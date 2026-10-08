@@ -12,6 +12,12 @@ specifies the studio; `03_CONDUIT_MIDDLEWARE.md` §5 specifies the pipeline it d
 The studio is an editor for a declarative **ingest recipe** — a YAML file. It is not a UI that
 accumulates hidden state.
 
+**It works within a case** (ADR-099 Amendment 4 decision 5): with no case open it says so rather than
+calling routes that belong to one. A recipe or source file belongs to the first dataset of the case
+it was made in, and is listed, verified, published and run only in cases reading that dataset
+(Amendment 3 decision 3). The connector and transform catalogues stay global; they describe the
+system, not a dataset's data.
+
 This is the design decision everything else follows from. A recipe can be reviewed in a pull
 request, diffed, copied between deployments, written by hand when that is faster, and produced
 by the studio when it is not. An ingest configuration that exists only inside an application
@@ -70,8 +76,8 @@ saying nothing.
 
 **Owner ruling R6, 27 September 2026.** "Where the data is" was, until this ruling, a path the
 analyst had to already know and type, and in a rendered deployment there was no path that worked:
-`POST /v1/ingest/recipes` takes a `source_location` the *Conduit's own container* must be able to
-read, and nothing was mounted there — making eight acceptance rows (B1–B3, B6–B8, B13–B18)
+`POST /v1/ingest/recipes` (now `/v1/investigations/{id}/ingest/recipes`) takes a `source_location` the
+*Conduit's own container* must be able to read, and nothing was mounted there — making eight acceptance rows (B1–B3, B6–B8, B13–B18)
 unperformable through the analyst's own door, not because they were hard but because there was no
 door.
 
@@ -94,8 +100,9 @@ GET /v1/investigations/{id}/ingest/source-files
 - **Authorisation:** `StudioRole.SOURCE_AUTHOR` — the same role that gates creating the draft the
   file will be attached to. Listing what you are about to point a draft at is that action one step
   earlier, so a principal who cannot create the draft has no use for the list.
-- **Returns:** the files directly in the root — name, `source_location` (the container path), size
-  and modified time, most recent first.
+- **Returns:** the files directly in the root, in `uploaded/`, and in each of the case's dataset
+  folders (`<root>/<dataset>/`, `uploaded/<dataset>/`) — name, `source_location` (the container
+  path), size and modified time, most recent first, each marked with its dataset or as in none.
 - **Refuses:** anything outside the root (each entry is resolved *before* being compared against
   the resolved root, so a symlink pointing out of the mount is refused rather than offered),
   subdirectories, and dotfiles. A missing root is an empty list, not an error — Docker creates a
@@ -119,7 +126,8 @@ POST /v1/investigations/{id}/ingest/source-files
 - **Request:** the file's bytes as the raw request body (`application/octet-stream`), its name in the
   query string (`?name=`). Nothing is parsed as a form.
 - **Authorisation:** `StudioRole.SOURCE_AUTHOR`, as for the listing, checked before a byte is read.
-- **Where it lands:** `<ingest root>/uploaded/<name>`, the one sub-folder the Conduit may write to.
+- **Where it lands:** `<ingest root>/uploaded/<dataset>/<name>`, the dataset being the case's first
+  (ADR-099 Amendment 4 decision 4), under the one sub-folder the Conduit may write to.
   The renderer mounts it writable *over* the read-only root, so operator-placed evidence is still
   not writable. The listing shows both, the uploaded ones marked `uploaded`.
 - **Refuses (each with a sentence the Glass shows as it is):** a name with a folder part, a leading
@@ -330,8 +338,9 @@ Each upload needs a handling marking, offered from the deployment's own scheme a
 could read, and a legal basis, kept in the audit (§2: neither can be answered later). A file of
 another kind, a holder `HOLDS` does not allow and a holder not in the view are refused before
 anything is kept. `POST /v1/investigations/{id}/documents`. **Not built from §7's description:** the
-extraction profile (which POLE classes, confidence floors, audio options) — extraction reads every
-non-Document type at the deployment's local models — and PDF, DOCX and the other document formats,
+extraction profile (which POLE classes, confidence floors, audio options) — extraction runs the fast
+recogniser by default and the deployment's extraction model on request (ADR-098), over every
+non-Document type — and PDF, DOCX and the other document formats,
 which need a text reader this build does not have. Tests: `test_document_content.py`,
 `test_document_upload_route.py`, `AddFiles.test.tsx`, `IngestStudioFiles.test.tsx`,
 `keyboard/add-files.spec.ts`. The synthetic phone extraction (`demo_fixtures/phone_extraction.py`,
@@ -352,7 +361,10 @@ stands behind it. Map refuses to save a recipe whose link names a Probabilistic 
 (the resolution engine's alone), `NOT_SAME_AS` (an analyst's judgement) or a type the ontology does
 not have, with `422 recipe_rule` naming each problem, which Map shows in those words; the engine
 refuses the same recipe again when it runs, before anything is written
-(`services/ingest/recipe_rules.py`). Tests: `tests/ingest/test_recipe_rules.py` and the Map save case
+(`services/ingest/recipe_rules.py`). A type an analyst proposed (ADR-090) may be named only once it
+was promoted as Direct; one promoted as Probabilistic is refused, and a pending, rejected, withdrawn
+or retired type is never accepted, checked at save and again at run (ADR-090 Amendment 1 decision 2,
+ADR-081 Amendment 3). Tests: `tests/ingest/test_recipe_rules.py` and the Map save case
 in `test_studio_map_routes.py`.
 
 ### The unstructured path is a different screen
@@ -382,7 +394,9 @@ A dry run over the sample that produces no persistent writes and three outputs.
 **How the clearance scoping in §8 is actually enforced.** An `on_match: reference` lookup during
 the dry run goes through the same `GraphPort.find_node` call the real write path uses
 (`services/ingest/engine.py`'s `_write_entity`), passing the author's own `Principal` — never a
-privileged or bypassing lookup. `GraphPort` is where `AccessFilter` is injected — access control lives in the adapter, never
+privileged or bypassing lookup. The lookup is also limited to the case's datasets, so a value held only by another dataset is
+not found and a new node is made for it in this one (ADR-099 Amendment 1 decision 5). `GraphPort` is
+where `AccessFilter` is injected — access control lives in the adapter, never
 applied after retrieval, and an unauthorised principal must not be able to detect a filtered
 node's existence via path length, degree count or histogram bucket — so this is what makes "an author cannot use a dry run to see material they could not
 otherwise see" (§8) mechanically true rather than a convention someone could get wrong: the
@@ -417,7 +431,7 @@ id: cdr-carrier-a
 version: 4
 label: "Carrier A — call detail records"
 connector: {profile: cdr-generic-csv, delimiter: ",", encoding: utf-8, header_rows: 1}
-ontology_version: 3
+ontology_version: 12
 
 defaults:
   provenance: {state: asserted}
@@ -496,10 +510,11 @@ editor; the repository is the record.
   unified CLI. It supersedes everything the load created, leaving the audit trail intact.
   Reverting a load is not yet reachable from the admin console; it is a function call today, and
   gets its own console screen once that surface exists.
-- **Written in bulk, by default (PROPOSED, ADR-058).** A publish would aggregate its resolved rows and write nodes then
-  edges through the bulk-load capability in chunks, falling back to `upsert_*` only for what collides with stored data;
-  `upsert_*` stays the path for low-volume and interactive writes. Today's engine writes one element per call, which at
-  234,000 links (the Enron measurement) is hours. Not built; awaiting the owner's decisions.
+- **Written in bulk (ADR-058, accepted in its Amendment 1).** A publish is to aggregate its resolved rows and write
+  nodes then edges through the bulk-load capability in chunks, falling back to `upsert_*` only for what collides with
+  stored data; `upsert_*` stays the path for low-volume and interactive writes. The seeds load in bulk (Amendment 10);
+  the Studio's engine does not yet, and still writes one element per call, which at 234,000 links (the Enron
+  measurement) is hours.
 
 ### The recipe registry, and how "flags the affected recipes" (above) actually happens
 
@@ -509,7 +524,9 @@ same Postgres instance the Conduit's audit stream already uses) tracks one row p
 version: `recipe_id`, `version`, `ontology_version`, `label`, `status`
 (`draft`/`published`/`flagged`/`superseded`), `content` (the in-progress recipe as JSON, populated
 while `draft`), `git_path` (set once published), `owning_unit`, `created_by`, `published_by`,
-`schedule_cron`/`schedule_watch`, `created_at`/`published_at`.
+`schedule_cron`/`schedule_watch`, `created_at`/`published_at`, and `dataset_id` (ADR-099 Amendment 3:
+the first dataset of the case it was made in, kept by every new version; null for a recipe made
+before, which stays readable in every case of its owner, Amendment 5).
 
 - **A draft is a row, not client state.** Stage 3's "create and edit draft recipes" (§8) spans
   sessions and sometimes people — an author drafts, an approver publishes later — so a draft
@@ -549,6 +566,11 @@ other, and it is a first-class screen rather than an administrative afterthought
 │ ⟦…⟧ = extracted span               │  [Accept selected]  [Reject all]  [Edit]     │
 └────────────────────────────────────┴──────────────────────────────────────────────┘
 ```
+
+The figures in the mock-up are a model's. Extraction runs the fast recogniser (Stanza) by default and
+the deployment's extraction model only when asked (ADR-098 decisions 2 and 3); a recogniser finding
+carries no confidence and reads *found by Stanza* in its place (Amendment 1 decision 3). Both kinds are
+inferred until a person accepts them (rule 5), in the same list.
 
 Rules, all of which follow from `01_DOMAIN_MODEL.md` §2.1:
 
@@ -617,7 +639,7 @@ decision log, because the two obstacles are both *this section's* concerns:
    recipe, `apply_schema` call, conformance fixture and generated TypeScript type moves with.
 
 **Until that decision is taken**, a suppression takes effect through
-`POST /v1/nodes/{node_id}/retract` as it always has, and a mark is a proposal sitting beside it —
+`POST /v1/investigations/{id}/nodes/{node_id}/retract` as it always has, and a mark is a proposal sitting beside it —
 nothing in this section is wired to anything yet.
 
 ## 9. What the studio deliberately does not do

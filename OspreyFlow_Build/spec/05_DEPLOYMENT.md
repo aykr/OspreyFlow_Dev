@@ -203,15 +203,20 @@ would have agreed with whatever the code did.
 
 **The model tier arrives shortly after `apply` reports ready, not before it.**
 `04_VAULT_BACKEND.md` §4's LiteLLM proxy and Ollama are both rendered, and Ollama pulls and
-digest-verifies its three models (ADR-020) on a persistent volume. The deployment deliberately
-does **not wait** for that pull: on a slow link it is roughly 2.2GB, and gating readiness on it
+digest-verifies its models (ADR-020) on a persistent volume: the three pinned ones, and the
+deployment's own extraction model (`models.extraction`, ADR-095: `qwen2.5:7b-instruct` by default,
+4.68 GB; 8.99 GB for the 14b). The deployment deliberately does **not wait** for that pull: on a slow
+link it is several gigabytes, and gating readiness on it
 made a CI gate ten times slower — measured, Floor A 9m40s → 1h43m, because the test suite applies
 ten deployments and destroys the model volume each time.
 
 **So on a first install, extraction and the review queue fail until the pull finishes.** Watch it
 with `docker compose logs -f ollama`, or `docker compose exec ollama ollama list` — when
-`qwen2.5:0.5b-instruct` and `all-minilm:22m-l6-v2-fp16` appear, extraction works; `moondream`
-backs image description only. On any later start the models are already on the volume and the
+the deployment's extraction model and `all-minilm:22m-l6-v2-fp16` appear, extraction works;
+`moondream` backs image description only, and `qwen2.5:0.5b-instruct` is the conformance suite's.
+**A disagreement to settle:** ADR-095 decision 1 says the deployment reports healthy only once its
+extraction model is present, but the rendered Ollama has no health check (`harness/render.py`, "No
+healthcheck, deliberately"), so it does not. On any later start the models are already on the volume and the
 tier is ready in seconds.
 
 **Open defect, 27 September 2026 — a stopped-and-started deployment loses the demo analyst's
@@ -453,9 +458,11 @@ for the Glass, the Ingest Studio and the Admin console, shows which answer, and 
 not: the deployment by `python -m scripts.refresh` (also `make refresh`) against the
 already-rendered `deploy/generated/<profile>/` — it writes the sign-in theme, builds the owned
 images, runs `docker compose up -d --wait`, restarts Keycloak when the theme changed and registers
-the sign-in accounts again, and never re-renders, removes a volume or seeds (ADR-049 Amendment,
-29 September 2026) — the admin console by `python -m harness`. The Ingest Studio has no address of its own — it is the Ingest tab inside the
-Glass — so its tile opens the workspace on the Ingest tab (`?view=ingest`), and both tiles carry
+the sign-in accounts again, brings in a service the checkout renders and the deployment lacks, moves a
+third-party service whose pin changed to the new image with its launch options and health probe
+(ADR-101 Amendment 1), and never re-renders, removes a volume or seeds (ADR-049 Amendment,
+29 September 2026) — the admin console by `python -m harness`. The Ingest Studio has no address of its own — it is a view of the Glass,
+reached from the left rail — so its tile opens the workspace on the Ingest tab (`?view=ingest`), and both tiles carry
 `?from=launcher` so the Glass carries the person's sign-in on without asking again
 (`02_GLASS_FRONTEND.md` §2.2). The launcher reads only `OSPREY_WORKSPACE_PORT`
 from `deployment.env`, so no credential reaches its page (`scripts/launch.py`,
@@ -528,6 +535,15 @@ synthetic generators the seeds call are now in the image (`packages/demo_fixture
 in the test tree, and re-seeding `scenarios` is idempotent: it pins its own ids, so a second
 seed upserts the same elements rather than building a second, parallel cohort.
 
+**Each seed writes into its own dataset** (`demo_fixtures/datasets.py`: Enron, Fixture Corp, HMP,
+PaySim, the acceptance scenarios; ADR-099 Amendment 2), and the case it seeds reads that dataset; a
+dataset of that id held by another unit is refused. **A deployment that held data before ADR-099** runs
+`python -m scripts.stamp_datasets --dry-run`, then without `--dry-run`, inside the deployment: it
+stamps what each seed loaded by its provenance, gives each case its datasets, stamps what analysts
+wrote onto canvases, rewrites the working set's copies, and places link-type proposals and alerts in
+their case's dataset (Amendment 5). It ends by counting what is still in no dataset, which no case
+reads until something claims it. Each step is safe to run again.
+
 **Where source files go — the ingest folder.** A rendered deployment bind-mounts
 `components.storage.ingest` (default `/var/lib/osprey/ingest`) **read-only** into the Conduit, for
 every profile, with one exception laid over it (ADR-067): its `uploaded/` sub-folder is mounted
@@ -556,8 +572,8 @@ The Conduit writes only to its `uploaded/` sub-folder (ADR-067), never to the re
 (`§2.1`), or in `osprey.yaml` directly; Preflight reports the folder's state and free space, and
 the generated `RUNBOOK.md` names it. An analyst without the `source_author` Studio role cannot
 list it at all. Owner ruling R6, 27 September 2026; `09_INGEST_STUDIO.md` §2 has the route and
-what it refuses. **A browser upload route is deliberately post-milestone** — as are Map's two
-recorded gaps.
+what it refuses. A browser upload writes into `uploaded/<dataset>/` (ADR-067, ADR-099 Amendment 4);
+Map's two recorded gaps remain post-milestone.
 
 **Add `--demo-analyst` if you intend to sign in.** The command above provisions no user, so the
 Glass has nobody to authenticate as; the flag creates a disposable analyst subject and writes its
@@ -687,6 +703,17 @@ The maintainability requirement, made concrete.
   rather than a test fixture. Under two minutes, and it is what makes the upgrade safe rather
   than hopeful. The headless equivalent is `osprey upgrade opensearch --to 3.2.1 && osprey verify
   opensearch`.
+- **Upgrading ArcadeDB on a kept store** (ADR-101 and its Amendment 1, done on the owner's deployment
+  on 7 October 2026 from 25.5.1 to 26.10.1): (1) back up first (`BACKUP DATABASE`, copied off the
+  volume), since a minor-version downgrade needs an export and re-import, not the old image; (2) if
+  the new image runs as another user (25.5.1 uid 1001, 26.10.1 uid 1000), hand the volumes to it in a
+  one-off container (`chown -R`), or the server stops at start before opening a database; (3) replace
+  the config volume's untouched defaults with the new release's, keeping `server-users.jsonl`;
+  (4) `make refresh`, which moves the pinned service to its new image with its launch options and
+  probe (it does not do step 2); (5) `CHECK DATABASE`, and remove duplicates by id (never by record
+  id alone: two copies can share a stored chunk, and deleting one breaks both) or with
+  `CHECK DATABASE FIX`, until it reports 0 errors; (6) `REBUILD INDEX *`, which a duplicate in a
+  unique index would otherwise drop and fail to rebuild.
 - **Rollback** is one click to a previous digest, then verify again. `deploy/versions.lock`
   records every digest that has been live, so there is always a known-good target.
 - **Airgapped upgrades** — `osprey bundle --images` produces a signed tarball of every image and
@@ -823,7 +850,8 @@ section be closed rather than narrowed; it has not been done.
 **Re-measured — §8 STAYS OPEN.** The original closing-pass fixture
 load is no longer runnable as written (`test_phase8_exit_over_the_wire.py` supersedes it); the
 sustained-load harness's own per-cycle load is the fallback the brief names, run fresh against a
-`local-lite` deployment on the current pin (`25.5.1`, `-Xmx8G`), never torn down between cycles:
+`local-lite` deployment on the then-current pin (`25.5.1`, `-Xmx8G`; the pin is now 26.10.1, ADR-101,
+and this has not been re-measured), never torn down between cycles:
 
 | Cycle | ArcadeDB RSS (`docker stats`) | Query-sample wall time |
 | --- | --- | --- |

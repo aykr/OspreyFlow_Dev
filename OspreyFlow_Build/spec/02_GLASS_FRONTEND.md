@@ -168,7 +168,7 @@ narrowed.
 ┌────────────────────────────────────────────────────────────────────────────────────┐
 │                     OFFICIAL — the highest marking in view                         │ strip, 20px
 ├────────────────────────────────────────────────────────────────────────────────────┤
-│ ◆ Osprey  Case 4471 — layering ▾  [ Search…  / ]  [Graph|Map]  Export ⚙  Dark  👤  │ top bar, 40px
+│ ◆ Osprey  Case 4471 — layering ▾  [ Search…  / ]  [Graph|Map]  Export ⚙        👤  │ top bar, 40px
 ├──┬───────────────────────────────────────────────────┬─────────────────────────────┤
 │▣ │ Resolution: ●Balanced            (view toolbar)   │ ⠿ Inspector              ⋯  │ header, 28px
 │◷ ├───────────────────────────────────────────────────┤ ▸ Properties                │
@@ -186,7 +186,9 @@ narrowed.
 ```
 
 The rail on the left (44px; ADR-097 step 1) holds the places the analyst goes to: *Cases*, *Watches*,
-*History*, *Proposed types* (administrators only, ADR-090 C3) and the *Ingest Studio*; in the Ingest
+*History*, *Explore* (where to start in the case's data, ADR-100, §3.1), *Questions* (the case's
+questions to the model, ADR-098, §3.1), *Proposed types* (administrators only, ADR-090 C3) and the
+*Ingest Studio*; in the Ingest
 Studio it holds *Back to the investigation*. Each is an icon button whose accessible name is its label;
 *Show names* widens the rail to show the labels and *Hide names* narrows it again. *Cases* opens a
 drawer listing the open cases (the strip of tabs of ADR-084, as a list) with *Browse all cases*. The
@@ -378,8 +380,9 @@ delta stream are built once per case, and it signs back in by itself (`from=case
 ### 2.2 Opening from the launcher
 
 The launcher (`make launch`, `05_DEPLOYMENT.md` §3) opens the Glass with `?from=launcher`, and with
-`&view=ingest` for its Ingest Studio tile. The Ingest Studio is the Ingest tab of the Glass, so the
-two tiles differ only in this parameter. `from=launcher` tells the Glass that the person has just
+`&view=ingest` for its Ingest Studio tile. The Ingest Studio is a view of the Glass, reached from the
+left rail, so the two tiles differ only in this parameter. It works only within a case: with none
+open it says so rather than calling routes that belong to one (ADR-099 Amendment 4 decision 5). `from=launcher` tells the Glass that the person has just
 signed in there, so it starts its own sign-in without waiting for a click; the identity provider
 already knows them, so no password is asked. If that cannot be done (no identity-provider session,
 or it cannot be reached) the sign-in screen appears as before, worded for the Ingest Studio when
@@ -390,10 +393,14 @@ checks every request against the token's roles (ADR-050). A refused sign-in (an 
 on return) is shown and is never retried automatically. Only the Ingest tab can be requested
 (`apps/workspace/src/auth/launcherHandoff.ts`, `App.test.tsx`).
 
-### 2.2 What a case reads (ADR-099)
+### 2.3 What a case reads (ADR-099)
 
 A case reads only its own datasets, on every read, in the Conduit: search, suggestions, expansion,
-the query builder, paths and the canvas itself. The Glass shows and asks; it enforces nothing.
+the query builder, paths, Explore and the canvas itself, and what belongs to a dataset is offered only
+in cases reading it: saved patterns, watches and their alerts, Studio recipes and source files, and
+the link types analysts propose (ADR-099 Amendment 3). The one exception is the types of the
+OspreyFlow default dataset (`default.yaml` and every promoted type), which every case reads. The Glass
+shows and asks; it enforces nothing.
 
 - **A new case** (the case picker and the case switcher) offers *Data the case reads*: the unit's
   datasets as boxes to tick, kept in the order ticked. None ticked, the form says the case gets a
@@ -416,7 +423,7 @@ the query builder, paths and the canvas itself. The Glass shows and asks; it enf
 | Expand a node's relationships | Context menu on right-click, headed with the node's type and name and closed by a click elsewhere or Escape (a list, so long edge-type names stay readable; the browser's own menu is suppressed); items generated from the ontology's edge types valid for the node's type, each with a live count, or `count unavailable` if the preview failed; actions with no count show none. A double-click on a node (or Enter on a focused one) expands its neighbours across every edge type, except on a Document, which opens to read (ADR-092; its right-click menu still expands it) |
 | Search Around | Multi-step, filtered traversal builder — `Person → uses → Endpoint → communicated with (≥5 events, in brush window) → Endpoint → used by → Person`. Preview count before committing to the canvas |
 | Pathfinder | Select two nodes, get k-shortest paths; paths render with the on-path node state (2px primary stroke, edges thickened), everything else dims to 32% |
-| Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then **Branch selected** — the strip's button, or the same entry in any selected node's right-click menu (ADR-084 Amendment 1) — and the selection opens as a new case in a tab of its own (§3.1h, ADR-084), with its own filter state; the parent is untouched. A bounding-box selection has no implementation yet |
+| Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then *Branch to a new case* on the selection bar, or *Branch selected (n)* in any selected node's right-click menu (ADR-084 Amendment 1, ADR-097 step 1) — and the selection opens as a new case, listed under its parent in the *Cases* drawer (§3.1h, ADR-084), with its own filter state; the parent is untouched. A bounding-box selection has no implementation yet |
 | Undo | Every canvas mutation is a step in an addressable history; the history panel is a list of named steps, not a stack of arrows |
 
 **Expansion budget.** Every expansion previews its cardinality before executing. Above 500 new
@@ -593,13 +600,14 @@ messages with text on the canvas as Documents titled by their first words, and s
 had none (a link of calls only is said to have none, as a notice). Proved by keyboard in `keyboard/link-menu.spec.ts`.
 
 An opened email offers **Extract entities** (ADR-089 step 3). The email becomes a `Document` node linked
-to its sender and recipient by `MENTIONED_IN`, both appear on the canvas at once, and the model's findings
-are listed as suggestions with a confidence each. Nothing a model finds reaches the graph until a person
+to its sender and recipient by `MENTIONED_IN`, both appear on the canvas at once, and the findings are
+listed as suggestions: *Extract entities* runs the fast recogniser (Stanza, ADR-098 decision 2), whose
+findings carry no score and say *found by Stanza*; *Ask the model to extract* runs the deployment's
+extraction model (`models.extraction`, decision 3), whose findings carry a confidence each. Nothing a model finds reaches the graph until a person
 accepts it (rule 5): *Accept* on one finding writes it as an inferred node with a `MENTIONED_IN` link to the
 email, both onto the canvas, where it is confirmed from the Inspector as any inferred node is. *Reject*,
 beside it, marks the finding rejected and writes nothing (owner, 6 October 2026), in the Inspector's list
-and in the reader alike. The model is
-the deployment's local one unless the caller names another. Reachable by keyboard
+and in the reader alike. Reachable by keyboard
 (`keyboard/link-events.spec.ts`).
 
 The change form asks **what stands behind the link** each time, with no default (ADR-081 Amendment
@@ -619,15 +627,16 @@ trail attributed to the analyst. Reachable by keyboard throughout (rule 13: `key
 `keyboard/link-change.spec.ts`). A menu or box that closes returns focus to the canvas.
 
 **When no type fits, an Editor defines one there (ADR-090).** The types the form offers are the case's
-own (`GET .../link-types`): the ontology's, and those proposed in the case, the cases it was branched
-from, or for a link the analyst can see in it, each proposed one marked "(proposed)". **Define a new
+own (`GET .../link-types`): the ontology's (the default dataset's), and those proposed in any case
+reading one of this case's datasets (ADR-099 Amendment 3 decision 2), each proposed one marked
+"(proposed)"; one proposed before that amendment and not yet placed keeps ADR-090's rule. **Define a new
 type…** asks for a name in sentence case ("Known to"), from which its ID is made (`KNOWN_TO`, which may
 be edited), whether it goes either way round, a colour and a thickness (both optional), and why no
 type fits; the ends are the link's own. Proposed, it is chosen at once in the form and, being
 probabilistic until an administrator decides, its basis is stated, not asked; on the canvas its links
 are drawn dotted in its own colour and thickness, named by its label. The Glass reads the case's types
 when a case opens and again after a proposal or a decision. A refused name is said in the server's
-words. **An `osprey-admin` holder** also has **Proposed types** in the top bar: their own unit's
+words. **An `osprey-admin` holder** also has **Proposed types** on the left rail: their own unit's
 proposals, each with its name, ID, ends, proposer, case and reason, to **Promote…** (Direct or
 Probabilistic, no default, and a new ID when the server says the name is taken by a type its links do
 not fit), **Reject…**, or once promoted **Retire…**, each with a reason. Reachable by keyboard
@@ -653,9 +662,9 @@ afresh and the view is fitted to the result; the first fill of an empty canvas i
 that are going somewhere are animated. `keyboard/keyboard.spec.ts` proves an expansion leaves the camera and
 the settled nodes where they were.
 
-### 3.1h Branch selected, and the strip of tabs (ADR-084)
+### 3.1h Branch selected, and the case's branches in the Cases drawer (ADR-084, ADR-097)
 
-Selecting nodes shows the **selection bar** (ADR-097 step 1, below), whose **Branch to a new case** sends the nodes to a **new case of their own**, holding those nodes and the links between them, and opens it. The case you branched from is left exactly as it was. A branch is a **copy** made at that moment: later changes to either never touch the other. A selected Group Node stands for every member of its group, so choosing one chooses them all. What the new case holds is re-checked against the branching analyst's own clearance, as every read is: a node they may not see is not copied, and a request that leaves nothing to copy says only "None of the selected nodes could be branched", whatever the reason.
+Selecting nodes shows the **selection bar** (ADR-097 step 1, below), whose **Branch to a new case** sends the nodes to a **new case of their own**, holding those nodes and the links between them, and opens it. The case you branched from is left exactly as it was. A branch is a **copy** made at that moment: later changes to either never touch the other. It reads its parent's datasets (ADR-099 decision 3). A selected Group Node stands for every member of its group, so choosing one chooses them all. What the new case holds is re-checked against the branching analyst's own clearance, as every read is: a node they may not see is not copied, and a request that leaves nothing to copy says only "None of the selected nodes could be branched", whatever the reason.
 
 **Seeing and working the selection (ADR-093, ADR-097).** A selected node is drawn larger with a bold
 brass ring (§4's table). While anything is selected, the **selection bar** floats at the bottom centre
@@ -672,9 +681,9 @@ The selection is built with the lasso, or by clicking nodes with Shift, Ctrl or 
 
 Each branch is a case saved for the analyst who made it (they are its Author, and it is visible to nobody else until they share it). It starts with the resolution threshold, layout and timeline brush of its own, not shared with the case it came from. The events behind the links it copied (the timeline's counts, *Show emails*, an email to extract from) are read from the case they were loaded into, for the links the branch holds, wherever the analyst can see that case; nothing is copied (ADR-084 Amendment 2).
 
-A **strip of tabs** sits under the top bar once a case has a branch. The original case is always the first tab; its open branches follow, each with a close button; the one on screen is marked. **Closing a tab only hides it** from this analyst's strip (a flag kept for them alone, which says nothing about anyone else's view). The **Branches** menu at the end of the strip lists every branch, open or hidden, as "Branches (n open of m)", so the analyst always sees the whole set they are working across; from it a branch is opened, brought back into the strip, or **discarded**. Discarding asks first and is the same soft remove as for any case: it leaves every list and nothing is deleted. Only an Author of the branch (or an administrator of the unit) is offered it, and never for the branch on screen.
+The open cases and their branches are listed in the **Cases** drawer on the left rail (ADR-097 Amendment 1 decision 2; the strip of tabs that sat under the top bar left its row for it): the case first, each open branch indented beneath it, each with a close button; the one on screen is marked. **Closing one only hides it** from this analyst's list (a flag kept for them alone, which says nothing about anyone else's view). The **Branches** list in the drawer shows every branch, open or hidden, as "Branches (n open of m)", so the analyst always sees the whole set they are working across; from it a branch is opened, brought back into the list, or **discarded**. Discarding asks first and is the same soft remove as for any case: it leaves every list and nothing is deleted. Only an Author of the branch (or an administrator of the unit) is offered it, and never for the branch on screen.
 
-Switching tab opens that case, which reloads the page, as every case switch does (§1): the working set, timeline and delta stream are each built once per case. The expansions and filters of a case are kept on the server, so they are still there; where nodes sit on screen and what was selected are not. Having several canvases live in one page, so that switching is instant and keeps the layout, is a later step (ADR-084).
+Opening another case or branch from the drawer reloads the page, as every case switch does (§1): the working set, timeline and delta stream are each built once per case. The expansions and filters of a case are kept on the server, so they are still there; where nodes sit on screen and what was selected are not. Having several canvases live in one page, so that switching is instant and keeps the layout, is a later step (ADR-084).
 
 ### 3.2 Social network analysis
 
@@ -697,9 +706,10 @@ Two metrics can be shown side by side, which is how the Clique Metric earns its 
 insight is "high clique score, low degree centrality", and that comparison has to be visible in
 one glance.
 
-The panel opens closed. It has three sections, **Ranking**, **Community detection** (named so since ADR-097
-step 3, apart from the canvas's *Communities* view) and **Filter**, one open at a
-time, and a closed section fetches nothing (ADR-070).
+The panel opens on **Ranking**, with **Community detection** (named so since ADR-097 step 3, apart from
+the canvas's *Communities* view) and **Filter** folded; parts open independently, more than one at a
+time, and a folded part keeps what it holds, so nothing is fetched again on opening it (ADR-096
+decisions 0 and 4, replacing ADR-070's one-at-a-time strip).
 
 **Filter (ADR-088).** Two social-network filters, both of which dim and never remove (§2 rule 2). A
 *Relationship strength* slider dims every link whose weight is below it and every node left with no
@@ -729,9 +739,11 @@ and because a canvas inherits every accessibility problem `GlassCanvas` has alre
 once (that ADR's own reasoning). Never expose the Gremlin; do show the estimated result count
 before running, principal-filtered exactly like the result itself will be, never a raw or
 unfiltered figure — access control is enforced before a count reaches the Conduit's response, not
-filtered afterward, and the Glass is never shown an unfiltered count. **Patterns are saveable,
-shareable and versioned** is this bullet's own unbuilt promise — only compose/preview/run are
-built; saving, sharing and versioning a pattern are not yet implemented.
+filtered afterward, and the Glass is never shown an unfiltered count. **Patterns are saved and
+versioned:** the Query builder's *Save this pattern* saves it (each save of the same pattern a new
+version) and *Load a saved pattern* lists the analyst's own. A pattern is private to its owner and
+belongs to the dataset of the case it was saved in, so it is listed and loaded only in cases reading
+that dataset (ADR-099 Amendment 3). Sharing a pattern is not built.
 
 **Hotlists and watchlists.** A list of identifiers with an owner and a review date. Any ingest
 that touches a listed identifier raises an alert. The CoLP journey turns on exactly this — a SIM
@@ -742,6 +754,11 @@ investigation.
 **Saved-pattern monitors.** A saved visual query run on a schedule against new data. Matches
 raise alerts with the same shape as hotlist alerts. This is the CoLP deck's "automatic daily
 searches" requirement.
+
+**A watch belongs to a dataset (ADR-099 Amendments 3 and 4).** A hotlist belongs to the dataset of
+the case it was made in, a monitor to its saved pattern's; each raises alerts only on that dataset's
+data, and the *Watches* panel lists only those of the open case's datasets. A match in another
+dataset raises nothing at all. Opening an alert makes a case that reads the alert's dataset.
 
 Every alert names the rule that fired and shows the evidence. Borrowing from the way fraud
 decisioning products present their scores: an alert that cannot explain itself is an alert the
@@ -888,13 +905,13 @@ Node state vocabulary, implemented once in the Sigma node program:
 | Inferred | 1.5px dashed 4-2, channel colour |
 | Unresolved | 1.5px dotted, channel colour |
 
-**Selected and on-path, combined — resolved here rather than left as a disclosed gap.** Selected and
-on-path are both a 2px stroke, and the code that first implemented them differentiated a
-select-and-on-path node from a selected-only one by stroke hue alone — a colour-only distinction,
-WCAG 1.4.1, for that one combination. Both states already carry their own non-colour cue in the
-table above — the 1px surface gap (selected) and the thickened incident edges (on-path) — so the
-fix asks nothing new of the palette: **the two cues are independent and both apply when both
-states hold.** A selected node on the active path shows the surface gap *and* thickened incident
+**Selected and on-path, combined — resolved here rather than left as a disclosed gap.** The code
+that first implemented the two states differentiated a select-and-on-path node from a selected-only
+one by stroke hue alone — a colour-only distinction, WCAG 1.4.1, for that one combination. Since
+ADR-093 a selected node is drawn 1.6 times its size with its own brass ring and a surface-coloured
+gap inside it (the table above), and on-path keeps the interaction ring and thickened incident
+edges, so each state carries its own non-colour cue and the fix asks nothing new of the palette: **the two cues are independent and both apply when both
+states hold.** A selected node on the active path shows its larger size, ring and gap *and* thickened incident
 edges together; stroke hue is decorative reinforcement in that combined case, never the only
 signal distinguishing it from a selected-but-off-path node. Binding on both states, not a choice
 between them — the "which state owns the non-colour channel" question the disclosed gap left open
@@ -964,8 +981,9 @@ in `src/canvas/nodeAttributes.test.ts` (shown red with the old "TYPE (n)" label)
 
 Dark is the working default. Light is a separately tuned ramp, not an inversion, and exists for
 screenshots pasted into reports and for print. Both meet the same contrast floor. An exported
-chart destined for an intelligence product should default to light. The top bar's theme button
-chooses between them per browser (ADR-070); canvases draw from a hex palette that a test keeps
+chart destined for an intelligence product should default to light. The theme item in the account menu
+(a button of its own only where there is no account menu, §2.0) chooses between them per browser
+(ADR-070, ADR-097 step 3); canvases draw from a hex palette that a test keeps
 equal to `tokens.css`.
 
 Type: Atkinson Hyperlegible Next for interface, IBM Plex Mono for literal values and every
@@ -1081,18 +1099,18 @@ Radii: 0 for canvas and cells, 2px controls, 4px panels, 6px overlays, 999px sta
 ## 9. Assessment production
 
 The HMP report is the model this platform exists to produce: a set of judgements, each resting on
-named evidence, plus explicit gaps and assumptions (`01_DOMAIN_MODEL.md` §5). "Judgements" has
-been named as one of the Inspector's five tabs (§2); this section is the first place
-that names what the tab actually contains.
+named evidence, plus explicit gaps and assumptions (`01_DOMAIN_MODEL.md` §5). "Judgements" is a
+section of the Inspector's accordion (§2; ADR-096 decision 1 replaced the tabs), open by default
+when no node is selected; this section is the first place that names what it contains.
 
-### 9.1 The Judgements tab
+### 9.1 The Judgements section
 
 A `Table` (§8; headless, per §1's TanStack Table choice) listing every judgement in the current
 investigation: statement (truncated), probability band, evidence count, author. Selecting a row
 opens a `Drawer` (§8) holding the full authoring surface below. Gaps and assumptions get their own
-`Tabs` (§8) panes within the same Drawer, not separate top-level Inspector tabs — all three are one
-assessment surface, and splitting them across the Inspector's own limited tab budget would scatter
-a single analytical object across three places.
+`Tabs` (§8) panes within the same Drawer, not separate Inspector sections — all three are one
+assessment surface, and splitting them across the Inspector would scatter a single analytical object
+across three places.
 
 **Judgement authoring.** Statement (`Input`, multi-line); probability band via `Select`, populated
 from the active deployment's yardstick file (§9.3); an evidence picker drawing from the current
@@ -1123,11 +1141,11 @@ judgements via multi-select against the investigation's own judgement list.
   no new channel and reaches the same practical goal — "this is relevant" — at the cost of not
   being visually distinct from an analyst's own manual selection while a judgement's evidence is
   highlighted. `GlassCanvasHandle.highlightNodes`'s own docstring has the full record.
-- Selecting a node lists, in the Judgements tab, every judgement resting on it —
+- Selecting a node lists, in the Judgements section, every judgement resting on it —
   `01_DOMAIN_MODEL.md` §5's own "selecting a node lists the judgements that rest on it," given a
   concrete surface for the first time. On the canvas, a small brass count beside a node says how many
   judgements rest on it, drawn only from the judgements the principal can already list (ADR-070).
-- **A judgement is hidden from the Judgements tab in full, not shown with a citation marked
+- **A judgement is hidden from the Judgements section in full, not shown with a citation marked
   unavailable, when the viewing principal's access does not cover at least one of its own
   `supporting` references** — `06_DECISIONS.md` ADR-046's own decision: a conclusion a viewer
   cannot verify is an unsupported assertion wearing the same formatting as a supported one, and
@@ -1148,7 +1166,7 @@ revision is a config change."
 ### 9.4 Review flag
 
 A judgement flagged for review (`01_DOMAIN_MODEL.md` §5 — triggered when a node it cites is split,
-corrected or retracted) shows a status chip on its own row in the Judgements tab (the `999px`
+corrected or retracted) shows a status chip on its own row in the Judgements section (the `999px`
 status-chip radius §8 already specifies), and a corresponding marker on the flagging node if it is
 currently on the canvas — the same list-row-plus-canvas-marker pairing the resolution-conflict
 pattern already establishes for "something here needs a human's attention."
@@ -1168,8 +1186,8 @@ arrives through the Ingest Studio (step two), so that no record is ever suppress
 of a click alone.
 
 ```
-POST /v1/nodes/{node_id}/suppression-mark
-DELETE /v1/nodes/{node_id}/suppression-mark
+POST /v1/investigations/{id}/nodes/{node_id}/suppression-mark     (Editor; ADR-099 Amendment 1)
+DELETE /v1/investigations/{id}/nodes/{node_id}/suppression-mark
 ```
 
 - **A marker on the node and in the inspector**, the same list-row-plus-canvas-marker pairing §9.4

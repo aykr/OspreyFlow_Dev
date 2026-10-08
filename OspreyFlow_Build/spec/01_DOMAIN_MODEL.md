@@ -13,8 +13,8 @@ bespoke application.
 The ontology is a YAML document validated against a JSON Schema at startup:
 
 ```yaml
-# ontology/default.yaml
-version: 3
+# ontology/default.yaml (abridged; version 12 is in force, ADR-094 Amendment 1)
+version: 12
 entity_types:
   - name: Person
     pole_class: person           # POLE upper class — see §1.1
@@ -61,6 +61,13 @@ entity_types:
     pole_class: object
     channel: violet
     shape: page
+    properties:
+      - {name: title, type: string, indexed: true}
+      - {name: sent_at, type: datetime}           # an email as a Document (ADR-092 Amendment 2)
+      - {name: message_id, type: string}
+      - {name: event_id, type: string}            # the analytics event it was made from
+      - {name: media_kind, type: enum, values: [text, image, video]}   # ADR-094
+      - {name: object_ref, type: string}          # its file in the object store, never the graph
   - name: Vehicle
     pole_class: object
     channel: jade
@@ -75,6 +82,7 @@ edge_types:
   - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true, basis: direct}
   - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], temporal: true, basis: direct}
   - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true, basis: direct}
+  - {name: HOLDS,             from: [Device, Endpoint, Person, Organisation], to: [Document], directed: true, basis: direct}  # ADR-094
   - {name: ASSOCIATE_OF,      from: [Person], to: [Person], directed: false, basis: direct}
   - {name: FAMILY_OF,         from: [Person], to: [Person], directed: false, properties: [relation], basis: direct}
   - {name: MEMBER_OF,         from: [Person], to: [Organisation], basis: direct}
@@ -187,7 +195,7 @@ class EdgeTypeDef(BaseModel):
     colour: str | None = None      # one of the nine data-channel names; None keeps the ordinary line colour
     thickness: int | None = None   # 1 to 5; None keeps the weight-only width
     label: str | None = None       # ADR-091: display name in sentence case; None derives it from name
-    aliases: list[str] = []        # ADR-090 Am1: other stored labels that read as this type
+    aliases: list[str] = []        # ADR-090 Am2: other stored labels that read as this type
     direct_since: datetime | None = None   # ADR-090: promoted as Direct; links written before stay probabilistic
     analyst_defined: bool = False  # ADR-090: proposed by an analyst, never authored in YAML
     hidden: bool = False           # ADR-090: a proposal's own storage label; never offered or sent to the Glass
@@ -232,9 +240,14 @@ The Ingest Studio's refusal of a probabilistic type is built (ADR-081 step D, `r
 
 **Analysts may propose a relationship type (ADR-090 and its Amendments).** The ontology in force is
 `default.yaml` plus every proposal, composed by one function (`services/api/link_types.py`'s
-`compose_ontology`) at start-up and after each proposal and decision. A pending proposal is usable at
-once in its own case, the cases branched from it, and any case where the caller can see one of its
-links; it is probabilistic. Each proposal's links are stored under a label of their own,
+`compose_ontology`) at start-up and after each proposal and decision. The types are the one thing a
+case reads beyond its datasets: they live in the OspreyFlow default dataset, which holds the types and
+only the types (`default.yaml` and every promoted type), is read by every case and is changed only by
+an administrator; it holds no nodes or links (ADR-099 Amendment 3 decision 1). A pending proposal
+belongs to the first dataset of the case it was proposed in, and is offered and drawn at once in every
+case reading that dataset and nowhere else (Amendment 3 decision 2); one made before that amendment
+that could not be placed keeps ADR-090's rule (its own case, its branches, any case where one of its
+links is in view). A pending proposal is probabilistic. Each proposal's links are stored under a label of their own,
 `<name>__<proposal id>`, declared as a `hidden` type so the graph store accepts them, and
 `storage_aliases` makes that label read as the name the links answer to: the proposal's own while
 pending, rejected, withdrawn or retired, the promoted name once promoted, merged or renamed. So no
@@ -284,7 +297,7 @@ projection the same way every other `SAME_AS` in this journey does (`06_DECISION
 
 ## 2. The node record
 
-Every node carries five blocks. Only the first is domain data.
+Every node carries five blocks, and the datasets it belongs to. Only the first block is domain data.
 
 ```python
 class Node(BaseModel):
@@ -295,6 +308,7 @@ class Node(BaseModel):
     handling: Handling
     resolution: ResolutionState
     audit: AuditStub
+    datasets: list[str]              # ADR-099, §2.2a
 ```
 
 ### 2.1 Provenance
@@ -414,8 +428,9 @@ restrictive possible principal: it matches no classification, not every classifi
 alternative (fail open) would make a configuration error into a silent over-disclosure, which is
 the one failure mode this platform cannot recover from after the fact.
 
-**A non-human `Principal` follows the same two axes as any other — a decision, not an implied
-exemption.** `06_DECISIONS.md` ADR-025's corpus-wide resolution trigger is the first caller in this
+**A non-human `Principal` follows the same handling axes as any other — a decision, not an implied
+exemption.** (The third axis, datasets, §2.2a, is the one place it differs: the service principal's
+`datasets` is `None`, unlimited, and no request handler can make such a principal.) `06_DECISIONS.md` ADR-025's corpus-wide resolution trigger is the first caller in this
 build that acts under a deployment-level service identity rather than an analyst's own — a real
 question, since nothing above states what such an identity may see. Settled here: the service
 principal carries the active scheme's *highest* classification but an **empty**
@@ -446,6 +461,18 @@ with the two handling axes above: a node, a link and a link's far end outside th
 counted, or found by any path, degree or bucket (`tests/conformance/graph_port/test_suite.py`, the
 ADR-099 section; `test_bulk_loader.py`). `Principal.datasets` carries the case's; `None` is unlimited
 and only the Conduit's own background work reads so; an empty list sees nothing.
+
+- **A dataset** is a named body of data held by one unit, kept in Postgres (`datasets`,
+  `investigation_datasets`). A case names at least one, all of its own unit; a branch takes its
+  parent's; only the case's Author changes them, and each change is audited (decision 3).
+- **What a case writes joins its first dataset** unless the load names another (decision 6). The
+  Conduit's own writes for a case are stamped so by `DatasetStampingGraph` (Amendment 1 decision 2),
+  and an element's properties are the latest write's (decision 2).
+- **A correction keeps its datasets**: `supersede_node` and `supersede_edge` give the new revision
+  every dataset of the old one (Amendment 2 decision 2).
+- **A `SAME_AS` link is in the datasets both its records share**, so a match across two datasets is
+  in none and no case reads it (Amendment 2 decision 3, §4).
+- **Events carry no dataset**: they stay keyed by case in the analytics store (decision 7).
 
 ### 2.3 Resolution state
 
@@ -532,6 +559,8 @@ class Edge(BaseModel):
     provenance: Provenance
     handling: Handling
     audit: AuditStub                 # §2.4 — an edge is versioned the same way a node is
+    basis: Literal["direct", "probabilistic"] | None  # ADR-081 Amendment 2; None takes its type's
+    datasets: list[str]              # ADR-099, §2.2a
 ```
 
 **An edge carries `AuditStub` too, including `superseded_by`.** Correcting an edge (a wrong
@@ -581,7 +610,9 @@ The design:
    `Person` from a custody record are two nodes. Nothing is merged.
 2. Splink runs over the source-fidelity nodes and writes `SAME_AS` edges carrying the
    Fellegi–Sunter match probability, the model version, and the comparison vector that produced
-   the score.
+   the score. Resolution compares across the whole corpus, but a `SAME_AS` it writes is in only the
+   datasets its two records share: a match across two datasets is in none, so no case reads it and
+   neither case's records are joined to the other's (ADR-099 Amendment 2 decision 3).
 3. At query time the Conduit applies a **resolution threshold** τ from the analyst's session and
    collapses `SAME_AS` components with score ≥ τ into a single displayed entity. Changing τ
    re-projects the view; it does not touch storage.
@@ -1077,9 +1108,11 @@ pattern language) is exactly the trigger for re-checking this argument, not a co
 ### 8.2 Additions beyond the illustrative sketch
 
 The illustrative sketch in `00_ARCHITECTURE.md` §2.1 covers `upsert_nodes`/`upsert_edges`/
-`get_node`/`expand`/`paths`/`match`/`neighbourhood_stats`/`apply_schema`/`revert_schema`. Five
-more methods were added later, without re-litigating the sketch first, the same way the original
-set itself went beyond it for transaction management and schema application:
+`get_node`/`expand`/`paths`/`match`/`neighbourhood_stats`/`apply_schema`/`revert_schema`. More
+methods were added later, without re-litigating the sketch first, the same way the original set
+itself went beyond it for transaction management and schema application. Besides those below, the
+search box's reads (`search_nodes`, `suggest_nodes`) and the query builder's count (`match_count`)
+are on the port too, each taking the principal like every other read.
 
 - **`find_node(entity_type, identifier_field, value, principal)`.** The recipe engine's
   `on_match: reference` (§7) needs to look an entity up by its declared identifier before
@@ -1094,7 +1127,8 @@ set itself went beyond it for transaction management and schema application:
   `superseded_by` chain stays individually retrievable. **Confirmed empirically that ArcadeDB (like
   TinkerPop generally) cannot relink an existing edge's endpoints** — `UPDATE E1 SET out = #rid`
   reports success but leaves `@out`/`@in` unchanged — so every edge incident to `node_id` is
-  cloned onto the replacement (provenance, handling, interval and occurrences preserved exactly)
+  cloned onto the replacement (provenance, handling, interval, occurrences, basis and datasets preserved
+  exactly; the replacement node keeps every dataset of the old one, ADR-099 Amendment 2)
   and the originals are marked `reverted`, rather than repointed in place. The clone-and-revert is
   wrapped in the same transaction as the rest of the operation: a failure partway rolls back to
   zero trace of the partial write, proven by a conformance case that injects a failure after N
@@ -1116,13 +1150,28 @@ set itself went beyond it for transaction management and schema application:
   load ledger), not a principal-scoped read. A reverted element is invisible to every read
   afterwards, any clearance, and is never actually deleted.
 
+Three reads take a set of nodes or the whole case rather than one seed, each with the access step on
+every node, every link and each link's other end, so a link counts only when both its ends can be
+seen and reverted, superseded and other-dataset elements count nowhere:
+
+- **`edges_among(node_ids, principal, edge_types=None) -> list[Edge]`** (ADR-098 decision 1). Every
+  link with both ends in the set: the links among a selection, or among everything in view.
+- **`type_counts(principal) -> TypeCounts`** (ADR-100 Amendment 1). Nodes per entity type and links
+  per link type the principal can see.
+- **`most_connected(principal, *, entity_type=None, limit=10, offset=0) -> RankedNodes`** (ADR-100
+  Amendment 1). Nodes by visible degree, most first, ties by id, of one type when named, with
+  `total` (how many are ranked) and `offset`; a page past the end is empty, never a short page that
+  passes for the whole. Both types are in `schemas/explore.py`.
+
 One more method closes the `filtered_count` gap this section used to describe as outstanding
 (below):
 
-- **`expand_candidate_count(req) -> int`.** The unfiltered half of `Subgraph.filtered_count`'s
-  comparison. Same seed set, depth, edge-type and temporal scope as `expand(req, principal)`, but
-  with neither access axis applied — only structural exclusion (reverted, superseded) carries
-  over, since those aren't principal-dependent. No `principal` argument, matching
+- **`expand_candidate_count(req, *, datasets=None) -> int`.** The unfiltered half of
+  `Subgraph.filtered_count`'s comparison. Same seed set, depth, edge-type and temporal scope as
+  `expand(req, principal)`, but with neither handling axis applied — only structural exclusion
+  (reverted, superseded) carries over, since those aren't principal-dependent, and the case's
+  `datasets` (ADR-099 decision 4): what lies outside a case's datasets is not hidden from it, it is
+  not in its world, and counting it would say there is more. No `principal` argument, matching
   `revert_elements`: not a principal-scoped read, and it returns only a bare count, never a node,
   an id or a property, so it cannot itself disclose which nodes are hidden or why.
   `services/api`'s Working-Set Service is the only sanctioned caller — see below.
@@ -1177,13 +1226,17 @@ class SavedPattern(BaseModel):
     owner_id: str
     created_at: datetime
     definition: PatternQuery
+    dataset_id: str | None = None  # ADR-099 Amendment 3: the first dataset of the case it was saved in
 ```
 
 `pattern_id` is stable across a pattern's own edit history; `id` and `version` identify one
 specific saved revision, so "run the pattern I saved" and "run exactly what version 3 said" are
 both addressable. Deliberately carries `owner_id` and nothing shaped like `Handling.owning_unit`
 or a share target — a saved pattern is readable only by its own owner until pattern sharing is
-built; there is no broader-audience field to widen by accident because none exists yet. §11 covers
+built; there is no broader-audience field to widen by accident because none exists yet. It belongs
+to the dataset of the case it was saved in and is listed, loaded and run only in cases reading that
+dataset; a new version keeps its pattern's. One saved before ADR-099 Amendment 3 has no dataset
+and stays readable in every case of its owner (Amendment 5). §11 covers
 the watch this can be turned into.
 
 ## 9. `AnalyticsPort` request and response shapes
@@ -1217,6 +1270,28 @@ class EventFilter(BaseModel):
     window: Interval | None = None
     node_ids: list[NodeId] = []
     edge_types: list[str] = []
+    edge_ids: list[EdgeId] = []      # ADR-089: one link's events
+    event_ids: list[str] = []        # ADR-089 Amendment 1: these events exactly
+    value_filters: dict[str, list[str]] = {}   # equality facets, compiled into the WHERE clause
+    inherited: InheritedEvents | None = None   # ADR-084 Amendment 2; set only by the Conduit
+
+class InheritedEvents(BaseModel):    # a branch's parents' events on the links it holds
+    scopes: list[str] = []
+    edge_ids: list[EdgeId] = []
+
+class FirstSeenRequest(BaseModel):   # ADR-087: when each node and link first appears in the window
+    filter: EventFilter
+class FirstSeenResult(BaseModel):
+    nodes: dict[NodeId, datetime] = {}
+    edges: dict[EdgeId, datetime] = {}
+
+class EventListRequest(BaseModel):   # ADR-089: the events themselves, paged
+    filter: EventFilter
+    offset: int = 0                  # >= 0
+    limit: int = 50                  # 1 to 200
+class EventListResult(BaseModel):
+    total: int                       # how many match, so a page never passes for the whole
+    events: list[EventRecord] = []
 ```
 
 **`properties.site_cell` — an incident geocoded into a site-grid cell (owner rulings R9, R10).**
@@ -1424,6 +1499,7 @@ class Hotlist(BaseModel):
     review_date: date
     status: WatchStatus = "active"
     created_at: datetime
+    dataset_id: str | None = None   # ADR-099 Amendment 3: the first dataset of the case it was made in
 
 class Monitor(BaseModel):
     id: str
@@ -1431,7 +1507,15 @@ class Monitor(BaseModel):
     owner_id: str
     status: WatchStatus = "active"
     created_at: datetime
+    dataset_id: str | None = None   # its saved pattern's dataset (ADR-099 Amendment 4 decision 1)
 ```
+
+**A watch belongs to a dataset (ADR-099 Amendments 3 and 4).** A hotlist belongs to the first dataset
+of the case it was made in, a monitor to its saved pattern's; each is listed only in cases reading
+that dataset and raises an alert only on data of it. A hotlist's match in another dataset writes
+nothing at all, not even the `notify` stub below: the stub would say that something matched there.
+A watch made before Amendment 3 has no dataset and stays readable in every case of its owner
+(Amendment 5).
 
 A `Hotlist` is deliberately bare: an identifier, an owner, a review date, no handling ceiling — an
 analyst can hotlist a bare phone number read off a warrant before it resolves to anything they can
@@ -1461,6 +1545,7 @@ class Alert(BaseModel):
     referent_node_ids: list[NodeId] = []
     investigation_id: str | None = None
     created_at: datetime
+    dataset_id: str | None = None   # the dataset of the watch that raised it (ADR-099 Amendment 3)
 ```
 
 An `Alert` stores references to evidence, never copies — access is re-checked at read time against
@@ -1472,4 +1557,7 @@ an access-control scope, threaded from whichever producer route was investigatio
 point the triggering write happened; `None` for a producer with no single investigation in scope
 (a corpus-wide resolution trigger, say). Jumping from an alert into an investigation branches a new
 one from this field via the same mechanism an ordinary investigation branch already uses; a `None`
-here means the jump starts an unbranched investigation rather than one carrying that link.
+here means the jump starts an unbranched investigation rather than one carrying that link. An alert's
+entities are read as the case it arose in reads, and one with no case reads nothing of them
+(ADR-099 Amendment 1 decision 4). The case a jump opens reads the alert's dataset, else what the
+alert's case reads, else a dataset of its own (Amendment 4 decision 3).

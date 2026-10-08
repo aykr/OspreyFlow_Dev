@@ -24,6 +24,7 @@
    │  ArcadeDB /       DuckDB /          graphology /       LiteLLM →          │
    │  JanusGraph       ClickHouse        rustworkx /        Ollama / vLLM      │
    │                                     GraphFrames        + Whisper + VLM    │
+   │                                                        Recogniser: Stanza │
    │  Working-set cache: Valkey     Object store: MinIO     Index: OpenSearch  │
    └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -549,6 +550,13 @@ conformance test suite in `tests/conformance/`, and a component is only supporte
 its suite. Adding a new backend means writing an adapter and turning the suite green — no
 changes above the port.
 
+Two narrower ports sit beside the four, each also a `Protocol` with its suite written first, but
+neither is a tier boundary the way the four are: **`RecognisePort`** (`packages/ports/recognise.py`,
+ADR-098 decision 2), the fast named-entity pass *Extract entities* runs, served by Stanza in its own
+`ner` sidecar, whose findings are proposals like a model's; and **`MediaStore`**
+(`packages/ports/media.py`, ADR-094), which keeps a file's bytes in the object store under a
+reference, never in the graph.
+
 ### 2.1 GraphPort
 
 Persistent property graph: write, traverse, subgraph extraction, schema management.
@@ -572,6 +580,10 @@ listener, but some engines expose Gremlin over an HTTP command endpoint instead 
 separate listener. Either is conformant — what the port guarantees is the language and the fact
 that it never crosses into the Conduit's callers, not the socket underneath. An adapter records
 its transport in its README and proves itself the same way regardless: the conformance suite.
+On ArcadeDB 26.10.1 the adapter's Gremlin runs on the engine's Groovy engine
+(`-Darcadedb.gremlin.engine=groovy`), because the default grammar parser refuses the bound variables
+and closures its writes use; that engine answers over HTTP only to `root`, the user the adapter
+connects as (ADR-101 decision 2). Rewriting the Gremlin for the grammar parser is future work.
 
 **Gremlin never leaves the Vault.** The Conduit builds Gremlin; the Glass never sees it and
 never sends it. This is what makes a future move to SQL/PGQ or openCypher an adapter change
@@ -594,14 +606,18 @@ creation), so a correction cannot silently disconnect a node from its own networ
 is the same operation for an edge: `01_DOMAIN_MODEL.md` §5's `Judgement.supporting`/`contradicting`
 can cite an `EdgeId` directly, so an edge needs the same "corrected, not vanished" guarantee — it
 has nothing to repoint, since nothing else in the domain model references an edge by id.
+Later reads, each with the access step on the element and on both ends of every link: `edges_among`
+(the links among a set of nodes, ADR-098 decision 1), and `type_counts` and `most_connected` (the
+Explore panel's counts and degree ranking, ADR-100 Amendment 1). `expand_candidate_count` takes the
+case's `datasets` (ADR-099 decision 4).
 
 Supported adapters: `arcadedb`, `janusgraph`. Candidate: `hugegraph`.
 
-> **PROPOSED, not yet the design (ADR-058, awaiting the owner's decisions D1 to D10).** `upsert_nodes` and
-> `upsert_edges` are the low-volume write path: merge-on-write, a weight against the live corpus, one element's worth of
-> round trips each. A set that arrives together (an Ingest Studio publish, a seed) would instead go through an optional
-> `BulkGraphLoader` capability, which an adapter may declare and which the engine falls back from to chunked `upsert_*`
-> where it is absent. The shape of that capability is decision D1.
+> **Bulk writes (ADR-058, accepted in its Amendment 1).** `upsert_nodes` and `upsert_edges` are the low-volume write
+> path: merge-on-write, a weight against the live corpus, one element's worth of round trips each. A set that arrives
+> together (a seed; the Enron and PaySim seeds load in bulk by default, Amendment 10) goes through the optional
+> `BulkGraphLoader` capability, which an adapter may declare and which the caller falls back from to chunked
+> `upsert_*` where it is absent.
 
 ### 2.2 AnalyticsPort
 
@@ -615,6 +631,10 @@ class AnalyticsPort(Protocol):
     async def cross_filter(self, req: CrossFilterRequest, principal: Principal) -> dict[str, Histogram]: ...
     async def baseline(self, req: BaselineRequest, principal: Principal) -> BaselineResult: ...
 ```
+
+It has grown beyond this snippet like `GraphPort`: `first_seen` (when each node first appears in
+the events, ADR-087 decision 1) and `list_events` (a paged read of the events themselves, ADR-089
+decision 2), each taking the principal like the rest.
 
 **There is no `raw_sql` escape hatch, deliberately.** An arbitrary SQL string cannot be
 access-filtered — the same reason the Conduit never accepts free-form Gremlin (ADR-003). Every
@@ -668,8 +688,10 @@ class ModelPort(Protocol):
 
 Backed by a LiteLLM proxy (MIT, self-hostable, runs air-gapped) in front of Ollama on a laptop
 and vLLM on a GPU cluster. Model choice, routing, fallback, per-team budgets and rate limits are
-`litellm-config.yaml`. Changing the extraction model is a YAML edit and a restart of one
-container.
+`litellm-config.yaml`. The model for each job (extraction, vision, transcription, embedding) is the
+deployment's own, chosen on the setup harness's *Models* screen from a closed list of pinned models,
+written to `osprey.yaml` as `models.*` and rendered into the proxy's routing table (ADR-095); a name
+off the list is refused, and the conformance suite keeps its own small model.
 
 ## 3. Quality attributes and how each is actually achieved
 
@@ -727,6 +749,12 @@ to be on every node and edge from the first write.
   `WHERE` clause. **No adapter may accept a call without a `Principal`** — enforced by the
   conformance suite, which asserts that an unauthorised principal cannot observe a filtered
   node's existence, not merely its properties.
+- The `Principal` also carries the datasets of the case its request path names
+  (`Principal.datasets`, ADR-099). The adapter limits every read to them in the same access step as
+  handling, so a node of another dataset is as absent as a hidden one. A request that names no case
+  carries none and reads nothing; only the Conduit's own background work (resolution, a load's
+  lookups, seeding) reads unlimited (`datasets=None`), and no request handler can make that
+  principal.
 - Redaction is not deletion: a filtered node is absent from the result, and the count is
   reported as filtered so the analyst knows the picture is incomplete. Showing a confident but
   partial network without saying so is worse than showing nothing.
@@ -751,6 +779,7 @@ ospreyflow/
 │   ├── ingest/                 # Connectors, normalisation, Knowledge Adapters
 │   ├── extract/                # Multimodal extraction workers
 │   ├── resolve/                # Splink entity resolution
+│   ├── ner/                    # The recogniser sidecar: Stanza (ADR-098)
 │   └── compute/                # ComputePort workers (rustworkx / Spark submit)
 ├── packages/
 │   ├── ports/                  # Protocol definitions — the architecture
@@ -761,7 +790,9 @@ ospreyflow/
 │   │   ├── analytics_clickhouse/
 │   │   ├── compute_rustworkx/
 │   │   ├── compute_spark/
-│   │   └── model_litellm/
+│   │   ├── model_litellm/
+│   │   ├── recognise_stanza/
+│   │   └── media_objectstore/
 │   ├── ontology/               # Schema definition, migrations, validation
 │   └── schemas/                # Shared Pydantic + generated TypeScript types
 ├── harness/                    # Browser setup harness and admin console; headless CLI
@@ -809,12 +840,15 @@ otherwise reach for by reflex. Two of them appear in the input documents.
 | MongoDB | SSPL | PostgreSQL / MinIO | |
 | Highcharts, AG Grid Enterprise | Commercial | Apache ECharts, TanStack Table | |
 | Grafana (9+) | AGPLv3 | Perses, or Grafana as a separate unbundled deployment | AGPL is acceptable for an unmodified separate service, not for bundling |
+| Stanford CoreNLP | GPL-3.0 | **Stanza** (Apache-2.0), held at 1.10.1 | Stanza 1.11.0 to 1.15.0 pull in `udtools` (GPL-2.0-or-later) and `udapi` (GPL-3.0-or-later). ADR-098 |
 
 Fonts: Atkinson Hyperlegible Next and IBM Plex Mono are both SIL OFL 1.1. Self-host them; do not
 load from a CDN — an air-gapped deployment must render correctly.
 
 `make licence-check` runs `pip-licenses` and `license-checker` against the allowlist and fails
-on any addition. Run it in CI on every pull request, not nightly.
+on any addition. Run it in CI on every pull request, not nightly. A sidecar's own environment is out
+of its sight, so the `ner` image gates its licences itself at build (`services/ner/licence_gate.py`,
+the same allowlist, default-deny; ADR-098 Amendment 1).
 
 Prove the check works with a committed fixture — a lockfile containing a known GPL-licensed
 package, and a test asserting `licence-check` rejects it by name. A licence gate nobody has
@@ -835,5 +869,7 @@ Recorded so that a later reader does not mistake an omission for an oversight.
   partition data within it; they are not a tenancy boundary.
   *Amended by ADR-056 (30 September 2026): one deployment may hold several vaults, one per dataset,
   within the same organisation. A vault is not a tenant; the organisation is still one.*
+  *Datasets (ADR-099) also partition what a case reads within the one organisation, enforced in
+  every read like handling; they are not a tenancy boundary either.*
 - **No mobile client.** The workspace targets a desktop analyst at ≥ 1440px. Responsive down to
   1024px for review, not for analysis.

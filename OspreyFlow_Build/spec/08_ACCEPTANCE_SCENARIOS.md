@@ -26,7 +26,9 @@ is about** — a real finding, since fixed by ruling R5.
 table.** The reason is one fact: a rendered deployment gives an analyst **no route by which to
 supply a source file** — `POST /v1/ingest/recipes` takes a `source_location` the Conduit's own
 container must be able to read, nothing is mounted there, and the only upload route in the Conduit
-is the site image. So B1–B3 and every row that depends on data arriving that way (B6, B7, B8, B13,
+is the site image. (That was so when the test was written. Since then the ingest folder is mounted
+and files can be uploaded into it, `POST /v1/investigations/{id}/ingest/source-files`, ADR-067 and
+ADR-099 Amendment 4; the recipe routes are under the case too.) So B1–B3 and every row that depends on data arriving that way (B6, B7, B8, B13,
 B14, B15–B18) cannot be performed by an analyst against a rendered deployment at all. That is a
 product gap, not a shortfall of the test. **Every row in that list has since been closed** —
 B1–B3 on 27 September 2026 (the ingest root, owner ruling R6), B7/B8/B15–B18 by the
@@ -504,7 +506,7 @@ now carries it.
 
 **Still not built: the two-step retraction R7 also describes** — marking a node is built
 (`02_GLASS_FRONTEND.md` §9.5) but the suppression still takes effect through the existing
-`/v1/nodes/{id}/retract` route rather than through an ingested retraction record.
+`/v1/investigations/{id}/nodes/{node_id}/retract` route rather than through an ingested retraction record.
 `06_DECISIONS.md` ADR-046's addendum records the two decisions that blocks on.
 
 ### The fixture's statistical shape is built and proved independently of the map UI
@@ -555,7 +557,13 @@ One later seizure record with two SIMs and a handset identifier.
 | B18 | Plot the device's sightings | Snail trail | An ordered track renders and animates under playback |
 | B19 | Expand to common contacts across the two principal endpoints | Pattern query | The intersection set is returned, with the estimated count shown before running |
 | B20 | Save the pattern as a monitor | Saved-pattern monitor | Subsequent matching ingest raises an alert with the same shape as B13 |
-| B21 | Run the pathfinder between the two principal endpoints, one from each investigation | Pathfinder | `POST /v1/paths` returns k-shortest paths through the Glass end to end; the shortest path traces the same cross-case link B16 found by timeline alone, and the on-path node state matches §3.1's own convention |
+| B21 | Run the pathfinder between the two principal endpoints, one from each investigation | Pathfinder | `POST /v1/investigations/{id}/paths` returns k-shortest paths through the Glass end to end; the shortest path traces the same cross-case link B16 found by timeline alone, and the on-path node state matches §3.1's own convention |
+
+**Each case reads only its datasets (ADR-099), and these rows depend on it.** B13 fires only if the
+seizure record is loaded into the hotlist's dataset, and B20 only on ingest into its pattern's
+dataset (a match in another dataset raises nothing). B14's new case reads the alert's dataset. B21's
+path across the two investigations is found only from a case reading both datasets. B16's overlay
+reads the analytics store, which stays keyed by case (ADR-099 decision 7), so it is unchanged.
 
 ### What B1–B3 prove
 
@@ -626,6 +634,7 @@ Run against both scenarios, on both the `local-lite` and `cluster` profiles.
 | --- | --- |
 | Every action appears in the audit stream with principal, query and result cardinality | Audit is architecture (`00_ARCHITECTURE.md` §5) |
 | A restricted principal running the same scenario sees fewer entities, is told how many are withheld, and is never told which | Filter at the port, disclose the count, never the content |
+| A case sees, counts and finds nothing outside its datasets, through search, suggestions, expansion, paths, the Explore counts and rankings | A dataset is a limit of access, like handling (ADR-099) |
 | Every model-derived node is `inferred` until confirmed; no automatic promotion occurs | `01_DOMAIN_MODEL.md` §2.1 |
 | No filter removes a node from the canvas; all filtering dims | `02_GLASS_FRONTEND.md` §2 |
 | The status bar count of dimmed and withheld items is correct at every step | An analyst must never mistake a partial picture for a complete one |

@@ -89,7 +89,7 @@ handling filter). A principal in the wrong unit gets the same 404 an unknown inv
 would — never a 403 — extending the existence-leak discipline `00_ARCHITECTURE.md` §5 already
 requires at node/edge level up to the investigation id itself.
 
-**Access by level (ADR-052, stage 1 built 29 September 2026).** The unit check above stays. On top of
+**Access by level (ADR-052).** The unit check above stays. On top of
 it a principal must hold a level on the case: their own grant (Viewer, Editor or Author) or the
 case's unit-wide level, whichever is higher. Each route declares the level it needs
 (`_authorized_at` in `services/api/app.py`), and `tests/services/api/test_investigation_levels.py`
@@ -101,13 +101,15 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 | Level | Routes under `/v1/investigations/{id}` |
 |---|---|
-| Viewer | `GET` the case; `tab` (PUT: the caller's own flag, ADR-084); `expand/preview`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `compute/{metric}`; `ingest/candidates` (GET); `dossier/documents/{doc}`; `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes` (GET), `links/{edge}/history` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the delta stream |
-| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `resolution/threshold` (PUT), `link`, `split`; `ingest/extract`, candidate `accept` and `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `link-types` (POST), `link-types/{proposal}/withdraw` (the proposer or an Author, ADR-090); `export`; `sites` (POST), `control-points`, `grid`; `ingest/recipes/{recipe}/run` |
-| Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`. An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
+| Viewer | `GET` the case; `access` (GET: the caller's own level); `tab` (PUT: the caller's own flag, ADR-084); `datasets` (GET, ADR-099); `search`, `suggest`, `paths` (POST, ADR-099); `explore/counts`, `explore/most-connected` (GET, ADR-100); `expand/preview`; `patterns/preview`, `patterns/run` (POST), `patterns`, `patterns/{pattern}` (GET); `compute/{metric}`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `hotlists`, `monitors`, `alerts`, `alerts/{alert}` (GET, ADR-099 Amendment 3); `questions` (GET, ADR-098); `ingest/candidates` (GET); `dossier/documents/{doc}`; `documents/{doc}/reader`, `documents/{doc}/file` (GET); `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes`, `links/{edge}/history`, `links/{edge}/events` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the Ingest Studio's reads (`ingest/source-files`, `ingest/recipes`, `ingest/recipes/{recipe}`, its `profile`, `map/sample-rows/{row}` and `map/handling-preview`, `ingest/recipe-registry`; ADR-099 Amendment 4); the delta stream |
+| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `nodes/{node}/confirm`, `retract`, `suppression-mark` (POST, DELETE; ADR-099 Amendment 1); `links-among` (ADR-098); `resolution/threshold` (PUT), `link`, `split`; `patterns/save`; `hotlists`, `monitors` (POST), `alerts/{alert}/jump`; `questions` (POST) and `questions/candidates/{candidate}/accept`, `reject` (ADR-098); `documents` (POST), `documents/{doc}/extract`, `designations`, and its candidate `accept`, `reject`; `ingest/extract`, its candidate `accept` and `reject`; `links/{edge}/events/documents`, `links/{edge}/events/{event}/extract` and its candidate `accept`, `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `link-types` (POST), `link-types/{proposal}/withdraw` (the proposer or an Author, ADR-090); `export`; `sites` (POST), `control-points`, `grid`; the Ingest Studio's writes (`ingest/source-files` (POST), `ingest/recipes` (POST), `ingest/recipes/{recipe}` (PATCH), its `versions`, `row-template`, `verify`, `publish`, `schedule` and `run`) |
+| Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `datasets` (PUT: what the case reads, ADR-099 decision 3); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`. An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
 
 `GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
-created by, branched from, and whether the caller has closed the case's tab). `POST .../branch` takes
-an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
+created by, branched from, whether the caller has closed the case's tab, and the names of the
+datasets it reads). `POST /v1/investigations` takes `dataset_ids`, at least one of the caller's unit;
+with none it makes a dataset of the case's own, named after it (ADR-099 decision 3). A branch reads its
+parent's datasets. `POST .../branch` takes an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
 among them, `name` names the new case. Without a body it forks the whole working set, as before. The
 copy is filtered for the branching principal like any read, and a choice with nothing left to copy
 (every id absent, hidden from the caller, or the list empty) is one `422 nothing_to_branch`, raised
@@ -115,8 +117,9 @@ before any case is created and the same whatever the reason (rules 3 and 4). `GE
 unit-wide level and every grant. A grantee is named by the account name the identity provider knows
 them by; a mistyped name grants nothing to anyone (ADR-052 P3).
 
-`POST /v1/investigations` needs no grant. Not yet built: the Glass picker and Share panel (stage 3) and the demo seeds' grants (stage 4). The
-listing has no counts yet; they need the working set read under the caller's handling filter.
+`POST /v1/investigations` needs no grant. The Glass's case picker and the demo seeds' grants
+(`scripts/case_seed.py`) are built; a Share panel in the Glass is not, so a grant is made through the
+routes above. The listing has no counts yet; they need the working set read under the caller's handling filter.
 
 ### 3.2 Working set
 
@@ -218,11 +221,11 @@ events of each case it came from that the account can see, **on the links the br
 extracted from one. `inherited` is always set by the Conduit; a value sent by a caller is discarded.
 `geometries` is reference data, not case data, and is unchanged.
 
-**Saved patterns are private to the principal who saved them.** `GET /v1/patterns` lists only the
-calling principal's own — `PatternStore.list_authorized` filters by owner in the query itself, not
-after fetching everything, and `GET /v1/patterns/{id}` applies the same authorization to a single
+**Saved patterns are private to the principal who saved them.** `GET /v1/investigations/{id}/patterns` lists only
+the calling principal's own — `PatternStore.list_authorized` filters by owner in the query itself, not
+after fetching everything, and `GET /v1/investigations/{id}/patterns/{pattern_id}` applies the same authorization to a single
 load. Since ADR-099 Amendment 3 a saved pattern belongs to the dataset of the case it was saved in
-and is found only in a case reading that dataset, the dataset clause in the same query. `POST /v1/patterns/save` raises the identical
+and is found only in a case reading that dataset, the dataset clause in the same query. `POST /v1/investigations/{id}/patterns/save` raises the identical
 `PatternNotFoundError` (404) when `pattern_id` names a pattern the caller does not own — the same
 existence-leak collapse every other route in this surface uses, enforced inside the save itself
 rather than a separate ownership check beforehand.
@@ -290,7 +293,8 @@ PATCH  /v1/investigations/{id}/ingest/recipes/{recipe_id}/schedule              
 ```
 
 **Connect (`POST`/`GET`/`PATCH .../recipes`) is `SOURCE_AUTHOR`-gated**, the studio role that also
-gates listing source files (`GET /v1/ingest/source-files`) and uploading one (`POST /v1/ingest/source-files`, ADR-067) — creating or editing a draft and
+gates listing source files (`GET /v1/investigations/{id}/ingest/source-files`) and uploading one (`POST` to the same path,
+ADR-067; under the case since ADR-099 Amendment 4) — creating or editing a draft and
 picking a source to point it at are the same action, one step apart. `GET .../recipes/{id}`
 rejects (409, via `RecipeNotADraftError`'s own sibling checks elsewhere in this family) once a
 recipe has left `draft` status for the edit route, but stays readable regardless of status.
@@ -318,15 +322,20 @@ override produces.
 reference` element's lookup against the existing graph still goes through the ordinary,
 principal-scoped `GraphPort.find_node` — an access-filtered miss reads as "would create" exactly
 like a genuine miss would, so a dry run cannot be used to discover that a higher-classification
-match exists. A completed run, rejections included, marks the recipe verified; publishing checks
+match exists. The lookup reads with the case's principal, so a value already held only by another
+dataset is not found and a new node is made for it in this one: one address loaded into two
+datasets by two loads is two nodes, joined only by resolution, unless the loads write the same node
+id (ADR-099 Amendment 1 decision 5). A completed run, rejections included, marks the recipe verified; publishing checks
 that flag rather than re-running the dry run itself.
 
 **Publish, its schedule, and reopening a version are all `SOURCE_APPROVER`-gated**, a distinct
 role from `SOURCE_AUTHOR` — the source-approver's sign-off *is* the publish action, not a separate
 step, and reopening a published recipe for a new mapping (`POST .../versions`) needs the identical
 sign-off since publishing the new version *is* the approval; there is no separate "approve a
-changed mapping" action. `GET /v1/ingest/recipe-registry` is Publish's own listing, every status
-the principal's own unit owns, not only drafts — a distinct path from `GET /v1/ingest/recipes`
+changed mapping" action. `GET /v1/investigations/{id}/ingest/recipe-registry` is Publish's own
+listing, every status the principal's own unit owns, not only drafts, of the case's datasets (and
+those made before ADR-099 Amendment 3, which name none, Amendment 5) — a distinct path from
+`GET /v1/investigations/{id}/ingest/recipes`
 rather than a query parameter, since the latter already registers `{recipe_id}` in the same
 position and a literal suffix there would collide with it. `POST .../publish` writes the recipe's
 own YAML and commits it before flipping the registry row to `published` — a published row never
@@ -344,9 +353,9 @@ POST   /v1/investigations/{id}/ingest/candidates/{candidate_id}/accept accept on
 POST   /v1/investigations/{id}/ingest/candidates/{candidate_id}/reject reject one candidate
 ```
 
-`investigation_id` here is audit attribution, not an access-control scope — an accepted candidate's
-minted node joins the shared graph/Postgres registry like any other write, the same boundary
-`run_studio_recipe` already draws. `POST .../extract` calls the configured extraction model against
+The path's case scopes what the principal reads to its datasets, and an accepted candidate's minted
+node is written into the case's first dataset (ADR-099 decision 6, Amendment 1 decisions 1 and 2),
+so `investigation_id` is no longer audit attribution only. `POST .../extract` calls the configured extraction model against
 the given text under the requesting principal's own handling marking and returns the raw
 candidates for review (`GET .../ingest/candidates`, above, lists them back). Accept and reject are
 both single-candidate, no bulk operation of either kind exists — `09_INGEST_STUDIO.md` §7's own
@@ -385,7 +394,8 @@ per-comparison match weights, not just the total.
 **A manual link, unlike a split, can grow a saved pattern's or hotlist's own match set** — `POST
 .../link` evaluates every watch this principal's hotlists/monitors/saved patterns declare, the
 identical evaluation `run_studio_recipe` (§3.4) already performs on an ingest, since a `SAME_AS`
-write and an ingested row are both, from a watch's own point of view, new evidence to check.
+write and an ingested row are both, from a watch's own point of view, new evidence to check. A watch
+is evaluated only against data of its own dataset (ADR-099 Amendment 3).
 `POST .../split` never evaluates anything — a `NOT_SAME_AS` write can only shrink a match set, and
 a watch has nothing to newly fire on.
 
@@ -399,7 +409,9 @@ POST   /v1/resolution/{entity_type}/run   re-run resolution for one entity type 
 ran — this acts on every entity of the given type regardless of which investigation's working set
 it happens to appear in, since the resolution `SAME_AS` edges it writes are corpus-wide facts, not
 investigation-scoped ones (§4 already collapses them per-session at read time, at whatever
-threshold that session has set). Returns immediately with an accepted job id; the run itself is
+threshold that session has set). It compares across the corpus, but each `SAME_AS` it writes carries
+only the datasets its two records share: a match across two datasets is in none, and no case reads
+it (ADR-099 Amendment 2 decision 3). Returns immediately with an accepted job id; the run itself is
 the same post-ingest resolution job `run_studio_recipe` (§3.4) also submits per resolvable entity
 type.
 
@@ -465,15 +477,20 @@ GET    /v1/investigations/{id}/alerts/{alert_id}   one alert, expanded to its ju
 POST   /v1/investigations/{id}/alerts/{alert_id}/jump   a new case seeded from the alert, reading the alert's dataset, Editor
 ```
 
-**Owner-only, not investigation-scoped** — a hotlist or a monitor is a standing watch that outlives
-any one investigation, and an alert belongs to the principal who owns the watch that fired it, not
-to whichever investigation happens to be open when it does. `POST .../jump` branches a fresh
+**Owner-only, and of a dataset** — a hotlist or a monitor is a standing watch that outlives any one
+investigation, and an alert belongs to the principal who owns the watch that fired it, not to
+whichever investigation happens to be open when it does. Each belongs to a dataset (a hotlist to
+the first of the case it was made in, a monitor to its saved pattern's; ADR-099 Amendments 3 and 4)
+and is listed only in cases reading that dataset. A match in another dataset writes nothing, not
+even a `notify` stub, and an alert's entities are read as its case reads them. `POST .../jump` branches a fresh
 investigation from `Investigation.branched_from`, seeded with the alert's own referent nodes — the
 identical branching mechanism §3.1's `POST /v1/investigations/{id}/branch` already uses, not a
 second implementation of it. `Alert.investigation_id` (the triggering event's own investigation,
 where the underlying ingest or resolution that raised the alert happened) may be absent — a
 resolution-triggered alert carries no single investigation — and the jump still succeeds, simply
-unlinked (`Investigation.branched_from` is `None` rather than pointed at a wrong investigation).
+unlinked (`Investigation.branched_from` is `None` rather than pointed at a wrong investigation). The
+case a jump makes reads the alert's dataset, else what the alert's case reads, else a dataset of its
+own (Amendment 4 decision 3).
 
 ### 3.9 Sites
 
@@ -585,7 +602,8 @@ promote to batch). Encode this as a typed error, not a generic 400, so the clien
 right dialogue.
 
 **Projection.** The stored set is source-fidelity. The projection applied on read is: resolution
-collapse at the session's τ, handling filter for the principal, then delta computation against
+collapse at the session's τ, the access check for the principal (handling and the case's datasets),
+then delta computation against
 what the client last acknowledged. Projection is pure and cheap; it runs per request. Resolution
 collapse is implemented with Splink; the handling filter and delta computation are implemented
 too.
@@ -597,12 +615,14 @@ shared team investigation, or one principal's branch of another's, means a later
 `Principal` may be different, and less privileged, than whoever's `expand`/`seed` call originally
 populated a given node. `GraphPort`'s own access filtering at the point of fetch is still the only
 thing that ever decides what gets *written* to the store — nothing re-derives or second-guesses
-that. What the handling filter re-applies on every read (`ontology.handling.principal_may_view`,
-the same predicate the adapter's compiled Gremlin is built from) is a *second*, independent check
+that. What the access check re-applies on every read (`ontology.handling.principal_may_read`: handling,
+`principal_may_view`, and the case's datasets, `in_case_datasets`, ADR-099 Amendment 1 decision 3 —
+the same predicates the adapter's compiled Gremlin is built from) is a *second*, independent check
 for whoever is *reading* the store back: a node one principal was entitled to fetch is not
 disclosed to a different principal who is not. This applies uniformly to the reconnect snapshot,
 replayed missed deltas, a live WebSocket push, and a `branch` copy — you cannot fork what you
-cannot see, either.
+cannot see, either. The stream's principal comes from a ticket minted outside any case, so the
+stream scopes it to its own case before the first read.
 
 **Why server-side rather than browser-only.** Three reasons that each independently decide it.
 An investigation must survive a tab crash. A branch operation must be atomic. And the resolution
@@ -640,7 +660,7 @@ recovery path work. Skipping it is the most expensive shortcut available in this
 - **load** — batched writes through `GraphPort` and `AnalyticsPort` in one logical transaction
   per document.
 
-  > **Spec and code disagree here, and ADR-058 (PROPOSED) settles which way.** The engine writes one element per
+  > **Spec and code disagreed here, and ADR-058 (accepted in its Amendment 1) settles which way.** The engine writes one element per
   > `GraphPort` call today (`services/ingest/engine.py`), not batches. Proposed: a publish aggregates its resolved
   > elements and writes them through the bulk-load capability by default, falling back to `upsert_*` only for elements
   > that collide with what is already stored. One transaction per document stays unachievable at 10^5 elements; a failed
@@ -672,14 +692,21 @@ link.
 
 ### 5.2 Extraction
 
-Four modalities behind one `ModelPort`:
+Four modalities behind one `ModelPort`, each the deployment's own model chosen from a pinned list
+(`osprey.yaml` `models.*`, ADR-095), plus a fast recogniser in front of the text path:
 
 | Input | Model class | Default local | Output |
 | --- | --- | --- | --- |
-| Text | Instruction-tuned LLM | Qwen/Llama-class 7–14B via Ollama | Typed nodes and edges |
-| Audio | ASR | faster-whisper | Transcript with word timings and speaker turns |
-| Image | Vision-language | Qwen2-VL / Llama Vision | Description, OCR, detected objects |
+| Text, first pass | Named-entity recogniser (`RecognisePort`) | Stanza 1.10.1, in the `ner` sidecar (ADR-098) | People, organisations, places (GPE, LOC, FAC), and email addresses and phone numbers by pattern as `Endpoint`s; no score; dates and money are not proposed |
+| Text, on request | Instruction-tuned LLM | `models.extraction`: `qwen2.5:7b-instruct` (or the 14b) via Ollama, 32,768-token context | Typed nodes and edges, each with a confidence |
+| Audio and video | ASR | `models.transcription`: `Systran/faster-whisper-tiny.en` | Transcript with word timings; a video's audio, time as the locator, frames not analysed (ADR-094) |
+| Image | Vision-language | `models.vision`: `moondream:1.8b-v2-q4_K_M` | Description and OCR, the image region as the locator (ADR-094) |
 | Document | Layout + text | Text path after layout parse | As text, plus table structure |
+
+*Extract entities* and the extraction routes run the recogniser by default and the model pass only
+when asked (`using: model`, ADR-098 Amendment 1 decision 4). Text longer than one extraction window
+is read in overlapping windows and the findings joined, so nothing past a window is dropped unread
+(ADR-095 decision 2). Embeddings use `models.embedding` (`all-minilm:22m-l6-v2-fp16`).
 
 **Structured output is enforced, not requested.** The extraction call passes a JSON Schema
 generated from the active ontology and uses constrained decoding — vLLM guided decoding on the
@@ -688,7 +715,8 @@ supported extraction model. Parsing free text for JSON and hoping is the single 
 of silent data corruption in pipelines of this kind.
 
 Each extracted element carries the model identifier and version, the character span or timestamp
-it came from, and the model's reported confidence. All of it is `inferred` until confirmed.
+it came from, and the model's reported confidence (none for a recogniser finding, which reads *found
+by Stanza*). All of it is `inferred` until confirmed.
 
 **The golden set is a build artefact.** `tests/golden/` holds documents with hand-labelled
 expected extractions. Changing a prompt or a model runs the set and reports precision and recall
@@ -719,7 +747,9 @@ review rather than acting on it.
 
 **Principal resolution.** OIDC via Keycloak (Apache-2.0). The session token resolves to a
 `Principal` carrying identity, unit, roles, clearance, and the handling codes the principal may
-receive.
+receive, and, for a request whose path names a case, that case's datasets (none otherwise, so it
+reads nothing). `get_principal` adds them; every principal a route is given comes through it
+(ADR-099 decision 5, Amendment 1 decision 1).
 
 **Enforcement at the port.** The `Principal` is a required argument on every read path in
 `GraphPort` and `AnalyticsPort`. Adapters inject the filter into the traversal or the `WHERE`
@@ -740,7 +770,8 @@ worse than a refused one.
 handling scheme. A `consult_originator` item blocks the export and is named specifically.
 Override requires a justification and an originator reference, both recorded. Exports carry the
 Osprey mark, the investigation reference, the export timestamp, the resolution threshold in
-force, and a manifest of withheld items by count.
+force, and a manifest of withheld items by count. A disclosed limit (ADR-099 Amendment 1 decision 6):
+export of a link checks the link's handling as the client submitted it, not its datasets.
 
 ## 7. Caching
 
@@ -753,8 +784,9 @@ the wrong one.
 | Query result | Valkey string | hash of (query, principal_class, τ) | TTL 300s + on graph write to touched types |
 | Analytics result | Valkey string | hash of (query, principal_class) | TTL 900s + on partition load |
 
-`principal_class` rather than `principal_id`: cache by the set of handling codes the principal
-may receive, not by the person. Otherwise the cache is useless at scale — and caching by person
+`principal_class` rather than `principal_id`: cache by what the principal may read — clearance, unit,
+the handling codes it may receive and the case's datasets (ADR-099; `tests/services/api/
+test_cache_access_class.py`) — not by the person. Otherwise the cache is useless at scale — and caching by person
 while keying on query is how access-control leaks happen.
 
 ## 8. Failure behaviour

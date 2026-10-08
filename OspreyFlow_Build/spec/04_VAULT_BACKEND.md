@@ -66,6 +66,15 @@ over its own native engine; JanusGraph is TinkerPop-native. Traversal steps that
 be unsupported, slow, or subtly different on the other — `repeat().until()` semantics, ordering
 guarantees without an explicit `order()`, and index selection are the usual offenders.
 
+**The ArcadeDB in use is 26.10.1** (`harness/render.py`, `deploy/compose/dev.yaml`; ADR-101). It moved
+from 25.5.1, where changing one record's value under a `NOTUNIQUE` index dropped every other record
+with that value from the index, so a revert hid every node of its type from a typed read. On 26.10.1
+Gremlin runs with `-Darcadedb.gremlin.engine=groovy`, because the default grammar parser refuses the
+bound variables and closures the adapter's writes use, and that engine answers over HTTP only to
+`root`. 26.10.1 also sends a Gremlin map as `{"result": [{"key", "value"}, ...]}`; the client turns it
+back into the map the adapter reads, the `id` property winning over the record id
+(`client._gremlin_row`).
+
 The mitigation is to keep the surface small. The Conduit builds Gremlin from a bounded set of
 composable builders — expand, path, match, aggregate — not free-form traversal strings. The
 conformance suite runs every builder against every adapter and asserts identical results on a
@@ -88,6 +97,11 @@ Both engines need explicit indexes; neither will be usable without them.
   value, so it matches nothing (ADR-074 Amendment 2).
 - Composite index on `(type, handling.classification)` — the access filter runs on every read
   and an unindexed filter there costs more than the query.
+- `datasets` (ADR-099) is a top-level list field beside the handling fields. The access step tests
+  it with `filter(values("datasets").unfold().is(within(...)))`, not `has("datasets", within(...))`,
+  which compares the whole list with each value and matches nothing. ADR-099 decision 2 calls the
+  field indexed; **no index on it is built yet**, so the test runs on the elements the rest of the
+  step selects.
 - Mixed/full-text index on name-like properties, served by OpenSearch on the cluster profile.
 - Vertex-centric index on `(edge_type, interval.from)` for every temporal edge type. Without
   this, timeline-filtered expansion on a high-degree node scans the whole adjacency list, which
@@ -154,11 +168,18 @@ Conduit ──► LiteLLM proxy ──┬──► Ollama            (local-lite
                             ├──► vLLM              (cluster: LLM + VLM, GPU)
                             ├──► faster-whisper    (ASR, both profiles)
                             └──► text-embeddings   (embeddings, both profiles)
+Conduit ──► ner (Stanza)                            (the fast recogniser, called directly
+                                                     at OSPREY_RECOGNISER_URL, not through LiteLLM)
 ```
 
 LiteLLM (MIT core, self-hostable, runs air-gapped) presents one OpenAI-compatible endpoint.
 Everything above it speaks one protocol. Routing, fallback, per-team budgets and rate limits are
 `litellm-config.yaml`.
+
+The example below shows the shape. A deployment's rendered `litellm.yaml` carries its own
+`models.extraction` (`qwen2.5:7b-instruct` by default, the 14b the other choice, each pinned by
+digest, served with `num_ctx` 32,768), `models.vision`, `models.transcription` and
+`models.embedding` (ADR-095).
 
 ```yaml
 model_list:
@@ -182,8 +203,9 @@ router_settings:
 ```
 
 **Code never names a model.** It names a role: `extract-text`, `extract-vision`, `transcribe`,
-`embed`, `summarise`. Changing the model behind a role is a YAML edit and a container restart,
-which is the flexibility requirement satisfied concretely rather than aspirationally.
+`embed`, `summarise`. The model behind a role is chosen on the setup harness's *Models* screen from
+the pinned list and rendered into the table (ADR-095), which is the flexibility requirement satisfied
+concretely rather than aspirationally.
 
 **Egress is default-denied.** The model gateway is the only component permitted to reach a
 network outside the deployment, and in the default configuration it is not permitted either. A
@@ -200,7 +222,8 @@ material must not be able to reach a hosted endpoint by a routing accident.
 | Cache and queue | Valkey | BSD-3 | Working set, session, cache, local queue |
 | Cluster queue | NATS JetStream | Apache-2.0 | Job distribution on the cluster profile |
 | Identity | Keycloak | Apache-2.0 | OIDC, roles, clearance claims |
-| Relational store | PostgreSQL | PostgreSQL Licence | Investigations, judgements, audit, users, jobs |
+| Relational store | PostgreSQL | PostgreSQL Licence | Investigations, judgements, audit, users, jobs; datasets and what each case reads (`datasets`, `investigation_datasets`, ADR-099); questions to the model (`case_questions`, ADR-098); link-type proposals and the overlay (ADR-090); saved patterns, watches, alerts and Studio recipes |
+| Recogniser | Stanza 1.10.1, in the `ner` sidecar | Apache-2.0 | The fast named-entity pass, CPU (ADR-098) |
 | Tiles | PMTiles / TileServer GL | BSD-3 / MIT | Offline basemaps |
 | Observability | OpenTelemetry + Prometheus + Loki | Apache-2.0 | |
 
@@ -226,11 +249,27 @@ Each port has a suite that runs against every adapter in CI, on the same fixture
 paths; pattern match; temporal filtering on a vertex-centric index; access filter with three
 principals of differing clearance; assert that an unauthorised principal cannot detect a
 filtered node's existence via path length, degree count or aggregate bucket; transaction
-rollback; schema migration up and down.
+rollback; schema migration up and down. A dataset section modelled on the handling one (ADR-099):
+another dataset's node and link match a graph where they never existed, through every read and the
+candidate count. `edges_among` (ADR-098); `type_counts` and `most_connected`, each checked right on
+its own and unchanged once hidden, other-dataset and reverted neighbours are added beside it
+(ADR-100); reverting, correcting and re-writing one of three nodes leaves the others listed
+(ADR-101).
 
 **AnalyticsPort suite** — identical histogram, geobin and baseline results across adapters,
 including edge cases: empty window, single-event window, window crossing a DST boundary, null
-coordinates.
+coordinates; `first_seen` (ADR-087), `list_events` paged with its total (ADR-089), `event_ids`
+(ADR-089 Amendment 1) and a branch's `inherited` events (ADR-084 Amendment 2).
+
+**RecognisePort suite** (ADR-098) — a person, an organisation and a place found with their spans;
+spans count characters, not bytes; an empty text has no entities and the recogniser names itself; a
+text past the limit is refused, never read in part. (Mapping the recogniser's labels to ontology
+types, and proposing nothing as accepted, is the Conduit's and is tested there.)
+
+**MediaStore suite** (ADR-094) — a file put comes back whole; the same bytes get the same reference
+and different bytes another; a reference says what kind of file it names; a reference never put, or
+one this store does not make, is not found; a file held under a name the store does not make is
+refused.
 
 **ComputePort suite** — identical metric values across all three tiers on the 5,000-node
 fixture, within tolerance.
@@ -243,8 +282,9 @@ A component without a green suite is not a supported component, whatever its mer
 the documentation, because the failure mode otherwise is someone swapping in an untested adapter
 in production and discovering the differences during an investigation.
 
-> **PROPOSED, not yet the design (ADR-058 D1, D7).** If `BulkGraphLoader` becomes an optional capability, its
-> conformance section is written before any adapter builds it (rule 1) and must prove: the same validation as
+> **The bulk loader's section (ADR-058 D1, D7, accepted in its Amendment 1;
+> `tests/conformance/graph_port/test_bulk_loader.py`).** It was written before the adapter built the capability
+> (rule 1) and proves: the same validation as
 > `upsert_*`; one element and many give the same stored result; a pair already stored is handed back, not merged or
 > dropped; `revert_load` removes exactly what the load wrote; and the count of ids stored twice is reported.
 
