@@ -214,9 +214,10 @@ ten deployments and destroys the model volume each time.
 with `docker compose logs -f ollama`, or `docker compose exec ollama ollama list` — when
 the deployment's extraction model and `all-minilm:22m-l6-v2-fp16` appear, extraction works;
 `moondream` backs image description only, and `qwen2.5:0.5b-instruct` is the conformance suite's.
-**A disagreement to settle:** ADR-095 decision 1 says the deployment reports healthy only once its
-extraction model is present, but the rendered Ollama has no health check (`harness/render.py`, "No
-healthcheck, deliberately"), so it does not. On any later start the models are already on the volume and the
+The deployment says when they have arrived rather than waiting for them (ADR-095 Amendment 2):
+`GET /v1/readiness`, signed in, lists the extraction, vision and embedding models and whether each
+is present, and is `ready` only when all are. A model extraction asked for before its model is in is
+refused in words (`503 model_unavailable`). On any later start the models are already on the volume and the
 tier is ready in seconds.
 
 **Open defect, 27 September 2026 — a stopped-and-started deployment loses the demo analyst's

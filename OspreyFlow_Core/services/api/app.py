@@ -162,6 +162,7 @@ from schemas.profile import SourceProfile
 
 from . import compute_routes as compute_routes_module
 from . import dossier as dossier_module
+from . import readiness as readiness_module
 from . import resolution as resolution_module
 from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
@@ -4106,6 +4107,15 @@ async def resolve_now_route(
 #: compares the anonymous and authenticated responses byte for byte has one thing to compare
 #: against and a future edit cannot change one caller's answer without changing the other's.
 LIVENESS_BODY: Final[dict[str, str]] = {"status": "ok"}
+
+
+@app.get("/v1/readiness")
+async def readiness_route(principal: PrincipalDep) -> readiness_module.Readiness:
+    """Whether the deployment's models are present (ADR-095 Amendment 2): any signed-in principal,
+    no case, no store. The deployment does not wait for its models at start; this says when they
+    have arrived."""
+    del principal
+    return await readiness_module.deployment_readiness()
 
 
 @app.get("/healthz")

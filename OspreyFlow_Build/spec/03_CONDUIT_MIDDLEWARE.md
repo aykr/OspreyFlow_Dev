@@ -44,6 +44,7 @@ cost of a flexible query layer on top of an access-filtered graph is not worth p
 
 ```
 GET    /healthz                                is this process up
+GET    /v1/readiness                           whether the deployment's models are present (signed in; ADR-095 Amendment 2)
 ```
 
 **Owner's decision, 24 September 2026.** One unauthenticated route, outside `/v1` because it is

@@ -1208,6 +1208,18 @@ def test_arcadedb_is_a_version_whose_indexes_survive_an_update_and_runs_our_grem
     assert "curl" not in probe and "wget" in probe
 
 
+def test_the_conduit_is_told_where_ollama_is_so_it_can_say_when_its_models_arrived(
+    rendered: RenderResult,
+) -> None:
+    """ADR-095 Amendment 2: the deployment reports whether its models are present
+    (`GET /v1/readiness`) by asking Ollama's list. Without the address the report says no model
+    server is configured, on every deployment. The planted violation: the setting absent."""
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    assert "ollama" in document["services"]
+    environment = document["services"]["api"]["environment"]
+    assert environment.get("OSPREY_OLLAMA_URL") == "http://ollama:11434"
+
+
 def test_the_conduits_config_mount_is_relative_to_the_compose_file_not_the_repository(
     rendered: RenderResult,
 ) -> None:

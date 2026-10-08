@@ -773,6 +773,8 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             api_environment["LITELLM_HOST"] = "litellm"
             api_environment["LITELLM_PORT"] = "4000"
             api_environment["LITELLM_API_KEY"] = LITELLM_KEY
+            # ADR-095 Amendment 2: where to ask whether the models have arrived (`/v1/readiness`).
+            api_environment["OSPREY_OLLAMA_URL"] = "http://ollama:11434"
             # ADR-098 decision 2: the fast recogniser. Not in `depends_on` below: without it the
             # rest of the Glass still works, and Extract entities says so and offers the model.
             api_environment["OSPREY_RECOGNISER_URL"] = "http://ner:8000"

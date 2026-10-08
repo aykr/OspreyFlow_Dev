@@ -10075,3 +10075,15 @@ Status: accepted 8 October 2026 (mine, within the owner's "carry on with stage 3
 Status: accepted 8 October 2026 (the owner: "align these decision logs as needed and supersede the stale one").
 
 Amendment 6 item 4 says the 405 on the case list was "fixed by the refresh sequence (ADR-049 Amendment)". ADR-049 is a process record and is not published with the product, so a published reader cannot follow that reference. It is superseded by this: the fix is the refresh sequence, `make refresh` (`python -m scripts.refresh`, `05_DEPLOYMENT.md` §3), which rebuilds the owned images and brings the deployment up to date. Nothing else in Amendment 6 changes. The decision-log publication gate now reads an amendment as its own ADR's (`tools/decision_log_publication_check.py`), which is how this citation was found: it had been read as ADR-055's, under whose heading ADR-049's own amendments stand.
+
+### ADR-095, Amendment 2 (8 October 2026) — the deployment reports its models' readiness; it does not wait for them
+
+Status: accepted 8 October 2026 (the owner: "I am not sure what is best possible path for you to fix this, please go ahead and make the required fixes"; recorded so it can be overruled).
+
+Decision 1 says the deployment "reports healthy only once [its extraction model] is present". Read as a container health check, that cannot hold together with what was measured before it: gating `docker compose up --wait` on the model pull made a CI gate ten times slower (9m40s to 1h43m, `05_DEPLOYMENT.md` §2.1.1), and `apply` failed outright with a model still downloading. So:
+
+1. **The deployment reports, and does not wait.** `GET /v1/readiness` (any signed-in principal, no case, no store) asks Ollama's own list (`/api/tags`) for each model the Conduit serves with through it, extraction, vision and embedding, and says `ready` only when every one is there under its own tag (a bare name is its `latest`). Transcription is the Whisper sidecar's and is not in that list. An Ollama that does not answer is not ready, and the report says so in words. The renderer gives the Conduit the address (`OSPREY_OLLAMA_URL`); refresh brings the new setting into a deployment rendered before.
+2. **The rendered Ollama still has no health check**, on purpose, so start-up never waits on gigabytes.
+3. **A request that needs a model not yet present is refused in words**, as it already was: a `503 model_unavailable` saying the model may still be downloading.
+
+Tests: `tests/services/api/test_readiness.py` (not ready until the extraction model is present; a model only under its own tag; Ollama refusing a connection or answering 500 is not ready and says so; none configured; the route needs a principal), `tests/harness/test_render.py` (the Conduit is told Ollama's address).
