@@ -26,6 +26,7 @@ from typing import Any, Protocol
 
 from conduit_common.identity import now_utc
 from ontology.errors import OntologyError
+from ontology.handling import HandlingScheme, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import BulkEdgeResult
 from schemas.domain import AuditStub, EdgeWrite, OntologySchema, WeightComponents
@@ -88,10 +89,16 @@ class _Planned:
 
 class BulkEdgeLoader:
     def __init__(
-        self, transport: BulkTransport, weight_config: WeightConfig = WeightConfig()
+        self,
+        transport: BulkTransport,
+        weight_config: WeightConfig = WeightConfig(),
+        *,
+        handling_scheme: HandlingScheme,
     ) -> None:
         self._transport = transport
         self._weight_config = weight_config
+        # ADR-102: a pair written twice in one load keeps the higher handling of the two.
+        self._scheme = handling_scheme
 
     async def load(
         self,
@@ -116,7 +123,11 @@ class BulkEdgeLoader:
             directed_by_type[write.type] = edge_type.directed
 
         # 2. Repeated pairs collapse by the shared merge rule.
-        aggregated = aggregate_edge_writes(edges, directed=lambda t: directed_by_type[t])
+        aggregated = aggregate_edge_writes(
+            edges,
+            directed=lambda t: directed_by_type[t],
+            handling=lambda old, new: merge_handling(old, new, self._scheme),
+        )
 
         # 3. Endpoints exist and fit the type, checked in batches before anything is written.
         await self._check_endpoints(schema, aggregated)

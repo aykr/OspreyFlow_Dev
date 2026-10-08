@@ -10157,3 +10157,27 @@ Status: accepted 8 October 2026 (building Amendment 7 decision 4, the owner's "A
 2. **In the Inspector,** a node's *Shares contacts* part offers each link type its own type starts (not a system type): "Who shares two contacts by “Communicated with”?", then the ten who share most, "bob · shares 446", saying of how many. A pick (`POST .../nodes/{node}/shared-contacts/{other}/canvas`, Editor) puts the two, the contacts they share and the links among them on the canvas, through `seed`, all or `limit_exceeded`. The shared contacts are ADR-030's two-pinned-roots pattern, bounded by the first node's contacts: the busiest pair, 448 nodes and 6,377 links, in 1.1 s. A link type must be one of the ontology's own (422 otherwise); a node the reader cannot see is 404.
 3. **A defect in ADR-030's pinned-root join, found here and fixed first:** its reverse walk stepped with `.in()`, checking each node but never the link, so a SECRET link made a visible endpoint a common contact for an OFFICIAL reader, telling them the link existed (rule 3). It walks `inE` then `outV` now, the access step on each. `test_match_intersection_never_rests_on_a_hidden_link`, red before the fix. No other step in the builders walks without its link.
 4. **Tests:** conformance for the read (red with the link back unchecked, and with the contact unchecked) and for the join; the pair against real ArcadeDB, a SECRET shared contact and a contact over a SECRET link both left out; the routes with the case's datasets (red with either read unscoped) and a system link type refused; the Inspector part; a keyboard case (red with a pick that never draws). The pairing step that counts each contact once per other node guards against the stray duplicate links ADR-056 Amendment 19 describes; no fixture produces one, so that step has not been shown red.
+
+## ADR-102 — Writing an element again never lowers its handling; lowering it is an explicit change
+
+Status: accepted 8 October 2026 (the owner: "allow the analyst to explicitly select whether the it should be downgraded for the whole set goes to the higher rating"; then, of the choices put, "Most restrictive of each" and "On the link, as a change"). It replaces the "latest write's handling wins" rule `schemas.merge` stated, found building ADR-100 (Amendment 6 item 7).
+
+### Context
+
+A second write for an element already stored (the same node id, or a link of the same type between the same pair) merged into it, and the handling was the latest write's. So an OFFICIAL write onto a SECRET link made it OFFICIAL, its earlier SECRET records with it, for every OFFICIAL reader: a merge lowered handling with nobody deciding to.
+
+### Decision
+
+1. **A merge keeps the most restrictive of each part** (`ontology.handling.merge_handling`, the one rule for `upsert_nodes`, `upsert_edges` and a bulk load's repeated pairs): the higher classification in the scheme's order; the handling code with the narrower dissemination (restricted, then conditional, then permitted); the action code forbidding direct action, then one needing the originator's permission, over one permitting it, and any over none; the sanitisation code consulting the originator over one that does not, and any over none; the earlier review date; the legal basis first given. A code the scheme does not define is refused, not ranked.
+2. **The owning unit and originator stay the existing element's.** The restricted-code check rests on them, and a later write does not move an element to another unit. One consequence to accept: a permitted element of unit 1 written again by unit 2 under a restricted code becomes restricted to unit 1's receivers, not unit 2's; a `Handling` holds one unit, so "most restrictive" cannot be both.
+3. **Action and sanitisation codes are one each, not lists.** "Kept from both", as put to the owner, cannot be stored; the stricter of the two is kept, which is what keeping both would have meant for a reader.
+4. **Lowering handling is an analyst's explicit change** to one link: *Change link…* offers the handling, and a lower one asks for a reason and a confirmation, is a new revision (the old one kept and audited) and needs Author access. **Not built in the change that makes decisions 1 to 3.**
+
+### Tests
+
+`tests/ontology/test_merge_handling.py` (each part, either order; red with each part taken from the incoming write, and with the incoming units); conformance: a SECRET link and a SECRET node written again at OFFICIAL stay hidden from an OFFICIAL reader (red with the adapter taking the incoming handling); `test_merge_rules_shared_by_both_paths.py`, both paths agreeing in either order; the bulk loader, a pair loaded twice written once SECRET (red with the loader taking the incoming handling). `aggregate_edge_writes` and `BulkEdgeLoader` take the rule as a required argument, so no caller can leave a later write free to lower a link.
+
+### Found on the way
+
+Five planted faults first gave misleading results: a plant swapping `existing` for `incoming` kept the file's length, and within the same second Python reused the planted file's bytecode after the restore, so a restored file failed. Plants since run with `PYTHONDONTWRITEBYTECODE=1` and every result above was taken that way.
+

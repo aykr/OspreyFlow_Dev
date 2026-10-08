@@ -27,7 +27,7 @@ from typing import Any
 
 from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
-from ontology.handling import HandlingScheme
+from ontology.handling import HandlingScheme, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import BulkEdgeResult, NodeSuggestions, SubgraphTooLarge, SuggestOptions
 from schemas.compute import LinkStructure, StructureEdge, StructureNode
@@ -128,10 +128,15 @@ class GraphArcadeDBAdapter:
     ) -> None:
         self._client = client
         self._access = AccessFilter(handling_scheme)
+        self._scheme = handling_scheme
         self._weight_config = weight_config
         # The bulk-load capability (`ports.graph.BulkGraphLoader`, ADR-058). The transport is
         # swappable so the loader's logic is testable without a store.
-        self._bulk = BulkEdgeLoader(bulk_transport or GremlinBulkTransport(client), weight_config)
+        self._bulk = BulkEdgeLoader(
+            bulk_transport or GremlinBulkTransport(client),
+            weight_config,
+            handling_scheme=handling_scheme,
+        )
         self._schema: OntologySchema | None = None
         # In-memory only: a real migration runner persists applied versions
         # to survive a restart. Reverting to a version never applied in
@@ -213,6 +218,7 @@ class GraphArcadeDBAdapter:
                     existing.get("provenance"), write.provenance
                 )
                 merged_datasets = merge_datasets(existing.get("datasets"), write.datasets)
+                merged_handling = self._merge_handling(existing, write.handling)
             else:
                 audit = AuditStub(
                     created_at=write.created_at,
@@ -223,9 +229,14 @@ class GraphArcadeDBAdapter:
                 )
                 merged_provenance = write.provenance
                 merged_datasets = merge_datasets(None, write.datasets)
+                merged_handling = write.handling
 
             merged_write = write.model_copy(
-                update={"provenance": merged_provenance, "datasets": merged_datasets}
+                update={
+                    "provenance": merged_provenance,
+                    "datasets": merged_datasets,
+                    "handling": merged_handling,
+                }
             )
             props = node_write_to_properties(
                 merged_write, node_id=node_id, audit=audit, entity_type=entity_type
@@ -372,6 +383,7 @@ class GraphArcadeDBAdapter:
                     existing.get("provenance"), write.provenance
                 )
                 merged_datasets = merge_datasets(existing.get("datasets"), write.datasets)
+                merged_handling = self._merge_handling(existing, write.handling)
                 existing_audit = AuditStub.model_validate(existing["audit"])
                 audit = existing_audit.model_copy(
                     update={
@@ -387,6 +399,7 @@ class GraphArcadeDBAdapter:
                 merged_interval = write.interval
                 merged_provenance = write.provenance
                 merged_datasets = merge_datasets(None, write.datasets)
+                merged_handling = write.handling
                 audit = AuditStub(
                     created_at=write.created_at,
                     created_by=write.created_by,
@@ -413,6 +426,7 @@ class GraphArcadeDBAdapter:
                     "interval": merged_interval,
                     "provenance": merged_provenance,
                     "datasets": merged_datasets,
+                    "handling": merged_handling,
                 }
             )
             props = edge_write_to_properties(
@@ -789,6 +803,10 @@ class GraphArcadeDBAdapter:
             total=int(totals[0].get("result") or 0),
             offset=offset,
         )
+
+    def _merge_handling(self, existing: dict[str, Any], incoming: Handling) -> Handling:
+        """ADR-102: a write onto an element already stored never lowers its handling."""
+        return merge_handling(Handling.model_validate(existing["handling"]), incoming, self._scheme)
 
     async def recent_loads(self, principal: Principal, *, limit: int = 10) -> RecentLoads:
         nodes_query, links_query = render_recent_loads_gremlin(self._access, principal)

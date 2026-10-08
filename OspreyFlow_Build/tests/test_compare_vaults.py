@@ -13,9 +13,10 @@ import asyncio
 import copy
 from typing import Any
 
-from adapters.graph_arcadedb.bulk import BulkEdgeLoader
 from scripts import compare_vaults
 
+from adapters.graph_arcadedb.bulk import BulkEdgeLoader
+from ontology.handling import load_uk_le_scheme
 from tests.adapters.graph_arcadedb.edge_store import make_edge
 from tests.adapters.graph_arcadedb.test_bulk_edge_loader import SCHEMA, _store
 
@@ -25,7 +26,7 @@ def _records() -> list[dict[str, Any]]:
     transport = _store("a", "b", "c", "d")
     edges = [make_edge("a", "b", 1), make_edge("a", "b", 2), make_edge("a", "c", 3)]
     edges.append(make_edge("d", "b", 4))
-    asyncio.run(BulkEdgeLoader(transport).load(SCHEMA, edges))
+    asyncio.run(BulkEdgeLoader(transport, handling_scheme=load_uk_le_scheme()).load(SCHEMA, edges))
     return [dict(row["p"]) for row in transport.written]
 
 

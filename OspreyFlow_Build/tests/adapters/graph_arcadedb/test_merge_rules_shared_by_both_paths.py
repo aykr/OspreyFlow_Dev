@@ -14,12 +14,16 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 
-from schemas.domain import EdgeWrite, Interval, Provenance, ProvenanceState, SourceRef
+from ontology.handling import load_uk_le_scheme, merge_handling
+from schemas.domain import EdgeWrite, Handling, Interval, Provenance, ProvenanceState, SourceRef
 from schemas.merge import aggregate_edge_writes, merge_interval, merge_provenance
-
 from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter, make_edge
 
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def _HANDLING(old: Handling, new: Handling) -> Handling:  # noqa: N802
+    return merge_handling(old, new, load_uk_le_scheme())
 
 
 def _with_interval(write: EdgeWrite, start_days: int, end_days: int | None) -> EdgeWrite:
@@ -61,7 +65,7 @@ def test_the_aggregate_is_what_one_at_a_time_upserts_leave_in_the_store() -> Non
     for write in _writes():
         asyncio.run(graph.upsert_edges([write], "tx"))
 
-    for aggregated in aggregate_edge_writes(_writes(), directed=_directed):
+    for aggregated in aggregate_edge_writes(_writes(), directed=_directed, handling=_HANDLING):
         stored = store.edges[(aggregated.write.source, aggregated.write.target)]
         assert stored["id"] == aggregated.write.id
         assert stored["occurrences"] == aggregated.write.occurrences
@@ -77,7 +81,7 @@ def test_the_aggregate_is_what_one_at_a_time_upserts_leave_in_the_store() -> Non
 
 def test_a_repeated_pair_becomes_one_edge_with_everything_kept() -> None:
     """Catches a pair being dropped, duplicated, or losing a source row."""
-    result = aggregate_edge_writes(_writes(), directed=_directed)
+    result = aggregate_edge_writes(_writes(), directed=_directed, handling=_HANDLING)
     assert [(r.write.source, r.write.target) for r in result] == [
         ("a", "b"),
         ("c", "d"),
@@ -100,8 +104,8 @@ def test_an_undirected_pair_is_the_same_pair_either_way_round() -> None:
     """Catches `a to b` and `b to a` of an undirected type staying two edges: `upsert_edges` finds
     an undirected edge from either end, so it merges them, and the aggregate must too."""
     writes = [make_edge("a", "b", 1), make_edge("b", "a", 2)]
-    assert len(aggregate_edge_writes(writes, directed=lambda _: False)) == 1
-    assert len(aggregate_edge_writes(writes, directed=_directed)) == 2
+    assert len(aggregate_edge_writes(writes, directed=lambda _: False, handling=_HANDLING)) == 1
+    assert len(aggregate_edge_writes(writes, directed=_directed, handling=_HANDLING)) == 2
 
 
 def test_the_first_write_keeps_the_edge_identity_and_the_last_its_own_properties() -> None:
@@ -109,7 +113,7 @@ def test_the_first_write_keeps_the_edge_identity_and_the_last_its_own_properties
     the wrong write's properties (the latest write wins, as in `upsert_edges`)."""
     first = make_edge("a", "b", 1)
     last = make_edge("a", "b", 2).model_copy(update={"properties": {"note": "latest"}})
-    (only,) = aggregate_edge_writes([first, last], directed=_directed)
+    (only,) = aggregate_edge_writes([first, last], directed=_directed, handling=_HANDLING)
     assert only.write.id == first.id and only.write.created_at == first.created_at
     assert only.write.properties == {"note": "latest"}
 
@@ -137,3 +141,23 @@ def test_merge_interval_widens_and_tolerates_a_missing_one() -> None:
     assert merge_interval(early, None) == early
     assert merge_interval(None, late) == late
     assert merge_interval(None, None) is None
+
+
+def test_both_paths_keep_the_higher_handling_of_a_repeated_pair() -> None:
+    """ADR-102: a pair written SECRET then OFFICIAL is SECRET on both paths, and the other way
+    round too; the stored handling and the aggregate's agree."""
+    def at(classification: str, n: int) -> EdgeWrite:
+        write = make_edge("a", "b", n)
+        handling = write.handling.model_copy(update={"classification": classification})
+        return write.model_copy(update={"handling": handling})
+
+    for order in (["SECRET", "OFFICIAL"], ["OFFICIAL", "SECRET"]):
+        writes = [at(c, i) for i, c in enumerate(order)]
+        store = CountingStore()
+        graph = make_adapter(store)
+        for write in writes:
+            asyncio.run(graph.upsert_edges([write], "tx"))
+        (only,) = aggregate_edge_writes(writes, directed=_directed, handling=_HANDLING)
+        assert only.write.handling.classification == "SECRET"
+        assert store.edges[("a", "b")]["handling"]["classification"] == "SECRET"
+        assert store.edges[("a", "b")]["handling_classification"] == "SECRET"

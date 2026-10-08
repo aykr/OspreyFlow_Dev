@@ -3571,3 +3571,39 @@ async def test_shared_contacts_page_and_say_how_many(factory: GraphAdapterFactor
         first = await adapter.shared_contacts(hub.id, CLEARED, edge_type="USES", limit=3)
         assert len(first.contacts) == 3 and first.total == 4
         assert [c.node.id for c in first.contacts] == sorted(o.id for o in others)[:3]
+
+
+# --- ADR-102: a repeated write never lowers handling ----------------------------
+
+
+async def test_a_link_written_again_lower_keeps_its_higher_handling(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Writing the same pair again at OFFICIAL once made a SECRET link OFFICIAL: the latest write's
+    handling won. Now the merged link keeps the most restrictive of each part, in either order."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(adapter, [_node("Person", classification="OFFICIAL"),
+                                           _node("Person", classification="OFFICIAL")], [])
+        await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="SECRET",
+                                         handling_code="C")])
+        await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")])
+        req = ExpandRequest(node_ids=[a], depth=1)
+        assert (await adapter.expand(req, OFFICIAL)).edges == []
+        (merged,) = (await adapter.expand(req, CLEARED)).edges
+        assert (merged.handling.classification, merged.handling.handling_code) == ("SECRET", "C")
+        assert merged.occurrences == 2
+
+
+async def test_a_node_written_again_lower_keeps_its_higher_handling(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        secret = _node("Person", classification="SECRET")
+        await _write(adapter, [secret], [])
+        lower = secret.model_copy(
+            update={"handling": secret.handling.model_copy(update={"classification": "OFFICIAL"})}
+        )
+        await _write(adapter, [lower], [])
+        assert await adapter.get_node(secret.id, OFFICIAL) is None
+        kept = await adapter.get_node(secret.id, CLEARED)
+        assert kept is not None and kept.handling.classification == "SECRET"

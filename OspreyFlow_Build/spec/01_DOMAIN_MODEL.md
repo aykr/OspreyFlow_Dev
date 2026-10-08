@@ -451,6 +451,14 @@ separate design question this default does not answer.
 proves it against the real adapter: a `handling_code: R` `Person` is invisible to the service
 principal and visible to an ordinarily-cleared-and-entitled one, in the same test.
 
+**Writing an element again never lowers its handling (ADR-102).** A node or link written again,
+through `upsert_nodes`, `upsert_edges` or within one bulk load, keeps the most restrictive of each
+part of the two handlings (`ontology.handling.merge_handling`): the higher classification, the
+handling code with the narrower dissemination, the stricter action and sanitisation codes (any over
+none), the earlier review date, a legal basis once given; its owning unit and originator stay the
+first write's. Lowering it is an analyst's explicit change to that element, never a merge
+(`tests/ontology/test_merge_handling.py`; the conformance suite's ADR-102 section).
+
 ### 2.2a Datasets (ADR-099)
 
 Every node and link carries `datasets`, the bodies of data that wrote it (the Enron corpus, Fixture

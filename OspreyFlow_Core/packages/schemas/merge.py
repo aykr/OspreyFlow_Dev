@@ -3,7 +3,8 @@
 `01_DOMAIN_MODEL.md` §3: one summarised edge per (type, source, target). A second write for the
 same pair merges into the stored edge instead of adding another: the occurrences add, every
 provenance source is kept (de-duplicated by document and locator, §7), the interval widens, the
-latest write's own properties and handling win, and the revision counts the writes.
+latest write's own properties win, the handling is never lowered (ADR-102: the most restrictive
+of each part, `ontology.handling.merge_handling`), and the revision counts the writes.
 `GraphArcadeDBAdapter.upsert_edges` applies the rule one write at a time against the store; a bulk
 load receives all of a pair's writes together and applies it here before anything is written.
 Keeping the rule in one place is the point: two copies would drift, and the test that compares the
@@ -18,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from schemas.domain import EdgeWrite, Interval, Provenance
+from schemas.domain import EdgeWrite, Handling, Interval, Provenance
 
 
 def merge_provenance(existing: Provenance | None, incoming: Provenance) -> Provenance:
@@ -72,16 +73,20 @@ def _pair_key(write: EdgeWrite, *, directed: bool) -> tuple[str, str, str]:
 
 
 def aggregate_edge_writes(
-    writes: Sequence[EdgeWrite], *, directed: Callable[[str], bool]
+    writes: Sequence[EdgeWrite],
+    *,
+    directed: Callable[[str], bool],
+    handling: Callable[[Handling, Handling], Handling],
 ) -> list[AggregatedEdge]:
     """Collapse repeated pairs by the rule above, in order of each pair's first appearance.
 
     What the aggregate keeps of which write mirrors what `upsert_edges` leaves in the store: the
     first write's id, endpoints (and so orientation), `created_at` and `created_by`, because the
     stored edge keeps them; every write's datasets (ADR-099); the latest write's properties,
-    handling, `load_id` and recipe, because a merge takes those from the incoming write;
-    occurrences summed; provenance and interval merged. `directed(type_name)` says whether a
-    type is directed."""
+    `load_id` and recipe, because a merge takes those from the incoming write; the handling merged
+    by `handling(existing, incoming)` (ADR-102, never lowered); occurrences summed; provenance and
+    interval merged. `directed(type_name)` says whether a type is directed. `handling` is required,
+    so no caller can leave a later write free to lower a link."""
     order: list[tuple[str, str, str]] = []
     grouped: dict[tuple[str, str, str], tuple[EdgeWrite, int]] = {}
     for write in writes:
@@ -104,6 +109,7 @@ def aggregate_edge_writes(
                     "interval": merge_interval(accumulated.interval, write.interval),
                     "provenance": merge_provenance(accumulated.provenance, write.provenance),
                     "datasets": merge_datasets(accumulated.datasets, write.datasets),
+                    "handling": handling(accumulated.handling, write.handling),
                 }
             ),
             count + 1,

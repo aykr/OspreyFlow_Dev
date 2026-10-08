@@ -15,12 +15,13 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 import pytest
+
 from adapters.graph_arcadedb.bulk import LOOKUP_BATCH, BulkEdgeLoader
 from adapters.graph_arcadedb.naming import physical_type_name
 from ontology.errors import OntologyError
+from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.domain import EdgeWrite
-
 from tests.adapters.graph_arcadedb.edge_store import make_edge
 
 SCHEMA = load_default_ontology()
@@ -121,7 +122,8 @@ def _store(*ids: str, label: str = ENDPOINT) -> MemoryTransport:
 
 
 def _load(transport: MemoryTransport, edges: list[EdgeWrite], **kwargs: Any) -> Any:
-    return asyncio.run(BulkEdgeLoader(transport).load(SCHEMA, edges, **kwargs))
+    loader = BulkEdgeLoader(transport, handling_scheme=load_uk_le_scheme())
+    return asyncio.run(loader.load(SCHEMA, edges, **kwargs))
 
 
 def _edge(source: str, target: str, n: int, occurrences: int = 1) -> EdgeWrite:
@@ -152,6 +154,19 @@ def test_an_empty_call_does_nothing() -> None:
     transport = _store("a")
     result = _load(transport, [])
     assert result.written == [] and result.received == 0 and transport.calls == []
+
+
+def test_a_pair_loaded_twice_keeps_the_higher_handling() -> None:
+    """ADR-102: within one load, a pair written SECRET then OFFICIAL is written once, SECRET."""
+    transport = _store("a", "b")
+    first = _edge("a", "b", 1)
+    secret = first.model_copy(
+        update={"handling": first.handling.model_copy(update={"classification": "SECRET"})}
+    )
+    _load(transport, [secret, _edge("a", "b", 2)])
+    (row,) = transport.written
+    assert row["p"]["handling_classification"] == "SECRET"
+    assert row["p"]["handling"]["classification"] == "SECRET"
 
 
 # --- the cost: a handful of store calls, not one per edge --------------------
