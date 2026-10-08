@@ -91,6 +91,9 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # ADR-099: reads over the whole graph moved under the case, so they read only its datasets.
     ("POST", P + "/search"): V,
     ("POST", P + "/suggest"): V,
+    # The Explore panel (ADR-100): reads.
+    ("GET", P + "/explore/counts"): V,
+    ("GET", P + "/explore/most-connected"): V,
     ("POST", P + "/patterns/preview"): V,
     ("POST", P + "/patterns/run"): V,
     # ADR-099 Amendment 3: a saved pattern is the dataset's, read and saved in a case reading it.

@@ -139,6 +139,7 @@ from schemas.domain import (
 # `Path` is already `pathlib.Path` in this module — `GraphPath` is the same alias
 # `adapters/compute_graphology_tier1/adapter.py` already uses for the identical collision.
 from schemas.domain import Path as GraphPath
+from schemas.explore import RankedNodes, TypeCounts
 from schemas.ingest import (
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
@@ -849,6 +850,8 @@ HistoryDep = Annotated[InvestigationHistoryStore, Depends(get_history)]
 GraphDep = Annotated[GraphPort, Depends(get_graph)]
 OntologyDep = Annotated[OntologySchema, Depends(get_ontology)]
 MapConfigDep = Annotated[MapConfig, Depends(get_map_config)]
+
+
 def get_link_notes(request: Request) -> LinkNoteService:
     return request.app.state.link_notes  # type: ignore[no-any-return]
 
@@ -1229,9 +1232,7 @@ async def _upload_refused_handler(request: Request, exc: UploadRefusedError) -> 
 @app.exception_handler(RecipeRuleError)
 async def _recipe_rule_handler(request: Request, exc: RecipeRuleError) -> JSONResponse:
     """A recipe declares what the ingest rules refuse (ADR-081 step D); each problem is named."""
-    return JSONResponse(
-        status_code=422, content={"error": "recipe_rule", "problems": exc.problems}
-    )
+    return JSONResponse(status_code=422, content={"error": "recipe_rule", "problems": exc.problems})
 
 
 @app.exception_handler(NotDocumentsError)
@@ -2854,6 +2855,58 @@ async def suggest_route(
     return result
 
 
+# --- the Explore panel (06_DECISIONS.md ADR-100) -----------------------------
+#
+# What the case's data holds and its most connected nodes, for an analyst who does not yet know
+# what to search for. Each figure is computed in the store with the principal `get_principal`
+# builds for this case, so it is of the case's datasets and the analyst's clearance only (rule 3);
+# a ranking carries its total and offset, so a page never passes for the whole (rule 2).
+
+#: The largest ranking page one request may ask for.
+EXPLORE_MAX_PAGE = 50
+
+
+@app.get("/v1/investigations/{investigation_id}/explore/counts")
+async def explore_counts_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+) -> TypeCounts:
+    counts = await graph.type_counts(principal)
+    await audit.record(
+        principal=principal,
+        action="explore_counts",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=sum(counts.nodes.values()),
+    )
+    return counts
+
+
+@app.get("/v1/investigations/{investigation_id}/explore/most-connected")
+async def explore_most_connected_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+    entity_type: Annotated[str | None, Query(max_length=100)] = None,
+    limit: Annotated[int, Query(ge=1, le=EXPLORE_MAX_PAGE)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> RankedNodes:
+    ranked = await graph.most_connected(
+        principal, entity_type=entity_type, limit=limit, offset=offset
+    )
+    await audit.record(
+        principal=principal,
+        action="explore_most_connected",
+        investigation_id=investigation.id,
+        resolved_query={"entity_type": entity_type, "limit": limit, "offset": offset},
+        result_cardinality=len(ranked.nodes),
+    )
+    return ranked
+
+
 # --- the visual query builder (Phase 7 Stage 4, 06_DECISIONS.md ADR-030) ------
 #
 # Not investigation-scoped — `patterns.py`'s own module docstring has the full reasoning, the
@@ -2985,8 +3038,7 @@ async def create_hotlist_route(
 
 @app.get("/v1/investigations/{investigation_id}/hotlists")
 async def list_hotlists_route(
-    investigation: InvestigationViewerDep,
-    principal: PrincipalDep, hotlists_store: HotlistsStoreDep
+    investigation: InvestigationViewerDep, principal: PrincipalDep, hotlists_store: HotlistsStoreDep
 ) -> HotlistList:
     return HotlistList(hotlists=await hotlists_store.list_authorized(principal))
 
@@ -3899,8 +3951,7 @@ async def create_monitor_route(
 
 @app.get("/v1/investigations/{investigation_id}/monitors")
 async def list_monitors_route(
-    investigation: InvestigationViewerDep,
-    principal: PrincipalDep, monitors_store: MonitorsStoreDep
+    investigation: InvestigationViewerDep, principal: PrincipalDep, monitors_store: MonitorsStoreDep
 ) -> MonitorList:
     return MonitorList(monitors=await monitors_store.list_authorized(principal))
 
@@ -5065,7 +5116,9 @@ async def upload_ingest_source_file(
     return saved
 
 
-def _with_default_classification(handling: dict[str, Any], scheme: HandlingScheme) -> dict[str, Any]:
+def _with_default_classification(
+    handling: dict[str, Any], scheme: HandlingScheme
+) -> dict[str, Any]:
     """**ADR-068.** Connect's classification is optional: left blank it is recorded as the scheme's
     lowest level, which for the UK scheme is `PUBLIC`. Done here, not in the Glass, so a draft never
     carries an empty marking whichever client wrote it; an analyst's own choice is never replaced."""
@@ -5143,7 +5196,9 @@ async def update_studio_recipe_draft(
 @app.get("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}")
 async def get_studio_recipe_draft(
     investigation: InvestigationViewerDep,
-    recipe: AuthorizedStudioRecipeDep, principal: PrincipalDep, audit: AuditDep
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    audit: AuditDep,
 ) -> StudioRecipeDraft:
     await audit.record(
         principal=principal,
@@ -5157,7 +5212,9 @@ async def get_studio_recipe_draft(
 @app.get("/v1/investigations/{investigation_id}/ingest/recipes")
 async def list_studio_recipe_drafts(
     investigation: InvestigationViewerDep,
-    principal: PrincipalDep, studio_recipes: StudioRecipesDep, audit: AuditDep
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
 ) -> list[StudioRecipeDraft]:
     """Connect's "resume a draft" list — the author's own unit's drafts
     only (`StudioRecipeStore.list_drafts`' own `owning_unit` scoping)."""
@@ -5349,7 +5406,9 @@ async def verify_studio_recipe(
 @app.get("/v1/investigations/{investigation_id}/ingest/recipe-registry")
 async def list_studio_recipe_registry(
     investigation: InvestigationViewerDep,
-    principal: PrincipalDep, studio_recipes: StudioRecipesDep, audit: AuditDep
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
 ) -> list[StudioRecipeDraft]:
     """Publish's own listing — every recipe the principal's own unit owns
     at whatever status (draft/published/flagged/superseded), not only
