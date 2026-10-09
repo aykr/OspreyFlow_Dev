@@ -1,6 +1,7 @@
 // One property's `FieldBinding` — `spec/09_INGEST_STUDIO.md` §4: field vs.
 // `fields` (multi-column, arity from the transform catalogue) vs. `literal`
 // vs. `map`, never a free expression.
+import { useState } from "react";
 import type { DragEvent } from "react";
 
 import type { FieldBinding, TransformDescriptor } from "../../../../../packages/schemas/generated";
@@ -150,16 +151,33 @@ function ValueMapEditor({
   map: Record<string, string>;
   onChange: (map: Record<string, string>) => void;
 }) {
-  const entries = Object.entries(map);
+  // Rows are editing state, not the canonical Record: a Record cannot hold two
+  // rows with the same key, so while one is empty or mid-edit the rows live
+  // here and only their collapsed form is published. Re-reading the prop would
+  // discard those rows on our own echo, so resync only when the published map
+  // no longer matches what the rows collapse to (a different draft loaded).
+  const [entries, setEntries] = useState<[string, string][]>(() => Object.entries(map));
+  if (JSON.stringify(map) !== JSON.stringify(Object.fromEntries(entries))) {
+    setEntries(Object.entries(map));
+  }
 
-  function setEntry(index: number, key: string, value: string) {
-    const next = [...entries];
-    next[index] = [key, value];
+  function publish(next: [string, string][]) {
+    setEntries(next);
     onChange(Object.fromEntries(next));
   }
 
+  function setEntry(index: number, key: string, value: string) {
+    const next: [string, string][] = [...entries];
+    next[index] = [key, value];
+    publish(next);
+  }
+
+  function addEntry() {
+    publish([...entries, ["", ""]]);
+  }
+
   function removeEntry(index: number) {
-    onChange(Object.fromEntries(entries.filter((_, i) => i !== index)));
+    publish(entries.filter((_, i) => i !== index));
   }
 
   return (
@@ -182,7 +200,7 @@ function ValueMapEditor({
           </Button>
         </div>
       ))}
-      <Button onClick={() => onChange({ ...map, "": "" })}>+ mapping</Button>
+      <Button onClick={addEntry}>+ mapping</Button>
     </div>
   );
 }
