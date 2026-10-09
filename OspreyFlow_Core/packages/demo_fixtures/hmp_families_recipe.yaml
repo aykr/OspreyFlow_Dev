@@ -8,7 +8,7 @@ version: 1
 label: "HMP fixture — family relationships"
 connector:
   profile: hmp-fixture-generic
-ontology_version: 13
+ontology_version: 14
 
 defaults:
   provenance: {state: asserted}

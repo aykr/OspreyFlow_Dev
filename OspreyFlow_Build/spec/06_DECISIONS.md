@@ -10363,3 +10363,17 @@ proving selection and the request end to end) and the Inspector's part opening o
 signal. Found on the way: every counted-Tab walk to a menu item in `keyboard.spec.ts` broke when
 the menu gained an item — replaced with `tabUntilFocused`, which Tabs until the named item holds
 focus, the fragility the action registry's own comment had already warned about.
+
+### ADR-105, Amendment 2 (9 October 2026) — ontology v14: an Endpoint may carry a picture
+
+Status: accepted 9 October 2026 (the owner: "Endpoints to carry pictures too… Yes go ahead and make this").
+
+Ontology **version 14**: `DEPICTS` gains `Endpoint` at its `to` end, so an email address or phone
+number can carry a picture of its own, in the Inspector's Picture part and the node menu's *Set
+picture…* alike — both gates read `DEPICTS`'s ends, so neither changed. Every recipe fixture pinned
+to 13 is bumped to 14 (25 files), and the same republish-once consequence applies: every published
+Studio recipe is flagged when the API starts under v14, reopened and published again (ADR-094
+Amendment 1's procedure). Tests red first: the version case, Endpoint moving from the refused list
+to the allowed list (`test_content_ontology.py`), and `test_entity_pictures.py`'s v13 refusal
+("a phone number has no picture of its own") replaced by its v14 counterpart, with an Event keeping
+the service's refusal path exercised.

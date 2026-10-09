@@ -97,6 +97,8 @@ ENTITIES = [
         value_normalised="+447700900123",
         endpoint_kind="msisdn",
     ),
+    #: v14's one still-refused case below needs a type `DEPICTS` does not allow.
+    _write("meeting-1", "Event"),
 ]
 
 
@@ -197,9 +199,18 @@ async def test_an_svg_is_not_a_picture(fx: _Fixture) -> None:
     assert await _shown(fx, SECRET_READER) == {}
 
 
-async def test_a_phone_number_has_no_picture_of_its_own(fx: _Fixture) -> None:
+async def test_an_endpoint_takes_a_picture_of_its_own_since_v14(fx: _Fixture) -> None:
+    """v13 refused this ("a phone number has no picture of its own"); ontology v14 (ADR-105
+    Amendment 2, the owner's choice, 9 October 2026) adds Endpoint to `DEPICTS`'s `to`."""
+    document_id = await _set(fx, "phone-1")
+    assert (await _shown(fx, SECRET_READER)).get("phone-1") == document_id
+
+
+async def test_an_event_still_has_no_picture_of_its_own(fx: _Fixture) -> None:
+    """The service refuses a type `DEPICTS` does not allow — proven with one v14 still refuses,
+    so the refusal path stays exercised now that Endpoint no longer is one."""
     with pytest.raises(UploadRefusedError):
-        await _set(fx, "phone-1")
+        await _set(fx, "meeting-1")
     assert await _shown(fx, SECRET_READER) == {}
 
 

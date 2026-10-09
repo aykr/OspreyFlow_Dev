@@ -15,8 +15,8 @@ from ontology.validation import validate_edge_endpoints, validate_properties
 ONTOLOGY = load_default_ontology()
 
 
-def test_the_ontology_is_version_13() -> None:
-    assert ONTOLOGY.version == 13
+def test_the_ontology_is_version_14() -> None:
+    assert ONTOLOGY.version == 14
 
 
 def test_a_document_declares_its_media_kind_and_its_file_reference() -> None:
@@ -45,7 +45,8 @@ def test_holds_refuses_an_end_it_does_not_declare() -> None:
         validate_edge_endpoints(holds, source_type="Device", target_type="Person")
 
 
-@pytest.mark.parametrize("subject", ["Person", "Organisation", "Vehicle", "Device", "Location", "Asset"])
+# Endpoint joined in v14 (ADR-105 Amendment 2, the owner's choice, 9 October 2026).
+@pytest.mark.parametrize("subject", ["Person", "Organisation", "Vehicle", "Device", "Location", "Asset", "Endpoint"])
 def test_depicts_links_a_picture_to_the_entity_it_shows_and_is_direct(subject: str) -> None:
     depicts = ONTOLOGY.edge_type("DEPICTS")
     assert depicts is not None and depicts.basis == "direct" and depicts.directed
@@ -54,7 +55,7 @@ def test_depicts_links_a_picture_to_the_entity_it_shows_and_is_direct(subject: s
     validate_properties(depicts, {"shown": False})
 
 
-@pytest.mark.parametrize("subject", ["Endpoint", "Event", "Document"])
+@pytest.mark.parametrize("subject", ["Event", "Document"])
 def test_depicts_refuses_an_entity_a_picture_does_not_show(subject: str) -> None:
     depicts = ONTOLOGY.edge_type("DEPICTS")
     assert depicts is not None

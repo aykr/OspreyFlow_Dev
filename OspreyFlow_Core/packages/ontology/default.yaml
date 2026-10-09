@@ -98,7 +98,10 @@
 # removed (the link is superseded, never deleted). A recipe may write it, so the version moves;
 # every recipe fixture pinned to 12 is bumped to 13 alongside this, and a published recipe is
 # flagged once to be reopened and published again.
-version: 13
+# v14 (ADR-105 Amendment 2, the owner's choice, 9 October 2026): an Endpoint may carry a picture
+# too, so `DEPICTS` gains Endpoint at its `to` end. The same republish-once consequence applies;
+# every fixture pinned to 13 is bumped to 14 alongside this.
+version: 14
 entity_types:
   - name: Person
     pole_class: person
@@ -215,7 +218,7 @@ edge_types:
   # ADR-105: a picture of one entity, held in the case as evidence; the Glass draws it on that node.
   - name: DEPICTS
     from: [Document]
-    to: [Person, Organisation, Vehicle, Device, Location, Asset]
+    to: [Person, Organisation, Vehicle, Device, Location, Asset, Endpoint]
     directed: true
     basis: direct
     properties:
