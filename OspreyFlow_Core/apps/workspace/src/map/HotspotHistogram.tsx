@@ -18,7 +18,7 @@
 // scale this checkpoint's fixture doesn't happen to exercise.
 import { useEffect, useState } from "react";
 
-import type { Histogram as HistogramResult } from "../../../../packages/schemas/generated";
+import type { EdgeTypeDef, Histogram as HistogramResult } from "../../../../packages/schemas/generated";
 import { fetchCrossFilter } from "../analytics/api";
 import { buildEventFilter, type CrossFilterStore } from "../crossfilter/store";
 import { Histogram, type HistogramBucket as PanelBucket } from "../design/primitives/Histogram";
@@ -35,6 +35,13 @@ export function rankTargetIdBuckets(histogram: HistogramResult | undefined): Pan
     .sort((a, b) => b.count - a.count);
 }
 
+/** The link types that end at a Location, for which a hotspot is a place. Ranking every event by
+ * its target once showed the most-called phone numbers as "hotspot cells" on a map with nothing on
+ * it (9 October 2026). */
+export function locationEdgeTypeNames(edgeTypes: readonly EdgeTypeDef[]): string[] {
+  return edgeTypes.filter((t) => (t.to ?? []).includes("Location")).map((t) => t.name);
+}
+
 export interface HotspotHistogramProps {
   apiBaseUrl: string;
   bearerToken: string;
@@ -43,6 +50,8 @@ export interface HotspotHistogramProps {
   /** Same "call only when something changes, never read reactively"
    * shape as `Timeline.tsx`'s own `getNodeIds` prop. */
   getNodeIds: () => readonly string[];
+  /** Only events on these link types are counted (`locationEdgeTypeNames`). */
+  locationEdgeTypes: readonly string[];
 }
 
 /** `target_id` is a whitelisted top-level field for `CATEGORICAL`
@@ -62,6 +71,7 @@ export function HotspotHistogram({
   investigationScope,
   crossFilterStore,
   getNodeIds,
+  locationEdgeTypes,
 }: HotspotHistogramProps) {
   const [buckets, setBuckets] = useState<PanelBucket[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -72,7 +82,10 @@ export function HotspotHistogram({
   useEffect(() => {
     let cancelled = false;
     async function refresh(window: ReturnType<CrossFilterStore["store"]["getState"]>["window"]) {
-      const filter = buildEventFilter(investigationScope, window, null);
+      const filter = {
+        ...buildEventFilter(investigationScope, window, null),
+        edge_types: [...locationEdgeTypes],
+      };
       const result = await fetchCrossFilter(apiBaseUrl, bearerToken, {
         filter,
         dimensions: [TARGET_ID_DIMENSION],
@@ -89,7 +102,7 @@ export function HotspotHistogram({
       cancelled = true;
       unsubscribe();
     };
-  }, [apiBaseUrl, bearerToken, investigationScope, crossFilterStore]);
+  }, [apiBaseUrl, bearerToken, investigationScope, crossFilterStore, locationEdgeTypes]);
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>

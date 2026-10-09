@@ -60,7 +60,7 @@ import { MetricsPanel } from "./metrics/MetricsPanel";
 import { QueryBuilderPanel } from "./patterns/QueryBuilderPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
 import { resolveNodeCoordinates } from "./map/geometries";
-import { HotspotHistogram } from "./map/HotspotHistogram";
+import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
 import { defaultProvider, fetchMapConfig } from "./map/providers";
 import { instantAtFraction, itemsUpTo } from "./playback/math";
@@ -343,6 +343,12 @@ export function App() {
   );
   const [ontology, setOntology] = useState<OntologyRegistry | null>(null);
   const [ontologyEdgeTypes, setEdgeTypes] = useState<EdgeTypeDef[]>([]);
+  // A hotspot is a place: the panel counts events on links ending at a Location, and shows only
+  // when the ontology has such links (9 October 2026).
+  const hotspotEdgeTypes = useMemo(
+    () => locationEdgeTypeNames(ontologyEdgeTypes),
+    [ontologyEdgeTypes],
+  );
   // ADR-090: the types a link in this case may take, read from the case: the ontology's, and those
   // analysts proposed in it, its parents or on a link in view, so a proposed type is named and drawn
   // in its own colour, dotted. `null` until read, or when the read fails: the ontology's alone.
@@ -1220,6 +1226,7 @@ export function App() {
                         );
                       }}
                     />
+                    {hotspotEdgeTypes.length > 0 && (
                     <div
                       style={{
                         position: "absolute",
@@ -1239,8 +1246,10 @@ export function App() {
                         investigationScope={investigationId}
                         crossFilterStore={crossFilterStore}
                         getNodeIds={() => workingSetRef.current.graph.nodes()}
+                        locationEdgeTypes={hotspotEdgeTypes}
                       />
                     </div>
+                    )}
                     {siteWizardOpen && (
                       <SiteCalibrationWizard
                         apiBaseUrl={API_BASE_URL}
