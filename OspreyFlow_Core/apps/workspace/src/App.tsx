@@ -78,7 +78,7 @@ import { CasePicker } from "./investigation/CasePicker";
 import { CaseSwitcher } from "./investigation/CaseSwitcher";
 import { CaseTabs } from "./investigation/CaseTabs";
 import { CaseDatasets } from "./investigation/CaseDatasets";
-import { openCase } from "./investigation/cases";
+import { caseIsOpenable, openCase } from "./investigation/cases";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { ExplorePanel } from "./explore/ExplorePanel";
 import type { BusyDay, RankedLink } from "./explore/exploreApi";
@@ -561,6 +561,22 @@ export function App() {
     // No case is created here any more (ADR-052, owner's ruling of 29 September 2026): with no
     // case chosen the Glass shows the case picker, and a case is only ever created by naming one.
   }, [investigationId]);
+
+  // A case this account cannot open is dropped, so the picker shows: signing in as a second account
+  // reopened the first one's case from the tab, every panel was refused and one of them blanked the
+  // Glass (9 October 2026). Asked once the account is known; a failing server keeps the case.
+  useEffect(() => {
+    if (!investigationId || !bearerToken || isDevBypass) return;
+    let cancelled = false;
+    void caseIsOpenable(API_BASE_URL, bearerToken, investigationId).then((openable) => {
+      if (cancelled || openable) return;
+      sessionStorage.removeItem(INVESTIGATION_ID_SESSION_KEY);
+      setInvestigationId(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [investigationId, bearerToken, isDevBypass]);
 
   // The count of judgements beside each node (ADR-070): fetched when the case opens, then kept
   // current by the Judgements tab each time it reloads the list. A failure leaves no badges; it

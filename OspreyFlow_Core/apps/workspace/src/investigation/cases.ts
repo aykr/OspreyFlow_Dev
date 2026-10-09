@@ -104,6 +104,20 @@ export function orderCases(cases: readonly CaseListing[]): CaseListing[] {
   });
 }
 
+/** Whether this account can open case `id`: false only when the Conduit refuses it (403/404), so a
+ * case left in the tab by another account is dropped and the picker shows (9 October 2026). A
+ * failing or unreachable server keeps the case: it is not a refusal. */
+export async function caseIsOpenable(apiBaseUrl: string, bearerToken: string, id: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${apiBaseUrl}/v1/investigations/${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${bearerToken}` },
+    });
+    return response.status !== 403 && response.status !== 404;
+  } catch {
+    return true;
+  }
+}
+
 export async function listCases(apiBaseUrl: string, bearerToken: string): Promise<CaseListing[]> {
   const response = await fetch(`${apiBaseUrl}/v1/investigations`, {
     headers: { Authorization: `Bearer ${bearerToken}` },

@@ -263,7 +263,9 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
               ? { monitors: [] }
               : url.endsWith("/v1/alerts")
                 ? { alerts: [] }
-                : url.endsWith("/v1/ingest/source-files")
+                : // The ingest folder is the case's (ADR-099 Amendment 3); this matched only the old
+                  // `/v1/ingest/source-files`, so Connect got `[]` and crashed when it drew in time.
+                  url.endsWith("/ingest/source-files")
             ? { root: "/ingest", files: [] }
             : [];
       return Promise.resolve(new Response(JSON.stringify(body)));

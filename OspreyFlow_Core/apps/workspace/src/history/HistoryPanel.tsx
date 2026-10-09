@@ -33,8 +33,10 @@ export function HistoryPanel({
     void fetch(`${apiBaseUrl}/v1/investigations/${investigationId}/history`, {
       headers: { Authorization: `Bearer ${bearerToken}` },
     })
-      .then((r) => r.json())
-      .then(setSteps);
+      // A refusal is an empty history: the error body set as the steps once threw on render.
+      .then((r) => (r.ok ? (r.json() as Promise<unknown>) : []))
+      .then((body) => setSteps(Array.isArray(body) ? (body as HistoryStepSummary[]) : []))
+      .catch(() => setSteps([]));
   }, [open, investigationId, apiBaseUrl, bearerToken]);
 
   async function restore(stepId: string): Promise<void> {

@@ -56,10 +56,13 @@ export function ResolutionThresholdControl({
     void fetch(`${apiBaseUrl}/v1/investigations/${investigationId}/resolution/threshold`, {
       headers: { Authorization: `Bearer ${bearerToken}` },
     })
-      .then((r) => r.json())
-      .then((body: { threshold: number }) => {
-        if (!cancelled) setThreshold(body.threshold);
-      });
+      // A refusal (a case this account cannot open answers 404) leaves the control hidden. It once
+      // took the error body's missing `threshold` as the value and blanked the Glass (9 October 2026).
+      .then((r) => (r.ok ? (r.json() as Promise<{ threshold?: unknown }>) : null))
+      .then((body) => {
+        if (!cancelled && typeof body?.threshold === "number") setThreshold(body.threshold);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };

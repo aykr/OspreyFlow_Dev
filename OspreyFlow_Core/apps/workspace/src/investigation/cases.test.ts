@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { INVESTIGATION_ID_SESSION_KEY } from "./investigationId";
-import { type CaseListing, caseUrl, createCase, listCases, nestCases, openCase, removeCase } from "./cases";
+import { type CaseListing, caseIsOpenable, caseUrl, createCase, listCases, nestCases, openCase, removeCase } from "./cases";
 
 const fetchMock = vi.fn();
 
@@ -246,5 +246,24 @@ describe("datasetLabel (ADR-099 Amendment 6)", () => {
     const { datasetLabel } = await import("./cases");
     expect(datasetLabel("enron", "Enron corpus")).toBe("Enron corpus · enron");
     expect(datasetLabel("01K9XQ0000000000000000ABCD", "Enron corpus")).toBe("Enron corpus · …0ABCD");
+  });
+});
+
+// 9 October 2026: after signing in as a second account, the Glass reopened the first account's case
+// from the tab's session and every panel was refused (404). A case the account cannot open is
+// dropped, so the picker shows; a server that is merely failing does not drop it.
+describe("caseIsOpenable", () => {
+  const answer = (status: number) => vi.fn(async () => new Response("{}", { status }));
+  it.each([[404], [403]])("is false when the case is refused (%i)", async (status) => {
+    vi.stubGlobal("fetch", answer(status));
+    expect(await caseIsOpenable("http://test.invalid", "tok", "inv-1")).toBe(false);
+  });
+  it.each([[200], [500], [503]])("is true otherwise (%i)", async (status) => {
+    vi.stubGlobal("fetch", answer(status));
+    expect(await caseIsOpenable("http://test.invalid", "tok", "inv-1")).toBe(true);
+  });
+  it("is true when the server cannot be reached", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))));
+    expect(await caseIsOpenable("http://test.invalid", "tok", "inv-1")).toBe(true);
   });
 });

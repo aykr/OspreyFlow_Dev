@@ -359,9 +359,12 @@ resolves an investigation id in this order —
 Whichever id resolves is written back to `sessionStorage` immediately, so a reload of the plain
 URL (no query parameter) still finds the same investigation rather than falling through to
 create a second one. This closes the gap with the smallest change that removes the manual
-`sessionStorage` step — it does not validate the URL-supplied id against `GET
-/v1/investigations/{id}` before use (an invalid or unauthorised id surfaces however the first
-investigation-scoped request already reports that failure today, not as a special case here).
+`sessionStorage` step. **Once the account is known, the id is checked** against `GET
+/v1/investigations/{id}`: refused (403/404), it is dropped and the case picker shows; a failing or
+unreachable server keeps it. Until 9 October 2026 it was not checked, and signing in as a second
+account in the same tab reopened the first account's case, every panel was refused, and a panel
+that took the refusal's body for data blanked the Glass. A panel never takes a refused response's
+body for its data.
 
 **What is not decided by this proposal:** whether the Glass should instead show an
 investigation-picker screen, whether an invalid URL id should have its own dedicated error state,
