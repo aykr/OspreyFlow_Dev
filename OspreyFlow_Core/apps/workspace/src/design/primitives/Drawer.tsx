@@ -12,16 +12,21 @@ export interface DrawerProps {
  * for the Inspector and named-step history panel. */
 export function Drawer({ open, onClose, title, children }: DrawerProps) {
   const ref = useRef<HTMLDivElement>(null);
+  // The latest `onClose`, read when Escape is pressed. A parent may pass a new one on every
+  // render; keyed on it, the effect below re-ran on each keystroke in a field inside the drawer and
+  // took focus back to the drawer (9 October 2026, *Record an assessment*).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onKeyDown);
     ref.current?.focus();
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (
