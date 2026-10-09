@@ -22,6 +22,11 @@ export interface ReportArtefactInput {
   yardstick: Yardstick;
   mark: ExportMark;
   manifest: ExportManifest;
+  /** The case's name, for the title and heading; the id when it is not known. */
+  caseName?: string;
+  /** How a cited node is named — as the canvas names it. Absent: by its id. A reader of the
+   * report has neither the canvas nor the ids' meaning (9 October 2026). */
+  citationLabel?: (id: string) => string;
 }
 
 function escapeHtml(value: string): string {
@@ -41,7 +46,17 @@ function bandLabel(yardstick: Yardstick, band: string): string {
   return found ? `${found.label} (${found.lower}–${found.upper})` : band;
 }
 
-function renderJudgement(judgement: Judgement, yardstick: Yardstick): string {
+function citationsHtml(ids: readonly string[], citationLabel: (id: string) => string): string {
+  return ids
+    .map((id) => `<span class="citation" data-id="${escapeHtml(id)}">${escapeHtml(citationLabel(id))}</span>`)
+    .join(", ");
+}
+
+function renderJudgement(
+  judgement: Judgement,
+  yardstick: Yardstick,
+  citationLabel: (id: string) => string,
+): string {
   const supporting = judgement.supporting ?? [];
   const contradicting = judgement.contradicting ?? [];
   return `
@@ -54,12 +69,12 @@ function renderJudgement(judgement: Judgement, yardstick: Yardstick): string {
       </p>
       ${
         supporting.length > 0
-          ? `<p class="citations"><strong>Supporting:</strong> ${supporting.map((c) => `<span class="value">${escapeHtml(c)}</span>`).join(", ")}</p>`
+          ? `<p class="citations"><strong>Supporting:</strong> ${citationsHtml(supporting, citationLabel)}</p>`
           : ""
       }
       ${
         contradicting.length > 0
-          ? `<p class="citations"><strong>Contradicting:</strong> ${contradicting.map((c) => `<span class="value">${escapeHtml(c)}</span>`).join(", ")}</p>`
+          ? `<p class="citations"><strong>Contradicting:</strong> ${citationsHtml(contradicting, citationLabel)}</p>`
           : ""
       }
     </article>`;
@@ -106,6 +121,8 @@ function manifestHtml(manifest: ExportManifest): string {
  * standalone document cannot depend on this repo's own stylesheet still existing at read time. */
 export function buildReportArtefact(input: ReportArtefactInput): string {
   const { judgements, gaps, assumptions, yardstick, mark, manifest } = input;
+  const caseName = input.caseName ?? mark.investigation_id;
+  const citationLabel = input.citationLabel ?? ((id: string) => id);
   const stamp = markStampHtml(mark);
   const markField = JSON.stringify(mark);
 
@@ -113,7 +130,7 @@ export function buildReportArtefact(input: ReportArtefactInput): string {
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8" />
-<title>OspreyFlow intelligence report — ${escapeHtml(mark.investigation_id)}</title>
+<title>OspreyFlow intelligence report — ${escapeHtml(caseName)}</title>
 <meta name="osprey-export-mark" content='${markField.replace(/'/g, "&#39;")}' />
 <script type="application/json" id="osprey-export-mark">${markField}</script>
 <style>
@@ -156,10 +173,10 @@ export function buildReportArtefact(input: ReportArtefactInput): string {
 </head>
 <body>
 <header class="osprey-stamp">${stamp}</header>
-<h1>Intelligence report — ${escapeHtml(mark.investigation_id)}</h1>
+<h1>Intelligence report — ${escapeHtml(caseName)}</h1>
 ${manifestHtml(manifest)}
 <h2>Judgements</h2>
-${judgements.length > 0 ? judgements.map((j) => renderJudgement(j, yardstick)).join("\n") : "<p>No judgements recorded.</p>"}
+${judgements.length > 0 ? judgements.map((j) => renderJudgement(j, yardstick, citationLabel)).join("\n") : "<p>No judgements recorded.</p>"}
 <h2>Intelligence gaps</h2>
 ${gaps.length > 0 ? gaps.map(renderGap).join("\n") : "<p>No gaps recorded.</p>"}
 <h2>Assumptions</h2>

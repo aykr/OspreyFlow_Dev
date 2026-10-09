@@ -148,3 +148,33 @@ describe("report export — test_report_export_produces_a_self_contained_html_do
     expect(plainSummary).not.toContain("osprey-export-mark");
   });
 });
+
+// 9 October 2026, the analyst journey's export: the report was titled by the case's id and cited
+// its evidence as `content:69b2…` and `01M46CS…` — a reader of the report has neither the canvas
+// nor the ids' meaning. It names the case, and each cited node as the canvas names it.
+describe("a report names its case and its evidence", () => {
+  const html = buildReportArtefact({
+    judgements: [JUDGEMENT],
+    gaps: [],
+    assumptions: [],
+    yardstick: YARDSTICK,
+    mark: MARK,
+    manifest: MANIFEST,
+    caseName: "Analyst journey",
+    citationLabel: (id) => ({ n1: "Person: MERCER, Dana", n2: "Document: Wing officer's note" })[id] ?? id,
+  });
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  it("is titled by the case's name", () => {
+    expect(doc.title).toContain("Analyst journey");
+    expect(doc.querySelector("h1")?.textContent).toContain("Analyst journey");
+  });
+
+  it("cites each piece of evidence by name, keeping its id only as data", () => {
+    const citations = doc.querySelector(".judgement .citations")?.textContent ?? "";
+    expect(citations).toContain("Person: MERCER, Dana");
+    expect(citations).toContain("Document: Wing officer's note");
+    expect(citations).not.toMatch(/\bn1\b|\bn2\b/);
+    expect(doc.querySelector('[data-id="n2"]')).not.toBeNull();
+  });
+});

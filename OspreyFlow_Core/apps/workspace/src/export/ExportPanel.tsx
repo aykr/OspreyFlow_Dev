@@ -22,6 +22,7 @@ import { useState } from "react";
 import type { Node } from "../../../../packages/schemas/generated";
 import { listAssumptions, listGaps, listJudgements, getYardstick } from "../assessment/api";
 import { nodeLabel } from "../canvas/nodeAttributes";
+import { caseLabel, listCases } from "../investigation/cases";
 import { Button } from "../design/primitives/Button";
 import { Drawer } from "../design/primitives/Drawer";
 import { Input } from "../design/primitives/Input";
@@ -146,13 +147,19 @@ export function ExportPanel({
       triggerDownload(blob, artefactFilename(kind, exported.mark));
       return;
     }
-    const [judgements, gaps, assumptions, yardstick] = await Promise.all([
+    const [judgements, gaps, assumptions, yardstick, cases] = await Promise.all([
       listJudgements(apiBaseUrl, bearerToken, investigationId),
       listGaps(apiBaseUrl, bearerToken, investigationId),
       listAssumptions(apiBaseUrl, bearerToken, investigationId),
       getYardstick(apiBaseUrl, bearerToken),
+      // The case's name for the report's title; without it, the title falls back to the id.
+      listCases(apiBaseUrl, bearerToken).catch(() => []),
     ]);
+    const current = cases.find((entry) => entry.id === investigationId);
     const html = buildReportArtefact({
+      caseName: current ? caseLabel(current) : undefined,
+      // A cited node on the canvas is named as the canvas names it; one not on it, by its id.
+      citationLabel: (id) => itemLabel(graph, id, "node"),
       judgements,
       gaps,
       assumptions,

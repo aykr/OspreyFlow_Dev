@@ -1266,7 +1266,11 @@ here rather than left a placeholder. Decided, not merely disclosed as open:
 - **Report — a self-contained HTML document.** Judgement/gap/assumption content, cited evidence
   and the yardstick band render inline as prose, styled against `design/tokens.css`'s own light
   theme (§4's "an exported chart destined for an intelligence product should default to light,"
-  extended here to the report as a whole). Chosen over a PDF pipeline deliberately: this build
+  extended here to the report as a whole). The report is titled by the case's name, and cites each
+  node of evidence as the canvas names it (§9.2), its id kept only as a data attribute; a cited
+  node not on the canvas is cited by its id. An author or a gap's raiser is still shown by
+  principal id: nothing in the build holds a principal's display name (found 9 October 2026; it
+  needs a decision on whether the name is kept at write time or looked up). Chosen over a PDF pipeline deliberately: this build
   does not need to own a PDF-rendering dependency to produce "a document handed to someone" (`08_
   ACCEPTANCE_SCENARIOS.md`'s own framing of what A13–A15 exist to prove) — a single HTML file
   opens in any browser and is printable to PDF by the recipient, at their own discretion, with
