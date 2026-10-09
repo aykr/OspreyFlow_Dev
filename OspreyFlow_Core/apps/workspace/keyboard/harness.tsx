@@ -34,6 +34,8 @@ declare global {
       askedIn: string | null;
       /** The Document the canvas asked to open to read (ADR-092). */
       openedDocument: string | null;
+      /** The node whose menu asked for the Inspector's Picture part (ADR-105 Amendment 1). */
+      pictureRequested?: string | null;
     };
     __CANVAS__?: {
       viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
@@ -81,6 +83,8 @@ const BASE_SCHEMA: OntologySchema = {
   edge_types: [
     { name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], directed: false },
     { name: "USES", from: ["Person"], to: ["Endpoint"], directed: true },
+    // ADR-105 Amendment 1: a Person may have a picture, so its menu offers Set picture….
+    { name: "DEPICTS", from: ["Document"], to: ["Person"], directed: true },
   ],
 };
 
@@ -366,6 +370,9 @@ createRoot(container).render(
       bearerToken="unused"
       onFocusChange={(nodeId) => {
         window.__KEYBOARD__!.focused = nodeId;
+      }}
+      onSetPicture={(nodeId) => {
+        window.__KEYBOARD__!.pictureRequested = nodeId;
       }}
       onSelectionChange={(ids) => {
         window.__KEYBOARD__!.selection = ids;

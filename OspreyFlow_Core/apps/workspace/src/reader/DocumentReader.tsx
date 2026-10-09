@@ -5,7 +5,7 @@
 // Escape returns to the view exactly as it was, since nothing behind the overlay is touched.
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { HighlightedMessage } from "../dossier/HighlightedMessage";
+import { HighlightLegend, HighlightedMessage } from "../dossier/HighlightedMessage";
 import { pendingSpansIn, type PendingSpan } from "./pendingSpans";
 import {
   acceptEmailCandidate,
@@ -343,6 +343,18 @@ export function DocumentReader({
                 </p>
               )}
             </div>
+            {load.view.text && (
+              <HighlightLegend
+                types={[
+                  ...new Set([
+                    ...load.view.spans.map((s) => s.entity_type),
+                    ...pendingSpans.map((p) => p.entity_type),
+                  ]),
+                ].sort()}
+                pendingPresent={pendingSpans.length > 0}
+                ontology={ontology}
+              />
+            )}
             {load.view.truncated && (
               <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
                 This is the first 4,000 characters; the message runs on.

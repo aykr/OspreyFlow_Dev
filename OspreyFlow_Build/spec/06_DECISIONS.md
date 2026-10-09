@@ -10349,3 +10349,17 @@ proving the directory was asked only for the authors of judgements actually serv
 A name is readable by anyone who may read the record it sits on — already true of the UUID, and
 the name is the point. Five minutes of staleness after an account rename. A deployment without
 `OIDC_ADMIN_USERS_URL` (or without the exchange client) sees ids exactly as today.
+
+### ADR-105, Amendment 1 (9 October 2026) — Set picture… from the node's own menu
+
+Status: accepted 9 October 2026 (the owner: "Can you add the ability to associate an image to node to its right click menu?").
+
+A node whose type a picture may depict (`DEPICTS`'s `to`) offers **Set picture…** in its
+right-click menu's Actions group. The item selects the node and opens the Inspector's Picture part
+(a rising `openPictureSignal`, the link menu's own `open*Signal` shape) — the choice itself stays
+there, because the file, the marking and the legal basis are the part's evidence rules, not a
+menu's. Tests: the menu hand-over (`keyboard.spec.ts`'s `menu-item-set-picture` case, rule 13,
+proving selection and the request end to end) and the Inspector's part opening on the rising
+signal. Found on the way: every counted-Tab walk to a menu item in `keyboard.spec.ts` broke when
+the menu gained an item — replaced with `tabUntilFocused`, which Tabs until the named item holds
+focus, the fragility the action registry's own comment had already warned about.

@@ -66,6 +66,9 @@ export interface InspectorProps {
   sharedContacts?: Omit<SharedContactsProps, "node">;
   /** ADR-105: the entity's own picture. Absent: not offered. */
   picture?: EntityPictureProps;
+  /** Rises when a node's menu chose *Set picture…* (ADR-105 Amendment 1): the Picture part opens.
+   * The same rising-counter shape as the link menu's `open*Signal`s. */
+  openPictureSignal?: number;
   /** Phase 8 Stage 4c: the Judgements tab, `02_GLASS_FRONTEND.md` §9. `undefined` when the
    * caller has not wired assessment production up yet (an existing test harness) — the tab is
    * then simply not offered, the same optional-prop pattern `dimmedNodeIds`/`communityHulls`
@@ -123,6 +126,7 @@ export function Inspector({
   visualFor,
   sharedContacts,
   picture,
+  openPictureSignal,
 }: InspectorProps) {
   // The link menu's counters only ever rise; a part opens when one rises, never on a later
   // selection just because a counter is above zero.
@@ -189,6 +193,7 @@ export function Inspector({
         visualFor={visualFor}
         sharedContacts={sharedContacts}
         picture={picture}
+        openPictureSignal={openPictureSignal}
       />
     </Panel>
   );
@@ -415,14 +420,26 @@ function NodeView({
   visualFor,
   sharedContacts,
   picture,
+  openPictureSignal,
 }: {
   node: Node | null;
   assessment: InspectorProps["assessment"];
   visualFor?: InspectorProps["visualFor"];
   sharedContacts?: InspectorProps["sharedContacts"];
   picture?: InspectorProps["picture"];
+  openPictureSignal?: number;
 }) {
   const parts = useOpenParts<NodePart>(node ? ["properties"] : ["judgements"]);
+  // *Set picture…* on the node's menu (ADR-105 Amendment 1): the Picture part opens when the
+  // signal rises, never merely because it is above zero on a later selection.
+  const pictureSignalSeen = useRef(openPictureSignal ?? 0);
+  useEffect(() => {
+    if ((openPictureSignal ?? 0) > pictureSignalSeen.current) {
+      pictureSignalSeen.current = openPictureSignal ?? 0;
+      parts.show("picture");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openPictureSignal]);
   // Judgements fetches the case's whole list, so it is built the first time its part is opened
   // and kept from then on, not built hidden for every node selected.
   const [judgementsWanted, setJudgementsWanted] = useState(!node);

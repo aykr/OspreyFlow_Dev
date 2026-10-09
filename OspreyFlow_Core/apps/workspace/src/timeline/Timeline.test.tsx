@@ -56,4 +56,25 @@ describe("Timeline's density strip", () => {
     expect(option.xAxis.axisLabel.fontFamily).toMatch(/IBM Plex Mono/);
     expect(option.xAxis.data).toEqual(["2026-01-01", "2026-01-02"]);
   });
+
+  it("fills the brushed window translucently, so the bars within stay readable", async () => {
+    // The owner, 9 October 2026: "selecting a portion of timeline should still let me see the
+    // trends for the selected zone and not block it out" — an opaque surface fill hid the bars.
+    const store = createCrossFilterStore("http://test.invalid", "unused", "inv-1");
+    render(
+      <Timeline
+        apiBaseUrl="http://test.invalid"
+        bearerToken="unused"
+        investigationScope="inv-1"
+        crossFilterStore={store}
+        getNodeIds={() => []}
+      />,
+    );
+    await waitFor(() => expect(setOption).toHaveBeenCalled());
+    const option = setOption.mock.calls.at(-1)![0] as {
+      brush: { brushStyle: { color: string } };
+    };
+    // An 8-digit hex: the fill carries its own alpha, never an opaque surface colour.
+    expect(option.brush.brushStyle.color).toMatch(/^#[0-9a-fA-F]{6}[0-3][0-9a-fA-F]$/);
+  });
 });

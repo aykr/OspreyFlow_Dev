@@ -28,9 +28,20 @@
 // Phase 6a Stage 4: every `test()` below that proves a `CANVAS_ACTIONS` entry calls
 // `registerCovered(id)` at the point it does so; the final test asserts none were missed —
 // `actionRegistry.ts`'s own docstring has the full reasoning for why this exists now.
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { assertAllCovered, CANVAS_ACTIONS, registerCovered } from "./actionRegistry";
+
+/** Tabs until `target` is focused — never a counted number of Tabs, which breaks whenever the
+ * menu gains an item (seen 9 October 2026: *Set picture…* and the Depicts link row joined the
+ * node menu and every counted walk in this file went red at once). */
+async function tabUntilFocused(page: Page, target: Locator, max = 12): Promise<void> {
+  await expect(target).toBeVisible();
+  for (let i = 0; i < max && !(await target.evaluate((el) => el === document.activeElement)); i++) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(target).toBeFocused();
+}
 import { layoutSettled } from "./layoutSettled";
 import { readPng } from "./pngPixels";
 
@@ -420,9 +431,7 @@ test("Space, then the radial list, reaches manual link — a real POST, not a st
   // `radialMenuItems` appends after them. `RadialMenu` focuses the first item (`ASSOCIATE_OF`) on
   // open; two native Tabs (past `USES`) reach "Link to n0". Nothing here calls `preventDefault`
   // on Tab while a menu is open (`onKeyDown`'s own guard).
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("menuitem", { name: /Link to n0/ })).toBeFocused();
+  await tabUntilFocused(page, page.getByRole("menuitem", { name: /Link to n0/ }));
   await page.keyboard.press("Enter");
 
   await expect.poll(() => linkRequestBody !== null).toBe(true);
@@ -458,10 +467,7 @@ test("the radial list also reaches Split, not only Link", async ({ page }) => {
   // Item order on n1: `ASSOCIATE_OF`, `USES` (see the manual-link test above for why there are two
   // edge-type items on a `Person` node), then "Link to n0", then "Split from n0" —
   // `radialMenuItems`' own push order. Three Tabs past the auto-focused first item reaches it.
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("menuitem", { name: /Split from n0/ })).toBeFocused();
+  await tabUntilFocused(page, page.getByRole("menuitem", { name: /Split from n0/ }));
   await page.keyboard.press("Enter");
 
   await expect.poll(() => splitRequestBody !== null).toBe(true);
@@ -563,9 +569,7 @@ test("the radial list reaches Explain cluster, and the explanation actually rend
   // manual-link test above for why a `Person` node gets two of them — come before the cluster
   // item), then "Explain cluster". Two native Tabs past the auto-focused first item reaches it,
   // the same navigation shape the manual-link test above already proves.
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("menuitem", { name: "Explain cluster" })).toBeFocused();
+  await tabUntilFocused(page, page.getByRole("menuitem", { name: "Explain cluster" }));
   await page.keyboard.press("Enter");
 
   await expect.poll(() => explainRequestUrl !== null).toBe(true);
@@ -601,9 +605,7 @@ test("Escape dismisses the cluster-explanation overlay, reachable by keyboard al
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowLeft"); // focus n2 — see the Explain-cluster test above
   await page.keyboard.press("\\");
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab"); // past Associate of, then Uses — see the explain-cluster test above
-  await expect(page.getByRole("menuitem", { name: "Explain cluster" })).toBeFocused();
+  await tabUntilFocused(page, page.getByRole("menuitem", { name: "Explain cluster" }));
   await page.keyboard.press("Enter");
   await expect(page.getByText("Cluster explanation")).toBeVisible();
 
@@ -714,6 +716,28 @@ test("the radial list reaches Mark for suppression, and the mark toggles", async
   registerCovered("CANVAS_ACTIONS", "menu-item-mark-for-suppression");
 });
 
+// ADR-105 Amendment 1: Set picture… on a node whose type a picture may depict selects the node
+// and hands over to the Inspector's Picture part — proven end to end, since the walkthrough is
+// hardcoded and cannot discover a new action on its own (rule 13).
+test("Set picture… on a node's menu, by keyboard, selects it and asks for the Picture part", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  const focused = await page.evaluate(() => window.__KEYBOARD__?.focused ?? null);
+  await page.keyboard.press("\\");
+  const menu = page.locator(".radial-menu__list[role='menu']");
+  await expect(menu).toBeVisible();
+  const item = page.getByRole("menuitem", { name: "Set picture…" });
+  await expect(item).toBeVisible();
+  await item.focus();
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.pictureRequested ?? null))
+    .toBe(focused);
+  expect(await page.evaluate(() => window.__KEYBOARD__?.selection ?? [])).toEqual([focused]);
+  registerCovered("CANVAS_ACTIONS", "menu-item-set-picture");
+});
+
 // Phase 7 Stage 5 (the pathfinder) — `06_DECISIONS.md` ADR-033. `POST /v1/paths` is intercepted,
 // the same "real network call, mocked at the transport" shape every test above already uses; the
 // mocked `Path[]` bodies reference only ids already in this file's own fixture (`n0`..`n3`,
@@ -768,8 +792,7 @@ async function selectN0AndN3ThenOpenMenu(page: import("@playwright/test").Page):
   // Item order on `n3` (a `Person`): `ASSOCIATE_OF`, `USES` (both qualify, same reasoning the
   // manual-link test above already gives), "Link to n0", "Split from n0", "Find paths to n0" —
   // `radialMenuItems`' own push order. Auto-focused first item; four Tabs reach the last one.
-  for (let i = 0; i < 4; i++) await page.keyboard.press("Tab");
-  await expect(page.getByRole("menuitem", { name: /Find paths to n0/ })).toBeFocused();
+  await tabUntilFocused(page, page.getByRole("menuitem", { name: /Find paths to n0/ }));
 }
 
 test("the radial list reaches Find paths, and a real found path renders in its own overlay", async ({
@@ -906,9 +929,7 @@ test("a failed manual link announces an error and does not silently leave the an
   await page.keyboard.press("Space"); // ring: {n0, n1}
 
   await page.keyboard.press("\\");
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("menuitem", { name: /Link to n0/ })).toBeFocused();
+  await tabUntilFocused(page, page.getByRole("menuitem", { name: /Link to n0/ }));
   await page.keyboard.press("Enter");
 
   await expect(page.getByRole("alert")).toHaveText("Link failed (500). Not recorded — try again.");
@@ -954,9 +975,10 @@ test("a failed explain-cluster announces an error rather than leaving the analys
   await page.keyboard.press("ArrowLeft"); // n2 — the harness's own cluster pair with n3
 
   await page.keyboard.press("\\");
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("menuitem", { name: "Explain cluster" })).toBeFocused();
+  // Tab until the item, never a counted number of Tabs: a new menu item (Set picture…, ADR-105
+  // Amendment 1) broke the two-Tab version of this walk, exactly the fragility the action
+  // registry's own comment warns about.
+  await tabUntilFocused(page, page.getByRole("menuitem", { name: "Explain cluster" }));
   await page.keyboard.press("Enter");
 
   await expect(page.getByRole("alert")).toHaveText("Explain cluster failed (500). Try again.");

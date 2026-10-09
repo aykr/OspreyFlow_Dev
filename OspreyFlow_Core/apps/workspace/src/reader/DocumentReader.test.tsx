@@ -203,6 +203,41 @@ describe("DocumentReader", () => {
     expect(marked.textContent).toBe("plant");
   });
 
+  it("shows a legend naming each highlighted type in its colour, dashed meaning not yet accepted", async () => {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("plant"));
+    const plantHash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    serve({
+      "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL },
+      "/links/e1/events/ev-1/extract": {
+        status: 200,
+        body: {
+          document_id: "email:ev-1",
+          delta: { seq: 2, op: "add", nodes: [], edges: [] },
+          candidates: [
+            {
+              id: "c1",
+              document_id: "email:ev-1",
+              entity_type: "Organisation",
+              properties: { name: "plant" },
+              confidence: 0.9,
+              status: "pending",
+              locator: "char span 28-33",
+              excerpt_hash: plantHash,
+            },
+          ],
+        },
+      },
+    });
+    mount();
+    // The accepted Person span alone already earns a legend.
+    const legend = await screen.findByLabelText("Highlight colours");
+    expect(legend.textContent).toContain("Person");
+    // A pending finding adds its type, and the dashed meaning is said.
+    fireEvent.click(screen.getByRole("button", { name: "Quick scan" }));
+    await waitFor(() => expect(legend.textContent).toContain("Organisation"));
+    expect(legend.textContent).toContain("dashed: found, not yet accepted");
+  });
+
   it("opens on the email it was handed when no Document has been written for it yet", async () => {
     serve({});
     render(

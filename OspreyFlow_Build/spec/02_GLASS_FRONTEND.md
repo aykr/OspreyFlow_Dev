@@ -194,7 +194,9 @@ Studio it holds *Back to the investigation*. Each is an icon button whose access
 drawer listing the open cases (the strip of tabs of ADR-084, as a list) with *Browse all cases*. The
 **view toolbar** above the canvas holds what belongs to that view alone: the resolution threshold on
 the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at the foot of the canvas
-appears when anything is selected (ADR-097 step 1; `keyboard/selection.spec.ts`). The timeline opens
+appears when anything is selected (ADR-097 step 1; `keyboard/selection.spec.ts`), on the inverse
+surface (the tooltip's `n11`-on-`surface-app` pairing) so it never reads as part of the right-click
+menu, which sits on `surface-raised` (the owner, 9 October 2026). The timeline opens
 folded. Above the bar, the **classification strip** names the highest protective marking among what is
 on screen, by the deployment's handling scheme's order, and is never hidden (`role="note"`, "Protective
 marking"). Chrome is these three rows — strip, bar, view toolbar — and no more (ADR-097 Amendment 1);
@@ -208,7 +210,10 @@ set of widgets:
 2. **Filters dim, they do not remove.** A filtered node stays in place at 12% channel mix with
    its label dropped. Removing nodes destroys the analyst's spatial memory of the network, which
    is most of what they are actually using to navigate.
-3. **Everything cross-filters.** A brush on the timeline dims the graph, restricts the map and
+3. **Everything cross-filters.** The brushed window's own fill is translucent (a 12% tint of its
+   border's token), never an opaque surface — the selected zone is the one whose trend the analyst
+   wants to read, so its bars stay visible while everything outside dims (the owner, 9 October
+   2026; `Timeline.test.tsx`'s translucent-fill case). A brush on the timeline dims the graph, restricts the map and
    recomputes the histograms. A lasso on the canvas filters the timeline. A histogram bar click
    filters everything. This is the Gotham pattern and it is the core interaction of the product.
    It holds however the analyst signed in: the deployed Glass gets its token after it opens, so
@@ -1024,7 +1029,10 @@ each finding's *Accept* and *Reject*, as the Inspector's email
 view does, and the text is read again after an acceptance so the new entity is marked. A finding not
 yet accepted is marked in the text where it sits, dashed and unclickable, from its own locator and
 only where the words hash to its excerpt hash (ADR-098 Amendment 3); accepting it turns the marking
-into the accepted entity's. Focus starts
+into the accepted entity's. Highlights fill at 18% of the type's channel (raised from the hull
+convention's 8% — the owner, 9 October 2026: the types were too hard to tell apart — text colour
+untouched), and a legend under the text names each highlighted type in its colour and says that
+dashed means found, not yet accepted (`HighlightLegend`). Focus starts
 on *Close*; Close or Escape returns to the canvas with nothing moved behind it. The text comes from
 `GET .../documents/{id}/reader`. Tests: `src/reader/DocumentReader.test.tsx` and
 `keyboard/reader.spec.ts` (Enter opens it, Escape closes it, Extract, Accept and Reject by keyboard). **Marking an

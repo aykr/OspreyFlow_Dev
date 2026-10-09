@@ -264,6 +264,10 @@ export interface GlassCanvasProps {
   /** ADR-092: double-click (or Enter) on a Document opens it to read rather than expanding it;
    * expanding a Document stays in its right-click menu. */
   onOpenDocument?: (nodeId: string) => void;
+  /** ADR-105 Amendment 1: the node menu's *Set picture…* selects the node and asks the caller to
+   * bring the Inspector's Picture part forward — the choice itself (file, marking, legal basis)
+   * stays there, never in the menu. */
+  onSetPicture?: (nodeId: string) => void;
 }
 
 /** Phase 7 Stage 3: what the metrics panel needs from outside the canvas's own event handlers —
@@ -374,6 +378,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       onLinkAction,
       getEventsWindow,
       onOpenDocument,
+      onSetPicture,
     }: GlassCanvasProps,
     ref,
   ) {
@@ -2530,6 +2535,24 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           count: undefined,
           group: "Actions",
           onSelect: () => setAddingFiles({ holder: { id: nodeId, label: nodeLabel(node) } }),
+        });
+      }
+
+      // ADR-105 Amendment 1 (owner, 9 October 2026): an entity a picture may depict offers to set
+      // one from its own menu. The menu selects the node and opens the Inspector's Picture part;
+      // the file, marking and legal basis stay there (evidence rules are the part's, not a menu's).
+      const depicts = edgeTypes.find((t) => t.name === "DEPICTS");
+      if (onSetPicture && bearerToken && investigationId && depicts?.to.includes(node.type)) {
+        items.push({
+          id: "set-picture",
+          label: "Set picture…",
+          count: undefined,
+          group: "Actions",
+          onSelect: () => {
+            setSelected(new Set([nodeId]));
+            onSelectionChange?.([nodeId]);
+            onSetPicture(nodeId);
+          },
         });
       }
 

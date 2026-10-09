@@ -121,6 +121,9 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   // reaches it by `End` rather than by counting Tabs, which would otherwise have to change every
   // time an edge type is added to the fixture.
   "menu-item-mark-for-suppression",
+  // ADR-105 Amendment 1: Set picture… on an entity a picture may depict, handing over to the
+  // Inspector's Picture part.
+  "menu-item-set-picture",
   "overlay-dismiss-cluster-explain",
   // The pathfinder — the keyboard-walkthrough's own entry drew
   // the line this follows: a further canvas radial-menu item extends this registry rather than

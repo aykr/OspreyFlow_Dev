@@ -62,13 +62,57 @@ function splitIntoRuns(text: string, spans: MessageSpan[], pending: PendingHighl
 function highlightStyle(channel: string, provenanceState: MessageSpan["provenance_state"]): CSSProperties {
   const hex = CHANNEL_HEX[channel] ?? FALLBACK_CHANNEL_HEX;
   return {
-    backgroundColor: `color-mix(in srgb, ${hex} 8%, transparent)`,
+    // 18%, raised from the hull convention's 8% (the owner, 9 October 2026: the types were too
+    // hard to tell apart in the text). Text colour is still never touched, so the contrast-floor
+    // argument above stands.
+    backgroundColor: `color-mix(in srgb, ${hex} 18%, transparent)`,
     borderBottom: `2px ${provenanceState === "inferred" ? "dashed" : "solid"} ${hex}`,
     padding: "0 1px",
     cursor: "pointer",
     font: "inherit",
     color: "inherit",
   };
+}
+
+/** Which colour marks which entity type (the owner, 9 October 2026): one chip per type present,
+ * drawn exactly as its highlights are, and the dashed meaning said when anything is pending. */
+export function HighlightLegend({
+  types,
+  pendingPresent,
+  ontology,
+}: {
+  types: readonly string[];
+  pendingPresent: boolean;
+  ontology: OntologyRegistry;
+}) {
+  if (types.length === 0) return null;
+  return (
+    <p
+      aria-label="Highlight colours"
+      className="label"
+      style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-12)", alignItems: "center", margin: 0 }}
+    >
+      {types.map((type) => {
+        const hex = CHANNEL_HEX[ontology.visualFor(type)?.channel ?? ""] ?? FALLBACK_CHANNEL_HEX;
+        return (
+          <span key={type} style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-4)" }}>
+            <span
+              aria-hidden="true"
+              style={{
+                width: "12px",
+                height: "12px",
+                borderRadius: "var(--r-control)",
+                backgroundColor: `color-mix(in srgb, ${hex} 18%, transparent)`,
+                borderBottom: `2px solid ${hex}`,
+              }}
+            />
+            {type}
+          </span>
+        );
+      })}
+      {pendingPresent && <span>dashed: found, not yet accepted</span>}
+    </p>
+  );
 }
 
 export function HighlightedMessage({ document, ontology, onSelectNode, pending }: HighlightedMessageProps) {

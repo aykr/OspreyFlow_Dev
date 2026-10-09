@@ -408,6 +408,8 @@ export function App() {
   const [linkChangeSignal, setLinkChangeSignal] = useState(0);
   const [linkEventsSignal, setLinkEventsSignal] = useState(0);
   const [linkHistorySignal, setLinkHistorySignal] = useState(0);
+  // ADR-105 Amendment 1: the node menu's *Set picture…* opens the Inspector's Picture part.
+  const [pictureOpenSignal, setPictureOpenSignal] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   // ADR-097 Amendment 1: the case and its branches, reached from the rail.
   const [casesOpen, setCasesOpen] = useState(false);
@@ -1118,6 +1120,7 @@ export function App() {
                   setDossierNodeId(nodeId);
                   setView("dossier");
                 }}
+                onSetPicture={() => setPictureOpenSignal((n) => n + 1)}
               />
             )}
             {/* ADR-100: an empty canvas offers where to start, until something is drawn. */}
@@ -1310,6 +1313,7 @@ export function App() {
                             }
                           : undefined
                       }
+                      openPictureSignal={pictureOpenSignal}
                       picture={
                         ontologySchema && pictureTypes.size > 0
                           ? {

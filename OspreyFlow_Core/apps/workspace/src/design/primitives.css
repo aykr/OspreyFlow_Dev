@@ -365,16 +365,23 @@
 .accordion-section__content { padding: var(--sp-8); }
 
 /* The selection bar (ADR-097 step 1, design review item 2): floating, bottom centre of the canvas,
-   an overlay, so a shadow and no hairline (DESIGN.md §6). */
+   an overlay, so a shadow and no hairline (DESIGN.md §6). Inverse surface (the tooltip's own
+   `n11`-on-`surface-app` pairing), so it never reads as part of the right-click menu, which sits
+   on `surface-raised` beside it (the owner, 9 October 2026: "the right menu and quick menu gets
+   confusing"). */
 .selection-bar {
   position: absolute; left: 50%; bottom: var(--sp-12); transform: translateX(-50%); z-index: 12;
   display: flex; align-items: center; gap: var(--sp-4);
   padding: var(--sp-4) var(--sp-4) var(--sp-4) var(--sp-12);
-  background: var(--surface-raised); box-shadow: var(--overlay-shadow);
+  background: var(--n11); color: var(--surface-app); box-shadow: var(--overlay-shadow);
   border-radius: var(--r-panel); font-size: var(--fs-12); line-height: var(--lh-12);
 }
-.selection-bar__count { margin-right: var(--sp-8); color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
-.selection-bar .btn { font-size: var(--fs-12); line-height: var(--lh-12); padding: var(--sp-4) var(--sp-8); }
+.selection-bar__count { margin-right: var(--sp-8); color: var(--surface-app); font-weight: 600; font-variant-numeric: tabular-nums; }
+.selection-bar .btn {
+  font-size: var(--fs-12); line-height: var(--lh-12); padding: var(--sp-4) var(--sp-8);
+  background: transparent; border-color: var(--n8); color: var(--surface-app);
+}
+.selection-bar .btn:hover, .selection-bar .btn:focus-visible { background: var(--n9); }
 
 /* The workspace shell (ADR-097 step 1, design review items 1 and 16). */
 .classification-strip {

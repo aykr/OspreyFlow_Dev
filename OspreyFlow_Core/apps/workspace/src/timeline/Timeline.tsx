@@ -364,7 +364,10 @@ export function Timeline({
             transformable: true,
             throttleType: "debounce",
             throttleDelay: 200,
-            brushStyle: { borderWidth: 1, color: palette.surfaceHover, borderColor: palette.textSecondary },
+            // A translucent fill (12% of the border's own token), never an opaque surface: the
+            // selected window is the zone whose trend the analyst wants, so its bars must stay
+            // readable (the owner, 9 October 2026); `outOfBrush` below already dims the rest.
+            brushStyle: { borderWidth: 1, color: `${palette.textSecondary}1F`, borderColor: palette.textSecondary },
             outOfBrush: { colorAlpha: 0.35 },
           },
           toolbox: { show: false },
