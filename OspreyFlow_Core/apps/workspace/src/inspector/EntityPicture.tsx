@@ -24,6 +24,10 @@ export interface EntityPictureProps extends PictureApi {
 export function EntityPicture({ nodeId, ...props }: EntityPictureProps & { nodeId: string }) {
   const { apiBaseUrl, bearerToken, onDelta } = props;
   const own = useSyncExternalStore(onEntityPicturesChange, () => entityPictureFor(nodeId));
+  // The file control is uncontrolled, so clearing `file` alone leaves the sent
+  // file's name showing, and the same file chosen again fires no change. A new
+  // key remounts it empty after each successful send.
+  const [controlGeneration, setControlGeneration] = useState(0);
   const [file, setFile] = useState<File | null>(null);
   const [classifications, setClassifications] = useState<string[]>(["OFFICIAL"]);
   const [classification, setClassification] = useState("OFFICIAL");
@@ -58,6 +62,7 @@ export function EntityPicture({ nodeId, ...props }: EntityPictureProps & { nodeI
       const deltas = await setEntityPicture(props, nodeId, file, classification, legalBasis.trim());
       deltas.forEach(onDelta);
       setFile(null);
+      setControlGeneration((generation) => generation + 1);
     });
   const remove = () => run(async () => onDelta(await removeEntityPicture(props, nodeId)));
 
@@ -71,6 +76,7 @@ export function EntityPicture({ nodeId, ...props }: EntityPictureProps & { nodeI
       <label>
         Picture
         <input
+          key={controlGeneration}
           type="file"
           aria-label="Picture file"
           accept={PICTURE_ACCEPT}
