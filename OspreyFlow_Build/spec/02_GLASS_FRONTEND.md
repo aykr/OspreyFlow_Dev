@@ -901,7 +901,11 @@ the map drew black (8 October 2026; `map/mapStart.ts`). Place labels need glyph 
 layer cannot have its glyphs, so without them the map drew nothing at all. The Glass asks for the
 labels' first glyph range before the map mounts (`glyphsServed`, an HTML answer counting as none,
 since nginx answers an unknown path with the Glass's own page) and leaves the label layer out when
-they are missing: the basemap then draws unlabelled. **Not built:** the glyph files themselves.
+they are missing: the basemap then draws unlabelled. **The glyph files** are installed into the
+tiles folder's `fonts/` by `python -m scripts.fetch_basemap_glyphs --tiles-root <tiles>` (the
+OpenMapTiles fonts release, pinned by SHA-256; only the fonts the style names); the renderer mounts
+that folder read-only into the workspace, whose nginx serves `/fonts/` from it with a real 404 for
+a missing range (until 9 October 2026 none existed and every map drew unlabelled).
 
 The bundled basemap and its overlays (the heat layer, a trail, a boundary) take their colours from
 the themed palette (ADR-070) and are drawn again when the theme changes: land the raised surface,

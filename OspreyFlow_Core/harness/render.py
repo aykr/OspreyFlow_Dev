@@ -72,6 +72,9 @@ from schemas.deployment import (
     SearchBackend,
 )
 
+#: Where the workspace's nginx serves the basemap's glyph files from (`apps/workspace/nginx.conf`).
+GLYPHS_CONTAINER_PATH = "/usr/share/nginx/fonts"
+
 #: **Where the ingest root is mounted inside the Conduit — fixed, not configurable** (owner ruling
 #: R6, 27 September 2026). The *host* side is `components.storage.ingest` and an operator moves it
 #: freely; the container side is a constant so that the Conduit's own source-file route and this
@@ -751,6 +754,14 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         # start after they are healthy, not merely after they are created. Found running the golden
         # path: with no ordering it died on `httpx.ConnectError` reaching a Keycloak that was still
         # importing its realm, and then restarted forever.
+        if entry.service == "workspace":
+            # The map's place names: glyph files kept with the basemap, in the tiles folder's
+            # `fonts/` (`scripts.fetch_basemap_glyphs`), served by the workspace's nginx at
+            # `/fonts/`, the bundled style's `glyphs` URL. Read-only. An empty folder is fine: the
+            # Glass probes for the glyphs and draws the map unlabelled without them.
+            service["volumes"] = [
+                f"{config.components.storage.tiles}/fonts:{GLYPHS_CONTAINER_PATH}:ro"
+            ]
         if entry.service == "api":
             # **Round 13bf — the recipe repository, on the persistent volume.** Publishing writes
             # the recipe to version control (`09_INGEST_STUDIO.md` §6); without this the Conduit

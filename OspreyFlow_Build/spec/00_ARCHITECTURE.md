@@ -826,6 +826,12 @@ LGPL dependency fails the check and is admitted only by a recorded exception nam
 the linkage mode and who assessed it. Do not write an unenforceable qualifier into the
 allowlist and assume the tooling honours it.
 
+**Fetched at deployment, not shipped in the repository:** the basemap's label glyphs, Noto Sans
+Regular from the OpenMapTiles fonts release v2.0 (SIL-OFL-1.1), installed into the tiles folder by
+`scripts.fetch_basemap_glyphs`, pinned by SHA-256 and served by the deployment itself, never from a
+CDN (spec 02 §3.4). Like the OpenStreetMap data the basemap is built from (ODbL), it is data the
+deployment holds, not a dependency of the code.
+
 The rejections below matter more than the acceptances, because each is a component someone will
 otherwise reach for by reflex. Two of them appear in the input documents.
 

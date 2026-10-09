@@ -1353,6 +1353,19 @@ def test_the_conduit_gets_the_tiles_folder_read_only_where_the_provider_source_p
     assert f"{config.components.storage.tiles}:/data/tiles:ro" in volumes
 
 
+def test_the_workspace_gets_the_basemap_glyphs_read_only_where_its_nginx_serves_them(
+    rendered: RenderResult, config: OspreyConfig
+) -> None:
+    """The map's place names need glyph files at `/fonts/` on the Glass's origin (the bundled
+    style's `glyphs` URL). They are kept with the basemap, in the tiles folder's `fonts/`, and the
+    workspace's nginx serves them from this mount (9 October 2026: none were served, so every
+    map drew without a single name). Read-only: the workspace serves them and never writes."""
+    document = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    volumes = document["services"]["workspace"]["volumes"]
+
+    assert f"{config.components.storage.tiles}/fonts:/usr/share/nginx/fonts:ro" in volumes
+
+
 # --- ADR-067 (amends R6): the one writable door inside the ingest root --------------------------
 #
 # Browser upload (the Connect stage's "Choose file…") needs the Conduit to write somewhere. R6's

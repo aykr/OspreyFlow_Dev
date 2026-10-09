@@ -192,3 +192,18 @@ def test_the_inventory_is_importable_without_docker(tmp_path: Path) -> None:
     with no Docker at all."""
     assert discover(REPO_ROOT)
     assert discover(tmp_path) == {entry.directory: Kind.PLACEHOLDER for entry in INVENTORY}
+
+
+def test_the_workspace_serves_the_basemap_glyphs_from_their_mount_and_404s_a_missing_one() -> None:
+    """The map's labels ask the Glass's origin for `/fonts/{fontstack}/{range}.pbf`. Served from
+    the read-only glyph mount the renderer gives the workspace (`GLYPHS_CONTAINER_PATH`), and a
+    missing range is a 404, not the Glass's own page: the SPA fallback answered every `/fonts/`
+    request with index.html, which MapLibre cannot read (9 October 2026)."""
+    from harness.render import GLYPHS_CONTAINER_PATH
+
+    conf = (REPO_ROOT / "apps" / "workspace" / "nginx.conf").read_text(encoding="utf-8")
+    block = conf[conf.index("location /fonts/") :]
+    block = block[: block.index("\n    }") + 6]  # the location's own brace, not `types { }`
+    assert f"alias {GLYPHS_CONTAINER_PATH}/;" in block
+    assert "try_files $uri =404;" in block
+    assert "application/x-protobuf" in block
