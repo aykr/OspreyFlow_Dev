@@ -10199,3 +10199,20 @@ Status: accepted 8 October 2026 (building decision 4 as the owner chose it; the 
 3. **An existing test changed its meaning.** `test_an_unknown_field_is_refused_so_a_marking_cannot_be_smuggled_in` sent an incomplete `handling` and expected 422; it would still have passed, because the handling was incomplete, not because handling was refused. It now sends a field the request does not declare, and a new case shows a complete handling reaching the service with whether the analyst is an Author.
 4. **Tests:** the service (raise; each kind of lowering refused without an Author, then without the confirmation, then written; units, clearance and an unknown code refused; planted: no Author check, no confirmation, lowering judged by classification alone, no unit check, no clearance check, each red); the route (the two refusals' statuses; Author worked out from the case; planted: always an Author); the form's rule and the form (planted: a lower handling sent unconfirmed); the history line; a keyboard case lowering a link's classification, refused until confirmed.
 
+## ADR-103 — Ofcom's reserved drama numbers are phone numbers to the `msisdn` adapter
+
+Status: accepted 9 October 2026 (the owner, of the choices put: "Adapter accepts drama ranges").
+
+### Context
+
+`CLAUDE.md` rule 9 allows only synthetic data in the repository, in CI and in a demo, and the project's synthetic phone numbers are Ofcom's ranges reserved for drama (`scripts/seed_scenarios.py`, enforced by `tests/test_seed_scenarios.py`; spec 09 §3 uses `+44 7700 900461` as its example). The `msisdn` Knowledge Adapter refused every one of the mobile range: `phonenumbers.is_valid_number` calls 07700 900xxx (and 01632 960xxx) unallocated. Found on 9 October 2026 in the data engineer's journey: the Profile stage recognised no phone column in a synthetic CDR (0 of 240 values matched), so the Map stage's `msisdn` transform would have rejected every row. The scenario seed never noticed, because it writes its numbers straight into the store without the adapter.
+
+### Decision
+
+1. **`msisdn()` accepts a UK number whose ten-digit national number begins with one of Ofcom's drama prefixes**, normalised to E.164 as any other: mobile 07700 900; geographic 0113–0118, 0121, 0131, 0141, 0151 and 0161 496 0; 020 7946 0; 0191 498 0; 028 9649 6; 029 2018 0; 01632 960; freephone 0808 157 0; premium 0909 879 0; UK-wide 0306 999 0. They are listed whole in the adapter, so the answer does not change with `phonenumbers`' metadata.
+2. **Nothing else is loosened.** A number outside those prefixes is valid only if `phonenumbers` says so, and a drama number of the wrong length is still refused.
+3. **No real intake is weakened.** Those numbers are never allocated, so a real feed holds none.
+
+### Tests
+
+`tests/knowledge_adapters/test_msisdn.py`: a drama mobile in five renderings (national, spaced international, bare international, `(0)` trunk, CLI-suppressed); seven of the other ranges; three wrong-length drama numbers refused. The mobile and 01632 cases were red first. The other geographic ranges already passed, because `phonenumbers` holds them as allocated blocks; they stay as cases so the list cannot lose them.

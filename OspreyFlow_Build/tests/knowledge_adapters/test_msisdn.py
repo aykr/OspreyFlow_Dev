@@ -44,3 +44,42 @@ def test_extension_is_dropped_from_the_canonical_e164_value() -> None:
 def test_unparseable_or_invalid_numbers_are_rejected_not_guessed(raw: str) -> None:
     with pytest.raises(NormalisationError):
         msisdn(raw)
+
+
+# --- ADR-103: Ofcom's reserved drama numbers are numbers -------------------------------------
+#
+# 9 October 2026, the data engineer's journey: every number in a synthetic CDR was rejected as
+# "not a valid phone number", because `phonenumbers` treats the ranges Ofcom reserves for drama as
+# unallocated — and those ranges are the only numbers `CLAUDE.md` rule 9's synthetic data may use
+# (`scripts/seed_scenarios.py`, `tests/test_seed_scenarios.py`). The planted values are the ones a
+# synthetic source actually holds, in the renderings a carrier export actually uses.
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["07700900461", "+44 7700 900461", "447700900461", "+44(0)7700 900461", "#31#07700900461"],
+)
+def test_a_drama_mobile_number_resolves_in_every_rendering(raw: str) -> None:
+    assert msisdn(raw) == "+447700900461"
+
+
+@pytest.mark.parametrize(
+    ("raw", "canonical"),
+    [
+        ("020 7946 0123", "+442079460123"),
+        ("0113 496 0999", "+441134960999"),
+        ("0161 496 0000", "+441614960000"),
+        ("028 9649 6123", "+442896496123"),
+        ("029 2018 0123", "+442920180123"),
+        ("01632 960123", "+441632960123"),
+        ("0808 157 0123", "+448081570123"),
+    ],
+)
+def test_the_geographic_and_non_geographic_drama_ranges_resolve(raw: str, canonical: str) -> None:
+    assert msisdn(raw) == canonical
+
+
+@pytest.mark.parametrize("raw", ["0770090046", "077009004611", "+44 7700 90046"])
+def test_a_drama_number_of_the_wrong_length_is_still_refused(raw: str) -> None:
+    with pytest.raises(NormalisationError):
+        msisdn(raw)
