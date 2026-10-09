@@ -402,11 +402,36 @@ class _ResolvedEdge:
         self.content = content
 
 
+def _check_values(
+    type_def: EntityTypeDef | EdgeTypeDef | None, properties: dict[str, Any]
+) -> None:
+    """Refuses the row when a value does not fit the type the ontology declares for its property (9
+    October 2026: it raised `OntologyError` from deep in the dry run or the load, so one bad row
+    failed Verify). Only the values are checked here: whether a required property is there depends
+    on whether the entity is created or references one already stored, which is known later. The
+    reason names the property and its type, never the value, as every rejection reason does."""
+    if type_def is None:
+        return  # an undeclared type is the recipe's fault, refused where it is checked
+    coerced = _coerce_declared_numeric_types(properties, type_def)
+    for prop in type_def.properties:
+        if prop.name not in coerced:
+            continue
+        try:
+            validate_properties(
+                type_def.model_copy(update={"properties": [prop], "identifiers": []}),
+                {prop.name: coerced[prop.name]},
+            )
+        except OntologyError:
+            reason = f"{type_def.name}.{prop.name} is not a valid {prop.type.value}"
+            raise RowRejected(reason) from None
+
+
 def _resolve_row(
     recipe: Recipe,
     row: Mapping[str, str],
     *,
     connector_defaults: Mapping[str, str | None],
+    ontology: OntologySchema | None = None,
 ) -> tuple[list[_ResolvedEntity], list[_ResolvedEdge]]:
     """Phase 1: pure resolution, no I/O. Raises `RowRejected` for the whole
     row on the first failing binding anywhere in it."""
@@ -418,6 +443,8 @@ def _resolve_row(
         properties = _resolve_properties(
             entity.properties, row, connector_defaults=connector_defaults
         )
+        if ontology is not None:
+            _check_values(ontology.entity_type(entity.type), properties)
         entities.append(_ResolvedEntity(entity, properties, _held_content(entity, row)))
 
     edges = []
@@ -428,6 +455,8 @@ def _resolve_row(
         properties = _resolve_properties(
             edge.properties, row, connector_defaults=connector_defaults
         )
+        if ontology is not None:
+            _check_values(ontology.edge_type(edge.type), properties)
         instant = (
             _resolve_temporal_instant(edge.temporal.at, row, connector_defaults=connector_defaults)
             if edge.temporal
@@ -493,6 +522,7 @@ def resolve_rows(
     *,
     load_id: str,
     source: str,
+    ontology: OntologySchema | None = None,
 ) -> tuple[list[StagedRow], list[RejectionRecord], int, int]:
     """Phase 1 of `run_recipe`, extracted so staging sits between
     resolution and load rather than being folded invisibly into one
@@ -537,7 +567,7 @@ def resolve_rows(
         row = materialized_rows[row_index]
         try:
             resolved_entities, resolved_edges = _resolve_row(
-                recipe, row, connector_defaults=connector_defaults
+                recipe, row, connector_defaults=connector_defaults, ontology=ontology
             )
         except RowRejected as exc:
             rejections.append(
@@ -1070,7 +1100,7 @@ async def dry_run_recipe(
     threads it onto `StagedRow`s that this function itself consumes and
     discards."""
     staged_rows, rejections, rows_read, rows_deduplicated = resolve_rows(
-        recipe, rows, load_id="dry-run", source=source
+        recipe, rows, load_id="dry-run", source=source, ontology=ontology
     )
     state = _DryRunState(
         graph=graph,
@@ -1177,7 +1207,7 @@ async def run_recipe(
     _stage_raw_rows(materialized_rows, storage=storage, load_id=load_id, source=source)
 
     staged_rows, rejections, rows_read, rows_deduplicated = resolve_rows(
-        recipe, materialized_rows, load_id=load_id, source=source
+        recipe, materialized_rows, load_id=load_id, source=source, ontology=ontology
     )
 
     # Stage the normalised rows, then read back — the loop below iterates

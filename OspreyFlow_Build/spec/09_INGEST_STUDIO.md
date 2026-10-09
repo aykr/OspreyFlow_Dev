@@ -448,6 +448,14 @@ never silently coerced. A run with rejections can be published — but the count
 against the load and shown in the source's history, because an analyst looking at this data in
 six months needs to know 4% of it never arrived.
 
+**A value the ontology refuses rejects its row.** Each entity's and link's values are checked
+against the types the ontology declares while the row is resolved, before the dry run simulates it
+or the load writes it, so Verify and the load reject the same rows: *Person.date_of_birth is not a
+valid date*, naming the property and its type, never the value. Until 9 October 2026 such a value
+raised from deep in the dry run (Verify answered 500) or part-way through the load's transaction.
+Whether a required property is present is not checked here, since an entity that references a
+stored one may leave it out. Test: `tests/ingest/test_wrong_type_rejects_the_row.py`.
+
 A cause names the adapter, the field and why ("msisdn: cannot normalise field 'a_party' — a phone
 number has no letters in it"), never the value: the value is in the row's sample. So one cause is
 one group however many values fail it, and for a principal not cleared for the source the samples
