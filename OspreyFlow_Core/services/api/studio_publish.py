@@ -24,6 +24,7 @@ from pathlib import Path
 
 import yaml
 from services.ingest.engine import run_recipe
+from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
 from services.ingest.recipe_loader import load_recipe
 
 from ports.analytics import AnalyticsPort
@@ -285,4 +286,19 @@ async def run_published_recipe(
     # *Show messages* or extraction (found building ADR-094 step 2).
     if analytics is not None and events:
         await analytics.load_events(events)
+    # The run's places go on the map the same way: each `Location`'s `geometry_ref` names a point
+    # in the geometry partition, and nothing wrote one, so a place loaded here was never drawn
+    # (9 October 2026). The partition is keyed by ref and insert-only, so a ref already there is
+    # not loaded twice.
+    points = point_geometries(recipe, rows)
+    if analytics is not None and points:
+        held = {
+            record.geometry_ref
+            for record in await analytics.get_geometries(
+                [record.geometry_ref for record in points],
+                principal,
+                version=POINT_GEOMETRY_VERSION,
+            )
+        }
+        await analytics.load_geometries([p for p in points if p.geometry_ref not in held])
     return report

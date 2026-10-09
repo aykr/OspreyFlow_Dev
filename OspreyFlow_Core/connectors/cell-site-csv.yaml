@@ -1,0 +1,20 @@
+# A carrier's cell-site list — one row per mast, its position as a longitude and latitude in WGS84.
+#
+# `09_INGEST_STUDIO.md` §2: adding a layout is a file, not a release. This one exists because a
+# coordinate pair is refused unless its source declares a coordinate system (`01_DOMAIN_MODEL.md`
+# §7.1, ADR-017: "rejected rather than guessed"), the Studio takes that declaration from the
+# connector profile and nowhere else, and no layout before this declared one. So a place with a
+# position could not be loaded through the Studio at all (found 9 October 2026).
+#
+# `EPSG:4326` is a fact about this layout: a carrier's site list gives decimal degrees. A source
+# in British National Grid eastings and northings is a different layout and declares
+# `EPSG:27700`; nothing here reads one as the other.
+id: cell-site-csv
+label: Cell-site list (CSV, WGS84)
+group: Communications
+structured: true
+reader: csv
+delimiter: ","
+encoding: utf-8
+header_rows: 1
+source_crs: "EPSG:4326"

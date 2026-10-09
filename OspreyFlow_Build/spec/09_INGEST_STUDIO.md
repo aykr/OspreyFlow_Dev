@@ -371,6 +371,18 @@ events (each timed link's occurrence, with any text it carries) to the analytics
 seed's do. Until 5 October 2026 the run dropped them, so nothing loaded through the studio reached
 the timeline, *Show messages* or extraction. Test: `tests/ingest/test_studio_run_events.py`.
 
+Its places go to the analytics store the same way. A `Location` holds a `geometry_ref`, never its
+coordinates (`03_CONDUIT_MIDDLEWARE.md` §5.1); after the run commits, each point a `geometry_ref`
+binding gives is loaded into the geometry partition under that ref (version 1, the site grid's),
+unless the ref is already there, marked with its entity's handling
+(`services/ingest/geometries.py`). Until 9 October 2026 nothing wrote them, so a place loaded
+through the studio carried a ref that resolved to nothing and was never on the map. A coordinate
+pair needs its source's coordinate system, which the studio takes only from the connector
+profile; `connectors/cell-site-csv.yaml` (`EPSG:4326`) is the first layout to declare one. Test:
+`tests/ingest/test_studio_run_geometries.py`. Open: the existing refs are read back as the loader,
+so a ref already loaded at a marking the loader cannot read is not seen, and its insert would
+collide on the partition's key after the graph has committed.
+
 ### Which relationship types a recipe may write (ADR-081 step D)
 
 A relationship the studio writes from the source's own records is **Direct**: a loaded record
