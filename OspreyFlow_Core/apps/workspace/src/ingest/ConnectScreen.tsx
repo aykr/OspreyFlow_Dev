@@ -21,6 +21,7 @@ import { Button } from "../design/primitives/Button";
 import { Input } from "../design/primitives/Input";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
+import { describeFileSize } from "./fileSize";
 import {
   ForbiddenError,
   createDraft,
@@ -460,7 +461,7 @@ export function ConnectScreen({
                 <option value="">Or choose one already on the server…</option>
                 {sourceFiles.files.map((file) => (
                   <option key={file.source_location} value={file.source_location}>
-                    {file.name} ({Math.max(1, Math.round(file.size_bytes / 1024))} KB
+                    {file.name} ({describeFileSize(file.size_bytes)}
                     {file.uploaded ? ", uploaded" : ""})
                   </option>
                 ))}
