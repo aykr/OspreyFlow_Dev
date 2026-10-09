@@ -20,13 +20,7 @@
 // edges as a disclosed simplification rather than a silent one.
 import type { StyleSpecification } from "maplibre-gl";
 
-import {
-  BORDER_STRONG_DARK_HEX,
-  SURFACE_APP_DARK_HEX,
-  SURFACE_RAISED_DARK_HEX,
-  SURFACE_SUNKEN_DARK_HEX,
-  TEXT_PRIMARY_DARK_HEX,
-} from "../color/tokens";
+import { activePalette, type Palette } from "../color/palette";
 import type { PublicMapProvider } from "../../../../packages/schemas/generated";
 
 export const BUNDLED_DARK_STYLE_ID = "bundled:osprey-dark";
@@ -57,6 +51,10 @@ export function resolvePmtilesSourceUrl(source: string, apiBaseUrl: string): str
  * says whether they are there. */
 export interface StyleOptions {
   labels: boolean;
+  /** The theme's palette (ADR-070); the theme shown now when absent. The style once painted the
+   * dark theme's constants in either theme, its land and sea barely apart, and the map read as a
+   * black rectangle in the light theme and in the deck (9 October 2026). */
+  palette?: Palette;
 }
 
 export function buildBundledDarkStyle(
@@ -78,6 +76,11 @@ export function buildBundledDarkStyle(
   }
   const source = sourceIdFor(provider);
   const sourceUrl = resolvePmtilesSourceUrl(provider.source, apiBaseUrl);
+  const palette = options.palette ?? activePalette();
+  // Land is the raised surface and water the sequential ramp's second step, so the coast reads in
+  // either theme; lines and labels are the theme's border and text.
+  const land = palette.surfaceRaised;
+  const water = palette.seq[1];
   const style: StyleSpecification = {
     version: 8,
     name: "osprey-dark",
@@ -95,21 +98,21 @@ export function buildBundledDarkStyle(
       {
         id: "background",
         type: "background",
-        paint: { "background-color": SURFACE_APP_DARK_HEX },
+        paint: { "background-color": land },
       },
       {
         id: "landcover",
         type: "fill",
         source,
         "source-layer": "landcover",
-        paint: { "fill-color": SURFACE_RAISED_DARK_HEX, "fill-opacity": 0.5 },
+        paint: { "fill-color": palette.surfaceHover, "fill-opacity": 0.5 },
       },
       {
         id: "water",
         type: "fill",
         source,
         "source-layer": "water",
-        paint: { "fill-color": SURFACE_SUNKEN_DARK_HEX },
+        paint: { "fill-color": water },
       },
       {
         id: "boundary",
@@ -117,7 +120,7 @@ export function buildBundledDarkStyle(
         source,
         "source-layer": "boundary",
         paint: {
-          "line-color": BORDER_STRONG_DARK_HEX,
+          "line-color": palette.borderStrong,
           "line-width": 0.5,
           "line-dasharray": [2, 2],
         },
@@ -128,7 +131,7 @@ export function buildBundledDarkStyle(
         source,
         "source-layer": "transportation",
         paint: {
-          "line-color": BORDER_STRONG_DARK_HEX,
+          "line-color": palette.borderStrong,
           "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.3, 16, 2],
           "line-opacity": 0.6,
         },
@@ -139,7 +142,7 @@ export function buildBundledDarkStyle(
         source,
         "source-layer": "building",
         minzoom: 14,
-        paint: { "fill-color": SURFACE_RAISED_DARK_HEX, "fill-opacity": 0.4 },
+        paint: { "fill-color": palette.surfaceHover, "fill-opacity": 0.4 },
       },
       {
         id: "place-label",
@@ -152,8 +155,8 @@ export function buildBundledDarkStyle(
           "text-size": ["interpolate", ["linear"], ["zoom"], 4, 9, 14, 14],
         },
         paint: {
-          "text-color": TEXT_PRIMARY_DARK_HEX,
-          "text-halo-color": SURFACE_APP_DARK_HEX,
+          "text-color": palette.textPrimary,
+          "text-halo-color": palette.surfaceApp,
           "text-halo-width": 1,
         },
       },
@@ -210,7 +213,7 @@ export function buildRasterStyle(
       {
         id: "background",
         type: "background",
-        paint: { "background-color": SURFACE_APP_DARK_HEX },
+        paint: { "background-color": activePalette().surfaceApp },
       },
       { id: "raster-overlay", type: "raster", source },
     ],

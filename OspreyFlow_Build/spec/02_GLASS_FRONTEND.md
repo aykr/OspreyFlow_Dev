@@ -903,6 +903,12 @@ labels' first glyph range before the map mounts (`glyphsServed`, an HTML answer 
 since nginx answers an unknown path with the Glass's own page) and leaves the label layer out when
 they are missing: the basemap then draws unlabelled. **Not built:** the glyph files themselves.
 
+The bundled basemap and its overlays (the heat layer, a trail, a boundary) take their colours from
+the themed palette (ADR-070) and are drawn again when the theme changes: land the raised surface,
+water the sequential ramp's second step, lines the strong border, labels the primary text. Until
+9 October 2026 they used the dark theme's constants in either theme, with land and sea barely
+apart, and the map read as a black rectangle in the light theme and in exported screenshots.
+
 **What is not decided by this proposal:** whether a `local-lite`/`small`/`cluster` deployment
 profile should instead serve the file from a dedicated static-file sidecar rather than the
 Conduit itself (a real question once this is more than a single-file demo case), and whether the

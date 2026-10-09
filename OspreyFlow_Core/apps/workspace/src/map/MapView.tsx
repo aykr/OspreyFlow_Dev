@@ -42,7 +42,8 @@ import type {
   PublicMapProvider,
   Sighting,
 } from "../../../../packages/schemas/generated";
-import { SEQ_HEX } from "../color/tokens";
+import { activePalette } from "../color/palette";
+import { currentTheme, onThemeChange } from "../theme/theme";
 import type { WorkingSetGraph } from "../workingset/store";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
 import { conduitRequest } from "./conduitRequest";
@@ -243,9 +244,14 @@ export function MapView({
   // basemap preflight check awaits a fetch), so the cleanup a synchronous effect body would
   // normally return can't yet reference the map/sigma instance it creates.
   const cleanupRef = useRef<(() => void) | null>(null);
+  // The basemap and its overlays take the theme's palette (ADR-070), so the map is drawn again when
+  // the theme changes; it once painted the dark theme's colours in either (9 October 2026).
+  const [theme, setTheme] = useState(currentTheme());
+  useEffect(() => onThemeChange(setTheme), []);
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const SEQ_HEX = activePalette().seq;
     setBasemapUnavailable(null);
     let cancelled = false;
 
@@ -427,7 +433,7 @@ export function MapView({
       cleanupRef.current?.();
       cleanupRef.current = null;
     };
-  }, [graph, provider, nodeCoordinates, apiBaseUrl, bearerToken, onMapReady]);
+  }, [graph, provider, nodeCoordinates, apiBaseUrl, bearerToken, onMapReady, theme]);
 
   useEffect(() => {
     const map = mapRef.current;
