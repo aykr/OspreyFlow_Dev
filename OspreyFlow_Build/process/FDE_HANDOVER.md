@@ -1,6 +1,7 @@
 # OspreyFlow — Handover to a Claude Code session working directly in the repository
 
-Written 4 October 2026, for Ayan; last corrected 4 October 2026 (ADR-085, graphify, tsc casing). This file supersedes `SESSION_HANDOVER.md` (18 September 2026, written for
+Written 4 October 2026, for Ayan; brought up to date 9 October 2026 (section 4 and section 6.0 are the
+current state and the next work; read them first). This file supersedes `SESSION_HANDOVER.md` (18 September 2026, written for
 the maker–checker arrangement) as the place a new session starts. It adds to `process/CLAUDE.md`
 (rules 1 to 15, which bind) and does not repeat it. Where this file and the code disagree, the code is the
 evidence and this file is wrong; say so and fix the file.
@@ -19,7 +20,7 @@ evidence and this file is wrong; say so and fix the file.
 - **Design questions.** Ask with multiple-choice questions (at most four at a time) and then wait. Multiple
   choice is easier for him than free text. Do not build a design he has not answered.
 - **ADRs.** Never edit an existing ADR. Append an amendment or write a new ADR. The last ADR used is
-  **ADR-094** (ADR-086 to ADR-093 recorded on 4 October 2026, ADR-094 on 5 October); the next free number is **095**. Check `spec/06_DECISIONS.md` before relying on that.
+  **ADR-105** (9 October 2026); the next free number is **106**. Check `spec/06_DECISIONS.md` before relying on that.
 - **Style.** British English in code comments, documentation and all user-facing copy. Always give full,
   complete commands to run, never "add this line" fragments. Keep replies short; one or two sentences on an
   outcome, not a recap.
@@ -44,6 +45,10 @@ Also: no credentials in any file or message. `OspreyFlow_Core/Makefile` and `.gi
 protected: give the owner the change as a command or a diff and do not edit them (a new live-service test
 file needs entries in both, which is why `test_investigation_access_store.py` took the new tab-flag tests
 instead of a new file). `OspreyFlow_Core/osprey.yaml` and `OspreyFlow_Core/data/` stay uncommitted.
+**On 9 October 2026 a session broke this rule:** commit `47f3516` added `test_entity_pictures.py` to two
+lists in `ci.yml` (the live-service job's run list and the `test` job's ignores). The permission settings
+blocked the matching `Makefile` edit but not the `ci.yml` one. The owner decides whether to keep it or revert it;
+the `Makefile` half is in section 6.0.
 
 Rules from `process/CLAUDE.md` that bite most often here: **13** (a new workspace action needs a keyboard
 case in `keyboard/keyboard.spec.ts` and a registry id in `keyboard/actionRegistry.ts`), **15** (a new gate is
@@ -86,7 +91,73 @@ demo accounts (they live in the `osprey` realm). The demo passwords are in
 live specs; you can, and **the "Not seen" notes in the friction log say which things were never seen against
 the real stack** (see section 5).
 
-## 4. State on 5 October 2026
+## 4. State on 9 October 2026 (current)
+
+**Where `main` is.** `fa18859`, 164 commits ahead of `origin/main`, none pushed (the owner pushes). Not mine,
+leave alone: `OspreyFlow_Core/osprey.yaml` (modified), `OspreyFlow_Core/data/` (untracked),
+`OspreyFlow_Product_Overview_Draft1a.pptx` (untracked, the deck's source).
+
+**Built 6 to 9 October 2026** (each with its friction-log row in `07_BUILD_PLAN.md`; the last rows are the
+detail):
+- ADR-095 to ADR-102: extraction with a real model and whole decoded emails (095); the side panels as
+  accordions (096); the 6 October design review (097); a fast recogniser first and the model on request
+  (098); datasets per case (099); the Explore panel, *What's new*, most connected, by type, busiest links
+  (100); ArcadeDB 26.10.1 (101); handling never lowered by a rewrite (102).
+- **The analyst's journey** (deck chapters 1 to 16, captured as `j01`…`j27`) and the assessment chapter.
+- **The data engineer's journey through the Ingest Studio** on synthetic carrier data in the case *Carrier B
+  intake* (signed in as `osprey-demo-analyst`, roles named in captions): the phone records (20 numbers, 141
+  links), a re-run (nothing duplicated), the subscriber list, the hand-off to the analyst (`d01`…`d20`).
+  Faults found on the way and fixed: Run's access gate; rejection reasons that name the cause, not the
+  value; links counted, not writes; ADR-103 (Ofcom drama numbers); letters refused in a phone number;
+  percentages that never round to 100%; entity rename; notes kept on *Ignore*; identifiers offered as
+  properties; ADR-104 (`person_name(part=family)`).
+- **The map:** themed basemap (land and water apart, light and dark), place-name glyphs fetched, pinned and
+  served by the deployment (`scripts/fetch_basemap_glyphs.py`, `/fonts/`), the hotspot panel counts only
+  events at a place. A place loaded through the Studio is now on the map (`connectors/cell-site-csv.yaml`,
+  `services/ingest/geometries.py`). Seen live: 8 synthetic masts in Manchester and 31 handset sightings in
+  *Carrier B intake*, labelled, with the hotspot panel's 8 bars (`d21_map_masts.jpg`).
+- **ADR-105, one entity's own picture:** ontology **version 13** (`DEPICTS`, an image Document to the
+  entity it shows), four routes filtered in the adapter, the Inspector's *Picture* part, the canvas drawing
+  the entity's picture before its type's. Seen live on one Device.
+- **A value the ontology refuses rejects its row** (fa18859) instead of aborting Verify or the load.
+
+**Ontology version 13 is in force.** Every Studio recipe published before it is flagged when the API starts;
+reopen each in the Studio and publish it again before it runs (ADR-094 Amendment 1's procedure).
+
+**The deck** (owner-only, never committed; `OspreyFlow_Product_Overview_Draft1b.pptx` at the repository root
+is in `.git/info/exclude`): 51 slides, rebuilt from `Draft1a` by
+`../OspreyFlow_deck_screens/deck_build/build_deck.py`, run there as
+`uv run --quiet --no-project --with python-pptx --with pillow python build_deck.py`. Screens are in
+`../OspreyFlow_deck_screens/`; the synthetic sources loaded through the Studio are in its `journey_sources/`.
+The Enron slides (32 and 33) carry real data and stay on this machine. `d21_map_masts.jpg` is captured but
+not yet in the deck.
+
+**Running things that differ from section 3:**
+- The session runs `make refresh` itself after committing a fix that needs deploying (the owner's choice,
+  9 October). **Each refresh signs the browser out**, and so does reloading the Glass's tab (its token is
+  kept only in the page): the owner signs in again, never the session. Batch work into one refresh before a
+  live check, and check persistence read-only from the graph instead of reloading.
+- Read-only graph reads on the deployment: `docker exec osprey-local-lite-api-1 python -c '…'` with
+  `ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))`; a link's properties sit under
+  `properties`, and labels are physical (`mx_DEPICTS`).
+- **Throwaway test stack** (not the deployment; replaces section 4a's `fde-test-*` names):
+  `osprey-probe-arcadedb-new` (2491), `osprey-test-pg` (55433), `osprey-test-valkey-6379` (6379),
+  `osprey-test-minio` (9000, from the local image `quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z`). The
+  test line, from `OspreyFlow_Core`: `PYTHONDONTWRITEBYTECODE=1 ARCADEDB_HTTP_PORT=2491 POSTGRES_PORT=55433
+  POSTGRES_PASSWORD=throwaway POSTGRES_DB=osprey VALKEY_PORT=6379 PYTHONPATH=.:packages:../OspreyFlow_Build
+  .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini <paths> -q -p no:cacheprovider`. Leaving out
+  `ARCADEDB_HTTP_PORT=2491` makes every ArcadeDB test fail as if the database were absent.
+- Glass type-check is `npm run -s typecheck` from `OspreyFlow_Core` (the root `tsconfig.json`), not `npx tsc`
+  inside `apps/workspace`.
+- `PYTHONDONTWRITEBYTECODE=1` for any planted-fault loop: a stale `.pyc` once hid a plant.
+
+**Known failures, not from this work** (add to section 4a's list): `test_build_local_basemap_end_to_end.py`
+(its fixture path); `test_explore_routes.py` fails 8 to 12 cases only when the whole `tests/services/api`
+directory runs, and passes alone (order-dependent, the same at the commit before ADR-105); `test_export.py::
+test_export_ledger_entry_survives_investigation_deletion` (a foreign key on `investigation_grants`);
+`route-coverage-check` and `test-file-coverage-check` were already red for other routes and files.
+
+## 4a. State on 5 October 2026 (history)
 
 - **Committed on 4 and 5 October 2026, to `439e664`:** ADR-090 and its Amendments 1 to 3 (analyst-proposed
   relationship types, built: C1 `0021c3e`, C2 and C3 `439e664`); ADR-091 (link display names), ADR-092 and its
@@ -167,6 +238,53 @@ From the friction log, the owner's live checks still to do or report:
    once as `osprey-admin` (*Proposed types*), and the media and upload work against the deployment's MinIO.
 
 ## 6. Open work, in the order the owner raised it
+
+### 6.0 Next, as of 9 October 2026 (start here)
+
+**Waiting on the owner**
+1. The `Makefile` edit the permission settings blocked, so `test-file-coverage-check` stops naming the file:
+   in the `test:` target add `--ignore=../OspreyFlow_Build/tests/services/api/test_entity_pictures.py` beside
+   the `test_link_changes_store.py` ignore, and in the `test-all:` target add
+   `../OspreyFlow_Build/tests/services/api/test_entity_pictures.py` beside `test_link_changes_store.py`.
+2. Keep or revert the `ci.yml` lines from `47f3516` (section 2).
+3. Republish the Studio recipes flagged by ontology version 13.
+4. Push when ready (164 commits).
+
+**Live checks to do (sign-in needed; one refresh, then all of them)**
+5. **The Studio Map fault** (b475b5a's row): with a link already in the template, picking the next link's
+   start was seen to leave only the picked entity drawn. `keyboard/map-canvas.spec.ts` could not reproduce it
+   in three sequences (34cb171), so try it on the deployed Studio: a new draft, two entities and a link,
+   *+ entity* a third, *+ link*, click the third. If it shows, the fault is in `MapScreen` or the page around
+   the canvas, not `MapCanvas`.
+6. *Remove picture* on the deployed Glass (only *Set picture* was seen live).
+7. The "Not yet seen" rows of 6 to 9 October, each named in its friction-log row: the hotspot panel on the
+   HMP case (it is mounted whenever the ontology has a link type to `Location`, which version 13 always has,
+   so it shows on every case; on *Carrier B intake* it was seen counting the masts); Run's refusal; a renamed entity and a kept
+   note in the Studio; Profile's rates; the export report; the drawer and the menu (`5a08d08`, `93be822`);
+   the ranking (`38454f1`); a Verify rejection for a wrongly typed value (fa18859).
+
+**Faults found and not fixed** (each in the friction log)
+8. The profiler ranks IMSI above IMEI for a 15-digit column (any 15 digits pass the IMSI adapter).
+9. Map's *+ mapping* adds a row only when the last is filled.
+10. The canvas's *Labels* menu does not close on a click outside it; with two entities the right-hand
+    label runs under the Inspector; there is no error boundary.
+11. The Studio's source list said "No drafts yet" without the case's earlier Carrier B drafts (seen once).
+12. After *Set picture* the file control still names the file sent.
+13. A geometry ref already loaded at a marking the loader cannot read would collide on insert after the
+    graph commits; `scripts/build_local_basemap.py`'s gazetteer load writes no geometries.
+14. A 0-byte file is listed as "1 KB".
+15. Enron: document preview times out; quoted-printable bodies; duplicate findings; link-type ids shown
+    instead of names.
+16. Undecided: authors shown as account UUIDs, not names (needs the owner's choice).
+17. `make refresh` does not carry new mounts into the generated compose; the hand edits (ingest root, tiles,
+    `fonts`) live in `deploy/generated/local-lite/compose.yaml` and survive it.
+
+**Deck**
+18. Add `d21_map_masts.jpg` (and, if wanted, a picture slide) and rebuild with `deck_build/build_deck.py`.
+
+**Unchanged from before 9 October:** sections 5, 6.1 to 6.4, and the standing summary's "Remains after the
+milestone" in `07_BUILD_PLAN.md` (the harness-image ports test, GitHub Actions never run, B6's span
+anchoring, the local basemap on this host); Phase 8a, the cluster profile, is unstarted.
 
 ### 6.1 Panel drag, reorder and resize (built 4 October 2026, ADR-085 and ADR-086; owner's live check to do)
 
