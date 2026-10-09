@@ -16,7 +16,8 @@ import { useEffect, useRef, useState } from "react";
 import type { OntologySchema, RowTemplate } from "../../../../../packages/schemas/generated";
 import { activePalette } from "../../color/palette";
 import { onThemeChange } from "../../theme/theme";
-import { mapCanvasColours, mapNodeColour } from "./mapCanvasColours";
+import { mapCanvasColours } from "./mapCanvasColours";
+import { syncTemplateGraph } from "./mapGraphSync";
 
 export type MapSelection = { kind: "entity"; ref: string } | { kind: "edge"; index: number } | null;
 
@@ -30,14 +31,6 @@ export interface MapCanvasProps {
   linkFromRef: string | null;
   onSelect: (selection: MapSelection) => void;
   onBackgroundClick: () => void;
-}
-
-const NODE_SIZE = 14;
-
-function layoutPosition(index: number): { x: number; y: number } {
-  // Left-to-right in creation order — matches §4's own mockup, which draws
-  // the row template as a simple flow rather than a force-directed cluster.
-  return { x: index * 220, y: (index % 2) * 90 };
 }
 
 export function MapCanvas({
@@ -99,37 +92,8 @@ export function MapCanvas({
 
   useEffect(() => {
     const palette = activePalette();
-    const colours = mapCanvasColours(palette);
-    sigmaRef.current?.setSetting("labelColor", { color: colours.label });
-    const graph = graphRef.current;
-    graph.clear();
-    template.entities.forEach((entity, index) => {
-      const visual = ontology.entity_types.find((t) => t.name === entity.type);
-      const { x, y } = layoutPosition(index);
-      const isSelected = selection?.kind === "entity" && selection.ref === entity.ref;
-      const isLinkFrom = linkFromRef === entity.ref;
-      graph.addNode(entity.ref, {
-        label: `${entity.ref} · ${entity.type}`,
-        x,
-        y,
-        size: NODE_SIZE,
-        color: mapNodeColour({ selected: isSelected, linkFrom: isLinkFrom, visual }, palette),
-      });
-    });
-    (template.edges ?? []).forEach((edge, index) => {
-      if (!graph.hasNode(edge.from) || !graph.hasNode(edge.to)) return;
-      const isSelected = selection?.kind === "edge" && selection.index === index;
-      // Plain straight-line edges — the same simplification
-      // `../../canvas/GlassCanvas.tsx` discloses (no `@sigma/edge-curve`
-      // wired), and directionality is legible enough here from the
-      // inspector's own `from`/`to` fields for a template this small.
-      graph.addEdgeWithKey(`edge-${index}`, edge.from, edge.to, {
-        label: edge.type,
-        size: isSelected ? 4 : 2,
-        color: isSelected ? palette.brass : colours.edge,
-        templateIndex: index,
-      });
-    });
+    sigmaRef.current?.setSetting("labelColor", { color: mapCanvasColours(palette).label });
+    syncTemplateGraph(graphRef.current, template, ontology, selection, linkFromRef, palette);
     sigmaRef.current?.refresh();
   }, [template, ontology, selection, linkFromRef, themeVersion]);
 
