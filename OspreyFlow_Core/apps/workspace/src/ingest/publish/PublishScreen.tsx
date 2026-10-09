@@ -120,6 +120,8 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Only a published or flagged recipe can be reopened for a further edit.",
   recipe_not_runnable:
     "This recipe isn't published — a flagged, draft or superseded recipe can't be run.",
+  source_above_clearance:
+    "This source is marked above your clearance, so you can't load it. A loader cleared for its marking must run it.",
 };
 
 function friendlyError(err: unknown): string {

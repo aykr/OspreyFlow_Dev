@@ -87,7 +87,7 @@ from geo.image_dimensions import (
 from geo.wkb import polygon_wkb
 from knowledge_adapters import ARITY, REGISTRY
 from ontology.errors import OntologyError
-from ontology.handling import HandlingScheme, load_uk_le_scheme
+from ontology.handling import HandlingScheme, load_uk_le_scheme, principal_may_view
 from ontology.loader import load_default_ontology
 from ontology.yardstick import Yardstick, load_phia_yardstick
 from ports.analytics import AnalyticsPort
@@ -1180,6 +1180,28 @@ async def get_authorized_studio_recipe(
 AuthorizedStudioRecipeDep = Annotated[StudioRecipeDraft, Depends(get_authorized_studio_recipe)]
 
 
+class SourceAboveClearanceError(Exception):
+    """A loader asked to run a recipe whose source marking is above their clearance."""
+
+
+async def get_runnable_studio_recipe(
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.LOADER))],
+    scheme: HandlingSchemeDep,
+) -> StudioRecipeDraft:
+    """§8: a loader runs a published recipe "against a file at or below their own clearance".
+    Refused before anything is read or written: a run's `on_match: reference` lookups go through
+    the graph at the loader's clearance, so a loader who cannot see the source's elements cannot
+    find the ones an earlier load made and writes them again. Found 9 October 2026, when an
+    OFFICIAL loader ran an OFFICIAL-SENSITIVE recipe twice and every number was made twice."""
+    if not principal_may_view(resolve_source_handling(recipe), principal, scheme):
+        raise SourceAboveClearanceError(recipe.recipe_id)
+    return recipe
+
+
+RunnableStudioRecipeDep = Annotated[StudioRecipeDraft, Depends(get_runnable_studio_recipe)]
+
+
 # --- exception handling ----------------------------------------------------
 
 
@@ -1633,6 +1655,20 @@ async def _provenance_transition_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT, content={"error": "provenance_transition_invalid"}
+    )
+
+
+@app.exception_handler(SourceAboveClearanceError)
+async def _source_above_clearance_handler(
+    request: Request, exc: SourceAboveClearanceError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "error": "source_above_clearance",
+            "detail": "This source is marked above your clearance, so you cannot load it. A loader "
+            "cleared for its marking must run it.",
+        },
     )
 
 
@@ -5903,7 +5939,7 @@ async def create_studio_recipe_version(
 @app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/run")
 async def run_studio_recipe(
     investigation: InvestigationEditorDep,
-    recipe: AuthorizedStudioRecipeDep,
+    recipe: RunnableStudioRecipeDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.LOADER))],
     graph: GraphDep,
     ontology: OntologyDep,

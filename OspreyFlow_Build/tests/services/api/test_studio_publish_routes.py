@@ -35,6 +35,8 @@ from schemas.ingest import FieldBinding, RecipeEntity, RowTemplate, StudioRecipe
 from tests.services.api.any_case import AnyCase
 from tests.services.api.test_app import _FakeInvestigations
 from tests.services.api.test_studio_recipe_routes import (
+    _UNCLEARED_HANDLING,
+    LOADER,
     SOURCE_APPROVER,
     SOURCE_AUTHOR,
     _draft,
@@ -256,3 +258,28 @@ def test_run_without_loader_role_is_forbidden(run_client: TestClient, tmp_path: 
     response = run_client.post(f"{CASE}/ingest/recipes/recipe-1/run")
 
     assert response.status_code == 403
+
+
+# 9 October 2026, the data engineer's journey: an OFFICIAL loader ran an OFFICIAL-SENSITIVE recipe,
+# twice. Its `on_match: reference` lookups run at the loader's clearance, so the second run could
+# not see the numbers the first had made and made them again: two nodes for one number. §8 lets a
+# loader run a published recipe only "against a file at or below their own clearance".
+def test_a_loader_not_cleared_for_the_source_cannot_run_it(
+    run_client: TestClient, tmp_path: Path
+) -> None:
+    published = _verified_draft(tmp_path, handling=_UNCLEARED_HANDLING).model_copy(
+        update={
+            "status": StudioRecipeStatus.PUBLISHED,
+            "ontology_version": 1,
+            "git_path": "recipes/recipe-1.yaml",
+        }
+    )
+    run_client.studio_recipes.draft = published  # type: ignore[attr-defined]
+    app.dependency_overrides[get_principal] = lambda: LOADER
+    app.dependency_overrides[get_investigations] = AnyCase
+
+    response = run_client.post(f"{CASE}/ingest/recipes/recipe-1/run")
+
+    # The graph stand-in is a bare `object()`: had the run started, it would have failed on it.
+    assert response.status_code == 403, response.text
+    assert response.json()["error"] == "source_above_clearance"

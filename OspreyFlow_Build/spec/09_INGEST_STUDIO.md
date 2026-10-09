@@ -624,6 +624,13 @@ Verify runs against the sample under the author's own clearance, so an author ca
 run to see material they could not otherwise see (mechanism: §5). Every recipe publish, edit and
 load is audited like any other action.
 
+**A load is refused when the source is marked above the loader's clearance** (403
+`source_above_clearance`, before anything is read or written). Verify may run below the source's
+marking, masked; a load may not, because its `on_match: reference` lookups run at the loader's
+clearance: a loader who cannot see an earlier load's elements cannot find them, and writes them
+again (found 9 October 2026, when an OFFICIAL loader ran an OFFICIAL-SENSITIVE recipe twice and every
+number was made twice).
+
 **Role vocabulary and enforcement.** The three roles are `StudioRole` values
 (`packages/schemas/ingest.py`): `source_author`, `source_approver`, `loader`. They arrive the same
 way `clearance`/`org_unit`/`receivable_handling_codes` already do — as a claim
