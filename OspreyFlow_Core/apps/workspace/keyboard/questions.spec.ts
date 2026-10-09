@@ -84,6 +84,16 @@ test("a proposal is accepted by keyboard, and its change reaches the view", asyn
   registerCovered(REGISTRY, "accept-a-proposal-by-keyboard");
 });
 
+test("the drawer closes from its visible Close button, reached by keyboard", async ({ page }) => {
+  // The owner, 9 October 2026: "how do I close the questions panel?" — Escape alone said nothing.
+  await serve(page, [ANSWER]);
+  const close = page.getByRole("button", { name: "Close Questions" });
+  await close.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__QUESTIONS__?.closed ?? 0)).toBe(1);
+  registerCovered(REGISTRY, "close-the-questions-drawer-by-keyboard");
+});
+
 test("a proposal is rejected by keyboard, and nothing reaches the view", async ({ page }) => {
   const { decided } = await serve(page, [ANSWER]);
   await page.getByRole("button", { name: "Reject Location · Dabhol" }).focus();

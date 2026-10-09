@@ -26,6 +26,10 @@
   --surface-panel:var(--n2);
   --surface-raised:var(--n3);
   --surface-hover:var(--n4);
+  /* A menu item's hover/focus: one step further up the ramp than --surface-hover, because a menu
+     item already sits on --surface-raised (n3) and n3→n4 was imperceptible (the owner, 9 October
+     2026: "the options I am hovering over do not highlight"). */
+  --surface-menu-hover:var(--n5);
 
   --border-subtle:var(--n5);
   --border:var(--n6);

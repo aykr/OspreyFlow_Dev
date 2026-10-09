@@ -130,7 +130,10 @@
 
 /* Overlays: shadow, no hairline. */
 .drawer {
-  position: fixed; top: 0; bottom: 0; right: 0; width: 360px;
+  /* Above every canvas-docked overlay (`.canvas-zoom`/`.canvas-legend` at 10, the selection bar
+     at 12) and the open menus at 40: without a layer of its own, the canvas's zoom cluster drew
+     over the Questions drawer's own text (the owner, 9 October 2026). */
+  position: fixed; top: 0; bottom: 0; right: 0; width: 360px; z-index: 45;
   background: var(--surface-panel); box-shadow: var(--overlay-shadow);
   border-radius: var(--r-overlay) 0 0 var(--r-overlay);
   transition: transform var(--dur-panel) var(--ease);
@@ -140,6 +143,7 @@
   display: flex; flex-direction: column;
 }
 .drawer > .panel__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.drawer__title { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-8); }
 
 .popover {
   background: var(--surface-raised); box-shadow: var(--overlay-shadow);
@@ -189,7 +193,7 @@
 }
 .radial-menu__group-items { list-style: none; margin: 0; padding: 0; }
 .context-menu__item:hover, .context-menu__item:focus-visible,
-.radial-menu__item:hover, .radial-menu__item:focus-visible { background: var(--surface-hover); }
+.radial-menu__item:hover, .radial-menu__item:focus-visible { background: var(--surface-menu-hover); }
 
 .table { width: 100%; border-collapse: collapse; font-size: var(--fs-13); }
 .table th {

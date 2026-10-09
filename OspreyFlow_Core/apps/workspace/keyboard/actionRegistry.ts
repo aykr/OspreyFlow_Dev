@@ -420,6 +420,8 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   "open-a-cited-document-by-keyboard",
   "accept-a-proposal-by-keyboard",
   "reject-a-proposal-by-keyboard",
+  // The drawer's visible Close (the owner, 9 October 2026).
+  "close-the-questions-drawer-by-keyboard",
 ] as const);
 
 /** Files added straight to a case (ADR-094 step 3): from the strip over the canvas, standing alone,

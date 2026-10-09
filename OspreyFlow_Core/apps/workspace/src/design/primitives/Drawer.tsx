@@ -38,7 +38,14 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
       tabIndex={-1}
       ref={ref}
     >
-      <div className="panel__title">{title}</div>
+      {/* A visible way out beside Escape (the owner, 9 October 2026: "how do I close the
+          questions panel?"). */}
+      <div className="panel__title drawer__title">
+        {title}
+        <button type="button" className="btn btn--quiet" aria-label={`Close ${title}`} onClick={onClose}>
+          Close
+        </button>
+      </div>
       <div className="panel__body">{children}</div>
     </div>
   );

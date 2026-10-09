@@ -36,3 +36,16 @@ it("still takes focus when it opens", () => {
   render(<Form />);
   expect(document.activeElement?.getAttribute("role")).toBe("dialog");
 });
+
+// The owner, 9 October 2026, on the Questions drawer: "how do I close the questions panel?" —
+// Escape worked but nothing visible said so.
+it("offers a visible Close button that closes it", () => {
+  let closed = 0;
+  render(
+    <Drawer open onClose={() => closed++} title="Questions">
+      <p>body</p>
+    </Drawer>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Close Questions" }));
+  expect(closed).toBe(1);
+});
