@@ -560,7 +560,12 @@ every profile, with one exception laid over it (ADR-067): its `uploaded/` sub-fo
 writable, which is where files an analyst uploads from the browser land. On Linux the host
 `uploaded/` folder must be writable by the Conduit's user (uid 10001):
 `sudo mkdir -p /var/lib/osprey/ingest/uploaded && sudo chown 10001 /var/lib/osprey/ingest/uploaded`.
-A Docker Desktop host (macOS, Windows) maps ownership itself and needs only the folder to exist. That folder is what the Ingest Studio's Connect stage lists, so an analyst picks a
+A Docker Desktop host (macOS, Windows) maps ownership itself and needs only the folder to exist —
+and it must exist *on the host*: on macOS the default `/var/lib/osprey/ingest` does not, and Docker
+Desktop then mounts an empty folder from its own VM, which the Studio lists as "no files on the
+server yet". Set `components.storage.ingest` to a folder in the operator's home there. A deployment
+rendered before ADR-067 has no writable `uploaded/` mount at all, and `make refresh` does not
+re-render it; an upload to it is refused with a 503 (found 9 October 2026). That folder is what the Ingest Studio's Connect stage lists, so an analyst picks a
 file from it rather than typing a path — and in a rendered deployment there is no path they could
 usefully type, because `source_location` is read inside the Conduit's own container. Put source
 files there, as the operator, before asking an analyst to ingest anything:

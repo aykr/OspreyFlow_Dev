@@ -5423,6 +5423,7 @@ _UPLOAD_REFUSAL_STATUS = {
     "type_not_allowed": status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
     "exists": status.HTTP_409_CONFLICT,
     "too_large": 413,
+    "not_writable": status.HTTP_503_SERVICE_UNAVAILABLE,
 }
 
 

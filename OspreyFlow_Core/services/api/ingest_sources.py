@@ -45,6 +45,7 @@ basis, source) from the analyst, and that is where they stay.
 
 from __future__ import annotations
 
+import errno
 import os
 import re
 import uuid
@@ -190,6 +191,9 @@ def list_source_files(
 #: compromised or mistaken upload can never alter operator-supplied evidence (ruling R6's reason).
 UPLOAD_SUBDIR = "uploaded"
 
+#: The errors that mean the server may not write the upload folder at all.
+_NOT_WRITABLE = frozenset({errno.EROFS, errno.EACCES, errno.EPERM})
+
 #: What may be uploaded: the formats the connector catalogue names (`09_INGEST_STUDIO.md` §2) and
 #: nothing executable. A name with no extension, or any other extension, is refused.
 UPLOAD_EXTENSIONS = frozenset(
@@ -272,11 +276,23 @@ async def save_upload(
     final = folder / name
     if (root / name).exists() or (root / UPLOAD_SUBDIR / name).exists() or final.exists():
         raise UploadRefused("exists", "A file with that name is already in the ingest folder.")
-    folder.mkdir(parents=True, exist_ok=True)
     part = folder / f".upload-{uuid.uuid4().hex}.part"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        handle = part.open("xb")
+    except OSError as error:
+        if error.errno not in _NOT_WRITABLE:
+            raise
+        # A deployment whose ingest folder has no writable `uploaded/` mount (ADR-067) — found 9
+        # October 2026, a deployment rendered before that mount existed, answering a bare 500.
+        raise UploadRefused(
+            "not_writable",
+            "The ingest folder on the server cannot be written to, so files cannot be uploaded "
+            "here. An operator needs to make its uploaded folder writable.",
+        ) from error
     written = 0
     try:
-        with part.open("xb") as handle:
+        with handle:
             async for chunk in chunks:
                 written += len(chunk)
                 if written > max_bytes:

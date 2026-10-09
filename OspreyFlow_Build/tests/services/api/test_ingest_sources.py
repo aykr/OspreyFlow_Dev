@@ -441,3 +441,55 @@ def test_a_dataset_id_that_is_not_a_plain_folder_name_is_never_made_a_path(root:
         "cdr-carrier-a.csv",
         "device-extract.xml",
     }
+
+
+# --- An ingest folder that cannot be written --------------------------------------------------
+#
+# 9 October 2026, the data engineer's journey: the deployment had been rendered before ADR-067's
+# writable `uploaded/` mount existed, so the whole ingest root was read-only in the container. The
+# upload died in `mkdir` with `OSError: [Errno 30] Read-only file system` and the Studio showed "The
+# upload was refused (500)". The planted fault is that same error, from that same call.
+
+
+def _read_only_mkdir(monkeypatch: pytest.MonkeyPatch) -> None:
+    import errno
+
+    def refuse(self: Path, *args: object, **kwargs: object) -> None:
+        raise OSError(errno.EROFS, "Read-only file system", str(self))
+
+    monkeypatch.setattr(Path, "mkdir", refuse)
+
+
+def test_a_read_only_ingest_folder_is_a_refusal_that_says_so(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _read_only_mkdir(monkeypatch)
+    refusal = _refusal(root, "calls.csv", b"a,b\n")
+    assert refusal.code == "not_writable"
+    assert "cannot be written" in refusal.message
+
+
+def test_a_folder_the_server_may_not_write_is_the_same_refusal(root: Path) -> None:
+    if os.geteuid() == 0:
+        pytest.skip("root writes through a read-only mode")
+    (root / UPLOAD_SUBDIR).mkdir()
+    (root / UPLOAD_SUBDIR).chmod(0o555)
+    try:
+        assert _refusal(root, "calls.csv", b"a,b\n").code == "not_writable"
+    finally:
+        (root / UPLOAD_SUBDIR).chmod(0o755)
+
+
+def test_the_route_says_503_with_a_sentence_for_a_read_only_ingest_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app, _audit = _client(monkeypatch, tmp_path)
+    _read_only_mkdir(monkeypatch)
+    try:
+        response = client.post(
+            f"{CASE}/ingest/source-files", params={"name": "calls.csv"}, content=b"a,b\n"
+        )
+        assert response.status_code == 503, response.text
+        assert "cannot be written" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()

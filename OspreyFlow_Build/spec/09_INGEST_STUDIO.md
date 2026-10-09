@@ -134,7 +134,8 @@ POST /v1/investigations/{id}/ingest/source-files
   dot, a control character or more than 200 characters (400); an extension outside the list the
   connectors read (415); a name already present in the root or in `uploaded` — nothing is ever
   overwritten (409); an empty file (400); a file over `OSPREY_INGEST_MAX_UPLOAD_BYTES`, default
-  512 MiB (413). The size is counted as the body streams, so the limit stops the read; the declared
+  512 MiB (413); an ingest folder the server cannot write, which is a deployment without the writable
+  `uploaded/` mount (503, saying an operator must make it writable, not a bare server error). The size is counted as the body streams, so the limit stops the read; the declared
   length is checked first so an honest oversized upload is refused unread.
 - **Written safely:** to a hidden part-file first, then linked into place only when complete, so a
   half-written file is never offered. A refused upload leaves nothing behind.
