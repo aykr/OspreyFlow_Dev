@@ -92,6 +92,10 @@ COPY apps/harness ./apps/harness
 # moved `tokens.css` from `docs/design/` (now `spec/design/`) into `apps/workspace/src/design/`,
 # so the separate `COPY docs/design` this used to need is gone — this one line now covers it.
 COPY apps/workspace/src/design ./apps/workspace/src/design
+# The theme module the admin console shares with the Glass (`apps/harness/src/main.tsx` imports
+# `../../workspace/src/theme/theme`): without it this image stopped building the day that import
+# landed — found 9 October 2026, building the welcome service (ADR-107).
+COPY apps/workspace/src/theme ./apps/workspace/src/theme
 RUN npm run build --workspace apps/harness
 
 FROM python:3.12-slim

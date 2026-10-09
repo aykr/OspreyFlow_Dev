@@ -157,6 +157,72 @@ def test_the_provider_refuses_a_redirect_that_is_not_the_registered_one(
         idp.authorise(LoginAttempts().start(config), username="ada")
 
 
+def test_a_backchannel_reaches_the_provider_while_the_issuer_stays_the_browsers(
+    idp: FakeIdentityProvider,
+) -> None:
+    """ADR-107: a containerised launcher's `localhost` is itself, so its token and certs fetches
+    go to `backchannel` while the browser's redirects — and the `iss` every token is verified
+    against — stay `issuer`. The fixture signs `iss` as the browser-facing name and serves only
+    the back-channel address, so a config that fetched through `issuer` would reach nothing."""
+    browser_issuer = "http://welcome.invalid:8081/realms/osprey"
+    idp.claim_overrides["iss"] = browser_issuer
+    config = SignInConfig(
+        issuer=browser_issuer,
+        client_id=CLIENT,
+        redirect_uri=REDIRECT,
+        post_logout_uri="http://localhost:7000/",
+        backchannel=idp.issuer,
+    )
+    attempts = LoginAttempts()
+    callback = idp.authorise(attempts.start(config), username="ada")
+    query = {
+        k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(callback).query).items()
+    }
+    identity = oidc.complete(config, code=query["code"], attempt=attempts.finish(query["state"]))
+    assert identity.username == "ada"
+
+
+def test_a_backchannel_minted_iss_verifies_too(idp: FakeIdentityProvider) -> None:
+    """Measured against the deployed Keycloak, 9 October 2026 (dev mode, no pinned hostname): the
+    same realm mints `iss` from the request's host — `http://keycloak:8080/...` through the compose
+    network, `http://localhost:8081/...` from the host. A config with a back channel therefore
+    accepts exactly those two forms and nothing else; here the fixture signs `iss` as its own
+    (back-channel) address while `issuer` is the browser-facing name."""
+    browser_issuer = "http://welcome.invalid:8081/realms/osprey"
+    config = SignInConfig(
+        issuer=browser_issuer,
+        client_id=CLIENT,
+        redirect_uri=REDIRECT,
+        post_logout_uri="http://localhost:7000/",
+        backchannel=idp.issuer,
+    )
+    attempts = LoginAttempts()
+    callback = idp.authorise(attempts.start(config), username="ada")
+    query = {
+        k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(callback).query).items()
+    }
+    identity = oidc.complete(config, code=query["code"], attempt=attempts.finish(query["state"]))
+    assert identity.username == "ada"
+
+
+def test_a_third_issuer_is_still_refused_with_a_backchannel(idp: FakeIdentityProvider) -> None:
+    idp.claim_overrides["iss"] = "http://neither.invalid/realms/osprey"
+    config = SignInConfig(
+        issuer="http://welcome.invalid:8081/realms/osprey",
+        client_id=CLIENT,
+        redirect_uri=REDIRECT,
+        post_logout_uri="http://localhost:7000/",
+        backchannel=idp.issuer,
+    )
+    attempts = LoginAttempts()
+    callback = idp.authorise(attempts.start(config), username="ada")
+    query = {
+        k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(callback).query).items()
+    }
+    with pytest.raises(SignInRefused):
+        oidc.complete(config, code=query["code"], attempt=attempts.finish(query["state"]))
+
+
 # --- state ---
 
 

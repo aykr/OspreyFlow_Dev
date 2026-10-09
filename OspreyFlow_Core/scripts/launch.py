@@ -132,6 +132,13 @@ SIGN_IN_TILE = "OspreyFlow"
 #: Word and shape for each state — the design system's rule that hue never carries a
 #: distinction on its own.
 STATE_LABELS = {"up": "Running", "starting": "Starting", "down": "Not running"}
+
+#: ADR-107: what a serve-only launcher says instead of a Start action — the command an operator
+#: runs in a terminal, per start target.
+SERVE_ONLY_COMMANDS = {
+    "stack": "make refresh   (from OspreyFlow_Core)",
+    "admin": "PYTHONPATH=.:packages .venv/bin/python -m harness   (from OspreyFlow_Core)",
+}
 STATE_SHAPES = {"up": "filled", "starting": "half", "down": "hollow"}
 
 Prober = Callable[[str], int | None]
@@ -271,7 +278,19 @@ class Launcher:
         frontend_built: bool | None = None,
         clock: Callable[[], float] = time.monotonic,
         oidc_issuer: str | None = None,
+        serve_only: bool = False,
+        probe_host: str | None = None,
+        oidc_backchannel: str | None = None,
     ) -> None:
+        #: ADR-107 stage 1: a launcher that only serves the page — it never starts or stops
+        #: anything, so it can run as a container without the docker socket. A door that is not
+        #: running is said to be not running, with the command that starts it.
+        self.serve_only = serve_only
+        #: ADR-107 stage 2: inside a container `localhost` is the container, so the probes go
+        #: through this host (the docker gateway) while every link the browser follows stays
+        #: `localhost`. Unset, the probes go where the links do, exactly as before.
+        self.probe_host = probe_host
+        self._oidc_backchannel = oidc_backchannel
         self.repo_root = repo_root
         self._prober = prober
         self._spawner = spawner
@@ -299,6 +318,7 @@ class Launcher:
             client_id=LAUNCHER_CLIENT_ID,
             redirect_uri=LAUNCHER_REDIRECT_URI,
             post_logout_uri=f"{LAUNCHER_ORIGIN}/",
+            backchannel=oidc_backchannel,
         )
         self.sessions = SessionStore(ttl_seconds=SESSION_TTL_SECONDS, clock=clock)
         self.attempts = LoginAttempts(clock=clock)
@@ -431,6 +451,15 @@ class Launcher:
             cause = "it wrote nothing to its log."
         return f"{name} stopped before it was ready: {cause} The full log is {handle.log_path}."
 
+    def _probe_url(self, url: str) -> str:
+        """The URL a probe actually asks: the page's own `localhost` form, unless `probe_host`
+        says this process reaches the host's ports under another name (ADR-107 stage 2)."""
+        if not self.probe_host:
+            return url
+        parts = urllib.parse.urlsplit(url)
+        host = f"{self.probe_host}:{parts.port}" if parts.port else self.probe_host
+        return urllib.parse.urlunsplit(parts._replace(netloc=host))
+
     def status(self) -> dict[str, str]:
         out: dict[str, str] = {}
         workspace = self.workspace_url()
@@ -438,14 +467,17 @@ class Launcher:
         for surface in self.surfaces():
             if surface.starts == "stack":
                 if stack is None:
-                    if self._prober(f"{workspace}healthz") == 200:
+                    if self._prober(self._probe_url(f"{workspace}healthz")) == 200:
                         stack = "up"
-                    elif self._prober(workspace) == 200 or self._within_grace("stack"):
+                    elif (
+                        self._prober(self._probe_url(workspace)) == 200
+                        or self._within_grace("stack")
+                    ):
                         stack = "starting"
                     else:
                         stack = "down"
                 out[surface.name] = stack
-            elif self._prober(surface.url) == 200:
+            elif self._prober(self._probe_url(surface.url)) == 200:
                 out[surface.name] = "up"
             else:
                 out[surface.name] = "starting" if self._within_grace("admin") else "down"
@@ -558,6 +590,14 @@ class Launcher:
                 '<p class="wait">This usually takes about a minute. '
                 "This page updates by itself.</p>"
             )
+        elif self.serve_only:
+            # ADR-107: this launcher never operates the deployment; it says what would.
+            command = SERVE_ONLY_COMMANDS.get(surface.starts, "")
+            action = (
+                '<p class="hint">Not running. From a terminal: '
+                f"<code>{html.escape(command)}</code></p>"
+            )
+            wait = ""
         else:
             action = (
                 f'<button type="button" class="btn primary" '
@@ -1024,6 +1064,16 @@ def _handler(launcher: Launcher) -> type[BaseHTTPRequestHandler]:
                 self._json(404, {"message": "Not found."})
                 return
             target = self.path[len(prefix) :]
+            if launcher.serve_only:
+                # ADR-107: the missing button is not the defence; the route itself refuses.
+                self._json(
+                    409,
+                    {
+                        "message": "This launcher only serves the page. Start things from a "
+                        "terminal: " + SERVE_ONLY_COMMANDS.get(target, "see the tile."),
+                    },
+                )
+                return
             if launcher.enforced and target == "admin":
                 identity = self._identity()
                 if identity is None or not identity.has_role(ADMIN_ROLE):
@@ -1059,8 +1109,12 @@ def port_problem(port: int, *, enforced: bool) -> str | None:
     return None
 
 
-def make_server(launcher: Launcher, *, port: int = LAUNCHER_PORT) -> ThreadingHTTPServer:
-    server = ThreadingHTTPServer((LOOPBACK, port), _handler(launcher))
+def make_server(
+    launcher: Launcher, *, port: int = LAUNCHER_PORT, bind: str = LOOPBACK
+) -> ThreadingHTTPServer:
+    # `bind` other than loopback is for a container (ADR-107 stage 2), whose namespace confines
+    # it; the host keeps loopback by publishing the port as 127.0.0.1:7070:7070.
+    server = ThreadingHTTPServer((bind, port), _handler(launcher))
     launcher.bound_port = server.server_address[1]
     return server
 
@@ -1075,16 +1129,32 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-browser", action="store_true", help="Print the address, do not open it."
     )
+    parser.add_argument(
+        "--serve-only",
+        action="store_true",
+        help="Serve the page only; never start or stop anything (ADR-107 — the containerised "
+        "launcher). Also set by OSPREY_LAUNCH_SERVE_ONLY=1.",
+    )
     args = parser.parse_args(argv)
 
+    serve_only = args.serve_only or os.environ.get("OSPREY_LAUNCH_SERVE_ONLY") == "1"
     spawner = ProcessSpawner(args.repo_root)
-    launcher = Launcher(repo_root=args.repo_root, prober=http_probe, spawner=spawner)
+    launcher = Launcher(
+        repo_root=args.repo_root,
+        prober=http_probe,
+        spawner=spawner,
+        serve_only=serve_only,
+        probe_host=os.environ.get("OSPREY_LAUNCH_PROBE_HOST") or None,
+        oidc_backchannel=os.environ.get("OSPREY_LAUNCH_OIDC_BACKCHANNEL") or None,
+    )
     problem = port_problem(args.port, enforced=launcher.enforced)
     if problem:
         sys.stderr.write(f"launcher: {problem}\n")
         return 2
     try:
-        server = make_server(launcher, port=args.port)
+        server = make_server(
+            launcher, port=args.port, bind=os.environ.get("OSPREY_LAUNCH_BIND") or LOOPBACK
+        )
     except OSError as err:
         sys.stderr.write(
             f"Could not listen on 127.0.0.1:{args.port} ({err.strerror}). "

@@ -65,6 +65,12 @@ class SignInConfig:
     client_id: str
     redirect_uri: str
     post_logout_uri: str
+    #: ADR-107: where THIS PROCESS reaches the provider, when that differs from `issuer` — a
+    #: containerised launcher's `localhost` is itself, so its token and certs fetches go to the
+    #: compose network's own address (e.g. http://keycloak:8080/realms/osprey) while the browser's
+    #: redirects, and the `iss` claim every token is verified against, stay `issuer`. Unset, the
+    #: issuer is used for both, exactly as before.
+    backchannel: str | None = None
 
     @property
     def auth_url(self) -> str:
@@ -72,11 +78,11 @@ class SignInConfig:
 
     @property
     def token_url(self) -> str:
-        return f"{self.issuer}/protocol/openid-connect/token"
+        return f"{self.backchannel or self.issuer}/protocol/openid-connect/token"
 
     @property
     def certs_url(self) -> str:
-        return f"{self.issuer}/protocol/openid-connect/certs"
+        return f"{self.backchannel or self.issuer}/protocol/openid-connect/certs"
 
     @property
     def logout_url(self) -> str:
@@ -229,7 +235,13 @@ def verify_id_token(config: SignInConfig, id_token: str, *, nonce: str) -> Ident
             key.key,
             algorithms=["RS256"],
             audience=config.client_id,
-            issuer=config.issuer,
+            # ADR-107: a split-horizon dev IdP mints `iss` from the request's host — measured
+            # against the deployed Keycloak, 9 October 2026: the same realm answered
+            # `http://keycloak:8080/realms/osprey` through the compose network and the
+            # `localhost` form from the host. A config with a back channel accepts exactly those
+            # two forms and nothing else; without one, behaviour is unchanged. A deployment that
+            # pins its hostname collapses the two into one.
+            issuer=[config.issuer, config.backchannel] if config.backchannel else config.issuer,
             options={"require": ["exp", "iat", "sub", "aud", "iss"]},
         )
     except jwt.PyJWKClientConnectionError as error:

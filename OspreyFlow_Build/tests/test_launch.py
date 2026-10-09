@@ -544,3 +544,98 @@ def test_the_tiles_the_page_refreshes_from_are_the_ones_it_first_shows(
     for name in launch.NAMES:
         assert f'data-name="{name}"' in fragment
     assert fragment.strip() in page
+
+
+# --- ADR-107 stage 1: serve-only, the launcher as a service -----------------------------------
+
+
+def _serve_only(repo: Path, spawner: FakeSpawner | None = None) -> launch.Launcher:
+    return launch.Launcher(
+        repo_root=repo,
+        prober=FakeProber(),
+        spawner=spawner or FakeSpawner(),
+        frontend_built=True,
+        clock=lambda: 0.0,
+        serve_only=True,
+    )
+
+
+def test_serve_only_a_down_interface_names_the_command_and_offers_no_start(repo: Path) -> None:
+    """ADR-107: a containerised launcher never operates the deployment — a door that is not
+    running is said to be not running, with the command that starts it, never a Start action."""
+    tile = _tile(_serve_only(repo).render_tiles(dict.fromkeys(launch.NAMES, "down")), launch.GLASS)
+    assert "Start The Glass" not in tile
+    assert "data-target" not in tile
+    assert "make refresh" in _visible_text(tile)
+
+
+def test_serve_only_a_running_interface_opens_as_before(repo: Path) -> None:
+    tile = _tile(_serve_only(repo).render_tiles(dict.fromkeys(launch.NAMES, "up")), launch.GLASS)
+    assert "Open The Glass" in tile
+
+
+def test_serve_only_refuses_a_start_request_and_spawns_nothing(repo: Path) -> None:
+    """The missing button is not the defence; the route itself refuses, and the planted spawner
+    proves nothing was run (rule 15: the refusal is shown, not assumed)."""
+    spawner = FakeSpawner()
+    launcher = _serve_only(repo, spawner)
+    server: ThreadingHTTPServer = launch.make_server(launcher, port=0)
+    port = server.server_address[1]
+    launcher.bound_port = port
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{port}"
+        code, body = _request(
+            base + "/start/stack", method="POST", headers={"X-Launch-Token": launcher.token}
+        )
+        assert code == 409
+        assert "terminal" in body
+        launcher.wait_idle()
+        assert spawner.calls == []
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_probe_host_redirects_the_probes_and_never_the_hrefs(repo: Path) -> None:
+    """ADR-107 stage 2: inside a container `localhost` is the container, so the probes go through
+    the given host (the docker gateway) while every link the browser follows stays `localhost`."""
+    prober = FakeProber()
+    launcher = launch.Launcher(
+        repo_root=repo,
+        prober=prober,
+        spawner=FakeSpawner(),
+        frontend_built=True,
+        clock=lambda: 0.0,
+        serve_only=True,
+        probe_host="gateway.test",
+    )
+    launcher.status()
+    assert prober.asked, "nothing was probed"
+    assert all("//gateway.test:" in url for url in prober.asked), prober.asked
+    page_urls = [s.url for s in launcher.surfaces(None)]
+    assert all("//localhost:" in url for url in page_urls), page_urls
+
+
+def test_an_oidc_backchannel_reaches_the_sign_in_config(repo: Path) -> None:
+    launcher = launch.Launcher(
+        repo_root=repo,
+        prober=FakeProber(),
+        spawner=FakeSpawner(),
+        frontend_built=True,
+        clock=lambda: 0.0,
+        oidc_backchannel="http://keycloak.test:8080/realms/osprey",
+    )
+    assert launcher.sign_in_config.backchannel == "http://keycloak.test:8080/realms/osprey"
+
+
+def test_the_server_binds_elsewhere_only_when_told_to(repo: Path) -> None:
+    """ADR-107 stage 2: inside a container the server must answer the published port, so the bind
+    is configurable there — and the default stays loopback, which the binds-loopback-only test
+    above pins. The host side keeps loopback by publishing the port as 127.0.0.1:7070:7070."""
+    server = launch.make_server(_serve_only(repo), port=0, bind="0.0.0.0")
+    try:
+        assert server.server_address[0] == "0.0.0.0"
+    finally:
+        server.server_close()

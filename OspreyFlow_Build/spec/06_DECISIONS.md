@@ -10434,3 +10434,23 @@ process at 7100 and never joins the product containers (ADR-049's boundary is no
 Serve-only refuses to spawn (a planted spawner records any call and the test asserts none); the
 tiles' not-running states; ADR-051's sign-in enforcement unchanged under serve-only; stage 3's
 render check (`--check`) green against the owner's compose once the config carries the edits.
+
+Build note (9 October 2026). **Stages 1 and 2 are built and running**; stage 3 (the renderer
+carrying the compose hand edits) remains. Stage 1: `--serve-only` / `OSPREY_LAUNCH_SERVE_ONLY=1`
+(a down tile names its command, the `/start/` route answers 409, the planted spawner recorded
+nothing), `--bind` via `OSPREY_LAUNCH_BIND` (default loopback, pinned by its own test),
+`OSPREY_LAUNCH_PROBE_HOST` (probes through the docker gateway while every href stays `localhost`),
+and `SignInConfig.backchannel` for the token and certs fetches. **Measured, not assumed**, against
+the deployed Keycloak: a dev-mode realm mints `iss` from the request's host (`http://keycloak:8080/…`
+through the compose network, the `localhost` form from the host), so a config with a back channel
+verifies `iss` against exactly those two forms — `test_a_backchannel_minted_iss_verifies_too` and the
+third-issuer refusal pin it. Stage 2: the `welcome` service in the local-lite compose (a recorded
+hand edit, like the mounts), built from `harness/Dockerfile`, published `127.0.0.1:7070:7070`,
+restart unless-stopped; seen answering with the stack probed "up" through the gateway and ADR-051's
+sign-in offered. **Found on the way:** (1) the deployment's `osprey-conduit` client secret had
+drifted from `deployment.env` — every ADR-043 exchange and ADR-106 name lookup had been failing
+silently as 401; repaired with `grant_service_account_roles`, the codebase's own post-import step.
+(2) `harness/Dockerfile` stopped building the day `apps/harness/src/main.tsx` began importing the
+workspace's theme module, which the builder stage never copied — the running image predated the
+import, so nothing noticed; one COPY line fixes it. The first full browser sign-in through the
+container's back channel is the owner's live check.

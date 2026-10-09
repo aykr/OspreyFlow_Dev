@@ -281,10 +281,12 @@ From the friction log, the owner's live checks still to do or report:
 17. `make refresh` does not carry new mounts into the generated compose; the hand edits (ingest root, tiles,
     `fonts`) live in `deploy/generated/local-lite/compose.yaml` and survive it.
 
-18. **ADR-107 (accepted 9 October 2026, not yet built): the launcher as a service** — the welcome
-    screen as the deployment's entry point at `localhost:7070`. Stage 1 `--serve-only`, stage 2 the
-    `welcome` container from the harness image, stage 3 the renderer carrying the owner's compose
-    hand edits (closes item 17). The ADR has the staged plan and the tests to write first.
+18. **ADR-107: stages 1 and 2 built and running** (9 October 2026) — the welcome screen is the
+    deployment's own entry point at `http://localhost:7070` (the `welcome` container, serve-only,
+    a recorded compose hand edit). **Stage 3 remains**: `harness.render` carrying the hand edits
+    (welcome + the tiles/ingest/fonts mounts), closing item 17. The owner's live check: a full
+    browser sign-in at 7070 (the container's back-channel `iss` pair is measured and unit-proven,
+    not yet seen through a real browser round trip).
 
 **Deck**
 19. Add `d21_map_masts.jpg` (and, if wanted, a picture slide) and rebuild with `deck_build/build_deck.py`.
