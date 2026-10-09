@@ -10454,3 +10454,67 @@ silently as 401; repaired with `grant_service_account_roles`, the codebase's own
 workspace's theme module, which the builder stage never copied — the running image predated the
 import, so nothing noticed; one COPY line fixes it. The first full browser sign-in through the
 container's back channel is the owner's live check.
+
+## ADR-108 — The Ingest Studio becomes a domain-driven DAG pipeline canvas
+
+Status: accepted 9 October 2026 (the owner's programme specification and seven recorded rulings,
+each chosen between presented options); **not yet built** — the phase plan below governs the build,
+and each phase lands with its own ADR amendment and its slice of the spec-09 rewrite.
+
+### The decision
+
+The Studio's linear wizard is replaced by a **typed pipeline graph** (a DAG) whose node kinds are a
+closed vocabulary — `domain-model` (exactly one, the root), `source`, `profile`, `map`, `extract`,
+`enrich`, `load` — validated at save (acyclic, every source reaches a load, an extract only
+downstream of a Document/Image/Audio-producing map). Rule 8 stands untouched: no expression
+language; every transform remains a Knowledge Adapter with golden files; the DAG is a projection of
+the recipe model, executed by the existing engine in topological order, idempotent and revertible
+per load node through the existing ledger. A domain model is an **ontology pack**: a versioned,
+licence-registered overlay module over the POLE core, selected per pipeline and bound to the
+dataset — FIBO (financial fraud/AML), NIEM (crime, with roles), STIX 2.1 (cyber: SDOs, SCOs, SROs),
+or bespoke POLE. A pack bump flags recipes exactly as an ontology version bump does.
+
+### The owner's rulings
+
+1. **Extraction output (Q1):** per-extract-node choice between the review queue (the default, with
+   a bulk-accept surface so one run is one decision) and writing `inferred` elements directly
+   through `GraphPort`. Nothing a model finds is ever written asserted; rule 5 stands. This
+   supersedes spec 09 §7's "candidates, never graph" for pipelines that opt in.
+2. **Down-classification (Q2): allowed, gated and loud.** Extracted elements inherit the source's
+   marking and legal basis by default; marking above is free; marking **below** the source needs
+   Author level (not Editor), a mandatory written reason, an audit row carrying the old and new
+   markings, and a run report that says "n elements carry a marking below their source's".
+3. **Libraries (Q3):** spaCy (MIT) and Hugging Face transformers (Apache-2.0) as new `ModelPort`
+   adapters, conformance suites first (rule 1); AML/compliance detection built as typology rules on
+   our own engine (structuring, rapid movement, circular flows). Stanford CoreNLP (GPLv3), Jube
+   (AGPL) and AMLTRIX (unverifiable as open source) are refused by the licence register and are not
+   used. The shipped models (Stanza, the LiteLLM-routed local LLM, faster-whisper, Qwen2-VL) serve
+   phase C.
+4. **NIEM roles (Q4): role-edges with validity** — a typed link carrying the role name and an
+   `Interval`, one hop, the base entity never duplicated; role-entities rejected as heavier with no
+   present need.
+5. **Geocoding (Q5): local first, configurable online.** The enrich node offers, as its geocoding
+   sources: the deployment's **already-loaded gazetteer datasets** (OS Open Names, Code-Point Open,
+   the OSM gazetteer, and whichever others the deployment has ingested — discovered, not
+   hardcoded), then any **configured online providers** (geopy/Nominatim et al., a per-deployment
+   allow-list), chosen per node by the data engineer. Any run that sent addresses to an online
+   provider says so in its report. deepparse (LGPL-3.0) parses the unstructured address first, its
+   weights pinned and served locally like the basemap glyphs.
+6. **The wizard (Q6): replaced outright.** A fresh set of screens is designed around the pipeline
+   paradigm (the canvas, a node palette, per-kind config panels); the 1–9 step wizard and its
+   keyboard specs retire when the canvas's own specs land. The existing screens' logic is salvaged
+   into node-config panels where it fits, but the linear navigation is not kept. The deck's
+   data-engineer journey (d01–d20) will need recapturing after phase B.
+7. **Phasing (Q7): A → D → B → C.** A: pipeline schema, v1-recipe migration (a pure function with
+   goldens), the canvas rendering existing recipes read-only. D: the domain-pack mechanism and the
+   FIBO/NIEM/STIX packs with the spaCy/HF adapters. B: the editable DAG, multi-source, the fresh
+   screens. C: extract and enrich nodes. Each phase: its own ADR amendment, its spec-09 slice, its
+   keyboard spec (rule 13), and its gates shown red first (rule 15).
+
+### Cost and consequences
+
+Spec 09 is rewritten in slices as phases land; until then it describes the wizard that still runs.
+The review queue gains bulk accept. The licence register gains spaCy, transformers, deepparse,
+geopy. Two new ModelPort adapters mean two conformance suites before any adapter code (rule 1).
+Replacing the wizard breaks every existing Studio walkthrough, screenshot and the deck's
+data-engineer chapter at phase B — accepted knowingly by the owner.
