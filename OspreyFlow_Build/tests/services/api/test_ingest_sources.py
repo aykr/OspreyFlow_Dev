@@ -493,3 +493,16 @@ def test_the_route_says_503_with_a_sentence_for_a_read_only_ingest_folder(
         assert "cannot be written" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
+
+
+# 9 October 2026: on the owner's Mac, Finder (or a sync tool) put an `Icon\r` file in the new ingest
+# folder and in its `uploaded/` folder, and the Studio offered both as source files. A name the
+# upload would refuse (a control character, no extension any connector reads) is not offered.
+def test_a_file_whose_name_the_studio_would_refuse_is_not_offered(root: Path) -> None:
+    (root / UPLOAD_SUBDIR).mkdir()
+    (root / "Icon\r").write_bytes(b"")
+    (root / UPLOAD_SUBDIR / "Icon\r").write_bytes(b"")
+    (root / "notes-without-extension").write_text("x", encoding="utf-8")
+    (root / UPLOAD_SUBDIR / "calls.csv").write_text("a,b\n", encoding="utf-8")
+    names = {f.name for f in list_source_files(root).files}
+    assert names == {"cdr-carrier-a.csv", "device-extract.xml", "calls.csv"}

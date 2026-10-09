@@ -133,6 +133,17 @@ def plain_dataset_id(dataset_id: str) -> bool:
     return bool(_PLAIN_DATASET_ID.match(dataset_id))
 
 
+def _offerable(name: str) -> bool:
+    """A file is offered only under a name the Studio would itself accept for an upload: plain,
+    not hidden, no control character, an extension a connector reads. An `Icon\r` file macOS put in
+    the folder was offered twice (9 October 2026)."""
+    try:
+        validate_upload_name(name)
+    except UploadRefused:
+        return False
+    return True
+
+
 def list_source_files(
     root: Path | None = None, *, datasets: Sequence[str] | None = None
 ) -> IngestSourceListing:
@@ -156,7 +167,7 @@ def list_source_files(
             ]
     for base, uploaded, dataset_id in bases:
         for candidate in _candidates(base):
-            if candidate.name.startswith("."):
+            if not _offerable(candidate.name):
                 continue
             if not is_inside(base, candidate.resolved):
                 # A symlink out of the directory. Skipped silently rather than reported: naming it

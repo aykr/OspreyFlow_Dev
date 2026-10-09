@@ -129,7 +129,9 @@ POST /v1/investigations/{id}/ingest/source-files
 - **Where it lands:** `<ingest root>/uploaded/<dataset>/<name>`, the dataset being the case's first
   (ADR-099 Amendment 4 decision 4), under the one sub-folder the Conduit may write to.
   The renderer mounts it writable *over* the read-only root, so operator-placed evidence is still
-  not writable. The listing shows both, the uploaded ones marked `uploaded`.
+  not writable. The listing shows both, the uploaded ones marked `uploaded`, and offers a file only
+  under a name an upload would be accepted under (below): a file the operating system or a sync
+  tool leaves in the folder, such as macOS's `Icon\r`, is not offered (found 9 October 2026).
 - **Refuses (each with a sentence the Glass shows as it is):** a name with a folder part, a leading
   dot, a control character or more than 200 characters (400); an extension outside the list the
   connectors read (415); a name already present in the root or in `uploaded` — nothing is ever
