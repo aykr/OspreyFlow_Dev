@@ -889,7 +889,11 @@ pattern — the client reads its own directory and tile blocks via byte ranges a
 file, never downloading it whole) and 404s with a named `detail` when the file has not been
 built. The Glass runs a preflight check against this route before mounting the map
 (`apps/workspace/src/map/basemapAvailability.ts`) and shows "Basemap not built" with the route's
-own detail message in place of a blank canvas when it 404s.
+own detail message in place of a blank canvas when it 404s. When nothing in the view has a map position
+(a case whose locations are on a site plan, not the map), the map opens on the basemap's own
+centre and zoom, read from its PMTiles header, and says "Nothing in this view has a map position";
+the graph layer is not bound, since with no extent it fitted the camera to an undefined box and
+the map drew black (8 October 2026; `map/mapStart.ts`).
 
 **What is not decided by this proposal:** whether a `local-lite`/`small`/`cluster` deployment
 profile should instead serve the file from a dedicated static-file sidecar rather than the

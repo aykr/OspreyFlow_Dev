@@ -43,6 +43,8 @@ export function registerAuthorisedPmtilesSource(
   protocol: Protocol,
   url: string,
   bearerToken: string | undefined,
-): void {
-  protocol.add(authorisedPmtilesSource(url, bearerToken));
+): PMTiles {
+  const source = authorisedPmtilesSource(url, bearerToken);
+  protocol.add(source);
+  return source;
 }

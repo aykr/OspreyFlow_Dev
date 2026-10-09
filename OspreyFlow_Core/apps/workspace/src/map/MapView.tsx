@@ -46,6 +46,7 @@ import { SEQ_HEX } from "../color/tokens";
 import type { WorkingSetGraph } from "../workingset/store";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
 import { conduitRequest } from "./conduitRequest";
+import { mapStart, type BasemapCentre } from "./mapStart";
 import { registerAuthorisedPmtilesSource } from "./pmtilesAuth";
 import { resolveBundledStyle, resolvePmtilesSourceUrl } from "./style";
 
@@ -236,6 +237,8 @@ export function MapView({
   // finding, 23 September 2026: a missing local PMTiles build used to leave this view a silent
   // blank canvas rather than telling the operator what to do about it.
   const [basemapUnavailable, setBasemapUnavailable] = useState<string | null>(null);
+  // Nothing in the view has a map position (`mapStart.ts`): said in words over the map.
+  const [nothingPlaced, setNothingPlaced] = useState(false);
   // Holds the real teardown for whichever mount actually ran — `mount()` below is async (the
   // basemap preflight check awaits a fetch), so the cleanup a synchronous effect body would
   // normally return can't yet reference the map/sigma instance it creates.
@@ -247,6 +250,7 @@ export function MapView({
     let cancelled = false;
 
     async function mount(): Promise<void> {
+      let basemapCentre: BasemapCentre | null = null;
       if (provider.kind === "vector" && provider.source) {
         const sourceUrl = resolvePmtilesSourceUrl(provider.source, apiBaseUrl ?? "");
         // Before the availability check, not after: the check can return early on a 404, and the
@@ -254,7 +258,7 @@ export function MapView({
         // asks MapLibre to open `pmtiles://<sourceUrl>`. Registering it here rather than in the
         // mount-once effect above is deliberate — the URL and the token are both per-provider
         // and per-session, and neither is known in an effect with an empty dependency list.
-        registerAuthorisedPmtilesSource(
+        const tiles = registerAuthorisedPmtilesSource(
           ensurePmtilesProtocolRegistered(),
           sourceUrl,
           bearerToken,
@@ -268,16 +272,24 @@ export function MapView({
           }
           throw err;
         }
+        try {
+          const header = await tiles.getHeader();
+          basemapCentre = header;
+        } catch {
+          // A basemap whose header cannot be read still draws; the map opens on the whole world.
+        }
       }
       if (cancelled || !containerRef.current) return;
 
       const mapGraph = buildMapGraph(graph, nodeCoordinates);
+      setNothingPlaced(mapGraph.order === 0);
       const style = resolveBundledStyle(provider.style, provider, apiBaseUrl ?? "");
-      const sigma = new Sigma<MapNodeAttributes, MapEdgeAttributes>(
-        mapGraph,
-        containerRef.current,
-      );
-      sigma.on("clickNode", ({ node }) => onNodeClickRef.current?.(node));
+      const start = mapStart(mapGraph.order, basemapCentre);
+      const sigma =
+        start.kind === "fit"
+          ? new Sigma<MapNodeAttributes, MapEdgeAttributes>(mapGraph, containerRef.current)
+          : null;
+      sigma?.on("clickNode", ({ node }) => onNodeClickRef.current?.(node));
 
       // `attributionControl: false` is this checkpoint's mitigation for
       // CVE-2026-85061 (spec/06_DECISIONS.md, ADR-014 amendment) — MapLibre's
@@ -304,9 +316,20 @@ export function MapView({
             conduitRequest(url, apiBaseUrl ?? "", bearerToken, window.location.origin)
         : undefined;
 
-      const layer = bindMaplibreLayer(sigma as unknown as Sigma, {
-        mapOptions: { style, attributionControl: false, transformRequest },
-      });
+      const mapOptions = { style, attributionControl: false as const, transformRequest };
+      const layer =
+        sigma !== null
+          ? bindMaplibreLayer(sigma as unknown as Sigma, { mapOptions })
+          : {
+              // Nothing to plot: the graph layer would fit the camera to an undefined box.
+              map: new maplibregl.Map({
+                container: containerRef.current,
+                center: start.kind === "view" ? start.center : [0, 0],
+                zoom: start.kind === "view" ? start.zoom : 1,
+                ...mapOptions,
+              }),
+              clean: () => undefined,
+            };
       mapRef.current = layer.map;
       onMapReady?.(layer.map);
 
@@ -382,7 +405,7 @@ export function MapView({
         typeof ResizeObserver === "function" && containerRef.current
           ? new ResizeObserver(() => {
               layer.map.resize();
-              sigma.resize();
+              sigma?.resize();
             })
           : null;
       if (containerRef.current) observer?.observe(containerRef.current);
@@ -391,7 +414,7 @@ export function MapView({
         observer?.disconnect();
         mapRef.current = null;
         layer.clean();
-        sigma.kill();
+        sigma?.kill();
       };
     }
 
@@ -469,6 +492,26 @@ export function MapView({
         >
           {provider.attribution}
           {provider.licence_note ? ` — ${provider.licence_note}` : ""}
+        </div>
+      )}
+      {!basemapUnavailable && nothingPlaced && (
+        <div
+          role="status"
+          style={{
+            position: "absolute",
+            top: "var(--sp-8)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            padding: "var(--sp-6) var(--sp-12)",
+            background: "var(--surface-panel)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: "var(--r-overlay)",
+            color: "var(--text-secondary)",
+            fontSize: "var(--fs-12)",
+            pointerEvents: "none",
+          }}
+        >
+          Nothing in this view has a map position. A location on a site plan is shown under Add site.
         </div>
       )}
       {/* `00_ARCHITECTURE.md` §1.2: "the map UI should show a
