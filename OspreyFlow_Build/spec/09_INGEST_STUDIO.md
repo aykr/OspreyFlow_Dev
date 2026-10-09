@@ -161,6 +161,13 @@ reads a sample — 10,000 rows or the whole file, whichever is smaller — and r
 - Each share (a type's confidence, a pattern's match rate) is shown so that it never claims all or
   none when that is not so: 239 of 240 is "99.6%", not "100%", since the missing row is the one
   Verify will reject (found 9 October 2026)
+- **Pattern matches are ranked by the evidence they carry, not the raw rate.** Each adapter
+  declares a coincidence rate — of values with the right character shape, roughly how many it
+  would accept anyway (`imsi` accepts any 15 digits: 1.0; a Luhn-checked adapter: 0.1) — and the
+  order is by `match rate × (1 − coincidence rate)`. The displayed rate is never adjusted. Raw
+  rate alone ranked `imsi 100%` above `imei 92%` on a column of IMEIs, so the first suggestion
+  was the wrong identifier exactly when the data was good (found 9 October 2026; the test is
+  `test_profiler.py::test_a_checksum_backed_match_outranks_a_shape_only_match`)
 
 **What shape-masking means, since "redacted" was never defined.** At profiling time there is no
 column-to-property mapping yet, so per-property sensitivity cannot apply — the only marking

@@ -146,6 +146,56 @@ def test_person_name_and_address_are_never_reported_as_pattern_matches() -> None
     assert {m.adapter for m in col.pattern_matches}.isdisjoint({"person_name", "address"})
 
 
+#: 23 IMEIs whose 15th digit passes the Luhn check, plus two whose check digit is
+#: wrong — the 92% match rate seen live on 9 October 2026, where `imsi 100%` was
+#: ranked above `imei 92%` because any 15 digits pass the IMSI adapter.
+_IMEI_COLUMN = [
+    "355260181590838", "350166131860913", "353909960308240", "356281948219932",
+    "355181909378654", "357975432319483", "357574911862525", "357601895559791",
+    "357114710497460", "355075291703422", "353667127684263", "358465632122332",
+    "350792440268595", "359528907866666", "351760313721593", "350109281590138",
+    "359624595711775", "357741215472802", "353852808414855", "352538885393366",
+    "353387500474394", "355755131373532", "357990751163727",
+    "356516761222021", "359729975288202",  # the two with a failing check digit
+]  # fmt: skip
+
+#: 15-digit strings that fail both Luhn forms (IMEI's position-15 check and the
+#: card adapter's whole-string check) — only the shape-only IMSI adapter matches.
+_IMSI_COLUMN = [
+    "234018263304348", "234395486205798", "234718033401878", "234878384837261",
+    "234675136134125", "234242731672326", "234865635515058", "234770658948113",
+    "234114402426462", "234889751402614", "234014193141705", "234864920831240",
+    "234234483478245", "234040008838737", "234167868433532", "234650201462016",
+    "234849340722470", "234455853043520", "234561748338014", "234829657249208",
+    "234682889093100", "234251678008374", "234333776174093", "234192544992070",
+    "234741374847771",
+]  # fmt: skip
+
+
+def test_a_checksum_backed_match_outranks_a_shape_only_match() -> None:
+    """An IMEI column: `imsi` matches 100% of it (any 15 digits do), `imei`
+    92% — but the IMEI match is backed by a Luhn check and the IMSI match by
+    nothing beyond length, so `imei` must rank first. Found live, 9 October
+    2026 (`07_BUILD_PLAN.md`'s row at 58e9cdf)."""
+    rows = _rows(*({"handset": v} for v in _IMEI_COLUMN))
+    profile = _profile(rows)
+    (col,) = profile.columns
+    adapters = [m.adapter for m in col.pattern_matches]
+    assert "imei" in adapters and "imsi" in adapters
+    assert adapters[0] == "imei"
+    assert adapters.index("imei") < adapters.index("imsi")
+    imei_match = next(m for m in col.pattern_matches if m.adapter == "imei")
+    assert imei_match.match_rate == 0.92  # the displayed rate is never adjusted
+
+
+def test_an_imsi_column_still_reports_imsi_first() -> None:
+    rows = _rows(*({"subscriber": v} for v in _IMSI_COLUMN))
+    profile = _profile(rows)
+    (col,) = profile.columns
+    adapters = [m.adapter for m in col.pattern_matches]
+    assert adapters[0] == "imsi"
+
+
 def test_a_column_below_the_match_threshold_is_not_reported() -> None:
     rows = _rows(
         {"mixed": "01621926368"},

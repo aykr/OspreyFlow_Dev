@@ -235,6 +235,29 @@ def _classify_value(value: str) -> InferredType:
     return InferredType.STRING
 
 
+#: `09_INGEST_STUDIO.md` §3: matches are ranked by the evidence they carry, not
+#: the raw rate. The rate alone ranks `imsi 100%` above `imei 92%` on a column
+#: of IMEIs, because any 15 digits pass the IMSI adapter — the shape-only match
+#: scores highest exactly when the data is good. Each adapter's coincidence
+#: rate is a coarse order of magnitude: of values with the right character
+#: shape, how many the adapter would accept anyway.
+_COINCIDENCE_RATE: dict[str, float] = {
+    "msisdn": 0.1,  # allocated-range and length rules via `phonenumbers`
+    "imei": 0.1,  # Luhn check digit at position 15
+    "imsi": 1.0,  # any 15 digits — length is the only test
+    "email": 0.1,  # local part, `@`, dotted domain
+    "iban": 0.02,  # mod-97 over the whole value
+    "card": 0.1,  # Luhn over the whole value
+    "postcode": 0.1,  # UK letter/digit grammar
+    "grid_ref": 0.1,  # two grid letters and an even count of digits
+    "datetime": 0.1,  # ISO 8601 field grammar
+}
+
+
+def _match_evidence(match: PatternMatch) -> float:
+    return match.match_rate * (1.0 - _COINCIDENCE_RATE[match.adapter])
+
+
 def _pattern_matches(values: list[str]) -> list[PatternMatch]:
     matches: list[PatternMatch] = []
     for name in _PATTERN_ADAPTER_NAMES:
@@ -255,7 +278,7 @@ def _pattern_matches(values: list[str]) -> list[PatternMatch]:
     if iso_rate >= PATTERN_MATCH_THRESHOLD:
         matches.append(PatternMatch(adapter="datetime", match_rate=iso_rate))
 
-    matches.sort(key=lambda m: m.match_rate, reverse=True)
+    matches.sort(key=_match_evidence, reverse=True)
     return matches
 
 
