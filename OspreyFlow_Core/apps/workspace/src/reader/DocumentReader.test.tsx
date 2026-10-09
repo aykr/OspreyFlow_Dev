@@ -104,7 +104,7 @@ describe("DocumentReader", () => {
       },
     });
     const { onDelta } = mount();
-    fireEvent.click(await screen.findByRole("button", { name: "Extract entities" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Quick scan" }));
     fireEvent.click(await screen.findByRole("button", { name: /Accept Person · MERCER, Dana/ }));
     await waitFor(() => expect(onDelta).toHaveBeenCalledTimes(2));
     // The text is read again, so an accepted finding is marked in place.
@@ -136,13 +136,71 @@ describe("DocumentReader", () => {
       "/links/e1/events/ev-1/candidates/c1/reject": { status: 200, body: {} },
     });
     const { onDelta } = mount();
-    fireEvent.click(await screen.findByRole("button", { name: "Extract entities" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Quick scan" }));
     fireEvent.click(await screen.findByRole("button", { name: /Reject Endpoint · Houston/ }));
     expect(await screen.findByText("Rejected")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Accept Endpoint · Houston/ })).toBeNull();
     expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith("/candidates/c1/reject"))).toBe(true);
     // Only the extraction's own delta (the email's Document); a rejection draws nothing.
     expect(onDelta).toHaveBeenCalledTimes(1);
+  });
+
+  // ADR-098 Amendment 1 (owner, 9 October 2026): the two extraction actions are equal, always
+  // offered, each saying what it does — and a pending finding is shown where it sits in the text.
+  it("offers Quick scan and Deep read (model) as equal buttons, each saying what it does", async () => {
+    serve({ "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL } });
+    mount();
+    const dialog = await screen.findByRole("dialog", { name: "Reading: Dabhol" });
+    expect(await screen.findByRole("button", { name: "Quick scan" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Deep read (model)" })).toBeTruthy();
+    expect(dialog.textContent).toContain("Names, emails and numbers, in seconds");
+    expect(dialog.textContent).toContain("A slower, deeper read; findings are added");
+  });
+
+  it("keeps both extraction buttons offered after findings are listed", async () => {
+    serve({
+      "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL },
+      "/links/e1/events/ev-1/extract": {
+        status: 200,
+        body: { document_id: "email:ev-1", delta: { seq: 2, op: "add", nodes: [], edges: [] }, candidates: [] },
+      },
+    });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "Quick scan" }));
+    await screen.findByText("No entities were found in this document.");
+    expect(screen.getByRole("button", { name: "Quick scan" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Deep read (model)" })).toBeTruthy();
+  });
+
+  it("shows a pending finding where it sits in the text, not yet accepted", async () => {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("plant"));
+    const plantHash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    serve({
+      "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL },
+      "/links/e1/events/ev-1/extract": {
+        status: 200,
+        body: {
+          document_id: "email:ev-1",
+          delta: { seq: 2, op: "add", nodes: [], edges: [] },
+          candidates: [
+            {
+              id: "c1",
+              document_id: "email:ev-1",
+              entity_type: "Organisation",
+              properties: { name: "plant" },
+              confidence: 0.9,
+              status: "pending",
+              locator: "char span 28-33",
+              excerpt_hash: plantHash,
+            },
+          ],
+        },
+      },
+    });
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "Quick scan" }));
+    const marked = await screen.findByTitle("Organisation — found, not yet accepted");
+    expect(marked.textContent).toBe("plant");
   });
 
   it("opens on the email it was handed when no Document has been written for it yet", async () => {
@@ -179,7 +237,7 @@ describe("DocumentReader", () => {
     });
     mount();
     await screen.findByRole("dialog");
-    expect(screen.queryByRole("button", { name: "Extract entities" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Quick scan" })).toBeNull();
   });
 });
 
@@ -277,7 +335,7 @@ describe("DocumentReader: held media (ADR-094)", () => {
       },
     });
     mountHeld();
-    fireEvent.click(await screen.findByRole("button", { name: "Extract entities" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Quick scan" }));
     fireEvent.click(await screen.findByRole("button", { name: /Accept Person · WOLSKI/ }));
     await waitFor(() =>
       expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith("/documents/content%3A1/candidates/c1/accept"))).toBe(true),
@@ -333,7 +391,7 @@ describe("DocumentReader: Stanza first, the model on request", () => {
     status: "pending",
   });
 
-  it("Extract entities asks the recogniser and says each finding is Stanza's", async () => {
+  it("Quick scan asks the recogniser and says each finding is Stanza's", async () => {
     const fetchMock = serve({
       "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL },
       "/links/e1/events/ev-1/extract": {
@@ -342,13 +400,13 @@ describe("DocumentReader: Stanza first, the model on request", () => {
       },
     });
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "Extract entities" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Quick scan" }));
     expect(await screen.findByText(/found by Stanza/)).toBeTruthy();
     const call = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/extract"))!;
     expect(JSON.parse(String(((call as unknown[])[1] as RequestInit).body))).toEqual({ using: "recogniser" });
   });
 
-  it("Ask the model to extract asks the model, after a fast pass too, and adds its findings", async () => {
+  it("Deep read (model) asks the model, after a fast pass too, and adds its findings", async () => {
     let calls = 0;
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith("/reader")) return { ok: true, status: 200, json: async () => EMAIL };
@@ -362,9 +420,9 @@ describe("DocumentReader: Stanza first, the model on request", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "Extract entities" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Quick scan" }));
     await screen.findByText(/found by Stanza/);
-    fireEvent.click(screen.getByRole("button", { name: "Ask the model to extract" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deep read (model)" }));
     expect(await screen.findByText(/90%/)).toBeTruthy();
     expect(screen.getByText(/found by Stanza/)).toBeTruthy(); // the fast pass's finding stays
     expect(calls).toBe(2);

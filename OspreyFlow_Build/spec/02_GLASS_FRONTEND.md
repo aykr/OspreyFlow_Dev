@@ -632,11 +632,13 @@ where a message is named by its first words and a call by its length; *Show mess
 messages with text on the canvas as Documents titled by their first words, and says how many events
 had none (a link of calls only is said to have none, as a notice). Proved by keyboard in `keyboard/link-menu.spec.ts`.
 
-An opened email offers **Extract entities** (ADR-089 step 3). The email becomes a `Document` node linked
-to its sender and recipient by `MENTIONED_IN`, both appear on the canvas at once, and the findings are
-listed as suggestions: *Extract entities* runs the fast recogniser (Stanza, ADR-098 decision 2), whose
-findings carry no score and say *found by Stanza*; *Ask the model to extract* runs the deployment's
-extraction model (`models.extraction`, decision 3), whose findings carry a confidence each. Nothing a model finds reaches the graph until a person
+An opened email offers extraction (ADR-089 step 3) as two equal, always-offered buttons named for
+what they do (ADR-098 Amendment 3): *Quick scan* runs the fast recogniser (Stanza, ADR-098
+decision 2), whose findings carry no score and say *found by Stanza*; *Deep read (model)* runs the
+deployment's extraction model (`models.extraction`, decision 3), whose findings carry a confidence
+each and are added to those listed. The email becomes a `Document` node linked to its sender and
+recipient by `MENTIONED_IN`, both appear on the canvas at once, and the findings are listed as
+suggestions. Nothing a model finds reaches the graph until a person
 accepts it (rule 5): *Accept* on one finding writes it as an inferred node with a `MENTIONED_IN` link to the
 email, both onto the canvas, where it is confirmed from the Inspector as any inferred node is. *Reject*,
 beside it, marks the finding rejected and writes nothing (owner, 6 October 2026), in the Inspector's list
@@ -1011,11 +1013,15 @@ painted dash, dot, arrowhead and the heavier link's width are each read from the
 full screen: an overlay over the whole work area (canvas, side column and timeline) with its title,
 for an email its sender, recipient and date, and its full text with the entities already accepted
 marked in place (the Dossier's marking); the text is the whole message (ADR-095), and a note says
-so only for one loaded before then, cut at 4,000 characters. An email offers *Extract entities* (since ADR-098 the fast recogniser, Stanza: people, organisations,
-places, emails and phone numbers in about a second, each finding saying *found by Stanza*), *Ask the model
-to extract* (the language model, slower and deeper, its findings added to the list, each with its
-confidence), and each finding's *Accept* and *Reject*, as the Inspector's email
-view does, and the text is read again after an acceptance so the new entity is marked. Focus starts
+so only for one loaded before then, cut at 4,000 characters. An email offers *Quick scan* (since ADR-098 the fast recogniser, Stanza: people, organisations,
+places, emails and phone numbers in about a second, each finding saying *found by Stanza*) and *Deep
+read (model)* (the language model, slower and deeper, its findings added to the list, each with its
+confidence) as equal buttons with a caption under each saying that much (ADR-098 Amendment 3), and
+each finding's *Accept* and *Reject*, as the Inspector's email
+view does, and the text is read again after an acceptance so the new entity is marked. A finding not
+yet accepted is marked in the text where it sits, dashed and unclickable, from its own locator and
+only where the words hash to its excerpt hash (ADR-098 Amendment 3); accepting it turns the marking
+into the accepted entity's. Focus starts
 on *Close*; Close or Escape returns to the canvas with nothing moved behind it. The text comes from
 `GET .../documents/{id}/reader`. Tests: `src/reader/DocumentReader.test.tsx` and
 `keyboard/reader.spec.ts` (Enter opens it, Escape closes it, Extract, Accept and Reject by keyboard). **Marking an
@@ -1025,7 +1031,7 @@ selecting words in the text, or typed, when their first place is used), a type (
 Document and drawn on the canvas; words not in the text are refused before anything is sent, and the
 server refuses words not at the place given (`keyboard/reader.spec.ts`, `keyboard/reader-select.spec.ts`). A Document written from held content (ADR-094) shows in the reader as what it is: an image as a
 picture, a video as a player, both fetched with the analyst's token from `GET .../documents/{id}/file`;
-*Extract entities* describes and reads an image, or transcribes a video, then extracts from that
+*Quick scan* describes and reads an image, or transcribes a video, then extracts from that
 text, which the reader then shows with the accepted entities marked (`POST .../documents/{id}/extract`
 and `.../candidates/{id}/accept`). An email opened in the Inspector's Emails section offers *Read full screen* beside *Back to the list*; the reader opens on that email even before it has been written as a Document, and reads it as one from then on (ADR-092 Amendment 3).
 

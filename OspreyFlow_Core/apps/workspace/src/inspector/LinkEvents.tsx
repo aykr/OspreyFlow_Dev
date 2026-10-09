@@ -390,28 +390,33 @@ export function LinkEvents({
           )}
           {onDelta && (
             <section aria-label="Entities in this email" style={{ display: "grid", gap: "var(--sp-8)" }}>
+              {/* ADR-098 Amendment 1: the same two equal, always-offered buttons as the reader;
+                  the panel is narrow, so what each does is its tooltip, not a caption. */}
               <span style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
-                {findings.state !== "ready" && (
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={findings.state === "running"}
-                    title="People, organisations, places, emails and phone numbers, in seconds"
-                    onClick={() => void extract("recogniser")}
-                  >
-                    {findings.state === "running" ? "Extracting…" : "Extract entities"}
-                  </button>
-                )}
                 <button
                   type="button"
-                  className="btn btn--quiet"
+                  className="btn"
                   disabled={findings.state === "running"}
-                  title="A deeper, slower read by the language model; its findings are added"
+                  title="Names, emails and numbers, in seconds"
+                  onClick={() => void extract("recogniser")}
+                >
+                  Quick scan
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={findings.state === "running"}
+                  title="A slower, deeper read; findings are added"
                   onClick={() => void extract("model")}
                 >
-                  Ask the model to extract
+                  Deep read (model)
                 </button>
               </span>
+              {findings.state === "running" && (
+                <p role="status" style={{ color: "var(--text-tertiary)", margin: 0 }}>
+                  Extracting…
+                </p>
+              )}
               {findings.state === "failed" && (
                 <p role="alert" style={{ color: "var(--text-secondary)", margin: 0 }}>
                   {findings.message}

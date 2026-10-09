@@ -1,10 +1,12 @@
 // A Document opened full screen to read (ADR-092 decision 4): an overlay over the whole work area,
 // canvas and panels, with the title, for an email its sender, recipient and date, and the full text
-// with the entities already accepted marked in place. *Extract entities* for an email; Close or
+// with the entities already accepted marked in place. *Quick scan* and *Deep read (model)* for an
+// email (ADR-098 Amendment 3); Close or
 // Escape returns to the view exactly as it was, since nothing behind the overlay is touched.
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { HighlightedMessage } from "../dossier/HighlightedMessage";
+import { pendingSpansIn, type PendingSpan } from "./pendingSpans";
 import {
   acceptEmailCandidate,
   candidateLabel,
@@ -128,8 +130,8 @@ export function DocumentReader({
     closeRef.current?.focus();
   }, [load.state]);
 
-  // ADR-098: the fast recogniser first (Extract entities), the language model on request (Ask the
-  // model to extract); a second pass adds its findings to those already listed.
+  // ADR-098: the fast recogniser first (Quick scan), the language model on request (Deep read);
+  // a second pass adds its findings to those already listed.
   async function extract(view: DocumentReaderView, using: ExtractUsing = "recogniser") {
     const listed = findings.state === "ready" ? findings.candidates : [];
     setFindings({ state: "running", listed });
@@ -226,6 +228,25 @@ export function DocumentReader({
   const shownFindings =
     findings.state === "ready" ? findings.candidates : findings.state === "running" ? findings.listed ?? [] : [];
 
+  // ADR-098 Amendment 1: a pending finding is shown where it sits in the text. Located against
+  // the shown text with each finding's own excerpt hash, so nothing is marked at a wrong place.
+  const [pendingSpans, setPendingSpans] = useState<PendingSpan[]>([]);
+  useEffect(() => {
+    if (load.state !== "ready" || !load.view.text) {
+      setPendingSpans([]);
+      return;
+    }
+    const listed =
+      findings.state === "ready" ? findings.candidates : findings.state === "running" ? findings.listed ?? [] : [];
+    let cancelled = false;
+    void pendingSpansIn(load.view.text, listed).then((spans) => {
+      if (!cancelled) setPendingSpans(spans);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load, findings]);
+
   return (
     <div
       role="dialog"
@@ -312,11 +333,12 @@ export function DocumentReader({
                 <HighlightedMessage
                   document={{ document_id: load.view.document_id, text: load.view.text, spans: load.view.spans }}
                   ontology={ontology}
+                  pending={pendingSpans}
                 />
               ) : (
                 <p style={{ color: "var(--text-tertiary)", margin: 0 }}>
                   {heldMedia
-                    ? "No text yet: Extract entities describes it and reads it first."
+                    ? "No text yet: Quick scan describes it and reads it first."
                     : "This document has no text to show."}
                 </p>
               )}
@@ -366,28 +388,42 @@ export function DocumentReader({
 
             {((load.view.edge_id && load.view.event_id) || load.view.has_file) && (
               <section aria-label="Entities in this email" style={{ display: "grid", gap: "var(--sp-8)" }}>
-                <span style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
-                  {findings.state !== "ready" && (
+                {/* ADR-098 Amendment 1 (owner, 9 October 2026): the two passes are equal buttons,
+                    always offered, each saying what it does — never one that disappears beside
+                    one styled like plain text. */}
+                <span style={{ display: "flex", gap: "var(--sp-16)", flexWrap: "wrap", alignItems: "start" }}>
+                  <span style={{ display: "grid", gap: "var(--sp-4)", justifyItems: "start" }}>
                     <button
                       type="button"
                       className="btn"
                       disabled={findings.state === "running"}
-                      title="People, organisations, places, emails and phone numbers, in seconds"
                       onClick={() => void extract(load.view, "recogniser")}
                     >
-                      {findings.state === "running" ? "Extracting…" : "Extract entities"}
+                      Quick scan
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn btn--quiet"
-                    disabled={findings.state === "running"}
-                    title="A deeper, slower read by the language model; its findings are added"
-                    onClick={() => void extract(load.view, "model")}
-                  >
-                    Ask the model to extract
-                  </button>
+                    <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
+                      Names, emails and numbers, in seconds
+                    </span>
+                  </span>
+                  <span style={{ display: "grid", gap: "var(--sp-4)", justifyItems: "start" }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={findings.state === "running"}
+                      onClick={() => void extract(load.view, "model")}
+                    >
+                      Deep read (model)
+                    </button>
+                    <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
+                      A slower, deeper read; findings are added
+                    </span>
+                  </span>
                 </span>
+                {findings.state === "running" && (
+                  <p role="status" style={{ color: "var(--text-tertiary)", margin: 0 }}>
+                    Extracting…
+                  </p>
+                )}
                 {findings.state === "failed" && (
                   <p role="alert" style={{ color: "var(--text-secondary)", margin: 0 }}>
                     {findings.message}

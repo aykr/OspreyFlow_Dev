@@ -93,6 +93,10 @@ export interface EmailCandidate {
   status: "pending" | "accepted" | "rejected";
   /** Who found it: "stanza:<version>", "analyst:<id>" for one marked by hand, or a model's name. */
   model?: string;
+  /** Where in the source text it was found: `char span <start>-<end>` (`SourceRef.locator`). */
+  locator?: string;
+  /** sha256 of exactly the words the extractor matched there, so a locator is never trusted bare. */
+  excerpt_hash?: string;
   node_id?: string | null;
 }
 

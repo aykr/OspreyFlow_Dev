@@ -1,5 +1,5 @@
 // The full-screen reader (ADR-092), by keyboard alone (rule 13): Enter on a Document on the canvas
-// opens it to read rather than expanding it; in the reader, Tab reaches Extract entities and a
+// opens it to read rather than expanding it; in the reader, Tab reaches Quick scan and a
 // finding's Accept, and Escape closes it. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
@@ -107,11 +107,11 @@ test("the reader opens with focus on Close, and Escape closes it", async ({ page
   registerCovered(REGISTRY, "escape-closes-the-reader");
 });
 
-test("Extract entities and Accept are reached and pressed by keyboard in the reader", async ({ page }) => {
+test("Quick scan and Accept are reached and pressed by keyboard in the reader", async ({ page }) => {
   await serveReader(page);
   await page.goto("/keyboard/reader-harness.html");
   await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
-  await tabTo(page, /^Extract entities$/);
+  await tabTo(page, /^Quick scan$/);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
   await tabTo(page, /Accept Person · MERCER, Dana/);
@@ -125,7 +125,7 @@ test("Reject beside Accept is reached and pressed by keyboard, and draws nothing
   await serveReader(page);
   await page.goto("/keyboard/reader-harness.html");
   await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
-  await tabTo(page, /^Extract entities$/);
+  await tabTo(page, /^Quick scan$/);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
   await tabTo(page, /Reject Person · MERCER, Dana/);
@@ -162,7 +162,7 @@ test("words are marked as an entity by keyboard: typed, a type chosen, and Mark 
   registerCovered(REGISTRY, "mark-an-entity-in-the-reader-by-keyboard");
 });
 
-test("Ask the model to extract is reached and pressed by keyboard in the reader (ADR-098)", async ({ page }) => {
+test("Deep read (model) is reached and pressed by keyboard in the reader (ADR-098)", async ({ page }) => {
   await serveReader(page);
   const usings: string[] = [];
   page.on("request", (request) => {
@@ -170,7 +170,7 @@ test("Ask the model to extract is reached and pressed by keyboard in the reader 
   });
   await page.goto("/keyboard/reader-harness.html");
   await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
-  await tabTo(page, /^Ask the model to extract$/, 20);
+  await tabTo(page, /^Deep read \(model\)$/, 20);
   await page.keyboard.press("Enter");
   await expect.poll(() => usings).toEqual(["model"]);
   registerCovered(REGISTRY, "ask-the-model-to-extract-in-the-reader-by-keyboard");

@@ -4,15 +4,26 @@ import { CHANNEL_HEX, FALLBACK_CHANNEL_HEX } from "../color/tokens";
 import type { OntologyRegistry } from "../ontology/schema";
 import type { DocumentView, MessageSpan } from "./models";
 
+/** A finding not yet accepted, shown where it sits (ADR-098 Amendment 1): no node to select,
+ * so no `node_id` and nothing to click — `pending` in the drawing sense rule 5 already uses,
+ * dashed like any other inferred fact. */
+export interface PendingHighlight {
+  start: number;
+  end: number;
+  entity_type: string;
+}
+
 export interface HighlightedMessageProps {
   document: DocumentView;
   ontology: OntologyRegistry;
   onSelectNode?: (nodeId: string) => void;
+  pending?: PendingHighlight[];
 }
 
 interface Run {
   text: string;
   span: MessageSpan | null;
+  pending?: PendingHighlight | null;
 }
 
 /** Splits `text` at each (already principal-narrowed, already sorted) span boundary into
@@ -20,13 +31,22 @@ interface Run {
  * was not visible, `services/api/dossier.py`'s own leak defence) simply never produces a run
  * here; there is no "redacted" run to render, only plain, undecorated text indistinguishable
  * from prose nothing was ever extracted from. */
-function splitIntoRuns(text: string, spans: MessageSpan[]): Run[] {
+function splitIntoRuns(text: string, spans: MessageSpan[], pending: PendingHighlight[]): Run[] {
+  // An accepted span always wins the words: a pending one overlapping it is not drawn (it is
+  // usually the same finding, just read again mid-acceptance), and the rest join in order.
+  const shown: (Run & { at: number; to: number })[] = [
+    ...spans.map((span) => ({ text: text.slice(span.start, span.end), span, at: span.start, to: span.end })),
+    ...pending
+      .filter((p) => !spans.some((s) => p.start < s.end && s.start < p.end))
+      .map((p) => ({ text: text.slice(p.start, p.end), span: null, pending: p, at: p.start, to: p.end })),
+  ].sort((a, b) => a.at - b.at);
+
   const runs: Run[] = [];
   let cursor = 0;
-  for (const span of spans) {
-    if (span.start > cursor) runs.push({ text: text.slice(cursor, span.start), span: null });
-    runs.push({ text: text.slice(span.start, span.end), span });
-    cursor = span.end;
+  for (const run of shown) {
+    if (run.at > cursor) runs.push({ text: text.slice(cursor, run.at), span: null });
+    runs.push(run);
+    cursor = run.to;
   }
   if (cursor < text.length) runs.push({ text: text.slice(cursor), span: null });
   return runs;
@@ -51,11 +71,23 @@ function highlightStyle(channel: string, provenanceState: MessageSpan["provenanc
   };
 }
 
-export function HighlightedMessage({ document, ontology, onSelectNode }: HighlightedMessageProps) {
-  const runs = splitIntoRuns(document.text, document.spans);
+export function HighlightedMessage({ document, ontology, onSelectNode, pending }: HighlightedMessageProps) {
+  const runs = splitIntoRuns(document.text, document.spans, pending ?? []);
   return (
     <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
       {runs.map((run, i) => {
+        if (run.pending) {
+          const visual = ontology.visualFor(run.pending.entity_type);
+          return (
+            <span
+              key={i}
+              title={`${run.pending.entity_type} — found, not yet accepted`}
+              style={{ ...highlightStyle(visual?.channel ?? "", "inferred"), cursor: "inherit" }}
+            >
+              {run.text}
+            </span>
+          );
+        }
         if (!run.span) return <span key={i}>{run.text}</span>;
         const visual = ontology.visualFor(run.span.entity_type);
         return (

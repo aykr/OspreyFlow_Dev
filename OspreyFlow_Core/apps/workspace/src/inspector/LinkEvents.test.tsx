@@ -144,7 +144,7 @@ describe("the entry's words", () => {
   });
 });
 
-// ADR-089 step 3: Extract entities on an open email, and accepting one finding at a time.
+// ADR-089 step 3: Quick scan on an open email, and accepting one finding at a time.
 describe("LinkEvents and extraction", () => {
   function serveWithExtraction() {
     const calls: string[] = [];
@@ -173,12 +173,12 @@ describe("LinkEvents and extraction", () => {
     return { fetchMock, calls };
   }
 
-  it("offers Extract entities only when the view can take the delta, lists the findings, and accepts one", async () => {
+  it("offers Quick scan only when the view can take the delta, lists the findings, and accepts one", async () => {
     const { calls } = serveWithExtraction();
     const onDelta = vi.fn();
     mount({ onDelta });
     fireEvent.click(await screen.findByRole("button", { name: /Subject 1/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Extract entities" }));
+    fireEvent.click(screen.getByRole("button", { name: "Quick scan" }));
     const list = await screen.findByRole("list", { name: "Entities found" });
     expect(list.textContent).toContain("Person · MERCER, Dana");
     expect(list.textContent).toContain("90%");
@@ -192,13 +192,13 @@ describe("LinkEvents and extraction", () => {
     expect(list.textContent).toContain("Accepted");
   });
 
-  it("Extract entities asks the recogniser; Ask the model to extract asks the model (ADR-098)", async () => {
+  it("Quick scan asks the recogniser; Deep read (model) asks the model (ADR-098)", async () => {
     const { fetchMock } = serveWithExtraction();
     mount({ onDelta: vi.fn() });
     fireEvent.click(await screen.findByRole("button", { name: /Subject 1/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Extract entities" }));
+    fireEvent.click(screen.getByRole("button", { name: "Quick scan" }));
     await screen.findByRole("list", { name: "Entities found" });
-    fireEvent.click(screen.getByRole("button", { name: "Ask the model to extract" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deep read (model)" }));
     await waitFor(() =>
       expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/extract"))).toHaveLength(2),
     );
@@ -212,7 +212,7 @@ describe("LinkEvents and extraction", () => {
     serveWithExtraction();
     mount();
     fireEvent.click(await screen.findByRole("button", { name: /Subject 1/ }));
-    expect(screen.queryByRole("button", { name: "Extract entities" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Quick scan" })).toBeNull();
   });
 });
 

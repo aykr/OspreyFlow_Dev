@@ -114,14 +114,14 @@ async function serveExtraction(page: Page) {
   return Object.assign(accepted, { usings, rejected });
 }
 
-test("Extract entities, reached and pressed by keyboard, lists the model's findings and hands the delta on", async ({ page }) => {
+test("Quick scan, reached and pressed by keyboard, lists the model's findings and hands the delta on", async ({ page }) => {
   await serve(page);
   await serveExtraction(page);
   await page.goto("/keyboard/link-events-harness.html");
   await expect(page.getByRole("heading", { name: "Emails (3)" })).toBeVisible();
   await tabTo(page, /Subject 3/);
   await page.keyboard.press("Enter");
-  await tabTo(page, /Extract entities/);
+  await tabTo(page, /Quick scan/);
   await page.keyboard.press("Enter");
   const list = page.getByRole("list", { name: "Entities found" });
   await expect(list).toBeVisible();
@@ -137,7 +137,7 @@ test("Accept on a finding, by keyboard, sends the accept and marks it accepted",
   await expect(page.getByRole("heading", { name: "Emails (3)" })).toBeVisible();
   await tabTo(page, /Subject 3/);
   await page.keyboard.press("Enter");
-  await tabTo(page, /Extract entities/);
+  await tabTo(page, /Quick scan/);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
   await tabTo(page, /^Accept Person · MERCER, Dana$/);
@@ -185,17 +185,17 @@ test("Put on the canvas, reached and pressed by keyboard, writes the emails and 
   registerCovered(REGISTRY, "put-the-emails-on-the-canvas-from-the-list");
 });
 
-test("Ask the model to extract, by keyboard, asks the model after the fast pass (ADR-098)", async ({ page }) => {
+test("Deep read (model), by keyboard, asks the model after the fast pass (ADR-098)", async ({ page }) => {
   await serve(page);
   const asked = await serveExtraction(page);
   await page.goto("/keyboard/link-events-harness.html");
   await expect(page.getByRole("heading", { name: "Emails (3)" })).toBeVisible();
   await tabTo(page, /Subject 3/);
   await page.keyboard.press("Enter");
-  await tabTo(page, /^Extract entities$/);
+  await tabTo(page, /^Quick scan$/);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
-  await tabTo(page, /^Ask the model to extract$/);
+  await tabTo(page, /^Deep read \(model\)$/);
   await page.keyboard.press("Enter");
   await expect.poll(() => asked.usings).toEqual(["recogniser", "model"]);
   registerCovered(REGISTRY, "ask-the-model-to-extract-by-keyboard");
@@ -208,9 +208,9 @@ test("Reject on a finding, by keyboard, sends the reject and marks it rejected",
   await expect(page.getByRole("heading", { name: "Emails (3)" })).toBeVisible();
   await tabTo(page, /Subject 3/);
   await page.keyboard.press("Enter");
-  await tabTo(page, /^Extract entities$/);
+  await tabTo(page, /^Quick scan$/);
   await page.keyboard.press("Enter");
-  await tabTo(page, /^Reject Person · MERCER, Dana$/);
+  await tabTo(page, /^Reject Person · MERCER, Dana$/, 20);
   await page.keyboard.press("Enter");
   await expect.poll(() => asked.rejected.length).toBe(1);
   await expect(page.getByRole("list", { name: "Entities found" })).toContainText("Rejected");
