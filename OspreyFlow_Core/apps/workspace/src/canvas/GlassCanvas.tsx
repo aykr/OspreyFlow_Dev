@@ -1603,8 +1603,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           setFocused(nodeId);
           const sigma = sigmaRef.current;
           if (!sigma) return;
-          const x = graph.getNodeAttribute(nodeId, "x") ?? 0;
-          const y = graph.getNodeAttribute(nodeId, "y") ?? 0;
+          // The camera's own frame, not the layout's (8 October 2026: the layout's position, in the
+          // hundreds, sent the camera thousands of node-widths away and the canvas went blank).
+          const shown = sigma.getNodeDisplayData(nodeId);
+          if (!shown) return;
+          const { x, y } = shown;
           // Pan only — the current zoom ratio is left untouched (`camera.animate` merges the given
           // keys, per Sigma's own `CameraState` semantics), so "centre" means exactly that and
           // nothing else, the simplest deterministic behaviour to both implement and assert against
@@ -1621,8 +1624,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           setFocused(nodeId);
           const sigma = sigmaRef.current;
           if (!sigma) return;
-          const x = graph.getNodeAttribute(nodeId, "x") ?? 0;
-          const y = graph.getNodeAttribute(nodeId, "y") ?? 0;
+          // The camera's own frame, not the layout's (8 October 2026: the layout's position, in the
+          // hundreds, sent the camera thousands of node-widths away and the canvas went blank).
+          const shown = sigma.getNodeDisplayData(nodeId);
+          if (!shown) return;
+          const { x, y } = shown;
           redrawWhenCameraStops(sigma, sigma.getCamera().animate({ x, y }, { duration: 200 }));
         },
         deselect: (nodeId: string) => {

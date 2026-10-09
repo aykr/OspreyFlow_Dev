@@ -13,6 +13,7 @@
 // shape `keyboard.spec.ts`'s own Enter-expand test already uses.
 import { expect, test } from "@playwright/test";
 
+import { layoutSettled } from "./layoutSettled";
 import { assertAllCovered, METRICS_PANEL_ACTIONS, registerCovered } from "./actionRegistry";
 
 declare global {
@@ -78,6 +79,21 @@ test("a keyboard-activated ranked row centres the canvas on the right node", asy
   await expect
     .poll(() => page.evaluate(() => window.__METRICS_PANEL__?.focusedNodeId))
     .toBe("n1");
+  // Centred means drawn in the middle of the 800 by 600 canvas (8 October 2026: the camera was
+  // given the node's layout position, not its camera position, and the canvas went blank). n1 is
+  // laid out at the centre already, which is how the case above passed with the camera thrown
+  // away; n2 starts at the left edge, so only a real centring brings it to the middle.
+  const centred = (id: string) => async () => {
+    const at = await page.evaluate((n) => window.__METRICS_PANEL__?.positionOf?.(n) ?? null, id);
+    return at !== null && Math.abs(at.x - 400) < 40 && Math.abs(at.y - 300) < 40;
+  };
+  // The first layout ends by fitting the camera to the graph, so a centring made while it still
+  // settles is undone by it; the analyst's view is the settled one.
+  await layoutSettled(page, ["n0", "n1", "n2"]);
+  expect(await centred("n2")()).toBe(false);
+  await tabToButtonNamed(page, "Person · n2");
+  await page.keyboard.press("Enter");
+  await expect.poll(centred("n2")).toBe(true);
   registerCovered("METRICS_PANEL_ACTIONS", "row-select-and-centre");
 });
 

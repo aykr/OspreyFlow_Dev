@@ -22,7 +22,11 @@ import type { OntologySchema, Node, Edge } from "../../../packages/schemas/gener
 
 declare global {
   interface Window {
-    __METRICS_PANEL__?: { focusedNodeId: string | null; filter: MetricFilter | null };
+    __METRICS_PANEL__?: {
+      focusedNodeId: string | null;
+      filter: MetricFilter | null;
+      positionOf?: (nodeId: string) => { x: number; y: number } | null;
+    };
   }
 }
 
@@ -86,6 +90,13 @@ workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges, f
 
 function Harness() {
   const glassCanvasRef = useRef<GlassCanvasHandle>(null);
+  // Where a node is drawn, so a case can ask whether centring put it in the middle.
+  window.__METRICS_PANEL__!.positionOf = (nodeId) =>
+    glassCanvasRef.current?.viewportPositionOf(nodeId) ?? null;
+  // The shape `layoutSettled.ts` reads, so a case can wait for the first layout to finish.
+  (window as unknown as { __CANVAS__: unknown }).__CANVAS__ = {
+    viewportPositionOf: (nodeId: string) => glassCanvasRef.current?.viewportPositionOf(nodeId) ?? null,
+  };
   return (
     <div style={{ display: "flex", width: 1100, height: 600 }}>
       <div style={{ width: 800, height: 600 }}>
