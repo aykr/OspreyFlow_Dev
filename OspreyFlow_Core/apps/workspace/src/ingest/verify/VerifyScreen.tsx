@@ -166,8 +166,8 @@ export function VerifyScreen({ apiBaseUrl,
 
       {!report && !error && !running && (
         <p style={{ color: "var(--text-secondary)" }}>
-          A dry run over the profiled sample — no persistent write happens, but an `on_match:
-          reference` lookup does go through the live graph, at your own clearance. Nothing is
+          A dry run over the profiled sample. Nothing is written, but an entity set to reference
+          an existing one is looked up in the live graph, at your own clearance. Nothing is
           published until Verify passes.
         </p>
       )}

@@ -30,7 +30,7 @@ run at all; it exists for a later one.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -89,7 +89,12 @@ from .transforms import apply_transform
 
 class RowRejected(Exception):
     """Raised while resolving one row — caught per row by `run_recipe`, so
-    one bad row never stops the load and never leaves a partial write."""
+    one bad row never stops the load and never leaves a partial write.
+
+    **The reason names the cause, never the value** (9 October 2026). The report groups by reason
+    (`09_INGEST_STUDIO.md` §5, "grouped by cause"), so a value in it made each bad value its own
+    group; and a reason is shown to a principal the row's sample is masked from, so a value in it
+    was a value the mask did not cover. The rejected value is in the row's sample."""
 
     def __init__(self, reason: str) -> None:
         self.reason = reason
@@ -190,7 +195,7 @@ def _resolve_binding(
                 binding.transform, tuple(values), connector_defaults=connector_defaults
             )
         except NormalisationError as exc:
-            raise RowRejected(str(exc)) from exc
+            raise RowRejected(_cause(exc, binding.fields)) from exc
     if binding.field is None:
         raise RowRejected("binding declares neither `field`, `fields` nor `literal`")
     field_value = row.get(binding.field)
@@ -198,9 +203,7 @@ def _resolve_binding(
         raise RowRejected(f"required field {binding.field!r} is missing")
     if binding.map is not None:
         if field_value not in binding.map:
-            raise RowRejected(
-                f"value {field_value!r} for field {binding.field!r} is not in the declared map"
-            )
+            raise RowRejected(f"a value of field {binding.field!r} is not in the declared map")
         return binding.map[field_value]
     if binding.transform is not None:
         try:
@@ -208,8 +211,15 @@ def _resolve_binding(
                 binding.transform, field_value, connector_defaults=connector_defaults
             )
         except NormalisationError as exc:
-            raise RowRejected(str(exc)) from exc
+            raise RowRejected(_cause(exc, [binding.field])) from exc
     return field_value
+
+
+def _cause(exc: NormalisationError, fields: Sequence[str]) -> str:
+    """A normalisation failure as a cause: the adapter, the field(s) and why, not the value."""
+    named = ", ".join(repr(name) for name in fields)
+    noun = "field" if len(fields) == 1 else "fields"
+    return f"{exc.adapter}: cannot normalise {noun} {named} — {exc.reason}"
 
 
 def _coerce_declared_numeric_types(
@@ -265,7 +275,7 @@ def _resolve_temporal_instant(
         return value.utc
     if isinstance(value, datetime):
         return value
-    raise RowRejected(f"temporal binding did not resolve to a datetime: {value!r}")
+    raise RowRejected("temporal binding did not resolve to a datetime")
 
 
 def _merge_override(

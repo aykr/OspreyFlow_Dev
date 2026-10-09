@@ -17,6 +17,7 @@ filter already decided this principal may see that node at all).
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping, Sequence
 
 from services.ingest.engine import dry_run_recipe
 from services.ingest.profiler import DEFAULT_SAMPLE_SIZE, _shape_mask
@@ -71,6 +72,13 @@ def _group_rejections(rejections: list[RejectionRecord]) -> list[RejectionGroup]
 
 def _mask_value(value: object) -> str:
     return _shape_mask(str(value))
+
+
+def _masked_sample(rows: Sequence[Mapping[str, object]], row_index: int) -> str:
+    """A rejected row as its sample reads, each value shape-masked and each column name kept."""
+    if not 0 <= row_index < len(rows):
+        return ""
+    return str({name: _mask_value(value) for name, value in rows[row_index].items()})
 
 
 async def run_verify(
@@ -140,6 +148,15 @@ async def run_verify(
             for edge in edges
         ]
 
+    rejections = result.rejections
+    if values_masked:
+        # The rejected rows are the source's values too (9 October 2026: they were shown in full
+        # under "every value this run would create is shown shape-masked").
+        rejections = [
+            rejection.model_copy(update={"sample": _masked_sample(sampled, rejection.row_index)})
+            for rejection in rejections
+        ]
+
     return VerifyReport(
         rows_read=result.rows_read,
         rows_deduplicated=result.rows_deduplicated,
@@ -152,7 +169,7 @@ async def run_verify(
         edges_by_type={
             name: VerifyEdgeCount(created=c.created) for name, c in result.edges_by_type.items()
         },
-        rejections=_group_rejections(result.rejections),
+        rejections=_group_rejections(rejections),
         nodes=nodes,
         edges=edges,
     )

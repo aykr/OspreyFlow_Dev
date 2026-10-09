@@ -23,7 +23,9 @@ from schemas.ingest import (
     RowTemplate,
 )
 from tests.services.api.test_studio_recipe_routes import (
+    _UNCLEARED_HANDLING,
     _ready_draft,
+    _write_csv,
     client,  # noqa: F401  (reused fixture, extended below)
 )
 
@@ -124,3 +126,70 @@ def test_verify_for_a_recipe_in_a_different_unit_is_not_found(
 
     assert response.status_code == 404
     assert response.json()["error"] == "studio_recipe_not_found"
+
+
+# --- The rejection report, for a principal not cleared for the source ----------------------
+#
+# 9 October 2026, the data engineer's journey: Verify said "You aren't cleared for this source's
+# handling marking, so every value this run would create is shown shape-masked", then listed each
+# rejected row in full (`'a_party': '+44 7700 900900'`) under a reason quoting the bad value
+# (`msisdn: cannot normalise '07ABC 123456'`). The would-be nodes and edges were masked; the
+# rejections were not. And because the reason carried the value, two bad values of one cause were
+# two groups, where §5 groups by cause.
+
+
+def _rejecting_row_template() -> RowTemplate:
+    return RowTemplate(
+        entities=[
+            RecipeEntity(
+                ref="a",
+                pole_class="object",
+                type="Endpoint",
+                on_match="create",
+                properties={
+                    "value_normalised": FieldBinding(field="a_party", transform="msisdn"),
+                    "endpoint_kind": FieldBinding(literal="msisdn"),
+                },
+            )
+        ]
+    )
+
+
+_BAD_ROWS = [
+    {"a_party": "07700900461", "duration": "42"},
+    {"a_party": "07ABC 123456", "duration": "45"},
+    {"a_party": "07XYZ 654321", "duration": "12"},
+]
+
+
+def test_an_uncleared_principal_sees_no_rejected_value(
+    graph_client: TestClient, tmp_path: Path
+) -> None:
+    graph_client.studio_recipes.draft = _ready_draft(  # type: ignore[attr-defined]
+        tmp_path,
+        source_location=_write_csv(tmp_path, _BAD_ROWS),
+        handling=_UNCLEARED_HANDLING,
+        row_template=_rejecting_row_template(),
+    )
+    body = graph_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/verify").json()
+    assert body["values_masked"] is True
+    report = str(body["rejections"])
+    for value in ("07ABC 123456", "07XYZ 654321", "123456", "654321", "ABC", "XYZ"):
+        assert value not in report, f"{value!r} is in the masked rejection report: {report}"
+    assert body["rejections"], "the rows were still rejected"
+
+
+def test_rejections_are_grouped_by_cause_not_by_value(
+    graph_client: TestClient, tmp_path: Path
+) -> None:
+    graph_client.studio_recipes.draft = _ready_draft(  # type: ignore[attr-defined]
+        tmp_path,
+        source_location=_write_csv(tmp_path, _BAD_ROWS),
+        row_template=_rejecting_row_template(),
+    )
+    body = graph_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/verify").json()
+    assert body["values_masked"] is False
+    assert [(g["count"], len(g["samples"])) for g in body["rejections"]] == [(2, 2)]
+    # A cleared principal still sees each rejected row as it was read.
+    samples = " ".join(s["sample"] for s in body["rejections"][0]["samples"])
+    assert "07ABC 123456" in samples and "07XYZ 654321" in samples

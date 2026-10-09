@@ -431,6 +431,13 @@ never silently coerced. A run with rejections can be published — but the count
 against the load and shown in the source's history, because an analyst looking at this data in
 six months needs to know 4% of it never arrived.
 
+A cause names the adapter, the field and why ("msisdn: cannot normalise field 'a_party' — a phone
+number has no letters in it"), never the value: the value is in the row's sample. So one cause is
+one group however many values fail it, and for a principal not cleared for the source the samples
+are shape-masked like every other value the run would create, column names kept (both found 9
+October 2026, when the report quoted each bad value and listed rejected rows in full under a note
+that values were masked).
+
 **Verify must pass before publish.** Not "verify is recommended".
 
 ## 6. Stage 5 — Publish
