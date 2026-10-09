@@ -98,3 +98,19 @@ describe("an entity's ref can be renamed in Map", () => {
     expect(screen.getAllByText("node e1")).toHaveLength(1);
   });
 });
+
+// 9 October 2026: the Map canvas measured 1240px wide from x=332 in a 1568px window, running under
+// the element inspector. Its column was `1fr`, which cannot shrink below its content, and Sigma sizes
+// its canvases in pixels, so once the column grew it never shrank: entities sat behind the inspector
+// and the one picked as a link's start left the view. jsdom does no layout, so this pins the rules
+// that keep the canvas in its column; the deployed measurement is in the build plan.
+describe("the canvas keeps to its column", () => {
+  it("sits in a column that may shrink, and clips what it draws", async () => {
+    await mount();
+    const canvasCell = screen.getByText("+ entity").closest("div")!.parentElement!;
+    const grid = canvasCell.parentElement!;
+    expect(grid.style.gridTemplateColumns).toContain("minmax(0, 1fr)");
+    expect(["0", "0px"]).toContain(canvasCell.style.minWidth);
+    expect(canvasCell.style.overflow).toBe("hidden");
+  });
+});

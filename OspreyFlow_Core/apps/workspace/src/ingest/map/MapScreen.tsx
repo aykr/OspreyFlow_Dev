@@ -305,7 +305,10 @@ export function MapScreen({
         </Button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr 340px", flex: 1, minHeight: 0, gap: "var(--sp-8)" }}>
+      {/* `minmax(0, 1fr)`, and `minWidth: 0` with clipping on the canvas cell: a `1fr` column cannot
+          shrink below its content, Sigma sizes its canvases in pixels, and the canvas once grew under
+          the inspector and never shrank back (9 October 2026). */}
+      <div style={{ display: "grid", gridTemplateColumns: "280px minmax(0, 1fr) 340px", flex: 1, minHeight: 0, gap: "var(--sp-8)" }}>
         <SourceFieldsPanel
           columns={columns}
           sampleRow={sampleRow}
@@ -323,7 +326,7 @@ export function MapScreen({
           }
         />
 
-        <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden" }}>
           <div style={{ display: "flex", gap: "var(--sp-8)", padding: "var(--sp-8)" }}>
             <Button onClick={handleAddEntity}>+ entity</Button>
             <Button
