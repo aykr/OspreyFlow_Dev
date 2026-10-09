@@ -129,3 +129,20 @@ export function findEntity(template: RowTemplate, ref: string): RecipeEntity | u
 export function findEdge(template: RowTemplate, index: number): RecipeEdge | undefined {
   return template.edges?.[index];
 }
+
+/** `ref`'s entity replaced by `next`, which may carry a new ref: the entity's links follow it. A
+ * new ref another entity already holds is refused (the template is returned unchanged), since two
+ * entities of one ref would leave each link's end ambiguous. Found 9 October 2026: the screen
+ * looked the entity up by its new ref, so a rename was dropped. */
+export function updateEntityByRef(template: RowTemplate, ref: string, next: RecipeEntity): RowTemplate {
+  if (next.ref !== ref && template.entities.some((e) => e.ref === next.ref)) return template;
+  return {
+    ...template,
+    entities: template.entities.map((e) => (e.ref === ref ? next : e)),
+    edges: template.edges?.map((edge) => ({
+      ...edge,
+      from: edge.from === ref ? next.ref : edge.from,
+      to: edge.to === ref ? next.ref : edge.to,
+    })),
+  };
+}

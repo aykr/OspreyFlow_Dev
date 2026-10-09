@@ -43,7 +43,7 @@ import {
 import { ElementInspector, type ElementSelection } from "./ElementInspector";
 import { MapCanvas, type MapSelection } from "./MapCanvas";
 import { SourceFieldsPanel } from "./SourceFieldsPanel";
-import { edgeTypesForEndpoints, entityTypesForPole, findEdge, findEntity, nextEntityRef, unmappedFieldNames, boundFieldNames as boundFieldNamesOf } from "./rowTemplate";
+import { edgeTypesForEndpoints, entityTypesForPole, findEdge, findEntity, nextEntityRef, unmappedFieldNames, updateEntityByRef, boundFieldNames as boundFieldNamesOf } from "./rowTemplate";
 
 export interface MapScreenProps {
   apiBaseUrl: string;
@@ -182,7 +182,10 @@ export function MapScreen({
   const ontologySchema = ontology;
 
   function updateEntity(ref: string, next: RecipeEntity) {
-    setTemplate((t) => ({ ...t, entities: t.entities.map((e) => (e.ref === ref ? next : e)) }));
+    // By the ref it had, not the one it may now be given: a rename was dropped (9 October 2026).
+    const renamed = next.ref !== ref && !template.entities.some((e) => e.ref === next.ref);
+    setTemplate((t) => updateEntityByRef(t, ref, next));
+    if (renamed) setSelection({ kind: "entity", ref: next.ref });
   }
 
   function updateEdge(index: number, next: RecipeEdge) {
@@ -354,7 +357,9 @@ export function MapScreen({
               sourceFieldNames={columns.map((c) => c.name)}
               baselineClassification={baselineClassification}
               classificationOrder={scheme?.classification ?? []}
-              onChangeEntity={(next) => updateEntity(next.ref, next)}
+              onChangeEntity={(next) =>
+                selection?.kind === "entity" ? updateEntity(selection.ref, next) : undefined
+              }
               onChangeEdge={(next) =>
                 selection?.kind === "edge" ? updateEdge(selection.index, next) : undefined
               }
