@@ -844,6 +844,10 @@ class BusiestLinksBuilder:
     edge_type: str | None
     limit: int
     offset: int
+    #: ADR-100 Amendment 9: ranked for one node — only links touching it. The access steps are
+    #: identical to the whole-case ranking's, so a hidden link of a busy node never surfaces by
+    #: being asked for through its node.
+    node_id: str | None = None
 
     def _base(self, access: AccessFilter, principal: Principal) -> str:
         has_access = access.gremlin_has_step(principal)
@@ -853,7 +857,15 @@ class BusiestLinksBuilder:
                 groovy_string_literal(x) for x in physical_edge_labels(self.edge_type)
             )
             label = f".hasLabel({labels})"
-        return f"g.E(){label}.{has_access}.where(outV().{has_access}).where(inV().{has_access})"
+        of_node = (
+            f".where(bothV().has(\"id\",{groovy_string_literal(self.node_id)}))"
+            if self.node_id is not None
+            else ""
+        )
+        return (
+            f"g.E(){label}{of_node}.{has_access}"
+            f".where(outV().{has_access}).where(inV().{has_access})"
+        )
 
     def render_total_gremlin(self, access: AccessFilter, principal: Principal) -> str:
         return f"{self._base(access, principal)}.count()"

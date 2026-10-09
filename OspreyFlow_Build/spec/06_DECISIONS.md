@@ -10197,6 +10197,30 @@ Status: accepted 8 October 2026 (building Amendment 7 decision 4, the owner's "A
 3. **A defect in ADR-030's pinned-root join, found here and fixed first:** its reverse walk stepped with `.in()`, checking each node but never the link, so a SECRET link made a visible endpoint a common contact for an OFFICIAL reader, telling them the link existed (rule 3). It walks `inE` then `outV` now, the access step on each. `test_match_intersection_never_rests_on_a_hidden_link`, red before the fix. No other step in the builders walks without its link.
 4. **Tests:** conformance for the read (red with the link back unchecked, and with the contact unchecked) and for the join; the pair against real ArcadeDB, a SECRET shared contact and a contact over a SECRET link both left out; the routes with the case's datasets (red with either read unscoped) and a system link type refused; the Inspector part; a keyboard case (red with a pick that never draws). The pairing step that counts each contact once per other node guards against the stray duplicate links ADR-056 Amendment 19 describes; no fixture produces one, so that step has not been shown red.
 
+### ADR-100, Amendment 9 (9 October 2026) — the panel folds, rows act by buttons, and a dense node comes with a chosen number of its busiest links
+
+Status: accepted 9 October 2026 (the owner's three choices between presented options: "Folding
+sections", "Add… with link budget", "Buttons on rows"; the budget steps of 25 and 50 are mine —
+the owner's preview said 100, which `EXPLORE_MAX_PAGE` (50) makes a second request, so the steps
+are single server pages and "all" is the canvas's own expand).
+
+1. **The blocks fold** (`AccordionSection`, the Inspector's own idiom): *What this case holds*
+   opens first; the rest are headings until opened. One screen tall, no scroll-to-discover.
+2. **A row's facts are text; the pressable thing is a button** (*Add…*, *Show*, *Set window*,
+   *Run*, *Add*), never a quiet button that reads as prose.
+3. **A ranked node's *Add…* asks how much**: *Just this entity*; *with its 25/50 busiest links*
+   (only the steps below its degree are offered); *with all n links…*, which hands over to the
+   canvas's own expand and its large-expansion question. The budget reads
+   `GET /explore/busiest-links?node_id=…&limit=…` — `GraphPort.busiest_links` gains `node_id`,
+   ranked under exactly the whole-case ranking's access steps, so a hidden link of a busy node
+   never surfaces by being asked for through its node (the conformance case plants a busier
+   other-dataset link on the node and asserts it never ranks). The response says `total`, so a
+   chosen 25 of 1,829 is the analyst's typed choice, never a silent slice (rule 2).
+4. **Tests:** the conformance case above (red first: the port had no `node_id`);
+   `ExplorePanel.test.tsx` 23 (the four Amendment 9 cases red first); `explore.spec.ts` 12 — every
+   walkthrough now opens its fold by keyboard, with `add-a-node-with-its-busiest-links-by-keyboard`
+   and `add-a-node-with-all-its-links-by-keyboard` registered (rule 13).
+
 ## ADR-102 — Writing an element again never lowers its handling; lowering it is an explicit change
 
 Status: accepted 8 October 2026 (the owner: "allow the analyst to explicitly select whether the it should be downgraded for the whole set goes to the higher rating"; then, of the choices put, "Most restrictive of each" and "On the link, as a change"). It replaces the "latest write's handling wins" rule `schemas.merge` stated, found building ADR-100 (Amendment 6 item 7).

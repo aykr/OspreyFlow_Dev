@@ -787,8 +787,9 @@ class GraphArcadeDBAdapter:
         edge_type: str | None = None,
         limit: int = 10,
         offset: int = 0,
+        node_id: str | None = None,
     ) -> RankedLinks:
-        builder = BusiestLinksBuilder(edge_type, limit, offset)
+        builder = BusiestLinksBuilder(edge_type, limit, offset, node_id)
         totals = await self._client.gremlin(builder.render_total_gremlin(self._access, principal))
         rows = await self._client.gremlin(builder.render_page_gremlin(self._access, principal))
         return RankedLinks(

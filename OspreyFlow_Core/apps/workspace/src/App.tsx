@@ -387,6 +387,23 @@ export function App() {
     });
     setSelectedNode(link.source);
   };
+  /** ADR-100 Amendment 9: a node with its chosen busiest links, each with both ends, drawn. */
+  const addWithBusiest = (node: Node, links: RankedLink[]) => {
+    const store = workingSetRef.current.store;
+    store.getState().applyDelta({
+      seq: store.getState().seq,
+      op: "add",
+      nodes: [node, ...links.flatMap((l) => [l.source, l.target])],
+      edges: links.map((l) => l.edge),
+    });
+    setSelectedNode(node);
+  };
+  /** ADR-100 Amendment 9: "with all n links…" — the canvas's own expand, whose large-expansion
+   * question already guards the all case. */
+  const expandAllOf = (node: Node) => {
+    pickToStart(node);
+    glassCanvasRef.current?.expandFrom(node.id, 1);
+  };
   /** ADR-100 Amendment 7: what a starter question put in the case's working set, drawn. */
   const applyStarterDelta = (delta: WorkingSetDelta) => {
     workingSetRef.current.store.getState().applyDelta(delta);
@@ -1154,6 +1171,8 @@ export function App() {
                   onPickLink={pickLinkToStart}
                   onPickDay={pickDay}
                   onApplyDelta={applyStarterDelta}
+                  onAddLinks={addWithBusiest}
+                  onExpandAll={expandAllOf}
                 />
               </div>
             )}
@@ -1480,6 +1499,14 @@ export function App() {
               setExploreOpen(false);
             }}
             onApplyDelta={applyStarterDelta}
+            onAddLinks={(node, links) => {
+              addWithBusiest(node, links);
+              setExploreOpen(false);
+            }}
+            onExpandAll={(node) => {
+              expandAllOf(node);
+              setExploreOpen(false);
+            }}
           />
         )}
       </Drawer>

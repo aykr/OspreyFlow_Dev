@@ -3,9 +3,10 @@
 // store within the case's datasets and the analyst's clearance; this panel adds nothing up itself.
 // A ranking says of how many and pages rather than stops (rule 2), and every item puts its node on
 // the canvas with one action, as choosing a search result does.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type { Node } from "../../../../packages/schemas/generated";
+import { AccordionSection } from "../design/primitives/AccordionSection";
 import { nodeLabel } from "../canvas/nodeAttributes";
 import { linkCaption, linkTypeName, type NamedType } from "../canvas/linkLabel";
 import { eventsNoun } from "../inspector/linkEventsApi";
@@ -48,6 +49,12 @@ export interface ExplorePanelProps {
   onPick: (node: Node) => void;
   /** Puts a link and both its ends on the canvas. */
   onPickLink?: (link: RankedLink) => void;
+  /** ADR-100 Amendment 9: puts a node and its chosen busiest links (each with both ends) on the
+   * canvas — the "how much" between one entity and everything. Absent: no budget is offered. */
+  onAddLinks?: (node: Node, links: RankedLink[]) => void;
+  /** ADR-100 Amendment 9: "with all n links…" — hands over to the canvas's own expand, whose
+   * large-expansion question already guards the all case. */
+  onExpandAll?: (node: Node) => void;
   /** Sets the timeline's window to the day. */
   onPickDay?: (day: BusyDay) => void;
   /** Applies what a starter question put in the case's working set to the canvas. */
@@ -102,10 +109,27 @@ interface PagedProps<T> {
   keyOf: (item: T) => string;
   labelOf: (item: T) => string;
   onPick: (item: T) => void;
+  /** The row drawn whole, when the plain label-button row is not enough (the link budget). */
+  row?: (item: T) => ReactNode;
+  /** The action button's words beside a plain row ("Show", "Set window"); rows are text and the
+   * pressable thing is a button (the owner, 9 October 2026). */
+  act?: string;
+}
+
+/** A row as ADR-100 Amendment 9 draws every list: its facts as text, its action as a button. */
+export function ActionRow({ label, act, onAct, disabled }: { label: string; act: string; onAct: () => void; disabled?: boolean }) {
+  return (
+    <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--sp-8)" }}>
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{label}</span>
+      <button type="button" className="btn" aria-label={`${act}: ${label}`} disabled={disabled} onClick={onAct}>
+        {act}
+      </button>
+    </span>
+  );
 }
 
 /** A ranking: its first page, then more on request, always saying of how many (rule 2). */
-function Paged<T>({ load, resetKey, first, what, keyOf, labelOf, onPick }: PagedProps<T>) {
+function Paged<T>({ load, resetKey, first, what, keyOf, labelOf, onPick, row, act }: PagedProps<T>) {
   const [rows, setRows] = useState<T[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -147,9 +171,11 @@ function Paged<T>({ load, resetKey, first, what, keyOf, labelOf, onPick }: Paged
       <ol style={{ margin: 0, paddingLeft: "var(--sp-16)", display: "grid", gap: "var(--sp-4)" }}>
         {rows.map((item) => (
           <li key={keyOf(item)}>
-            <button type="button" className="btn btn--quiet" onClick={() => onPick(item)}>
-              {labelOf(item)}
-            </button>
+            {row ? (
+              row(item)
+            ) : (
+              <ActionRow label={labelOf(item)} act={act ?? "Add"} onAct={() => onPick(item)} />
+            )}
           </li>
         ))}
       </ol>
@@ -172,8 +198,114 @@ interface RankingProps extends Omit<ExplorePanelProps, "edgeTypes" | "onPickLink
   first: number;
 }
 
+/** ADR-100 Amendment 9's budgets: single server pages (`EXPLORE_MAX_PAGE` is 50), so "how much"
+ * is 25 or 50 of the busiest; everything is the canvas's own expand with its large-expansion
+ * question. */
+const LINK_BUDGETS = [25, 50];
+
+/** One ranked node: its facts as text, *Add…* opening the "how much" choice (ADR-100
+ * Amendment 8) — just the entity, a budget of its busiest links, or all of them by the canvas's
+ * own expand. */
+function BudgetRow({
+  item,
+  apiBaseUrl,
+  bearerToken,
+  investigationId,
+  onPick,
+  onAddLinks,
+  onExpandAll,
+}: Omit<RankingProps, "entityType" | "first"> & { item: RankedNode }) {
+  const { node, degree } = item;
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const label = `${nodeLabel(node)} · ${node.type} · ${plural(degree, "link", "links")}`;
+
+  async function withBusiest(count: number) {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const answer = await loadBusiestLinks(apiBaseUrl, bearerToken, investigationId, {
+        limit: count,
+        nodeId: node.id,
+      });
+      onAddLinks?.(node, answer.links);
+      setOpen(false);
+    } catch (err: unknown) {
+      setProblem(err instanceof Error ? err.message : "Its links could not be read.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!onAddLinks) {
+    // A caller without the budget (an older harness) keeps the one-action row.
+    return <ActionRow label={label} act="Add" onAct={() => onPick(node)} />;
+  }
+  return (
+    <div style={{ display: "grid", gap: "var(--sp-4)" }}>
+      <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--sp-8)" }}>
+        <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{label}</span>
+        <button
+          type="button"
+          className="btn"
+          aria-label={`Add ${nodeLabel(node)} to the graph`}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          Add…
+        </button>
+      </span>
+      {open && (
+        <span style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            className="btn btn--quiet"
+            disabled={busy}
+            onClick={() => {
+              onPick(node);
+              setOpen(false);
+            }}
+          >
+            Just this entity
+          </button>
+          {LINK_BUDGETS.filter((count) => count < degree).map((count) => (
+            <button
+              key={count}
+              type="button"
+              className="btn btn--quiet"
+              disabled={busy}
+              onClick={() => void withBusiest(count)}
+            >
+              {`With its ${count} busiest links`}
+            </button>
+          ))}
+          {onExpandAll && (
+            <button
+              type="button"
+              className="btn btn--quiet"
+              disabled={busy}
+              onClick={() => {
+                onExpandAll(node);
+                setOpen(false);
+              }}
+            >
+              {`With all ${COUNT.format(degree)} links…`}
+            </button>
+          )}
+        </span>
+      )}
+      {problem && (
+        <p role="alert" style={{ margin: 0, color: "var(--text-secondary)" }}>
+          {problem}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Nodes by degree, of one type when named. */
-function Ranking({ apiBaseUrl, bearerToken, investigationId, entityType, first, onPick }: RankingProps) {
+function Ranking({ apiBaseUrl, bearerToken, investigationId, entityType, first, onPick, onAddLinks, onExpandAll }: RankingProps) {
   return (
     <Paged<RankedNode>
       load={async (offset, limit) => {
@@ -190,6 +322,17 @@ function Ranking({ apiBaseUrl, bearerToken, investigationId, entityType, first, 
       keyOf={({ node }) => node.id}
       labelOf={({ node, degree }) => `${nodeLabel(node)} · ${node.type} · ${plural(degree, "link", "links")}`}
       onPick={({ node }) => onPick(node)}
+      row={(item) => (
+        <BudgetRow
+          item={item}
+          apiBaseUrl={apiBaseUrl}
+          bearerToken={bearerToken}
+          investigationId={investigationId}
+          onPick={onPick}
+          onAddLinks={onAddLinks}
+          onExpandAll={onExpandAll}
+        />
+      )}
     />
   );
 }
@@ -236,9 +379,11 @@ function GroupsAndBridges({ apiBaseUrl, bearerToken, investigationId, onPick }: 
       <ol style={list}>
         {found.groups.map((group) => (
           <li key={group.id}>
-            <button type="button" className="btn btn--quiet" onClick={() => onPick(group.central)}>
-              {`Group of ${COUNT.format(group.size)} · mostly ${group.dominant_type} · around ${nodeLabel(group.central)}`}
-            </button>
+            <ActionRow
+              label={`Group of ${COUNT.format(group.size)} · mostly ${group.dominant_type} · around ${nodeLabel(group.central)}`}
+              act="Add"
+              onAct={() => onPick(group.central)}
+            />
           </li>
         ))}
       </ol>
@@ -250,9 +395,11 @@ function GroupsAndBridges({ apiBaseUrl, bearerToken, investigationId, onPick }: 
           <ol style={list}>
             {found.bridges.map((bridge) => (
               <li key={bridge.node.id}>
-                <button type="button" className="btn btn--quiet" onClick={() => onPick(bridge.node)}>
-                  {`${nodeLabel(bridge.node)} · reaches ${plural(bridge.groups_reached, "other group", "other groups")} · ${plural(bridge.links, "link", "links")}`}
-                </button>
+                <ActionRow
+                  label={`${nodeLabel(bridge.node)} · reaches ${plural(bridge.groups_reached, "other group", "other groups")} · ${plural(bridge.links, "link", "links")}`}
+                  act="Add"
+                  onAct={() => onPick(bridge.node)}
+                />
               </li>
             ))}
           </ol>
@@ -330,9 +477,11 @@ function WhatIsNew({ apiBaseUrl, bearerToken, investigationId, onPick }: Omit<Ex
         <ol aria-label="Recently confirmed" style={list}>
           {confirmed.map((c) => (
             <li key={c.node.id}>
-              <button type="button" className="btn btn--quiet" onClick={() => onPick(c.node)}>
-                {`${nodeLabel(c.node)} · ${c.node.type} · confirmed by ${c.confirmed_by} · ${when(c.confirmed_at)}`}
-              </button>
+              <ActionRow
+                label={`${nodeLabel(c.node)} · ${c.node.type} · confirmed by ${c.confirmed_by} · ${when(c.confirmed_at)}`}
+                act="Add"
+                onAct={() => onPick(c.node)}
+              />
             </li>
           ))}
         </ol>
@@ -342,9 +491,11 @@ function WhatIsNew({ apiBaseUrl, bearerToken, investigationId, onPick }: Omit<Ex
         <ol aria-label="Recently marked" style={list}>
           {marked.map((m) => (
             <li key={m.node.id}>
-              <button type="button" className="btn btn--quiet" onClick={() => onPick(m.node)}>
-                {`${nodeLabel(m.node)} · ${m.node.type} · marked for suppression by ${m.marked_by} · ${when(m.marked_at)} · “${m.reason}”`}
-              </button>
+              <ActionRow
+                label={`${nodeLabel(m.node)} · ${m.node.type} · marked for suppression by ${m.marked_by} · ${when(m.marked_at)} · “${m.reason}”`}
+                act="Add"
+                onAct={() => onPick(m.node)}
+              />
             </li>
           ))}
         </ol>
@@ -405,9 +556,7 @@ function StarterQuestionList({
       <ol style={{ margin: 0, paddingLeft: "var(--sp-16)", display: "grid", gap: "var(--sp-4)" }}>
         {offered.questions.map((q) => (
           <li key={q.id}>
-            <button type="button" className="btn btn--quiet" disabled={running} onClick={() => void run(q.id)}>
-              {q.question}
-            </button>
+            <ActionRow label={q.question} act="Run" disabled={running} onAct={() => void run(q.id)} />
           </li>
         ))}
       </ol>
@@ -444,17 +593,35 @@ export function ExplorePanel(props: ExplorePanelProps) {
     bearerToken,
     investigationId,
     onPick: props.onPick,
+    onAddLinks: props.onAddLinks,
+    onExpandAll: props.onExpandAll,
   };
+  // ADR-100 Amendment 9: folds instead of one scroll; what the analyst wants opens, the rest is a
+  // heading. "What this case holds" starts open — the first question a new case answers.
+  const [openFolds, setOpenFolds] = useState<ReadonlySet<string>>(() => new Set(["holds"]));
+  const toggleFold = (id: string) =>
+    setOpenFolds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const fold = (id: string, title: string, content: ReactNode) => (
+    <AccordionSection title={title} open={openFolds.has(id)} onToggle={() => toggleFold(id)}>
+      <section aria-label={title}>{content}</section>
+    </AccordionSection>
+  );
   const entities = counts ? byCount(counts.nodes ?? {}) : [];
   const links = counts ? byCount(counts.edges ?? {}) : [];
   const entityTotal = entities.reduce((sum, [, n]) => sum + n, 0);
   const linkTotal = links.reduce((sum, [, n]) => sum + n, 0);
-  const heading = { fontSize: "var(--fs-13)", margin: "0 0 var(--sp-4)" };
 
   return (
-    <div style={{ display: "grid", gap: "var(--sp-16)" }}>
-      <section aria-labelledby="explore-holds">
-        <h3 id="explore-holds" style={heading}>What this case holds</h3>
+    <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+      {fold(
+        "holds",
+        "What this case holds",
+        <>
         {problem && <p role="alert">{problem}</p>}
         {!problem && counts === null && <p style={{ color: "var(--text-tertiary)" }}>Counting…</p>}
         {counts && entities.length === 0 && links.length === 0 && (
@@ -481,24 +648,24 @@ export function ExplorePanel(props: ExplorePanelProps) {
             </ul>
           </>
         )}
-      </section>
+        </>,
+      )}
       {counts && entities.length > 0 && (
         <>
-          <section aria-labelledby="explore-top">
-            <h3 id="explore-top" style={heading}>Most connected</h3>
-            <Ranking {...ranking} first={TOP} />
-          </section>
-          <section aria-labelledby="explore-types">
-            <h3 id="explore-types" style={heading}>By entity type</h3>
+          {fold("top", "Most connected", <Ranking {...ranking} first={TOP} />)}
+          {fold(
+            "types",
+            "By entity type",
             <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "var(--sp-4)" }}>
               {entities.map(([name, n]) => (
                 <TypeEntry key={name} {...ranking} name={name} count={n} />
               ))}
-            </ul>
-          </section>
-          {links.length > 0 && (
-            <section aria-labelledby="explore-links">
-              <h3 id="explore-links" style={heading}>Busiest links</h3>
+            </ul>,
+          )}
+          {links.length > 0 &&
+            fold(
+              "links",
+              "Busiest links",
               <Paged<RankedLink>
                 load={async (offset, limit) => {
                   const answer = await loadBusiestLinks(apiBaseUrl, bearerToken, investigationId, { limit, offset });
@@ -516,30 +683,24 @@ export function ExplorePanel(props: ExplorePanelProps) {
                   )}`
                 }
                 onPick={(link) => props.onPickLink?.(link)}
-              />
-            </section>
-          )}
-          {links.length > 0 && (
-            <section aria-labelledby="explore-groups">
-              <h3 id="explore-groups" style={heading}>Groups and bridges</h3>
-              <GroupsAndBridges {...ranking} />
-            </section>
-          )}
-          <section aria-labelledby="explore-new">
-            <h3 id="explore-new" style={heading}>What&apos;s new</h3>
-            <WhatIsNew {...ranking} />
-          </section>
-          <section aria-labelledby="explore-starters">
-            <h3 id="explore-starters" style={heading}>Starter questions</h3>
+                act="Show"
+              />,
+            )}
+          {links.length > 0 && fold("groups", "Groups and bridges", <GroupsAndBridges {...ranking} />)}
+          {fold("new", "What's new", <WhatIsNew {...ranking} />)}
+          {fold(
+            "starters",
+            "Starter questions",
             <StarterQuestionList
               apiBaseUrl={apiBaseUrl}
               bearerToken={bearerToken}
               investigationId={investigationId}
               onApplyDelta={props.onApplyDelta}
-            />
-          </section>
-          <section aria-labelledby="explore-days">
-            <h3 id="explore-days" style={heading}>Busiest days</h3>
+            />,
+          )}
+          {fold(
+            "days",
+            "Busiest days",
             <Paged<BusyDay>
               load={async (offset, limit) => {
                 const answer = await loadBusiestDays(apiBaseUrl, bearerToken, investigationId, { limit, offset });
@@ -551,8 +712,9 @@ export function ExplorePanel(props: ExplorePanelProps) {
               keyOf={(day) => day.start}
               labelOf={(day) => `${DAY.format(new Date(day.start)).replace(",", "")} · ${plural(day.count, "event", "events")}`}
               onPick={(day) => props.onPickDay?.(day)}
-            />
-          </section>
+              act="Set window"
+            />,
+          )}
         </>
       )}
     </div>

@@ -327,11 +327,14 @@ class GraphPort(Protocol):
         edge_type: str | None = None,
         limit: int = 10,
         offset: int = 0,
+        node_id: str | None = None,
     ) -> RankedLinks:
         """`06_DECISIONS.md` ADR-100 decision 5: links by how many records each stands for
         (`occurrences`), most first, ties by id, of one link type when named, each with both its
         ends. Only links `principal` can see whose two ends it can see are ranked or counted in
-        `total` (rule 3); a page past the end is empty."""
+        `total` (rule 3); a page past the end is empty. With `node_id` (Amendment 8), only that
+        node's own links are ranked — how a dense node is brought to the canvas with its N busiest
+        rather than all or nothing — under exactly the same access rules."""
         ...
 
     async def link_structure(

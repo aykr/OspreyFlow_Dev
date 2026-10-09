@@ -79,9 +79,12 @@ export function loadBusiestLinks(
   apiBaseUrl: string,
   bearerToken: string,
   investigationId: string,
-  { limit = 10, offset = 0 }: RankingPage,
+  { limit = 10, offset = 0, nodeId }: RankingPage & { nodeId?: string },
 ): Promise<RankedLinks> {
+  // ADR-100 Amendment 9: with `nodeId`, one node's own links — how a dense node is brought to the
+  // canvas with its N busiest rather than all or nothing.
   const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (nodeId) query.set("node_id", nodeId);
   return get(
     exploreUrl(apiBaseUrl, investigationId, `busiest-links?${query.toString()}`),
     bearerToken,

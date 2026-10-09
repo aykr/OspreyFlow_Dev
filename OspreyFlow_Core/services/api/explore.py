@@ -152,13 +152,16 @@ class ExploreService:
         edge_type: str | None = None,
         limit: int = 10,
         offset: int = 0,
+        node_id: str | None = None,
     ) -> RankedLinks:
-        signature = f"explore:{_VERSION}:busiest-links:{edge_type or '*'}:{limit}:{offset}"
+        signature = (
+            f"explore:{_VERSION}:busiest-links:{edge_type or '*'}:{node_id or '*'}:{limit}:{offset}"
+        )
         if self._cache is not None and (held := await self._cache.get(signature, principal)):
             return RankedLinks.model_validate(held)
         ranked = (
             await self._graph.busiest_links(
-                principal, edge_type=edge_type, limit=limit, offset=offset
+                principal, edge_type=edge_type, limit=limit, offset=offset, node_id=node_id
             )
         ).model_copy(update={"computed_at": self._now()})
         if self._cache is not None:

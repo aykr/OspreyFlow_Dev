@@ -11,11 +11,19 @@ import { ExplorePanel } from "../src/explore/ExplorePanel";
 
 declare global {
   interface Window {
-    __EXPLORE__?: { picked: string[]; links: string[]; days: string[]; deltas: number[] };
+    __EXPLORE__?: {
+      picked: string[];
+      links: string[];
+      days: string[];
+      deltas: number[];
+      /** ADR-100 Amendment 9: [node id, how many links came] per budget add. */
+      budget: [string, number][];
+      expandedAll: string[];
+    };
   }
 }
 
-window.__EXPLORE__ = { picked: [], links: [], days: [], deltas: [] };
+window.__EXPLORE__ = { picked: [], links: [], days: [], deltas: [], budget: [], expandedAll: [] };
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
@@ -31,6 +39,8 @@ createRoot(container).render(
     onPickLink={(link) => window.__EXPLORE__!.links.push(link.edge.id)}
     onPickDay={(day) => window.__EXPLORE__!.days.push(day.start)}
     onApplyDelta={(delta) => window.__EXPLORE__!.deltas.push(delta.seq)}
+    onAddLinks={(node, links) => window.__EXPLORE__!.budget.push([node.id, links.length])}
+    onExpandAll={(node) => window.__EXPLORE__!.expandedAll.push(node.id)}
   />
   </Drawer>,
 );

@@ -3065,16 +3065,24 @@ async def explore_busiest_links_route(
     edge_type: Annotated[str | None, Query(max_length=100)] = None,
     limit: Annotated[int, Query(ge=1, le=EXPLORE_MAX_PAGE)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
+    node_id: Annotated[str | None, Query(max_length=200)] = None,
 ) -> RankedLinks:
-    """ADR-100 decision 5: the links that stand for the most records, within the case's datasets."""
+    """ADR-100 decision 5: the links that stand for the most records, within the case's datasets.
+    With `node_id` (Amendment 8), one node's own links — how a dense node is brought to the canvas
+    with its N busiest rather than all or nothing."""
     ranked = await explore.busiest_links(
-        principal, edge_type=edge_type, limit=limit, offset=offset
+        principal, edge_type=edge_type, limit=limit, offset=offset, node_id=node_id
     )
     await audit.record(
         principal=principal,
         action="explore_busiest_links",
         investigation_id=investigation.id,
-        resolved_query={"edge_type": edge_type, "limit": limit, "offset": offset},
+        resolved_query={
+            "edge_type": edge_type,
+            "limit": limit,
+            "offset": offset,
+            "node_id": node_id,
+        },
         result_cardinality=len(ranked.links),
     )
     return ranked

@@ -410,6 +410,9 @@ export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [
   "put-a-marked-node-on-the-canvas-by-keyboard",
   // ADR-100 decision 8 (Amendment 7).
   "run-a-starter-question-by-keyboard",
+  // ADR-100 Amendment 9: the link budget on a ranked node.
+  "add-a-node-with-its-busiest-links-by-keyboard",
+  "add-a-node-with-all-its-links-by-keyboard",
 ] as const);
 
 /** The case's questions to the model (ADR-098 decision 4): asked, answered with what it draws on,

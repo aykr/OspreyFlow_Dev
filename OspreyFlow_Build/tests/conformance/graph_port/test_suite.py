@@ -3347,6 +3347,26 @@ async def test_busiest_links_rank_by_records_and_say_of_how_many(factory: GraphA
         assert again.total == 3
 
 
+async def test_busiest_links_of_one_node_rank_only_its_own_visible_links(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-100 Amendment 9 (the owner, 9 October 2026): a dense node is brought to the canvas with
+    its N busiest links, not all or nothing — so the ranking takes `node_id`. Access control is the
+    same as the whole-case ranking's: after `_add_busy_links_that_must_not_count`, node `b` carries
+    an other-dataset link busier (50) than anything it may show; ranked, it would come first."""
+    async with factory.context() as adapter:
+        ids = await _busy_world(adapter)
+        mine = await adapter.busiest_links(EXPLORER, node_id=ids["b"])
+        assert [r.edge.id for r in mine.links] == [ids["ab"], ids["bc"]]
+        assert mine.total == 2
+        first = await adapter.busiest_links(EXPLORER, node_id=ids["b"], limit=1)
+        assert [r.edge.id for r in first.links] == [ids["ab"]] and first.total == 2
+        await _add_busy_links_that_must_not_count(adapter, ids)
+        again = await adapter.busiest_links(EXPLORER, node_id=ids["b"], limit=10)
+        assert [r.edge.id for r in again.links] == [ids["ab"], ids["bc"]]
+        assert again.total == 2
+
+
 async def test_busiest_links_page_and_filter_by_type(factory: GraphAdapterFactory) -> None:
     async with factory.context() as adapter:
         ids = await _busy_world(adapter)

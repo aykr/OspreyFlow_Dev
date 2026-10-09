@@ -527,8 +527,13 @@ with both figures in words, and the question is kept (`keyboard/questions.spec.t
 `keyboard/selection.spec.ts`).
 
 **Where to start in a case's data: Explore (ADR-100).** While the canvas holds nothing, it shows *Where to
-start* over the canvas; the same panel opens from the left rail as *Explore* at any time. It shows, for the
-case's datasets and the analyst's clearance only: *What this case holds* (the count of each entity type and
+start* over the canvas; the same panel opens from the left rail as *Explore* at any time. Its blocks fold
+(ADR-100 Amendment 9): *What this case holds* opens first and the rest are headings until opened, one screen
+tall; in every block a row's facts are text and the pressable thing is a button. A ranked node's *Add…* asks
+how much comes to the canvas: just the entity, its 25 or 50 busiest links (the steps below its degree), or
+all of them through the canvas's own expand and its large-expansion question — the budget reads the node's
+own busiest links (`node_id` on `/explore/busiest-links`), under the whole-case ranking's access rules. It
+shows, for the case's datasets and the analyst's clearance only: *What this case holds* (the count of each entity type and
 each link type, types with none left out); *Most connected* (the 10 nodes with the most visible links, saying
 "The 10 most connected of N", with *Show n more* until "All N shown"); and *By entity type* (each type and its
 count, opening to its 5 most connected and paging the same way); *Busiest links* (the links that stand for

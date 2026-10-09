@@ -8,6 +8,13 @@ import { EXPLORE_ACTIONS, assertAllCovered, registerCovered } from "./actionRegi
 
 const REGISTRY = "EXPLORE_ACTIONS";
 
+/** ADR-100 Amendment 9: the blocks fold, so each walkthrough opens its fold by keyboard first. */
+async function openFold(page: Page, name: string) {
+  const header = page.getByRole("button", { name, exact: true });
+  await header.focus();
+  await page.keyboard.press("Enter");
+}
+
 function node(id: string, type: string) {
   return {
     id,
@@ -68,7 +75,7 @@ async function serve(page: Page) {
     const offset = Number(url.searchParams.get("offset"));
     const limit = Number(url.searchParams.get("limit"));
     if (type === "Organisation") return json({ nodes: [{ node: node("Acme", "Organisation"), degree: 3 }], total: 1, offset });
-    const all = Array.from({ length: 12 }, (_, i) => ({ node: node(`hub${i}`, "Person"), degree: 20 - i }));
+    const all = Array.from({ length: 12 }, (_, i) => ({ node: node(`hub${i}`, "Person"), degree: 60 - i }));
     return json({ nodes: all.slice(offset, offset + limit), total: 12, offset });
   });
   await page.goto("/keyboard/explore-harness.html");
@@ -77,8 +84,11 @@ async function serve(page: Page) {
 
 test("a node from the most connected goes on the canvas by keyboard", async ({ page }) => {
   await serve(page);
+  await openFold(page, "Most connected");
   const top = page.getByRole("region", { name: "Most connected" });
-  await top.getByRole("button", { name: "hub0 · Person · 20 links" }).focus();
+  await top.getByRole("button", { name: "Add hub0 to the graph" }).focus();
+  await page.keyboard.press("Enter");
+  await top.getByRole("button", { name: "Just this entity" }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub0"]);
   registerCovered(REGISTRY, "put-a-most-connected-node-on-the-canvas-by-keyboard");
@@ -86,6 +96,7 @@ test("a node from the most connected goes on the canvas by keyboard", async ({ p
 
 test("an entity type opens by keyboard, and one of its own goes on the canvas", async ({ page }) => {
   await serve(page);
+  await openFold(page, "By entity type");
   const byType = page.getByRole("region", { name: "By entity type" });
   const organisation = byType.getByRole("button", { name: "Organisation · 1" });
   await organisation.focus();
@@ -94,7 +105,7 @@ test("an entity type opens by keyboard, and one of its own goes on the canvas", 
   // Its ranking arrives from the server; Tab before it is drawn would land past it.
   await expect(byType.getByText("All 1 shown.")).toBeVisible();
   await page.keyboard.press("Tab");
-  await expect(byType.getByRole("button", { name: "Acme · Organisation · 3 links" })).toBeFocused();
+  await expect(byType.getByRole("button", { name: "Add Acme to the graph" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["Acme"]);
   registerCovered(REGISTRY, "open-an-entity-type-and-put-one-on-the-canvas-by-keyboard");
@@ -102,6 +113,7 @@ test("an entity type opens by keyboard, and one of its own goes on the canvas", 
 
 test("Show more pages a ranking by keyboard, and it says when all are shown", async ({ page }) => {
   const asked = await serve(page);
+  await openFold(page, "Most connected");
   const top = page.getByRole("region", { name: "Most connected" });
   await expect(top.getByText("The 10 most connected of 12.")).toBeVisible();
   await top.getByRole("button", { name: "Show 2 more" }).focus();
@@ -113,8 +125,9 @@ test("Show more pages a ranking by keyboard, and it says when all are shown", as
 
 test("a busiest link goes on the canvas by keyboard", async ({ page }) => {
   await serve(page);
+  await openFold(page, "Busiest links");
   const busy = page.getByRole("region", { name: "Busiest links" });
-  await busy.getByRole("button", { name: "hub0 → hub1 · Associate of · 9 records" }).focus();
+  await busy.getByRole("button", { name: "Show: hub0 → hub1 · Associate of · 9 records" }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.links)).toEqual(["l1"]);
   registerCovered(REGISTRY, "put-a-busiest-link-on-the-canvas-by-keyboard");
@@ -122,8 +135,9 @@ test("a busiest link goes on the canvas by keyboard", async ({ page }) => {
 
 test("a busiest day becomes the timeline's window by keyboard", async ({ page }) => {
   await serve(page);
+  await openFold(page, "Busiest days");
   const days = page.getByRole("region", { name: "Busiest days" });
-  await days.getByRole("button", { name: "Wed 2 May 2001 · 40 events" }).focus();
+  await days.getByRole("button", { name: "Set window: Wed 2 May 2001 · 40 events" }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.days)).toEqual(["2001-05-02T00:00:00Z"]);
   registerCovered(REGISTRY, "set-the-timeline-to-a-busiest-day-by-keyboard");
@@ -131,8 +145,9 @@ test("a busiest day becomes the timeline's window by keyboard", async ({ page })
 
 test("a group's centre goes on the canvas by keyboard", async ({ page }) => {
   await serve(page);
+  await openFold(page, "Groups and bridges");
   const groups = page.getByRole("region", { name: "Groups and bridges" });
-  await groups.getByRole("button", { name: "Group of 4 · mostly Person · around hub0" }).focus();
+  await groups.getByRole("button", { name: "Add: Group of 4 · mostly Person · around hub0" }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub0"]);
   registerCovered(REGISTRY, "put-a-groups-centre-on-the-canvas-by-keyboard");
@@ -140,8 +155,9 @@ test("a group's centre goes on the canvas by keyboard", async ({ page }) => {
 
 test("a bridge goes on the canvas by keyboard", async ({ page }) => {
   await serve(page);
+  await openFold(page, "Groups and bridges");
   const groups = page.getByRole("region", { name: "Groups and bridges" });
-  await groups.getByRole("button", { name: "hub1 · reaches 2 other groups · 5 links" }).focus();
+  await groups.getByRole("button", { name: "Add: hub1 · reaches 2 other groups · 5 links" }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub1"]);
   registerCovered(REGISTRY, "put-a-bridge-on-the-canvas-by-keyboard");
@@ -149,8 +165,9 @@ test("a bridge goes on the canvas by keyboard", async ({ page }) => {
 
 test("a node a colleague confirmed goes on the canvas by keyboard", async ({ page }) => {
   await serve(page);
+  await openFold(page, "What's new");
   const news = page.getByRole("region", { name: "What's new" });
-  await news.getByRole("button", { name: /^hub2 · Person · confirmed by analyst-2/ }).focus();
+  await news.getByRole("button", { name: /^Add: hub2 · Person · confirmed by analyst-2/ }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub2"]);
   registerCovered(REGISTRY, "put-a-confirmed-node-on-the-canvas-by-keyboard");
@@ -158,8 +175,9 @@ test("a node a colleague confirmed goes on the canvas by keyboard", async ({ pag
 
 test("a node a colleague marked goes on the canvas by keyboard", async ({ page }) => {
   await serve(page);
+  await openFold(page, "What's new");
   const news = page.getByRole("region", { name: "What's new" });
-  await news.getByRole("button", { name: /^hub3 · Person · marked for suppression by analyst-3/ }).focus();
+  await news.getByRole("button", { name: /^Add: hub3 · Person · marked for suppression by analyst-3/ }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub3"]);
   registerCovered(REGISTRY, "put-a-marked-node-on-the-canvas-by-keyboard");
@@ -167,8 +185,9 @@ test("a node a colleague marked goes on the canvas by keyboard", async ({ page }
 
 test("a starter question runs onto the canvas by keyboard", async ({ page }) => {
   await serve(page);
+  await openFold(page, "Starter questions");
   const starters = page.getByRole("region", { name: "Starter questions" });
-  await starters.getByRole("button", { name: /^Person → Person → Person/ }).focus();
+  await starters.getByRole("button", { name: /^Run: Person → Person → Person/ }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.deltas)).toEqual([9]);
   await expect(starters.getByText("1 node and 0 links added.")).toBeVisible();
@@ -177,12 +196,39 @@ test("a starter question runs onto the canvas by keyboard", async ({ page }) => 
 
 test("the drawer scrolls, so its last section can be reached and seen", async ({ page }) => {
   await serve(page);
+  await openFold(page, "Starter questions");
   const last = page.getByRole("region", { name: "Starter questions" });
-  await last.getByRole("button", { name: /^Person → Person → Person/ }).focus();
-  await expect(last.getByRole("button", { name: /^Person → Person → Person/ })).toBeInViewport();
+  await last.getByRole("button", { name: /^Run: Person → Person → Person/ }).focus();
+  await expect(last.getByRole("button", { name: /^Run: Person → Person → Person/ })).toBeInViewport();
   await page.mouse.move(1000, 400);
   await page.mouse.wheel(0, -100_000);
   await expect(page.getByRole("heading", { name: "What this case holds" })).toBeInViewport();
+});
+
+test("a node goes on the canvas with a budget of its busiest links, by keyboard", async ({ page }) => {
+  await serve(page);
+  await openFold(page, "Most connected");
+  const top = page.getByRole("region", { name: "Most connected" });
+  await top.getByRole("button", { name: "Add hub0 to the graph" }).focus();
+  await page.keyboard.press("Enter");
+  await top.getByRole("button", { name: "With its 25 busiest links" }).focus();
+  await page.keyboard.press("Enter");
+  // The node and its one served link reach the caller; which request went out (node_id, limit)
+  // is the panel unit test's assertion.
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.budget)).toEqual([["hub0", 1]]);
+  registerCovered(REGISTRY, "add-a-node-with-its-busiest-links-by-keyboard");
+});
+
+test("a node with all its links hands over to the canvas's expand, by keyboard", async ({ page }) => {
+  await serve(page);
+  await openFold(page, "Most connected");
+  const top = page.getByRole("region", { name: "Most connected" });
+  await top.getByRole("button", { name: "Add hub0 to the graph" }).focus();
+  await page.keyboard.press("Enter");
+  await top.getByRole("button", { name: "With all 60 links…" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.expandedAll)).toEqual(["hub0"]);
+  registerCovered(REGISTRY, "add-a-node-with-all-its-links-by-keyboard");
 });
 
 test("every registered explore action has its own proving test case above", () => {

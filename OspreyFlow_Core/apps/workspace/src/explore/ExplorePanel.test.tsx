@@ -136,12 +136,19 @@ function mount(onPick = vi.fn(), onPickLink = vi.fn(), onPickDay = vi.fn(), onAp
       onPick={onPick}
       onPickLink={onPickLink}
       onPickDay={onPickDay}
+      onAddLinks={vi.fn()}
+      onExpandAll={vi.fn()}
     />,
   );
   return onPick;
 }
 
 describe("ExplorePanel", () => {
+  // ADR-100 Amendment 9: the blocks fold; a test opens the fold it reads.
+  async function unfold(name: string) {
+    fireEvent.click(await screen.findByRole("button", { name }));
+  }
+
   it("says what the case's data holds, by type, most first, and leaves out a type with none", async () => {
     standard();
     mount();
@@ -160,19 +167,21 @@ describe("ExplorePanel", () => {
   it("ranks the most connected and says of how many", async () => {
     standard();
     mount();
+    await unfold("Most connected");
     const top = await screen.findByRole("region", { name: "Most connected" });
     expect(await within(top).findByText("The 10 most connected of 14.")).toBeTruthy();
-    expect(within(top).getAllByRole("button", { name: /links$/ })).toHaveLength(10);
-    expect(within(top).getByRole("button", { name: "Hub 0 · Person · 100 links" })).toBeTruthy();
+    expect(within(top).getAllByRole("button", { name: /^Add .* to the graph$/ })).toHaveLength(10);
+    expect(within(top).getByText("Hub 0 · Person · 100 links")).toBeTruthy();
   });
 
   it("pages the ranking rather than stopping, and says when all are shown", async () => {
     const calls = standard();
     mount();
+    await unfold("Most connected");
     const top = await screen.findByRole("region", { name: "Most connected" });
     fireEvent.click(await within(top).findByRole("button", { name: "Show 4 more" }));
     expect(await within(top).findByText("All 14 shown.")).toBeTruthy();
-    expect(within(top).getAllByRole("button", { name: /links$/ })).toHaveLength(14);
+    expect(within(top).getAllByRole("button", { name: /^Add .* to the graph$/ })).toHaveLength(14);
     expect(within(top).queryByRole("button", { name: /^Show \d+ more$/ })).toBeNull();
     expect(calls).toContain("most-connected?limit=4&offset=10");
   });
@@ -180,8 +189,10 @@ describe("ExplorePanel", () => {
   it("puts a node on the canvas with one action", async () => {
     standard();
     const onPick = mount();
+    await unfold("Most connected");
     const top = await screen.findByRole("region", { name: "Most connected" });
-    fireEvent.click(await within(top).findByRole("button", { name: "Hub 3 · Person · 97 links" }));
+    fireEvent.click(await within(top).findByRole("button", { name: "Add Hub 3 to the graph" }));
+    fireEvent.click(within(top).getByRole("button", { name: "Just this entity" }));
     expect(onPick).toHaveBeenCalledTimes(1);
     expect(onPick.mock.calls[0]?.[0].id).toBe("Hub3");
   });
@@ -189,6 +200,7 @@ describe("ExplorePanel", () => {
   it("opens a type to its five most connected, then pages it", async () => {
     const calls = standard();
     const onPick = mount();
+    await unfold("By entity type");
     const byType = await screen.findByRole("region", { name: "By entity type" });
     const person = await within(byType).findByRole("button", { name: "Person · 12" });
     expect(person.getAttribute("aria-expanded")).toBe("false");
@@ -198,7 +210,8 @@ describe("ExplorePanel", () => {
     expect(calls).toContain("most-connected?limit=5&offset=0&entity_type=Person");
     fireEvent.click(within(byType).getByRole("button", { name: "Show 7 more" }));
     expect(await within(byType).findByText("All 12 shown.")).toBeTruthy();
-    fireEvent.click(within(byType).getByRole("button", { name: "Person 11 · Person · 89 links" }));
+    fireEvent.click(within(byType).getByRole("button", { name: "Add Person 11 to the graph" }));
+    fireEvent.click(within(byType).getByRole("button", { name: "Just this entity" }));
     expect(onPick.mock.calls[0]?.[0].id).toBe("Person11");
     // A type with none is not offered.
     expect(within(byType).queryByRole("button", { name: /^Location/ })).toBeNull();
@@ -208,10 +221,11 @@ describe("ExplorePanel", () => {
     standard();
     const onPickLink = vi.fn();
     mount(vi.fn(), onPickLink);
+    await unfold("Busiest links");
     const busy = await screen.findByRole("region", { name: "Busiest links" });
     expect(await within(busy).findByText("The 10 busiest of 12.")).toBeTruthy();
     const top = within(busy).getByRole("button", {
-      name: "alice@enron.com → bob@enron.com · Communicated with · 50 emails",
+      name: "Show: alice@enron.com → bob@enron.com · Communicated with · 50 emails",
     });
     fireEvent.click(top);
     expect(onPickLink.mock.calls[0]?.[0].edge.id).toBe("l0");
@@ -223,27 +237,30 @@ describe("ExplorePanel", () => {
     standard();
     const onPickDay = vi.fn();
     mount(vi.fn(), vi.fn(), onPickDay);
+    await unfold("Busiest days");
     const days = await screen.findByRole("region", { name: "Busiest days" });
     expect(await within(days).findByText("All 1 shown.")).toBeTruthy();
-    fireEvent.click(within(days).getByRole("button", { name: "Wed 2 May 2001 · 1,234 events" }));
+    fireEvent.click(within(days).getByRole("button", { name: "Set window: Wed 2 May 2001 · 1,234 events" }));
     expect(onPickDay).toHaveBeenCalledWith({ start: "2001-05-02T00:00:00Z", end: "2001-05-03T00:00:00Z", count: 1234 });
   });
 
   it("names the largest groups by their centre and the nodes bridging them, and counts the rest", async () => {
     standard();
     const onPick = mount();
+    await unfold("Groups and bridges");
     const groups = await screen.findByRole("region", { name: "Groups and bridges" });
     expect(await within(groups).findByText("The largest 1 of 36 groups; 35 not shown.")).toBeTruthy();
-    fireEvent.click(within(groups).getByRole("button", { name: "Group of 3,669 · mostly Endpoint · around alice@enron.com" }));
+    fireEvent.click(within(groups).getByRole("button", { name: "Add: Group of 3,669 · mostly Endpoint · around alice@enron.com" }));
     expect(onPick.mock.calls[0]?.[0].id).toBe("alice");
     expect(within(groups).getByText("The strongest 1 of 812 bridges.")).toBeTruthy();
-    fireEvent.click(within(groups).getByRole("button", { name: "bob@enron.com · reaches 5 other groups · 120 links" }));
+    fireEvent.click(within(groups).getByRole("button", { name: "Add: bob@enron.com · reaches 5 other groups · 120 links" }));
     expect(onPick.mock.calls[1]?.[0].id).toBe("bob");
   });
 
   it("names the latest loads, newest first, and says of how many", async () => {
     standard();
     mount();
+    await unfold("What's new");
     const news = await screen.findByRole("region", { name: "What's new" });
     expect(await within(news).findByText("The latest 2 of 14 loads.")).toBeTruthy();
     const loads = within(news).getByRole("list", { name: "Latest loads" });
@@ -256,16 +273,17 @@ describe("ExplorePanel", () => {
   it("puts a node a colleague confirmed or marked on the canvas with one action", async () => {
     standard();
     const onPick = mount();
+    await unfold("What's new");
     const news = await screen.findByRole("region", { name: "What's new" });
     fireEvent.click(
       await within(news).findByRole("button", {
-        name: "alice@enron.com · Endpoint · confirmed by analyst-2 · 8 Oct 2026, 10:30 UTC",
+        name: "Add: alice@enron.com · Endpoint · confirmed by analyst-2 · 8 Oct 2026, 10:30 UTC",
       }),
     );
     expect(onPick.mock.calls[0]?.[0].id).toBe("alice");
     fireEvent.click(
       within(news).getByRole("button", {
-        name: "bob@enron.com · Endpoint · marked for suppression by analyst-3 · 8 Oct 2026, 11:00 UTC · “a duplicate”",
+        name: "Add: bob@enron.com · Endpoint · marked for suppression by analyst-3 · 8 Oct 2026, 11:00 UTC · “a duplicate”",
       }),
     );
     expect(onPick.mock.calls[1]?.[0].id).toBe("bob");
@@ -282,6 +300,7 @@ describe("ExplorePanel", () => {
       return json(200, { nodes: [], links: [], days: [], groups: [], bridges: [], total: 0, offset: 0 });
     });
     mount();
+    await unfold("What's new");
     const news = await screen.findByRole("region", { name: "What's new" });
     expect(await within(news).findByText("No loads you can see.")).toBeTruthy();
     expect(within(news).getByText("Nothing confirmed you can see.")).toBeTruthy();
@@ -298,9 +317,10 @@ describe("ExplorePanel", () => {
     });
     const onApplyDelta = vi.fn();
     mount(vi.fn(), vi.fn(), vi.fn(), onApplyDelta);
+    await unfold("Starter questions");
     const starters = await screen.findByRole("region", { name: "Starter questions" });
     expect(await within(starters).findByText("The first 2 of 7 questions.")).toBeTruthy();
-    fireEvent.click(within(starters).getByRole("button", { name: "Person → Endpoint → Endpoint, by “Uses” then “Communicated with”" }));
+    fireEvent.click(within(starters).getByRole("button", { name: "Run: Person → Endpoint → Endpoint, by “Uses” then “Communicated with”" }));
     expect(await within(starters).findByText("2 nodes and 0 links added.")).toBeTruthy();
     expect(onApplyDelta).toHaveBeenCalledWith(delta);
     expect(calls).toContain("starter-questions/chain%3AA/run?");
@@ -315,8 +335,9 @@ describe("ExplorePanel", () => {
     });
     const onApplyDelta = vi.fn();
     mount(vi.fn(), vi.fn(), vi.fn(), onApplyDelta);
+    await unfold("Starter questions");
     const starters = await screen.findByRole("region", { name: "Starter questions" });
-    fireEvent.click(await within(starters).findByRole("button", { name: /^Endpoint → Endpoint/ }));
+    fireEvent.click(await within(starters).findByRole("button", { name: /^Run: Endpoint → Endpoint/ }));
     expect(
       await within(starters).findByText(
         "At least 1,000 match, too many to add. Open the Query builder and pin a node to narrow it.",
@@ -343,5 +364,80 @@ describe("ExplorePanel", () => {
     serve((path) => (path === "counts" ? json(200, { nodes: {}, edges: {} }) : json(200, { nodes: [], total: 0, offset: 0 })));
     mount();
     expect(await screen.findByText("This case's data holds nothing you can see yet.")).toBeTruthy();
+  });
+});
+
+// ADR-100 Amendment 9 (the owner, 9 October 2026): folds instead of one scroll; explicit action
+// buttons; a dense node brought to the canvas with a chosen number of its busiest links.
+describe("ExplorePanel: folds and the link budget (ADR-100 Amendment 9)", () => {
+  async function openFold(name: string) {
+    fireEvent.click(await screen.findByRole("button", { name }));
+  }
+
+  function mountWithBudget() {
+    const onPick = vi.fn();
+    const onAddLinks = vi.fn();
+    const onExpandAll = vi.fn();
+    render(
+      <ExplorePanel
+        apiBaseUrl="http://api"
+        bearerToken="t"
+        investigationId="c1"
+        edgeTypes={[]}
+        onPick={onPick}
+        onAddLinks={onAddLinks}
+        onExpandAll={onExpandAll}
+      />,
+    );
+    return { onPick, onAddLinks, onExpandAll };
+  }
+
+  it("folds each block, What this case holds open first", async () => {
+    standard();
+    mountWithBudget();
+    expect(await screen.findByRole("region", { name: "What this case holds" })).toBeTruthy();
+    const most = await screen.findByRole("button", { name: "Most connected" });
+    expect(most.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("region", { name: "Most connected" })).toBeNull();
+    fireEvent.click(most);
+    expect(await screen.findByRole("region", { name: "Most connected" })).toBeTruthy();
+  });
+
+  it("Add… on a ranked node offers the budget, and Just this entity picks it alone", async () => {
+    standard();
+    const { onPick, onAddLinks } = mountWithBudget();
+    await openFold("Most connected");
+    const top = await screen.findByRole("region", { name: "Most connected" });
+    fireEvent.click((await within(top).findAllByRole("button", { name: "Add Hub 0 to the graph" }))[0]!);
+    fireEvent.click(within(top).getByRole("button", { name: "Just this entity" }));
+    expect(onPick).toHaveBeenCalledTimes(1);
+    expect(onAddLinks).not.toHaveBeenCalled();
+  });
+
+  it("a budget asks for that node's own busiest links and hands them over", async () => {
+    const calls = standard();
+    const { onAddLinks } = mountWithBudget();
+    await openFold("Most connected");
+    const top = await screen.findByRole("region", { name: "Most connected" });
+    fireEvent.click((await within(top).findAllByRole("button", { name: "Add Hub 0 to the graph" }))[0]!);
+    fireEvent.click(within(top).getByRole("button", { name: "With its 25 busiest links" }));
+    await vi.waitFor(() => expect(onAddLinks).toHaveBeenCalledTimes(1));
+    expect(
+      calls.some((c) => c.startsWith("busiest-links?") && c.includes("node_id=Hub0") && c.includes("limit=25")),
+    ).toBe(true);
+    const [picked, links] = onAddLinks.mock.calls[0]!;
+    expect((picked as { id: string }).id).toBe("Hub0");
+    expect((links as unknown[]).length).toBe(12);
+  });
+
+  it("with all its links hands over to the canvas's own expand", async () => {
+    standard();
+    const { onExpandAll, onAddLinks } = mountWithBudget();
+    await openFold("Most connected");
+    const top = await screen.findByRole("region", { name: "Most connected" });
+    fireEvent.click((await within(top).findAllByRole("button", { name: "Add Hub 0 to the graph" }))[0]!);
+    fireEvent.click(within(top).getByRole("button", { name: /^With all \d+ links…$/ }));
+    expect(onExpandAll).toHaveBeenCalledTimes(1);
+    expect(onAddLinks).not.toHaveBeenCalled();
   });
 });
