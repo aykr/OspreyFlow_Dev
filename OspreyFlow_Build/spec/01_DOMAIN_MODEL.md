@@ -907,7 +907,7 @@ Normalisers required at ingest, each a pure function with a golden test file:
 
 | Adapter | Input variance | Canonical form |
 | --- | --- | --- |
-| `msisdn` | national, international, CLI-suppression prefixes, extensions; Ofcom's reserved drama ranges are numbers (ADR-103) | E.164, plus original retained in `value_raw` |
+| `msisdn` | national, international, CLI-suppression prefixes, extensions; Ofcom's reserved drama ranges are numbers (ADR-103); a letter anywhere but an extension marker is refused, never read as a keypad digit | E.164, plus original retained in `value_raw` |
 | `imei` | 14/15/16 digits, check digit, `/` separators | 14-digit TAC+serial, check digit dropped |
 | `imsi` | with/without MCC-MNC separators | 15-digit |
 | `email` | case, plus-addressing, unicode domains | lowercase local, punycode domain |

@@ -158,6 +158,9 @@ reads a sample — 10,000 rows or the whole file, whichever is smaller — and r
 - **Pattern recognition against the Knowledge Adapters**: a column that looks like E.164 or a UK
   national number, an IMEI passing its check digit, an IBAN, a timestamp and its apparent
   timezone, a postcode, a British National Grid reference, an easting/northing pair
+- Each share (a type's confidence, a pattern's match rate) is shown so that it never claims all or
+  none when that is not so: 239 of 240 is "99.6%", not "100%", since the missing row is the one
+  Verify will reject (found 9 October 2026)
 
 **What shape-masking means, since "redacted" was never defined.** At profiling time there is no
 column-to-property mapping yet, so per-property sensitivity cannot apply — the only marking

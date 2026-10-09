@@ -48,6 +48,9 @@ def _is_drama_number(parsed: phonenumbers.PhoneNumber) -> bool:
     national = phonenumbers.national_significant_number(parsed)
     return parsed.country_code == 44 and len(national) == 10 and national[:7] in _DRAMA_PREFIXES
 _TRUNK_PARENTHESIS = re.compile(r"\(0\)")
+#: A trailing extension, the one place a letter belongs in a number (`01621926368x123`).
+_EXTENSION = re.compile(r"\s*(?:ext\.?|extension|x)\s*\d+\s*$", re.IGNORECASE)
+_LETTER = re.compile(r"[^\W\d_]")
 
 
 def msisdn(raw: str, *, default_region: str = "GB") -> str:
@@ -57,6 +60,10 @@ def msisdn(raw: str, *, default_region: str = "GB") -> str:
             cleaned = cleaned[len(prefix) :]
             break
     cleaned = _TRUNK_PARENTHESIS.sub("", cleaned)
+    # `phonenumbers` reads letters as keypad digits, so "0800 FLOWERS" would become a real number.
+    # In a number field a letter is corruption, not a rendering, and is refused (9 October 2026).
+    if _LETTER.search(_EXTENSION.sub("", cleaned)):
+        raise NormalisationError("msisdn", raw, "a phone number has no letters in it")
 
     try:
         parsed = phonenumbers.parse(cleaned, default_region)

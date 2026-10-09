@@ -6,6 +6,7 @@ import type { ColumnProfile, MapSampleRow } from "../../../../../packages/schema
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Panel } from "../../design/primitives/Panel";
+import { percent } from "../percent";
 
 export interface SourceFieldsPanelProps {
   columns: ColumnProfile[];
@@ -51,7 +52,7 @@ export function SourceFieldsPanel({
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <strong>{column.name}</strong>
                   <span style={{ color: "var(--text-tertiary)" }}>
-                    {column.inferred_type} ({Math.round(column.type_confidence * 100)}%)
+                    {column.inferred_type} ({percent(column.type_confidence)})
                   </span>
                 </div>
                 <div style={{ fontFamily: "var(--mono)", fontSize: "0.85em", color: "var(--text-secondary)" }}>
@@ -69,7 +70,7 @@ export function SourceFieldsPanel({
                       fontSize: "0.8em",
                     }}
                   >
-                    {m.adapter} {Math.round(m.match_rate * 100)}%
+                    {m.adapter} {percent(m.match_rate)}
                   </span>
                 ))}
               </div>

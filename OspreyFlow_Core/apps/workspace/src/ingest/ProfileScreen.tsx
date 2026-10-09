@@ -20,6 +20,7 @@ import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
 import { Table, type TableColumn } from "../design/primitives/Table";
 import { fetchDraft, fetchProfile, ProfileError } from "./api";
+import { percent } from "./percent";
 
 export interface ProfileScreenProps {
   apiBaseUrl: string;
@@ -62,8 +63,7 @@ function friendlyError(err: unknown): string {
 }
 
 function typeLabel(column: ColumnProfile): string {
-  const pct = Math.round(column.type_confidence * 100);
-  return `${column.inferred_type} (${pct}%)`;
+  return `${column.inferred_type} (${percent(column.type_confidence)})`;
 }
 
 export function ProfileScreen({ apiBaseUrl,
@@ -139,7 +139,7 @@ export function ProfileScreen({ apiBaseUrl,
             {matches.map((m) => (
               <span
                 key={m.adapter}
-                title={`${Math.round(m.match_rate * 100)}% of sampled values matched`}
+                title={`${percent(m.match_rate)} of sampled values matched`}
                 style={{
                   border: "1px solid var(--border-strong)",
                   borderRadius: "var(--r-panel)",
@@ -148,7 +148,7 @@ export function ProfileScreen({ apiBaseUrl,
                   color: "var(--text-secondary)",
                 }}
               >
-                {m.adapter} {Math.round(m.match_rate * 100)}%
+                {m.adapter} {percent(m.match_rate)}
               </span>
             ))}
           </div>

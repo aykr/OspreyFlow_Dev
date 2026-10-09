@@ -83,3 +83,18 @@ def test_the_geographic_and_non_geographic_drama_ranges_resolve(raw: str, canoni
 def test_a_drama_number_of_the_wrong_length_is_still_refused(raw: str) -> None:
     with pytest.raises(NormalisationError):
         msisdn(raw)
+
+
+# 9 October 2026: `phonenumbers` reads letters as keypad digits, so "0800 FLOWERS" became a real
+# freephone number and "07700 900 ABC" became +447700900222. In a carrier's or a seizure's number
+# field a letter is corruption, not a rendering `01_DOMAIN_MODEL.md` §7 names, and turning it into
+# a different, plausible number is a guess. Letters are allowed only as an extension marker.
+@pytest.mark.parametrize("raw", ["0800 FLOWERS", "07700 900 ABC", "+44 7700 9OO461", "0162192636B"])
+def test_a_number_with_letters_in_it_is_refused_not_read_as_a_keypad(raw: str) -> None:
+    with pytest.raises(NormalisationError):
+        msisdn(raw)
+
+
+@pytest.mark.parametrize("raw", ["01621926368 ext 123", "01621926368 ext. 123", "01621926368X123"])
+def test_an_extension_marker_is_still_read_as_one(raw: str) -> None:
+    assert msisdn(raw) == _CANONICAL
