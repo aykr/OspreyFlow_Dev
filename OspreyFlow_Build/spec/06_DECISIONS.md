@@ -10272,3 +10272,60 @@ The picture is evidence in the graph, so it is drawn in any case holding the ent
 ### Tests
 
 Written first, each shown red: the ontology at version 13 and `DEPICTS`'s ends (`tests/ontology/test_content_ontology.py`); setting, replacing (the old link superseded, not deleted), removing, a refused SVG, a refused type, an entity the person cannot see (404, as missing), and the audit rows (`tests/services/api/test_entity_pictures.py`); **access control (rule 4):** a picture marked above the reader's clearance reads as no picture, with and without an older visible picture behind it; the canvas's precedence (`nodeAttributes` unit cases); the Inspector's two actions (`keyboard/inspector.spec.ts`).
+
+## ADR-106 — A principal shown to a person is named, resolved at read time, never stored
+
+Status: accepted 9 October 2026 (the owner's choice between presented options: "resolve names at read time").
+
+### Context
+
+Judgement authors, a gap's raiser, a link note's author, a question's asker and a Studio recipe's
+publisher are all shown as the principal's id — a Keycloak subject UUID (`07_BUILD_PLAN.md`, the
+rows at e986a2f and d211f8b). The stores hold `principal.id` and nothing in the build holds a
+display name. The alternatives put to the owner: resolve the name from the identity provider when
+serving the read (chosen); keep the display name beside the id at write time (rejected — a renamed
+account would keep its old name on old records); show the username (rejected — less human).
+
+### Decision
+
+1. **The id is identity; the name is presentation.** Every store keeps `principal.id` exactly as
+   today — audit, authorship and `mine` checks are unchanged. A display name is resolved when a
+   read is served and is **never stored** (`LinkNote.mine` and `resolved_citations` are the
+   precedent for a read-time field).
+2. **One directory in the Conduit** (`services/api/principal_names.py`): `display_names(ids)`
+   reads `GET {OIDC_ADMIN_USERS_URL}/{id}` bearing the ADR-043 client-credentials token — the same
+   view-users capability the revocation pre-check already holds. The name is "firstName lastName",
+   or the username when the account has neither. An unknown id, an unreachable identity provider
+   or a deployment with no admin-users URL yields **no name, never a failed read**: the id is
+   shown as before.
+3. **No lookup route.** Each read path that serves a principal id for display also serves its
+   `<field>_name`, resolved only for the ids already in that caller's authorised response. A
+   `GET /principals/names?ids=…` endpoint would be an oracle: any authenticated caller could
+   resolve a UUID it was never served, the enumeration rule 3 exists to prevent. The test that
+   would fail if this were violated: the directory fixture records the ids asked for, and a
+   response that hides a record must never ask for that record's author.
+4. **Names are cached per process, five minutes.** ADR-036's "resolved fresh, never cached"
+   governs what decides access; a display name decides none, and a renamed account's old name
+   lingering five minutes misleads no gate. The enabled/disabled fact stays uncached where it is
+   read (ADR-043's pre-check). A 404 (the id is not a user) is cached like a name; a transport
+   failure is not cached, so one IdP outage does not blank names for the TTL.
+5. **The fields**, each `str | None`, filled at read time: `Judgement.author_name`,
+   `IntelligenceGap.raised_by_name`, `LinkNote.author_name`, a case question's `author_name`,
+   `StudioRecipeDraft.created_by_name` and `published_by_name`. The Glass and the export report
+   show the name when present and the id otherwise.
+
+### Tests
+
+Written first, shown red. The directory's fixture models the identity provider's **refusals**, not
+only its grants (rule 15's third worked example): a read without the fixture's own issued bearer is
+401, an unknown id 404. Cases: the two-name, the username-only and the unknown account; the token
+fetched before the reads and refused reads yielding no name; a transport failure yielding no names
+and no exception; the cache's one fetch for a repeated id within the TTL; and per route, one case
+that the served payload carries the name beside the id — with the judgements route's case also
+proving the directory was asked only for the authors of judgements actually served.
+
+### Cost
+
+A name is readable by anyone who may read the record it sits on — already true of the UUID, and
+the name is the point. Five minutes of staleness after an account rename. A deployment without
+`OIDC_ADMIN_USERS_URL` (or without the exchange client) sees ids exactly as today.

@@ -692,6 +692,9 @@ class Judgement(BaseModel):
     #: Empty for every judgement whose citations are all current, which is almost all of them.
     resolved_citations: dict[str, str] = Field(default_factory=dict)
     author: PrincipalId
+    #: The author's display name, resolved from the identity provider when the read is served and
+    #: never stored (`06_DECISIONS.md` ADR-106); absent, the id is shown.
+    author_name: str | None = None
     created_at: datetime
     #: Set when a cited node/edge is superseded (content change) or when a `contradicting`
     #: reference becomes unreadable (`06_DECISIONS.md` ADR-046's own "flagged for review the same
@@ -708,6 +711,8 @@ class IntelligenceGap(BaseModel):
     investigation_id: str
     question: str
     raised_by: PrincipalId
+    #: Resolved at read time, never stored (ADR-106).
+    raised_by_name: str | None = None
     linked_entities: list[NodeId] = Field(default_factory=list)
     status: Literal["open", "tasked", "answered", "closed"] = "open"
     created_at: datetime
@@ -733,6 +738,8 @@ class LinkNote(BaseModel):
     investigation_id: str
     edge_id: EdgeId
     author: PrincipalId
+    #: Resolved at read time like `mine`, never stored (ADR-106).
+    author_name: str | None = None
     body: str
     created_at: datetime
     edited_at: datetime | None = None

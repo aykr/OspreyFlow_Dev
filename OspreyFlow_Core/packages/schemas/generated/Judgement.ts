@@ -7,6 +7,7 @@ export type ProbabilityBand = string;
 export type Supporting = string[];
 export type Contradicting = string[];
 export type PrincipalId = string;
+export type AuthorName = string | null;
 export type CreatedAt = string;
 export type FlaggedForReview = boolean;
 export type FlagReason = string | null;
@@ -45,6 +46,7 @@ export interface Judgement {
   contradicting?: Contradicting;
   resolved_citations?: ResolvedCitations;
   author: PrincipalId;
+  author_name?: AuthorName;
   created_at: CreatedAt;
   flagged_for_review?: FlaggedForReview;
   flag_reason?: FlagReason;

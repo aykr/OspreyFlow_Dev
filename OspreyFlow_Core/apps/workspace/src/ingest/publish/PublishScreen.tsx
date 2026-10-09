@@ -392,7 +392,7 @@ export function PublishScreen({
       {draft?.git_path && (
         <p style={{ color: "var(--text-secondary)", fontSize: "0.85em" }}>
           Committed at <code>{draft.git_path}</code>
-          {draft.published_by ? ` by ${draft.published_by}` : ""}
+          {draft.published_by ? ` by ${draft.published_by_name ?? draft.published_by}` : ""}
           {draft.published_at ? ` on ${new Date(draft.published_at).toLocaleString()}` : ""}.
         </p>
       )}

@@ -64,7 +64,7 @@ function renderJudgement(
       <p class="statement">${escapeHtml(judgement.statement)}</p>
       <p class="meta">
         <span class="band">${escapeHtml(bandLabel(yardstick, judgement.probability_band))}</span>
-        · <span class="author">${escapeHtml(judgement.author)}</span>
+        · <span class="author">${escapeHtml(judgement.author_name ?? judgement.author)}</span>
         · <span class="value">${escapeHtml(judgement.created_at)}</span>
       </p>
       ${
@@ -86,7 +86,7 @@ function renderGap(gap: IntelligenceGap): string {
       <p class="statement">${escapeHtml(gap.question)}</p>
       <p class="meta">
         <span class="status">${escapeHtml(gap.status ?? "open")}</span>
-        · <span class="author">${escapeHtml(gap.raised_by)}</span>
+        · <span class="author">${escapeHtml(gap.raised_by_name ?? gap.raised_by)}</span>
         · <span class="value">${escapeHtml(gap.created_at)}</span>
       </p>
     </article>`;

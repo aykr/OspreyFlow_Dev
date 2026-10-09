@@ -284,6 +284,8 @@ class StudioRecipeDraft(BaseModel):
     legal_basis: str | None = None
     owning_unit: str
     created_by: PrincipalId
+    #: Resolved at read time, never stored (`06_DECISIONS.md` ADR-106).
+    created_by_name: str | None = None
     created_at: datetime
     #: §2: Connect cannot proceed to Profile without all three gate answers.
     #: Profile enforces this server-side too (`services/api/studio_profile.
@@ -320,6 +322,8 @@ class StudioRecipeDraft(BaseModel):
     ontology_version: int | None = None
     git_path: str | None = None
     published_by: PrincipalId | None = None
+    #: Resolved at read time, never stored (ADR-106).
+    published_by_name: str | None = None
     published_at: datetime | None = None
     schedule_cron: str | None = None
     schedule_watch: str | None = None

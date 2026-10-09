@@ -4,6 +4,7 @@ export type GapId = string;
 export type InvestigationId = string;
 export type Question = string;
 export type PrincipalId = string;
+export type RaisedByName = string | null;
 export type NodeId = string;
 export type LinkedEntities = NodeId[];
 export type Status = "open" | "tasked" | "answered" | "closed";
@@ -17,6 +18,7 @@ export interface IntelligenceGap {
   investigation_id: InvestigationId;
   question: Question;
   raised_by: PrincipalId;
+  raised_by_name?: RaisedByName;
   linked_entities?: LinkedEntities;
   status?: Status;
   created_at: CreatedAt;

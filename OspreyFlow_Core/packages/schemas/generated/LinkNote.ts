@@ -4,6 +4,7 @@ export type Id = string;
 export type InvestigationId = string;
 export type EdgeId = string;
 export type PrincipalId = string;
+export type AuthorName = string | null;
 export type Body = string;
 export type CreatedAt = string;
 export type EditedAt = string | null;
@@ -19,6 +20,7 @@ export interface LinkNote {
   investigation_id: InvestigationId;
   edge_id: EdgeId;
   author: PrincipalId;
+  author_name?: AuthorName;
   body: Body;
   created_at: CreatedAt;
   edited_at?: EditedAt;

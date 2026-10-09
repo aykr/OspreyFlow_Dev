@@ -320,7 +320,7 @@ export function LinkNotes({
                         {n.body}
                       </div>
                       <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", marginTop: "var(--sp-4)" }}>
-                        {n.author} · {when(n.created_at)}
+                        {n.author_name ?? n.author} · {when(n.created_at)}
                         {n.edited_at ? ` · edited ${when(n.edited_at)}` : ""}
                       </div>
                       {n.mine && (

@@ -357,6 +357,7 @@ from .patterns import (
     run_pattern,
     run_pattern_match_job,
 )
+from .principal_names import PrincipalNameDirectory
 from .questions import (
     AskRequest,
     NoDocumentsError,
@@ -663,6 +664,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     job_worker.register(JOB_TYPE_PATTERN_MATCH, run_pattern_match_job)
     app.state.job_worker = job_worker
     app.state.principal_resolver = PrincipalResolver(config)
+    # ADR-106: display names for principal ids, resolved when a read is served.
+    app.state.principal_names = PrincipalNameDirectory(config)
     app.state.map_config = load_map_config(config.osprey_config_path)
 
     try:
@@ -688,6 +691,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await studio_recipes.close()
         await extraction_candidates.close()
         await questions_store.close()
+        await app.state.principal_names.aclose()
         await datasets_store.close()
         # A closed store must not outlive the app that held it (a test app is started again).
         app.state.datasets = None
@@ -813,6 +817,10 @@ def get_judgements_store(request: Request) -> JudgementStore:
     return request.app.state.judgements_store  # type: ignore[no-any-return]
 
 
+def get_principal_names(request: Request) -> PrincipalNameDirectory:
+    return request.app.state.principal_names  # type: ignore[no-any-return]
+
+
 def get_gaps_store(request: Request) -> IntelligenceGapStore:
     return request.app.state.gaps_store  # type: ignore[no-any-return]
 
@@ -912,6 +920,7 @@ HotlistsStoreDep = Annotated[HotlistStore, Depends(get_hotlists_store)]
 MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
+PrincipalNamesDep = Annotated[PrincipalNameDirectory, Depends(get_principal_names)]
 LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
 
 
@@ -3484,13 +3493,16 @@ async def list_judgements_route(
     principal: PrincipalDep,
     judgements_store: JudgementsStoreDep,
     graph: GraphDep,
+    principal_names: PrincipalNamesDep,
 ) -> JudgementListResponse:
     """`list_visible_judgements`, not `list_for_investigation` — ADR-046's own hide-in-full rule
     and the lazy `contradicting`-unreadable flag both apply here, not only the ownership check."""
+    judgements = await list_visible_judgements(judgements_store, investigation.id, principal, graph)
+    # ADR-106: names only for the authors of judgements actually served — after the visibility
+    # filter, never before it.
+    names = await principal_names.display_names(j.author for j in judgements)
     return JudgementListResponse(
-        judgements=await list_visible_judgements(
-            judgements_store, investigation.id, principal, graph
-        )
+        judgements=[j.model_copy(update={"author_name": names.get(j.author)}) for j in judgements]
     )
 
 
@@ -4123,9 +4135,12 @@ async def list_questions_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     questions: QuestionsDep,
+    principal_names: PrincipalNamesDep,
 ) -> list[QuestionAnswer]:
     """The case's questions and answers, as this reader may see them (ADR-098 decision 4)."""
-    return await questions.history(investigation.id, principal)
+    history = await questions.history(investigation.id, principal)
+    names = await principal_names.display_names(q.author for q in history)
+    return [q.model_copy(update={"author_name": names.get(q.author)}) for q in history]
 
 
 @app.post("/v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/accept")
@@ -4264,10 +4279,15 @@ async def list_link_notes_route(
     edge_id: str,
     principal: PrincipalDep,
     link_notes: LinkNotesDep,
+    principal_names: PrincipalNamesDep,
 ) -> LinkNoteListResponse:
     """Notes on one link, newest first — only to someone who can see the link
     (`link_notes.py`'s module docstring). Not audited, like the other case reads here."""
-    return LinkNoteListResponse(notes=await link_notes.list(investigation.id, edge_id, principal))
+    notes = await link_notes.list(investigation.id, edge_id, principal)
+    names = await principal_names.display_names(n.author for n in notes)
+    return LinkNoteListResponse(
+        notes=[n.model_copy(update={"author_name": names.get(n.author)}) for n in notes]
+    )
 
 
 @app.post(
@@ -4365,10 +4385,15 @@ async def save_gap_route(
 
 @app.get("/v1/investigations/{investigation_id}/gaps")
 async def list_gaps_route(
-    investigation: InvestigationViewerDep, principal: PrincipalDep, gaps_store: GapsStoreDep
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    gaps_store: GapsStoreDep,
+    principal_names: PrincipalNamesDep,
 ) -> IntelligenceGapListResponse:
+    gaps = await gaps_store.list_for_investigation(investigation.id, principal)
+    names = await principal_names.display_names(g.raised_by for g in gaps)
     return IntelligenceGapListResponse(
-        gaps=await gaps_store.list_for_investigation(investigation.id, principal)
+        gaps=[g.model_copy(update={"raised_by_name": names.get(g.raised_by)}) for g in gaps]
     )
 
 
@@ -5754,6 +5779,7 @@ async def get_studio_recipe_draft(
     recipe: AuthorizedStudioRecipeDep,
     principal: PrincipalDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> StudioRecipeDraft:
     await audit.record(
         principal=principal,
@@ -5761,7 +5787,15 @@ async def get_studio_recipe_draft(
         resolved_query={"recipe_id": recipe.recipe_id},
         result_cardinality=1,
     )
-    return recipe
+    names = await principal_names.display_names(
+        [recipe.created_by, *([recipe.published_by] if recipe.published_by else [])]
+    )
+    return recipe.model_copy(
+        update={
+            "created_by_name": names.get(recipe.created_by),
+            "published_by_name": names.get(recipe.published_by or ""),
+        }
+    )
 
 
 @app.get("/v1/investigations/{investigation_id}/ingest/recipes")
@@ -5770,10 +5804,23 @@ async def list_studio_recipe_drafts(
     principal: PrincipalDep,
     studio_recipes: StudioRecipesDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> list[StudioRecipeDraft]:
     """Connect's "resume a draft" list — the author's own unit's drafts
     only (`StudioRecipeStore.list_drafts`' own `owning_unit` scoping)."""
-    drafts = await studio_recipes.list_drafts(principal)
+    listed = await studio_recipes.list_drafts(principal)
+    names = await principal_names.display_names(
+        [d.created_by for d in listed] + [d.published_by for d in listed if d.published_by]
+    )
+    drafts = [
+        d.model_copy(
+            update={
+                "created_by_name": names.get(d.created_by),
+                "published_by_name": names.get(d.published_by or ""),
+            }
+        )
+        for d in listed
+    ]
     await audit.record(
         principal=principal,
         action="list_studio_recipe_drafts",

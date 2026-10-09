@@ -13,6 +13,8 @@ export interface Citation {
 export interface QuestionAnswer {
   id: string;
   author: string;
+  /** Resolved at read time, never stored (ADR-106); absent, the id is shown. */
+  author_name?: string | null;
   question: string;
   answer: string;
   citations: Citation[];

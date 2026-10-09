@@ -20,7 +20,7 @@ evidence and this file is wrong; say so and fix the file.
 - **Design questions.** Ask with multiple-choice questions (at most four at a time) and then wait. Multiple
   choice is easier for him than free text. Do not build a design he has not answered.
 - **ADRs.** Never edit an existing ADR. Append an amendment or write a new ADR. The last ADR used is
-  **ADR-105** (9 October 2026); the next free number is **106**. Check `spec/06_DECISIONS.md` before relying on that.
+  **ADR-106** (9 October 2026); the next free number is **107**. Check `spec/06_DECISIONS.md` before relying on that.
 - **Style.** British English in code comments, documentation and all user-facing copy. Always give full,
   complete commands to run, never "add this line" fragments. Keep replies short; one or two sentences on an
   outcome, not a recap.
@@ -242,13 +242,11 @@ From the friction log, the owner's live checks still to do or report:
 ### 6.0 Next, as of 9 October 2026 (start here)
 
 **Waiting on the owner**
-1. The `Makefile` edit the permission settings blocked, so `test-file-coverage-check` stops naming the file:
-   in the `test:` target add `--ignore=../OspreyFlow_Build/tests/services/api/test_entity_pictures.py` beside
-   the `test_link_changes_store.py` ignore, and in the `test-all:` target add
-   `../OspreyFlow_Build/tests/services/api/test_entity_pictures.py` beside `test_link_changes_store.py`.
-2. Keep or revert the `ci.yml` lines from `47f3516` (section 2).
-3. Republish the Studio recipes flagged by ontology version 13.
-4. Push when ready (164 commits).
+1. (Done 9 October 2026, by the owner's hand: `dba07d5`.) The `Makefile` edit for `test_entity_pictures.py`.
+2. (Decided 9 October 2026: keep.) The `ci.yml` lines from `47f3516`.
+3. Republish the Studio recipes flagged by ontology version 13 (owner chose: in the same signed-in
+   session as the live-check pass below).
+4. (Done 9 October 2026.) Pushed to `dba07d5`; commits since then await the next push.
 
 **Live checks to do (sign-in needed; one refresh, then all of them)**
 5. **The Studio Map fault** (b475b5a's row): with a link already in the template, picking the next link's
@@ -264,18 +262,22 @@ From the friction log, the owner's live checks still to do or report:
    the ranking (`38454f1`); a Verify rejection for a wrongly typed value (fa18859).
 
 **Faults found and not fixed** (each in the friction log)
-8. The profiler ranks IMSI above IMEI for a 15-digit column (any 15 digits pass the IMSI adapter).
-9. Map's *+ mapping* adds a row only when the last is filled.
+8. (Fixed 9 October 2026, `65e4d3e`.) The profiler's ranking: a checksum-backed match now outranks a
+   shape-only one (spec 09 §3's ranking rule).
+9. (Fixed 9 October 2026, `138c031`.) Map's *+ mapping*: rows are editing state, not the Record.
 10. The canvas's *Labels* menu does not close on a click outside it; with two entities the right-hand
     label runs under the Inspector; there is no error boundary.
 11. The Studio's source list said "No drafts yet" without the case's earlier Carrier B drafts (seen once).
-12. After *Set picture* the file control still names the file sent.
+12. (Fixed 9 October 2026, `f369059`.) The picture file control empties once the picture is sent.
 13. A geometry ref already loaded at a marking the loader cannot read would collide on insert after the
     graph commits; `scripts/build_local_basemap.py`'s gazetteer load writes no geometries.
-14. A 0-byte file is listed as "1 KB".
+14. (Fixed 9 October 2026, `22e76d6`.) An empty file is listed as "empty", bytes below a kilobyte.
 15. Enron: document preview times out; quoted-printable bodies; duplicate findings; link-type ids shown
     instead of names.
-16. Undecided: authors shown as account UUIDs, not names (needs the owner's choice).
+16. (Decided and built 9 October 2026, ADR-106.) Authors are named at read time from the identity
+    provider — judgements, gaps, link notes, questions and Studio recipes; the id shows where no name
+    resolves. Also that day, ADR-098 Amendment 3: *Quick scan* / *Deep read (model)* as equal buttons,
+    pending findings marked in the reader's text. Both not yet seen on the deployed Glass.
 17. `make refresh` does not carry new mounts into the generated compose; the hand edits (ingest root, tiles,
     `fonts`) live in `deploy/generated/local-lite/compose.yaml` and survive it.
 

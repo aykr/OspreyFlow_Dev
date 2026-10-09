@@ -117,7 +117,7 @@ export function QuestionsPanel({
             <li key={entry.id} style={{ display: "grid", gap: "var(--sp-8)" }}>
               <p style={{ margin: 0, fontWeight: 600 }}>{entry.question}</p>
               <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
-                {entry.author} · {WHEN.format(new Date(entry.created_at))} UTC
+                {entry.author_name ?? entry.author} · {WHEN.format(new Date(entry.created_at))} UTC
               </p>
               <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{entry.answer || "The model gave no answer."}</p>
               {entry.citations.length > 0 && (

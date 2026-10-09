@@ -348,3 +348,80 @@ def test_save_and_list_assumption_route(
         assert any(
             a["statement"] == "The subject acted alone." for a in listed.json()["assumptions"]
         )
+
+
+# --- Author names (ADR-106) -------------------------------------------------------------------
+
+
+class _RecordingDirectory:
+    """Stands in for `PrincipalNameDirectory` to record exactly which ids the route asks for —
+    the directory's own behaviour (refusals included) is proven in `test_principal_names.py`."""
+
+    def __init__(self, names: dict[str, str]) -> None:
+        self.names = names
+        self.asked: list[list[str]] = []
+
+    async def display_names(self, ids: object) -> dict[str, str]:
+        wanted = [i for i in dict.fromkeys(ids) if i]  # type: ignore[call-overload]
+        self.asked.append(wanted)
+        return {i: self.names[i] for i in wanted if i in self.names}
+
+    async def aclose(self) -> None:
+        """The lifespan's shutdown closes whatever sits on `app.state.principal_names`."""
+
+
+def test_list_judgements_route_names_only_the_authors_it_serves(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """ADR-106 decisions 3 and 5: `author_name` beside `author`, and the directory asked only for
+    the authors of judgements actually served — a judgement hidden by ADR-046's hide-in-full rule
+    never has its author's name looked up, which would otherwise say the hidden record exists."""
+    private_key, _ = keypair
+    investigation_id = asyncio.run(_write_investigation(PRINCIPAL))
+    visible_id = asyncio.run(_write_node(owning_unit=PRINCIPAL.org_unit))
+    hidden_id = asyncio.run(_write_node(owning_unit="unit-9", classification="SECRET"))
+
+    async def _grant_editor(account_id: str) -> None:
+        from services.api.investigations import AccessLevel
+
+        store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            await store.set_grant(investigation_id, account_id, AccessLevel.EDITOR, by=PRINCIPAL)
+        finally:
+            await store.close()
+
+    asyncio.run(_grant_editor("author-hidden"))
+    served_headers = _bearer(private_key)
+    hidden_headers = _bearer(private_key, sub="author-hidden", clearance="SECRET")
+
+    from services.api.app import app
+
+    with TestClient(app) as client:
+        for headers, supporting, statement in (
+            (served_headers, [visible_id], "Cites a visible node."),
+            (hidden_headers, [visible_id, hidden_id], "Cites a SECRET node."),
+        ):
+            response = client.post(
+                f"/v1/investigations/{investigation_id}/judgements",
+                headers=headers,
+                json={
+                    "investigation_id": investigation_id,
+                    "statement": statement,
+                    "probability_band": "likely",
+                    "supporting": supporting,
+                },
+            )
+            assert response.status_code == 201, response.text
+
+        directory = _RecordingDirectory(
+            {"analyst-1": "KAR, Ayan", "author-hidden": "never shown"}
+        )
+        app.state.principal_names = directory
+        list_response = client.get(
+            f"/v1/investigations/{investigation_id}/judgements", headers=served_headers
+        )
+        assert list_response.status_code == 200, list_response.text
+        (served,) = list_response.json()["judgements"]
+        assert served["author"] == "analyst-1"
+        assert served["author_name"] == "KAR, Ayan"
+        assert directory.asked == [["analyst-1"]]

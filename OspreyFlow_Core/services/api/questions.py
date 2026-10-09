@@ -129,6 +129,8 @@ class QuestionAnswer(BaseModel):
 
     id: str
     author: str
+    #: Resolved at read time, never stored (`06_DECISIONS.md` ADR-106).
+    author_name: str | None = None
     question: str
     answer: str
     citations: list[Citation]
