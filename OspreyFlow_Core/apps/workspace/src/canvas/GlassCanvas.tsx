@@ -2393,10 +2393,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       if (selected.size === 2 && selected.has(nodeId)) {
         const other = Array.from(selected).find((id) => id !== nodeId);
         if (other) {
+          // Named as the canvas labels it (9 October 2026: these read "Link to 01M46CSD…").
+          const otherLabel = graph.hasNode(other) ? nodeLabel(graph.getNodeAttribute(other, "data")) : other;
           items.push(
             {
               id: "manual-link",
-              label: `Link to ${other}`,
+              label: `Link to ${otherLabel}`,
               count: undefined,
               group: "Actions",
               onSelect: () => {
@@ -2406,7 +2408,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             },
             {
               id: "manual-split",
-              label: `Split from ${other}`,
+              label: `Split from ${otherLabel}`,
               count: undefined,
               group: "Actions",
               onSelect: () => {
@@ -2424,7 +2426,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               // Phase 7 Stage 5 — the same pair-selection shape B11 above already established,
               // reused rather than a new selection mechanism invented for it.
               id: "find-paths",
-              label: `Find paths to ${other}`,
+              label: `Find paths to ${otherLabel}`,
               count: undefined,
               group: "Actions",
               onSelect: () => {

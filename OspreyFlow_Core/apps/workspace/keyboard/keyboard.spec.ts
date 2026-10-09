@@ -181,6 +181,29 @@ test("Ctrl+Shift+Arrow reaches a node arrow-walk cannot, and Space pairs the two
   registerCovered("CANVAS_ACTIONS", "ctrl-shift-arrow-walks-every-node");
 });
 
+// 9 October 2026: the pair's actions read "Link to 01M46CSD…", the other node's id. Every fixture
+// person but n5 is labelled by its id, so this asks the menu on n0 about n5 ("n5, Zed").
+test("a pair's actions name the other node as the canvas labels it, not by its id", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus(); // n0, in the ring
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press("Control+Shift+ArrowRight");
+    if ((await page.evaluate(() => window.__KEYBOARD__?.focused)) === "n5") break;
+  }
+  await page.keyboard.press(" "); // ring: {n0, n5}
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press("Control+Shift+ArrowRight");
+    if ((await page.evaluate(() => window.__KEYBOARD__?.focused)) === "n0") break;
+  }
+  expect(await page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("n0");
+  await page.keyboard.press("\\");
+  const menu = page.locator(".radial-menu__list[role='menu']");
+  for (const verb of ["Link to", "Split from", "Find paths to"]) {
+    await expect(menu.getByRole("menuitem", { name: `${verb} n5, Zed` })).toBeVisible();
+  }
+});
+
 test("backslash opens the radial menu as a keyboard-navigable list", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
