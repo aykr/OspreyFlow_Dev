@@ -35,7 +35,7 @@ compute the boundary of.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from services.api.access import narrow_to_visible
@@ -132,7 +132,11 @@ class WorkingSetService:
         self._valkey = valkey
 
     def _project(
-        self, nodes: Sequence[Node], edges: Sequence[Edge], principal: Principal
+        self,
+        nodes: Sequence[Node],
+        edges: Sequence[Edge],
+        principal: Principal,
+        known: Mapping[NodeId, Node] | None = None,
     ) -> tuple[list[Node], list[Edge], int]:
         """The read-time handling filter `03_CONDUIT_MIDDLEWARE.md` §4
         requires. An edge is visible only if both its own handling block
@@ -141,22 +145,39 @@ class WorkingSetService:
         principal cannot see would itself disclose that hidden node's
         existence, exactly the leak `principal_may_view` exists to
         prevent at node level."""
-        visible_nodes = [
-            n for n in nodes if principal_may_read(n.handling, n.datasets, principal, self._scheme)
-        ]
-        visible_node_ids = {n.id for n in visible_nodes}
-        visible_edges = [
-            e
-            for e in edges
-            if principal_may_read(e.handling, e.datasets, principal, self._scheme)
-            and e.source in visible_node_ids
-            and e.target in visible_node_ids
-        ]
-        hidden_count = (len(nodes) - len(visible_nodes)) + (len(edges) - len(visible_edges))
+        # A link's ends are judged against `nodes` and, where given, the rest of the working set
+        # (`known`): a delta replayed or pushed alone carries only its own nodes, and a link from
+        # one of them to a node already on the canvas is the reader's to see (9 October 2026: it was
+        # dropped and counted hidden). A link whose end is in neither has left the view: it is left
+        # out and not counted, since nothing is withheld from the reader by it.
+        ends = {**(known or {}), **{n.id: n for n in nodes}}
+        readable = {
+            node_id
+            for node_id, n in ends.items()
+            if principal_may_read(n.handling, n.datasets, principal, self._scheme)
+        }
+        visible_nodes = [n for n in nodes if n.id in readable]
+        visible_edges: list[Edge] = []
+        hidden_edges = 0
+        for e in edges:
+            if e.source not in ends or e.target not in ends:
+                continue
+            if (
+                principal_may_read(e.handling, e.datasets, principal, self._scheme)
+                and e.source in readable
+                and e.target in readable
+            ):
+                visible_edges.append(e)
+            else:
+                hidden_edges += 1
+        hidden_count = (len(nodes) - len(visible_nodes)) + hidden_edges
         return visible_nodes, visible_edges, hidden_count
 
     def project_delta(
-        self, delta: WorkingSetDelta, principal: Principal
+        self,
+        delta: WorkingSetDelta,
+        principal: Principal,
+        known: Mapping[NodeId, Node] | None = None,
     ) -> tuple[WorkingSetDelta, int]:
         """Re-filters one already-recorded delta for `principal` — the
         replay-on-reconnect path (`sync`) and the live WebSocket push
@@ -169,7 +190,7 @@ class WorkingSetService:
         `DeltaRemove`/`DeltaReproject`/`DeltaNotice` carry nothing
         disclosable and pass through unchanged, hidden count zero."""
         if isinstance(delta, DeltaAdd):
-            nodes, edges, hidden = self._project(delta.nodes, delta.edges, principal)
+            nodes, edges, hidden = self._project(delta.nodes, delta.edges, principal, known)
             return delta.model_copy(update={"nodes": nodes, "edges": edges}), hidden
         if isinstance(delta, DeltaSnapshot):
             nodes, edges, hidden = self._project(delta.nodes, delta.edges, principal)
@@ -188,6 +209,14 @@ class WorkingSetService:
                 return delta, 0
             return DeltaRemove(seq=delta.seq, node_ids=[]), 1
         return delta, 0
+
+    async def project_live(
+        self, investigation_id: str, delta: WorkingSetDelta, principal: Principal
+    ) -> tuple[WorkingSetDelta, int]:
+        """A live push, projected for `principal` with its links' ends judged against the working
+        set as it now stands (`_project`'s `known`)."""
+        known = await self._store.source_fidelity_nodes(investigation_id)
+        return self.project_delta(delta, principal, known)
 
     async def get_resolution_threshold(self, investigation_id: str) -> float:
         """`GET /v1/resolution/threshold` (`03_CONDUIT_MIDDLEWARE.md` §3.5). `None` in the store
@@ -955,8 +984,9 @@ class WorkingSetService:
             if raw_deltas is not None:
                 projected: list[WorkingSetDelta] = []
                 hidden_total = 0
+                known = await self._store.source_fidelity_nodes(investigation_id)
                 for raw in raw_deltas:
-                    delta, hidden = self.project_delta(raw, principal)
+                    delta, hidden = self.project_delta(raw, principal, known)
                     projected.append(delta)
                     hidden_total += hidden
                 if hidden_total > 0:

@@ -6132,7 +6132,11 @@ async def _authenticate_websocket(websocket: WebSocket) -> Principal:
 
 
 async def _forward_notifications(
-    pubsub: Any, websocket: WebSocket, working_set: WorkingSetService, principal: Principal
+    pubsub: Any,
+    websocket: WebSocket,
+    working_set: WorkingSetService,
+    investigation_id: str,
+    principal: Principal,
 ) -> None:
     """Relays a live mutation from `notify.py`'s Pub/Sub channel to this
     one connected principal — re-projected via `WorkingSetService.
@@ -6145,7 +6149,7 @@ async def _forward_notifications(
             continue
         data = message["data"]
         raw = decode_delta(json.loads(data.decode() if isinstance(data, bytes) else data))
-        delta, hidden = working_set.project_delta(raw, principal)
+        delta, hidden = await working_set.project_live(investigation_id, raw, principal)
         await websocket.send_text(delta.model_dump_json())
         if hidden > 0:
             notice = DeltaNotice(
@@ -6234,7 +6238,7 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
     await pubsub.subscribe(channel)
     try:
         forward_task = asyncio.create_task(
-            _forward_notifications(pubsub, websocket, working_set, principal)
+            _forward_notifications(pubsub, websocket, working_set, investigation_id, principal)
         )
         resync_task = asyncio.create_task(
             _handle_resync_requests(websocket, working_set, investigation_id, principal)

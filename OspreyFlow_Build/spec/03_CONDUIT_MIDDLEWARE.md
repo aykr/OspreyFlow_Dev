@@ -171,6 +171,12 @@ status bar both carry, computed fresh for whichever principal is reconnecting (Â
 The `notice` operation is how withheld items reach the status bar. It carries a count and never
 carries the withheld content, not even its identifiers.
 
+Withheld means withheld from this reader by handling, and nothing else. A link whose end has left
+the working set (removing a node leaves its links in the store) is left out of every read and not
+counted. A delta replayed or pushed alone carries only its own nodes, so its links' ends are judged
+against the working set as it stands: a link to a node already on the canvas is sent, and one to a
+node this reader may not see is withheld and counted (9 October 2026; `test_hidden_count.py`).
+
 ### 3.3 Query and analytics
 
 ```
