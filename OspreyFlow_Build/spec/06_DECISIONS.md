@@ -10216,3 +10216,22 @@ Status: accepted 9 October 2026 (the owner, of the choices put: "Adapter accepts
 ### Tests
 
 `tests/knowledge_adapters/test_msisdn.py`: a drama mobile in five renderings (national, spaced international, bare international, `(0)` trunk, CLI-suppressed); seven of the other ranges; three wrong-length drama numbers refused. The mobile and 01632 cases were red first. The other geographic ranges already passed, because `phonenumbers` holds them as allocated blocks; they stay as cases so the list cannot lose them.
+
+## ADR-104 — A structured transform fills a property through a named part
+
+Status: accepted 9 October 2026 (the owner, of the choices put: "A part argument").
+
+### Context
+
+`person_name()` returns a given name and a family name, and `address()` returns its lines, a postcode and a gazetteer id (spec 01 §7: "structured given/family"). A recipe binding fills one property. Nothing said how one binding takes one part of a structured result, so the engine stored the whole result object: bound to `family_name`, ontology validation raised, and the dry run (so Verify) failed outright rather than rejecting a row. Map offered `person_name` in its transform list, so a data engineer reached this on their first person. Found on 9 October 2026 mapping a subscriber list.
+
+### Decision
+
+1. **A structured transform takes `part=`**, in the `key=value` arguments a transform string already has: `person_name(part=family)`, `person_name(part=given)`, `address(part=postcode)`, `address(part=lines)` (the lines joined with ", "), `address(part=gazetteer_id)`. `part` is consumed by the transform machinery, not passed to the adapter. The parts are listed once, in `services/ingest/transforms.STRUCTURED_PARTS`.
+2. **A structured transform with no part, or a part it does not have, is refused when the recipe is saved** (`recipe_rule_violations`), with a sentence naming the parts. At run time an unknown part is a `NormalisationError`, so a row is rejected, not the run aborted.
+3. **The transform catalogue carries each transform's `parts`** (`TransformDescriptor.parts`), and Map offers a structured transform once per part (*person_name — family*), never bare.
+
+### Tests
+
+`tests/ingest/test_structured_transform_parts.py`: each part of a person name and an address's postcode; an unknown part refused; the catalogue's parts; the save-time refusal of no part and of an unknown part; a recipe binding both parts dry-runs to the two names in two properties. Six red first with only `STRUCTURED_PARTS` in place. `FieldBindingEditor.parts.test.tsx`: Map offers each part and not the bare transform (red first).
+

@@ -912,7 +912,7 @@ Normalisers required at ingest, each a pure function with a golden test file:
 | `imsi` | with/without MCC-MNC separators | 15-digit |
 | `email` | case, plus-addressing, unicode domains | lowercase local, punycode domain |
 | `datetime` | mixed formats, local times, missing zones | UTC with recorded original offset. A missing offset is an error, not a guess — and so is an **ambiguous date order**: `03/04/2026` is April in the UK and March in the US, and with both in scope (ADR-017) there is no safe default. The connector profile declares `date_order: dmy` or `mdy`; a file with ambiguous dates and no declaration is rejected, named and counted, exactly like a missing offset |
-| `person_name` | ordering, diacritics, honorifics, ALL-CAPS surnames | structured given/family, originals retained |
+| `person_name` | ordering, diacritics, honorifics, ALL-CAPS surnames | structured given/family, originals retained; a recipe binding takes one part, `person_name(part=family)` (ADR-104) |
 | `postcode` | UK postcode, spacing and case variance | normalised outward and inward code |
 | `grid_ref` | British National Grid reference, letter pair plus digits, or a bare easting/northing pair | EPSG:27700 easting and northing, then reprojected to WGS84 like any other coordinate |
 | `coordinate_lon` / `coordinate_lat` | a declared-CRS easting/northing pair | WGS84 longitude/latitude, for an `EventRecord` or similar — never a `Location` node property (§7.1) |

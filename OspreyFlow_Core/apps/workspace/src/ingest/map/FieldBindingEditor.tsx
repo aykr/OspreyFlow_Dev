@@ -114,12 +114,21 @@ export function FieldBindingEditor({
           </div>
           <Select value={binding.transform ?? ""} onChange={(e) => setTransform(e.target.value)}>
             <option value="">No transform</option>
-            {transforms.map((t) => (
-              <option key={t.name} value={t.name}>
-                {t.name}
-                {t.arity > 1 ? ` (${t.arity} columns)` : ""}
-              </option>
-            ))}
+            {/* ADR-104: a structured transform is offered once per part, never bare. */}
+            {transforms.flatMap((t) =>
+              (t.parts ?? []).length > 0
+                ? (t.parts ?? []).map((part) => (
+                    <option key={`${t.name}:${part}`} value={`${t.name}(part=${part})`}>
+                      {`${t.name} — ${part}`}
+                    </option>
+                  ))
+                : [
+                    <option key={t.name} value={t.name}>
+                      {t.name}
+                      {t.arity > 1 ? ` (${t.arity} columns)` : ""}
+                    </option>,
+                  ],
+            )}
           </Select>
         </>
       )}

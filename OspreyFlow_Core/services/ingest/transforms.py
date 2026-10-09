@@ -16,6 +16,12 @@ from knowledge_adapters.errors import NormalisationError
 
 _CALL = re.compile(r"^(?P<name>\w+)(\((?P<args>.*)\))?$")
 
+#: ADR-104: the adapters whose result is structured, and the parts a binding may take from it.
+STRUCTURED_PARTS: dict[str, tuple[str, ...]] = {
+    "person_name": ("family", "given"),
+    "address": ("lines", "postcode", "gazetteer_id"),
+}
+
 #: Which adapters take which connector-level default, so a connector's
 #: `date_order`/`source_crs` (`01_DOMAIN_MODEL.md` §7, `00_ARCHITECTURE.md`
 #: §1.2.2) reach every relevant transform without every field binding
@@ -63,4 +69,31 @@ def apply_transform(
                 )
             # An explicit argument here overrides the connector default set above.
             kwargs[key.strip()] = val.strip()
-    return adapter(value, **kwargs)
+    # ADR-104: `part=` names which part of a structured result the binding takes. It is not the
+    # adapter's own argument, so it is taken out before the call.
+    part = kwargs.pop("part", None)
+    result = adapter(value, **kwargs)
+    if part is None or name not in STRUCTURED_PARTS:
+        return result
+    if part not in STRUCTURED_PARTS[name]:
+        parts = ", ".join(STRUCTURED_PARTS[name])
+        reason = f"{name} has no part {part!r} (its parts: {parts})"
+        raise NormalisationError("transform", spec, reason)
+    chosen = getattr(result, part)
+    if isinstance(chosen, list):
+        return ", ".join(str(line) for line in chosen)
+    return chosen
+
+
+def transform_name_and_part(spec: str) -> tuple[str, str | None] | None:
+    """A transform string's adapter name and its `part=` argument, if it has one; `None` when the
+    string is not a transform expression at all."""
+    match = _CALL.match(spec.strip())
+    if match is None:
+        return None
+    part = None
+    for chunk in (match.group("args") or "").split(","):
+        key, sep, val = chunk.partition("=")
+        if sep and key.strip() == "part":
+            part = val.strip()
+    return match.group("name"), part

@@ -290,7 +290,9 @@ the list at two: a British National Grid reference split across a letter pair an
 columns is three, and the next format will be four.
 
 **Transforms are Knowledge Adapters, not free expressions.** A field binding may pass through
-`msisdn()`, `imei()`, `datetime(tz=...)`, `person_name()`, `address()`, `iban()` and the rest.
+`msisdn()`, `imei()`, `datetime(tz=...)`, `person_name()`, `address()`, `iban()` and the rest. A transform whose result is structured
+is bound one part at a time, `person_name(part=family)` (ADR-104); Map offers each part, never the bare
+transform, and a recipe naming none is refused when saved.
 There is no scripting language in the studio. The moment you allow arbitrary expressions you have
 created an unreviewable, untestable transformation layer that nobody can audit, and the usual
 result is the same normalisation logic implemented four slightly different ways. If a source

@@ -64,6 +64,7 @@ from services.ingest.engine import run_recipe
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import RecipeRuleError, check_recipe_rules
 from services.ingest.staging import ObjectStorageConfig
+from services.ingest.transforms import STRUCTURED_PARTS
 from services.resolve.trigger import JOB_TYPE_RESOLVE_ENTITY_TYPE, run_resolve_entity_type_job
 from valkey.asyncio import Valkey
 
@@ -5662,7 +5663,12 @@ async def list_transforms(principal: PrincipalDep) -> list[TransformDescriptor]:
     hand-duplicated in the Glass. Deployment metadata, same treatment as
     `list_connectors`. An adapter absent from `ARITY` takes a single
     `field`, never a `fields` list (that module's own docstring)."""
-    return [TransformDescriptor(name=name, arity=ARITY.get(name, 1)) for name in REGISTRY]
+    return [
+        TransformDescriptor(
+            name=name, arity=ARITY.get(name, 1), parts=list(STRUCTURED_PARTS.get(name, ()))
+        )
+        for name in REGISTRY
+    ]
 
 
 @app.put("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/row-template")

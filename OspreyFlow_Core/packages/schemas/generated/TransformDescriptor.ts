@@ -2,6 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Name = string;
 export type Arity = number;
+export type Parts = string[];
 
 /**
  * One entry of the Knowledge Adapter catalogue Map's transform picker
@@ -14,5 +15,6 @@ export type Arity = number;
 export interface TransformDescriptor {
   name: Name;
   arity: Arity;
+  parts?: Parts;
   [k: string]: unknown;
 }

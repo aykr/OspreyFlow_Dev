@@ -500,6 +500,9 @@ class TransformDescriptor(BaseModel):
 
     name: str
     arity: int = Field(ge=1)
+    #: ADR-104: for a structured transform, the parts a binding takes one of (`person_name(part=
+    #: family)`); empty for any other.
+    parts: list[str] = Field(default_factory=list)
 
 
 class RowTemplateUpdateInput(BaseModel):

@@ -9,6 +9,8 @@ language is involved (rule 8): each rule reads only what the recipe declares.
 
 from __future__ import annotations
 
+from services.ingest.transforms import STRUCTURED_PARTS, transform_name_and_part
+
 from schemas.domain import NOT_SAME_AS, OntologySchema
 from schemas.ingest import RowTemplate
 
@@ -26,6 +28,28 @@ class RecipeRuleError(Exception):
 def recipe_rule_violations(template: RowTemplate, ontology: OntologySchema) -> list[str]:
     """Every problem with `template` against `ontology`, in the recipe's order; empty if none."""
     problems: list[str] = []
+    # ADR-104: a structured transform fills a property through one named part, so a binding that
+    # names none (or one the result does not have) is refused here, when the recipe is saved.
+    owners = [(entity.ref, entity.properties) for entity in template.entities] + [
+        (edge.type, edge.properties) for edge in template.edges
+    ]
+    for owner, properties in owners:
+        for prop, binding in properties.items():
+            parsed = transform_name_and_part(binding.transform) if binding.transform else None
+            if parsed is None or parsed[0] not in STRUCTURED_PARTS:
+                continue
+            name, part = parsed
+            parts = STRUCTURED_PARTS[name]
+            if part is None:
+                problems.append(
+                    f"{owner}.{prop} uses {name}, which gives {' and '.join(parts)}: choose the "
+                    f"part it takes, for example {name}(part={parts[0]})."
+                )
+            elif part not in parts:
+                problems.append(
+                    f"{owner}.{prop} asks {name} for {part!r}, which it does not give "
+                    f"(its parts: {', '.join(parts)})."
+                )
     for edge in template.edges:
         type_def = ontology.edge_type(edge.type)
         if type_def is None:
