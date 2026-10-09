@@ -52,9 +52,17 @@ export function resolvePmtilesSourceUrl(source: string, apiBaseUrl: string): str
   return source.startsWith("/") ? `${apiBaseUrl}${source}` : source;
 }
 
+/** Whether the style draws place labels. MapLibre fails a whole vector tile whose label layer
+ * cannot have its glyphs, so without them the map drew nothing (8 October 2026); `glyphsServed`
+ * says whether they are there. */
+export interface StyleOptions {
+  labels: boolean;
+}
+
 export function buildBundledDarkStyle(
   provider: PublicMapProvider,
   apiBaseUrl: string,
+  options: StyleOptions = { labels: true },
 ): StyleSpecification {
   if (provider.kind !== "vector") {
     throw new Error(
@@ -70,7 +78,7 @@ export function buildBundledDarkStyle(
   }
   const source = sourceIdFor(provider);
   const sourceUrl = resolvePmtilesSourceUrl(provider.source, apiBaseUrl);
-  return {
+  const style: StyleSpecification = {
     version: 8,
     name: "osprey-dark",
     sources: {
@@ -151,6 +159,29 @@ export function buildBundledDarkStyle(
       },
     ],
   };
+  if (options.labels) return style;
+  const unlabelled: StyleSpecification = {
+    ...style,
+    layers: style.layers.filter((layer) => layer.type !== "symbol"),
+  };
+  delete unlabelled.glyphs;
+  return unlabelled;
+}
+
+/** The glyph file for the labels' font, as the style names it; the first range is enough to know. */
+export const GLYPH_PROBE_PATH = "/fonts/Noto%20Sans%20Regular/0-255.pbf";
+
+/** Whether the label glyphs are served. Not built yet by `scripts/build_local_basemap.py`, and the
+ * workspace's nginx answers an unknown path with the Glass's own page, so a 200 alone is not proof:
+ * an HTML answer is no glyph. */
+export async function glyphsServed(fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  try {
+    const response = await fetchImpl(GLYPH_PROBE_PATH);
+    const type = response.headers.get("content-type") ?? "";
+    return response.ok && !type.includes("text/html");
+  } catch {
+    return false;
+  }
 }
 
 /** A `kind: raster` provider's style. One XYZ `raster` source/layer;
@@ -197,10 +228,11 @@ export function resolveBundledStyle(
   styleId: string | null,
   provider: PublicMapProvider,
   apiBaseUrl: string,
+  options: StyleOptions = { labels: true },
 ): StyleSpecification {
   switch (styleId) {
     case BUNDLED_DARK_STYLE_ID:
-      return buildBundledDarkStyle(provider, apiBaseUrl);
+      return buildBundledDarkStyle(provider, apiBaseUrl, options);
     case BUNDLED_LIGHT_STYLE_ID:
       throw new Error(
         "the light MapLibre style is a stated follow-up, not yet built (see this module's " +

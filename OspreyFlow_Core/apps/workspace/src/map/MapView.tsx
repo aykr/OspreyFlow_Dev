@@ -48,7 +48,7 @@ import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailab
 import { conduitRequest } from "./conduitRequest";
 import { mapStart, type BasemapCentre } from "./mapStart";
 import { registerAuthorisedPmtilesSource } from "./pmtilesAuth";
-import { resolveBundledStyle, resolvePmtilesSourceUrl } from "./style";
+import { glyphsServed, resolveBundledStyle, resolvePmtilesSourceUrl } from "./style";
 
 const GEO_BINS_SOURCE_ID = "ospreyflow-geo-bins";
 const GEO_BINS_LAYER_ID = "ospreyflow-geo-bins-heat";
@@ -283,7 +283,9 @@ export function MapView({
 
       const mapGraph = buildMapGraph(graph, nodeCoordinates);
       setNothingPlaced(mapGraph.order === 0);
-      const style = resolveBundledStyle(provider.style, provider, apiBaseUrl ?? "");
+      const labels = await glyphsServed();
+      if (cancelled || !containerRef.current) return;
+      const style = resolveBundledStyle(provider.style, provider, apiBaseUrl ?? "", { labels });
       const start = mapStart(mapGraph.order, basemapCentre);
       const sigma =
         start.kind === "fit"

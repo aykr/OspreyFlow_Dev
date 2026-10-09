@@ -5,6 +5,7 @@ import {
   BUNDLED_DARK_STYLE_ID,
   BUNDLED_RASTER_OVERLAY_STYLE_ID,
   buildBundledDarkStyle,
+  glyphsServed,
   buildRasterStyle,
   resolveBundledStyle,
 } from "./style";
@@ -81,6 +82,42 @@ describe("buildBundledDarkStyle", () => {
     expect(() => buildBundledDarkStyle(provider({ source: null }), "http://api")).toThrow(
       /directly-fetchable/,
     );
+  });
+});
+
+describe("the dark style's labels", () => {
+  // 8 October 2026: the glyph files are not built, so `/fonts/...` came back as the Glass's own
+  // page; MapLibre fails a whole tile whose label layer cannot have its glyphs, and the map drew
+  // nothing at all. Without glyphs the style has no label layer, so the map draws unlabelled.
+  it("has a label layer and its glyphs when the glyphs are served", () => {
+    const style = buildBundledDarkStyle(provider(), "http://api", { labels: true });
+    expect(style.layers.some((l) => l.type === "symbol")).toBe(true);
+    expect(style.glyphs).toBeDefined();
+  });
+
+  it("has neither when they are not", () => {
+    const style = buildBundledDarkStyle(provider(), "http://api", { labels: false });
+    expect(style.layers.some((l) => l.type === "symbol")).toBe(false);
+    expect(style.glyphs).toBeUndefined();
+    expect(style.layers.map((l) => l.id)).toContain("water");
+  });
+});
+
+describe("glyphsServed", () => {
+  const answer = (status: number, type: string) =>
+    (async () => new Response("x", { status, headers: { "content-type": type } })) as typeof fetch;
+
+  it("is true for a glyph file", async () => {
+    expect(await glyphsServed(answer(200, "application/x-protobuf"))).toBe(true);
+  });
+
+  it("is false for the Glass's own page answering an unknown path", async () => {
+    expect(await glyphsServed(answer(200, "text/html"))).toBe(false);
+  });
+
+  it("is false when missing or unreachable", async () => {
+    expect(await glyphsServed(answer(404, "text/plain"))).toBe(false);
+    expect(await glyphsServed((async () => { throw new TypeError("offline"); }) as typeof fetch)).toBe(false);
   });
 });
 

@@ -893,7 +893,12 @@ own detail message in place of a blank canvas when it 404s. When nothing in the 
 (a case whose locations are on a site plan, not the map), the map opens on the basemap's own
 centre and zoom, read from its PMTiles header, and says "Nothing in this view has a map position";
 the graph layer is not bound, since with no extent it fitted the camera to an undefined box and
-the map drew black (8 October 2026; `map/mapStart.ts`).
+the map drew black (8 October 2026; `map/mapStart.ts`). Place labels need glyph files, which
+`scripts/build_local_basemap.py` does not build yet; MapLibre fails a whole vector tile whose label
+layer cannot have its glyphs, so without them the map drew nothing at all. The Glass asks for the
+labels' first glyph range before the map mounts (`glyphsServed`, an HTML answer counting as none,
+since nginx answers an unknown path with the Glass's own page) and leaves the label layer out when
+they are missing: the basemap then draws unlabelled. **Not built:** the glyph files themselves.
 
 **What is not decided by this proposal:** whether a `local-lite`/`small`/`cluster` deployment
 profile should instead serve the file from a dedicated static-file sidecar rather than the
