@@ -408,9 +408,12 @@ the link types analysts propose (ADR-099 Amendment 3). The one exception is the 
 OspreyFlow default dataset (`default.yaml` and every promoted type), which every case reads. The Glass
 shows and asks; it enforces nothing.
 
-- **A new case** (the case picker and the case switcher) offers *Data the case reads*: the unit's
-  datasets as boxes to tick, kept in the order ticked. None ticked, the form says the case gets a
-  dataset of its own for the data added to it.
+- **A new case** (the case picker and the case switcher) asks *What can this case see?* as a
+  first-class choice (ADR-099 Amendment 8): *Start empty — it holds only the data you load into
+  it* (the default), or *Read existing data…*, which reveals the unit's datasets as boxes to tick,
+  kept in the order ticked, each named by its name alone (names are unique, Amendment 6; a raw id
+  in the list reads as noise). Returning to *Start empty* forgets what was ticked. The read-only
+  "reads …" summaries keep the dataset id, where comparing records needs it.
 - **The case picker** says what each case reads beside its level ("reads Enron corpus · author").
 - **The Cases drawer** ends with *Data this case reads*: the open case's datasets, to every reader.
   Its Author is offered *Change what this case reads*, a list to tick and *Save*, which will not save

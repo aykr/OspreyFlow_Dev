@@ -10118,6 +10118,26 @@ Status: accepted 8 October 2026 (the owner: "Diagnose and fix first", of three f
 3. **Decision.** The stream scopes its principal to the case (`scope_to_case`), after the Viewer check and before it accepts, and uses that principal for the snapshot, the resyncs and the live pushes. The ticket still binds the identity only; what it may read is the case's, decided when it is redeemed.
 4. **Tests:** `tests/services/api/test_stream_scope.py`, the route run for real with the working set's own projection: a ticket's reader is sent the case's working set; a header's reader is kept to the case's datasets; the live-push and resync loops start with the scoped principal. All three red before the fix.
 
+### ADR-099, Amendment 8 (9 October 2026) — what a new case can see is a first-class choice
+
+Status: accepted 9 October 2026 (the owner: "The new case section is very confusing — what is the purpose of this?", and his choice between presented options: "Two explicit choices").
+
+1. **What was confusing.** The new-case form led with a bare tick list, "Data the case reads",
+   whose purpose — ADR-099's access boundary — was explained only by one sentence of fine print at
+   the bottom, and each dataset's raw id (`…5D5GG`) leaked into the labels.
+2. **The form now asks "What can this case see?"** as a radio pair: *Start empty — it holds only
+   the data you load into it* (the default), or *Read existing data…*, which reveals the tick
+   list. Returning to *Start empty* forgets what was ticked, so the default never silently carries
+   a hidden selection. The wire shape is unchanged: nothing ticked sends no `dataset_ids` and the
+   Conduit gives the case a dataset of its own, exactly as before.
+3. **A tick list shows the dataset's name alone.** Names are unique within a unit (Amendment 6),
+   so the id suffix carried no information an analyst could use. The read-only "reads …" summaries
+   keep the id, where an administrator comparing records needs it.
+4. **Tests:** `NewCaseForm.test.tsx` 5, red first (the default empty creation, the hidden-then-revealed
+   list, the forgotten selection, the id kept out of labels, the ticked creation);
+   `CaseDatasets.test.tsx` brought to the new labels; the keyboard case
+   `tick-datasets-and-create-a-case-by-keyboard` now reaches the radio first (rule 13).
+
 ### ADR-100, Amendment 3 (8 October 2026) — stage 4: the figures are measured, then kept
 
 Status: accepted 8 October 2026 (mine, within the owner's "Go ahead all 5 stage on ADR-100"; recorded so it can be overruled).

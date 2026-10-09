@@ -38,6 +38,10 @@ test("a dataset is ticked with Space and the case made with Enter, reading it", 
   const sent = await serve(page);
   await page.getByLabel("Case name").focus();
   await page.keyboard.type("Shipping");
+  // ADR-099 Amendment 8: the datasets sit behind the "Read existing data…" choice, reached and
+  // chosen by keyboard before any box can be ticked.
+  await page.getByRole("radio", { name: "Read existing data…" }).focus();
+  await page.keyboard.press(" ");
   await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
   await page.keyboard.press(" ");
   await expect(page.getByRole("checkbox", { name: "Enron corpus" })).toBeChecked();
