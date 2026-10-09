@@ -196,7 +196,11 @@ export function ElementInspector({
     }
 
     const typeDef = ontology.entity_types.find((t) => t.name === entity.type);
-    const availablePropertyNames = (typeDef?.properties ?? []).map((p) => p.name);
+    // A type's identifiers, then its properties, each once: a Device's IMEI is declared only as an
+    // identifier, and Map once offered a Device nothing to set (9 October 2026).
+    const availablePropertyNames = [
+      ...new Set([...(typeDef?.identifiers ?? []), ...(typeDef?.properties ?? []).map((p) => p.name)]),
+    ];
 
     return (
       <Panel title={`${entity.ref} · ${entity.type}`}>

@@ -258,6 +258,9 @@ so the template looks like the thing it will produce.
 - **The profiler proposes a starting template.** For a recognised source shape it proposes the
   whole thing; for an unfamiliar one it proposes the bindings it is confident about and leaves
   the rest. Every proposal is visibly a proposal until confirmed.
+- **An entity offers its type's identifiers as well as its properties** (identifiers first, each once):
+  a Device's IMEI is declared only as an identifier, and Map offered a Device nothing to set until
+  9 October 2026.
 - **An element's ref is its name in the recipe and can be changed.** Renaming an entity carries its
   links' ends with it; a ref another entity already holds is refused, since a link's end would
   then be ambiguous (a rename was silently dropped until 9 October 2026).
