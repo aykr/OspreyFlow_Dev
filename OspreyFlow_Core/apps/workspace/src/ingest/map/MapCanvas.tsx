@@ -11,15 +11,12 @@
 // `Endpoint` the Glass renders once this recipe runs.
 import Graph from "graphology";
 import Sigma from "sigma";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { OntologySchema, RowTemplate } from "../../../../../packages/schemas/generated";
-import {
-  BORDER_STRONG_DARK_HEX,
-  BRASS_HEX,
-  TEXT_PRIMARY_DARK_HEX,
-  resolveChannelHex,
-} from "../../color/tokens";
+import { activePalette } from "../../color/palette";
+import { onThemeChange } from "../../theme/theme";
+import { mapCanvasColours, mapNodeColour } from "./mapCanvasColours";
 
 export type MapSelection = { kind: "entity"; ref: string } | { kind: "edge"; index: number } | null;
 
@@ -36,11 +33,6 @@ export interface MapCanvasProps {
 }
 
 const NODE_SIZE = 14;
-// DESIGN.md §3.7, from the canvas's own mirror of the tokens: selected is brass, the link's chosen
-// end is drawn as a path end (`--text-primary`), and a type the ontology does not know is neutral.
-const SELECTED_COLOR = BRASS_HEX;
-const LINK_FROM_COLOR = TEXT_PRIMARY_DARK_HEX;
-const UNKNOWN_TYPE_COLOR = BORDER_STRONG_DARK_HEX;
 
 function layoutPosition(index: number): { x: number; y: number } {
   // Left-to-right in creation order — matches §4's own mockup, which draws
@@ -59,6 +51,7 @@ export function MapCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<Sigma | null>(null);
   const graphRef = useRef<Graph>(new Graph());
+  const [themeVersion, setThemeVersion] = useState(0);
 
   // `sigma.on(...)` below is wired once, in a mount-only effect, so the
   // Sigma instance survives every re-render (recreating it on every
@@ -79,10 +72,12 @@ export function MapCanvas({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const colours = mapCanvasColours(activePalette());
     const sigma = new Sigma(graphRef.current, containerRef.current, {
       renderLabels: true,
-      defaultNodeColor: UNKNOWN_TYPE_COLOR,
-      defaultEdgeColor: UNKNOWN_TYPE_COLOR,
+      labelColor: { color: colours.label },
+      defaultNodeColor: colours.edge,
+      defaultEdgeColor: colours.edge,
     });
     sigmaRef.current = sigma;
     sigma.on("clickNode", ({ node }) => onSelectRef.current({ kind: "entity", ref: node }));
@@ -91,7 +86,10 @@ export function MapCanvas({
       onSelectRef.current({ kind: "edge", index });
     });
     sigma.on("clickStage", () => onBackgroundClickRef.current());
+    // A canvas cannot read a CSS variable, so it is told when the theme changes (ADR-070).
+    const stopWatchingTheme = onThemeChange(() => setThemeVersion((v) => v + 1));
     return () => {
+      stopWatchingTheme();
       sigma.kill();
       sigmaRef.current = null;
     };
@@ -100,6 +98,9 @@ export function MapCanvas({
   }, []);
 
   useEffect(() => {
+    const palette = activePalette();
+    const colours = mapCanvasColours(palette);
+    sigmaRef.current?.setSetting("labelColor", { color: colours.label });
     const graph = graphRef.current;
     graph.clear();
     template.entities.forEach((entity, index) => {
@@ -112,13 +113,7 @@ export function MapCanvas({
         x,
         y,
         size: NODE_SIZE,
-        color: isSelected
-          ? SELECTED_COLOR
-          : isLinkFrom
-            ? LINK_FROM_COLOR
-            : visual
-              ? resolveChannelHex(visual.channel)
-              : UNKNOWN_TYPE_COLOR,
+        color: mapNodeColour({ selected: isSelected, linkFrom: isLinkFrom, visual }, palette),
       });
     });
     (template.edges ?? []).forEach((edge, index) => {
@@ -131,12 +126,12 @@ export function MapCanvas({
       graph.addEdgeWithKey(`edge-${index}`, edge.from, edge.to, {
         label: edge.type,
         size: isSelected ? 4 : 2,
-        color: isSelected ? SELECTED_COLOR : UNKNOWN_TYPE_COLOR,
+        color: isSelected ? palette.brass : colours.edge,
         templateIndex: index,
       });
     });
     sigmaRef.current?.refresh();
-  }, [template, ontology, selection, linkFromRef]);
+  }, [template, ontology, selection, linkFromRef, themeVersion]);
 
   return (
     <div

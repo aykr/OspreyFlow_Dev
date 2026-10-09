@@ -261,6 +261,9 @@ so the template looks like the thing it will produce.
 - **An element's ref is its name in the recipe and can be changed.** Renaming an entity carries its
   links' ends with it; a ref another entity already holds is refused, since a link's end would
   then be ambiguous (a rename was silently dropped until 9 October 2026).
+- **The Map canvas paints from the themed palette (ADR-070)** and redraws when the theme changes, so
+  every element, label and link stands out from the canvas in either theme (a link's chosen start
+  was painted the dark theme's text colour, and vanished in the light theme, until 9 October 2026).
 - **Unmapped fields are shown, always.** A field nobody mapped is either unimportant or the most
   important thing in the file, and silence is how the second case gets missed. Mark it
   `ignore` deliberately, with an optional note, or map it.
