@@ -359,7 +359,7 @@ class _RunState:
     touched_edge_ids: list[EdgeId] = field(default_factory=list)
     nodes_created: int = 0
     nodes_referenced: int = 0
-    edges_written: int = 0
+    edges_created: int = 0
     #: Within-load cache so the same value referenced by two rows in one
     #: load resolves to one node without depending on read-your-own-write
     #: visibility from a query issued inside the same open transaction.
@@ -736,7 +736,9 @@ async def _write_held_content(
     )
     (edge_id,) = await state.graph.upsert_edges([holds], state.tx)
     state.touched_edge_ids.append(edge_id)
-    state.edges_written += 1
+    # Counted per write: its id is the document's and holder's, so a returned id cannot tell a new
+    # HOLDS link from one merged into (unlike `_write_edge` below).
+    state.edges_created += 1
 
 
 async def _write_edge(
@@ -798,7 +800,11 @@ async def _write_edge(
     )
     (edge_id,) = await state.graph.upsert_edges([write], state.tx)
     state.touched_edge_ids.append(edge_id)
-    state.edges_written += 1
+    # A link is created only when the store kept the id this write was sent. A second call between
+    # the same two parties merges into the link already there, and `upsert_edges` returns that
+    # link's id: counting every write said "236 edges created" for 141 links (9 October 2026).
+    if edge_id == write.id:
+        state.edges_created += 1
 
     if resolved.instant is not None:
         # The event's own properties carry the full set of source rows it
@@ -1232,7 +1238,7 @@ async def run_recipe(
         rows_deduplicated=rows_deduplicated,
         nodes_created=state.nodes_created,
         nodes_referenced=state.nodes_referenced,
-        edges_created=state.edges_written,
+        edges_created=state.edges_created,
         rejections=[*rejections, *state.content_rejections],
         created_node_ids=state.created_node_ids,
         touched_edge_ids=state.touched_edge_ids,

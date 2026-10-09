@@ -518,6 +518,10 @@ editor; the repository is the record.
   possible without re-uploading the source file.
 - **Re-runnable.** The same recipe against a new file, or the same file again — the deduplication
   key makes a re-run idempotent.
+  A load's report counts what it made: *edges created* is the links it created, so a second call
+  between the same two parties (merged into the first link) is not counted again, and a re-run of
+  the same file reports none. It agrees with Verify's *would create* and with the store (the
+  report once counted every edge write, 236 for 141 links, until 9 October 2026).
 - **Versioned, with loads attributed.** Every loaded element records which recipe version
   produced it (`load_id`/`recipe_id`/`recipe_version` on its audit stub — `01_DOMAIN_MODEL.md`
   §2.4). When a mapping error is found in month six, the affected elements are identifiable by
