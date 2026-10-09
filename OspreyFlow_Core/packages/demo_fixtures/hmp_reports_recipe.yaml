@@ -10,7 +10,7 @@ version: 1
 label: "HMP fixture — reports"
 connector:
   profile: hmp-fixture-generic
-ontology_version: 12
+ontology_version: 13
 
 defaults:
   provenance: {state: asserted}

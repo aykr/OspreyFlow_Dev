@@ -1,7 +1,8 @@
 """ADR-094 step 2: the ontology that holds content. Every content item is a `Document` with a
 `media_kind`; a file is kept in the object store and the Document carries only its reference;
 content held by an entity is linked to it by `HOLDS`, which is Direct. Version 12: every recipe
-pinned to 11 is flagged once to be re-pinned (spec 09 §4)."""
+pinned to 11 is flagged once to be re-pinned (spec 09 §4). Version 13 (ADR-105): an image Document
+`DEPICTS` the one entity it is a picture of."""
 
 from __future__ import annotations
 
@@ -14,8 +15,8 @@ from ontology.validation import validate_edge_endpoints, validate_properties
 ONTOLOGY = load_default_ontology()
 
 
-def test_the_ontology_is_version_12() -> None:
-    assert ONTOLOGY.version == 12
+def test_the_ontology_is_version_13() -> None:
+    assert ONTOLOGY.version == 13
 
 
 def test_a_document_declares_its_media_kind_and_its_file_reference() -> None:
@@ -42,3 +43,22 @@ def test_holds_refuses_an_end_it_does_not_declare() -> None:
         validate_edge_endpoints(holds, source_type="Location", target_type="Document")
     with pytest.raises(OntologyError):
         validate_edge_endpoints(holds, source_type="Device", target_type="Person")
+
+
+@pytest.mark.parametrize("subject", ["Person", "Organisation", "Vehicle", "Device", "Location", "Asset"])
+def test_depicts_links_a_picture_to_the_entity_it_shows_and_is_direct(subject: str) -> None:
+    depicts = ONTOLOGY.edge_type("DEPICTS")
+    assert depicts is not None and depicts.basis == "direct" and depicts.directed
+    assert not depicts.temporal
+    validate_edge_endpoints(depicts, source_type="Document", target_type=subject)
+    validate_properties(depicts, {"shown": False})
+
+
+@pytest.mark.parametrize("subject", ["Endpoint", "Event", "Document"])
+def test_depicts_refuses_an_entity_a_picture_does_not_show(subject: str) -> None:
+    depicts = ONTOLOGY.edge_type("DEPICTS")
+    assert depicts is not None
+    with pytest.raises(OntologyError):
+        validate_edge_endpoints(depicts, source_type="Document", target_type=subject)
+    with pytest.raises(OntologyError):
+        validate_edge_endpoints(depicts, source_type="Person", target_type="Vehicle")

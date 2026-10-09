@@ -254,6 +254,13 @@ from .email_extraction import (
     ExtractEmailRequest,
     NotDocumentsError,
 )
+from .entity_pictures import (
+    PICTURE_TYPES,
+    EntityPicture,
+    EntityPictureService,
+    PictureNotFoundError,
+    PictureSetResult,
+)
 from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .event_scope import visible_ancestors, with_inherited
 from .explore import (
@@ -433,12 +440,14 @@ from .watch_routes import (
 )
 from .worker import JobWorker
 from .working_set.models import (
+    MAX_NODES,
     CardinalityPreview,
     ClusterExplanation,
     ClusterNotFoundError,
     DeltaAdd,
     DeltaNotice,
     DeltaRemove,
+    DeltaReplaceEdge,
     DeltaReproject,
     DeltaSnapshot,
     ExpansionOutcome,
@@ -581,6 +590,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         transcribe_model=models.transcription,
         scheme=handling_scheme,
         recogniser=recogniser,
+    )
+    app.state.entity_pictures = EntityPictureService(
+        app.state.working_set, graph, media, ontology, scheme=handling_scheme
     )
     app.state.email_extraction = EmailExtractionService(
         app.state.working_set,
@@ -908,6 +920,13 @@ def get_document_content(request: Request) -> DocumentContentService:
 
 
 DocumentContentDep = Annotated[DocumentContentService, Depends(get_document_content)]
+
+
+def get_entity_pictures(request: Request) -> EntityPictureService:
+    return request.app.state.entity_pictures  # type: ignore[no-any-return]
+
+
+EntityPicturesDep = Annotated[EntityPictureService, Depends(get_entity_pictures)]
 
 
 def get_media(request: Request) -> MediaStore:
@@ -1279,6 +1298,12 @@ async def _judgement_not_found_handler(
 async def _holder_not_found_handler(request: Request, exc: HolderNotFoundError) -> JSONResponse:
     """A holder not in the view and one the caller may not see give this one answer (ADR-094)."""
     return JSONResponse(status_code=404, content={"error": "holder_not_found"})
+
+
+@app.exception_handler(PictureNotFoundError)
+async def _picture_not_found_handler(request: Request, exc: PictureNotFoundError) -> JSONResponse:
+    """No picture and one the caller may not see give this one answer (ADR-105)."""
+    return JSONResponse(status_code=404, content={"error": "picture_not_found"})
 
 
 @app.exception_handler(UploadRefusedError)
@@ -3858,6 +3883,138 @@ async def document_file_route(
         action="read_document_file",
         investigation_id=investigation.id,
         resolved_query={"document_id": document_id},
+        result_cardinality=1,
+    )
+    return Response(content=data, media_type=content_type)
+
+
+#: The extensions a picture's name may carry (ADR-105), for the shared name check.
+PICTURE_EXTENSIONS = frozenset(f".{ext}" for ext in PICTURE_TYPES)
+
+
+class PicturesRequest(BaseModel):
+    node_ids: list[str] = Field(max_length=MAX_NODES)
+
+
+@app.put("/v1/investigations/{investigation_id}/nodes/{node_id}/picture")
+async def set_entity_picture_route(
+    investigation: InvestigationEditorDep,
+    node_id: str,
+    request: Request,
+    principal: PrincipalDep,
+    pictures: EntityPicturesDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+    name: str = Query(min_length=1),
+    classification: str = Query(min_length=1),
+    legal_basis: str = Query(min_length=1),
+    handling_code: str = Query(default="P", min_length=1),
+) -> PictureSetResult:
+    """One entity's own picture (ADR-105): an image Document that `DEPICTS` it, added as any file
+    is (a marking the person could read and a legal basis), replacing the picture they could see
+    before, which is kept. Audited with the name, size, marking and legal basis."""
+    limit = max_upload_bytes()
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > limit:
+        raise HTTPException(status_code=413, detail="That file is larger than the upload limit.")
+    try:
+        filename = validate_upload_name(name, PICTURE_EXTENSIONS)
+    except UploadRefused as refusal:
+        raise HTTPException(
+            status_code=_UPLOAD_REFUSAL_STATUS[refusal.code], detail=refusal.message
+        ) from refusal
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > limit:
+            raise HTTPException(
+                status_code=413, detail="That file is larger than the upload limit."
+            )
+    handling = Handling(
+        classification=classification,
+        handling_code=handling_code,
+        originator=principal.org_unit,
+        owning_unit=principal.org_unit,
+    )
+    result = await pictures.set(
+        investigation.id, node_id, principal, name=filename, data=bytes(data), handling=handling
+    )
+    for delta in result.deltas:
+        await publish_delta(valkey, investigation.id, delta)
+    await audit.record(
+        principal=principal,
+        action="set_entity_picture",
+        investigation_id=investigation.id,
+        resolved_query={
+            "node_id": node_id,
+            "document_id": result.document_id,
+            "name": filename,
+            "size": len(data),
+            "classification": classification,
+            "legal_basis": legal_basis,
+        },
+        result_cardinality=1,
+    )
+    return result
+
+
+@app.delete("/v1/investigations/{investigation_id}/nodes/{node_id}/picture")
+async def remove_entity_picture_route(
+    investigation: InvestigationEditorDep,
+    node_id: str,
+    principal: PrincipalDep,
+    pictures: EntityPicturesDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> DeltaReplaceEdge:
+    """The entity goes back to its type's picture (ADR-105); its own is kept, no longer shown."""
+    delta = await pictures.remove(investigation.id, node_id, principal)
+    await publish_delta(valkey, investigation.id, delta)
+    await audit.record(
+        principal=principal,
+        action="remove_entity_picture",
+        investigation_id=investigation.id,
+        resolved_query={"node_id": node_id},
+        result_cardinality=1,
+    )
+    return delta
+
+
+@app.post("/v1/investigations/{investigation_id}/pictures")
+async def entity_pictures_route(
+    investigation: InvestigationViewerDep,
+    body: PicturesRequest,
+    principal: PrincipalDep,
+    pictures: EntityPicturesDep,
+    audit: AuditDep,
+) -> list[EntityPicture]:
+    """Which of these entities have a picture of their own the caller can see (ADR-105)."""
+    found = await pictures.pictures(investigation.id, body.node_ids, principal)
+    await audit.record(
+        principal=principal,
+        action="read_entity_pictures",
+        investigation_id=investigation.id,
+        resolved_query={"node_ids": len(body.node_ids)},
+        result_cardinality=len(found),
+    )
+    return found
+
+
+@app.get("/v1/investigations/{investigation_id}/nodes/{node_id}/picture")
+async def entity_picture_file_route(
+    investigation: InvestigationViewerDep,
+    node_id: str,
+    principal: PrincipalDep,
+    pictures: EntityPicturesDep,
+    audit: AuditDep,
+) -> Response:
+    """The entity's picture's file, to someone who can see it; one they cannot answers as none."""
+    data, content_type = await pictures.file(investigation.id, node_id, principal)
+    await audit.record(
+        principal=principal,
+        action="read_entity_picture",
+        investigation_id=investigation.id,
+        resolved_query={"node_id": node_id},
         result_cardinality=1,
     )
     return Response(content=data, media_type=content_type)

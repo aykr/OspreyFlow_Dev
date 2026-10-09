@@ -93,7 +93,12 @@
 # writes, an index or an adapter reads has changed in this step, and moving it would flag every
 # published recipe as stale. (The Ingest Studio's refusal of a Probabilistic type, build step D,
 # is a recipe rule and may revisit that.)
-version: 12
+# v13 (ADR-105): one entity's own picture. `DEPICTS` runs from an image `Document` to the Person,
+# Organisation, Vehicle, Device, Location or Asset it shows, with `shown` false once the picture is
+# removed (the link is superseded, never deleted). A recipe may write it, so the version moves;
+# every recipe fixture pinned to 12 is bumped to 13 alongside this, and a published recipe is
+# flagged once to be reopened and published again.
+version: 13
 entity_types:
   - name: Person
     pole_class: person
@@ -207,6 +212,14 @@ edge_types:
   # ADR-094 step 2: content held by an entity (a phone's photos, videos and saved files), recorded
   # by the source that holds it, so Direct.
   - {name: HOLDS,             from: [Device, Endpoint, Person, Organisation], to: [Document], directed: true, basis: direct}
+  # ADR-105: a picture of one entity, held in the case as evidence; the Glass draws it on that node.
+  - name: DEPICTS
+    from: [Document]
+    to: [Person, Organisation, Vehicle, Device, Location, Asset]
+    directed: true
+    basis: direct
+    properties:
+      - {name: shown, type: boolean}
   - {name: ASSOCIATE_OF,      from: [Person], to: [Person], directed: false, basis: direct}
   - name: FAMILY_OF
     from: [Person]

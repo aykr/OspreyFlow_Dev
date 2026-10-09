@@ -467,7 +467,7 @@ id: cdr-carrier-a
 version: 4
 label: "Carrier A — call detail records"
 connector: {profile: cdr-generic-csv, delimiter: ",", encoding: utf-8, header_rows: 1}
-ontology_version: 12
+ontology_version: 13
 
 defaults:
   provenance: {state: asserted}

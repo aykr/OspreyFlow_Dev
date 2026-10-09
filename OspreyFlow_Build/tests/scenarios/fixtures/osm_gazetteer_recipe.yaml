@@ -17,7 +17,7 @@ label: "OSM-derived gazetteer (tier 1)"
 connector:
   profile: geo-osm-pbf
   source_crs: "EPSG:4326"
-ontology_version: 12
+ontology_version: 13
 
 defaults:
   provenance: {state: asserted}

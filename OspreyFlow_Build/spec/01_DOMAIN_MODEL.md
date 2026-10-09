@@ -13,7 +13,7 @@ bespoke application.
 The ontology is a YAML document validated against a JSON Schema at startup:
 
 ```yaml
-# ontology/default.yaml (abridged; version 12 is in force, ADR-094 Amendment 1)
+# ontology/default.yaml (abridged; version 13 is in force, ADR-105)
 version: 12
 entity_types:
   - name: Person
@@ -83,6 +83,7 @@ edge_types:
   - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], temporal: true, basis: direct}
   - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true, basis: direct}
   - {name: HOLDS,             from: [Device, Endpoint, Person, Organisation], to: [Document], directed: true, basis: direct}  # ADR-094
+  - {name: DEPICTS,           from: [Document], to: [Person, Organisation, Vehicle, Device, Location, Asset], directed: true, basis: direct}  # ADR-105; property `shown` (boolean)
   - {name: ASSOCIATE_OF,      from: [Person], to: [Person], directed: false, basis: direct}
   - {name: FAMILY_OF,         from: [Person], to: [Person], directed: false, properties: [relation], basis: direct}
   - {name: MEMBER_OF,         from: [Person], to: [Organisation], basis: direct}

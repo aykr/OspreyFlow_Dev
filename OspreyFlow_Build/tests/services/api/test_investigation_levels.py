@@ -75,6 +75,11 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/documents/{document_id}/reader"): V,
     ("POST", P + "/documents"): E,
     ("GET", P + "/documents/{document_id}/file"): V,
+    # ADR-105: one entity's own picture.
+    ("PUT", P + "/nodes/{node_id}/picture"): E,
+    ("DELETE", P + "/nodes/{node_id}/picture"): E,
+    ("GET", P + "/nodes/{node_id}/picture"): V,
+    ("POST", P + "/pictures"): V,
     ("POST", P + "/documents/{document_id}/extract"): E,
     ("POST", P + "/documents/{document_id}/candidates/{candidate_id}/accept"): E,
     ("POST", P + "/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/accept"): E,

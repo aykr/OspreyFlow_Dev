@@ -10235,3 +10235,30 @@ Status: accepted 9 October 2026 (the owner, of the choices put: "A part argument
 
 `tests/ingest/test_structured_transform_parts.py`: each part of a person name and an address's postcode; an unknown part refused; the catalogue's parts; the save-time refusal of no part and of an unknown part; a recipe binding both parts dry-runs to the two names in two properties. Six red first with only `STRUCTURED_PARTS` in place. `FieldBindingEditor.parts.test.tsx`: Map offers each part and not the bare transform (red first).
 
+
+## ADR-105 — One entity has its own picture: an image Document that `DEPICTS` it
+
+Status: accepted 9 October 2026 (the owner: "I may want to set the picture of particular car or person to particular picture and at the same time i might want to change the standard icon to a picture for the whole entity type"; of the choices put, "In the case, as evidence", "The entity's own" first, and "A new DEPICTS link").
+
+### Context
+
+ADR-079 gave a *type* of node an icon, and let the analyst choose a picture of their own for a type, kept in their browser. It left "a picture or icon per node rather than per type" undecided, so a picture chosen for one car was drawn on every Vehicle. The owner needs both: one entity's own picture, and still a picture for the whole type. The second half exists (ADR-079's *Icons* control) and is unchanged; this record is the first half.
+
+A picture of a person or a car is evidence about it: someone took it, it came from somewhere, it carries a marking and was added under a legal basis. So it is held as content is held (ADR-094), not as a display preference.
+
+### Decision
+
+1. **A picture of one entity is an image `Document` linked to it by `DEPICTS`.** `DEPICTS` runs from `Document` to `Person`, `Organisation`, `Vehicle`, `Device`, `Location` or `Asset`; it is directed, Direct and not temporal, and declares one property, `shown` (boolean). A recipe may write it, so the **ontology moves to version 13**: every recipe fixture pinned to 12 is moved with it, and a recipe published in a running deployment is flagged once, to be reopened and published again (as ADR-094 Amendment 1).
+2. **Setting a picture.** `PUT /v1/investigations/{id}/nodes/{node_id}/picture`, Editor, with the file as the body and `name`, `classification` and `legal_basis` as parameters, exactly as an upload (ADR-094 step 3): a png, jpeg, webp or gif (never an SVG), within the upload cap, at a marking the person could read. The entity must be one the person can see (`visible_node`, one 404 for missing and hidden) and of a type `DEPICTS` allows. The Document is written as an upload is (content-addressed, `media_kind: image`, the file in the media store), and the `DEPICTS` link carries the **picture's** marking, so a reader who may not see the picture does not see the link either. Both are added to the case's working set. If the entity already has a picture the person can see, that link is **superseded** by the new one (`GraphPort.supersede_edge`): the old picture stays, as evidence and in the link's history, and is no longer the one drawn. Audited as `set_entity_picture`, with the legal basis.
+3. **Removing a picture** (`DELETE` on the same path, Editor) supersedes the current link with a copy whose `shown` is false. Nothing is deleted. An entity with no picture the person can see answers 404 `picture_not_found`. Audited as `remove_entity_picture`.
+4. **Reading pictures.** `POST /v1/investigations/{id}/pictures` with `node_ids`, Viewer, answers, for each id in the case's working set that has one, the Document id of its picture: the newest `DEPICTS` link that is not superseded, not `shown: false`, and comes from an image Document. It reads through `GraphPort.expand` (inbound, `DEPICTS` only, depth 1), so the adapter filters the link and the Document by the reader's access (rule 3): a picture the reader may not see reads exactly as no picture, and with an older one superseded, nothing else shows through. The file itself is read from `GET /v1/investigations/{id}/nodes/{node_id}/picture`, Viewer, which resolves the picture the same way. Not the document file route: that one serves only a Document in this case's working set, and a picture added in another case is not.
+5. **What the canvas draws, in order:** the entity's own picture; else the analyst's choice for its type (ADR-079, this browser); else the ontology's icon. A picture is cut to the node's shape with the provenance outline over it, as ADR-079 draws a type's picture, and is fetched with the analyst's token and drawn only through ADR-079's strict data-address check.
+6. **The Inspector has a *Picture* section** for an entity whose type `DEPICTS` allows: the current picture, *Set picture…* (a file, its marking and the legal basis, both required) and *Remove picture*. Both actions are registered and proved by keyboard (rule 13).
+
+### Not decided here
+
+The picture is evidence in the graph, so it is drawn in any case holding the entity, for anyone who may read it; nothing scopes it to the case it was added in. A person who cannot see an entity's current picture and sets one adds a second link rather than superseding the hidden one; a reader who can see both is shown the newer. Pictures in search results, the timeline or a report. Choosing one of an entity's existing image Documents (one it `HOLDS`, or one already in the case) instead of uploading a file.
+
+### Tests
+
+Written first, each shown red: the ontology at version 13 and `DEPICTS`'s ends (`tests/ontology/test_content_ontology.py`); setting, replacing (the old link superseded, not deleted), removing, a refused SVG, a refused type, an entity the person cannot see (404, as missing), and the audit rows (`tests/services/api/test_entity_pictures.py`); **access control (rule 4):** a picture marked above the reader's clearance reads as no picture, with and without an older visible picture behind it; the canvas's precedence (`nodeAttributes` unit cases); the Inspector's two actions (`keyboard/inspector.spec.ts`).
