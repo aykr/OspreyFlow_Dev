@@ -31,6 +31,8 @@ export interface MapCanvasProps {
   linkFromRef: string | null;
   onSelect: (selection: MapSelection) => void;
   onBackgroundClick: () => void;
+  /** Handed the Sigma instance once made; for a harness that reads where a node is drawn. */
+  onReady?: (sigma: Sigma) => void;
 }
 
 export function MapCanvas({
@@ -40,6 +42,7 @@ export function MapCanvas({
   linkFromRef,
   onSelect,
   onBackgroundClick,
+  onReady,
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sigmaRef = useRef<Sigma | null>(null);
@@ -73,6 +76,7 @@ export function MapCanvas({
       defaultEdgeColor: colours.edge,
     });
     sigmaRef.current = sigma;
+    onReady?.(sigma);
     sigma.on("clickNode", ({ node }) => onSelectRef.current({ kind: "entity", ref: node }));
     sigma.on("clickEdge", ({ edge }) => {
       const index = graphRef.current.getEdgeAttribute(edge, "templateIndex") as number;
@@ -88,6 +92,7 @@ export function MapCanvas({
     };
     // Constructed once; the graph's own content is synced by the effect
     // below via `graphRef`, not by recreating the Sigma instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
