@@ -116,3 +116,30 @@ describe("test_the_evidence_picker_never_offers_an_edge_as_a_citation_option", (
     expect(listbox.textContent ?? "").toContain("Mercer");
   });
 });
+
+// 9 October 2026, in the deployed Glass: the evidence box offered nothing. Its options were worked
+// out once from the working-set graph, which the canvas fills in place after the panel has mounted
+// (at page load it is empty), so the list never grew. A node on the canvas is evidence to offer.
+describe("evidence is offered from the working set as it is now", () => {
+  test("a node that arrives after the panel opened is offered", async () => {
+    mockFetchEmptyLists();
+    const graph = new Graph();
+    render(
+      <JudgementsPanel
+        apiBaseUrl="http://localhost:8000"
+        bearerToken="tok"
+        investigationId="inv-1"
+        workingSetGraph={graph}
+        selectedNodeId={null}
+        onHighlightNodes={() => undefined}
+      />,
+    );
+    graph.addNode("n1", { data: { type: "Person", properties: { family_name: "Mercer" } } });
+
+    fireEvent.click(screen.getByText("Add judgement, gap or assumption"));
+    const picker = await screen.findByLabelText("Add supporting evidence");
+    fireEvent.change(picker, { target: { value: "Mer" } });
+    const listbox = await screen.findByRole("listbox");
+    expect(listbox.textContent ?? "").toContain("Mercer");
+  });
+});

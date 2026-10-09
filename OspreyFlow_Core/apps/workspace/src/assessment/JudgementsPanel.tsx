@@ -172,10 +172,11 @@ export function JudgementsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [investigationId]);
 
-  const nodeOptions = useMemo(
-    () => workingSetGraph.nodes().map((id) => ({ value: id, label: nodeLabel(workingSetGraph, id) })),
-    [workingSetGraph],
-  );
+  // Read from the working set on every render, not memoised on it: the canvas fills the same graph
+  // in place, so a memo keyed on it was worked out once, at page load, empty (9 October 2026).
+  const nodeOptions = workingSetGraph
+    .nodes()
+    .map((id) => ({ value: id, label: nodeLabel(workingSetGraph, id) }));
 
   const judgementOptions = useMemo(
     () => judgements.map((j) => ({ value: j.id, label: j.statement.slice(0, 60) })),
