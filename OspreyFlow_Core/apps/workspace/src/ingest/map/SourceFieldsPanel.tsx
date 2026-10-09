@@ -2,6 +2,8 @@
 // the row scrubber ("the template is always shown bound to a real row, and
 // the analyst can page through"), and the unmapped-fields list ("Unmapped
 // fields are shown, always").
+import { useState } from "react";
+
 import type { ColumnProfile, MapSampleRow } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
@@ -133,16 +135,22 @@ function UnmappedFieldRow({
   field: string;
   onIgnore: (field: string, note: string | null) => void;
 }) {
+  // The note is held here so Ignore keeps it; the button once ignored with no note, and only Enter
+  // kept what was typed (9 October 2026).
+  const [note, setNote] = useState("");
+  const ignore = () => onIgnore(field, note.trim() || null);
   return (
     <div style={{ display: "flex", gap: "var(--sp-8, 8px)", alignItems: "center" }}>
       <strong style={{ flex: 1 }}>{field}</strong>
       <Input
         placeholder="note (optional)"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") onIgnore(field, (e.target as HTMLInputElement).value || null);
+          if (e.key === "Enter") ignore();
         }}
       />
-      <Button onClick={() => onIgnore(field, null)}>Ignore</Button>
+      <Button onClick={ignore}>Ignore</Button>
     </div>
   );
 }
