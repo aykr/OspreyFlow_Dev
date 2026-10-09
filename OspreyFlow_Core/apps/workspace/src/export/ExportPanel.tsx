@@ -19,7 +19,9 @@
 import type Graph from "graphology";
 import { useState } from "react";
 
+import type { Node } from "../../../../packages/schemas/generated";
 import { listAssumptions, listGaps, listJudgements, getYardstick } from "../assessment/api";
+import { nodeLabel } from "../canvas/nodeAttributes";
 import { Button } from "../design/primitives/Button";
 import { Drawer } from "../design/primitives/Drawer";
 import { Input } from "../design/primitives/Input";
@@ -58,13 +60,11 @@ type ArtefactKind = "chart" | "subgraph" | "report";
 function itemLabel(graph: Graph, id: string, kind: "node" | "edge"): string {
   if (kind === "node") {
     if (!graph.hasNode(id)) return id;
-    const data = graph.getNodeAttribute(id, "data") as
-      | { type?: string; properties?: Record<string, unknown> }
-      | undefined;
-    const name =
-      (data?.properties?.family_name as string | undefined) ??
-      (data?.properties?.value_normalised as string | undefined);
-    return name ? `${data?.type ?? "Node"}: ${name}` : id;
+    // Named as the canvas names it; a labeller of this panel's own once knew only `family_name`
+    // and sent a document to the gate by its content id (9 October 2026).
+    const data = graph.getNodeAttribute(id, "data") as Node | undefined;
+    if (!data) return id;
+    return `${data.type}: ${nodeLabel({ ...data, id })}`;
   }
   if (!graph.hasEdge(id)) return id;
   const data = graph.getEdgeAttribute(id, "data") as { type?: string } | undefined;

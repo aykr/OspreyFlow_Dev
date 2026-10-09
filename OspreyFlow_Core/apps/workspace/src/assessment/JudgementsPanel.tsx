@@ -8,6 +8,7 @@
 import type Graph from "graphology";
 import { useEffect, useMemo, useState } from "react";
 
+import { nodeLabel } from "../canvas/nodeAttributes";
 import { Button } from "../design/primitives/Button";
 import { Combobox } from "../design/primitives/Combobox";
 import { Drawer } from "../design/primitives/Drawer";
@@ -28,7 +29,7 @@ import {
 } from "./api";
 import { ReviewFlagChip } from "./ReviewFlagChip";
 
-import type { Assumption, IntelligenceGap, Judgement } from "../../../../packages/schemas/generated";
+import type { Assumption, IntelligenceGap, Judgement, Node } from "../../../../packages/schemas/generated";
 
 export interface JudgementsPanelProps {
   apiBaseUrl: string;
@@ -54,15 +55,14 @@ export interface JudgementsPanelProps {
 
 type DrawerTab = "judgement" | "gap" | "assumption";
 
-function nodeLabel(graph: Graph, nodeId: string): string {
+/** Named as the canvas names it (`canvas/nodeAttributes.ts`), with its type in front. This panel
+ * once kept a labeller of its own that knew only `family_name`, so an option read "Person: OKAFOR"
+ * for "OKAFOR, Callum" and a document by its content id (9 October 2026). */
+function optionLabel(graph: Graph, nodeId: string): string {
   if (!graph.hasNode(nodeId)) return nodeId;
-  const data = graph.getNodeAttribute(nodeId, "data") as
-    | { type?: string; properties?: Record<string, unknown> }
-    | undefined;
-  const name =
-    (data?.properties?.family_name as string | undefined) ??
-    (data?.properties?.value_normalised as string | undefined);
-  return name ? `${data?.type ?? "Node"}: ${name}` : nodeId;
+  const data = graph.getNodeAttribute(nodeId, "data") as Node | undefined;
+  if (!data) return nodeId;
+  return `${data.type}: ${nodeLabel({ ...data, id: nodeId })}`;
 }
 
 /** A `Combobox` (add) plus a chip list (remove) — the shared shape both the judgement/gap
@@ -176,7 +176,7 @@ export function JudgementsPanel({
   // in place, so a memo keyed on it was worked out once, at page load, empty (9 October 2026).
   const nodeOptions = workingSetGraph
     .nodes()
-    .map((id) => ({ value: id, label: nodeLabel(workingSetGraph, id) }));
+    .map((id) => ({ value: id, label: optionLabel(workingSetGraph, id) }));
 
   const judgementOptions = useMemo(
     () => judgements.map((j) => ({ value: j.id, label: j.statement.slice(0, 60) })),

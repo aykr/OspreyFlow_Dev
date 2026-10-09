@@ -143,3 +143,32 @@ describe("evidence is offered from the working set as it is now", () => {
     expect(listbox.textContent ?? "").toContain("Mercer");
   });
 });
+
+// 9 October 2026, in the deployed Glass: the evidence list read "Person: OKAFOR" for a node the
+// canvas labels "OKAFOR, Callum", and a document by its content id. The panel had a labeller of its
+// own that knew only `family_name`; an option names a node as the canvas does.
+describe("an evidence option names its node as the canvas does", () => {
+  test("a person's given names and a document's title are shown", async () => {
+    mockFetchEmptyLists();
+    const graph = new Graph();
+    graph.addNode("p1", { data: { id: "p1", type: "Person", properties: { family_name: "OKAFOR", given_names: "Callum" } } });
+    graph.addNode("content:69b2", { data: { id: "content:69b2", type: "Document", properties: { title: "Wing officer's note" } } });
+    render(
+      <JudgementsPanel
+        apiBaseUrl="http://localhost:8000"
+        bearerToken="tok"
+        investigationId="inv-1"
+        workingSetGraph={graph}
+        selectedNodeId={null}
+        onHighlightNodes={() => undefined}
+      />,
+    );
+    fireEvent.click(screen.getByText("Add judgement, gap or assumption"));
+    const picker = await screen.findByLabelText("Add supporting evidence");
+    fireEvent.change(picker, { target: { value: "O" } });
+    const text = (await screen.findByRole("listbox")).textContent ?? "";
+    expect(text).toContain("OKAFOR, Callum");
+    expect(text).toContain("Wing officer's note");
+    expect(text).not.toContain("content:69b2");
+  });
+});

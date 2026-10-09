@@ -1153,7 +1153,9 @@ across three places.
 **Judgement authoring.** Statement (`Input`, multi-line); probability band via `Select`, populated
 from the active deployment's yardstick file (§9.3); an evidence picker drawing from the current
 canvas selection or `Combobox` search, split into `supporting`/`contradicting`
-(`01_DOMAIN_MODEL.md` §5's own field names). **A judgement cannot be saved with zero supporting
+(`01_DOMAIN_MODEL.md` §5's own field names). An evidence option names its node as the canvas does
+(its type, then the canvas label: "Person: OKAFOR, Callum", a document by its title), and so does each
+item an export sends to the gate (§10.1); neither keeps a labeller of its own. **A judgement cannot be saved with zero supporting
 references** — A13's own literal assertion — so the `Save` `Button` is disabled, not merely
 validated on submit, until at least one evidence item is attached: the constraint is visible
 before the analyst attempts to save, per §7's own copy-rule discipline of saying what will happen

@@ -309,3 +309,32 @@ describe("test_export_panel_produces_subgraph_export.test.tsx", () => {
     }
   });
 });
+
+// 9 October 2026: the export request named each item with a labeller of the panel's own that knew
+// only `family_name`, so a document went to the gate (and into a blocked-item message) by its
+// content id. An item is named as the canvas names it.
+describe("an export item is named as the canvas names it", () => {
+  test("a document's title and a person's full name are sent as the labels", async () => {
+    let sent: { items?: { id: string; label: string }[] } = {};
+    mockFetch((url, init) => {
+      if (url.includes("/resolution/threshold")) return { threshold: 0.95 };
+      if (url.includes("/export")) {
+        sent = JSON.parse(String(init?.body ?? "{}"));
+        return { ok: false, status: 422, json: async () => ({ error: "override_required", detail: "x", blocked: [] }) };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const handling = { classification: "OFFICIAL", handling_code: "P", owning_unit: "unit-1", originator: "unit-1" };
+    const graph = new Graph();
+    graph.addNode("p1", { data: { id: "p1", type: "Person", properties: { family_name: "OKAFOR", given_names: "Callum" }, handling } });
+    graph.addNode("content:69b2", { data: { id: "content:69b2", type: "Document", properties: { title: "Wing officer's note" }, handling } });
+    render(
+      <ExportPanel apiBaseUrl="http://localhost:8000" bearerToken="tok" investigationId="inv-1" graph={graph} open={true} onClose={() => undefined} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(sent.items?.length).toBe(2));
+    const labels = Object.fromEntries((sent.items ?? []).map((i) => [i.id, i.label]));
+    expect(labels["p1"]).toContain("OKAFOR, Callum");
+    expect(labels["content:69b2"]).toContain("Wing officer's note");
+  });
+});
