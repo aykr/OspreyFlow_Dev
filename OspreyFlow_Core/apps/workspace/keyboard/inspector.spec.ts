@@ -108,6 +108,72 @@ test("a link's handling is lowered by keyboard, and only once confirmed", async 
   registerCovered(REGISTRY, "lower-a-links-handling-with-a-confirmation-by-keyboard");
 });
 
+// ADR-105: a 1x1 PNG, so the picture is really read and drawn small in the browser.
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+async function servePictures(page: Page) {
+  const sent: { method: string; query: Record<string, string> }[] = [];
+  let held = false;
+  const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route("**/v1/handling-scheme", (r) => r.fulfill(json({ classification: ["OFFICIAL", "SECRET"] })));
+  await page.route("**/v1/investigations/inv-1/pictures", (r) =>
+    r.fulfill(json(held ? [{ node_id: "car-1", document_id: "content:1" }] : [])),
+  );
+  await page.route("**/v1/investigations/inv-1/nodes/car-1/picture**", async (route) => {
+    const request = route.request();
+    const method = request.method();
+    sent.push({ method, query: Object.fromEntries(new URL(request.url()).searchParams) });
+    if (method === "PUT") {
+      held = true;
+      await route.fulfill(json({ document_id: "content:1", deltas: [{ op: "add", seq: 7, nodes: [], edges: [] }] }));
+    } else if (method === "DELETE") {
+      held = false;
+      await route.fulfill(json({ op: "replace_edge", seq: 8 }));
+    } else {
+      await route.fulfill({ status: 200, contentType: "image/png", body: PNG });
+    }
+  });
+  return sent;
+}
+
+async function setPictureByKeyboard(page: Page) {
+  await page.getByRole("button", { name: "Picture", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByLabel("Picture file").setInputFiles({ name: "car.png", mimeType: "image/png", buffer: PNG });
+  await page.getByLabel("Picture legal basis").focus();
+  await page.keyboard.type("Seized under PACE s19");
+  await page.getByRole("button", { name: "Set picture" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("img", { name: "This entity's own picture" })).toBeVisible();
+}
+
+test("an entity's own picture is set by keyboard, with its marking and legal basis", async ({ page }) => {
+  const sent = await servePictures(page);
+  await page.goto("/keyboard/inspector-harness.html?view=picture");
+  await setPictureByKeyboard(page);
+  expect(sent[0]).toEqual({
+    method: "PUT",
+    query: { name: "car.png", classification: "OFFICIAL", legal_basis: "Seized under PACE s19" },
+  });
+  await expect.poll(() => page.evaluate(() => window.__INSPECTOR__?.deltas)).toEqual([7]);
+  registerCovered(REGISTRY, "set-an-entitys-own-picture-by-keyboard");
+});
+
+test("an entity's own picture is removed by keyboard, back to its type's", async ({ page }) => {
+  const sent = await servePictures(page);
+  await page.goto("/keyboard/inspector-harness.html?view=picture");
+  await setPictureByKeyboard(page);
+  await page.getByRole("button", { name: "Remove picture" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("No picture of its own: it is drawn with its type's.")).toBeVisible();
+  expect(sent.map((s) => s.method)).toContain("DELETE");
+  await expect.poll(() => page.evaluate(() => window.__INSPECTOR__?.deltas)).toEqual([7, 8]);
+  registerCovered(REGISTRY, "remove-an-entitys-own-picture-by-keyboard");
+});
+
 test("every registered Inspector action has its own proving test case above", () => {
   assertAllCovered("INSPECTOR_ACTIONS", INSPECTOR_ACTIONS);
 });

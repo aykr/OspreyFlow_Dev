@@ -3,6 +3,7 @@ import type { EdgeTypeDef, Judgement, Node } from "../../../../packages/schemas/
 import { JudgementsPanel } from "../assessment/JudgementsPanel";
 import { Panel } from "../design/primitives/Panel";
 import { AccordionSection } from "../design/primitives/AccordionSection";
+import { EntityPicture, type EntityPictureProps } from "./EntityPicture";
 import { LinkDetails, type LinkDetailsProps } from "./LinkDetails";
 import { LinkChange } from "./LinkChange";
 import type { LinkChangeResult } from "./linkChangeApi";
@@ -63,6 +64,8 @@ export interface InspectorProps {
   };
   /** ADR-100 Amendment 7: who shares contacts with the selected node. Absent: not offered. */
   sharedContacts?: Omit<SharedContactsProps, "node">;
+  /** ADR-105: the entity's own picture. Absent: not offered. */
+  picture?: EntityPictureProps;
   /** Phase 8 Stage 4c: the Judgements tab, `02_GLASS_FRONTEND.md` §9. `undefined` when the
    * caller has not wired assessment production up yet (an existing test harness) — the tab is
    * then simply not offered, the same optional-prop pattern `dimmedNodeIds`/`communityHulls`
@@ -80,7 +83,7 @@ export interface InspectorProps {
 }
 
 type LinkPart = "details" | "change" | "notes" | "events" | "history";
-type NodePart = "properties" | "relationships" | "shared" | "provenance" | "source" | "judgements";
+type NodePart = "properties" | "picture" | "relationships" | "shared" | "provenance" | "source" | "judgements";
 
 /** Which parts of a panel are open, starting from `initial`; `toggle` opens or closes one. */
 function useOpenParts<T extends string>(initial: readonly T[]) {
@@ -119,6 +122,7 @@ export function Inspector({
   selection,
   visualFor,
   sharedContacts,
+  picture,
 }: InspectorProps) {
   // The link menu's counters only ever rise; a part opens when one rises, never on a later
   // selection just because a counter is above zero.
@@ -184,6 +188,7 @@ export function Inspector({
         assessment={assessment}
         visualFor={visualFor}
         sharedContacts={sharedContacts}
+        picture={picture}
       />
     </Panel>
   );
@@ -409,11 +414,13 @@ function NodeView({
   assessment,
   visualFor,
   sharedContacts,
+  picture,
 }: {
   node: Node | null;
   assessment: InspectorProps["assessment"];
   visualFor?: InspectorProps["visualFor"];
   sharedContacts?: InspectorProps["sharedContacts"];
+  picture?: InspectorProps["picture"];
 }) {
   const parts = useOpenParts<NodePart>(node ? ["properties"] : ["judgements"]);
   // Judgements fetches the case's whole list, so it is built the first time its part is opened
@@ -464,6 +471,9 @@ function NodeView({
             ))}
           </dl>,
         )}
+      {node &&
+        picture?.types.has(node.type) &&
+        section("picture", "Picture", <EntityPicture {...picture} nodeId={node.id} />)}
       {node &&
         section(
           "relationships",

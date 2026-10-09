@@ -345,6 +345,11 @@ export function App() {
   const [ontologyEdgeTypes, setEdgeTypes] = useState<EdgeTypeDef[]>([]);
   // A hotspot is a place: the panel counts events on links ending at a Location, and shows only
   // when the ontology has such links (9 October 2026).
+  // ADR-105: the entity types a picture of its own may depict.
+  const pictureTypes = useMemo(
+    () => new Set(ontologyEdgeTypes.find((t) => t.name === "DEPICTS")?.to ?? []),
+    [ontologyEdgeTypes],
+  );
   const hotspotEdgeTypes = useMemo(
     () => locationEdgeTypeNames(ontologyEdgeTypes),
     [ontologyEdgeTypes],
@@ -1302,6 +1307,17 @@ export function App() {
                               investigationId,
                               edgeTypes: ontologySchema.edge_types,
                               onDelta: applyStarterDelta,
+                            }
+                          : undefined
+                      }
+                      picture={
+                        ontologySchema && pictureTypes.size > 0
+                          ? {
+                              apiBaseUrl: API_BASE_URL,
+                              bearerToken,
+                              investigationId,
+                              types: pictureTypes,
+                              onDelta: (delta) => applyStarterDelta(delta as WorkingSetDelta),
                             }
                           : undefined
                       }

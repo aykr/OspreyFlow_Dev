@@ -115,6 +115,7 @@ import { labelIsLiteral, NODE_LABEL_FONT, NODE_LABEL_SIZE } from "./nodeLabel";
 import { getLabelChoices, onLabelChoicesChange } from "./labelChoices";
 import { LabelsMenu } from "./LabelsMenu";
 import { IconsMenu } from "./IconsMenu";
+import { forgetEntityPictures, loadEntityPictures, onEntityPicturesChange } from "./entityPictures";
 import { onIconChoicesChange } from "./iconChoices";
 import {
   boxAt,
@@ -955,6 +956,23 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // A different icon chosen for a type (ADR-079): it is baked into each node's picture, so the
     // nodes' stored pictures are worked out again, then the canvas is drawn.
     useEffect(() => onIconChoicesChange(() => redrawForThemeRef.current()), []);
+    // An entity's own picture (ADR-105) is baked in the same way. The pictures of the nodes in view
+    // are asked for whenever the view changes; only types a picture can depict are asked about, and
+    // the server answers only for pictures the analyst may see.
+    useEffect(() => onEntityPicturesChange(() => redrawForThemeRef.current()), []);
+    useEffect(() => forgetEntityPictures, [investigationId]);
+    useEffect(() => {
+      if (!bearerToken || !investigationId) return;
+      const depicts = edgeTypes.find((t) => t.name === "DEPICTS");
+      if (!depicts) return;
+      const pictured = new Set(depicts.to);
+      const ids: string[] = [];
+      graph.forEachNode((id, attrs) => {
+        if (pictured.has(attrs.data.type)) ids.push(id);
+      });
+      void loadEntityPictures({ apiBaseUrl, bearerToken, investigationId }, ids).catch(() => undefined);
+      // `workingSetSeq` changes whenever nodes or links are added or removed.
+    }, [workingSetSeq, graph, edgeTypes, apiBaseUrl, bearerToken, investigationId]);
 
     // Assign an initial position and the graph-level (rarely-changing)
     // visual attributes exactly once, when a node is added to the working

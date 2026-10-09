@@ -6,8 +6,9 @@
 // in this browser only, never sent to the server and not part of the case. The canvas cannot read it
 // from a component's state, so it is a small store the canvas listens to.
 import { glyphMarkup, hasGlyph } from "../color/nodeGlyphs";
-import { isSafeImageDataUrl, type NodeIcon } from "../color/nodeVisual";
+import { MAX_IMAGE_ICON_CHARS, isSafeImageDataUrl, type NodeIcon } from "../color/nodeVisual";
 import { readableTextOn } from "../color/oklab";
+import { entityPictureFor } from "./entityPictures";
 
 export const ICON_CHOICES_KEY = "ospreyflow.node-icons";
 
@@ -139,4 +140,20 @@ export function resolveNodeIcon(
   const name = choice?.kind === "glyph" ? choice.name : ontologyIcon;
   if (typeof name !== "string" || glyphMarkup(name, fillHex) === null) return null;
   return { kind: "glyph", name, colourHex: readableTextOn(fillHex) };
+}
+
+/** The icon to draw inside node `nodeId` (ADR-105): the entity's own picture, else what
+ * `resolveNodeIcon` gives its type. The key names the node, because the drawn picture is cached by
+ * its key and two entities may hold the same picture. */
+export function resolveIconForNode(
+  nodeId: string,
+  entityType: string,
+  ontologyIcon: string | null | undefined,
+  fillHex: string,
+): NodeIcon | null {
+  const own = entityPictureFor(nodeId);
+  if (own !== undefined && isSafeImageDataUrl(own) && own.length <= MAX_IMAGE_ICON_CHARS) {
+    return { kind: "image", key: `node:${nodeId}:${imageKeyFor(own)}`, dataUrl: own };
+  }
+  return resolveNodeIcon(entityType, ontologyIcon, fillHex);
 }

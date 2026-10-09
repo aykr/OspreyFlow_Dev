@@ -42,9 +42,27 @@ window.__INSPECTOR__ = { deltas: [] };
 
 /** `?view=node`: a person selected, with who shares contacts with them (ADR-100 Amendment 7). */
 const NODE_VIEW = new URLSearchParams(window.location.search).get("view") === "node";
+/** `?view=picture`: a car selected, which may have a picture of its own (ADR-105). */
+const PICTURE_VIEW = new URLSearchParams(window.location.search).get("view") === "picture";
+
+const car = { ...person("car-1", "unused"), type: "Vehicle", properties: {} } as unknown as Node;
 
 function Harness() {
   const [noteSignal, setNoteSignal] = useState(0);
+  if (PICTURE_VIEW) {
+    return (
+      <Inspector
+        node={car}
+        picture={{
+          apiBaseUrl: "http://keyboard-test.invalid",
+          bearerToken: "unused",
+          investigationId: "inv-1",
+          types: new Set(["Vehicle"]),
+          onDelta: (delta) => window.__INSPECTOR__!.deltas.push((delta as { seq: number }).seq),
+        }}
+      />
+    );
+  }
   if (NODE_VIEW) {
     return (
       <Inspector

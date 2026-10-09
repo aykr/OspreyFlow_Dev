@@ -29,7 +29,7 @@ import { cachedNodeSvgDataUri, type StrokeStyle } from "../color/nodeVisual";
 import { mixOklab } from "../color/oklab";
 import { activePalette } from "../color/palette";
 import type { EntityVisual } from "../ontology/schema";
-import { resolveNodeIcon } from "./iconChoices";
+import { resolveIconForNode } from "./iconChoices";
 import { chosenLabel, defaultLabel } from "./labelChoices";
 import { linkCaption, linkTypeName } from "./linkLabel";
 import { zoomBandForRatio, type ZoomBand } from "./zoomBands";
@@ -176,8 +176,9 @@ export function computeNodeGraphAttributes(
     fillHex,
     strokeHex: stroke.hex,
     strokeStyle: stroke.style,
-    // The analyst's own choice for the type, else the ontology's (ADR-079).
-    icon: resolveNodeIcon(node.type, visual.icon, fillHex),
+    // The entity's own picture (ADR-105), else the analyst's choice for the type, else the
+    // ontology's (ADR-079).
+    icon: resolveIconForNode(node.id, node.type, visual.icon, fillHex),
     iconOpacity: state.filteredOut ? 0.2 : state.dimmed ? 0.45 : 1,
   });
 

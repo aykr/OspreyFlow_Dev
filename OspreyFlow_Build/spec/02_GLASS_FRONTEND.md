@@ -577,6 +577,18 @@ keyboard (`Tab` to the button, `Enter` to open, arrow keys to choose, `Escape` t
 control is an ordinary file input), and `keyboard/keyboard.spec.ts` proves it, including that a
 picture given from a file reaches the canvas's pixels.
 
+**One entity's own picture (ADR-105).** An entity whose type a picture may depict (`DEPICTS`'s
+`to`) has a *Picture* part in the Inspector: its current picture, *Set picture* (a file, its marking
+and its legal basis, both required) and *Remove picture*. Unlike the type's picture, it is evidence
+held in the case on the server, so every analyst who may see it sees it. The canvas draws, in order,
+the entity's own picture, the analyst's picture or drawing for the type, then the ontology's icon.
+The pictures of the nodes in view are asked for when the view changes
+(`canvas/entityPictures.ts`), fetched with the analyst's token, and drawn small through the same
+thumbnail and data-address check as a type's picture. Reachable by keyboard
+(`keyboard/inspector.spec.ts`, `set-an-entitys-own-picture-by-keyboard` and
+`remove-an-entitys-own-picture-by-keyboard`). Not proved: the entity's picture reaching the canvas's
+pixels, as the type's picture is; the precedence is a unit case (`canvas/entityPictures.test.ts`).
+
 ### 3.1f The right-click menu on a link (ADR-080)
 
 Right-click on a drawn link (the click finds the nearest link within 6 pixels), or select it (`L`
