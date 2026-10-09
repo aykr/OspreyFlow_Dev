@@ -10401,3 +10401,36 @@ Amendment 1's procedure). Tests red first: the version case, Endpoint moving fro
 to the allowed list (`test_content_ontology.py`), and `test_entity_pictures.py`'s v13 refusal
 ("a phone number has no picture of its own") replaced by its v14 counterpart, with an Event keeping
 the service's refusal path exercised.
+
+## ADR-107 — The welcome screen as the deployment's entry point: the launcher as a service
+
+Status: accepted 9 October 2026 (the owner's choice between presented options: "Launcher as a
+service"); **not yet built** — the staged plan below is the next work block.
+
+### Context
+
+The welcome screen (Glass, Ingest Studio, Admin console as tiles) is `scripts/launch.py`, a local
+process on `127.0.0.1:7070` that dies with the terminal that started it; the owner found it gone
+and wants it always there as the entry address. The admin console itself stays the harness's
+process at 7100 and never joins the product containers (ADR-049's boundary is not moved by this).
+
+### Decision, staged
+
+1. **Stage 1 — serve-only mode.** `scripts/launch.py --serve-only` (env
+   `OSPREY_LAUNCH_SERVE_ONLY=1`): serves the page and the sign-in flow (ADR-051 unchanged), never
+   spawns or stops anything — a door that is not running is said to be not running, with the
+   command that starts it, instead of a Start action. No docker socket ever enters a container.
+2. **Stage 2 — a `welcome` service** in the local-lite deployment, from the harness image (whose
+   traced set already carries `scripts/`), running serve-only on published port 7070, restart
+   unless-stopped. The entry address becomes `http://localhost:7070`.
+3. **Stage 3 — the renderer carries what the compose holds.** `harness.render` gains the welcome
+   service and the owner's standing hand edits (the tiles, ingest and fonts mounts), closing the
+   friction-log's "make refresh does not carry new mounts" debt: after this, a re-render drops
+   nothing. Until stage 3 lands, the welcome service is the same kind of recorded hand edit the
+   mounts already are.
+
+### Tests to write first
+
+Serve-only refuses to spawn (a planted spawner records any call and the test asserts none); the
+tiles' not-running states; ADR-051's sign-in enforcement unchanged under serve-only; stage 3's
+render check (`--check`) green against the owner's compose once the config carries the edits.

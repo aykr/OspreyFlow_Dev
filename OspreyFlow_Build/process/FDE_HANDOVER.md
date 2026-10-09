@@ -281,8 +281,13 @@ From the friction log, the owner's live checks still to do or report:
 17. `make refresh` does not carry new mounts into the generated compose; the hand edits (ingest root, tiles,
     `fonts`) live in `deploy/generated/local-lite/compose.yaml` and survive it.
 
+18. **ADR-107 (accepted 9 October 2026, not yet built): the launcher as a service** — the welcome
+    screen as the deployment's entry point at `localhost:7070`. Stage 1 `--serve-only`, stage 2 the
+    `welcome` container from the harness image, stage 3 the renderer carrying the owner's compose
+    hand edits (closes item 17). The ADR has the staged plan and the tests to write first.
+
 **Deck**
-18. Add `d21_map_masts.jpg` (and, if wanted, a picture slide) and rebuild with `deck_build/build_deck.py`.
+19. Add `d21_map_masts.jpg` (and, if wanted, a picture slide) and rebuild with `deck_build/build_deck.py`.
 
 **Unchanged from before 9 October:** sections 5, 6.1 to 6.4, and the standing summary's "Remains after the
 milestone" in `07_BUILD_PLAN.md` (the harness-image ports test, GitHub Actions never run, B6's span
