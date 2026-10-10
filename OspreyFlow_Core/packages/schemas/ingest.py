@@ -248,6 +248,46 @@ class StudioRecipeStatus(StrEnum):
     SUPERSEDED = "superseded"
 
 
+class PipelineNodeKind(StrEnum):
+    """The pipeline graph's closed node vocabulary (`06_DECISIONS.md` ADR-108). Closed on
+    purpose: rule 8 — no expression or scripting language in the Studio; every node is a declared
+    stage whose transforms remain Knowledge Adapters with golden files."""
+
+    DOMAIN_MODEL = "domain_model"
+    SOURCE = "source"
+    PROFILE = "profile"
+    MAP = "map"
+    EXTRACT = "extract"
+    ENRICH = "enrich"
+    LOAD = "load"
+
+
+class PipelineNode(BaseModel):
+    """One stage of a pipeline. `config` carries the stage's own settings (a source node's
+    connector profile and location, a domain node's pack) — its keys are each stage's declared
+    vocabulary, validated by `services/ingest/pipeline.py`, never free code."""
+
+    id: str
+    kind: PipelineNodeKind
+    label: str
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class PipelineEdge(BaseModel):
+    """A data dependency: `source` feeds `target`. The graph is acyclic (validated at save)."""
+
+    source: str
+    target: str
+
+
+class PipelineGraph(BaseModel):
+    """ADR-108: the recipe as a typed DAG. A v1 recipe that has none is read as its canonical
+    chain (`pipeline_from_recipe`), derived at read time and never stored back."""
+
+    nodes: list[PipelineNode] = Field(default_factory=list)
+    edges: list[PipelineEdge] = Field(default_factory=list)
+
+
 class ConnectDraftInput(BaseModel):
     """What Connect (§2) actually collects: a connector choice and the
     three mandatory gate answers. Nothing here is optional except
@@ -330,6 +370,9 @@ class StudioRecipeDraft(BaseModel):
     #: ADR-099 Amendment 3: the dataset of the case it was made in; found, listed and run only in a
     #: case reading it. `None` for one made before, until `stamp_datasets` places it.
     dataset_id: str | None = None
+    #: ADR-108: the recipe as a typed DAG. `None` for a v1 recipe, which reads as its canonical
+    #: chain through `pipeline_from_recipe` — derived, never stored back.
+    pipeline: PipelineGraph | None = None
 
     @model_validator(mode="before")
     @classmethod
