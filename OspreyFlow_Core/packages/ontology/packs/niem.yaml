@@ -1,0 +1,27 @@
+# NIEM domain pack (ADR-108 phase D) — the National Information Exchange Model's justice-domain
+# shape over the POLE core, which POLE already mirrors. NIEM is published by the US Government as
+# a public-domain national standard (https://www.niem.gov/). NIEM Roles — a base entity assuming
+# a temporary function (a vehicle as a weapon) — land as role-edges with a validity interval
+# (ADR-108 ruling Q4): one hop, the base entity never duplicated.
+pack: niem
+pack_version: 1
+entity_types: []
+edge_types:
+  - name: USED_AS
+    from: [Vehicle, Device, Asset, Endpoint]
+    to: [Event]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Used as
+    properties:
+      - {name: role, type: string, required: true}
+  - name: ROLE_IN
+    from: [Person, Organisation]
+    to: [Event]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Role in
+    properties:
+      - {name: role, type: string, required: true}

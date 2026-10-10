@@ -1,0 +1,86 @@
+# STIX 2.1 domain pack (ADR-108 phase D) — a curated subset of OASIS STIX 2.1's graph model over
+# the POLE core: SDOs as entity types, SROs as typed edges; SCOs (IPs, domains, hashes) are
+# Endpoints and Documents the core already holds, named by their identifiers. STIX 2.1 is an OASIS
+# Standard (https://docs.oasis-open.org/cti/stix/v2.1/), implementable under the OASIS IPR policy;
+# this file implements its vocabulary, it does not copy its text.
+pack: stix
+pack_version: 1
+entity_types:
+  - name: ThreatActor
+    pole_class: person
+    channel: indigo
+    shape: triangle
+    icon: shield
+    identifiers: []
+    properties:
+      - {name: name, type: string, required: true, indexed: true}
+      - {name: sophistication, type: string}
+      - {name: motivation, type: string}
+  - name: Campaign
+    pole_class: event
+    channel: moss
+    shape: triangle
+    icon: flag
+    identifiers: []
+    properties:
+      - {name: name, type: string, required: true, indexed: true}
+      - {name: objective, type: string}
+  - name: Malware
+    pole_class: object
+    channel: ochre
+    shape: hexagon
+    icon: box
+    identifiers: []
+    properties:
+      - {name: name, type: string, required: true, indexed: true}
+      - {name: malware_types, type: "string[]"}
+  - name: Vulnerability
+    pole_class: object
+    channel: jade
+    shape: square
+    icon: tag
+    identifiers: []
+    properties:
+      - {name: name, type: string, required: true, indexed: true}
+      - {name: cve, type: string, indexed: true}
+  - name: Infrastructure
+    pole_class: object
+    channel: violet
+    shape: hexagon
+    icon: globe
+    identifiers: []
+    properties:
+      - {name: name, type: string, required: true, indexed: true}
+      - {name: infrastructure_types, type: "string[]"}
+edge_types:
+  - name: ATTRIBUTED_TO
+    from: [Campaign, Malware]
+    to: [ThreatActor, Organisation]
+    directed: true
+    basis: direct
+    label: Attributed to
+  - name: TARGETS
+    from: [ThreatActor, Campaign, Malware]
+    to: [Organisation, Person, Infrastructure, Vulnerability]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Targets
+  - name: INDICATES
+    from: [Endpoint, Document]
+    to: [ThreatActor, Campaign, Malware, Infrastructure]
+    directed: true
+    basis: direct
+    label: Indicates
+  - name: COMPROMISES
+    from: [Malware, ThreatActor]
+    to: [Device, Infrastructure, Endpoint, Organisation]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Compromises
+  # The core's USES gains the SDO ends; nothing of it is redefined.
+  - name: USES
+    extends: true
+    from: [ThreatActor, Campaign]
+    to: [Malware, Infrastructure]

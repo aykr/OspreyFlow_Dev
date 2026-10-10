@@ -1,0 +1,53 @@
+# FIBO domain pack (ADR-108 phase D) — a curated subset of the Financial Industry Business
+# Ontology's corporate-structure, beneficial-ownership, account and transaction vocabulary,
+# mapped onto the POLE core. FIBO is published by the EDM Council under the MIT licence
+# (https://spec.edmcouncil.org/fibo/); this file implements its definitions, it does not copy its
+# text. Curated, not complete: what the Studio's financial-fraud and AML pipelines bind to.
+pack: fibo
+pack_version: 1
+entity_types:
+  - name: Account
+    pole_class: object
+    channel: azure
+    shape: hexagon
+    icon: card
+    identifiers: [iban, card]
+    properties:
+      - {name: account_number, type: string, required: true, indexed: true}
+      - {name: institution, type: string, indexed: true}
+      - {name: currency, type: string}
+      - {name: opened_on, type: date}
+edge_types:
+  # fibo-be: beneficial ownership — who ultimately owns or benefits, directly or through layers.
+  - name: BENEFICIAL_OWNER_OF
+    from: [Person, Organisation]
+    to: [Organisation, Account]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Beneficial owner of
+    properties:
+      - {name: percent, type: float}
+      - {name: nature, type: string}
+  # fibo-be: control without necessarily owning (directorships, signatory powers).
+  - name: CONTROLS
+    from: [Person, Organisation]
+    to: [Organisation, Account]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Controls
+    properties:
+      - {name: capacity, type: string}
+  - name: HOLDS_ACCOUNT
+    from: [Person, Organisation]
+    to: [Account]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Holds account
+  # The core's TRANSACTED gains Accounts at both ends; nothing of it is redefined.
+  - name: TRANSACTED
+    extends: true
+    from: [Account]
+    to: [Account]
