@@ -61,6 +61,7 @@ from services.extract.writer import (
 )
 from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.engine import run_recipe
+from services.ingest.pipeline import pipeline_from_recipe
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import RecipeRuleError, check_recipe_rules
 from services.ingest.staging import ObjectStorageConfig
@@ -5802,6 +5803,9 @@ async def get_studio_recipe_draft(
         update={
             "created_by_name": names.get(recipe.created_by),
             "published_by_name": names.get(recipe.published_by or ""),
+            # ADR-108 phase A: a v1 recipe reads as its canonical chain — derived here, never
+            # stored back, the same read-time discipline the display names above follow.
+            "pipeline": pipeline_from_recipe(recipe),
         }
     )
 

@@ -21,6 +21,7 @@ from services.api.app import (
     get_investigations,
     get_ontology,
     get_principal,
+    get_principal_names,
     get_studio_recipes,
 )
 from services.api.studio_recipes import (
@@ -188,6 +189,14 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # unlike every route above it which never touches the scheme at all.
     app.dependency_overrides[get_handling_scheme] = lambda: load_uk_le_scheme()
     app.dependency_overrides[get_ontology] = lambda: load_default_ontology()
+
+    # ADR-106: the read decorates author names; this harness runs no lifespan, so a directory
+    # that resolves nothing stands in (its real behaviour is proven in test_principal_names.py).
+    class _NoNames:
+        async def display_names(self, ids: object) -> dict[str, str]:
+            return {}
+
+    app.dependency_overrides[get_principal_names] = _NoNames
 
     test_client = TestClient(app)
     test_client.studio_recipes = studio_recipes  # type: ignore[attr-defined]
@@ -434,3 +443,24 @@ def test_get_profile_for_a_missing_source_file_is_unprocessable(
 
     assert response.status_code == 422
     assert response.json()["error"] == "source_unreadable"
+
+
+def test_get_draft_carries_its_pipeline_chain(client: TestClient) -> None:
+    """ADR-108 phase A: a v1 recipe reads as its canonical chain — derived at read time, never
+    stored, so the canvas can draw every recipe ever made without touching what is stored."""
+    made = client.post(
+        "/v1/investigations/inv-1/ingest/recipes",
+        json={"label": "Carrier A — CDR", "connector_profile": "generic-csv"},
+    ).json()
+    read = client.get(f"/v1/investigations/inv-1/ingest/recipes/{made['recipe_id']}")
+    assert read.status_code == 200
+    pipeline = read.json()["pipeline"]
+    assert pipeline is not None
+    assert [n["kind"] for n in pipeline["nodes"]] == [
+        "domain_model",
+        "source",
+        "profile",
+        "map",
+        "load",
+    ]
+    assert pipeline["nodes"][0]["config"]["pack"] == "pole"
