@@ -166,6 +166,7 @@ from schemas.ingest import (
     MapHandlingPreviewResult,
     MapSampleRow,
     PipelineGraph,
+    PipelineRunReport,
     PublishRecipeInput,
     RowTemplateUpdateInput,
     RunRecipeInput,
@@ -364,6 +365,13 @@ from .patterns import (
     preview_pattern,
     run_pattern,
     run_pattern_match_job,
+)
+from .pipeline_run import (
+    OnlineGeocode,
+    RecogniserFor,
+    online_geocode_from_env,
+    recogniser_for_deployment,
+    run_published_pipeline,
 )
 from .principal_names import PrincipalNameDirectory
 from .questions import (
@@ -583,6 +591,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     media = ObjectStoreMediaStore(MediaStoreConfig.from_env())
     # ADR-098 decision 2: the fast recogniser, the `ner` sidecar.
     recogniser = RecogniseStanzaAdapter(RecogniserConfig.from_env())
+    # ADR-108 phase C: the pipeline runner's recogniser lookup and the online geocoding
+    # allow-list (`OSPREY_ONLINE_GEOCODER`), both deployment-level wiring, not per-request.
+    app.state.pipeline_recogniser_for = recogniser_for_deployment(recogniser)
+    app.state.online_geocode = online_geocode_from_env()
     app.state.media = media
     app.state.document_reader = DocumentReaderService(
         app.state.working_set, analytics, graph, extraction_candidates, investigations, media
@@ -1015,6 +1027,18 @@ ValkeyDep = Annotated[Valkey, Depends(get_valkey)]
 SiteImageStorageDep = Annotated[ObjectStorageConfig, Depends(get_site_image_storage)]
 TileCacheStorageDep = Annotated[ObjectStorageConfig, Depends(get_tile_cache_storage)]
 AnalyticsDep = Annotated[AnalyticsPort, Depends(get_analytics)]
+
+
+def get_pipeline_recogniser_for(request: Request) -> RecogniserFor:
+    return cast(RecogniserFor, request.app.state.pipeline_recogniser_for)
+
+
+def get_online_geocode(request: Request) -> OnlineGeocode | None:
+    return cast("OnlineGeocode | None", request.app.state.online_geocode)
+
+
+PipelineRecognisersDep = Annotated[RecogniserFor, Depends(get_pipeline_recogniser_for)]
+OnlineGeocodeDep = Annotated[OnlineGeocode | None, Depends(get_online_geocode)]
 
 
 def require_studio_role(role: StudioRole) -> Any:
@@ -6230,7 +6254,10 @@ async def run_studio_recipe(
     patterns_store: PatternsStoreDep,
     alerts_store: AlertsStoreDep,
     principal_resolver: PrincipalResolverDep,
-) -> LoadReport:
+    extraction_candidates: ExtractionCandidatesDep,
+    recogniser_for: PipelineRecognisersDep,
+    online_geocode: OnlineGeocodeDep,
+) -> LoadReport | PipelineRunReport:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
     file; omitted, this repeats against the recipe's own recorded location
@@ -6270,21 +6297,46 @@ async def run_studio_recipe(
     is a narrower, disclosed problem, not a reason to tell the caller their load failed when it
     didn't."""
     load_id = new_id()
-    report = await run_published_recipe(
-        recipe,
-        principal,
-        graph=graph,
-        ontology=ontology,
-        load_id=load_id,
-        investigation_scope=investigation.id,
-        source_location=body.source_location,
-        repo_root=repo_root,
-        analytics=analytics,
-        media=media,
-    )
-    await resolution_trigger_module.submit_post_ingest_resolution_jobs(
-        report, recipe.row_template, ontology=ontology, jobs=jobs
-    )
+    report: LoadReport | PipelineRunReport
+    if recipe.pipeline is not None:
+        # ADR-108 phase C: a recipe holding a pipeline graph runs through the pipeline runner —
+        # branches, extract stages, enrich stages — never silently as its first branch alone.
+        report = await run_published_pipeline(
+            recipe,
+            principal,
+            graph=graph,
+            ontology=ontology,
+            scheme=handling_scheme,
+            load_id=load_id,
+            investigation_scope=investigation.id,
+            repo_root=repo_root,
+            recogniser_for=recogniser_for,
+            candidates=extraction_candidates,
+            analytics=analytics,
+            media=media,
+            source_location=body.source_location,
+            online_geocode=online_geocode,
+        )
+        for branch in report.branches:
+            await resolution_trigger_module.submit_post_ingest_resolution_jobs(
+                branch.report, recipe.row_template, ontology=ontology, jobs=jobs
+            )
+    else:
+        report = await run_published_recipe(
+            recipe,
+            principal,
+            graph=graph,
+            ontology=ontology,
+            load_id=load_id,
+            investigation_scope=investigation.id,
+            source_location=body.source_location,
+            repo_root=repo_root,
+            analytics=analytics,
+            media=media,
+        )
+        await resolution_trigger_module.submit_post_ingest_resolution_jobs(
+            report, recipe.row_template, ontology=ontology, jobs=jobs
+        )
     entry = await ChangeStreamWriter(valkey).publish(
         "ingest",
         node_ids=report.created_node_ids,

@@ -137,6 +137,9 @@ def build_recipe(
         row_template=draft.row_template,
         unmapped_fields=draft.unmapped_fields,
         schedule=schedule,
+        # ADR-108 phase C: the published YAML carries the topology the runner executes, so a run
+        # is provably against what was published. `None` for a v1 draft — its YAML is unchanged.
+        pipeline=draft.pipeline,
     )
 
 

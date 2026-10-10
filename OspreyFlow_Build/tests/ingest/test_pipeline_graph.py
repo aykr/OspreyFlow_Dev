@@ -165,18 +165,22 @@ def test_a_domain_node_names_a_known_pack_or_the_core() -> None:
 
 
 def test_what_the_runner_cannot_run_yet_is_named_not_skipped() -> None:
-    """ADR-108 phase B: a pipeline may hold extract and enrich stages and further sources before
-    the runner exists for them (phase C) — publishing one is refused in words, never published and
-    silently part-run (rule 2)."""
+    """ADR-108 phase C: the runner runs branches, extracts and enriches now, so the publish gate
+    only refuses what it still cannot — an extract library or media kind outside the runner's own
+    set, a handling override missing its mandatory reason (ruling Q2), an unknown geocoder — each
+    in words, never published and silently part-run (rule 2)."""
     from services.ingest.pipeline import pipeline_run_violations
 
+    def with_stage(kind: PipelineNodeKind, config: dict) -> PipelineGraph:
+        stage = PipelineNode(id="stage", kind=kind, label="Stage", config=config)
+        return _graph(
+            [*CHAIN, stage, _node("load2", PipelineNodeKind.LOAD)],
+            [*CHAIN_EDGES, ("map", "stage"), ("stage", "load2")],
+        )
+
     assert pipeline_run_violations(_graph(CHAIN, CHAIN_EDGES)) == []
-    with_extract = _graph(
-        [*CHAIN, _node("extract", PipelineNodeKind.EXTRACT), _node("load2", PipelineNodeKind.LOAD)],
-        [*CHAIN_EDGES, ("map", "extract"), ("extract", "load2")],
-    )
-    problems = pipeline_run_violations(with_extract)
-    assert any("extract" in p and "phase C" in p for p in problems)
+
+    # What phase C runs is no longer refused: a second source, a runnable extract, an enrich.
     two_sources = _graph(
         [
             *CHAIN,
@@ -193,4 +197,34 @@ def test_what_the_runner_cannot_run_yet_is_named_not_skipped() -> None:
             ("map2", "load2"),
         ],
     )
-    assert any("second source" in p for p in pipeline_run_violations(two_sources))
+    assert pipeline_run_violations(two_sources) == []
+    runnable_extract = with_stage(
+        PipelineNodeKind.EXTRACT,
+        {"library": "spacy", "media": "text", "output": "review_queue"},
+    )
+    assert pipeline_run_violations(runnable_extract) == []
+    runnable_enrich = with_stage(PipelineNodeKind.ENRICH, {"geocoder": "local_gazetteer"})
+    assert pipeline_run_violations(runnable_enrich) == []
+
+    # What it cannot run is named, in words.
+    whisper = with_stage(PipelineNodeKind.EXTRACT, {"library": "whisper", "media": "text"})
+    assert any("whisper" in p for p in pipeline_run_violations(whisper))
+    audio = with_stage(PipelineNodeKind.EXTRACT, {"library": "spacy", "media": "audio"})
+    assert any("audio" in p for p in pipeline_run_violations(audio))
+    no_reason = with_stage(
+        PipelineNodeKind.EXTRACT,
+        {"library": "spacy", "media": "text", "handling_override": {"handling_code": "D"}},
+    )
+    assert any("reason" in p for p in pipeline_run_violations(no_reason))
+    with_reason = with_stage(
+        PipelineNodeKind.EXTRACT,
+        {
+            "library": "spacy",
+            "media": "text",
+            "handling_override": {"handling_code": "D"},
+            "override_reason": "open-source text; the source marking over-protects it",
+        },
+    )
+    assert pipeline_run_violations(with_reason) == []
+    odd_geocoder = with_stage(PipelineNodeKind.ENRICH, {"geocoder": "crystal_ball"})
+    assert any("crystal_ball" in p for p in pipeline_run_violations(odd_geocoder))

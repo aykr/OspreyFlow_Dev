@@ -283,3 +283,90 @@ def test_a_loader_not_cleared_for_the_source_cannot_run_it(
     # The graph stand-in is a bare `object()`: had the run started, it would have failed on it.
     assert response.status_code == 403, response.text
     assert response.json()["error"] == "source_above_clearance"
+
+
+def test_a_pipeline_recipe_runs_through_the_pipeline_runner(
+    run_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-108 phase C's dispatch, rule 12's question answered: if the run route quietly fell
+    back to `run_published_recipe` for a recipe holding a pipeline, the response here would be a
+    single `LoadReport` and this test — not the live runner suite, which never crosses HTTP —
+    is what fails. The runner itself is proven in `tests/ingest/test_pipeline_run.py`."""
+    from schemas.ingest import BranchRunReport, LoadReport, PipelineGraph, PipelineRunReport
+
+    pipeline = PipelineGraph.model_validate(
+        {
+            "nodes": [
+                {"id": "domain", "kind": "domain_model", "label": "D", "config": {"pack": "pole"}},
+                {"id": "source", "kind": "source", "label": "A", "config": {}},
+                {"id": "source-b", "kind": "source", "label": "B", "config": {}},
+                {"id": "map", "kind": "map", "label": "Map", "config": {}},
+                {"id": "load", "kind": "load", "label": "Load", "config": {}},
+            ],
+            "edges": [
+                {"source": "domain", "target": "source"},
+                {"source": "domain", "target": "source-b"},
+                {"source": "source", "target": "map"},
+                {"source": "source-b", "target": "map"},
+                {"source": "map", "target": "load"},
+            ],
+        }
+    )
+    published = _verified_draft(tmp_path).model_copy(
+        update={
+            "status": StudioRecipeStatus.PUBLISHED,
+            "ontology_version": 1,
+            "git_path": "recipes/recipe-1.yaml",
+            "pipeline": pipeline,
+        }
+    )
+    run_client.studio_recipes.draft = published  # type: ignore[attr-defined]
+    app.dependency_overrides[get_principal] = lambda: LOADER
+    app.dependency_overrides[get_investigations] = AnyCase
+    # The success path resolves the route's whole dependency list; none of these is reached
+    # past the (monkeypatched) runner because the fake report creates nothing.
+    import services.api.app as app_module
+
+    for getter in (
+        app_module.get_analytics,
+        app_module.get_media,
+        app_module.get_jobs,
+        app_module.get_valkey,
+        app_module.get_config,
+        app_module.get_hotlists_store,
+        app_module.get_monitors_store,
+        app_module.get_patterns_store,
+        app_module.get_alerts_store,
+        app_module.get_principal_resolver,
+        app_module.get_extraction_candidates,
+    ):
+        app.dependency_overrides[getter] = lambda: object()
+    app.dependency_overrides[app_module.get_pipeline_recogniser_for] = lambda: (lambda name: None)
+    app.dependency_overrides[app_module.get_online_geocode] = lambda: None
+
+    async def fake_runner(draft, principal, **kwargs):  # noqa: ANN001, ANN003
+        def branch(source_id: str) -> BranchRunReport:
+            return BranchRunReport(
+                source_id=source_id,
+                source_label=source_id,
+                report=LoadReport(
+                    load_id=f"{kwargs['load_id']}:{source_id}",
+                    recipe_id=draft.recipe_id,
+                    recipe_version=draft.version,
+                ),
+            )
+
+        return PipelineRunReport(
+            load_id=kwargs["load_id"],
+            recipe_id=draft.recipe_id,
+            recipe_version=draft.version,
+            branches=[branch("source"), branch("source-b")],
+        )
+
+    monkeypatch.setattr(app_module, "run_published_pipeline", fake_runner)
+
+    response = run_client.post(f"{CASE}/ingest/recipes/recipe-1/run", json={})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [b["source_id"] for b in body["branches"]] == ["source", "source-b"]

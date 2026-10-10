@@ -652,6 +652,10 @@ class Recipe(BaseModel):
     row_template: RowTemplate
     unmapped_fields: list[UnmappedField] = Field(default_factory=list)
     schedule: ScheduleConfig | None = None
+    #: ADR-108 phase C: the published topology the runner executes. `None` on every recipe
+    #: published before phase C (and on a v1 draft) — those run as the one canonical chain, and
+    #: their committed YAML stays byte-for-byte what it was (`exclude_none` at serialisation).
+    pipeline: PipelineGraph | None = None
 
 
 # --- Rejections and the load report (09_INGEST_STUDIO.md §5) -------------
@@ -680,6 +684,71 @@ class LoadReport(BaseModel):
     #: referenced, and never an edge it only extended (§9.1, when this
     #: becomes a `LoadRecord`, records only what revert may safely
     #: supersede without touching another load's contribution).
+    created_node_ids: list[NodeId] = Field(default_factory=list)
+    touched_edge_ids: list[EdgeId] = Field(default_factory=list)
+
+
+# --- The pipeline run report (06_DECISIONS.md ADR-108 phase C) -------------
+
+
+class BranchRunReport(BaseModel):
+    """One source branch's run: which source node fed it, where it read from, and the branch's
+    own `LoadReport`. Each branch has its own `load_id`, so a branch remains independently
+    revertible (`09_INGEST_STUDIO.md` §9.1)."""
+
+    source_id: str
+    source_label: str
+    source_location: str | None = None
+    report: LoadReport
+
+
+class ExtractStageReport(BaseModel):
+    """One extract node's run, loud about everything it did and refused (rules 2 and 5): how many
+    documents it read, where its findings went, how many carried an overridden handling, and every
+    refusal in words — a stage that could not run says so here, never silently does nothing."""
+
+    node_id: str
+    library: str
+    output: str
+    documents_read: int = 0
+    candidates_queued: int = 0
+    nodes_written_inferred: int = 0
+    #: Findings written under the node's own `handling_override` instead of the source document's
+    #: handling (ruling Q2: allowed, Author-gated, reason mandatory, loud here).
+    handling_overridden: int = 0
+    override_reason: str | None = None
+    refusals: list[str] = Field(default_factory=list)
+
+
+class EnrichStageReport(BaseModel):
+    """One enrich node's run (ruling Q5: local gazetteers first, online only via the deployment's
+    configured allow-list, disclosed per run). A `SAME_AS` match is `inferred`, never a merge."""
+
+    node_id: str
+    geocoder: str
+    locations_considered: int = 0
+    matched_local: int = 0
+    matched_online: int = 0
+    unmatched: int = 0
+    refusals: list[str] = Field(default_factory=list)
+
+
+class PipelineRunReport(BaseModel):
+    """A whole pipeline's run (ADR-108 phase C): every branch's `LoadReport`, every extract and
+    enrich stage's own account, and the aggregates the post-run machinery (resolution trigger,
+    change stream, audit) reads uniformly with a plain `LoadReport`."""
+
+    load_id: str
+    recipe_id: str
+    recipe_version: int
+    branches: list[BranchRunReport] = Field(default_factory=list)
+    extracts: list[ExtractStageReport] = Field(default_factory=list)
+    enriches: list[EnrichStageReport] = Field(default_factory=list)
+    rows_read: int = 0
+    nodes_created: int = 0
+    nodes_referenced: int = 0
+    edges_created: int = 0
+    rejections: list[RejectionRecord] = Field(default_factory=list)
     created_node_ids: list[NodeId] = Field(default_factory=list)
     touched_edge_ids: list[EdgeId] = Field(default_factory=list)
 
@@ -807,6 +876,10 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     Recipe,
     RejectionRecord,
     LoadReport,
+    BranchRunReport,
+    ExtractStageReport,
+    EnrichStageReport,
+    PipelineRunReport,
     VerifyEntityCount,
     VerifyEdgeCount,
     RejectionGroup,

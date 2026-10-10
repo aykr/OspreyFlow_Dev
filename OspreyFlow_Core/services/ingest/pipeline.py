@@ -148,21 +148,48 @@ def pipeline_rule_violations(graph: PipelineGraph) -> list[str]:
     return problems
 
 
+#: What phase C's runner (`services/api/pipeline_run.py`) runs today. The gate below and the
+#: runner's own stage refusals both read these — one vocabulary, two enforcement points.
+SUPPORTED_EXTRACT_LIBRARIES = ("stanza", "spacy", "transformers")
+SUPPORTED_EXTRACT_MEDIA = ("text",)
+SUPPORTED_GEOCODERS = ("local_gazetteer", "online_allowlist")
+
+
 def pipeline_run_violations(graph: PipelineGraph) -> list[str]:
-    """What a publish must refuse because the runner does not run it yet (ADR-108 phase B): a
-    valid-to-save pipeline may hold stages ahead of the engine — publishing one is refused in
-    words, never published and silently part-run (rule 2). Phase C's runner empties this list."""
+    """What a publish must refuse because the runner cannot run it (ADR-108 phase C): branches,
+    text extraction through the wired recognisers, and gazetteer/allow-list enrichment all run
+    now, so what remains is the stage *configuration* the runner would refuse at run time — an
+    extract library or media kind outside its set, a handling override missing its mandatory
+    reason (ruling Q2), an unknown geocoder. Refused here, in words, rather than published and
+    refused loudly later (rule 2 applied as early as the mistake is visible)."""
     problems: list[str] = []
-    sources = [n for n in graph.nodes if n.kind is PipelineNodeKind.SOURCE]
-    if len(sources) > 1:
-        problems.append(
-            "the pipeline holds a second source; the runner runs one source until phase C's "
-            "pipeline runner lands — publish one pipeline per source meanwhile"
-        )
     for node in graph.nodes:
-        if node.kind in (PipelineNodeKind.EXTRACT, PipelineNodeKind.ENRICH):
-            problems.append(
-                f"the pipeline holds an {node.kind.value} stage ('{node.label}'); the runner "
-                "runs it with phase C — remove it to publish now, or wait for phase C"
-            )
+        if node.kind is PipelineNodeKind.EXTRACT:
+            library = str(node.config.get("library", "stanza"))
+            if library not in SUPPORTED_EXTRACT_LIBRARIES:
+                problems.append(
+                    f"extract '{node.label}' names the library '{library}'; the runner runs "
+                    f"{', '.join(SUPPORTED_EXTRACT_LIBRARIES)}"
+                )
+            media = str(node.config.get("media", "text"))
+            if media not in SUPPORTED_EXTRACT_MEDIA:
+                problems.append(
+                    f"extract '{node.label}' reads '{media}' media; the runner extracts from "
+                    "text documents only for now"
+                )
+            if node.config.get("handling_override") is not None and not node.config.get(
+                "override_reason"
+            ):
+                problems.append(
+                    f"extract '{node.label}' declares a handling override without a reason; "
+                    "the reason is mandatory (ruling Q2) — say why the source marking "
+                    "over-protects these findings"
+                )
+        elif node.kind is PipelineNodeKind.ENRICH:
+            geocoder = str(node.config.get("geocoder", "local_gazetteer"))
+            if geocoder not in SUPPORTED_GEOCODERS:
+                problems.append(
+                    f"enrich '{node.label}' names the geocoder '{geocoder}'; the runner runs "
+                    f"{', '.join(SUPPORTED_GEOCODERS)}"
+                )
     return problems

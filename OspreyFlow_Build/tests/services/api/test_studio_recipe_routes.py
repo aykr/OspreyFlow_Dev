@@ -538,8 +538,8 @@ def test_put_pipeline_refuses_a_cycle_in_words(client: TestClient) -> None:
 
 
 def test_publish_refuses_what_the_runner_cannot_run_yet(client: TestClient) -> None:
-    """ADR-108 phase B: a pipeline holding an extract stage saves fine but does not publish until
-    phase C's runner exists — refused in words, never part-run (rule 2)."""
+    """ADR-108 phase C: the runner runs extract stages now, so the gate refuses only what it
+    still cannot — here, a library outside the runner's set — in words, never part-run (rule 2)."""
     made = client.post(
         "/v1/investigations/inv-1/ingest/recipes",
         json={"label": "Pipelined", "connector_profile": "generic-csv"},
@@ -549,7 +549,12 @@ def test_publish_refuses_what_the_runner_cannot_run_yet(client: TestClient) -> N
         json={
             "nodes": [
                 *_CHAIN_NODES,
-                {"id": "extract", "kind": "extract", "label": "Extract", "config": {}},
+                {
+                    "id": "extract",
+                    "kind": "extract",
+                    "label": "Extract",
+                    "config": {"library": "whisper", "media": "text"},
+                },
                 {"id": "load2", "kind": "load", "label": "Load", "config": {}},
             ],
             "edges": [
@@ -578,4 +583,4 @@ def test_publish_refuses_what_the_runner_cannot_run_yet(client: TestClient) -> N
     assert response.status_code == 422, response.text
     body = response.json()
     assert body["error"] == "pipeline_not_runnable"
-    assert any("phase C" in problem for problem in body["problems"])
+    assert any("whisper" in problem for problem in body["problems"])
