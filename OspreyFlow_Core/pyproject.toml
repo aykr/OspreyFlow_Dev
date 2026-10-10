@@ -107,3 +107,15 @@ select = ["E", "F", "I", "UP"]
 
 [tool.uv]
 package = false
+
+# ADR-108 phase D (9-10 October 2026): the in-process recognisers and address enrichment.
+# Installed where extraction pipelines run; the CI image deliberately carries none of them.
+# Licences: spec/00_ARCHITECTURE.md §7 (deepparse is the recorded LGPL-3.0 exception).
+[project.optional-dependencies]
+extraction = [
+    "spacy>=3.8",
+    "transformers>=4.50",
+    "torch>=2.6",
+    "deepparse>=0.9",
+    "geopy>=2.4",
+]

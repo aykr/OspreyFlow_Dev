@@ -3,7 +3,9 @@ adapter (rule 1). Parametrised over `RECOGNISE_PORT_ADAPTERS`; each runs against
 sidecar (`services/ner`), as the model suite runs against a live proxy.
 
 What it proves is the contract, not recognition quality: entities come back with the recogniser's
-label and an exact *character* span into the text given (a byte span would be wrong after any
+label — normalised to the canonical core (PERSON, ORG, GPE) where a library's own tag set differs,
+each adapter's docstring says how — and an exact *character* span into the text given (bytes
+would be wrong after any
 non-ASCII character), an empty text has none, the recogniser names itself, and a text past the
 limit is refused, never read in part.
 """
@@ -46,7 +48,10 @@ async def test_an_empty_text_has_no_entities_and_the_recogniser_names_itself(
     async with factory.context() as adapter:
         result = await adapter.recognise("   ")
     assert result.entities == []
-    assert result.recogniser.startswith("stanza:")
+    # Every recogniser names itself with its version ("stanza:1.10.1", "spacy:en_core_web_sm-…",
+    # "transformers:dslim/bert-base-NER") — generalised from the stanza-only form when ADR-108
+    # phase D added in-process recognisers to this suite.
+    assert ":" in result.recogniser and result.recogniser.split(":")[0].isidentifier()
 
 
 async def test_a_text_past_the_limit_is_refused_not_read_in_part(

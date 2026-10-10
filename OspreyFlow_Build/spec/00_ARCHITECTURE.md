@@ -832,6 +832,17 @@ Regular from the OpenMapTiles fonts release v2.0 (SIL-OFL-1.1), installed into t
 CDN (spec 02 §3.4). Like the OpenStreetMap data the basemap is built from (ODbL), it is data the
 deployment holds, not a dependency of the code.
 
+**ADR-108 additions (9–10 October 2026), each on the allowlist unless said otherwise:** spaCy
+(MIT) and its `en_core_web_sm` pipeline (MIT); Hugging Face `transformers` (Apache-2.0) with
+`torch` (BSD-3-Clause); the `dslim/bert-base-NER` weights (MIT, per its model card), fetched once
+into the local Hugging Face cache and served from disk thereafter; `geopy` (MIT — its *online*
+geocoders are governed by ADR-108 ruling Q5, local gazetteers first and any online use disclosed
+per run). **Recorded LGPL exception:** `deepparse` (LGPL-3.0) — imported unmodified as a separate,
+user-replaceable installed package, never vendored, statically bundled or modified; assessed
+10 October 2026 under ADR-108 (the owner's authorisation of the dependency set is in the ADR).
+Jube (AGPL) and AMLTRIX (commercial, unverifiable as open source) are rejected with CoreNLP below;
+the AML typologies are our own rules (`services/ingest/typologies.py`).
+
 The rejections below matter more than the acceptances, because each is a component someone will
 otherwise reach for by reflex. Two of them appear in the input documents.
 

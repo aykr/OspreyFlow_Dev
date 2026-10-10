@@ -135,7 +135,35 @@ def _recognise_stanza_factories() -> list[RecogniseAdapterFactory]:
     return [RecogniseAdapterFactory(label="recognise_stanza", context=recognise_stanza_adapter)]
 
 
-RECOGNISE_PORT_ADAPTERS: list[RecogniseAdapterFactory] = _recognise_stanza_factories()
+def _recognise_in_process_factories() -> list[RecogniseAdapterFactory]:
+    """ADR-108 phase D: the in-process recognisers, offered only where their libraries are
+    installed — the CI image deliberately carries neither, so their conformance runs on a machine
+    that holds the weights (the friction log records where each last ran green)."""
+    found: list[RecogniseAdapterFactory] = []
+    try:
+        from adapters.recognise_spacy.testing import recognise_spacy_adapter
+
+        found.append(
+            RecogniseAdapterFactory(label="recognise_spacy", context=recognise_spacy_adapter)
+        )
+    except ImportError:
+        pass
+    try:
+        from adapters.recognise_transformers.testing import recognise_transformers_adapter
+
+        found.append(
+            RecogniseAdapterFactory(
+                label="recognise_transformers", context=recognise_transformers_adapter
+            )
+        )
+    except ImportError:
+        pass
+    return found
+
+
+RECOGNISE_PORT_ADAPTERS: list[RecogniseAdapterFactory] = (
+    _recognise_stanza_factories() + _recognise_in_process_factories()
+)
 
 
 @dataclass(frozen=True)
