@@ -464,3 +464,17 @@ def test_get_draft_carries_its_pipeline_chain(client: TestClient) -> None:
         "load",
     ]
     assert pipeline["nodes"][0]["config"]["pack"] == "pole"
+
+
+def test_the_domain_pack_catalogue_names_each_pack_and_what_it_adds(client: TestClient) -> None:
+    """ADR-108 phase D: the Studio's domain-model choice — the POLE core first, then each pack
+    with the entity and link types it brings, so the chooser never guesses."""
+    response = client.get("/v1/ingest/packs")
+    assert response.status_code == 200
+    body = response.json()
+    assert [p["name"] for p in body] == ["pole", "fibo", "niem", "stix"]
+    fibo = body[1]
+    assert "Account" in fibo["entity_types"]
+    assert "BENEFICIAL_OWNER_OF" in fibo["edge_types"]
+    pole = body[0]
+    assert pole["entity_types"] == []  # the core adds nothing to itself; it is the base

@@ -20,6 +20,7 @@ from typing import Any
 import yaml
 
 from schemas.domain import EdgeTypeDef, EntityTypeDef, OntologySchema
+from schemas.ingest import DomainPackEntry
 
 from .errors import OntologyError
 from .loader import _check_edge_endpoints, _check_entity_types
@@ -88,3 +89,27 @@ def compose_with_packs(base: OntologySchema, packs: list[str]) -> OntologySchema
     _check_entity_types(entity_types)
     _check_edge_endpoints(entity_types, edge_types)
     return OntologySchema(version=base.version, entity_types=entity_types, edge_types=edge_types)
+
+
+_PACK_LABELS = {
+    "fibo": "Financial fraud and AML (FIBO)",
+    "niem": "Crime case analysis (NIEM)",
+    "stix": "Cyber threat analytics (STIX 2.1)",
+}
+
+
+def pack_catalogue() -> list[DomainPackEntry]:
+    """The Studio's domain-model choices: the POLE core first (it adds nothing to itself), then
+    each pack with what it brings — read from the packs themselves, never hardcoded."""
+    entries = [DomainPackEntry(name="pole", label="Bespoke POLE (the core model)")]
+    for name in PACK_NAMES:
+        raw = load_pack(name)
+        entries.append(
+            DomainPackEntry(
+                name=name,
+                label=_PACK_LABELS[name],
+                entity_types=[e["name"] for e in raw.get("entity_types") or []],
+                edge_types=[e["name"] for e in raw.get("edge_types") or []],
+            )
+        )
+    return entries

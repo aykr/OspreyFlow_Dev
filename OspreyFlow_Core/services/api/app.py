@@ -62,6 +62,8 @@ from services.extract.writer import (
 from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.engine import run_recipe
 from services.ingest.pipeline import pipeline_from_recipe
+
+from ontology.packs import pack_catalogue
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import RecipeRuleError, check_recipe_rules
 from services.ingest.staging import ObjectStorageConfig
@@ -152,6 +154,7 @@ from schemas.explore import (
     WhatsNew,
 )
 from schemas.ingest import (
+    DomainPackEntry,
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
     ConnectorCatalogueEntry,
@@ -5593,6 +5596,13 @@ async def list_connectors(principal: PrincipalDep) -> list[ConnectorCatalogueEnt
     investigation-scoped and not audited, since nothing here is a node, a
     property value or a count."""
     return list(CONNECTOR_CATALOGUE)
+
+
+@app.get("/v1/ingest/packs")
+async def list_domain_packs(principal: PrincipalDep) -> list[DomainPackEntry]:
+    """ADR-108 phase D: the domain-model catalogue — deployment metadata, the same justification
+    as the connector catalogue above: authenticated, not case-scoped, not audited."""
+    return pack_catalogue()
 
 
 @app.get("/v1/handling-scheme")

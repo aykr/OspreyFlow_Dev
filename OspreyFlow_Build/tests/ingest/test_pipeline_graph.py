@@ -134,3 +134,31 @@ def test_an_extract_belongs_downstream_of_a_map_and_nowhere_else() -> None:
         [*CHAIN_EDGES, ("source", "extract"), ("extract", "load2")],
     )
     assert any("extract" in problem for problem in pipeline_rule_violations(misplaced))
+
+
+def test_a_domain_node_names_a_known_pack_or_the_core() -> None:
+    """ADR-108 phase D: the domain model is the POLE core or a named pack; a typo is a save-time
+    violation, never a silent fallback."""
+    good = _graph(
+        [
+            PipelineNode(
+                id="domain", kind=PipelineNodeKind.DOMAIN_MODEL, label="D", config={"pack": "stix"}
+            ),
+            *CHAIN[1:],
+        ],
+        CHAIN_EDGES,
+    )
+    assert pipeline_rule_violations(good) == []
+    unknown = _graph(
+        [
+            PipelineNode(
+                id="domain",
+                kind=PipelineNodeKind.DOMAIN_MODEL,
+                label="D",
+                config={"pack": "marvel"},
+            ),
+            *CHAIN[1:],
+        ],
+        CHAIN_EDGES,
+    )
+    assert any("marvel" in problem for problem in pipeline_rule_violations(unknown))

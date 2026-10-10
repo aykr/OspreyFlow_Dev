@@ -248,6 +248,16 @@ class StudioRecipeStatus(StrEnum):
     SUPERSEDED = "superseded"
 
 
+class DomainPackEntry(BaseModel):
+    """One domain model the Studio offers (ADR-108 phase D): the POLE core, or a pack with the
+    entity and link types it adds over it."""
+
+    name: str
+    label: str
+    entity_types: list[str] = Field(default_factory=list)
+    edge_types: list[str] = Field(default_factory=list)
+
+
 class PipelineNodeKind(StrEnum):
     """The pipeline graph's closed node vocabulary (`06_DECISIONS.md` ADR-108). Closed on
     purpose: rule 8 — no expression or scripting language in the Studio; every node is a declared
@@ -770,6 +780,7 @@ class LoadRecord(BaseModel):
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     ConnectorCatalogueEntry,
     ConnectDraftInput,
+    DomainPackEntry,
     PipelineNode,
     PipelineEdge,
     PipelineGraph,

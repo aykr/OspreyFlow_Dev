@@ -17,9 +17,10 @@ from __future__ import annotations
 
 from collections import deque
 
+from ontology.packs import PACK_NAMES
 from schemas.ingest import PipelineGraph, PipelineNode, PipelineNodeKind, StudioRecipeDraft
 
-#: The domain pack a v1 recipe reads as, until phase D's packs exist: the POLE core itself.
+#: The domain pack a v1 recipe reads as: the POLE core itself (phase D's packs overlay it).
 CORE_PACK = "pole"
 
 
@@ -121,6 +122,15 @@ def pipeline_rule_violations(graph: PipelineGraph) -> list[str]:
             if node.kind is PipelineNodeKind.SOURCE and not reaches_load:
                 problems.append(
                     f"source '{node.label}' reaches no load; its rows would go nowhere"
+                )
+
+    for node in graph.nodes:
+        if node.kind is PipelineNodeKind.DOMAIN_MODEL:
+            pack = node.config.get("pack", CORE_PACK)
+            if pack not in (CORE_PACK, *PACK_NAMES):
+                problems.append(
+                    f"domain model '{node.label}' names an unknown pack '{pack}'; "
+                    f"the packs are {CORE_PACK}, {', '.join(PACK_NAMES)}"
                 )
 
     backward: dict[str, list[str]] = {}

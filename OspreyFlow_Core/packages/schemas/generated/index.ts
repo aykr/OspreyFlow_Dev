@@ -58,6 +58,7 @@ export type { EventListRequest } from "./EventListRequest";
 export type { EventListResult } from "./EventListResult";
 export type { ConnectorCatalogueEntry } from "./ConnectorCatalogueEntry";
 export type { ConnectDraftInput } from "./ConnectDraftInput";
+export type { DomainPackEntry } from "./DomainPackEntry";
 export type { PipelineNode } from "./PipelineNode";
 export type { PipelineEdge } from "./PipelineEdge";
 export type { PipelineGraph } from "./PipelineGraph";
