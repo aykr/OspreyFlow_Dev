@@ -24,10 +24,19 @@ const NODE_HEIGHT = 56;
 
 export interface PipelineCanvasProps {
   pipeline: PipelineGraph;
+  /** ADR-108 phase B: the Studio owns selection and its own panels; given these, the canvas is a
+   * controlled picker and its built-in read-only settings section stays out of the page. */
+  selectedId?: string | null;
+  onSelect?: (node: PipelineNode) => void;
 }
 
-export function PipelineCanvas({ pipeline }: PipelineCanvasProps) {
-  const [chosen, setChosen] = useState<PipelineNode | null>(null);
+export function PipelineCanvas({ pipeline, selectedId, onSelect }: PipelineCanvasProps) {
+  const controlled = onSelect !== undefined;
+  const [ownChoice, setOwnChoice] = useState<PipelineNode | null>(null);
+  const chosen = controlled
+    ? (pipeline.nodes ?? []).find((n) => n.id === selectedId) ?? null
+    : ownChoice;
+  const setChosen = (node: PipelineNode) => (controlled ? onSelect?.(node) : setOwnChoice(node));
   const allNodes = pipeline.nodes ?? [];
   const allEdges = pipeline.edges ?? [];
   const placed = new Map(pipelineLayout(pipeline).map((p) => [p.id, p]));
@@ -122,7 +131,7 @@ export function PipelineCanvas({ pipeline }: PipelineCanvasProps) {
           );
         })}
       </div>
-      {chosen && (
+      {chosen && !controlled && (
         <section
           aria-label="Node settings"
           style={{

@@ -424,6 +424,17 @@ export const PIPELINE_CANVAS_ACTIONS = defineActionRegistry("PIPELINE_CANVAS_ACT
   "read-a-nodes-settings-by-keyboard",
 ] as const);
 
+/** The pipeline Studio (ADR-108 phase B): the fresh screens, every action keyboard-provable. */
+export const PIPELINE_STUDIO_ACTIONS = defineActionRegistry("PIPELINE_STUDIO_ACTIONS", [
+  "create-a-pipeline-by-keyboard",
+  "open-a-pipeline-by-keyboard",
+  "add-a-source-branch-by-keyboard",
+  "choose-a-domain-pack-by-keyboard",
+  "apply-extract-settings-by-keyboard",
+  "remove-a-node-by-keyboard",
+  "open-the-map-editor-by-keyboard",
+] as const);
+
 export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   "ask-a-question-with-ctrl-enter",
   "ask-a-question-with-the-ask-button",

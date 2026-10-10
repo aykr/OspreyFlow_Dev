@@ -22,6 +22,8 @@ import type {
   TransformDescriptor,
   UnmappedField,
   VerifyReport,
+  PipelineGraph,
+  DomainPackEntry,
 } from "../../../../packages/schemas/generated";
 
 export interface HandlingCode {
@@ -498,4 +500,41 @@ export async function runRecipe(
     response,
     "POST /v1/investigations/{id}/ingest/recipes/{id}/run",
   );
+}
+
+/** ADR-108 phase B: what the pipeline save answers — the draft, or every problem in words. */
+export type PipelineSaveOutcome =
+  | { kind: "saved"; draft: StudioRecipeDraft }
+  | { kind: "invalid"; problems: string[] };
+
+export async function savePipeline(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  recipeId: string,
+  pipeline: PipelineGraph,
+): Promise<PipelineSaveOutcome> {
+  const response = await fetch(
+    `${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/pipeline`,
+    {
+      method: "PUT",
+      headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
+      body: JSON.stringify(pipeline),
+    },
+  );
+  if (response.status === 422) {
+    const body = (await response.json()) as { error?: string; problems?: string[] };
+    if (body.error === "pipeline_invalid") {
+      return { kind: "invalid", problems: body.problems ?? [] };
+    }
+  }
+  return { kind: "saved", draft: await parseOrThrow(response, "PUT /v1/ingest/recipes/{id}/pipeline") };
+}
+
+export async function fetchDomainPacks(
+  apiBaseUrl: string,
+  bearerToken: string,
+): Promise<DomainPackEntry[]> {
+  const response = await fetch(`${apiBaseUrl}/v1/ingest/packs`, { headers: authHeaders(bearerToken) });
+  return parseOrThrow(response, "GET /v1/ingest/packs");
 }
