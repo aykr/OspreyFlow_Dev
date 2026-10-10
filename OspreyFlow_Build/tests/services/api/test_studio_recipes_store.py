@@ -20,6 +20,10 @@ from services.api.studio_recipes import (
 
 from schemas.domain import Principal
 from schemas.ingest import (
+    PipelineEdge,
+    PipelineGraph,
+    PipelineNode,
+    PipelineNodeKind,
     RecipeEntity,
     RowTemplate,
     StudioRecipeDraft,
@@ -465,3 +469,57 @@ async def test_flag_stale_flags_only_published_recipes_targeting_a_different_ont
     assert refetched_stale.status is StudioRecipeStatus.FLAGGED
     refetched_current = await store.get(current_published.recipe_id)
     assert refetched_current.status is StudioRecipeStatus.PUBLISHED
+
+
+def _chain_pipeline() -> PipelineGraph:
+    nodes = [
+        PipelineNode(
+            id="domain", kind=PipelineNodeKind.DOMAIN_MODEL, label="D", config={"pack": "fibo"}
+        ),
+        PipelineNode(id="source", kind=PipelineNodeKind.SOURCE, label="S"),
+        PipelineNode(id="profile", kind=PipelineNodeKind.PROFILE, label="P"),
+        PipelineNode(id="map", kind=PipelineNodeKind.MAP, label="M"),
+        PipelineNode(id="load", kind=PipelineNodeKind.LOAD, label="L"),
+    ]
+    chain = ["domain", "source", "profile", "map", "load"]
+    return PipelineGraph(
+        nodes=nodes,
+        edges=[PipelineEdge(source=a, target=b) for a, b in zip(chain, chain[1:], strict=False)],
+    )
+
+
+async def test_a_saved_pipeline_round_trips_and_survives_a_connect_edit(
+    store: StudioRecipeStore,
+) -> None:
+    """ADR-108 phase B: the pipeline is part of the draft's one content document, so an edit to any
+    other part must carry it — the same sibling-field rule `update_draft`'s own row-template
+    comment states."""
+    made = await store.create_draft(AUTHOR, label="Pipelined", connector_profile="generic-csv",
+                                    source_location=None, handling={}, legal_basis=None)
+    saved = await store.update_pipeline(made.recipe_id, AUTHOR, pipeline=_chain_pipeline())
+    assert saved.pipeline is not None
+    assert [n.kind for n in saved.pipeline.nodes][0] == PipelineNodeKind.DOMAIN_MODEL
+    edited = await store.update_draft(made.recipe_id, AUTHOR, label="Renamed")
+    assert edited.pipeline is not None, "a Connect edit dropped the pipeline"
+    assert edited.pipeline == saved.pipeline
+    read = await store.get_authorized(made.recipe_id, AUTHOR)
+    assert read.pipeline == saved.pipeline
+
+
+async def test_update_pipeline_rejects_once_the_recipe_is_no_longer_a_draft(
+    store: StudioRecipeStore,
+) -> None:
+    made = await store.create_draft(AUTHOR, label="P", connector_profile="generic-csv",
+                                    source_location=None, handling={}, legal_basis=None)
+    await store.mark_verified(made.recipe_id, made.version, now=datetime(2026, 1, 1, tzinfo=UTC))
+    await store.publish(
+        made.recipe_id,
+        AUTHOR,
+        ontology_version=14,
+        git_path="recipes/p.yaml",
+        schedule_cron=None,
+        schedule_watch=None,
+        now=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+    with pytest.raises(StudioRecipeNotADraftError):
+        await store.update_pipeline(made.recipe_id, AUTHOR, pipeline=_chain_pipeline())

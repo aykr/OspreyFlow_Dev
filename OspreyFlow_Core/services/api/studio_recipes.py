@@ -35,7 +35,13 @@ import asyncpg
 
 from conduit_common.identity import new_id
 from schemas.domain import Principal
-from schemas.ingest import RowTemplate, StudioRecipeDraft, StudioRecipeStatus, UnmappedField
+from schemas.ingest import (
+    PipelineGraph,
+    RowTemplate,
+    StudioRecipeDraft,
+    StudioRecipeStatus,
+    UnmappedField,
+)
 
 from .dataset_scope import made_in, reach_clause
 
@@ -95,6 +101,25 @@ class StudioRecipeCannotVersionError(Exception):
     definition (its own successor already exists)."""
 
 
+def _content_json(draft: StudioRecipeDraft, **overrides: object) -> str:
+    """The draft's one content document, every sibling field carried — the rule `update_draft`'s
+    row-template comment states, now in one place so no writer can forget a field (ADR-108 phase B:
+    the first dropped-sibling was nearly `pipeline`)."""
+    whole: dict[str, object] = {
+        "connector_profile": draft.connector_profile,
+        "source_location": draft.source_location,
+        "handling": draft.handling,
+        "legal_basis": draft.legal_basis,
+        "row_template": draft.row_template.model_dump(by_alias=True)
+        if draft.row_template is not None
+        else None,
+        "unmapped_fields": [f.model_dump() for f in draft.unmapped_fields],
+        "pipeline": draft.pipeline.model_dump(by_alias=True) if draft.pipeline else None,
+    }
+    whole.update(overrides)
+    return json.dumps(whole)
+
+
 def _row_to_draft(row: asyncpg.Record) -> StudioRecipeDraft:
     data = dict(row)
     content = json.loads(data.pop("content"))
@@ -122,6 +147,9 @@ def _row_to_draft(row: asyncpg.Record) -> StudioRecipeDraft:
         unmapped_fields=[
             UnmappedField.model_validate(f) for f in content.get("unmapped_fields", [])
         ],
+        pipeline=PipelineGraph.model_validate(content["pipeline"])
+        if content.get("pipeline")
+        else None,
         verified_at=data["verified_at"],
         ontology_version=data["ontology_version"],
         git_path=data["git_path"],
@@ -239,31 +267,47 @@ class StudioRecipeStore:
         draft = await self.get_authorized(recipe_id, principal)
         if draft.status is not StudioRecipeStatus.DRAFT:
             raise StudioRecipeNotADraftError(recipe_id)
-        content = json.dumps(
-            {
-                "connector_profile": connector_profile
-                if connector_profile is not None
-                else draft.connector_profile,
-                "source_location": source_location
-                if source_location is not None
-                else draft.source_location,
-                "handling": handling if handling is not None else draft.handling,
-                "legal_basis": legal_basis if legal_basis is not None else draft.legal_basis,
-                # A Connect-stage edit must not silently drop a row template
-                # Map has already saved (§4/§6: "a draft is a row" —
-                # `content` is the whole draft, not just Connect's own
-                # fields) — carried over as-is, Connect never touches it.
-                "row_template": draft.row_template.model_dump(by_alias=True)
-                if draft.row_template is not None
-                else None,
-                "unmapped_fields": [f.model_dump() for f in draft.unmapped_fields],
-            }
+        content = _content_json(
+            draft,
+            **{
+                k: v
+                for k, v in {
+                    "connector_profile": connector_profile,
+                    "source_location": source_location,
+                    "handling": handling,
+                    "legal_basis": legal_basis,
+                }.items()
+                if v is not None
+            },
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE studio_recipes SET label = $1, content = $2, verified_at = NULL "
                 "WHERE recipe_id = $3 AND version = $4",
                 label if label is not None else draft.label,
+                content,
+                recipe_id,
+                draft.version,
+            )
+        return await self.get(recipe_id)
+
+    async def update_pipeline(
+        self,
+        recipe_id: str,
+        principal: Principal,
+        *,
+        pipeline: PipelineGraph,
+    ) -> StudioRecipeDraft:
+        """The pipeline's own save (ADR-108 phase B) — draft-only, like every other edit; an edit
+        clears `verified_at`, since what was dry-run is no longer what would run."""
+        draft = await self.get_authorized(recipe_id, principal)
+        if draft.status is not StudioRecipeStatus.DRAFT:
+            raise StudioRecipeNotADraftError(recipe_id)
+        content = _content_json(draft, pipeline=pipeline.model_dump(by_alias=True))
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE studio_recipes SET content = $1, verified_at = NULL "
+                "WHERE recipe_id = $2 AND version = $3",
                 content,
                 recipe_id,
                 draft.version,
@@ -284,15 +328,10 @@ class StudioRecipeStore:
         draft = await self.get_authorized(recipe_id, principal)
         if draft.status is not StudioRecipeStatus.DRAFT:
             raise StudioRecipeNotADraftError(recipe_id)
-        content = json.dumps(
-            {
-                "connector_profile": draft.connector_profile,
-                "source_location": draft.source_location,
-                "handling": draft.handling,
-                "legal_basis": draft.legal_basis,
-                "row_template": row_template.model_dump(by_alias=True),
-                "unmapped_fields": [f.model_dump() for f in unmapped_fields],
-            }
+        content = _content_json(
+            draft,
+            row_template=row_template.model_dump(by_alias=True),
+            unmapped_fields=[f.model_dump() for f in unmapped_fields],
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
@@ -435,18 +474,7 @@ class StudioRecipeStore:
         draft = await self.get_authorized(recipe_id, principal)
         if draft.status not in (StudioRecipeStatus.PUBLISHED, StudioRecipeStatus.FLAGGED):
             raise StudioRecipeCannotVersionError(recipe_id)
-        content = json.dumps(
-            {
-                "connector_profile": draft.connector_profile,
-                "source_location": draft.source_location,
-                "handling": draft.handling,
-                "legal_basis": draft.legal_basis,
-                "row_template": draft.row_template.model_dump(by_alias=True)
-                if draft.row_template is not None
-                else None,
-                "unmapped_fields": [f.model_dump() for f in draft.unmapped_fields],
-            }
-        )
+        content = _content_json(draft)
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute(
