@@ -86,6 +86,15 @@ class _FakeStudioRecipes:
             raise StudioRecipeNotFoundError(recipe_id)
         return draft
 
+    async def update_pipeline(
+        self, recipe_id: str, principal: Principal, *, pipeline: object
+    ) -> StudioRecipeDraft:
+        if self.raise_not_a_draft:
+            raise StudioRecipeNotADraftError(recipe_id)
+        assert self.draft is not None
+        self.draft = self.draft.model_copy(update={"pipeline": pipeline})
+        return self.draft
+
     async def update_draft(
         self, recipe_id: str, principal: Principal, **kwargs: object
     ) -> StudioRecipeDraft:
@@ -478,3 +487,51 @@ def test_the_domain_pack_catalogue_names_each_pack_and_what_it_adds(client: Test
     assert "BENEFICIAL_OWNER_OF" in fibo["edge_types"]
     pole = body[0]
     assert pole["entity_types"] == []  # the core adds nothing to itself; it is the base
+
+
+_CHAIN_NODES = [
+    {"id": "domain", "kind": "domain_model", "label": "D", "config": {"pack": "niem"}},
+    {"id": "source", "kind": "source", "label": "S", "config": {}},
+    {"id": "profile", "kind": "profile", "label": "P", "config": {}},
+    {"id": "map", "kind": "map", "label": "M", "config": {}},
+    {"id": "load", "kind": "load", "label": "L", "config": {}},
+]
+_CHAIN_EDGES = [
+    {"source": "domain", "target": "source"},
+    {"source": "source", "target": "profile"},
+    {"source": "profile", "target": "map"},
+    {"source": "map", "target": "load"},
+]
+
+
+def test_put_pipeline_saves_a_valid_graph(client: TestClient) -> None:
+    made = client.post(
+        "/v1/investigations/inv-1/ingest/recipes",
+        json={"label": "Pipelined", "connector_profile": "generic-csv"},
+    ).json()
+    response = client.put(
+        f"/v1/investigations/inv-1/ingest/recipes/{made['recipe_id']}/pipeline",
+        json={"nodes": _CHAIN_NODES, "edges": _CHAIN_EDGES},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["pipeline"]["nodes"][0]["config"]["pack"] == "niem"
+
+
+def test_put_pipeline_refuses_a_cycle_in_words(client: TestClient) -> None:
+    """ADR-108 phase B: the graph half of the save gate — a violation is 422 with every problem
+    named, never a saved graph the engine would walk forever."""
+    made = client.post(
+        "/v1/investigations/inv-1/ingest/recipes",
+        json={"label": "Pipelined", "connector_profile": "generic-csv"},
+    ).json()
+    response = client.put(
+        f"/v1/investigations/inv-1/ingest/recipes/{made['recipe_id']}/pipeline",
+        json={
+            "nodes": _CHAIN_NODES,
+            "edges": [*_CHAIN_EDGES, {"source": "load", "target": "source"}],
+        },
+    )
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert body["error"] == "pipeline_invalid"
+    assert any("cycle" in problem for problem in body["problems"])

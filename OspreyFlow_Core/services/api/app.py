@@ -61,9 +61,7 @@ from services.extract.writer import (
 )
 from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.engine import run_recipe
-from services.ingest.pipeline import pipeline_from_recipe
-
-from ontology.packs import pack_catalogue
+from services.ingest.pipeline import pipeline_from_recipe, pipeline_rule_violations
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import RecipeRuleError, check_recipe_rules
 from services.ingest.staging import ObjectStorageConfig
@@ -93,6 +91,7 @@ from knowledge_adapters import ARITY, REGISTRY
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, load_uk_le_scheme, principal_may_view
 from ontology.loader import load_default_ontology
+from ontology.packs import pack_catalogue
 from ontology.yardstick import Yardstick, load_phia_yardstick
 from ports.analytics import AnalyticsPort
 from ports.compute import ComputePort
@@ -154,14 +153,15 @@ from schemas.explore import (
     WhatsNew,
 )
 from schemas.ingest import (
-    DomainPackEntry,
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
     ConnectorCatalogueEntry,
+    DomainPackEntry,
     LoadReport,
     MapHandlingPreviewRequest,
     MapHandlingPreviewResult,
     MapSampleRow,
+    PipelineGraph,
     PublishRecipeInput,
     RowTemplateUpdateInput,
     RunRecipeInput,
@@ -5787,6 +5787,34 @@ async def update_studio_recipe_draft(
         principal=principal,
         action="update_studio_recipe_draft",
         resolved_query={"recipe_id": recipe.recipe_id},
+        result_cardinality=1,
+    )
+    return updated
+
+
+@app.put("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/pipeline")
+async def update_studio_recipe_pipeline(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+    body: PipelineGraph,
+) -> StudioRecipeDraft:
+    """ADR-108 phase B: the pipeline's own save. The graph half of the save gate runs here —
+    a violation answers 422 `pipeline_invalid` with every problem in words, and nothing is
+    stored; the row-template half stays Map's own, unchanged."""
+    problems = pipeline_rule_violations(body)
+    if problems:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422,
+            content={"error": "pipeline_invalid", "problems": problems},
+        )
+    updated = await studio_recipes.update_pipeline(recipe.recipe_id, principal, pipeline=body)
+    await audit.record(
+        principal=principal,
+        action="update_studio_recipe_pipeline",
+        resolved_query={"recipe_id": recipe.recipe_id, "nodes": len(body.nodes)},
         result_cardinality=1,
     )
     return updated
