@@ -10518,3 +10518,31 @@ The review queue gains bulk accept. The licence register gains spaCy, transforme
 geopy. Two new ModelPort adapters mean two conformance suites before any adapter code (rule 1).
 Replacing the wizard breaks every existing Studio walkthrough, screenshot and the deck's
 data-engineer chapter at phase B — accepted knowingly by the owner.
+
+### ADR-108, Amendment 1 (10 October 2026) — phase D built: domain packs, recognisers, typologies
+
+Status: build note within ADR-108's accepted plan; one correction recorded.
+
+**Built.** The pack mechanism (`packages/ontology/packs.py`): FIBO, NIEM and STIX 2.1 as versioned,
+licence-headed overlays composed over the POLE core, entity collisions refused, an edge widened
+only through `extends: true` (FIBO adds Accounts to `TRANSACTED`; STIX adds SDOs to `USES`), the
+composed schema passing the loader's own checks; NIEM roles as role-edges with validity (ruling
+Q4). The pack catalogue route (`GET /v1/ingest/packs`) and pack-name validation on the pipeline's
+domain node. The AML typologies (ruling Q3) as pure rules with their transactions cited
+(`services/ingest/typologies.py`): structuring, rapid movement, circular flows. Two in-process
+recognisers, **conformance first** (rule 1): spaCy and Hugging Face token-classification, both
+passing the `RecognisePort` suite alongside Stanza (14/14 against a throwaway sidecar); the suite's
+stanza-only self-naming case generalised, and non-canonical tags normalised in the adapter that
+carries them (HF's PER→PERSON, LOC→GPE, said in its docstring). Dependencies installed, declared
+(`[project.optional-dependencies] extraction`), locked, and registered in spec 00 §7 — deepparse
+as the recorded LGPL-3.0 exception; the `dslim/bert-base-NER` weights (MIT, per its card) fetched
+once into the local cache.
+
+**Correction.** ADR-108 ruling Q3 said "new `ModelPort` adapters"; building found the codebase's
+own split (ADR-098 decision 2) already names the right port — `ModelPort.extract` is schema-driven
+LLM extraction, spaCy and HF-NER are **recognisers**, so they are `RecognisePort` adapters. The
+rule stands, the port named was wrong, the code follows the codebase.
+
+**Deferred within phase D:** deepparse's weights are fetched when phase C's enrich stage lands
+(the authorised download, pinned then); the pack-choosing screen is phase B's; the typologies'
+run-report wiring is phase C's.
