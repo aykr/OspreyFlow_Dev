@@ -253,6 +253,12 @@ branches; `model`/`whisper`/`vision` and non-text media refused at publish; deep
 unwired). Everything red-first; the runner proven live against throwaway Postgres + ArcadeDB
 (`tests/ingest/test_pipeline_run.py`); keyboard 268/268.
 
+**Operation Ledger is live** (10 October, afternoon): the case "Operation Ledger (synthetic demo)"
+is seeded and openable by the demo accounts — the deck's fraud chapter as a working case (network,
+timeline drumbeat, SAR extraction, map points, questions). Behind it, ADR-108 Amendment 4: the
+deployment ontology is the core composed with every pack, so FIBO types load for real. Re-seed any
+time with `python -m scripts.seed_internal ledger --stop-api`.
+
 **The owner's next session, in order:**
 a. `git push` (many commits since `dba07d5`).
 b. `make refresh`, sign in, then the live checks: the pipeline Studio itself (home → canvas →
