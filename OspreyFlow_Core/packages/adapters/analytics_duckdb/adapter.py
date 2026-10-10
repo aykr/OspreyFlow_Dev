@@ -104,6 +104,11 @@ def _as_utc(value: object) -> datetime:
 
 class AnalyticsDuckDBAdapter:
     def __init__(self, con: duckdb.DuckDBPyConnection, handling_scheme: HandlingScheme) -> None:
+        # `occurred_at` is a plain TIMESTAMP holding UTC. DuckDB converts an aware time to the
+        # connection's zone on the way in, so the zone is fixed to UTC here — otherwise a machine
+        # off UTC stores every event shifted and reads it back as UTC, an hour (or more) out
+        # (found building ADR-109 phase A; `test_event_time_zone.py`).
+        con.execute("SET TimeZone = 'UTC'")
         self._con = con
         self._access = AccessFilter(handling_scheme)
 
