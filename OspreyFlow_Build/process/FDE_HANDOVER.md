@@ -239,7 +239,31 @@ From the friction log, the owner's live checks still to do or report:
 
 ## 6. Open work, in the order the owner raised it
 
-### 6.0 Next, as of 9 October 2026 (start here)
+### 6.0 Next, as of 10 October 2026 (start here)
+
+**ADR-108 is built, all four phases (A→D→B→C), autonomously overnight on the owner's standing
+instruction.** The Ingest Studio is the pipeline canvas (the wizard is gone — ruling Q6); domain
+packs FIBO/NIEM/STIX overlay the POLE core; the runner executes branches (each under its own
+`load_id`), extract stages (spaCy/transformers/stanza; review queue or `inferred` graph; ruling
+Q2's reasoned, loud handling override) and enrich stages (local gazetteer `SAME_AS` first, online
+only via `OSPREY_ONLINE_GEOCODER`, disclosed and persisted); ruling Q1's bulk accept is the
+Reader's *Accept all pending (n)* over enumerated ids. Spec 09 §1/§1.1/§7 carry the paradigm;
+ADR-108 Amendments 1–3 carry the build notes and the disclosed narrowings (one row template across
+branches; `model`/`whisper`/`vision` and non-text media refused at publish; deepparse installed but
+unwired). Everything red-first; the runner proven live against throwaway Postgres + ArcadeDB
+(`tests/ingest/test_pipeline_run.py`); keyboard 268/268.
+
+**The owner's next session, in order:**
+a. `git push` (many commits since `dba07d5`).
+b. `make refresh`, sign in, then the live checks: the pipeline Studio itself (home → canvas →
+   panels), a pipeline publish and run (the per-stage run report on Publish), *Accept all pending*
+   in the Reader, the domain-pack chooser — plus items 3 and 5–7 below, still queued from 9 October.
+c. The deck's d01–d20 recapture (the data-engineer chapter shows the retired wizard) and item 19.
+d. If online geocoding is wanted live: set `OSPREY_ONLINE_GEOCODER=nominatim` on the api service
+   (a compose hand edit until ADR-107 stage 3 lands) — without it the enrich stage says, in its
+   run report, that no provider is configured.
+
+### 6.0a The queue as of 9 October 2026 (items still open are referenced above)
 
 **Waiting on the owner**
 1. (Done 9 October 2026, by the owner's hand: `dba07d5`.) The `Makefile` edit for `test_entity_pictures.py`.
