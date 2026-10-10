@@ -1,0 +1,41 @@
+# Operation Ledger — the bank transaction export: every movement a temporal TRANSACTED link
+# between two FIBO Accounts, each row an event on the timeline. The structuring drumbeat, the
+# rapid movement and the ordinary trading noise all come through this one template.
+id: ledger-transactions
+version: 1
+label: "Operation Ledger — bank transaction export"
+connector:
+  profile: ledger-fixture-generic
+ontology_version: 14
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-fincrime, owning_unit: verify}
+
+row_template:
+  entities:
+    - ref: payer
+      pole_class: object
+      type: Account
+      match_on: account_number
+      on_match: reference
+      properties:
+        account_number: {field: payer_iban}
+    - ref: payee
+      pole_class: object
+      type: Account
+      match_on: account_number
+      on_match: reference
+      properties:
+        account_number: {field: payee_iban}
+  edges:
+    - type: TRANSACTED
+      from: payer
+      to: payee
+      temporal:
+        at: {field: at, transform: datetime}
+      properties:
+        amount: {field: amount}
+        transaction_type: {field: transaction_type}
+
+unmapped_fields: []

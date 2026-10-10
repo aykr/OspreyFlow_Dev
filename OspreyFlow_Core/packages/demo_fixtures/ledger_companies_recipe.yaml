@@ -1,0 +1,64 @@
+# Operation Ledger — the companies: each with its account, its registered office, and (where the
+# register names one) its beneficial owner, referenced among the KYC-loaded people.
+id: ledger-companies
+version: 1
+label: "Operation Ledger — companies register extract"
+connector:
+  profile: ledger-fixture-generic
+ontology_version: 14
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-fincrime, owning_unit: verify}
+
+row_template:
+  entities:
+    - ref: company
+      pole_class: organisation
+      type: Organisation
+      match_on: name
+      on_match: reference
+      properties:
+        name: {field: company_name}
+    - ref: account
+      pole_class: object
+      type: Account
+      match_on: account_number
+      on_match: reference
+      properties:
+        account_number: {field: iban}
+        institution: {field: institution}
+        currency: {literal: GBP}
+        name: {field: account_name}
+        geometry_ref: {field: branch_geometry_ref}
+    - ref: office
+      pole_class: location
+      type: Location
+      match_on: name
+      on_match: reference
+      properties:
+        name: {field: office_name}
+        geometry_ref: {field: office_geometry_ref}
+    - ref: owner
+      pole_class: person
+      type: Person
+      match_on: family_name
+      on_match: reference
+      when: {field: owner_family_name, is: not_null}
+      properties:
+        family_name: {field: owner_family_name}
+  edges:
+    - type: HOLDS_ACCOUNT
+      from: company
+      to: account
+    - type: REGISTERED_AT
+      from: company
+      to: office
+    - type: BENEFICIAL_OWNER_OF
+      from: owner
+      to: company
+      when: {field: owner_family_name, is: not_null}
+      properties:
+        percent: {field: owner_percent}
+
+unmapped_fields: []

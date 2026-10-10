@@ -74,6 +74,9 @@ REAL_DATA_USE = "owner_run_demonstration"
 
 DATASETS: dict[str, Dataset] = {
     "hmp": Dataset(script="scripts.seed_hmp_fixture", case_name="HMP fixture (synthetic demo)"),
+    "ledger": Dataset(
+        script="scripts.seed_ledger_fixture", case_name="Operation Ledger (synthetic demo)"
+    ),
     "fixture-corp": Dataset(
         script="scripts.seed_fixture_corp", case_name="Fixture Corp (synthetic demo)"
     ),

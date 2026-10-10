@@ -40,6 +40,12 @@ PAYSIM = SeedDataset(
     source="paysim-dataset",
     case_name="PaySim mobile money (internal)",
 )
+LEDGER = SeedDataset(
+    id="ledger",
+    name="Operation Ledger",
+    source="ledger-fixture",
+    case_name="Operation Ledger (synthetic demo)",
+)
 SCENARIOS = SeedDataset(id="scenarios", name="Acceptance scenarios", source="fixture")
 
-SEED_DATASETS: tuple[SeedDataset, ...] = (ENRON, FIXTURE_CORP, HMP, PAYSIM, SCENARIOS)
+SEED_DATASETS: tuple[SeedDataset, ...] = (ENRON, FIXTURE_CORP, HMP, LEDGER, PAYSIM, SCENARIOS)

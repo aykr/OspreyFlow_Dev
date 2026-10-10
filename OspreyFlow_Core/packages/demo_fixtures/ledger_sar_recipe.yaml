@@ -1,0 +1,26 @@
+# Operation Ledger — the SAR narrative as content Brightpath holds (ADR-094): the text goes to the
+# media store, a Document names it, HOLDS links it — the reader then opens it and Quick scan reads
+# it live, the same path every held document takes.
+id: ledger-sar
+version: 1
+label: "Operation Ledger — suspicious activity report"
+connector:
+  profile: ledger-fixture-generic
+ontology_version: 14
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-fincrime, owning_unit: verify}
+
+row_template:
+  entities:
+    - ref: subject
+      pole_class: organisation
+      type: Organisation
+      match_on: name
+      on_match: reference
+      properties:
+        name: {field: company_name}
+      content: {kind: document_text, field: sar_text}
+
+unmapped_fields: []

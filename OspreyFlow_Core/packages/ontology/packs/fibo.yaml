@@ -17,7 +17,20 @@ entity_types:
       - {name: institution, type: string, indexed: true}
       - {name: currency, type: string}
       - {name: opened_on, type: date}
+      # A display name ("Brightpath · Barclays …98 12") and the holding branch's point in the
+      # geometry partition, so the money flow itself draws on the map (ADR-108 Amendment 4's
+      # Operation Ledger case asked for both).
+      - {name: name, type: string}
+      - {name: geometry_ref, type: string}
 edge_types:
+  # fibo-fnd: a company's registered address — the gazetteer-resolvable anchor AML work pivots on.
+  - name: REGISTERED_AT
+    from: [Organisation]
+    to: [Location]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Registered at
   # fibo-be: beneficial ownership — who ultimately owns or benefits, directly or through layers.
   - name: BENEFICIAL_OWNER_OF
     from: [Person, Organisation]

@@ -1,0 +1,70 @@
+# Operation Ledger (ADR-108 Amendment 4) — the KYC customer list: each customer, their account,
+# and the endpoints the bank holds for them. FIBO `Account` is a pack type: this recipe only runs
+# against the deployment ontology (`load_deployment_ontology`), which is the point of the fixture.
+id: ledger-kyc
+version: 1
+label: "Operation Ledger — KYC customer list"
+connector:
+  profile: ledger-fixture-generic
+ontology_version: 14
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-fincrime, owning_unit: verify}
+
+row_template:
+  entities:
+    - ref: customer
+      pole_class: person
+      type: Person
+      match_on: family_name
+      on_match: reference
+      properties:
+        family_name: {field: family_name}
+        given_names: {field: given_names}
+        date_of_birth: {field: date_of_birth}
+    - ref: account
+      pole_class: object
+      type: Account
+      match_on: account_number
+      on_match: reference
+      properties:
+        account_number: {field: iban}
+        institution: {field: institution}
+        currency: {literal: GBP}
+        name: {field: account_name}
+        geometry_ref: {field: branch_geometry_ref}
+    - ref: phone
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      when: {field: phone, is: not_null}
+      properties:
+        value_raw: {field: phone}
+        value_normalised: {field: phone, transform: msisdn}
+        endpoint_kind: {literal: msisdn}
+    - ref: email
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      when: {field: email, is: not_null}
+      properties:
+        value_raw: {field: email}
+        value_normalised: {field: email, transform: email}
+        endpoint_kind: {literal: email}
+  edges:
+    - type: HOLDS_ACCOUNT
+      from: customer
+      to: account
+    - type: USES
+      from: customer
+      to: phone
+      when: {field: phone, is: not_null}
+    - type: USES
+      from: customer
+      to: email
+      when: {field: email, is: not_null}
+
+unmapped_fields: []

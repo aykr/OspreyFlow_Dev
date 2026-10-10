@@ -103,7 +103,10 @@ def test_the_deployment_ontology_is_the_core_composed_with_every_pack() -> None:
     assert "Account" in names  # fibo
     assert "ThreatActor" in names  # stix
     edge_names = {edge.name for edge in deployed.edge_types}
-    assert {"BENEFICIAL_OWNER_OF", "CONTROLS", "HOLDS_ACCOUNT", "USED_AS"} <= edge_names
+    assert {"BENEFICIAL_OWNER_OF", "CONTROLS", "HOLDS_ACCOUNT", "REGISTERED_AT", "USED_AS"} <= edge_names
+    account = next(entity for entity in deployed.entity_types if entity.name == "Account")
+    # The Operation Ledger case needs a display name and the branch's point on the map.
+    assert {"name", "geometry_ref"} <= {prop.name for prop in account.properties}
     transacted = next(edge for edge in deployed.edge_types if edge.name == "TRANSACTED")
     assert "Account" in transacted.from_types and "Account" in transacted.to_types
     assert len(PACK_NAMES) == 3
