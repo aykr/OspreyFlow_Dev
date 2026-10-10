@@ -417,6 +417,13 @@ export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [
 
 /** The case's questions to the model (ADR-098 decision 4): asked, answered with what it draws on,
  * and its proposals accepted or rejected. `keyboard/questions.spec.ts`. */
+/** The pipeline canvas, read-only (ADR-108 phase A): every node reachable and its settings
+ * readable, by keyboard alone. Phase B's editable canvas extends this registry. */
+export const PIPELINE_CANVAS_ACTIONS = defineActionRegistry("PIPELINE_CANVAS_ACTIONS", [
+  "walk-the-pipeline-nodes-by-keyboard",
+  "read-a-nodes-settings-by-keyboard",
+] as const);
+
 export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   "ask-a-question-with-ctrl-enter",
   "ask-a-question-with-the-ask-button",
