@@ -144,3 +144,18 @@ async def test_the_layered_structure_traces_to_its_beneficial_owners() -> None:
         assert [sorted(names[n] for n in c) for c in view.trace.cycles] == [
             ["Aegean Fiduciary Trust", "Tamarind Holdings Ltd"]
         ]
+
+
+async def test_building_the_ledger_twice_makes_nothing_twice() -> None:
+    """A re-seed (`seed_internal ledger` into the existing case) must leave one NAIR and one home:
+    the direct writes find what they made before rather than making it again."""
+    ontology = load_deployment_ontology()
+    async with arcadedb_adapter(ontology, load_uk_le_scheme()) as graph:
+        await build_ledger_graph(graph=graph, ontology=ontology, principal=ANALYST)
+        await build_ledger_graph(graph=graph, ontology=ontology, principal=ANALYST)
+        people = (await graph.list_nodes("Person", ANALYST, limit=500)).nodes
+        families = sorted(str(p.properties.get("family_name")) for p in people)
+        assert len(families) == len(set(families)), families
+        places = (await graph.list_nodes("Location", ANALYST, limit=500)).nodes
+        names = [p.properties.get("name") for p in places]
+        assert names.count("Dunstall Road, Wolverhampton") == 1

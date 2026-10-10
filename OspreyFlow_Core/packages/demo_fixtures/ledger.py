@@ -367,11 +367,23 @@ async def _direct_writes(graph: GraphPort, principal: Principal, load_id_prefix:
     try:
         # PETROV is the companies register's own (Brightpath's owner): found, never made twice —
         # a second node would split her ownership between two (ADR-109 phase C found it).
-        nair = node("Person", {"family_name": "Nair", "given_names": "Priya"})
-        home = node(
-            "Location", {"name": "Dunstall Road, Wolverhampton", "geometry_ref": "ledger:dunstall"}
+        # NAIR and CARTER's home are the direct writes' own: found if a previous seed made them, so
+        # a re-seed into the same case makes neither twice.
+        async def found_or_made(node_type: str, key: str, properties: dict[str, object]) -> str:
+            existing = await graph.find_node(node_type, key, str(properties[key]), principal)
+            if existing is not None:
+                return existing.id
+            (made,) = await graph.upsert_nodes([node(node_type, properties)], tx)
+            return made
+
+        nair_id = await found_or_made(
+            "Person", "family_name", {"family_name": "Nair", "given_names": "Priya"}
         )
-        (nair_id, home_id) = await graph.upsert_nodes([nair, home], tx)
+        home_id = await found_or_made(
+            "Location",
+            "name",
+            {"name": "Dunstall Road, Wolverhampton", "geometry_ref": "ledger:dunstall"},
+        )
 
         async def need(node_type: str, key: str, value: str) -> str:
             found = await graph.find_node(node_type, key, value, principal)

@@ -28,6 +28,7 @@ from scripts.load_screening_list import parse_list
 from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
 from services.api.config import PostgresConfig
 from services.api.dataset_scope import stamping
+from services.api.rule_evaluation import transaction_key
 from services.api.screening import ScreeningListStore
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
@@ -42,6 +43,7 @@ from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
+from schemas.analytics import EventFilter, EventListRequest
 from schemas.domain import Principal
 
 SCREENING_LIST = (
@@ -72,6 +74,25 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     args = parser.parse_args(argv)
     check_case_arguments(parser, args)
     return args
+
+
+async def _event_keys(
+    analytics: AnalyticsPort, principal: Principal, scope: str
+) -> set[tuple[object, ...]]:
+    """Every event already in the case, as its transaction key — paged to the end."""
+    keys: set[tuple[object, ...]] = set()
+    offset = 0
+    while True:
+        page = await analytics.list_events(
+            EventListRequest(
+                filter=EventFilter(investigation_scope=scope), offset=offset, limit=200
+            ),
+            principal,
+        )
+        keys.update(transaction_key(e) for e in page.events)
+        offset += len(page.events)
+        if not page.events or offset >= page.total:
+            return keys
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -115,7 +136,13 @@ async def _run(args: argparse.Namespace) -> int:
         create_events_table(analytics_con)
         create_geometries_table(analytics_con)
         analytics: AnalyticsPort = AnalyticsDuckDBAdapter(analytics_con, scheme)
-        await analytics.load_events(result.events)
+        # A re-seed into the same case must not write each transaction's event again (the
+        # analytics store inserts; ADR-109 Amendment 1): only events not already there load,
+        # judged by the one definition of "the same transaction" the typology rules use.
+        already = await _event_keys(analytics, principal, scope)
+        await analytics.load_events(
+            [e for e in result.events if transaction_key(e) not in already]
+        )
         # Insert-only, keyed by ref: a re-seeded point already in the partition is not loaded twice.
         wanted = geometry_records()
         held = {
