@@ -289,6 +289,39 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("ingest");
   });
 
+  // Seen live, 10 October 2026: Open Ingest Studio -> sign in -> no case open yet -> the case
+  // gate -> choosing a case reloaded the page without the tile's choice, landing on the Glass.
+  test("choosing a case at the gate keeps the Studio tile's choice", async () => {
+    sessionStorage.setItem(
+      "ospreyflow.launcherHandoff",
+      JSON.stringify({ view: "ingest", at: Date.now() }),
+    );
+    sessionStorage.removeItem("ospreyflow.investigationId");
+    vi.mocked(globalThis.fetch).mockImplementation((input) => {
+      const url = String(input);
+      const body = url.endsWith("/v1/investigations")
+        ? [{ id: "inv-9", name: "TestCase", level: "editor", created_at: "2026-10-10T09:00:00Z", created_by: "a1" }]
+        : url.endsWith("/v1/ontology")
+          ? { entity_types: [], edge_types: [] }
+          : [];
+      return Promise.resolve(new Response(JSON.stringify(body)));
+    });
+    const went: string[] = [];
+    const realLocation = window.location;
+    Reflect.deleteProperty(window, "location");
+    (window as { location: unknown }).location = {
+      ...realLocation,
+      assign: (url: string | URL) => went.push(String(url)),
+    };
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "TestCase" }));
+    expect(went).toHaveLength(1);
+    expect(went[0]).toContain("view=ingest");
+    (window as { location: unknown }).location = realLocation;
+  });
+
   // The switch tests only look at the bar, so no request is answered: an answer of the wrong shape
   // for a panel that is not under test would crash that panel after the test had finished.
   const holdAllRequests = () => {

@@ -879,7 +879,9 @@ export function App() {
         bearerToken={bearerToken}
         lastCaseId={investigationIdFromSession()}
         isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
-        onOpen={(id) => openCase(id)}
+        // The gate is also where the Studio tile's arrival lands when no case is open yet: the
+        // reload it causes must keep that choice, or the tile opens the Glass (seen 10 Oct 2026).
+        onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
       />
     );
   }
