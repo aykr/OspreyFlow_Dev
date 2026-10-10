@@ -515,7 +515,7 @@ async def test_update_pipeline_rejects_once_the_recipe_is_no_longer_a_draft(
     await store.publish(
         made.recipe_id,
         AUTHOR,
-        ontology_version=14,
+        ontology_version=15,
         git_path="recipes/p.yaml",
         schedule_cron=None,
         schedule_watch=None,

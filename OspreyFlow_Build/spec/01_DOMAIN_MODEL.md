@@ -76,12 +76,20 @@ entity_types:
     pole_class: object
     channel: rose
     shape: diamond
+  # v15, ADR-109 ruling 2: what a typology rule raised. Never loaded by a recipe; written
+  # `inferred` by the rule at the highest handling of everything it references.
+  - name: Alert
+    pole_class: event
+    channel: rose
+    shape: triangle
+    properties: [rule_id (required), typology, words, raised_at]
 
 edge_types:
   - {name: COMMUNICATED_WITH, from: [Endpoint], to: [Endpoint], directed: true, temporal: true, basis: direct}
   - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true, basis: direct}
   - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], temporal: true, basis: direct}
   - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true, basis: direct}
+  - {name: ALERTED_ON,        from: [Alert], to: ["*"], directed: true, basis: probabilistic, system: true}  # v15, ADR-109
   - {name: HOLDS,             from: [Device, Endpoint, Person, Organisation], to: [Document], directed: true, basis: direct}  # ADR-094
   - {name: DEPICTS,           from: [Document], to: [Person, Organisation, Vehicle, Device, Location, Asset], directed: true, basis: direct}  # ADR-105; property `shown` (boolean)
   - {name: ASSOCIATE_OF,      from: [Person], to: [Person], directed: false, basis: direct}
@@ -146,8 +154,8 @@ shape, and nothing in the visual language breaks. A loader that rejected all reu
 the very escape hatch the design system provides, and would have to be reversed the first time a
 deployment outgrew nine types.
 
-The nine shipped types use nine distinct channels, so no sharing occurs in the default ontology.
-The rule exists for the tenth.
+The nine POLE types use nine distinct channels. The tenth shipped type, `Alert` (v15, ADR-109),
+is the rule's first use: it shares Asset's rose channel with a triangle, not a diamond.
 
 **An entity type may name an icon (ADR-079).** `icon` is optional and is one of twenty names (person,
 people, building, bank, phone, mail, device, pin, calendar, document, vehicle, box, key, globe, card,

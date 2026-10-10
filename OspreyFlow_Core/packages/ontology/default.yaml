@@ -101,7 +101,11 @@
 # v14 (ADR-105 Amendment 2, the owner's choice, 9 October 2026): an Endpoint may carry a picture
 # too, so `DEPICTS` gains Endpoint at its `to` end. The same republish-once consequence applies;
 # every fixture pinned to 13 is bumped to 14 alongside this.
-version: 14
+# v15 (ADR-109 ruling 2, the owner's, 10 October 2026): an alert is a graph node as well as a queue
+# row — `Alert`, written `inferred` by the rule that raised it at the highest handling of what it
+# references, linked by the system link `ALERTED_ON` to every entity it concerns (any type, so a
+# pack's `Account` is reached). The republish-once consequence applies; fixtures bumped to 15.
+version: 15
 entity_types:
   - name: Person
     pole_class: person
@@ -199,6 +203,18 @@ entity_types:
     shape: diamond
     icon: box
 
+  # v15, ADR-109: what a typology rule raised, for a person to triage. Never loaded by a recipe.
+  - name: Alert
+    pole_class: event
+    channel: rose
+    shape: triangle
+    icon: flag
+    properties:
+      - {name: rule_id, type: string, required: true, indexed: true}
+      - {name: typology, type: string}
+      - {name: words, type: string}
+      - {name: raised_at, type: datetime}
+
 edge_types:
   - name: COMMUNICATED_WITH
     from: [Endpoint]
@@ -212,6 +228,9 @@ edge_types:
   - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true, basis: direct}
   - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], directed: true, temporal: true, basis: direct}
   - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true, basis: direct}
+  # v15, ADR-109: an alert to what it concerns. A rule's finding, so Probabilistic; a system link,
+  # so never offered to an analyst to draw.
+  - {name: ALERTED_ON,        from: [Alert], to: ["*"], directed: true, basis: probabilistic, system: true}
   # ADR-094 step 2: content held by an entity (a phone's photos, videos and saved files), recorded
   # by the source that holds it, so Direct.
   - {name: HOLDS,             from: [Device, Endpoint, Person, Organisation], to: [Document], directed: true, basis: direct}

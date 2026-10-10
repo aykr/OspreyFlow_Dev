@@ -34,16 +34,21 @@ def _minimal_doc(**overrides: object) -> dict[str, object]:
     return doc
 
 
-def test_default_ontology_loads_with_nine_entity_types() -> None:
+def test_default_ontology_loads_with_ten_entity_types() -> None:
+    # Nine POLE types plus `Alert` (v15, ADR-109), which a rule raises and no recipe loads.
     schema = load_default_ontology()
-    assert len(schema.entity_types) == 9
+    assert len(schema.entity_types) == 10
     assert {e.pole_class for e in schema.entity_types} <= set(PoleClass)
 
 
 def test_default_ontology_channels_are_all_distinct() -> None:
+    # The nine POLE types each hold a channel of their own; `Alert` (v15) shares Asset's by a
+    # distinct shape, which `01_DOMAIN_MODEL.md` §1.1 permits (hue never carries a distinction alone).
     schema = load_default_ontology()
-    channels = [e.channel for e in schema.entity_types]
+    channels = [e.channel for e in schema.entity_types if e.name != "Alert"]
     assert len(channels) == len(set(channels))
+    pairs = [(e.channel, e.shape) for e in schema.entity_types]
+    assert len(pairs) == len(set(pairs))
 
 
 def test_loader_always_injects_same_as_and_not_same_as() -> None:
