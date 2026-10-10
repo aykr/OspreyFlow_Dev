@@ -24,17 +24,58 @@ by the studio when it is not. An ingest configuration that exists only inside an
 database is one that nobody can audit and nobody can move.
 
 ```
-Connect ──► Profile ──► Map ──► Verify ──► Publish
-   │           │          │        │          │
-   │           │          │        │          └─ versioned recipe, optionally scheduled
-   │           │          │        └─ dry run on a sample; see the actual graph
-   │           │          └─ the row template: what each record becomes
-   │           └─ automatic; what is in this source and what shape is it
-   └─ pick a connector, point at the data
+            ┌─ source ─ profile ─ map ─┬─ load
+domain model┤                          ├─ extract ─ load
+            └─ source ─ profile ─ map ─┴─ enrich ─ load
 ```
 
-The five stages are navigable in any order once a source is connected. Nobody gets a mapping
-right first time, and a wizard that will not let you go back gets abandoned.
+**The recipe carries a pipeline graph — ADR-108.** Since phase B the Studio *is* a canvas: a typed,
+acyclic graph of declared stages, not a wizard. Its node vocabulary is closed (rule 8 — every
+transform remains a Knowledge Adapter with golden files, never an expression language):
+
+- **domain model** — exactly one, the pipeline's root: the POLE core, or the core plus one domain
+  pack (§1.1).
+- **source** — a connector profile and a location. A pipeline may hold several; each runs as its
+  own branch under its own `load_id`, so each stays independently revertible (§9.1 discipline).
+  Every branch runs the recipe's one committed row template — per-branch templates are future work,
+  disclosed in the run report by each branch naming the same recipe version.
+- **profile**, **map** — the stage editors of old (§3, §4), rehosted as node panels; their routes,
+  rules and tests are unchanged.
+- **extract** — unstructured extraction over the Documents its upstream branches created, fed by a
+  map and never by raw bytes. Its config declares the library (`stanza`, `spacy` or `transformers`
+  run today; `model`/`whisper`/`vision` are refused at publish until the runner runs them), the
+  media kind (text today), and where findings go — the **review queue** (the default; §7) or
+  **inferred graph elements** written directly, both `inferred`, never asserted (rule 5; ruling Q1).
+  Findings inherit the source document's handling and legal basis; marking **below** the source
+  needs a mandatory written reason, is Author-gated at publish, and is counted loudly in the run
+  report (ruling Q2).
+- **enrich** — geocoding of the places its upstream branches created: the local gazetteer first
+  (a scored, `inferred` `SAME_AS` edge — rule 6, never a merge), and online only through the
+  deployment's configured allow-list (`OSPREY_ONLINE_GEOCODER`), every online call disclosed in the
+  run report (ruling Q5). An online point lands in the analytics geometry partition and the node is
+  superseded with its `geometry_ref` — a new revision, never an in-place edit.
+- **load** — where a branch's rows become graph, through the engine unchanged.
+
+**Two gates, both in words (rule 2).** Saving a pipeline refuses a graph that breaks the rules
+(a cycle, a second domain root, a source reaching no load, an extract not fed by a map, an unknown
+pack — `pipeline_rule_violations`); publishing refuses stage *configuration* the runner cannot run
+(`pipeline_run_violations`): an unrunnable library or media kind, an unknown geocoder, a handling
+override with no reason. Nothing is published and silently part-run.
+
+**A v1 recipe is read as its canonical chain** — `domain model → source → profile → map → load` —
+derived at read time and never stored back, so a recipe written by the old wizard is byte-for-byte
+what it always was. The published YAML carries the pipeline, so a run is provably against exactly
+what was published. The run of a pipeline answers a `PipelineRunReport`: every branch's own
+`LoadReport`, every extract and enrich stage's own account, refusals included.
+
+### 1.1 Domain packs (ADR-108 phase D)
+
+The domain-model node names the ontology overlay the pipeline is built against: the POLE core
+(`pole`), or the core plus one pack — financial fraud and AML (`fibo`), justice and public safety
+roles (`niem`, role-edges with validity intervals per ruling Q4), or cyber threat analytics
+(`stix`). A pack only ever *adds* entity and edge types or widens an existing edge's ends
+(`extends: true`); a collision with the core is refused at load. The catalogue is served by
+`GET /v1/ingest/packs` and offered in the Studio's domain panel.
 
 ## 2. Stage 1 — Connect
 
@@ -632,7 +673,10 @@ Rules, all of which follow from `01_DOMAIN_MODEL.md` §2.1:
 - **No bulk accept above a confidence threshold.** Not as a default, not as a setting. The whole
   point of `inferred` is that a person decided. A queue of two thousand candidates is a resourcing
   problem, and the honest answer is a higher extraction confidence floor or a narrower extraction
-  profile — not automatic promotion.
+  profile — not automatic promotion. **ADR-108 ruling Q1 adds one multi-id surface without touching
+  this rule:** *Accept all pending* takes the explicit, enumerated ids a person reviewed on screen,
+  as one decision — never a filter, a document-wide flag or a threshold — each finding still
+  written `inferred`, each refusal answered per item, in words.
 - **Accept, reject and edit are all recorded**, with the principal and the timestamp. Rejections
   are as informative as acceptances and feed the golden set.
 - **Every candidate shows its span.** Clicking a candidate scrolls and highlights the supporting

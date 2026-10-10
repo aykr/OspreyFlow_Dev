@@ -10575,3 +10575,52 @@ everything through tsc, eslint, ruff, mypy.
 
 **Spec 09's rewrite** for phases A–B follows in the next commit, so the document never describes
 only the wizard that no longer exists.
+
+### ADR-108, Amendment 3 (10 October 2026) — phase C built: the pipeline runner
+
+**Built.** The committed YAML now carries the pipeline (`Recipe.pipeline`, `None` on every recipe
+published before this — their files stay byte-for-byte what they were), and
+`services/api/pipeline_run.py` runs it: every source branch through the existing engine under its
+own `load_id` (`<run>:<source-node-id>`, so each branch reverts alone); every extract stage over
+the text Documents its upstream branches created (output per node: the review queue through
+`run_recognition`, or `inferred` graph elements through `write_candidate` — rule 5 holds on both);
+every enrich stage over the Locations they created (local gazetteer first via `suggest_locations`
++ `match_place_mention`, a scored `inferred` `SAME_AS`, never a merge; online only through
+`OSPREY_ONLINE_GEOCODER` — `nominatim` is the one wired, geopy in a thread — the point written to
+the geometry partition and the node superseded with its ref). The run route dispatches on
+`recipe.pipeline` and answers `PipelineRunReport` — branches, stages, refusals, aggregates — which
+the Publish screen renders per stage, refusal words included. Ruling Q1's bulk accept is
+`DocumentContentService.accept_all` + `POST …/documents/{id}/candidates/accept`: explicit
+enumerated ids as one decision, never a filter or threshold (spec 09 §7's ban stands), per-item
+refusals in words, *Accept all pending (n)* in the Reader with its own keyboard case.
+
+**The publish gate narrowed, red first.** `pipeline_run_violations` no longer refuses a second
+source or an extract/enrich stage; it refuses what the runner still cannot run: a library outside
+`stanza`/`spacy`/`transformers`, media other than text, an unknown geocoder, and ruling Q2's
+handling override without its mandatory reason (also refused at run time, belt and braces, since a
+recipe committed before a gate tightening can still be run).
+
+**Disclosed narrowings, not silent ones.** (a) Every branch runs the recipe's one committed row
+template — a second source is "the same mapping over another export", which the dedupe key makes
+idempotent; per-branch templates are future work. (b) `model`/`whisper`/`vision` extract libraries
+and non-text media are refused at publish until the runner runs them — the ModelPort path needs an
+extraction profile the extract node does not yet carry. (c) deepparse address parsing is installed
+(the licence register's LGPL-3.0 exception) but not yet wired into the enrich stage; enrichment
+today is place-name geocoding. (d) Down-classification's audit row rides the publish/run audit
+records and the run report's loud count; a dedicated audit action per overridden element is not
+written.
+
+**Tests.** `tests/ingest/test_pipeline_run.py`, live against Postgres + ArcadeDB like
+`test_studio_publish_pipeline.py`: two branches each under its own `load_id`; queue output pending
+with inherited handling and nothing in the graph; inferred output `inferred` with
+`extracted_by=model:spacy:…`; the override loud with its reason and refused without one; an
+unwired library refused in words with the branch load still counted; a document above the loader's
+clearance never reaching the recogniser (rule 3 in the runner); the gazetteer `SAME_AS` scored and
+`inferred` with the mention still a node (rule 6); online-without-provider refused in words; the
+online path disclosed, persisted, and its fake provider modelling refusals (rule 15 — an unknown
+name gets nothing, not invented coordinates). Gate tests rewritten red-first for the narrowing;
+the run route's dispatch has its own test (a pipeline recipe answers branches, never its first
+branch alone); `accept_all` per-item refusals; the Reader and Publish screens' own vitest cases;
+keyboard `accept-all-pending-in-the-reader-by-keyboard` (rule 13). While adding the bulk route to
+the investigation-levels table, that gate caught phase B's `PUT …/pipeline` route missing from it
+— added at Editor.
