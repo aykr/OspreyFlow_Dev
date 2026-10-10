@@ -107,6 +107,9 @@ test("an entity type opens by keyboard, and one of its own goes on the canvas", 
   await page.keyboard.press("Tab");
   await expect(byType.getByRole("button", { name: "Add Acme to the graph" })).toBeFocused();
   await page.keyboard.press("Enter");
+  // ADR-100 Amendment 9: Add… offers how much to bring; the smallest choice picks it alone.
+  await byType.getByRole("button", { name: "Just this entity" }).focus();
+  await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["Acme"]);
   registerCovered(REGISTRY, "open-an-entity-type-and-put-one-on-the-canvas-by-keyboard");
 });
