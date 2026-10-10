@@ -191,7 +191,11 @@ export type ExtractUsing = "recogniser" | "model";
  * hand-marking, or a model's confidence. */
 export function candidateSource(candidate: EmailCandidate): string {
   const by = candidate.model ?? "";
+  // A recogniser gives no score (ADR-098 Amendment 1 decision 3): its name shows instead of a
+  // percentage. spaCy and the transformer recogniser joined Stanza with ADR-108 phase D.
   if (by.startsWith("stanza:")) return "found by Stanza";
+  if (by.startsWith("spacy:")) return "found by spaCy";
+  if (by.startsWith("transformers:")) return "found by the transformer recogniser";
   if (by.startsWith("analyst:")) return "marked by hand";
   return `${Math.round(candidate.confidence * 100)}%`;
 }

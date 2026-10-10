@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { makeNode } from "../testing/fixtures";
-import { eventsNoun } from "./linkEventsApi";
+import { candidateSource, eventsNoun } from "./linkEventsApi";
 
 const enronAddress = makeNode("enron-ep-1", {
   type: "Endpoint",
@@ -33,5 +33,26 @@ describe("eventsNoun", () => {
     expect(eventsNoun("TRANSACTED", paysimAccount)).toBe("events");
     expect(eventsNoun("COMMUNICATED_WITH", paysimAccount)).toBe("events");
     expect(eventsNoun("COMMUNICATED_WITH", undefined)).toBe("events");
+  });
+});
+
+describe("candidateSource", () => {
+  // ADR-098 Amendment 1 decision 3: a recogniser gives no score, so its name shows instead of a
+  // percentage — and since ADR-108 phase D, spaCy and the transformer recogniser count as
+  // recognisers too, not as "100%".
+  const candidate = (model: string | undefined, confidence = 1) =>
+    ({ id: "c", document_id: "d", entity_type: "Person", properties: {}, confidence, status: "pending", model }) as never;
+
+  it("names each recogniser instead of showing a percentage", () => {
+    expect(candidateSource(candidate("stanza:en-1.10"))).toBe("found by Stanza");
+    expect(candidateSource(candidate("spacy:en_core_web_sm-3.8.0"))).toBe("found by spaCy");
+    expect(candidateSource(candidate("transformers:dslim/bert-base-NER"))).toBe(
+      "found by the transformer recogniser",
+    );
+    expect(candidateSource(candidate("analyst:a1"))).toBe("marked by hand");
+  });
+
+  it("shows a model's own confidence as a percentage", () => {
+    expect(candidateSource(candidate("qwen2.5:0.5b-instruct", 0.87))).toBe("87%");
   });
 });
