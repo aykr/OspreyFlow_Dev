@@ -923,6 +923,33 @@ class KycStatus(BaseModel):
     assessed_on: date
 
 
+class RiskContribution(BaseModel):
+    """One alerted entity near the target and what it contributes: its alerts, how many hops
+    away, and its weight after decay."""
+
+    node_id: NodeId
+    name: str
+    hops: int
+    alert_ids: list[str] = Field(default_factory=list)
+    summaries: list[str] = Field(default_factory=list)
+    contribution: float
+
+
+class NeighbourhoodRisk(BaseModel):
+    """*Neighbourhood risk* (ADR-109 phase E, ruling 9's defaults): the case's alerts within
+    `max_hops` of an entity, each decayed by `decay` per hop and counted for `window_days` —
+    computed at read, as the reader reads the graph, never stored, so it says only what their own
+    visible graph supports (rule 3)."""
+
+    node_id: NodeId
+    score: float
+    max_hops: int
+    decay: float
+    window_days: int
+    as_of: date
+    contributions: list[RiskContribution] = Field(default_factory=list)
+
+
 class HeldRowDecision(BaseModel):
     """A reviewer's release or rejection of named held rows — enumerated ids, never a filter
     (one decision over exactly what was seen, as bulk accept is in ADR-108 Amendment 3). A
@@ -1104,6 +1131,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     KycDocument,
     RiskFactor,
     KycStatus,
+    RiskContribution,
+    NeighbourhoodRisk,
     ExplainedTransaction,
     AlertExplanation,
     AlertDispositionInput,

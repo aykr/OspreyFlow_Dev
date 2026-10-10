@@ -67,6 +67,7 @@ function Harness() {
     return (
       <Inspector
         node={person("a", "Lay")}
+        neighbourhoodRisk={{ apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused", investigationId: "inv-1" }}
         sharedContacts={{
           apiBaseUrl: "http://keyboard-test.invalid",
           bearerToken: "unused",

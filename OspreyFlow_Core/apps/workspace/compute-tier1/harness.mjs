@@ -266,10 +266,51 @@ function ownership(request) {
   return { target: request.target, threshold, owners, cycles: ownershipCycles(request.links) };
 }
 
+// --- risk propagation (06_DECISIONS.md ADR-109 phase E) — Tier 2's
+// `adapters/compute_rustworkx/propagation.py`, operation for operation: breadth-first shortest
+// distances, the decay factor by repeated multiplication, contributions sorted then summed.
+function propagate(request) {
+  const around = new Map();
+  const link = (a, b) => {
+    if (!around.has(a)) around.set(a, new Set());
+    around.get(a).add(b);
+  };
+  for (const e of request.edges) {
+    link(e.source, e.target);
+    link(e.target, e.source);
+  }
+  const maxHops = request.max_hops ?? 2;
+  const decay = request.decay ?? 0.5;
+  const hops = new Map([[request.target, 0]]);
+  const queue = [request.target];
+  while (queue.length) {
+    const node = queue.shift();
+    if (hops.get(node) === maxHops) continue;
+    for (const next of [...(around.get(node) ?? [])].sort()) {
+      if (!hops.has(next)) {
+        hops.set(next, hops.get(node) + 1);
+        queue.push(next);
+      }
+    }
+  }
+  const contributions = [];
+  for (const [nodeId, seed] of Object.entries(request.seeds)) {
+    if (!hops.has(nodeId) || seed <= 0) continue;
+    let factor = 1.0;
+    for (let i = 0; i < hops.get(nodeId); i += 1) factor = factor * decay;
+    contributions.push({ node_id: nodeId, hops: hops.get(nodeId), seed, contribution: seed * factor });
+  }
+  contributions.sort((a, b) => b.contribution - a.contribution || (a.node_id < b.node_id ? -1 : a.node_id > b.node_id ? 1 : 0));
+  let score = 0.0;
+  for (const c of contributions) score = score + c.contribution;
+  return { target: request.target, score, contributions };
+}
+
 function dispatch(method, request) {
   if (method === "centrality") return centrality(request.subgraph, request.metric);
   if (method === "communities") return communities(request.subgraph);
   if (method === "ownership") return ownership(request);
+  if (method === "propagate") return propagate(request);
   if (method === "clique_metric") {
     return cliqueMetric(request.subgraph, request.k_min ?? 4, request.k_max ?? 30);
   }

@@ -18,6 +18,7 @@ import { linkTypeName } from "../canvas/linkLabel";
 import type { EntityVisual } from "../ontology/schema";
 import { SelectionList } from "./SelectionList";
 import { TypeChip } from "./TypeChip";
+import { NeighbourhoodRisk, type NeighbourhoodRiskProps } from "./NeighbourhoodRisk";
 import { SharedContacts, type SharedContactsProps } from "./SharedContacts";
 import type { HandlingScheme } from "../ingest/api";
 
@@ -64,6 +65,8 @@ export interface InspectorProps {
   };
   /** ADR-100 Amendment 7: who shares contacts with the selected node. Absent: not offered. */
   sharedContacts?: Omit<SharedContactsProps, "node">;
+  /** ADR-109 phase E: the selected entity's neighbourhood risk, on demand. Absent: not offered. */
+  neighbourhoodRisk?: Omit<NeighbourhoodRiskProps, "node">;
   /** ADR-105: the entity's own picture. Absent: not offered. */
   picture?: EntityPictureProps;
   /** Rises when a node's menu chose *Set picture…* (ADR-105 Amendment 1): the Picture part opens.
@@ -86,7 +89,7 @@ export interface InspectorProps {
 }
 
 type LinkPart = "details" | "change" | "notes" | "events" | "history";
-type NodePart = "properties" | "picture" | "relationships" | "shared" | "provenance" | "source" | "judgements";
+type NodePart = "properties" | "picture" | "relationships" | "shared" | "risk" | "provenance" | "source" | "judgements";
 
 /** Which parts of a panel are open, starting from `initial`; `toggle` opens or closes one. */
 function useOpenParts<T extends string>(initial: readonly T[]) {
@@ -125,6 +128,7 @@ export function Inspector({
   selection,
   visualFor,
   sharedContacts,
+  neighbourhoodRisk,
   picture,
   openPictureSignal,
 }: InspectorProps) {
@@ -192,6 +196,7 @@ export function Inspector({
         assessment={assessment}
         visualFor={visualFor}
         sharedContacts={sharedContacts}
+        neighbourhoodRisk={neighbourhoodRisk}
         picture={picture}
         openPictureSignal={openPictureSignal}
       />
@@ -419,6 +424,7 @@ function NodeView({
   assessment,
   visualFor,
   sharedContacts,
+  neighbourhoodRisk,
   picture,
   openPictureSignal,
 }: {
@@ -426,6 +432,7 @@ function NodeView({
   assessment: InspectorProps["assessment"];
   visualFor?: InspectorProps["visualFor"];
   sharedContacts?: InspectorProps["sharedContacts"];
+  neighbourhoodRisk?: InspectorProps["neighbourhoodRisk"];
   picture?: InspectorProps["picture"];
   openPictureSignal?: number;
 }) {
@@ -510,6 +517,9 @@ function NodeView({
       {node &&
         sharedContacts &&
         section("shared", "Shares contacts", <SharedContacts {...sharedContacts} node={node} />)}
+      {node &&
+        neighbourhoodRisk &&
+        section("risk", "Neighbourhood risk", <NeighbourhoodRisk {...neighbourhoodRisk} node={node} />)}
       {node &&
         section(
           "provenance",

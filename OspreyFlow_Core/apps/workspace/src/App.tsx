@@ -1364,6 +1364,11 @@ export function App() {
                         onRemove: (id) => glassCanvasRef.current?.deselect(id),
                       }}
                       visualFor={(type) => ontology.visualFor(type)}
+                      neighbourhoodRisk={
+                        investigationId
+                          ? { apiBaseUrl: API_BASE_URL, bearerToken, investigationId }
+                          : undefined
+                      }
                       sharedContacts={
                         ontologySchema
                           ? {

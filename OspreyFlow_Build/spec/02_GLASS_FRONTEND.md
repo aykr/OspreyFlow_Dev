@@ -862,6 +862,13 @@ drawn — the Query builder (§3.3) — and saved there; in the *Alerts* place's
 it. It always runs after each load commits (said in the form, with no choice offered). Deploying has
 its own keyboard case (`deploy-a-drawn-pattern-rule-by-keyboard`).
 
+**Neighbourhood risk (ADR-109 phase E).** The Inspector's *Neighbourhood risk* part, for the
+selected entity, asks on request (*Score this neighbourhood*) and shows the score in words — alerts
+within two hops, halved per hop, from the last ninety days, in what the analyst can see — and each
+contributing entity with its distance, its alerts' count and summaries, and what it adds. Nothing is
+stored or drawn on the node: the score is a read, and another analyst may read another. Its keyboard
+case is in `keyboard/inspector.spec.ts` (`score-a-neighbourhoods-risk-by-keyboard`).
+
 ### 3.4 Temporal analysis
 
 The timeline is the second most important control in the product after the canvas.

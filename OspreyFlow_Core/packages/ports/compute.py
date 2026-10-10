@@ -27,6 +27,8 @@ from schemas.compute import (
     MotifRequest,
     OwnershipRequest,
     OwnershipTrace,
+    PropagationRequest,
+    PropagationResult,
 )
 from schemas.domain import CliqueScore, CommunityId, NodeId, Path, PathRequest
 
@@ -48,4 +50,10 @@ class ComputePort(Protocol):
         percentage is `unknown` (never assumed); one through a `controls` link is `control` (no
         share). A circle of cross-holdings is traced once and flagged. Deeper than `max_depth`, or
         more chains than can be enumerated, raises `OwnershipTooComplex`."""
+        ...
+
+    async def propagate(self, req: PropagationRequest) -> PropagationResult:
+        """Distance-decayed risk at `req.target` (ADR-109 phase E): each seed within `max_hops`
+        contributes `seed × decay^hops` at its shortest undirected distance, once; the score is
+        their sum, in one fixed order on every tier (contributions sorted, then summed)."""
         ...

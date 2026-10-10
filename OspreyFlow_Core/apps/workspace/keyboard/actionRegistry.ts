@@ -528,6 +528,8 @@ export const INSPECTOR_ACTIONS = defineActionRegistry("INSPECTOR_ACTIONS", [
   // ADR-105 decision 6.
   "set-an-entitys-own-picture-by-keyboard",
   "remove-an-entitys-own-picture-by-keyboard",
+  // ADR-109 phase E: the selected entity's neighbourhood risk, asked on demand.
+  "score-a-neighbourhoods-risk-by-keyboard",
 ] as const);
 
 /** The workspace shell (ADR-097 step 1): the top bar, the left rail, the classification strip.

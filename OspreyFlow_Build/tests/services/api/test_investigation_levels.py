@@ -139,6 +139,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/ownership/{node_id}"): V,
     # ADR-109 phase F: a customer's KYC status, computed at read.
     ("GET", P + "/kyc/{node_id}"): V,
+    # ADR-109 phase E: neighbourhood risk, computed at read.
+    ("GET", P + "/risk/{node_id}"): V,
     ("POST", P + "/ownership/{node_id}/canvas"): E,
     # ADR-109 phase B: the case team's alert queue — read at Viewer, triaged at Editor.
     ("GET", P + "/alert-queue"): V,

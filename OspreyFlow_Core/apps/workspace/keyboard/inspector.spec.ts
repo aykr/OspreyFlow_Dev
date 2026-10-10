@@ -76,6 +76,30 @@ test("who shares contacts with a node is asked, and a pair put on the canvas, by
   registerCovered(REGISTRY, "ask-who-shares-contacts-and-add-a-pair-by-keyboard");
 });
 
+test("a node's neighbourhood risk is scored by keyboard, each contribution named", async ({ page }) => {
+  await page.route("**/*/v1/investigations/inv-1/risk/a", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        node_id: "a", score: 1.5, max_hops: 2, decay: 0.5, window_days: 90, as_of: "2026-10-10",
+        contributions: [
+          { node_id: "b", name: "Skilling", hops: 1, alert_ids: ["x", "y"], summaries: ["Structuring", "Rapid movement"], contribution: 1.0 },
+          { node_id: "c", name: "Fastow", hops: 2, alert_ids: ["z"], summaries: ["Circular flow"], contribution: 0.5 },
+        ],
+      }),
+    });
+  });  // prettier-ignore
+  await page.goto("/keyboard/inspector-harness.html?view=node");
+  await page.getByRole("button", { name: "Neighbourhood risk" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Score this neighbourhood" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status")).toContainText("Neighbourhood risk 1.5");
+  await expect(page.getByText("Skilling, one hop away: 2 alert(s), +1 — Structuring; Rapid movement")).toBeVisible();
+  registerCovered(REGISTRY, "score-a-neighbourhoods-risk-by-keyboard");
+});
+
 test("a link's handling is lowered by keyboard, and only once confirmed", async ({ page }) => {
   await serve(page);
   const sent: unknown[] = [];

@@ -195,6 +195,37 @@ class OwnershipView(BaseModel):
     edges: list[Edge] = Field(default_factory=list)
 
 
+# --- Risk propagation (06_DECISIONS.md ADR-109 phase E, ruling 9's D4 defaults) -
+
+
+class PropagationRequest(BaseModel):
+    """How much risk reaches `target` from the seeds around it: each seed's weight decayed by
+    `decay` per hop of its *shortest* distance (links undirected), counted once, out to `max_hops`.
+    The structure is whatever the caller read as the reader — so a seed, or a path, the reader
+    cannot see contributes nothing (rule 3)."""
+
+    target: NodeId
+    nodes: list[StructureNode]
+    edges: list[StructureEdge]
+    seeds: dict[NodeId, float]
+    max_hops: int = Field(default=2, ge=0, le=4)
+    decay: float = Field(default=0.5, gt=0, le=1)
+
+
+class PropagationContribution(BaseModel):
+    node_id: NodeId
+    hops: int
+    seed: float
+    contribution: float
+
+
+class PropagationResult(BaseModel):
+    target: NodeId
+    score: float
+    #: Largest contribution first, ties by id.
+    contributions: list[PropagationContribution] = Field(default_factory=list)
+
+
 class OwnershipTooComplex(Exception):
     """A structure deeper than `max_depth`, or with more chains than a trace will enumerate:
     refused in words rather than traced in part (rule 2)."""
@@ -215,4 +246,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     OwnerTrace,
     OwnershipTrace,
     OwnershipView,
+    PropagationRequest,
+    PropagationContribution,
+    PropagationResult,
 )

@@ -1539,6 +1539,27 @@ class OwnershipTrace(BaseModel):
     cycles: list[list[NodeId]]        # each circle of cross-holdings, traced once, flagged
 ```
 
+```python
+# ADR-109 phase E: risk propagation (`ComputePort.propagate`).
+class PropagationRequest(BaseModel):
+    target: NodeId
+    nodes: list[StructureNode]
+    edges: list[StructureEdge]        # undirected for distance
+    seeds: dict[NodeId, float]        # each alerted entity's weight (its alerts)
+    max_hops: int = 2
+    decay: float = 0.5
+
+class PropagationContribution(BaseModel):
+    node_id: NodeId; hops: int; seed: float; contribution: float   # seed × decay^hops
+
+class PropagationResult(BaseModel):
+    target: NodeId; score: float
+    contributions: list[PropagationContribution]   # largest first; summed in that order
+```
+
+Each seed counts once, at its shortest distance; the decay factor is built by repeated
+multiplication and the contributions summed in sorted order, so both tiers agree exactly.
+
 **Ownership's semantics (ADR-109 ruling 9).** Every *simple* chain of links reaching the target is
 counted (a party is never revisited, so a circle is traced once); a chain's share is the product of
 its percentages, an owner's the sum over its chains, computed in one fixed order on both tiers so
@@ -1743,6 +1764,15 @@ class KycStatus(BaseModel):             # computed at each read, as the reader; 
     node_id: NodeId; name: str; status: Literal["verified", "unverified"]
     documents: list[KycDocument]; risk_score: int; risk_band: Literal["low", "medium", "high"]
     factors: list[RiskFactor]; assessed_on: date
+```
+
+```python
+class RiskContribution(BaseModel):      # ADR-109 phase E
+    node_id: NodeId; name: str; hops: int; alert_ids: list[str]; summaries: list[str]
+    contribution: float
+class NeighbourhoodRisk(BaseModel):     # computed at read, as the reader; never stored
+    node_id: NodeId; score: float; max_hops: int; decay: float; window_days: int; as_of: date
+    contributions: list[RiskContribution]
 ```
 
 **KYC (ontology v16; the addendum's Components 6 and 7).** A customer — a `Person` or an

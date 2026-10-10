@@ -35,7 +35,9 @@ class ListRefused(Exception):
     """The list may not be loaded, in words."""
 
 
-def parse_list(raw: dict[str, Any], *, use: str, config_path: Path | None = None) -> tuple[str, list[ScreeningEntry]]:
+def parse_list(
+    raw: dict[str, Any], *, use: str, config_path: Path | None = None
+) -> tuple[str, list[ScreeningEntry]]:
     synthetic = raw.get("synthetic") is True
     if not synthetic:
         dataset = str(raw.get("dataset") or "").strip()

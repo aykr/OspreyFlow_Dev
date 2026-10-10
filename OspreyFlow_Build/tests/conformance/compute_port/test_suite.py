@@ -450,3 +450,97 @@ async def test_ownership_agrees_across_tiers() -> None:
     first = traces[0].model_dump()
     for other in traces[1:]:
         assert other.model_dump() == first
+
+
+# --- risk propagation (ADR-109 phase E) — written before either adapter's code (rule 1) -----
+
+from schemas.compute import PropagationRequest  # noqa: E402
+
+
+def _propagation(
+    target: str,
+    edges: list[tuple[str, str]],
+    seeds: dict[str, float],
+    *,
+    max_hops: int = 2,
+    decay: float = 0.5,
+) -> PropagationRequest:
+    names = sorted({target, *seeds, *(n for e in edges for n in e)})
+    return PropagationRequest(
+        target=target,
+        nodes=[StructureNode(id=n, type="Person") for n in names],
+        edges=[StructureEdge(id=f"{a}-{b}", source=a, target=b) for a, b in edges],
+        seeds=seeds,
+        max_hops=max_hops,
+        decay=decay,
+    )
+
+
+@_per_adapter
+async def test_risk_decays_by_half_per_hop_of_the_shortest_distance(
+    factory: ComputeAdapterFactory,
+) -> None:
+    """T—A—B, A alerted twice (seed 2), B once (seed 1): A one hop, 2 × 0.5 = 1; B two hops,
+    1 × 0.25 = 0.25; T itself holds nothing. Score 1.25."""
+    req = _propagation("T", [("T", "A"), ("A", "B")], {"A": 2.0, "B": 1.0})
+    async with factory.context() as compute:
+        result = await compute.propagate(req)
+    assert result.score == 1.25
+    assert [(c.node_id, c.hops, c.contribution) for c in result.contributions] == [
+        ("A", 1, 1.0),
+        ("B", 2, 0.25),
+    ]
+
+
+@_per_adapter
+async def test_a_seed_counts_once_at_its_nearest_however_many_paths_reach_it(
+    factory: ComputeAdapterFactory,
+) -> None:
+    """T reaches S directly and through A: S is one hop away and counts once — 1 × 0.5."""
+    req = _propagation("T", [("T", "S"), ("T", "A"), ("A", "S")], {"S": 1.0})
+    async with factory.context() as compute:
+        result = await compute.propagate(req)
+    assert result.score == 0.5
+    assert [c.hops for c in result.contributions] == [1]
+
+
+@_per_adapter
+async def test_a_seed_beyond_the_hops_contributes_nothing(factory: ComputeAdapterFactory) -> None:
+    """T—A—B—C with C alerted: three hops, past the two counted."""
+    req = _propagation("T", [("T", "A"), ("A", "B"), ("B", "C")], {"C": 5.0})
+    async with factory.context() as compute:
+        result = await compute.propagate(req)
+    assert result.score == 0.0 and result.contributions == []
+
+
+@_per_adapter
+async def test_the_target_s_own_alerts_count_at_full_weight(factory: ComputeAdapterFactory) -> None:
+    """Zero hops: decay^0 = 1."""
+    req = _propagation("T", [("T", "A")], {"T": 3.0})
+    async with factory.context() as compute:
+        result = await compute.propagate(req)
+    assert result.score == 3.0 and result.contributions[0].hops == 0
+
+
+@_per_adapter
+async def test_a_seed_not_connected_is_not_reached(factory: ComputeAdapterFactory) -> None:
+    """X is alerted but nothing links it to T (as when the only path is hidden from the reader)."""
+    req = _propagation("T", [("T", "A")], {"X": 4.0})
+    async with factory.context() as compute:
+        result = await compute.propagate(req)
+    assert result.score == 0.0
+
+
+async def test_propagation_agrees_across_tiers() -> None:
+    req = _propagation(
+        "T",
+        [("T", "A"), ("A", "B"), ("T", "C"), ("C", "B"), ("B", "D"), ("D", "E")],
+        {"A": 1.0, "B": 3.0, "D": 0.7, "E": 9.0, "T": 0.3},
+        max_hops=3,
+        decay=0.4,
+    )
+    results = []
+    for factory in COMPUTE_PORT_ADAPTERS:
+        async with factory.context() as compute:
+            results.append(await compute.propagate(req))
+    assert all(r.model_dump() == results[0].model_dump() for r in results[1:])

@@ -11099,3 +11099,46 @@ bound is refused in words (red with the bound removed); a pattern no longer the 
 rule; a pre-commit pattern rule is refused at the schema. The deploy route refuses another's pattern
 and a pre-commit trigger. Glass: the rule input's vitest case and the keyboard case in
 `ALERTS_ACTIONS`.
+
+### ADR-109, Amendment 6 (10 October 2026) — phase E built: neighbourhood risk; the programme complete
+
+Status: build note within ADR-109's accepted rulings (ruling 9's D4 defaults); decisions marked
+*mine* may be overruled. With this amendment every ruled phase (A → B → C → F → D → E) is built.
+
+**Built.** `ComputePort.propagate` (`PropagationRequest` → `PropagationResult`, spec 01 §10),
+conformance first: five cases worked by hand (½ per hop of the shortest distance; a seed counted
+once however many paths reach it; nothing past the hops; the entity's own alerts at full weight;
+an unconnected seed unreached) and a cross-tier agreement case, red before either adapter. Both
+tiers walk breadth-first and build the decay by repeated multiplication (Python's and JavaScript's
+`pow` may differ in the last bit), sum sorted contributions, and agree exactly.
+`services/api/risk.py` and `GET …/risk/{node}` (spec 03 §3.8d): the neighbourhood to two hops read
+as the reader, `Alert` nodes and links left out; the case's alerts the reader may see whole, within
+ninety days, false positives excluded, each adding 1 to each entity it names. The Inspector's
+*Neighbourhood risk* part (spec 02 §3.3), asked on request.
+
+**The access-control test, written before the read (as this ADR named it).**
+`tests/ingest/test_risk.py`: a reader who cannot see an alerted neighbour reads the same score and
+contributions as the same neighbourhood without it; risk never travels through a node the reader
+cannot see; an alert past ninety days, or closed false, counts nothing; a neighbourhood too large is
+refused, never part-scored. **Two guards stand behind the first case, found by planting:** an
+all-seeing neighbourhood read alone left it green, because the alert on the hidden neighbour is
+itself withheld from that reader (phase B's all-or-nothing); with both made all-seeing the case
+turned red. The second case (a hidden intermediate) catches the neighbourhood guard alone.
+
+**Decisions mine.** (a) Each visible alert weighs 1 (no per-typology severity — a weighting is a
+policy choice the owner may want; recorded rather than guessed). (b) `SAME_AS` links carry risk
+(a screened customer near a listed party is near what the list names). (c) Asked on request in the
+Inspector rather than computed for every node drawn: a two-hop read per node would cost the canvas
+its performance budget.
+
+**Tests.** Conformance 5 × 2 tiers + agreement (54 in the suite), red under a Tier 2 plant (an extra
+hop of decay) and a Tier 1 plant (the hop limit ignored); 4 live (`test_risk.py`), red under the
+three plants above; the route at Viewer with its 404s; Glass: 2 vitest (red with the part fetching
+before it is asked) and the Inspector keyboard case.
+
+**The programme, closing.** Everything committed is synthetic (rule 9). What the owner does next is
+in `process/FDE_HANDOVER.md` §6.0: push; refresh and sign in (ontology v16 flags every published
+Studio recipe once, as v15 did); re-seed Operation Ledger (the layered structure and the synthetic
+screening list); deploy rules in the *Alerts* place and run the onboarding applications through a
+pipeline to see the gate fire live; the deck's captures. Found and not fixed, the owner's call: a
+re-run duplicates its events in analytics (spec 09 §6).

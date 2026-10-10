@@ -397,3 +397,34 @@ def test_only_a_pattern_the_author_saved_is_deployed_as_a_rule(
         before = client.post(path, headers=_as(key, AUTHOR.id),
                              json={**body, "params": {"typology": "pattern", "pattern_id": mine}, "trigger": "pre_commit"})  # fmt: skip
         assert before.status_code == 422
+
+
+# --- phase E: neighbourhood risk's route ---------------------------------------------
+
+
+def test_neighbourhood_risk_is_read_at_viewer(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    key, _ = keypair
+    case = asyncio.run(_case())
+    alert_id = asyncio.run(_queued_alert(case))
+    from services.api.alerts import AlertStore
+
+    async def a_referent() -> str:
+        store = await AlertStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            alert = await store.get_case_alert(alert_id, case, AUTHOR.model_copy(update={"datasets": None}))
+            return alert.referent_node_ids[0]
+        finally:
+            await store.close()
+
+    node = asyncio.run(a_referent())
+    from services.api.app import app
+
+    with TestClient(app) as client:
+        base = f"/v1/investigations/{case}/risk"
+        read = client.get(f"{base}/{node}", headers=_as(key, VIEWER))
+        assert read.status_code == 200, read.text
+        assert read.json()["score"] == 1.0, "its own alert, at no hops"
+        assert client.get(f"{base}/{node}", headers=_as(key, OUTSIDER)).status_code == 404
+        assert client.get(f"{base}/{new_id()}", headers=_as(key, VIEWER)).status_code == 404

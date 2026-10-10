@@ -23,11 +23,14 @@ from schemas.compute import (
     MotifRequest,
     OwnershipRequest,
     OwnershipTrace,
+    PropagationRequest,
+    PropagationResult,
 )
 from schemas.domain import CliqueScore, CommunityId, NodeId, Path, PathRequest, Subgraph
 
 from .communities import split_disconnected_communities
 from .ownership import trace_ownership
+from .propagation import propagate
 
 
 def _build_undirected(
@@ -190,4 +193,8 @@ class ComputeRustworkxAdapter:
     async def ownership(self, req: OwnershipRequest) -> OwnershipTrace:
         """ADR-109 phase C — `ownership.py` has the walk and its fixed order."""
         return trace_ownership(req)
+
+    async def propagate(self, req: PropagationRequest) -> PropagationResult:
+        """ADR-109 phase E — `propagation.py` has the walk and its fixed order."""
+        return propagate(req)
 

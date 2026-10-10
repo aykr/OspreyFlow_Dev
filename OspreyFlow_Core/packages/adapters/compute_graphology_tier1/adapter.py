@@ -25,6 +25,8 @@ from schemas.compute import (
     OwnershipRequest,
     OwnershipTooComplex,
     OwnershipTrace,
+    PropagationRequest,
+    PropagationResult,
 )
 from schemas.domain import CliqueScore, CommunityId, NodeId, PathRequest
 from schemas.domain import Path as GraphPath
@@ -116,4 +118,9 @@ class ComputeGraphologyTier1Adapter:
                 raise OwnershipTooComplex(str(exc)) from exc
             raise
         return OwnershipTrace.model_validate(result)
+
+    async def propagate(self, req: PropagationRequest) -> PropagationResult:
+        """ADR-109 phase E: the harness's `propagate`, the same walk and order as Tier 2's."""
+        result = await _call_harness("propagate", req.model_dump(mode="json"))
+        return PropagationResult.model_validate(result)
 

@@ -140,6 +140,7 @@ from schemas.domain import (
     KycStatus,
     LinkNote,
     Monitor,
+    NeighbourhoodRisk,
     Node,
     NodeId,
     NodeWrite,
@@ -202,6 +203,7 @@ from . import readiness as readiness_module
 from . import resolution as resolution_module
 from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
+from . import risk as risk_module
 from . import search as search_module
 from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict
 from .assessments import (
@@ -420,6 +422,7 @@ from .review import (
     RejectedResponse,
     RunExtractionRequest,
 )
+from .risk import NeighbourhoodTooLarge
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .rule_holds import ReleaseRefused, readable_rule_audit, release_held_rows
 from .screening import ScreeningListStore
@@ -6671,6 +6674,46 @@ async def kyc_status_route(
         result_cardinality=len(status.factors),
     )
     return status
+
+
+@app.get("/v1/investigations/{investigation_id}/risk/{node_id}")
+async def neighbourhood_risk_route(
+    node_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    compute: ComputeDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+) -> NeighbourhoodRisk:
+    """*Neighbourhood risk* (ADR-109 phase E): the case's alerts within two hops, halved per hop,
+    counted for ninety days — read as the reader, never stored."""
+    risk = await risk_module.neighbourhood_risk(
+        graph,
+        compute,
+        alerts_store,
+        investigation.id,
+        node_id,
+        principal,
+        today=datetime.now(UTC).date(),
+    )
+    await audit.record(
+        principal=principal,
+        action="neighbourhood_risk",
+        investigation_id=investigation.id,
+        resolved_query={"node_id": node_id},
+        result_cardinality=len(risk.contributions),
+    )
+    return risk
+
+
+@app.exception_handler(NeighbourhoodTooLarge)
+async def _neighbourhood_too_large_handler(
+    request: Request, exc: NeighbourhoodTooLarge
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=409, content={"error": "neighbourhood_too_large", "detail": str(exc)}
+    )
 
 
 @app.exception_handler(KycNotApplicable)

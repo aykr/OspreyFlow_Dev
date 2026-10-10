@@ -20,7 +20,7 @@ evidence and this file is wrong; say so and fix the file.
 - **Design questions.** Ask with multiple-choice questions (at most four at a time) and then wait. Multiple
   choice is easier for him than free text. Do not build a design he has not answered.
 - **ADRs.** Never edit an existing ADR. Append an amendment or write a new ADR. The last ADR used is
-  **ADR-108** (9 October 2026); the next free number is **109**. Check `spec/06_DECISIONS.md` before relying on that.
+  **ADR-109** (10 October 2026); the next free number is **110**. Check `spec/06_DECISIONS.md` before relying on that.
 - **Style.** British English in code comments, documentation and all user-facing copy. Always give full,
   complete commands to run, never "add this line" fragments. Keep replies short; one or two sentences on an
   outcome, not a recap.
@@ -239,7 +239,46 @@ From the friction log, the owner's live checks still to do or report:
 
 ## 6. Open work, in the order the owner raised it
 
-### 6.0 Next, as of 10 October 2026 (start here)
+### 6.0 Next, as of 10 October 2026, evening (start here)
+
+**ADR-109 is built, every ruled phase (A → B → C → F → D → E), autonomously on the owner's
+instruction after his design review.** Ontology is **v16**. Amendments 1–6 carry what was built,
+what was decided along the way (marked *mine*, overrulable) and what was found:
+- **A** typology rules on the load path, before or after commit (a hit loads with its `Alert` node;
+  a failing pre-commit rule holds its rows in a quarantine); the rule audit. **B** the case team's
+  alert queue, explainable alerts, triage (a true positive confirms the alert's node), the *Alerts*
+  place (Queue, Rules, Held rows, Audit). **C** cumulative UBO tracing on both compute tiers, the
+  *Ownership* place, Operation Ledger's BVI company, Cyprus trust, nominee and circle. **F** the KYC
+  gate as rules (screening the customer and its beneficial owners against a screening list kept
+  outside the graph, shared contact details, verifying documents), KYC status and baseline risk at
+  read, a daily one-replica expiry sweep, the due-diligence panel. **D** drawn patterns (the query
+  builder's) deployed as rules. **E** neighbourhood risk, a per-reader read, in the Inspector.
+- Found and fixed on the way: the DuckDB adapter stored event times in the machine's zone (now UTC);
+  PETROV was two Person nodes in the Ledger. **Found, not fixed (the owner's call):** re-running a
+  load writes its analytics events again (`load_events` inserts), so the timeline doubles for a
+  re-run file (spec 09 §6 says so; rules read one transaction once regardless).
+
+**The owner's next session, in order:**
+a. `git push` (everything since `781c471`).
+b. `make refresh` was run by the session after the last commit (see below); **sign in again**.
+   Ontology v16 flags every published Studio recipe once: reopen and publish each before it runs.
+c. Re-seed Operation Ledger for the layered structure and the synthetic screening list:
+   `python -m scripts.seed_internal ledger --stop-api`.
+d. The live checks, in the case "Operation Ledger (synthetic demo)": *Alerts* → Rules → deploy a
+   *KYC: screening* rule (before commit) and a *KYC: verifying documents* rule; then load
+   `packages/demo_fixtures/ledger_onboarding_applications.csv` through a pipeline (recipe shape:
+   `packages/demo_fixtures/ledger_onboarding_recipe.yaml`) — Halcyon Marine Ltd should raise two
+   screening alerts (PETROV 48% sanctioned, NAIR 32% PEP) and one document alert, Brookfield Joinery
+   none. Open an alert, *Show on the canvas*, close one as a true positive. *Ownership* → trace
+   Crescent Imports Ltd (PETROV 47.8%, NAIR 25.2%, the circle flagged) and read Halcyon's due
+   diligence. Select a node and ask its *Neighbourhood risk*.
+e. Real lists, only if wanted, only on this device: add the dataset to
+   `config/real_data_exceptions.yaml` (`python -m scripts.real_data_exceptions add`), convert the
+   export to the loader's YAML shape, then `python -m scripts.load_screening_list <file> --use
+   local_development`. OpenSanctions is CC-BY-NC 4.0 — non-commercial only (spec 00 §7).
+f. The deck: EDD, alerts and KYC captures (owner-only, never committed).
+
+### 6.0b The previous queue (10 October 2026, before ADR-109)
 
 **ADR-108 is built, all four phases (A→D→B→C), autonomously overnight on the owner's standing
 instruction.** The Ingest Studio is the pipeline canvas (the wizard is gone — ruling Q6); domain
