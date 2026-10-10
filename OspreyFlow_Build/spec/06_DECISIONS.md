@@ -10655,13 +10655,12 @@ run was in before this amendment — and loads cleanly against the deployment on
 accounts, two transfers, the events emitted). `test_the_deployment_ontology_is_the_core_composed_
 with_every_pack` fails if a pack's types stop reaching the applied schema.
 
-## ADR-109 — PROPOSED: preventive AML/EDD — streaming rules, alert triage, UBO tracing
+## ADR-109 — preventive AML/EDD — rules, alert triage, UBO tracing, KYC gate
 
-**Status: PROPOSED, 10 October 2026.** The owner's feature specification, reviewed against the
-codebase and recorded here with its decision points *unruled* — the build session's first job is a
-design review that takes the owner through D1–D7 as choice batches and records the rulings as this
-ADR's acceptance, exactly as ADR-108's Q1–Q7 were taken. **No code before the rulings.**
-`process/ADR109_KICKOFF_PROMPT.md` is the prompt that starts that session.
+**Status: accepted 10 October 2026** (proposed the same day; the owner's design review, taken as
+four choice batches, ruled D1–D7 and the KYC addendum — "The owner's rulings" below, after the
+proposal text, which is kept as drafted). **Not yet built**; the ruled phasing governs the build.
+`process/ADR109_KICKOFF_PROMPT.md` is the prompt that started that session.
 
 ### Objective
 
@@ -10749,3 +10748,71 @@ Per phase, before code: the rule-fires/rule-refuses pair per typology; the alert
 test (D2/D4); the UBO cycle and parallel-path cases with hand-computed expected percentages; the
 keyboard walkthroughs for both new surfaces; and every gate shown red before it is trusted
 (rule 15).
+
+### The owner's rulings (10 October 2026)
+
+Where a ruling differs from the recommendation recorded above, it says so. Rulings 9–10 are
+defaults the owner accepted as a set ("Accept all defaults"); they may be overruled by amendment.
+
+1. **D1 — the rule chooses its trigger point (differs from the recommendation, which was
+   post-commit only).** Each rule declares, as part of its design, `post_commit` (the existing
+   change-stream path, best-effort, never failing the ingest) or `pre_commit` (evaluated over the
+   incoming rows inside the load, before the graph write). **A pre-commit hit loads the rows and
+   writes the alert with them** — the `Alert` graph node and its `ALERTED_ON` links in the same
+   graph transaction as the rows, so a committed row a pre-commit rule fired on never exists
+   without its alert; the queue row (ruling 2) follows the commit and is reconcilable from the
+   graph node (graph and alert store are two stores; no cross-store transaction is claimed). **A
+   pre-commit rule that errors or overruns its time budget fails closed:** the rows it could not
+   judge are *held* — written to a quarantine, not the graph — with the failure in the run report
+   and an alert raised; a reviewer releases (loads) or rejects them. **Every trigger, firing,
+   refusal, hold, release and rule lifecycle change is audited**, and an **audit inspection
+   interface** for rules is part of the build, readable by the case's Authors and the deployment
+   admin, every entry naming a node filtered by the reader's clearance (rules 3, 4).
+2. **D2 — both (differs from the recommendation, which was the store row alone).** An alert is a
+   Postgres row (authoritative for queue state: status, assignee, disposition, the fired rule, the
+   touched node/edge ids, the window, the hit's words) **and** an `Alert` graph node linked by
+   `ALERTED_ON` to what it concerns. The node carries **the highest handling of everything it
+   references**, so only a viewer who can see all of it sees the node (no existence leak, rule 3);
+   it is written `inferred` with `extracted_by=rule:<id>`, and a triage disposition of *true
+   positive* is the human confirmation that makes it asserted (rule 5). Ontology bump for `Alert`
+   and `ALERTED_ON`.
+3. **Alert ownership — the case's team queue (as recommended).** A typology alert belongs to its
+   case: every member at the right level sees one queue, claims or assigns, and each reader's
+   evidence is re-checked against their own clearance at read (ADR-039's all-or-nothing). This
+   is the "shared or team-owned" revisit ADR-036 named; a rule still evaluates as its deployer's
+   principal (ADR-036 unchanged for evaluation), only the resulting alert's readership widens.
+4. **D3 — a case Author deploys, with no second approver (differs from the recommendation, which
+   had a second Author approve).** Deploy, edit and retire are audited (ruling 1) and visible in
+   the audit interface; builder-drawn rules follow the same authority.
+5. **D7 — two new left-rail places (as recommended):** *Alerts*, opening on the team triage queue,
+   and *Ownership*, opening on a chosen entity's UBO trace. Each ships its own keyboard walkthrough
+   registry (rule 13).
+6. **KYC addendum — phase F of this ADR (as recommended).** Component 6 (the IdR and screening
+   gate: synthetic-identity check by shared-attribute reads on a newly loaded Person or
+   Organisation, screening against a **synthetic in-repo** sanctions/PEP list, a baseline customer
+   risk assessment, an alert on a hit) and Component 7 (`VERIFIED_BY` to a verifying Document;
+   KYC status downgrading to *Unverified* when it expires or is marked fraudulent). The gate is a
+   rule like any other (ruling 1's trigger points apply); "halting onboarding" is the alert and
+   the queue, since OspreyFlow activates no accounts. Placed after C because the gate traces
+   ownership.
+7. **Document expiry — read-time status plus a daily sweep (as recommended).** KYC status is
+   computed at read from the document's expiry against today, so it reads *Unverified* the moment
+   it lapses; a daily, bounded sweep raises the review alert — ADR-037's first periodic pass,
+   priced in phase F's amendment. *Marked fraudulent* is a write and reaches the change stream.
+8. **Phasing: A → B → C → F → D → E.** A rules on the chassis (both trigger points, the
+   quarantine, the rule audit and its inspection read); B triage (the *Alerts* place, the
+   explainable render); C UBO/EDD (the *Ownership* place, the layered fixture on Operation Ledger);
+   F KYC; D the no-code builder; E risk propagation. Each phase: its own amendment, its spec
+   slices, its keyboard registry, gates red first.
+9. **D4 and D5 defaults.** Risk propagation is a compute-time read per principal, never stored: 2
+   hops, ½ decay per hop, an alert contributing for 90 days, shown as *Neighbourhood risk*; the
+   access-control test named above stands. UBO: threshold 25%; cycles traced once and flagged,
+   never looped or refused; a `BENEFICIAL_OWNER_OF` without `percent` shown as *share unknown*,
+   never assumed; **`CONTROLS` is a control path, not an ownership share** — correction to the
+   proposal text above, which said FIBO's `CONTROLS` carries `percent`: it carries `capacity`
+   only (`packages/ontology/packs/fibo.yaml`); a traced UBO is view-only, never written.
+10. **D6 and KYC defaults.** Everything committed or in CI is synthetic (rule 9 — not open to a
+    ruling). ICIJ Offshore Leaks and OpenSanctions only through the owner's local
+    `real_data_exceptions.yaml`; OpenSanctions' CC-BY-NC 4.0 gets its licence-register entry
+    before any local use. A KYC risk assessment is computed at read, never stored; a screening hit
+    is scored and `inferred` until a person confirms it.
