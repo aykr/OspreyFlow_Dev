@@ -117,6 +117,7 @@ from schemas.analytics import (
     Sighting,
     SightingRequest,
 )
+from schemas.compute import OwnershipTooComplex, OwnershipView
 from schemas.domain import (
     Alert,
     AlertDispositionInput,
@@ -190,6 +191,7 @@ from schemas.profile import SourceProfile
 from . import alert_queue
 from . import compute_routes as compute_routes_module
 from . import dossier as dossier_module
+from . import ownership as ownership_module
 from . import readiness as readiness_module
 from . import resolution as resolution_module
 from . import resolution_trigger as resolution_trigger_module
@@ -6516,6 +6518,83 @@ async def _rule_gate(
         loader=loader,
         held_store=held_rows,
         fail_closed=fail_closed,
+    )
+
+
+# --- ultimate beneficial ownership (ADR-109 phase C) ------------------------------
+
+
+@app.get("/v1/investigations/{investigation_id}/ownership/{node_id}")
+async def trace_ownership_route(
+    node_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    compute: ComputeDep,
+    audit: AuditDep,
+    threshold: Annotated[float, Query(gt=0, le=100)] = 25.0,
+) -> OwnershipView:
+    """Who ultimately owns or controls the entity, with cumulative shares, as the reader reads
+    the structure (rule 3); refused in words when too deep or too large (rule 2). A view: nothing
+    it concludes is written (ruling 9)."""
+    view = await ownership_module.trace_for(
+        graph, compute, node_id, principal, threshold=threshold
+    )
+    await audit.record(
+        principal=principal,
+        action="trace_ownership",
+        investigation_id=investigation.id,
+        resolved_query={"node_id": node_id, "threshold": threshold},
+        result_cardinality=len(view.trace.owners),
+    )
+    return view
+
+
+@app.post("/v1/investigations/{investigation_id}/ownership/{node_id}/canvas")
+async def ownership_canvas(
+    node_id: str,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    working_set: WorkingSetDep,
+    history: HistoryDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> StarterRunOutcome:
+    """The entity's ownership structure onto the canvas, all or (past the cap) none."""
+    nodes, edges = await ownership_module.read_structure(graph, node_id, principal, max_depth=10)
+    outcome = await working_set.seed(
+        investigation.id, list(nodes.values()), list(edges.values()), principal
+    )
+    await publish_delta(valkey, investigation.id, outcome.delta)
+    await _record_history_step(
+        working_set,
+        history,
+        investigation.id,
+        seq=outcome.delta.seq,
+        label=f"Showed an ownership structure: {len(outcome.delta.nodes)} node(s)",
+        principal=principal,
+    )
+    await audit.record(
+        principal=principal,
+        action="ownership_canvas",
+        investigation_id=investigation.id,
+        resolved_query={"node_id": node_id},
+        result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
+    )
+    return StarterRunOutcome(
+        delta=outcome.delta,
+        added_nodes=len(outcome.delta.nodes),
+        added_links=len(outcome.delta.edges),
+    )
+
+
+@app.exception_handler(OwnershipTooComplex)
+async def _ownership_too_complex_handler(
+    request: Request, exc: OwnershipTooComplex
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=409, content={"error": "ownership_too_complex", "detail": str(exc)}
     )
 
 

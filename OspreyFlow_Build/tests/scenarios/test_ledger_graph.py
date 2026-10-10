@@ -105,3 +105,42 @@ async def test_ledger_graph_side() -> None:
         assert office is not None
         assert office.properties["geometry_ref"] in POINTS
         assert brightpath_account.properties["geometry_ref"] in POINTS
+
+
+async def test_the_layered_structure_traces_to_its_beneficial_owners() -> None:
+    """ADR-109 phase C: Crescent Imports is held through a BVI company and a Cyprus trust, with a
+    cross-holding and a nominee. Worked by hand, as the spec's conformance cases are:
+
+    - Tamarind Holdings (BVI) owns 90% of Crescent: 90%.
+    - Aegean Fiduciary Trust (Cyprus) owns 70% of Tamarind: 0.7 × 0.9 = 63%.
+    - PETROV owns 60% of Aegean and 10% of Crescent directly: 0.6 × 0.7 × 0.9 + 10 = 47.8%.
+    - NAIR owns 40% of Aegean: 0.4 × 0.7 × 0.9 = 25.2% — just over the 25% threshold.
+    - Kestrel Nominees holds Tamarind by an unstated share: share unknown, never assumed.
+    - Tamarind owns 15% of Aegean: a circle with Aegean, flagged, never looped.
+    And one person, one node: PETROV, named by the companies register and the direct writes alike,
+    is a single Person (a second would split her ownership between two nodes)."""
+    from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
+    from services.api.ownership import trace_for
+
+    ontology = load_deployment_ontology()
+    async with arcadedb_adapter(ontology, load_uk_le_scheme()) as graph:
+        await build_ledger_graph(graph=graph, ontology=ontology, principal=ANALYST)
+        people = (await graph.list_nodes("Person", ANALYST, limit=500)).nodes
+        assert [p.properties.get("given_names") for p in people
+                if p.properties.get("family_name") == "Petrov"] == ["Elena"]  # fmt: skip
+
+        crescent = await graph.find_node("Organisation", "name", "Crescent Imports Ltd", ANALYST)
+        assert crescent is not None
+        view = await trace_for(graph, ComputeRustworkxAdapter(), crescent.id, ANALYST)
+        names = {n.id: n.properties.get("name") or n.properties.get("family_name") for n in view.nodes}
+        shares = {names[o.node_id]: round(o.cumulative_percent, 6) for o in view.trace.owners}
+        assert shares["Tamarind Holdings Ltd"] == 90.0
+        assert shares["Aegean Fiduciary Trust"] == 63.0
+        assert shares["Petrov"] == 47.8
+        assert shares["Nair"] == 25.2
+        owners = {names[o.node_id]: o for o in view.trace.owners}
+        assert owners["Petrov"].beneficial_owner and owners["Nair"].beneficial_owner
+        assert owners["Kestrel Nominees Ltd"].share_unknown is True
+        assert [sorted(names[n] for n in c) for c in view.trace.cycles] == [
+            ["Aegean Fiduciary Trust", "Tamarind Holdings Ltd"]
+        ]

@@ -22,6 +22,9 @@ from schemas.compute import (
     CommunityRequest,
     MotifMatch,
     MotifRequest,
+    OwnershipRequest,
+    OwnershipTooComplex,
+    OwnershipTrace,
 )
 from schemas.domain import CliqueScore, CommunityId, NodeId, PathRequest
 from schemas.domain import Path as GraphPath
@@ -45,8 +48,14 @@ async def _call_harness(method: str, request: dict[str, object]) -> dict[str, ob
     payload = json.dumps({"method": method, "request": request}).encode()
     stdout, stderr = await process.communicate(payload)
     if process.returncode != 0:
+        # The harness writes its own refusal to stdout as `{"error": ...}` before exiting 1.
+        try:
+            said = str(json.loads(stdout).get("error", ""))
+        except ValueError:
+            said = ""
         raise RuntimeError(
-            f"Tier 1 harness ({method}) exited {process.returncode}: {stderr.decode().strip()}"
+            f"Tier 1 harness ({method}) exited {process.returncode}: "
+            f"{said or stderr.decode().strip()}"
         )
     result = json.loads(stdout)
     if "error" in result:
@@ -95,3 +104,16 @@ class ComputeGraphologyTier1Adapter:
             "schemas because _pending_port_placeholders.py's retirement needed them, not because "
             "the algorithm has an owning phase yet"
         )
+
+    async def ownership(self, req: OwnershipRequest) -> OwnershipTrace:
+        """ADR-109 phase C: the harness's `ownership`, the same walk and order as Tier 2's. Its
+        refusal (too deep, too many chains) comes back as the harness's error; said as
+        `OwnershipTooComplex`, the port's own word for it."""
+        try:
+            result = await _call_harness("ownership", req.model_dump(mode="json"))
+        except RuntimeError as exc:
+            if "not traced in part" in str(exc):
+                raise OwnershipTooComplex(str(exc)) from exc
+            raise
+        return OwnershipTrace.model_validate(result)
+

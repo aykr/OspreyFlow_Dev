@@ -47,6 +47,7 @@ row_template:
       when: {field: owner_family_name, is: not_null}
       properties:
         family_name: {field: owner_family_name}
+        given_names: {field: owner_given_names}
   edges:
     - type: HOLDS_ACCOUNT
       from: company

@@ -25,6 +25,8 @@ from schemas.compute import (
     CommunityRequest,
     MotifMatch,
     MotifRequest,
+    OwnershipRequest,
+    OwnershipTrace,
 )
 from schemas.domain import CliqueScore, CommunityId, NodeId, Path, PathRequest
 
@@ -39,3 +41,11 @@ class ComputePort(Protocol):
     #: population, only a source/target pair, worth a design pass whenever this method gets a
     #: real caller rather than assumed identical in shape to the rest of this Protocol.
     async def temporal_motifs(self, req: MotifRequest) -> list[MotifMatch]: ...
+    async def ownership(self, req: OwnershipRequest) -> OwnershipTrace:
+        """Cumulative ownership and control of `req.target` (ADR-109 phase C, ruling 9): every
+        simple chain of owner→owned links reaching it; a chain's share is the product of its
+        percentages, an owner's the sum over its chains. A chain with a link of no stated
+        percentage is `unknown` (never assumed); one through a `controls` link is `control` (no
+        share). A circle of cross-holdings is traced once and flagged. Deeper than `max_depth`, or
+        more chains than can be enumerated, raises `OwnershipTooComplex`."""
+        ...

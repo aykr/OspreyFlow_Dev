@@ -21,10 +21,13 @@ from schemas.compute import (
     CommunityRequest,
     MotifMatch,
     MotifRequest,
+    OwnershipRequest,
+    OwnershipTrace,
 )
 from schemas.domain import CliqueScore, CommunityId, NodeId, Path, PathRequest, Subgraph
 
 from .communities import split_disconnected_communities
+from .ownership import trace_ownership
 
 
 def _build_undirected(
@@ -183,3 +186,8 @@ class ComputeRustworkxAdapter:
             "the algorithm has an owning phase yet, the same disclosed shape "
             "TranscribeRequest.diarize's own NotImplementedError already established"
         )
+
+    async def ownership(self, req: OwnershipRequest) -> OwnershipTrace:
+        """ADR-109 phase C — `ownership.py` has the walk and its fixed order."""
+        return trace_ownership(req)
+

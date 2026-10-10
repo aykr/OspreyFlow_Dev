@@ -278,3 +278,175 @@ async def test_all_registered_tiers_agree_within_tolerance(
         assert baseline.keys() == other.keys()
         for node_id, value in baseline.items():
             assert other[node_id] == pytest.approx(value, rel=1e-9)
+
+
+# --- ownership (ADR-109 phase C, ruling 9) — written before either adapter's code (rule 1) ----
+#
+# Every expected figure is worked by hand in the case's own docstring, so a reader can check the
+# arithmetic without trusting either adapter.
+
+from schemas.compute import OwnershipLink, OwnershipRequest, OwnershipTooComplex  # noqa: E402
+
+
+def _ownership(
+    target: str,
+    people: list[str],
+    companies: list[str],
+    links: list[tuple[str, str, str, float | None]],
+    threshold: float = 25.0,
+    max_depth: int = 10,
+) -> OwnershipRequest:
+    return OwnershipRequest(
+        target=target,
+        nodes=[StructureNode(id=n, type="Person") for n in people]
+        + [StructureNode(id=n, type="Organisation") for n in companies],
+        links=[
+            OwnershipLink(id=f"{s}->{t}", source=s, target=t, kind=kind, percent=pct)  # type: ignore[arg-type]
+            for s, t, kind, pct in links
+        ],
+        threshold=threshold,
+        max_depth=max_depth,
+    )
+
+
+def _owner(trace, node_id: str):  # type: ignore[no-untyped-def]
+    found = [o for o in trace.owners if o.node_id == node_id]
+    assert found, f"{node_id} has no chain to the target"
+    return found[0]
+
+
+@_per_adapter
+async def test_ownership_through_a_chain_is_the_product_of_its_shares(
+    factory: ComputeAdapterFactory,
+) -> None:
+    """P owns 60% of A, A owns 50% of T: P holds 0.6 × 0.5 = 30% of T, A 50%."""
+    req = _ownership("T", ["P"], ["A", "T"], [("P", "A", "owns", 60), ("A", "T", "owns", 50)])
+    async with factory.context() as compute:
+        trace = await compute.ownership(req)
+    assert round(_owner(trace, "P").cumulative_percent, 6) == 30.0
+    assert round(_owner(trace, "A").cumulative_percent, 6) == 50.0
+    assert _owner(trace, "P").beneficial_owner is True
+    assert _owner(trace, "A").beneficial_owner is False, "a company is never a beneficial owner"
+    assert [p.link_ids for p in _owner(trace, "P").paths] == [["P->A", "A->T"]]
+    assert trace.cycles == []
+
+
+@_per_adapter
+async def test_ownership_sums_parallel_chains(factory: ComputeAdapterFactory) -> None:
+    """P: 60% × 50% through A = 30%, plus 20% directly = 50%."""
+    req = _ownership(
+        "T", ["P"], ["A", "T"],
+        [("P", "A", "owns", 60), ("A", "T", "owns", 50), ("P", "T", "owns", 20)],
+    )  # fmt: skip
+    async with factory.context() as compute:
+        trace = await compute.ownership(req)
+    owner = _owner(trace, "P")
+    assert round(owner.cumulative_percent, 6) == 50.0
+    assert len(owner.paths) == 2
+    assert trace.owners[0].node_id == "A" or trace.owners[0].cumulative_percent >= 50.0
+
+
+@_per_adapter
+async def test_a_circle_of_cross_holdings_is_traced_once_and_flagged(
+    factory: ComputeAdapterFactory,
+) -> None:
+    """A owns 50% of B and B 50% of A; P owns all of A; A owns 60% of T and B 40%.
+    P: P→A→T = 1 × 0.6 = 60%; P→A→B→T = 1 × 0.5 × 0.4 = 20%; total 80% (P→A→B→A… never looped).
+    A: A→T 60% + A→B→T 0.5 × 0.4 = 20% → 80%.  B: B→T 40% + B→A→T 0.5 × 0.6 = 30% → 70%."""
+    req = _ownership(
+        "T", ["P"], ["A", "B", "T"],
+        [("A", "B", "owns", 50), ("B", "A", "owns", 50), ("P", "A", "owns", 100),
+         ("A", "T", "owns", 60), ("B", "T", "owns", 40)],
+    )  # fmt: skip
+    async with factory.context() as compute:
+        trace = await compute.ownership(req)
+    assert round(_owner(trace, "P").cumulative_percent, 6) == 80.0
+    assert round(_owner(trace, "A").cumulative_percent, 6) == 80.0
+    assert round(_owner(trace, "B").cumulative_percent, 6) == 70.0
+    assert [sorted(c) for c in trace.cycles] == [["A", "B"]]
+
+
+@_per_adapter
+async def test_a_link_without_a_percentage_is_unknown_never_assumed(
+    factory: ComputeAdapterFactory,
+) -> None:
+    """P owns A by an unstated share; A owns all of T. P's share is unknown — not 100%, not 0%:
+    its known share is 0, it is flagged, and as a person below the threshold it is a possible
+    beneficial owner."""
+    req = _ownership("T", ["P"], ["A", "T"], [("P", "A", "owns", None), ("A", "T", "owns", 100)])
+    async with factory.context() as compute:
+        trace = await compute.ownership(req)
+    owner = _owner(trace, "P")
+    assert owner.cumulative_percent == 0.0
+    assert owner.share_unknown is True
+    assert owner.beneficial_owner is False
+    assert owner.possible_beneficial_owner is True
+    assert [p.kind for p in owner.paths] == ["unknown"]
+
+
+@_per_adapter
+async def test_control_confers_control_not_a_share(factory: ComputeAdapterFactory) -> None:
+    """P controls A (no share); A owns all of T. P controls T through A and holds no share of it;
+    a natural person with control is a beneficial owner whatever the share."""
+    req = _ownership("T", ["P"], ["A", "T"], [("P", "A", "controls", None), ("A", "T", "owns", 100)])
+    async with factory.context() as compute:
+        trace = await compute.ownership(req)
+    owner = _owner(trace, "P")
+    assert owner.cumulative_percent == 0.0
+    assert owner.controls is True
+    assert owner.beneficial_owner is True
+    assert [p.kind for p in owner.paths] == ["control"]
+
+
+@_per_adapter
+async def test_the_threshold_is_inclusive(factory: ComputeAdapterFactory) -> None:
+    """Q holds exactly 25% (a beneficial owner at the 25% threshold); R holds 24.99% (not)."""
+    req = _ownership("T", ["Q", "R"], ["T"], [("Q", "T", "owns", 25), ("R", "T", "owns", 24.99)])
+    async with factory.context() as compute:
+        trace = await compute.ownership(req)
+    assert _owner(trace, "Q").beneficial_owner is True
+    assert _owner(trace, "R").beneficial_owner is False
+    assert [o.node_id for o in trace.owners] == ["Q", "R"], "the largest known share first"
+
+
+@_per_adapter
+async def test_a_structure_deeper_than_the_limit_is_refused_not_traced_in_part(
+    factory: ComputeAdapterFactory,
+) -> None:
+    """A chain of five links with `max_depth=4`: refused, rather than reporting the four nearest."""
+    chain = ["P", "C1", "C2", "C3", "C4", "T"]
+    req = _ownership(
+        "T", ["P"], chain[1:],
+        [(a, b, "owns", 100) for a, b in zip(chain, chain[1:], strict=False)], max_depth=4,
+    )  # fmt: skip
+    async with factory.context() as compute:
+        with pytest.raises((OwnershipTooComplex, RuntimeError)):
+            await compute.ownership(req)
+
+
+@_per_adapter
+async def test_a_party_with_no_chain_to_the_target_is_not_an_owner(
+    factory: ComputeAdapterFactory,
+) -> None:
+    """X owns 90% of an unrelated company: not in the trace at all."""
+    req = _ownership("T", ["P", "X"], ["T", "U"], [("P", "T", "owns", 100), ("X", "U", "owns", 90)])
+    async with factory.context() as compute:
+        trace = await compute.ownership(req)
+    assert [o.node_id for o in trace.owners] == ["P"]
+
+
+async def test_ownership_agrees_across_tiers() -> None:
+    """The same layered structure through both tiers gives the same trace (ADR-028's agreement)."""
+    req = _ownership(
+        "T", ["P", "N"], ["A", "B", "T"],
+        [("P", "A", "owns", 60), ("N", "A", "owns", 40), ("A", "B", "owns", 70),
+         ("B", "T", "owns", 100), ("P", "T", "owns", 10), ("B", "A", "owns", 15),
+         ("N", "T", "owns", None), ("N", "B", "controls", None)],
+    )  # fmt: skip
+    traces = []
+    for factory in COMPUTE_PORT_ADAPTERS:
+        async with factory.context() as compute:
+            traces.append(await compute.ownership(req))
+    first = traces[0].model_dump()
+    for other in traces[1:]:
+        assert other.model_dump() == first

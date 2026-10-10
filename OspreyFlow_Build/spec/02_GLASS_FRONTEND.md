@@ -838,6 +838,17 @@ a load's rows, which then load, or rejects them with a reason) and **Audit** (an
 unit's administrator: the rule audit, fifty entries at a time, the total said). Every action has
 its case in `keyboard/alerts.spec.ts`, under its own registry `ALERTS_ACTIONS` (rule 13).
 
+**Ultimate beneficial ownership: the *Ownership* place (ADR-109 phase C).** After *Alerts* on the
+left rail. An organisation or account is found by name (the case's own suggest), and traced: a line
+naming the beneficial owners at the threshold (25% unless changed; a person holding control is one
+whatever the share; a person whose share is partly unknown is "possibly more"), a warning for each
+circle of cross-holdings ("traced once, not round and round"), and a table of every party with a
+chain to the entity — its type, its cumulative share ("at least" when part of it is unknown), its
+notes, and its chains, each in words, owner first, with every link's percentage ("share not
+stated", "controls") and the chain's product. *Show the structure on the canvas* puts the parties and
+links there (Editor), and the graph opens with them selected. Nothing it shows is written to the
+graph. Every action has its case in `keyboard/ownership.spec.ts`, registry `OWNERSHIP_ACTIONS`.
+
 ### 3.4 Temporal analysis
 
 The timeline is the second most important control in the product after the canvas.

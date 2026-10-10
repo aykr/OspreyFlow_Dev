@@ -10937,3 +10937,58 @@ proven, the registry gate shown red with one proof removed; the shell's rail wal
 
 **Not seen.** The place against the running deployment (it needs `make refresh` and a signed-in
 owner; batched for after phase C so one refresh covers both).
+
+### ADR-109, Amendment 3 (10 October 2026) — phase C built: ultimate beneficial ownership
+
+Status: build note within ADR-109's accepted rulings; decisions marked *mine* may be overruled.
+
+**Built.** `ComputePort.ownership` (`OwnershipRequest` → `OwnershipTrace`, `01_DOMAIN_MODEL.md` §10),
+**conformance first** (rule 1): eight cases with their percentages worked by hand in the docstrings
+(a chain, parallel chains, a circle, an unstated share, control, the inclusive threshold, a structure
+too deep, a party with no chain) and a cross-tier agreement case, written and seen red before
+either adapter. Tier 2 (`adapters/compute_rustworkx/ownership.py`) and Tier 1 (the harness's
+`ownership`) walk back from the target enumerating simple chains and do the same arithmetic in the
+same order, so they agree exactly. `services/api/ownership.py` reads the structure as the reader;
+two routes (spec 03 §3.8b); the *Ownership* place on the rail (spec 02 §3.3) with its keyboard
+registry `OWNERSHIP_ACTIONS`.
+
+**Ruling 9's defaults, as built.** 25%, inclusive; a natural person (`Person`) only is a beneficial
+owner — a company never is, however much it holds; control makes a person one whatever the share;
+a partly unknown share is "at least" and, below the threshold, "possibly more"; circles traced once
+(simple chains only) and listed as strongly connected components; the trace is a view, never
+written.
+
+**Rule 2, as built — and one check removed as proving nothing.** The structure is read one layer past
+`max_depth` so that a longer chain reaches the port, which refuses it whole. A service-level depth
+check written alongside was found, by its own plant, to decide nothing (the port already refused
+every case it could see), and was removed rather than kept as an untested branch (rule 15's "an
+injection any fallthrough would catch proves nothing"); the plant now made — reading only
+`max_depth` layers — turns the depth case red. More than 500 parties, or more than 20,000 chains, is
+also refused.
+
+**Operation Ledger grows (ruling 10: synthetic).** `ledger_ownership_recipe.yaml`: behind Crescent
+Imports, Tamarind Holdings (BVI, Road Town) 90%, Aegean Fiduciary Trust (Cyprus, Limassol) 70% of
+Tamarind, PETROV 60% and NAIR 40% of the trust, PETROV 10% of Crescent directly, a nominee (Kestrel)
+holding Tamarind by an unstated share, and Tamarind holding 15% of the trust (a circle). Traced:
+PETROV 47.8%, NAIR 25.2% — both beneficial owners; Kestrel's share unknown; the circle flagged.
+`link_kind` chooses each row's link, since a recipe's `when` takes one condition and an empty
+percentage must never be written as one. **A fixture defect found and fixed:** PETROV was two
+Person nodes — the companies register made one, the direct writes another — so her ownership would
+have split; the direct writes now find her, and the register carries her given name
+(`test_the_layered_structure_traces_to_its_beneficial_owners`, red first on the duplicate).
+
+**Decisions mine.** (a) The picker searches organisations and accounts only (what due diligence is
+done on). (b) Tracing needs Viewer; the canvas needs Editor. (c) The place shows every party with a
+chain, companies included, so the layers read; only persons are called beneficial owners.
+
+**Tests.** Conformance 9 ownership cases × both tiers + agreement (43 in the suite), red under five
+plants (an unstated share assumed, a circle walked, circles unflagged — Tier 2; an unstated share
+assumed, control ignored — Tier 1; the agreement input was strengthened with an unknown and a
+control link after a plant showed it too benign to catch a divergence). Live: 3 in
+`tests/ingest/test_ownership.py` (a hidden owner or hidden link leaves the trace as if absent; the
+depth refusal; an unseen entity is not found), red under two plants (an all-seeing read; reading
+`max_depth` layers); the Ledger's layered trace; route levels. Glass: 5 vitest (red with "at least"
+dropped), `keyboard/ownership.spec.ts` 4 actions; vitest 1,381/1,381, keyboard 284/284.
+
+**Not done:** the deck's EDD captures (owner-only screens, never committed; after the refresh); the
+Ledger re-seed into the deployment (with the refresh, batched for the owner's sign-in).

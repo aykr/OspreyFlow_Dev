@@ -1,0 +1,72 @@
+# Operation Ledger — the layered structure behind Crescent Imports (ADR-109 phase C): a BVI
+# holding company, a Cyprus trust, a nominee with an unstated share and a cross-holding. One row
+# per ownership link; `link_kind` chooses the link (a person's or a company's, with a share or
+# without), since an empty percentage must never be written as one. Synthetic, like the rest.
+id: ledger-ownership
+version: 1
+label: "Operation Ledger — ownership register extract"
+connector:
+  profile: ledger-fixture-generic
+ontology_version: 15
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-fincrime, owning_unit: verify}
+
+row_template:
+  entities:
+    - ref: owned
+      pole_class: organisation
+      type: Organisation
+      match_on: name
+      on_match: reference
+      properties:
+        name: {field: owned_company}
+    - ref: owner_company
+      pole_class: organisation
+      type: Organisation
+      match_on: name
+      on_match: reference
+      when: {field: owner_company, is: not_null}
+      properties:
+        name: {field: owner_company}
+    - ref: owner_person
+      pole_class: person
+      type: Person
+      match_on: family_name
+      on_match: reference
+      when: {field: owner_person, is: not_null}
+      properties:
+        family_name: {field: owner_person}
+    - ref: office
+      pole_class: location
+      type: Location
+      match_on: name
+      on_match: reference
+      when: {field: office_name, is: not_null}
+      properties:
+        name: {field: office_name}
+        geometry_ref: {field: office_geometry_ref}
+  edges:
+    - type: BENEFICIAL_OWNER_OF
+      from: owner_company
+      to: owned
+      when: {field: link_kind, equals: company_owns}
+      properties:
+        percent: {field: percent}
+    - type: BENEFICIAL_OWNER_OF
+      from: owner_company
+      to: owned
+      when: {field: link_kind, equals: company_owns_unstated}
+    - type: BENEFICIAL_OWNER_OF
+      from: owner_person
+      to: owned
+      when: {field: link_kind, equals: person_owns}
+      properties:
+        percent: {field: percent}
+    - type: REGISTERED_AT
+      from: owned
+      to: office
+      when: {field: office_name, is: not_null}
+
+unmapped_fields: []

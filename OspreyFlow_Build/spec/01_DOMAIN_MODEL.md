@@ -1500,7 +1500,53 @@ class MotifMatch(BaseModel):
     motif_type: MotifType
     node_ids: list[NodeId]
     interval: Interval | None = None
+
+# ADR-109 phase C: cumulative ownership (`ComputePort.ownership`).
+class OwnershipLink(BaseModel):
+    id: EdgeId
+    source: NodeId                    # the owner
+    target: NodeId                    # the owned
+    kind: Literal["owns", "controls"]
+    percent: float | None = None      # 0–100; None when the record states none
+
+class OwnershipRequest(BaseModel):
+    target: NodeId
+    nodes: list[StructureNode]        # each party's type: a Person is told apart
+    links: list[OwnershipLink]
+    threshold: float = 25.0           # a natural person at or above it is a beneficial owner
+    max_depth: int = 10               # a longer chain is refused (OwnershipTooComplex), never cut
+
+class OwnershipPath(BaseModel):       # one chain, owner first
+    link_ids: list[EdgeId]
+    kind: Literal["ownership", "unknown", "control"]
+    share: float | None = None        # product of the percentages, for `ownership` only
+
+class OwnerTrace(BaseModel):
+    node_id: NodeId
+    node_type: str
+    cumulative_percent: float         # sum of the known shares — a lower bound if share_unknown
+    share_unknown: bool = False
+    controls: bool = False
+    paths: list[OwnershipPath]
+    beneficial_owner: bool = False    # Person, and at/over the threshold or holding control
+    possible_beneficial_owner: bool = False   # Person, under it, with a share partly unknown
+
+class OwnershipTrace(BaseModel):
+    target: NodeId
+    threshold: float
+    owners: list[OwnerTrace]          # largest known share first, ties by id
+    cycles: list[list[NodeId]]        # each circle of cross-holdings, traced once, flagged
 ```
+
+**Ownership's semantics (ADR-109 ruling 9).** Every *simple* chain of links reaching the target is
+counted (a party is never revisited, so a circle is traced once); a chain's share is the product of
+its percentages, an owner's the sum over its chains, computed in one fixed order on both tiers so
+they agree exactly (the suite's cross-tier case). A link stating no percentage makes its chain's
+share **unknown** — never assumed to be 100% or 0%; a chain through `controls` confers **control,
+not a share**. The caller (`services/api/ownership.py`) reads the structure through
+`GraphPort.expand` as the reader — one layer past `max_depth`, so a longer chain reaches the port
+and is refused whole — and that access-filtered read is what the reader's trace rests on
+(`tests/ingest/test_ownership.py`: a hidden owner leaves the trace as if absent).
 
 **No `Principal` on any `ComputePort` method, deliberately — unlike `GraphPort`/`AnalyticsPort`,
 which carry one everywhere.** Every population-carrying request above embeds `Subgraph` — the same
@@ -1596,6 +1642,20 @@ class Alert(BaseModel):
     investigation_id: str | None = None
     created_at: datetime
     dataset_id: str | None = None   # the dataset of the watch that raised it (ADR-099 Amendment 3)
+    # ADR-109: a typology rule's alert carries what makes it explainable, and its triage.
+    typology: str | None = None
+    words: str | None = None
+    edge_ids: list[EdgeId] = []
+    event_ids: list[str] = []       # each transaction cited (an analytics event)
+    window: Interval | None = None
+    trigger: RuleTrigger | None = None
+    alert_node_id: NodeId | None = None   # the `Alert` graph node; None where withheld
+    status: AlertStatus = "open"    # open | claimed | closed
+    assignee: str | None = None
+    disposition: AlertDisposition | None = None   # true_positive | false_positive
+    disposition_reason: str | None = None
+    decided_by: str | None = None
+    decided_at: datetime | None = None
 ```
 
 An `Alert` stores references to evidence, never copies — access is re-checked at read time against
@@ -1611,3 +1671,61 @@ here means the jump starts an unbranched investigation rather than one carrying 
 entities are read as the case it arose in reads, and one with no case reads nothing of them
 (ADR-099 Amendment 1 decision 4). The case a jump opens reads the alert's dataset, else what the
 alert's case reads, else a dataset of its own (Amendment 4 decision 3).
+
+### 11.1 Typology rules, held rows and the alert queue (ADR-109)
+
+```python
+class StructuringParams(BaseModel):     # typology "structuring"
+    threshold: float; window_days: int; minimum_count: int
+class RapidMovementParams(BaseModel):   # typology "rapid_movement"
+    within_hours: float; keep_fraction: float
+class CircularFlowParams(BaseModel):    # typology "circular_flow"
+    max_hops: int; window_days: int
+
+class TypologyRuleInput(BaseModel):     # what a case Author deploys (ruling 4)
+    name: str
+    params: StructuringParams | RapidMovementParams | CircularFlowParams   # by `typology`
+    trigger: Literal["pre_commit", "post_commit"] = "post_commit"
+    budget_ms: int = 5000               # a pre-commit rule over budget holds its rows
+
+class TypologyRule(TypologyRuleInput):
+    id: str; investigation_id: str; owner_id: str
+    status: Literal["active", "retired"] = "active"
+    created_at: datetime; retired_at: datetime | None = None; dataset_id: str | None = None
+
+class HeldRow(BaseModel):               # a row a failing pre-commit rule could not judge
+    id: str; investigation_id: str; recipe_id: str; recipe_version: int; load_id: str
+    source: str; row_index: int; row: dict[str, str]   # as read, with its original number
+    rule_id: str; reason: str; handling: Handling      # the marking the recipe would give it
+    status: Literal["held", "released", "rejected"] = "held"
+    held_at: datetime; decided_by: str | None; decided_at: datetime | None
+    decision_reason: str | None; dataset_id: str | None
+
+class HeldRowDecision(BaseModel):       # enumerated ids, never a filter
+    ids: list[str]; reason: str | None = None
+
+class RuleAuditEntry(BaseModel):
+    recorded_at: datetime; principal_id: str; action: str
+    detail: dict[str, Any]; result_cardinality: int
+class RuleAuditPage(BaseModel):
+    entries: list[RuleAuditEntry]; total: int   # of what the reader may see
+
+class QueuedAlert(BaseModel):           # one row of the case team's queue
+    alert: Alert; summary: str          # entities named as the reader sees them
+class ExplainedTransaction(BaseModel):
+    event_id: str; edge_id: EdgeId; source_id: NodeId; target_id: NodeId
+    occurred_at: datetime; amount: float | None
+class AlertExplanation(BaseModel):      # what fired it, all visible to the reader or not shown
+    alert: Alert; summary: str; nodes: list[Node]; edges: list[Edge]
+    transactions: list[ExplainedTransaction]
+class AlertDispositionInput(BaseModel):
+    disposition: Literal["true_positive", "false_positive"]; reason: str   # required
+```
+
+A rule's parameters are a closed set per typology (rule 8). A typology reads money movements from
+the analytics store's `TRANSACTED` events — one per transaction, since same-pair links merge in the
+graph — with the access step in the query; one transaction loaded twice is read once. A rule
+evaluates as its deployer (ADR-036); its alerts are the case team's (ADR-109 ruling 3), each shown
+only to a reader who can see all of it. A true positive confirms the alert's `Alert` node
+(asserted, rule 5); a false positive leaves it `inferred`. `03_CONDUIT_MIDDLEWARE.md` §3.8a has the
+routes and the trigger points; the tests that pin each invariant are named in ADR-109's amendments.

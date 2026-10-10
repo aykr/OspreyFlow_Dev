@@ -132,9 +132,144 @@ function cliqueMetric(subgraph, kMin, kMax) {
   return result;
 }
 
+// --- ownership (06_DECISIONS.md ADR-109 phase C) — the same walk and the same order as Tier 2's
+// `adapters/compute_rustworkx/ownership.py`, so the two agree to the last bit: chains sorted by
+// their link ids, shares multiplied owner first, summed in chain order.
+const MAX_CHAINS = 20000;
+
+function compareIds(a, b) {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i += 1) {
+    if (a[i] < b[i]) return -1;
+    if (a[i] > b[i]) return 1;
+  }
+  return a.length - b.length;
+}
+
+function ownershipPath(links) {
+  const ids = links.map((l) => l.id);
+  if (links.some((l) => l.kind === "controls")) return { link_ids: ids, kind: "control", share: null };
+  if (links.some((l) => l.percent === null || l.percent === undefined)) {
+    return { link_ids: ids, kind: "unknown", share: null };
+  }
+  let share = 100.0;
+  for (const l of links) share = (share * l.percent) / 100;
+  return { link_ids: ids, kind: "ownership", share };
+}
+
+function ownershipCycles(links) {
+  const graph = new Map();
+  const nodes = new Set();
+  const selfOwned = new Set();
+  for (const l of links) {
+    if (!graph.has(l.source)) graph.set(l.source, []);
+    graph.get(l.source).push(l.target);
+    nodes.add(l.source);
+    nodes.add(l.target);
+    if (l.source === l.target) selfOwned.add(l.source);
+  }
+  const index = new Map();
+  const low = new Map();
+  const onStack = new Set();
+  const stack = [];
+  const found = [];
+  let counter = 0;
+  for (const root of [...nodes].sort()) {
+    if (index.has(root)) continue;
+    const work = [[root, 0]];
+    while (work.length) {
+      const [node, child] = work.pop();
+      if (child === 0) {
+        index.set(node, counter);
+        low.set(node, counter);
+        counter += 1;
+        stack.push(node);
+        onStack.add(node);
+      }
+      const successors = [...(graph.get(node) ?? [])].sort();
+      if (child < successors.length) {
+        work.push([node, child + 1]);
+        const next = successors[child];
+        if (!index.has(next)) work.push([next, 0]);
+        else if (onStack.has(next)) low.set(node, Math.min(low.get(node), index.get(next)));
+        continue;
+      }
+      if (low.get(node) === index.get(node)) {
+        const component = [];
+        for (;;) {
+          const member = stack.pop();
+          onStack.delete(member);
+          component.push(member);
+          if (member === node) break;
+        }
+        if (component.length > 1 || selfOwned.has(node)) found.push(component.sort());
+      }
+      if (work.length) {
+        const parent = work[work.length - 1][0];
+        low.set(parent, Math.min(low.get(parent), low.get(node)));
+      }
+    }
+  }
+  return found.sort(compareIds);
+}
+
+function ownership(request) {
+  const types = new Map(request.nodes.map((n) => [n.id, n.type]));
+  const into = new Map();
+  for (const l of request.links) {
+    if (!into.has(l.target)) into.set(l.target, []);
+    into.get(l.target).push(l);
+  }
+  for (const incoming of into.values()) incoming.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const maxDepth = request.max_depth ?? 10;
+  const threshold = request.threshold ?? 25;
+  const chains = new Map();
+  let count = 0;
+  const work = [[request.target, [], new Set([request.target])]];
+  while (work.length) {
+    const [node, links, seen] = work.pop();
+    for (const link of into.get(node) ?? []) {
+      const owner = link.source;
+      if (seen.has(owner)) continue;
+      const chain = [link, ...links];
+      if (chain.length > maxDepth) {
+        throw new Error(`a chain of more than ${maxDepth} links reaches the target; the structure is not traced in part`);
+      }
+      count += 1;
+      if (count > MAX_CHAINS) throw new Error(`more than ${MAX_CHAINS} chains reach the target; the structure is not traced in part`);
+      if (!chains.has(owner)) chains.set(owner, []);
+      chains.get(owner).push(ownershipPath(chain));
+      work.push([owner, chain, new Set([...seen, owner])]);
+    }
+  }
+  const owners = [];
+  for (const [owner, paths] of chains) {
+    paths.sort((a, b) => compareIds(a.link_ids, b.link_ids));
+    let cumulative = 0.0;
+    for (const p of paths) if (p.kind === "ownership" && p.share !== null) cumulative += p.share;
+    const unknown = paths.some((p) => p.kind === "unknown");
+    const controls = paths.some((p) => p.kind === "control");
+    const person = types.get(owner) === "Person";
+    const beneficial = person && (cumulative >= threshold || controls);
+    owners.push({
+      node_id: owner,
+      node_type: types.get(owner) ?? "unknown",
+      cumulative_percent: cumulative,
+      share_unknown: unknown,
+      controls,
+      paths,
+      beneficial_owner: beneficial,
+      possible_beneficial_owner: person && !beneficial && unknown,
+    });
+  }
+  owners.sort((a, b) => b.cumulative_percent - a.cumulative_percent || (a.node_id < b.node_id ? -1 : a.node_id > b.node_id ? 1 : 0));
+  return { target: request.target, threshold, owners, cycles: ownershipCycles(request.links) };
+}
+
 function dispatch(method, request) {
   if (method === "centrality") return centrality(request.subgraph, request.metric);
   if (method === "communities") return communities(request.subgraph);
+  if (method === "ownership") return ownership(request);
   if (method === "clique_metric") {
     return cliqueMetric(request.subgraph, request.k_min ?? 4, request.k_max ?? 30);
   }

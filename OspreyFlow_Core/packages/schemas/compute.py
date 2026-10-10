@@ -21,9 +21,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
-from schemas.domain import EdgeId, Interval, NodeId, Subgraph
+from schemas.domain import Edge, EdgeId, Interval, Node, NodeId, Subgraph
 
 CentralityMetric = Literal[
     "degree",
@@ -125,6 +125,81 @@ class MotifMatch(BaseModel):
     interval: Interval | None = None
 
 
+# --- Ownership (06_DECISIONS.md ADR-109 phase C, ruling 9) -------------------
+
+
+class OwnershipLink(BaseModel):
+    """One link of a corporate structure, owner to owned: `owns` with its percentage (0–100;
+    `None` when the record states none), or `controls` (control without a stated share)."""
+
+    id: EdgeId
+    source: NodeId
+    target: NodeId
+    kind: Literal["owns", "controls"]
+    percent: float | None = Field(default=None, ge=0, le=100)
+
+
+class OwnershipRequest(BaseModel):
+    """Who ultimately owns or controls `target`, through every chain of `links` that reaches
+    it. `nodes` carry each party's type, so a natural person is told apart."""
+
+    target: NodeId
+    nodes: list[StructureNode]
+    links: list[OwnershipLink]
+    #: The share at or above which a natural person is a beneficial owner (5AMLD's 25 by default).
+    threshold: float = Field(default=25.0, gt=0, le=100)
+    #: The longest chain traced; a longer structure is refused, never traced in part (rule 2).
+    max_depth: int = Field(default=10, ge=1, le=20)
+
+
+class OwnershipPath(BaseModel):
+    """One chain from an owner to the target, its links in order. `ownership`: every link owns
+    with a stated percentage, and `share` is their product (as a percentage). `unknown`: a link
+    states no percentage, so the share is not known. `control`: a link controls rather than owns,
+    so the chain confers control, not a share."""
+
+    link_ids: list[EdgeId]
+    kind: Literal["ownership", "unknown", "control"]
+    share: float | None = None
+
+
+class OwnerTrace(BaseModel):
+    node_id: NodeId
+    node_type: str
+    #: The sum of the known shares of every ownership chain — a lower bound when `share_unknown`.
+    cumulative_percent: float
+    share_unknown: bool = False
+    controls: bool = False
+    paths: list[OwnershipPath] = Field(default_factory=list)
+    #: A natural person at or above the threshold, or holding control.
+    beneficial_owner: bool = False
+    #: A natural person below the threshold whose share is partly unknown: it may be more.
+    possible_beneficial_owner: bool = False
+
+
+class OwnershipTrace(BaseModel):
+    target: NodeId
+    threshold: float
+    #: Every party with a chain to the target, the largest known share first.
+    owners: list[OwnerTrace] = Field(default_factory=list)
+    #: Each set of parties that own one another in a circle (traced once, never looped; flagged).
+    cycles: list[list[NodeId]] = Field(default_factory=list)
+
+
+class OwnershipView(BaseModel):
+    """An ownership trace as the Glass shows it: the trace, and the parties and links it was
+    computed over, read as the reader (ADR-109 phase C)."""
+
+    trace: OwnershipTrace
+    nodes: list[Node] = Field(default_factory=list)
+    edges: list[Edge] = Field(default_factory=list)
+
+
+class OwnershipTooComplex(Exception):
+    """A structure deeper than `max_depth`, or with more chains than a trace will enumerate:
+    refused in words rather than traced in part (rule 2)."""
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     CentralityRequest,
     CommunityRequest,
@@ -134,4 +209,10 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     CliqueMetricRequest,
     MotifRequest,
     MotifMatch,
+    OwnershipLink,
+    OwnershipRequest,
+    OwnershipPath,
+    OwnerTrace,
+    OwnershipTrace,
+    OwnershipView,
 )

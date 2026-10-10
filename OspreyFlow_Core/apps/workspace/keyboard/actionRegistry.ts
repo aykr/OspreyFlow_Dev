@@ -454,6 +454,15 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
   "page-the-rule-audit-by-keyboard",
 ] as const);
 
+/** The Ownership place (ADR-109 phase C): find an entity, trace its beneficial owners, change the
+ * threshold, read a party's chains, put the structure on the canvas. `keyboard/ownership.spec.ts`. */
+export const OWNERSHIP_ACTIONS = defineActionRegistry("OWNERSHIP_ACTIONS", [
+  "find-an-entity-and-trace-its-ownership-by-keyboard",
+  "trace-again-at-another-threshold-by-keyboard",
+  "read-a-partys-chains-by-keyboard",
+  "show-the-structure-on-the-canvas-by-keyboard",
+] as const);
+
 export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   "ask-a-question-with-ctrl-enter",
   "ask-a-question-with-the-ask-button",

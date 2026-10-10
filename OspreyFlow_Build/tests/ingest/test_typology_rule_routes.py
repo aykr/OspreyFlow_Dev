@@ -295,3 +295,36 @@ def test_the_queue_is_read_at_viewer_and_triaged_at_editor(
         assert closed.status_code == 200 and closed.json()["status"] == "closed"
         assert client.get(base, headers=_as(key, VIEWER)).json() == []
         assert len(client.get(f"{base}?status=closed", headers=_as(key, VIEWER)).json()) == 1
+
+
+# --- phase C: ownership's routes ------------------------------------------------
+
+
+def test_ownership_is_traced_at_viewer_and_drawn_at_editor(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    key, _ = keypair
+    case = asyncio.run(_case())
+    alert_id = asyncio.run(_queued_alert(case))
+    from services.api.alerts import AlertStore
+
+    async def referents() -> list[str]:
+        store = await AlertStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            return (await store.get_case_alert(alert_id, case, AUTHOR.model_copy(update={"datasets": None}))).referent_node_ids
+        finally:
+            await store.close()
+
+    owned = asyncio.run(referents())[0]
+    from services.api.app import app
+
+    with TestClient(app) as client:
+        base = f"/v1/investigations/{case}/ownership/{owned}"
+        traced = client.get(base, headers=_as(key, VIEWER))
+        assert traced.status_code == 200, traced.text
+        assert traced.json()["trace"]["target"] == owned
+        assert client.get(base, headers=_as(key, OUTSIDER)).status_code == 404
+        assert client.get(f"/v1/investigations/{case}/ownership/{new_id()}",
+                          headers=_as(key, VIEWER)).status_code == 404  # fmt: skip
+        assert client.post(f"{base}/canvas", headers=_as(key, VIEWER)).status_code == 403
+        assert client.post(f"{base}/canvas", headers=_as(key, EDITOR)).status_code == 200

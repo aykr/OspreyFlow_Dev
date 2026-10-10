@@ -92,6 +92,7 @@ import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
 import { AlertInbox } from "./watches/AlertInbox";
 import { AlertsPlace } from "./alerts/AlertsPlace";
+import { OwnershipPlace } from "./ownership/OwnershipPlace";
 import { HotlistPanel } from "./watches/HotlistPanel";
 import { MonitorPanel } from "./watches/MonitorPanel";
 import {
@@ -475,11 +476,11 @@ export function App() {
   }, [counts, classificationOrder]);
 
   const [view, setView] = useState<
-    "graph" | "map" | "ingest" | "dossier" | "watches" | "alerts"
+    "graph" | "map" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
   >(handoff.view === "ingest" ? "ingest" : "graph");
   // Which application is open, and (so the switch can go back to it) the Glass view last open.
   const app = view === "ingest" ? "ingest" : "glass";
-  const lastGlassView = useRef<"graph" | "map" | "dossier" | "watches" | "alerts">("graph");
+  const lastGlassView = useRef<"graph" | "map" | "dossier" | "watches" | "alerts" | "ownership">("graph");
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {
@@ -985,6 +986,8 @@ export function App() {
                 { id: "watches", label: "Watches", icon: "watches" as const, onSelect: () => setView("watches"), pressed: view === "watches" },
                 // ADR-109 ruling 5: the case team's alert queue, its rules, held rows and audit.
                 { id: "alerts", label: "Alerts", icon: "alerts" as const, onSelect: () => setView("alerts"), pressed: view === "alerts" },
+                // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
+                { id: "ownership", label: "Ownership", icon: "ownership" as const, onSelect: () => setView("ownership"), pressed: view === "ownership" },
                 { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
                 { id: "explore", label: "Explore", icon: "explore" as const, onSelect: () => setExploreOpen(true), pressed: exploreOpen },
                 { id: "questions", label: "Questions", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
@@ -1119,7 +1122,19 @@ export function App() {
             }}
           />
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "alerts" && (
+        {view === "ownership" && (
+          <OwnershipPlace
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            onCanvas={(outcome, nodeIds) => {
+              applyStarterDelta(outcome.delta);
+              pendingHighlight.current = nodeIds;
+              setView("graph");
+            }}
+          />
+        )}
+        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "alerts" && view !== "ownership" && (
           <div style={{ flex: 1, position: "relative" }}>
             {view === "graph" && (
               <GlassCanvas

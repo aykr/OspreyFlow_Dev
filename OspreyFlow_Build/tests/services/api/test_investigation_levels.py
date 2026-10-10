@@ -135,6 +135,9 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # ADR-109 phase A: an Author deploys and retires a typology rule (ruling 4); the rule list is
     # the case team's; the rule audit is an Author's (or the admin's safety net, ruling 1); held rows
     # are listed at Editor and decided at Author (Amendment 1).
+    # ADR-109 phase C: ownership traced at Viewer, drawn on the canvas at Editor.
+    ("GET", P + "/ownership/{node_id}"): V,
+    ("POST", P + "/ownership/{node_id}/canvas"): E,
     # ADR-109 phase B: the case team's alert queue — read at Viewer, triaged at Editor.
     ("GET", P + "/alert-queue"): V,
     ("GET", P + "/alert-queue/{alert_id}"): V,

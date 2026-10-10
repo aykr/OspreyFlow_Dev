@@ -58,6 +58,9 @@ POINTS: dict[str, tuple[float, float]] = {
     "ledger:branch-london": (-0.0792, 51.5126),
     "ledger:branch-walsall": (-1.9979, 52.5736),
     "ledger:branch-wolverhampton": (-2.1301, 52.5852),
+    # ADR-109 phase C: the layered structure's registered offices (real towns, invented firms).
+    "ledger:road-town": (-64.6208, 18.4286),  # Road Town, Tortola, British Virgin Islands
+    "ledger:limassol": (33.0413, 34.6786),  # Limassol, Cyprus
 }
 
 SAR_TEXT = (
@@ -137,20 +140,20 @@ def kyc_rows() -> list[dict[str, str]]:
 
 def company_rows() -> list[dict[str, str]]:
     def row(name: str, number: str, iban: str, office: str, office_ref: str,
-            owner: str = "", percent: str = "") -> dict[str, str]:
+            owner: str = "", percent: str = "", given: str = "") -> dict[str, str]:
         institution, account_name, branch = ACCOUNTS[iban]
         return {
             "company_name": name, "company_number": number, "iban": iban,
             "institution": institution, "account_name": account_name, "branch_geometry_ref": branch,
             "office_name": office, "office_geometry_ref": office_ref,
-            "owner_family_name": owner, "owner_percent": percent,
+            "owner_family_name": owner, "owner_given_names": given, "owner_percent": percent,
         }
 
     return [
         row("Hale Logistics Ltd", "09418821", HALE_BIZ,
-            "Unit 6, Pleck Industrial Estate, Walsall", "ledger:pleck", "Hale", "100"),
+            "Unit 6, Pleck Industrial Estate, Walsall", "ledger:pleck", "Hale", "100", "Marcus"),
         row("Brightpath Consulting Ltd", "14092733", BRIGHTPATH_ACC,
-            "Suite 14, 83 Colmore Row, Birmingham", "ledger:colmore-row", "Petrov", "100"),
+            "Suite 14, 83 Colmore Row, Birmingham", "ledger:colmore-row", "Petrov", "100", "Elena"),
         row("Crescent Imports Ltd", "13550917", CRESCENT_ACC,
             "Level 2, 71 Fenchurch Street, London", "ledger:fenchurch"),
         row("Kesterton Freight Ltd", "08771204", TRADING_ACCOUNTS[0],
@@ -160,6 +163,37 @@ def company_rows() -> list[dict[str, str]]:
         row("Arden Fuel Cards Ltd", "10233471", TRADING_ACCOUNTS[2],
             "Fort Dunlop, Birmingham", "ledger:branch-birmingham"),
     ]
+
+
+def ownership_rows() -> list[dict[str, str]]:
+    """ADR-109 phase C: who stands behind Crescent Imports — a BVI holding company, a Cyprus trust
+    owned by PETROV and NAIR, a nominee holding an unstated share, and a cross-holding that makes
+    a circle. `link_kind` says which link each row writes: a person's or a company's, with a
+    stated share or without (an empty percentage is never written as one)."""
+
+    def row(owned: str, link_kind: str, owner_company: str = "", owner_person: str = "",
+            percent: str = "", office: str = "", office_ref: str = "") -> dict[str, str]:
+        return {
+            "owned_company": owned, "link_kind": link_kind, "owner_company": owner_company,
+            "owner_person": owner_person, "percent": percent, "office_name": office,
+            "office_geometry_ref": office_ref,
+        }
+
+    return [
+        row("Tamarind Holdings Ltd", "company_owns", owner_company="Aegean Fiduciary Trust",
+            percent="70", office="Craigmuir Chambers, Road Town, Tortola",
+            office_ref="ledger:road-town"),
+        row("Crescent Imports Ltd", "company_owns", owner_company="Tamarind Holdings Ltd",
+            percent="90"),
+        row("Aegean Fiduciary Trust", "person_owns", owner_person="Petrov", percent="60",
+            office="Agiou Andreou 12, Limassol", office_ref="ledger:limassol"),
+        row("Aegean Fiduciary Trust", "person_owns", owner_person="Nair", percent="40"),
+        row("Crescent Imports Ltd", "person_owns", owner_person="Petrov", percent="10"),
+        row("Aegean Fiduciary Trust", "company_owns", owner_company="Tamarind Holdings Ltd",
+            percent="15"),
+        row("Tamarind Holdings Ltd", "company_owns_unstated",
+            owner_company="Kestrel Nominees Ltd"),
+    ]  # fmt: skip
 
 
 #: Day of September -> how many sub-threshold deposits landed (sums to twenty-six; the gaps are
@@ -289,6 +323,23 @@ async def build_ledger_graph(
             )
 
     await _direct_writes(graph, principal, load_id_prefix)
+    # ADR-109 phase C: the layered structure, after the people it names exist (NAIR is a direct
+    # write).
+    recipe = load_recipe(FIXTURES / "ledger_ownership_recipe.yaml")
+    tx = await graph.begin_transaction()
+    try:
+        report, _ = await run_recipe(
+            recipe, ownership_rows(), graph=graph, ontology=ontology, tx=tx, principal=principal,
+            load_id=f"{load_id_prefix}-{recipe.id}", investigation_scope=investigation_scope,
+            source=f"{SOURCE}:{recipe.id}",
+        )
+    except Exception:
+        await graph.rollback_transaction(tx)
+        raise
+    if report.rejections:
+        await graph.rollback_transaction(tx)
+        raise AssertionError(f"ledger_ownership_recipe.yaml rejected rows: {report.rejections}")
+    await graph.commit_transaction(tx)
     return LedgerGraphResult(
         events=events, sar_document_id=sar_document_id, transactions_loaded=transactions
     )
@@ -314,12 +365,13 @@ async def _direct_writes(graph: GraphPort, principal: Principal, load_id_prefix:
 
     tx = await graph.begin_transaction()
     try:
+        # PETROV is the companies register's own (Brightpath's owner): found, never made twice —
+        # a second node would split her ownership between two (ADR-109 phase C found it).
         nair = node("Person", {"family_name": "Nair", "given_names": "Priya"})
-        petrov = node("Person", {"family_name": "Petrov", "given_names": "Elena"})
         home = node(
             "Location", {"name": "Dunstall Road, Wolverhampton", "geometry_ref": "ledger:dunstall"}
         )
-        (nair_id, petrov_id, home_id) = await graph.upsert_nodes([nair, petrov, home], tx)
+        (nair_id, home_id) = await graph.upsert_nodes([nair, home], tx)
 
         async def need(node_type: str, key: str, value: str) -> str:
             found = await graph.find_node(node_type, key, value, principal)
