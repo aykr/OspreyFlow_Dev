@@ -595,6 +595,14 @@ editor; the repository is the record.
   between the same two parties (merged into the first link) is not counted again, and a re-run of
   the same file reports none. It agrees with Verify's *would create* and with the store (the
   report once counted every edge write, 236 for 141 links, until 9 October 2026).
+  **Not yet true of the run's events (found 10 October 2026, ADR-109 Amendment 1, not fixed):** a
+  re-run writes each transaction's event to the analytics store again under a new id
+  (`load_events` inserts), so the timeline and event counts double for a re-run file. Typology rules
+  read one transaction once regardless; the timeline does not yet.
+- **Judged by the case's rules (ADR-109 ruling 1).** A run is judged by its case's typology rules
+  at the point each declares (`03_CONDUIT_MIDDLEWARE.md` §3.8a, §5.1). The run report carries
+  `rows_held` and `rule_notes`: what each rule raised, and any rows a failing pre-commit rule held
+  for review — they reached no store, their places included, until an Author releases them.
 - **Versioned, with loads attributed.** Every loaded element records which recipe version
   produced it (`load_id`/`recipe_id`/`recipe_version` on its audit stub — `01_DOMAIN_MODEL.md`
   §2.4). When a mapping error is found in month six, the affected elements are identifiable by

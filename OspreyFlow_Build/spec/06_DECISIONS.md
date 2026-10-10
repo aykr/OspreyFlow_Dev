@@ -10816,3 +10816,76 @@ defaults the owner accepted as a set ("Accept all defaults"); they may be overru
     `real_data_exceptions.yaml`; OpenSanctions' CC-BY-NC 4.0 gets its licence-register entry
     before any local use. A KYC risk assessment is computed at read, never stored; a screening hit
     is scored and `inferred` until a person confirms it.
+
+### ADR-109, Amendment 1 (10 October 2026) — phase A built: rules on the chassis
+
+Status: build note within ADR-109's accepted rulings. Decisions marked *mine* were taken in the
+build under the owner's standing instruction and may be overruled.
+
+**Built.** Ontology **v15**: `Alert` (rose, triangle — the first channel shared by shape, as §1.1
+allows) and the system link `ALERTED_ON` (`from: [Alert]`, `to: ["*"]`, Probabilistic); every
+pinned fixture bumped, so every published Studio recipe is flagged once and republished, as at
+v12–v14. `TypologyRule` (a closed vocabulary per typology: `StructuringParams`,
+`RapidMovementParams`, `CircularFlowParams`; trigger; `budget_ms`) in its case-scoped Postgres
+store; `services/api/rule_evaluation.py` — flows read from the analytics store's `TRANSACTED`
+events through `AnalyticsPort.list_events` (access in the `WHERE` clause), the three typologies run
+over them, `RuleGate` with `pre_commit`, `after_commit` and `post_commit`; `load_with_rules` in
+`studio_publish.py`, the one load path for a single run, every pipeline branch and a release; the
+`held_rows` quarantine, filtered by marking in its own SQL; the alert row gains `typology`, `words`,
+`edge_ids`, `event_ids`, `window`, `trigger`, `alert_node_id`; the rule audit read; seven routes
+(spec 03 §3.8a), the run report's `rows_held` and `rule_notes`.
+
+**Where a flow comes from — found, not designed.** The proposal assumed transactions are graph
+edges; they are not. Same-pair `TRANSACTED` writes merge into one link (the engine's
+`_write_edge`), so each transaction lives only as an analytics event. Rules therefore read events,
+and an alert cites event ids as well as links and nodes.
+
+**Ruling 1 as built.** A pre-commit hit writes its `Alert` node and links in the load's own graph
+transaction (carrying the load's `load_id`, so reverting the load reverts its alerts); the queue
+row follows the commit (two stores, no cross-store transaction claimed). A failing rule — an error,
+a context read over `CONTEXT_CAP` (10,000 events, a guess, disclosed), or an overrun of its budget
+— holds every row carrying a money movement in the load (a typology judges flows, so those are the
+rows it could not judge): rollback, quarantine, reload without them; a second hold is refused
+rather than part-loaded. A post-commit rule runs from the load path's own post-commit point, once
+the events are in the analytics store — the same deliberate in-request shortcut ADR-037's amendment
+records for monitors, not a stream consumer; no other producer (resolution, manual assertion)
+writes money movements, so nothing a typology could judge is missed by it. A finding alerts once:
+its signature (rule, typology, subject, cited events) in a Valkey set per rule, recorded only after
+the alert is committed.
+
+**Ruling 2 as built.** The node is `inferred`, `extracted_by=rule:<id>`, marked by `merge_handling`
+folded over every cited event and every referenced node as stored (a node still uncommitted in the
+load's own transaction is stood in for by the highest marking the recipe can write). Where a
+restricted code is among referents of different units or originators no single marking is safe:
+the node is withheld, the row kept, and `alert_node_withheld` audited.
+
+**Decisions mine (overrulable).** (a) The audit read uses ADR-052 §4's safety net for the admin
+— an `osprey-admin` of the case's own unit, not every unit's. (b) Held rows are listed at Editor
+(triage reads them) and decided at Author; a release also needs the Studio's Loader role, as every
+load does. (c) A rejection needs a reason; a release may carry one. (d) A release judges the rows
+again but never holds them (the reviewer's release is the human judgement), and a recipe published
+again since the hold is refused in words. (e) Until phase B, a typology alert's row is owned by the
+rule's deployer and read as §3.8 alerts are; phase B widens readership to the case team (ruling 3).
+
+**Two defects found on the way.** (1) *Fixed:* the DuckDB analytics adapter stored an aware UTC
+time in the connection's local zone and read it back as UTC — an hour late on this Mac in BST,
+invisible in the UTC containers. The adapter now fixes its connection to UTC
+(`tests/adapters/analytics_duckdb/test_event_time_zone.py`, red first under a New York zone).
+(2) *Not fixed, recorded:* `load_events` inserts, so re-running a file writes every event again under
+new ids and the timeline doubles for it (spec 09 §6 now says so). Rules are proof against it — one
+transaction (link, ends, instant, amount) is read once, as its earliest event — but the timeline
+and *Show messages* are not. Owner's call whether it is fixed next.
+
+**Tests.** Pure: 21 (`tests/services/api/test_rule_evaluation.py` — each typology fires and refuses,
+one parameter apart; the access predicate on both axes; the alert marking; one transaction read
+once), with planted faults shown red (the unit check, the mixed-units guard, the this-load filter).
+Live against throwaway Postgres, Valkey, MinIO and ArcadeDB with the real DuckDB adapter: 12
+(`tests/ingest/test_typology_rules.py`), red under four plants (the deployer filter, the
+transaction collapse, fail-closed, the highest marking — the last needed a mixed-marking case to
+show red, which is now in the file). Routes: 5 (`tests/ingest/test_typology_rule_routes.py`, the
+real app and lifespan), red under two level plants; the investigation-levels table gains all
+seven routes. The release route's own wiring is proven through `release_held_rows`, not by an HTTP
+case — disclosed, and owed by phase B, whose Glass drives it.
+
+**Not in phase A:** the Glass (phase B: the *Alerts* place, rule management, the audit and the
+holds in it, with its keyboard registry); the team queue (phase B).

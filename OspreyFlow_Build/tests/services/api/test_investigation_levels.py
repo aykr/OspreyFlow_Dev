@@ -132,6 +132,16 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/ingest/recipes/{recipe_id}/profile"): V,
     ("PUT", P + "/ingest/recipes/{recipe_id}/row-template"): E,
     ("PUT", P + "/ingest/recipes/{recipe_id}/pipeline"): E,
+    # ADR-109 phase A: an Author deploys and retires a typology rule (ruling 4); the rule list is
+    # the case team's; the rule audit is an Author's (or the admin's safety net, ruling 1); held rows
+    # are listed at Editor and decided at Author (Amendment 1).
+    ("GET", P + "/rules"): V,
+    ("POST", P + "/rules"): A,
+    ("POST", P + "/rules/{rule_id}/retire"): A,
+    ("GET", P + "/rules/audit"): A,
+    ("GET", P + "/held-rows"): E,
+    ("POST", P + "/held-rows/reject"): A,
+    ("POST", P + "/ingest/recipes/{recipe_id}/held-rows/release"): A,
     ("GET", P + "/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}"): V,
     ("POST", P + "/ingest/recipes/{recipe_id}/map/handling-preview"): V,
     ("POST", P + "/ingest/recipes/{recipe_id}/verify"): E,

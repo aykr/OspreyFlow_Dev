@@ -123,6 +123,8 @@ from schemas.domain import (
     EdgeWrite,
     ExpandRequest,
     Handling,
+    HeldRow,
+    HeldRowDecision,
     Hotlist,
     IntelligenceGap,
     Interval,
@@ -138,8 +140,11 @@ from schemas.domain import (
     Principal,
     Provenance,
     ProvenanceState,
+    RuleAuditPage,
     SavedPattern,
     SourceRef,
+    TypologyRule,
+    TypologyRuleInput,
 )
 
 # `Path` is already `pathlib.Path` in this module — `GraphPath` is the same alias
@@ -288,6 +293,7 @@ from .export import (
     OverrideRequiredError,
     submit_export,
 )
+from .held_rows import HeldRowNotFoundError, HeldRowStore
 from .history import (
     HistoryStep,
     HistoryStepNotFoundError,
@@ -396,6 +402,8 @@ from .review import (
     RejectedResponse,
     RunExtractionRequest,
 )
+from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
+from .rule_holds import ReleaseRefused, readable_rule_audit, release_held_rows
 from .search import SearchRequest, SearchResponse, SuggestRequest, SuggestResponse
 from .site_images import (
     object_key_for,
@@ -444,6 +452,7 @@ from .tile_cache import (
     write_cached_tile,
 )
 from .tile_proxy import build_upstream_url, fetch_tile
+from .typology_rules import TypologyRuleNotFoundError, TypologyRuleStore
 from .watch_routes import (
     AlertJumpResult,
     AlertList,
@@ -506,6 +515,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     hotlists_store = await HotlistStore.connect(config.postgres.dsn)
     monitors_store = await MonitorStore.connect(config.postgres.dsn)
     alerts_store = await AlertStore.connect(config.postgres.dsn)
+    # ADR-109: each case's typology rules, and the rows a failing pre-commit rule holds.
+    typology_rules = await TypologyRuleStore.connect(config.postgres.dsn)
+    held_rows = await HeldRowStore.connect(config.postgres.dsn, handling_scheme)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
     link_notes_store = await LinkNoteStore.connect(config.postgres.dsn)
     link_changes_store = await LinkChangeStore.connect(config.postgres.dsn)
@@ -569,6 +581,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.hotlists_store = hotlists_store
     app.state.monitors_store = monitors_store
     app.state.alerts_store = alerts_store
+    app.state.typology_rules = typology_rules
+    app.state.held_rows = held_rows
     app.state.judgements_store = judgements_store
     app.state.link_notes = LinkNoteService(link_notes_store, app.state.working_set)
     # ADR-090: the ontology in force is `default.yaml` plus every proposal, composed here and after
@@ -701,6 +715,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await hotlists_store.close()
         await monitors_store.close()
         await alerts_store.close()
+        await typology_rules.close()
+        await held_rows.close()
         await judgements_store.close()
         await link_notes_store.close()
         await link_changes_store.close()
@@ -833,6 +849,14 @@ def get_alerts_store(request: Request) -> AlertStore:
     return request.app.state.alerts_store  # type: ignore[no-any-return]
 
 
+def get_typology_rules(request: Request) -> TypologyRuleStore:
+    return request.app.state.typology_rules  # type: ignore[no-any-return]
+
+
+def get_held_rows(request: Request) -> HeldRowStore:
+    return request.app.state.held_rows  # type: ignore[no-any-return]
+
+
 def get_judgements_store(request: Request) -> JudgementStore:
     return request.app.state.judgements_store  # type: ignore[no-any-return]
 
@@ -939,6 +963,8 @@ ConfigDep = Annotated[ApiConfig, Depends(get_config)]
 HotlistsStoreDep = Annotated[HotlistStore, Depends(get_hotlists_store)]
 MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
+TypologyRulesDep = Annotated[TypologyRuleStore, Depends(get_typology_rules)]
+HeldRowsDep = Annotated[HeldRowStore, Depends(get_held_rows)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 PrincipalNamesDep = Annotated[PrincipalNameDirectory, Depends(get_principal_names)]
 LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
@@ -1275,6 +1301,24 @@ async def _limit_exceeded_handler(request: Request, exc: LimitExceededError) -> 
 async def _nothing_to_branch_handler(request: Request, exc: NothingToBranchError) -> JSONResponse:
     """One answer whether the chosen nodes are hidden from the caller or do not exist (ADR-084)."""
     return JSONResponse(status_code=422, content={"error": "nothing_to_branch"})
+
+
+@app.exception_handler(TypologyRuleNotFoundError)
+async def _typology_rule_not_found_handler(
+    request: Request, exc: TypologyRuleNotFoundError
+) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"error": "rule_not_found"})
+
+
+@app.exception_handler(HeldRowNotFoundError)
+async def _held_row_not_found_handler(request: Request, exc: HeldRowNotFoundError) -> JSONResponse:
+    """One answer whether a held row does not exist, is another case's, or is above the reader."""
+    return JSONResponse(status_code=404, content={"error": "held_row_not_found"})
+
+
+@app.exception_handler(ReleaseRefused)
+async def _release_refused_handler(request: Request, exc: ReleaseRefused) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": "release_refused", "detail": str(exc)})
 
 
 @app.exception_handler(AuditWriteError)
@@ -6289,6 +6333,8 @@ async def run_studio_recipe(
     extraction_candidates: ExtractionCandidatesDep,
     recogniser_for: PipelineRecognisersDep,
     online_geocode: OnlineGeocodeDep,
+    typology_rules: TypologyRulesDep,
+    held_rows: HeldRowsDep,
 ) -> LoadReport | PipelineRunReport:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -6329,6 +6375,20 @@ async def run_studio_recipe(
     is a narrower, disclosed problem, not a reason to tell the caller their load failed when it
     didn't."""
     load_id = new_id()
+    # ADR-109 ruling 1: the case's typology rules judge this load, at the point each declares.
+    rules = await _rule_gate(
+        investigation.id,
+        loader=principal,
+        graph=graph,
+        analytics=analytics,
+        scheme=handling_scheme,
+        typology_rules=typology_rules,
+        held_rows=held_rows,
+        alerts_store=alerts_store,
+        audit=audit,
+        valkey=valkey,
+        principal_resolver=principal_resolver,
+    )
     report: LoadReport | PipelineRunReport
     if recipe.pipeline is not None:
         # ADR-108 phase C: a recipe holding a pipeline graph runs through the pipeline runner —
@@ -6348,6 +6408,7 @@ async def run_studio_recipe(
             media=media,
             source_location=body.source_location,
             online_geocode=online_geocode,
+            rules=rules,
         )
         for branch in report.branches:
             await resolution_trigger_module.submit_post_ingest_resolution_jobs(
@@ -6365,6 +6426,7 @@ async def run_studio_recipe(
             repo_root=repo_root,
             analytics=analytics,
             media=media,
+            rules=rules,
         )
         await resolution_trigger_module.submit_post_ingest_resolution_jobs(
             report, recipe.row_template, ontology=ontology, jobs=jobs
@@ -6403,6 +6465,268 @@ async def run_studio_recipe(
     return report
 
 
+def _owner_resolver(
+    principal: Principal, principal_resolver: PrincipalResolver
+) -> Callable[[str], Awaitable[Principal | None]]:
+    """An owner's principal, resolved fresh (ADR-036, ADR-043): the requester's own at once, any
+    other through Token Exchange, never cached."""
+
+    async def resolve(owner_id: str) -> Principal | None:
+        if owner_id == principal.id:
+            return principal
+        return await principal_resolver.resolve_for_owner(owner_id)
+
+    return resolve
+
+
+async def _rule_gate(
+    investigation_id: str,
+    *,
+    loader: Principal,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    scheme: HandlingScheme,
+    typology_rules: TypologyRuleStore,
+    held_rows: HeldRowStore,
+    alerts_store: AlertStore,
+    audit: AuditWriter,
+    valkey: Valkey,
+    principal_resolver: PrincipalResolver,
+    fail_closed: bool = True,
+) -> RuleGate | None:
+    """The case's active typology rules for one load (ADR-109), or `None` when it has none."""
+    rules = await typology_rules.list_active_for_case(investigation_id)
+    if not rules:
+        return None
+    return RuleGate(
+        rules=rules,
+        investigation_id=investigation_id,
+        graph=graph,
+        analytics=analytics,
+        scheme=scheme,
+        alert_store=alerts_store,
+        audit=audit,
+        valkey=valkey,
+        principal_for_owner=_owner_resolver(loader, principal_resolver),
+        loader=loader,
+        held_store=held_rows,
+        fail_closed=fail_closed,
+    )
+
+
+# --- typology rules, their audit, and held rows (ADR-109 phase A) -------------
+
+
+@app.get("/v1/investigations/{investigation_id}/rules")
+async def list_typology_rules(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+) -> list[TypologyRule]:
+    """The case's rules, retired ones included — what watches this case's loads is the case
+    team's to know (ruling 3)."""
+    return await typology_rules.list_for_case(investigation.id, principal)
+
+
+@app.post("/v1/investigations/{investigation_id}/rules", status_code=201)
+async def deploy_typology_rule(
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    audit: AuditDep,
+    body: TypologyRuleInput,
+) -> TypologyRule:
+    """A case Author deploys, with no second approver (ADR-109 ruling 4); audited."""
+    rule = await typology_rules.create(principal, investigation.id, body)
+    await audit.record(
+        principal=principal,
+        action="rule_deployed",
+        investigation_id=investigation.id,
+        resolved_query={"rule_id": rule.id, "rule": body.model_dump(mode="json")},
+        result_cardinality=1,
+    )
+    return rule
+
+
+@app.post("/v1/investigations/{investigation_id}/rules/{rule_id}/retire")
+async def retire_typology_rule(
+    rule_id: str,
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    audit: AuditDep,
+) -> TypologyRule:
+    rule = await typology_rules.retire(rule_id, investigation.id, principal)
+    await audit.record(
+        principal=principal,
+        action="rule_retired",
+        investigation_id=investigation.id,
+        resolved_query={"rule_id": rule.id},
+        result_cardinality=1,
+    )
+    return rule
+
+
+@app.get("/v1/investigations/{investigation_id}/rules/audit")
+async def read_rule_audit(
+    investigation: InvestigationAccessManagerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> RuleAuditPage:
+    """The rule audit inspection read (ruling 1): the case's Authors, and the deployment admin
+    through ADR-052 §4's safety net. An entry naming a node the reader cannot see is withheld whole,
+    from the page and the total (rule 3)."""
+    page = await readable_rule_audit(
+        audit, graph, investigation.id, principal, offset=offset, limit=limit
+    )
+    await audit.record(
+        principal=principal,
+        action="read_rule_audit",
+        investigation_id=investigation.id,
+        resolved_query={"offset": offset, "limit": limit, "actions": list(RULE_AUDIT_ACTIONS)},
+        result_cardinality=len(page.entries),
+    )
+    return page
+
+
+@app.get("/v1/investigations/{investigation_id}/held-rows")
+async def list_held_rows(
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    held_rows: HeldRowsDep,
+    audit: AuditDep,
+) -> list[HeldRow]:
+    """Rows held by a failing pre-commit rule, waiting for review — only those whose marking
+    the reader may read, filtered in the store's own query (rule 3)."""
+    rows = await held_rows.list_authorized(investigation.id, principal)
+    await audit.record(
+        principal=principal,
+        action="list_held_rows",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=len(rows),
+    )
+    return rows
+
+
+@app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/held-rows/release")
+async def release_held_rows_route(
+    investigation: InvestigationAuthorDep,
+    recipe: RunnableStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.LOADER))],
+    body: HeldRowDecision,
+    graph: GraphDep,
+    ontology: OntologyDep,
+    analytics: AnalyticsDep,
+    media: MediaDep,
+    repo_root: RecipesRepoRootDep,
+    audit: AuditDep,
+    valkey: ValkeyDep,
+    handling_scheme: HandlingSchemeDep,
+    alerts_store: AlertsStoreDep,
+    principal_resolver: PrincipalResolverDep,
+    typology_rules: TypologyRulesDep,
+    held_rows: HeldRowsDep,
+) -> LoadReport:
+    """A reviewer releases named held rows of one load: they are loaded now, under a new load
+    id, with their provenance as it would have been. The case's rules judge them again, but a
+    failing rule no longer holds them (ruling 1: the release is the human judgement)."""
+    held = [
+        await held_rows.get_authorized(held_id, investigation.id, principal)
+        for held_id in dict.fromkeys(body.ids)
+    ]
+    if any(h.status != "held" for h in held):
+        raise ReleaseRefused("a named row was already released or rejected")
+    rules = await _rule_gate(
+        investigation.id,
+        loader=principal,
+        graph=graph,
+        analytics=analytics,
+        scheme=handling_scheme,
+        typology_rules=typology_rules,
+        held_rows=held_rows,
+        alerts_store=alerts_store,
+        audit=audit,
+        valkey=valkey,
+        principal_resolver=principal_resolver,
+        fail_closed=False,
+    ) or RuleGate(
+        rules=[],
+        investigation_id=investigation.id,
+        graph=graph,
+        analytics=analytics,
+        scheme=handling_scheme,
+        alert_store=alerts_store,
+        audit=audit,
+        valkey=valkey,
+        principal_for_owner=_owner_resolver(principal, principal_resolver),
+        loader=principal,
+        held_store=held_rows,
+        fail_closed=False,
+    )
+    assert recipe.git_path is not None
+    load_id = new_id()
+    report = await release_held_rows(
+        held,
+        load_recipe(repo_root / recipe.git_path),
+        principal,
+        graph=graph,
+        ontology=ontology,
+        analytics=analytics,
+        media=media,
+        rules=rules,
+        load_id=load_id,
+    )
+    decided = await held_rows.decide_for_reader(
+        [h.id for h in held], investigation.id, principal, status="released", reason=body.reason
+    )
+    await audit.record(
+        principal=principal,
+        action="rows_released",
+        investigation_id=investigation.id,
+        resolved_query={
+            "load_id": load_id,
+            "held_ids": [h.id for h in decided],
+            "rows": [h.row_index for h in decided],
+            "reason": body.reason,
+        },
+        result_cardinality=len(decided),
+    )
+    return report
+
+
+@app.post("/v1/investigations/{investigation_id}/held-rows/reject")
+async def reject_held_rows(
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    body: HeldRowDecision,
+    held_rows: HeldRowsDep,
+    audit: AuditDep,
+) -> list[HeldRow]:
+    """Named held rows are rejected: never loaded, kept as the record of what was refused. A
+    rejection says why."""
+    if not (body.reason and body.reason.strip()):
+        raise ReleaseRefused("a rejection needs its reason")
+    decided = await held_rows.decide_for_reader(
+        body.ids, investigation.id, principal, status="rejected", reason=body.reason
+    )
+    await audit.record(
+        principal=principal,
+        action="rows_rejected",
+        investigation_id=investigation.id,
+        resolved_query={
+            "held_ids": [h.id for h in decided],
+            "rows": [h.row_index for h in decided],
+            "reason": body.reason,
+        },
+        result_cardinality=len(decided),
+    )
+    return decided
+
+
 async def _evaluate_watches_best_effort(
     entry: ChangeStreamEntry,
     *,
@@ -6435,10 +6759,7 @@ async def _evaluate_watches_best_effort(
     owner resolves to `None` on this call and the next, with nothing here holding onto whatever a
     prior call once returned."""
 
-    async def _principal_for_owner(owner_id: str) -> Principal | None:
-        if owner_id == principal.id:
-            return principal
-        return await principal_resolver.resolve_for_owner(owner_id)
+    _principal_for_owner = _owner_resolver(principal, principal_resolver)
 
     try:
         await evaluate_hotlists_for_entry(

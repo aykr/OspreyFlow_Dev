@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -585,6 +585,18 @@ class Alert(BaseModel):
     #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
     #: it. `None` for one made before, until `stamp_datasets` places it.
     dataset_id: str | None = None
+    #: ADR-109 ruling 2 — an alert a typology rule raised carries what makes it explainable:
+    #: the typology, the finding in words, the links and the events (each transaction) it cites,
+    #: the span those events cover, the trigger point the rule ran at, and the `Alert` graph node
+    #: written alongside it (`None` where that node was withheld; see `rule_evaluation.py`).
+    #: Every reference is re-checked against the reader at read time (ADR-039), never trusted.
+    typology: str | None = None
+    words: str | None = None
+    edge_ids: list[EdgeId] = Field(default_factory=list)
+    event_ids: list[str] = Field(default_factory=list)
+    window: Interval | None = None
+    trigger: RuleTrigger | None = None
+    alert_node_id: NodeId | None = None
 
 
 #: `Hotlist.status`/`Monitor.status` — ADR-036's own "the monitor stops" (extended in Stage 6b to
@@ -647,6 +659,127 @@ class Monitor(BaseModel):
     #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
     #: it. `None` for one made before, until `stamp_datasets` places it.
     dataset_id: str | None = None
+
+
+# --- Typology rules (06_DECISIONS.md ADR-109) ---------------------------------
+
+#: The closed vocabulary of typologies a rule may run — `services/ingest/typologies.py`'s three
+#: rules. Rule 8: no expression language; a rule is one of these with its parameters.
+TypologyName = Literal["structuring", "rapid_movement", "circular_flow"]
+#: ADR-109 ruling 1: the rule chooses where it runs. `pre_commit` judges the incoming rows inside
+#: the load (a hit loads with its alert; a failure holds the rows); `post_commit` runs on the
+#: change stream after the load commits, best-effort.
+RuleTrigger = Literal["pre_commit", "post_commit"]
+RuleStatus = Literal["active", "retired"]
+
+
+class StructuringParams(BaseModel):
+    typology: Literal["structuring"] = "structuring"
+    #: The reportable amount; each movement below it, together above it, is the finding.
+    threshold: float = Field(gt=0)
+    window_days: int = Field(ge=1, le=366)
+    minimum_count: int = Field(ge=2, le=1000)
+
+
+class RapidMovementParams(BaseModel):
+    typology: Literal["rapid_movement"] = "rapid_movement"
+    within_hours: float = Field(gt=0, le=744)
+    #: The share of an incoming amount that must leave again for the account to be a pass-through.
+    keep_fraction: float = Field(gt=0, le=1)
+
+
+class CircularFlowParams(BaseModel):
+    typology: Literal["circular_flow"] = "circular_flow"
+    max_hops: int = Field(ge=2, le=6)
+    #: How far back the flows a cycle may be made of are read.
+    window_days: int = Field(ge=1, le=366)
+
+
+TypologyParams = Annotated[
+    StructuringParams | RapidMovementParams | CircularFlowParams,
+    Field(discriminator="typology"),
+]
+
+
+class TypologyRuleInput(BaseModel):
+    """What a case Author deploys (ADR-109 ruling 4): a typology with its parameters and the
+    trigger point it runs at. `budget_ms` bounds a pre-commit evaluation; overrunning it holds the
+    rows it could not judge (ruling 1, fail closed)."""
+
+    name: str = Field(min_length=1, max_length=120)
+    params: TypologyParams
+    trigger: RuleTrigger = "post_commit"
+    budget_ms: int = Field(default=5000, ge=100, le=60000)
+
+
+class TypologyRule(TypologyRuleInput):
+    """A deployed rule. It belongs to the case it was deployed in and evaluates as its deployer's
+    principal, resolved fresh at each evaluation (ADR-036, unchanged by ADR-109)."""
+
+    id: str
+    investigation_id: str
+    owner_id: str
+    status: RuleStatus = "active"
+    created_at: datetime
+    retired_at: datetime | None = None
+    dataset_id: str | None = None
+
+
+HeldRowStatus = Literal["held", "released", "rejected"]
+
+
+class HeldRow(BaseModel):
+    """A source row a pre-commit rule could not judge — it errored or overran its budget — held
+    out of the graph for a reviewer (ADR-109 ruling 1, fail closed). Carries the row as read and its
+    original row number, so a release loads it with its provenance unchanged; `handling` is the
+    marking the recipe would have given it, and a reader is filtered by it (rule 3)."""
+
+    id: str
+    investigation_id: str
+    recipe_id: str
+    recipe_version: int
+    load_id: str
+    source: str
+    row_index: int
+    row: dict[str, str]
+    rule_id: str
+    reason: str
+    handling: Handling
+    status: HeldRowStatus = "held"
+    held_at: datetime
+    decided_by: str | None = None
+    decided_at: datetime | None = None
+    decision_reason: str | None = None
+    dataset_id: str | None = None
+
+
+class RuleAuditEntry(BaseModel):
+    """One line of a case's rule audit (ADR-109 ruling 1): a deploy, retire, evaluation, firing,
+    failure, hold, release or rejection. Read only by the case's Authors and the deployment admin,
+    and an entry naming a node the reader cannot see is withheld whole (rule 3)."""
+
+    recorded_at: datetime
+    principal_id: str
+    action: str
+    detail: dict[str, Any] = Field(default_factory=dict)
+    result_cardinality: int = 0
+
+
+class RuleAuditPage(BaseModel):
+    """A page of a case's rule audit, newest first, with the total of what the reader may see —
+    an entry withheld from them is neither on the page nor in the total (rule 3)."""
+
+    entries: list[RuleAuditEntry] = Field(default_factory=list)
+    total: int = Field(ge=0)
+
+
+class HeldRowDecision(BaseModel):
+    """A reviewer's release or rejection of named held rows — enumerated ids, never a filter
+    (one decision over exactly what was seen, as bulk accept is in ADR-108 Amendment 3). A
+    rejection needs its reason."""
+
+    ids: list[str] = Field(min_length=1, max_length=1000)
+    reason: str | None = Field(default=None, max_length=2000)
 
 
 class Judgement(BaseModel):
@@ -805,6 +938,15 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     Alert,
     Hotlist,
     Monitor,
+    StructuringParams,
+    RapidMovementParams,
+    CircularFlowParams,
+    TypologyRuleInput,
+    TypologyRule,
+    HeldRow,
+    RuleAuditEntry,
+    RuleAuditPage,
+    HeldRowDecision,
     Judgement,
     IntelligenceGap,
     Assumption,

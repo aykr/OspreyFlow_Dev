@@ -303,6 +303,17 @@ def _handling(defaults: Mapping[str, Any]) -> Handling:
     return Handling.model_validate(raw)
 
 
+def recipe_handlings(recipe: Recipe) -> list[Handling]:
+    """Every marking this recipe can write: its defaults, and each entity's and link's override
+    over them — what a row it has not yet written could carry (ADR-109: a held row's marking, and
+    the stand-in for a node written in a still-open transaction)."""
+    defaults = recipe.defaults.handling
+    overrides = [e.handling for e in recipe.row_template.entities] + [
+        e.handling for e in recipe.row_template.edges
+    ]
+    return [_handling(defaults), *(_handling(_merge_override(defaults, o)) for o in overrides if o)]
+
+
 def _provenance(
     defaults: Mapping[str, Any], *, source: str, row_index: int, now: datetime
 ) -> Provenance:
@@ -523,12 +534,16 @@ def resolve_rows(
     load_id: str,
     source: str,
     ontology: OntologySchema | None = None,
+    row_numbers: Sequence[int] | None = None,
 ) -> tuple[list[StagedRow], list[RejectionRecord], int, int]:
     """Phase 1 of `run_recipe`, extracted so staging sits between
     resolution and load rather than being folded invisibly into one
     function. Returns `(staged_rows, rejections, rows_read,
     rows_deduplicated)` — pure, no I/O of any kind, including no object
-    storage: `run_recipe` is the only caller that writes anything."""
+    storage: `run_recipe` is the only caller that writes anything.
+
+    `row_numbers`, when given, is each row's number in the source it was first read from — a held
+    row released later (ADR-109 ruling 1) keeps the provenance locator it would have had."""
     connector_defaults: Mapping[str, str | None] = {
         "date_order": recipe.connector.date_order,
         "source_crs": recipe.connector.source_crs,
@@ -560,11 +575,16 @@ def resolve_rows(
         groups[key].append(row_index)
     rows_deduplicated = rows_read - len(group_order)
 
+    def number(position: int) -> int:
+        return row_numbers[position] if row_numbers is not None else position
+
     staged_rows: list[StagedRow] = []
     rejections: list[RejectionRecord] = []
     for key in group_order:
-        row_index, *duplicate_row_indices = groups[key]
-        row = materialized_rows[row_index]
+        position, *duplicate_positions = groups[key]
+        row = materialized_rows[position]
+        row_index = number(position)
+        duplicate_row_indices = [number(p) for p in duplicate_positions]
         try:
             resolved_entities, resolved_edges = _resolve_row(
                 recipe, row, connector_defaults=connector_defaults, ontology=ontology
@@ -1178,7 +1198,12 @@ async def run_recipe(
     source: str,
     storage: ObjectStorageConfig | None = None,
     media: MediaStore | None = None,
+    skip_row_indices: frozenset[int] = frozenset(),
+    row_numbers: Sequence[int] | None = None,
 ) -> tuple[LoadReport, list[EventRecord]]:
+    """`skip_row_indices`: rows resolved but not written — those a failing pre-commit rule holds
+    (ADR-109 ruling 1); a held row's duplicates go with it, as they share its survivor.
+    `row_numbers` as `resolve_rows` takes it."""
     if recipe.ontology_version != ontology.version:
         raise StaleRecipeError(
             f"recipe {recipe.id!r} targets ontology version {recipe.ontology_version}, but the "
@@ -1207,7 +1232,12 @@ async def run_recipe(
     _stage_raw_rows(materialized_rows, storage=storage, load_id=load_id, source=source)
 
     staged_rows, rejections, rows_read, rows_deduplicated = resolve_rows(
-        recipe, materialized_rows, load_id=load_id, source=source, ontology=ontology
+        recipe,
+        materialized_rows,
+        load_id=load_id,
+        source=source,
+        ontology=ontology,
+        row_numbers=row_numbers,
     )
 
     # Stage the normalised rows, then read back — the loop below iterates
@@ -1230,6 +1260,8 @@ async def run_recipe(
     events: list[EventRecord] = []
 
     for staged_row in loaded_rows:
+        if staged_row.row_index in skip_row_indices:
+            continue
         now = datetime.now(UTC)
         refs: dict[str, NodeId] = {}
         for staged_entity in staged_row.entities:

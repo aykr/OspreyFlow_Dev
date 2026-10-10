@@ -46,6 +46,7 @@ from services.api.review import (
     run_recognition,
     text_windows,
 )
+from services.api.rule_evaluation import RuleGate
 from services.api.studio_publish import run_published_recipe
 from services.extract.candidates import ExtractionCandidate
 from services.extract.recognised import recognised_candidates
@@ -482,6 +483,7 @@ async def run_published_pipeline(
     media: MediaStore | None = None,
     source_location: str | None = None,
     online_geocode: OnlineGeocode | None = None,
+    rules: RuleGate | None = None,
 ) -> PipelineRunReport:
     """The whole pipeline, in topological order: branches, then extracts, then enriches.
 
@@ -516,6 +518,7 @@ async def run_published_pipeline(
             repo_root=repo_root,
             analytics=analytics,
             media=media,
+            rules=rules,
         )
         report.branches.append(
             BranchRunReport(
@@ -563,6 +566,8 @@ async def run_published_pipeline(
         report.nodes_referenced += branch.report.nodes_referenced
         report.edges_created += branch.report.edges_created
         report.rejections.extend(branch.report.rejections)
+        report.rows_held += branch.report.rows_held
+        report.rule_notes.extend(branch.report.rule_notes)
         report.created_node_ids.extend(branch.report.created_node_ids)
         report.touched_edge_ids.extend(branch.report.touched_edge_ids)
     return report

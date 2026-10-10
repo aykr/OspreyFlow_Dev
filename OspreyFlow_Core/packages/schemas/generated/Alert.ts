@@ -9,6 +9,14 @@ export type ReferentNodeIds = NodeId[];
 export type InvestigationId = string | null;
 export type CreatedAt = string;
 export type DatasetId = string | null;
+export type Typology = string | null;
+export type Words = string | null;
+export type EdgeId = string;
+export type EdgeIds = EdgeId[];
+export type EventIds = string[];
+export type ValidFrom = string;
+export type ValidTo = string | null;
+export type Trigger = ("pre_commit" | "post_commit") | null;
 
 /**
  * A persisted alert row — `06_DECISIONS.md` ADR-038/039, Phase 7 Stage 6a's own foundation.
@@ -38,5 +46,17 @@ export interface Alert {
   investigation_id?: InvestigationId;
   created_at: CreatedAt;
   dataset_id?: DatasetId;
+  typology?: Typology;
+  words?: Words;
+  edge_ids?: EdgeIds;
+  event_ids?: EventIds;
+  window?: Interval | null;
+  trigger?: Trigger;
+  alert_node_id?: NodeId | null;
+  [k: string]: unknown;
+}
+export interface Interval {
+  valid_from: ValidFrom;
+  valid_to?: ValidTo;
   [k: string]: unknown;
 }

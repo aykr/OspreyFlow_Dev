@@ -22,6 +22,8 @@ export type NodeId = string;
 export type CreatedNodeIds = NodeId[];
 export type EdgeId = string;
 export type TouchedEdgeIds = EdgeId[];
+export type RowsHeld = number;
+export type RuleNotes = string[];
 export type Branches = BranchRunReport[];
 export type NodeId1 = string;
 export type Library = string;
@@ -48,6 +50,8 @@ export type EdgesCreated1 = number;
 export type Rejections1 = RejectionRecord[];
 export type CreatedNodeIds1 = NodeId[];
 export type TouchedEdgeIds1 = EdgeId[];
+export type RowsHeld1 = number;
+export type RuleNotes1 = string[];
 
 /**
  * A whole pipeline's run (ADR-108 phase C): every branch's `LoadReport`, every extract and
@@ -68,6 +72,8 @@ export interface PipelineRunReport {
   rejections?: Rejections1;
   created_node_ids?: CreatedNodeIds1;
   touched_edge_ids?: TouchedEdgeIds1;
+  rows_held?: RowsHeld1;
+  rule_notes?: RuleNotes1;
   [k: string]: unknown;
 }
 /**
@@ -94,6 +100,8 @@ export interface LoadReport {
   rejections?: Rejections;
   created_node_ids?: CreatedNodeIds;
   touched_edge_ids?: TouchedEdgeIds;
+  rows_held?: RowsHeld;
+  rule_notes?: RuleNotes;
   [k: string]: unknown;
 }
 /**

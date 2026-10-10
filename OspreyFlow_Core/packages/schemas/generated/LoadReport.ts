@@ -16,6 +16,8 @@ export type NodeId = string;
 export type CreatedNodeIds = NodeId[];
 export type EdgeId = string;
 export type TouchedEdgeIds = EdgeId[];
+export type RowsHeld = number;
+export type RuleNotes = string[];
 
 export interface LoadReport {
   load_id: LoadId;
@@ -29,6 +31,8 @@ export interface LoadReport {
   rejections?: Rejections;
   created_node_ids?: CreatedNodeIds;
   touched_edge_ids?: TouchedEdgeIds;
+  rows_held?: RowsHeld;
+  rule_notes?: RuleNotes;
   [k: string]: unknown;
 }
 /**

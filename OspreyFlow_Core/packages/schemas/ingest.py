@@ -686,6 +686,10 @@ class LoadReport(BaseModel):
     #: supersede without touching another load's contribution).
     created_node_ids: list[NodeId] = Field(default_factory=list)
     touched_edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: ADR-109 ruling 1: rows a pre-commit rule could not judge, held out of the graph for review,
+    #: and what the case's pre-commit rules did, in words — never a silent part-load (rule 2).
+    rows_held: int = 0
+    rule_notes: list[str] = Field(default_factory=list)
 
 
 # --- The pipeline run report (06_DECISIONS.md ADR-108 phase C) -------------
@@ -751,6 +755,9 @@ class PipelineRunReport(BaseModel):
     rejections: list[RejectionRecord] = Field(default_factory=list)
     created_node_ids: list[NodeId] = Field(default_factory=list)
     touched_edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: The branches' held rows and rule notes, summed (ADR-109 ruling 1).
+    rows_held: int = 0
+    rule_notes: list[str] = Field(default_factory=list)
 
 
 # --- Verify (09_INGEST_STUDIO.md §5) --------------------------------------

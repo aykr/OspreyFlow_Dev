@@ -23,13 +23,15 @@ import os
 from pathlib import Path
 
 import yaml
-from services.ingest.engine import run_recipe
+from services.ingest.engine import recipe_handlings, run_recipe
 from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
 from services.ingest.recipe_loader import load_recipe
 
+from ontology.handling import merge_handling
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from ports.media import MediaStore
+from schemas.analytics import EventRecord
 from schemas.domain import OntologySchema, Principal
 from schemas.ingest import (
     LoadReport,
@@ -40,6 +42,7 @@ from schemas.ingest import (
     StudioRecipeStatus,
 )
 
+from .rule_evaluation import PreCommitVerdict, RuleGate, alert_handling, held_rows_for
 from .studio_profile import _read_rows as _read_recipe_rows
 from .studio_profile import connector_for
 
@@ -47,6 +50,7 @@ __all__ = [
     "GitCommitError",
     "RecipeNotRunnableError",
     "build_recipe",
+    "load_with_rules",
     "recipe_git_relative_path",
     "run_published_recipe",
     "serialise_recipe",
@@ -242,6 +246,7 @@ async def run_published_recipe(
     repo_root: Path = _REPO_ROOT,
     analytics: AnalyticsPort | None = None,
     media: MediaStore | None = None,
+    rules: RuleGate | None = None,
 ) -> LoadReport:
     """§8: "Loader: run a published recipe against a file at or below their
     own clearance" — "a file", not necessarily the one Connect originally
@@ -265,25 +270,19 @@ async def run_published_recipe(
     read_from = draft if source_location is None else draft.model_copy(
         update={"source_location": source_location}
     )
-    rows = _read_recipe_rows(read_from)
-    tx = await graph.begin_transaction()
-    try:
-        report, events = await run_recipe(
-            recipe,
-            rows,
-            graph=graph,
-            ontology=ontology,
-            tx=tx,
-            principal=principal,
-            load_id=load_id,
-            investigation_scope=investigation_scope,
-            source=read_from.source_location or draft.recipe_id,
-            media=media,
-        )
-    except Exception:
-        await graph.rollback_transaction(tx)
-        raise
-    await graph.commit_transaction(tx)
+    rows = list(_read_recipe_rows(read_from))
+    report, events, held_rows = await load_with_rules(
+        recipe,
+        rows,
+        principal,
+        graph=graph,
+        ontology=ontology,
+        load_id=load_id,
+        investigation_scope=investigation_scope,
+        source=read_from.source_location or draft.recipe_id,
+        media=media,
+        rules=rules,
+    )
     # The run's events (a call's time, a message's text) go to the analytics store, as every seed's
     # do; they were dropped here, so nothing loaded through the Studio reached the timeline,
     # *Show messages* or extraction (found building ADR-094 step 2).
@@ -293,7 +292,8 @@ async def run_published_recipe(
     # in the geometry partition, and nothing wrote one, so a place loaded here was never drawn
     # (9 October 2026). The partition is keyed by ref and insert-only, so a ref already there is
     # not loaded twice.
-    points = point_geometries(recipe, rows)
+    # A held row (ADR-109 ruling 1) reached no store, its place included.
+    points = point_geometries(recipe, [r for i, r in enumerate(rows) if i not in held_rows])
     if analytics is not None and points:
         held = {
             record.geometry_ref
@@ -304,4 +304,95 @@ async def run_published_recipe(
             )
         }
         await analytics.load_geometries([p for p in points if p.geometry_ref not in held])
+    # ADR-109 ruling 1: the case's post-commit rules, once the load's events can be read with it.
+    if rules is not None:
+        report.rule_notes.extend(await rules.post_commit(events, load_id=load_id))
     return report
+
+
+async def load_with_rules(
+    recipe: Recipe,
+    rows: list[dict[str, str]],
+    principal: Principal,
+    *,
+    graph: GraphPort,
+    ontology: OntologySchema,
+    load_id: str,
+    investigation_scope: str,
+    source: str,
+    media: MediaStore | None = None,
+    rules: RuleGate | None = None,
+    row_numbers: list[int] | None = None,
+) -> tuple[LoadReport, list[EventRecord], frozenset[int]]:
+    """One load in one graph transaction, judged by the case's pre-commit rules before it commits
+    (`06_DECISIONS.md` ADR-109 ruling 1). A hit loads with its alert: the `Alert` node is written
+    into the same transaction, the queue row follows the commit. A rule that fails holds the rows
+    it could not judge: the transaction is rolled back, the rows go to the quarantine, and the load
+    runs again without them — a second pass whose remaining rows carry no money movement for a
+    typology to judge, so it cannot hold again; if it ever did, the load is refused rather than
+    part-loaded silently (rule 2)."""
+    unseen = (
+        alert_handling(rules.scheme, recipe_handlings(recipe)) if rules is not None else None
+    )
+    held = PreCommitVerdict()
+    skip: frozenset[int] = frozenset()
+    while True:
+        tx = await graph.begin_transaction()
+        try:
+            report, events = await run_recipe(
+                recipe,
+                rows,
+                graph=graph,
+                ontology=ontology,
+                tx=tx,
+                principal=principal,
+                load_id=load_id,
+                investigation_scope=investigation_scope,
+                source=source,
+                media=media,
+                skip_row_indices=skip,
+                row_numbers=row_numbers,
+            )
+            verdict = (
+                await rules.pre_commit(events, tx, load_id=load_id, unseen=unseen)
+                if rules is not None
+                else PreCommitVerdict()
+            )
+        except Exception:
+            await graph.rollback_transaction(tx)
+            raise
+        if not verdict.hold:
+            break
+        await graph.rollback_transaction(tx)
+        if skip:
+            raise RuntimeError(
+                "rows were still unjudged after holding the first ones — nothing was loaded"
+            )
+        held = verdict
+        skip = frozenset(verdict.hold)
+    await graph.commit_transaction(tx)
+
+    if rules is not None:
+        await rules.after_commit(verdict)
+        if held.hold:
+            handlings = recipe_handlings(recipe)
+            marking = handlings[0]
+            for other in handlings[1:]:
+                marking = merge_handling(marking, other, rules.scheme)
+            await rules.hold(
+                held_rows_for(
+                    held,
+                    rows,
+                    row_numbers=row_numbers,
+                    investigation_id=rules.investigation_id,
+                    recipe_id=recipe.id,
+                    recipe_version=recipe.version,
+                    load_id=load_id,
+                    source=source,
+                    handling=marking,
+                    dataset_id=principal.datasets[0] if principal.datasets else None,
+                )
+            )
+        report.rows_held = len(held.hold)
+        report.rule_notes = [*held.notes, *verdict.notes]
+    return report, events, skip

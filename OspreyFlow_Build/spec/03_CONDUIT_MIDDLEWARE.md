@@ -102,9 +102,9 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 | Level | Routes under `/v1/investigations/{id}` |
 |---|---|
-| Viewer | `GET` the case; `access` (GET: the caller's own level); `tab` (PUT: the caller's own flag, ADR-084); `datasets` (GET, ADR-099); `search`, `suggest`, `paths` (POST, ADR-099); `explore/counts`, `explore/most-connected`, `explore/busiest-links`, `explore/busiest-days`, `explore/groups`, `explore/whats-new`, `explore/starter-questions`, `nodes/{node}/shared-contacts` (GET, ADR-100); `expand/preview`; `patterns/preview`, `patterns/run` (POST), `patterns`, `patterns/{pattern}` (GET); `compute/{metric}`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `hotlists`, `monitors`, `alerts`, `alerts/{alert}` (GET, ADR-099 Amendment 3); `questions` (GET, ADR-098); `ingest/candidates` (GET); `dossier/documents/{doc}`; `documents/{doc}/reader`, `documents/{doc}/file` (GET); `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes`, `links/{edge}/history`, `links/{edge}/events` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the Ingest Studio's reads (`ingest/source-files`, `ingest/recipes`, `ingest/recipes/{recipe}`, its `profile`, `map/sample-rows/{row}` and `map/handling-preview`, `ingest/recipe-registry`; ADR-099 Amendment 4); the delta stream |
-| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `nodes/{node}/confirm`, `retract`, `suppression-mark` (POST, DELETE; ADR-099 Amendment 1); `links-among` (ADR-098); `explore/starter-questions/{question}/run`, `nodes/{node}/shared-contacts/{other}/canvas` (ADR-100); `resolution/threshold` (PUT), `link`, `split`; `patterns/save`; `hotlists`, `monitors` (POST), `alerts/{alert}/jump`; `questions` (POST) and `questions/candidates/{candidate}/accept`, `reject` (ADR-098); `documents` (POST), `documents/{doc}/extract`, `designations`, and its candidate `accept`, `reject`; `ingest/extract`, its candidate `accept` and `reject`; `links/{edge}/events/documents`, `links/{edge}/events/{event}/extract` and its candidate `accept`, `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `link-types` (POST), `link-types/{proposal}/withdraw` (the proposer or an Author, ADR-090); `export`; `sites` (POST), `control-points`, `grid`; the Ingest Studio's writes (`ingest/source-files` (POST), `ingest/recipes` (POST), `ingest/recipes/{recipe}` (PATCH), its `versions`, `row-template`, `verify`, `publish`, `schedule` and `run`) |
-| Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `datasets` (PUT: what the case reads, ADR-099 decision 3); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`. An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
+| Viewer | `GET` the case; `access` (GET: the caller's own level); `tab` (PUT: the caller's own flag, ADR-084); `datasets` (GET, ADR-099); `search`, `suggest`, `paths` (POST, ADR-099); `explore/counts`, `explore/most-connected`, `explore/busiest-links`, `explore/busiest-days`, `explore/groups`, `explore/whats-new`, `explore/starter-questions`, `nodes/{node}/shared-contacts` (GET, ADR-100); `expand/preview`; `patterns/preview`, `patterns/run` (POST), `patterns`, `patterns/{pattern}` (GET); `compute/{metric}`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `hotlists`, `monitors`, `alerts`, `alerts/{alert}` (GET, ADR-099 Amendment 3); `rules` (GET, ADR-109); `questions` (GET, ADR-098); `ingest/candidates` (GET); `dossier/documents/{doc}`; `documents/{doc}/reader`, `documents/{doc}/file` (GET); `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes`, `links/{edge}/history`, `links/{edge}/events` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the Ingest Studio's reads (`ingest/source-files`, `ingest/recipes`, `ingest/recipes/{recipe}`, its `profile`, `map/sample-rows/{row}` and `map/handling-preview`, `ingest/recipe-registry`; ADR-099 Amendment 4); the delta stream |
+| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `nodes/{node}/confirm`, `retract`, `suppression-mark` (POST, DELETE; ADR-099 Amendment 1); `links-among` (ADR-098); `explore/starter-questions/{question}/run`, `nodes/{node}/shared-contacts/{other}/canvas` (ADR-100); `resolution/threshold` (PUT), `link`, `split`; `patterns/save`; `hotlists`, `monitors` (POST), `alerts/{alert}/jump`; `held-rows` (GET, ADR-109); `questions` (POST) and `questions/candidates/{candidate}/accept`, `reject` (ADR-098); `documents` (POST), `documents/{doc}/extract`, `designations`, and its candidate `accept`, `reject`; `ingest/extract`, its candidate `accept` and `reject`; `links/{edge}/events/documents`, `links/{edge}/events/{event}/extract` and its candidate `accept`, `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `link-types` (POST), `link-types/{proposal}/withdraw` (the proposer or an Author, ADR-090); `export`; `sites` (POST), `control-points`, `grid`; the Ingest Studio's writes (`ingest/source-files` (POST), `ingest/recipes` (POST), `ingest/recipes/{recipe}` (PATCH), its `versions`, `row-template`, `verify`, `publish`, `schedule` and `run`) |
+| Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `datasets` (PUT: what the case reads, ADR-099 decision 3); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`; `rules` (POST), `rules/{rule}/retire`, `rules/audit` (GET; the admin's safety net reaches this one too), `held-rows/reject`, `ingest/recipes/{recipe}/held-rows/release` (ADR-109). An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
 
 `GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
 created by, branched from, whether the caller has closed the case's tab, and the names of the
@@ -513,6 +513,47 @@ unlinked (`Investigation.branched_from` is `None` rather than pointed at a wrong
 case a jump makes reads the alert's dataset, else what the alert's case reads, else a dataset of its
 own (Amendment 4 decision 3).
 
+### 3.8a Typology rules, their audit, held rows (ADR-109 phase A)
+
+```
+GET    /v1/investigations/{id}/rules   the case's typology rules, retired ones included, Viewer
+POST   /v1/investigations/{id}/rules   deploy one: a typology, its parameters, its trigger point and budget, Author
+POST   /v1/investigations/{id}/rules/{rule_id}/retire   retire one (never deleted), Author
+GET    /v1/investigations/{id}/rules/audit   the rule audit, newest first, paged, Author or the unit's admin
+GET    /v1/investigations/{id}/held-rows   rows a failing pre-commit rule held, at or below the reader's marking, Editor
+POST   /v1/investigations/{id}/held-rows/reject   reject named held rows, with a reason, Author
+POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/held-rows/release   load named held rows of one load, Author and Loader
+```
+
+**A rule belongs to its case** and evaluates as its deployer's principal, resolved fresh (ADR-036);
+its parameters are a closed vocabulary per typology (structuring, rapid movement, circular flow —
+rule 8), refused at the schema otherwise. **Where it runs is the rule's** (ADR-109 ruling 1): a
+`pre_commit` rule judges a run's incoming money movements inside the load's graph transaction — a
+hit is written there as an `Alert` node with `ALERTED_ON` links, and its queue row follows the
+commit; a rule that errors or overruns `budget_ms` holds the rows it could not judge (§5.1). A
+`post_commit` rule runs once the load's events are in the analytics store, best-effort. Both read
+flows from the analytics store's `TRANSACTED` events (one per transaction; the graph merges a pair's
+transactions into one link), with the access step in the query; a rule never fires on an event its
+deployer cannot read, and one transaction loaded twice is read once. A finding alerts once (its
+signature, per rule, in Valkey).
+
+**An alert a rule raised** is a §3.8 alert row carrying `typology`, `words`, `edge_ids`,
+`event_ids`, `window`, `trigger` and `alert_node_id`, plus the `Alert` node, marked no lower than
+anything it references; where referents with a restricted code belong to different units no single
+marking is safe, the node is withheld and the withholding audited. Phase B turns these rows into
+the case team's queue (ruling 3); until then they are the deployer's, read as §3.8 reads alerts.
+
+**The audit read** returns entries of `rule_deployed`, `rule_retired`, `rule_evaluated`,
+`rule_fired`, `rule_failed`, `rows_held`, `rows_released`, `rows_rejected` and
+`alert_node_withheld`. An entry naming a node the reader cannot see is withheld whole, before
+paging, so the total never counts it.
+
+**Held rows** are read in the store's query by marking (the adapters' two axes) and case; a
+decision names rows by id and decides all or none (an id not held, or not readable, refuses the
+whole decision as not found). A release loads the rows under a new load id with their original row
+numbers, judged again by the case's rules, but a failure no longer holds them: the release is the
+human judgement. A recipe published again since the rows were held is refused in words.
+
 ### 3.9 Sites
 
 ```
@@ -666,6 +707,13 @@ upload/connector → identify → stage(raw) → normalise → deduplicate → s
   field as it appeared, typed as text. Immutable, never rewritten.
 - **stage(normalised)** — the post-transform rows land in a second Parquet dataset, partitioned
   the same way and carrying the raw row's identifier.
+- **judge (ADR-109 ruling 1)** — between load and commit, the case's `pre_commit` typology rules
+  (§3.8a) judge the run's money movements in the open transaction. A hit loads with its `Alert`
+  node; a rule that errors or overruns its budget fails closed: the transaction is rolled back, the
+  rows it could not judge go to the `held_rows` quarantine with their original row numbers, and the
+  load runs again without them. The run report says how many were held and why (`rows_held`,
+  `rule_notes`) — never a silent part-load. After the commit, once the events are in the analytics
+  store, the `post_commit` rules run, best-effort.
 
 **Two staging datasets, not one, and the order matters.** Staging exists so that re-extraction,
 re-resolution and schema migration are possible without re-uploading — and only the raw dataset

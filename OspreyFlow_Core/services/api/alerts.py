@@ -40,7 +40,7 @@ import asyncpg
 
 from conduit_common.identity import new_id
 from ports.graph import GraphPort
-from schemas.domain import Alert, AlertMode, Principal
+from schemas.domain import Alert, AlertMode, Interval, Principal
 
 from .audit import AuditWriter
 from .dataset_scope import reach_clause
@@ -71,6 +71,13 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS investigation_id TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS dataset_id TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS typology TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS words TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS edge_ids TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS event_ids TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS window_json TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS trigger TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS alert_node_id TEXT;
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
 """
 
@@ -89,6 +96,14 @@ class AlertNotFoundError(Exception):
     establish."""
 
 
+#: Every column an `Alert` is read from; one list, so a new column cannot be read by one query and
+#: missed by another.
+_COLUMNS = (
+    "id, rule_id, owner_id, mode, referent_node_ids, investigation_id, created_at, dataset_id, "
+    "typology, words, edge_ids, event_ids, window_json, trigger, alert_node_id"
+)
+
+
 def _row_to_alert(row: asyncpg.Record) -> Alert:
     return Alert(
         id=row["id"],
@@ -99,6 +114,13 @@ def _row_to_alert(row: asyncpg.Record) -> Alert:
         investigation_id=row["investigation_id"],
         created_at=row["created_at"],
         dataset_id=row["dataset_id"],
+        typology=row["typology"],
+        words=row["words"],
+        edge_ids=json.loads(row["edge_ids"]) if row["edge_ids"] else [],
+        event_ids=json.loads(row["event_ids"]) if row["event_ids"] else [],
+        window=Interval.model_validate_json(row["window_json"]) if row["window_json"] else None,
+        trigger=row["trigger"],
+        alert_node_id=row["alert_node_id"],
     )
 
 
@@ -121,9 +143,8 @@ class AlertStore:
     async def save(self, alert: Alert) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "INSERT INTO alerts "
-                "(id, rule_id, owner_id, mode, referent_node_ids, investigation_id, created_at, "
-                "dataset_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                f"INSERT INTO alerts ({_COLUMNS}) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
                 alert.id,
                 alert.rule_id,
                 alert.owner_id,
@@ -132,6 +153,13 @@ class AlertStore:
                 alert.investigation_id,
                 alert.created_at,
                 alert.dataset_id,
+                alert.typology,
+                alert.words,
+                json.dumps(alert.edge_ids),
+                json.dumps(alert.event_ids),
+                alert.window.model_dump_json() if alert.window else None,
+                alert.trigger,
+                alert.alert_node_id,
             )
 
     async def get_authorized(self, alert_id: str, principal: Principal) -> Alert:
@@ -142,8 +170,7 @@ class AlertStore:
         reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, rule_id, owner_id, mode, referent_node_ids, investigation_id, "
-                f"created_at, dataset_id FROM alerts WHERE id = $1 AND owner_id = $2{reach}",
+                f"SELECT {_COLUMNS} FROM alerts WHERE id = $1 AND owner_id = $2{reach}",
                 alert_id,
                 principal.id,
                 *extra,
@@ -156,8 +183,7 @@ class AlertStore:
         reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, rule_id, owner_id, mode, referent_node_ids, investigation_id, "
-                f"created_at, dataset_id FROM alerts WHERE owner_id = $1{reach} "
+                f"SELECT {_COLUMNS} FROM alerts WHERE owner_id = $1{reach} "
                 "ORDER BY created_at DESC",
                 principal.id,
                 *extra,

@@ -27,12 +27,13 @@ a different role.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 import asyncpg
 
-from schemas.domain import Principal
+from schemas.domain import Principal, RuleAuditEntry
 
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -103,3 +104,31 @@ class AuditWriter:
                 )
         except (OSError, asyncpg.PostgresError) as exc:
             raise AuditWriteError(f"audit write failed for action {action!r}: {exc}") from exc
+
+    async def list_for_case(
+        self, investigation_id: str, actions: Sequence[str]
+    ) -> list[RuleAuditEntry]:
+        """Every entry of these actions recorded in one case, newest first — the rule audit's raw
+        read (ADR-109 ruling 1). Unfiltered by the reader: the caller withholds what names a node
+        the reader cannot see (`rule_holds.readable_rule_audit`), and only after that pages."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT recorded_at, principal_id, action, resolved_query, result_cardinality "
+                "FROM audit_log WHERE investigation_id = $1 AND action = ANY($2::text[]) "
+                "ORDER BY recorded_at DESC, id DESC",
+                investigation_id,
+                list(actions),
+            )
+        return [
+            RuleAuditEntry(
+                recorded_at=r["recorded_at"],
+                principal_id=r["principal_id"],
+                action=r["action"],
+                detail=json.loads(r["resolved_query"])
+                if isinstance(r["resolved_query"], str)
+                else r["resolved_query"],
+                result_cardinality=r["result_cardinality"],
+            )
+            for r in rows
+        ]
+
