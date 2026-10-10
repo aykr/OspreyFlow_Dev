@@ -17,6 +17,12 @@ export type EventIds = string[];
 export type ValidFrom = string;
 export type ValidTo = string | null;
 export type Trigger = ("pre_commit" | "post_commit") | null;
+export type Status = "open" | "claimed" | "closed";
+export type Assignee = string | null;
+export type Disposition = ("true_positive" | "false_positive") | null;
+export type DispositionReason = string | null;
+export type DecidedBy = string | null;
+export type DecidedAt = string | null;
 
 /**
  * A persisted alert row — `06_DECISIONS.md` ADR-038/039, Phase 7 Stage 6a's own foundation.
@@ -53,6 +59,12 @@ export interface Alert {
   window?: Interval | null;
   trigger?: Trigger;
   alert_node_id?: NodeId | null;
+  status?: Status;
+  assignee?: Assignee;
+  disposition?: Disposition;
+  disposition_reason?: DispositionReason;
+  decided_by?: DecidedBy;
+  decided_at?: DecidedAt;
   [k: string]: unknown;
 }
 export interface Interval {

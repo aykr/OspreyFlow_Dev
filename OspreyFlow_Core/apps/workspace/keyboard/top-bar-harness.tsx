@@ -92,6 +92,7 @@ createRoot(container).render(
         items={[
           { id: "cases", label: "Cases", icon: "cases", onSelect: rail("cases") },
           { id: "watches", label: "Watches", icon: "watches", onSelect: rail("watches") },
+          { id: "alerts", label: "Alerts", icon: "alerts", onSelect: rail("alerts") },
           { id: "history", label: "History", icon: "history", onSelect: rail("history") },
           { id: "explore", label: "Explore", icon: "explore", onSelect: rail("explore") },
           { id: "questions", label: "Questions", icon: "questions", onSelect: rail("questions") },

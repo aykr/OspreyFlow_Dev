@@ -1,6 +1,6 @@
 // The shell's icons (ADR-097 step 1): 16px, one stroke in the current text colour, no fill, so
 // they take the chrome's neutral and never a data colour.
-export type ShellIcon = "cases" | "history" | "watches" | "types" | "ingest" | "glass" | "names" | "questions" | "explore";
+export type ShellIcon = "cases" | "history" | "watches" | "alerts" | "types" | "ingest" | "glass" | "names" | "questions" | "explore";
 
 const PATHS: Record<ShellIcon, string> = {
   // Two stacked folders: the case and its branches.
@@ -9,6 +9,8 @@ const PATHS: Record<ShellIcon, string> = {
   history: "M8 2.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 0 0 0-11z M8 5v3.2l2.2 1.3",
   // A bell: something to be told about.
   watches: "M4 11V7.5a4 4 0 0 1 8 0V11l1 1.5H3z M6.8 13.5a1.3 1.3 0 0 0 2.4 0",
+  // A warning triangle: a rule has raised something to triage (ADR-109).
+  alerts: "M8 2.5L14 13H2z M8 6.5v3 M8 11.2v.1",
   // A tag: a type of link.
   types: "M2.5 2.5h5l6 6l-5 5l-6-6z M5.2 5.2h.1",
   // A tray with an arrow into it: bringing data in.

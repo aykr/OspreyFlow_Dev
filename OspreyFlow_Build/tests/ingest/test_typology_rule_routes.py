@@ -208,3 +208,90 @@ def test_a_rejection_needs_a_reason_and_an_author(
         assert done.status_code == 200 and done.json()[0]["status"] == "rejected"
         assert client.get(f"/v1/investigations/{case}/held-rows",
                           headers=_as(key, AUTHOR.id)).json() == []  # fmt: skip
+
+
+# --- phase B: the alert queue's routes ----------------------------------------
+
+
+async def _queued_alert(case: str, classification: str = "OFFICIAL") -> str:
+    """Two accounts in the case's dataset and a rule-raised alert on them, written straight to the
+    stores the running app reads."""
+    from services.api.alerts import AlertStore
+
+    from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
+    from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+    from ontology.packs import load_deployment_ontology
+    from schemas.domain import Alert, AlertMode, NodeWrite, Provenance, ProvenanceState, SourceRef
+    from tests.services.api.case_dataset import dataset_for
+
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    now = datetime.now(UTC)
+    try:
+        graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
+        await graph.apply_schema(load_deployment_ontology())
+        tx = await graph.begin_transaction()
+        ids = await graph.upsert_nodes(
+            [
+                NodeWrite(
+                    id=new_id(), type="Account", properties={"account_number": f"GB-{new_id()}"},
+                    provenance=Provenance(state=ProvenanceState.ASSERTED, first_seen=now,
+                                          sources=[SourceRef(document_id="t", locator="r",
+                                                             excerpt_hash="")]),
+                    handling=Handling(classification=classification, handling_code="P",
+                                      originator="unit-1", owning_unit="unit-1"),
+                    created_by="test", created_at=now, datasets=[dataset_for(AUTHOR)],
+                )  # fmt: skip
+                for _ in range(2)
+            ],
+            tx,
+        )
+        await graph.commit_transaction(tx)
+    finally:
+        await client.aclose()
+    store = await AlertStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        alert = Alert(
+            id=new_id(), rule_id="typology:r", owner_id=AUTHOR.id, mode=AlertMode.FULL,
+            referent_node_ids=list(ids), investigation_id=case, created_at=now,
+            dataset_id=dataset_for(AUTHOR), typology="structuring",
+            words=f"4 movements from {ids[0]} to {ids[1]}", trigger="post_commit",
+        )  # fmt: skip
+        await store.save(alert)
+        return alert.id
+    finally:
+        await store.close()
+
+
+def test_the_queue_is_read_at_viewer_and_triaged_at_editor(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    key, _ = keypair
+    case = asyncio.run(_case())
+    alert_id = asyncio.run(_queued_alert(case))
+    hidden_id = asyncio.run(_queued_alert(case, "SECRET"))
+    from services.api.app import app
+
+    with TestClient(app) as client:
+        base = f"/v1/investigations/{case}/alert-queue"
+        listed = client.get(base, headers=_as(key, VIEWER))
+        assert listed.status_code == 200, listed.text
+        assert [q["alert"]["id"] for q in listed.json()] == [alert_id], "the SECRET one withheld"
+        assert alert_id not in listed.json()[0]["summary"]
+        assert client.get(base, headers=_as(key, OUTSIDER)).status_code == 404
+        assert client.get(f"{base}/{hidden_id}", headers=_as(key, VIEWER)).status_code == 404
+        assert client.get(f"{base}/{alert_id}", headers=_as(key, VIEWER)).status_code == 200
+
+        assert client.post(f"{base}/{alert_id}/claim", headers=_as(key, VIEWER)).status_code == 403
+        claimed = client.post(f"{base}/{alert_id}/claim", headers=_as(key, EDITOR))
+        assert claimed.status_code == 200 and claimed.json()["assignee"] == EDITOR
+        assert client.post(f"{base}/{alert_id}/claim",
+                           headers=_as(key, AUTHOR.id)).status_code == 409  # fmt: skip
+        assert client.post(f"{base}/{alert_id}/canvas", headers=_as(key, EDITOR)).status_code == 200
+        no_reason = client.post(f"{base}/{alert_id}/disposition", headers=_as(key, EDITOR),
+                                json={"disposition": "false_positive", "reason": ""})  # fmt: skip
+        assert no_reason.status_code == 422
+        closed = client.post(f"{base}/{alert_id}/disposition", headers=_as(key, EDITOR),
+                             json={"disposition": "false_positive", "reason": "payroll"})  # fmt: skip
+        assert closed.status_code == 200 and closed.json()["status"] == "closed"
+        assert client.get(base, headers=_as(key, VIEWER)).json() == []
+        assert len(client.get(f"{base}?status=closed", headers=_as(key, VIEWER)).json()) == 1

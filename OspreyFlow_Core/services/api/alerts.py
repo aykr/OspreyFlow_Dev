@@ -33,6 +33,7 @@ obligation independently.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -78,6 +79,13 @@ ALTER TABLE alerts ADD COLUMN IF NOT EXISTS event_ids TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS window_json TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS trigger TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS alert_node_id TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open';
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS assignee TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS disposition TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS disposition_reason TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS decided_by TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS decided_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS alerts_investigation_idx ON alerts (investigation_id);
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
 """
 
@@ -100,7 +108,8 @@ class AlertNotFoundError(Exception):
 #: missed by another.
 _COLUMNS = (
     "id, rule_id, owner_id, mode, referent_node_ids, investigation_id, created_at, dataset_id, "
-    "typology, words, edge_ids, event_ids, window_json, trigger, alert_node_id"
+    "typology, words, edge_ids, event_ids, window_json, trigger, alert_node_id, status, assignee, "
+    "disposition, disposition_reason, decided_by, decided_at"
 )
 
 
@@ -121,6 +130,12 @@ def _row_to_alert(row: asyncpg.Record) -> Alert:
         window=Interval.model_validate_json(row["window_json"]) if row["window_json"] else None,
         trigger=row["trigger"],
         alert_node_id=row["alert_node_id"],
+        status=row["status"],
+        assignee=row["assignee"],
+        disposition=row["disposition"],
+        disposition_reason=row["disposition_reason"],
+        decided_by=row["decided_by"],
+        decided_at=row["decided_at"],
     )
 
 
@@ -144,7 +159,8 @@ class AlertStore:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 f"INSERT INTO alerts ({_COLUMNS}) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, "
+                "$17, $18, $19, $20, $21)",
                 alert.id,
                 alert.rule_id,
                 alert.owner_id,
@@ -160,6 +176,12 @@ class AlertStore:
                 alert.window.model_dump_json() if alert.window else None,
                 alert.trigger,
                 alert.alert_node_id,
+                alert.status,
+                alert.assignee,
+                alert.disposition,
+                alert.disposition_reason,
+                alert.decided_by,
+                alert.decided_at,
             )
 
     async def get_authorized(self, alert_id: str, principal: Principal) -> Alert:
@@ -189,6 +211,78 @@ class AlertStore:
                 *extra,
             )
         return [_row_to_alert(row) for row in rows]
+
+    async def list_case_queue(self, investigation_id: str, principal: Principal) -> list[Alert]:
+        """ADR-109 ruling 3 — the case team's queue: every rule-raised alert of the case within
+        the reader's dataset reach, newest first, whoever deployed the rule. Whether the reader may
+        open the case is the route's level check; whether they may see each alert's evidence is
+        the caller's (`evidence_available`, all-or-nothing), before anything is shown or counted."""
+        reach, extra = reach_clause(principal, 2)
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM alerts WHERE investigation_id = $1 "
+                f"AND typology IS NOT NULL{reach} ORDER BY created_at DESC",
+                investigation_id,
+                *extra,
+            )
+        return [_row_to_alert(row) for row in rows]
+
+    async def get_case_alert(
+        self, alert_id: str, investigation_id: str, principal: Principal
+    ) -> Alert:
+        reach, extra = reach_clause(principal, 3)
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"SELECT {_COLUMNS} FROM alerts WHERE id = $1 AND investigation_id = $2 "
+                f"AND typology IS NOT NULL{reach}",
+                alert_id,
+                investigation_id,
+                *extra,
+            )
+        if row is None:
+            raise AlertNotFoundError(alert_id)
+        return _row_to_alert(row)
+
+    async def set_triage(
+        self,
+        alert_id: str,
+        investigation_id: str,
+        *,
+        expect_status: Sequence[str],
+        status: str,
+        assignee: str | None,
+        disposition: str | None = None,
+        disposition_reason: str | None = None,
+        decided_by: str | None = None,
+        alert_node_id: str | None = None,
+    ) -> Alert:
+        """Moves one case alert from a status in `expect_status` to `status`, in one statement, so
+        two members acting at once cannot both win (the loser is told it moved on)."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "UPDATE alerts SET status = $3, assignee = $4, disposition = $5, "
+                "disposition_reason = $6, decided_by = $7, "
+                "decided_at = CASE WHEN $7::text IS NULL THEN NULL ELSE now() END, "
+                "alert_node_id = COALESCE($8, alert_node_id) "
+                "WHERE id = $1 AND investigation_id = $2 AND status = ANY($9::text[]) "
+                f"RETURNING {_COLUMNS}",
+                alert_id,
+                investigation_id,
+                status,
+                assignee,
+                disposition,
+                disposition_reason,
+                decided_by,
+                alert_node_id,
+                list(expect_status),
+            )
+        if row is None:
+            raise AlertTriageConflict(alert_id)
+        return _row_to_alert(row)
+
+
+class AlertTriageConflict(Exception):
+    """The alert was not in a state that allows this (someone else claimed or closed it)."""
 
 
 async def evidence_available(alert: Alert, principal: Principal, graph: GraphPort) -> bool:
@@ -285,6 +379,7 @@ async def record_match(
 __all__ = [
     "AlertNotFoundError",
     "AlertStore",
+    "AlertTriageConflict",
     "DisclosurePolicy",
     "disclosure_policy_from_value",
     "evidence_available",

@@ -437,6 +437,23 @@ export const PIPELINE_STUDIO_ACTIONS = defineActionRegistry("PIPELINE_STUDIO_ACT
   "open-the-source-settings-by-keyboard",
 ] as const);
 
+/** The Alerts place (ADR-109 phase B): the case team's queue, an alert's explanation and its
+ * triage, the rules (an Author deploys and retires), held rows and the rule audit, every action by
+ * keyboard alone. `keyboard/alerts.spec.ts`. */
+export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
+  "open-an-alert-from-the-queue-by-keyboard",
+  "claim-an-alert-by-keyboard",
+  "release-an-alert-by-keyboard",
+  "show-an-alert-on-the-canvas-by-keyboard",
+  "close-an-alert-with-a-reason-by-keyboard",
+  "filter-the-queue-by-keyboard",
+  "deploy-a-rule-by-keyboard",
+  "retire-a-rule-by-keyboard",
+  "release-held-rows-by-keyboard",
+  "reject-held-rows-by-keyboard",
+  "page-the-rule-audit-by-keyboard",
+] as const);
+
 export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   "ask-a-question-with-ctrl-enter",
   "ask-a-question-with-the-ask-button",

@@ -118,6 +118,9 @@ from schemas.analytics import (
     SightingRequest,
 )
 from schemas.domain import (
+    Alert,
+    AlertDispositionInput,
+    AlertExplanation,
     Assumption,
     Edge,
     EdgeWrite,
@@ -140,6 +143,7 @@ from schemas.domain import (
     Principal,
     Provenance,
     ProvenanceState,
+    QueuedAlert,
     RuleAuditPage,
     SavedPattern,
     SourceRef,
@@ -183,6 +187,7 @@ from schemas.ingest import (
 from schemas.mapconfig import MapConfig, PublicMapConfig
 from schemas.profile import SourceProfile
 
+from . import alert_queue
 from . import compute_routes as compute_routes_module
 from . import dossier as dossier_module
 from . import readiness as readiness_module
@@ -190,7 +195,7 @@ from . import resolution as resolution_module
 from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import search as search_module
-from .alerts import AlertNotFoundError, AlertStore
+from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict
 from .assessments import (
     AssumptionListResponse,
     AssumptionNotFoundError,
@@ -6512,6 +6517,182 @@ async def _rule_gate(
         held_store=held_rows,
         fail_closed=fail_closed,
     )
+
+
+# --- the case team's alert queue (ADR-109 phase B) ----------------------------
+
+
+@app.get("/v1/investigations/{investigation_id}/alert-queue")
+async def read_alert_queue(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+    status_filter: Annotated[
+        Literal["open", "claimed", "closed", "active", "all"], Query(alias="status")
+    ] = "active",
+) -> list[QueuedAlert]:
+    """The case's rule-raised alerts, the case team's (ruling 3). `active` is open and claimed.
+    An alert any of whose entities the reader cannot see is left out, and not counted (rule 3)."""
+    statuses = {
+        "active": ["open", "claimed"],
+        "all": None,
+    }.get(status_filter, [status_filter])
+    rows = await alert_queue.queue(
+        alerts_store, graph, investigation.id, principal, statuses=statuses
+    )
+    await audit.record(
+        principal=principal,
+        action="read_alert_queue",
+        investigation_id=investigation.id,
+        resolved_query={"status": status_filter},
+        result_cardinality=len(rows),
+    )
+    return rows
+
+
+@app.get("/v1/investigations/{investigation_id}/alert-queue/{alert_id}")
+async def explain_alert(
+    alert_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    analytics: AnalyticsDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+) -> AlertExplanation:
+    """What fired the alert: its entities and node, the links and each transaction it cites."""
+    explanation = await alert_queue.explain(
+        alerts_store, graph, analytics, investigation.id, alert_id, principal
+    )
+    await audit.record(
+        principal=principal,
+        action="explain_alert",
+        investigation_id=investigation.id,
+        resolved_query={"alert_id": alert_id},
+        result_cardinality=len(explanation.nodes),
+    )
+    return explanation
+
+
+async def _triage_audit(
+    audit: AuditWriter, principal: Principal, investigation_id: str, action: str, alert: Alert
+) -> None:
+    await audit.record(
+        principal=principal,
+        action=action,
+        investigation_id=investigation_id,
+        resolved_query={
+            "alert_id": alert.id,
+            "status": alert.status,
+            "disposition": alert.disposition,
+            "node_ids": alert.referent_node_ids,
+        },
+        result_cardinality=1,
+    )
+
+
+@app.post("/v1/investigations/{investigation_id}/alert-queue/{alert_id}/claim")
+async def claim_alert(
+    alert_id: str,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+) -> Alert:
+    alert = await alert_queue.claim(alerts_store, graph, investigation.id, alert_id, principal)
+    await _triage_audit(audit, principal, investigation.id, "alert_claimed", alert)
+    return alert
+
+
+@app.post("/v1/investigations/{investigation_id}/alert-queue/{alert_id}/release")
+async def release_alert(
+    alert_id: str,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+) -> Alert:
+    alert = await alert_queue.release(alerts_store, graph, investigation.id, alert_id, principal)
+    await _triage_audit(audit, principal, investigation.id, "alert_released", alert)
+    return alert
+
+
+@app.post("/v1/investigations/{investigation_id}/alert-queue/{alert_id}/disposition")
+async def dispose_alert(
+    alert_id: str,
+    body: AlertDispositionInput,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+) -> Alert:
+    """Closes the alert with its disposition and reason. A true positive confirms its node
+    (rule 5's human confirmation); a false positive leaves it `inferred`."""
+    alert = await alert_queue.dispose(
+        alerts_store,
+        graph,
+        investigation.id,
+        alert_id,
+        principal,
+        disposition=body.disposition,
+        reason=body.reason,
+    )
+    await _triage_audit(audit, principal, investigation.id, "alert_disposed", alert)
+    return alert
+
+
+@app.post("/v1/investigations/{investigation_id}/alert-queue/{alert_id}/canvas")
+async def alert_canvas(
+    alert_id: str,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    working_set: WorkingSetDep,
+    history: HistoryDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> StarterRunOutcome:
+    """The alert's node, its entities and the links it cites onto the canvas — all, or past the
+    working set's cap, none (`limit_exceeded`, rule 2). Editor, as it adds to the working set."""
+    alert, nodes, edges = await alert_queue.canvas_elements(
+        alerts_store, graph, investigation.id, alert_id, principal
+    )
+    outcome = await working_set.seed(investigation.id, nodes, edges, principal)
+    await publish_delta(valkey, investigation.id, outcome.delta)
+    await _record_history_step(
+        working_set,
+        history,
+        investigation.id,
+        seq=outcome.delta.seq,
+        label=f"Opened an alert: {alert.typology or 'alert'}",
+        principal=principal,
+    )
+    await audit.record(
+        principal=principal,
+        action="alert_canvas",
+        investigation_id=investigation.id,
+        resolved_query={"alert_id": alert_id},
+        result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
+    )
+    return StarterRunOutcome(
+        delta=outcome.delta,
+        added_nodes=len(outcome.delta.nodes),
+        added_links=len(outcome.delta.edges),
+    )
+
+
+@app.exception_handler(AlertTriageConflict)
+async def _alert_triage_conflict_handler(
+    request: Request, exc: AlertTriageConflict
+) -> JSONResponse:
+    """Someone else claimed or closed it first: the Glass reloads the queue."""
+    return JSONResponse(status_code=409, content={"error": "alert_moved_on"})
 
 
 # --- typology rules, their audit, and held rows (ADR-109 phase A) -------------

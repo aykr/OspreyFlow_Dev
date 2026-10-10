@@ -10889,3 +10889,51 @@ case — disclosed, and owed by phase B, whose Glass drives it.
 
 **Not in phase A:** the Glass (phase B: the *Alerts* place, rule management, the audit and the
 holds in it, with its keyboard registry); the team queue (phase B).
+
+### ADR-109, Amendment 2 (10 October 2026) — phase B built: the case team's queue and the *Alerts* place
+
+Status: build note within ADR-109's accepted rulings; decisions marked *mine* may be overruled.
+
+**Built.** The alert row gains triage: `status` (open, claimed, closed), `assignee`, `disposition`
+(true or false positive), its `reason`, `decided_by`/`decided_at`. `services/api/alert_queue.py`:
+the case's queue (ruling 3 — every member reads every rule-raised alert of the case), an alert's
+explanation (`AlertExplanation`: its entities and node, the links it cites and its `ALERTED_ON`
+links, each transaction with its amount), claim, release, disposition, and the canvas (seed, all or
+`limit_exceeded`). Six routes (spec 03 §3.8a). In the Glass, the *Alerts* place on the left rail
+(ruling 5), after *Watches*: Queue (filter; an alert opens to its finding in words, its span and a
+transactions table; claim, release, show on the canvas — the view switches to the graph with the
+alert's nodes selected — and close with a required reason), Rules (list in words; an Author deploys
+and retires), Held rows (grouped by load; an Author releases or rejects), Audit (paged, the total
+said). Spec 02 §3.3 describes it.
+
+**Rule 3, as built.** An alert any of whose entities, cited links or cited transactions the reader
+cannot read is withheld whole — from the queue, its count, the explanation and every action —
+because its words name what it concerns. The summary replaces node ids with names the reader sees.
+
+**Rule 5, as built.** A true positive confirms the `Alert` node (`confirm_node`: asserted,
+`confirmed_by`), and the row follows the new revision's id. A false positive closes the row and
+leaves the node `inferred`: a suggestion nobody confirmed, which is true of it. *Mine:* no
+"false positive" mark is written onto the node (that would need an ontology property; the row holds
+the disposition and the audit holds who and why).
+
+**Decisions mine (overrulable).** (a) Reading the queue needs Viewer; claiming, releasing, closing
+and the canvas need Editor (they change the case's work), matching how the case's other writes are
+levelled. (b) Only the claimant releases a claimed alert; anyone at Editor may close one. (c) A
+status move is one conditional update; the loser of a race is told `alert_moved_on` (409) and the
+Glass says "Someone else has already claimed or closed this alert." (d) Rules and held rows sit in
+the same place as the queue rather than a place each: the people who triage are the people who tune.
+
+**Tests.** Live, against throwaway Postgres, Valkey, MinIO and ArcadeDB (5 more in
+`tests/ingest/test_typology_rules.py`, 17 in all): the teammate reads the deployer's alert; a SECRET
+alert is neither queued nor opened nor claimed by an OFFICIAL member; the explanation's
+transactions, links and canvas set; one claim wins; a true positive confirms the node, a false
+positive leaves it inferred — red under three plants (a hidden referent not withheld, a claim not
+exclusive, a true positive that confirms nothing). Route levels and the 409 in
+`tests/ingest/test_typology_rule_routes.py` (6 in all) and the levels table. Glass: 8 vitest cases
+(`src/alerts/AlertsPlace.test.tsx`), red under two plants (closing without a reason; triage offered
+to a Viewer); `keyboard/alerts.spec.ts` with its own `ALERTS_ACTIONS` registry, 11 actions each
+proven, the registry gate shown red with one proof removed; the shell's rail walkthrough gains
+*Alerts*. Whole Glass: vitest 1,375/1,375, keyboard 279/279, tsc and eslint clean.
+
+**Not seen.** The place against the running deployment (it needs `make refresh` and a signed-in
+owner; batched for after phase C so one refresh covers both).

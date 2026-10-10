@@ -597,6 +597,15 @@ class Alert(BaseModel):
     window: Interval | None = None
     trigger: RuleTrigger | None = None
     alert_node_id: NodeId | None = None
+    #: ADR-109 phase B — the case team's triage of a rule-raised alert (ruling 3): open, claimed by
+    #: one member, or closed with a disposition and its reason. A true positive is the human
+    #: confirmation that makes the `Alert` node asserted (rule 5); a false positive retracts it.
+    status: AlertStatus = "open"
+    assignee: str | None = None
+    disposition: AlertDisposition | None = None
+    disposition_reason: str | None = None
+    decided_by: str | None = None
+    decided_at: datetime | None = None
 
 
 #: `Hotlist.status`/`Monitor.status` — ADR-036's own "the monitor stops" (extended in Stage 6b to
@@ -671,6 +680,8 @@ TypologyName = Literal["structuring", "rapid_movement", "circular_flow"]
 #: change stream after the load commits, best-effort.
 RuleTrigger = Literal["pre_commit", "post_commit"]
 RuleStatus = Literal["active", "retired"]
+AlertStatus = Literal["open", "claimed", "closed"]
+AlertDisposition = Literal["true_positive", "false_positive"]
 
 
 class StructuringParams(BaseModel):
@@ -771,6 +782,44 @@ class RuleAuditPage(BaseModel):
 
     entries: list[RuleAuditEntry] = Field(default_factory=list)
     total: int = Field(ge=0)
+
+
+class QueuedAlert(BaseModel):
+    """One row of the case's alert queue: the alert, and its finding in words with the entities
+    named as the reader sees them (never an id the reader would have to look up)."""
+
+    alert: Alert
+    summary: str
+
+
+class ExplainedTransaction(BaseModel):
+    """One transaction an alert cites, as the reader may read it: the link it is on, its ends,
+    when, and how much."""
+
+    event_id: str
+    edge_id: EdgeId
+    source_id: NodeId
+    target_id: NodeId
+    occurred_at: datetime
+    amount: float | None = None
+
+
+class AlertExplanation(BaseModel):
+    """What fired an alert, for the reader (ADR-109 phase B): the entities it concerns and its
+    own node, the links it cites (and the `ALERTED_ON` links), and each transaction it cites. Every
+    part is read as the reader; an alert any part of which the reader cannot see is not shown at
+    all (ADR-039's all-or-nothing, rule 3)."""
+
+    alert: Alert
+    summary: str
+    nodes: list[Node] = Field(default_factory=list)
+    edges: list[Edge] = Field(default_factory=list)
+    transactions: list[ExplainedTransaction] = Field(default_factory=list)
+
+
+class AlertDispositionInput(BaseModel):
+    disposition: AlertDisposition
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 class HeldRowDecision(BaseModel):
@@ -946,6 +995,10 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     HeldRow,
     RuleAuditEntry,
     RuleAuditPage,
+    QueuedAlert,
+    ExplainedTransaction,
+    AlertExplanation,
+    AlertDispositionInput,
     HeldRowDecision,
     Judgement,
     IntelligenceGap,

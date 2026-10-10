@@ -102,8 +102,8 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 | Level | Routes under `/v1/investigations/{id}` |
 |---|---|
-| Viewer | `GET` the case; `access` (GET: the caller's own level); `tab` (PUT: the caller's own flag, ADR-084); `datasets` (GET, ADR-099); `search`, `suggest`, `paths` (POST, ADR-099); `explore/counts`, `explore/most-connected`, `explore/busiest-links`, `explore/busiest-days`, `explore/groups`, `explore/whats-new`, `explore/starter-questions`, `nodes/{node}/shared-contacts` (GET, ADR-100); `expand/preview`; `patterns/preview`, `patterns/run` (POST), `patterns`, `patterns/{pattern}` (GET); `compute/{metric}`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `hotlists`, `monitors`, `alerts`, `alerts/{alert}` (GET, ADR-099 Amendment 3); `rules` (GET, ADR-109); `questions` (GET, ADR-098); `ingest/candidates` (GET); `dossier/documents/{doc}`; `documents/{doc}/reader`, `documents/{doc}/file` (GET); `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes`, `links/{edge}/history`, `links/{edge}/events` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the Ingest Studio's reads (`ingest/source-files`, `ingest/recipes`, `ingest/recipes/{recipe}`, its `profile`, `map/sample-rows/{row}` and `map/handling-preview`, `ingest/recipe-registry`; ADR-099 Amendment 4); the delta stream |
-| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `nodes/{node}/confirm`, `retract`, `suppression-mark` (POST, DELETE; ADR-099 Amendment 1); `links-among` (ADR-098); `explore/starter-questions/{question}/run`, `nodes/{node}/shared-contacts/{other}/canvas` (ADR-100); `resolution/threshold` (PUT), `link`, `split`; `patterns/save`; `hotlists`, `monitors` (POST), `alerts/{alert}/jump`; `held-rows` (GET, ADR-109); `questions` (POST) and `questions/candidates/{candidate}/accept`, `reject` (ADR-098); `documents` (POST), `documents/{doc}/extract`, `designations`, and its candidate `accept`, `reject`; `ingest/extract`, its candidate `accept` and `reject`; `links/{edge}/events/documents`, `links/{edge}/events/{event}/extract` and its candidate `accept`, `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `link-types` (POST), `link-types/{proposal}/withdraw` (the proposer or an Author, ADR-090); `export`; `sites` (POST), `control-points`, `grid`; the Ingest Studio's writes (`ingest/source-files` (POST), `ingest/recipes` (POST), `ingest/recipes/{recipe}` (PATCH), its `versions`, `row-template`, `verify`, `publish`, `schedule` and `run`) |
+| Viewer | `GET` the case; `access` (GET: the caller's own level); `tab` (PUT: the caller's own flag, ADR-084); `datasets` (GET, ADR-099); `search`, `suggest`, `paths` (POST, ADR-099); `explore/counts`, `explore/most-connected`, `explore/busiest-links`, `explore/busiest-days`, `explore/groups`, `explore/whats-new`, `explore/starter-questions`, `nodes/{node}/shared-contacts` (GET, ADR-100); `expand/preview`; `patterns/preview`, `patterns/run` (POST), `patterns`, `patterns/{pattern}` (GET); `compute/{metric}`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `hotlists`, `monitors`, `alerts`, `alerts/{alert}` (GET, ADR-099 Amendment 3); `rules`, `alert-queue`, `alert-queue/{alert}` (GET, ADR-109); `questions` (GET, ADR-098); `ingest/candidates` (GET); `dossier/documents/{doc}`; `documents/{doc}/reader`, `documents/{doc}/file` (GET); `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes`, `links/{edge}/history`, `links/{edge}/events` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the Ingest Studio's reads (`ingest/source-files`, `ingest/recipes`, `ingest/recipes/{recipe}`, its `profile`, `map/sample-rows/{row}` and `map/handling-preview`, `ingest/recipe-registry`; ADR-099 Amendment 4); the delta stream |
+| Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `nodes/{node}/confirm`, `retract`, `suppression-mark` (POST, DELETE; ADR-099 Amendment 1); `links-among` (ADR-098); `explore/starter-questions/{question}/run`, `nodes/{node}/shared-contacts/{other}/canvas` (ADR-100); `resolution/threshold` (PUT), `link`, `split`; `patterns/save`; `hotlists`, `monitors` (POST), `alerts/{alert}/jump`; `held-rows` (GET, ADR-109); `alert-queue/{alert}/claim`, `release`, `disposition`, `canvas` (ADR-109); `questions` (POST) and `questions/candidates/{candidate}/accept`, `reject` (ADR-098); `documents` (POST), `documents/{doc}/extract`, `designations`, and its candidate `accept`, `reject`; `ingest/extract`, its candidate `accept` and `reject`; `links/{edge}/events/documents`, `links/{edge}/events/{event}/extract` and its candidate `accept`, `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `link-types` (POST), `link-types/{proposal}/withdraw` (the proposer or an Author, ADR-090); `export`; `sites` (POST), `control-points`, `grid`; the Ingest Studio's writes (`ingest/source-files` (POST), `ingest/recipes` (POST), `ingest/recipes/{recipe}` (PATCH), its `versions`, `row-template`, `verify`, `publish`, `schedule` and `run`) |
 | Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `datasets` (PUT: what the case reads, ADR-099 decision 3); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`; `rules` (POST), `rules/{rule}/retire`, `rules/audit` (GET; the admin's safety net reaches this one too), `held-rows/reject`, `ingest/recipes/{recipe}/held-rows/release` (ADR-109). An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
 
 `GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
@@ -540,13 +540,32 @@ signature, per rule, in Valkey).
 **An alert a rule raised** is a §3.8 alert row carrying `typology`, `words`, `edge_ids`,
 `event_ids`, `window`, `trigger` and `alert_node_id`, plus the `Alert` node, marked no lower than
 anything it references; where referents with a restricted code belong to different units no single
-marking is safe, the node is withheld and the withholding audited. Phase B turns these rows into
-the case team's queue (ruling 3); until then they are the deployer's, read as §3.8 reads alerts.
+marking is safe, the node is withheld and the withholding audited. They are also the deployer's
+§3.8 alerts, and the case team's queue below.
 
 **The audit read** returns entries of `rule_deployed`, `rule_retired`, `rule_evaluated`,
 `rule_fired`, `rule_failed`, `rows_held`, `rows_released`, `rows_rejected` and
 `alert_node_withheld`. An entry naming a node the reader cannot see is withheld whole, before
 paging, so the total never counts it.
+
+**The case team's queue (phase B, ruling 3).**
+
+```
+GET    /v1/investigations/{id}/alert-queue   the case's rule-raised alerts; ?status= active (default), open, claimed, closed or all, Viewer
+GET    /v1/investigations/{id}/alert-queue/{alert_id}   what fired it: nodes, cited links and ALERTED_ON, each transaction, Viewer
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/claim   open → claimed by the caller, Editor
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/release   claimed (by the caller) → open, Editor
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/disposition   → closed, true or false positive with a reason, Editor
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/canvas   its node, entities and cited links into the working set, Editor
+```
+
+Every member of the case reads every rule-raised alert of it, whoever deployed the rule; an alert
+any of whose entities, cited links or transactions the reader cannot read is left out of the list
+and its count, and opening or acting on it answers 404 (ADR-039's all-or-nothing). The summary names
+entities as the reader sees them, never by id. A move between statuses is one conditional update,
+so two members acting at once cannot both win: the loser gets 409 `alert_moved_on`. A true positive
+confirms the `Alert` node (asserted, `confirmed_by` the member, rule 5); a false positive leaves it
+`inferred`. The canvas route seeds all or, past the cap, nothing (`limit_exceeded`, rule 2).
 
 **Held rows** are read in the store's query by marking (the adapters' two axes) and case; a
 decision names rows by id and decides all or none (an id not held, or not readable, refuses the

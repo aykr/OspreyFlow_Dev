@@ -820,6 +820,24 @@ Every alert names the rule that fired and shows the evidence. Borrowing from the
 decisioning products present their scores: an alert that cannot explain itself is an alert the
 analyst will learn to dismiss.
 
+**Typology rules and the *Alerts* place (ADR-109).** A case's typology rules (structuring, rapid
+movement, circular flow — each a closed set of parameters, never an expression) judge its loads,
+before commit or after as each rule declares, and raise alerts to **the case team's queue**: the
+*Alerts* place on the left rail, after *Watches*. It opens on the queue (open and claimed by
+default; closed and all by choice), each alert named by its typology and its finding in words, the
+entities named as the reader sees them — an alert any part of which the reader cannot see is not
+shown or counted. Opening one shows **what fired it**: the finding, when the rule ran, the span, and
+a table of the transactions it cites (when, from, to, amount). An Editor claims it, releases it,
+puts it **on the canvas** (its node, its entities and the links it cites, all or none; the view
+switches to the graph with those nodes selected) and closes it as a true or false positive with a
+required reason; a true positive confirms the alert's node (rule 5). A Viewer reads only. Its
+other tabs: **Rules** (every rule, what it looks for in words, where it runs; an Author deploys —
+typology, parameters, before or after commit, a time budget for before — and retires), **Held
+rows** (Editor and above: rows a failing pre-commit rule held, grouped by load; an Author releases
+a load's rows, which then load, or rejects them with a reason) and **Audit** (an Author, or the
+unit's administrator: the rule audit, fifty entries at a time, the total said). Every action has
+its case in `keyboard/alerts.spec.ts`, under its own registry `ALERTS_ACTIONS` (rule 13).
+
 ### 3.4 Temporal analysis
 
 The timeline is the second most important control in the product after the canvas.
