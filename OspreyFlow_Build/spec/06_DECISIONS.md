@@ -10606,7 +10606,12 @@ idempotent; per-branch templates are future work. (b) `model`/`whisper`/`vision`
 and non-text media are refused at publish until the runner runs them — the ModelPort path needs an
 extraction profile the extract node does not yet carry. (c) deepparse address parsing is installed
 (the licence register's LGPL-3.0 exception) but not yet wired into the enrich stage; enrichment
-today is place-name geocoding. (d) Down-classification's audit row rides the publish/run audit
+today is place-name geocoding. (c2) **`compose_with_packs` has no production caller** (found 10
+October 2026, answering "which case holds the fraud demo"): a pipeline's pack is offered, chosen
+and validated at save and publish, but the runner hands `run_recipe` the deployment's own
+ontology uncomposed — so a row template that actually maps a pack's types (a FIBO `Account`)
+would be refused at run time. Running a pack-typed pipeline needs the composition applied at run
+(and the graph store's schema to carry the pack's types), which is real, undone work. (d) Down-classification's audit row rides the publish/run audit
 records and the run report's loud count; a dedicated audit action per overridden element is not
 written.
 
