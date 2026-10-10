@@ -31,6 +31,6 @@ export default defineConfig({
     baseURL: "http://localhost:5187",
     viewport: { width: 1512, height: 807 },
     deviceScaleFactor: 2,
-    colorScheme: "dark",
+    colorScheme: "light",
   },
 });

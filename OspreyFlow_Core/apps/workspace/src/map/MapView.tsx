@@ -293,9 +293,19 @@ export function MapView({
       if (cancelled || !containerRef.current) return;
       const style = resolveBundledStyle(provider.style, provider, apiBaseUrl ?? "", { labels });
       const start = mapStart(mapGraph.order, basemapCentre);
+      // The overlay takes the theme's palette (owner, 10 October 2026): sigma's own grey
+      // defaults were unreadable over the light basemap — markers, links and labels alike.
+      const overlayPalette = activePalette();
       const sigma =
         start.kind === "fit"
-          ? new Sigma<MapNodeAttributes, MapEdgeAttributes>(mapGraph, containerRef.current)
+          ? new Sigma<MapNodeAttributes, MapEdgeAttributes>(mapGraph, containerRef.current, {
+              defaultNodeColor: overlayPalette.brass,
+              defaultEdgeColor: overlayPalette.textSecondary,
+              labelColor: { color: overlayPalette.textPrimary },
+              // The markers are drawn at the fixed size 6 above, which sits under sigma's own
+              // label threshold — every plotted place deserves its name.
+              labelRenderedSizeThreshold: 5,
+            })
           : null;
       sigma?.on("clickNode", ({ node }) => onNodeClickRef.current?.(node));
 
@@ -339,6 +349,14 @@ export function MapView({
               clean: () => undefined,
             };
       mapRef.current = layer.map;
+      // The graph layer fits the camera to the plotted nodes' own box exactly (its `fitBounds`
+      // runs with no padding), so a boundary marker and its label sat clipped at the viewport
+      // edge (owner, 10 October 2026 — seen on the deck's fraud captures, and true of any mast at
+      // the fitted view's edge). One small ease outward gives every boundary marker its label.
+      if (sigma !== null) {
+        const camera = sigma.getCamera();
+        camera.setState({ ratio: camera.ratio * 1.25 });
+      }
       onMapReady?.(layer.map);
 
       // `load` fires once the style and its own sources have finished

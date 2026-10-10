@@ -24,6 +24,19 @@ function shot(name: string) {
   return { path: join(SHOTS, name), type: "jpeg" as const, quality: 90 };
 }
 
+// The owner's choice, 10 October 2026: the deck reads better in the light theme. The attribute
+// is set before any module runs, so canvas-painted colours (the graph, the map) follow it too.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("ospreyflow.theme", "light");
+    } catch {
+      /* storage may be blocked; the attribute below still decides this page */
+    }
+    document.documentElement.setAttribute("data-theme", "light");
+  });
+});
+
 const json = (body: unknown) => ({
   status: 200,
   contentType: "application/json",
@@ -127,6 +140,34 @@ test("questions — the case asked in plain words, the answer cited", async ({ p
   await page.goto("/keyboard/questions-harness.html");
   await expect(page.getByText(/sole director Elena Petrov/)).toBeVisible();
   await page.screenshot(shot("f05_fraud_questions.jpg"));
+});
+
+
+test("timeline — the fraud over time", async ({ page }) => {
+  // Operation Ledger's own fortnight, bucketed per day: the structuring drumbeat (every deposit
+  // under the threshold), the weekend gaps, then the two large transfers and quiet.
+  const day = (d: number, count: number) => ({
+    start: `2026-09-${String(d).padStart(2, "0")}T00:00:00Z`,
+    end: `2026-09-${String(d + 1).padStart(2, "0")}T00:00:00Z`,
+    count,
+  });
+  const counts: [number, number][] = [
+    [1, 2], [2, 3], [3, 2], [4, 0], [5, 3], [6, 0], [7, 0], [8, 3], [9, 2], [10, 3],
+    [11, 3], [12, 3], [13, 1], [14, 1], [15, 0], [16, 0], [17, 0], [18, 0],
+  ];
+  await page.route("**/v1/analytics/histogram", (route) =>
+    route.fulfill(
+      json({
+        bucketing: "fixed_interval",
+        buckets: counts.map(([d, count]) => day(d, count)),
+        total: counts.reduce((sum, [, count]) => sum + count, 0),
+      }),
+    ),
+  );
+  await page.goto("/deck-capture/fraud-timeline-harness.html");
+  await expect(page.locator("svg, canvas").first()).toBeVisible();
+  await page.waitForTimeout(1500);
+  await page.screenshot(shot("f11_fraud_timeline.jpg"));
 });
 
 // --- The Ingest Studio -------------------------------------------------------

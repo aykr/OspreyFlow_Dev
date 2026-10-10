@@ -122,12 +122,21 @@ export const LOCATIONS = {
   }),
 };
 
-/** WGS84, synthetic but plausible, for the map's own markers. */
+/** WGS84, synthetic but plausible, for the map's own markers. The map draws a link only when
+ * both of its ends are placed (`MapView.buildMapGraph`), so the accounts are placed too — each at
+ * its holder's branch or office — and the TRANSACTED flow itself reads on the map: the mules'
+ * deposits converging on Birmingham, the transfer to London, the invoice back to Walsall. */
 export const COORDINATES: Record<string, { lat: number; lng: number }> = {
   "l-bright-office": { lat: 52.4809, lng: -1.9005 },
   "l-hale-depot": { lat: 52.5743, lng: -1.9994 },
   "l-crescent-office": { lat: 51.5119, lng: -0.0807 },
-  "l-carter-home": { lat: 52.5926, lng: -2.1416 },
+  "l-carter-home": { lat: 52.5848, lng: -2.1416 },
+  "a-brightpath": { lat: 52.4802, lng: -1.8988 },
+  "a-crescent": { lat: 51.5126, lng: -0.0792 },
+  "a-hale-biz": { lat: 52.5736, lng: -1.9979 },
+  "a-carter": { lat: 52.5852, lng: -2.1301 },
+  "a-ruiz": { lat: 52.5861, lng: -1.9829 },
+  "a-zelinsky": { lat: 52.5703, lng: -2.1255 },
 };
 
 export const SAR_DOCUMENT = fraudNode("doc-sar-0412", "Document", {
@@ -138,7 +147,7 @@ export const SAR_DOCUMENT = fraudNode("doc-sar-0412", "Document", {
 /** The SAR narrative the reader opens: what extraction finds its entities in. Entirely synthetic;
  * the phone number is an Ofcom drama-range MSISDN. */
 export const SAR_TEXT =
-  "Suspicious activity report, 12 September 2026. Over eleven banking days, nine cash deposits " +
+  "Suspicious activity report, 12 September 2026. Over eleven banking days, twenty-six cash deposits " +
   "of between £9,400 and £9,850 were made into the Barclays account of Brightpath Consulting Ltd, " +
   "each below the £10,000 reporting threshold, at branches in Birmingham, Walsall and " +
   "Wolverhampton. The deposits were made by Jamal Carter, Sofia Ruiz and Tomas Zelinsky. Within " +
