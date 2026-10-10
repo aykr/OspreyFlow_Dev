@@ -10546,3 +10546,32 @@ rule stands, the port named was wrong, the code follows the codebase.
 **Deferred within phase D:** deepparse's weights are fetched when phase C's enrich stage lands
 (the authorised download, pinned then); the pack-choosing screen is phase B's; the typologies'
 run-report wiring is phase C's.
+
+### ADR-108, Amendment 2 (10 October 2026) — phase B built: the canvas is the Studio
+
+Status: build note within ADR-108's accepted plan.
+
+**Built.** The pipeline persists on the draft through one content writer (`_content_json` — the
+sibling-field rule in one place, so no editor can drop another stage's work), with
+`update_pipeline` draft-only and verification-clearing like every other edit. The save route
+(`PUT …/recipes/{id}/pipeline`) runs the graph half of the save gate and answers 422
+`pipeline_invalid` with every problem in words. The Studio itself is replaced (ruling Q6): a
+pipelines home (name one, open one), the canvas as the one editing surface (controlled selection,
+palette: + Source / + Extract / + Enrich / Remove), stage panels per node — the domain pack chooser
+(reading `GET /v1/ingest/packs`), the source panel (mirroring the first source to the draft-level
+fields today's engine reads), extract and enrich panels declaring the config phase C executes
+(library, media, where findings go — queue by default; geocode source — local gazetteers by
+default) — and the existing Profile/Map/Verify/Publish editors rehosted whole from their nodes.
+The 1–9 wizard and its tab gating are gone; the Files tab (ADR-094's unstructured path) stays.
+**Publish refuses what the runner cannot run yet** — a second source, an extract or enrich stage —
+as 422 `pipeline_not_runnable` naming each stage and phase C, never published and silently
+part-run (rule 2).
+
+**Tests.** Pure graph edits 4; Studio shell 6 (home, create, grow-and-save, the gate's words
+shown, pack applied, extract declared); pipeline rules +2 (pack names, run-capability, both red
+first); store round-trip 2 (the pipeline survives a Connect edit; draft-only), red first; publish
+refusal route case; keyboard `pipeline-studio.spec.ts` 8 with its own registry (rule 13);
+everything through tsc, eslint, ruff, mypy.
+
+**Spec 09's rewrite** for phases A–B follows in the next commit, so the document never describes
+only the wizard that no longer exists.
