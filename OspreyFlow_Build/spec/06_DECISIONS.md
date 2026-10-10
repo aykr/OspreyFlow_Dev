@@ -10654,3 +10654,98 @@ entities, a temporal `TRANSACTED` between them) is refused against the bare core
 run was in before this amendment — and loads cleanly against the deployment ontology (three
 accounts, two transfers, the events emitted). `test_the_deployment_ontology_is_the_core_composed_
 with_every_pack` fails if a pack's types stop reaching the applied schema.
+
+## ADR-109 — PROPOSED: preventive AML/EDD — streaming rules, alert triage, UBO tracing
+
+**Status: PROPOSED, 10 October 2026.** The owner's feature specification, reviewed against the
+codebase and recorded here with its decision points *unruled* — the build session's first job is a
+design review that takes the owner through D1–D7 as choice batches and records the rulings as this
+ADR's acceptance, exactly as ADR-108's Q1–Q7 were taken. **No code before the rulings.**
+`process/ADR109_KICKOFF_PROMPT.md` is the prompt that starts that session.
+
+### Objective
+
+OspreyFlow as a preventive AML/EDD platform: typology rules evaluated continuously as data loads,
+alerts an analyst triages from a queue (each one explainable — the sub-graph that fired it),
+contextual risk read around alerted entities, and an EDD view that traces ultimate beneficial
+ownership through layered corporate structures with cumulative percentages.
+
+### What already exists (build on it, do not duplicate it)
+
+- **Continuous evaluation on ingest** — every load publishes to the change stream and is evaluated
+  synchronously against hotlists, monitors and saved patterns, raising alerts (ADR-036/037,
+  Phase 7 Stage 6c; `services/api/evaluation.py`, `_evaluate_watches_best_effort`). This *is* the
+  streaming rules engine's chassis.
+- **The AML typologies** — structuring, rapid movement, circular flows
+  (`services/ingest/typologies.py`, ADR-108 phase D), tested, **with no production caller yet**.
+- **The pattern machinery** — the visual query builder, the pattern language (shared contacts,
+  ADR-100 stage 8), saved patterns evaluated on ingest. The no-code typology builder extends this.
+- **FIBO vocabulary live in the store** — `BENEFICIAL_OWNER_OF`/`CONTROLS` with `percent`,
+  `HOLDS_ACCOUNT`, account-to-account `TRANSACTED` (ADR-108 Amendment 4); Operation Ledger as the
+  seeded, synthetic fraud case.
+- **ComputePort** (graphology/rustworkx) for the propagation and ownership maths; **Alert store,
+  Watches panel** for the queue's bones.
+
+### Decision points for the owner (D1–D7)
+
+- **D1 — where rules evaluate.** (a) *Recommended:* the existing post-commit change-stream
+  evaluation path — the load lands, the rules run, an alert follows in the same request,
+  best-effort, never failing the ingest (the documented ADR-036 discipline). (b) The
+  specification's "before the new data settles": pre-commit interception — an architecture change
+  (the engine inside the load transaction) with rule-2 and latency costs; name what it buys.
+- **D2 — what an alert is.** (a) *Recommended:* a store row (as today) carrying graph references
+  (the fired rule, the touched node/edge ids, the evaluation window) that the Glass renders as the
+  explainable sub-graph. (b) The specification's `Alert` graph node: an ontology change needing
+  its own provenance/handling answers, and a rule-3 answer — an alert node about entities a viewer
+  cannot see must not leak their existence.
+- **D3 — how typologies become rules.** *Recommended:* each typology is a parameterised monitor
+  (threshold, window, keep-fraction — a closed vocabulary, rule 8: no expression language), and
+  the no-code builder compiles a drawn sub-graph to the existing pattern language; drawing deploys
+  a monitor, with the same roles/audit as monitors today. Ruling needed on who may deploy
+  (compliance role vs analyst) and whether deployment needs a second pair of eyes (the
+  source-approver shape).
+- **D4 — risk propagation semantics.** *Recommended:* a compute-time, per-principal read ("the
+  risk-weighted neighbourhood of X"), never a score written onto neighbour nodes — a stored
+  propagated score is model-derived data (rule 5) and a cross-principal leak vector (rule 3: a
+  score summed over edges the viewer cannot see discloses them). Rule on: hops (the spec says 2),
+  decay per hop, whether an alert's contribution expires (TTL), and the name the Glass shows it
+  under. The access-control test is named now: a principal who cannot see the alerted neighbour
+  must read the same score as if that neighbour did not exist.
+- **D5 — UBO mathematics.** Cumulative ownership = product of `percent` along each
+  `BENEFICIAL_OWNER_OF`/`CONTROLS` chain, summed across parallel paths; rule on the UBO threshold
+  (25%, the 5AMLD convention, as the default?), the cycle policy (shells owning shells: cap, flag,
+  or refuse), treatment of edges with no `percent` (CONTROLS as 100%? flagged unknown?), and
+  whether a traced UBO conclusion is writable to the graph (if so: `inferred`, rule 5) or
+  view-only.
+- **D6 — demo data.** The committed, CI-safe demo is synthetic: extend Operation Ledger with the
+  layered structure the spec describes (a BVI shell, a Cyprus trust, a synthetic PEP register).
+  ICIJ Offshore Leaks and OpenSanctions are real data about real people: admissible **only** as
+  entries in the owner's local `real_data_exceptions.yaml` (ADR-035 §C3), owner-run, this machine
+  only, never committed, never CI, never distributed — the Enron discipline. OpenSanctions bulk
+  data is CC-BY-NC 4.0: a licence-register entry and the non-commercial constraint need recording
+  before any local use.
+- **D7 — the Glass surfaces.** Rule on: the Alert Triage dashboard's home (the Watches panel
+  grown, vs a new left-rail place that opens on the queue instead of an empty canvas) and the EDD
+  view's home (a new place vs a canvas mode). Either way rule 13 applies: each new surface ships
+  its own keyboard walkthrough registry, and every triage/trace action has its proving case.
+
+### Proposed phasing (each phase exits green before the next starts)
+
+1. **A — rules on the chassis:** typologies wired into change-stream evaluation as parameterised
+   monitors; alerts carry their explainable references; red-first on the throwaway stack,
+   including the "a rule that should not fire, does not" cases (rule 15: fixtures model refusals).
+2. **B — triage:** the queue surface, the explainable render (open an alert → the firing
+   sub-graph, highlighted), keyboard spec, access-control tests per read path (rule 4).
+3. **C — UBO/EDD:** ownership tracing + cumulative percentages in ComputePort, the EDD view,
+   the synthetic layered fixture grown onto Operation Ledger, deck captures.
+4. **D — the no-code builder:** draw → compile to pattern language → deploy as monitor, with the
+   deployment authority ruled in D3.
+5. **E — risk propagation:** last, because D4's leak discipline is the hardest part; its
+   access-control test is written before its adapter (rule 1's spirit).
+
+### Test obligations named now (rule 12)
+
+Per phase, before code: the rule-fires/rule-refuses pair per typology; the alert-visibility leak
+test (D2/D4); the UBO cycle and parallel-path cases with hand-computed expected percentages; the
+keyboard walkthroughs for both new surfaces; and every gate shown red before it is trusted
+(rule 15).
