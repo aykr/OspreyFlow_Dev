@@ -7,7 +7,8 @@ export type Params =
   | CircularFlowParams
   | KycScreeningParams
   | SharedAttributesParams
-  | DocumentVerificationParams;
+  | DocumentVerificationParams
+  | PatternRuleParams;
 export type Typology = "structuring";
 export type Threshold = number;
 export type WindowDays = number;
@@ -29,6 +30,9 @@ export type MinOthers = number;
  */
 export type Kinds = ["msisdn" | "email" | "ip" | "handle", ...("msisdn" | "email" | "ip" | "handle")[]];
 export type Typology5 = "document_verification";
+export type Typology6 = "pattern";
+export type PatternId = string;
+export type MaxMatches = number;
 export type Trigger = "pre_commit" | "post_commit";
 export type BudgetMs = number;
 
@@ -91,5 +95,18 @@ export interface SharedAttributesParams {
  */
 export interface DocumentVerificationParams {
   typology?: Typology5;
+  [k: string]: unknown;
+}
+/**
+ * ADR-109 phase D, the no-code typology builder: a sub-graph drawn in the query builder and
+ * saved (a `SavedPattern` the deployer owns, read afresh at each evaluation — ADR-036's own
+ * discipline for monitors), deployed as a rule. Matched against the stored graph, so it runs
+ * after commit only. A match larger than `max_matches` nodes is refused in words, never alerted on
+ * in part (rule 2).
+ */
+export interface PatternRuleParams {
+  typology?: Typology6;
+  pattern_id: PatternId;
+  max_matches?: MaxMatches;
   [k: string]: unknown;
 }

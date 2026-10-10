@@ -115,6 +115,9 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
     }
     if (path === "alert-queue/a1/canvas")
       return json(200, { delta: { seq: 2, op: "add", nodes: [], edges: [] }, added_nodes: 3, added_links: 3 });
+    if (path === "patterns")
+      return json(200, { patterns: [{ id: "sp1", pattern_id: "pat-1", version: 1, name: "Company with a phone",
+        owner_id: "analyst-1", created_at: "2026-10-01T00:00:00Z", definition: { nodes: [], edges: [] } }] });  // prettier-ignore
     if (path === "rules" && method === "GET") return json(200, state.rules);
     if (path === "rules" && method === "POST") {
       const made = { ...(request.postDataJSON() as object), id: "r2", investigation_id: "inv-1", owner_id: "analyst-1", status: "active", created_at: "2026-09-03T00:00:00Z" };
@@ -246,6 +249,24 @@ test("a KYC screening rule is deployed with its switch, by keyboard", async ({ p
     budget_ms: 5000,
   });
   registerCovered(REGISTRY, "deploy-a-kyc-rule-by-keyboard");
+});
+
+test("a pattern drawn in the Query builder is deployed as a rule, by keyboard", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await page.getByLabel("Rule name").fill("Drawn: company with a phone");
+  await page.getByRole("combobox", { name: "Typology" }).selectOption("pattern");
+  await page.getByRole("combobox", { name: "Saved pattern" }).selectOption("pat-1");
+  await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
+  await expect(page.getByText("Deployed “Drawn: company with a phone”.")).toBeVisible();
+  expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
+    name: "Drawn: company with a phone",
+    params: { typology: "pattern", pattern_id: "pat-1", max_matches: 200 },
+    trigger: "post_commit",
+    budget_ms: 5000,
+  });
+  registerCovered(REGISTRY, "deploy-a-drawn-pattern-rule-by-keyboard");
 });
 
 test("held rows are released and rejected, by keyboard", async ({ page }) => {

@@ -6450,6 +6450,7 @@ async def run_studio_recipe(
         screening=screening_lists,
         compute=compute,
         expiries=kyc_expiries,
+        patterns=patterns_store,
     )
     report: LoadReport | PipelineRunReport
     if recipe.pipeline is not None:
@@ -6558,6 +6559,7 @@ async def _rule_gate(
     screening: ScreeningListStore | None = None,
     compute: ComputePort | None = None,
     expiries: KycExpiryStore | None = None,
+    patterns: PatternStore | None = None,
 ) -> RuleGate | None:
     """The case's active typology rules for one load (ADR-109), or `None` when it has none."""
     rules = await typology_rules.list_active_for_case(investigation_id)
@@ -6883,10 +6885,17 @@ async def deploy_typology_rule(
     investigation: InvestigationAuthorDep,
     principal: PrincipalDep,
     typology_rules: TypologyRulesDep,
+    patterns_store: PatternsStoreDep,
     audit: AuditDep,
     body: TypologyRuleInput,
 ) -> TypologyRule:
-    """A case Author deploys, with no second approver (ADR-109 ruling 4); audited."""
+    """A case Author deploys, with no second approver (ADR-109 ruling 4); audited. A drawn
+    pattern (phase D) must be one the Author saved: it is read as theirs at every evaluation."""
+    if body.params.typology == "pattern":
+        try:
+            await patterns_store.get_authorized(body.params.pattern_id, principal)
+        except PatternNotFoundError:
+            raise ReleaseRefused("only a pattern you saved can be deployed as a rule") from None
     rule = await typology_rules.create(principal, investigation.id, body)
     await audit.record(
         principal=principal,

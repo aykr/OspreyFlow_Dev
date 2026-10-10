@@ -1729,6 +1729,10 @@ class SharedAttributesParams(BaseModel):  # typology "shared_attributes"
     min_others: int = 3; kinds: list[Literal["msisdn", "email", "ip", "handle"]]
 class DocumentVerificationParams(BaseModel):  # typology "document_verification"
     pass
+# ADR-109 phase D: the no-code typology builder — a pattern drawn and saved in the query builder.
+class PatternRuleParams(BaseModel):     # typology "pattern"; runs after commit only
+    pattern_id: str                     # a SavedPattern the deployer owns, read afresh each time
+    max_matches: int = 200              # a larger match is refused, never alerted on in part
 
 class KycDocument(BaseModel):
     node_id: NodeId; title: str | None; document_kind: str | None; expires_on: date | None

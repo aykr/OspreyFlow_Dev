@@ -11060,3 +11060,42 @@ levels; the Glass's vitest and keyboard cases (OWNERSHIP_ACTIONS and ALERTS_ACTI
 
 **Not done.** No converter from any real list's export to the loader's shape is committed (the
 owner's local step); the deck's KYC captures; the live run, batched with the refresh.
+
+### ADR-109, Amendment 5 (10 October 2026) — phase D built: the no-code typology builder
+
+Status: build note within ADR-109's accepted rulings (D3/ruling 4: an Author deploys, no second
+approver); decisions marked *mine* may be overruled.
+
+**Built on what exists (the duplication avoided, named).** The proposal's "draw a sub-graph →
+compile to the pattern language → deploy" is, almost entirely, the query builder that already
+exists: it draws (ADR-032's palette editor), compiles (ADR-030, widened by ADR-100 Amendment 7) and
+saves versioned patterns. A second drawing surface would have duplicated it, so none was built.
+What phase D adds is the deployment: a `pattern` typology (`PatternRuleParams`: the saved pattern's
+id and the largest match to alert on) in the rule chassis's closed vocabulary,
+`services/api/pattern_rules.py`, the deploy check that the pattern is the Author's own, and the
+Rules tab's *Drawn pattern* choice listing the Author's saved patterns.
+
+**As built.** Read afresh as the deployer at each evaluation (`PatternStore.get_authorized`): an
+edited pattern is evaluated as it now reads, one no longer theirs stops the rule with the failure
+audited and said. Counted (`match_count`) and matched (`match`) through the store as the deployer;
+more than `max_matches` nodes is refused in words (rule 2). **Post-commit only, refused at the
+schema otherwise** — a pattern is matched against the stored graph, which a pre-commit rule cannot
+read. The alert cites the whole current match (the pattern language returns one union, ADR-030's
+standing limit), and one distinct match raises one alert.
+
+**One check removed, as proving nothing (rule 15).** A "the match must touch this load's writes"
+check was built and its plant stayed green: the finding's signature already stops an unchanged
+match re-alerting, so the check decided nothing — and would have hidden a match completed by a write
+other than a load (a manual link) and first seen at the next load. Removed; the dedupe it relied on
+was planted instead (findings not checked against their signatures), and the case turned red.
+
+**Decisions mine.** (a) The deployer must own the saved pattern (patterns are private, ADR-040);
+the alert still goes to the case team (ruling 3), each reader seeing it only whole. (b) The default
+bound is 200 nodes, at most 1,000.
+
+**Tests.** `tests/ingest/test_pattern_rules.py` (5): a load completing the drawn pattern raises it;
+an unchanged match is not raised again (red with the signature check removed); a match past its
+bound is refused in words (red with the bound removed); a pattern no longer the deployer's stops the
+rule; a pre-commit pattern rule is refused at the schema. The deploy route refuses another's pattern
+and a pre-commit trigger. Glass: the rule input's vitest case and the keyboard case in
+`ALERTS_ACTIONS`.

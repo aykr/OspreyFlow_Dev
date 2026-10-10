@@ -856,6 +856,12 @@ document with its state — all computed by the Conduit as the reader sees the g
 The *Alerts* place's Rules tab deploys the KYC rules (screening — with *Screen beneficial owners
 too* —, shared contact details, verifying documents) as it deploys the typologies.
 
+**The no-code typology builder (ADR-109 phase D).** A typology is drawn where patterns are already
+drawn — the Query builder (§3.3) — and saved there; in the *Alerts* place's Rules tab an Author picks
+*Drawn pattern*, chooses one of their saved patterns and the largest match to alert on, and deploys
+it. It always runs after each load commits (said in the form, with no choice offered). Deploying has
+its own keyboard case (`deploy-a-drawn-pattern-rule-by-keyboard`).
+
 ### 3.4 Temporal analysis
 
 The timeline is the second most important control in the product after the canvas.

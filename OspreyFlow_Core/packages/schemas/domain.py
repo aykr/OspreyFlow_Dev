@@ -681,6 +681,7 @@ TypologyName = Literal[
     "kyc_screening",
     "shared_attributes",
     "document_verification",
+    "pattern",
 ]
 #: ADR-109 ruling 1: the rule chooses where it runs. `pre_commit` judges the incoming rows inside
 #: the load (a hit loads with its alert; a failure holds the rows); `post_commit` runs on the
@@ -746,13 +747,26 @@ class DocumentVerificationParams(BaseModel):
     typology: Literal["document_verification"] = "document_verification"
 
 
+class PatternRuleParams(BaseModel):
+    """ADR-109 phase D, the no-code typology builder: a sub-graph drawn in the query builder and
+    saved (a `SavedPattern` the deployer owns, read afresh at each evaluation — ADR-036's own
+    discipline for monitors), deployed as a rule. Matched against the stored graph, so it runs
+    after commit only. A match larger than `max_matches` nodes is refused in words, never alerted on
+    in part (rule 2)."""
+
+    typology: Literal["pattern"] = "pattern"
+    pattern_id: str = Field(min_length=1)
+    max_matches: int = Field(default=200, ge=1, le=1000)
+
+
 TypologyParams = Annotated[
     StructuringParams
     | RapidMovementParams
     | CircularFlowParams
     | KycScreeningParams
     | SharedAttributesParams
-    | DocumentVerificationParams,
+    | DocumentVerificationParams
+    | PatternRuleParams,
     Field(discriminator="typology"),
 ]
 
@@ -766,6 +780,14 @@ class TypologyRuleInput(BaseModel):
     params: TypologyParams
     trigger: RuleTrigger = "post_commit"
     budget_ms: int = Field(default=5000, ge=100, le=60000)
+
+    @model_validator(mode="after")
+    def _a_drawn_pattern_runs_after_commit(self) -> TypologyRuleInput:
+        if self.params.typology == "pattern" and self.trigger != "post_commit":
+            raise ValueError(
+                "a drawn pattern is matched against the stored graph, so it runs after commit"
+            )
+        return self
 
 
 class TypologyRule(TypologyRuleInput):
@@ -1072,6 +1094,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     KycScreeningParams,
     SharedAttributesParams,
     DocumentVerificationParams,
+    PatternRuleParams,
     TypologyRuleInput,
     TypologyRule,
     HeldRow,

@@ -149,6 +149,14 @@ describe("a rule's parameters", () => {
     });
   });
 
+  it("for a drawn pattern carry the saved pattern, and always run after commit", () => {
+    expect(ruleInput("Drawn", "pattern", {}, "pre_commit", 5000, {}, [], "pat-1").params).toEqual({
+      typology: "pattern",
+      max_matches: 200,
+      pattern_id: "pat-1",
+    });
+  });
+
   it("are described in words", () => {
     const rule = {
       id: "r", investigation_id: "c1", owner_id: "o", name: "S", created_at: "",

@@ -35,6 +35,7 @@ export type { CircularFlowParams } from "./CircularFlowParams";
 export type { KycScreeningParams } from "./KycScreeningParams";
 export type { SharedAttributesParams } from "./SharedAttributesParams";
 export type { DocumentVerificationParams } from "./DocumentVerificationParams";
+export type { PatternRuleParams } from "./PatternRuleParams";
 export type { TypologyRuleInput } from "./TypologyRuleInput";
 export type { TypologyRule } from "./TypologyRule";
 export type { HeldRow } from "./HeldRow";

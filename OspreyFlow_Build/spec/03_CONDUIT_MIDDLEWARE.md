@@ -588,6 +588,15 @@ it was computed over. Too deep (a chain of more than ten links) or too large (mo
 parties) is 409 `ownership_too_complex` with the reason — never a part-trace (rule 2). An entity the
 reader cannot see is 404. A trace is a view: nothing it concludes is written (ruling 9).
 
+**Drawn patterns as rules (phase D, the no-code typology builder).** A `pattern` rule names a
+pattern the deploying Author drew and saved in the query builder (§3.3; deploying another's is 422).
+At each evaluation the saved pattern is read again as the deployer (an edited one is evaluated as it
+now reads; one no longer theirs stops the rule, audited — ADR-036's discipline), counted and matched
+through `GraphPort` as the deployer. It runs after commit only — it is matched against the stored
+graph — and a pre-commit `pattern` rule is refused at the schema. The alert cites the whole match
+(the pattern language returns one union of what matches, ADR-030); one alert per distinct match (its
+signature is the matched nodes and links); more than `max_matches` nodes is refused in words.
+
 ### 3.8c KYC: the onboarding gate, status and screening lists (ADR-109 phase F)
 
 ```

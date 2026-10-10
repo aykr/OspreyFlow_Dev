@@ -73,6 +73,7 @@ from .alerts import AlertStore
 from .audit import AuditWriter
 from .held_rows import HeldRowStore
 from .kyc_expiries import KycExpiryStore
+from .pattern_store import PatternStore
 from .screening import ScreeningListStore
 
 #: The edge type whose events are money movements.
@@ -545,6 +546,8 @@ class RuleGate:
     #: for screening an organisation's beneficial owners.
     screening: ScreeningListStore | None = None
     compute: ComputePort | None = None
+    #: ADR-109 phase D: where a drawn pattern rule's saved pattern is read from.
+    patterns: PatternStore | None = None
     #: What the last load wrote, kept for its post-commit rules (set by `load_with_rules`).
     last_written: Sequence[NodeWrite | EdgeWrite] = ()
     #: ADR-109 phase F: where a verifying document's expiry is recorded for the daily sweep.
@@ -630,6 +633,12 @@ class RuleGate:
                 scheme=self.scheme,
                 investigation_scope=self.investigation_id,
             )
+        if rule.params.typology == "pattern":
+            from .pattern_rules import judge_pattern
+
+            return await judge_pattern(
+                rule, deployer, written, graph=self.graph, patterns=self.patterns
+            )
         from .kyc_rules import KycContext, judge_kyc
 
         context = KycContext(
@@ -649,6 +658,8 @@ class RuleGate:
     ) -> list[int]:
         """The rows a rule judges, and so would hold were it to fail: those carrying a money
         movement for a flow typology; those that created a customer for a KYC one."""
+        if rule.params.typology == "pattern":
+            return []  # a drawn pattern runs after commit only; it never holds a row
         if is_flow_rule(rule):
             return sorted(
                 {r for e in events if e.edge_type == FLOW_EDGE_TYPE for r in _source_rows(e)}

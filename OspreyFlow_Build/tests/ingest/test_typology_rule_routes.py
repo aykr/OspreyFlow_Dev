@@ -358,3 +358,42 @@ def test_the_kyc_status_is_read_at_viewer_and_only_of_a_customer(
         assert refused.status_code == 422 and refused.json()["error"] == "kyc_not_applicable"
         assert client.get(f"{base}/{account}", headers=_as(key, OUTSIDER)).status_code == 404
         assert client.get(f"{base}/{new_id()}", headers=_as(key, VIEWER)).status_code == 404
+
+
+# --- phase D: a drawn pattern deployed as a rule ------------------------------------
+
+
+def test_only_a_pattern_the_author_saved_is_deployed_as_a_rule(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    key, _ = keypair
+    case = asyncio.run(_case())
+    from services.api.pattern_store import PatternStore
+
+    from schemas.domain import PatternEdge, PatternNode, PatternQuery
+
+    async def saved_by(owner: Principal) -> str:
+        store = await PatternStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            pattern = await store.save(owner, pattern_id=None, name="Company with a phone",
+                definition=PatternQuery(
+                    nodes=[PatternNode(var="o", entity_type="Organisation"), PatternNode(var="p", entity_type="Endpoint")],
+                    edges=[PatternEdge(edge_type="USES", from_var="o", to_var="p")]))  # fmt: skip
+            return pattern.pattern_id
+        finally:
+            await store.close()
+
+    mine = asyncio.run(saved_by(AUTHOR))
+    theirs = asyncio.run(saved_by(Principal(id=EDITOR, clearance="OFFICIAL", org_unit="unit-1")))
+    from services.api.app import app
+
+    with TestClient(app) as client:
+        path = f"/v1/investigations/{case}/rules"
+        body = {"name": "Drawn", "params": {"typology": "pattern", "pattern_id": theirs}}
+        refused = client.post(path, headers=_as(key, AUTHOR.id), json=body)
+        assert refused.status_code == 422 and "only a pattern you saved" in refused.json()["detail"]
+        made = client.post(path, headers=_as(key, AUTHOR.id), json={**body, "params": {"typology": "pattern", "pattern_id": mine}})
+        assert made.status_code == 201, made.text
+        before = client.post(path, headers=_as(key, AUTHOR.id),
+                             json={**body, "params": {"typology": "pattern", "pattern_id": mine}, "trigger": "pre_commit"})  # fmt: skip
+        assert before.status_code == 422

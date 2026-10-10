@@ -454,6 +454,8 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
   "page-the-rule-audit-by-keyboard",
   // ADR-109 phase F: a KYC rule, with its switches.
   "deploy-a-kyc-rule-by-keyboard",
+  // ADR-109 phase D: the no-code typology builder — a drawn, saved pattern deployed as a rule.
+  "deploy-a-drawn-pattern-rule-by-keyboard",
 ] as const);
 
 /** The Ownership place (ADR-109 phase C): find an entity, trace its beneficial owners, change the
