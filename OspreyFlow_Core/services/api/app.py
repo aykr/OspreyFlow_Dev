@@ -61,7 +61,11 @@ from services.extract.writer import (
 )
 from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.engine import run_recipe
-from services.ingest.pipeline import pipeline_from_recipe, pipeline_rule_violations
+from services.ingest.pipeline import (
+    pipeline_from_recipe,
+    pipeline_rule_violations,
+    pipeline_run_violations,
+)
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import RecipeRuleError, check_recipe_rules
 from services.ingest.staging import ObjectStorageConfig
@@ -6104,6 +6108,15 @@ async def publish_studio_recipe(
     matching commit — the reverse of that (a commit with no `published`
     row, if the registry write somehow failed) is the safer order given
     §6's own "the repository is the record"."""
+    # ADR-108 phase B: what the runner cannot run yet is refused in words, never published and
+    # silently part-run (rule 2). Phase C's pipeline runner empties this gate.
+    if recipe.pipeline is not None:
+        unrunnable = pipeline_run_violations(recipe.pipeline)
+        if unrunnable:
+            return JSONResponse(  # type: ignore[return-value]
+                status_code=422,
+                content={"error": "pipeline_not_runnable", "problems": unrunnable},
+            )
     built = build_recipe(
         recipe,
         ontology_version=ontology.version,

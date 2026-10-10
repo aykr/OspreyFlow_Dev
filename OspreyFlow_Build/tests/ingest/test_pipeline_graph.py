@@ -162,3 +162,35 @@ def test_a_domain_node_names_a_known_pack_or_the_core() -> None:
         CHAIN_EDGES,
     )
     assert any("marvel" in problem for problem in pipeline_rule_violations(unknown))
+
+
+def test_what_the_runner_cannot_run_yet_is_named_not_skipped() -> None:
+    """ADR-108 phase B: a pipeline may hold extract and enrich stages and further sources before
+    the runner exists for them (phase C) — publishing one is refused in words, never published and
+    silently part-run (rule 2)."""
+    from services.ingest.pipeline import pipeline_run_violations
+
+    assert pipeline_run_violations(_graph(CHAIN, CHAIN_EDGES)) == []
+    with_extract = _graph(
+        [*CHAIN, _node("extract", PipelineNodeKind.EXTRACT), _node("load2", PipelineNodeKind.LOAD)],
+        [*CHAIN_EDGES, ("map", "extract"), ("extract", "load2")],
+    )
+    problems = pipeline_run_violations(with_extract)
+    assert any("extract" in p and "phase C" in p for p in problems)
+    two_sources = _graph(
+        [
+            *CHAIN,
+            _node("source2", PipelineNodeKind.SOURCE),
+            _node("profile2", PipelineNodeKind.PROFILE),
+            _node("map2", PipelineNodeKind.MAP),
+            _node("load2", PipelineNodeKind.LOAD),
+        ],
+        [
+            *CHAIN_EDGES,
+            ("domain", "source2"),
+            ("source2", "profile2"),
+            ("profile2", "map2"),
+            ("map2", "load2"),
+        ],
+    )
+    assert any("second source" in p for p in pipeline_run_violations(two_sources))

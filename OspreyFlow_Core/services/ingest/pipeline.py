@@ -146,3 +146,23 @@ def pipeline_rule_violations(graph: PipelineGraph) -> list[str]:
                     "an extract works on what a map bound, never on raw bytes"
                 )
     return problems
+
+
+def pipeline_run_violations(graph: PipelineGraph) -> list[str]:
+    """What a publish must refuse because the runner does not run it yet (ADR-108 phase B): a
+    valid-to-save pipeline may hold stages ahead of the engine — publishing one is refused in
+    words, never published and silently part-run (rule 2). Phase C's runner empties this list."""
+    problems: list[str] = []
+    sources = [n for n in graph.nodes if n.kind is PipelineNodeKind.SOURCE]
+    if len(sources) > 1:
+        problems.append(
+            "the pipeline holds a second source; the runner runs one source until phase C's "
+            "pipeline runner lands — publish one pipeline per source meanwhile"
+        )
+    for node in graph.nodes:
+        if node.kind in (PipelineNodeKind.EXTRACT, PipelineNodeKind.ENRICH):
+            problems.append(
+                f"the pipeline holds an {node.kind.value} stage ('{node.label}'); the runner "
+                "runs it with phase C — remove it to publish now, or wait for phase C"
+            )
+    return problems

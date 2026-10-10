@@ -535,3 +535,47 @@ def test_put_pipeline_refuses_a_cycle_in_words(client: TestClient) -> None:
     body = response.json()
     assert body["error"] == "pipeline_invalid"
     assert any("cycle" in problem for problem in body["problems"])
+
+
+def test_publish_refuses_what_the_runner_cannot_run_yet(client: TestClient) -> None:
+    """ADR-108 phase B: a pipeline holding an extract stage saves fine but does not publish until
+    phase C's runner exists — refused in words, never part-run (rule 2)."""
+    made = client.post(
+        "/v1/investigations/inv-1/ingest/recipes",
+        json={"label": "Pipelined", "connector_profile": "generic-csv"},
+    ).json()
+    saved = client.put(
+        f"/v1/investigations/inv-1/ingest/recipes/{made['recipe_id']}/pipeline",
+        json={
+            "nodes": [
+                *_CHAIN_NODES,
+                {"id": "extract", "kind": "extract", "label": "Extract", "config": {}},
+                {"id": "load2", "kind": "load", "label": "Load", "config": {}},
+            ],
+            "edges": [
+                *_CHAIN_EDGES,
+                {"source": "map", "target": "extract"},
+                {"source": "extract", "target": "load2"},
+            ],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    approver = SOURCE_AUTHOR.model_copy(
+        update={"roles": [*SOURCE_AUTHOR.roles, "source_approver"]}
+    )
+    app.dependency_overrides[get_principal] = lambda: approver
+    # The refusal fires before anything touches the recipes repository, so a throwaway path
+    # satisfies the dependency without ever being written to.
+    from pathlib import Path
+
+    from services.api.app import get_recipes_repo_root
+
+    app.dependency_overrides[get_recipes_repo_root] = lambda: Path("/tmp/never-written")
+    response = client.post(
+        f"/v1/investigations/inv-1/ingest/recipes/{made['recipe_id']}/publish",
+        json={},
+    )
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert body["error"] == "pipeline_not_runnable"
+    assert any("phase C" in problem for problem in body["problems"])
