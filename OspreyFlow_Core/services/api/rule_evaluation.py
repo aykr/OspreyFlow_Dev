@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from collections.abc import Awaitable, Callable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -47,6 +47,7 @@ from conduit_common.identity import new_edge_id, new_id, new_node_id
 from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme, merge_handling
 from ports.analytics import AnalyticsPort
+from ports.compute import ComputePort
 from ports.graph import GraphPort
 from schemas.analytics import EventFilter, EventListRequest, EventRecord
 from schemas.domain import (
@@ -71,6 +72,8 @@ from schemas.domain import (
 from .alerts import AlertStore
 from .audit import AuditWriter
 from .held_rows import HeldRowStore
+from .kyc_expiries import KycExpiryStore
+from .screening import ScreeningListStore
 
 #: The edge type whose events are money movements.
 FLOW_EDGE_TYPE = "TRANSACTED"
@@ -80,6 +83,13 @@ FLOW_EDGE_TYPE = "TRANSACTED"
 CONTEXT_CAP = 10_000
 
 TypologyParamsT = StructuringParams | RapidMovementParams | CircularFlowParams
+
+#: The typologies judged over money movements; the rest (`kyc_rules.py`) over new customers.
+FLOW_TYPOLOGIES = frozenset({"structuring", "rapid_movement", "circular_flow"})
+
+
+def is_flow_rule(rule: TypologyRule) -> bool:
+    return rule.params.typology in FLOW_TYPOLOGIES
 
 
 class RuleContextTooLarge(Exception):
@@ -287,29 +297,51 @@ async def read_flow_events(
 
 @dataclass(frozen=True)
 class Finding:
-    """One hit, with the events it cites in hand."""
+    """One thing a rule found, with what makes it explainable in hand: a typology's hit over flows
+    (`from_hit`, its events cited) or a KYC finding about entities (`kyc_rules.py`, its nodes and
+    links named, and anything it writes alongside its alert — a screening match's listed party and
+    its `SAME_AS` — in `pending`)."""
 
     rule: TypologyRule
     deployer: Principal
-    hit: TypologyHit
-    events: tuple[EventRecord, ...]
+    typology: str
+    subject: str
+    refs: tuple[str, ...]
+    words: str
+    node_ids: list[str]
+    edge_ids: list[str] = field(default_factory=list)
+    events: tuple[EventRecord, ...] = ()
+    pending: tuple[NodeWrite | EdgeWrite, ...] = ()
+
+    @classmethod
+    def from_hit(
+        cls,
+        rule: TypologyRule,
+        deployer: Principal,
+        hit: TypologyHit,
+        events: tuple[EventRecord, ...],
+    ) -> Finding:
+        return cls(
+            rule=rule,
+            deployer=deployer,
+            typology=hit.typology,
+            subject=hit.subject,
+            refs=hit.refs,
+            words=hit.words,
+            node_ids=sorted({e.source_id for e in events} | {e.target_id for e in events}),
+            edge_ids=sorted({e.edge_id for e in events}),
+            events=events,
+        )
 
     @property
     def signature(self) -> str:
-        return hit_signature(self.rule.id, self.hit)
+        raw = "|".join([self.rule.id, self.typology, self.subject, *sorted(self.refs)])
+        return hashlib.sha256(raw.encode()).hexdigest()
 
     @property
-    def node_ids(self) -> list[str]:
-        return sorted({e.source_id for e in self.events} | {e.target_id for e in self.events})
-
-    @property
-    def edge_ids(self) -> list[str]:
-        return sorted({e.edge_id for e in self.events})
-
-    @property
-    def window(self) -> Interval:
+    def window(self) -> Interval | None:
         times = [e.occurred_at for e in self.events]
-        return Interval(valid_from=min(times), valid_to=max(times))
+        return Interval(valid_from=min(times), valid_to=max(times)) if times else None
 
 
 async def judge(
@@ -328,9 +360,12 @@ async def judge(
         for e in incoming
         if e.edge_type == FLOW_EDGE_TYPE and handling_readable(scheme, deployer, e.handling)
     ]
+    params = rule.params
+    if not isinstance(params, (StructuringParams, RapidMovementParams, CircularFlowParams)):
+        return []
     if not flows_from_events(judged):
         return []
-    reach = context_window(rule.params)
+    reach = context_window(params)
     times = [e.occurred_at for e in judged]
     accounts = sorted({e.source_id for e in judged} | {e.target_id for e in judged})
     context = await read_flow_events(
@@ -343,24 +378,36 @@ async def judge(
     canonical = one_per_transaction([*context, *judged])
     by_id = {e.event_id: e for e in canonical.values()}
     hits = hits_citing(
-        run_typology(rule.params, flows_from_events(by_id.values())),
+        run_typology(params, flows_from_events(by_id.values())),
         {canonical[transaction_key(e)].event_id for e in judged},
     )
     return [
-        Finding(rule=rule, deployer=deployer, hit=h, events=tuple(by_id[r] for r in h.refs))
+        Finding.from_hit(rule, deployer, h, tuple(by_id[r] for r in h.refs))
         for h in hits
     ]
 
 
 async def _referent_handlings(
-    graph: GraphPort, scheme: HandlingScheme, finding: Finding, unseen: Handling | None
+    graph: GraphPort,
+    scheme: HandlingScheme,
+    finding: Finding,
+    unseen: Handling | None,
+    known: Mapping[str, Handling],
 ) -> list[Handling]:
-    """The markings an alert must not be lower than: every cited event's, and every referenced
-    node's as stored. A node not yet committed (written in this very load's transaction) cannot be
-    read back; `unseen` — the highest marking the load's recipe could give it — stands in."""
+    """The markings an alert must not be lower than: every cited event's, everything it writes
+    alongside, and every referenced node's as stored. A node not yet committed (written in this
+    very load's transaction) cannot be read back: its marking as written (`known`) stands in, else
+    `unseen` — the highest marking the load's recipe could give it."""
     handlings = [e.handling for e in finding.events]
+    pending = {w.id: w.handling for w in finding.pending}
+    handlings.extend(pending.values())
     reader = service_principal(scheme)
     for node_id in finding.node_ids:
+        if node_id in pending:
+            continue
+        if node_id in known:
+            handlings.append(known[node_id])
+            continue
         node = await graph.get_node(node_id, reader)
         if node is not None:
             handlings.append(node.handling)
@@ -379,12 +426,17 @@ async def write_alert_node(
     *,
     unseen: Handling | None = None,
     load_id: str | None = None,
+    known: Mapping[str, Handling] | None = None,
 ) -> str | None:
     """The `Alert` node and its `ALERTED_ON` links, in `tx` — at the highest marking of what it
-    references, `inferred`, attributed to the rule (ruling 2; rules 3 and 5). `None` when no single
-    marking is safe (`alert_handling`): the node is withheld, the queue row still raised."""
+    references, `inferred`, attributed to the rule (ruling 2; rules 3 and 5) — after anything the
+    finding writes alongside (`pending`). `None` when no single marking is safe
+    (`alert_handling`): the node is withheld, the queue row still raised."""
+    if finding.pending:
+        await graph.upsert_nodes([w for w in finding.pending if isinstance(w, NodeWrite)], tx)
+        await graph.upsert_edges([w for w in finding.pending if isinstance(w, EdgeWrite)], tx)
     marking = alert_handling(
-        scheme, await _referent_handlings(graph, scheme, finding, unseen)
+        scheme, await _referent_handlings(graph, scheme, finding, unseen, known or {})
     )
     if marking is None:
         return None
@@ -393,7 +445,7 @@ async def write_alert_node(
         state=ProvenanceState.INFERRED,
         sources=[
             SourceRef(document_id=f"rule:{finding.rule.id}", locator=ref, excerpt_hash="")
-            for ref in finding.hit.refs
+            for ref in finding.refs
         ],
         extracted_by=f"rule:{finding.rule.id}",
         first_seen=now,
@@ -403,8 +455,8 @@ async def write_alert_node(
         type="Alert",
         properties={
             "rule_id": finding.rule.id,
-            "typology": finding.hit.typology,
-            "words": finding.hit.words,
+            "typology": finding.typology,
+            "words": finding.words,
             "raised_at": now.isoformat(),
         },
         provenance=provenance,
@@ -445,10 +497,10 @@ def alert_row(finding: Finding, alert_node_id: str | None, investigation_id: str
         investigation_id=investigation_id,
         created_at=datetime.now(UTC),
         dataset_id=finding.rule.dataset_id,
-        typology=finding.hit.typology,
-        words=finding.hit.words,
+        typology=finding.typology,
+        words=finding.words,
         edge_ids=finding.edge_ids,
-        event_ids=list(finding.hit.refs),
+        event_ids=[e.event_id for e in finding.events],
         window=finding.window,
         trigger=finding.rule.trigger,
         alert_node_id=alert_node_id,
@@ -489,6 +541,31 @@ class RuleGate:
     loader: Principal
     held_store: HeldRowStore | None = None
     fail_closed: bool = True
+    #: ADR-109 phase F: what the KYC typologies read — the screening lists, and the ownership maths
+    #: for screening an organisation's beneficial owners.
+    screening: ScreeningListStore | None = None
+    compute: ComputePort | None = None
+    #: What the last load wrote, kept for its post-commit rules (set by `load_with_rules`).
+    last_written: Sequence[NodeWrite | EdgeWrite] = ()
+    #: ADR-109 phase F: where a verifying document's expiry is recorded for the daily sweep.
+    expiries: KycExpiryStore | None = None
+
+    async def record_expiries(self, written: Sequence[NodeWrite | EdgeWrite]) -> int:
+        """Every verifying document this load wrote that carries an expiry, recorded so the
+        daily sweep can find the ones that lapse (the change stream never sees a clock pass)."""
+        if self.expiries is None:
+            return 0
+        documents = {
+            w.id: w
+            for w in written
+            if isinstance(w, NodeWrite) and w.type == "Document" and w.properties.get("expires_on")
+        }
+        pairs = [
+            (w.target, w.source, str(documents[w.target].properties["expires_on"])[:10])
+            for w in written
+            if isinstance(w, EdgeWrite) and w.type == "VERIFIED_BY" and w.target in documents
+        ]
+        return await self.expiries.record(self.investigation_id, pairs)
 
     async def _deployer(self, rule: TypologyRule) -> Principal | None:
         deployer = await self.principal_for_owner(rule.owner_id)
@@ -531,6 +608,57 @@ class RuleGate:
     async def _remember(self, finding: Finding) -> None:
         await reply(self.valkey.sadd(f"{_SIGNATURES_PREFIX}{finding.rule.id}", finding.signature))
 
+    async def _judge_rule(
+        self,
+        rule: TypologyRule,
+        deployer: Principal,
+        events: Sequence[EventRecord],
+        written: Sequence[NodeWrite | EdgeWrite],
+    ) -> list[Finding]:
+        """A flow typology over the load's money movements; a KYC typology over its new customers
+        (`kyc_rules.py`, imported here, not at the top: it builds on this module)."""
+        if is_flow_rule(rule):
+            if self.analytics is None:
+                raise RuntimeError(
+                    "this run has no analytics store to read the flows around these accounts"
+                )
+            return await judge(
+                rule,
+                deployer,
+                events,
+                analytics=self.analytics,
+                scheme=self.scheme,
+                investigation_scope=self.investigation_id,
+            )
+        from .kyc_rules import KycContext, judge_kyc
+
+        context = KycContext(
+            graph=self.graph,
+            scheme=self.scheme,
+            screening=self.screening,
+            compute=self.compute,
+            today=datetime.now(UTC).date(),
+        )
+        return await judge_kyc(rule, deployer, written, context)
+
+    @staticmethod
+    def _rows_for(
+        rule: TypologyRule,
+        events: Sequence[EventRecord],
+        written: Sequence[NodeWrite | EdgeWrite],
+    ) -> list[int]:
+        """The rows a rule judges, and so would hold were it to fail: those carrying a money
+        movement for a flow typology; those that created a customer for a KYC one."""
+        if is_flow_rule(rule):
+            return sorted(
+                {r for e in events if e.edge_type == FLOW_EDGE_TYPE for r in _source_rows(e)}
+            )
+        from .kyc_rules import CUSTOMER_TYPES, customer_rows
+
+        return customer_rows(
+            [w for w in written if isinstance(w, NodeWrite) and w.type in CUSTOMER_TYPES]
+        )
+
     async def pre_commit(
         self,
         events: Sequence[EventRecord],
@@ -538,30 +666,21 @@ class RuleGate:
         *,
         load_id: str,
         unseen: Handling | None,
+        written: Sequence[NodeWrite | EdgeWrite] = (),
     ) -> PreCommitVerdict:
         verdict = PreCommitVerdict()
-        flow_rows = sorted(
-            {r for e in events if e.edge_type == FLOW_EDGE_TYPE for r in _source_rows(e)}
-        )
+        known = {w.id: w.handling for w in written if isinstance(w, NodeWrite)}
         for rule in (r for r in self.rules if r.trigger == "pre_commit"):
+            flow_rows = self._rows_for(rule, events, written)
             reason: str | None = None
             findings: list[Finding] = []
             deployer = await self._deployer(rule)
             if deployer is None:
                 reason = "the rule's deployer could not be resolved, so it could not run as them"
-            elif self.analytics is None:
-                reason = "this run has no analytics store to read the flows around these accounts"
             else:
                 try:
                     async with asyncio.timeout(rule.budget_ms / 1000):
-                        findings = await judge(
-                            rule,
-                            deployer,
-                            events,
-                            analytics=self.analytics,
-                            scheme=self.scheme,
-                            investigation_scope=self.investigation_id,
-                        )
+                        findings = await self._judge_rule(rule, deployer, events, written)
                 except TimeoutError:
                     reason = f"it overran its {rule.budget_ms:,} ms budget"
                 except Exception as exc:  # noqa: BLE001 - a failing rule fails closed, in words
@@ -597,7 +716,13 @@ class RuleGate:
             for finding in fresh:
                 try:
                     node_id = await write_alert_node(
-                        self.graph, self.scheme, finding, tx, unseen=unseen, load_id=load_id
+                        self.graph,
+                        self.scheme,
+                        finding,
+                        tx,
+                        unseen=unseen,
+                        load_id=load_id,
+                        known=known,
                     )
                 except RuntimeError:
                     # A referent's marking cannot be known: no node rather than a guessed one.
@@ -619,7 +744,7 @@ class RuleGate:
             "rule_id": finding.rule.id,
             "alert_id": alert.id,
             "trigger": finding.rule.trigger,
-            "words": finding.hit.words,
+            "words": finding.words,
             "node_ids": finding.node_ids,
         }
         await self._audit("rule_fired", detail, 1)
@@ -631,25 +756,37 @@ class RuleGate:
             )
         return alert
 
-    async def post_commit(self, events: Sequence[EventRecord], *, load_id: str) -> list[str]:
-        """The case's post-commit rules, over the committed load's events — best-effort: a
-        failure is audited and said, never raised into the load (ADR-036/037)."""
+    async def raise_committed(self, finding: Finding, *, load_id: str | None = None) -> Alert:
+        """A finding raised outside any load's transaction (after commit, or by the daily sweep):
+        its node in a transaction of its own, then its queue row."""
+        tx = await self.graph.begin_transaction()
+        try:
+            node_id = await write_alert_node(self.graph, self.scheme, finding, tx, load_id=load_id)
+        except Exception:
+            await self.graph.rollback_transaction(tx)
+            raise
+        await self.graph.commit_transaction(tx)
+        return await self._raise_row(finding, node_id)
+
+    async def seen(self, finding: Finding) -> bool:
+        return await self._seen(finding)
+
+    async def post_commit(
+        self,
+        events: Sequence[EventRecord],
+        *,
+        load_id: str,
+        written: Sequence[NodeWrite | EdgeWrite] = (),
+    ) -> list[str]:
+        """The case's post-commit rules, over the committed load's events and new customers —
+        best-effort: a failure is audited and said, never raised into the load (ADR-036/037)."""
         notes: list[str] = []
         for rule in (r for r in self.rules if r.trigger == "post_commit"):
             try:
                 deployer = await self._deployer(rule)
                 if deployer is None:
                     raise RuntimeError("the rule's deployer could not be resolved")
-                if self.analytics is None:
-                    raise RuntimeError("this run has no analytics store")
-                findings = await judge(
-                    rule,
-                    deployer,
-                    events,
-                    analytics=self.analytics,
-                    scheme=self.scheme,
-                    investigation_scope=self.investigation_id,
-                )
+                findings = await self._judge_rule(rule, deployer, events, written)
                 fresh = [f for f in findings if not await self._seen(f)]
                 await self._audit(
                     "rule_evaluated",
@@ -658,16 +795,7 @@ class RuleGate:
                     len(fresh),
                 )
                 for finding in fresh:
-                    tx = await self.graph.begin_transaction()
-                    try:
-                        node_id = await write_alert_node(
-                            self.graph, self.scheme, finding, tx, load_id=load_id
-                        )
-                    except Exception:
-                        await self.graph.rollback_transaction(tx)
-                        raise
-                    await self.graph.commit_transaction(tx)
-                    await self._raise_row(finding, node_id)
+                    await self.raise_committed(finding, load_id=load_id)
                 if fresh:
                     notes.append(f"Rule “{rule.name}” raised {len(fresh)} alert(s).")
             except Exception as exc:  # noqa: BLE001 - best-effort, audited and said

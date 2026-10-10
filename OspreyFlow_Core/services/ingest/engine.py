@@ -379,6 +379,10 @@ class _RunState:
     content_rejections: list[RejectionRecord] = field(default_factory=list)
     #: Documents already written this load, so one file held twice is written once.
     documents_written: set[NodeId] = field(default_factory=set)
+    #: ADR-109 phase F: every node this load created and every link it wrote, as written, for a
+    #: caller that judges them before the commit (a pre-commit KYC rule cannot read the open
+    #: transaction back). `None` when no caller asked.
+    written: list[NodeWrite | EdgeWrite] | None = None
 
 
 class _ResolvedEntity:
@@ -657,6 +661,8 @@ async def _write_entity(
     (node_id,) = await state.graph.upsert_nodes([write], state.tx)
     state.created_node_ids.append(node_id)
     state.nodes_created += 1
+    if state.written is not None:
+        state.written.append(write.model_copy(update={"id": node_id}))
     if entity.on_match == "reference" and entity.match_on:
         match_value = str(properties.get(entity.match_on))
         state.local_index[(entity.type, match_value)] = node_id
@@ -850,6 +856,8 @@ async def _write_edge(
     )
     (edge_id,) = await state.graph.upsert_edges([write], state.tx)
     state.touched_edge_ids.append(edge_id)
+    if state.written is not None:
+        state.written.append(write.model_copy(update={"id": edge_id}))
     # A link is created only when the store kept the id this write was sent. A second call between
     # the same two parties merges into the link already there, and `upsert_edges` returns that
     # link's id: counting every write said "236 edges created" for 141 links (9 October 2026).
@@ -1200,10 +1208,12 @@ async def run_recipe(
     media: MediaStore | None = None,
     skip_row_indices: frozenset[int] = frozenset(),
     row_numbers: Sequence[int] | None = None,
+    written: list[NodeWrite | EdgeWrite] | None = None,
 ) -> tuple[LoadReport, list[EventRecord]]:
     """`skip_row_indices`: rows resolved but not written — those a failing pre-commit rule holds
     (ADR-109 ruling 1); a held row's duplicates go with it, as they share its survivor.
-    `row_numbers` as `resolve_rows` takes it."""
+    `row_numbers` as `resolve_rows` takes it. `written`, when given, receives every node this load
+    created and every link it wrote (ADR-109 phase F)."""
     if recipe.ontology_version != ontology.version:
         raise StaleRecipeError(
             f"recipe {recipe.id!r} targets ontology version {recipe.ontology_version}, but the "
@@ -1256,6 +1266,7 @@ async def run_recipe(
         ontology=ontology,
         source=source,
         investigation_scope=investigation_scope,
+        written=written,
     )
     events: list[EventRecord] = []
 

@@ -1,0 +1,26 @@
+# The baseline customer risk assessment's weights (ADR-109 phase F, ruling 10): deployment
+# configuration, read at each assessment, never a stored score. The country and industry lists
+# here are illustrative defaults only — XA, XB and XC are the synthetic screening list's own
+# fictional jurisdictions; VG (British Virgin Islands) and CY (Cyprus) stand in for the offshore and
+# trust-company centres enhanced due diligence commonly looks harder at. A deployment sets its own
+# lists from its own policy; nothing here is a finding about any real country or industry.
+bands:
+  medium: 30
+  high: 60
+countries:
+  high: [XA, XB, XC]
+  medium: [VG, CY]
+industries:
+  high: [Money services, Crypto exchange, Precious metals dealing]
+  medium: [Ship management, Trust and company services]
+weights:
+  country_high: 30
+  country_medium: 15
+  industry_high: 25
+  industry_medium: 10
+  listed_sanction: 60
+  listed_pep: 30
+  listed_adverse_media: 20
+  owner_listed: 40
+  shared_attribute: 20
+  unverified: 25

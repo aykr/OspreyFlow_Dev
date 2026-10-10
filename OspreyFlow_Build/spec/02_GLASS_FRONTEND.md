@@ -849,6 +849,13 @@ stated", "controls") and the chain's product. *Show the structure on the canvas*
 links there (Editor), and the graph opens with them selected. Nothing it shows is written to the
 graph. Every action has its case in `keyboard/ownership.spec.ts`, registry `OWNERSHIP_ACTIONS`.
 
+**Due diligence (ADR-109 phase F).** The same place finds a person too, and for a person or an
+organisation shows its KYC status and baseline risk above the ownership trace: verified or
+unverified, the risk band and score, each factor in words with its weight, and each verifying
+document with its state — all computed by the Conduit as the reader sees the graph, at that moment.
+The *Alerts* place's Rules tab deploys the KYC rules (screening — with *Screen beneficial owners
+too* —, shared contact details, verifying documents) as it deploys the typologies.
+
 ### 3.4 Temporal analysis
 
 The timeline is the second most important control in the product after the canvas.

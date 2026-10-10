@@ -229,6 +229,25 @@ test("a rule is deployed and another retired, by keyboard", async ({ page }) => 
   registerCovered(REGISTRY, "retire-a-rule-by-keyboard");
 });
 
+test("a KYC screening rule is deployed with its switch, by keyboard", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await page.getByLabel("Rule name").fill("Onboarding screen");
+  await page.getByRole("combobox", { name: "Typology" }).selectOption("kyc_screening");
+  await page.getByRole("checkbox", { name: "Screen beneficial owners too" }).focus();
+  await page.keyboard.press("Space");
+  await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
+  await expect(page.getByText("Deployed “Onboarding screen”.")).toBeVisible();
+  expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
+    name: "Onboarding screen",
+    params: { typology: "kyc_screening", min_score: 0.9, owner_threshold: 25, screen_owners: false },
+    trigger: "post_commit",
+    budget_ms: 5000,
+  });
+  registerCovered(REGISTRY, "deploy-a-kyc-rule-by-keyboard");
+});
+
 test("held rows are released and rejected, by keyboard", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");

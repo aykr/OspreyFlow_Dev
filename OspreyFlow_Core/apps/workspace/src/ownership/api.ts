@@ -1,7 +1,7 @@
 // The Ownership place's calls (`06_DECISIONS.md` ADR-109 phase C; `03_CONDUIT_MIDDLEWARE.md`
 // §3.8b): find an organisation or account by what it is called, trace who ultimately owns or
 // controls it, and put its structure on the canvas. Shapes are the generated ones.
-import type { Node, OwnershipView } from "../../../../packages/schemas/generated";
+import type { KycStatus, Node, OwnershipView } from "../../../../packages/schemas/generated";
 import type { CanvasOutcome } from "../alerts/api";
 
 export interface OwnershipApi {
@@ -38,7 +38,7 @@ export async function findEntities(a: OwnershipApi, query: string): Promise<Node
   const body = await send<{ nodes: Node[] }>(caseUrl(a, "suggest"), a.bearerToken, "Finding entities", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, limit: 10, mode: "contains", types: ["Organisation", "Account"], ignore_case: true }),
+    body: JSON.stringify({ query, limit: 10, mode: "contains", types: ["Organisation", "Account", "Person"], ignore_case: true }),
   });
   return body.nodes;
 }
@@ -48,3 +48,7 @@ export const traceOwnership = (a: OwnershipApi, nodeId: string, threshold: numbe
 
 export const ownershipToCanvas = (a: OwnershipApi, nodeId: string) =>
   send<CanvasOutcome>(caseUrl(a, `ownership/${encodeURIComponent(nodeId)}/canvas`), a.bearerToken, "Showing the structure", { method: "POST" });
+
+/** ADR-109 phase F: the customer's KYC status and baseline risk, computed now (never stored). */
+export const kycStatus = (a: OwnershipApi, nodeId: string) =>
+  send<KycStatus>(caseUrl(a, `kyc/${encodeURIComponent(nodeId)}`), a.bearerToken, "Reading the KYC status");

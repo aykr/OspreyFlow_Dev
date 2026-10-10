@@ -8,7 +8,7 @@ version: 1
 label: "HMP fixture — associate relationships"
 connector:
   profile: hmp-fixture-generic
-ontology_version: 15
+ontology_version: 16
 
 defaults:
   provenance: {state: asserted}

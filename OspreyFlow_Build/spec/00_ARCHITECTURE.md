@@ -843,6 +843,16 @@ user-replaceable installed package, never vendored, statically bundled or modifi
 Jube (AGPL) and AMLTRIX (commercial, unverifiable as open source) are rejected with CoreNLP below;
 the AML typologies are our own rules (`services/ingest/typologies.py`).
 
+**ADR-109 data sources (10 October 2026) — data, not code, and never in the repository or CI.**
+**OpenSanctions** consolidated data: CC-BY-NC 4.0 for the bulk data — attribution required, and
+**non-commercial use only**; any commercial or client-facing use needs OpenSanctions' commercial
+licence first. Admitted only through the owner's local `config/real_data_exceptions.yaml` (rule 9,
+ADR-035 §C3), on the owner's device, for local development or an owner-run demonstration;
+`scripts/load_screening_list.py` refuses a list not marked synthetic unless that file names it.
+**ICIJ Offshore Leaks**: real people's data (ODbL for the database, with ICIJ's own terms of use);
+the same local-only admission. What the repository and CI hold is
+`packages/demo_fixtures/screening_list_synthetic.yaml` — invented names, marked synthetic.
+
 The rejections below matter more than the acceptances, because each is a component someone will
 otherwise reach for by reflex. Two of them appear in the input documents.
 

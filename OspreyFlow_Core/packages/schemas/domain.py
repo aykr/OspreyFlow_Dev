@@ -674,7 +674,14 @@ class Monitor(BaseModel):
 
 #: The closed vocabulary of typologies a rule may run — `services/ingest/typologies.py`'s three
 #: rules. Rule 8: no expression language; a rule is one of these with its parameters.
-TypologyName = Literal["structuring", "rapid_movement", "circular_flow"]
+TypologyName = Literal[
+    "structuring",
+    "rapid_movement",
+    "circular_flow",
+    "kyc_screening",
+    "shared_attributes",
+    "document_verification",
+]
 #: ADR-109 ruling 1: the rule chooses where it runs. `pre_commit` judges the incoming rows inside
 #: the load (a hit loads with its alert; a failure holds the rows); `post_commit` runs on the
 #: change stream after the load commits, best-effort.
@@ -706,8 +713,46 @@ class CircularFlowParams(BaseModel):
     window_days: int = Field(ge=1, le=366)
 
 
+class KycScreeningParams(BaseModel):
+    """ADR-109 phase F (the KYC addendum's Component 6): a newly loaded person or organisation
+    screened against the deployment's screening lists, and — for an organisation — each natural
+    person who ultimately owns at least `owner_threshold` of it, or controls it."""
+
+    typology: Literal["kyc_screening"] = "kyc_screening"
+    min_score: float = Field(default=0.9, ge=0.5, le=1)
+    screen_owners: bool = True
+    owner_threshold: float = Field(default=25.0, gt=0, le=100)
+
+
+EndpointKindScreened = Literal["msisdn", "email", "ip", "handle"]
+
+
+class SharedAttributesParams(BaseModel):
+    """Component 6's synthetic-identity check: a new customer's phone, email, IP address or handle
+    already used by at least `min_others` other customers."""
+
+    typology: Literal["shared_attributes"] = "shared_attributes"
+    min_others: int = Field(default=3, ge=1, le=100)
+    kinds: list[EndpointKindScreened] = Field(
+        default_factory=lambda: list[EndpointKindScreened](["msisdn", "email", "ip"]),
+        min_length=1,
+    )
+
+
+class DocumentVerificationParams(BaseModel):
+    """Component 7: a new customer with no valid verifying document — none, or each one expired
+    or marked fraudulent."""
+
+    typology: Literal["document_verification"] = "document_verification"
+
+
 TypologyParams = Annotated[
-    StructuringParams | RapidMovementParams | CircularFlowParams,
+    StructuringParams
+    | RapidMovementParams
+    | CircularFlowParams
+    | KycScreeningParams
+    | SharedAttributesParams
+    | DocumentVerificationParams,
     Field(discriminator="typology"),
 ]
 
@@ -820,6 +865,40 @@ class AlertExplanation(BaseModel):
 class AlertDispositionInput(BaseModel):
     disposition: AlertDisposition
     reason: str = Field(min_length=1, max_length=2000)
+
+
+class KycDocument(BaseModel):
+    """A document verifying a customer, and whether it still does."""
+
+    node_id: NodeId
+    title: str | None = None
+    document_kind: str | None = None
+    expires_on: date | None = None
+    state: Literal["valid", "expired", "fraudulent"]
+
+
+class RiskFactor(BaseModel):
+    """One reason a customer's baseline risk is what it is, with its weight and its words."""
+
+    factor: str
+    weight: int
+    words: str
+
+
+class KycStatus(BaseModel):
+    """A customer's KYC status and baseline risk assessment (ADR-109 phase F, rulings 7 and 10):
+    computed at each read, as the reader reads the graph, never stored. `verified` while at least
+    one verifying document is valid — so an expiry or a fraud mark downgrades it the moment it
+    applies, with nothing written."""
+
+    node_id: NodeId
+    name: str
+    status: Literal["verified", "unverified"]
+    documents: list[KycDocument] = Field(default_factory=list)
+    risk_score: int = 0
+    risk_band: Literal["low", "medium", "high"] = "low"
+    factors: list[RiskFactor] = Field(default_factory=list)
+    assessed_on: date
 
 
 class HeldRowDecision(BaseModel):
@@ -990,12 +1069,18 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     StructuringParams,
     RapidMovementParams,
     CircularFlowParams,
+    KycScreeningParams,
+    SharedAttributesParams,
+    DocumentVerificationParams,
     TypologyRuleInput,
     TypologyRule,
     HeldRow,
     RuleAuditEntry,
     RuleAuditPage,
     QueuedAlert,
+    KycDocument,
+    RiskFactor,
+    KycStatus,
     ExplainedTransaction,
     AlertExplanation,
     AlertDispositionInput,

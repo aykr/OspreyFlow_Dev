@@ -8,7 +8,13 @@ import type { AccessLevel } from "../investigation/cases";
 import { deployRule, listRules, retireRule, type AlertsApi } from "./api";
 import { money, typologyLabel, when } from "./names";
 
-type Typology = "structuring" | "rapid_movement" | "circular_flow";
+type Typology =
+  | "structuring"
+  | "rapid_movement"
+  | "circular_flow"
+  | "kyc_screening"
+  | "shared_attributes"
+  | "document_verification";
 
 interface Field {
   key: string;
@@ -16,6 +22,21 @@ interface Field {
   step: string;
   fallback: number;
 }
+
+/** ADR-109 phase F: a typology's yes-or-no setting, sent as a boolean. */
+interface Choice {
+  key: string;
+  label: string;
+  fallback: boolean;
+}
+
+/** Each KYC typology's switches, in the order the server's models declare them. */
+export const CHOICES: Partial<Record<Typology, Choice[]>> = {
+  kyc_screening: [{ key: "screen_owners", label: "Screen beneficial owners too", fallback: true }],
+};
+
+/** The shared-attribute typology's closed list of what may be shared. */
+export const SHARED_KINDS = ["msisdn", "email", "ip", "handle"] as const;
 
 /** Each typology's parameters, in the order the server's models declare them. */
 export const PARAMETERS: Record<Typology, Field[]> = {
@@ -32,6 +53,12 @@ export const PARAMETERS: Record<Typology, Field[]> = {
     { key: "max_hops", label: "At most (movements round)", step: "1", fallback: 4 },
     { key: "window_days", label: "Within (days)", step: "1", fallback: 30 },
   ],
+  kyc_screening: [
+    { key: "min_score", label: "Name match at least (0.5 to 1)", step: "0.01", fallback: 0.9 },
+    { key: "owner_threshold", label: "Screen owners holding at least (%)", step: "1", fallback: 25 },
+  ],
+  shared_attributes: [{ key: "min_others", label: "Used by at least (other customers)", step: "1", fallback: 3 }],
+  document_verification: [],
 };
 
 export function describeParams(rule: TypologyRule): string {
@@ -42,6 +69,16 @@ export function describeParams(rule: TypologyRule): string {
       return `${n("minimum_count")}+ movements each under ${money(n("threshold"))}, summing past it, within ${n("window_days")} day(s)`;
     case "rapid_movement":
       return `${Math.round(n("keep_fraction") * 100)}% or more leaving within ${n("within_hours")} hour(s) of arriving`;
+    case "kyc_screening": {
+      const owners = (rule.params as unknown as Record<string, unknown>).screen_owners !== false;
+      return `new customers' names${owners ? `, and owners holding ${n("owner_threshold")}% or more,` : ""} screened at ${n("min_score")} or closer`;
+    }
+    case "shared_attributes": {
+      const kinds = ((rule.params as unknown as Record<string, unknown>).kinds as string[] | undefined) ?? [];
+      return `a new customer's ${kinds.join(", ")} already used by ${n("min_others")} or more other customers`;
+    }
+    case "document_verification":
+      return "a new customer with no valid verifying document (none, expired or marked fraudulent); checked again daily as documents lapse";
     default:
       return `value back where it started in ${n("max_hops")} movements or fewer, within ${n("window_days")} day(s)`;
   }
@@ -54,9 +91,13 @@ export function ruleInput(
   values: Record<string, string>,
   trigger: "pre_commit" | "post_commit",
   budgetMs: number,
+  choices: Record<string, boolean> = {},
+  kinds: string[] = ["msisdn", "email", "ip"],
 ): TypologyRuleInput {
   const params: Record<string, unknown> = { typology };
   for (const field of PARAMETERS[typology]) params[field.key] = Number(values[field.key] ?? field.fallback);
+  for (const choice of CHOICES[typology] ?? []) params[choice.key] = choices[choice.key] ?? choice.fallback;
+  if (typology === "shared_attributes") params.kinds = kinds;
   return { name: name.trim(), params: params as unknown as TypologyRuleInput["params"], trigger, budget_ms: budgetMs };
 }
 
@@ -137,6 +178,8 @@ function DeployForm(props: RulesPanelProps & { onDeployed: (rule: TypologyRule) 
   const [values, setValues] = useState<Record<string, string>>({});
   const [trigger, setTrigger] = useState<"pre_commit" | "post_commit">("post_commit");
   const [budget, setBudget] = useState("5000");
+  const [choices, setChoices] = useState<Record<string, boolean>>({});
+  const [kinds, setKinds] = useState<string[]>(["msisdn", "email", "ip"]);
   const [problem, setProblem] = useState<string | null>(null);
 
   return (
@@ -145,7 +188,7 @@ function DeployForm(props: RulesPanelProps & { onDeployed: (rule: TypologyRule) 
       onSubmit={(e) => {
         e.preventDefault();
         setProblem(null);
-        deployRule(props, ruleInput(name, typology, values, trigger, Number(budget)))
+        deployRule(props, ruleInput(name, typology, values, trigger, Number(budget), choices, kinds))
           .then((rule) => {
             setName("");
             props.onDeployed(rule);
@@ -167,11 +210,15 @@ function DeployForm(props: RulesPanelProps & { onDeployed: (rule: TypologyRule) 
           onChange={(e) => {
             setTypology(e.target.value as Typology);
             setValues({});
+            setChoices({});
           }}
         >
           <option value="structuring">Structuring</option>
           <option value="rapid_movement">Rapid movement</option>
           <option value="circular_flow">Circular flow</option>
+          <option value="kyc_screening">KYC: screening (sanctions, PEPs, adverse media)</option>
+          <option value="shared_attributes">KYC: shared phone, email or address</option>
+          <option value="document_verification">KYC: verifying documents</option>
         </Select>
       </label>
       {PARAMETERS[typology].map((field) => (
@@ -186,6 +233,33 @@ function DeployForm(props: RulesPanelProps & { onDeployed: (rule: TypologyRule) 
           />
         </label>
       ))}
+      {(CHOICES[typology] ?? []).map((choice) => (
+        <label key={choice.key} className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+          <input
+            type="checkbox"
+            aria-label={choice.label}
+            checked={choices[choice.key] ?? choice.fallback}
+            onChange={(e) => setChoices({ ...choices, [choice.key]: e.target.checked })}
+          />
+          {choice.label}
+        </label>
+      ))}
+      {typology === "shared_attributes" && (
+        <fieldset style={{ border: "none", padding: 0, display: "flex", gap: "var(--sp-12)" }}>
+          <legend className="label">What counts as shared</legend>
+          {SHARED_KINDS.map((kind) => (
+            <label key={kind} className="label" style={{ display: "flex", gap: "var(--sp-4)", alignItems: "center" }}>
+              <input
+                type="checkbox"
+                aria-label={`Shared ${kind}`}
+                checked={kinds.includes(kind)}
+                onChange={(e) => setKinds(e.target.checked ? [...kinds, kind] : kinds.filter((k) => k !== kind))}
+              />
+              {kind}
+            </label>
+          ))}
+        </fieldset>
+      )}
       <label className="label">
         Runs
         <Select aria-label="When the rule runs" value={trigger} onChange={(e) => setTrigger(e.target.value as "pre_commit" | "post_commit")}>

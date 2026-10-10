@@ -452,6 +452,8 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
   "release-held-rows-by-keyboard",
   "reject-held-rows-by-keyboard",
   "page-the-rule-audit-by-keyboard",
+  // ADR-109 phase F: a KYC rule, with its switches.
+  "deploy-a-kyc-rule-by-keyboard",
 ] as const);
 
 /** The Ownership place (ADR-109 phase C): find an entity, trace its beneficial owners, change the
@@ -461,6 +463,8 @@ export const OWNERSHIP_ACTIONS = defineActionRegistry("OWNERSHIP_ACTIONS", [
   "trace-again-at-another-threshold-by-keyboard",
   "read-a-partys-chains-by-keyboard",
   "show-the-structure-on-the-canvas-by-keyboard",
+  // ADR-109 phase F: the customer's KYC status and baseline risk.
+  "read-a-customers-due-diligence-by-keyboard",
 ] as const);
 
 export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [

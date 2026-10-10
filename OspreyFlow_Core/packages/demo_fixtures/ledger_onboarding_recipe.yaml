@@ -1,0 +1,68 @@
+# Operation Ledger — a customer onboarding application (ADR-109 phase F, the KYC addendum): the
+# applying company with its country and industry, the shareholder that owns it, the phone it gives,
+# and the document that verifies it. Loaded through a case whose KYC rules judge it as it loads.
+# Synthetic, like the rest of the fixture.
+id: ledger-onboarding
+version: 1
+label: "Operation Ledger — onboarding applications"
+connector:
+  profile: ledger-fixture-generic
+ontology_version: 16
+
+defaults:
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: unit-fincrime, owning_unit: verify}
+
+row_template:
+  entities:
+    - ref: applicant
+      pole_class: organisation
+      type: Organisation
+      match_on: name
+      on_match: reference
+      properties:
+        name: {field: company_name}
+        country: {field: country}
+        industry: {field: industry}
+    - ref: shareholder
+      pole_class: organisation
+      type: Organisation
+      match_on: name
+      on_match: reference
+      when: {field: owner_company, is: not_null}
+      properties:
+        name: {field: owner_company}
+    - ref: phone
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      when: {field: phone, is: not_null}
+      properties:
+        value_normalised: {field: phone}
+        endpoint_kind: {literal: msisdn}
+    - ref: document
+      pole_class: object
+      type: Document
+      when: {field: document_title, is: not_null}
+      properties:
+        title: {field: document_title}
+        document_kind: {field: document_kind}
+        expires_on: {field: document_expires}
+  edges:
+    - type: BENEFICIAL_OWNER_OF
+      from: shareholder
+      to: applicant
+      when: {field: owner_company, is: not_null}
+      properties:
+        percent: {field: owner_percent}
+    - type: USES
+      from: applicant
+      to: phone
+      when: {field: phone, is: not_null}
+    - type: VERIFIED_BY
+      from: applicant
+      to: document
+      when: {field: document_title, is: not_null}
+
+unmapped_fields: []

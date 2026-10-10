@@ -10,7 +10,7 @@ connector:
   delimiter: ","
   encoding: utf-8
   header_rows: 1
-ontology_version: 15
+ontology_version: 16
 
 defaults:
   provenance: {state: asserted}

@@ -10,9 +10,9 @@ from ontology.loader import load_default_ontology
 from ontology.packs import load_deployment_ontology
 
 
-def test_the_core_carries_alert_and_alerted_on_at_version_15() -> None:
+def test_the_core_carries_alert_and_alerted_on_from_version_15() -> None:
     core = load_default_ontology()
-    assert core.version == 15
+    assert core.version >= 15
     alert = core.entity_type("Alert")
     assert alert is not None
     assert {p.name for p in alert.properties} >= {"rule_id", "typology", "words", "raised_at"}

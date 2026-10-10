@@ -54,6 +54,17 @@ const VIEW = {
   ],
 };  // prettier-ignore
 
+const KYC = {
+  node_id: "C", name: "Crescent Imports Ltd", status: "unverified", risk_score: 85, risk_band: "high",
+  assessed_on: "2026-10-10",
+  documents: [{ node_id: "d1", document_kind: "certificate_of_incorporation", expires_on: "2025-01-31", state: "expired" }],
+  factors: [
+    { factor: "unverified", weight: 25, words: "No valid verifying document (certificate of incorporation expired)" },
+    { factor: "owner_listed", weight: 40, words: "Beneficial owner Elena Petrov (47.8%) possibly Elena Petrova on a sanctions list" },
+    { factor: "shared_attribute", weight: 20, words: "msisdn 447700900777 also used by 3 other customer(s)" },
+  ],
+};  // prettier-ignore
+
 function serve(handler: (path: string, url: URL) => Response | null = () => null) {
   const calls: string[] = [];
   vi.stubGlobal(
@@ -66,6 +77,7 @@ function serve(handler: (path: string, url: URL) => Response | null = () => null
       if (answered) return answered;
       if (path === "suggest") return json(200, { nodes: [VIEW.nodes[0]], more: false });
       if (path === "ownership/C") return json(200, VIEW);
+      if (path === "kyc/C") return json(200, KYC);
       return json(404, {});
     }),
   );
@@ -74,7 +86,7 @@ function serve(handler: (path: string, url: URL) => Response | null = () => null
 
 async function traceCrescent(onCanvas = vi.fn()) {
   render(<OwnershipPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" onCanvas={onCanvas} />);
-  fireEvent.change(screen.getByLabelText("Organisation or account"), { target: { value: "Cresc" } });
+  fireEvent.change(screen.getByLabelText("Organisation, account or person"), { target: { value: "Cresc" } });
   fireEvent.click(screen.getByRole("button", { name: "Find" }));
   fireEvent.click(await screen.findByRole("button", { name: "Trace Crescent Imports Ltd" }));
   await screen.findByRole("table", { name: "Every owner and controller" });
@@ -82,6 +94,15 @@ async function traceCrescent(onCanvas = vi.fn()) {
 }
 
 describe("the Ownership place", () => {
+  it("shows a customer's due diligence, every factor in words", async () => {
+    serve();
+    await traceCrescent();
+    const panel = await screen.findByRole("region", { name: "Due diligence" });
+    expect(panel.textContent).toContain("Unverified · High risk (85)");
+    expect(screen.getByText(/possibly Elena Petrova on a sanctions list \(\+40\)/)).toBeTruthy();
+    expect(panel.textContent).toContain("certificate of incorporation — expired (expires 2025-01-31)");
+  });
+
   it("names the beneficial owners, each share, and the circle", async () => {
     serve();
     await traceCrescent();
@@ -119,7 +140,7 @@ describe("the Ownership place", () => {
       path === "ownership/C" ? json(409, { error: "ownership_too_complex", detail: "owners reach this entity through more than 10 layers" }) : null,
     );
     render(<OwnershipPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" onCanvas={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText("Organisation or account"), { target: { value: "Cresc" } });
+    fireEvent.change(screen.getByLabelText("Organisation, account or person"), { target: { value: "Cresc" } });
     fireEvent.click(screen.getByRole("button", { name: "Find" }));
     fireEvent.click(await screen.findByRole("button", { name: "Trace Crescent Imports Ltd" }));
     expect(await screen.findByText("This structure is not traced: owners reach this entity through more than 10 layers.")).toBeTruthy();

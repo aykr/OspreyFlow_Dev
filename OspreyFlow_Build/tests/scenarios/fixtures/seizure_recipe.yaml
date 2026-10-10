@@ -13,7 +13,7 @@ connector:
   header_rows: 1
   # No `date_order`: this layout's dates are ISO-8601 with an offset, so there is nothing
   # ambiguous to resolve. See the connector profile's own comment.
-ontology_version: 15
+ontology_version: 16
 
 defaults:
   provenance: {state: asserted}

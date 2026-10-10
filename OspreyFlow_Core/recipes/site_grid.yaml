@@ -20,7 +20,7 @@ label: "Site grid cells"
 connector:
   profile: geo-site-grid
   source_crs: "EPSG:4326"
-ontology_version: 15
+ontology_version: 16
 
 defaults:
   provenance: {state: asserted}

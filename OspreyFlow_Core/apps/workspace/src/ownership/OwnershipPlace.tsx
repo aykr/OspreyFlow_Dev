@@ -5,11 +5,11 @@
 // control is control, not a share; a circle of cross-holdings is traced once and said. Everything
 // is as the reader reads it, and nothing here is written to the graph.
 import { useState } from "react";
-import type { Edge, Node, OwnershipView, OwnerTrace } from "../../../../packages/schemas/generated";
+import type { Edge, KycStatus, Node, OwnershipView, OwnerTrace } from "../../../../packages/schemas/generated";
 import { Button, Input } from "../design/primitives";
 import { nodeName } from "../alerts/names";
 import type { CanvasOutcome } from "../alerts/api";
-import { findEntities, ownershipToCanvas, traceOwnership, type OwnershipApi } from "./api";
+import { findEntities, kycStatus, ownershipToCanvas, traceOwnership, type OwnershipApi } from "./api";
 
 export interface OwnershipPlaceProps {
   apiBaseUrl: string;
@@ -55,6 +55,7 @@ export function OwnershipPlace(props: OwnershipPlaceProps) {
   const [target, setTarget] = useState<Node | null>(null);
   const [threshold, setThreshold] = useState("25");
   const [view, setView] = useState<OwnershipView | null>(null);
+  const [kyc, setKyc] = useState<KycStatus | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [openChains, setOpenChains] = useState<string | null>(null);
@@ -67,14 +68,23 @@ export function OwnershipPlace(props: OwnershipPlaceProps) {
     setProblem(null);
     setSaid(null);
     setView(null);
+    setKyc(null);
     const value = Number(share);
     if (!(value > 0 && value <= 100)) {
       setProblem("The threshold is a percentage above 0 and at most 100.");
       return;
     }
-    traceOwnership(api, node.id, value)
-      .then(setView)
-      .catch((e: Error) => setProblem(e.message));
+    // ADR-109 phase F: due diligence on a person or an organisation; ownership on what is owned.
+    if (node.type === "Person" || node.type === "Organisation") {
+      kycStatus(api, node.id)
+        .then(setKyc)
+        .catch((e: Error) => setProblem(e.message));
+    }
+    if (node.type !== "Person") {
+      traceOwnership(api, node.id, value)
+        .then(setView)
+        .catch((e: Error) => setProblem(e.message));
+    }
   };
 
   const names = new Map((view?.nodes ?? []).map((n) => [n.id, nodeName(n)]));
@@ -97,8 +107,8 @@ export function OwnershipPlace(props: OwnershipPlaceProps) {
         style={{ display: "flex", gap: "var(--sp-8)", alignItems: "end", flexWrap: "wrap" }}
       >
         <label className="label" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
-          Organisation or account
-          <Input aria-label="Organisation or account" value={query} onChange={(e) => setQuery(e.target.value)} />
+          Organisation, account or person
+          <Input aria-label="Organisation, account or person" value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
         <Button type="submit" disabled={query.trim().length < 2}>
           Find
@@ -134,6 +144,7 @@ export function OwnershipPlace(props: OwnershipPlaceProps) {
       )}
       {problem && <p role="alert" style={{ color: "var(--error)" }}>{problem}</p>}
       {said && <p role="status" className="label">{said}</p>}
+      {kyc && <DueDiligence status={kyc} />}
       {view && target && (
         <>
           <h3 className="value" style={{ margin: 0 }}>Who stands behind {nodeName(target)}</h3>
@@ -209,6 +220,41 @@ export function OwnershipPlace(props: OwnershipPlaceProps) {
           </div>
         </>
       )}
+    </section>
+  );
+}
+
+const BAND_WORDS: Record<string, string> = { low: "Low", medium: "Medium", high: "High" };
+
+/** ADR-109 phase F: KYC status and the baseline risk assessment, each factor in words. Computed
+ * by the server at this moment from what this reader can see; nothing here is stored. */
+function DueDiligence({ status }: { status: KycStatus }) {
+  const documents = status.documents ?? [];
+  const factors = status.factors ?? [];
+  return (
+    <section aria-label="Due diligence" style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
+      <h3 className="value" style={{ margin: 0 }}>Due diligence: {status.name}</h3>
+      <p style={{ margin: 0 }}>
+        {status.status === "verified" ? "Verified" : "Unverified"} · {BAND_WORDS[status.risk_band ?? "low"]} risk ({status.risk_score ?? 0}) · as of{" "}
+        {status.assessed_on}
+      </p>
+      {factors.length > 0 && (
+        <ul aria-label="Risk factors" style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
+          {factors.map((f, i) => (
+            <li key={`${f.factor}-${i}`} className="label">
+              {f.words} (+{f.weight})
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="label" style={{ margin: 0 }}>
+        Verifying documents:{" "}
+        {documents.length === 0
+          ? "none you can see"
+          : documents
+              .map((d) => `${(d.document_kind ?? "document").replace(/_/g, " ")} — ${d.state}${d.expires_on ? ` (expires ${d.expires_on})` : ""}`)
+              .join("; ")}
+      </p>
     </section>
   );
 }

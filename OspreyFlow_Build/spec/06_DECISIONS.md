@@ -10992,3 +10992,71 @@ dropped), `keyboard/ownership.spec.ts` 4 actions; vitest 1,381/1,381, keyboard 2
 
 **Not done:** the deck's EDD captures (owner-only screens, never committed; after the refresh); the
 Ledger re-seed into the deployment (with the refresh, batched for the owner's sign-in).
+
+### ADR-109, Amendment 4 (10 October 2026) — phase F built: the KYC gate
+
+Status: build note within ADR-109's accepted rulings (6, 7, 10); decisions marked *mine* may be
+overruled.
+
+**Built.** Ontology **v16**: `VERIFIED_BY` (customer to Document) and a Document's `document_kind`,
+`expires_on`, `fraudulent`; an organisation's `country` and `industry`; a party's `listing` and
+`list_name`; `ip` as an endpoint kind; an organisation may `USES` an endpoint (every published Studio
+recipe republished once, as at v15). Three KYC typologies on the phase A rule chassis
+(`services/api/kyc_rules.py`) — `kyc_screening` (the customer and, for an organisation, every natural
+person owning at least the threshold or controlling it, through the phase C maths over the load's
+own ownership links and the stored structure above them), `shared_attributes`,
+`document_verification` — judged over the customers a load creates, before or after commit. The
+screening list store and its loader (`services/api/screening.py`, `scripts/load_screening_list.py`),
+the synthetic list, the OpenSanctions/ICIJ entry in spec 00 §7. The KYC status and baseline risk
+(`services/api/kyc.py`, `kyc_risk_factors.yaml`), the `kyc_expiries` registry and the daily sweep
+(`services/api/kyc_sweep.py`, a lifespan task). In the Glass: the due-diligence panel in the
+*Ownership* place and the KYC rules in the deploy form.
+
+**The addendum's demo, as built and tested.** Onboarding Halcyon Marine Ltd — 80% owned by the
+Cyprus trust — with a `kyc_screening` rule: PETROV holds 0.6 × 0.8 = 48% and matches "PETROVA, Elena"
+on the synthetic sanctions list; NAIR holds 32% and matches "Priya NAIR" on its PEP list; two alerts
+raised with the load, each with the listed party and an `inferred` `SAME_AS` drawn
+(`test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate`).
+
+**A duplication named, and why it is not one.** A screening list is not a hotlist (ADR-038): a
+hotlist holds one owner's one exact identifier; a screening list is a licensed register of names
+matched fuzzily, deployment-wide. It lives outside the graph so that a real list, admitted locally,
+never enters a case beyond the entries a customer matches. **Reused, not rebuilt:** name similarity
+is the resolution engine's own DuckDB `jaro_winkler_similarity`; the match is a resolution-shaped
+scored `SAME_AS`; the ownership is phase C's; the alert, its node, its marking and the queue are
+phases A and B's.
+
+**Pre-commit, as built.** A KYC rule must judge customers still in the open transaction, which the
+store cannot read back: the engine now hands its writes to the caller (`run_recipe(written=…)`),
+and the rule judges those, each filtered by its deployer's access (`handling_readable`), reading
+everything already committed through `GraphPort` as the deployer. A failing KYC rule holds the rows
+that created the customers it could not judge.
+
+**Ruling 7, as built.** Status is computed at read from expiry against the day; the sweep reads only
+the registry's date range since its last run, re-checks through the store as each rule's deployer,
+and claims each day with `SET NX` so one replica sweeps it. *Disclosed:* a day the deployment was
+down is swept at its next run; documents loaded before a case had a rule are not in the registry
+(the registry is written by loads into cases that have rules).
+
+**Decisions mine.** (a) A screening hit's listed party is written asserted (the list says it) and
+the `SAME_AS` inferred (that the customer is that party is the suggestion). (b) The risk config's
+country and industry lists are illustrative defaults — the synthetic list's fictional XA–XC, and VG
+and CY standing for the offshore centres EDD looks harder at — a deployment sets its own. (c) The
+seed loads the synthetic screening list; `ledger_onboarding_applications.csv` (Halcyon, and a clean
+Brookfield Joinery) is committed for the owner to load through a pipeline with rules deployed, so
+the gate fires live.
+
+**Tests.** Pure: screening and the loader's rule 9 guard (6; plants: the exceptions check skipped,
+the date-of-birth rule dropped). Live (`tests/ingest/test_kyc_rules.py`, 10): the demo; an owner below
+the threshold not screened; a shared phone flagged at the count and not one below; an expired
+document flags, a valid one does not; a customer the deployer cannot read is not judged; the gate
+after commit; the status and every factor computed (and earlier the same customer verified); a
+SECRET document verifies only for a SECRET reader; the daily sweep raises once, and not for a
+customer with another valid document. Plants shown red: the deployer filter, owners screened below
+the threshold, expiry ignored, a hit written asserted (first caught by the model's own validator,
+which proved nothing about the assertion, so planted again with that confidence dropped — then red
+on the assertion itself), an all-seeing status read, a lapse check blind to valid documents. Route
+levels; the Glass's vitest and keyboard cases (OWNERSHIP_ACTIONS and ALERTS_ACTIONS each gain one).
+
+**Not done.** No converter from any real list's export to the loader's shape is committed (the
+owner's local step); the deck's KYC captures; the live run, batched with the refresh.

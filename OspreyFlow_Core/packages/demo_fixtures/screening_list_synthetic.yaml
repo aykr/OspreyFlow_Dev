@@ -1,0 +1,18 @@
+# A synthetic screening list (ADR-109 phase F; rule 9: invented, in-repo, never real). The shape
+# `scripts/load_screening_list.py` loads: a list of sanctions, politically exposed persons and
+# adverse-media entries, each a person or an organisation. Two names echo Operation Ledger's own
+# synthetic people so the onboarding gate has something to find; the rest are noise, so a match is
+# a choice among many and not the only entry there is.
+list_name: "Synthetic consolidated list (OspreyFlow demo)"
+synthetic: true
+entries:
+  - {id: syn-001, listing: sanction, entity_type: Person, name: "PETROVA, Elena", country: "XA"}
+  - {id: syn-002, listing: pep, entity_type: Person, name: "Priya NAIR", country: "GB"}
+  - {id: syn-003, listing: adverse_media, entity_type: Organisation, name: "Kestrel Nominees Limited", country: "VG"}
+  - {id: syn-004, listing: sanction, entity_type: Person, name: "Dmitri ORLANSKY", date_of_birth: "1964-02-11", country: "XA"}
+  - {id: syn-005, listing: sanction, entity_type: Organisation, name: "Borealis Shipping Corp", country: "XB"}
+  - {id: syn-006, listing: pep, entity_type: Person, name: "Harriet QUENNELL", country: "GB"}
+  - {id: syn-007, listing: pep, entity_type: Person, name: "Tobias ARKWRIGHT", date_of_birth: "1958-09-30", country: "GB"}
+  - {id: syn-008, listing: adverse_media, entity_type: Person, name: "Lucas FENWICK-DRAKE", country: "GB"}
+  - {id: syn-009, listing: sanction, entity_type: Organisation, name: "Northwind Metals FZE", country: "XC"}
+  - {id: syn-010, listing: adverse_media, entity_type: Organisation, name: "Vantage Crest Holdings", country: "CY"}

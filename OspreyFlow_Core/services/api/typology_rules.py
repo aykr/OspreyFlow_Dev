@@ -13,16 +13,14 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 import asyncpg
 from pydantic import TypeAdapter
 
 from conduit_common.identity import new_id
 from schemas.domain import (
-    CircularFlowParams,
     Principal,
-    RapidMovementParams,
-    StructuringParams,
     TypologyParams,
     TypologyRule,
     TypologyRuleInput,
@@ -52,9 +50,7 @@ _COLUMNS = (
     "retired_at, dataset_id"
 )
 
-_PARAMS: TypeAdapter[StructuringParams | RapidMovementParams | CircularFlowParams] = TypeAdapter(
-    TypologyParams
-)
+_PARAMS: TypeAdapter[Any] = TypeAdapter(TypologyParams)
 
 
 class TypologyRuleNotFoundError(Exception):

@@ -32,7 +32,7 @@ from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from ports.media import MediaStore
 from schemas.analytics import EventRecord
-from schemas.domain import OntologySchema, Principal
+from schemas.domain import EdgeWrite, NodeWrite, OntologySchema, Principal
 from schemas.ingest import (
     LoadReport,
     Recipe,
@@ -306,7 +306,9 @@ async def run_published_recipe(
         await analytics.load_geometries([p for p in points if p.geometry_ref not in held])
     # ADR-109 ruling 1: the case's post-commit rules, once the load's events can be read with it.
     if rules is not None:
-        report.rule_notes.extend(await rules.post_commit(events, load_id=load_id))
+        report.rule_notes.extend(
+            await rules.post_commit(events, load_id=load_id, written=rules.last_written)
+        )
     return report
 
 
@@ -337,6 +339,7 @@ async def load_with_rules(
     held = PreCommitVerdict()
     skip: frozenset[int] = frozenset()
     while True:
+        written: list[NodeWrite | EdgeWrite] = []
         tx = await graph.begin_transaction()
         try:
             report, events = await run_recipe(
@@ -352,9 +355,12 @@ async def load_with_rules(
                 media=media,
                 skip_row_indices=skip,
                 row_numbers=row_numbers,
+                written=written,
             )
             verdict = (
-                await rules.pre_commit(events, tx, load_id=load_id, unseen=unseen)
+                await rules.pre_commit(
+                    events, tx, load_id=load_id, unseen=unseen, written=written
+                )
                 if rules is not None
                 else PreCommitVerdict()
             )
@@ -395,4 +401,6 @@ async def load_with_rules(
             )
         report.rows_held = len(held.hold)
         report.rule_notes = [*held.notes, *verdict.notes]
+        rules.last_written = written
+        await rules.record_expiries(written)
     return report, events, skip

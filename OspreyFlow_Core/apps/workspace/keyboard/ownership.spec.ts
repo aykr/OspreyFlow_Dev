@@ -48,6 +48,11 @@ async function serve(page: Page): Promise<string[]> {
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
     if (path === "suggest") return json(200, { nodes: [VIEW.nodes[0]], more: false });
     if (path === "ownership/C") return json(200, VIEW);
+    if (path === "kyc/C")
+      return json(200, {
+        node_id: "C", name: "Crescent Imports Ltd", status: "verified", risk_score: 15, risk_band: "low",
+        assessed_on: "2026-10-10", documents: [], factors: [{ factor: "country_medium", weight: 15, words: "Registered in CY, a medium-risk jurisdiction" }],
+      });  // prettier-ignore
     if (path === "ownership/C/canvas")
       return json(200, { delta: { seq: 1, op: "add", nodes: [], edges: [] }, added_nodes: 3, added_links: 2 });
     return json(404, {});
@@ -61,7 +66,7 @@ async function press(page: Page, target: Locator) {
 }
 
 async function traceCrescent(page: Page) {
-  await page.getByLabel("Organisation or account").fill("Cresc");
+  await page.getByLabel("Organisation, account or person").fill("Cresc");
   await page.keyboard.press("Enter");
   await press(page, page.getByRole("button", { name: "Trace Crescent Imports Ltd" }));
   await expect(page.getByRole("table", { name: "Every owner and controller" })).toBeVisible();
@@ -73,6 +78,15 @@ test("an entity is found and its ownership traced, by keyboard", async ({ page }
   await traceCrescent(page);
   await expect(page.getByText(/Beneficial owners at 25%: Elena Petrov \(60%\)/)).toBeVisible();
   registerCovered(REGISTRY, "find-an-entity-and-trace-its-ownership-by-keyboard");
+});
+
+test("a customer's due diligence is read, by keyboard", async ({ page }) => {
+  await serve(page);
+  await page.goto("/keyboard/ownership-harness.html");
+  await traceCrescent(page);
+  await expect(page.getByRole("region", { name: "Due diligence" })).toContainText("Verified · Low risk (15)");
+  await expect(page.getByText("Registered in CY, a medium-risk jurisdiction (+15)")).toBeVisible();
+  registerCovered(REGISTRY, "read-a-customers-due-diligence-by-keyboard");
 });
 
 test("a trace is asked again at another threshold, by keyboard", async ({ page }) => {

@@ -137,6 +137,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # are listed at Editor and decided at Author (Amendment 1).
     # ADR-109 phase C: ownership traced at Viewer, drawn on the canvas at Editor.
     ("GET", P + "/ownership/{node_id}"): V,
+    # ADR-109 phase F: a customer's KYC status, computed at read.
+    ("GET", P + "/kyc/{node_id}"): V,
     ("POST", P + "/ownership/{node_id}/canvas"): E,
     # ADR-109 phase B: the case team's alert queue — read at Viewer, triaged at Editor.
     ("GET", P + "/alert-queue"): V,

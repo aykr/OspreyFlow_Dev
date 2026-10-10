@@ -28,7 +28,7 @@ import json
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, cast
 
@@ -70,7 +70,11 @@ from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import RecipeRuleError, check_recipe_rules
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.transforms import STRUCTURED_PARTS
-from services.resolve.trigger import JOB_TYPE_RESOLVE_ENTITY_TYPE, run_resolve_entity_type_job
+from services.resolve.trigger import (
+    JOB_TYPE_RESOLVE_ENTITY_TYPE,
+    run_resolve_entity_type_job,
+    service_principal,
+)
 from valkey.asyncio import Valkey
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
@@ -133,6 +137,7 @@ from schemas.domain import (
     IntelligenceGap,
     Interval,
     Judgement,
+    KycStatus,
     LinkNote,
     Monitor,
     Node,
@@ -191,6 +196,7 @@ from schemas.profile import SourceProfile
 from . import alert_queue
 from . import compute_routes as compute_routes_module
 from . import dossier as dossier_module
+from . import kyc as kyc_module
 from . import ownership as ownership_module
 from . import readiness as readiness_module
 from . import resolution as resolution_module
@@ -327,6 +333,11 @@ from .investigations import (
     InvestigationStore,
 )
 from .jobs import JobQueue
+from .kyc import KycNotApplicable
+from .kyc_expiries import KycExpiryStore
+from .kyc_sweep import SweepReport
+from .kyc_sweep import run_daily as run_daily_kyc_sweep
+from .kyc_sweep import sweep as kyc_sweep
 from .link_changes import (
     ChangeNotMadeError,
     InvalidChangeError,
@@ -411,6 +422,7 @@ from .review import (
 )
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .rule_holds import ReleaseRefused, readable_rule_audit, release_held_rows
+from .screening import ScreeningListStore
 from .search import SearchRequest, SearchResponse, SuggestRequest, SuggestResponse
 from .site_images import (
     object_key_for,
@@ -525,6 +537,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-109: each case's typology rules, and the rows a failing pre-commit rule holds.
     typology_rules = await TypologyRuleStore.connect(config.postgres.dsn)
     held_rows = await HeldRowStore.connect(config.postgres.dsn, handling_scheme)
+    screening_lists = await ScreeningListStore.connect(config.postgres.dsn)
+    kyc_expiries = await KycExpiryStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
     link_notes_store = await LinkNoteStore.connect(config.postgres.dsn)
     link_changes_store = await LinkChangeStore.connect(config.postgres.dsn)
@@ -590,6 +604,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.alerts_store = alerts_store
     app.state.typology_rules = typology_rules
     app.state.held_rows = held_rows
+    app.state.screening_lists = screening_lists
+    app.state.kyc_expiries = kyc_expiries
     app.state.judgements_store = judgements_store
     app.state.link_notes = LinkNoteService(link_notes_store, app.state.working_set)
     # ADR-090: the ontology in force is `default.yaml` plus every proposal, composed here and after
@@ -709,9 +725,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.principal_names = PrincipalNameDirectory(config)
     app.state.map_config = load_map_config(config.osprey_config_path)
 
+    # ADR-109 phase F, ruling 7: the daily sweep for verifying documents that lapse — the clock
+    # passing is never a write the change stream could carry. One replica a day (a Valkey claim).
+    sweeper = service_principal(handling_scheme)
+
+    async def _sweep_day(day: date) -> SweepReport:
+        return await kyc_sweep(
+            day=day,
+            expiries=kyc_expiries,
+            rules=typology_rules,
+            graph=graph,
+            scheme=handling_scheme,
+            alert_store=alerts_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=app.state.principal_resolver.resolve_for_owner,
+            sweeper=sweeper,
+        )
+
+    sweep_task = asyncio.create_task(run_daily_kyc_sweep(valkey, _sweep_day))
+
     try:
         yield
     finally:
+        sweep_task.cancel()
         await arcadedb_client.aclose()
         await valkey.aclose()
         await audit.close()
@@ -724,6 +761,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await alerts_store.close()
         await typology_rules.close()
         await held_rows.close()
+        await screening_lists.close()
+        await kyc_expiries.close()
         await judgements_store.close()
         await link_notes_store.close()
         await link_changes_store.close()
@@ -864,6 +903,14 @@ def get_held_rows(request: Request) -> HeldRowStore:
     return request.app.state.held_rows  # type: ignore[no-any-return]
 
 
+def get_screening_lists(request: Request) -> ScreeningListStore:
+    return request.app.state.screening_lists  # type: ignore[no-any-return]
+
+
+def get_kyc_expiries(request: Request) -> KycExpiryStore:
+    return request.app.state.kyc_expiries  # type: ignore[no-any-return]
+
+
 def get_judgements_store(request: Request) -> JudgementStore:
     return request.app.state.judgements_store  # type: ignore[no-any-return]
 
@@ -972,6 +1019,8 @@ MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 TypologyRulesDep = Annotated[TypologyRuleStore, Depends(get_typology_rules)]
 HeldRowsDep = Annotated[HeldRowStore, Depends(get_held_rows)]
+ScreeningListsDep = Annotated[ScreeningListStore, Depends(get_screening_lists)]
+KycExpiriesDep = Annotated[KycExpiryStore, Depends(get_kyc_expiries)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 PrincipalNamesDep = Annotated[PrincipalNameDirectory, Depends(get_principal_names)]
 LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
@@ -6342,6 +6391,9 @@ async def run_studio_recipe(
     online_geocode: OnlineGeocodeDep,
     typology_rules: TypologyRulesDep,
     held_rows: HeldRowsDep,
+    screening_lists: ScreeningListsDep,
+    compute: ComputeDep,
+    kyc_expiries: KycExpiriesDep,
 ) -> LoadReport | PipelineRunReport:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -6395,6 +6447,9 @@ async def run_studio_recipe(
         audit=audit,
         valkey=valkey,
         principal_resolver=principal_resolver,
+        screening=screening_lists,
+        compute=compute,
+        expiries=kyc_expiries,
     )
     report: LoadReport | PipelineRunReport
     if recipe.pipeline is not None:
@@ -6500,6 +6555,9 @@ async def _rule_gate(
     valkey: Valkey,
     principal_resolver: PrincipalResolver,
     fail_closed: bool = True,
+    screening: ScreeningListStore | None = None,
+    compute: ComputePort | None = None,
+    expiries: KycExpiryStore | None = None,
 ) -> RuleGate | None:
     """The case's active typology rules for one load (ADR-109), or `None` when it has none."""
     rules = await typology_rules.list_active_for_case(investigation_id)
@@ -6586,6 +6644,38 @@ async def ownership_canvas(
         delta=outcome.delta,
         added_nodes=len(outcome.delta.nodes),
         added_links=len(outcome.delta.edges),
+    )
+
+
+@app.get("/v1/investigations/{investigation_id}/kyc/{node_id}")
+async def kyc_status_route(
+    node_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    compute: ComputeDep,
+    audit: AuditDep,
+) -> KycStatus:
+    """A customer's KYC status and baseline risk, computed now, as the reader reads the graph,
+    never stored (ADR-109 rulings 7 and 10)."""
+    status = await kyc_module.assess(
+        graph, compute, node_id, principal, today=datetime.now(UTC).date()
+    )
+    await audit.record(
+        principal=principal,
+        action="kyc_status",
+        investigation_id=investigation.id,
+        resolved_query={"node_id": node_id},
+        result_cardinality=len(status.factors),
+    )
+    return status
+
+
+@app.exception_handler(KycNotApplicable)
+async def _kyc_not_applicable_handler(request: Request, exc: KycNotApplicable) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"error": "kyc_not_applicable", "detail": f"KYC is not about a {exc}"},
     )
 
 
@@ -6890,6 +6980,8 @@ async def release_held_rows_route(
     principal_resolver: PrincipalResolverDep,
     typology_rules: TypologyRulesDep,
     held_rows: HeldRowsDep,
+    screening_lists: ScreeningListsDep,
+    compute: ComputeDep,
 ) -> LoadReport:
     """A reviewer releases named held rows of one load: they are loaded now, under a new load
     id, with their provenance as it would have been. The case's rules judge them again, but a
@@ -6913,6 +7005,8 @@ async def release_held_rows_route(
         valkey=valkey,
         principal_resolver=principal_resolver,
         fail_closed=False,
+        screening=screening_lists,
+        compute=compute,
     ) or RuleGate(
         rules=[],
         investigation_id=investigation.id,

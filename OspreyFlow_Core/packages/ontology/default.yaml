@@ -105,7 +105,11 @@
 # row — `Alert`, written `inferred` by the rule that raised it at the highest handling of what it
 # references, linked by the system link `ALERTED_ON` to every entity it concerns (any type, so a
 # pack's `Account` is reached). The republish-once consequence applies; fixtures bumped to 15.
-version: 15
+# v16 (ADR-109 phase F, the KYC addendum, 10 October 2026): `VERIFIED_BY` from a customer to the
+# Document that verifies them, with the Document's kind, expiry and fraud mark; an organisation's
+# country and industry; a party's screening `listing` and `list_name`; `ip` as an endpoint kind;
+# an organisation may use an endpoint. Republish once; fixtures bumped to 16.
+version: 16
 entity_types:
   - name: Person
     pole_class: person
@@ -118,6 +122,9 @@ entity_types:
       - {name: given_names, type: string, indexed: true}
       - {name: date_of_birth, type: date, sensitivity: high}
       - {name: aliases, type: "string[]"}
+      # v16, ADR-109 phase F: a party as a screening list names it (sanction, PEP, adverse media).
+      - {name: listing, type: enum, values: [sanction, pep, adverse_media]}
+      - {name: list_name, type: string}
     resolution:
       blocking: [soundex(family_name), year(date_of_birth)]
       comparisons: [jaro_winkler(family_name), levenshtein(given_names), exact(date_of_birth)]
@@ -131,7 +138,7 @@ entity_types:
     properties:
       - {name: value_raw, type: string}
       - {name: value_normalised, type: string, indexed: true, required: true}
-      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, email, handle, iban, card, account]}
+      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, email, handle, iban, card, account, ip]}
 
   - name: Device
     pole_class: object
@@ -166,6 +173,11 @@ entity_types:
       # v8: no display property existed at all before this — the same
       # gap `name` closed for `Location` in v7.
       - {name: name, type: string, indexed: true}
+      # v16, ADR-109 phase F: the baseline customer risk assessment's inputs, and screening.
+      - {name: country, type: string}
+      - {name: industry, type: string}
+      - {name: listing, type: enum, values: [sanction, pep, adverse_media]}
+      - {name: list_name, type: string}
 
   - name: Event
     pole_class: event
@@ -190,6 +202,11 @@ entity_types:
       # the graph: `object_ref` names it in the deployment's object store.
       - {name: media_kind, type: enum, values: [text, image, video]}
       - {name: object_ref, type: string}
+      # v16, ADR-109 phase F: a verifying document. KYC status is computed from these at read,
+      # never stored: expired or marked fraudulent, it no longer verifies anyone.
+      - {name: document_kind, type: enum, values: [passport, driving_licence, national_id, utility_bill, bank_statement, certificate_of_incorporation, register_extract, other]}
+      - {name: expires_on, type: date}
+      - {name: fraudulent, type: boolean}
 
   - name: Vehicle
     pole_class: object
@@ -225,7 +242,9 @@ edge_types:
     properties:
       - {name: duration_s, type: float}
       - {name: direction, type: enum, values: [inbound, outbound]}
-  - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true, basis: direct}
+  - {name: USES,              from: [Person, Organisation], to: [Endpoint, Device], directed: true, basis: direct}
+  # v16, ADR-109 phase F: a customer to the document that verifies them.
+  - {name: VERIFIED_BY,       from: [Person, Organisation], to: [Document], directed: true, basis: direct}
   - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], directed: true, temporal: true, basis: direct}
   - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true, basis: direct}
   # v15, ADR-109: an alert to what it concerns. A rule's finding, so Probabilistic; a system link,

@@ -97,7 +97,9 @@ async def release_held_rows(
     )
     if analytics is not None and events:
         await analytics.load_events(events)
-    report.rule_notes.extend(await rules.post_commit(events, load_id=load_id))
+    report.rule_notes.extend(
+        await rules.post_commit(events, load_id=load_id, written=rules.last_written)
+    )
     return report
 
 

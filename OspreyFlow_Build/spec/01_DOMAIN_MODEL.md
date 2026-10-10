@@ -86,9 +86,10 @@ entity_types:
 
 edge_types:
   - {name: COMMUNICATED_WITH, from: [Endpoint], to: [Endpoint], directed: true, temporal: true, basis: direct}
-  - {name: USES,              from: [Person], to: [Endpoint, Device], directed: true, basis: direct}
+  - {name: USES,              from: [Person, Organisation], to: [Endpoint, Device], directed: true, basis: direct}  # Organisation from v16
   - {name: PRESENT_AT,        from: [Person, Device, Vehicle], to: [Location], temporal: true, basis: direct}
   - {name: MENTIONED_IN,      from: ["*"], to: [Document], directed: true, basis: direct}
+  - {name: VERIFIED_BY,       from: [Person, Organisation], to: [Document], directed: true, basis: direct}  # v16, ADR-109 phase F
   - {name: ALERTED_ON,        from: [Alert], to: ["*"], directed: true, basis: probabilistic, system: true}  # v15, ADR-109
   - {name: HOLDS,             from: [Device, Endpoint, Person, Organisation], to: [Document], directed: true, basis: direct}  # ADR-094
   - {name: DEPICTS,           from: [Document], to: [Person, Organisation, Vehicle, Device, Location, Asset], directed: true, basis: direct}  # ADR-105; property `shown` (boolean)
@@ -1720,7 +1721,34 @@ class AlertExplanation(BaseModel):      # what fired it, all visible to the read
     transactions: list[ExplainedTransaction]
 class AlertDispositionInput(BaseModel):
     disposition: Literal["true_positive", "false_positive"]; reason: str   # required
+
+# ADR-109 phase F: the KYC gate's typologies (judged over the customers a load creates).
+class KycScreeningParams(BaseModel):    # typology "kyc_screening"
+    min_score: float = 0.9; screen_owners: bool = True; owner_threshold: float = 25.0
+class SharedAttributesParams(BaseModel):  # typology "shared_attributes"
+    min_others: int = 3; kinds: list[Literal["msisdn", "email", "ip", "handle"]]
+class DocumentVerificationParams(BaseModel):  # typology "document_verification"
+    pass
+
+class KycDocument(BaseModel):
+    node_id: NodeId; title: str | None; document_kind: str | None; expires_on: date | None
+    state: Literal["valid", "expired", "fraudulent"]
+class RiskFactor(BaseModel):
+    factor: str; weight: int; words: str
+class KycStatus(BaseModel):             # computed at each read, as the reader; never stored
+    node_id: NodeId; name: str; status: Literal["verified", "unverified"]
+    documents: list[KycDocument]; risk_score: int; risk_band: Literal["low", "medium", "high"]
+    factors: list[RiskFactor]; assessed_on: date
 ```
+
+**KYC (ontology v16; the addendum's Components 6 and 7).** A customer — a `Person` or an
+`Organisation` — is verified while at least one Document it is `VERIFIED_BY` is valid: not marked
+`fraudulent`, not past `expires_on`. That is computed at each read, never stored, so a document's
+lapse or fraud mark downgrades the customer the moment it applies. A screening-list match writes the
+listed party (asserted, carrying `listing` and `list_name`) and a scored `SAME_AS` from the customer
+(or its beneficial owner) to it — `inferred` (rule 5), never a merge (rule 6). The baseline risk is
+the sum of weighted factors (`services/api/kyc_risk_factors.yaml`: country, industry, a listed
+match, a listed beneficial owner, a shared contact detail, an unverified status), each named.
 
 A rule's parameters are a closed set per typology (rule 8). A typology reads money movements from
 the analytics store's `TRANSACTED` events — one per transaction, since same-pair links merge in the

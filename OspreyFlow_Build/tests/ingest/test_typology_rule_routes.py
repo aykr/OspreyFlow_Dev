@@ -328,3 +328,33 @@ def test_ownership_is_traced_at_viewer_and_drawn_at_editor(
                           headers=_as(key, VIEWER)).status_code == 404  # fmt: skip
         assert client.post(f"{base}/canvas", headers=_as(key, VIEWER)).status_code == 403
         assert client.post(f"{base}/canvas", headers=_as(key, EDITOR)).status_code == 200
+
+
+# --- phase F: the KYC status route ------------------------------------------------
+
+
+def test_the_kyc_status_is_read_at_viewer_and_only_of_a_customer(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    key, _ = keypair
+    case = asyncio.run(_case())
+    alert_id = asyncio.run(_queued_alert(case))
+    from services.api.alerts import AlertStore
+
+    async def an_account() -> str:
+        store = await AlertStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            alert = await store.get_case_alert(alert_id, case, AUTHOR.model_copy(update={"datasets": None}))
+            return alert.referent_node_ids[0]
+        finally:
+            await store.close()
+
+    account = asyncio.run(an_account())
+    from services.api.app import app
+
+    with TestClient(app) as client:
+        base = f"/v1/investigations/{case}/kyc"
+        refused = client.get(f"{base}/{account}", headers=_as(key, VIEWER))
+        assert refused.status_code == 422 and refused.json()["error"] == "kyc_not_applicable"
+        assert client.get(f"{base}/{account}", headers=_as(key, OUTSIDER)).status_code == 404
+        assert client.get(f"{base}/{new_id()}", headers=_as(key, VIEWER)).status_code == 404

@@ -20,6 +20,9 @@ export const TYPOLOGY_LABELS: Record<string, string> = {
   structuring: "Structuring",
   rapid_movement: "Rapid movement",
   circular_flow: "Circular flow",
+  kyc_screening: "KYC screening",
+  shared_attributes: "Shared contact details",
+  document_verification: "Unverified customer",
 };
 
 export function typologyLabel(typology: string | null | undefined): string {

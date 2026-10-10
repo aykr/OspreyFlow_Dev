@@ -22,9 +22,13 @@ from pathlib import Path
 from typing import cast
 
 import duckdb
+import yaml
 from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
+from scripts.load_screening_list import parse_list
 from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
+from services.api.config import PostgresConfig
 from services.api.dataset_scope import stamping
+from services.api.screening import ScreeningListStore
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -39,6 +43,10 @@ from ontology.packs import load_deployment_ontology
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.domain import Principal
+
+SCREENING_LIST = (
+    Path(__file__).resolve().parents[1] / "packages/demo_fixtures/screening_list_synthetic.yaml"
+)
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -120,11 +128,23 @@ async def _run(args: argparse.Namespace) -> int:
     finally:
         analytics_con.close()
 
+    # ADR-109 phase F: the synthetic screening list the KYC rules screen against (rule 9: synthetic,
+    # in-repo). Replaced whole, so a re-seed leaves one copy of it.
+    list_name, entries = parse_list(
+        yaml.safe_load(SCREENING_LIST.read_text(encoding="utf-8")), use="local_development"
+    )
+    screening = await ScreeningListStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        await screening.replace_list(list_name, entries)
+    finally:
+        await screening.close()
+
     print(
         f"Seeded Operation Ledger: {result.transactions_loaded} transactions "
         f"({len(result.events)} timeline events), the SAR "
         f"({result.sar_document_id or 'not written — no media store?'}), and "
-        f"{len(geometry_records())} map points under investigation_scope={scope!r}."
+        f"{len(geometry_records())} map points under investigation_scope={scope!r}; "
+        f"the screening list {list_name!r} ({len(entries)} synthetic entries)."
     )
     return 0
 

@@ -102,7 +102,7 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 | Level | Routes under `/v1/investigations/{id}` |
 |---|---|
-| Viewer | `GET` the case; `access` (GET: the caller's own level); `tab` (PUT: the caller's own flag, ADR-084); `datasets` (GET, ADR-099); `search`, `suggest`, `paths` (POST, ADR-099); `explore/counts`, `explore/most-connected`, `explore/busiest-links`, `explore/busiest-days`, `explore/groups`, `explore/whats-new`, `explore/starter-questions`, `nodes/{node}/shared-contacts` (GET, ADR-100); `expand/preview`; `patterns/preview`, `patterns/run` (POST), `patterns`, `patterns/{pattern}` (GET); `compute/{metric}`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `hotlists`, `monitors`, `alerts`, `alerts/{alert}` (GET, ADR-099 Amendment 3); `rules`, `alert-queue`, `alert-queue/{alert}`, `ownership/{node}` (GET, ADR-109); `questions` (GET, ADR-098); `ingest/candidates` (GET); `dossier/documents/{doc}`; `documents/{doc}/reader`, `documents/{doc}/file` (GET); `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes`, `links/{edge}/history`, `links/{edge}/events` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the Ingest Studio's reads (`ingest/source-files`, `ingest/recipes`, `ingest/recipes/{recipe}`, its `profile`, `map/sample-rows/{row}` and `map/handling-preview`, `ingest/recipe-registry`; ADR-099 Amendment 4); the delta stream |
+| Viewer | `GET` the case; `access` (GET: the caller's own level); `tab` (PUT: the caller's own flag, ADR-084); `datasets` (GET, ADR-099); `search`, `suggest`, `paths` (POST, ADR-099); `explore/counts`, `explore/most-connected`, `explore/busiest-links`, `explore/busiest-days`, `explore/groups`, `explore/whats-new`, `explore/starter-questions`, `nodes/{node}/shared-contacts` (GET, ADR-100); `expand/preview`; `patterns/preview`, `patterns/run` (POST), `patterns`, `patterns/{pattern}` (GET); `compute/{metric}`; `resolution/threshold` (GET); `resolution/explain/{cluster}`; `hotlists`, `monitors`, `alerts`, `alerts/{alert}` (GET, ADR-099 Amendment 3); `rules`, `alert-queue`, `alert-queue/{alert}`, `ownership/{node}`, `kyc/{node}` (GET, ADR-109); `questions` (GET, ADR-098); `ingest/candidates` (GET); `dossier/documents/{doc}`; `documents/{doc}/reader`, `documents/{doc}/file` (GET); `history` (GET); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes`, `links/{edge}/history`, `links/{edge}/events` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the Ingest Studio's reads (`ingest/source-files`, `ingest/recipes`, `ingest/recipes/{recipe}`, its `profile`, `map/sample-rows/{row}` and `map/handling-preview`, `ingest/recipe-registry`; ADR-099 Amendment 4); the delta stream |
 | Editor | `branch`; `seed`; `expand`; `nodes` (DELETE); `nodes/{node}/confirm`, `retract`, `suppression-mark` (POST, DELETE; ADR-099 Amendment 1); `links-among` (ADR-098); `explore/starter-questions/{question}/run`, `nodes/{node}/shared-contacts/{other}/canvas` (ADR-100); `resolution/threshold` (PUT), `link`, `split`; `patterns/save`; `hotlists`, `monitors` (POST), `alerts/{alert}/jump`; `held-rows` (GET, ADR-109); `alert-queue/{alert}/claim`, `release`, `disposition`, `canvas`, `ownership/{node}/canvas` (ADR-109); `questions` (POST) and `questions/candidates/{candidate}/accept`, `reject` (ADR-098); `documents` (POST), `documents/{doc}/extract`, `designations`, and its candidate `accept`, `reject`; `ingest/extract`, its candidate `accept` and `reject`; `links/{edge}/events/documents`, `links/{edge}/events/{event}/extract` and its candidate `accept`, `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `link-types` (POST), `link-types/{proposal}/withdraw` (the proposer or an Author, ADR-090); `export`; `sites` (POST), `control-points`, `grid`; the Ingest Studio's writes (`ingest/source-files` (POST), `ingest/recipes` (POST), `ingest/recipes/{recipe}` (PATCH), its `versions`, `row-template`, `verify`, `publish`, `schedule` and `run`) |
 | Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `datasets` (PUT: what the case reads, ADR-099 decision 3); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`; `rules` (POST), `rules/{rule}/retire`, `rules/audit` (GET; the admin's safety net reaches this one too), `held-rows/reject`, `ingest/recipes/{recipe}/held-rows/release` (ADR-109). An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
 
@@ -587,6 +587,42 @@ maths (`01_DOMAIN_MODEL.md` §10). The answer (`OwnershipView`) is the trace and
 it was computed over. Too deep (a chain of more than ten links) or too large (more than 500
 parties) is 409 `ownership_too_complex` with the reason — never a part-trace (rule 2). An entity the
 reader cannot see is 404. A trace is a view: nothing it concludes is written (ruling 9).
+
+### 3.8c KYC: the onboarding gate, status and screening lists (ADR-109 phase F)
+
+```
+GET    /v1/investigations/{id}/kyc/{node_id}   a customer's KYC status and baseline risk, computed now, Viewer
+```
+
+**The gate is rules** (ruling 6): three more typologies in §3.8a's closed vocabulary, judged over
+the customers a load *creates*, at the trigger point each rule declares. `kyc_screening`: each new
+person or organisation's name, and — for an organisation — each natural person who ultimately owns
+at least `owner_threshold`% of it or controls it (§3.8b's ownership maths over the load's own
+ownership links and the stored structure above them), screened against the screening lists; a hit
+writes the listed party and a scored, `inferred` `SAME_AS` with the alert. `shared_attributes`: a
+new customer's phone, email, IP address or handle already used by `min_others` other customers.
+`document_verification`: a new customer with no valid verifying document. A pre-commit KYC rule
+judges the load's writes as the engine wrote them (the open transaction cannot be read back), each
+filtered by its deployer's access; one that fails holds the rows that created the customers it
+could not judge. "Halting onboarding" is the alert, raised with the load (OspreyFlow activates no
+accounts).
+
+**The daily sweep** (ruling 7). Each load records the expiry of every verifying document it writes
+(`kyc_expiries`); once a day one replica (a Valkey claim per day) re-checks the documents that
+lapsed since the last sweep, as each case's `document_verification` rule's deployer, and raises a
+review alert where no valid document remains — the deployment's first periodic pass.
+
+**Screening lists** are deployment-wide reference data in `screening_entries`, outside the graph —
+only a matched entry enters a case. `python -m scripts.load_screening_list <file>` loads one,
+replacing a list of the same name whole; a list not marked synthetic needs the owner's local
+real-data exceptions entry (rule 9; spec 00 §7 for OpenSanctions' terms). Names are compared with
+the resolution engine's own Jaro-Winkler, over sorted tokens; a disagreeing date of birth rules a
+match out.
+
+**The status route** reads, as the reader, the customer's verifying documents, its listed `SAME_AS`
+neighbours, its beneficial owners' (for an organisation), its shared contact details, its country
+and industry, and returns the status and the weighted factors. Not a customer (anything but a
+person or an organisation): 422 `kyc_not_applicable`; unseen: 404. Nothing it computes is stored.
 
 ### 3.9 Sites
 

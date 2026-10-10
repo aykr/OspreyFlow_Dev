@@ -1,7 +1,13 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Name = string;
-export type Params = StructuringParams | RapidMovementParams | CircularFlowParams;
+export type Params =
+  | StructuringParams
+  | RapidMovementParams
+  | CircularFlowParams
+  | KycScreeningParams
+  | SharedAttributesParams
+  | DocumentVerificationParams;
 export type Typology = "structuring";
 export type Threshold = number;
 export type WindowDays = number;
@@ -12,6 +18,17 @@ export type KeepFraction = number;
 export type Typology2 = "circular_flow";
 export type MaxHops = number;
 export type WindowDays1 = number;
+export type Typology3 = "kyc_screening";
+export type MinScore = number;
+export type ScreenOwners = boolean;
+export type OwnerThreshold = number;
+export type Typology4 = "shared_attributes";
+export type MinOthers = number;
+/**
+ * @minItems 1
+ */
+export type Kinds = ["msisdn" | "email" | "ip" | "handle", ...("msisdn" | "email" | "ip" | "handle")[]];
+export type Typology5 = "document_verification";
 export type Trigger = "pre_commit" | "post_commit";
 export type BudgetMs = number;
 
@@ -44,5 +61,35 @@ export interface CircularFlowParams {
   typology?: Typology2;
   max_hops: MaxHops;
   window_days: WindowDays1;
+  [k: string]: unknown;
+}
+/**
+ * ADR-109 phase F (the KYC addendum's Component 6): a newly loaded person or organisation
+ * screened against the deployment's screening lists, and — for an organisation — each natural
+ * person who ultimately owns at least `owner_threshold` of it, or controls it.
+ */
+export interface KycScreeningParams {
+  typology?: Typology3;
+  min_score?: MinScore;
+  screen_owners?: ScreenOwners;
+  owner_threshold?: OwnerThreshold;
+  [k: string]: unknown;
+}
+/**
+ * Component 6's synthetic-identity check: a new customer's phone, email, IP address or handle
+ * already used by at least `min_others` other customers.
+ */
+export interface SharedAttributesParams {
+  typology?: Typology4;
+  min_others?: MinOthers;
+  kinds?: Kinds;
+  [k: string]: unknown;
+}
+/**
+ * Component 7: a new customer with no valid verifying document — none, or each one expired
+ * or marked fraudulent.
+ */
+export interface DocumentVerificationParams {
+  typology?: Typology5;
   [k: string]: unknown;
 }
