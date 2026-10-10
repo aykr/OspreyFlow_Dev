@@ -120,6 +120,11 @@ describe("DocumentReader", () => {
       text: "Amelia Burke travels to Birmingham.",
       truncated: false,
       spans: [],
+      sent_at: null,
+      sender_id: null,
+      recipient_id: null,
+      edge_id: null,
+      event_id: null,
       has_file: true,
     };
     const candidate = (id: string, entityType: string, name: string) => ({

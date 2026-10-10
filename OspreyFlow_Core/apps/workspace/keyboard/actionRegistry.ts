@@ -433,6 +433,8 @@ export const PIPELINE_STUDIO_ACTIONS = defineActionRegistry("PIPELINE_STUDIO_ACT
   "apply-extract-settings-by-keyboard",
   "remove-a-node-by-keyboard",
   "open-the-map-editor-by-keyboard",
+  // ADR-108, 10 October 2026: the Connect gate rehosted under the first source node.
+  "open-the-source-settings-by-keyboard",
 ] as const);
 
 export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [

@@ -56,6 +56,17 @@ async function serve(page: Page) {
     const json = (status: number, body: unknown) =>
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
     if (url.endsWith("/v1/ingest/packs")) return json(200, PACKS);
+    if (url.endsWith("/v1/ingest/connectors"))
+      return json(200, [
+        { id: "generic-csv", label: "CSV file", group: "Generic", structured: true, available: true },
+      ]);
+    if (url.endsWith("/v1/handling-scheme"))
+      return json(200, {
+        name: "uk-le",
+        classification: ["PUBLIC", "OFFICIAL"],
+        handling_codes: { P: { label: "Permissive", dissemination: "permitted" } },
+      });
+    if (url.endsWith("/ingest/source-files")) return json(200, { root: "/r", files: [] });
     if (url.endsWith("/pipeline") && method === "PUT") {
       const sent = request.postDataJSON();
       puts.push(sent);
@@ -147,6 +158,23 @@ test("a node is removed by keyboard", async ({ page }) => {
   await expect.poll(() => puts.length).toBe(1);
   expect((puts[0] as { nodes: unknown[] }).nodes).toHaveLength(4);
   registerCovered(REGISTRY, "remove-a-node-by-keyboard");
+});
+
+test("the source settings open from the first source's node by keyboard", async ({ page }) => {
+  await serve(page);
+  await openPipeline(page);
+  await page.getByRole("button", { name: "Source: Carrier B" }).focus();
+  await page.keyboard.press("Enter");
+  const open = page.getByRole("button", { name: "Open source settings" });
+  await open.focus();
+  await page.keyboard.press("Enter");
+  // The Connect gate whole: the file, the marking, the legal basis — proven by its own unit
+  // tests; reaching it from the node is this test's.
+  await expect(page.getByRole("button", { name: "Choose file…" })).toBeVisible();
+  await page.getByRole("button", { name: "Back to the pipeline" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("group", { name: "Pipeline" })).toBeVisible();
+  registerCovered(REGISTRY, "open-the-source-settings-by-keyboard");
 });
 
 test("the map editor opens from its node by keyboard", async ({ page }) => {

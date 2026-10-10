@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PipelineGraph, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
 // The rehosted stage editors have their own tests and pull canvas machinery jsdom cannot host;
 // here they are stubs — this file tests the Studio shell, the canvas and the panels.
+vi.mock("../ConnectScreen", () => ({ ConnectScreen: () => <p>connect-screen</p> }));
 vi.mock("../ProfileScreen", () => ({ ProfileScreen: () => <p>profile-screen</p> }));
 vi.mock("../map/MapScreen", () => ({ MapScreen: () => <p>map-screen</p> }));
 vi.mock("../verify/VerifyScreen", () => ({ VerifyScreen: () => <p>verify-screen</p> }));
@@ -147,6 +148,15 @@ describe("PipelineStudio", () => {
       const nodes = (put!.body as PipelineGraph).nodes!;
       expect(nodes.find((n) => n.kind === "domain_model")!.config!.pack).toBe("fibo");
     });
+  });
+
+  it("the first source's panel opens the Connect gate whole (file, marking, legal basis)", async () => {
+    serve();
+    mount();
+    await openPipeline();
+    fireEvent.click(screen.getByRole("button", { name: "Source: Carrier B" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open source settings" }));
+    expect(await screen.findByText("connect-screen")).toBeTruthy();
   });
 
   it("the extract panel declares library, media and where findings go", async () => {

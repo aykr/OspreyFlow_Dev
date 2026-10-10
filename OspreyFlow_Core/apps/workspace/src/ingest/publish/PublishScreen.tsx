@@ -23,6 +23,12 @@ import {
   updateSchedule,
 } from "../api";
 
+/** The run route answers one of two shapes; both carry index signatures in the generated types,
+ * so `in` cannot discriminate them — a pipeline run is the one whose `branches` is a real list. */
+function pipelineRunOf(report: LoadReport | PipelineRunReport): PipelineRunReport | null {
+  return Array.isArray((report as PipelineRunReport).branches) ? (report as PipelineRunReport) : null;
+}
+
 export interface PublishScreenProps {
   apiBaseUrl: string;
   bearerToken: string;
@@ -402,7 +408,9 @@ export function PublishScreen({
           <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
             <li>Load id: {loadReport.load_id}</li>
             <li>Rows read: {loadReport.rows_read}</li>
-            {!("branches" in loadReport) && <li>Rows deduplicated: {loadReport.rows_deduplicated}</li>}
+            {!pipelineRunOf(loadReport) && (
+              <li>Rows deduplicated: {(loadReport as LoadReport).rows_deduplicated}</li>
+            )}
             <li>Nodes created: {loadReport.nodes_created}</li>
             <li>Nodes referenced: {loadReport.nodes_referenced}</li>
             <li>Edges created: {loadReport.edges_created}</li>
@@ -410,15 +418,15 @@ export function PublishScreen({
           </ul>
           {/* ADR-108 phase C: a pipeline run answers per branch and per stage, refusals in words —
               a stage that could not run says so here, never a silently thinner total. */}
-          {"branches" in loadReport && (
+          {pipelineRunOf(loadReport) && (
             <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }} aria-label="Pipeline stages">
-              {(loadReport.branches ?? []).map((branch) => (
+              {(pipelineRunOf(loadReport)!.branches ?? []).map((branch) => (
                 <li key={branch.source_id}>
                   Source “{branch.source_label}”: {branch.report.rows_read} rows read,{" "}
                   {branch.report.nodes_created} nodes created (load {branch.report.load_id})
                 </li>
               ))}
-              {(loadReport.extracts ?? []).map((stage) => (
+              {(pipelineRunOf(loadReport)!.extracts ?? []).map((stage) => (
                 <li key={stage.node_id}>
                   Extract ({stage.library}): {stage.documents_read} documents read,{" "}
                   {stage.output === "review_queue"
@@ -430,7 +438,7 @@ export function PublishScreen({
                   {(stage.refusals ?? []).length > 0 ? ` — refused: ${(stage.refusals ?? []).join("; ")}` : ""}
                 </li>
               ))}
-              {(loadReport.enriches ?? []).map((stage) => (
+              {(pipelineRunOf(loadReport)!.enriches ?? []).map((stage) => (
                 <li key={stage.node_id}>
                   Enrich ({stage.geocoder}): {stage.locations_considered} places considered,{" "}
                   {stage.matched_local} matched locally, {stage.matched_online} online, {stage.unmatched} unmatched

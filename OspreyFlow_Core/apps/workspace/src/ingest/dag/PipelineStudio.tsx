@@ -18,8 +18,8 @@ import {
   fetchDraft,
   listDrafts,
   savePipeline,
-  updateDraft,
 } from "../api";
+import { ConnectScreen } from "../ConnectScreen";
 import { MapScreen } from "../map/MapScreen";
 import { ProfileScreen } from "../ProfileScreen";
 import { PublishScreen } from "../publish/PublishScreen";
@@ -42,7 +42,7 @@ export interface PipelineStudioProps {
 type View =
   | { at: "home" }
   | { at: "canvas"; recipeId: string }
-  | { at: "profile" | "map" | "verify" | "publish"; recipeId: string };
+  | { at: "connect" | "profile" | "map" | "verify" | "publish"; recipeId: string };
 
 export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId }: PipelineStudioProps) {
   const [view, setView] = useState<View>({ at: "home" });
@@ -59,6 +59,11 @@ export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId }: Pip
   }
   const stage = { apiBaseUrl, bearerToken, investigationId, recipeId: view.recipeId };
   const back = () => setView({ at: "canvas", recipeId: view.recipeId });
+  if (view.at === "connect") {
+    // The source node's own editor: the Connect gate rehosted whole (spec 09 §2 — the connector
+    // catalogue, the file, the marking and the legal basis), pinned to this pipeline's draft.
+    return <ConnectScreen {...stage} recipeId={view.recipeId} onBack={back} />;
+  }
   if (view.at === "profile") return <ProfileScreen {...stage} onBack={back} />;
   if (view.at === "map") return <MapScreen {...stage} onBack={back} />;
   if (view.at === "verify") return <VerifyScreen {...stage} onBack={back} />;
@@ -129,6 +134,10 @@ function PipelinesHome({
 
   return (
     <div style={{ padding: "var(--sp-16)", display: "grid", gap: "var(--sp-16)", alignContent: "start" }}>
+      <p className="label" style={{ margin: 0 }}>
+        A pipeline is one source's journey into this case's graph: a domain model, the source, its
+        profile, its mapping, and the load. Name one and the canvas starts you with that chain.
+      </p>
       <section aria-label="New pipeline" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
         <Input
           aria-label="Pipeline name"
@@ -144,7 +153,7 @@ function PipelinesHome({
       {problem && <p role="alert">{problem}</p>}
       <section aria-label="Pipelines" style={{ display: "grid", gap: "var(--sp-4)" }}>
         {drafts === null && !problem && <p className="label">Reading the pipelines…</p>}
-        {drafts?.length === 0 && <p className="label">No pipelines yet. Name one above to begin.</p>}
+        {drafts?.length === 0 && <p className="label">No pipelines yet. Name one above — "Carrier B phone records", say — and set up its source on the canvas.</p>}
         <ul role="list" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
           {(drafts ?? []).map((draft) => (
             <li key={`${draft.recipe_id}:${draft.version}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--sp-8)" }}>
@@ -173,7 +182,7 @@ function PipelineEditor({
 }: PipelineStudioProps & {
   recipeId: string;
   onHome: () => void;
-  onOpenStage: (at: "profile" | "map" | "verify" | "publish") => void;
+  onOpenStage: (at: "connect" | "profile" | "map" | "verify" | "publish") => void;
 }) {
   const [draft, setDraft] = useState<StudioRecipeDraft | null>(null);
   const [pipeline, setPipeline] = useState<PipelineGraph | null>(null);
@@ -296,27 +305,28 @@ function PipelineEditor({
             onApply={(config) => change(withNodeConfig(pipeline, selected.id, config))}
           />
         )}
-        {selected?.kind === "source" && (
-          <SourcePanel
-            draft={draft}
-            node={selected}
-            disabled={busy}
-            onApply={async (config) => {
-              change(withNodeConfig(pipeline, selected.id, config));
-              // The first source also carries the draft-level fields the engine reads today.
-              const first = (pipeline.nodes ?? []).find((n) => n.kind === "source");
-              if (first && first.id === selected.id) {
-                const updated = await updateDraft(apiBaseUrl, bearerToken, investigationId, recipeId, {
-                  label: draft.label,
-                  connector_profile:
-                    (config.connector_profile as string) || draft.connector_profile || "generic-csv",
-                  source_location: (config.source_location as string) || null,
-                });
-                setDraft(updated);
-              }
-            }}
-          />
-        )}
+        {selected?.kind === "source" &&
+          ((pipeline.nodes ?? []).find((n) => n.kind === "source")?.id === selected.id ? (
+            // The pipeline's first source carries the draft itself: its editor is the Connect
+            // gate rehosted whole (file, connector catalogue, marking, legal basis — spec 09 §2),
+            // found missing from phase B on 10 October 2026, when the start felt like naming a
+            // pipeline into a void.
+            <StagePanel
+              title="Source"
+              words="Where the data comes from: the file, its connector, its handling marking and its legal basis. Profile and Map read what is set here."
+            >
+              <Button variant="primary" onClick={() => onOpenStage("connect")}>
+                Open source settings
+              </Button>
+            </StagePanel>
+          ) : (
+            <SourcePanel
+              draft={draft}
+              node={selected}
+              disabled={busy}
+              onApply={(config) => change(withNodeConfig(pipeline, selected.id, config))}
+            />
+          ))}
         {selected?.kind === "profile" && (
           <StagePanel title="Profile" words="Run and read the source's profile.">
             <Button onClick={() => onOpenStage("profile")}>Open profile</Button>

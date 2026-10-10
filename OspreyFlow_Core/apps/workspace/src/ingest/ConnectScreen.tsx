@@ -26,6 +26,7 @@ import {
   ForbiddenError,
   createDraft,
   fetchConnectorCatalogue,
+  fetchDraft,
   fetchHandlingScheme,
   UPLOAD_ACCEPT,
   fetchIngestSourceFiles,
@@ -49,6 +50,11 @@ export interface ConnectScreenProps {
   /** Fired when "Continue to Profile" is pressed, only ever enabled once
    * the active draft's `ready_for_profile` is `true` (§2). */
   onContinueToProfile?: (recipeId: string) => void;
+  /** ADR-108: pinned to one pipeline's draft, opened from its source node. The Sources sidebar
+   * and "Continue to Profile" make no sense there (the canvas is the navigation), so a pinned
+   * screen shows the one draft's form and a way back to the pipeline. */
+  recipeId?: string | null;
+  onBack?: () => void;
 }
 
 export interface FormState {
@@ -120,6 +126,8 @@ export function ConnectScreen({
   bearerToken,
   onDraftChange,
   onContinueToProfile,
+  recipeId = null,
+  onBack,
 }: ConnectScreenProps) {
   const [catalogue, setCatalogue] = useState<ConnectorCatalogueEntry[] | null>(null);
   const [scheme, setScheme] = useState<HandlingScheme | null>(null);
@@ -155,6 +163,15 @@ export function ConnectScreen({
         setCatalogue(catalogueResult);
         setScheme(schemeResult);
         setDrafts(draftsResult);
+        if (recipeId) {
+          const pinned = draftsResult.find((d) => d.recipe_id === recipeId);
+          if (pinned) resumeDraft(pinned);
+          else {
+            void fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeId).then((d) => {
+              if (!cancelled) resumeDraft(d);
+            });
+          }
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -163,7 +180,8 @@ export function ConnectScreen({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, investigationId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resumeDraft is stable in behaviour
+  }, [apiBaseUrl, bearerToken, investigationId, recipeId]);
 
   // The ingest root, loaded separately from the three above on purpose: a deployment whose
   // operator has staged nothing, or an analyst without `source_author`, must still get a working
@@ -290,6 +308,7 @@ export function ConnectScreen({
         overflow: "auto",
       }}
     >
+      {!recipeId && (
       <div style={{ width: 280, flexShrink: 0 }}>
         <Panel title="Sources">
           <Button variant="primary" onClick={startNewDraft} style={{ marginBottom: "var(--sp-8)" }}>
@@ -329,9 +348,10 @@ export function ConnectScreen({
           </ul>
         </Panel>
       </div>
+      )}
 
       <div style={{ flex: 1, maxWidth: 640 }}>
-        <Panel title="Connect">
+        <Panel title={recipeId ? "Source" : "Connect"}>
           {forbidden && (
             <div
               role="alert"
@@ -564,17 +584,21 @@ export function ConnectScreen({
             <Button variant="primary" disabled={!canSave || saving} onClick={() => void handleSave()}>
               {activeRecipeId ? "Save" : "Create draft"}
             </Button>
-            <Button
-              disabled={!lastSaved?.ready_for_profile}
-              title={
-                lastSaved?.ready_for_profile
-                  ? undefined
-                  : "Answer location, handling marking and legal basis to continue"
-              }
-              onClick={() => lastSaved && onContinueToProfile?.(lastSaved.recipe_id)}
-            >
-              Continue to Profile
-            </Button>
+            {recipeId ? (
+              <Button onClick={() => onBack?.()}>Back to the pipeline</Button>
+            ) : (
+              <Button
+                disabled={!lastSaved?.ready_for_profile}
+                title={
+                  lastSaved?.ready_for_profile
+                    ? undefined
+                    : "Answer location, handling marking and legal basis to continue"
+                }
+                onClick={() => lastSaved && onContinueToProfile?.(lastSaved.recipe_id)}
+              >
+                Continue to Profile
+              </Button>
+            )}
             {lastSaved && !lastSaved.ready_for_profile && (
               <span style={{ color: "var(--text-tertiary)" }}>
                 Answer location, handling marking and legal basis to continue.
