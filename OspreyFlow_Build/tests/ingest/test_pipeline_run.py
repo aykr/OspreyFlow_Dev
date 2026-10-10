@@ -601,3 +601,89 @@ async def test_enrich_online_allowlist_geocodes_discloses_and_persists(
                 )
         assert current_names_to_refs["Birmingham New Street"] == geometry.geometry_ref
         assert current_names_to_refs["Nowhere Peculiar"] is None
+
+
+# --- Pack types at run time (ADR-108 Amendment 4) ----------------------------
+
+
+def _fibo_template() -> RowTemplate:
+    return RowTemplate.model_validate(
+        {
+            "entities": [
+                {
+                    "ref": "payer",
+                    "pole_class": "object",
+                    "type": "Account",
+                    "match_on": "account_number",
+                    "on_match": "reference",
+                    "properties": {"account_number": {"field": "payer_iban"}},
+                },
+                {
+                    "ref": "payee",
+                    "pole_class": "object",
+                    "type": "Account",
+                    "match_on": "account_number",
+                    "on_match": "reference",
+                    "properties": {"account_number": {"field": "payee_iban"}},
+                },
+            ],
+            "edges": [
+                {
+                    "type": "TRANSACTED",
+                    "from": "payer",
+                    "to": "payee",
+                    "temporal": {"at": {"field": "at", "transform": "datetime"}},
+                    "properties": {
+                        "amount": {"field": "amount"},
+                        "transaction_type": {"literal": "TRANSFER"},
+                    },
+                }
+            ],
+        }
+    )
+
+
+async def test_a_fibo_pipeline_loads_accounts_the_bare_core_refuses(
+    store: StudioRecipeStore, tmp_path: Path, git_repo: Path
+) -> None:
+    """ADR-108 Amendment 4, both sides in one case: the same committed FIBO recipe is refused
+    against the bare core (`Account` is no type of it — the state every run was in while
+    `compose_with_packs` had no production caller) and loads cleanly against the deployment
+    ontology, which composes every pack over the core at startup."""
+    from ontology.packs import load_deployment_ontology
+
+    rows = [
+        {"payer_iban": "GB58 LOYD 3096 1700 7099 43", "payee_iban": "GB94 BARC 2003 5538 2998 12",
+         "amount": "9400", "at": "2026-09-01T10:12:00Z"},
+        {"payer_iban": "GB82 MONZ 0400 0412 8831 22", "payee_iban": "GB94 BARC 2003 5538 2998 12",
+         "amount": "9750", "at": "2026-09-02T11:03:00Z"},
+    ]
+    a = _csv(tmp_path / "txns.csv", ["payer_iban", "payee_iban", "amount", "at"], rows)
+    published = await _publish_pipeline(
+        store, git_repo, label="fibo accounts", source_location=str(a),
+        row_template=_fibo_template(),
+        pipeline=_chain(),
+        ontology_version=load_default_ontology().version,
+    )
+
+    core = load_default_ontology()
+    deployed = load_deployment_ontology()
+    scheme = load_uk_le_scheme()
+
+    async with arcadedb_adapter(core, scheme) as graph:
+        with pytest.raises(Exception, match="Account"):
+            await run_published_pipeline(
+                published, LOADER, graph=graph, ontology=core, scheme=scheme,
+                load_id="fibo-refused", investigation_scope="case-1", repo_root=git_repo,
+                recogniser_for=_recognisers,
+            )
+
+    async with arcadedb_adapter(deployed, scheme) as graph:
+        report = await _run(published, graph, git_repo=git_repo)
+        assert report.rows_read == 2
+        assert report.nodes_created == 3  # the three distinct accounts
+        assert report.edges_created == 2
+        payee = await graph.find_node(
+            "Account", "account_number", "GB94 BARC 2003 5538 2998 12", LOADER
+        )
+        assert payee is not None

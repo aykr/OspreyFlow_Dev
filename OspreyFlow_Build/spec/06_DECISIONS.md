@@ -10629,3 +10629,28 @@ branch alone); `accept_all` per-item refusals; the Reader and Publish screens' o
 keyboard `accept-all-pending-in-the-reader-by-keyboard` (rule 13). While adding the bulk route to
 the investigation-levels table, that gate caught phase B's `PUT …/pipeline` route missing from it
 — added at Editor.
+
+### ADR-108, Amendment 4 (10 October 2026) — packs reach the store: the deployment ontology
+
+**Decision (the owner's, choosing "wire packs, then seed" over a core-types-only demo).** The
+schema a deployment applies and serves is `load_deployment_ontology()`: the POLE core composed
+with every shipped pack, at the core's own version. Amendment 3's narrowing (c2) —
+`compose_with_packs` had no production caller, so a pipeline could choose FIBO at save and publish
+and still have its `Account` rows refused at run time — closes by composing once, at startup, in
+the Conduit's lifespan: the store's DDL gains the packs' types, every read route serves them, and
+Verify, Map validation and the runner all see one schema. Composition is deterministic (the packs
+ship with the code; collisions are refused at load), so "version N" stays well defined: version N
+as this build composes it, and no published recipe is flagged by the change.
+
+**Disclosed looseness.** The pipeline's chosen pack remains the Studio's declared vocabulary and
+the run report's words, but template validation now runs against the superset, so a POLE pipeline
+could in principle map a STIX type without the save gate objecting. Tightening validation to the
+pipeline's own pack is future work; the gate that matters — what the store accepts and how it is
+disclosed — is the one closed here.
+
+**The test (rule 12's question).** `test_a_fibo_pipeline_loads_accounts_the_bare_core_refuses`,
+both sides in one case against live Postgres + ArcadeDB: the same committed FIBO recipe (Account
+entities, a temporal `TRANSACTED` between them) is refused against the bare core — the state every
+run was in before this amendment — and loads cleanly against the deployment ontology (three
+accounts, two transfers, the events emitted). `test_the_deployment_ontology_is_the_core_composed_
+with_every_pack` fails if a pack's types stop reaching the applied schema.

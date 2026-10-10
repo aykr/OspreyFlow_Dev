@@ -11,7 +11,6 @@ channel-and-shape rule fails `test_every_pack_composes_cleanly_over_the_core`.
 from __future__ import annotations
 
 import pytest
-
 from ontology.errors import OntologyError
 from ontology.loader import load_default_ontology
 from ontology.packs import PACK_NAMES, compose_with_packs
@@ -85,3 +84,26 @@ def test_an_edge_collision_without_extends_is_refused() -> None:
     # NIEM's USED_AS is a definition, not an extension; composing it twice redefines it.
     with pytest.raises(OntologyError, match="USED_AS"):
         compose_with_packs(once, ["niem"])
+
+
+def test_the_deployment_ontology_is_the_core_composed_with_every_pack() -> None:
+    """ADR-108 Amendment 4: `compose_with_packs` had no production caller, so a pipeline could
+    choose FIBO at save and publish and still have its `Account` rows refused at run time. The
+    deployment applies the core composed with every shipped pack, at the core's own version —
+    which test fails if a pack's types stop reaching the store's schema: this one."""
+    from ontology.loader import load_default_ontology
+    from ontology.packs import PACK_NAMES, load_deployment_ontology
+
+    core = load_default_ontology()
+    deployed = load_deployment_ontology()
+
+    assert deployed.version == core.version
+    names = {entity.name for entity in deployed.entity_types}
+    assert {entity.name for entity in core.entity_types} <= names
+    assert "Account" in names  # fibo
+    assert "ThreatActor" in names  # stix
+    edge_names = {edge.name for edge in deployed.edge_types}
+    assert {"BENEFICIAL_OWNER_OF", "CONTROLS", "HOLDS_ACCOUNT", "USED_AS"} <= edge_names
+    transacted = next(edge for edge in deployed.edge_types if edge.name == "TRANSACTED")
+    assert "Account" in transacted.from_types and "Account" in transacted.to_types
+    assert len(PACK_NAMES) == 3

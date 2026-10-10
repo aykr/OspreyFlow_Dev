@@ -94,8 +94,7 @@ from geo.wkb import polygon_wkb
 from knowledge_adapters import ARITY, REGISTRY
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, load_uk_le_scheme, principal_may_view
-from ontology.loader import load_default_ontology
-from ontology.packs import pack_catalogue
+from ontology.packs import load_deployment_ontology, pack_catalogue
 from ontology.yardstick import Yardstick, load_phia_yardstick
 from ports.analytics import AnalyticsPort
 from ports.compute import ComputePort
@@ -490,7 +489,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await arcadedb_client.create_database_if_absent()
     handling_scheme = load_uk_le_scheme()
     yardstick = load_phia_yardstick()
-    ontology = load_default_ontology()
+    ontology = load_deployment_ontology()
     # ADR-099: the services write through `DatasetStampingGraph`, so whatever the Conduit writes
     # for a case belongs to the case's dataset (`dataset_scope.py`).
     graph: GraphPort = cast(

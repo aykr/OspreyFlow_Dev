@@ -113,3 +113,17 @@ def pack_catalogue() -> list[DomainPackEntry]:
             )
         )
     return entries
+
+
+def load_deployment_ontology() -> OntologySchema:
+    """The schema a deployment applies and serves (ADR-108 Amendment 4): the core composed with
+    every shipped pack, at the core's own version. `compose_with_packs` had no production caller
+    before this — a pipeline could choose FIBO at save and publish and still have its `Account`
+    rows refused at run time, because the store's applied schema never carried the pack's types.
+    Composition is deterministic (the packs ship with the code and collisions are refused at
+    load), so "version N" remains well defined: it is version N as this build composes it. The
+    pipeline's own chosen pack remains the Studio's declared vocabulary and the run report's
+    words; this is the superset the store accepts."""
+    from .loader import load_default_ontology
+
+    return compose_with_packs(load_default_ontology(), list(PACK_NAMES))
