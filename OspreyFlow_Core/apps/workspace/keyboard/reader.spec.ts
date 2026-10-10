@@ -136,6 +136,55 @@ test("Reject beside Accept is reached and pressed by keyboard, and draws nothing
   registerCovered(REGISTRY, "reject-a-finding-in-the-reader-by-keyboard");
 });
 
+test("Accept all pending accepts the enumerated findings as one decision by keyboard (ADR-108 Q1)", async ({ page }) => {
+  // A held Document (not an email): the bulk surface is the Document route's own.
+  const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  const candidate = (id: string, entityType: string, name: string) => ({
+    id,
+    document_id: "email:ev-1",
+    entity_type: entityType,
+    properties: { name },
+    confidence: 1,
+    status: "pending",
+  });
+  await serveReader(page);
+  await page.route("**/v1/investigations/inv-1/documents/*/reader", (route) =>
+    route.fulfill(json({ ...EMAIL, edge_id: undefined, event_id: undefined, has_file: true })),
+  );
+  await page.route("**/v1/investigations/inv-1/documents/*/extract", (route) =>
+    route.fulfill(
+      json({
+        document_id: "email:ev-1",
+        text: EMAIL.text,
+        candidates: [candidate("c1", "Person", "Dana Mercer"), candidate("c2", "Location", "Dabhol")],
+      }),
+    ),
+  );
+  let sent: { candidate_ids?: string[] } | null = null;
+  await page.route("**/v1/investigations/inv-1/documents/*/candidates/accept", async (route) => {
+    sent = route.request().postDataJSON();
+    await route.fulfill(
+      json({
+        accepted: [
+          { node_id: "n1", delta: { seq: 2, op: "add", nodes: [], edges: [] } },
+          { node_id: "n2", delta: { seq: 3, op: "add", nodes: [], edges: [] } },
+        ],
+        refusals: [],
+      }),
+    );
+  });
+  await page.goto("/keyboard/reader-harness.html");
+  await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await tabTo(page, /^Quick scan$/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
+  await tabTo(page, /^Accept all pending \(2\)$/);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => sent?.candidate_ids).toEqual(["c1", "c2"]);
+  await expect(page.getByText("Accepted").first()).toBeVisible();
+  registerCovered(REGISTRY, "accept-all-pending-in-the-reader-by-keyboard");
+});
+
 test("words are marked as an entity by keyboard: typed, a type chosen, and Mark pressed (ADR-098)", async ({ page }) => {
   await serveReader(page);
   let sent: { entity_type: string; text: string; start: number; end: number } | null = null;

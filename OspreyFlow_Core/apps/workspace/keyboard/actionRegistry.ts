@@ -462,6 +462,8 @@ export const READER_ACTIONS = defineActionRegistry("READER_ACTIONS", [
   "read-full-screen-from-a-documents-menu",
   // The owner's ask, 6 October 2026: a Reject beside each Accept.
   "reject-a-finding-in-the-reader-by-keyboard",
+  // ADR-108 ruling Q1: the pending findings, enumerated, accepted as one decision.
+  "accept-all-pending-in-the-reader-by-keyboard",
   // ADR-098 decision 5: an entity marked by hand.
   "mark-an-entity-in-the-reader-by-keyboard",
   // ADR-098 decision 3: the language model on request.

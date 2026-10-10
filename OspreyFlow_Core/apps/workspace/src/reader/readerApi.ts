@@ -103,6 +103,24 @@ export function acceptDocumentFinding(
   );
 }
 
+/** ADR-108 ruling Q1: the enumerated pending findings a person reviewed, accepted as one
+ * decision — an explicit list of ids, never a filter or a confidence threshold. Each refusal
+ * comes back per item, in words. */
+export function acceptAllDocumentFindings(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  documentId: string,
+  candidateIds: string[],
+): Promise<{
+  accepted: { node_id: string; delta: unknown }[];
+  refusals: { candidate_id: string; words: string }[];
+}> {
+  return postJson(`${documentUrl(apiBaseUrl, investigationId, documentId)}/candidates/accept`, bearerToken, {
+    candidate_ids: candidateIds,
+  });
+}
+
 /** Rejects one finding from a held Document (owner, 6 October 2026): nothing is written. */
 export async function rejectDocumentFinding(
   apiBaseUrl: string,

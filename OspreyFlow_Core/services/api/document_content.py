@@ -50,7 +50,9 @@ from schemas.model import TranscribeRequest, VisionRequest
 
 from .email_extraction import MENTIONED_IN, _edge_from_write, _node_from_write
 from .review import (
+    CandidateNotPendingError,
     DocumentNotFoundError,
+    ExtractionCandidateNotFoundError,
     ExtractionCandidateRecord,
     ExtractionCandidateStore,
     accept_candidate,
@@ -88,6 +90,19 @@ class DocumentExtractionResult(BaseModel):
 class DocumentAcceptResult(BaseModel):
     node_id: str
     delta: DeltaAdd
+
+
+class BulkAcceptRefusal(BaseModel):
+    """One id a bulk accept could not act on, and why, in words — per item, never a failed batch
+    hiding the rest (rule 2)."""
+
+    candidate_id: str
+    words: str
+
+
+class DocumentBulkAcceptResult(BaseModel):
+    accepted: list[DocumentAcceptResult]
+    refusals: list[BulkAcceptRefusal]
 
 
 class HolderNotFoundError(Exception):
@@ -334,6 +349,48 @@ class DocumentContentService:
         if record.document_id != document_id:
             raise DocumentNotFoundError(document_id)
         await reject_candidate(self._candidates, candidate_id, principal)
+
+    async def accept_all(
+        self,
+        investigation_id: str,
+        document_id: str,
+        candidate_ids: list[str],
+        principal: Principal,
+    ) -> DocumentBulkAcceptResult:
+        """ADR-108 ruling Q1's bulk accept: one explicit list of ids, reviewed and accepted as one
+        decision — never a filter and never a confidence threshold (`09_INGEST_STUDIO.md` §7's ban
+        on those stands untouched; the caller enumerated exactly what a person looked at). Each
+        finding goes through `accept` and lands `inferred` (rule 5); an id that cannot be accepted
+        is reported per item, in words, without abandoning the rest."""
+        accepted: list[DocumentAcceptResult] = []
+        refusals: list[BulkAcceptRefusal] = []
+        for candidate_id in candidate_ids:
+            try:
+                accepted.append(
+                    await self.accept(investigation_id, document_id, candidate_id, principal)
+                )
+            except ExtractionCandidateNotFoundError:
+                refusals.append(
+                    BulkAcceptRefusal(
+                        candidate_id=candidate_id,
+                        words="no such pending finding, or not one this principal may act on",
+                    )
+                )
+            except CandidateNotPendingError:
+                refusals.append(
+                    BulkAcceptRefusal(
+                        candidate_id=candidate_id,
+                        words="already decided; a finding is accepted or rejected once",
+                    )
+                )
+            except DocumentNotFoundError:
+                refusals.append(
+                    BulkAcceptRefusal(
+                        candidate_id=candidate_id,
+                        words="not a finding of this document",
+                    )
+                )
+        return DocumentBulkAcceptResult(accepted=accepted, refusals=refusals)
 
     async def accept(
         self, investigation_id: str, document_id: str, candidate_id: str, principal: Principal

@@ -113,6 +113,57 @@ describe("DocumentReader", () => {
     );
   });
 
+  it("accepts all pending findings as one decision and reports refusals in words (ADR-108 Q1)", async () => {
+    const DOC: DocumentReaderView = {
+      document_id: "doc-1",
+      title: "Notes",
+      text: "Amelia Burke travels to Birmingham.",
+      truncated: false,
+      spans: [],
+      has_file: true,
+    };
+    const candidate = (id: string, entityType: string, name: string) => ({
+      id,
+      document_id: "doc-1",
+      entity_type: entityType,
+      properties: { name },
+      confidence: 1,
+      status: "pending",
+    });
+    serve({
+      "/documents/doc-1/reader": { status: 200, body: DOC },
+      "/documents/doc-1/extract": {
+        status: 200,
+        body: { document_id: "doc-1", text: DOC.text, candidates: [candidate("c1", "Person", "Amelia Burke"), candidate("c2", "Location", "Birmingham")] },
+      },
+      "/documents/doc-1/candidates/accept": {
+        status: 200,
+        body: {
+          accepted: [{ node_id: "n1", delta: { seq: 2, op: "add", nodes: [], edges: [] } }],
+          refusals: [{ candidate_id: "c2", words: "already decided; a finding is accepted or rejected once" }],
+        },
+      },
+    });
+    const onDelta = vi.fn();
+    render(
+      <DocumentReader
+        apiBaseUrl="http://api.test"
+        bearerToken="tok"
+        investigationId="inv-1"
+        documentId="doc-1"
+        ontology={ONTOLOGY}
+        labelOf={(id) => id}
+        onClose={vi.fn()}
+        onDelta={onDelta}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Quick scan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept all pending (2)" }));
+    const status = await screen.findByText(/1 accepted; 1 refused/);
+    expect(status.textContent).toContain("already decided");
+    expect(onDelta).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a finding beside Accept, writing nothing to the view (owner, 6 October 2026)", async () => {
     const fetchMock = serve({
       "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL },

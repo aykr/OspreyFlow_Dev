@@ -14,6 +14,7 @@ import type {
   MapHandlingPreviewResult,
   MapSampleRow,
   OntologySchema,
+  PipelineRunReport,
   PublishRecipeInput,
   RowTemplate,
   ScheduleUpdateInput,
@@ -487,7 +488,7 @@ export async function runRecipe(
   /** §8: "run a published recipe against a file" — omit to repeat
    * against the recipe's own recorded location. */
   sourceLocation?: string,
-): Promise<LoadReport> {
+): Promise<LoadReport | PipelineRunReport> {
   const response = await fetch(
     `${apiBaseUrl}/v1/investigations/${investigationId}/ingest/recipes/${recipeId}/run`,
     {

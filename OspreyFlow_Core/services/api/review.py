@@ -19,11 +19,12 @@ from `inferred` to `asserted` or reversing that. Conflating "accept" with "confi
 every accepted candidate silently asserted the moment a human first saw it, which is exactly the
 automatic promotion this codebase forbids.
 
-**No bulk accept, by construction, not by a checked rule.** `09_INGEST_STUDIO.md` §7: "No bulk
-accept above a confidence threshold. Not as a default, not as a setting." `accept_candidate`/
-`reject_candidate` both take exactly one `candidate_id` — there is no code path here that accepts
-a list of ids, a filter, or a threshold, so this is structurally true rather than a rule a caller
-could accidentally satisfy by passing a filter that happens to match one row.
+**No threshold or filter accept, by construction, not by a checked rule.** `09_INGEST_STUDIO.md`
+§7: "No bulk accept above a confidence threshold. Not as a default, not as a setting."
+`accept_candidate`/`reject_candidate` both take exactly one `candidate_id`, and the one multi-id
+surface that exists — `DocumentContentService.accept_all`, ADR-108 ruling Q1's "one run is one
+decision" — takes an explicit, enumerated list of ids a person looked at, never a filter, a
+document-wide flag or a threshold. There is still no code path that accepts by confidence.
 
 **A document's own raw text, since Phase 6a Stage 4.** `run_extraction`'s `text` argument used to
 be discarded once candidates were built — nothing anywhere served a document's text back by id.
@@ -144,6 +145,14 @@ class RunExtractionRequest(BaseModel):
 
 class AcceptCandidateRequest(BaseModel):
     properties_override: dict[str, Any] | None = None
+
+
+class BulkAcceptRequest(BaseModel):
+    """ADR-108 ruling Q1: an explicit, enumerated list of ids a person reviewed and accepts as one
+    decision. Deliberately not a filter, a document-wide flag or a confidence threshold —
+    `09_INGEST_STUDIO.md` §7's ban on those stands."""
+
+    candidate_ids: list[str]
 
 
 class NodeIdResponse(BaseModel):

@@ -240,6 +240,7 @@ from .datasets import (
 from .document_content import (
     UPLOAD_CONTENT_EXTENSIONS,
     DocumentAcceptResult,
+    DocumentBulkAcceptResult,
     DocumentContentService,
     DocumentExtractionResult,
     DocumentUploadResult,
@@ -4122,6 +4123,38 @@ async def accept_document_candidate_route(
         investigation_id=investigation.id,
         resolved_query={"document_id": document_id, "candidate_id": candidate_id},
         result_cardinality=1,
+    )
+    return result
+
+
+@app.post("/v1/investigations/{investigation_id}/documents/{document_id}/candidates/accept")
+async def accept_document_candidates_route(
+    investigation: InvestigationEditorDep,
+    document_id: str,
+    body: review_module.BulkAcceptRequest,
+    principal: PrincipalDep,
+    document_content: DocumentContentDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> DocumentBulkAcceptResult:
+    """ADR-108 ruling Q1's bulk accept: the enumerated findings a person reviewed, accepted as one
+    decision — each written `inferred` (rule 5), each refusal reported per item in words, and
+    never a filter or a confidence threshold."""
+    result = await document_content.accept_all(
+        investigation.id, document_id, body.candidate_ids, principal
+    )
+    for outcome in result.accepted:
+        await publish_delta(valkey, investigation.id, outcome.delta)
+    await audit.record(
+        principal=principal,
+        action="accept_document_candidates",
+        investigation_id=investigation.id,
+        resolved_query={
+            "document_id": document_id,
+            "candidate_ids": body.candidate_ids,
+            "refused": [r.candidate_id for r in result.refusals],
+        },
+        result_cardinality=len(result.accepted),
     )
     return result
 

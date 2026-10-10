@@ -9,7 +9,7 @@
 // error.
 import { useEffect, useState } from "react";
 
-import type { LoadReport, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
+import type { LoadReport, PipelineRunReport, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Panel } from "../../design/primitives/Panel";
@@ -150,7 +150,7 @@ export function PublishScreen({
   const [scheduleWatch, setScheduleWatch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadReport, setLoadReport] = useState<LoadReport | null>(null);
+  const [loadReport, setLoadReport] = useState<LoadReport | PipelineRunReport | null>(null);
   const [runSourceLocation, setRunSourceLocation] = useState("");
 
   useEffect(() => {
@@ -402,12 +402,43 @@ export function PublishScreen({
           <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
             <li>Load id: {loadReport.load_id}</li>
             <li>Rows read: {loadReport.rows_read}</li>
-            <li>Rows deduplicated: {loadReport.rows_deduplicated}</li>
+            {!("branches" in loadReport) && <li>Rows deduplicated: {loadReport.rows_deduplicated}</li>}
             <li>Nodes created: {loadReport.nodes_created}</li>
             <li>Nodes referenced: {loadReport.nodes_referenced}</li>
             <li>Edges created: {loadReport.edges_created}</li>
             <li>Rows rejected: {(loadReport.rejections ?? []).length}</li>
           </ul>
+          {/* ADR-108 phase C: a pipeline run answers per branch and per stage, refusals in words —
+              a stage that could not run says so here, never a silently thinner total. */}
+          {"branches" in loadReport && (
+            <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }} aria-label="Pipeline stages">
+              {(loadReport.branches ?? []).map((branch) => (
+                <li key={branch.source_id}>
+                  Source “{branch.source_label}”: {branch.report.rows_read} rows read,{" "}
+                  {branch.report.nodes_created} nodes created (load {branch.report.load_id})
+                </li>
+              ))}
+              {(loadReport.extracts ?? []).map((stage) => (
+                <li key={stage.node_id}>
+                  Extract ({stage.library}): {stage.documents_read} documents read,{" "}
+                  {stage.output === "review_queue"
+                    ? `${stage.candidates_queued} findings queued for review`
+                    : `${stage.nodes_written_inferred} inferred entities written`}
+                  {(stage.handling_overridden ?? 0) > 0
+                    ? `; ${stage.handling_overridden} carry an overridden marking — ${stage.override_reason}`
+                    : ""}
+                  {(stage.refusals ?? []).length > 0 ? ` — refused: ${(stage.refusals ?? []).join("; ")}` : ""}
+                </li>
+              ))}
+              {(loadReport.enriches ?? []).map((stage) => (
+                <li key={stage.node_id}>
+                  Enrich ({stage.geocoder}): {stage.locations_considered} places considered,{" "}
+                  {stage.matched_local} matched locally, {stage.matched_online} online, {stage.unmatched} unmatched
+                  {(stage.refusals ?? []).length > 0 ? ` — refused: ${(stage.refusals ?? []).join("; ")}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
       )}
     </div>

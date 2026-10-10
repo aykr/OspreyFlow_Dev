@@ -81,6 +81,7 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/nodes/{node_id}/picture"): V,
     ("POST", P + "/pictures"): V,
     ("POST", P + "/documents/{document_id}/extract"): E,
+    ("POST", P + "/documents/{document_id}/candidates/accept"): E,
     ("POST", P + "/documents/{document_id}/candidates/{candidate_id}/accept"): E,
     ("POST", P + "/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/accept"): E,
     # Owner, 6 October 2026: a finding rejected writes nothing, but changes the case's review list.
@@ -130,6 +131,7 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("PATCH", P + "/ingest/recipes/{recipe_id}"): E,
     ("GET", P + "/ingest/recipes/{recipe_id}/profile"): V,
     ("PUT", P + "/ingest/recipes/{recipe_id}/row-template"): E,
+    ("PUT", P + "/ingest/recipes/{recipe_id}/pipeline"): E,
     ("GET", P + "/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}"): V,
     ("POST", P + "/ingest/recipes/{recipe_id}/map/handling-preview"): V,
     ("POST", P + "/ingest/recipes/{recipe_id}/verify"): E,

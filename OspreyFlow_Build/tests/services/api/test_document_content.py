@@ -187,6 +187,23 @@ async def test_a_finding_is_inferred_until_accepted() -> None:
     assert await working.get_node("inv-1", accepted.node_id) is not None
 
 
+async def test_pending_findings_accept_as_one_decision_each_still_inferred() -> None:
+    """ADR-108 ruling Q1's bulk accept: an explicit list of ids as one decision — never a filter
+    or a confidence threshold (spec 09 §7's ban on those stands). Each accepted finding is still
+    written `inferred` (rule 5), and an id that cannot be accepted is refused in words, per item,
+    without failing the rest."""
+    service, _, _, _, graph, _ = await _service()
+    result = await service.extract("inv-1", "image-1", ANALYST)
+    ids = [c.id for c in result.candidates]
+    bulk = await service.accept_all("inv-1", "image-1", [*ids, "no-such"], ANALYST)
+    assert [a.node_id for a in bulk.accepted]
+    for outcome in bulk.accepted:
+        assert graph.nodes[outcome.node_id].provenance.state == ProvenanceState.INFERRED
+    (refusal,) = bulk.refusals
+    assert refusal.candidate_id == "no-such"
+    assert refusal.words
+
+
 async def test_a_finding_can_be_rejected_and_nothing_is_written() -> None:
     """Owner, 6 October 2026: a Reject beside each Accept in the Reader."""
     service, _, _, candidates, graph, _ = await _service()

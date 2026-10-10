@@ -20,6 +20,7 @@ import {
 import type { OntologyRegistry } from "../ontology/schema";
 import { placeOf, selectionIn, type SelectedWords } from "./designation";
 import {
+  acceptAllDocumentFindings,
   acceptDocumentFinding,
   designateInDocument,
   extractDocument,
@@ -82,6 +83,8 @@ export function DocumentReader({
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [findings, setFindings] = useState<Findings>({ state: "idle" });
   const [accepting, setAccepting] = useState<string | null>(null);
+  // ADR-108 ruling Q1: the outcome of an "Accept all pending", refusal words included.
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   // ADR-098 decision 5: words marked as an entity by the analyst.
   const textRef = useRef<HTMLDivElement>(null);
@@ -172,6 +175,46 @@ export function DocumentReader({
         candidates: findings.candidates.map((c) => (c.id === candidate.id ? { ...c, status: "accepted" } : c)),
       });
       await read(); // an accepted finding is marked in the text
+    } catch (err) {
+      setFindings({ state: "failed", message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setAccepting(null);
+    }
+  }
+
+  // ADR-108 ruling Q1: the pending findings, reviewed and accepted as one decision — the ids on
+  // screen, enumerated, never a filter or threshold. Refusals come back per item, in words.
+  async function acceptAll(view: DocumentReaderView) {
+    if (findings.state !== "ready") return;
+    const pending = findings.candidates.filter((c) => c.status !== "accepted" && c.status !== "rejected");
+    if (pending.length === 0) return;
+    setAccepting("all");
+    try {
+      const result = await acceptAllDocumentFindings(
+        apiBaseUrl,
+        bearerToken,
+        investigationId,
+        view.document_id,
+        pending.map((c) => c.id),
+      );
+      for (const outcome of result.accepted) onDelta?.(outcome.delta);
+      const refused = new Set(result.refusals.map((r) => r.candidate_id));
+      setFindings({
+        state: "ready",
+        candidates: findings.candidates.map((c) =>
+          refused.has(c.id) || c.status === "accepted" || c.status === "rejected"
+            ? c
+            : { ...c, status: "accepted" },
+        ),
+      });
+      setBulkMessage(
+        result.refusals.length > 0
+          ? `${result.accepted.length} accepted; ${result.refusals.length} refused: ${result.refusals
+              .map((r) => r.words)
+              .join("; ")}`
+          : null,
+      );
+      await read(); // the accepted findings are marked in the text
     } catch (err) {
       setFindings({ state: "failed", message: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -444,6 +487,27 @@ export function DocumentReader({
                 {findings.state === "ready" && findings.candidates.length === 0 && (
                   <p style={{ color: "var(--text-tertiary)", margin: 0 }}>No entities were found in this document.</p>
                 )}
+                {bulkMessage && (
+                  <p role="status" style={{ color: "var(--text-secondary)", margin: 0 }}>
+                    {bulkMessage}
+                  </p>
+                )}
+                {/* ADR-108 ruling Q1: one run's findings as one decision — the pending ids on
+                    screen, enumerated. Held Documents only; an email's findings accept singly. */}
+                {!(load.view.edge_id && load.view.event_id) &&
+                  findings.state === "ready" &&
+                  findings.candidates.filter((c) => c.status !== "accepted" && c.status !== "rejected").length > 1 && (
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ justifySelf: "start" }}
+                      disabled={accepting !== null}
+                      onClick={() => void acceptAll(load.view)}
+                    >
+                      Accept all pending (
+                      {findings.candidates.filter((c) => c.status !== "accepted" && c.status !== "rejected").length})
+                    </button>
+                  )}
                 {shownFindings.length > 0 && (
                   <ul role="list" aria-label="Entities found" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
                     {shownFindings.map((candidate) => (
