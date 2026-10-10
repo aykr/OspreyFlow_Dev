@@ -770,6 +770,9 @@ class LoadRecord(BaseModel):
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     ConnectorCatalogueEntry,
     ConnectDraftInput,
+    PipelineNode,
+    PipelineEdge,
+    PipelineGraph,
     StudioRecipeDraft,
     RecipeConnector,
     RecipeDefaults,

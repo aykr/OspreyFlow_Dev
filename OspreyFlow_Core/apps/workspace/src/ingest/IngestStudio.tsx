@@ -4,13 +4,15 @@
 // activate once the active draft's own gates say so — the same gates each
 // screen's own "Continue" button already enforces, checked again here
 // since a tab click bypasses that button.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { StudioRecipeDraft } from "../../../../packages/schemas/generated";
 import { AddFiles } from "../content/AddFiles";
 import { Tabs } from "../design/primitives/Tabs";
 import { CaseSwitcher } from "../investigation/CaseSwitcher";
 import { ConnectScreen } from "./ConnectScreen";
+import { PipelineCanvas } from "./dag/PipelineCanvas";
+import { fetchDraft } from "./api";
 import { MapScreen } from "./map/MapScreen";
 import { ProfileScreen } from "./ProfileScreen";
 import { PublishScreen } from "./publish/PublishScreen";
@@ -28,7 +30,7 @@ export interface IngestStudioProps {
   onOpenCase: (id: string) => void;
 }
 
-type Stage = "connect" | "profile" | "map" | "verify" | "publish" | "files";
+type Stage = "connect" | "profile" | "map" | "verify" | "publish" | "files" | "pipeline";
 
 export function IngestStudio({
   apiBaseUrl,
@@ -110,6 +112,8 @@ export function IngestStudio({
           { id: "publish", label: "Publish" },
           // ADR-094 step 3, spec 09 §7: the unstructured path, a screen of its own.
           ...(investigationId ? [{ id: "files", label: "Files" }] : []),
+          // ADR-108 phase A: the recipe as a pipeline, read-only; phase B makes it the editor.
+          ...(activeDraft ? [{ id: "pipeline", label: "Pipeline" }] : []),
         ]}
         activeId={stage}
         onChange={(id) => {
@@ -124,6 +128,8 @@ export function IngestStudio({
             goToPublish();
           } else if (id === "files") {
             setStage("files");
+          } else if (id === "pipeline") {
+            if (activeDraft) setStage("pipeline");
           } else {
             setStage("connect");
           }
@@ -183,6 +189,14 @@ export function IngestStudio({
             onBack={() => setStage("connect")}
           />
         )}
+        {stage === "pipeline" && activeDraft && (
+          <PipelineStage
+            apiBaseUrl={apiBaseUrl}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            recipeId={activeDraft.recipe_id}
+          />
+        )}
         {stage === "publish" && (
           <PublishScreen
             apiBaseUrl={apiBaseUrl}
@@ -198,6 +212,44 @@ export function IngestStudio({
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/** ADR-108 phase A: the draft read fresh (its pipeline is derived at read time), drawn read-only.
+ * Phase B replaces this stage with the editable canvas. */
+function PipelineStage({
+  apiBaseUrl,
+  bearerToken,
+  investigationId,
+  recipeId,
+}: {
+  apiBaseUrl: string;
+  bearerToken: string;
+  investigationId: string;
+  recipeId: string;
+}) {
+  const [draft, setDraft] = useState<StudioRecipeDraft | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setDraft(null);
+    setProblem(null);
+    fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeId)
+      .then((found) => !cancelled && setDraft(found))
+      .catch((err: unknown) => {
+        if (!cancelled) setProblem(err instanceof Error ? err.message : "The recipe could not be read.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken, investigationId, recipeId]);
+  if (problem) return <p role="alert" style={{ padding: "var(--sp-16)" }}>{problem}</p>;
+  if (!draft) return <p className="label" style={{ padding: "var(--sp-16)" }}>Reading the recipe…</p>;
+  if (!draft.pipeline) return <p className="label" style={{ padding: "var(--sp-16)" }}>This recipe has no pipeline to show.</p>;
+  return (
+    <div style={{ padding: "var(--sp-16)", overflow: "auto" }}>
+      <PipelineCanvas pipeline={draft.pipeline} />
     </div>
   );
 }
