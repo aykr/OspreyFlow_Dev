@@ -728,6 +728,40 @@ this operator-facing guide adjudicates or grants.
 
 ---
 
+## 8a. The four personas and the reporting walkthrough — `shipped`, 11 October 2026
+
+A demonstration deployment (`apply --demo-analyst`, then `make refresh`) has four accounts, one per
+seat, each opening exactly its own rail (`spec/06_DECISIONS.md` ADR-113 decision 8). Their passwords
+are in `deploy/generated/<profile>/deployment.env`, never printed:
+
+| Account | Role | What it shows | Password variable |
+| --- | --- | --- | --- |
+| `osprey-demo-analyst` | Analyst | the investigation: graph, map, alerts, ownership, reports | `OSPREY_DEMO_ANALYST_PASSWORD` |
+| `osprey-demo-engineer` | Data Engineer | the Ingest Studio: pipelines, rules, held rows | `OSPREY_DEMO_ENGINEER_PASSWORD` |
+| `osprey-demo-report-viewer` | Reports Viewer | Reports and Dashboards only — no graph | `OSPREY_DEMO_REPORT_VIEWER_PASSWORD` |
+| `osprey-demo-admin` | Administrator (and Analyst, Data Engineer) | everything, and the Admin area | `OSPREY_DEMO_ADMIN_PASSWORD` |
+
+The engineer holds Editor and the report viewer Viewer on the synthetic demo cases; neither is ever
+granted on a real dataset (rule 9).
+
+**The reporting walkthrough** (all synthetic, on "Operation Ledger — AML review"):
+
+1. **As the analyst** — *Reports* in the top bar: the case's figures, counted for the reader.
+2. **As the admin** — *Admin → Dashboards*: register a dashboard identity (its secret is shown once;
+   put it in `REPORT_SYNC_DASHBOARDS`); its *Figures* column says when it last pulled.
+3. **As the case's Author** — *Cases → Who can open this case*: give the dashboard's account id
+   Viewer. report-sync pulls the case as that identity within 15 minutes (restart `report-sync` to
+   pull now); every pull is in the export ledger.
+4. **As the report viewer** — *Dashboards* in the rail, or *Reports → Dashboards*: the Superset board,
+   branded OspreyFlow, drawn inside the Glass with no second sign-in. It opens only for someone who
+   could count every figure on it (ADR-111 Amendment 3).
+5. **Superset itself** — `http://localhost:8088`, *Sign in with Keycloak* as the admin, for building
+   boards on the reporting mart (`spec/05_DEPLOYMENT.md` §2.7).
+
+Requires `reporting: {sync: true, superset: true}` in `osprey.yaml`; `make refresh` does not rebuild
+the Superset image — after a change under `deploy/superset/`, build it and recreate the service
+(§2.7 of `spec/05_DEPLOYMENT.md`).
+
 ## 9. Related documents
 
 | Document | What it covers |
