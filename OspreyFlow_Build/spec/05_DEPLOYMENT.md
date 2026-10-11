@@ -24,6 +24,14 @@ transportability requirement, and it is verifiable: the acceptance scenarios in
 
 ## 2. The setup harness
 
+> **Superseded by design, not yet by build — `06_DECISIONS.md` ADR-114 (11 October 2026).** One
+> command, `ospreyflow` (`install`, `start`, `stop`, `status`, `open`, `update`, `demo`, `doctor`, …),
+> replaces this harness's Set-up console, `make refresh`, `make launch` and the welcome service; one
+> front proxy gives each app a name instead of a port; Small runs on one AWS or Azure VM with managed
+> services, Enterprise on EKS or AKS from a Helm chart. Until each stage of ADR-114 is built
+> (`process/HANDOVER_2026-10-11.md`), what this section describes is what runs.
+
+
 The harness is a **browser application**, not a command-line tool. One bootstrap command starts
 it; everything after that happens on screen.
 

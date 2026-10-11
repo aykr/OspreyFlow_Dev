@@ -929,6 +929,11 @@ Superset image only, never vendored, statically bundled into OspreyFlow or modif
 and does not work with Superset: it types a string parameter as `varchar`, and Superset looks
 charts and dashboards up by the URL's id as a string, so every edit and delete answered "Not found".
 
+**PaySim (ADR-055 Amendment, ADR-114 decision 5, 11 October 2026) — data, CC BY-SA 4.0**, verified
+from Kaggle's metadata for `ealaxi/paysim1` (Edgar Lopez-Rojas). Redistributable as a downloadable demo
+pack, never in a repository, with its attribution and licence text; anything derived from it and
+redistributed carries the same licence. Not on the code allowlist: it is data, recorded here.
+
 **ADR-109 data sources (10 October 2026) — data, not code, and never in the repository or CI.**
 **OpenSanctions** consolidated data: CC-BY-NC 4.0 for the bulk data — attribution required, and
 **non-commercial use only**; any commercial or client-facing use needs OpenSanctions' commercial

@@ -11647,3 +11647,143 @@ shown; a published version immutable; a reader without Viewer refused (404) and 
 `read_reports` refused (403); the PDF export refused above the exporter's handling and recorded in
 the ledger when allowed; keyboard cases for building a trend, adding it to a pack, publishing and
 exporting (rule 13); the demo personas each seeing exactly their own rail.
+
+## ADR-114 — Install, configure and distribute: a user repository, one `ospreyflow` command, demo packs, one address per app, Small and Enterprise on AWS and Azure — ACCEPTED (design)
+
+Status: **accepted on the owner's rulings of 11 October 2026; design only, nothing built.** The owner:
+"I want to bring on more developers and testers for this project along with distributing this to
+some pilot users, hence I need the install, configure and manage steps to be easy and intuitive";
+`make refresh` and `make launch` are "very confusing". Each decision below was put to the owner as
+options and ruled; the ruling is quoted where it changed an option. Decisions marked *(mine)* are
+details the owner may overrule.
+
+**What was true when decided** (survey of 11 October 2026): no CLI exists (`pyproject.toml` declares
+no entry point, though spec 05 §2.3 documents `osprey apply`); only `local-lite` is rendered (`small`
+takes the same Compose path, `cluster` raises `ClusterRendererNotBuilt`); the browser uses five
+ports (8080 Glass, 8081 Keycloak, 8088 Superset, 7070 launcher, 7100 Set-up console); Keycloak runs
+`start-dev` with an unpersisted database, so a restart loses accounts; the Glass's identity-provider
+origin is fixed at build time; the Conduit holds DuckDB in-process with an exclusive lock, so it
+cannot run on two machines; the Admin area cannot create people; Core's Makefile reaches into
+`../OspreyFlow_Build` for every gate though no product code imports it; the committed `osprey.yaml`
+carries an absolute path to the owner's machine; the live compose is hand-edited and has drifted
+from the renderer.
+
+### Decisions
+
+1. **Two repositories.** A user repository, `ospreyflow`, holds what is `OspreyFlow_Core` today and
+   is complete on its own: install, run, update, demo packs. It is **published from this
+   repository by a release step** that copies Core and fails if anything of `OspreyFlow_Build`, an
+   internal demo, a real-data exception or an absolute local path would leave with it. Pilot users and
+   testers get only that repository; developers who need the specification and tests also get this
+   one. Core is made self-sufficient: its Makefile and `package.json` stop naming `../OspreyFlow_Build`
+   (the gates move to this repository's own tooling), `harness bundle` leaves Core, and
+   `osprey.yaml` carries no machine path.
+2. **One command, `ospreyflow`, with verbs** — `install`, `start`, `stop`, `status`, `open`,
+   `update`, `demo list|add|remove`, `doctor` (prerequisite checks), `logs`, `backup`, `restore`,
+   `uninstall [--keep-data]` — with `--install`-style flags accepted as aliases. Every question
+   `install` asks can be answered by a flag or a file (`--config`, `--yes`), so testers and CI install
+   without prompts. Installed from the repository by a one-line bootstrap per OS (`install.sh`,
+   `install.ps1`) that brings `uv` and installs the command *(mine: Python, packaged as a `uv` tool,
+   so Windows, macOS and Linux share one implementation)*.
+3. **The old entry points are removed outright** (ruling: "Remove them outright") — `make refresh`,
+   `make launch`, the launcher page on 7070 and the standalone Set-up console on 7100. *Interpretation,
+   flagged:* the guided screens survive only as a temporary local page `ospreyflow install --gui`
+   serves while an install runs, since the owner chose `--gui` in decision 2; nothing stays listening
+   afterwards.
+4. **Prerequisites, per mode, in the README** *(mine, measured figures to replace estimates as each
+   mode is built)*:
+   - *Lite* — Docker (Desktop on Windows, with the WSL 2 back end, and on macOS; Engine with Compose v2
+     on Linux), set to start at sign-in; 16 GB memory (32 GB comfortable); 60 GB free disk plus the
+     chosen demo packs; Git; internet for the first install.
+   - *Small* — an AWS or Azure account with the permissions listed per cloud; OpenTofu; the cloud's
+     command line signed in; a DNS name the client controls.
+   - *Enterprise* — Small's, plus EKS or AKS quota including GPU nodes for the models, and Helm.
+5. **Demo packs, offered at install and addable later** (`ospreyflow demo add`, and an Admin-area
+   *Demo packs* tab). The packs: **Operation Ledger** (AML, synthetic — added to the demo registry as
+   `shipped`, which it was missing from), **Fixture Corp** (fraud and ownership, synthetic,
+   `shipped`), **HMP** (organised crime, synthetic, `shipped`), and **PaySim** (ruling: "Include PaySim
+   now"). **PaySim's licence was verified on 11 October 2026** from Kaggle's own metadata for
+   `ealaxi/paysim1`: *CC BY-SA 4.0*, owner Edgar Lopez-Rojas — redistribution permitted with
+   attribution, the licence carried with it, and any adapted form (the seeded graph and events) under
+   the same licence. It is therefore reclassified `shipped` by an ADR-055 amendment, carried as a
+   downloadable pack (471 MB, checksum-verified, with its attribution and licence file) rather than in
+   the repository, and recorded in the licence register as a data licence. Never offered: Enron (real
+   data), VAST (not admitted), OpenSanctions (non-commercial). The synthetic packs are generated by
+   code already in the repository, so for them "download" means "seed". The basemap (5 GB in full) is
+   offered as an optional regional pack *(mine)*. A pack loads into its own named case with the
+   installing administrator as Author.
+6. **One address per app, behind one front proxy.** Caddy (Apache-2.0, automatic HTTPS) routes by
+   name: the Glass (with the Studio and the Admin area inside it) at the base name, Superset at `bi.`,
+   Keycloak at `id.`. On a laptop the base is `ospreyflow.localhost` *(mine; a browser that does not
+   resolve `*.localhost` falls back to `localhost` names — to be checked on Safari, Chrome, Edge and
+   Firefox before it is relied on)*; in the cloud, the client's domain. No other port is published.
+   Keycloak gets a fixed hostname (`KC_HOSTNAME`), and the Glass reads the identity provider's address
+   at run time from the deployment, never at build time.
+7. **Running: containers only** (ruling: "installing Docker should be part of the pre-requisites. Also
+   this will help protect me from OS level vulnerabilities and compatibility issues"). Every service
+   carries a Docker restart policy; `ospreyflow start` and `stop` drive Compose; nothing is registered
+   with the operating system. On a laptop the stack returns after a reboot only once Docker Desktop
+   starts, which is why "start at sign-in" is a prerequisite.
+8. **Small = one VM plus the cloud's managed services.** AWS: EC2, RDS for PostgreSQL, S3, Secrets
+   Manager, AWS Backup, EC2 automatic recovery. Azure: a VM, Azure Database for PostgreSQL, Blob
+   Storage, Key Vault, Azure Backup, VM auto-repair. Docker on the VM restarts the stack; the cloud
+   protects the data. S3 works through the existing S3-protocol media adapter; **Blob needs an adapter
+   of its own** (with its conformance suite). DuckDB stays.
+9. **Enterprise = Kubernetes (EKS or AKS) from a Helm chart, clustered across VMs.** The Glass, the
+   Conduit, report-sync, Superset and the proxy run as replicas. The changes clustering needs: the
+   **ClickHouse analytics adapter** (planned since the start; written to pass the existing
+   AnalyticsPort suite, `trend` included) replacing the in-process DuckDB; ArcadeDB in its replicated
+   (Raft) mode; Keycloak clustered over Postgres; Valkey and Postgres as managed services; OpenSearch as
+   Amazon OpenSearch Service on AWS and self-hosted in the cluster on Azure, which has no managed
+   OpenSearch *(mine)*; the three background workers built as images; the launcher's in-memory
+   sessions retired with the launcher.
+10. **Infrastructure as code: OpenTofu** (MPL-2.0, on the allowlist; HashiCorp Terraform's BSL is
+    not), one module set per cloud sharing one shape, for Small and Enterprise.
+11. **Models: self-hosted by default, the client's own provider when they choose** (ruling: "with
+    the ability for the client to specify their own in case they have agreements in place with closed
+    source frontier model providers like Gemini or Open AI or Anthropic"). Ollama on Lite, vLLM on a GPU
+    VM or node pool otherwise; a client may name its own provider through LiteLLM, which already sits
+    behind the ModelPort. The choice is recorded per deployment, its key held in the secrets store, and
+    shown in the Admin area's System tab with the notice that case content then leaves the deployment.
+12. **Accounts, managed in the Admin area.** Keycloak (free, open source) in production mode with its
+    data in the deployment's Postgres, so nothing is lost on restart. The Admin area gains: invite a
+    person (email or a one-time link), set clearance, unit and roles, disable, re-enable, reset
+    sign-in — every change audited — and the *Demo packs* tab. The first administrator is created by
+    the install. Connecting a client's own directory (Entra ID, Okta) through Keycloak is an option on
+    Small and Enterprise.
+13. **Versioned releases.** Each release is tagged in the user repository with signed images (cosign,
+    Apache-2.0) and a changelog. `ospreyflow update` checks for a newer release, backs up, applies,
+    verifies and can roll back; the Admin area's System tab shows the version and whether an update
+    exists; cloud installs move by the same OpenTofu and Helm releases.
+
+**What this supersedes.** Spec 05 §2–§3's install path (the harness and Set-up console, `make
+refresh`, `make launch`, the welcome service, ADR-107), and `process/CLAUDE.md`'s convention "No
+`osprey` CLI yet", once the command exists. The renderer stays the single source of what a deployment
+is (ADR-049); the command drives it.
+
+**Tests to write first, named, per stage** (the build is staged in the handover note,
+`process/HANDOVER_2026-10-11.md`): the publish step refusing a Build path, an internal demo, a
+real-data exception and an absolute path (each planted); `ospreyflow doctor` refusing each missing
+prerequisite in words; a non-interactive Lite install from a clean checkout reaching a signed-in Glass
+at the single address (over the wire); `start`/`stop`/`status` round trip; a demo pack's checksum
+refused when wrong and PaySim's licence and attribution present beside it; the proxy publishing
+nothing but its own ports; Keycloak keeping an account across a restart; the Admin area's invite,
+disable and reset routes behind `manage_people` with each change audited, refused to anyone else;
+`update` rolling back a release that fails verification; the ClickHouse adapter passing the
+AnalyticsPort suite unchanged; the Blob adapter passing the MediaStore suite; OpenTofu plans for both
+clouds validated in CI without credentials (`tofu validate`); the Helm chart rendering with every
+stateful component external.
+
+### ADR-055, Amendment (11 October 2026) — PaySim's licence verified; reclassified `shipped`, as a downloadable pack
+
+ADR-055 §3–4 required PaySim's licence to be verified and recorded "before any change of
+classification". **Verified 11 October 2026** from Kaggle's public metadata for `ealaxi/paysim1`
+(`/api/v1/datasets/view/ealaxi/paysim1`): title "Synthetic Financial Datasets For Fraud Detection",
+owner and creator Edgar Lopez-Rojas, licence **CC BY-SA 4.0**. The data is synthetic (generated by the
+PaySim simulator), so no real-data exception applies. The owner ruled it included in the starter demo
+packs (ADR-114 decision 5). It is reclassified **`shipped`** on these conditions: it travels as a
+downloadable pack, never in a repository; the pack carries the attribution (Lopez-Rojas, Elmir and
+Axelsson, *PaySim: A financial mobile money simulator for fraud detection*, EMSS 2016) and the CC
+BY-SA 4.0 text; and anything derived from it that is redistributed — a seeded graph, its events —
+carries the same licence. The demo registry changes with the pack's build (handover stage B0), not
+before: until then `paysim` stays `internal` in `scripts/demo_registry.py`, and the gate is unchanged.
