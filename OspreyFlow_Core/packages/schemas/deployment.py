@@ -340,6 +340,19 @@ class NetworkConfig(BaseModel):
         return self
 
 
+class ReportingConfig(BaseModel):
+    """Dashboards for the business (`06_DECISIONS.md` ADR-111 Amendment 2): the report sync service
+    and Superset, each a component of its own with its own memory, both off by default."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sync: bool = Field(default=False, description="Default: false — run report-sync")
+    sync_interval_seconds: int = Field(default=900, ge=60, description="Default: 900")
+    sync_memory: str = Field(default="256m", description="Default: 256m")
+    superset: bool = Field(default=False, description="Default: false — run Superset")
+    superset_memory: str = Field(default="2g", description="Default: 2g")
+
+
 class OspreyConfig(BaseModel):
     """The whole of `osprey.yaml`.
 
@@ -357,6 +370,7 @@ class OspreyConfig(BaseModel):
     cluster: ClusterConfig = Field(default_factory=ClusterConfig)
     network: NetworkConfig = Field(default_factory=NetworkConfig)
     map: MapConfig | None = Field(default=None, description="Default: none declared")
+    reporting: ReportingConfig = Field(default_factory=ReportingConfig)
 
     @model_validator(mode="after")
     def _cluster_hosts_belong_to_the_cluster_profile(self) -> OspreyConfig:

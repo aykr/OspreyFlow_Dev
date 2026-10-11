@@ -114,6 +114,9 @@ def ensure_client(*, issuer: str, realm: str, token: str, client: dict[str, Any]
             "webOrigins": client["webOrigins"],
             "attributes": attributes,
         }
+        if "secret" in client:
+            # A confidential client's secret comes from the env file; keep Keycloak in step with it.
+            wanted["secret"] = client["secret"]
         if all(existing.get(k) == v for k, v in wanted.items()):
             return "already registered"
         status, body = _call(

@@ -71,6 +71,7 @@ from harness.render import (
     write_config_copy,
 )
 from harness.render import write as write_artefacts
+from harness.reporting import reporting_secrets
 from schemas.deployment import OspreyConfig, Profile
 
 #: How long any one service gets to become healthy. Generous because the Conduit applies the graph
@@ -489,6 +490,8 @@ def main(argv: list[str] | None = None) -> int:
             + f"OIDC_TOKEN_EXCHANGE_CLIENT_ID={CONDUIT_CLIENT_ID}\n"
             + f"OIDC_TOKEN_EXCHANGE_CLIENT_SECRET={secret}\n"
             + f"OIDC_ADMIN_USERS_URL=http://keycloak:8080/admin/realms/{args.realm}/users\n"
+            # ADR-111 Amendment 2: the reporting components' secrets, only for what is switched on.
+            + reporting_secrets(config)
             + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\n"
             # **Every one of these four, not just the host.** `services/api/config.py` defaults
             # `POSTGRES_PORT` to **5433** — a workaround for `deploy/compose/dev.yaml` publishing

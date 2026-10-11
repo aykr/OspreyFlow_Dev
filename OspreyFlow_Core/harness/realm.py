@@ -324,6 +324,32 @@ def _harness_client() -> dict[str, Any]:
     return _loopback_public_client(HARNESS_CLIENT_ID, HARNESS_ORIGIN, HARNESS_REDIRECT_URI)
 
 
+#: ADR-111 Amendment 2: Superset's sign-in client.
+SUPERSET_CLIENT_ID = "osprey-superset"
+
+
+def superset_client(origin: str) -> dict[str, Any]:
+    """Superset signs people in through this realm (ADR-111 Amendment 2): a confidential client —
+    its secret set at registration from the env file, never in the realm document — whose only
+    redirect is Superset's own sign-in callback, carrying the principal claims (`roles` among them)
+    so Superset maps OspreyFlow's roles onto its own."""
+    origin = origin.rstrip("/")
+    return {
+        "clientId": SUPERSET_CLIENT_ID,
+        "name": "Superset (reference dashboard)",
+        "enabled": True,
+        "protocol": "openid-connect",
+        "publicClient": False,
+        "standardFlowEnabled": True,
+        "directAccessGrantsEnabled": False,
+        "serviceAccountsEnabled": False,
+        "redirectUris": [f"{origin}/oauth-authorized/keycloak"],
+        "webOrigins": [origin],
+        "attributes": {"post.logout.redirect.uris": f"{origin}/"},
+        "protocolMappers": _claim_mappers(),
+    }
+
+
 def render_realm(
     config: OspreyConfig, *, realm_name: str = "osprey", demo_analyst: bool = False
 ) -> dict[str, Any]:

@@ -30,8 +30,10 @@ from harness.realm import (
     LAUNCHER_CLIENT_ID,
     LOGIN_THEME_NAME,
     REALM_DISPLAY_NAME,
+    SUPERSET_CLIENT_ID,
     generate_client_secret,
     render_realm,
+    superset_client,
 )
 from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
 from schemas.deployment import OspreyConfig
@@ -103,6 +105,17 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
     lines.append(
         keycloak_admin.ensure_service_account_roles(issuer=issuer, realm=realm, token=token)
     )
+    superset_secret = values.get("SUPERSET_OIDC_CLIENT_SECRET")
+    if superset_secret:
+        # ADR-111 Amendment 2: Superset's sign-in, only when the deployment runs Superset.
+        origin = values.get("SUPERSET_PUBLIC_ORIGIN", "http://localhost:8088")
+        lines.append(
+            f"sign-in client {SUPERSET_CLIENT_ID}: "
+            + keycloak_admin.ensure_client(
+                issuer=issuer, realm=realm, token=token,
+                client={**superset_client(origin), "secret": superset_secret},
+            )
+        )  # fmt: skip
     for client_id in (LAUNCHER_CLIENT_ID, HARNESS_CLIENT_ID):
         (client,) = [c for c in rendered["clients"] if c["clientId"] == client_id]
         lines.append(

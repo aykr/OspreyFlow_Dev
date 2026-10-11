@@ -63,6 +63,7 @@ from harness.images import (
 )
 from harness.profiles import arcadedb_java_memory_opts
 from harness.realm import CONDUIT_CLIENT_ID, HARNESS_PORT
+from harness.reporting import reporting_env, reporting_services
 from schemas.deployment import (
     EXTRACTION_CONTEXT_TOKENS,
     EXTRACTION_MODELS,
@@ -860,6 +861,9 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         if entry.service == "ollama":
             service["command"] = [render_ollama_pull_script(config)]
         services[entry.service] = service
+    # ADR-111 Amendment 2: report-sync (the Conduit's own image) and Superset, when switched on.
+    api = next(entry for entry in images if entry.service == "api")
+    services.update(reporting_services(config, api_image=api.image, building=api.building))
     document = {
         "name": f"osprey-{config.profile.value}",
         "services": services,
@@ -928,6 +932,7 @@ def _render_env(config: OspreyConfig) -> str:
     ]
     if config.models.hosted_fallback is not None:
         lines.append(f"OSPREY_HOSTED_FALLBACK={config.models.hosted_fallback}")
+    lines += reporting_env(config, keycloak_port=PORT_OVERRIDES["keycloak"][1])
     # §2.5: "It never sees a secret. Credentials are entered as references." Nothing above is a
     # value; every one of these is a name, a path or a choice already written in osprey.yaml.
     return _comment_block(_BANNER, "#") + "\n".join(lines) + "\n"

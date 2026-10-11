@@ -615,3 +615,20 @@ def test_a_refresh_grants_the_conduits_account_the_roles_it_lacks(tmp_path: Path
     assert sorted(keycloak.granted) == ["impersonation", "manage-clients", "manage-users", "view-users"]
     assert "realm-admin" not in keycloak.granted
     assert "the Conduit's account already holds its roles" in _register(_env(tmp_path))
+
+
+def test_superset_gets_its_sign_in_client_only_when_it_is_configured(tmp_path: Path, keycloak: FakeKeycloak) -> None:
+    """ADR-111 Amendment 2: Superset signs people in through the deployment's identity provider —
+    a confidential client whose secret comes from the env file and whose only redirect is
+    Superset's own address. A deployment without Superset gets no such client."""
+    _register(_env(tmp_path))
+    assert "osprey-superset" not in {c["clientId"] for c in keycloak.clients.values()}
+
+    lines = _register(_env(tmp_path, "SUPERSET_OIDC_CLIENT_SECRET=superset-secret",
+                           "SUPERSET_PUBLIC_ORIGIN=http://localhost:8088"))  # fmt: skip
+    (client,) = [c for c in keycloak.clients.values() if c["clientId"] == "osprey-superset"]
+    assert client["publicClient"] is False and client["secret"] == "superset-secret"
+    assert client["redirectUris"] == ["http://localhost:8088/oauth-authorized/keycloak"]
+    assert "roles" in {m["name"] for m in client["protocolMappers"]}
+    assert any(line.startswith("sign-in client osprey-superset") for line in lines)
+    assert "superset-secret" not in "\n".join(lines), "a secret is never printed"
