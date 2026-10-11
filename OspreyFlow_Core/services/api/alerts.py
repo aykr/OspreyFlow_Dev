@@ -255,15 +255,17 @@ class AlertStore:
         disposition_reason: str | None = None,
         decided_by: str | None = None,
         alert_node_id: str | None = None,
+        edge_ids: Sequence[str] | None = None,
     ) -> Alert:
         """Moves one case alert from a status in `expect_status` to `status`, in one statement, so
-        two members acting at once cannot both win (the loser is told it moved on)."""
+        two members acting at once cannot both win (the loser is told it moved on). `alert_node_id`
+        and `edge_ids`, when given, replace what the alert cites with the revisions triage wrote."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "UPDATE alerts SET status = $3, assignee = $4, disposition = $5, "
                 "disposition_reason = $6, decided_by = $7, "
                 "decided_at = CASE WHEN $7::text IS NULL THEN NULL ELSE now() END, "
-                "alert_node_id = COALESCE($8, alert_node_id) "
+                "alert_node_id = COALESCE($8, alert_node_id), edge_ids = COALESCE($10, edge_ids) "
                 "WHERE id = $1 AND investigation_id = $2 AND status = ANY($9::text[]) "
                 f"RETURNING {_COLUMNS}",
                 alert_id,
@@ -275,6 +277,7 @@ class AlertStore:
                 decided_by,
                 alert_node_id,
                 list(expect_status),
+                None if edge_ids is None else json.dumps(list(edge_ids)),
             )
         if row is None:
             raise AlertTriageConflict(alert_id)

@@ -11142,3 +11142,34 @@ Studio recipe once, as v15 did); re-seed Operation Ledger (the layered structure
 screening list); deploy rules in the *Alerts* place and run the onboarding applications through a
 pipeline to see the gate fire live; the deck's captures. Found and not fixed, the owner's call: a
 re-run duplicates its events in analytics (spec 09 §6).
+
+
+### ADR-109, Amendment 7 (11 October 2026) — a true positive on a screening alert confirms its match
+
+Status: **owner ruling**, given in answer to a question put to the owner on 11 October 2026 after the
+live checks. It extends ruling D2 ("a true positive confirms the alert's node") and is consistent
+with rule 5: the confirmation is still a person's — the analyst closing the alert with a written
+reason — never a score or a threshold.
+
+**The question.** Closing PRIYA NAIR's PEP alert as a true positive confirmed the `Alert` node only.
+The match it had found — the scored, `inferred` `SAME_AS` from NAIR to the listed "Priya NAIR" —
+stayed inferred, so due diligence went on reading "possibly … on a politically exposed persons list"
+for a match the analyst had just confirmed. **Ruled: also confirm the match.**
+
+**Built.** `alert_queue.dispose`: on a true positive of a `kyc_screening` alert, every cited
+`SAME_AS` still inferred is confirmed in the same transaction as the alert's node
+(`services/extract/writer.confirm_edge` — a new revision, `confirmed_by` and `last_confirmed` set,
+the model's figure cleared, never an in-place edit). `AlertStore.set_triage` replaces the alert's
+cited link ids with the new revisions in the same statement that closes it, since an alert whose
+cited link the reader cannot find is withheld whole (`explain`). Due diligence (`kyc.assess`) reads
+whether each match is asserted: "confirmed on a sanctions list as …" against "possibly … on a
+sanctions list". A false positive confirms nothing and leaves the match inferred.
+
+**Test.** `tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not`,
+red first (the match stayed `inferred`); with the cited-id replacement planted out, the closed alert
+is withheld (`AlertNotFoundError`), so the case guards that too.
+
+**Not changed.** A monitoring alert's true positive still confirms only its node: the transactions
+it cites are recorded facts already asserted, and nothing it cites is a model's suggestion. A general
+edge confirm/retract route is still not built (`GraphPort` has no `get_edge`); `confirm_edge` takes
+a link its caller has already read as the reader.

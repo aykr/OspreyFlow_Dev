@@ -393,3 +393,44 @@ async def test_the_gate_the_routes_build_carries_what_the_kyc_and_pattern_rules_
     )  # type: ignore[arg-type]  # fmt: skip
     assert gate is not None
     assert (gate.screening, gate.compute, gate.expiries, gate.patterns) == (screening, compute, expiries, patterns)
+
+
+from services.api.alert_queue import dispose, explain  # noqa: E402
+
+
+async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+    stores: dict[str, Any],
+) -> None:
+    """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+    positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+    asserted, the alert still opens (its cited link follows the new revision), and due diligence
+    says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        alerts = await _alerts(stores, case)
+        petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+        nair = next(a for a in alerts if "Nair" in (a.words or ""))
+
+        closed = await dispose(stores["alerts"], graph, case, petrov.id, OFFICER,
+                               disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
+        matches = [e for e in why.edges if e.type == "SAME_AS"]
+        assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
+        assert matches[0].provenance.state is ProvenanceState.ASSERTED
+        assert matches[0].provenance.confirmed_by == OFFICER.id
+
+        await dispose(stores["alerts"], graph, case, nair.id, OFFICER,
+                      disposition="false_positive", reason="A different person")  # fmt: skip
+        nair_match = [e for e in await graph.edges_among(nair.referent_node_ids, OFFICER) if e.type == "SAME_AS"]
+        assert [e.provenance.state for e in nair_match] == [ProvenanceState.INFERRED]
+
+        halcyon = await graph.find_node("Organisation", "name", "Halcyon Marine Ltd", OFFICER)
+        assert halcyon is not None
+        seen = await assess(graph, ComputeRustworkxAdapter(), halcyon.id, OFFICER, today=date(2026, 10, 11))
+        words = [f.words for f in seen.factors if f.factor == "owner_listed"]
+        assert any("Elena Petrov" in w and "confirmed on a sanctions list" in w for w in words), words
+        assert any("Priya Nair" in w and "possibly" in w for w in words), words

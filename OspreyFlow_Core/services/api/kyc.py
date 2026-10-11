@@ -22,7 +22,15 @@ import yaml
 
 from ports.compute import ComputePort
 from ports.graph import GraphPort
-from schemas.domain import ExpandRequest, KycDocument, KycStatus, Node, Principal, RiskFactor
+from schemas.domain import (
+    ExpandRequest,
+    KycDocument,
+    KycStatus,
+    Node,
+    Principal,
+    ProvenanceState,
+    RiskFactor,
+)
 
 from .kyc_rules import CUSTOMER_TYPES, document_state, party_name
 from .ownership import trace_for
@@ -54,11 +62,21 @@ async def _neighbours(
     return [n for n in found.nodes if n.id != node_id]
 
 
-async def _listed(graph: GraphPort, node_id: str, reader: Principal) -> list[Node]:
+async def _listed(graph: GraphPort, node_id: str, reader: Principal) -> list[tuple[Node, bool]]:
+    """The listed parties matched to `node_id`, each with whether a person has confirmed the match
+    (ADR-109 Amendment 7: a true positive on its screening alert asserts the `SAME_AS`)."""
+    found = await graph.expand(
+        ExpandRequest(node_ids=[node_id], edge_types=["SAME_AS"], direction="both"), reader
+    )
+    confirmed = {
+        e.target if e.source == node_id else e.source
+        for e in found.edges
+        if e.type == "SAME_AS" and e.provenance.state is ProvenanceState.ASSERTED
+    }
     return [
-        n
-        for n in await _neighbours(graph, node_id, reader, "SAME_AS", "both")
-        if n.properties.get("listing")
+        (n, n.id in confirmed)
+        for n in found.nodes
+        if n.id != node_id and n.properties.get("listing")
     ]
 
 
@@ -125,12 +143,14 @@ async def assess(
             )
             break
 
-    for listed in await _listed(graph, customer.id, reader):
+    for listed, sure in await _listed(graph, customer.id, reader):
         kind = str(listed.properties["listing"])
         factors.append(RiskFactor(
             factor=f"listed_{kind}", weight=weights[f"listed_{kind}"],
-            words=f"Possibly {party_name(listed)} on {_LISTING_WORDS.get(kind, 'a list')} "
-                  f"({listed.properties.get('list_name')}) — a suggestion to confirm",
+            words=(f"Confirmed as {party_name(listed)} on {_LISTING_WORDS.get(kind, 'a list')} "
+                   f"({listed.properties.get('list_name')})" if sure else
+                   f"Possibly {party_name(listed)} on {_LISTING_WORDS.get(kind, 'a list')} "
+                   f"({listed.properties.get('list_name')}) — a suggestion to confirm"),
         ))  # fmt: skip
 
     if customer.type == "Organisation":
@@ -140,12 +160,14 @@ async def assess(
             party = names.get(owner.node_id)
             if party is None or not owner.beneficial_owner:
                 continue
-            for listed in await _listed(graph, owner.node_id, reader):
+            for listed, sure in await _listed(graph, owner.node_id, reader):
+                listing = _LISTING_WORDS.get(str(listed.properties["listing"]), "a list")
                 factors.append(RiskFactor(
                     factor="owner_listed", weight=weights["owner_listed"],
-                    words=f"Beneficial owner {party_name(party)} ({owner.cumulative_percent:.4g}%) "
-                          f"possibly {party_name(listed)} on "
-                          f"{_LISTING_WORDS.get(str(listed.properties['listing']), 'a list')}",
+                    words=(f"Beneficial owner {party_name(party)} "
+                           f"({owner.cumulative_percent:.4g}%) "
+                           + (f"confirmed on {listing} as {party_name(listed)}" if sure
+                              else f"possibly {party_name(listed)} on {listing}")),
                 ))  # fmt: skip
 
     for endpoint in await _neighbours(graph, customer.id, reader, "USES", "out"):

@@ -32,7 +32,10 @@ node itself records which of the two it was before a confirmation — reconstruc
 a new field nothing here has a use for otherwise. `inferred` is the conservative, honest choice: it
 says "not a confirmed fact", which is the only thing retraction is actually asserting.
 
-**Edge confirm/retract are not built this stage.** `GraphPort` has no `get_edge` method — there is
+**Edge confirm is built for one caller only** (ADR-109 Amendment 7): `confirm_edge` below takes a
+link the caller has already read *as the reader* — a screening alert's cited `SAME_AS`, from
+`edges_among` — so it needs no `get_edge`. A general edge confirm/retract route is still not built:
+`GraphPort` has no `get_edge` method — there is
 no way to fetch an existing edge's current state before deciding whether a requested transition is
 valid, and adding one is a real port change needing its own conformance-suite coverage first,
 not a small addition folded in here. This is deferred alongside edge/relationship
@@ -43,9 +46,12 @@ needing this in the first place.
 
 from __future__ import annotations
 
-from conduit_common.identity import new_node_id, now_utc
+from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ports.graph import GraphPort
 from schemas.domain import (
+    Edge,
+    EdgeId,
+    EdgeWrite,
     Node,
     NodeId,
     NodeWrite,
@@ -155,6 +161,25 @@ async def confirm_node(
         raise ProvenanceTransitionError(f"{node_id} is already asserted")
     replacement = _replacement_for(node, principal, new_state=ProvenanceState.ASSERTED)
     return await graph.supersede_node(node_id, replacement, tx)
+
+
+async def confirm_edge(graph: GraphPort, edge: Edge, principal: Principal, *, tx: TxId) -> EdgeId:
+    """An inferred link, already read as `principal`, made asserted by that person: a new revision
+    naming who confirmed it and when, the model's figure cleared (as `confirm_node` does)."""
+    if edge.provenance.state is ProvenanceState.ASSERTED:
+        raise ProvenanceTransitionError(f"{edge.id} is already asserted")
+    now = now_utc()
+    provenance = edge.provenance.model_copy(
+        update={"state": ProvenanceState.ASSERTED, "confirmed_by": principal.id,
+                "last_confirmed": now, "extraction_confidence": None}
+    )  # fmt: skip
+    replacement = EdgeWrite(
+        id=new_edge_id(), type=edge.type, source=edge.source, target=edge.target,
+        properties=edge.properties, interval=edge.interval, occurrences=edge.occurrences,
+        basis=edge.basis, provenance=provenance, handling=edge.handling,
+        created_by=principal.id, created_at=now,
+    )  # fmt: skip
+    return await graph.supersede_edge(edge.id, replacement, tx)
 
 
 async def retract_node(

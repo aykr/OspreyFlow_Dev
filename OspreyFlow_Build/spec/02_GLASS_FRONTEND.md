@@ -841,7 +841,9 @@ markings no single marking covers. Where the alert stands is one sentence — "O
 puts it **on the canvas** (its node, its entities and the links it cites, all or none; the view
 switches to the graph with those nodes selected; the alert's node is labelled by what its rule
 found, "KYC screening alert", never by its id — rule 7) and closes it as a true or false positive with a
-required reason; a true positive confirms the alert's node (rule 5). A Viewer reads only. Its
+required reason; a true positive confirms the alert's node (rule 5) and, for a screening alert,
+the match it found, so due diligence then says "confirmed" rather than "possibly" (ADR-109
+Amendment 7). A Viewer reads only. Its
 other tabs: **Rules** (every rule, what it looks for in words, where it runs; an Author deploys —
 typology, parameters, before or after commit, a time budget for before — and retires), **Held
 rows** (Editor and above: rows a failing pre-commit rule held, grouped by load, with the rule and

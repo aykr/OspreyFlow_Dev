@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from services.extract.writer import confirm_node
+from services.extract.writer import confirm_edge, confirm_node
 
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
@@ -222,16 +222,29 @@ async def dispose(
     if alert.status == "closed":
         raise AlertTriageConflict(alert_id)
     confirmed_node: str | None = None
-    if disposition == "true_positive" and alert.alert_node_id is not None:
-        node = nodes[alert.alert_node_id]
-        if node.provenance.state is not ProvenanceState.ASSERTED:
+    cited: list[str] | None = None
+    if disposition == "true_positive":
+        node = nodes.get(alert.alert_node_id) if alert.alert_node_id is not None else None
+        # ADR-109 Amendment 7 (owner ruling, 11 October 2026): a true positive on a screening alert
+        # is the analyst's confirmation of the match it found — its inferred `SAME_AS` becomes
+        # asserted, and the alert cites the new revision so it still opens.
+        matches = [
+            e for e in await _cited_edges(alert, graph, member, list(nodes))
+            if alert.typology == "kyc_screening" and e.type == "SAME_AS"
+            and e.provenance.state is not ProvenanceState.ASSERTED
+        ]  # fmt: skip
+        if (node is not None and node.provenance.state is not ProvenanceState.ASSERTED) or matches:
             tx = await graph.begin_transaction()
             try:
-                confirmed_node = await confirm_node(graph, alert.alert_node_id, member, tx=tx)
+                if node is not None and node.provenance.state is not ProvenanceState.ASSERTED:
+                    confirmed_node = await confirm_node(graph, node.id, member, tx=tx)
+                renamed = {e.id: await confirm_edge(graph, e, member, tx=tx) for e in matches}
             except Exception:
                 await graph.rollback_transaction(tx)
                 raise
             await graph.commit_transaction(tx)
+            if renamed:
+                cited = [renamed.get(edge_id, edge_id) for edge_id in alert.edge_ids]
     return await store.set_triage(
         alert_id,
         investigation_id,
@@ -242,6 +255,7 @@ async def dispose(
         disposition_reason=reason,
         decided_by=member.id,
         alert_node_id=confirmed_node,
+        edge_ids=cited,
     )
 
 
