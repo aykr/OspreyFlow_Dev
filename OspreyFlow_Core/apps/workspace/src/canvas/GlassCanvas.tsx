@@ -1255,6 +1255,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         WorkingSetNodeAttributes,
         WorkingSetEdgeAttributes
       >(graph, containerRef.current, {
+        // The toolbar above and the selection bar below sit over the canvas: fitting with Sigma's
+        // 30px framed the outermost nodes under them (found live, 11 October 2026).
+        stagePadding: 80,
         defaultNodeType: "glass-node",
         nodeProgramClasses: { "glass-node": NODE_PROGRAM },
         defaultEdgeType: "glass-edge",

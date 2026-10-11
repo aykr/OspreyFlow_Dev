@@ -96,7 +96,8 @@ test("a node's neighbourhood risk is scored by keyboard, each contribution named
   await page.getByRole("button", { name: "Score this neighbourhood" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("status")).toContainText("Neighbourhood risk 1.5");
-  await expect(page.getByText("Skilling, one hop away: 2 alert(s), +1 — Structuring; Rapid movement")).toBeVisible();
+  await expect(page.getByText("Skilling, one hop away: 2 alert(s), +1")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Alerts on Skilling" })).toContainText("Rapid movement");
   registerCovered(REGISTRY, "score-a-neighbourhoods-risk-by-keyboard");
 });
 

@@ -31,7 +31,9 @@ describe("Neighbourhood risk", () => {
     expect(fetched).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Score this neighbourhood" }));
     expect(await screen.findByText(/Neighbourhood risk 0.75/)).toBeTruthy();
-    expect(screen.getByText("Skilling, one hop away: 1 alert(s), +0.5 — Structuring")).toBeTruthy();
+    // Each alert on its own line: three alerts' words run together read as one (found live, 11 Oct).
+    expect(screen.getByText("Skilling, one hop away: 1 alert(s), +0.5")).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Alerts on Skilling" }).textContent).toBe("Structuring");
     expect(screen.getByText("Fastow, 2 hops away: 1 alert(s), +0.25")).toBeTruthy();
   });
 

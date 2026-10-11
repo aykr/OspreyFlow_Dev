@@ -68,8 +68,14 @@ export function NeighbourhoodRisk(props: NeighbourhoodRiskProps) {
             <ul aria-label="What contributes" style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
               {(risk.contributions ?? []).map((c) => (
                 <li key={c.node_id} className="label">
-                  {c.name}, {hopsWords(c.hops)}: {(c.alert_ids ?? []).length} alert(s), +{SCORE.format(c.contribution)}
-                  {(c.summaries ?? []).length > 0 ? ` — ${(c.summaries ?? []).join("; ")}` : ""}
+                  <span>{`${c.name}, ${hopsWords(c.hops)}: ${(c.alert_ids ?? []).length} alert(s), +${SCORE.format(c.contribution)}`}</span>
+                  {(c.summaries ?? []).length > 0 && (
+                    <ul aria-label={`Alerts on ${c.name}`} style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
+                      {(c.summaries ?? []).map((words, i) => (
+                        <li key={i}>{words}</li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>

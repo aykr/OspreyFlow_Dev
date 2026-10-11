@@ -5,6 +5,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { statusSentence } from "./AlertQueue";
 import { AlertsPlace } from "./AlertsPlace";
 import { describeParams, ruleInput } from "./RulesPanel";
 
@@ -77,6 +78,22 @@ describe("the Alerts place", () => {
     expect(await screen.findByRole("table", { name: "Transactions this alert cites" })).toBeTruthy();
     expect(screen.getByText("9,500")).toBeTruthy();
     expect(screen.getByText("GB-MULE")).toBeTruthy();
+  });
+
+  it("names the parties of an alert that cites no transactions, never an empty table", async () => {
+    const kyc = { ...ALERT, typology: "kyc_screening", edge_ids: [], event_ids: [], window: null };
+    const org = { ...account("n1", ""), type: "Organisation", properties: { name: "Halcyon Marine Ltd" } };
+    serve("viewer", (path) =>
+      path === "alert-queue/a1"
+        ? json(200, { alert: kyc, summary: "Halcyon Marine Ltd is ultimately owned 48%", nodes: [org], edges: [], transactions: [] })
+        : null,
+    );
+    place();
+    fireEvent.click(await screen.findByRole("button", { name: /Open alert/ }));
+    const parties = await screen.findByRole("list", { name: "What this alert concerns" });
+    expect(parties.textContent).toContain("Halcyon Marine Ltd · Organisation");
+    expect(screen.queryByRole("table", { name: "Transactions this alert cites" })).toBeNull();
+    expect(screen.getByText("Raised as the data loaded (before it was committed)")).toBeTruthy();
   });
 
   it("offers no triage to a Viewer", async () => {
@@ -176,5 +193,17 @@ describe("a rule's parameters", () => {
       params: { typology: "structuring", threshold: 10000, window_days: 7, minimum_count: 3 },
     };  // prettier-ignore
     expect(describeParams(rule as never)).toBe("3+ movements each under 10,000, summing past it, within 7 day(s)");
+  });
+});
+
+describe("where an alert stands", () => {
+  it("is said once, not twice", () => {
+    const a = ALERT as never as Parameters<typeof statusSentence>[0];
+    expect(statusSentence({ ...a, status: "claimed", assignee: "me" }, true)).toBe("Claimed by you");
+    expect(statusSentence({ ...a, status: "claimed", assignee: "pat" }, false)).toBe("Claimed by pat");
+    expect(
+      statusSentence({ ...a, status: "closed", assignee: "me", disposition: "true_positive", disposition_reason: "Matches" }, true),
+    ).toBe("Closed as a true positive: Matches");
+    expect(statusSentence(a, false)).toBe("Open");
   });
 });

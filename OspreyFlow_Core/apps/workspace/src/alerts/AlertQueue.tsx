@@ -3,7 +3,7 @@
 // member does: claim it, release it, put it on the canvas, close it as a true or false positive
 // with the reason. A true positive confirms the alert's node (rule 5); the server says which.
 import { useCallback, useEffect, useState } from "react";
-import type { AlertExplanation, QueuedAlert } from "../../../../packages/schemas/generated";
+import type { Alert, AlertExplanation, QueuedAlert } from "../../../../packages/schemas/generated";
 import { Button, Select } from "../design/primitives";
 import type { AccessLevel } from "../investigation/cases";
 import {
@@ -27,6 +27,16 @@ export interface AlertQueueProps extends AlertsApi {
 }
 
 const STATUS_WORDS: Record<string, string> = { open: "Open", claimed: "Claimed", closed: "Closed" };
+
+/** Where an alert stands, in one sentence: "Claimed by you", "Closed as a true positive: …". */
+export function statusSentence(alert: Alert, mine: boolean): string {
+  if (alert.status === "closed") {
+    const kind = alert.disposition === "false_positive" ? "a false" : "a true";
+    return alert.disposition ? `Closed as ${kind} positive: ${alert.disposition_reason ?? ""}` : "Closed";
+  }
+  if (alert.status === "claimed" && alert.assignee) return `Claimed by ${mine ? "you" : alert.assignee}`;
+  return STATUS_WORDS[alert.status ?? "open"] ?? "Open";
+}
 
 export function AlertQueue(props: AlertQueueProps) {
   const { apiBaseUrl, bearerToken, investigationId } = props;
@@ -153,40 +163,47 @@ function AlertDetail(props: AlertDetailProps) {
       <h3 className="value" style={{ margin: 0 }}>{typologyLabel(alert.typology)}</h3>
       <p style={{ margin: 0 }}>{why.summary}</p>
       <p className="label" style={{ margin: 0 }}>
-        Raised {alert.trigger === "pre_commit" ? "as the data loaded (before it was committed)" : "after the data loaded"} ·{" "}
-        {alert.window ? `${when(alert.window.valid_from)} to ${when(alert.window.valid_to ?? alert.window.valid_from)}` : ""}
+        {`Raised ${alert.trigger === "pre_commit" ? "as the data loaded (before it was committed)" : "after the data loaded"}`}
+        {alert.window ? ` · ${when(alert.window.valid_from)} to ${when(alert.window.valid_to ?? alert.window.valid_from)}` : ""}
       </p>
       {alert.alert_node_id === null && (
         <p className="label" style={{ color: "var(--warning)", margin: 0 }}>
           This alert has no node on the graph: what it concerns is held under markings no single marking can cover.
         </p>
       )}
-      <table className="table" aria-label="Transactions this alert cites">
-        <thead>
-          <tr>
-            <th>When</th>
-            <th>From</th>
-            <th>To</th>
-            <th style={{ textAlign: "right" }}>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(why.transactions ?? []).map((t) => (
-            <tr key={t.event_id}>
-              <td>{when(t.occurred_at)}</td>
-              <td>{names.get(t.source_id) ?? "—"}</td>
-              <td>{names.get(t.target_id) ?? "—"}</td>
-              <td style={{ textAlign: "right" }}>{money(t.amount)}</td>
+      {(why.transactions ?? []).length === 0 ? (
+        // A KYC alert cites parties, not money: the applicant, its owner, the listed party.
+        <ul aria-label="What this alert concerns" style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
+          {nodes
+            .filter((n) => n.type !== "Alert")
+            .map((n) => (
+              <li key={n.id}>{`${nodeName(n)} · ${n.type}`}</li>
+            ))}
+        </ul>
+      ) : (
+        <table className="table" aria-label="Transactions this alert cites">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>From</th>
+              <th>To</th>
+              <th style={{ textAlign: "right" }}>Amount</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {(why.transactions ?? []).map((t) => (
+              <tr key={t.event_id}>
+                <td>{when(t.occurred_at)}</td>
+                <td>{names.get(t.source_id) ?? "—"}</td>
+                <td>{names.get(t.target_id) ?? "—"}</td>
+                <td style={{ textAlign: "right" }}>{money(t.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       <p className="label" style={{ margin: 0 }}>
-        {STATUS_WORDS[alert.status ?? "open"]}
-        {alert.assignee ? `, ${mine ? "claimed by you" : `claimed by ${alert.assignee}`}` : ""}
-        {closed && alert.disposition
-          ? ` as a ${alert.disposition === "true_positive" ? "true" : "false"} positive: ${alert.disposition_reason ?? ""}`
-          : ""}
+        {statusSentence(alert, mine)}
       </p>
       {said && <p role="status" className="label">{said}</p>}
       {problem && <p role="alert" style={{ color: "var(--error)" }}>{problem}</p>}

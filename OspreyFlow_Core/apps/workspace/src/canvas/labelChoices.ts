@@ -8,6 +8,7 @@
 // not part of the case: the same standing the light/dark theme has (ADR-070). The canvas cannot
 // read it from a component's state, so, like the theme, it is a small store the canvas listens to.
 import type { EntityTypeDef, Node } from "../../../../packages/schemas/generated";
+import { TYPOLOGY_LABELS } from "../alerts/names";
 
 export const LABEL_CHOICES_KEY = "ospreyflow.node-labels";
 
@@ -97,6 +98,11 @@ export function chosenLabel(node: Node): string | null {
  * (an address, a number); and only failing all of those by its id. */
 export function defaultLabel(node: Node): string {
   const properties = (node.properties ?? {}) as Record<string, unknown>;
+  // A rule's alert (ADR-109) has no name of its own: it is called by what its rule found.
+  if (node.type === "Alert") {
+    const typology = asText(properties["typology"]);
+    return typology !== null && TYPOLOGY_LABELS[typology] ? `${TYPOLOGY_LABELS[typology]} alert` : "Alert";
+  }
   const family = asText(properties["family_name"]);
   if (family !== null) {
     const given = asText(properties["given_names"]);

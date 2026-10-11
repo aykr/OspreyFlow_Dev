@@ -34,6 +34,15 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
+describe("a rule's alert on the canvas", () => {
+  it("is named by what the rule found, never by its id (rule 7)", () => {
+    // Found live, 11 October 2026: an alert shown on the canvas read "01M4MQZPCS31…WFRXQ1ZXP0H".
+    const alert = node("Alert", { rule_id: "typology:01M4", typology: "kyc_screening", words: "…" }, "01M4MQZPCS31");
+    expect(defaultLabel(alert)).toBe("KYC screening alert");
+    expect(defaultLabel(node("Alert", { rule_id: "typology:x" }))).toBe("Alert");
+  });
+});
+
 describe("the default label", () => {
   it("is the family name then the given names for a person, so people of one family differ", () => {
     expect(defaultLabel(volkov)).toBe("Volkov, Mikhail");
