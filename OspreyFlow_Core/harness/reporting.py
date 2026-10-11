@@ -49,7 +49,8 @@ def reporting_services(
             "mem_limit": reporting.superset_memory,
             "ports": [f"127.0.0.1:${{{SUPERSET_PORT_VARIABLE}:-{SUPERSET_PORT}}}:8088"],
             "depends_on": {
-                name: {"condition": "service_healthy"} for name in ("postgres", "keycloak", "valkey")
+                name: {"condition": "service_healthy"}
+                for name in ("postgres", "keycloak", "valkey")
             },
             "healthcheck": {
                 "test": ["CMD", "python", "-c",
