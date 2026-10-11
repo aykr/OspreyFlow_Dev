@@ -162,7 +162,7 @@ error, and no drift report either, because the second render is self-consistent 
 single `deploy/compose/dev.yaml` and no single `deploy/versions.lock`, because a harness
 that can render three profiles cannot have one of either without the second render destroying the
 first. Each profile's four artefacts sit under its own directory and are read from there by
-Preflight, by the scripted deploy and by the admin console alike.
+Preflight, by the scripted deploy and by the Set-up console alike.
 
 The directory is **not** version-controlled in this repository, which is a separate point from
 where it sits: this repository is not a deployment — the committed `osprey.yaml` describes itself as
@@ -340,20 +340,21 @@ button.
 - **It never sees a secret.** Credentials are entered as references — an environment variable
   name or a secret-manager path. The harness records where to look, never what it found.
 - **It does not run as a privileged long-lived service.** During setup it needs the container
-  socket; the admin console it becomes afterwards does not, and runs with the same non-root,
+  socket; the Set-up console it stays afterwards does not, and runs with the same non-root,
   read-only-root posture as every other component (§7).
 
-#### 2.5.1 Signing in to the Admin console — `06_DECISIONS.md` ADR-051
+#### 2.5.1 Signing in to the Set-up console — `06_DECISIONS.md` ADR-051
 
-Once a realm has been rendered (`deploy/generated/<profile>/realm.json` exists) the Admin console
+(Named the admin console until ADR-110 Amendment 1; the post-launch Admin area is the Glass's, §3.)
+Once a realm has been rendered (`deploy/generated/<profile>/realm.json` exists) the Set-up console
 requires a signed-in account holding the `osprey-admin` role, on **every** route including the pages
 themselves. Sign-in is the deployment's own realm through the public client `osprey-harness`
 (authorization code with PKCE), so the console needs the identity provider running: with it down
 the console says so and admits nobody, and the launcher (`make launch`) is how the stack is started
 first. A demonstration deployment (`apply --demo-analyst`) includes the account `osprey-demo-admin`,
 which holds `osprey-admin` and also every role the demo analyst holds, so one demonstration login
-can open the Admin console, the Glass and the Ingest Studio (each role is still enforced by the
-Conduit itself); its password is `OSPREY_DEMO_ADMIN_PASSWORD` in `deployment.env`. A deployment applied earlier gets
+can open the Set-up console, the Glass with its Admin area, and the Ingest Studio (each right is
+still enforced by the Conduit itself); its password is `OSPREY_DEMO_ADMIN_PASSWORD` in `deployment.env`. A deployment applied earlier gets
 the client and the account with `make register-sign-in`, which also switches on custom user
 attributes in the realm and restores the account's attributes if it was created without them (the
 `osprey-admin` role travels as one, and Keycloak discards it silently when they are off).
@@ -441,6 +442,54 @@ already renders, the Glass as a public client. It is **not** harness work and it
 **milestone-blocking** — the build plan's own sign-in stage carries the exit
 test. Until it is built, the dev-token path is fenced so that no rendered deployment can carry it.
 
+### 2.7 The reporting components — `report-sync` and Superset (ADR-111 Amendment 2)
+
+Both are **off by default** and switched on in `osprey.yaml`:
+
+```yaml
+reporting:
+  sync: true                  # run report-sync
+  sync_interval_seconds: 900  # how often each case is pulled
+  sync_memory: 256m
+  superset: true              # run the reference dashboard
+  superset_memory: 2g
+```
+
+Each is a container of its own with its own memory limit, outside the three tiers
+(`harness/reporting.py`; `00_ARCHITECTURE.md` §1.4):
+
+- **`report-sync`** runs the Conduit's own image with its entrypoint replaced
+  (`python -m services.report_sync`) — the same code, not a second copy. Its health check is a
+  heartbeat written after every pass; `--health` fails once it is two intervals old, so a hung loop
+  is unhealthy rather than merely running. It reads `REPORT_SYNC_DASHBOARDS` (a JSON list of
+  `{client_id, secret, weeks}`, one per dashboard identity registered in the Admin area — the secret
+  is shown there once), `REPORT_SYNC_TOKEN_URL` and `REPORT_SYNC_CONDUIT_URL`, and creates the mart's
+  read-only login from `REPORT_MART_READER` / `REPORT_MART_READER_PASSWORD`.
+- **Superset** is `deploy/superset/`: the official image pinned by digest, plus psycopg2-binary (the
+  recorded LGPL exception, §7 of `00_ARCHITECTURE.md`) and Authlib. Published on loopback only
+  (`OSPREY_SUPERSET_PORT`, 8088). Its start is idempotent: it makes its metadata database, migrates,
+  and registers the mart as its one data source through the read-only login. People sign in through
+  the realm's confidential client `osprey-superset` — the browser to the identity provider's public
+  address, Superset's own calls (token, keys) to the internal one; the id_token's issuer is the public
+  realm unless `SUPERSET_IDP_ISSUER` names another. Rate limits are counted in the deployment's Valkey.
+
+**Secrets** — `REPORT_MART_READER_PASSWORD`, `SUPERSET_SECRET_KEY`, `SUPERSET_OIDC_CLIENT_SECRET` and an
+empty `REPORT_SYNC_DASHBOARDS=[]` — are minted at apply, only for what is switched on, and never
+appear in the deterministic render. Every `make refresh` registers the `osprey-superset` client when
+its secret is in `deployment.env`.
+
+**Wiring a dashboard, end to end:** register it in the Admin area (Dashboards); put its client id and
+the one-time secret into `REPORT_SYNC_DASHBOARDS`; a case's Author gives its account id Viewer in the
+Share panel; the next pass pulls it (or restart `report-sync` for one now). The Admin area's Figures
+column then says when it last pulled, or why it is failing.
+
+**Known limits, recorded rather than hidden.** `make refresh` builds the Conduit's and the Glass's
+images but not `osprey/superset:local`; after a change under `deploy/superset/`, build it
+(`docker build -t osprey/superset:local deploy/superset`) and recreate the `superset` service. On
+the local demonstration deployment, whose generated compose had drifted from a fresh render
+(hand-edited ingest mounts), the two services and their settings were appended by hand with the
+owner's agreement (11 October 2026) rather than re-rendering over the drift.
+
 ## 3. Standing it up on a laptop
 
 ```bash
@@ -467,14 +516,15 @@ console is superseded by the workspace's Admin area.
 The seeded demo credentials are displayed once and written nowhere.
 
 **Afterwards, `make launch` is the way in.** It serves one page on `127.0.0.1:7070` with a tile each
-for the Glass, the Ingest Studio and the Admin console, shows which answer, and starts one that does
+for the Glass, the Ingest Studio, the Admin console — the Glass's Admin area, opened with
+`?from=launcher&view=admin` — and the Set-up console, shows which answer, and starts one that does
 not: the deployment by `python -m scripts.refresh` (also `make refresh`) against the
 already-rendered `deploy/generated/<profile>/` — it writes the sign-in theme, builds the owned
 images, runs `docker compose up -d --wait`, restarts Keycloak when the theme changed and registers
 the sign-in accounts again, brings in a service the checkout renders and the deployment lacks, moves a
 third-party service whose pin changed to the new image with its launch options and health probe
 (ADR-101 Amendment 1), and never re-renders, removes a volume or seeds (ADR-049 Amendment,
-29 September 2026) — the admin console by `python -m harness`. The Ingest Studio has no address of its own — it is a view of the Glass,
+29 September 2026) — the Set-up console by `python -m harness`. The Ingest Studio has no address of its own — it is a view of the Glass,
 reached from the left rail — so its tile opens the workspace on the Ingest tab (`?view=ingest`), and both tiles carry
 `?from=launcher` so the Glass carries the person's sign-in on without asking again
 (`02_GLASS_FRONTEND.md` §2.2). The launcher reads only `OSPREY_WORKSPACE_PORT`
@@ -483,15 +533,16 @@ from `deployment.env`, so no credential reaches its page (`scripts/launch.py`,
 
 **Once a deployment has been rendered the launcher asks you to sign in first** (ADR-051), through the
 realm's public client `osprey-launcher`, and then shows only the interfaces your roles allow: the
-Glass to any signed-in account, the Ingest Studio to an account holding any Studio role
-(`source_author`, `source_approver` or `loader`), the Admin console to `osprey-admin`. Before you
+Glass to any signed-in account, the Ingest Studio to an account holding a role that grants `edit_pipelines` (Data Engineer, or a
+legacy Studio role — `06_DECISIONS.md` ADR-112), the Admin console and the Set-up console to
+`osprey-admin`. Before you
 sign in it shows one tile, which is **Start OspreyFlow** when the stack is not running (the identity
 provider is part of it, so it has to be startable first) and **Sign in** when it is. Starting the
-Admin console needs an `osprey-admin` session, which the launcher checks itself; hiding a tile is a
+Set-up console needs an `osprey-admin` session, which the launcher checks itself; hiding a tile is a
 courtesy and is not what protects anything. Sessions are held in memory for eight hours from
 sign-in, and `/logout` ends the identity provider's session too. Before any realm has been rendered
 the launcher is open, as it always was. It must be served on port 7070 when sign-in is required.
-Cookies are per host name, not per port, so the launcher's and the Admin console's session cookies
+Cookies are per host name, not per port, so the launcher's and the Set-up console's session cookies
 (different names) are also sent to other services on `localhost`; on a machine you own that is a
 known limit, not a hole to close here (`tests/test_launch_sign_in.py`).
 
@@ -682,7 +733,8 @@ rather than assumed.
 
 **Laptop to small, or small to cluster:**
 
-1. **Back up** from the admin console, or `osprey backup`. Writes a portable bundle: staged
+1. **Back up** from the Admin area (designed: ADR-110 Amendment 1 puts post-launch operations there),
+   or `osprey backup`. Writes a portable bundle: staged
    Parquet, object store contents, Postgres dump, ontology, handling scheme, and `osprey.yaml`.
 2. **Change profile** in the harness. It loads the existing `osprey.yaml` and re-opens only the
    screens whose answers are invalid at the new profile, marking the rest as carried forward.
@@ -715,8 +767,8 @@ The maintainability requirement, made concrete.
   every one, so an upgrade that breaks a port contract is visible before merge.
 - **Weekly** — `trivy` scans every image; anything critical or high raises an issue
   automatically.
-- **Rolling a single component** is a screen in the admin console: pick the component, pick the
-  target version, and the console runs preflight, rolls the container or the Kubernetes
+- **Rolling a single component** is to be a screen in the Admin area (designed, ADR-110 Amendment
+  1): pick the component, pick the target version, and it runs preflight, rolls the container or the Kubernetes
   deployment, then runs **verify** — the port conformance suite against the *running* deployment
   rather than a test fixture. Under two minutes, and it is what makes the upgrade safe rather
   than hopeful. The headless equivalent is `osprey upgrade opensearch --to 3.2.1 && osprey verify

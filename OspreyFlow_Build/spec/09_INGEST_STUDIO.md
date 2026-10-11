@@ -661,8 +661,8 @@ editor; the repository is the record.
 - **Revertible.** A load is a unit. Revert is a function in `services/ingest` (`revert_load`),
   tested directly against a live `GraphPort`, not a CLI command — this build has no `osprey`
   unified CLI. It supersedes everything the load created, leaving the audit trail intact.
-  Reverting a load is not yet reachable from the admin console; it is a function call today, and
-  gets its own console screen once that surface exists.
+  Reverting a load is not yet reachable from the Admin area; it is a function call today, and gets
+  its own screen there (the `revert_loads` right, ADR-112, already names who may).
 - **Written in bulk (ADR-058, accepted in its Amendment 1).** A publish is to aggregate its resolved rows and write
   nodes then edges through the bulk-load capability in chunks, falling back to `upsert_*` only for what collides with
   stored data; `upsert_*` stays the path for low-volume and interactive writes. The seeds load in bulk (Amendment 10);
@@ -763,6 +763,18 @@ marking, masked; a load may not, because its `on_match: reference` lookups run a
 clearance: a loader who cannot see an earlier load's elements cannot find them, and writes them
 again (found 9 October 2026, when an OFFICIAL loader ran an OFFICIAL-SENSITIVE recipe twice and every
 number was made twice).
+
+**Rights, since ADR-112 (11 October 2026).** Studio routes now declare the *right* they need —
+`edit_pipelines`, `verify_pipelines`, `publish_pipelines`, `schedule_pipelines`, `run_pipelines`,
+`add_ingest_files`, `revert_loads`, `load_screening_lists` — through `require_right`, and
+`require_studio_role` maps each Studio role to its right. The Data Engineer role holds all of them;
+the Analyst role holds `add_ingest_files`; one right may be granted alone as the role
+`right:<name>`. The three roles below are kept, each to the rights it already conferred
+(`source_author` → edit, verify and add files; `source_approver` → publish and schedule; `loader` →
+run), so no deployment loses access in the transition (`packages/schemas/rights.py`,
+`LEGACY_ROLE_RIGHTS`). The Glass shows the Ingest Studio's rail entry only to an account holding
+`edit_pipelines`. The paragraph below describes the mechanism as first built and still holds for
+the legacy roles.
 
 **Role vocabulary and enforcement.** The three roles are `StudioRole` values
 (`packages/schemas/ingest.py`): `source_author`, `source_approver`, `loader`. They arrive the same

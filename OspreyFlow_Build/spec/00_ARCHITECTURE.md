@@ -4,33 +4,39 @@
 
 ```
                           THE GLASS  (stateless, horizontally scaled)
-   ┌──────────────────────────────────────────────────────────────────────────┐
-   │  React + TypeScript workspace                                            │
-   │  Canvas (Sigma/graphology) · Timeline · Map (MapLibre) · Dossier · Query  │
-   │  One working set in browser memory, driven by one shared filter state     │
-   └───────────────────────────────┬──────────────────────────────────────────┘
-                       HTTPS (REST + SSE) · WebSocket for working-set deltas
-   ┌───────────────────────────────┴──────────────────────────────────────────┐
-   │  THE CONDUIT  (stateless FastAPI, horizontally scaled)                    │
-   │                                                                           │
-   │  API surface ── Working-Set Service ── Access Control ── Audit            │
-   │        │                │                                                 │
+   ┌──────────────────────────────────────────────────────────────────────────┐   ┌────────────────────┐
+   │  React + TypeScript workspace                                            │   │ IDENTITY PROVIDER  │
+   │  Views: Graph (Sigma) · Map (MapLibre) · Timeline · Reports               │   │ Keycloak realm     │
+   │  Places: Cases · Watches · Alerts · Ownership · History · Explore ·       │◄─►│ people, roles,     │
+   │          Questions · Ingest Studio · Admin area                           │   │ dashboard          │
+   │  One working set in browser memory; the rail follows /v1/me/rights        │   │ identities;        │
+   └───────────────────────────────┬──────────────────────────────────────────┘   │ OIDC for the Glass,│
+                       HTTPS (REST + SSE) · WebSocket for working-set deltas       │ Superset and each  │
+   ┌───────────────────────────────┴──────────────────────────────────────────┐   │ dashboard          │
+   │  THE CONDUIT  (stateless FastAPI, horizontally scaled)                    │◄─►│ (admin API: the    │
+   │                                                                           │   │ Admin area's       │
+   │  API surface ── Rights (ADR-112) ── Case levels (ADR-052) ── Audit        │   │ people/dashboards) │
+   │        │                │                                                 │   └────────────────────┘
    │  Job orchestration: ingest → extract → resolve → load → score            │
-   │  Rule gate (ADR-109): typology rules judge a load before commit and after │
-   └───┬──────────────┬──────────────┬───────────────┬────────────────────────┘
-       │ GraphPort    │ AnalyticsPort│ ComputePort   │ ModelPort
-   ┌───┴──────────────┴──────────────┴───────────────┴────────────────────────┐
-   │  THE VAULT                                                                │
-   │  Graph store      Columnar OLAP     Graph compute      Model serving      │
-   │  ArcadeDB /       DuckDB /          graphology /       LiteLLM →          │
-   │  JanusGraph       ClickHouse        rustworkx /        Ollama / vLLM      │
-   │                                     GraphFrames        + Whisper + VLM    │
+   │  Rule gate (ADR-109): typology rules judge a load before commit and after │   ┌────────────────────┐
+   │  Reports (ADR-111): one count behind the Reports view and the feed ───────┼──►│ REPORTING (opt-in) │
+   └───┬──────────────┬──────────────┬───────────────┬────────────────────────┘   │ report-sync pulls  │
+       │ GraphPort    │ AnalyticsPort│ ComputePort   │ ModelPort                   │ the feed as each   │
+   ┌───┴──────────────┴──────────────┴───────────────┴────────────────────────┐   │ dashboard → mart   │
+   │  THE VAULT                                                                │   │ (Postgres          │
+   │  Graph store      Columnar OLAP     Graph compute      Model serving      │   │ osprey_reports) →  │
+   │  ArcadeDB /       DuckDB /          graphology /       LiteLLM →          │   │ Superset / BI via  │
+   │  JanusGraph       ClickHouse        rustworkx /        Ollama / vLLM      │   │ a read-only login  │
+   │                                     GraphFrames        + Whisper + VLM    │   └────────────────────┘
    │                                                        Recogniser: Stanza │
    │  Working-set cache: Valkey     Object store: MinIO     Index: OpenSearch  │
+   │  Conduit stores: Postgres (cases, grants, alerts, audit, export ledger)   │
    └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-Everything between tiers crosses a named port. Nothing else does.
+Everything between tiers crosses a named port. Nothing else does. The two boxes on the right sit
+outside the three tiers: the identity provider says who someone is (§1.3), and the reporting
+components (§1.4) are consumers of the Conduit's feed, never readers of the Vault.
 
 ### 1.1 How the map is rendered
 
@@ -216,7 +222,7 @@ being the same object: a site an analyst has calibrated once could, later, be pr
 `kind: image` entry for other investigations to reuse as a basemap layer — but that promotion
 step does not exist yet, and nothing does it silently.
 
-Swapping the default at implementation time is three actions on the admin console's Geospatial
+Swapping the default at implementation time is three actions on the Set-up console's Geospatial
 screen — add the provider, make it the default, run **Verify** — or the same three headlessly
 (`05_DEPLOYMENT.md` §2.3). No rebuild, no code change, no migration. Existing investigations keep working because nothing
 in the data model references a provider — see §1.2.1.
@@ -513,8 +519,8 @@ or a credential reference on the same screen. See `05_DEPLOYMENT.md` §2.2.
 ### 1.3 The request path and analyst sign-in
 
 **The request path (first paragraph) is decided — the owner's decision of 25 September 2026, and
-it is built. Analyst sign-in (the rest) is Accepted**, with five amendments, milestone-blocking —
-**but not yet built.**
+it is built. Analyst sign-in (the rest) is accepted and built** (ADR-050 and its amendments; the
+launcher's and the Set-up console's own sign-in, ADR-051).
 
 The Glass is served by the workspace container's nginx, which also reverse-proxies the Conduit's
 API (/v1) and the delta WebSocket to the Conduit over the deployment's internal network. The
@@ -543,6 +549,41 @@ memory and session storage and ends the identity-provider session.
 The analyst's token and the Conduit's owner-side token exchange are distinct mechanisms: the former
 is how an interactive caller is identified; the latter is how the Conduit evaluates a watch as its
 owner, and it is never used for the interactive caller.
+
+### 1.4 Identity, rights, administration and reporting — the interfaces outside the tiers
+
+Built 11 October 2026 (`06_DECISIONS.md` ADR-110 Amendment 1, ADR-111 and its Amendment 2, ADR-112,
+ADR-052 Amendment 12). Each interface below has one owner and one direction:
+
+| Interface | From → to | What crosses it | What guards it |
+| --- | --- | --- | --- |
+| Sign-in (OIDC, code + PKCE) | Glass → identity provider | a person's credentials, entered there only | the identity provider |
+| Bearer token | Glass → Conduit | subject, clearance, unit, roles, handling codes | signature against the realm's keys |
+| `GET /v1/me/rights` | Conduit → Glass | the caller's rights, from their roles | — (the Glass only hides; the Conduit refuses) |
+| `/v1/admin/*` | Glass's Admin area → Conduit → identity provider's admin API | people's `roles`, dashboard identities, component health, feed freshness | `manage_people` / `manage_dashboards` / `administer_system`; only `osprey-dashboard-*` clients; a dashboard's clearance capped at its registrar's |
+| `…/access` (the Share panel) | Glass → Conduit | who holds which level on a case, by account id | the case's Author (or the administrator's safety net) and `share_case` |
+| `…/reports/feed` | report-sync → Conduit | figures only (CSV/JSON), counted as the dashboard | the dashboard's own token (client credentials), its clearance and its case grants; each read in the export ledger |
+| Reporting mart | report-sync → Postgres `osprey_reports` | the feed's rows, upserted; per-case pull times and failures | owned by report-sync; never the Conduit's tables |
+| Mart reader | Superset / a BI tool → `osprey_reports` | `SELECT` only | the read-only login `osprey_reports_reader` |
+| Superset sign-in (OIDC) | Superset → identity provider | a person's identity; `osprey-admin` → Superset Admin, other roles → Gamma | id_token verified against the realm's keys and issuer |
+
+**Three axes of authorisation, never folded into one.** *Clearance and handling* decide what a
+principal can **see**, applied in the adapter's query (§5, rule 3). *Case levels* — Viewer, Editor,
+Author (ADR-052) — decide **where** a principal can act. *Rights* — 42 named rights bundled into four
+roles, Analyst, Data Engineer, Admin and Reports Viewer (ADR-112) — decide **what** a principal can
+do; each route declares the right it needs (`require_right`), and a route without one fails the
+route-rights test. A right never widens what a principal can see, and a level never confers a right.
+
+**A dashboard is an identity like a person.** An administrator registers it in the Admin area (a
+confidential client whose secret is shown once); a case's Author gives its account Viewer on the
+case; `report-sync` pulls each granted case's feed as that identity every interval, one pull per
+slot across instances, and writes the mart. Revoking the grant empties the next pull. The Admin
+area shows each dashboard's freshness from the mart's `pulls` table — aggregates only, never which
+cases it reads.
+
+**The Set-up console and the Admin area are different places.** The harness is the pre-launch
+Set-up console (`05_DEPLOYMENT.md` §2); everything an administrator does after launch is in the
+Glass's Admin area, behind the same sign-in as everything else.
 
 ## 2. The four ports
 
@@ -784,6 +825,9 @@ to be on every node and edge from the first write.
   carries none and reads nothing; only the Conduit's own background work (resolution, a load's
   lookups, seeding) reads unlimited (`datasets=None`), and no request handler can make that
   principal.
+- Seeing is not doing. A case level (ADR-052) and a right (ADR-112) are checked in the Conduit
+  before a route runs — a missing level is the same 404 as a missing case, a missing right a 403 —
+  and neither changes the `Principal` filter the adapter applies (§1.4).
 - Redaction is not deletion: a filtered node is absent from the result, and the count is
   reported as filtered so the analyst knows the picture is incomplete. Showing a confident but
   partial network without saying so is worse than showing nothing.
@@ -802,6 +846,9 @@ OspreyFlow_Core/
 │   ├── canvas/ timeline/ map/  #   the five views' renderers and the working set (workingset/)
 │   ├── inspector/ metrics/     #   the right-hand panels (patterns/ is the Query builder)
 │   ├── alerts/ ownership/      #   the Alerts and Ownership places (ADR-109)
+│   ├── reports/ admin/         #   the Reports view (ADR-111) and the Admin area (ADR-110 Am. 1)
+│   ├── investigation/          #   the case picker, switcher, datasets and Share panel (ADR-052)
+│   ├── rights/                 #   what the rail and views show for the caller's rights (ADR-112)
 │   ├── ingest/                 #   the Ingest Studio: dag/ (pipelines home and canvas), map/, verify/, publish/
 │   └── design/                 #   tokens.css, primitives
 ├── services/
@@ -811,7 +858,8 @@ OspreyFlow_Core/
 │   ├── resolve/                # Splink entity resolution
 │   ├── ner/                    # The recogniser sidecar: Stanza (ADR-098)
 │   ├── geocoder/               # Gazetteer matching: a scored, inferred SAME_AS, never a merge
-│   └── compute/                # ComputePort workers
+│   ├── compute/                # ComputePort workers
+│   └── report_sync/            # Feeds each dashboard's figures into the reporting mart (ADR-111 Am. 2)
 ├── packages/
 │   ├── ports/                  # Protocol definitions — the architecture
 │   ├── adapters/               # graph_arcadedb, analytics_duckdb, compute_rustworkx,
@@ -822,8 +870,8 @@ OspreyFlow_Core/
 │   └── demo_fixtures/          # Synthetic fixtures (rule 9), e.g. Operation Ledger
 ├── connectors/ providers/      # Connector and map-provider profiles (YAML)
 ├── recipes/                    # Published ingest recipes — the repository is the record
-├── harness/                    # Browser setup harness and admin console
-├── deploy/                     # Generated compose files and manifests per profile
+├── harness/                    # The Set-up console: pre-launch setup (post-launch is the Glass's Admin area)
+├── deploy/                     # Generated compose files per profile; superset/ (the reference dashboard image)
 └── scripts/                    # Operational modules, `python -m scripts.<name>`
 ```
 
