@@ -430,6 +430,7 @@ from .questions import (
     QuestionsService,
     QuestionsTooLargeError,
 )
+from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
 from .resolution_trigger import ResolveNowAccepted
@@ -572,6 +573,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     gaps_store = await IntelligenceGapStore.connect(config.postgres.dsn)
     assumptions_store = await AssumptionStore.connect(config.postgres.dsn)
     export_ledger = await ExportLedgerStore.connect(config.postgres.dsn)
+    # ADR-111 Amendment 2: read-only, for the Admin area's Dashboards screen.
+    report_freshness = await ReportFreshness.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
@@ -703,6 +706,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.gaps_store = gaps_store
     app.state.assumptions_store = assumptions_store
     app.state.export_ledger = export_ledger
+    app.state.report_freshness = report_freshness
     app.state.studio_recipes = studio_recipes
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
@@ -797,6 +801,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await gaps_store.close()
         await assumptions_store.close()
         await export_ledger.close()
+        await report_freshness.close()
         await studio_recipes.close()
         await extraction_candidates.close()
         await questions_store.close()
@@ -961,6 +966,10 @@ def get_assumptions_store(request: Request) -> AssumptionStore:
 
 def get_export_ledger(request: Request) -> ExportLedgerStore:
     return request.app.state.export_ledger  # type: ignore[no-any-return]
+
+
+def get_report_freshness(request: Request) -> ReportFreshness:
+    return request.app.state.report_freshness  # type: ignore[no-any-return]
 
 
 def get_studio_recipes(request: Request) -> StudioRecipeStore:
@@ -1130,6 +1139,7 @@ SuppressionMarksDep = Annotated[SuppressionMarkStore, Depends(get_suppression_ma
 GapsStoreDep = Annotated[IntelligenceGapStore, Depends(get_gaps_store)]
 AssumptionsStoreDep = Annotated[AssumptionStore, Depends(get_assumptions_store)]
 ExportLedgerDep = Annotated[ExportLedgerStore, Depends(get_export_ledger)]
+ReportFreshnessDep = Annotated[ReportFreshness, Depends(get_report_freshness)]
 StudioRecipesDep = Annotated[StudioRecipeStore, Depends(get_studio_recipes)]
 ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extraction_candidates)]
 ModelDep = Annotated[ModelPort, Depends(get_model)]
@@ -7842,9 +7852,18 @@ async def set_person_roles_route(
 
 @app.get("/v1/admin/dashboards", dependencies=[Depends(require_right(Right.MANAGE_DASHBOARDS))])
 async def list_dashboards_route(
-    principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    freshness: ReportFreshnessDep,
+    audit: AuditDep,
 ) -> list[DashboardIdentity]:
-    dashboards = await identity_admin.list_dashboards()
+    """Each dashboard identity, with how fresh its figures are in the reporting mart (aggregates
+    only: never which cases it reads)."""
+    pulled = await freshness.by_dashboard()
+    dashboards = [
+        d.model_copy(update=pulled[d.client_id].model_dump()) if d.client_id in pulled else d
+        for d in await identity_admin.list_dashboards()
+    ]
     await audit.record(principal=principal, action="list_dashboards", resolved_query={},
                        result_cardinality=len(dashboards))  # fmt: skip
     return dashboards

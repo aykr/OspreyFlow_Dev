@@ -16,9 +16,11 @@ from services.api.app import (
     get_identity_admin,
     get_investigations,
     get_principal,
+    get_report_freshness,
     get_valkey,
 )
 from services.api.identity_admin import UnknownRoleError, allowed_role
+from services.api.report_freshness import Freshness
 
 from ontology.handling import load_uk_le_scheme
 from schemas.admin import DashboardIdentity, PersonAccount, RegisteredDashboard
@@ -48,15 +50,29 @@ class _Identity:
             raise UnknownRoleError("not a role")
         return PersonAccount(id=user_id, username="x", name="x", enabled=True, roles=roles)
 
+    async def list_dashboards(self) -> list[DashboardIdentity]:
+        return [DashboardIdentity(client_id="osprey-dashboard-board", account_id="sa-1"),
+                DashboardIdentity(client_id="osprey-dashboard-new", account_id="sa-2")]  # fmt: skip
+
     async def create_dashboard(self, name: str, *, clearance: str, org_unit: str) -> RegisteredDashboard:
         self.made.append((name, clearance))
         return RegisteredDashboard(dashboard=DashboardIdentity(client_id="osprey-dashboard-x", account_id="sa-1",
                                                                clearance=clearance, org_unit=org_unit), secret="s")  # fmt: skip
 
 
+class _Freshness:
+    async def by_dashboard(self) -> dict[str, Freshness]:
+        from datetime import UTC, datetime
+
+        return {"osprey-dashboard-board": Freshness(
+            last_pulled=datetime(2026, 10, 11, 10, 24, tzinfo=UTC), last_failure="the feed was refused (403)",
+            failed_at=datetime(2026, 10, 11, 10, 39, tzinfo=UTC), cases_pulled=2)}  # fmt: skip
+
+
 @pytest.fixture
 def client() -> Any:
     audit, identity = _Audit(), _Identity()
+    app.dependency_overrides[get_report_freshness] = _Freshness
     app.dependency_overrides[get_audit] = lambda: audit
     app.dependency_overrides[get_identity_admin] = lambda: identity
     app.dependency_overrides[get_handling_scheme] = load_uk_le_scheme
@@ -135,3 +151,16 @@ def test_the_system_screen_says_which_component_failed_and_still_answers(client:
     assert all(c["ok"] for n, c in by_name.items() if n != "Graph store")
     _as(ANALYST)
     assert client.get("/v1/admin/system").status_code == 403
+
+
+def test_the_dashboards_screen_says_how_fresh_each_feed_is_and_never_which_cases(client: Any) -> None:
+    """ADR-111 Amendment 2: the Admin area sees a stale or failing feed; a dashboard never pulled
+    says so by absence; no case identifier reaches the screen."""
+    _as(ADMIN)
+    response = client.get("/v1/admin/dashboards")
+    assert response.status_code == 200, response.text
+    board, new = response.json()
+    assert board["last_pulled"].startswith("2026-10-11T10:24")
+    assert (board["last_failure"], board["cases_pulled"]) == ("the feed was refused (403)", 2)
+    assert (new["last_pulled"], new["last_failure"], new["cases_pulled"]) == (None, None, 0)
+    assert "case_id" not in response.text

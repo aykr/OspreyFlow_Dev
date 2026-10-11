@@ -16,6 +16,22 @@ import {
   type AdminApi,
 } from "./api";
 
+const utc = (iso: string) => `${iso.slice(0, 16).replace("T", " ")} UTC`;
+
+/** How fresh a dashboard's figures are, from the reporting mart (ADR-111 Amendment 2): a standing
+ * failure first, in the sync service's own words; then the last good pull; else never pulled. */
+export function feedFreshness(d: DashboardIdentity): { text: string; failing: boolean } {
+  const cases = d.cases_pulled ?? 0;
+  if (d.last_failure && d.failed_at) {
+    const last = d.last_pulled ? `; last good pull ${utc(d.last_pulled)}` : "; never pulled";
+    return { text: `Failing since ${utc(d.failed_at)}: ${d.last_failure}${last}`, failing: true };
+  }
+  if (d.last_pulled) {
+    return { text: `Pulled ${utc(d.last_pulled)} · ${cases} ${cases === 1 ? "case" : "cases"}`, failing: false };
+  }
+  return { text: "Never pulled: no case has given it Viewer yet", failing: false };
+}
+
 export interface AdminPlaceProps extends AdminApi {
   rights: ReadonlySet<string>;
 }
@@ -154,6 +170,7 @@ function Dashboards({ api }: { api: AdminApi }) {
             <th>Dashboard</th>
             <th>Account (give this to a case's Author)</th>
             <th>Reads at</th>
+            <th>Figures</th>
             <th />
           </tr>
         </thead>
@@ -163,6 +180,7 @@ function Dashboards({ api }: { api: AdminApi }) {
               <td>{d.client_id}</td>
               <td><code>{d.account_id}</code></td>
               <td>{`${d.clearance ?? "—"} · ${d.org_unit ?? "—"}`}</td>
+              <td style={feedFreshness(d).failing ? { color: "var(--error)" } : undefined}>{feedFreshness(d).text}</td>
               <td>
                 <Button
                   aria-label={`Remove ${d.client_id}`}

@@ -135,6 +135,26 @@ export type TtlDays = number;
 export type PrefetchAreas = string[];
 export type Style = string | null;
 export type Attribution = string;
+/**
+ * Default: false — run report-sync
+ */
+export type Sync = boolean;
+/**
+ * Default: 900
+ */
+export type SyncIntervalSeconds = number;
+/**
+ * Default: 256m
+ */
+export type SyncMemory = string;
+/**
+ * Default: false — run Superset
+ */
+export type Superset = boolean;
+/**
+ * Default: 2g
+ */
+export type SupersetMemory = string;
 
 /**
  * The whole of `osprey.yaml`.
@@ -155,6 +175,7 @@ export interface OspreyConfig {
    * Default: none declared
    */
   map?: MapConfig | null;
+  reporting?: ReportingConfig;
 }
 /**
  * `05_DEPLOYMENT.md` §2.1's Components screen. Defaults are the `local-lite` row of §1's own
@@ -293,4 +314,15 @@ export interface PrefetchCache {
   ttl_days: TtlDays;
   prefetch_areas?: PrefetchAreas;
   [k: string]: unknown;
+}
+/**
+ * Dashboards for the business (`06_DECISIONS.md` ADR-111 Amendment 2): the report sync service
+ * and Superset, each a component of its own with its own memory, both off by default.
+ */
+export interface ReportingConfig {
+  sync?: Sync;
+  sync_interval_seconds?: SyncIntervalSeconds;
+  sync_memory?: SyncMemory;
+  superset?: Superset;
+  superset_memory?: SupersetMemory;
 }

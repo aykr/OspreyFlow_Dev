@@ -3,6 +3,8 @@ and dashboard identities. Generated into TypeScript for the Glass's Admin area."
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -22,6 +24,13 @@ class DashboardIdentity(BaseModel):
     account_id: str
     clearance: str | None = None
     org_unit: str | None = None
+    #: From the reporting mart (ADR-111 Amendment 2): when `report-sync` last truly pulled for this
+    #: dashboard, its standing failure in words and when, and how many cases it pulls. Absent —
+    #: never pulled — when reporting is off or the dashboard has no case yet.
+    last_pulled: datetime | None = None
+    last_failure: str | None = None
+    failed_at: datetime | None = None
+    cases_pulled: int = 0
 
 
 class RegisteredDashboard(BaseModel):

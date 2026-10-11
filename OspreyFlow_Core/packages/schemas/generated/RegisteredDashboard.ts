@@ -4,6 +4,10 @@ export type ClientId = string;
 export type AccountId = string;
 export type Clearance = string | null;
 export type OrgUnit = string | null;
+export type LastPulled = string | null;
+export type LastFailure = string | null;
+export type FailedAt = string | null;
+export type CasesPulled = number;
 export type Secret = string;
 
 export interface RegisteredDashboard {
@@ -16,5 +20,9 @@ export interface DashboardIdentity {
   account_id: AccountId;
   clearance?: Clearance;
   org_unit?: OrgUnit;
+  last_pulled?: LastPulled;
+  last_failure?: LastFailure;
+  failed_at?: FailedAt;
+  cases_pulled?: CasesPulled;
   [k: string]: unknown;
 }

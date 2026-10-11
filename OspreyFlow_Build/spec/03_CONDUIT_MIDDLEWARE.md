@@ -728,7 +728,7 @@ blank map.
 GET    /v1/me/rights                                       the signed-in person's rights (ADR-112), so the Glass leaves out what it would be refused; any signed-in person
 GET    /v1/admin/people                                    every person in the realm with roles, clearance and unit, no service account (ADR-112); manage_people
 PUT    /v1/admin/people/{user_id}/roles                    a person's roles set whole — the four roles, right:<name>, the old role names; anything else 422; manage_people
-GET    /v1/admin/dashboards                                the registered dashboard identities (ADR-111 decision 7); manage_dashboards
+GET    /v1/admin/dashboards                                the registered dashboard identities (ADR-111 decision 7), each with how fresh its figures are in the reporting mart — last pulled, standing failure and when, cases pulled; aggregates only, never a case id; manage_dashboards
 POST   /v1/admin/dashboards                                register one: its secret in this answer only; clearance capped at the registrar's (403); manage_dashboards
 DELETE /v1/admin/dashboards/{client_id}                    remove one — only an osprey-dashboard-* client; manage_dashboards
 GET    /v1/admin/system                                    each component asked now: graph, Postgres, Valkey, models, identity provider; administer_system

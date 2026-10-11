@@ -4,7 +4,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AdminPlace } from "./AdminPlace";
+import { AdminPlace, feedFreshness } from "./AdminPlace";
 
 afterEach(() => {
   cleanup();
@@ -84,5 +84,29 @@ describe("the Admin area", () => {
     await waitFor(() => expect((screen.getByLabelText("Dashboard clearance") as HTMLSelectElement).value).toBe("OFFICIAL"));
     fireEvent.click(screen.getByRole("button", { name: "Register" }));
     expect(await screen.findByText("A dashboard cannot read above your own clearance (SECRET asked).")).toBeTruthy();
+  });
+});
+
+describe("how fresh a dashboard's figures are", () => {
+  const base = { client_id: "osprey-dashboard-board", account_id: "sa-1" };
+
+  it("says a standing failure first, in the sync service's words, with the last good pull", () => {
+    const shown = feedFreshness({ ...base, last_pulled: "2026-10-11T10:24:32Z", last_failure: "the feed was refused (403)",
+                                  failed_at: "2026-10-11T10:39:00Z", cases_pulled: 1 });  // prettier-ignore
+    expect(shown).toEqual({
+      text: "Failing since 2026-10-11 10:39 UTC: the feed was refused (403); last good pull 2026-10-11 10:24 UTC",
+      failing: true,
+    });
+  });
+
+  it("says when it last pulled, and how many cases", () => {
+    expect(feedFreshness({ ...base, last_pulled: "2026-10-11T10:24:32Z", cases_pulled: 2 })).toEqual({
+      text: "Pulled 2026-10-11 10:24 UTC · 2 cases",
+      failing: false,
+    });
+  });
+
+  it("says a dashboard never pulled has been given no case", () => {
+    expect(feedFreshness(base).text).toBe("Never pulled: no case has given it Viewer yet");
   });
 });
