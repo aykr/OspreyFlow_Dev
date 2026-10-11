@@ -934,6 +934,11 @@ export function App() {
     );
   }
   const crossFilterStore = crossFilterRef.current;
+  // The timeline and the status line describe the working set: they belong beside the graph and
+  // the map, not over Reports, a Superset board or the Admin area, and not to an account that may
+  // not investigate (opened under an embedded board, the timeline overlapped it).
+  const showsWorkingSetTools =
+    showsInspector(rights) && !["ingest", "dossier", "watches", "reports", "dashboards", "admin"].includes(view);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -1534,7 +1539,7 @@ export function App() {
           </SidePanelFrame>
         )}
       </div>
-      {view !== "ingest" && view !== "dossier" && view !== "watches" && (
+      {showsWorkingSetTools && (
         // ADR-097 step 1: folded to its header by default, so the canvas has the room; opened and
         // sized as before (ADR-086).
         <BottomPanelFrame title="Timeline" height={252} initiallyOpen={false} openSignal={timelineOpenSignal}>
@@ -1555,7 +1560,7 @@ export function App() {
       )}
       </div>
       </div>
-      {view !== "ingest" && view !== "dossier" && view !== "watches" && (
+      {showsWorkingSetTools && (
         <StatusBar
           nodeCount={counts.nodes}
           edgeCount={counts.edges}
