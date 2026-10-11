@@ -562,3 +562,16 @@
 .reader-mark input { min-width: 240px; min-height: 24px; }
 .reader-mark select { min-height: 24px; }
 .reader-mark__message { color: var(--text-secondary); }
+
+/* ADR-111 Amendment 3: the Superset frame the embedded SDK adds fills its panel. */
+.embedded-dashboard {
+  display: flex;
+}
+.embedded-dashboard iframe {
+  flex: 1;
+  width: 100%;
+  min-height: 480px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-panel, 4px);
+  background: var(--surface-panel);
+}

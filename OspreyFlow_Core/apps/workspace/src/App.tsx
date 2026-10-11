@@ -96,7 +96,7 @@ import { AlertsPlace } from "./alerts/AlertsPlace";
 import { AdminPlace } from "./admin/AdminPlace";
 import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
 import { ReportsPlace } from "./reports/ReportsPlace";
-import { canDownloadFeed, landingView, railEntries, viewsFor } from "./rights/visibility";
+import { canDownloadFeed, landingView, railEntries, showsInspector, viewsFor } from "./rights/visibility";
 import { OwnershipPlace } from "./ownership/OwnershipPlace";
 import { HotlistPanel } from "./watches/HotlistPanel";
 import { MonitorPanel } from "./watches/MonitorPanel";
@@ -1387,7 +1387,7 @@ export function App() {
               })()}
           </div>
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "watches" && (
+        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "dashboards" && showsInspector(rights) && (
           <SidePanelFrame name="Inspector">
             <SidePanelStack
               panels={[

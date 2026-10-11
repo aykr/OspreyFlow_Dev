@@ -2,7 +2,7 @@
 // Each role's view of the rail and the view switch, from the rights `GET /v1/me/rights` returns.
 import { describe, expect, it } from "vitest";
 
-import { canDownloadFeed, landingView, railEntries, viewsFor } from "./visibility";
+import { canDownloadFeed, landingView, railEntries, showsInspector, viewsFor } from "./visibility";
 
 const ANALYST = ["investigate", "keep_watches", "read_alert_queue", "trace_ownership", "ask_model", "read_reports", "add_ingest_files"];
 const ENGINEER = ["investigate", "read_alert_queue", "edit_pipelines", "read_reports"];
@@ -30,6 +30,8 @@ describe("what the Glass offers each role", () => {
     expect(viewsFor(new Set(READER))).toEqual(["reports"]);
     expect(landingView(new Set(READER))).toBe("reports");
     expect(canDownloadFeed(new Set(READER))).toBe(true);
+    expect(showsInspector(new Set(READER))).toBe(false);
+    expect(showsInspector(new Set(ANALYST))).toBe(true);
     expect(canDownloadFeed(new Set(ANALYST))).toBe(false);
   });
 

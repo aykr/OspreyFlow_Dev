@@ -45,6 +45,12 @@ export function landingView(rights: Rights): GlassView {
   return viewsFor(rights)[0] ?? "graph";
 }
 
+/** The Inspector and its judgements are investigation tools: a Reports Viewer, who may not
+ * investigate, is not offered a panel whose every action they would be refused. */
+export function showsInspector(rights: Rights): boolean {
+  return has(rights, "investigate");
+}
+
 export function canDownloadFeed(rights: Rights): boolean {
   return known(rights, "read_report_feed");
 }
