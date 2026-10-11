@@ -98,6 +98,9 @@ def reporting_env(
             f"SUPERSET_IDP_INTERNAL=http://keycloak:8080/realms/{realm}",
             f"SUPERSET_IDP_PUBLIC={_origin_on(config, keycloak_port)}/realms/{realm}",
             "SUPERSET_RATELIMIT_STORAGE=redis://valkey:6379/5",
+            # ADR-111 Amendment 3: Superset framed by the Glass; the Conduit's way in to Superset.
+            f"SUPERSET_GLASS_ORIGIN={config.network.public_origin.rstrip('/')}",
+            "SUPERSET_INTERNAL_URL=http://superset:8088",
         ]
     return lines
 
@@ -114,5 +117,7 @@ def reporting_secrets(config: OspreyConfig) -> str:
         lines.append("REPORT_SYNC_DASHBOARDS=[]")
     if reporting.superset:
         lines += [f"SUPERSET_SECRET_KEY={secrets.token_urlsafe(42)}",
-                  f"SUPERSET_OIDC_CLIENT_SECRET={secrets.token_urlsafe(32)}"]  # fmt: skip
+                  f"SUPERSET_OIDC_CLIENT_SECRET={secrets.token_urlsafe(32)}",
+                  f"SUPERSET_EMBEDDER_PASSWORD={secrets.token_urlsafe(32)}",
+                  f"SUPERSET_GUEST_TOKEN_SECRET={secrets.token_urlsafe(42)}"]  # fmt: skip
     return "".join(f"{line}\n" for line in lines)

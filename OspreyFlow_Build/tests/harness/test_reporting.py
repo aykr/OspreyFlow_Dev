@@ -38,10 +38,14 @@ def test_the_render_carries_no_secret_and_apply_mints_only_what_is_on() -> None:
     env = "\n".join(reporting_env(config))
     assert "SUPERSET_PUBLIC_ORIGIN=http://localhost:8088" in env
     assert "SUPERSET_IDP_PUBLIC=http://localhost:8081/realms/osprey" in env
+    # ADR-111 Amendment 3: framed only by the Glass's own origin; the Conduit reaches it inside.
+    assert "SUPERSET_GLASS_ORIGIN=http://localhost:8080" in env
+    assert "SUPERSET_INTERNAL_URL=http://superset:8088" in env
     assert "PASSWORD" not in env and "SECRET" not in env
     minted = reporting_secrets(config)
     assert {line.split("=")[0] for line in minted.splitlines()} == {
-        "REPORT_MART_READER_PASSWORD", "REPORT_SYNC_DASHBOARDS", "SUPERSET_SECRET_KEY", "SUPERSET_OIDC_CLIENT_SECRET"}  # fmt: skip
+        "REPORT_MART_READER_PASSWORD", "REPORT_SYNC_DASHBOARDS", "SUPERSET_SECRET_KEY", "SUPERSET_OIDC_CLIENT_SECRET",
+        "SUPERSET_EMBEDDER_PASSWORD", "SUPERSET_GUEST_TOKEN_SECRET"}  # fmt: skip
     assert reporting_secrets(config) != minted, "freshly minted each time, never derived"
     sync_only = reporting_secrets(_config(sync=True))
     assert "SUPERSET" not in sync_only

@@ -4,6 +4,7 @@ export type ClientId = string;
 export type AccountId = string;
 export type Clearance = string | null;
 export type OrgUnit = string | null;
+export type ReceivableHandlingCodes = string[];
 export type LastPulled = string | null;
 export type LastFailure = string | null;
 export type FailedAt = string | null;
@@ -14,6 +15,7 @@ export interface DashboardIdentity {
   account_id: AccountId;
   clearance?: Clearance;
   org_unit?: OrgUnit;
+  receivable_handling_codes?: ReceivableHandlingCodes;
   last_pulled?: LastPulled;
   last_failure?: LastFailure;
   failed_at?: FailedAt;

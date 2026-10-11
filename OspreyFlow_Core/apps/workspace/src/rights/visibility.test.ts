@@ -11,13 +11,13 @@ const READER = ["read_alert_queue", "read_reports", "read_report_feed", "read_da
 
 describe("what the Glass offers each role", () => {
   it("offers an analyst the investigation and no administration", () => {
-    expect(railEntries(new Set(ANALYST))).toEqual(["cases", "watches", "alerts", "ownership", "history", "explore", "questions"]);
+    expect(railEntries(new Set(ANALYST))).toEqual(["cases", "watches", "alerts", "ownership", "history", "explore", "questions", "dashboards"]);
     expect(viewsFor(new Set(ANALYST))).toEqual(["graph", "map", "reports"]);
     expect(landingView(new Set(ANALYST))).toBe("graph");
   });
 
   it("offers a data engineer the Studio and no watches or ownership", () => {
-    expect(railEntries(new Set(ENGINEER))).toEqual(["cases", "alerts", "history", "explore", "ingest"]);
+    expect(railEntries(new Set(ENGINEER))).toEqual(["cases", "alerts", "history", "explore", "ingest", "dashboards"]);
   });
 
   it("offers an administrator the Admin area and nothing of a case's content", () => {
@@ -26,7 +26,7 @@ describe("what the Glass offers each role", () => {
   });
 
   it("lands a reports viewer on Reports, with the alerts and the feed", () => {
-    expect(railEntries(new Set(READER))).toEqual(["cases", "alerts"]);
+    expect(railEntries(new Set(READER))).toEqual(["cases", "alerts", "dashboards"]);
     expect(viewsFor(new Set(READER))).toEqual(["reports"]);
     expect(landingView(new Set(READER))).toBe("reports");
     expect(canDownloadFeed(new Set(READER))).toBe(true);
@@ -36,6 +36,7 @@ describe("what the Glass offers each role", () => {
   it("shows what it always showed while the rights are not yet known", () => {
     expect(railEntries(null)).toContain("ingest");
     expect(railEntries(null)).not.toContain("admin");
+    expect(railEntries(null)).not.toContain("dashboards"); // ADR-111 Am. 3: only once the right is known
     expect(viewsFor(null)).toEqual(["graph", "map", "reports"]);
   });
 });

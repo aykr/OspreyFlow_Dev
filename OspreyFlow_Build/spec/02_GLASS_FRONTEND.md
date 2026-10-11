@@ -906,9 +906,18 @@ leaves out what it would only be refused — never in place of the Conduit's che
 (`rights/visibility.ts`): the rail shows *Watches* for keep_watches, *Alerts* for read_alert_queue,
 *Ownership* for trace_ownership, *History* and *Explore* for investigate, *Questions* for ask_model,
 *Proposed types* for manage_ontology, *Ingest Studio* for edit_pipelines (an analyst adds files from
-the canvas), *Admin* for any administration right; the view switch offers Graph and Map for
+the canvas), *Dashboards* for read_reports, *Admin* for any administration right; the view switch offers Graph and Map for
 investigate and Reports for read_reports, and a person who may not investigate (a Reports Viewer)
 lands on Reports; the Reports view's download is offered only to holders of read_report_feed.
+
+**Superset dashboards inside the Glass (ADR-111 Amendment 3).** The Reports view has two tabs,
+*Figures* (the case's own counts, above) and *Dashboards*; the rail's *Dashboards* place shows the
+same thing full width. Both list only the boards the Conduit says this person may open
+(`GET /v1/reports/dashboards`) — those whose every figure they could count themselves — and draw the
+chosen one through Superset's embedded SDK (`@superset-ui/embedded-sdk` 0.1.3) in a frame, with a
+five-minute guest token the Conduit issues and the SDK asks for again before it lapses. Superset's
+menus never appear; a refusal is said in words; with none to open, the panel says why one would
+appear (`reports/EmbeddedDashboards.tsx`, `reports/ReportsPlace.tsx`; `keyboard/reports.spec.ts`).
 
 **The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
 running system, behind the same sign-in — *Admin* on the rail — with a tab per right: *People and

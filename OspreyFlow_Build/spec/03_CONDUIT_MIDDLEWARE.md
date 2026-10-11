@@ -734,6 +734,8 @@ DELETE /v1/admin/dashboards/{client_id}                    remove one — only a
 GET    /v1/admin/system                                    each component asked now: graph, Postgres, Valkey, models, identity provider; administer_system
 GET    /v1/investigations/{id}/reports                     the Reports view's figures (ADR-111): every figure counted as the reader; held rows for Editors and above; 409 limit_exceeded past the bound; Viewer
 GET    /v1/investigations/{id}/reports/feed                the same figures for a dashboard, ?format=json|csv; figures only; every read in the export ledger (artefact_kind report_feed); Viewer
+GET    /v1/reports/dashboards                              the Superset boards this person may open: each counted for a dashboard identity whose every figure they could count (unit, clearance, handling codes, a level on each of its cases — ADR-111 Am. 3); read_reports
+POST   /v1/reports/dashboards/{slug}/guest-token           a five-minute, read-only Superset guest token for one such board, its rows limited to that identity (row-level rule); otherwise 404; Superset refusing is a 502 in words; read_reports
 POST   /v1/investigations/{id}/documents/{document_id}/candidates/accept   the reader's Accept all pending: an enumerated list of candidate ids, never a filter (ADR-108 Q1); Editor
 POST   /v1/investigations/{id}/nodes/{node_id}/confirm   inferred/unresolved → asserted, human-attested; Editor, within the case's datasets (ADR-099)
 POST   /v1/investigations/{id}/nodes/{node_id}/retract   asserted → inferred, the mirror of confirm; Editor (ADR-099)

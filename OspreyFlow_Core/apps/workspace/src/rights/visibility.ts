@@ -5,7 +5,7 @@
 
 export type Rights = ReadonlySet<string> | null;
 export type RailEntry =
-  | "cases" | "watches" | "alerts" | "ownership" | "history" | "explore" | "questions" | "types" | "ingest" | "admin";
+  | "cases" | "watches" | "alerts" | "ownership" | "history" | "explore" | "questions" | "types" | "ingest" | "dashboards" | "admin";
 export type GlassView = "graph" | "map" | "reports";
 
 const has = (rights: Rights, ...any: string[]) => rights === null || any.some((r) => rights.has(r));
@@ -24,6 +24,8 @@ export function railEntries(rights: Rights): RailEntry[] {
     // The Studio is for pipelines; an analyst adds files from the canvas's *Add files* (the
     // launcher's Ingest Studio tile follows the same rule).
     ["ingest", has(rights, "edit_pipelines")],
+    // ADR-111 Amendment 3: the Superset boards this person may open, drawn inside the Glass.
+    ["dashboards", known(rights, "read_reports")],
     ["admin", known(rights, "manage_people", "manage_dashboards", "administer_system", "operate_schedules")],
   ];
   return entries.filter(([, shown]) => shown).map(([entry]) => entry);

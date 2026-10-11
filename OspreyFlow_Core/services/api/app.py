@@ -111,8 +111,10 @@ from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
 from schemas.admin import (
     ComponentHealth,
+    DashboardGuestToken,
     DashboardIdentity,
     DashboardInput,
+    EmbeddedDashboard,
     PersonAccount,
     RegisteredDashboard,
     RolesInput,
@@ -489,6 +491,15 @@ from .studio_recipes import (
 )
 from .studio_verify import RowTemplateMissingError, run_verify
 from .supersede import JOB_TYPE_SUPERSEDE_NODE, run_supersede_node_job
+from .superset_embed import (
+    EmbeddableDashboard,
+    SupersetEmbedder,
+    SupersetRefused,
+    SupersetSettings,
+    identity_for,
+    identity_principal,
+    may_open,
+)
 from .suppression import NodeNotVisibleError, SuppressionMark, SuppressionMarkStore
 from .tile_cache import (
     cache_key_for,
@@ -754,6 +765,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.principal_names = PrincipalNameDirectory(config)
     # ADR-112: the Admin area's people and dashboards, through the Conduit's own account.
     app.state.identity_admin = IdentityAdmin(config)
+    # ADR-111 Amendment 3: Superset dashboards inside the Glass; None when not configured.
+    superset_settings = SupersetSettings.from_env()
+    app.state.superset_embedder = SupersetEmbedder(superset_settings) if superset_settings else None
     app.state.map_config = load_map_config(config.osprey_config_path)
 
     # ADR-109 phase F, ruling 7: the daily sweep for verifying documents that lapse — the clock
@@ -807,6 +821,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await questions_store.close()
         await app.state.principal_names.aclose()
         await app.state.identity_admin.aclose()
+        if app.state.superset_embedder is not None:
+            await app.state.superset_embedder.aclose()
         await datasets_store.close()
         # A closed store must not outlive the app that held it (a test app is started again).
         app.state.datasets = None
@@ -1065,6 +1081,13 @@ KycExpiriesDep = Annotated[KycExpiryStore, Depends(get_kyc_expiries)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 PrincipalNamesDep = Annotated[PrincipalNameDirectory, Depends(get_principal_names)]
 IdentityAdminDep = Annotated[IdentityAdmin, Depends(get_identity_admin)]
+
+
+def get_superset_embedder(request: Request) -> SupersetEmbedder | None:
+    return getattr(request.app.state, "superset_embedder", None)
+
+
+SupersetEmbedderDep = Annotated[SupersetEmbedder | None, Depends(get_superset_embedder)]
 LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
 
 
@@ -7953,6 +7976,94 @@ async def system_status_route(
         await check("Identity provider", identity_admin.reachable),
     ]
     return SystemStatus(version=os.environ.get("OSPREY_VERSION"), components=components)
+
+
+async def _openable_dashboards(
+    principal: Principal,
+    embedder: SupersetEmbedder | None,
+    identity_admin: IdentityAdmin,
+    investigations: InvestigationStore,
+    handling_scheme: HandlingScheme,
+) -> list[EmbeddableDashboard]:
+    """The Superset dashboards this person could open: each counted for an identity whose every
+    figure they could compute themselves (ADR-111 Amendment 3, decision 2)."""
+    if embedder is None:
+        return []
+    identities = await identity_admin.list_dashboards()
+    boards = await embedder.embeddable(identities)
+    if not boards:
+        return []
+    viewer_cases = {case.id for case, _ in await investigations.list_for(principal)}
+    classification = list(handling_scheme.classification)
+    openable = []
+    for board in boards:
+        identity = identity_for(board.slug, identities)
+        if identity is None:
+            continue
+        identity_cases = {
+            c.id for c, _ in await investigations.list_for(identity_principal(identity))
+        }
+        if may_open(principal, identity, classification=classification,
+                    viewer_cases=viewer_cases, identity_cases=identity_cases):  # fmt: skip
+            openable.append(board)
+    return openable
+
+
+@app.get("/v1/reports/dashboards", dependencies=[Depends(require_right(Right.READ_REPORTS))])
+async def list_embedded_dashboards(
+    principal: PrincipalDep,
+    embedder: SupersetEmbedderDep,
+    identity_admin: IdentityAdminDep,
+    investigations: InvestigationsDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> list[EmbeddedDashboard]:
+    """The Superset dashboards this person may open inside the Glass — nothing they could not count
+    themselves (ADR-111 Amendment 3)."""
+    boards = await _openable_dashboards(
+        principal, embedder, identity_admin, investigations, handling_scheme
+    )
+    await audit.record(principal=principal, action="list_embedded_dashboards", resolved_query={},
+                       result_cardinality=len(boards))  # fmt: skip
+    return [EmbeddedDashboard(slug=b.slug, title=b.title) for b in boards]
+
+
+@app.post(
+    "/v1/reports/dashboards/{slug}/guest-token",
+    dependencies=[Depends(require_right(Right.READ_REPORTS))],
+)
+async def embedded_dashboard_guest_token(
+    slug: str,
+    principal: PrincipalDep,
+    embedder: SupersetEmbedderDep,
+    identity_admin: IdentityAdminDep,
+    investigations: InvestigationsDep,
+    handling_scheme: HandlingSchemeDep,
+    principal_names: PrincipalNamesDep,
+    audit: AuditDep,
+) -> DashboardGuestToken:
+    """A five-minute, read-only guest token for one dashboard, its rows limited to the identity it
+    was counted for. A dashboard this person may not open is the same 404 as one that does not
+    exist."""
+    boards = await _openable_dashboards(
+        principal, embedder, identity_admin, investigations, handling_scheme
+    )
+    board = next((b for b in boards if b.slug == slug), None)
+    if board is None or embedder is None:
+        raise HTTPException(status_code=404, detail="no such dashboard")
+    name = (await principal_names.display_names([principal.id])).get(principal.id, "")
+    token, uuid = await embedder.guest_token(board, principal, name)
+    await audit.record(principal=principal, action="embedded_dashboard_guest_token",
+                       resolved_query={"dashboard": slug, "identity": board.client_id},
+                       result_cardinality=1)  # fmt: skip
+    return DashboardGuestToken(
+        token=token, uuid=uuid, superset_origin=embedder.settings.public_origin
+    )
+
+
+@app.exception_handler(SupersetRefused)
+async def _superset_refused(request: Request, exc: SupersetRefused) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"error": "superset_refused", "detail": str(exc)})
 
 
 @app.exception_handler(IdentityAdminRefused)

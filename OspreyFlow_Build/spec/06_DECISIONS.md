@@ -11531,6 +11531,44 @@ refused and its rows left with their old pulled-at; one pull across two sync ins
 retried and its failure recorded; deregistration removing a dashboard's rows; the mart's read-only role
 refused a write; a live check that Superset draws a chart from the mart.
 
+### ADR-111, Amendment 3 (11 October 2026) — Superset dashboards inside the Glass
+
+Owner rulings: "the Superset should be panel under the Glass"; of two ways, **Superset's embedded
+SDK with a guest token the Conduit asks for**; of two places, **both** — a *Dashboards* tab in the
+Reports view and a *Dashboards* place in the rail. Decided:
+
+1. **The Conduit decides who sees an embedded dashboard; Superset only draws it.** The Glass asks
+   `POST /v1/reports/dashboards/{slug}/guest-token`; the Conduit checks, then asks Superset for a
+   short-lived (five-minute) guest token for that one dashboard, read-only, and returns it. The person
+   never signs in to Superset and never sees Superset's menus. Superset allows itself to be framed by
+   the Glass's origin only.
+2. **A person sees an embedded dashboard only if they could see everything it counts** *(mine —
+   fail-closed)*. Its figures were counted for the dashboard identity, not for the viewer, so showing
+   them to someone who could not compute them is a read above their access (rule 3). The Conduit
+   therefore requires: the right `read_reports`; the identity's own organisational unit; a clearance at
+   least the identity's; every handling code the identity may receive; and a level on **every** case
+   the identity has been given. Anything less is the same 404 as a dashboard that does not exist.
+3. **A Superset dashboard is embeddable when its slug names a registered dashboard identity**
+   (`compliance-board` ↔ `osprey-dashboard-compliance-board`). The guest token carries a row-level
+   rule restricting the mart to that identity's rows (`dashboard = '<client id>'`), so a board built
+   carelessly across the mart still shows one identity's figures.
+4. **Superset side:** the `EMBEDDED_SUPERSET` feature; a guest role reading only the mart's datasets;
+   a local service user, `osprey-embedder`, whose password is a deployment secret held by the Conduit
+   and Superset only, allowed to grant guest tokens and to mark a dashboard embeddable (the Conduit
+   does so for the Glass's origin the first time a dashboard is listed); `GUEST_TOKEN_JWT_SECRET`, a
+   deployment secret.
+5. **Glass side:** the SDK `@superset-ui/embedded-sdk` 0.1.3 (Apache-2.0; the release matching
+   Superset 4.1), the token fetched again before it lapses. The Reports view gains *Figures* and
+   *Dashboards* tabs; the rail gains *Dashboards*, shown with `read_reports`; both list only the
+   dashboards the Conduit says this person may open.
+
+**Tests to write first, named.** The guest-token route refused without `read_reports` (403); refused
+as not found for a viewer below the identity's clearance, of another unit, lacking a handling code, or
+missing a level on one of its cases; granted with the row-level rule naming the identity; the fake
+Superset refusing a wrong service password and an unknown dashboard (rule 15); the list showing only
+what the person may open; the Glass's tab and place each with a keyboard case (rule 13); a live check
+that the board draws inside the Glass.
+
 ### ADR-112, Amendment 1 (11 October 2026) — steps 1 and 2 built; who calls the identity provider for the Admin area
 
 **Built (steps 1 and 2, `51e7337`).** `packages/schemas/rights.py` and a right declared on every route

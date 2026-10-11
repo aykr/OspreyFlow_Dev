@@ -558,6 +558,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
 export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
   "change-the-reports-period-by-keyboard",
   "download-the-figures-by-keyboard",
+  // ADR-111 Amendment 3: the Dashboards tab, and choosing one of several boards.
+  "open-the-dashboards-tab-and-choose-a-board-by-keyboard",
 ] as const);
 
 export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [

@@ -565,6 +565,7 @@ ADR-052 Amendment 12). Each interface below has one owner and one direction:
 | `…/reports/feed` | report-sync → Conduit | figures only (CSV/JSON), counted as the dashboard | the dashboard's own token (client credentials), its clearance and its case grants; each read in the export ledger |
 | Reporting mart | report-sync → Postgres `osprey_reports` | the feed's rows, upserted; per-case pull times and failures | owned by report-sync; never the Conduit's tables |
 | Mart reader | Superset / a BI tool → `osprey_reports` | `SELECT` only | the read-only login `osprey_reports_reader` |
+| Embedded board | Glass → Conduit (`/v1/reports/dashboards`) → Superset (guest token) | a five-minute read-only token for one board, rows limited to its identity | `read_reports`; the viewer could count every figure the identity counts; framed only by the Glass |
 | Superset sign-in (OIDC) | Superset → identity provider | a person's identity; `osprey-admin` → Superset Admin, other roles → Gamma | id_token verified against the realm's keys and issuer |
 
 **Three axes of authorisation, never folded into one.** *Clearance and handling* decide what a
@@ -922,7 +923,9 @@ official image pinned by digest; Authlib (BSD-3-Clause) for its single sign-on. 
 exception:** `psycopg2-binary` 2.9.6 (LGPL-3.0, with its bundled libpq under the PostgreSQL
 licence) — Superset's own Postgres driver, installed unmodified as a separate package inside the
 Superset image only, never vendored, statically bundled into OspreyFlow or modified; assessed
-11 October 2026 by the owner ("psycopg2 + exception"). The BSD alternative, pg8000, was tried first
+11 October 2026 by the owner ("psycopg2 + exception"). **ADR-111 Amendment 3:**
+`@superset-ui/embedded-sdk` 0.1.3 (Apache-2.0) in the Glass, with `@superset-ui/switchboard`
+(Apache-2.0) and `jwt-decode` (MIT). The BSD alternative, pg8000, was tried first
 and does not work with Superset: it types a string parameter as `varchar`, and Superset looks
 charts and dashboards up by the URL's id as a string, so every edit and delete answered "Not found".
 

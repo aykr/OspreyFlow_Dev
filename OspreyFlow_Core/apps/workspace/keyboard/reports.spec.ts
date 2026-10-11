@@ -19,6 +19,15 @@ async function serve(page: import("@playwright/test").Page): Promise<string[]> {
   await page.route("**/*/v1/**", async (route) => {
     const url = new URL(route.request().url());
     asked.push(`${url.pathname.replace("/v1/investigations/inv-1/", "")}${url.search}`);
+    if (url.pathname === "/v1/reports/dashboards") {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([
+        { slug: "compliance-board", title: "Compliance board" }, { slug: "fraud-board", title: "Fraud board" }]) });
+    }
+    const board = /^\/v1\/reports\/dashboards\/([^/]+)\/guest-token$/.exec(url.pathname);
+    if (board) {
+      return route.fulfill({ status: 200, contentType: "application/json",
+        body: JSON.stringify({ token: "g", uuid: `uuid-${board[1]}`, superset_origin: "http://bi.invalid" }) });
+    }
     if (url.pathname.endsWith("/reports/feed")) {
       return route.fulfill({ status: 200, contentType: "text/csv", body: "section,label,typology,week_start,value\n" });
     }
@@ -26,6 +35,21 @@ async function serve(page: import("@playwright/test").Page): Promise<string[]> {
   });
   return asked;
 }
+
+test("the Dashboards tab is opened and a board chosen by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/reports-harness.html");
+  await page.getByRole("tab", { name: "Figures" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("tab", { name: "Dashboards" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EMBEDDED__?.at(-1)?.id)).toBe("uuid-compliance-board");
+  await page.getByRole("button", { name: "Fraud board" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EMBEDDED__?.at(-1))).toEqual({ id: "uuid-fraud-board", domain: "http://bi.invalid" });
+  expect(asked.filter((a) => a.includes("guest-token"))).toHaveLength(2);
+  registerCovered(REGISTRY, "open-the-dashboards-tab-and-choose-a-board-by-keyboard");
+});
 
 test("the period is changed by keyboard", async ({ page }) => {
   const asked = await serve(page);

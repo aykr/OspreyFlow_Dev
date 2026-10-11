@@ -1,0 +1,44 @@
+"""Superset's OspreyFlow roles and service user (`06_DECISIONS.md` ADR-111 Amendment 3), run by
+`osprey_entrypoint.py` at every start — idempotent.
+
+- `OspreyEmbedded`, the guest role a Glass viewer's token carries: Superset's read-only Gamma, plus
+  reading the reporting mart's schema and nothing else.
+- `OspreyEmbedder`, the role of the service user the Conduit signs in as: the same, plus granting a
+  guest token and marking a dashboard embeddable. Its password is `SUPERSET_EMBEDDER_PASSWORD`, a
+  deployment secret; the user is local to Superset and never a person.
+"""
+
+import os
+
+from superset.app import create_app
+
+MART = "[OspreyFlow reports].[osprey_reports]"
+GUEST, EMBEDDER_ROLE, EMBEDDER = "OspreyEmbedded", "OspreyEmbedder", "osprey-embedder"
+
+app = create_app()
+with app.app_context():
+    from superset import db
+    from superset import security_manager as sm
+
+    def unique(perms):  # Gamma already holds some of what is added; a role holds each once
+        return list({p.id: p for p in perms}.values())
+
+    gamma = sm.find_role("Gamma")
+    mart = sm.add_permission_view_menu("schema_access", MART)
+    guest = sm.find_role(GUEST) or sm.add_role(GUEST)
+    guest.permissions = unique([*gamma.permissions, mart])
+    extra = [sm.add_permission_view_menu(p, v) for p, v in (
+        ("can_grant_guest_token", "SecurityRestApi"), ("can_set_embedded", "Dashboard"),
+        ("can_read", "Dashboard"))]  # fmt: skip
+    embedder_role = sm.find_role(EMBEDDER_ROLE) or sm.add_role(EMBEDDER_ROLE)
+    embedder_role.permissions = unique([*gamma.permissions, mart, *extra])
+    password = os.environ["SUPERSET_EMBEDDER_PASSWORD"]
+    user = sm.find_user(username=EMBEDDER)
+    if user is None:
+        sm.add_user(EMBEDDER, "OspreyFlow", "embedder", f"{EMBEDDER}@ospreyflow.invalid",
+                    embedder_role, password=password)  # fmt: skip
+    else:
+        user.roles = [embedder_role]
+        sm.reset_password(user.id, password)
+    db.session.commit()
+    print("osprey_setup: roles and the embedder user are in place")

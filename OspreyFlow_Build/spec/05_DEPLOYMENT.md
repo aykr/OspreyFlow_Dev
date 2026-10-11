@@ -473,8 +473,15 @@ Each is a container of its own with its own memory limit, outside the three tier
   address, Superset's own calls (token, keys) to the internal one; the id_token's issuer is the public
   realm unless `SUPERSET_IDP_ISSUER` names another. Rate limits are counted in the deployment's Valkey.
 
-**Secrets** — `REPORT_MART_READER_PASSWORD`, `SUPERSET_SECRET_KEY`, `SUPERSET_OIDC_CLIENT_SECRET` and an
-empty `REPORT_SYNC_DASHBOARDS=[]` — are minted at apply, only for what is switched on, and never
+**Embedded in the Glass (ADR-111 Amendment 3).** Superset runs with `EMBEDDED_SUPERSET`, a guest role
+(`OspreyEmbedded`: read-only, the mart's schema only) and its own security policy as shipped plus the
+Glass's origin as the one permitted framer (`SUPERSET_GLASS_ORIGIN`). At every start
+`osprey_setup.py` puts the guest role and the local service user `osprey-embedder` in place; the
+Conduit signs in as that user (`SUPERSET_INTERNAL_URL`, `SUPERSET_EMBEDDER_PASSWORD`) to issue guest
+tokens signed with `SUPERSET_GUEST_TOKEN_SECRET`. Without these settings the Glass lists no boards.
+
+**Secrets** — `REPORT_MART_READER_PASSWORD`, `SUPERSET_SECRET_KEY`, `SUPERSET_OIDC_CLIENT_SECRET`,
+`SUPERSET_EMBEDDER_PASSWORD`, `SUPERSET_GUEST_TOKEN_SECRET` and an empty `REPORT_SYNC_DASHBOARDS=[]` — are minted at apply, only for what is switched on, and never
 appear in the deterministic render. Every `make refresh` registers the `osprey-superset` client when
 its secret is in `deployment.env`.
 

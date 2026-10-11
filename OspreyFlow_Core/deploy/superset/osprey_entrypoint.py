@@ -30,6 +30,8 @@ superset("init")
 reader, reader_password = os.environ.get("REPORT_MART_READER", "osprey_reports_reader"), os.environ["REPORT_MART_READER_PASSWORD"]
 mart = f"postgresql+psycopg2://{reader}:{reader_password}@{host}:{port}/{os.environ.get('POSTGRES_DB', 'ospreyflow')}"
 superset("set-database-uri", "--database_name", "OspreyFlow reports", "--uri", mart)
+# ADR-111 Amendment 3: the guest role and the Conduit's service user, after the mart is a source.
+subprocess.run([sys.executable, "/app/osprey_setup.py"], check=True)
 
 sys.stdout.flush()
 os.execvp("gunicorn", ["gunicorn", "--workers", "2", "--worker-class", "gthread", "--threads", "4",

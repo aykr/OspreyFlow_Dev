@@ -206,6 +206,9 @@ class IdentityAdmin:
         return DashboardIdentity(
             client_id=str(client["clientId"]), account_id=str(account["id"]),
             clearance=_first(attributes, "clearance"), org_unit=_first(attributes, "org_unit"),
+            receivable_handling_codes=[
+                str(c) for c in attributes.get("receivable_handling_codes") or []
+            ],
         )  # fmt: skip
 
     async def list_dashboards(self) -> list[DashboardIdentity]:

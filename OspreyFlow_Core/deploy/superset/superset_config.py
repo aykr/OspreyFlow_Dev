@@ -138,7 +138,33 @@ EXTRA_SEQUENTIAL_COLOR_SCHEMES = [
         "colors": ["#cfebec", "#a0ced0", "#6eaeb2", "#358f94", "#007177", "#00535b"],  # --seq-1..6
     }
 ]
-FEATURE_FLAGS = {"DASHBOARD_RBAC": True}
+FEATURE_FLAGS = {"DASHBOARD_RBAC": True, "EMBEDDED_SUPERSET": True}
+
+# --- Embedded in the Glass (ADR-111 Amendment 3). The Conduit asks for guest tokens as the local
+# service user `osprey-embedder` (made by osprey_setup.py); a guest reads only the mart, and its
+# token carries a row-level rule naming one dashboard identity. Superset's own content security
+# policy is kept as shipped (4.1.2) — only the Glass's origin is added as a permitted framer. ---
+GUEST_ROLE_NAME = "OspreyEmbedded"
+GUEST_TOKEN_JWT_SECRET = os.environ["SUPERSET_GUEST_TOKEN_SECRET"]
+GUEST_TOKEN_JWT_EXP_SECONDS = 300
+_glass = os.environ.get("SUPERSET_GLASS_ORIGIN", "http://localhost:8080")
+TALISMAN_CONFIG = {
+    "content_security_policy": {
+        "base-uri": ["'self'"],
+        "default-src": ["'self'"],
+        "img-src": ["'self'", "blob:", "data:", "https://apachesuperset.gateway.scarf.sh",
+                    "https://static.scarf.sh/"],
+        "worker-src": ["'self'", "blob:"],
+        "connect-src": ["'self'", "https://api.mapbox.com", "https://events.mapbox.com"],
+        "object-src": "'none'",
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "script-src": ["'self'", "'strict-dynamic'"],
+        "frame-ancestors": ["'self'", _glass],
+    },
+    "content_security_policy_nonce_in": ["script-src"],
+    "force_https": False,
+    "session_cookie_secure": False,
+}  # fmt: skip
 # Superset's own content security policy stays on (its default); rate limits are counted in the
 # deployment's Valkey, so every worker and replica counts together.
 RATELIMIT_STORAGE_URI = os.environ.get("SUPERSET_RATELIMIT_STORAGE", "redis://valkey:6379/5")

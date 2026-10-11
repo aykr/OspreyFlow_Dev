@@ -33,11 +33,11 @@ test("the marking strip and the top bar take 20 and 40 pixels, and the rail 44",
 
 test("each rail entry is reached and pressed by keyboard", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
-  for (const name of ["Cases", "Watches", "Alerts", "Ownership", "History", "Explore", "Questions", "Ingest Studio", "Admin"]) {
+  for (const name of ["Cases", "Watches", "Alerts", "Ownership", "History", "Explore", "Questions", "Ingest Studio", "Dashboards", "Admin"]) {
     await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name }).focus();
     await page.keyboard.press("Enter");
   }
-  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["cases", "watches", "alerts", "ownership", "history", "explore", "questions", "ingest", "admin"]);
+  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["cases", "watches", "alerts", "ownership", "history", "explore", "questions", "ingest", "dashboards", "admin"]);
   registerCovered(REGISTRY, "rail-entries-by-keyboard");
 });
 

@@ -94,8 +94,9 @@ import { Timeline } from "./timeline/Timeline";
 import { AlertInbox } from "./watches/AlertInbox";
 import { AlertsPlace } from "./alerts/AlertsPlace";
 import { AdminPlace } from "./admin/AdminPlace";
+import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
+import { ReportsPlace } from "./reports/ReportsPlace";
 import { canDownloadFeed, landingView, railEntries, viewsFor } from "./rights/visibility";
-import { ReportsView } from "./reports/ReportsView";
 import { OwnershipPlace } from "./ownership/OwnershipPlace";
 import { HotlistPanel } from "./watches/HotlistPanel";
 import { MonitorPanel } from "./watches/MonitorPanel";
@@ -497,11 +498,11 @@ export function App() {
   }, [counts, classificationOrder]);
 
   const [view, setView] = useState<
-    "graph" | "map" | "reports" | "admin" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
+    "graph" | "map" | "reports" | "admin" | "dashboards" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
   >(handoff.view === "ingest" ? "ingest" : handoff.view === "admin" ? "admin" : "graph");
   // Which application is open, and (so the switch can go back to it) the Glass view last open.
   const app = view === "ingest" ? "ingest" : "glass";
-  const lastGlassView = useRef<"graph" | "map" | "reports" | "admin" | "dossier" | "watches" | "alerts" | "ownership">("graph");
+  const lastGlassView = useRef<"graph" | "map" | "reports" | "admin" | "dashboards" | "dossier" | "watches" | "alerts" | "ownership">("graph");
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {
@@ -1026,6 +1027,8 @@ export function App() {
                 // ADR-090 C3: the relationship types analysts of the administrator's unit proposed.
                 { id: "types", label: "Proposed types", icon: "types" as const, onSelect: () => setProposedTypesOpen(true), pressed: proposedTypesOpen },
                 { id: "ingest", label: "Ingest Studio", icon: "ingest" as const, onSelect: () => setView("ingest") },
+                // ADR-111 Amendment 3: Superset dashboards, drawn inside the Glass.
+                { id: "dashboards", label: "Dashboards", icon: "dashboards" as const, onSelect: () => setView("dashboards"), pressed: view === "dashboards" },
                 // ADR-110 Amendment 1: the deployment's administration, inside the running system.
                 { id: "admin", label: "Admin", icon: "admin" as const, onSelect: () => setView("admin"), pressed: view === "admin" },
               ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id))
@@ -1155,7 +1158,12 @@ export function App() {
           />
         )}
         {view === "reports" && (
-          <ReportsView apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} />
+          <ReportsPlace apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} />
+        )}
+        {view === "dashboards" && (
+          <div style={{ flex: 1, display: "flex", padding: "var(--sp-16)", minHeight: 0 }}>
+            <EmbeddedDashboards apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} />
+          </div>
         )}
         {view === "admin" && rights && <AdminPlace apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} rights={rights} />}
         {view === "ownership" && (
@@ -1170,7 +1178,7 @@ export function App() {
             }}
           />
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "admin" && (
+        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "admin" && view !== "dashboards" && (
           <div style={{ flex: 1, position: "relative" }}>
             {view === "graph" && (
               <GlassCanvas

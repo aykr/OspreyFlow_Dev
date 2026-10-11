@@ -24,6 +24,9 @@ class DashboardIdentity(BaseModel):
     account_id: str
     clearance: str | None = None
     org_unit: str | None = None
+    #: The handling codes the identity may receive — a viewer of its embedded board must hold
+    #: every one (ADR-111 Amendment 3).
+    receivable_handling_codes: list[str] = Field(default_factory=list)
     #: From the reporting mart (ADR-111 Amendment 2): when `report-sync` last truly pulled for this
     #: dashboard, its standing failure in words and when, and how many cases it pulls. Absent —
     #: never pulled — when reporting is off or the dashboard has no case yet.
@@ -71,7 +74,24 @@ class SystemStatus(BaseModel):
     components: list[ComponentHealth]
 
 
+class EmbeddedDashboard(BaseModel):
+    """A Superset dashboard this person may open inside the Glass (ADR-111 Amendment 3)."""
+
+    slug: str
+    title: str
+
+
+class DashboardGuestToken(BaseModel):
+    """A short-lived, read-only Superset guest token for one embedded dashboard."""
+
+    token: str
+    #: The dashboard's embedded id, which the Glass's SDK mounts.
+    uuid: str
+    #: Where the browser reaches Superset.
+    superset_origin: str
+
+
 ALL_MODELS = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
-    ComponentHealth, SystemStatus,
+    ComponentHealth, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
 ]  # fmt: skip
