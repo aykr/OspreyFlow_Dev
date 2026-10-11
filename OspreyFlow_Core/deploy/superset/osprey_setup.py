@@ -12,7 +12,7 @@ import os
 
 from superset.app import create_app
 
-MART = "[OspreyFlow reports].[osprey_reports]"
+MART_DATABASE, MART_SCHEMA = "OspreyFlow reports", "osprey_reports"
 GUEST, EMBEDDER_ROLE, EMBEDDER = "OspreyEmbedded", "OspreyEmbedder", "osprey-embedder"
 
 app = create_app()
@@ -23,8 +23,14 @@ with app.app_context():
     def unique(perms):  # Gamma already holds some of what is added; a role holds each once
         return list({p.id: p for p in perms}.values())
 
+    from superset.models.core import Database
+
     gamma = sm.find_role("Gamma")
-    mart = sm.add_permission_view_menu("schema_access", MART)
+    # Superset's own name for the schema permission — since 4.1 it includes the catalog
+    # ("[db].[catalog].[schema]"); a name written by hand without it matched no chart.
+    database = db.session.query(Database).filter_by(database_name=MART_DATABASE).one()
+    schema_perm = sm.get_schema_perm(database.database_name, database.get_default_catalog(), MART_SCHEMA)
+    mart = sm.add_permission_view_menu("schema_access", schema_perm)
     guest = sm.find_role(GUEST) or sm.add_role(GUEST)
     guest.permissions = unique([*gamma.permissions, mart])
     extra = [sm.add_permission_view_menu(p, v) for p, v in (
