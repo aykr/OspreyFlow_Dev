@@ -74,7 +74,7 @@ export function RuleAuditPanel(props: AlertsApi) {
           {entries.map((entry, i) => (
             <tr key={`${entry.recorded_at}-${i}`}>
               <td>{when(entry.recorded_at)}</td>
-              <td>{entry.principal_id}</td>
+              <td>{entry.principal_name ?? entry.principal_id}</td>
               <td>{ACTION_WORDS[entry.action] ?? entry.action}</td>
               <td>{describeEntry(entry)}</td>
             </tr>

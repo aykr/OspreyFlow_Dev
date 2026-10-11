@@ -2,6 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type RecordedAt = string;
 export type PrincipalId = string;
+export type PrincipalName = string | null;
 export type Action = string;
 export type ResultCardinality = number;
 
@@ -13,6 +14,7 @@ export type ResultCardinality = number;
 export interface RuleAuditEntry {
   recorded_at: RecordedAt;
   principal_id: PrincipalId;
+  principal_name?: PrincipalName;
   action: Action;
   detail?: Detail;
   result_cardinality?: ResultCardinality;

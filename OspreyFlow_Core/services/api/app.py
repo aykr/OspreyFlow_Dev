@@ -6981,6 +6981,7 @@ async def read_rule_audit(
     principal: PrincipalDep,
     graph: GraphDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> RuleAuditPage:
@@ -6989,6 +6990,16 @@ async def read_rule_audit(
     from the page and the total (rule 3)."""
     page = await readable_rule_audit(
         audit, graph, investigation.id, principal, offset=offset, limit=limit
+    )
+    # Who acted, by name — only for the entries this reader is served (ADR-106 decision 3).
+    names = await principal_names.display_names(e.principal_id for e in page.entries)
+    page = page.model_copy(
+        update={
+            "entries": [
+                e.model_copy(update={"principal_name": names.get(e.principal_id)})
+                for e in page.entries
+            ]
+        }
     )
     await audit.record(
         principal=principal,

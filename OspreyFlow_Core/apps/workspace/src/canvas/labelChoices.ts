@@ -96,6 +96,10 @@ export function chosenLabel(node: Node): string | null {
 /** What a node is called when nothing was chosen: a person by family name and given names; a thing
  * with a name or a title (an organisation, a place, a document) by it; else by its normalised value
  * (an address, a number); and only failing all of those by its id. */
+/** The identifiers a thing with no name is known by — a handset's IMEI, an account's number — tried
+ * in this order before its id (a Device once read "01M4GBQ6YROZ…" in Verify's preview). */
+const IDENTIFYING = ["account_number", "imei", "imsi", "e164", "email", "handle", "org_ref", "registration"];
+
 export function defaultLabel(node: Node): string {
   const properties = (node.properties ?? {}) as Record<string, unknown>;
   // A rule's alert (ADR-109) has no name of its own: it is called by what its rule found.
@@ -112,6 +116,7 @@ export function defaultLabel(node: Node): string {
     asText(properties["name"]) ??
     asText(properties["title"]) ??
     asText(properties["value_normalised"]) ??
+    IDENTIFYING.map((key) => asText(properties[key])).find((v) => v !== null) ??
     node.id
   );
 }

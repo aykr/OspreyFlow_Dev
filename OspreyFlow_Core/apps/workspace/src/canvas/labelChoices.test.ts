@@ -43,6 +43,16 @@ describe("a rule's alert on the canvas", () => {
   });
 });
 
+describe("a thing with no name", () => {
+  it("is called by an identifier before its id (rule 7)", () => {
+    // Found live, 11 October 2026: Verify's preview of the handset sightings drew every Device as
+    // "01M4GBQ6YROZ…" — a handset has an IMEI and no name.
+    expect(defaultLabel(node("Device", { imei: "356938035643809" }, "01M4GBQ6YROZ"))).toBe("356938035643809");
+    expect(defaultLabel(node("Account", { account_number: "GB-HUB-001" }))).toBe("GB-HUB-001");
+    expect(defaultLabel(node("Device", {}, "01M4GBQ6YROZ"))).toBe("01M4GBQ6YROZ");
+  });
+});
+
 describe("the default label", () => {
   it("is the family name then the given names for a person, so people of one family differ", () => {
     expect(defaultLabel(volkov)).toBe("Volkov, Mikhail");

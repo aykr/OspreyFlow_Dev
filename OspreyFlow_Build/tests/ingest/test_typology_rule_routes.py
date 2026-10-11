@@ -166,6 +166,42 @@ def test_the_rule_audit_is_read_by_authors_and_the_admin_only(
         assert client.get(path, headers=admin).status_code == 200
 
 
+class _Names:
+    """Stands in for the principal-name directory (its own refusals are proven in
+    `test_principal_names.py`); records which ids the route asked for."""
+
+    def __init__(self, names: dict[str, str]) -> None:
+        self.names, self.asked = names, []  # type: ignore[var-annotated]
+
+    async def display_names(self, ids: object) -> dict[str, str]:
+        wanted = [i for i in dict.fromkeys(ids) if i]  # type: ignore[call-overload]
+        self.asked.append(wanted)
+        return {i: self.names[i] for i in wanted if i in self.names}
+
+    async def aclose(self) -> None:
+        """Closed by the lifespan's shutdown."""
+
+
+def test_the_rule_audit_names_who_acted_not_their_account_id(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """Found live, 11 October 2026: the Audit tab's Who column read "2f0ef3c4-09d7-…". The page now
+    carries each entry's display name beside its id (ADR-106 decision 3: only ids it serves)."""
+    key, _ = keypair
+    case = asyncio.run(_case())
+    from services.api.app import app
+
+    with TestClient(app) as client:
+        names = _Names({AUTHOR.id: "Demo Author"})
+        app.state.principal_names = names
+        client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
+        page = client.get(f"/v1/investigations/{case}/rules/audit", headers=_as(key, AUTHOR.id))
+        assert page.status_code == 200, page.text
+        (entry,) = page.json()["entries"]
+        assert (entry["principal_id"], entry["principal_name"]) == (AUTHOR.id, "Demo Author")
+        assert names.asked == [[AUTHOR.id]]
+
+
 def test_held_rows_are_listed_at_editor_and_only_at_the_readers_marking(
     api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> None:

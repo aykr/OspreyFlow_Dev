@@ -838,6 +838,9 @@ class RuleAuditEntry(BaseModel):
 
     recorded_at: datetime
     principal_id: str
+    #: Who acted, by name (ADR-106 decision 3: looked up only for ids this page serves); absent
+    #: where the directory has none, and the Glass then shows the id.
+    principal_name: str | None = None
     action: str
     detail: dict[str, Any] = Field(default_factory=dict)
     result_cardinality: int = 0
