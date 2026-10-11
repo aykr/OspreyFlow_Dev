@@ -868,6 +868,16 @@ user-replaceable installed package, never vendored, statically bundled or modifi
 Jube (AGPL) and AMLTRIX (commercial, unverifiable as open source) are rejected with CoreNLP below;
 the AML typologies are our own rules (`services/ingest/typologies.py`).
 
+**ADR-111 Amendment 2 additions (11 October 2026) — the reference dashboard, in its own container
+(`deploy/superset/`), never imported by OspreyFlow's code:** Apache Superset (Apache-2.0), the
+official image pinned by digest; Authlib (BSD-3-Clause) for its single sign-on. **Recorded LGPL
+exception:** `psycopg2-binary` 2.9.6 (LGPL-3.0, with its bundled libpq under the PostgreSQL
+licence) — Superset's own Postgres driver, installed unmodified as a separate package inside the
+Superset image only, never vendored, statically bundled into OspreyFlow or modified; assessed
+11 October 2026 by the owner ("psycopg2 + exception"). The BSD alternative, pg8000, was tried first
+and does not work with Superset: it types a string parameter as `varchar`, and Superset looks
+charts and dashboards up by the URL's id as a string, so every edit and delete answered "Not found".
+
 **ADR-109 data sources (10 October 2026) — data, not code, and never in the repository or CI.**
 **OpenSanctions** consolidated data: CC-BY-NC 4.0 for the bulk data — attribution required, and
 **non-commercial use only**; any commercial or client-facing use needs OpenSanctions' commercial

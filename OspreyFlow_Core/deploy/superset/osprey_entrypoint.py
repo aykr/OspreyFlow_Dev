@@ -6,15 +6,18 @@ import os
 import subprocess
 import sys
 
-import pg8000.native
+import psycopg2
 
 host, port = os.environ.get("POSTGRES_HOST", "postgres"), int(os.environ.get("POSTGRES_PORT", "5432"))
 user, password = os.environ["POSTGRES_USER"], os.environ["POSTGRES_PASSWORD"]
 metadata = os.environ.get("SUPERSET_METADATA_DB", "superset")
 
-conn = pg8000.native.Connection(user, host=host, port=port, password=password, database=os.environ.get("POSTGRES_DB", "ospreyflow"))
-if not conn.run("SELECT 1 FROM pg_database WHERE datname = :d", d=metadata):
-    conn.run(f'CREATE DATABASE "{metadata}"')
+conn = psycopg2.connect(user=user, host=host, port=port, password=password, dbname=os.environ.get("POSTGRES_DB", "ospreyflow"))
+conn.autocommit = True  # CREATE DATABASE cannot run inside a transaction
+with conn.cursor() as cur:
+    cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (metadata,))
+    if cur.fetchone() is None:
+        cur.execute(f'CREATE DATABASE "{metadata}"')
 conn.close()
 
 
@@ -25,7 +28,7 @@ def superset(*args: str) -> None:
 superset("db", "upgrade")
 superset("init")
 reader, reader_password = os.environ.get("REPORT_MART_READER", "osprey_reports_reader"), os.environ["REPORT_MART_READER_PASSWORD"]
-mart = f"postgresql+pg8000://{reader}:{reader_password}@{host}:{port}/{os.environ.get('POSTGRES_DB', 'ospreyflow')}"
+mart = f"postgresql+psycopg2://{reader}:{reader_password}@{host}:{port}/{os.environ.get('POSTGRES_DB', 'ospreyflow')}"
 superset("set-database-uri", "--database_name", "OspreyFlow reports", "--uri", mart)
 
 sys.stdout.flush()

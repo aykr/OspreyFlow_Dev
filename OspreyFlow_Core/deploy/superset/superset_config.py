@@ -24,7 +24,7 @@ _pg = (
     f"@{os.environ.get('POSTGRES_HOST', 'postgres')}:{os.environ.get('POSTGRES_PORT', '5432')}"
 )
 SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
-SQLALCHEMY_DATABASE_URI = f"postgresql+pg8000://{_pg}/{os.environ.get('SUPERSET_METADATA_DB', 'superset')}"
+SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{_pg}/{os.environ.get('SUPERSET_METADATA_DB', 'superset')}"
 
 AUTH_TYPE = AUTH_OAUTH
 AUTH_USER_REGISTRATION = True
