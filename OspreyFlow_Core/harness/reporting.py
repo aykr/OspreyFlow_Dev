@@ -33,7 +33,13 @@ def reporting_services(
         services["report-sync"] = {
             "restart": "unless-stopped",
             "image": api_image,
-            "command": ["python", "-m", "services.report_sync"],
+            # The image's own entrypoint is the Conduit's uvicorn, and its healthcheck the
+            # Conduit's `/healthz`: both replaced, or the sync never starts nor turns healthy.
+            "entrypoint": ["python", "-m", "services.report_sync"],
+            "healthcheck": {
+                "test": ["CMD", "python", "-m", "services.report_sync", "--health"],
+                "interval": "30s", "timeout": "5s", "retries": 3, "start_period": "60s",
+            },
             "env_file": ["deployment.env"],
             "mem_limit": reporting.sync_memory,
             "depends_on": {

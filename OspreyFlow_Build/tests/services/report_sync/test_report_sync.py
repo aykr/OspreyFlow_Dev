@@ -11,7 +11,8 @@ What a mistake would do, and the case that catches it:
 - a revoked identity's rows silently refreshed or dropped — `test_a_refused_identity_leaves_its_rows_stale_and_says_so`;
 - two sync instances pulling the same case twice — `test_one_pull_across_two_instances`;
 - a deregistered dashboard's figures left behind — `test_a_dashboard_no_longer_configured_is_removed`;
-- a BI tool able to write the mart — `test_the_readers_role_cannot_write`.
+- a BI tool able to write the mart — `test_the_readers_role_cannot_write`;
+- a hung loop reported healthy — `test_health_needs_a_recent_pass`.
 """
 
 from __future__ import annotations
@@ -207,3 +208,14 @@ def test_the_configuration_is_read_from_the_environment_and_refused_in_words() -
         dashboards_from_env({**env, "REPORT_SYNC_DASHBOARDS": '[{"client_id": "osprey-conduit", "secret": "s"}]'})
     with pytest.raises(SystemExit, match="must both be set"):
         dashboards_from_env({"REPORT_SYNC_DASHBOARDS": "[]"})
+
+
+def test_health_needs_a_recent_pass(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from services.report_sync.__main__ import healthy
+
+    beat = tmp_path / "alive"
+    assert not healthy(beat, 900, time.time()), "no pass yet is not healthy"
+    beat.touch()
+    now = beat.stat().st_mtime
+    assert healthy(beat, 900, now + 1799)
+    assert not healthy(beat, 900, now + 1800), "two intervals without a pass is a hung loop"

@@ -12,6 +12,10 @@ Configuration, all from the environment (the deployment's env file — secrets n
 - the usual `POSTGRES_*` and `VALKEY_*`.
 
 Each pass claims its slot (`time // interval`), so any number of instances pull each case once.
+
+After every pass the service touches a heartbeat file; `--health` (the container's healthcheck)
+succeeds only while that file is younger than two intervals, so a loop that has hung turns the
+container unhealthy rather than merely running.
 """
 
 from __future__ import annotations
@@ -20,8 +24,10 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 from collections.abc import Mapping
+from pathlib import Path
 
 from services.api.config import PostgresConfig, ValkeyConfig
 from valkey.asyncio import Valkey
@@ -30,6 +36,19 @@ from .mart import Mart
 from .sync import Dashboard, sync_once
 
 log = logging.getLogger("report_sync")
+HEARTBEAT = Path("/tmp/report-sync.alive")
+
+
+def interval_from_env(env: Mapping[str, str]) -> int:
+    return max(60, int(env.get("REPORT_SYNC_INTERVAL_SECONDS", "900")))
+
+
+def healthy(heartbeat: Path, interval: int, now: float) -> bool:
+    """True while the last pass finished less than two intervals ago."""
+    try:
+        return now - heartbeat.stat().st_mtime < 2 * interval
+    except FileNotFoundError:
+        return False
 
 
 def dashboards_from_env(env: Mapping[str, str]) -> list[Dashboard]:
@@ -58,7 +77,7 @@ def dashboards_from_env(env: Mapping[str, str]) -> list[Dashboard]:
 
 async def run(env: Mapping[str, str]) -> None:
     boards = dashboards_from_env(env)
-    interval = max(60, int(env.get("REPORT_SYNC_INTERVAL_SECONDS", "900")))
+    interval = interval_from_env(env)
     mart = await Mart.connect(PostgresConfig.from_env().dsn)
     reader, password = (
         env.get("REPORT_MART_READER", "osprey_reports_reader"),
@@ -79,6 +98,7 @@ async def run(env: Mapping[str, str]) -> None:
             )  # fmt: skip
             for failure in summary.failures:
                 log.warning("report-sync: %s", failure)
+            HEARTBEAT.touch()
             await asyncio.sleep(max(1.0, (slot + 1) * interval - time.time()))
     finally:
         await mart.close()
@@ -86,5 +106,7 @@ async def run(env: Mapping[str, str]) -> None:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--health"]:
+        sys.exit(0 if healthy(HEARTBEAT, interval_from_env(os.environ), time.time()) else 1)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     asyncio.run(run(os.environ))

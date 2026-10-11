@@ -23,7 +23,11 @@ def test_each_component_is_its_own_container_with_its_own_memory() -> None:
     config = _config(sync=True, superset=True, superset_memory="2g", sync_memory="256m")
     services = reporting_services(config, api_image="osprey/api:local", building=True)
     sync, superset = services["report-sync"], services["superset"]
-    assert sync["image"] == "osprey/api:local" and sync["command"] == ["python", "-m", "services.report_sync"]  # type: ignore[index]
+    assert sync["image"] == "osprey/api:local"  # type: ignore[index]
+    # The Conduit's image starts uvicorn and checks `/healthz`: a `command` alone would be handed to
+    # uvicorn as options, and the inherited healthcheck could never pass (found live, 11 Oct 2026).
+    assert sync["entrypoint"] == ["python", "-m", "services.report_sync"] and "command" not in sync  # type: ignore[index,operator]
+    assert sync["healthcheck"]["test"] == ["CMD", "python", "-m", "services.report_sync", "--health"]  # type: ignore[index]
     assert (sync["mem_limit"], superset["mem_limit"]) == ("256m", "2g")  # type: ignore[index]
     assert superset["ports"] == ["127.0.0.1:${OSPREY_SUPERSET_PORT:-8088}:8088"], "loopback only"  # type: ignore[index]
     assert superset["build"] == {"context": "../../superset", "dockerfile": "Dockerfile"}  # type: ignore[index]
