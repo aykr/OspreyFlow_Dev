@@ -242,9 +242,11 @@ export function VerifyScreen({ apiBaseUrl,
                   store={workingSet.store}
                   ontology={registry}
                   edgeTypes={edgeTypes}
-                  investigationId={recipeId}
+                  // A dry run stores nothing: no case and no token, so the canvas asks the
+                  // Conduit nothing (pictures, links among, files) about nodes that do not exist.
+                  investigationId=""
                   apiBaseUrl={apiBaseUrl}
-                  bearerToken={bearerToken}
+                  bearerToken=""
                 />
               ) : (
                 <p style={{ color: "var(--text-secondary)" }}>Loading the ontology…</p>

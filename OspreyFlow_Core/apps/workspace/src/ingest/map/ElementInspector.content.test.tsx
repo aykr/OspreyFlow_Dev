@@ -99,3 +99,22 @@ describe("ElementInspector: content an entity holds (ADR-094 step 2)", () => {
     expect(screen.getByText(/relative to the export's own folder/)).toBeTruthy();
   });
 });
+
+describe("ElementInspector: when a link occurred (found building the AML deck, 11 October 2026)", () => {
+  it("says a link with no time is not recorded, rather than showing a column it will not use", () => {
+    mount({ type: "COMMUNICATED_WITH", from: "a", to: "b" });
+    expect((screen.getByLabelText("When it occurred") as HTMLSelectElement).value).toBe("");
+    expect(screen.queryByText("sender")).toBeNull();
+    expect(screen.queryByLabelText("Text the model can read")).toBeNull();
+  });
+
+  it("records the time from a column when asked, and clears it again", () => {
+    const onChangeEdge = mount({ type: "COMMUNICATED_WITH", from: "a", to: "b" });
+    fireEvent.change(screen.getByLabelText("When it occurred"), { target: { value: "column" } });
+    expect(onChangeEdge).toHaveBeenLastCalledWith(expect.objectContaining({ temporal: { at: { field: "sender" } } }));
+    cleanup();
+    const again = mount({ type: "COMMUNICATED_WITH", from: "a", to: "b", temporal: { at: { field: "sent_at" } } });
+    fireEvent.change(screen.getByLabelText("When it occurred"), { target: { value: "" } });
+    expect(again).toHaveBeenLastCalledWith(expect.objectContaining({ temporal: null, content: null }));
+  });
+});

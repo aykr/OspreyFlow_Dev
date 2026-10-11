@@ -372,3 +372,24 @@ async def test_a_document_that_lapses_is_caught_by_the_daily_sweep_once(stores: 
     finally:
         await expiries.close()
         await stores["valkey"].delete("kyc:sweep:last")
+
+
+async def test_the_gate_the_routes_build_carries_what_the_kyc_and_pattern_rules_read() -> None:
+    """Every case above builds its `RuleGate` by hand, so none could see the run and release routes'
+    own factory drop the screening list: found live, 11 October 2026 — the onboarding pipeline's
+    every row held, "this deployment has no screening list store", in a deployment that has one."""
+    from services.api.app import _rule_gate
+
+    class OneRule:
+        async def list_active_for_case(self, _case: str) -> list[object]:
+            return [object()]
+
+    screening, compute, expiries, patterns = object(), object(), object(), object()
+    gate = await _rule_gate(
+        "case", loader=OFFICER, graph=object(), analytics=object(), scheme=SCHEME,
+        typology_rules=OneRule(), held_rows=object(), alerts_store=object(), audit=object(),
+        valkey=object(), principal_resolver=object(), screening=screening, compute=compute,
+        expiries=expiries, patterns=patterns,
+    )  # type: ignore[arg-type]  # fmt: skip
+    assert gate is not None
+    assert (gate.screening, gate.compute, gate.expiries, gate.patterns) == (screening, compute, expiries, patterns)

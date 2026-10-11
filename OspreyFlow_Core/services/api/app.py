@@ -6558,13 +6558,15 @@ async def _rule_gate(
     audit: AuditWriter,
     valkey: Valkey,
     principal_resolver: PrincipalResolver,
+    screening: ScreeningListStore,
+    compute: ComputePort,
+    expiries: KycExpiryStore | None,
+    patterns: PatternStore,
     fail_closed: bool = True,
-    screening: ScreeningListStore | None = None,
-    compute: ComputePort | None = None,
-    expiries: KycExpiryStore | None = None,
-    patterns: PatternStore | None = None,
 ) -> RuleGate | None:
-    """The case's active typology rules for one load (ADR-109), or `None` when it has none."""
+    """The case's active typology rules for one load (ADR-109), or `None` when it has none.
+    What the KYC and pattern typologies read is required, never defaulted: a route that left it
+    out once held every row it loaded, failing closed on a store the deployment had."""
     rules = await typology_rules.list_active_for_case(investigation_id)
     if not rules:
         return None
@@ -6581,6 +6583,10 @@ async def _rule_gate(
         loader=loader,
         held_store=held_rows,
         fail_closed=fail_closed,
+        screening=screening,
+        compute=compute,
+        expiries=expiries,
+        patterns=patterns,
     )
 
 
@@ -7034,6 +7040,8 @@ async def release_held_rows_route(
     held_rows: HeldRowsDep,
     screening_lists: ScreeningListsDep,
     compute: ComputeDep,
+    kyc_expiries: KycExpiriesDep,
+    patterns_store: PatternsStoreDep,
 ) -> LoadReport:
     """A reviewer releases named held rows of one load: they are loaded now, under a new load
     id, with their provenance as it would have been. The case's rules judge them again, but a
@@ -7059,6 +7067,8 @@ async def release_held_rows_route(
         fail_closed=False,
         screening=screening_lists,
         compute=compute,
+        expiries=kyc_expiries,
+        patterns=patterns_store,
     ) or RuleGate(
         rules=[],
         investigation_id=investigation.id,

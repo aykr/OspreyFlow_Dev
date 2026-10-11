@@ -23,10 +23,20 @@ export const TYPOLOGY_LABELS: Record<string, string> = {
   kyc_screening: "KYC screening",
   shared_attributes: "Shared contact details",
   document_verification: "Unverified customer",
+  pattern: "Drawn pattern",
 };
 
 export function typologyLabel(typology: string | null | undefined): string {
   return (typology && TYPOLOGY_LABELS[typology]) || "Alert";
+}
+
+/** A rule is named by what it checks; its alert, above, by what it found. */
+const RULE_LABELS: Record<string, string> = {
+  document_verification: "Document verification",
+};
+
+export function ruleTypologyLabel(typology: string | null | undefined): string {
+  return (typology && RULE_LABELS[typology]) || typologyLabel(typology);
 }
 
 const MONEY = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });

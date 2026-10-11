@@ -389,18 +389,37 @@ export function ElementInspector({
         </div>
 
         {edgeTypeDef?.temporal && (
-          <div>
-            <label>Temporal (when it occurred)</label>
-            <FieldBindingEditor
-              binding={edge.temporal?.at ?? { field: sourceFieldNames[0] }}
-              sourceFieldNames={sourceFieldNames}
-              transforms={transforms}
-              onChange={(at) => onChangeEdge({ ...edge, temporal: { at } })}
-            />
+          // A link type that can carry a time need not: a link with none records no event. The
+          // editor shows what the recipe holds — it once showed a binding to the first column that
+          // was never saved (found building the AML deck, 11 October 2026).
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}>
+            <label htmlFor="edge-temporal-mode">When it occurred</label>
+            <Select
+              id="edge-temporal-mode"
+              value={edge.temporal ? "column" : ""}
+              onChange={(e) =>
+                onChangeEdge(
+                  e.target.value === "column"
+                    ? { ...edge, temporal: { at: { field: sourceFieldNames[0] ?? "" } } }
+                    : { ...edge, temporal: null, content: null },
+                )
+              }
+            >
+              <option value="">Not recorded</option>
+              <option value="column">From a column</option>
+            </Select>
+            {edge.temporal && (
+              <FieldBindingEditor
+                binding={edge.temporal.at}
+                sourceFieldNames={sourceFieldNames}
+                transforms={transforms}
+                onChange={(at) => onChangeEdge({ ...edge, temporal: { at } })}
+              />
+            )}
           </div>
         )}
 
-        {edgeTypeDef?.temporal && (
+        {edgeTypeDef?.temporal && edge.temporal && (
           // ADR-094: the column holding this link's message or document text, kept on its events
           // where the reader and extraction read it. Only a link with a time has events.
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}>

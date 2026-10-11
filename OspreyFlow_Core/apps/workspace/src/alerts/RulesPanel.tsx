@@ -11,7 +11,7 @@ import { Button, Input, Select } from "../design/primitives";
 import type { AccessLevel } from "../investigation/cases";
 import { listPatterns } from "../patterns/api";
 import { deployRule, listRules, retireRule, type AlertsApi } from "./api";
-import { money, typologyLabel, when } from "./names";
+import { money, ruleTypologyLabel, when } from "./names";
 
 type Typology =
   | "structuring"
@@ -48,6 +48,9 @@ export const CHOICES: Partial<Record<Typology, Choice[]>> = {
 };
 
 /** The shared-attribute typology's closed list of what may be shared. */
+/** A form field: its label above its input, the input the form's full width. */
+const FIELD = { display: "grid", gap: "var(--sp-4)" } as const;
+
 export const SHARED_KINDS = ["msisdn", "email", "ip", "handle"] as const;
 
 /** Each typology's parameters, in the order the server's models declare them. */
@@ -255,14 +258,14 @@ export function RulesPanel(props: RulesPanelProps) {
               }}
             >
               <span className="value">
-                {rule.name} · {typologyLabel(rule.params.typology)}
+                {rule.name} · {ruleTypologyLabel(rule.params.typology)}
               </span>
               <span className="label">
                 {describeParams(rule, patternNames)}
               </span>
               <span className="label">
                 {rule.trigger === "pre_commit"
-                  ? `Judges each load before it commits (budget ${rule.budget_ms ?? 5000} ms; held if it cannot judge)`
+                  ? `Judges each load before it commits (budget ${(rule.budget_ms ?? 5000).toLocaleString("en-GB")} ms; held if it cannot judge)`
                   : "Runs after each load commits"}{" "}
                 ·{" "}
                 {rule.status === "retired"
@@ -358,7 +361,7 @@ function DeployForm(
       <h3 className="value" style={{ margin: 0 }}>
         Deploy a rule
       </h3>
-      <label className="label">
+      <label className="label" style={FIELD}>
         Name
         <Input
           value={name}
@@ -367,7 +370,7 @@ function DeployForm(
           aria-label="Rule name"
         />
       </label>
-      <label className="label">
+      <label className="label" style={FIELD}>
         Typology
         <Select
           aria-label="Typology"
@@ -396,7 +399,7 @@ function DeployForm(
         </Select>
       </label>
       {typology === "pattern" && (
-        <label className="label">
+        <label className="label" style={FIELD}>
           Saved pattern
           <Select
             aria-label="Saved pattern"
@@ -419,7 +422,7 @@ function DeployForm(
         </label>
       )}
       {PARAMETERS[typology].map((field) => (
-        <label key={field.key} className="label">
+        <label key={field.key} className="label" style={FIELD}>
           {field.label}
           <Input
             type="number"
@@ -492,7 +495,7 @@ function DeployForm(
           stored graph.
         </p>
       ) : (
-        <label className="label">
+        <label className="label" style={FIELD}>
           Runs
           <Select
             aria-label="When the rule runs"
@@ -507,7 +510,7 @@ function DeployForm(
         </label>
       )}
       {trigger === "pre_commit" && typology !== "pattern" && (
-        <label className="label">
+        <label className="label" style={FIELD}>
           Time budget (ms) — a load it cannot judge in time is held for review
           <Input
             type="number"

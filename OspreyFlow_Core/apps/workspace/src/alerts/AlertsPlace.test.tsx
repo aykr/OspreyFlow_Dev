@@ -126,6 +126,19 @@ describe("the Alerts place", () => {
     expect(await screen.findByText("Someone else has already claimed or closed this alert.")).toBeTruthy();
   });
 
+  it("names a deployed rule by what it checks, and its budget in readable figures", async () => {
+    const rule = {
+      id: "r2", investigation_id: "c1", owner_id: "me", name: "Onboarding documents", created_at: "",
+      status: "active", trigger: "pre_commit", budget_ms: 5000,
+      params: { typology: "document_verification", kinds: [] },
+    };  // prettier-ignore
+    serve("author", (path) => (path === "rules" ? json(200, [rule]) : null));
+    place();
+    fireEvent.click(await screen.findByRole("tab", { name: "Rules" }));
+    expect(await screen.findByText("Onboarding documents · Document verification")).toBeTruthy();
+    expect(screen.getByText(/budget 5,000 ms/)).toBeTruthy();
+  });
+
   it("offers deployment to an Author only", async () => {
     serve("editor");
     place();
