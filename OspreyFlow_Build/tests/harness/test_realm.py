@@ -309,13 +309,7 @@ def test_the_demo_admin_holds_the_admin_role_and_every_role_the_demo_analyst_hol
     (admin,) = [u for u in realm["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
     (analyst,) = [u for u in realm["users"] if u["username"] == DEMO_ANALYST_SUBJECT]
 
-    assert admin["attributes"]["roles"] == [
-        ADMIN_ROLE,
-        "analyst",
-        "source_author",
-        "source_approver",
-        "loader",
-    ]
+    assert admin["attributes"]["roles"] == [ADMIN_ROLE, "analyst", "data_engineer"]  # ADR-112
     assert set(analyst["attributes"]["roles"]) <= set(admin["attributes"]["roles"])
     assert ADMIN_ROLE not in analyst["attributes"]["roles"]
     assert admin["enabled"] is True

@@ -108,6 +108,13 @@ from ports.graph import GraphPort
 from ports.media import MediaStore
 from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
+from schemas.admin import (
+    DashboardIdentity,
+    DashboardInput,
+    PersonAccount,
+    RegisteredDashboard,
+    RolesInput,
+)
 from schemas.analytics import (
     CrossFilterRequest,
     EventFilter,
@@ -321,6 +328,12 @@ from .history import (
     InvestigationHistoryStore,
 )
 from .hotlists import HotlistNotFoundError, HotlistStore
+from .identity_admin import (
+    DashboardExistsError,
+    IdentityAdmin,
+    IdentityAdminRefused,
+    UnknownRoleError,
+)
 from .ingest_sources import (
     IngestSourceFile,
     IngestSourceListing,
@@ -732,6 +745,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.principal_resolver = PrincipalResolver(config)
     # ADR-106: display names for principal ids, resolved when a read is served.
     app.state.principal_names = PrincipalNameDirectory(config)
+    # ADR-112: the Admin area's people and dashboards, through the Conduit's own account.
+    app.state.identity_admin = IdentityAdmin(config)
     app.state.map_config = load_map_config(config.osprey_config_path)
 
     # ADR-109 phase F, ruling 7: the daily sweep for verifying documents that lapse — the clock
@@ -783,6 +798,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await extraction_candidates.close()
         await questions_store.close()
         await app.state.principal_names.aclose()
+        await app.state.identity_admin.aclose()
         await datasets_store.close()
         # A closed store must not outlive the app that held it (a test app is started again).
         app.state.datasets = None
@@ -924,6 +940,10 @@ def get_judgements_store(request: Request) -> JudgementStore:
     return request.app.state.judgements_store  # type: ignore[no-any-return]
 
 
+def get_identity_admin(request: Request) -> IdentityAdmin:
+    return request.app.state.identity_admin  # type: ignore[no-any-return]
+
+
 def get_principal_names(request: Request) -> PrincipalNameDirectory:
     return request.app.state.principal_names  # type: ignore[no-any-return]
 
@@ -1032,6 +1052,7 @@ ScreeningListsDep = Annotated[ScreeningListStore, Depends(get_screening_lists)]
 KycExpiriesDep = Annotated[KycExpiryStore, Depends(get_kyc_expiries)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 PrincipalNamesDep = Annotated[PrincipalNameDirectory, Depends(get_principal_names)]
+IdentityAdminDep = Annotated[IdentityAdmin, Depends(get_identity_admin)]
 LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
 
 
@@ -7775,6 +7796,117 @@ async def _evaluate_watches_best_effort(
 
 
 # --- the delta stream --------------------------------------------------------
+
+
+# --- the Admin area: people and dashboards (ADR-110 Amendment 1, ADR-112) ------------------------
+
+
+@app.get("/v1/admin/people", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
+async def list_people_route(
+    principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+) -> list[PersonAccount]:
+    """Every person in the realm with their roles, clearance and unit — never a service account."""
+    people = await identity_admin.list_people()
+    await audit.record(principal=principal, action="list_people", resolved_query={},
+                       result_cardinality=len(people))  # fmt: skip
+    return people
+
+
+@app.put(
+    "/v1/admin/people/{user_id}/roles", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def set_person_roles_route(
+    user_id: str,
+    body: RolesInput,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    audit: AuditDep,
+) -> PersonAccount:
+    """A person's roles, set whole — the four roles, `right:<name>` grants and the old role names;
+    anything else is refused before the identity provider is asked (ADR-112 Amendment 1)."""
+    person = await identity_admin.set_roles(user_id, body.roles)
+    await audit.record(principal=principal, action="set_person_roles",
+                       resolved_query={"user_id": user_id, "roles": person.roles},
+                       result_cardinality=1)  # fmt: skip
+    return person
+
+
+@app.get("/v1/admin/dashboards", dependencies=[Depends(require_right(Right.MANAGE_DASHBOARDS))])
+async def list_dashboards_route(
+    principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+) -> list[DashboardIdentity]:
+    dashboards = await identity_admin.list_dashboards()
+    await audit.record(principal=principal, action="list_dashboards", resolved_query={},
+                       result_cardinality=len(dashboards))  # fmt: skip
+    return dashboards
+
+
+@app.post(
+    "/v1/admin/dashboards",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.MANAGE_DASHBOARDS))],
+)
+async def register_dashboard_route(
+    body: DashboardInput,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> RegisteredDashboard:
+    """A dashboard identity (ADR-111 decision 7). Its clearance may not exceed the registering
+    administrator's own — otherwise registering a dashboard would be a way to read above one's
+    clearance (rule 3). The secret is in this answer only."""
+    order = list(handling_scheme.classification)
+    if body.clearance not in order:
+        raise UnknownRoleError(f"{body.clearance} is not a classification of this deployment")
+    if principal.clearance not in order or order.index(body.clearance) > order.index(
+        principal.clearance
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "dashboard_above_your_clearance", "clearance": body.clearance},
+        )
+    made = await identity_admin.create_dashboard(
+        body.name, clearance=body.clearance, org_unit=body.org_unit
+    )
+    await audit.record(principal=principal, action="register_dashboard",
+                       resolved_query={"client_id": made.dashboard.client_id,
+                                       "clearance": body.clearance, "org_unit": body.org_unit},
+                       result_cardinality=1)  # fmt: skip
+    return made
+
+
+@app.delete(
+    "/v1/admin/dashboards/{client_id}",
+    status_code=204,
+    dependencies=[Depends(require_right(Right.MANAGE_DASHBOARDS))],
+)
+async def remove_dashboard_route(
+    client_id: str, principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+) -> Response:
+    await identity_admin.delete_dashboard(client_id)
+    await audit.record(principal=principal, action="remove_dashboard",
+                       resolved_query={"client_id": client_id}, result_cardinality=1)  # fmt: skip
+    return Response(status_code=204)
+
+
+@app.exception_handler(IdentityAdminRefused)
+async def _identity_admin_refused(request: Request, exc: IdentityAdminRefused) -> JSONResponse:
+    return JSONResponse(
+        status_code=502, content={"error": "identity_provider_refused", "detail": str(exc)}
+    )
+
+
+@app.exception_handler(UnknownRoleError)
+async def _unknown_role(request: Request, exc: UnknownRoleError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": "not_allowed", "detail": str(exc)})
+
+
+@app.exception_handler(DashboardExistsError)
+async def _dashboard_exists(request: Request, exc: DashboardExistsError) -> JSONResponse:
+    return JSONResponse(
+        status_code=409, content={"error": "dashboard_exists", "client_id": str(exc)}
+    )
 
 
 @app.get("/v1/me/rights")

@@ -334,12 +334,16 @@ def test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs() -> None
 
     from schemas.deployment import OspreyConfig
 
+    from schemas.rights import Right, rights_for
+
     realm = render_realm(OspreyConfig(), demo_analyst=True)
     demo = next(u for u in realm["users"] if u["username"] == DEMO_ANALYST_SUBJECT)
-    assert set(demo["attributes"]["roles"]) >= {
-        "source_author",
-        "source_approver",
-        "loader",
+    # ADR-112: the flow needs the rights, whatever role names carry them.
+    assert rights_for(demo["attributes"]["roles"]) >= {
+        Right.ADD_INGEST_FILES,
+        Right.EDIT_PIPELINES,
+        Right.PUBLISH_PIPELINES,
+        Right.RUN_PIPELINES,
     }, (
         "the demo analyst cannot walk the Ingest Studio, so R6's own flow 403s at its first step: "
         f"{demo['attributes']['roles']}"

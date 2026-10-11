@@ -109,7 +109,7 @@ DEMO_ADMIN_SUBJECT = "osprey-demo-admin"
 #: "ospreyRequiredServiceAccountRoles"` — so the whole realm failed to import and Keycloak never
 #: became healthy. A realm document carries only what Keycloak defines; anything this harness needs
 #: to remember lives here.
-REQUIRED_SERVICE_ACCOUNT_ROLES = ("impersonation", "view-users")
+REQUIRED_SERVICE_ACCOUNT_ROLES = ("impersonation", "view-users", "manage-users", "manage-clients")
 
 #: Keycloak 26 discards unrecognised user attributes by default and reports nothing — the write
 #: succeeds, the attribute is stored nowhere, and the token arrives without it, so a realm that
@@ -183,7 +183,9 @@ _DEMO_ANALYST_ATTRIBUTES = {
     "clearance": ["OFFICIAL"],
     "org_unit": ["verify"],
     "receivable_handling_codes": ["P"],
-    "roles": ["analyst", "source_author", "source_approver", "loader"],
+    # ADR-112: the Analyst and Data Engineer roles, which hold every right the three Studio roles
+    # (`source_author`, `source_approver`, `loader`) conferred, and more.
+    "roles": ["analyst", "data_engineer"],
 }
 
 

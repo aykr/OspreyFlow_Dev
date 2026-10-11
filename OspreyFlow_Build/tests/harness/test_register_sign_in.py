@@ -37,7 +37,7 @@ from schemas.deployment import OspreyConfig
 
 ISSUER = "http://kc.test"
 ADMIN_PASSWORD = "the-keycloak-admin-password"
-DEMO_ADMIN_ROLES = [ADMIN_ROLE, "analyst", "source_author", "source_approver", "loader"]
+DEMO_ADMIN_ROLES = [ADMIN_ROLE, "analyst", "data_engineer"]
 SECRET_SHAPED = "s3cret-value-that-must-never-be-printed"
 
 
@@ -561,3 +561,25 @@ def test_an_accounts_subject_is_read_from_keycloak_and_an_unknown_one_is_named(
         keycloak_admin.user_id(
             issuer=ISSUER, realm="osprey", token="admin-token", username="osprey-nobody"
         )
+
+
+# --- ADR-112: registration must not undo what an administrator set in People and roles ---
+
+
+def test_a_role_an_administrator_set_survives_registration_again(keycloak: FakeKeycloak) -> None:
+    """Found designing ADR-112 step 3: `make refresh` re-registers the demo accounts, and the
+    registration put the rendered attributes back whenever the stored ones differed — so a role
+    an administrator set in the Admin area's People and roles was silently reset by the next
+    refresh. Registration now restores only an attribute that is missing."""
+    keycloak.unmanaged_attributes = "ENABLED"
+    rendered = {"username": DEMO_ANALYST_SUBJECT, "attributes": {"roles": ["analyst"], "clearance": ["OFFICIAL"]}}
+    assert keycloak_admin.ensure_user(issuer=ISSUER, realm="osprey", token="admin-token", user=rendered) == "created"
+    (stored,) = keycloak.users.values()
+    stored["attributes"] = {"roles": ["analyst", "reports_viewer"], "clearance": ["OFFICIAL"]}  # the administrator's change
+    keycloak_admin.ensure_user(issuer=ISSUER, realm="osprey", token="admin-token", user=rendered)
+    assert keycloak.users[stored["id"]]["attributes"]["roles"] == ["analyst", "reports_viewer"]
+
+    del keycloak.users[stored["id"]]["attributes"]["clearance"]  # lost, as when custom attributes were off
+    assert keycloak_admin.ensure_user(issuer=ISSUER, realm="osprey", token="admin-token",
+                                      user=rendered) == "already there; attributes restored"  # fmt: skip
+    assert keycloak.users[stored["id"]]["attributes"] == {"roles": ["analyst", "reports_viewer"], "clearance": ["OFFICIAL"]}

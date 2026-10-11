@@ -24,7 +24,9 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-REQUIRED_ROLES = ("impersonation", "view-users")
+#: `manage-users` and `manage-clients` (ADR-112 Amendment 1): the Admin area's People and roles and
+#: Dashboards, through the Conduit's own account so every change passes its right check and audit.
+REQUIRED_ROLES = ("impersonation", "view-users", "manage-users", "manage-clients")
 
 
 class RealmConfigurationFailed(RuntimeError):
@@ -195,14 +197,25 @@ def ensure_user(*, issuer: str, realm: str, token: str, user: dict[str, Any]) ->
         f"{issuer}/admin/realms/{realm}/users?username={username}&exact=true", token=token
     )
     if status == 200 and found:
-        wanted = user.get("attributes")
-        if wanted and found[0].get("attributes") != wanted:
-            # Present but without what the realm renders for it (for instance created while custom
-            # attributes were still off): put the attributes back rather than leave it as found.
+        wanted = user.get("attributes") or {}
+        stored = found[0].get("attributes") or {}
+        # Present but without what the realm renders for it (created while custom attributes were
+        # still off, or before a ruling widened its roles): put back what is missing. **Only what
+        # is missing** (ADR-112): an attribute absent is restored, and a rendered role the account
+        # lacks is added — but nothing the account holds is removed or replaced, so a role an
+        # administrator added in the Admin area's People and roles survives `make refresh`. The
+        # cost, on the disposable demo accounts only: a rendered role taken away is put back.
+        merged = {**stored}
+        for key, value in wanted.items():
+            if key not in stored:
+                merged[key] = value
+            elif key == "roles":
+                merged[key] = [*stored[key], *(v for v in value if v not in stored[key])]
+        if merged != stored:
             status, body = _call(
                 f"{issuer}/admin/realms/{realm}/users/{found[0]['id']}",
                 token=token,
-                data={**found[0], "attributes": wanted},
+                data={**found[0], "attributes": merged},
                 method="PUT",
             )
             if status not in (200, 204):

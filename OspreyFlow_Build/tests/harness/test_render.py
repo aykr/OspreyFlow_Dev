@@ -768,7 +768,8 @@ def test_the_rendered_realm_carries_only_fields_keycloak_defines() -> None:
     assert set(realm) <= known, (
         f"unexpected top-level key(s) in the realm document: {sorted(set(realm) - known)}"
     )
-    assert REQUIRED_SERVICE_ACCOUNT_ROLES == ("impersonation", "view-users")
+    # ADR-112 Amendment 1: manage-users and manage-clients, for the Admin area's people and dashboards.
+    assert REQUIRED_SERVICE_ACCOUNT_ROLES == ("impersonation", "view-users", "manage-users", "manage-clients")
     assert "unmanagedAttributePolicy" not in realm
 
 

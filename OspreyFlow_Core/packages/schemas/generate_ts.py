@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from schemas.admin import ALL_MODELS as ADMIN_MODELS  # noqa: E402
 from schemas.analytics import ALL_MODELS as ANALYTICS_MODELS  # noqa: E402
 from schemas.compute import ALL_MODELS as COMPUTE_PORT_MODELS  # noqa: E402
 from schemas.deployment import ALL_MODELS as DEPLOYMENT_MODELS  # noqa: E402
@@ -47,6 +48,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *MAPCONFIG_MODELS,
     *PROVIDER_PROFILE_MODELS,
     *RIGHTS_MODELS,
+    *ADMIN_MODELS,
     *MODEL_PORT_MODELS,
     *COMPUTE_PORT_MODELS,
     *DEPLOYMENT_MODELS,

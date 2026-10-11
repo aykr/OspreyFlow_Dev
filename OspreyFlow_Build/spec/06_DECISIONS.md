@@ -11520,3 +11520,22 @@ token — rule 15, second worked example); a re-pull upserting nothing new; a re
 refused and its rows left with their old pulled-at; one pull across two sync instances; a failed pull
 retried and its failure recorded; deregistration removing a dashboard's rows; the mart's read-only role
 refused a write; a live check that Superset draws a chart from the mart.
+
+### ADR-112, Amendment 1 (11 October 2026) — steps 1 and 2 built; who calls the identity provider for the Admin area
+
+**Built (steps 1 and 2, `51e7337`).** `packages/schemas/rights.py` and a right declared on every route
+(`test_route_rights.py`'s table); spec 03 carries the table's principle. The old `source_author` keeps
+listing and uploading ingest files (owner ruling R6), found by the route tests.
+
+**Decided *(mine)*, for steps 3 and 4 — the Admin area's identity-provider calls go through the
+Conduit's own service account**, granted `manage-users` and `manage-clients` beside its existing
+`impersonation` and `view-users`. The alternative — the administrator's own token calling the identity
+provider directly — would put realm-management power into Glass tokens and let a change bypass the
+Conduit's audit. The cost, disclosed: a compromised Conduit could manage the realm. Narrowed in code:
+the Conduit's admin routes change only a person's `roles` attribute (to the four roles, `right:<name>`
+grants and the old role names — anything else refused) and only clients named `osprey-dashboard-*`.
+
+**A dashboard's case access stays ADR-052's.** An administrator registers a dashboard identity (a
+confidential client with a service account, its clearance and unit, the *Reports Viewer* role); a case
+**Author** grants that identity Viewer on their case through the case's existing access screen, as for
+a person. The administrator never reaches into a case to do it (decision 6).
