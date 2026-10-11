@@ -11759,7 +11759,7 @@ from the renderer.
 **What this supersedes.** Spec 05 §2–§3's install path (the harness and Set-up console, `make
 refresh`, `make launch`, the welcome service, ADR-107), and `process/CLAUDE.md`'s convention "No
 `osprey` CLI yet", once the command exists. The renderer stays the single source of what a deployment
-is (ADR-049); the command drives it.
+is (`osprey.yaml` rendered by the harness, `05_DEPLOYMENT.md` §2.1); the command drives it.
 
 **Tests to write first, named, per stage** (the build is staged in the handover note,
 `process/HANDOVER_2026-10-11.md`): the publish step refusing a Build path, an internal demo, a
