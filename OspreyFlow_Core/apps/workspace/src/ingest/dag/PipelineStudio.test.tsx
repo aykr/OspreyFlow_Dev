@@ -60,7 +60,7 @@ const PACKS = [
   { name: "fibo", label: "Financial fraud and AML (FIBO)", entity_types: ["Account"], edge_types: ["BENEFICIAL_OWNER_OF"] },
 ];
 
-function serve(overrides: { putStatus?: number; putBody?: unknown } = {}) {
+function serve(overrides: { putStatus?: number; putBody?: unknown; registry?: StudioRecipeDraft[] } = {}) {
   const calls: { method: string; url: string; body?: unknown }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -79,7 +79,7 @@ function serve(overrides: { putStatus?: number; putBody?: unknown } = {}) {
       if (/\/ingest\/recipes\/r1$/.test(path) && method === "GET") return json(200, draft());
       if (/\/ingest\/recipes\/r1$/.test(path) && method === "PATCH") return json(200, draft());
       if (path.endsWith("/ingest/recipes") && method === "POST") return json(201, draft(null));
-      if (path.endsWith("/ingest/recipes") && method === "GET") return json(200, [draft()]);
+      if (path.endsWith("/ingest/recipe-registry")) return json(200, overrides.registry ?? [draft()]);
       return json(404, { error: "not_found" });
     }),
   );
@@ -102,6 +102,22 @@ describe("PipelineStudio", () => {
     expect(await screen.findByText(/Carrier B intake/)).toBeTruthy();
     await openPipeline();
     expect(screen.getAllByRole("button", { name: /: / })).toHaveLength(5);
+  });
+
+  it("keeps a published pipeline listed, and opens a recipe from before pipelines at Publish", async () => {
+    // Found live, 11 October 2026: the home listed drafts only, so a pipeline vanished on publish —
+    // nobody could run it again, schedule it or release its held rows — and a recipe the ontology
+    // flagged could not be reached to republish.
+    const published = { ...draft(), recipe_id: "r2", label: "Onboarding applications", status: "published" };
+    const flagged = { ...draft(null), recipe_id: "r3", label: "Carrier B subscribers", status: "flagged" };
+    const superseded = { ...draft(), recipe_id: "r4", label: "Old intake", status: "superseded" };
+    serve({ registry: [published, flagged, superseded] as StudioRecipeDraft[] });
+    mount();
+    expect(await screen.findByText(/Onboarding applications/)).toBeTruthy();
+    expect(screen.getByText(/· published/)).toBeTruthy();
+    expect(screen.queryByText(/Old intake/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Carrier B subscribers" }));
+    expect(await screen.findByText("publish-screen")).toBeTruthy();
   });
 
   it("names a new pipeline and lands on its canvas", async () => {

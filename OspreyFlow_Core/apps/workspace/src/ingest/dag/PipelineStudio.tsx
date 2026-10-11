@@ -16,7 +16,7 @@ import {
   createDraft,
   fetchDomainPacks,
   fetchDraft,
-  listDrafts,
+  fetchRecipeRegistry,
   savePipeline,
 } from "../api";
 import { ConnectScreen } from "../ConnectScreen";
@@ -42,7 +42,7 @@ export interface PipelineStudioProps {
 type View =
   | { at: "home" }
   | { at: "canvas"; recipeId: string }
-  | { at: "connect" | "profile" | "map" | "verify" | "publish"; recipeId: string };
+  | { at: "connect" | "profile" | "map" | "verify" | "publish"; recipeId: string; fromHome?: boolean };
 
 export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId }: PipelineStudioProps) {
   const [view, setView] = useState<View>({ at: "home" });
@@ -53,12 +53,21 @@ export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId }: Pip
         apiBaseUrl={apiBaseUrl}
         bearerToken={bearerToken}
         investigationId={investigationId}
-        onOpen={(recipeId) => setView({ at: "canvas", recipeId })}
+        onOpen={(recipe) =>
+          // A published or flagged recipe from before pipelines has no canvas: it opens where it is
+          // republished. A draft, new or old, is drawn on the canvas.
+          setView(
+            recipe.pipeline || recipe.status === "draft"
+              ? { at: "canvas", recipeId: recipe.recipe_id }
+              : { at: "publish", recipeId: recipe.recipe_id, fromHome: true },
+          )
+        }
       />
     );
   }
   const stage = { apiBaseUrl, bearerToken, investigationId, recipeId: view.recipeId };
-  const back = () => setView({ at: "canvas", recipeId: view.recipeId });
+  const back = () =>
+    setView("fromHome" in view && view.fromHome ? { at: "home" } : { at: "canvas", recipeId: view.recipeId });
   if (view.at === "connect") {
     // The source node's own editor: the Connect gate rehosted whole (spec 09 §2 — the connector
     // catalogue, the file, the marking and the legal basis), pinned to this pipeline's draft.
@@ -97,7 +106,7 @@ function PipelinesHome({
   bearerToken,
   investigationId,
   onOpen,
-}: PipelineStudioProps & { onOpen: (recipeId: string) => void }) {
+}: PipelineStudioProps & { onOpen: (recipe: StudioRecipeDraft) => void }) {
   const [drafts, setDrafts] = useState<StudioRecipeDraft[] | null>(null);
   const [label, setLabel] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
@@ -105,8 +114,10 @@ function PipelinesHome({
 
   useEffect(() => {
     let cancelled = false;
-    listDrafts(apiBaseUrl, bearerToken, investigationId)
-      .then((found) => !cancelled && setDrafts(found))
+    // Every recipe at every status but superseded: a published pipeline stays here to run again,
+    // schedule or release held rows from, and a flagged one to republish.
+    fetchRecipeRegistry(apiBaseUrl, bearerToken, investigationId)
+      .then((found) => !cancelled && setDrafts(found.filter((r) => r.status !== "superseded")))
       .catch((err: unknown) => {
         if (!cancelled) setProblem(err instanceof Error ? err.message : "The pipelines could not be read.");
       });
@@ -125,7 +136,7 @@ function PipelinesHome({
         label: label.trim(),
         connector_profile: "generic-csv",
       });
-      onOpen(made.recipe_id);
+      onOpen(made);
     } catch (err: unknown) {
       setProblem(err instanceof Error ? err.message : "The pipeline could not be created.");
       setBusy(false);
@@ -161,7 +172,7 @@ function PipelinesHome({
                 {draft.label}
                 <span style={{ color: "var(--text-tertiary)" }}>{` · v${draft.version} · ${draft.status}`}</span>
               </span>
-              <Button aria-label={`Open ${draft.label}`} onClick={() => onOpen(draft.recipe_id)}>
+              <Button aria-label={`Open ${draft.label}`} onClick={() => onOpen(draft)}>
                 Open
               </Button>
             </li>
