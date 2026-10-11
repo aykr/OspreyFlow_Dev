@@ -16,6 +16,7 @@
    │  API surface ── Working-Set Service ── Access Control ── Audit            │
    │        │                │                                                 │
    │  Job orchestration: ingest → extract → resolve → load → score            │
+   │  Rule gate (ADR-109): typology rules judge a load before commit and after │
    └───┬──────────────┬──────────────┬───────────────┬────────────────────────┘
        │ GraphPort    │ AnalyticsPort│ ComputePort   │ ModelPort
    ┌───┴──────────────┴──────────────┴───────────────┴────────────────────────┐
@@ -553,7 +554,8 @@ changes above the port.
 Two narrower ports sit beside the four, each also a `Protocol` with its suite written first, but
 neither is a tier boundary the way the four are: **`RecognisePort`** (`packages/ports/recognise.py`,
 ADR-098 decision 2), the fast named-entity pass *Extract entities* runs, served by Stanza in its own
-`ner` sidecar, whose findings are proposals like a model's; and **`MediaStore`**
+`ner` sidecar — and, since ADR-108, by spaCy and transformers adapters a pipeline's extract node may
+name (`recognise_spacy`, `recognise_transformers`) — whose findings are proposals like a model's; and **`MediaStore`**
 (`packages/ports/media.py`, ADR-094), which keeps a file's bytes in the object store under a
 reference, never in the graph.
 
@@ -651,7 +653,8 @@ Supported adapters: `duckdb`, `clickhouse`.
 
 ### 2.3 ComputePort
 
-Graph algorithms: centrality, community detection, the Clique Metric, shortest path at scale.
+Graph algorithms: centrality, community detection, the Clique Metric, shortest path at scale, and
+— since ADR-109 — cumulative beneficial ownership and distance-decayed risk propagation.
 Separate from `GraphPort` because it has a different scaling profile — batch, memory-hungry,
 tolerant of staleness — and a different deployment shape.
 
@@ -662,7 +665,15 @@ class ComputePort(Protocol):
     async def clique_metric(self, req: CliqueMetricRequest) -> dict[NodeId, CliqueScore]: ...
     async def shortest_paths(self, req: PathRequest) -> list[Path]: ...
     async def temporal_motifs(self, req: MotifRequest) -> list[MotifMatch]: ...
+    async def ownership(self, req: OwnershipRequest) -> OwnershipTrace: ...       # ADR-109 phase C
+    async def propagate(self, req: PropagationRequest) -> PropagationResult: ...  # ADR-109 phase E
 ```
+
+`ownership` and `propagate` are implemented on two tiers that must agree exactly — rustworkx in the
+Conduit and a graphology harness in Node (`compute_graphology_tier1`) — and each is called with a
+subgraph already read *as the reader* through `GraphPort`, so a node the reader cannot see never
+enters the arithmetic (rule 3). Neither writes anything: due diligence and neighbourhood risk are
+reads (ADR-109 ruling 9).
 
 Three tiers of implementation, selected by working-set size, not by deployment profile:
 
@@ -728,6 +739,24 @@ brush, histogram selection, map viewport, degree threshold — operate on the br
 with no network call. This is why scrubbing the timeline is instant and why the five analytical
 views cross-filter each other without a round trip.
 
+**Beside the graph, four kinds of record are deliberately kept out of it (ADR-109):**
+
+- **Screening lists** live in their own Postgres store (`services/api/screening.py`), deployment-wide,
+  loaded and replaced a whole list at a time, each entry marked synthetic or not (the loader refuses a
+  list not marked synthetic unless the owner's exceptions file names it). Only a listed party a
+  customer is found to match enters a case's graph, as a scored, `inferred` `SAME_AS` — never a
+  merge (rule 6). A real list is admitted only through the licence register and the owner's local
+  exceptions list (rule 9).
+- **Held rows** — rows a pre-commit rule could not judge — wait in a quarantine store
+  (`services/api/held_rows.py`) with their marking, reaching no graph or analytics store until a
+  reviewer releases or rejects them (`09_INGEST_STUDIO.md` §6).
+- **KYC status and risk are never stored.** They are computed at each read, as the reader, from what
+  the reader can see (`services/api/kyc.py`); two analysts with different clearances may read
+  different scores, and neither score is a record.
+- **The daily KYC expiry sweep** is the deployment's first periodic pass: a lifespan task that one
+  replica a day claims through Valkey (`SET NX`), raising an alert when a verifying document lapses —
+  the change stream never sees a clock pass (`services/api/kyc_sweep.py`).
+
 Expanding beyond the working-set cap does not silently truncate. The Glass offers three explicit
 choices: expand into a new branch tab, apply a filter before expanding, or promote the expansion
 to a batch job whose result is a saved subgraph. Silent truncation of an intelligence picture is
@@ -764,47 +793,43 @@ to be on every node and edge from the first write.
 
 ## 6. Repository layout
 
+The product tree, as of 11 October 2026 (ADR-054 keeps the specification, the build record and the
+test suites beside it rather than inside it, and local data outside version control altogether):
+
 ```
-ospreyflow/
-├── apps/
-│   └── workspace/              # The Glass. React + TS + Vite
-│       ├── src/canvas/         # Sigma renderer, programs, interaction
-│       ├── src/timeline/       # Temporal view
-│       ├── src/map/            # MapLibre view
-│       ├── src/dossier/        # Object explorer / entity detail
-│       ├── src/workingset/     # graphology store, delta protocol client
-│       └── src/design/         # tokens.css, primitives
+OspreyFlow_Core/
+├── apps/workspace/             # The Glass. React + TS + Vite; src/ holds, among others:
+│   ├── canvas/ timeline/ map/  #   the five views' renderers and the working set (workingset/)
+│   ├── inspector/ metrics/     #   the right-hand panels (patterns/ is the Query builder)
+│   ├── alerts/ ownership/      #   the Alerts and Ownership places (ADR-109)
+│   ├── ingest/                 #   the Ingest Studio: dag/ (pipelines home and canvas), map/, verify/, publish/
+│   └── design/                 #   tokens.css, primitives
 ├── services/
-│   ├── api/                    # The Conduit. FastAPI
-│   ├── ingest/                 # Connectors, normalisation, Knowledge Adapters
+│   ├── api/                    # The Conduit. FastAPI; the rule gate, held rows, screening, KYC, sweep
+│   ├── ingest/                 # Connectors, the engine, the pipeline runner, Knowledge Adapters
 │   ├── extract/                # Multimodal extraction workers
 │   ├── resolve/                # Splink entity resolution
 │   ├── ner/                    # The recogniser sidecar: Stanza (ADR-098)
-│   └── compute/                # ComputePort workers (rustworkx / Spark submit)
+│   ├── geocoder/               # Gazetteer matching: a scored, inferred SAME_AS, never a merge
+│   └── compute/                # ComputePort workers
 ├── packages/
 │   ├── ports/                  # Protocol definitions — the architecture
-│   ├── adapters/
-│   │   ├── graph_arcadedb/
-│   │   ├── graph_janusgraph/
-│   │   ├── analytics_duckdb/
-│   │   ├── analytics_clickhouse/
-│   │   ├── compute_rustworkx/
-│   │   ├── compute_spark/
-│   │   ├── model_litellm/
-│   │   ├── recognise_stanza/
-│   │   └── media_objectstore/
-│   ├── ontology/               # Schema definition, migrations, validation
-│   └── schemas/                # Shared Pydantic + generated TypeScript types
-├── harness/                    # Browser setup harness and admin console; headless CLI
-├── deploy/
-│   ├── compose/                # Generated compose files per profile
-│   └── cluster/                # Generated Kubernetes manifests
-├── tests/
-│   ├── conformance/            # Port conformance suites
-│   ├── golden/                 # Extraction golden sets
-│   └── scenarios/              # Acceptance scenarios A and B
-└── docs/                       # This spec pack, kept in-repo
+│   ├── adapters/               # graph_arcadedb, analytics_duckdb, compute_rustworkx,
+│   │                           # compute_graphology_tier1, model_litellm, recognise_stanza,
+│   │                           # recognise_spacy, recognise_transformers, media_objectstore
+│   ├── ontology/               # Schema definition (default.yaml, v16), packs, validation
+│   ├── schemas/                # Shared Pydantic + generated TypeScript types
+│   └── demo_fixtures/          # Synthetic fixtures (rule 9), e.g. Operation Ledger
+├── connectors/ providers/      # Connector and map-provider profiles (YAML)
+├── recipes/                    # Published ingest recipes — the repository is the record
+├── harness/                    # Browser setup harness and admin console
+├── deploy/                     # Generated compose files and manifests per profile
+└── scripts/                    # Operational modules, `python -m scripts.<name>`
 ```
+
+The adapters named in §2 as supported but not listed above — `graph_janusgraph`,
+`analytics_clickhouse`, and Spark or Vermeer for the third compute tier — are the ports' planned
+second implementations, not yet built; each lands with its conformance suite green (rule 1).
 
 Shared types are generated, not hand-mirrored: Pydantic models in `packages/schemas` are the
 source of truth and TypeScript types are emitted from their JSON Schema at build time. A drift

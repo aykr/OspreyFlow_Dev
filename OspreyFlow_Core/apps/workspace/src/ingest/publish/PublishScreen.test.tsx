@@ -63,7 +63,7 @@ const PIPELINE_RUN = {
   rejections: [],
 };
 
-function serve() {
+function serve(run: unknown = PIPELINE_RUN) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -71,7 +71,7 @@ function serve() {
       const method = init?.method ?? "GET";
       const json = (status: number, payload: unknown) =>
         ({ ok: status < 400, status, json: async () => payload }) as Response;
-      if (path.endsWith("/run") && method === "POST") return json(200, PIPELINE_RUN);
+      if (path.endsWith("/run") && method === "POST") return json(200, run);
       if (/\/ingest\/recipes\/r1$/.test(path)) return json(200, PUBLISHED);
       return json(404, { error: "not_found" });
     }),
@@ -96,5 +96,18 @@ describe("PublishScreen", () => {
     expect(stages.textContent).toContain("Extract (spacy): 1 documents read, 4 findings queued for review");
     expect(stages.textContent).toContain("refused: the extraction library 'whisper' is not available");
     expect(stages.textContent).toContain("Enrich (local_gazetteer): 2 places considered, 1 matched locally");
+  });
+
+  it("says what the case's rules did, and how many rows wait for review", async () => {
+    // Found by the spec survey, 11 October 2026: the run report carried `rows_held` and
+    // `rule_notes` (ADR-109 ruling 1) but the Studio drew neither, so a fully held load read as a
+    // load that simply made nothing.
+    serve({ ...PIPELINE_RUN, nodes_created: 0, rows_held: 2,
+            rule_notes: ["Rule “Onboarding screen” could not judge 2 row(s): held for review."] });  // prettier-ignore
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
+    expect(await screen.findByText("Rows held for review: 2 — a reviewer releases or rejects them in Alerts › Held rows")).toBeTruthy();
+    const rules = screen.getByRole("list", { name: "What the case's rules did" });
+    expect(rules.textContent).toContain("could not judge 2 row(s)");
   });
 });

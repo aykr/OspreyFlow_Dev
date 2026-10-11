@@ -142,7 +142,7 @@ export function VerifyScreen({ apiBaseUrl,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
-        <Button onClick={onBack}>← Connect</Button>
+        <Button onClick={onBack}>← Back to the pipeline</Button>
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>Verify{draft ? ` — ${draft.label}` : ""}</h1>
         <div style={{ flex: 1 }} />
         <Button onClick={() => void handleRunVerify()} variant="primary" disabled={running}>

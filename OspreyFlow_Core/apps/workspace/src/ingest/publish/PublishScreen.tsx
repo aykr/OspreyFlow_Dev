@@ -281,7 +281,7 @@ export function PublishScreen({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
-        <Button onClick={onBack}>← Connect</Button>
+        <Button onClick={onBack}>← Back</Button>
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>Publish{draft ? ` — ${draft.label}` : ""}</h1>
         <div style={{ flex: 1 }} />
         <span
@@ -415,7 +415,21 @@ export function PublishScreen({
             <li>Nodes referenced: {loadReport.nodes_referenced}</li>
             <li>Edges created: {loadReport.edges_created}</li>
             <li>Rows rejected: {(loadReport.rejections ?? []).length}</li>
+            {(loadReport.rows_held ?? 0) > 0 && (
+              <li>
+                Rows held for review: {loadReport.rows_held} — a reviewer releases or rejects them in Alerts › Held rows
+              </li>
+            )}
           </ul>
+          {/* ADR-109 ruling 1: what the case's rules did to this load, in words — a held load must
+              never read as a load that simply made nothing (rule 2). */}
+          {(loadReport.rule_notes ?? []).length > 0 && (
+            <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }} aria-label="What the case's rules did">
+              {(loadReport.rule_notes ?? []).map((note, i) => (
+                <li key={i}>{note}</li>
+              ))}
+            </ul>
+          )}
           {/* ADR-108 phase C: a pipeline run answers per branch and per stage, refusals in words —
               a stage that could not run says so here, never a silently thinner total. */}
           {pipelineRunOf(loadReport) && (

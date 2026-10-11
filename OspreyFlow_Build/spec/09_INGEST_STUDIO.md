@@ -38,9 +38,13 @@ transform remains a Knowledge Adapter with golden files, never an expression lan
 - **source** — a connector profile and a location. A pipeline may hold several; each runs as its
   own branch under its own `load_id`, so each stays independently revertible (§9.1 discipline).
   Every branch runs the recipe's one committed row template — per-branch templates are future work,
-  disclosed in the run report by each branch naming the same recipe version.
-- **profile**, **map** — the stage editors of old (§3, §4), rehosted as node panels; their routes,
-  rules and tests are unchanged.
+  disclosed in the run report by each branch naming the same recipe version. The **first** source
+  carries the draft itself: its panel opens the Connect gate whole (§2 — file, connector, handling
+  marking, legal basis). A further source's panel sets only its connector profile and location; it
+  is read under the first source's marking and legal basis.
+- **profile**, **map** — the stage editors of old (§3, §4). Choosing the node shows a short panel
+  whose button ("Open profile", "Open map editor") replaces the canvas with the full editor;
+  "← Back to the pipeline" returns to the canvas. Their routes, rules and tests are unchanged.
 - **extract** — unstructured extraction over the Documents its upstream branches created, fed by a
   map and never by raw bytes. Its config declares the library (`stanza`, `spacy` or `transformers`
   run today; `model`/`whisper`/`vision` are refused at publish until the runner runs them), the
@@ -54,7 +58,35 @@ transform remains a Knowledge Adapter with golden files, never an expression lan
   deployment's configured allow-list (`OSPREY_ONLINE_GEOCODER`), every online call disclosed in the
   run report (ruling Q5). An online point lands in the analytics geometry partition and the node is
   superseded with its `geometry_ref` — a new revision, never an in-place edit.
-- **load** — where a branch's rows become graph, through the engine unchanged.
+- **load** — where a branch's rows become graph, through the engine unchanged. Its panel has no
+  settings: it names the case dataset the rows are written into.
+
+**Verify and Publish are not nodes.** They are the canvas header's two buttons, beside the
+pipeline's name, version and status: Verify (§5) dry-runs the whole recipe, Publish (§6) commits it,
+schedules it and runs it.
+
+### 1.0 Working in the Studio (as built, 11 October 2026)
+
+The Studio opens on the **pipelines home** (`apps/workspace/src/ingest/dag/PipelineStudio.tsx`,
+beside the **Files** tab, §4 "Files"):
+
+- **Name a pipeline** and press *New pipeline*: a draft is created on the generic CSV connector with
+  the canonical chain drawn, and opens on its canvas.
+- **The list** is the case's recipe registry (`GET …/ingest/recipe-registry`) at every status but
+  *superseded* — each row "label · vN · status" with *Open*. A published pipeline stays here to be run
+  again, rescheduled or reopened; a *flagged* one (§6, ontology moved) to be republished. Listing
+  drafts only lost a pipeline from the Studio the moment it was published (found live, 11 October
+  2026; `PipelineStudio.test.tsx` "keeps a published pipeline listed, and opens a recipe from before
+  pipelines at Publish").
+- **Open** puts a draft, or any recipe with a pipeline, on its canvas. A published or flagged recipe
+  written before pipelines has no canvas of its own: it opens at Publish, whose back returns home.
+
+On the **canvas**, the *Pipeline stages* toolbar holds **+ Source** (a whole source → profile → map →
+load branch), **+ Extract** and **+ Enrich** (each after the last map) and **Remove selected** (never
+the domain root). Every edit is saved as it is made (`PUT …/ingest/recipes/{id}/pipeline`); the save
+gate's refusals are shown above the canvas in its own words. The **Stage settings** panel beside the
+canvas is the chosen node's editor: the domain pack as a choice of packs (§1.1), the extract's
+library, media and where findings go, the enrich's geocoder.
 
 **Two gates, both in words (rule 2).** Saving a pipeline refuses a graph that breaks the rules
 (a cycle, a second domain root, a source reaching no load, an extract not fed by a map, an unknown
@@ -296,16 +328,21 @@ so the template looks like the thing it will produce.
 │                       │                                           │ On match             │
 │                       │                                           │  ● reference ○ create│
 └───────────────────────┴──────────────────────────────────────────┴──────────────────────┘
-      Row 1 of 10,000 sample    ◂ ▸        [Verify mapping]    [Save draft]
+      Row 1 of 10,000 sample    ◂ ▸                            [Save draft]
 ```
 
 ### Interaction
 
-- **Drag a source field onto a template element** to bind it, or select both and press Enter —
-  the keyboard path is not an afterthought, because this screen is used for hours at a time.
-- **The profiler proposes a starting template.** For a recognised source shape it proposes the
-  whole thing; for an unfamiliar one it proposes the bindings it is confident about and leaves
-  the rest. Every proposal is visibly a proposal until confirmed.
+- **Drag a source field onto a template element** to bind it. *Not built:* the keyboard path
+  (select both and press Enter) — every other control on the screen is reachable by Tab, so nothing
+  is keyboard-inaccessible, but this one shortcut is deferred and disclosed in `MapScreen.tsx`.
+- **The profiler proposes a starting template** — *not built* (§2 records both as post-milestone).
+  When built, every proposal is visibly a proposal until confirmed.
+- **Map saves; it does not verify.** The editor's one action is *Save draft*; Verify is the canvas
+  header's (§1), reached by "← Back to the pipeline".
+- **A link's time is chosen, never assumed.** *When it occurred* is **Not recorded** or **From a
+  column**, and only a column chosen there is saved; the editor once displayed a default binding it
+  never saved (found live, 11 October 2026; `ElementInspector.content.test.tsx`).
 - **An entity offers its type's identifiers as well as its properties** (identifiers first, each once):
   a Device's IMEI is declared only as an identifier, and Map offered a Device nothing to set until
   9 October 2026.
@@ -359,11 +396,12 @@ defaults and a row index in, a `Handling`/`Provenance` out, no open transaction 
 is exactly what lets Map (and Verify, §5) show what an element's handling and provenance *would*
 be before any write happens: `services/ingest/engine.preview_handling_and_provenance()` wraps
 them for this purpose and is the one path both this stage's live preview and Verify's dry run
-call, rather than each re-deriving it. The per-element override this paragraph promises is not
-yet a field on `RecipeEntity`/`RecipeEdge` — building it is this stage's own scope: add
-`handling`/`provenance` override fields to both, and have the write path (and the preview call
-above) merge an element's override over `recipe.defaults` before validating, rather than using
-the recipe-level default unconditionally as it does today.
+call, rather than each re-deriving it. The per-element override is built: `RecipeEntity` and
+`RecipeEdge` carry `handling`/`provenance` overrides (`packages/schemas/ingest.py`), the write path
+and the preview merge an element's override over `recipe.defaults` before validating
+(`engine._merge_override`), and Map's element panel shows the override with its live preview
+(`ElementInspector.tsx`). An override may only tighten the source's marking, never loosen it —
+refused at save (`studio_map.validate_handling_tightens`).
 
 **Conditional elements.** An element can be conditional on a field value, which is how one
 recipe handles a file whose rows are not homogeneous — a device extraction where a row is a call,
@@ -395,7 +433,7 @@ store. Tests: `tests/ingest/test_held_content.py`, `tests/conformance/media_stor
 
 ### Files: the unstructured path, built for images, videos and text (ADR-094 step 3)
 
-The studio's **Files** stage (shown once the studio has a case to load into) adds images, videos
+The studio's **Files** tab (beside *Pipelines*, shown once the studio has a case to load into) adds images, videos
 and text files straight to that case, each a Document in the media store, read and extracted from
 by its kind; the same dialog is reached from the canvas, standing alone (*Add files* under the strip
 over the canvas) or held by a node (*Add files held by this…* in the menu of a node `HOLDS` allows).
@@ -602,7 +640,18 @@ editor; the repository is the record.
 - **Judged by the case's rules (ADR-109 ruling 1).** A run is judged by its case's typology rules
   at the point each declares (`03_CONDUIT_MIDDLEWARE.md` §3.8a, §5.1). The run report carries
   `rows_held` and `rule_notes`: what each rule raised, and any rows a failing pre-commit rule held
-  for review — they reached no store, their places included, until an Author releases them.
+  for review — they reached no store, their places included. Publish's *Load result* shows both:
+  "Rows held for review: N" and *What the case's rules did*, in the rules' own words (a fully held
+  load once read as a load that made nothing; `PublishScreen.test.tsx`).
+  **Held rows are decided in the Glass, not the Studio:** the Alerts place's *Held rows* tab
+  (`02_GLASS_FRONTEND.md` §3.3) lists them, Editor and above, only rows whose marking the reader can
+  read, each with the rule that could not judge it and why. **Release and load** needs the case
+  Author level and the studio role Loader; released rows are loaded under a new load id with their
+  provenance as it would have been, judged again by the rules, and never held again (the release is
+  the human judgement a failing rule waited for — `fail_closed=False`). **Reject** needs the Author
+  level and a written reason. Worked example, 11 October 2026: the onboarding pipeline's two rows
+  were held because the run route never gave the rules the screening list; released after the fix
+  (`364ba2e`), they were judged again and raised the three alerts the rules exist for.
 - **Versioned, with loads attributed.** Every loaded element records which recipe version
   produced it (`load_id`/`recipe_id`/`recipe_version` on its audit stub — `01_DOMAIN_MODEL.md`
   §2.4). When a mapping error is found in month six, the affected elements are identifiable by
@@ -760,9 +809,14 @@ nothing in this section is wired to anything yet.
 
 - **No scripting.** Covered in §4, and worth restating because it is the request that will come
   up most often. Transforms are adapters with golden tests.
-- **No joins across sources at ingest.** A recipe maps one source. Relating two sources is entity
+- **No joins across sources at ingest.** A pipeline may hold several sources (§1), but each is its
+  own branch under its own `load_id`, mapped row by row; no row is ever joined to another source's
+  row. Relating two sources is entity
   resolution's job, at query time, where it can be adjusted and undone. Joining at ingest bakes a
   decision into storage and is the same mistake ADR-006 rejects.
 - **No aggregation at ingest.** Load records at source fidelity. Aggregation is a query.
-- **No enrichment from external services.** No hosted lookup, no third-party enrichment API. What
-  goes in is what came in, plus locally computed normalisation.
+- **No enrichment from external services, except a geocoder the deployment allows.** No hosted
+  lookup and no third-party enrichment API — with the one exception ADR-108 ruling Q5 made: an
+  enrich node may geocode online, only through the deployment's configured allow-list
+  (`OSPREY_ONLINE_GEOCODER`), the local gazetteer first, every online call disclosed in the run
+  report (§1). Otherwise what goes in is what came in, plus locally computed normalisation.

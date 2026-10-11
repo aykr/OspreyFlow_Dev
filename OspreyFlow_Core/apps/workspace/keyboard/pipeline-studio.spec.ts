@@ -76,6 +76,8 @@ async function serve(page: Page) {
     if (url.endsWith("/ingest/recipes/r1") && method === "PATCH") return json(200, draft(CHAIN));
     if (url.endsWith("/ingest/recipes") && method === "POST") return json(201, draft(null));
     if (url.endsWith("/ingest/recipes") && method === "GET") return json(200, [draft(CHAIN)]);
+    // The pipelines home lists the registry (every status but superseded), not drafts only.
+    if (url.endsWith("/ingest/recipe-registry") && method === "GET") return json(200, [draft(CHAIN)]);
     return json(404, {});
   });
   await page.goto("/keyboard/pipeline-studio-harness.html");

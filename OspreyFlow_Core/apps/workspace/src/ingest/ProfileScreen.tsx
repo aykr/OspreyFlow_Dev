@@ -184,7 +184,7 @@ export function ProfileScreen({ apiBaseUrl,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
-        <Button onClick={onBack}>← Connect</Button>
+        <Button onClick={onBack}>← Back to the pipeline</Button>
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>
           Profile{draft ? ` — ${draft.label}` : ""}
         </h1>

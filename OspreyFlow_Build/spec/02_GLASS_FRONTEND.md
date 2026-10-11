@@ -185,8 +185,9 @@ narrowed.
 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The rail on the left (44px; ADR-097 step 1) holds the places the analyst goes to: *Cases*, *Watches*,
-*History*, *Explore* (where to start in the case's data, ADR-100, §3.1), *Questions* (the case's
+The rail on the left (44px; ADR-097 step 1) holds the places the analyst goes to, in this order: *Cases*,
+*Watches*, *Alerts* (the case team's alert queue, its rules, held rows and audit — ADR-109, §3.3),
+*Ownership* (beneficial ownership and due diligence — ADR-109, §3.3), *History*, *Explore* (where to start in the case's data, ADR-100, §3.1), *Questions* (the case's
 questions to the model, ADR-098, §3.1), *Proposed types* (administrators only, ADR-090 C3) and the
 *Ingest Studio*; in the Ingest
 Studio it holds *Back to the investigation*. Each is an icon button whose accessible name is its label;
@@ -267,7 +268,8 @@ have their own accordion: every part sits in a hairline box (`--border-subtle`, 
 header row (`--fs-12` 600, a chevron on the left that turns when open), and a part folds within its own
 panel only. Each panel opens on its preview and folds the rest: the Inspector a link's *Details* (then
 *Change this link*, *Notes*, the link's *Emails*, *Messages* or *Events*, *Change history*) or a node's
-*Properties* (then *Provenance*, *Source*, *Judgements*; with no node, *Judgements* open); the Query
+*Properties* (then *Picture*, *Relationships*, *Shares contacts*, *Neighbourhood risk*, *Provenance*,
+*Source*, *Judgements*; with no node, *Judgements* open); the Query
 builder its *Pattern* with *Preview* and *Run* (then *Add to the pattern*, *Connect* once there are two
 nodes, *Save and load*); Metrics its *Ranking* (then *Community detection*, *Filter*). Parts open independently.
 A link-menu choice opens its part; opening *Change this link* opens the form. A folded part keeps what
@@ -277,8 +279,9 @@ is half-written in it. The three panels are denser than the rest of the Glass: b
 
 **What the Inspector shows (ADR-097 step 1).** With **one node** selected, its header is the node as
 the canvas draws it (shape in its channel's colour, then the type) and its name as a literal value in
-mono; its parts are *Properties* (open), *Relationships* (its links in view, by type, most first),
-*Provenance*, *Source* and *Judgements*. With **several**, they are shown together, not the first
+mono; its parts are *Properties* (open), *Picture* (only for a type a picture may depict, §3),
+*Relationships* (its links in view, by type, most first), *Shares contacts*, *Neighbourhood risk*
+(ADR-109 phase E, below), *Provenance*, *Source* and *Judgements*. With **several**, they are shown together, not the first
 alone: *Summary* (open: counts by type, and every property they all share with one value), *Selected
 (n)* (ADR-093's list: centre on one, take one out) and *Links between them (n)*, by type. With
 **nothing** selected: "Select a node, or press / to search." — and `/` anywhere outside a text field
@@ -332,7 +335,7 @@ One row, 40px. From the left:
 There is no application switch: the Ingest Studio is reached from the rail, and while it is open the
 bar shows a brass line under it and drops what belongs only to the Glass (search, the view switch,
 Export). *Back to the investigation* on the rail returns to the Glass view that was last open. Watches,
-History and Proposed types are on the rail; the resolution threshold, named **Match strictness** for what
+Alerts, Ownership, History and Proposed types are on the rail; the resolution threshold, named **Match strictness** for what
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 
@@ -480,7 +483,9 @@ a crowded view still shrinks them as before.
 
 **Zoom, the legend and the grid (ADR-097 step 2).** A zoom cluster at the canvas's lower right, a group
 named *Zoom*: *Zoom in*, *Zoom out* and *Fit to view*; F with the canvas focused fits too (the whole graph
-framed, as an arrangement frames it). A legend at the lower left lists each type in view as the canvas
+framed, as an arrangement frames it, inside an 80px margin so the outermost nodes clear the toolbar
+above the canvas and the selection bar below it — Sigma's 30px framed them under both, found live 11
+October 2026 and checked by eye, since jsdom draws no WebGL). A legend at the lower left lists each type in view as the canvas
 draws it (shape in its channel's colour), with how many, most first; *Legend* folds it to its title. The
 graph canvas, and no other surface, has DESIGN.md §9 exception 4's measurement grid: 1px `--border-subtle`
 lines on an 8px lattice, fixed to the screen. *Grid* in the toolbar's Show group switches it off and on
@@ -826,15 +831,23 @@ before commit or after as each rule declares, and raise alerts to **the case tea
 *Alerts* place on the left rail, after *Watches*. It opens on the queue (open and claimed by
 default; closed and all by choice), each alert named by its typology and its finding in words, the
 entities named as the reader sees them — an alert any part of which the reader cannot see is not
-shown or counted. Opening one shows **what fired it**: the finding, when the rule ran, the span, and
-a table of the transactions it cites (when, from, to, amount). An Editor claims it, releases it,
+shown or counted. Opening one shows **what fired it**: the finding, when the rule ran (as the data
+loaded, before commit, or after), the span when it has one, and a table of the transactions it cites
+(when, from, to, amount) — or, for an alert that cites no transactions (a KYC alert), a list of the
+parties it concerns, each named with its type (an empty transactions table once stood there; found
+live, 11 October 2026). An alert with no node on the graph says so: what it concerns is held under
+markings no single marking covers. Where the alert stands is one sentence — "Open", "Claimed by you",
+"Closed as a true positive: <reason>". An Editor claims it, releases it,
 puts it **on the canvas** (its node, its entities and the links it cites, all or none; the view
-switches to the graph with those nodes selected) and closes it as a true or false positive with a
+switches to the graph with those nodes selected; the alert's node is labelled by what its rule
+found, "KYC screening alert", never by its id — rule 7) and closes it as a true or false positive with a
 required reason; a true positive confirms the alert's node (rule 5). A Viewer reads only. Its
 other tabs: **Rules** (every rule, what it looks for in words, where it runs; an Author deploys —
 typology, parameters, before or after commit, a time budget for before — and retires), **Held
-rows** (Editor and above: rows a failing pre-commit rule held, grouped by load; an Author releases
-a load's rows, which then load, or rejects them with a reason) and **Audit** (an Author, or the
+rows** (Editor and above: rows a failing pre-commit rule held, grouped by load, with the rule and
+why; an Author who also holds the studio role Loader releases a load's rows, which load and are
+judged again but never held again, or an Author rejects them with a reason — `09_INGEST_STUDIO.md`
+§6) and **Audit** (an Author, or the
 unit's administrator: the rule audit, fifty entries at a time, the total said). Every action has
 its case in `keyboard/alerts.spec.ts`, under its own registry `ALERTS_ACTIONS` (rule 13).
 
@@ -865,7 +878,8 @@ its own keyboard case (`deploy-a-drawn-pattern-rule-by-keyboard`).
 **Neighbourhood risk (ADR-109 phase E).** The Inspector's *Neighbourhood risk* part, for the
 selected entity, asks on request (*Score this neighbourhood*) and shows the score in words — alerts
 within two hops, halved per hop, from the last ninety days, in what the analyst can see — and each
-contributing entity with its distance, its alerts' count and summaries, and what it adds. Nothing is
+contributing entity with its distance, its alerts' count and what it adds, its alerts' summaries
+listed one to a line beneath it (three alerts' words joined into one sentence could not be read). Nothing is
 stored or drawn on the node: the score is a read, and another analyst may read another. Its keyboard
 case is in `keyboard/inspector.spec.ts` (`score-a-neighbourhoods-risk-by-keyboard`).
 

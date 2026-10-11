@@ -33,4 +33,10 @@ describe("the Verify preview", () => {
     expect(props.investigationId).not.toBe("recipe-1");
     expect(props.bearerToken).toBe("");
   });
+
+  it("goes back to the pipeline, and says so", async () => {
+    // Since ADR-108 every stage editor returns to the canvas; the button said "← Connect" (survey, 11 Oct).
+    render(<VerifyScreen apiBaseUrl="http://x" investigationId="case-1" bearerToken="t" recipeId="recipe-1" onBack={() => undefined} />);
+    expect(await screen.findByRole("button", { name: "← Back to the pipeline" })).toBeTruthy();
+  });
 });

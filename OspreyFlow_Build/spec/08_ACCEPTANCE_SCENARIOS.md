@@ -650,3 +650,30 @@ view on these two rows in these terms. Both remain real, standing claims for thi
 once their own owning work exists. Profile-parity testing's home is the `cluster`-profile
 work; network-partition resilience has no owning work yet — both entries, with the full
 reasoning, are recorded as out of scope for v1, not deleted from here.
+
+## Scenario C — Operation Ledger, preventive AML (ADR-109) — PROPOSED, recording what is proven
+
+**Status: proposed, not owner-ruled.** Scenarios A and B are the owner's definition of done. ADR-109
+added preventive AML and KYC after both were written, and this document said nothing about it (found
+by the spec survey of 11 October 2026). The rows below **record what ADR-109's tests already prove**
+against the synthetic Operation Ledger fixture (`packages/demo_fixtures/ledger.py`, the synthetic
+consolidated screening list, `ledger_onboarding_applications.csv`). They add no new criterion until
+the owner rules them in; until then they are evidence, not a gate.
+
+| # | Step | Capability | Proven by |
+| --- | --- | --- | --- |
+| C1 | Halcyon Marine Ltd's onboarding file is loaded through the Studio with the case's KYC rules deployed before commit | Rule gate, ingest | `test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate`; `test_the_gate_the_routes_build_carries_what_the_kyc_and_pattern_rules_read` (the routes' own factory) |
+| C2 | The applicant loads with three alerts — PETROV 48% (sanctions), NAIR 32% (PEP), the expired certificate — and Brookfield with none | KYC screening of beneficial owners, document verification | the C1 case; `test_an_expired_document_verifies_no_one`, `test_a_valid_document_raises_nothing`, `test_an_owner_below_the_threshold_is_not_screened`; seen live 11 October 2026 |
+| C3 | A rule that cannot judge holds the rows; a reviewer releases them and the rules judge them again | Fail-closed quarantine | `test_a_failing_pre_commit_rule_holds_its_rows_out_of_the_graph`, `test_a_released_row_loads_with_its_original_row_number`; `keyboard/alerts.spec.ts` (held rows) |
+| C4 | The team's queue shows each alert in words; one is put on the canvas and closed as a true positive, confirming its node | Alerts place, triage, rule 5 | `test_a_rule_alert_is_in_the_whole_case_teams_queue`, `test_an_alert_explains_itself_with_its_transactions_links_and_node`, `test_triage_claims_once_and_a_true_positive_confirms_the_alert_node`; `keyboard/alerts.spec.ts` |
+| C5 | Ownership is traced through the trust to the people behind it, a circle traced once | ComputePort.ownership, both tiers | `tests/conformance/compute_port/test_suite.py` (`test_ownership_through_a_chain_is_the_product_of_its_shares` … `test_ownership_agrees_across_tiers`); `keyboard/ownership.spec.ts` |
+| C6 | Due diligence and neighbourhood risk are read as the reader sees the graph, never stored | KYC at read, ComputePort.propagate | `test_the_status_and_risk_are_computed_from_what_the_reader_sees`, `test_a_document_the_reader_cannot_see_verifies_no_one_for_them`, `test_risk_decays_by_half_per_hop_of_the_shortest_distance`; `keyboard/inspector.spec.ts` |
+| C7 | A customer, alert or rule audit entry the reader cannot see is neither judged for them, shown nor counted | Rule 3 on every read path (rule 4) | `test_a_customer_the_deployer_cannot_read_is_not_judged`, `test_an_alert_the_reader_cannot_wholly_see_is_neither_queued_nor_opened`, `test_a_rule_audit_entry_naming_a_hidden_node_is_withheld_from_page_and_total`, `test_held_rows_are_read_only_at_or_below_the_readers_marking` |
+
+**Not yet an over-the-wire test.** Unlike A and B, no single test walks C1–C7 against a deployed stack
+as the demo analyst; the walk was done by hand on 11 October 2026 and recorded in the build record. Writing that test is what ruling this scenario in would require.
+
+**Likely stale, not run:** B1–B3's Glass test `apps/workspace/live/ingest-folder.spec.ts` clicks
+*Ingest Studio* and expects the Connect picker at once; since ADR-108 phase B the Studio opens on the
+pipelines home (`09_INGEST_STUDIO.md` §1.0), so the test probably fails until it opens a pipeline's
+first source. It needs a live stack to confirm and is recorded here rather than assumed.

@@ -160,7 +160,7 @@ export function MapScreen({
   if (error || !draft || !columns || !ontology) {
     return (
       <div style={{ padding: "var(--sp-16)" }}>
-        <Button onClick={onBack}>← Connect</Button>
+        <Button onClick={onBack}>← Back to the pipeline</Button>
         <div role="alert" style={{ marginTop: "var(--sp-8)" }}>
           {error ?? "Map could not load this source."}
         </div>
@@ -292,7 +292,7 @@ export function MapScreen({
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)", padding: "var(--sp-16)" }}>
-        <Button onClick={onBack}>← Connect</Button>
+        <Button onClick={onBack}>← Back to the pipeline</Button>
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>Map — {draft.label}</h1>
         <div style={{ flex: 1 }} />
         {saveError && (

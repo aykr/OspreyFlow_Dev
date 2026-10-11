@@ -296,17 +296,19 @@ disclosed historical illustration alongside the real surface.
 
 ```
 GET    /v1/ingest/connectors                               the connector catalogue (09_INGEST_STUDIO.md §2)
+GET    /v1/ingest/packs                                    the domain packs a pipeline's root may name (09 §1.1)
 POST   /v1/investigations/{id}/ingest/recipes                                   Connect: create a draft
 GET    /v1/investigations/{id}/ingest/recipes                                   Connect: the author's own unit's drafts
 GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}                        load one draft
 PATCH  /v1/investigations/{id}/ingest/recipes/{recipe_id}                        Connect: edit a draft still in progress
+PUT    /v1/investigations/{id}/ingest/recipes/{recipe_id}/pipeline               the canvas: save the pipeline graph (SOURCE_AUTHOR, Editor); 422 pipeline_invalid, every violation in words
 GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}/profile                Profile: run and read the automatic source profile
 GET    /v1/ingest/transforms                                 Map: the Knowledge Adapter catalogue
 GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}   Map: page through a real row bound to the template
 PUT    /v1/investigations/{id}/ingest/recipes/{recipe_id}/row-template            Map: save the row template
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/map/handling-preview    Map: preview an element's handling/provenance override
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/verify                  Verify: the dry run — no write of any kind
-GET    /v1/investigations/{id}/ingest/recipe-registry                             Publish: every recipe the principal's own unit owns, any status
+GET    /v1/investigations/{id}/ingest/recipe-registry                             the pipelines home and Publish: every recipe the principal's own unit owns, any status (the home hides superseded)
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/publish                 Publish: draft → published; the sign-off itself
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/versions                Publish: reopen a published recipe as a new draft version
 PATCH  /v1/investigations/{id}/ingest/recipes/{recipe_id}/schedule                Publish: change a published recipe's schedule
@@ -379,9 +381,11 @@ node is written into the case's first dataset (ADR-099 decision 6, Amendment 1 d
 so `investigation_id` is no longer audit attribution only. `POST .../extract` calls the configured extraction model against
 the given text under the requesting principal's own handling marking and returns the raw
 candidates for review (`GET .../ingest/candidates`, above, lists them back). Accept and reject are
-both single-candidate, no bulk operation of either kind exists — `09_INGEST_STUDIO.md` §7's own
-"no bulk accept" is structural here, not a checked rule: the route takes exactly one
-`candidate_id`, never a list. Accepting mints the node (optionally with `properties_override`);
+single-candidate on these routes. The one bulk operation is the document reader's *Accept all
+pending* (ADR-108 ruling Q1): `POST /v1/investigations/{id}/documents/{document_id}/candidates/accept`
+takes an enumerated list of `candidate_ids` — the findings the analyst has on screen — never a
+filter or a threshold, so it remains one human decision over named items (rule 5). There is still no
+bulk reject. Accepting mints the node (optionally with `properties_override`);
 rejecting discards the candidate with no node ever created, and neither ever produces a dossier
 span (§3.6) until a candidate has actually been accepted.
 
@@ -719,11 +723,12 @@ blank map.
 ### 3.11 Node provenance actions
 
 ```
+POST   /v1/investigations/{id}/documents/{document_id}/candidates/accept   the reader's Accept all pending: an enumerated list of candidate ids, never a filter (ADR-108 Q1); Editor
 POST   /v1/investigations/{id}/nodes/{node_id}/confirm   inferred/unresolved → asserted, human-attested; Editor, within the case's datasets (ADR-099)
 POST   /v1/investigations/{id}/nodes/{node_id}/retract   asserted → inferred, the mirror of confirm; Editor (ADR-099)
 POST   /v1/investigations/{id}/nodes/{node_id}/suppression-mark   propose a suppression (R7 step one); `DELETE` withdraws it; Editor (ADR-099 moved both under the case)
 DELETE /v1/investigations/{id}/nodes/{node_id}/suppression-mark   withdraw that proposal; Editor (ADR-099)
-POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/run   run a published recipe against a file
+POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/run   run a published recipe against a file; a recipe with a pipeline runs through the pipeline runner (services/api/pipeline_run.py over services/ingest/pipeline.py) and answers a PipelineRunReport, every branch, extract and enrich stage its own account; the case's rule gate judges each branch (§3.8a)
 ```
 
 `confirm`/`retract` supersede the node (`GraphPort.supersede_node` — a fresh id, never the original,
