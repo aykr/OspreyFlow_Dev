@@ -385,3 +385,27 @@ def test_the_consoles_port_is_not_one_that_macos_itself_listens_on() -> None:
     Receiver (`ControlCenter`), and 5000 is the same service on older releases. Every Mac with that
     switched on, which is the default, would meet the same wall."""
     assert HARNESS_PORT not in {5000, 7000}
+
+
+def test_the_four_demo_personas_are_distinct_and_see_the_same_cases() -> None:
+    """ADR-113 decision 8: each persona one role, so each seat shows exactly its own rail; the same
+    clearance, unit and handling codes, so all four open the seeded cases."""
+    from harness.realm import (
+        DEMO_ADMIN_SUBJECT,
+        DEMO_ANALYST_SUBJECT,
+        DEMO_ENGINEER_SUBJECT,
+        DEMO_REPORT_VIEWER_SUBJECT,
+        render_realm,
+    )
+
+    config = OspreyConfig.model_validate({"network": {"public_origin": "http://localhost:8080"}})
+    users = {u["username"]: u for u in render_realm(config, demo_analyst=True)["users"]}
+    roles = {name: users[name]["attributes"]["roles"] for name in
+             (DEMO_ANALYST_SUBJECT, DEMO_ENGINEER_SUBJECT, DEMO_REPORT_VIEWER_SUBJECT, DEMO_ADMIN_SUBJECT)}  # fmt: skip
+    assert roles == {DEMO_ANALYST_SUBJECT: ["analyst"], DEMO_ENGINEER_SUBJECT: ["data_engineer"],
+                     DEMO_REPORT_VIEWER_SUBJECT: ["reports_viewer"],
+                     DEMO_ADMIN_SUBJECT: ["osprey-admin", "analyst", "data_engineer"]}  # fmt: skip
+    for name in roles:
+        attrs = users[name]["attributes"]
+        assert (attrs["clearance"], attrs["org_unit"], attrs["receivable_handling_codes"]) == (["OFFICIAL"], ["verify"], ["P"])
+        assert users[name]["email"].endswith("@ospreyflow.invalid") and users[name]["firstName"] == "Demo"

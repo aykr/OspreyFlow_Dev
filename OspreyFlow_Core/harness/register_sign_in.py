@@ -26,11 +26,14 @@ from harness.keycloak_admin import RealmConfigurationFailed
 from harness.realm import (
     DEMO_ADMIN_SUBJECT,
     DEMO_ANALYST_SUBJECT,
+    DEMO_ENGINEER_SUBJECT,
+    DEMO_REPORT_VIEWER_SUBJECT,
     HARNESS_CLIENT_ID,
     LAUNCHER_CLIENT_ID,
     LOGIN_THEME_NAME,
     REALM_DISPLAY_NAME,
     SUPERSET_CLIENT_ID,
+    WITHDRAWN_DEMO_ROLES,
     generate_client_secret,
     render_realm,
     superset_client,
@@ -41,6 +44,11 @@ from schemas.deployment import OspreyConfig
 ADMIN_PASSWORD_KEY = "OSPREY_KEYCLOAK_ADMIN_PASSWORD"
 DEMO_ANALYST_PASSWORD_KEY = "OSPREY_DEMO_ANALYST_PASSWORD"
 DEMO_ADMIN_PASSWORD_KEY = "OSPREY_DEMO_ADMIN_PASSWORD"
+#: ADR-113 decision 8: the two personas added beside the analyst and the admin.
+DEMO_PERSONA_PASSWORD_KEYS = {
+    DEMO_ENGINEER_SUBJECT: "OSPREY_DEMO_ENGINEER_PASSWORD",
+    DEMO_REPORT_VIEWER_SUBJECT: "OSPREY_DEMO_REPORT_VIEWER_PASSWORD",
+}
 
 
 def _read_env(env_path: Path) -> dict[str, str]:
@@ -166,6 +174,32 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
             password=analyst_password,
         )
         lines.append(f"password for {DEMO_ANALYST_SUBJECT} set; it is in {env_path.name}")
+        # ADR-113 decision 8, on a demonstration deployment only (the analyst's password marks
+        # one): the two further personas, each with its own password, made once and kept.
+        for username, key in DEMO_PERSONA_PASSWORD_KEYS.items():
+            (persona,) = [u for u in rendered["users"] if u["username"] == username]
+            lines.append(
+                f"account {username}: "
+                + keycloak_admin.ensure_user(issuer=issuer, realm=realm, token=token, user=persona)
+            )
+            persona_password = values.get(key) or generate_client_secret()
+            keycloak_admin.set_user_password(
+                issuer=issuer,
+                realm=realm,
+                token=token,
+                username=username,
+                password=persona_password,
+            )
+            _write_env_value(env_path, key, persona_password)
+            lines.append(f"password for {username} set; it is in {env_path.name}")
+    # Roles a ruling took away from a demo account — the one removal registration makes.
+    for username, roles in WITHDRAWN_DEMO_ROLES.items():
+        lines.append(
+            f"account {username}: "
+            + keycloak_admin.withdraw_roles(
+                issuer=issuer, realm=realm, token=token, username=username, roles=roles
+            )
+        )
     return lines
 
 

@@ -123,6 +123,23 @@ def test_the_demo_admin_is_an_author_and_the_demo_analyst_an_editor_by_subject(
     assert "--attested-checkout" in call
 
 
+def test_the_engineer_edits_and_the_report_viewer_reads_each_seeded_case_where_they_exist(
+    repo: Path,
+) -> None:
+    """ADR-113 decision 8: the two further personas are granted on every seeded case — and a
+    deployment registered before they existed still seeds, without them."""
+    from harness.realm import DEMO_ENGINEER_SUBJECT, DEMO_REPORT_VIEWER_SUBJECT
+
+    subs = {**SUBS, DEMO_ENGINEER_SUBJECT: "sub-eng-333", DEMO_REPORT_VIEWER_SUBJECT: "sub-rv-444"}
+    call = _seed_call(_run_and_return(repo, subs=subs))
+    grants = sorted(call[i + 1] for i, a in enumerate(call) if a == "--grant")
+    assert grants == ["sub-admin-111=author", "sub-analyst-222=editor", "sub-eng-333=editor", "sub-rv-444=viewer"]
+    (repo.parent / "OspreyFlow_Data" / "Enron_Mails").mkdir(parents=True, exist_ok=True)
+    real = _seed_call(_run_and_return(repo, subs=subs, dataset="enron"))
+    real_grants = sorted(real[i + 1] for i, a in enumerate(real) if a == "--grant")
+    assert real_grants == ["sub-admin-111=author", "sub-analyst-222=editor"], "a real dataset goes to no further persona"
+
+
 def test_it_refuses_when_the_conduit_is_running_and_says_which_flag_to_use(repo: Path) -> None:
     """DuckDB's exclusive lock: seeding into a running Conduit fails, and stopping it for you is a
     data-affecting decision (`harness.apply`'s own rule)."""

@@ -100,6 +100,12 @@ ADMIN_ROLE = "osprey-admin"
 #: analyst account stays unprivileged. Rendered only with `demo_analyst=True`, beside the analyst.
 DEMO_ADMIN_SUBJECT = "osprey-demo-admin"
 
+#: ADR-113 decision 8: the four demo personas are distinct, so each seat shows exactly its own
+#: rail — the data engineer's (pipelines, rules, schedules) and the reports viewer's (figures,
+#: published packs and dashboards, no graph). Rendered only with `demo_analyst=True`.
+DEMO_ENGINEER_SUBJECT = "osprey-demo-engineer"
+DEMO_REPORT_VIEWER_SUBJECT = "osprey-demo-report-viewer"
+
 #: Granted to the Conduit's service account *after* import, by `harness/keycloak_admin.py`: a realm
 #: import cannot express a service-account role mapping onto `realm-management` without ids that do
 #: not exist until the import has run.
@@ -183,9 +189,18 @@ _DEMO_ANALYST_ATTRIBUTES = {
     "clearance": ["OFFICIAL"],
     "org_unit": ["verify"],
     "receivable_handling_codes": ["P"],
-    # ADR-112: the Analyst and Data Engineer roles, which hold every right the three Studio roles
-    # (`source_author`, `source_approver`, `loader`) conferred, and more.
-    "roles": ["analyst", "data_engineer"],
+    # ADR-113 decision 8: the Analyst role only — the Studio is the demo engineer's seat now.
+    "roles": ["analyst"],
+}
+
+_DEMO_ENGINEER_ATTRIBUTES = {**_DEMO_ANALYST_ATTRIBUTES, "roles": ["data_engineer"]}
+_DEMO_REPORT_VIEWER_ATTRIBUTES = {**_DEMO_ANALYST_ATTRIBUTES, "roles": ["reports_viewer"]}
+
+#: Roles a demo account no longer receives, removed by `make register-sign-in`, which otherwise only
+#: adds (so an administrator's changes in the Admin area survive a refresh). Each entry is a ruling.
+WITHDRAWN_DEMO_ROLES: dict[str, list[str]] = {
+    # ADR-113 decision 8: the demo analyst's Data Engineer role.
+    DEMO_ANALYST_SUBJECT: ["data_engineer"],
 }
 
 
@@ -197,7 +212,9 @@ _DEMO_ANALYST_ATTRIBUTES = {
 #: seeded investigation is visible to it.
 _DEMO_ADMIN_ATTRIBUTES = {
     **_DEMO_ANALYST_ATTRIBUTES,
-    "roles": [ADMIN_ROLE, *_DEMO_ANALYST_ATTRIBUTES["roles"]],
+    # Written out since ADR-113 slimmed the analyst: the admin keeps the Analyst and Data Engineer
+    # roles it held, so one login still opens every surface.
+    "roles": [ADMIN_ROLE, "analyst", "data_engineer"],
 }
 
 
@@ -397,6 +414,21 @@ def render_realm(
                 "lastName": "Analyst",
             }
         )
+        for username, attributes, last in (
+            (DEMO_ENGINEER_SUBJECT, _DEMO_ENGINEER_ATTRIBUTES, "Engineer"),
+            (DEMO_REPORT_VIEWER_SUBJECT, _DEMO_REPORT_VIEWER_ATTRIBUTES, "Report Viewer"),
+        ):
+            users.append(
+                {
+                    "username": username,
+                    "enabled": True,
+                    "attributes": dict(attributes),
+                    "email": f"{username}@ospreyflow.invalid",
+                    "emailVerified": True,
+                    "firstName": "Demo",
+                    "lastName": last,
+                }
+            )
         users.append(
             {
                 "username": DEMO_ADMIN_SUBJECT,

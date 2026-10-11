@@ -32,7 +32,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from harness.apply import _compose
-from harness.realm import DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT
+from harness.realm import (
+    DEMO_ADMIN_SUBJECT,
+    DEMO_ANALYST_SUBJECT,
+    DEMO_ENGINEER_SUBJECT,
+    DEMO_REPORT_VIEWER_SUBJECT,
+)
 from scripts.refresh import NothingToRefresh, _deployment_dir, _keycloak_port
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -166,7 +171,8 @@ def _lookup_subs(directory: Path) -> dict[str, str]:
         issuer=issuer, admin_user="admin", admin_password=values[ADMIN_PASSWORD_KEY]
     )
     found: dict[str, str] = {}
-    for username in (DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT):
+    for username in (DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT, DEMO_ENGINEER_SUBJECT,
+                     DEMO_REPORT_VIEWER_SUBJECT):  # fmt: skip
         try:
             found[username] = keycloak_admin.user_id(
                 issuer=issuer, realm="osprey", token=token, username=username
@@ -349,6 +355,15 @@ def seed_internal(
         "--grant",
         f"{subs[DEMO_ANALYST_SUBJECT]}=editor",
     ]
+    # ADR-113 decision 8: the engineer edits and the report viewer reads each seeded *synthetic*
+    # case — where those personas exist (a deployment registered before them seeds without them).
+    # A real dataset (rule 9's local exception) is shared with no further persona.
+    for persona, level in (
+        (DEMO_ENGINEER_SUBJECT, "editor"),
+        (DEMO_REPORT_VIEWER_SUBJECT, "viewer"),
+    ):
+        if persona in subs and not spec.real_dataset:
+            argv += ["--grant", f"{subs[persona]}={level}"]
     if spec.data_folder:
         argv += ["--data-dir", CONTAINER_DATA, "--attested-checkout"]
     if spec.real_dataset:

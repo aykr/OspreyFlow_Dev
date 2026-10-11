@@ -632,3 +632,46 @@ def test_superset_gets_its_sign_in_client_only_when_it_is_configured(tmp_path: P
     assert "roles" in {m["name"] for m in client["protocolMappers"]}
     assert any(line.startswith("sign-in client osprey-superset") for line in lines)
     assert "superset-secret" not in "\n".join(lines), "a secret is never printed"
+
+
+# --- ADR-113 decision 8: four distinct demo personas ---
+
+
+def test_a_demonstration_deployment_gets_the_engineer_and_the_report_viewer_with_their_own_passwords(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    from harness.realm import DEMO_ENGINEER_SUBJECT, DEMO_REPORT_VIEWER_SUBJECT
+
+    keycloak.unmanaged_attributes = "ENABLED"
+    env = _env(tmp_path, "OSPREY_DEMO_ANALYST_PASSWORD=analyst-pass")
+    _register(env)
+    values = _env_values(env)
+    by_name = {u["username"]: u for u in keycloak.users.values()}
+    assert by_name[DEMO_ENGINEER_SUBJECT]["attributes"]["roles"] == ["data_engineer"]
+    assert by_name[DEMO_REPORT_VIEWER_SUBJECT]["attributes"]["roles"] == ["reports_viewer"]
+    assert keycloak.passwords[DEMO_ENGINEER_SUBJECT] == values["OSPREY_DEMO_ENGINEER_PASSWORD"]
+    assert keycloak.passwords[DEMO_REPORT_VIEWER_SUBJECT] == values["OSPREY_DEMO_REPORT_VIEWER_PASSWORD"]
+    _register(env)
+    assert _env_values(env)["OSPREY_DEMO_ENGINEER_PASSWORD"] == values["OSPREY_DEMO_ENGINEER_PASSWORD"], "kept, never rotated"
+
+
+def test_a_deployment_without_a_demo_analyst_gets_no_further_personas(keycloak: FakeKeycloak, tmp_path: Path) -> None:
+    env = _env(tmp_path)
+    _register(env)
+    assert "OSPREY_DEMO_ENGINEER_PASSWORD" not in _env_values(env)
+    assert {u["username"] for u in keycloak.users.values()} == {DEMO_ADMIN_SUBJECT}
+
+
+def test_the_analysts_data_engineer_role_is_withdrawn_and_nothing_else_is(keycloak: FakeKeycloak, tmp_path: Path) -> None:
+    """The one removal registration makes is a ruling's; a role an administrator added in the Admin
+    area stays, so a refresh still never undoes their change."""
+    keycloak.unmanaged_attributes = "ENABLED"
+    keycloak.users["uid-a"] = {"id": "uid-a", "username": DEMO_ANALYST_SUBJECT,
+                               "attributes": {"roles": ["analyst", "data_engineer", "right:read_export_ledger"],
+                                              "clearance": ["OFFICIAL"]}}  # fmt: skip
+    env = _env(tmp_path, "OSPREY_DEMO_ANALYST_PASSWORD=analyst-pass")
+    lines = _register(env)
+    assert keycloak.users["uid-a"]["attributes"]["roles"] == ["analyst", "right:read_export_ledger"]
+    assert any("withdrew data_engineer" in line for line in lines)
+    admin = next(u for u in keycloak.users.values() if u["username"] == DEMO_ADMIN_SUBJECT)
+    assert "data_engineer" in admin["attributes"]["roles"], "the admin keeps every surface"

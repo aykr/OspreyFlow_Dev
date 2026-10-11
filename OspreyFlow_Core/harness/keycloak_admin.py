@@ -233,6 +233,33 @@ def ensure_user(*, issuer: str, realm: str, token: str, user: dict[str, Any]) ->
     return "created"
 
 
+def withdraw_roles(*, issuer: str, realm: str, token: str, username: str, roles: list[str]) -> str:
+    """Removes the named roles from an account's `roles` attribute and nothing else — the one way a
+    role leaves a demo account, each use backed by a ruling (`harness.realm.WITHDRAWN_DEMO_ROLES`).
+    An absent account or role is not an error: there is nothing to withdraw."""
+    status, found = _call(
+        f"{issuer}/admin/realms/{realm}/users?username={username}&exact=true", token=token
+    )
+    if status != 200 or not found:
+        return "not present"
+    stored = found[0].get("attributes") or {}
+    held = list(stored.get("roles") or [])
+    kept = [r for r in held if r not in roles]
+    if kept == held:
+        return "nothing to withdraw"
+    status, body = _call(
+        f"{issuer}/admin/realms/{realm}/users/{found[0]['id']}",
+        token=token,
+        data={**found[0], "attributes": {**stored, "roles": kept}},
+        method="PUT",
+    )
+    if status not in (200, 204):
+        raise RealmConfigurationFailed(
+            f"could not withdraw roles from {username!r}: {status} {body}"
+        )
+    return f"withdrew {', '.join(r for r in held if r in roles)}"
+
+
 def user_id(*, issuer: str, realm: str, token: str, username: str) -> str:
     """The subject Keycloak gives an account: the Conduit's principal id for it, which is what a case
     grant is written to. Raises, naming the account, when the realm has no such account (a Keycloak
