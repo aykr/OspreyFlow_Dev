@@ -11481,3 +11481,42 @@ case — view and feed equal, CSV header, outsider 404, two ledger entries (plan
 removed turned it red). Vitest `ReportsView.test.tsx` (5); keyboard `reports.spec.ts` and the new
 view-switch case. **Not yet:** the Superset demonstration (decision 9) and the dashboard service
 account, which arrives with ADR-112.
+
+### ADR-111, Amendment 2 (11 October 2026) — dashboards are fed by a report sync service, built for production
+
+Owner ruling, given the finding that Superset cannot renew an identity-provider token (its HTTP
+adapter sends a fixed header; access tokens live minutes): **a sync job beside the dashboard tool —
+"please design this so that this works in production and not just for the demo."** Decided (design,
+built after ADR-112, whose dashboard identities it uses):
+
+1. **`report-sync` is a deployment component of its own** (its own container and memory limit, off by
+   default, on in a profile that wants dashboards): it holds one or more registered dashboard
+   identities (ADR-111 decision 7), obtains tokens by the client-credentials grant and renews them
+   itself, and on its schedule (15 minutes by default, configurable per dashboard) pulls each case's
+   feed it has been granted.
+2. **It writes a reporting mart, not a file:** a Postgres schema (`osprey_reports`) owned by the sync
+   service — one table of figure rows keyed by dashboard, case, period, section, label, typology and
+   week, upserted so a re-pull changes nothing that did not change, each row stamped with when it was
+   pulled and the dashboard identity that pulled it. Any BI tool that reads Postgres — Superset, Power
+   BI, Tableau, Qlik — reads the mart through a read-only database role; none of them talks to the
+   Conduit or holds an OspreyFlow credential.
+3. **Every pull is still a reader's read.** The Conduit counts the figures as the dashboard identity
+   (rule 3), audits the read and writes it to the export ledger; the mart therefore holds only what
+   that identity may see, and a revoked identity's next pull is refused and recorded, its rows left
+   stale with their pulled-at time — never silently refreshed from somewhere else.
+4. **Production properties named, each with its test:** retry with back-off on a failed pull; a pull
+   that fails is visible (a *last pulled* and *last failure* per dashboard and case, shown in the Admin
+   area's *Dashboards* screen); secrets from the deployment's environment file, never the mart; one
+   instance claims each pull (Valkey `SET NX`, as the KYC sweep does) so scaling the service never
+   double-pulls; the mart's schema versioned with the feed's; a dashboard deregistered in the Admin
+   area has its rows removed from the mart.
+5. **Superset** (Apache-2.0, its own container and memory limit, off by default) is the shipped
+   reference dashboard: it signs people in through the deployment's identity provider (Reports Viewer
+   maps to its read-only role) and reads the mart. The architecture shows **Conduit feed → report-sync
+   → reporting mart → Superset / Power BI / Tableau / Qlik**, outside the three tiers.
+
+**Tests to write first, named.** Token renewal before expiry (a fake provider that refuses an expired
+token — rule 15, second worked example); a re-pull upserting nothing new; a revoked identity's pull
+refused and its rows left with their old pulled-at; one pull across two sync instances; a failed pull
+retried and its failure recorded; deregistration removing a dashboard's rows; the mart's read-only role
+refused a write; a live check that Superset draws a chart from the mart.
