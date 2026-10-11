@@ -344,9 +344,11 @@ outside it, and when keyboard focus moves outside it, so it never traps a keyboa
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
-**Designed, not built (ADR-052):** the Glass will show a picker of the cases the account holds a
-level on before the workspace opens, and a Share panel for a case's Authors. The load order below
-remains what the Glass does until then.
+**Built (ADR-052 Amendments 5 and 12):** the Glass shows a picker of the cases the account holds a
+level on, and the Cases drawer holds "Who can open this case" — the Share panel, where a case's
+Author gives an account (named by account id, as the Admin area shows it) Viewer, Editor or Author,
+and removes it; anyone else holding `share_case` sees only their own level. The load order below
+is what resolves the case on load.
 
 **This document was silent on the question — checked directly, not assumed.** Before this
 proposal, the Glass created its own

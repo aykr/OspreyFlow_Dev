@@ -10086,6 +10086,16 @@ Status: accepted 8 October 2026 (the owner: "align these decision logs as needed
 
 Amendment 6 item 4 says the 405 on the case list was "fixed by the refresh sequence (ADR-049 Amendment)". ADR-049 is a process record and is not published with the product, so a published reader cannot follow that reference. It is superseded by this: the fix is the refresh sequence, `make refresh` (`python -m scripts.refresh`, `05_DEPLOYMENT.md` §3), which rebuilds the owned images and brings the deployment up to date. Nothing else in Amendment 6 changes. The decision-log publication gate now reads an amendment as its own ADR's (`tools/decision_log_publication_check.py`), which is how this citation was found: it had been read as ADR-055's, under whose heading ADR-049's own amendments stand.
 
+### ADR-052, Amendment 12 (11 October 2026) — the Share panel, and a grantee is named by account id
+
+Status: accepted 11 October 2026 (the owner, asked how a dashboard identity is to be given Viewer on a case when no screen for it existed: "Build the Share panel").
+
+1. **The Share panel is built** — decision 9's last unbuilt piece. "Who can open this case" sits in the Cases drawer under "Data this case reads". Everyone holding `share_case` (ADR-112) sees their own level; the case's Author sees every account holding a level, gives an account a level (Viewer, Editor or Author) and removes one. An account without `share_case` is answered 403 by `GET …/access` and the panel is not shown at all. The panel never offers to remove the case's last Author (the store does not refuse it; the administrator's safety net of decision 4 would still reach the case, but the panel does not invite the stranding). It enforces nothing: the Conduit decides every change, and a refusal is said in words.
+2. **A grantee is named by account id, not account name — a correction of fact to P3.** P3 and `03_CONDUIT_MIDDLEWARE.md` §3 said an Author names a person "by the account name the identity provider knows them by". The Conduit has always compared a grant with the token's `sub` (`principal.id`, `principal_auth`), which is the account's identifier, and every stored grant — the seeds' included — is one. A grant made to a username was therefore not a typo but the same thing: it granted nothing to anyone. Nothing in the code changes; the documents now say what it does. The panel asks for an "Account id" and says where to find one: the Admin area shows each person's and each dashboard identity's (ADR-111 Amendment 2).
+3. **The Author sees the grantees by name.** `GET …/access` gains `names`: display names for the accounts in the grants it already serves the Author, from ADR-106's directory, under ADR-106's own rule — only ids already in the caller's authorised response, so a Viewer (served no grants) causes no lookup, and an id with no name to give (a dashboard's service account may have none) is absent and shown by its id.
+
+Tests: `tests/services/api/test_investigation_access_routes.py` (`test_an_author_sees_the_grantees_names_and_nobody_else_is_named`, red under a planted lookup before the level check); `CaseAccessPanel.test.tsx` (seven, the last-Author and not-shown-without-the-right cases each red under its own plant); `keyboard/case-access.spec.ts` (giving and removing access by keyboard, rule 13; red under a Give access button that does not submit).
+
 ### ADR-095, Amendment 2 (8 October 2026) — the deployment reports its models' readiness; it does not wait for them
 
 Status: accepted 8 October 2026 (the owner: "I am not sure what is best possible path for you to fix this, please go ahead and make the required fixes"; recorded so it can be overruled).
@@ -11279,7 +11289,7 @@ Ideally this should be more integrated into the system." **Decided (design):**
   behind the same single sign-on (ADR-112), shown only to an account holding an administration right,
   and calling the Conduit's `/v1/admin/*` routes. No separate process, port or terminal command.
 - **The harness keeps one job: setting up a deployment before one exists** (profile, components,
-  preflight, launch — ADR-049, ADR-107). Everything it would do *after* launch moves to the Admin area.
+  preflight, launch — `05_DEPLOYMENT.md` §3, ADR-107). Everything it would do *after* launch moves to the Admin area.
   The launcher's *Admin console* card opens the Admin area once the deployment runs.
 - **First screens of the Admin area:** *Schedules and runs* (decision 8 above); *People and roles*
   (assigning ADR-112's roles, through the identity provider's admin API, every change audited);

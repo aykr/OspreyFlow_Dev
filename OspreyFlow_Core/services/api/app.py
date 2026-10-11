@@ -2279,6 +2279,9 @@ class AccessView(BaseModel):
     your_level: AccessLevel | None
     unit_level: AccessLevel | None
     grants: dict[str, AccessLevel] | None
+    #: Display names for the accounts in `grants` (ADR-106: only ids this response already
+    #: carries); an account with no name to give is absent, and the Glass shows its id.
+    names: dict[str, str] | None = None
 
 
 @app.get(
@@ -2289,14 +2292,17 @@ async def get_investigation_access(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     investigations: InvestigationsDep,
+    principal_names: PrincipalNamesDep,
 ) -> AccessView:
     level = await investigations.effective_level(investigation.id, principal)
     if level is not AccessLevel.AUTHOR:
         return AccessView(your_level=level, unit_level=None, grants=None)
+    grants = await investigations.list_grants(investigation.id)
     return AccessView(
         your_level=level,
         unit_level=await investigations.unit_level(investigation.id),
-        grants=await investigations.list_grants(investigation.id),
+        grants=grants,
+        names=await principal_names.display_names(grants),
     )
 
 

@@ -115,8 +115,10 @@ among them, `name` names the new case. Without a body it forks the whole working
 copy is filtered for the branching principal like any read, and a choice with nothing left to copy
 (every id absent, hidden from the caller, or the list empty) is one `422 nothing_to_branch`, raised
 before any case is created and the same whatever the reason (rules 3 and 4). `GET .../access` shows anyone their own level, and shows an Author the
-unit-wide level and every grant. A grantee is named by the account name the identity provider knows
-them by; a mistyped name grants nothing to anyone (ADR-052 P3).
+unit-wide level, every grant and the grantees' display names (`names`, ADR-106: only ids already in
+the grants served). A grantee is named by account id — the token's `sub`, which the Admin area shows
+for a person or a dashboard identity; any other string grants nothing to anyone (ADR-052 P3, as
+corrected by Amendment 12).
 
 `POST /v1/investigations` needs no grant. The Glass's case picker and the demo seeds' grants
 (`scripts/case_seed.py`) are built; a Share panel in the Glass is not, so a grant is made through the

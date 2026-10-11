@@ -13,6 +13,7 @@ from services.api.app import (
     get_audit,
     get_investigations,
     get_principal,
+    get_principal_names,
 )
 from services.api.investigations import (
     AccessHistoryEntry,
@@ -117,13 +118,28 @@ class _Audit:
         return None
 
 
+class _Names:
+    """ADR-106's directory: names an id only when asked, and records what it was asked."""
+
+    def __init__(self) -> None:
+        self.asked: list[str] = []
+
+    async def display_names(self, ids):  # type: ignore[no-untyped-def]
+        ids = list(ids)
+        self.asked.extend(ids)
+        known = {"alice": "Alice Author", "bob": "Bob Viewer"}
+        return {i: known[i] for i in ids if i in known}
+
+
 @pytest.fixture
 def store() -> _Store:
     return _Store()
 
 
-def _as(principal: Principal, store: _Store) -> TestClient:
+def _as(principal: Principal, store: _Store, names: _Names | None = None) -> TestClient:
+    names = names or _Names()
     app.dependency_overrides[get_investigations] = lambda: store
+    app.dependency_overrides[get_principal_names] = lambda: names
     app.dependency_overrides[get_principal] = lambda: principal
     app.dependency_overrides[get_audit] = lambda: _Audit()
     return TestClient(app, raise_server_exceptions=False)
@@ -159,7 +175,30 @@ def test_an_author_reads_the_whole_access_list_and_a_viewer_only_their_own_level
     assert author_view["your_level"] == "author"
     assert author_view["unit_level"] == "viewer"
     assert author_view["grants"] == {"alice": "author", "bob": "viewer"}
-    assert viewer_view == {"your_level": "viewer", "unit_level": None, "grants": None}
+    assert viewer_view == {
+        "your_level": "viewer",
+        "unit_level": None,
+        "grants": None,
+        "names": None,
+    }
+
+
+def test_an_author_sees_the_grantees_names_and_nobody_else_is_named(store: _Store) -> None:
+    """The Share panel shows people by name (ADR-106): only the ids already in the Author's own
+    grants are looked up, and a Viewer — who is not served the grants — causes no lookup at all."""
+    store.grants["bob"] = AccessLevel.VIEWER
+    store.grants["service-account-x"] = AccessLevel.VIEWER
+    names = _Names()
+
+    author_view = _as(ALICE, store, names).get("/v1/investigations/inv-1/access").json()
+
+    assert author_view["names"] == {"alice": "Alice Author", "bob": "Bob Viewer"}, (
+        "an id with no name is absent"
+    )
+    assert sorted(names.asked) == ["alice", "bob", "service-account-x"]
+    names.asked.clear()
+    _as(BOB, store, names).get("/v1/investigations/inv-1/access")
+    assert names.asked == [], "a Viewer is served no grants, so no names are resolved for them"
 
 
 def test_an_author_grants_and_revokes_and_sets_the_unit_wide_level(store: _Store) -> None:

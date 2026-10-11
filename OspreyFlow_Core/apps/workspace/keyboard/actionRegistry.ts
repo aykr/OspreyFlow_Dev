@@ -393,6 +393,12 @@ export const CASE_DATASETS_ACTIONS = defineActionRegistry("CASE_DATASETS_ACTIONS
   "change-what-a-case-reads-by-keyboard",
 ] as const);
 
+/** Who can open a case (ADR-052 §9): its Author gives and removes levels. `keyboard/case-access.spec.ts`. */
+export const CASE_ACCESS_ACTIONS = defineActionRegistry("CASE_ACCESS_ACTIONS", [
+  "give-an-account-access-by-keyboard",
+  "remove-an-accounts-access-by-keyboard",
+] as const);
+
 /** Where to start in a case's data (ADR-100): a node from the most connected, or from a type's
  * most connected, put on the canvas; a ranking paged. `keyboard/explore.spec.ts`. */
 export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [

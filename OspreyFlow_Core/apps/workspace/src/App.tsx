@@ -77,6 +77,7 @@ import { IngestStudio } from "./ingest/IngestStudio";
 import { CasePicker } from "./investigation/CasePicker";
 import { CaseSwitcher } from "./investigation/CaseSwitcher";
 import { CaseTabs } from "./investigation/CaseTabs";
+import { CaseAccessPanel } from "./investigation/CaseAccessPanel";
 import { CaseDatasets } from "./investigation/CaseDatasets";
 import { caseIsOpenable, openCase } from "./investigation/cases";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
@@ -1634,6 +1635,8 @@ export function App() {
             investigationId={investigationId}
             onChanged={() => window.location.reload()}
           />
+          {/* ADR-052 §9: who can open the case — its Author gives and removes levels. */}
+          <CaseAccessPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} />
         </div>
       </Drawer>
       <HistoryPanel
