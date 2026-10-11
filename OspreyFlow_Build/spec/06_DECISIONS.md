@@ -11344,9 +11344,13 @@ schema carries no free-text field beyond fixed labels (a test that fails if one 
 answers `limit_exceeded`; keyboard cases for each Reports panel; the perf gate unchanged.
 
 
-## ADR-112 — Single sign-on with four roles built from named rights — PROPOSED
+## ADR-112 — Single sign-on with four roles built from named rights — ACCEPTED
 
-Status: **PROPOSED, for the owner's review** (11 October 2026). The owner asked for single sign-on
+Status: **ACCEPTED by the owner, 11 October 2026** ("I approve the table displayed"), the rights table
+and both of its defaults as written. **Build order ruled with it:** ADR-111, then this ADR — which also
+builds the Admin area's shell (ADR-110 Amendment 1) with its *People and roles* and *Dashboards*
+screens, so the console is an integrated component of the deployment from this ADR on, never a process
+an administrator starts — then ADR-110, which adds *Schedules and runs*. Proposed the same day. The owner asked for single sign-on
 across the whole system "with authorisations that are granted", four roles — **Analyst, Data
 Engineer, Admin, Reports Viewer** — each granted a set of rights, and a recommended, comprehensive
 rights list. Nothing here is built.
