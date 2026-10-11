@@ -291,10 +291,21 @@ def grant_service_account_roles(
         )
 
     ensure_unmanaged_attributes(issuer=issuer, realm=realm, token=token)
+    ensure_service_account_roles(issuer=issuer, realm=realm, token=token)
+
+
+def ensure_service_account_roles(*, issuer: str, realm: str, token: str) -> str:
+    """The Conduit's service account holds every role in `REQUIRED_ROLES`: granted at apply, and
+    again by every `make refresh` (ADR-112 Amendment 1) — so a deployment made before a role was
+    added (`manage-users`, `manage-clients` for the Admin area) gains it without being re-applied.
+    Touches nothing but the account's realm-management role mappings."""
+    from harness.realm import CONDUIT_CLIENT_ID
 
     status, conduit = _call(
         f"{issuer}/admin/realms/{realm}/clients?clientId={CONDUIT_CLIENT_ID}", token=token
     )
+    if status != 200 or not conduit:
+        raise RealmConfigurationFailed(f"client {CONDUIT_CLIENT_ID!r} not found")
     uuid = conduit[0]["id"]
     status, service_account = _call(
         f"{issuer}/admin/realms/{realm}/clients/{uuid}/service-account-user", token=token
@@ -316,14 +327,21 @@ def grant_service_account_roles(
     if missing:
         raise RealmConfigurationFailed(f"realm-management has no role(s): {sorted(missing)}")
 
-    status, _ = _call(
+    mapped_url = (
         f"{issuer}/admin/realms/{realm}/users/{service_account['id']}"
-        f"/role-mappings/clients/{management_uuid}",
-        token=token,
-        data=wanted,
+        f"/role-mappings/clients/{management_uuid}"
     )
+    status, held = _call(mapped_url, token=token)
+    held_names = (
+        {role["name"] for role in held} if status == 200 and isinstance(held, list) else set()
+    )
+    lacking = [role for role in wanted if role["name"] not in held_names]
+    if not lacking:
+        return "the Conduit's account already holds its roles"
+    status, _ = _call(mapped_url, token=token, data=lacking)
     if status not in (204, 201, 200):
         raise RealmConfigurationFailed(f"could not grant {REQUIRED_ROLES}: {status}")
+    return "the Conduit's account granted " + ", ".join(sorted(r["name"] for r in lacking))
 
 
 def set_demo_analyst_password(

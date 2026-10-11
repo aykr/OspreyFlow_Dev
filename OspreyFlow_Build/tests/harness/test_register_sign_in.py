@@ -63,6 +63,15 @@ class FakeKeycloak:
         # Themes Keycloak can see. The OspreyFlow one is there only if compose mounted it.
         self.themes = ["keycloak", "keycloak.v2"]
         self.calls: list[tuple[str, str]] = []
+        # ADR-112 Amendment 1: the Conduit's client, its service account, and realm-management's
+        # roles — so `register` can bring the account's grants up to date on every refresh.
+        # Kept apart from `clients`, which the sign-in tests count.
+        self.system_clients = [{"clientId": "osprey-conduit", "id": "cid-conduit"},
+                               {"clientId": "realm-management", "id": "cid-rm"}]  # fmt: skip
+        self.service_account = {"id": "uid-sa", "username": "service-account-osprey-conduit"}
+        self.realm_management_roles = ["impersonation", "view-users", "manage-users", "manage-clients",
+                                       "query-users", "realm-admin"]  # fmt: skip
+        self.granted: list[str] = ["impersonation", "view-users"]
 
     def call(
         self,
@@ -94,7 +103,19 @@ class FakeKeycloak:
             return 200, dict(self.realm)
         if route.startswith("/clients?clientId="):
             wanted = route.split("=", 1)[1]
-            return 200, [c for c in self.clients.values() if c["clientId"] == wanted]
+            return 200, [c for c in [*self.clients.values(), *self.system_clients] if c["clientId"] == wanted]
+        if route == "/clients/cid-conduit/service-account-user":
+            return 200, self.service_account
+        if route == "/clients/cid-rm/roles":
+            return 200, [{"id": f"r-{n}", "name": n} for n in self.realm_management_roles]
+        if route == "/users/uid-sa/role-mappings/clients/cid-rm":
+            if verb == "GET":
+                return 200, [{"id": f"r-{n}", "name": n} for n in self.granted]
+            unknown = [r["name"] for r in data if r["name"] not in self.realm_management_roles]
+            if unknown:
+                return 404, {"error": "Role not found"}
+            self.granted += [r["name"] for r in data if r["name"] not in self.granted]
+            return 204, ""
         if route.startswith("/clients/cid-") and verb == "PUT":
             self.clients[route.rsplit("/", 1)[1]] = data
             return 204, ""
@@ -583,3 +604,14 @@ def test_a_role_an_administrator_set_survives_registration_again(keycloak: FakeK
     assert keycloak_admin.ensure_user(issuer=ISSUER, realm="osprey", token="admin-token",
                                       user=rendered) == "already there; attributes restored"  # fmt: skip
     assert keycloak.users[stored["id"]]["attributes"] == {"roles": ["analyst", "reports_viewer"], "clearance": ["OFFICIAL"]}
+
+
+def test_a_refresh_grants_the_conduits_account_the_roles_it_lacks(tmp_path: Path, keycloak: FakeKeycloak) -> None:
+    """Found live, 11 October 2026: the deployment's Conduit held only `impersonation` and
+    `view-users` — grants are made at apply, and `make refresh` never revisited them, so the Admin
+    area's People and roles and Dashboards would have been refused on any existing deployment."""
+    lines = _register(_env(tmp_path))
+    assert "the Conduit's account granted manage-clients, manage-users" in lines
+    assert sorted(keycloak.granted) == ["impersonation", "manage-clients", "manage-users", "view-users"]
+    assert "realm-admin" not in keycloak.granted
+    assert "the Conduit's account already holds its roles" in _register(_env(tmp_path))
