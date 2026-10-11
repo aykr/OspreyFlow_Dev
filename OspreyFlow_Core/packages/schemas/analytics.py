@@ -428,3 +428,63 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     EventListRequest,
     EventListResult,
 )
+
+
+# --- Trends (`06_DECISIONS.md` ADR-113 decisions 1 and 2) ---------------------------------------
+
+
+class TrendInterval(StrEnum):
+    WEEK = "week"
+    MONTH = "month"
+
+
+class TrendMeasure(StrEnum):
+    COUNT = "count"
+    SUM = "sum"
+
+
+class TrendRequest(BaseModel):
+    """A closed trend definition, counted as the reader: events per period, optionally split into
+    series by a field, as a count or as the sum of a numeric property. No expression language."""
+
+    filter: EventFilter
+    interval: TrendInterval = TrendInterval.WEEK
+    measure: TrendMeasure = TrendMeasure.COUNT
+    #: The property summed; required for `sum`, refused for `count`.
+    measure_field: str | None = None
+    #: `edge_type`, another top-level field, or a property key; none for a single series.
+    group_by: str | None = None
+    #: Bounds past which the port refuses with `TrendLimitExceeded` rather than cut (rule 2).
+    max_periods: int = Field(default=104, gt=0)
+    max_series: int = Field(default=12, gt=0)
+
+    @model_validator(mode="after")
+    def _measure_needs_its_field(self) -> TrendRequest:
+        if self.measure is TrendMeasure.SUM and not self.measure_field:
+            raise ValueError("measure_field is required for a sum")
+        if self.measure is TrendMeasure.COUNT and self.measure_field:
+            raise ValueError("measure_field is only for a sum")
+        return self
+
+
+class TrendPoint(BaseModel):
+    period_start: datetime
+    #: The series this point belongs to; none when the trend has a single series.
+    series: str | None = None
+    value: float
+
+
+class TrendResult(BaseModel):
+    interval: TrendInterval
+    measure: TrendMeasure
+    points: list[TrendPoint]
+    #: The series present, ordered; empty for a single-series trend.
+    series: list[str] = Field(default_factory=list)
+    total: float
+    #: Events counted.
+    events: int = Field(ge=0)
+    #: Events whose summed property was missing or not a number — counted, said, never guessed.
+    unvalued: int = Field(default=0, ge=0)
+    #: The distinct classifications among the events counted, so a snapshot can be marked at the
+    #: highest of them (ADR-113 decision 4). Only what the reader could see.
+    classifications: list[str] = Field(default_factory=list)

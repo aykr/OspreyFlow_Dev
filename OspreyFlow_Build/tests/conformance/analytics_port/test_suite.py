@@ -40,6 +40,8 @@ from schemas.analytics import (
     SightingRequest,
 )
 from schemas.domain import Handling, Interval, Principal
+from ports.analytics import TrendLimitExceeded
+from schemas.analytics import TrendInterval, TrendMeasure, TrendRequest
 from tests.conformance.registry import ANALYTICS_PORT_ADAPTERS, AnalyticsAdapterFactory
 
 pytestmark = pytest.mark.parametrize("factory", ANALYTICS_PORT_ADAPTERS, ids=str)
@@ -1470,3 +1472,84 @@ async def test_geocode_refuses_an_inherited_filter(factory: AnalyticsAdapterFact
                 ),
                 CLEARED,
             )
+
+
+# --- trend (ADR-113 decisions 1 and 2) -------------------------------------------------------------
+
+
+def _week(day: int) -> datetime:
+    """A moment in the week of 5 January 2026 + `day` days (5 January 2026 is a Monday)."""
+    return datetime(2026, 1, 5 + day, 12, tzinfo=UTC)
+
+
+async def test_trend_counts_events_per_week(factory: AnalyticsAdapterFactory) -> None:
+    events = [_event(occurred_at=_week(0)), _event(occurred_at=_week(3)), _event(occurred_at=_week(8))]
+    async with factory.context(events) as adapter:
+        result = await adapter.trend(TrendRequest(filter=_filter()), OFFICIAL)
+    assert [(p.period_start.date().isoformat(), p.value) for p in result.points] == [
+        ("2026-01-05", 2.0), ("2026-01-12", 1.0)]  # fmt: skip
+    assert (result.total, result.events, result.series) == (3.0, 3, [])
+
+
+async def test_trend_counts_per_month(factory: AnalyticsAdapterFactory) -> None:
+    events = [_event(occurred_at=datetime(2026, 1, 30, tzinfo=UTC)), _event(occurred_at=datetime(2026, 2, 2, tzinfo=UTC))]
+    async with factory.context(events) as adapter:
+        result = await adapter.trend(TrendRequest(filter=_filter(), interval=TrendInterval.MONTH), OFFICIAL)
+    assert [p.period_start.date().isoformat() for p in result.points] == ["2026-01-01", "2026-02-01"]
+
+
+async def test_unauthorised_event_moves_no_trend_point_total_or_classification(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    visible = [_event(occurred_at=_week(0), edge_type="TRANSACTED", properties={"amount": 10})]
+    req = TrendRequest(filter=_filter(), measure=TrendMeasure.SUM, measure_field="amount", group_by="edge_type")
+    async with factory.context(visible) as adapter:
+        before = await adapter.trend(req, OFFICIAL)
+    hidden = _event(occurred_at=_week(7), edge_type="WIRED", classification="SECRET", properties={"amount": 999})
+    async with factory.context([*visible, hidden]) as adapter:
+        after = await adapter.trend(req, OFFICIAL)
+        cleared = await adapter.trend(req, CLEARED)
+    assert after == before, "a hidden event adds no point, series, total or classification"
+    assert before.classifications == ["OFFICIAL"]
+    assert cleared.total == 1009.0 and set(cleared.classifications) == {"OFFICIAL", "SECRET"}
+    assert cleared.series == ["TRANSACTED", "WIRED"]
+
+
+async def test_trend_sums_a_property_and_says_what_it_could_not_sum(factory: AnalyticsAdapterFactory) -> None:
+    events = [_event(occurred_at=_week(0), properties={"amount": 100.5}),
+              _event(occurred_at=_week(1), properties={"amount": "200"}),
+              _event(occurred_at=_week(2), properties={"amount": "not a number"}),
+              _event(occurred_at=_week(2))]  # fmt: skip
+    async with factory.context(events) as adapter:
+        result = await adapter.trend(TrendRequest(filter=_filter(), measure=TrendMeasure.SUM, measure_field="amount"), OFFICIAL)
+    assert result.total == 300.5 and result.events == 4 and result.unvalued == 2
+
+
+async def test_trend_splits_series_by_a_property(factory: AnalyticsAdapterFactory) -> None:
+    events = [_event(occurred_at=_week(0), properties={"channel": "cash"}),
+              _event(occurred_at=_week(0), properties={"channel": "wire"}),
+              _event(occurred_at=_week(7), properties={"channel": "cash"})]  # fmt: skip  — the next week
+    async with factory.context(events) as adapter:
+        result = await adapter.trend(TrendRequest(filter=_filter(), group_by="channel"), OFFICIAL)
+    assert result.series == ["cash", "wire"]
+    assert sorted((p.series, p.value) for p in result.points) == [("cash", 1.0), ("cash", 1.0), ("wire", 1.0)]
+
+
+async def test_a_trend_past_its_bounds_is_refused_not_cut(factory: AnalyticsAdapterFactory) -> None:
+    events = [_event(occurred_at=_week(7 * i), properties={"channel": f"c{i}"}) for i in range(4)]
+    async with factory.context(events) as adapter:
+        with pytest.raises(TrendLimitExceeded) as periods:
+            await adapter.trend(TrendRequest(filter=_filter(), max_periods=3), OFFICIAL)
+        with pytest.raises(TrendLimitExceeded) as series:
+            await adapter.trend(TrendRequest(filter=_filter(), group_by="channel", max_series=3), OFFICIAL)
+    assert (periods.value.cap_kind, periods.value.would_be) == ("periods", 4)
+    assert (series.value.cap_kind, series.value.would_be) == ("series", 4)
+
+
+async def test_the_trend_bound_counts_only_what_the_reader_sees(factory: AnalyticsAdapterFactory) -> None:
+    """A hidden event in a fourth week must not tip a three-week trend over its bound."""
+    events = [_event(occurred_at=_week(7 * i)) for i in range(3)]
+    events.append(_event(occurred_at=_week(21), classification="SECRET"))
+    async with factory.context(events) as adapter:
+        result = await adapter.trend(TrendRequest(filter=_filter(), max_periods=3), OFFICIAL)
+    assert result.events == 3

@@ -31,8 +31,19 @@ from schemas.analytics import (
     HistogramRequest,
     Sighting,
     SightingRequest,
+    TrendRequest,
+    TrendResult,
 )
 from schemas.domain import Principal
+
+
+class TrendLimitExceeded(Exception):
+    """A trend past its bound (ADR-113 decision 2, rule 2): refused, never cut. `would_be` counts
+    only what the reader could see, so the refusal discloses nothing."""
+
+    def __init__(self, cap_kind: str, cap: int, would_be: int) -> None:
+        super().__init__(f"the trend would have {would_be} {cap_kind}; the bound is {cap}")
+        self.cap_kind, self.cap, self.would_be = cap_kind, cap, would_be
 
 
 class AnalyticsPort(Protocol):
@@ -66,6 +77,13 @@ class AnalyticsPort(Protocol):
     async def list_events(self, req: EventListRequest, principal: Principal) -> EventListResult:
         """A page of the events the filter describes, newest first, with the total (ADR-089).
         Access control is in the query: a hidden event is neither listed nor counted."""
+        ...
+
+    async def trend(self, req: TrendRequest, principal: Principal) -> TrendResult:
+        """Events per week or month, optionally split into series by a field, as a count or the
+        sum of a numeric property (ADR-113). Access control is in the query: a hidden event moves no
+        point, no total, no series and no classification. Past `max_periods` or `max_series` it
+        raises `TrendLimitExceeded` — never a partial trend."""
         ...
 
     async def first_seen(self, req: FirstSeenRequest, principal: Principal) -> FirstSeenResult:

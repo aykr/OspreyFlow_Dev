@@ -19,6 +19,7 @@ from typing import Any, cast
 import duckdb
 
 from ontology.handling import HandlingScheme
+from ports.analytics import TrendLimitExceeded
 from schemas.analytics import (
     BaselineRequest,
     BaselineResult,
@@ -41,6 +42,11 @@ from schemas.analytics import (
     HistogramRequest,
     Sighting,
     SightingRequest,
+    TrendInterval,
+    TrendMeasure,
+    TrendPoint,
+    TrendRequest,
+    TrendResult,
 )
 from schemas.domain import Handling, Interval, Principal
 
@@ -192,6 +198,67 @@ class AnalyticsDuckDBAdapter:
             return self._weekday_hour_histogram(predicate)
         assert req.field is not None  # enforced by HistogramRequest's own validator
         return self._categorical_histogram(predicate, req.field)
+
+    # --- trend (ADR-113) ----------------------------------------------------------------------
+
+    async def trend(self, req: TrendRequest, principal: Principal) -> TrendResult:
+        predicate = self._predicate(req.filter, principal)
+        unit = "week" if req.interval is TrendInterval.WEEK else "month"
+        period = f"date_trunc('{unit}', occurred_at)"
+        series = (
+            "NULL"
+            if req.group_by is None
+            else f"CAST({_field_expression(req.group_by)} AS VARCHAR)"
+        )
+        # The bounds are checked on what the reader can see, before anything is aggregated, so a
+        # refusal is never a partial answer and a hidden event cannot tip a trend over its bound.
+        periods, groups = self._con.execute(
+            f"SELECT COUNT(DISTINCT {period}), COUNT(DISTINCT {series}) FROM events "
+            f"WHERE {predicate.where}",
+            predicate.params,
+        ).fetchone() or (0, 0)
+        if periods > req.max_periods:
+            raise TrendLimitExceeded("periods", req.max_periods, int(periods))
+        if groups > req.max_series:
+            raise TrendLimitExceeded("series", req.max_series, int(groups))
+        if req.measure is TrendMeasure.SUM:
+            assert req.measure_field is not None  # enforced by TrendRequest's own validator
+            number = f"TRY_CAST({_field_expression(req.measure_field)} AS DOUBLE)"
+            value, unvalued = f"COALESCE(SUM({number}), 0)", f"COUNT(*) - COUNT({number})"
+        else:
+            value, unvalued = "COUNT(*)", "0"
+        rows = self._con.execute(
+            f"SELECT {period} AS period, {series} AS series, {value} AS value, COUNT(*) AS n, "
+            f"{unvalued} AS unvalued FROM events WHERE {predicate.where} "
+            "GROUP BY period, series ORDER BY period, series NULLS FIRST",
+            predicate.params,
+        ).fetchall()
+        classifications = [
+            str(c)
+            for (c,) in self._con.execute(
+                f"SELECT DISTINCT handling_classification FROM events WHERE {predicate.where} "
+                "ORDER BY 1",
+                predicate.params,
+            ).fetchall()
+        ]
+        points = [
+            TrendPoint(
+                period_start=(p if p.tzinfo else p.replace(tzinfo=UTC)),
+                series=None if g is None else str(g),
+                value=float(v),
+            )
+            for p, g, v, _, _ in rows
+        ]
+        return TrendResult(
+            interval=req.interval,
+            measure=req.measure,
+            points=points,
+            series=sorted({pt.series for pt in points if pt.series is not None}),
+            total=float(sum(pt.value for pt in points)),
+            events=int(sum(r[3] for r in rows)),
+            unvalued=int(sum(r[4] for r in rows)),
+            classifications=classifications,
+        )
 
     def _fixed_interval_histogram(
         self, predicate: SqlPredicate, interval_seconds: int | None
