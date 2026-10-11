@@ -38,7 +38,7 @@ function trendTable(item: PackItem): string {
   const rows = figures.result.points
     .map(
       (p) =>
-        `<tr><td>${escapeHtml(p.period_start)}</td><td>${escapeHtml(p.series ?? "")}</td>` +
+        `<tr><td>${escapeHtml(formatDay(p.period_start))}</td><td>${escapeHtml(p.series ?? "")}</td>` +
         `<td class="num">${escapeHtml(formatNumber(p.value))}</td></tr>`,
     )
     .join("");
@@ -85,14 +85,18 @@ function itemPage(item: PackItem): string {
 export function packPrintHtml(manifest: PackExport): string {
   const { mark } = manifest;
   const withheld = typeof manifest.withheld === "number" && manifest.withheld > 0 ? manifest.withheld : 0;
+  // The cover is a printed page too: it carries the highest marking exported, top and bottom.
+  const coverBanner = (where: "top" | "bottom") => `<div class="banner banner-${where}">Marked ${escapeHtml(mark.handling_level)}</div>`;
   const cover =
     `<section class="page cover">` +
+    coverBanner("top") +
     `<h1>${escapeHtml(manifest.title)}</h1>` +
     `<p class="notice">Version ${manifest.version}, published ${escapeHtml(formatDay(manifest.published_at))} by ${escapeHtml(manifest.published_by_name ?? manifest.published_by)}</p>` +
     `<p class="notice">Exported by ${escapeHtml(mark.exported_by_name ?? mark.exported_by)} on ${escapeHtml(formatDay(mark.exported_at))}; ` +
     `handling level ${escapeHtml(mark.handling_level)}; OspreyFlow export ${escapeHtml(manifest.ledger_entry_id)}</p>` +
     (withheld > 0 ? `<p class="notice">${escapeHtml(withheldSentence(withheld))}</p>` : "") +
     (mark.rests_on_retracted_evidence ? `<p class="notice">This pack rests on evidence since retracted or corrected.</p>` : "") +
+    coverBanner("bottom") +
     `</section>`;
   return (
     `<!doctype html><html lang="en-GB"><head><meta charset="utf-8">` +

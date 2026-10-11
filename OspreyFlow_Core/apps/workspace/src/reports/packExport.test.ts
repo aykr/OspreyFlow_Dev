@@ -31,6 +31,20 @@ describe("packPrintHtml", () => {
     expect(official.indexOf("A public matter")).toBeLessThan(official.indexOf("banner-bottom"));
   });
 
+  it("marks the cover too, top and bottom, at the highest marking exported", () => {
+    const html = packPrintHtml(manifest([OFFICIAL_NOTE, SECRET_NOTE], { mark: { ...manifest([]).mark, handling_level: "SECRET" } }));
+    const cover = html.split('<section class="page item"')[0] ?? "";
+    expect(cover).toContain('<section class="page cover">');
+    expect(cover.match(/class="banner banner-(top|bottom)">Marked SECRET</g)).toHaveLength(2);
+    expect(cover.indexOf("banner-top")).toBeLessThan(cover.indexOf("<h1>"));
+  });
+
+  it("dates each period of a trend as a day, never a timestamp", () => {
+    const html = packPrintHtml(manifest([TREND_ITEM]));
+    expect(html).toContain("<td>14 September 2026</td>");
+    expect(html).not.toContain("<td>2026-09-14");
+  });
+
   it("puts the withheld sentence on the cover only when withheld is a number above zero", () => {
     const sentence = "2 items in this pack are withheld from you.";
     expect(packPrintHtml(manifest([OFFICIAL_NOTE], { policy: "disclose", withheld: 2 }))).toContain(sentence);

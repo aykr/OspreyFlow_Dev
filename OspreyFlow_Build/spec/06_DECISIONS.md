@@ -11868,8 +11868,8 @@ route-rights row `export_pack_route`.
 
 ### ADR-113, Amendment 3 (11 October 2026) — what the live walk found
 
-Stage 6 (handover A6), walked as `osprey-demo-analyst` on the deployment. Two findings; one fixed,
-one recorded.
+Stage 6 (handover A6), walked as `osprey-demo-analyst` on the deployment. Three findings; two
+fixed, one recorded.
 
 1. **People are named (ADR-106), fixed.** The walk showed a version "published … by" a Keycloak
    subject UUID: the pack routes served `published_by`, `withdrawn_by` and the export mark's
@@ -11890,9 +11890,19 @@ one recorded.
    the events belong to. Whether a case that reads a dataset should also count that dataset's
    events is a decision about ADR-099, for the owner; nothing here changes it.
 
+3. **The printed cover is marked, and periods are days, fixed.** Amendment 2 gave each item's page
+   its own banner but left the cover — a printed page carrying the title, the publisher and the
+   mark — with none. The cover now carries the highest marking exported (the mark's handling
+   level), top and bottom. And the trend table in the PDF, with the chart's span sentence, its
+   accessible description and each bar's title on screen, printed each period as a timestamp
+   ("2026-08-03T00:00:00Z"); each is now said as a day ("3 August 2026"), in the words the rest of
+   the pack uses.
+
 **Tests.** `test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up`
 (`tests/services/api/test_packs.py`, its directory fake recording every id asked for) and the names
 in `test_the_manifest_names_only_what_the_exporter_may_see_and_the_ledger_records_it`; the Glass's
 version line, Published line and printed cover (`PacksTab`, `PublishedTab`, `packExport` tests).
 Six planted faults, each red: a published read asking for every item's adder; the withdrawer, the
-exporter, the published list, the history's versions and the publish response each left unnamed.
+exporter, the published list, the history's versions and the publish response each left unnamed. For
+finding 3: the cover's two banners (`packExport.test.ts`) and the days in the table and on the chart
+(`packExport.test.ts`, `TrendChart.test.tsx`), each red before the change.
