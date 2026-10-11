@@ -38,7 +38,10 @@ def reporting_services(
             "entrypoint": ["python", "-m", "services.report_sync"],
             "healthcheck": {
                 "test": ["CMD", "python", "-m", "services.report_sync", "--health"],
-                "interval": "30s", "timeout": "5s", "retries": 3, "start_period": "60s",
+                "interval": "30s",
+                "timeout": "5s",
+                "retries": 3,
+                "start_period": "60s",
             },
             "env_file": ["deployment.env"],
             "mem_limit": reporting.sync_memory,
