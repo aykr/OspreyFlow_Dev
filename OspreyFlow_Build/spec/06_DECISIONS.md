@@ -11173,3 +11173,287 @@ is withheld (`AlertNotFoundError`), so the case guards that too.
 it cites are recorded facts already asserted, and nothing it cites is a model's suggestion. A general
 edge confirm/retract route is still not built (`GraphPort` has no `get_edge`); `confirm_edge` takes
 a link its caller has already read as the reader.
+
+## ADR-110 — Scheduled pipeline runs: configured in the Studio, operated from the admin console, read in the Glass — ACCEPTED
+
+Status: **ACCEPTED by the owner, 11 October 2026**, with one change (Amendment 1, below): the admin
+console is to be integrated into the running system, not left as the separately started harness.
+Built after ADR-111. Originally proposed the same day. The owner chose to build an
+in-product scheduler and asked that it be configured through the Ingest Studio, monitored and changed
+through the admin console, and visible read-only in the Glass, and asked what design changes that
+needs. Nothing here is built. Decisions marked *(mine)* are proposals the owner may overrule.
+
+**Context — what is true today** (survey of 11 October 2026). A published recipe carries
+`schedule_cron` and `schedule_watch` (`studio_recipes`, `ScheduleConfig`, the Publish screen's
+free-text *Schedule* panel, `PATCH …/schedule`, Source approver), but **nothing executes them**: there
+is no scheduler, no cron parser in the dependency set, and no validation of either value. Spec 09 §6
+says a recipe is "optionally scheduled" and that a flagged recipe's "scheduled runs" are blocked —
+true only in that there are none. A run happens when a person presses *Run now* (or an external
+scheduler calls `POST …/run`), and runs as that person. There is **no record of runs**: `LoadRecord`
+is built but never persisted, and only an audit line (`run_studio_recipe`) remains. `schedule_watch`
+has no defined meaning (spec 09's example is an `s3://` prefix; nothing in the codebase lists object
+storage). The **admin console does not exist**: `/admin` on the harness is a placeholder, and the
+harness's sign-in client carries no Conduit audience.
+
+### Decisions proposed
+
+1. **One run path.** The run route's body becomes `run_recipe_as(principal, recipe, source, trigger)`,
+   called by the route and by the scheduler alike, so a scheduled load is judged by the case's rules,
+   publishes to the change stream, evaluates watches and submits resolution exactly as a manual run
+   does. No second loader.
+2. **The executor follows the KYC sweep's pattern** (`kyc_sweep.run_daily`): a Conduit lifespan task
+   ticking each minute; for every published, un-paused, un-flagged recipe with a slot due, it claims
+   `(recipe, slot)` with Valkey `SET NX` so exactly one replica runs it, and a per-recipe lock so two
+   runs of one recipe never overlap (an overlapping slot is recorded *skipped*). After downtime it runs
+   **once** for the latest missed slot and records the others *missed* — no catch-up storm *(mine)*.
+3. **A scheduled run acts as a person, never as the system.** It runs as the Source approver who last
+   set the schedule (the *schedule owner*), resolved at each run through ADR-043's token exchange
+   (`resolve_for_owner`), scoped to the recipe's case (`scope_to_case`), and the existing
+   `source_above_clearance` check is re-run. A revoked or unresolvable owner, or one whose clearance no
+   longer covers the source, is a **refused** run, recorded and never retried silently; three refusals
+   in a row pause the schedule *(mine)*. The system principal is not used: a load judged and audited as
+   a named person is what rule 3 and the audit stream assume.
+4. **Flagged recipes are blocked, as spec 09 already promises** — a due slot for a flagged recipe is
+   recorded *blocked: the ontology changed* and not run.
+5. **"Folder watch" means a folder of the ingest root**, not object storage (v1): the case dataset's own
+   folder (`<root>/<dataset>/`, the same listing `list_source_files` already guards — no paths outside
+   the root, no subdirectories, no dotfiles), with a filename pattern. A file is run once, identified
+   by name, size and modification time; the recipe's deduplication key keeps a re-run idempotent
+   anyway. An `s3://` watch is future work, needing its own listing port *(mine)*.
+6. **A run ledger.** A new Postgres table `recipe_runs` records every run, manual or scheduled: run id,
+   recipe and version, case, trigger (manual, schedule, watch, release), slot, start and finish, outcome
+   (succeeded, failed, refused, blocked, skipped, missed), counts (rows read, created, referenced,
+   rejected, held; alerts raised), the load id, and the failure in words. This also closes the "no run
+   history" gap for manual runs.
+7. **Configured in the Ingest Studio.** The Publish screen's free-text Schedule panel becomes a
+   structured editor: *Run on a schedule* (hourly, daily or weekly at a time, in a named time zone —
+   Europe/London by default — or an advanced cron expression, validated and explained in words: "every
+   weekday at 06:00") and *Run when a file arrives* (choose the case's folder and a pattern), with
+   *Pause* and *Resume*, the next five run times shown before saving, and the recipe's run history
+   beneath. Source approver, as today. Invalid input is refused in words (rule 2).
+8. **Operated from the admin console — its first real screen.** *Schedules and runs*: every scheduled
+   recipe across the deployment with its case, schedule in words, owner, next run, last outcome, and a
+   run history; actions *Pause*, *Resume*, *Run now*, and *Change schedule* (the administrator's
+   ADR-052 safety-net reach, every change audited with the administrator named). The console calls new
+   Conduit routes under `/v1/admin/schedules` gated by the existing `require_admin_role`; the
+   `osprey-harness` client gains the Conduit audience. **Rule 3 in the console:** an administrator sees
+   schedule metadata and outcomes for every recipe, but a run's counts only where the source's handling
+   is one the administrator may view — otherwise *withheld* — since a count of what a load wrote is a
+   read *(mine)*.
+9. **Read-only in the Glass.** A *Data feeds* panel in the Reports view (ADR-111) lists each pipeline
+   feeding the case's datasets: its schedule in words, next run, last run's outcome, rows and alerts —
+   so a business reader sees how fresh the data is. Viewer level, the case's recipes only.
+10. **A failed or refused scheduled run tells someone.** It raises a notice in the schedule owner's alert
+    inbox (ADR-039) and shows in the console; it is not a typology alert and never enters the case
+    team's AML queue *(mine)*.
+
+**Dependencies.** A cron parser — `croniter` (MIT) — needs a licence register entry (spec 00 §7);
+time zones through the standard library's `zoneinfo`.
+
+**Spec changes it would make.** 09 §6 (*Scheduled runs*: the editor, the owner, blocking, the watch
+folder, the ledger); 03 (`run_recipe_as`, the schedule and run routes, `/v1/admin/schedules`); 05 (the
+admin console's first screen; the harness client's audience); 02 (the *Data feeds* panel); 00 §4 (the
+scheduler as the deployment's second periodic pass) and §7 (`croniter`); 01 nothing.
+
+**Tests to write first, named (rules 1, 4, 12, 15).** Due-slot computation including the two
+daylight-saving changes; one claim across two replicas (two schedulers, one run); an overlapping slot
+recorded *skipped*; a missed window run once; a flagged recipe *blocked*; a revoked owner *refused* and
+the third refusal pausing; an owner whose clearance dropped below the source *refused*; a watched file
+run once and a renamed copy run again; the ledger's row per outcome; `/v1/admin/schedules` refused to a
+non-administrator (404) and its counts withheld for a source above the administrator's clearance; the
+*Data feeds* panel showing only the case's recipes to a Viewer; keyboard cases for every new Studio,
+console and Glass action (rule 13). The fake standing in for the token exchange refuses what the real
+Keycloak refuses (rule 15, second worked example).
+
+**Cost.** The largest new surface since ADR-109: an executor, a ledger, two editors (Studio and
+console), the console's sign-in to the Conduit, and a Glass panel. It needs a live-stack check that a
+scheduled run fires, since a fake clock proves the arithmetic but not the lifespan.
+
+### ADR-110, Amendment 1 (11 October 2026) — the admin console becomes part of the running system
+
+Owner ruling: the admin console the launcher shows today — the harness, "Not running. From a
+terminal: `python -m harness`" — "was very rudimentary when the initial versions were working.
+Ideally this should be more integrated into the system." **Decided (design):**
+
+- **The deployed admin console is an *Admin* area of the deployed workspace**, served with the stack,
+  behind the same single sign-on (ADR-112), shown only to an account holding an administration right,
+  and calling the Conduit's `/v1/admin/*` routes. No separate process, port or terminal command.
+- **The harness keeps one job: setting up a deployment before one exists** (profile, components,
+  preflight, launch — ADR-049, ADR-107). Everything it would do *after* launch moves to the Admin area.
+  The launcher's *Admin console* card opens the Admin area once the deployment runs.
+- **First screens of the Admin area:** *Schedules and runs* (decision 8 above); *People and roles*
+  (assigning ADR-112's roles, through the identity provider's admin API, every change audited);
+  *Dashboards* (registering and revoking ADR-111's dashboard identities); *System* (component health
+  and versions — what the harness's preflight shows, for a running deployment).
+- Spec 05's "becomes the deployment's admin console at `/admin`" is corrected to this.
+
+
+## ADR-111 — The Reports view and a read-only reporting feed for business dashboards — ACCEPTED
+
+Status: **ACCEPTED by the owner, 11 October 2026**: build both — a *Reports* view in the Glass
+"alongside graph, map and timeline", for view-only users, and a read-only feed third-party dashboards
+(Power BI, Tableau, Qlik) can pull. Decisions 7 and 8 ruled below; the demonstration tool ruled too.
+
+**Context.** Business readers (compliance heads, MLROs) need trends, not graphs. Nothing in the product
+counts alerts, held rows or KYC statuses *for a reader*: the alert queue filters all-or-nothing per
+alert in Python (`alert_queue.queue`), `HeldRowStore` filters in SQL but has no count, and KYC is per
+node. There is no identity for a non-human reader, and the export gate (`services/api/export.py`) is
+the deployment's one door out — "no principal re-checks anything ever again" after it.
+
+### Decisions proposed
+
+1. **One computation, two surfaces.** `services/api/reports.py::case_report(reader, case, period)`
+   returns typed `ReportFigures`; the Reports view and the feed both call it, so they cannot disagree.
+2. **Every figure is counted as the reader (rule 3).** An alert the reader cannot see whole is in no
+   figure, total or bucket — the CLAUDE.md clause "histogram bucket" read literally. Held-row figures
+   appear only for Editor and above (as the Held rows tab does). KYC figures assess each customer as the
+   reader.
+3. **What it shows.** Alerts raised over time by typology (weekly); open alerts by age (under a day, a
+   week, a month, older); outcomes (true and false positives, by typology); loads held and released;
+   the case's customers by KYC status and risk band; and *Data feeds* (ADR-110, once built — until then
+   the last manual runs).
+4. **Bounded, never truncated (rule 2).** A case whose alerts or customers exceed the report's bound
+   (10,000 alerts, 2,000 customers *(mine)*) answers a typed `limit_exceeded` with its options (a shorter
+   period, fewer typologies, the feed's paged form), never a partial figure presented as whole.
+5. **The Reports view** is a third entry in the top-bar view switch — *Graph · Map · Reports* — with the
+   timeline strip unchanged beneath; case Viewer and above; every panel reachable by keyboard
+   (rule 13) and inside the performance budget (rule 10).
+6. **The feed** is `GET /v1/investigations/{id}/reports/feed?period=…&format=json|csv`: figures only —
+   labels, dates and numbers; no entity name, identifier, alert words or any graph content. Case Viewer.
+7. **Who a dashboard is — ruled: its own service account, under single sign-on.** Each dashboard is a
+   named confidential client in the identity provider holding the *Reports Viewer* role (ADR-112), a
+   clearance and an organisational unit set by an administrator, and granted Viewer on named cases
+   like any person (ADR-052). Registered and revoked in the Admin area (ADR-110 Amendment 1); every read
+   audited under its name; it sees only what its clearance and its cases allow.
+8. **The feed and the export gate — ruled: figures only, recorded in the export ledger.** The feed
+   carries no element, so it is not an item export and does not pass the item-by-item gate; but every
+   feed read is audited and written to the export ledger as metadata (which dashboard, which case, which
+   period, when), so compliance sees what left and to whom.
+9. **The demonstration dashboard — ruled: Apache Superset (Apache-2.0) in a container of its own**, with
+   its own memory limit, a separate component of the deployment profile rather than part of the Glass
+   or the Conduit, reading the feed with its dashboard identity and signing people in through the same
+   identity provider. It is a demonstration component, off by default in every profile; spec 00 (the
+   tier diagram, §7 the licence register), spec 05 (the component and its memory) and the AML
+   architecture diagram show it as an external consumer of the feed, outside the three tiers.
+
+**Tests to write first, named.** A Viewer reads the report; an alert naming a node the reader cannot
+see changes no figure and no bucket (the plant: the same report with and without the hidden node,
+equal); held-row figures absent for a Viewer; an outsider 404 and a Viewer on another case 404; the
+feed and the view return the same figures for the same reader (one test calling both); the feed's
+schema carries no free-text field beyond fixed labels (a test that fails if one is added); the bound
+answers `limit_exceeded`; keyboard cases for each Reports panel; the perf gate unchanged.
+
+
+## ADR-112 — Single sign-on with four roles built from named rights — PROPOSED
+
+Status: **PROPOSED, for the owner's review** (11 October 2026). The owner asked for single sign-on
+across the whole system "with authorisations that are granted", four roles — **Analyst, Data
+Engineer, Admin, Reports Viewer** — each granted a set of rights, and a recommended, comprehensive
+rights list. Nothing here is built.
+
+**Context — authorisation today has three independent axes, and this ADR touches only one.**
+1. **What a person may *see*** — clearance and receivable handling codes, applied in the adapter
+   (rule 3). Unchanged.
+2. **Where they may act** — case grants: Viewer, Editor, Author (ADR-052), plus the administrator's
+   safety net on the access routes. Unchanged.
+3. **What they may *do*** — today a scatter of token roles: `analyst`, the studio roles
+   `source_author`, `source_approver` and `loader`, `osprey-admin`, `compliance` (the export ledger),
+   each checked ad hoc (`require_studio_role`, `require_admin_role`, an inline `"compliance" in roles`).
+   **This axis becomes rights.**
+
+### Decisions proposed
+
+1. **A right is a named action, never a licence to see.** Holding *Investigate in a case* lets a person
+   expand the graph; what they see when they do is still decided by their clearance and the case's
+   datasets. Every right is checked in the Conduit (`require_right(Right.X)`), never only in the UI.
+2. **A role is a named bundle of rights**, defined in the identity provider as a composite role, so one
+   sign-in carries them to every part of the system — the Glass, the Ingest Studio, the Admin area
+   (ADR-110 Amendment 1) and Superset (ADR-111). A person may hold more than one role; rights may also
+   be granted singly (a compliance officer granted *Read the export ledger* without the whole Admin
+   role).
+3. **A right is necessary, never sufficient, inside a case.** Case-scoped rights also need the case
+   grant at the level shown below (V = Viewer, E = Editor, A = Author); a right with no case column is
+   system-wide.
+4. **Single sign-on through the one realm** the deployment already runs: one sign-in for the Glass,
+   the Studio and the Admin area; Superset signs in through the same provider and maps *Reports Viewer*
+   to its read-only role. Machine readers (dashboards) are service accounts holding *Reports Viewer*
+   (ADR-111 decision 7).
+5. **The old roles map onto the new without a flag day:** `analyst` → Analyst; `source_author` +
+   `source_approver` + `loader` → Data Engineer; `osprey-admin` → Admin; `compliance` → the single right
+   *Read the export ledger*. Old role names are accepted alongside rights for one release, then removed.
+6. **Administration is not content access.** Admin manages the system, people and schedules; it
+   carries no right to investigate and no clearance. Its one reach into a case remains ADR-052's safety
+   net (managing an orphaned case's access, never reading it).
+
+### The rights list (recommended)
+
+| # | Right | Case level | Analyst | Data Engineer | Admin | Reports Viewer |
+|---|---|---|:-:|:-:|:-:|:-:|
+| **Cases** |||||||
+| C1 | Create a case | — | ✓ | ✓ | | |
+| C2 | Share a case and manage its access | A | ✓ | ✓ | ✓ (safety net, orphaned cases) | |
+| C3 | Remove a case | A | ✓ | | ✓ (safety net) | |
+| C4 | Branch a case | E | ✓ | | | |
+| C5 | Export from a case (through the export gate) | E | ✓ | | | |
+| C6 | Override a consult-originator item at export, with a justification | E | ✓ | | | |
+| **Investigation** |||||||
+| I1 | Investigate in a case: search, expand, paths, filters | V | ✓ | ✓ | | |
+| I2 | Add and change entities and links | E | ✓ | | | |
+| I3 | Confirm or retract inferred data | E | ✓ | | | |
+| I4 | Add files and run extraction; accept or reject findings | E | ✓ | | | |
+| I5 | Resolve entities: run resolution, confirm or split matches | E | ✓ | | | |
+| I6 | Record judgements, gaps and assumptions | E | ✓ | | | |
+| I7 | Ask the case a question (the model) | V | ✓ | | | |
+| I8 | Run network analysis (centrality, communities, paths at scale) | V | ✓ | ✓ | | |
+| I9 | Propose a link type | E | ✓ | ✓ | | |
+| **Alerts and AML** |||||||
+| L1 | Read the alert queue | V | ✓ | ✓ | | ✓ |
+| L2 | Triage alerts: claim, release, put on the canvas, close with a reason | E | ✓ | | | |
+| L3 | Deploy and retire typology rules | A | ✓ | ✓ | | |
+| L4 | Read the rule audit | A | ✓ | ✓ | ✓ | |
+| L5 | Read held rows | E | ✓ | ✓ | | |
+| L6 | Release or reject held rows | A | ✓ | ✓ | | |
+| L7 | Trace ownership; read due diligence and neighbourhood risk | V | ✓ | | | |
+| L8 | Keep watchlists and saved-pattern monitors | E | ✓ | | | |
+| L9 | Load and replace screening lists (licensed lists only, spec 00 §7) | — | | ✓ | ✓ | |
+| **Ingest** |||||||
+| D1 | Create and edit pipelines; profile and map sources | E | | ✓ | | |
+| D2 | Verify a pipeline | E | | ✓ | | |
+| D3 | Publish a pipeline (the sign-off) | E | | ✓ | | |
+| D4 | Run a published pipeline | E | | ✓ | | |
+| D5 | Set and change a pipeline's schedule | E | | ✓ | ✓ (in the Admin area) | |
+| D6 | Add files to a case's ingest folder | E | ✓ | ✓ | | |
+| D7 | Revert a load | E | | ✓ | ✓ | |
+| **Reporting** |||||||
+| R1 | Read the Reports view | V | ✓ | ✓ | | ✓ |
+| R2 | Read the reporting feed | V | | | | ✓ |
+| R3 | Read the data-feeds panel (pipeline freshness) | V | ✓ | ✓ | | ✓ |
+| **Administration** |||||||
+| A1 | Administer the system: components, settings, health, versions | — | | | ✓ | |
+| A2 | Manage people and their roles | — | | | ✓ | |
+| A3 | Register and revoke dashboard identities | — | | | ✓ | |
+| A4 | Operate schedules: pause, resume, run now, read run history | — | | ✓ (own pipelines) | ✓ | |
+| A5 | Manage the ontology: promote proposed types, apply a version | — | | | ✓ | |
+| A6 | Manage map providers and geospatial reference data | — | | | ✓ | |
+| A7 | Read the audit stream | — | | | ✓ | |
+| A8 | Read the export ledger | — | | | ✓ | |
+
+**Two choices this table makes that the owner may want differently.**
+(a) **Publishing (D3) is not separated from authoring (D1)** inside the Data Engineer role. A firm
+wanting four-eyes on a pipeline can grant D3 to a different person, since rights are grantable singly
+— the role is the default, not the limit. (b) **Analysts deploy rules (L3)** as ADR-109 ruling D3 has
+them do (a case Author, no second approver); Data Engineers can too.
+
+**What it would change.** A `Right` enumeration in `packages/schemas` and `require_right` in the
+Conduit replacing `require_studio_role`, `require_admin_role` and the inline `compliance` check; the
+realm's composite roles in `harness/realm.py` and their registration; the Glass and Studio hiding what
+a person lacks the right for (the server still refusing); the Admin area's *People and roles* screen.
+Spec 03 (the rights table beside the level table), 05 (the realm's roles), 01 §2.2 (the three axes
+named).
+
+**Tests to write first, named.** For every right, a route test that the right alone (without the case
+level) is refused and the case level alone (without the right) is refused (rule 12: a right stated and
+exercised by nothing is the failure this project keeps finding); a Reports Viewer refused every write;
+an Admin refused every investigation read; the old role names accepted for the transition release and
+refused after; the dashboard service account refused everything but R2; the Glass hiding an action the
+person lacks (a keyboard case per hidden action, rule 13).
