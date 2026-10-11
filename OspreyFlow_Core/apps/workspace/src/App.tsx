@@ -92,6 +92,8 @@ import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
 import { AlertInbox } from "./watches/AlertInbox";
 import { AlertsPlace } from "./alerts/AlertsPlace";
+import { AdminPlace } from "./admin/AdminPlace";
+import { canDownloadFeed, landingView, railEntries, viewsFor } from "./rights/visibility";
 import { ReportsView } from "./reports/ReportsView";
 import { OwnershipPlace } from "./ownership/OwnershipPlace";
 import { HotlistPanel } from "./watches/HotlistPanel";
@@ -184,6 +186,9 @@ export function App() {
   // constant to the real access token this state holds once the analyst has signed in.
   const isDevBypass = Boolean(DEV_MODE_BEARER_TOKEN);
   const [bearerToken, setBearerToken] = useState<string>(DEV_MODE_BEARER_TOKEN);
+  // ADR-112: what this person may do, so the Glass leaves out what it would only be refused. `null`
+  // until known; the Conduit checks every right itself either way.
+  const [rights, setRights] = useState<ReadonlySet<string> | null>(null);
   const [principal, setPrincipal] = useState<DisplayPrincipal | null>(null);
   // `null` until the very first bootstrap effect below has run once — distinguishes "still
   // checking whether this load is a redirect callback" from "checked, and there is no session",
@@ -286,6 +291,20 @@ export function App() {
   }
 
   const unauthenticatedHandledRef = useRef(false);
+  useEffect(() => {
+    if (!bearerToken) {
+      setRights(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/v1/me/rights`, { headers: { Authorization: `Bearer ${bearerToken}` } })
+      .then((r) => (r.ok ? (r.json() as Promise<{ rights: string[] }>) : null))
+      .then((found) => !cancelled && found && setRights(new Set(found.rights)))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [bearerToken]);
   const bearerTokenRef = useRef(bearerToken);
   bearerTokenRef.current = bearerToken;
   // A new token is a new sign-in: a refusal of *it* is worth reacting to again.
@@ -477,11 +496,11 @@ export function App() {
   }, [counts, classificationOrder]);
 
   const [view, setView] = useState<
-    "graph" | "map" | "reports" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
-  >(handoff.view === "ingest" ? "ingest" : "graph");
+    "graph" | "map" | "reports" | "admin" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
+  >(handoff.view === "ingest" ? "ingest" : handoff.view === "admin" ? "admin" : "graph");
   // Which application is open, and (so the switch can go back to it) the Glass view last open.
   const app = view === "ingest" ? "ingest" : "glass";
-  const lastGlassView = useRef<"graph" | "map" | "reports" | "dossier" | "watches" | "alerts" | "ownership">("graph");
+  const lastGlassView = useRef<"graph" | "map" | "reports" | "admin" | "dossier" | "watches" | "alerts" | "ownership">("graph");
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {
@@ -492,6 +511,13 @@ export function App() {
     return () => cancelAnimationFrame(frame);
   }, [view]);
   if (view !== "ingest") lastGlassView.current = view;
+  // ADR-112: someone who may not investigate (a Reports Viewer) lands where they may look.
+  useEffect(() => {
+    const views: string[] = viewsFor(rights);
+    if ((view === "graph" || view === "map" || view === "reports") && !views.includes(view)) {
+      setView(landingView(rights));
+    }
+  }, [rights, view]);
   const [dossierNodeId, setDossierNodeId] = useState<string | null>(null);
   // ADR-092: the Document open in the full-screen reader, if any.
   const [readerDocumentId, setReaderDocumentId] = useState<string | null>(null);
@@ -947,10 +973,12 @@ export function App() {
         views={
           app === "glass"
             ? [
-                { id: "graph", label: "Graph", pressed: view === "graph", onSelect: () => setView("graph") },
-                { id: "map", label: "Map", pressed: view === "map", onSelect: () => setView("map") },
-                // ADR-111: the case's figures for people who read rather than investigate.
-                { id: "reports", label: "Reports", pressed: view === "reports", onSelect: () => setView("reports") },
+                ...[
+                  { id: "graph", label: "Graph", pressed: view === "graph", onSelect: () => setView("graph") },
+                  { id: "map", label: "Map", pressed: view === "map", onSelect: () => setView("map") },
+                  // ADR-111: the case's figures for people who read rather than investigate.
+                  { id: "reports", label: "Reports", pressed: view === "reports", onSelect: () => setView("reports") },
+                ].filter((v) => (viewsFor(rights) as string[]).includes(v.id)),
                 ...(dossierNodeId
                   ? [{ id: "dossier", label: "Messages", pressed: view === "dossier", onSelect: () => setView("dossier") }]
                   : []),
@@ -994,12 +1022,12 @@ export function App() {
                 { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
                 { id: "explore", label: "Explore", icon: "explore" as const, onSelect: () => setExploreOpen(true), pressed: exploreOpen },
                 { id: "questions", label: "Questions", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
-                ...((principal?.roles?.includes("osprey-admin") ?? false)
-                  ? // ADR-090 C3: the relationship types analysts of the administrator's unit proposed.
-                    [{ id: "types", label: "Proposed types", icon: "types" as const, onSelect: () => setProposedTypesOpen(true), pressed: proposedTypesOpen }]
-                  : []),
+                // ADR-090 C3: the relationship types analysts of the administrator's unit proposed.
+                { id: "types", label: "Proposed types", icon: "types" as const, onSelect: () => setProposedTypesOpen(true), pressed: proposedTypesOpen },
                 { id: "ingest", label: "Ingest Studio", icon: "ingest" as const, onSelect: () => setView("ingest") },
-              ]
+                // ADR-110 Amendment 1: the deployment's administration, inside the running system.
+                { id: "admin", label: "Admin", icon: "admin" as const, onSelect: () => setView("admin"), pressed: view === "admin" },
+              ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id))
             : [
                 { id: "investigation", label: "Back to the investigation", icon: "glass" as const, onSelect: () => setView(lastGlassView.current) },
               ]),
@@ -1126,8 +1154,9 @@ export function App() {
           />
         )}
         {view === "reports" && (
-          <ReportsView apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} />
+          <ReportsView apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} />
         )}
+        {view === "admin" && rights && <AdminPlace apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} rights={rights} />}
         {view === "ownership" && (
           <OwnershipPlace
             apiBaseUrl={API_BASE_URL}
@@ -1140,7 +1169,7 @@ export function App() {
             }}
           />
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "alerts" && view !== "ownership" && view !== "reports" && (
+        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "admin" && (
           <div style={{ flex: 1, position: "relative" }}>
             {view === "graph" && (
               <GlassCanvas

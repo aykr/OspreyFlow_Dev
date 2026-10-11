@@ -899,6 +899,22 @@ never a partial chart. Every action has its case in `keyboard/reports.spec.ts` (
 the view switch itself, never proved by keyboard before, in `keyboard/shell.spec.ts`
 (`views-chosen-by-keyboard`).
 
+**The Glass follows the person's rights (ADR-112).** It reads `GET /v1/me/rights` at sign-in and
+leaves out what it would only be refused — never in place of the Conduit's check
+(`rights/visibility.ts`): the rail shows *Watches* for keep_watches, *Alerts* for read_alert_queue,
+*Ownership* for trace_ownership, *History* and *Explore* for investigate, *Questions* for ask_model,
+*Proposed types* for manage_ontology, *Ingest Studio* for edit_pipelines (an analyst adds files from
+the canvas), *Admin* for any administration right; the view switch offers Graph and Map for
+investigate and Reports for read_reports, and a person who may not investigate (a Reports Viewer)
+lands on Reports; the Reports view's download is offered only to holders of read_report_feed.
+
+**The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
+running system, behind the same sign-in — *Admin* on the rail — with a tab per right: *People and
+roles* (each person's four roles as checkboxes, saved whole, other grants kept and shown), *Dashboards*
+(register a dashboard identity — its secret shown once — and remove one; its account id is what a
+case's Author grants Viewer to), *System* (each component asked as the tab opens, with *Ask again*).
+Every action has its case in `keyboard/admin.spec.ts` (`ADMIN_ACTIONS`).
+
 ### 3.4 Temporal analysis
 
 The timeline is the second most important control in the product after the canvas.

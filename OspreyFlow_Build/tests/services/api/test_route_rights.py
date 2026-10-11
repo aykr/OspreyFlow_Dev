@@ -106,7 +106,7 @@ ROUTE_RIGHTS = {
  "reject_held_rows": "decide_held_rows", "issue_ws_ticket": None, "my_rights_route": None,
  "list_people_route": "manage_people", "set_person_roles_route": "manage_people",
  "list_dashboards_route": "manage_dashboards", "register_dashboard_route": "manage_dashboards",
- "remove_dashboard_route": "manage_dashboards",
+ "remove_dashboard_route": "manage_dashboards", "system_status_route": "administer_system",
 }
 
 
@@ -157,7 +157,7 @@ def test_every_right_guards_at_least_one_route() -> None:
     area (ADR-110 Amendment 1, ADR-112) and ADR-110's run ledger; screening lists load by a script;
     reverting a load has no route (spec 09 §6); operating schedules arrives with ADR-110."""
     not_yet = {"read_data_feeds", "load_screening_lists",
-               "revert_loads", "operate_schedules", "administer_system", "read_audit",
+               "revert_loads", "operate_schedules", "read_audit",
                "export_override"}  # fmt: skip
     guarded = {r for r in ROUTE_RIGHTS.values() if r}
     assert {r.value for r in Right} - guarded == not_yet

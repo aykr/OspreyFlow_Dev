@@ -143,6 +143,8 @@ export type { DashboardIdentity } from "./DashboardIdentity";
 export type { RegisteredDashboard } from "./RegisteredDashboard";
 export type { RolesInput } from "./RolesInput";
 export type { DashboardInput } from "./DashboardInput";
+export type { ComponentHealth } from "./ComponentHealth";
+export type { SystemStatus } from "./SystemStatus";
 export type { ExtractionRequest } from "./ExtractionRequest";
 export type { ExtractionResult } from "./ExtractionResult";
 export type { TranscribeRequest } from "./TranscribeRequest";

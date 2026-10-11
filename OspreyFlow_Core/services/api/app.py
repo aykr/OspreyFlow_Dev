@@ -28,6 +28,7 @@ import functools
 import io
 import json
 import os
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
@@ -109,11 +110,13 @@ from ports.media import MediaStore
 from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
 from schemas.admin import (
+    ComponentHealth,
     DashboardIdentity,
     DashboardInput,
     PersonAccount,
     RegisteredDashboard,
     RolesInput,
+    SystemStatus,
 )
 from schemas.analytics import (
     CrossFilterRequest,
@@ -7888,6 +7891,43 @@ async def remove_dashboard_route(
     await audit.record(principal=principal, action="remove_dashboard",
                        resolved_query={"client_id": client_id}, result_cardinality=1)  # fmt: skip
     return Response(status_code=204)
+
+
+@app.get("/v1/admin/system", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
+async def system_status_route(
+    principal: PrincipalDep,
+    graph: GraphDep,
+    investigations: InvestigationsDep,
+    valkey: ValkeyDep,
+    identity_admin: IdentityAdminDep,
+) -> SystemStatus:
+    """Each component of the running deployment, asked now (ADR-110 Amendment 1, the *System*
+    screen). The graph is asked as a principal of no datasets, so the check reads nothing."""
+
+    async def check(name: str, probe: Callable[[], Awaitable[object]]) -> ComponentHealth:
+        started = time.monotonic()
+        try:
+            await asyncio.wait_for(probe(), timeout=5.0)
+            ok, detail = True, None
+        except Exception as e:  # noqa: BLE001 - a component's failure is the answer, in words
+            ok, detail = False, (str(e) or type(e).__name__)[:200]
+        return ComponentHealth(name=name, ok=ok, millis=int((time.monotonic() - started) * 1000),
+                               detail=detail)  # fmt: skip
+
+    async def models() -> None:
+        found = await readiness_module.deployment_readiness()
+        if not found.ready:
+            raise RuntimeError(found.problem or "a model is not yet present")
+
+    nobody = principal.model_copy(update={"datasets": []})
+    components = [
+        await check("Graph store", lambda: graph.type_counts(nobody)),
+        await check("Case and rule stores (Postgres)", lambda: investigations.list_for(principal)),
+        await check("Working-set cache (Valkey)", lambda: valkey.ping()),
+        await check("Model server", models),
+        await check("Identity provider", identity_admin.reachable),
+    ]
+    return SystemStatus(version=os.environ.get("OSPREY_VERSION"), components=components)
 
 
 @app.exception_handler(IdentityAdminRefused)

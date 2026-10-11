@@ -16,7 +16,7 @@
 
 /** `questions`: a case just branched to ask the model about its documents (ADR-098 decision 4),
  * opened on its Questions panel. */
-export type HandoffView = "ingest" | "questions";
+export type HandoffView = "ingest" | "questions" | "admin";
 
 export interface Handoff {
   /** Start the sign-in without waiting for a click. */
@@ -34,7 +34,7 @@ interface Stash {
 }
 
 function viewFrom(value: unknown): HandoffView | null {
-  return value === "ingest" || value === "questions" ? value : null;
+  return value === "ingest" || value === "questions" || value === "admin" ? value : null;
 }
 
 function stash(storage: Storage, value: Stash): void {

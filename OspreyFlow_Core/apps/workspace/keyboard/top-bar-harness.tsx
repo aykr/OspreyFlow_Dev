@@ -100,6 +100,8 @@ createRoot(container).render(
           { id: "explore", label: "Explore", icon: "explore", onSelect: rail("explore") },
           { id: "questions", label: "Questions", icon: "questions", onSelect: rail("questions") },
           { id: "ingest", label: "Ingest Studio", icon: "ingest", onSelect: rail("ingest") },
+          // ADR-110 Amendment 1: the Admin area, as `App.tsx` offers it to an administrator.
+          { id: "admin", label: "Admin", icon: "admin", onSelect: rail("admin") },
         ]}
       />
       <main style={{ flex: 1 }} aria-label="Canvas stand-in" />

@@ -47,7 +47,7 @@ function serve(handler: (url: URL) => Response | null = () => null) {
 }
 
 function place() {
-  render(<ReportsView apiBaseUrl="http://x" bearerToken="t" investigationId="c1" />);
+  render(<ReportsView apiBaseUrl="http://x" bearerToken="t" investigationId="c1" canDownload />);
 }
 
 describe("the Reports view", () => {

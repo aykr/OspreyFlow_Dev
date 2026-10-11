@@ -60,6 +60,10 @@ describe("reading the launcher's hand-off", () => {
     }
   });
 
+  test("the Admin console tile lands on the Glass's Admin area (ADR-110 Amendment 1)", () => {
+    expect(readHandoff("?from=launcher&view=admin", sessionStorage, NOW)).toEqual({ autoSignIn: true, view: "admin" });
+  });
+
   test("the Ingest Studio tile lands on the Ingest tab, and the choice survives the sign-in trip", () => {
     expect(readHandoff("?from=launcher&view=ingest", sessionStorage, NOW)).toEqual({
       autoSignIn: true,

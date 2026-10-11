@@ -1,6 +1,6 @@
 // The shell's icons (ADR-097 step 1): 16px, one stroke in the current text colour, no fill, so
 // they take the chrome's neutral and never a data colour.
-export type ShellIcon = "cases" | "history" | "watches" | "alerts" | "ownership" | "types" | "ingest" | "glass" | "names" | "questions" | "explore";
+export type ShellIcon = "cases" | "history" | "watches" | "alerts" | "ownership" | "types" | "ingest" | "glass" | "names" | "questions" | "explore" | "admin";
 
 const PATHS: Record<ShellIcon, string> = {
   // Two stacked folders: the case and its branches.
@@ -25,6 +25,8 @@ const PATHS: Record<ShellIcon, string> = {
   questions: "M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z",
   // A compass: where to start.
   explore: "M8 2.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 0 0 0-11z M10.2 5.8L9 9L5.8 10.2L7 7z",
+  // A gear: the deployment's administration (ADR-110 Amendment 1).
+  admin: "M8 5.8a2.2 2.2 0 1 0 0 4.4a2.2 2.2 0 0 0 0-4.4z M8 1.8v2 M8 12.2v2 M1.8 8h2 M12.2 8h2 M3.6 3.6l1.4 1.4 M11 11l1.4 1.4 M3.6 12.4l1.4-1.4 M11 5l1.4-1.4",
 };
 
 export function Icon({ name }: { name: ShellIcon }) {

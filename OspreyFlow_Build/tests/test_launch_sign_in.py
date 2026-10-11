@@ -66,7 +66,7 @@ USERS = {
     "plain": ["analyst"],
     "nobody": [],
 }
-GLASS, STUDIO, ADMIN = launch.GLASS, launch.INGEST, launch.ADMIN
+GLASS, STUDIO, ADMIN, SETUP = launch.GLASS, launch.INGEST, launch.ADMIN, launch.SETUP
 
 
 @pytest.fixture
@@ -206,7 +206,7 @@ def test_with_no_rendered_realm_the_launcher_is_open_and_has_no_sign_in_routes(
         repo_root=tmp_path, prober=FakeProber(), spawner=FakeSpawner(), frontend_built=True
     )
     assert launcher.enforced is False
-    assert _tile_names(launcher.render_tiles()) == [GLASS, STUDIO, ADMIN]
+    assert _tile_names(launcher.render_tiles()) == [GLASS, STUDIO, ADMIN, SETUP]
 
 
 def test_with_a_rendered_realm_the_launcher_requires_sign_in(rig: Rig) -> None:
@@ -336,9 +336,9 @@ def test_a_start_request_still_needs_the_page_token_when_signed_in(
 @pytest.mark.parametrize(
     ("user", "expected"),
     [
-        ("ada", [GLASS, STUDIO, ADMIN]),
+        ("ada", [GLASS, STUDIO, ADMIN, SETUP]),
         ("demo-analyst", [GLASS, STUDIO]),
-        ("admin-only", [GLASS, ADMIN]),
+        ("admin-only", [GLASS, ADMIN, SETUP]),
         ("plain", [GLASS]),  # an analyst with no Studio role: no Ingest Studio
         ("nobody", [GLASS]),  # the Glass is open to any signed-in account
     ],
@@ -357,7 +357,7 @@ def test_the_tiles_shown_are_exactly_those_the_roles_allow(
     assert _tile_names(fragment) == expected
     assert sorted(json.loads(status)) == sorted(expected)
     assert headers["x-launcher-mode"] == "signed-in"
-    if ADMIN not in expected:
+    if SETUP not in expected:
         assert f"localhost:{launch.HARNESS_PORT}" not in page, "the console's address is shown"
 
 
@@ -373,7 +373,11 @@ def test_any_one_studio_role_is_enough_for_the_ingest_studio(
 
 def test_the_studio_roles_are_the_ones_the_ingest_studio_defines() -> None:
     """Catches a role added to (or renamed in) the Ingest Studio that the launcher does not know."""
-    assert launch.STUDIO_ROLES == frozenset(r.value for r in StudioRole)
+    # ADR-112: the Studio's own role names, and every role whose rights include editing pipelines.
+    from schemas.rights import ROLE_RIGHTS, Right
+
+    editors = {role for role, rights in ROLE_RIGHTS.items() if Right.EDIT_PIPELINES in rights}
+    assert launch.STUDIO_ROLES == frozenset(r.value for r in StudioRole) | editors
 
 
 def test_the_page_says_who_is_signed_in_and_offers_to_sign_out(
@@ -386,12 +390,12 @@ def test_the_page_says_who_is_signed_in_and_offers_to_sign_out(
     assert 'href="/logout"' in person.get("/")[2]
 
 
-def test_the_admin_tile_says_to_sign_in_there_with_an_admin_account(
+def test_the_set_up_tile_says_to_sign_in_there_with_an_admin_account(
     rig: Rig, idp: FakeIdentityProvider
 ) -> None:
     person = rig.browser()
     assert person.sign_in(idp, "ada") == 303
-    hint = _tile(person.get("/tiles")[2], ADMIN)
+    hint = _tile(person.get("/tiles")[2], SETUP)  # ADR-110 Amendment 1: the harness is Set-up
     assert "osprey-admin" in hint
     assert "without a sign-in" not in hint, "that was true only before the console required one"
 
@@ -596,3 +600,10 @@ def test_the_launchers_message_pages_follow_the_light_and_dark_choice_too(rig: R
         encoding="utf-8"
     )
     assert script.strip() in body
+
+
+def test_a_data_engineer_is_shown_the_ingest_studio() -> None:
+    """ADR-112: the tile follows the right to edit pipelines, not only the old Studio role names —
+    a Data Engineer, who holds the right under its new role name, would otherwise never see it."""
+    assert "data_engineer" in launch.STUDIO_ROLES
+    assert "analyst" not in launch.STUDIO_ROLES, "an analyst adds files from the canvas, not the Studio"

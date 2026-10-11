@@ -132,6 +132,10 @@ class IdentityAdmin:
             )
         return response
 
+    async def reachable(self) -> None:
+        """Raises `IdentityAdminRefused` unless the identity provider grants the Conduit a token."""
+        await self._token()
+
     # --- people -------------------------------------------------------------------------------
 
     async def list_people(self) -> list[PersonAccount]:

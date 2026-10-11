@@ -73,7 +73,7 @@ function RaisedByWeek({ figures, colours }: { figures: ReportFigures; colours: M
   );
 }
 
-export function ReportsView(api: ReportsApi) {
+export function ReportsView({ canDownload, ...api }: ReportsApi & { canDownload: boolean }) {
   const [weeks, setWeeks] = useState(12);
   const [figures, setFigures] = useState<ReportFigures | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -125,7 +125,8 @@ export function ReportsView(api: ReportsApi) {
           </Select>
         </label>
         <span style={{ flex: 1 }} />
-        <Button onClick={() => void download()}>Download the figures (CSV)</Button>
+        {/* ADR-112: the feed is the Reports Viewer's right (R2); offered only to its holders. */}
+        {canDownload && <Button onClick={() => void download()}>Download the figures (CSV)</Button>}
       </header>
       {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
       {!figures && !problem && <p className="label">Counting…</p>}

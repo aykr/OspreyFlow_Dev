@@ -119,9 +119,9 @@ def _request(
         return err.code, err.read().decode("utf-8")
 
 
-def test_the_launcher_offers_exactly_the_three_interfaces_by_their_own_names(repo: Path) -> None:
+def test_the_launcher_offers_exactly_its_interfaces_by_their_own_names(repo: Path) -> None:
     names = [s.name for s in _launcher(repo).surfaces()]
-    assert names == ["The Glass", "Ingest Studio", "Admin console"]
+    assert names == ["The Glass", "Ingest Studio", "Admin console", "Set-up console"]
 
 
 def test_the_glass_and_ingest_studio_use_the_deployments_own_workspace_port(
@@ -151,11 +151,15 @@ def test_the_glass_and_the_studio_open_different_places_and_say_they_came_from_t
     assert by_name["The Glass"].url != by_name["Ingest Studio"].url
 
 
-def test_the_admin_console_is_on_the_harness_port_never_the_workspace(repo: Path) -> None:
-    """The defect the sibling runbook fix corrects: `localhost:<workspace>/admin` is the Glass."""
-    admin = {s.name: s for s in _launcher(repo).surfaces()}["Admin console"]
-    assert admin.url == f"http://localhost:{HARNESS_PORT}/"
-    assert ":8080" not in admin.url
+def test_the_admin_console_is_the_glasss_admin_area_and_set_up_is_the_harness(repo: Path) -> None:
+    """ADR-110 Amendment 1 (owner: the console "should be more integrated into the system"): the
+    Admin console is The Glass's Admin area, started with the stack — nothing to start by hand;
+    the harness, on its own port, keeps setting the deployment up."""
+    by_name = {s.name: s for s in _launcher(repo).surfaces()}
+    assert by_name["Admin console"].url == "http://localhost:8080/?from=launcher&view=admin"
+    assert by_name["Admin console"].starts == "stack"
+    assert by_name["Set-up console"].url == f"http://localhost:{HARNESS_PORT}/"
+    assert by_name["Set-up console"].starts == "admin"
 
 
 def test_the_ingest_studio_tile_says_where_it_is_because_it_has_no_address_of_its_own(
@@ -207,7 +211,8 @@ def test_status_reports_each_interface_up_only_when_it_answers(repo: Path) -> No
     status = _launcher(repo, prober).status()
     assert status["The Glass"] == "up"
     assert status["Ingest Studio"] == "up"
-    assert status["Admin console"] == "down"
+    assert status["Admin console"] == "up", "part of The Glass: up when it is"
+    assert status["Set-up console"] == "down"
 
 
 def test_a_workspace_that_answers_while_the_conduit_does_not_is_starting_not_up(
@@ -314,16 +319,16 @@ def test_the_launcher_binds_loopback_only(repo: Path) -> None:
         server.server_close()
 
 
-def test_the_page_shows_three_tiles_and_the_status_endpoint_is_json(
+def test_the_page_shows_its_tiles_and_the_status_endpoint_is_json(
     served: tuple[str, launch.Launcher, FakeProber, FakeSpawner],
 ) -> None:
     base, _, _, _ = served
     _, page = _request(base + "/")
-    for name in ("The Glass", "Ingest Studio", "Admin console"):
+    for name in ("The Glass", "Ingest Studio", "Admin console", "Set-up console"):
         assert name in page
     code, body = _request(base + "/status")
     assert code == 200
-    assert set(json.loads(body)) == {"The Glass", "Ingest Studio", "Admin console"}
+    assert set(json.loads(body)) == {"The Glass", "Ingest Studio", "Admin console", "Set-up console"}
 
 
 # --- The page: design system and plain language (friction log, 29 September 2026, second item) ---

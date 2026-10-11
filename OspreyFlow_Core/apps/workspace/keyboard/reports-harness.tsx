@@ -7,5 +7,5 @@ import "../src/design/primitives.css";
 import { ReportsView } from "../src/reports/ReportsView";
 
 createRoot(document.getElementById("root")!).render(
-  <ReportsView apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="inv-1" />,
+  <ReportsView apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="inv-1" canDownload />,
 );

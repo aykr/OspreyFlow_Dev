@@ -8,7 +8,16 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from services.api.app import app, get_audit, get_handling_scheme, get_identity_admin, get_principal
+from services.api.app import (
+    app,
+    get_audit,
+    get_graph,
+    get_handling_scheme,
+    get_identity_admin,
+    get_investigations,
+    get_principal,
+    get_valkey,
+)
 from services.api.identity_admin import UnknownRoleError, allowed_role
 
 from ontology.handling import load_uk_le_scheme
@@ -89,3 +98,40 @@ def test_a_dashboard_cannot_read_above_its_registrars_clearance(client: Any) -> 
     made = client.post("/v1/admin/dashboards", json={"name": "Board", "clearance": "OFFICIAL", "org_unit": "verify"})
     assert made.status_code == 201 and made.json()["secret"] == "s"
     assert client.identity.made == [("Board", "OFFICIAL")]
+
+
+class _Broken:
+    async def type_counts(self, principal: Principal) -> object:
+        raise ConnectionError("graph store unreachable")
+
+
+class _Fine:
+    async def list_for(self, principal: Principal) -> list[object]:
+        return []
+
+    async def ping(self) -> bool:
+        return True
+
+
+def test_the_system_screen_says_which_component_failed_and_still_answers(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.api import readiness as readiness_module
+
+    async def ready() -> object:
+        return readiness_module.Readiness(ready=True, models=[])
+
+    async def reachable() -> None:
+        return None
+
+    monkeypatch.setattr(readiness_module, "deployment_readiness", ready)
+    client.identity.reachable = reachable
+    app.dependency_overrides[get_graph] = _Broken
+    app.dependency_overrides[get_investigations] = _Fine
+    app.dependency_overrides[get_valkey] = _Fine
+    _as(ADMIN)
+    status = client.get("/v1/admin/system")
+    assert status.status_code == 200, status.text
+    by_name = {c["name"]: c for c in status.json()["components"]}
+    assert by_name["Graph store"]["ok"] is False and "unreachable" in by_name["Graph store"]["detail"]
+    assert all(c["ok"] for n, c in by_name.items() if n != "Graph store")
+    _as(ANALYST)
+    assert client.get("/v1/admin/system").status_code == 403

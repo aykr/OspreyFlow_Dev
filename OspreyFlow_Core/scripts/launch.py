@@ -76,7 +76,6 @@ from pathlib import Path
 from typing import Protocol
 
 from harness import oidc
-from harness.theme_script import read_theme_script
 from harness.oidc import (
     Identity,
     IdentityProviderUnreachable,
@@ -95,8 +94,10 @@ from harness.realm import (
     LAUNCHER_PORT,
     LAUNCHER_REDIRECT_URI,
 )
+from harness.theme_script import read_theme_script
 
 from schemas.ingest import StudioRole
+from schemas.rights import ROLE_RIGHTS, Right
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORKSPACE_PORT = 8080
@@ -118,11 +119,18 @@ HANDOFF = "from=launcher"
 GLASS = "The Glass"
 INGEST = "Ingest Studio"
 ADMIN = "Admin console"
-NAMES = (GLASS, INGEST, ADMIN)
+#: ADR-110 Amendment 1: the harness keeps one job, setting a deployment up — its profile and
+#: components. The Admin console is now part of The Glass and starts with it.
+SETUP = "Set-up console"
+NAMES = (GLASS, INGEST, ADMIN, SETUP)
 
 #: ADR-051. The roles that show the Ingest Studio tile: any one of the Studio's own roles. Taken
 #: from the Studio's definition so a role added there is not silently missing here.
-STUDIO_ROLES = frozenset(role.value for role in StudioRole)
+#: ADR-112: and any role whose rights include editing pipelines (`data_engineer`), read from the
+#: rights table so a role given that right is not missing here.
+STUDIO_ROLES = frozenset(role.value for role in StudioRole) | frozenset(
+    role for role, rights in ROLE_RIGHTS.items() if Right.EDIT_PIPELINES in rights
+)
 SESSION_COOKIE = "osprey_launcher_session"
 LOGIN_COOKIE = "osprey_launcher_login"
 SESSION_TTL_SECONDS = 8 * 3600.0
@@ -395,9 +403,20 @@ class Launcher:
             ),
             Surface(
                 ADMIN,
+                f"{workspace}?{HANDOFF}&view=admin",
+                "People and their roles, dashboards and the system's health, for the person who "
+                "looks after OspreyFlow.",
+                "It is part of The Glass, so it starts and opens together with it, on its Admin "
+                "area, for an account holding an administration right.",
+                "stack",
+                "admin",
+                frozenset({ADMIN_ROLE}),
+            ),
+            Surface(
+                SETUP,
                 f"http://localhost:{HARNESS_PORT}/",
-                "Settings and set-up for the person who looks after OspreyFlow. "
-                "Not needed for analysis.",
+                "Changing how this deployment is set up: its profile, components and models. "
+                "Not needed for analysis or day-to-day administration.",
                 (
                     "Sign in there with an account that holds the osprey-admin role, such as "
                     "osprey-demo-admin."
@@ -433,7 +452,7 @@ class Launcher:
         handle = self._handles.get(target)
         if handle is None or not self._stopped(target):
             return ""
-        name = ADMIN if target == "admin" else GLASS
+        name = SETUP if target == "admin" else GLASS
         try:
             text = handle.log_path.read_text(encoding="utf-8", errors="replace")
             lines = [line.strip() for line in text.splitlines() if line.strip()]
@@ -682,7 +701,7 @@ class Launcher:
       <p>This set-up has two demonstration accounts.</p>
       <p><span class="value">osprey-demo-analyst</span>, for analysts: opens The Glass and the Ingest Studio.
         <button type="button" class="btn" data-copy="osprey-demo-analyst">Copy</button></p>
-      <p><span class="value">osprey-demo-admin</span>, for whoever looks after OspreyFlow: opens The Glass and the Admin console.
+      <p><span class="value">osprey-demo-admin</span>, for whoever looks after OspreyFlow: opens The Glass, its Admin area, and the Set-up console.
         <button type="button" class="btn" data-copy="osprey-demo-admin">Copy</button></p>
       <p>The passwords were created when OspreyFlow was set up and are kept in
         <span class="value">{html.escape(self.env_file_hint())}</span>, on the lines that start
@@ -795,7 +814,7 @@ __WHO__
 __TILES__
     </div>
 __SIGNIN__
-    <p class="foot">Closing this page does not stop OspreyFlow. To stop this launcher, press Ctrl-C in the terminal where you started it; the Admin console it started stops with it, and The Glass keeps running.</p>
+    <p class="foot">Closing this page does not stop OspreyFlow. To stop this launcher, press Ctrl-C in the terminal where you started it; the Set-up console it started stops with it, and The Glass — with its Admin area — keeps running.</p>
   </main>
 </div>
 <p id="announce" class="sr-only" role="status" aria-live="polite"></p>
@@ -1079,7 +1098,7 @@ def _handler(launcher: Launcher) -> type[BaseHTTPRequestHandler]:
                 if identity is None or not identity.has_role(ADMIN_ROLE):
                     self._json(
                         403,
-                        {"message": "Starting the Admin console needs an administrator account."},
+                        {"message": "Starting the Set-up console needs an administrator account."},
                     )
                     return
             try:

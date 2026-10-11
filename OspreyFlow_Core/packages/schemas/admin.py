@@ -45,4 +45,24 @@ class DashboardInput(BaseModel):
     org_unit: str = Field(min_length=1)
 
 
-ALL_MODELS = [PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput]
+class ComponentHealth(BaseModel):
+    """One part of the running deployment, asked just now: whether it answered, and how fast."""
+
+    name: str
+    ok: bool
+    millis: int = Field(ge=0)
+    detail: str | None = None
+
+
+class SystemStatus(BaseModel):
+    """The Admin area's *System* screen (ADR-110 Amendment 1): each component, asked as the screen
+    opens — what the harness's preflight showed before launch, for a running deployment."""
+
+    version: str | None = None
+    components: list[ComponentHealth]
+
+
+ALL_MODELS = [
+    PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
+    ComponentHealth, SystemStatus,
+]  # fmt: skip

@@ -723,6 +723,13 @@ blank map.
 ### 3.11 Node provenance actions
 
 ```
+GET    /v1/me/rights                                       the signed-in person's rights (ADR-112), so the Glass leaves out what it would be refused; any signed-in person
+GET    /v1/admin/people                                    every person in the realm with roles, clearance and unit, no service account (ADR-112); manage_people
+PUT    /v1/admin/people/{user_id}/roles                    a person's roles set whole — the four roles, right:<name>, the old role names; anything else 422; manage_people
+GET    /v1/admin/dashboards                                the registered dashboard identities (ADR-111 decision 7); manage_dashboards
+POST   /v1/admin/dashboards                                register one: its secret in this answer only; clearance capped at the registrar's (403); manage_dashboards
+DELETE /v1/admin/dashboards/{client_id}                    remove one — only an osprey-dashboard-* client; manage_dashboards
+GET    /v1/admin/system                                    each component asked now: graph, Postgres, Valkey, models, identity provider; administer_system
 GET    /v1/investigations/{id}/reports                     the Reports view's figures (ADR-111): every figure counted as the reader; held rows for Editors and above; 409 limit_exceeded past the bound; Viewer
 GET    /v1/investigations/{id}/reports/feed                the same figures for a dashboard, ?format=json|csv; figures only; every read in the export ledger (artefact_kind report_feed); Viewer
 POST   /v1/investigations/{id}/documents/{document_id}/candidates/accept   the reader's Accept all pending: an enumerated list of candidate ids, never a filter (ADR-108 Q1); Editor
@@ -921,6 +928,20 @@ review rather than acting on it.
 receive, and, for a request whose path names a case, that case's datasets (none otherwise, so it
 reads nothing). `get_principal` adds them; every principal a route is given comes through it
 (ADR-099 decision 5, Amendment 1 decision 1).
+
+**Rights (ADR-112).** What a principal may *do* is a set of named rights, from the roles in its
+token (`schemas/rights.py`: Analyst, Data Engineer, Admin — `osprey-admin` — and Reports Viewer; a
+right granted singly as `right:<name>`; the old Studio roles and `compliance` kept to their own rights
+for the transition). Every route declares the right it needs in its decorator
+(`require_right(Right.X)`), checked before anything else; eighteen routes need none — reference
+catalogues, the case list, health, the stream ticket — and `test_route_rights.py`'s table names each
+route's right, every right refused both ways (the right without the case level, the level without
+the right). A right never confers visibility: what the principal then sees is still the access step
+below. `GET /v1/me/rights` tells the Glass which rights a person holds, so it leaves out what it would
+only be refused. **Admin routes:** `GET /v1/admin/people`, `PUT /v1/admin/people/{id}/roles`
+(manage_people), `GET|POST /v1/admin/dashboards`, `DELETE /v1/admin/dashboards/{client_id}`
+(manage_dashboards; a dashboard's clearance capped at its registrar's), `GET /v1/admin/system`
+(administer_system) — through the Conduit's own identity-provider account (ADR-112 Amendment 1).
 
 **Enforcement at the port.** The `Principal` is a required argument on every read path in
 `GraphPort` and `AnalyticsPort`. Adapters inject the filter into the traversal or the `WHERE`

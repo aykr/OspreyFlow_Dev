@@ -64,9 +64,14 @@ That is the only command in this document that has to be typed. It is unavoidabl
 has to serve the page before anything is deployed — so it is kept to one line and does nothing
 except start the harness.
 
-After launch the harness does not go away. It becomes the deployment's **admin console** at
-`/admin`, which is where provider registration, gazetteer loading, upgrades and verification live
-for the life of the system. Per the brand foundations, the console carries the Nexus mark and the
+After launch the harness does not go away: it stays the **Set-up console**, where the deployment's
+profile, components and models are changed (provider registration, gazetteer loading, upgrades and
+verification). **The admin console is not the harness** (ADR-110 Amendment 1): it is the *Admin*
+area of the deployed workspace — people and their roles, dashboard identities, the system's health,
+and with ADR-110 the schedules — started with the stack, behind the same single sign-on, shown to an
+account holding an administration right (ADR-112), with nothing to start by hand. The launcher's
+*Admin console* tile opens it (`?from=launcher&view=admin`); its *Set-up console* tile starts the
+harness. Per the brand foundations, the console carries the Nexus mark and the
 analyst workspace carries Osprey; from inside the workspace the data layer is plumbing, not a
 brand.
 
@@ -455,12 +460,10 @@ confirm the artefacts, and let Preflight run. Click Launch, then **Seed demo dat
 that follows.
 
 Roughly fifteen minutes end to end, most of it pulling model weights and building tiles, with
-progress shown throughout. The workspace is then at `http://localhost:8080`. **The admin console
-stays at `http://localhost:7100`** — the harness's own port, not the workspace's, and its screens
-are served at the root: `/admin` answers 404 in the default (setup) mode and exists only in console
-mode, where it is a bearer-only placeholder for the post-launch console that is not yet built. §2's
-own "the harness does not go away, it becomes /admin" describes the same process switching mode,
-not a page the workspace serves.
+progress shown throughout. The workspace is then at `http://localhost:8080`, its *Admin* area
+included (ADR-110 Amendment 1). **The Set-up console stays at `http://localhost:7100`** — the
+harness's own port, its screens served at the root; its old `/admin` placeholder for a post-launch
+console is superseded by the workspace's Admin area.
 The seeded demo credentials are displayed once and written nowhere.
 
 **Afterwards, `make launch` is the way in.** It serves one page on `127.0.0.1:7070` with a tile each

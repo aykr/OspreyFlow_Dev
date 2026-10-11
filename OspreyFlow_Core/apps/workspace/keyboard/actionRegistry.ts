@@ -542,6 +542,13 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "views-chosen-by-keyboard",
 ] as const);
 
+export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
+  "save-a-persons-roles-by-keyboard",
+  "register-a-dashboard-by-keyboard",
+  "remove-a-dashboard-by-keyboard",
+  "ask-the-system-again-by-keyboard",
+] as const);
+
 export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
   "change-the-reports-period-by-keyboard",
   "download-the-figures-by-keyboard",

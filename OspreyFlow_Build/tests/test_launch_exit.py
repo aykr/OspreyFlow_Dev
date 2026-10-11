@@ -71,7 +71,8 @@ def _launcher(tmp_path: Path, spawner: Spawner, prober: Prober | None = None) ->
 
 
 def _admin_state(launcher: launch.Launcher) -> str:
-    return launcher.status()[launch.ADMIN]
+    # ADR-110 Amendment 1: the harness process this file is about is now the Set-up console.
+    return launcher.status()[launch.SETUP]
 
 
 def test_a_console_that_is_still_running_reads_starting(tmp_path: Path) -> None:

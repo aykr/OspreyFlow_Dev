@@ -14,12 +14,13 @@ export interface SignInScreenProps {
   reason?: string | null;
   /** The launcher's Ingest Studio tile opens the Glass on its Ingest tab. If the sign-in has to be
    * done by hand, the screen says which of the two the person is signing in to. */
-  intent?: "ingest" | "questions" | null;
+  intent?: "ingest" | "questions" | "admin" | null;
   onSignIn: () => void;
 }
 
 export function SignInScreen({ reason, intent, onSignIn }: SignInScreenProps) {
   const studio = intent === "ingest";
+  const admin = intent === "admin";
   return (
     <div
       style={{
@@ -33,11 +34,13 @@ export function SignInScreen({ reason, intent, onSignIn }: SignInScreenProps) {
         textAlign: "center",
       }}
     >
-      <h1 style={{ margin: 0 }}>{studio ? "Ingest Studio" : "OspreyFlow"}</h1>
+      <h1 style={{ margin: 0 }}>{studio ? "Ingest Studio" : admin ? "OspreyFlow Admin" : "OspreyFlow"}</h1>
       <p style={{ color: "var(--text-secondary)", maxWidth: 420 }}>
         {studio
           ? "Sign in to bring a new source of data in: connect it, map it, check it, publish it."
-          : "Sign in with your analyst credentials to open the workspace."}{" "}
+          : admin
+            ? "Sign in with an administrator's account to manage people, dashboards and the system."
+            : "Sign in with your analyst credentials to open the workspace."}{" "}
         Credentials are entered at your organisation's identity provider — never here.
       </p>
       {reason && (
