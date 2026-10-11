@@ -65,7 +65,7 @@ export function PublishedTab({ api, canExport, print }: PublishedTabProps) {
         {pack && (
           <>
             <h3 style={{ margin: 0 }}>{pack.title}</h3>
-            <p className="label" style={{ margin: 0 }}>{`Version ${pack.version}, published ${formatDay(pack.published_at)} by ${pack.published_by}`}</p>
+            <p className="label" style={{ margin: 0 }}>{`Version ${pack.version}, published ${formatDay(pack.published_at)} by ${pack.published_by_name ?? pack.published_by}`}</p>
             {pack.marking && <p className="label" style={{ margin: 0 }}>{`Marked ${pack.marking}`}</p>}
             {pack.withheld > 0 && <p style={{ margin: 0 }}>{withheldSentence(pack.withheld)}</p>}
             {pack.items.map((item) => (

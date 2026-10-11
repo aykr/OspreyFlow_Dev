@@ -5,6 +5,7 @@ export type Title = string;
 export type Version = number;
 export type PublishedAt = string;
 export type PublishedBy = string;
+export type PublishedByName = string | null;
 
 export interface PublishedPackSummary {
   pack_id: PackId;
@@ -12,5 +13,6 @@ export interface PublishedPackSummary {
   version: Version;
   published_at: PublishedAt;
   published_by: PublishedBy;
+  published_by_name?: PublishedByName;
   [k: string]: unknown;
 }

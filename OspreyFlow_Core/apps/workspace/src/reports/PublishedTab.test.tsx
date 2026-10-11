@@ -32,6 +32,17 @@ describe("the Published tab", () => {
     expect(await screen.findByText("No pack has been published in this case yet.")).toBeTruthy();
   });
 
+  it("names who published it, or shows the id when the server had no name (ADR-106)", async () => {
+    serve((c) => (c.path === "published" ? json(200, [SUMMARY]) : c.path === "packs/p1/published" ? json(200, { ...PUBLISHED, published_by_name: "Ana Ames" }) : null));
+    render(<PublishedTab api={{ apiBaseUrl: "http://x", bearerToken: "t", investigationId: "c1" }} canExport={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Quarter pack/ }));
+    expect(await screen.findByText("Version 2, published 11 October 2026 by Ana Ames")).toBeTruthy();
+    cleanup();
+    place();
+    fireEvent.click(await screen.findByRole("button", { name: /Quarter pack/ }));
+    expect(await screen.findByText("Version 2, published 11 October 2026 by ana")).toBeTruthy();
+  });
+
   it("shows a chosen pack read-only, with its withheld sentence", async () => {
     place();
     fireEvent.click(await screen.findByRole("button", { name: /Quarter pack/ }));

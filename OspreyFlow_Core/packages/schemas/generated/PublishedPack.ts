@@ -6,6 +6,7 @@ export type Title = string;
 export type Version = number;
 export type PublishedAt = string;
 export type PublishedBy = string;
+export type PublishedByName = string | null;
 export type Id = string;
 export type Kind = "trend" | "assessment" | "entity" | "note";
 export type Marking = string;
@@ -91,6 +92,7 @@ export interface PublishedPack {
   version: Version;
   published_at: PublishedAt;
   published_by: PublishedBy;
+  published_by_name?: PublishedByName;
   items: Items;
   withheld: Withheld;
   marking?: Marking2;

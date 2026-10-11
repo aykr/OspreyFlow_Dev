@@ -6,6 +6,7 @@ export type PackId = string;
 export type Version = number;
 export type ExportedAt = string;
 export type ExportedBy = string;
+export type ExportedByName = string | null;
 export type HandlingLevel = string;
 export type RestsOnRetractedEvidence = boolean;
 
@@ -21,6 +22,7 @@ export interface PackExportMark {
   version: Version;
   exported_at: ExportedAt;
   exported_by: ExportedBy;
+  exported_by_name?: ExportedByName;
   handling_level: HandlingLevel;
   rests_on_retracted_evidence?: RestsOnRetractedEvidence;
   [k: string]: unknown;

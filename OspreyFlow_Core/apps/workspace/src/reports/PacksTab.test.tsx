@@ -164,15 +164,15 @@ describe("publishing and withdrawing", () => {
     expect(calls.some((c) => c.method === "POST" && c.path === "packs/p1/publish")).toBe(true);
   });
 
-  it("says each version in words and sends the reason when one is withdrawn", async () => {
+  it("says each version in words, naming people where the server could (ADR-106), and sends the reason when one is withdrawn", async () => {
     const withdrawn = { ...PUBLISHED_PACK, versions: [
-      { version: 1, published_at: "2026-10-03T09:00:00Z", published_by: "ana", withdrawn_at: "2026-10-05T09:00:00Z", withdrawn_by: "ben", withdrawal_reason: "wrong quarter" },
+      { version: 1, published_at: "2026-10-03T09:00:00Z", published_by: "ana", published_by_name: "Ana Ames", withdrawn_at: "2026-10-05T09:00:00Z", withdrawn_by: "ben", withdrawn_by_name: "Ben Bell", withdrawal_reason: "wrong quarter" },
       { version: 2, published_at: "2026-10-11T09:00:00Z", published_by: "ana", withdrawn_at: null, withdrawn_by: null, withdrawal_reason: null },
     ] };  // prettier-ignore
     const calls = serve(routes((c) => (c.method === "POST" && c.path === "packs/p1/versions/2/withdraw" ? json(200, withdrawn) : null), withdrawn));
     place();
     await openPack();
-    expect(screen.getByText("Version 1, published 3 October 2026 by ana, withdrawn by ben: wrong quarter")).toBeTruthy();
+    expect(screen.getByText("Version 1, published 3 October 2026 by Ana Ames, withdrawn by Ben Bell: wrong quarter")).toBeTruthy();
     expect(screen.getByText("Version 2, published 11 October 2026 by ana")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Withdraw version 1" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Withdraw version 2" }));

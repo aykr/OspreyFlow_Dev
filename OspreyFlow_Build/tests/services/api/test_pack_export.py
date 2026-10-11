@@ -12,7 +12,9 @@ What a mistake would do, and the case that catches it:
 - a withheld count printed when the deployment says omit — `test_under_omit_the_manifest_carries_no_withheld_count`;
 - the originator's consent skipped — `test_an_item_needing_its_originator_needs_a_justification_and_a_reference`;
 - exporting by a Reports Viewer or at Viewer — `test_exporting_needs_the_export_right_and_editor`;
-- a withdrawn publication exported — `test_a_pack_with_no_live_publication_has_nothing_to_export`.
+- a withdrawn publication exported — `test_a_pack_with_no_live_publication_has_nothing_to_export`;
+- the exporter or publisher printed as an account id when the directory names them (ADR-106) —
+  `test_the_manifest_names_only_what_the_exporter_may_see_and_the_ledger_records_it`.
 """
 
 from __future__ import annotations
@@ -111,8 +113,10 @@ def test_the_manifest_names_only_what_the_exporter_may_see_and_the_ledger_record
     assert (entry.artefact_kind, entry.item_count, entry.withheld_count, entry.handling_level) == (
         "report_pack", 1, 2, "OFFICIAL")  # fmt: skip
     assert body["ledger_entry_id"] == entry.id
+    assert (body["mark"]["exported_by_name"], body["published_by_name"]) == (None, "Edith Editor")
     whole = _export(w, pack, EDITOR).json()
     assert whole["withheld"] == 0 and whole["mark"]["handling_level"] == "SECRET"
+    assert (whole["mark"]["exported_by"], whole["mark"]["exported_by_name"]) == ("ed", "Edith Editor")
 
 
 def test_under_omit_the_manifest_carries_no_withheld_count(exporting: World) -> None:

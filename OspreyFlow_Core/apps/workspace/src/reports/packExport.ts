@@ -88,8 +88,8 @@ export function packPrintHtml(manifest: PackExport): string {
   const cover =
     `<section class="page cover">` +
     `<h1>${escapeHtml(manifest.title)}</h1>` +
-    `<p class="notice">Version ${manifest.version}, published ${escapeHtml(formatDay(manifest.published_at))} by ${escapeHtml(manifest.published_by)}</p>` +
-    `<p class="notice">Exported by ${escapeHtml(mark.exported_by)} on ${escapeHtml(formatDay(mark.exported_at))}; ` +
+    `<p class="notice">Version ${manifest.version}, published ${escapeHtml(formatDay(manifest.published_at))} by ${escapeHtml(manifest.published_by_name ?? manifest.published_by)}</p>` +
+    `<p class="notice">Exported by ${escapeHtml(mark.exported_by_name ?? mark.exported_by)} on ${escapeHtml(formatDay(mark.exported_at))}; ` +
     `handling level ${escapeHtml(mark.handling_level)}; OspreyFlow export ${escapeHtml(manifest.ledger_entry_id)}</p>` +
     (withheld > 0 ? `<p class="notice">${escapeHtml(withheldSentence(withheld))}</p>` : "") +
     (mark.rests_on_retracted_evidence ? `<p class="notice">This pack rests on evidence since retracted or corrected.</p>` : "") +

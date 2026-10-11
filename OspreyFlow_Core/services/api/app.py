@@ -216,6 +216,7 @@ from schemas.packs import (
     PackInput,
     PackItem,
     PackOrder,
+    PackVersionSummary,
     PackWithdrawal,
     PackWithheldBody,
     PublishedPack,
@@ -8212,6 +8213,27 @@ async def _pack_or_404(packs: PackStore, case_id: str, pack_id: str) -> ReportPa
     return pack
 
 
+def _named_version(v: PackVersionSummary, names: dict[str, str]) -> PackVersionSummary:
+    return v.model_copy(update={
+        "published_by_name": names.get(v.published_by),
+        "withdrawn_by_name": names.get(v.withdrawn_by) if v.withdrawn_by else None,
+    })  # fmt: skip
+
+
+async def _named_packs(
+    found: list[ReportPack], principal_names: PrincipalNameDirectory
+) -> list[ReportPack]:
+    """ADR-106: each version's publisher and withdrawer named — only the people these versions,
+    which the response carries, already show."""
+    names = await principal_names.display_names(
+        who for p in found for v in p.versions for who in (v.published_by, v.withdrawn_by) if who
+    )
+    return [
+        p.model_copy(update={"versions": [_named_version(v, names) for v in p.versions]})
+        for p in found
+    ]
+
+
 async def _readable_draft(
     packs: PackStore,
     pack_id: str,
@@ -8254,9 +8276,9 @@ async def create_pack(
     dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
 )
 async def list_packs(
-    investigation: InvestigationViewerDep, packs: PackStoreDep
+    investigation: InvestigationViewerDep, packs: PackStoreDep, principal_names: PrincipalNamesDep
 ) -> list[ReportPack]:
-    return await packs.list_for_case(investigation.id)
+    return await _named_packs(await packs.list_for_case(investigation.id), principal_names)
 
 
 @app.get(
@@ -8271,6 +8293,7 @@ async def read_pack(
     graph: GraphDep,
     scheme: HandlingSchemeDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> PackDraft:
     """The draft as this reader may see it: the items withheld from them are counted, not named."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
@@ -8285,8 +8308,9 @@ async def read_pack(
         resolved_query={"pack": pack.id},
         result_cardinality=len(served),
     )
+    (named,) = await _named_packs([pack], principal_names)
     return PackDraft(
-        pack=pack, items=served, withheld=withheld, marking=highest_marking(served, scheme)
+        pack=named, items=served, withheld=withheld, marking=highest_marking(served, scheme)
     )
 
 
@@ -8425,6 +8449,7 @@ async def reorder_pack(
     graph: GraphDep,
     scheme: HandlingSchemeDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> PackDraft:
     """Only the reader's own items move; each item withheld from them keeps its place."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
@@ -8445,8 +8470,11 @@ async def reorder_pack(
     )
     by_id = {i.id: i for i in shown}
     served = [by_id[i].served() for i in body.item_ids]
+    (named,) = await _named_packs(
+        [await _pack_or_404(packs, investigation.id, pack_id)], principal_names
+    )
     return PackDraft(
-        pack=await _pack_or_404(packs, investigation.id, pack_id),
+        pack=named,
         items=served,
         withheld=withheld,
         marking=highest_marking(served, scheme),
@@ -8520,8 +8548,11 @@ async def pack_history(
     packs: PackStoreDep,
     graph: GraphDep,
     scheme: HandlingSchemeDep,
+    principal_names: PrincipalNamesDep,
 ) -> PackHistory:
-    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    (pack,) = await _named_packs(
+        [await _pack_or_404(packs, investigation.id, pack_id)], principal_names
+    )
     earlier = await packs.earlier_snapshots(pack.id)
     shown, withheld = await readable(earlier, principal, scheme, graph, investigation.id)
     return PackHistory(
@@ -8542,6 +8573,7 @@ async def publish_pack(
     graph: GraphDep,
     scheme: HandlingSchemeDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> PublishedPack:
     """A new immutable version. Refused while the draft holds an item the publisher may not see:
     nobody publishes what they cannot read (Amendment 1)."""
@@ -8569,6 +8601,9 @@ async def publish_pack(
         version=version.version,
         published_at=version.published_at,
         published_by=version.published_by,
+        published_by_name=(await principal_names.display_names([version.published_by])).get(
+            version.published_by
+        ),
         items=served,
         withheld=0,
         marking=highest_marking(served, scheme),
@@ -8587,6 +8622,7 @@ async def withdraw_pack_version(
     principal: PrincipalDep,
     packs: PackStoreDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> ReportPack:
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     if not await packs.withdraw(pack.id, version, principal, body.reason):
@@ -8598,7 +8634,10 @@ async def withdraw_pack_version(
         resolved_query={"pack": pack.id, "version": version, "reason": body.reason},
         result_cardinality=1,
     )
-    return await _pack_or_404(packs, investigation.id, pack_id)
+    (named,) = await _named_packs(
+        [await _pack_or_404(packs, investigation.id, pack_id)], principal_names
+    )
+    return named
 
 
 @app.get(
@@ -8610,6 +8649,7 @@ async def list_published_packs(
     principal: PrincipalDep,
     packs: PackStoreDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> list[PublishedPackSummary]:
     """*Reports → Published*: each pack's newest version not withdrawn."""
     found = await packs.published_for_case(investigation.id)
@@ -8620,6 +8660,7 @@ async def list_published_packs(
         resolved_query={},
         result_cardinality=len(found),
     )
+    names = await principal_names.display_names(v.published_by for _, v in found)
     return [
         PublishedPackSummary(
             pack_id=p.id,
@@ -8627,6 +8668,7 @@ async def list_published_packs(
             version=v.version,
             published_at=v.published_at,
             published_by=v.published_by,
+            published_by_name=names.get(v.published_by),
         )
         for p, v in found
     ]
@@ -8644,6 +8686,7 @@ async def read_published_pack(
     graph: GraphDep,
     scheme: HandlingSchemeDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> PublishedPack:
     """The newest published version as this reader may see it (decision 5): every read audited."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
@@ -8666,6 +8709,9 @@ async def read_published_pack(
         version=version.version,
         published_at=version.published_at,
         published_by=version.published_by,
+        published_by_name=(await principal_names.display_names([version.published_by])).get(
+            version.published_by
+        ),
         items=served,
         withheld=withheld,
         marking=highest_marking(served, scheme),
@@ -8687,9 +8733,11 @@ async def export_pack_route(
     export_ledger: ExportLedgerDep,
     config: ConfigDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> PackExport:
     """The newest live publication through the export gate (ADR-113 decision 6, ADR-045/047): the
-    approved manifest, from which the Glass renders the PDF. Editor and `export`, as every export."""
+    approved manifest, from which the Glass renders the PDF. Editor and `export`, as every
+    export."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     version = await packs.latest_published(pack.id)
     if version is None:
@@ -8704,7 +8752,14 @@ async def export_pack_route(
                         "ledger_entry": result.ledger_entry_id},
         result_cardinality=len(result.items), justification=body.justification,
     )
-    return result
+    # ADR-106: the two people the manifest prints, named; nobody else is looked up.
+    names = await principal_names.display_names([result.published_by, result.mark.exported_by])
+    return result.model_copy(update={
+        "published_by_name": names.get(result.published_by),
+        "mark": result.mark.model_copy(
+            update={"exported_by_name": names.get(result.mark.exported_by)}
+        ),
+    })  # fmt: skip
 
 
 @app.exception_handler(PackExportRefused)

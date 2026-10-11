@@ -49,14 +49,22 @@ describe("packPrintHtml", () => {
     expect(flagged).toContain("This pack rests on evidence since retracted or corrected.");
   });
 
+  it("prints the publisher's and exporter's names where the server gave them (ADR-106)", () => {
+    const named = manifest([OFFICIAL_NOTE], { published_by_name: "Ana Ames", mark: { ...manifest([]).mark, exported_by_name: "Ben Bell" } });
+    const html = packPrintHtml(named);
+    expect(html).toContain("Version 1, published 3 October 2026 by Ana Ames");
+    expect(html).toContain("Exported by Ben Bell on 11 October 2026");
+  });
+
   it("escapes every string it interpolates", () => {
     const hostile = "<script>alert(1)</script>";
     const html = packPrintHtml(
       manifest([{ ...OFFICIAL_NOTE, note: hostile, marking: `OFFICIAL"><script>x</script>` }], {
         title: hostile,
         published_by: hostile,
+        published_by_name: hostile,
         ledger_entry_id: hostile,
-        mark: { ...manifest([]).mark, exported_by: hostile, handling_level: hostile },
+        mark: { ...manifest([]).mark, exported_by: hostile, exported_by_name: hostile, handling_level: hostile },
       }),
     );
     expect(html).not.toContain("<script>");

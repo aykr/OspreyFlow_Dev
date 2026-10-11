@@ -94,8 +94,11 @@ class PackVersionSummary(BaseModel):
     version: int
     published_at: datetime
     published_by: str
+    #: ADR-106: the name, resolved when served and never stored; `None` shows the id.
+    published_by_name: str | None = None
     withdrawn_at: datetime | None = None
     withdrawn_by: str | None = None
+    withdrawn_by_name: str | None = None
     withdrawal_reason: str | None = None
 
 
@@ -135,6 +138,8 @@ class PublishedPack(BaseModel):
     version: int
     published_at: datetime
     published_by: str
+    #: ADR-106: the name, resolved when served and never stored; `None` shows the id.
+    published_by_name: str | None = None
     items: list[PackItem]
     withheld: int = Field(ge=0)
     marking: str | None = None
@@ -146,6 +151,8 @@ class PublishedPackSummary(BaseModel):
     version: int
     published_at: datetime
     published_by: str
+    #: ADR-106: the name, resolved when served and never stored; `None` shows the id.
+    published_by_name: str | None = None
 
 
 class PackWithheldBody(BaseModel):
@@ -174,6 +181,8 @@ class PackExportMark(BaseModel):
     version: int
     exported_at: datetime
     exported_by: str
+    #: ADR-106: the name, resolved when served and never stored; `None` shows the id.
+    exported_by_name: str | None = None
     #: The highest marking among the items exported.
     handling_level: str
     #: An exported entity or assessment rests on a record since superseded (retracted or corrected).
@@ -190,6 +199,8 @@ class PackExport(BaseModel):
     version: int
     published_at: datetime
     published_by: str
+    #: ADR-106: the name, resolved when served and never stored; `None` shows the id.
+    published_by_name: str | None = None
     items: list[PackItem]
     policy: Literal["disclose", "omit"]
     #: Items withheld from the exporter — `None` under `omit`, where the artefact carries no count.

@@ -17,7 +17,9 @@ What a mistake would do, and the case that catches it:
 - a note marked above its author, or below what they say — `test_a_note_is_marked_as_its_author_says_never_above_their_clearance`;
 - a withdrawn version still served, the withdrawal unrecorded — `test_a_withdrawn_publication_is_not_read_and_the_withdrawal_is_recorded`;
 - an assessment changing in the pack when the judgement is edited — `test_an_assessment_is_frozen_as_written`;
-- a reorder that moves a withheld item — `test_reorder_moves_only_the_readers_own_slots`.
+- a reorder that moves a withheld item — `test_reorder_moves_only_the_readers_own_slots`;
+- a publisher or withdrawer shown by account id, or a name asked for that the response does not show
+  (ADR-106) — `test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up`.
 """
 
 from __future__ import annotations
@@ -55,6 +57,7 @@ from services.api.app import (
     get_ontology,
     get_pack_store,
     get_principal,
+    get_principal_names,
     get_trend_store,
     get_working_set,
 )
@@ -197,10 +200,27 @@ class _Audit:
         self.actions.append(kwargs["action"])
 
 
+#: The directory's accounts (ADR-106): "ed-low" is unknown to it, so it has no name.
+NAMES = {"ed": "Edith Editor", "rv": "Rhys Reader"}
+
+
+class _Names:
+    """ADR-106's directory, recording every id it is asked for (decision 3's test)."""
+
+    def __init__(self) -> None:
+        self.asked: list[str] = []
+
+    async def display_names(self, ids: Any) -> dict[str, str]:
+        wanted = list(ids)
+        self.asked += wanted
+        return {i: NAMES[i] for i in wanted if i in NAMES}
+
+
 class World:
     def __init__(self) -> None:
         self.graph, self.judgements = _Graph(), _Judgements()
         self.trends, self.analytics, self.audit = _Trends(), _Analytics(), _Audit()
+        self.names = _Names()
         self.trends.saved["t1"] = TrendDefinition(
             title="Sum of amounts", event_types=["TRANSACTED"], measure="sum", measure_field="amount",
             id="t1", investigation_id="case-1", created_by="ed", created_at=NOW, updated_at=NOW)  # fmt: skip
@@ -228,6 +248,7 @@ def world() -> Iterator[World]:
         get_judgements_store: lambda: w.judgements, get_trend_store: lambda: w.trends,
         get_analytics: lambda: w.analytics, get_ontology: lambda: ONTOLOGY,
         get_handling_scheme: lambda: SCHEME, get_audit: lambda: w.audit, get_working_set: lambda: None,
+        get_principal_names: lambda: w.names,
     })  # fmt: skip
     yield w
     app.dependency_overrides.clear()
@@ -393,6 +414,29 @@ def test_a_withdrawn_publication_is_not_read_and_the_withdrawal_is_recorded(worl
     assert "withdraw_pack" in world.audit.actions
     again = world.as_(EDITOR).post(f"{CASE}/packs/{pack}/versions/1/withdraw", json={"reason": "again"})
     assert again.status_code == 404, "withdrawn once"
+
+
+def test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up(world: World) -> None:
+    pack = _new_pack(world)
+    _add(world, pack, who=LOW_EDITOR, kind="note", text="official", classification="OFFICIAL")
+    _add(world, pack, kind="note", text="secret", classification="SECRET")
+    published = _publish(world, pack)
+    assert (published["published_by"], published["published_by_name"]) == ("ed", "Edith Editor")
+    world.names.asked.clear()
+    read = world.as_(READER).get(f"{CASE}/packs/{pack}/published")
+    assert read.json()["published_by_name"] == "Edith Editor" and read.json()["withheld"] == 1
+    assert set(world.names.asked) == {"ed"}, "only who the response shows, never a withheld item's author"
+    (listed,) = [p for p in world.as_(READER).get(f"{CASE}/published").json() if p["pack_id"] == pack]
+    assert listed["published_by_name"] == "Edith Editor"
+    world.as_(EDITOR).post(f"{CASE}/packs/{pack}/versions/1/withdraw", json={"reason": "superseded"})
+    (version,) = world.as_(EDITOR).get(f"{CASE}/packs/{pack}").json()["pack"]["versions"]
+    assert (version["published_by_name"], version["withdrawn_by_name"]) == ("Edith Editor", "Edith Editor")
+    (history,) = world.as_(EDITOR).get(f"{CASE}/packs/{pack}/history").json()["versions"]
+    assert history["withdrawn_by_name"] == "Edith Editor"
+    unknown = _new_pack(world)
+    _add(world, unknown, who=LOW_EDITOR, kind="note", text="n", classification="OFFICIAL")
+    by_low = _publish(world, unknown, who=LOW_EDITOR)
+    assert (by_low["published_by"], by_low["published_by_name"]) == ("ed-low", None), "no name: the id is shown"
 
 
 # --- rights ---------------------------------------------------------------------------------------

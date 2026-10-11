@@ -11865,3 +11865,34 @@ withdrawn version — and runs it through the gate. What the decision left open,
 
 **Tests.** `tests/services/api/test_pack_export.py` (6, against the real export ledger); the
 route-rights row `export_pack_route`.
+
+### ADR-113, Amendment 3 (11 October 2026) — what the live walk found
+
+Stage 6 (handover A6), walked as `osprey-demo-analyst` on the deployment. Two findings; one fixed,
+one recorded.
+
+1. **People are named (ADR-106), fixed.** The walk showed a version "published … by" a Keycloak
+   subject UUID: the pack routes served `published_by`, `withdrawn_by` and the export mark's
+   `exported_by` with no name, which ADR-106 decision 3 forbids for any id served for display. Each
+   now carries its `<field>_name`, resolved at read time and never stored: `PackVersionSummary`'s
+   `published_by_name` and `withdrawn_by_name` (on every route that serves a pack's versions — the
+   list, the draft, a reorder, the history, a withdrawal), `PublishedPack` and
+   `PublishedPackSummary`'s `published_by_name`, and `PackExport`'s `published_by_name` with its
+   mark's `exported_by_name`. The directory is asked only for the people the response shows —
+   never an item's adder, whose id the Glass does not display. The Glass and the printed cover show
+   the name, or the id when there is none. An item's `added_by` and a pack's `created_by` are not
+   displayed, so they carry no name.
+2. **A case that reads another's dataset has no events of its own — recorded, not changed.**
+   *Operation Ledger — AML review* reads the ledger dataset (ADR-099 Amendment 8) and its trend
+   counted nothing: its 44 transactions belong to *Operation Ledger (synthetic demo)*, the case
+   they were loaded into, because the analytics store keys events to their case, not a dataset
+   (ADR-099 decision 7). Its Timeline is empty for the same reason. The walk was made in the case
+   the events belong to. Whether a case that reads a dataset should also count that dataset's
+   events is a decision about ADR-099, for the owner; nothing here changes it.
+
+**Tests.** `test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up`
+(`tests/services/api/test_packs.py`, its directory fake recording every id asked for) and the names
+in `test_the_manifest_names_only_what_the_exporter_may_see_and_the_ledger_records_it`; the Glass's
+version line, Published line and printed cover (`PacksTab`, `PublishedTab`, `packExport` tests).
+Six planted faults, each red: a published read asking for every item's adder; the withdrawer, the
+exporter, the published list, the history's versions and the publish response each left unnamed.

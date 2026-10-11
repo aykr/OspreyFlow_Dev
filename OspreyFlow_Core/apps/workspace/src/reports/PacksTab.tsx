@@ -35,8 +35,9 @@ function liveVersion(pack: ReportPack): PackVersionSummary | null {
 }
 
 function versionWords(v: PackVersionSummary): string {
-  const base = `Version ${v.version}, published ${formatDay(v.published_at)} by ${v.published_by}`;
-  return v.withdrawn_at ? `${base}, withdrawn by ${v.withdrawn_by ?? "an administrator"}: ${v.withdrawal_reason ?? "no reason was given"}` : base;
+  // ADR-106: the name the server resolved, or the id when it had none.
+  const base = `Version ${v.version}, published ${formatDay(v.published_at)} by ${v.published_by_name ?? v.published_by}`;
+  return v.withdrawn_at ? `${base}, withdrawn by ${v.withdrawn_by_name ?? v.withdrawn_by ?? "an administrator"}: ${v.withdrawal_reason ?? "no reason was given"}` : base;
 }
 
 export interface PacksTabProps {
