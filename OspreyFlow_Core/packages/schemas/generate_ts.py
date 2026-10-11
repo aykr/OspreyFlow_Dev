@@ -30,6 +30,7 @@ from schemas.explore import ALL_MODELS as EXPLORE_MODELS  # noqa: E402
 from schemas.ingest import ALL_MODELS as INGEST_MODELS  # noqa: E402
 from schemas.mapconfig import ALL_MODELS as MAPCONFIG_MODELS  # noqa: E402
 from schemas.model import ALL_MODELS as MODEL_PORT_MODELS  # noqa: E402
+from schemas.packs import ALL_MODELS as PACK_MODELS  # noqa: E402
 from schemas.profile import ALL_MODELS as PROFILE_MODELS  # noqa: E402
 from schemas.provider_profile import ALL_MODELS as PROVIDER_PROFILE_MODELS  # noqa: E402
 from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
@@ -55,6 +56,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *DEPLOYMENT_MODELS,
     *EXPLORE_MODELS,
     *TREND_MODELS,
+    *PACK_MODELS,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

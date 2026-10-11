@@ -101,6 +101,14 @@ ROUTE_RIGHTS = {
  # ADR-113 decision 7: building, saving and reading trends is run_analysis.
  "trend_options_route": "run_analysis", "preview_trend": "run_analysis", "save_trend": "run_analysis",
  "list_trends": "run_analysis", "trend_figures": "run_analysis", "delete_trend": "run_analysis",
+ # ADR-113 decision 7: assembling, refreshing and publishing a pack is record_assessment; reading
+ # what was published is read_reports.
+ "create_pack": "record_assessment", "list_packs": "record_assessment", "read_pack": "record_assessment",
+ "add_pack_item": "record_assessment", "remove_pack_item": "record_assessment",
+ "reorder_pack": "record_assessment", "refresh_pack_item": "record_assessment",
+ "pack_history": "record_assessment", "publish_pack": "record_assessment",
+ "withdraw_pack_version": "record_assessment", "list_published_packs": "read_reports",
+ "read_published_pack": "read_reports",
  "read_report_feed": "read_report_feed", "read_alert_queue": "read_alert_queue",
  "explain_alert": "read_alert_queue", "claim_alert": "triage_alerts", "release_alert": "triage_alerts",
  "dispose_alert": "triage_alerts", "alert_canvas": "triage_alerts",

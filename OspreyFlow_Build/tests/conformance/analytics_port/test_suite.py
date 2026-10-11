@@ -41,7 +41,7 @@ from schemas.analytics import (
 )
 from schemas.domain import Handling, Interval, Principal
 from ports.analytics import TrendLimitExceeded
-from schemas.analytics import TrendInterval, TrendMeasure, TrendRequest
+from schemas.analytics import TrendInterval, TrendMeasure, TrendRequest, TrendResult
 from tests.conformance.registry import ANALYTICS_PORT_ADAPTERS, AnalyticsAdapterFactory
 
 pytestmark = pytest.mark.parametrize("factory", ANALYTICS_PORT_ADAPTERS, ids=str)
@@ -1553,3 +1553,28 @@ async def test_the_trend_bound_counts_only_what_the_reader_sees(factory: Analyti
     async with factory.context(events) as adapter:
         result = await adapter.trend(TrendRequest(filter=_filter(), max_periods=3), OFFICIAL)
     assert result.events == 3
+
+
+async def test_trend_says_the_handling_it_counted_and_only_what_the_reader_sees(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """A pack's snapshot is read by people other than its author (ADR-113 Amendment 1), so it must
+    know every distinct handling it rests on — a restricted code and its units included, not only
+    the classification — and a hidden event must add none."""
+    events = [_event(occurred_at=_week(0)),
+              _event(occurred_at=_week(1)),
+              _event(occurred_at=_week(2), handling_code="R", owning_unit="unit-1", originator="unit-9"),
+              _event(occurred_at=_week(3), classification="SECRET", handling_code="C")]  # fmt: skip
+    receives_r = Principal(id="a-r", clearance="OFFICIAL", org_unit="unit-1", receivable_handling_codes=["R"])
+    async with factory.context(events) as adapter:
+        restricted = await adapter.trend(TrendRequest(filter=_filter()), receives_r)
+        official = await adapter.trend(TrendRequest(filter=_filter()), OFFICIAL)
+        cleared = await adapter.trend(TrendRequest(filter=_filter()), CLEARED)
+
+    def seen(result: TrendResult) -> set[tuple[str, str, str, str]]:
+        return {(h.classification, h.handling_code, h.owning_unit, h.originator) for h in result.handlings}
+
+    assert seen(restricted) == {("OFFICIAL", "P", "unit-1", "unit-1"), ("OFFICIAL", "R", "unit-1", "unit-9")}
+    assert len(restricted.handlings) == 2, "each distinct handling once"
+    assert seen(official) == {("OFFICIAL", "P", "unit-1", "unit-1")}, "a hidden event adds no handling"
+    assert ("SECRET", "C", "unit-1", "unit-1") in seen(cleared)

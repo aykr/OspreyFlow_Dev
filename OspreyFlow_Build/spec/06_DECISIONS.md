@@ -11787,3 +11787,48 @@ Axelsson, *PaySim: A financial mobile money simulator for fraud detection*, EMSS
 BY-SA 4.0 text; and anything derived from it that is redistributed — a seeded graph, its events —
 carries the same licence. The demo registry changes with the pack's build (handover stage B0), not
 before: until then `paysim` stays `internal` in `scripts/demo_registry.py`, and the gate is unchanged.
+
+### ADR-113, Amendment 1 (11 October 2026) — report packs built: what an item rests on, and the gaps the decisions left
+
+Stage 3 (handover A3). Decisions 3 to 5 and 7 are built as decided. Building them found places where
+the decisions were silent; each was filled as below, all *(mine)*, none loosening a decision, each
+open to the owner's overruling.
+
+1. **An item rests on handling, not on a classification alone.** Decision 4 marks a snapshot at the
+   highest classification it counted. That decides the *banner*, not who may read it: an event under
+   a recipient-restricted handling code (`R` in the UK scheme) is limited to its owning and
+   originating units whatever the reader's clearance (`01_DOMAIN_MODEL.md` §2.2), and a snapshot
+   counted by its author would otherwise carry that event's figures to a case Viewer of another
+   unit — rule 3, broken by an aggregate. So every item keeps each distinct handling it rests on (a
+   trend's counted events; an assessment's supporting entities; a chosen entity's own; a note's
+   own), and a reader gets the item only if they may view each one. `AnalyticsPort.trend` returns
+   the distinct handlings it counted (`TrendResult.handlings`), its conformance case first: a hidden
+   event adds none. The banner is still the highest classification.
+2. **An entity or an assessment is checked again as the reader, now.** A frozen item could outlive
+   a reclassification of what it names. On every read, a chosen entity must still be visible to the
+   reader in the graph, and an assessment's supporting entities must pass ADR-046's hide-in-full
+   rule for them (R7's narrowing kept: a superseded citation resolves forward). A trend or a note has
+   nothing to re-read and rests on its frozen handlings.
+3. **A note is marked by its author.** The words are the author's, so the marking is too: a
+   classification is required (never assumed), the handling code defaults to the scheme's least
+   restrictive, owning and originating unit are the author's, and a note cannot be marked above
+   what its author may read.
+4. **"Never which" includes the place.** Items are served in order without positions, so a
+   withheld item leaves no gap; its id appears nowhere in the reader's response. Reordering moves
+   only the reader's own items, in the places they held; each withheld item keeps its place.
+5. **Nobody publishes what they cannot read.** Publishing is refused (409, with the count) while the
+   draft holds an item withheld from the publisher; an empty pack is refused (422).
+6. **Drafts are for assemblers.** Reading a draft or its history needs `record_assessment` with
+   Viewer, so a Reports Viewer sees only published versions. *Published* shows each pack's newest
+   version not withdrawn; a withdrawn version is no longer served to readers but is kept, with who
+   withdrew it, when and why, in the pack's version list and the audit stream.
+7. **A refresh is counted as the refresher.** It replaces the snapshot in its place; the earlier one
+   is kept in the pack's history (`replaced_by`, `replaced_at`), withheld there by the same rule.
+
+**Limitation, stated.** The analytics store keeps an event's classification, handling code and
+units but not its action or sanitisation code, so the export gate (decision 6) cannot ask whether a
+trend's counted events need the originator consulted; it can for an entity or an assessment.
+
+**Tests.** `tests/conformance/analytics_port/test_suite.py::test_trend_says_the_handling_it_counted_and_only_what_the_reader_sees`;
+`tests/services/api/test_packs.py` (13) and `test_pack_store.py` (4); the route-rights table's twelve
+rows.

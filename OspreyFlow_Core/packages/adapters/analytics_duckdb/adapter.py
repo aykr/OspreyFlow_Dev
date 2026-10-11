@@ -23,6 +23,7 @@ from ports.analytics import TrendLimitExceeded
 from schemas.analytics import (
     BaselineRequest,
     BaselineResult,
+    CountedHandling,
     CrossFilterRequest,
     EventFilter,
     EventListRequest,
@@ -241,6 +242,16 @@ class AnalyticsDuckDBAdapter:
                 predicate.params,
             ).fetchall()
         ]
+        handlings = [
+            CountedHandling(
+                classification=str(c), handling_code=str(h), owning_unit=str(u), originator=str(o)
+            )
+            for c, h, u, o in self._con.execute(
+                "SELECT DISTINCT handling_classification, handling_code, owning_unit, originator "
+                f"FROM events WHERE {predicate.where} ORDER BY 1, 2, 3, 4",
+                predicate.params,
+            ).fetchall()
+        ]
         points = [
             TrendPoint(
                 period_start=(p if p.tzinfo else p.replace(tzinfo=UTC)),
@@ -258,6 +269,7 @@ class AnalyticsDuckDBAdapter:
             events=int(sum(r[3] for r in rows)),
             unvalued=int(sum(r[4] for r in rows)),
             classifications=classifications,
+            handlings=handlings,
         )
 
     def _fixed_interval_histogram(

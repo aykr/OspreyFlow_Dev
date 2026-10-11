@@ -474,6 +474,17 @@ class TrendPoint(BaseModel):
     value: float
 
 
+class CountedHandling(BaseModel):
+    """One distinct handling among the events a trend counted: what a reader of a frozen snapshot
+    must be able to view (ADR-113 Amendment 1) — the restricted code and its units, not only the
+    classification."""
+
+    classification: str
+    handling_code: str
+    owning_unit: str
+    originator: str
+
+
 class TrendResult(BaseModel):
     interval: TrendInterval
     measure: TrendMeasure
@@ -488,6 +499,8 @@ class TrendResult(BaseModel):
     #: The distinct classifications among the events counted, so a snapshot can be marked at the
     #: highest of them (ADR-113 decision 4). Only what the reader could see.
     classifications: list[str] = Field(default_factory=list)
+    #: Each distinct handling among the events counted, once. Only what the reader could see.
+    handlings: list[CountedHandling] = Field(default_factory=list)
 
 
-ALL_MODELS = (*ALL_MODELS, TrendRequest, TrendPoint, TrendResult)
+ALL_MODELS = (*ALL_MODELS, TrendRequest, TrendPoint, CountedHandling, TrendResult)

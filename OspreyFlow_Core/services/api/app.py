@@ -207,6 +207,19 @@ from schemas.ingest import (
     VerifyReport,
 )
 from schemas.mapconfig import MapConfig, PublicMapConfig
+from schemas.packs import (
+    AddPackItem,
+    PackDraft,
+    PackHistory,
+    PackInput,
+    PackItem,
+    PackOrder,
+    PackWithdrawal,
+    PackWithheldBody,
+    PublishedPack,
+    PublishedPackSummary,
+    ReportPack,
+)
 from schemas.profile import SourceProfile
 from schemas.rights import Right, RightsResponse, rights_for
 from schemas.trends import (
@@ -411,6 +424,19 @@ from .link_types import (
 from .mapconfig_loader import load_map_config, public_view
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
+from .packs import (
+    PackHasWithheldItems,
+    PackItemRefused,
+    PackStore,
+    StoredPackItem,
+    assessment_item,
+    entity_item,
+    highest_marking,
+    note_item,
+    readable,
+    reorder_visible,
+    trend_item,
+)
 from .pattern_store import PatternNotFoundError, PatternStore
 from .patterns import (
     JOB_TYPE_PATTERN_MATCH,
@@ -604,6 +630,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     report_freshness = await ReportFreshness.connect(config.postgres.dsn)
     # ADR-113: the saved trend definitions of each case.
     trend_store = await TrendStore.connect(config.postgres.dsn)
+    pack_store = await PackStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
@@ -737,6 +764,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.export_ledger = export_ledger
     app.state.report_freshness = report_freshness
     app.state.trend_store = trend_store
+    app.state.pack_store = pack_store
     app.state.studio_recipes = studio_recipes
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
@@ -836,6 +864,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await export_ledger.close()
         await report_freshness.close()
         await trend_store.close()
+        await pack_store.close()
         await studio_recipes.close()
         await extraction_candidates.close()
         await questions_store.close()
@@ -1190,6 +1219,13 @@ def get_trend_store(request: Request) -> TrendStore:
 
 
 TrendStoreDep = Annotated[TrendStore, Depends(get_trend_store)]
+
+
+def get_pack_store(request: Request) -> PackStore:
+    return request.app.state.pack_store  # type: ignore[no-any-return]
+
+
+PackStoreDep = Annotated[PackStore, Depends(get_pack_store)]
 StudioRecipesDep = Annotated[StudioRecipeStore, Depends(get_studio_recipes)]
 ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extraction_candidates)]
 ModelDep = Annotated[ModelPort, Depends(get_model)]
@@ -8160,6 +8196,488 @@ async def _trend_refused(request: Request, exc: TrendDefinitionRefused) -> JSONR
 async def _trend_limit(request: Request, exc: TrendLimitExceeded) -> JSONResponse:
     body = TrendLimitExceededBody(cap_kind=exc.cap_kind, cap=exc.cap, would_be=exc.would_be)  # type: ignore[arg-type]
     return JSONResponse(status_code=409, content=body.model_dump())
+
+
+# --- Case report packs (ADR-113 decisions 3 to 5 and 7, Amendment 1) -------------------------
+
+
+async def _pack_or_404(packs: PackStore, case_id: str, pack_id: str) -> ReportPack:
+    pack = await packs.get(case_id, pack_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail="no such pack in this case")
+    return pack
+
+
+async def _readable_draft(
+    packs: PackStore,
+    pack_id: str,
+    reader: Principal,
+    scheme: HandlingScheme,
+    graph: GraphPort,
+    case_id: str,
+) -> tuple[list[StoredPackItem], list[StoredPackItem], int]:
+    """The draft's items in order, those this reader may see, and how many they may not."""
+    items = await packs.items(pack_id)
+    shown, withheld = await readable(items, reader, scheme, graph, case_id)
+    return items, shown, withheld
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/packs",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
+async def create_pack(
+    body: PackInput,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    audit: AuditDep,
+) -> ReportPack:
+    pack = await packs.create(investigation.id, body.title, principal)
+    await audit.record(
+        principal=principal,
+        action="create_pack",
+        investigation_id=investigation.id,
+        resolved_query={"pack": pack.id, "title": pack.title},
+        result_cardinality=1,
+    )
+    return pack
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/packs",
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
+async def list_packs(
+    investigation: InvestigationViewerDep, packs: PackStoreDep
+) -> list[ReportPack]:
+    return await packs.list_for_case(investigation.id)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/packs/{pack_id}",
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
+async def read_pack(
+    pack_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> PackDraft:
+    """The draft as this reader may see it: the items withheld from them are counted, not named."""
+    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    _, shown, withheld = await _readable_draft(
+        packs, pack.id, principal, scheme, graph, investigation.id
+    )
+    served = [i.served() for i in shown]
+    await audit.record(
+        principal=principal,
+        action="read_pack",
+        investigation_id=investigation.id,
+        resolved_query={"pack": pack.id},
+        result_cardinality=len(served),
+    )
+    return PackDraft(
+        pack=pack, items=served, withheld=withheld, marking=highest_marking(served, scheme)
+    )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/packs/{pack_id}/items",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
+async def add_pack_item(
+    pack_id: str,
+    body: AddPackItem,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    judgements_store: JudgementsStoreDep,
+    trends: TrendStoreDep,
+    ontology: OntologyDep,
+    analytics: AnalyticsDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+) -> PackItem:
+    """The content is read and frozen here, as the adder — never taken from the request, except a
+    caption and a note's own words."""
+    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    item = await _build_pack_item(
+        body,
+        investigation,
+        principal,
+        graph,
+        scheme,
+        judgements_store,
+        trends,
+        ontology,
+        analytics,
+        investigations,
+        audit,
+        working_set,
+    )
+    await packs.add_item(pack.id, item)
+    await audit.record(
+        principal=principal,
+        action="add_pack_item",
+        investigation_id=investigation.id,
+        resolved_query={"pack": pack.id, "item": item.id, "kind": item.kind},
+        result_cardinality=1,
+    )
+    return item.served()
+
+
+async def _build_pack_item(
+    body: AddPackItem,
+    case: Investigation,
+    principal: Principal,
+    graph: GraphPort,
+    scheme: HandlingScheme,
+    judgements_store: JudgementStore,
+    trends: TrendStore,
+    ontology: OntologySchema,
+    analytics: AnalyticsPort,
+    investigations: InvestigationStore,
+    audit: AuditWriter,
+    working_set: WorkingSetService,
+) -> StoredPackItem:
+    if body.kind == "trend":
+        saved = await trends.get(case.id, body.trend_id) if body.trend_id else None
+        if saved is None:
+            raise HTTPException(status_code=404, detail="no such trend in this case")
+        figures = await _trend_figures(
+            saved, case, principal, ontology, analytics, investigations, audit, working_set, scheme
+        )
+        return trend_item(saved.id, figures, principal, scheme)
+    if body.kind == "assessment":
+        try:
+            judgement = await judgements_store.get_authorized(body.judgement_id or "", principal)
+        except JudgementNotFoundError:
+            judgement = None
+        built = (
+            await assessment_item(judgement, principal, scheme, graph)
+            if judgement is not None and judgement.investigation_id == case.id
+            else None
+        )
+        if built is None:
+            raise HTTPException(status_code=404, detail="no such assessment in this case")
+        return built
+    if body.kind == "entity":
+        node = await graph.get_node(body.node_id, principal) if body.node_id else None
+        if node is None:
+            raise HTTPException(status_code=404, detail="no such entity")
+        return entity_item(node, body.caption or "", principal, scheme)
+    if not body.text:
+        raise PackItemRefused("a note needs its words")
+    return note_item(body.text, body.classification, body.handling_code, principal, scheme)
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/packs/{pack_id}/items/{item_id}",
+    status_code=204,
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
+async def remove_pack_item(
+    pack_id: str,
+    item_id: str,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> None:
+    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    _, shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
+    if item_id not in {i.id for i in shown} or not await packs.remove_item(pack.id, item_id):
+        raise HTTPException(status_code=404, detail="no such item in this pack")
+    await audit.record(
+        principal=principal,
+        action="remove_pack_item",
+        investigation_id=investigation.id,
+        resolved_query={"pack": pack.id, "item": item_id},
+        result_cardinality=1,
+    )
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/packs/{pack_id}/order",
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
+async def reorder_pack(
+    pack_id: str,
+    body: PackOrder,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> PackDraft:
+    """Only the reader's own items move; each item withheld from them keeps its place."""
+    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    items, shown, withheld = await _readable_draft(
+        packs, pack.id, principal, scheme, graph, investigation.id
+    )
+    try:
+        order = reorder_visible([i.id for i in items], {i.id for i in shown}, body.item_ids)
+    except ValueError as exc:
+        raise PackItemRefused(str(exc)) from exc
+    await packs.set_order(pack.id, order)
+    await audit.record(
+        principal=principal,
+        action="reorder_pack",
+        investigation_id=investigation.id,
+        resolved_query={"pack": pack.id},
+        result_cardinality=len(order),
+    )
+    by_id = {i.id: i for i in shown}
+    served = [by_id[i].served() for i in body.item_ids]
+    return PackDraft(
+        pack=await _pack_or_404(packs, investigation.id, pack_id),
+        items=served,
+        withheld=withheld,
+        marking=highest_marking(served, scheme),
+    )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/packs/{pack_id}/items/{item_id}/refresh",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
+async def refresh_pack_item(
+    pack_id: str,
+    item_id: str,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    judgements_store: JudgementsStoreDep,
+    trends: TrendStoreDep,
+    ontology: OntologyDep,
+    analytics: AnalyticsDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+) -> PackItem:
+    """A trend snapshot counted again, now, as the refresher; the earlier one stays in the
+    history (decision 4)."""
+    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    _, shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
+    old = next((i for i in shown if i.id == item_id), None)
+    if old is None:
+        raise HTTPException(status_code=404, detail="no such item in this pack")
+    if old.kind != "trend" or old.trend_id is None:
+        raise PackItemRefused("only a trend snapshot is refreshed")
+    new = await _build_pack_item(
+        AddPackItem(kind="trend", trend_id=old.trend_id),
+        investigation,
+        principal,
+        graph,
+        scheme,
+        judgements_store,
+        trends,
+        ontology,
+        analytics,
+        investigations,
+        audit,
+        working_set,
+    )
+    if not await packs.replace_item(pack.id, old.id, new):
+        raise HTTPException(status_code=404, detail="no such item in this pack")
+    await audit.record(
+        principal=principal,
+        action="refresh_pack_item",
+        investigation_id=investigation.id,
+        resolved_query={"pack": pack.id, "item": old.id, "replaced_by": new.id},
+        result_cardinality=1,
+    )
+    return new.served()
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/packs/{pack_id}/history",
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
+async def pack_history(
+    pack_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+) -> PackHistory:
+    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    earlier = await packs.earlier_snapshots(pack.id)
+    shown, withheld = await readable(earlier, principal, scheme, graph, investigation.id)
+    return PackHistory(
+        earlier_snapshots=[i.served() for i in shown], withheld=withheld, versions=pack.versions
+    )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/packs/{pack_id}/publish",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
+async def publish_pack(
+    pack_id: str,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> PublishedPack:
+    """A new immutable version. Refused while the draft holds an item the publisher may not see:
+    nobody publishes what they cannot read (Amendment 1)."""
+    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    items, _, withheld = await _readable_draft(
+        packs, pack.id, principal, scheme, graph, investigation.id
+    )
+    if not items:
+        raise PackItemRefused("an empty pack has nothing to publish")
+    if withheld:
+        raise PackHasWithheldItems(withheld)
+    version = await packs.publish(pack.id, principal)
+    await audit.record(
+        principal=principal,
+        action="publish_pack",
+        investigation_id=investigation.id,
+        resolved_query={"pack": pack.id, "version": version.version},
+        result_cardinality=len(version.items),
+    )
+    served = [i.served() for i in version.items]
+    return PublishedPack(
+        pack_id=pack.id,
+        investigation_id=investigation.id,
+        title=pack.title,
+        version=version.version,
+        published_at=version.published_at,
+        published_by=version.published_by,
+        items=served,
+        withheld=0,
+        marking=highest_marking(served, scheme),
+    )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/packs/{pack_id}/versions/{version}/withdraw",
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
+async def withdraw_pack_version(
+    pack_id: str,
+    version: int,
+    body: PackWithdrawal,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    audit: AuditDep,
+) -> ReportPack:
+    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    if not await packs.withdraw(pack.id, version, principal, body.reason):
+        raise HTTPException(status_code=404, detail="no such published version")
+    await audit.record(
+        principal=principal,
+        action="withdraw_pack",
+        investigation_id=investigation.id,
+        resolved_query={"pack": pack.id, "version": version, "reason": body.reason},
+        result_cardinality=1,
+    )
+    return await _pack_or_404(packs, investigation.id, pack_id)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/published",
+    dependencies=[Depends(require_right(Right.READ_REPORTS))],
+)
+async def list_published_packs(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    audit: AuditDep,
+) -> list[PublishedPackSummary]:
+    """*Reports → Published*: each pack's newest version not withdrawn."""
+    found = await packs.published_for_case(investigation.id)
+    await audit.record(
+        principal=principal,
+        action="list_published_packs",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=len(found),
+    )
+    return [
+        PublishedPackSummary(
+            pack_id=p.id,
+            title=p.title,
+            version=v.version,
+            published_at=v.published_at,
+            published_by=v.published_by,
+        )
+        for p, v in found
+    ]
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/packs/{pack_id}/published",
+    dependencies=[Depends(require_right(Right.READ_REPORTS))],
+)
+async def read_published_pack(
+    pack_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> PublishedPack:
+    """The newest published version as this reader may see it (decision 5): every read audited."""
+    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    version = await packs.latest_published(pack.id)
+    if version is None:
+        raise HTTPException(status_code=404, detail="this pack has no publication")
+    shown, withheld = await readable(version.items, principal, scheme, graph, investigation.id)
+    served = [i.served() for i in shown]
+    await audit.record(
+        principal=principal,
+        action="read_published_pack",
+        investigation_id=investigation.id,
+        resolved_query={"pack": pack.id, "version": version.version},
+        result_cardinality=len(served),
+    )
+    return PublishedPack(
+        pack_id=pack.id,
+        investigation_id=investigation.id,
+        title=pack.title,
+        version=version.version,
+        published_at=version.published_at,
+        published_by=version.published_by,
+        items=served,
+        withheld=withheld,
+        marking=highest_marking(served, scheme),
+    )
+
+
+@app.exception_handler(PackHasWithheldItems)
+async def _pack_withheld(request: Request, exc: PackHasWithheldItems) -> JSONResponse:
+    return JSONResponse(
+        status_code=409, content=PackWithheldBody(withheld=exc.withheld).model_dump()
+    )
+
+
+@app.exception_handler(PackItemRefused)
+async def _pack_refused(request: Request, exc: PackItemRefused) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": "pack_refused", "detail": str(exc)})
 
 
 async def _openable_dashboards(

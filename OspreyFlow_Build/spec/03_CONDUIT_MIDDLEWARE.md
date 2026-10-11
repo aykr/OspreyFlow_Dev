@@ -740,6 +740,18 @@ POST   /v1/investigations/{id}/trends                  save a checked definition
 GET    /v1/investigations/{id}/trends                  the case's saved definitions; run_analysis, Viewer
 GET    /v1/investigations/{id}/trends/{trend}/figures  a saved trend counted for the reader now; another case's trend is 404; run_analysis, Viewer
 DELETE /v1/investigations/{id}/trends/{trend}          remove a saved definition; run_analysis, Editor
+POST   /v1/investigations/{id}/packs                   create a report pack (ADR-113 decision 3); record_assessment, Editor
+GET    /v1/investigations/{id}/packs                   the case's packs with their versions; record_assessment, Viewer
+GET    /v1/investigations/{id}/packs/{pack}            the draft as the reader may see it: items in order, no positions, the withheld count (never which — ADR-113 Am. 1); record_assessment, Viewer
+POST   /v1/investigations/{id}/packs/{pack}/items      add an item — a saved trend (snapshotted now, as the adder), an assessment, an entity with a caption, or a note with its marking; content read and frozen by the Conduit; record_assessment, Editor
+DELETE /v1/investigations/{id}/packs/{pack}/items/{item}         remove one of the reader's own items; record_assessment, Editor
+PUT    /v1/investigations/{id}/packs/{pack}/order      the reader's own items in a new order; withheld items keep their places; record_assessment, Editor
+POST   /v1/investigations/{id}/packs/{pack}/items/{item}/refresh a trend snapshot counted again now; the earlier one kept in the history; record_assessment, Editor
+GET    /v1/investigations/{id}/packs/{pack}/history    earlier snapshots the reader may see, the withheld count, the versions with any withdrawal; record_assessment, Viewer
+POST   /v1/investigations/{id}/packs/{pack}/publish    a new immutable version; 409 pack_has_withheld_items while the publisher cannot see an item; record_assessment, Editor
+POST   /v1/investigations/{id}/packs/{pack}/versions/{v}/withdraw  withdraw a publication, with a reason, recorded once; record_assessment, Editor
+GET    /v1/investigations/{id}/published               each pack's newest publication not withdrawn (Reports → Published); audited; read_reports, Viewer
+GET    /v1/investigations/{id}/packs/{pack}/published  that publication as the reader may see it, with the withheld count; every read audited; read_reports, Viewer
 GET    /v1/reports/dashboards                              the Superset boards this person may open: each counted for a dashboard identity whose every figure they could count (unit, clearance, handling codes, a level on each of its cases — ADR-111 Am. 3); read_reports
 POST   /v1/reports/dashboards/{slug}/guest-token           a five-minute, read-only Superset guest token for one such board, its rows limited to that identity (row-level rule); otherwise 404; Superset refusing is a 502 in words; read_reports
 POST   /v1/investigations/{id}/documents/{document_id}/candidates/accept   the reader's Accept all pending: an enumerated list of candidate ids, never a filter (ADR-108 Q1); Editor
