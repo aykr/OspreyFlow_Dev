@@ -885,6 +885,20 @@ listed one to a line beneath it (three alerts' words joined into one sentence co
 stored or drawn on the node: the score is a read, and another analyst may read another. Its keyboard
 case is in `keyboard/inspector.spec.ts` (`score-a-neighbourhoods-risk-by-keyboard`).
 
+**The Reports view (ADR-111).** A third entry in the top bar's view switch — *Graph · Map ·
+Reports* — for people who read rather than investigate (a case Viewer and above). It draws the case's
+figures as the Conduit counts them for this reader (`GET …/reports`): the alerts of the period
+("3 alerts in the last 12 weeks"), alerts raised each week by typology (stacked bars in the channel
+tokens, with a key), open alerts by age (under a day, 1 to 7 days, 7 to 30, over 30), outcomes by
+typology (open, claimed, true, false), the customers holding a verifying document by KYC status and
+risk band, and — only when the server sends them, to Editors and above — held rows. A line says the
+figures are counted for the reader. *Period* chooses the last 4, 12, 26 or 52 weeks and is asked of
+the server; *Download the figures (CSV)* fetches the dashboards' feed, each read of which is in the
+export ledger. A report past its bound says so in words with its option ("Choose a shorter period"),
+never a partial chart. Every action has its case in `keyboard/reports.spec.ts` (`REPORTS_ACTIONS`);
+the view switch itself, never proved by keyboard before, in `keyboard/shell.spec.ts`
+(`views-chosen-by-keyboard`).
+
 ### 3.4 Temporal analysis
 
 The timeline is the second most important control in the product after the canvas.

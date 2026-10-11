@@ -41,6 +41,16 @@ test("each rail entry is reached and pressed by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "rail-entries-by-keyboard");
 });
 
+test("each view is chosen by keyboard, Reports among them", async ({ page }) => {
+  await page.goto("/keyboard/top-bar-harness.html");
+  for (const name of ["Map", "Reports", "Graph"]) {
+    await page.getByRole("button", { name, exact: true }).focus();
+    await page.keyboard.press("Enter");
+  }
+  expect(await page.evaluate(() => window.__TOPBAR__?.views)).toEqual(["map", "reports", "graph"]);
+  registerCovered(REGISTRY, "views-chosen-by-keyboard");
+});
+
 test("the rail shows its names, and hides them again, by keyboard", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
   const rail = page.getByRole("navigation", { name: "Workspace" });

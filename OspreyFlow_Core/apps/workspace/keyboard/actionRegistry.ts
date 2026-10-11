@@ -538,6 +538,13 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "slash-moves-focus-to-search",
   "rail-entries-by-keyboard",
   "rail-shows-and-hides-names-by-keyboard",
+  // ADR-111: the view switch, Reports included — never proved by keyboard before it.
+  "views-chosen-by-keyboard",
+] as const);
+
+export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
+  "change-the-reports-period-by-keyboard",
+  "download-the-figures-by-keyboard",
 ] as const);
 
 export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [

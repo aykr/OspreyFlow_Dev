@@ -92,6 +92,7 @@ import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
 import { AlertInbox } from "./watches/AlertInbox";
 import { AlertsPlace } from "./alerts/AlertsPlace";
+import { ReportsView } from "./reports/ReportsView";
 import { OwnershipPlace } from "./ownership/OwnershipPlace";
 import { HotlistPanel } from "./watches/HotlistPanel";
 import { MonitorPanel } from "./watches/MonitorPanel";
@@ -476,11 +477,11 @@ export function App() {
   }, [counts, classificationOrder]);
 
   const [view, setView] = useState<
-    "graph" | "map" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
+    "graph" | "map" | "reports" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
   >(handoff.view === "ingest" ? "ingest" : "graph");
   // Which application is open, and (so the switch can go back to it) the Glass view last open.
   const app = view === "ingest" ? "ingest" : "glass";
-  const lastGlassView = useRef<"graph" | "map" | "dossier" | "watches" | "alerts" | "ownership">("graph");
+  const lastGlassView = useRef<"graph" | "map" | "reports" | "dossier" | "watches" | "alerts" | "ownership">("graph");
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {
@@ -948,6 +949,8 @@ export function App() {
             ? [
                 { id: "graph", label: "Graph", pressed: view === "graph", onSelect: () => setView("graph") },
                 { id: "map", label: "Map", pressed: view === "map", onSelect: () => setView("map") },
+                // ADR-111: the case's figures for people who read rather than investigate.
+                { id: "reports", label: "Reports", pressed: view === "reports", onSelect: () => setView("reports") },
                 ...(dossierNodeId
                   ? [{ id: "dossier", label: "Messages", pressed: view === "dossier", onSelect: () => setView("dossier") }]
                   : []),
@@ -1122,6 +1125,9 @@ export function App() {
             }}
           />
         )}
+        {view === "reports" && (
+          <ReportsView apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} />
+        )}
         {view === "ownership" && (
           <OwnershipPlace
             apiBaseUrl={API_BASE_URL}
@@ -1134,7 +1140,7 @@ export function App() {
             }}
           />
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "alerts" && view !== "ownership" && (
+        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "alerts" && view !== "ownership" && view !== "reports" && (
           <div style={{ flex: 1, position: "relative" }}>
             {view === "graph" && (
               <GlassCanvas

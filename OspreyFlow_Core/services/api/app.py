@@ -23,7 +23,9 @@ audit failure.
 from __future__ import annotations
 
 import asyncio
+import csv
 import functools
+import io
 import json
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -151,6 +153,7 @@ from schemas.domain import (
     Provenance,
     ProvenanceState,
     QueuedAlert,
+    ReportFigures,
     RuleAuditPage,
     SavedPattern,
     SourceRef,
@@ -200,6 +203,7 @@ from . import dossier as dossier_module
 from . import kyc as kyc_module
 from . import ownership as ownership_module
 from . import readiness as readiness_module
+from . import reports as reports_module
 from . import resolution as resolution_module
 from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
@@ -409,6 +413,7 @@ from .questions import (
     QuestionsService,
     QuestionsTooLargeError,
 )
+from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
 from .resolution_trigger import ResolveNowAccepted
 from .review import (
@@ -6606,9 +6611,7 @@ async def trace_ownership_route(
     """Who ultimately owns or controls the entity, with cumulative shares, as the reader reads
     the structure (rule 3); refused in words when too deep or too large (rule 2). A view: nothing
     it concludes is written (ruling 9)."""
-    view = await ownership_module.trace_for(
-        graph, compute, node_id, principal, threshold=threshold
-    )
+    view = await ownership_module.trace_for(graph, compute, node_id, principal, threshold=threshold)
     await audit.record(
         principal=principal,
         action="trace_ownership",
@@ -6740,6 +6743,115 @@ async def _ownership_too_complex_handler(
 
 
 # --- the case team's alert queue (ADR-109 phase B) ----------------------------
+
+
+async def _case_report(
+    investigation: Investigation,
+    principal: Principal,
+    *,
+    investigations: InvestigationStore,
+    graph: GraphPort,
+    alerts_store: AlertStore,
+    held_rows: HeldRowStore,
+    compute: ComputePort,
+    period_weeks: int,
+) -> ReportFigures:
+    level = await investigations.effective_level(investigation.id, principal)
+    return await reports_module.case_report(
+        alerts=alerts_store,
+        graph=graph,
+        held=held_rows,
+        compute=compute,
+        investigation_id=investigation.id,
+        reader=principal,
+        today=datetime.now(UTC).date(),
+        period_weeks=period_weeks,
+        show_held=level is not None and level.rank >= AccessLevel.EDITOR.rank,
+    )
+
+
+@app.get("/v1/investigations/{investigation_id}/reports")
+async def read_case_report(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    held_rows: HeldRowsDep,
+    compute: ComputeDep,
+    audit: AuditDep,
+    weeks: Annotated[int, Query(ge=1, le=52)] = 12,
+) -> ReportFigures:
+    """The Reports view (ADR-111): the case's figures, every one counted as the reader (rule 3);
+    held rows only for Editors and above; past its bound, `limit_exceeded` (rule 2)."""
+    figures = await _case_report(
+        investigation, principal, investigations=investigations, graph=graph,
+        alerts_store=alerts_store, held_rows=held_rows, compute=compute, period_weeks=weeks,
+    )  # fmt: skip
+    await audit.record(
+        principal=principal,
+        action="read_case_report",
+        investigation_id=investigation.id,
+        resolved_query={"weeks": weeks},
+        result_cardinality=figures.alerts_total,
+    )
+    return figures
+
+
+@app.get("/v1/investigations/{investigation_id}/reports/feed", response_model=None)
+async def read_report_feed(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    held_rows: HeldRowsDep,
+    compute: ComputeDep,
+    audit: AuditDep,
+    export_ledger: ExportLedgerDep,
+    weeks: Annotated[int, Query(ge=1, le=52)] = 12,
+    feed_format: Annotated[Literal["json", "csv"], Query(alias="format")] = "json",
+) -> ReportFigures | Response:
+    """The reporting feed a dashboard pulls (ADR-111 decisions 6 to 8): the same figures as the
+    Reports view, as JSON or CSV — figures only. Every read is audited and written to the export
+    ledger as metadata (who, which case, when), since the figures leave the Glass."""
+    figures = await _case_report(
+        investigation, principal, investigations=investigations, graph=graph,
+        alerts_store=alerts_store, held_rows=held_rows, compute=compute, period_weeks=weeks,
+    )  # fmt: skip
+    rows = reports_module.feed_rows(figures)
+    await export_ledger.record(
+        ExportLedgerEntry(
+            id=new_id(),
+            investigation_id=investigation.id,
+            principal_id=principal.id,
+            artefact_kind="report_feed",
+            handling_level=principal.clearance,
+            exported_at=datetime.now(UTC),
+            item_count=len(rows),
+            withheld_count=0,
+            manifest_policy="omit",
+        )
+    )
+    await audit.record(
+        principal=principal,
+        action="read_report_feed",
+        investigation_id=investigation.id,
+        resolved_query={"weeks": weeks, "format": feed_format},
+        result_cardinality=len(rows),
+    )
+    if feed_format == "json":
+        return figures
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(["section", "label", "typology", "week_start", "value"])
+    writer.writerows(rows)
+    return Response(content=buffer.getvalue(), media_type="text/csv; charset=utf-8")
+
+
+@app.exception_handler(ReportLimitExceededError)
+async def _report_limit_handler(request: Request, exc: ReportLimitExceededError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=exc.detail.model_dump())
 
 
 @app.get("/v1/investigations/{investigation_id}/alert-queue")

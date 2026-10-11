@@ -144,6 +144,9 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/ownership/{node_id}/canvas"): E,
     # ADR-109 phase B: the case team's alert queue — read at Viewer, triaged at Editor.
     ("GET", P + "/alert-queue"): V,
+    # ADR-111: the Reports view and the dashboards' feed, both at Viewer.
+    ("GET", P + "/reports"): V,
+    ("GET", P + "/reports/feed"): V,
     ("GET", P + "/alert-queue/{alert_id}"): V,
     ("POST", P + "/alert-queue/{alert_id}/claim"): E,
     ("POST", P + "/alert-queue/{alert_id}/release"): E,

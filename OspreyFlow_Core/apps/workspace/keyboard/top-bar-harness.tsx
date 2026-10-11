@@ -16,11 +16,11 @@ import { GlobalSearch } from "../src/search/GlobalSearch";
 
 declare global {
   interface Window {
-    __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean; rail: string[] };
+    __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean; rail: string[]; views: string[] };
   }
 }
 
-window.__TOPBAR__ = { opened: null, browsed: false, signedOut: false, rail: [] };
+window.__TOPBAR__ = { opened: null, browsed: false, signedOut: false, rail: [], views: [] };
 
 const CASES = [
   { id: "c1", name: "Enron corpus (real data, this machine only)", level: "author", created_at: "2026-09-29T09:00:00Z", created_by: "a" },
@@ -64,8 +64,10 @@ createRoot(container).render(
         <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" investigationId="inv-1" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} />
       }
       views={[
-        { id: "graph", label: "Graph", pressed: true, onSelect: () => undefined },
-        { id: "map", label: "Map", pressed: false, onSelect: () => undefined },
+        { id: "graph", label: "Graph", pressed: true, onSelect: () => window.__TOPBAR__!.views.push("graph") },
+        { id: "map", label: "Map", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("map") },
+        // ADR-111: as `App.tsx` offers it.
+        { id: "reports", label: "Reports", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("reports") },
       ]}
       actions={<Button>Export ⚙</Button>}
       account={

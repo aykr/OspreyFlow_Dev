@@ -846,6 +846,82 @@ class RuleAuditEntry(BaseModel):
     result_cardinality: int = 0
 
 
+class ReportCount(BaseModel):
+    """One labelled figure of a report (ADR-111): a fixed label and a count, never free text."""
+
+    label: str
+    value: int = Field(ge=0)
+
+
+class WeekCount(BaseModel):
+    """Alerts raised in one week (Monday to Sunday) of one typology, as the reader sees them."""
+
+    week_start: date
+    typology: str
+    count: int = Field(ge=0)
+
+
+class OutcomeCount(BaseModel):
+    """Where one typology's alerts of the period stand: open, claimed, closed true or false."""
+
+    typology: str
+    open: int = Field(default=0, ge=0)
+    claimed: int = Field(default=0, ge=0)
+    true_positive: int = Field(default=0, ge=0)
+    false_positive: int = Field(default=0, ge=0)
+
+
+class HeldFigures(BaseModel):
+    """The case's held rows by what became of them — for Editors and above only, as the Held rows
+    tab is (ADR-111 decision 2)."""
+
+    held: int = Field(ge=0)
+    released: int = Field(ge=0)
+    rejected: int = Field(ge=0)
+
+
+class KycFigures(BaseModel):
+    """The case's customers — people and organisations holding a verifying document — by KYC
+    status and risk band, each assessed as the reader at the moment of reading."""
+
+    customers: int = Field(ge=0)
+    verified: int = Field(ge=0)
+    unverified: int = Field(ge=0)
+    by_band: list[ReportCount] = Field(default_factory=list)
+
+
+class ReportFigures(BaseModel):
+    """A case's report (`06_DECISIONS.md` ADR-111): the Reports view and the dashboards' feed are
+    both this, from one computation, so they cannot disagree. Every figure is counted as its
+    reader — an alert the reader cannot see whole is in no total and no bucket (rule 3). Figures
+    only: labels, dates and numbers, never a name, an identifier or an alert's words."""
+
+    period_weeks: int = Field(ge=1, le=52)
+    as_of: date
+    generated_at: datetime
+    alerts_total: int = Field(ge=0)
+    alerts_by_week: list[WeekCount] = Field(default_factory=list)
+    open_by_age: list[ReportCount] = Field(default_factory=list)
+    outcomes: list[OutcomeCount] = Field(default_factory=list)
+    held: HeldFigures | None = None
+    kyc: KycFigures
+
+
+ReportOption = Literal["shorter_period", "fewer_typologies"]
+_REPORT_OPTIONS: tuple[ReportOption, ...] = ("shorter_period", "fewer_typologies")
+
+
+class ReportLimitExceeded(BaseModel):
+    """A report past its bound answers this, never a partial figure presented as whole (rule 2).
+    `would_be` counts only what the reader can see, so the refusal itself discloses nothing."""
+
+    error: Literal["limit_exceeded"] = "limit_exceeded"
+    cap_kind: Literal["alerts", "customers"]
+    cap: int
+    would_be: int
+    options: list[ReportOption] = Field(default_factory=lambda: list(_REPORT_OPTIONS))
+
+
 class RuleAuditPage(BaseModel):
     """A page of a case's rule audit, newest first, with the total of what the reader may see —
     an entry withheld from them is neither on the page nor in the total (rule 3)."""
@@ -1130,6 +1206,13 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     HeldRow,
     RuleAuditEntry,
     RuleAuditPage,
+    ReportCount,
+    WeekCount,
+    OutcomeCount,
+    HeldFigures,
+    KycFigures,
+    ReportFigures,
+    ReportLimitExceeded,
     QueuedAlert,
     KycDocument,
     RiskFactor,

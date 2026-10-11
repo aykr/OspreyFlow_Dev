@@ -11310,8 +11310,8 @@ the deployment's one door out — "no principal re-checks anything ever again" a
    reader.
 3. **What it shows.** Alerts raised over time by typology (weekly); open alerts by age (under a day, a
    week, a month, older); outcomes (true and false positives, by typology); loads held and released;
-   the case's customers by KYC status and risk band; and *Data feeds* (ADR-110, once built — until then
-   the last manual runs).
+   the case's customers by KYC status and risk band; and *Data feeds*, which arrives with ADR-110's run
+   ledger (no run history exists before it, so the panel is not drawn from guesses).
 4. **Bounded, never truncated (rule 2).** A case whose alerts or customers exceed the report's bound
    (10,000 alerts, 2,000 customers *(mine)*) answers a typed `limit_exceeded` with its options (a shorter
    period, fewer typologies, the feed's paged form), never a partial figure presented as whole.
@@ -11461,3 +11461,23 @@ exercised by nothing is the failure this project keeps finding); a Reports Viewe
 an Admin refused every investigation read; the old role names accepted for the transition release and
 refused after; the dashboard service account refused everything but R2; the Glass hiding an action the
 person lacks (a keyboard case per hidden action, rule 13).
+
+
+### ADR-111, Amendment 1 (11 October 2026) — the Reports view and the feed built
+
+**Built.** `services/api/reports.py::case_report` — alerts through the queue's own all-or-nothing
+check, held rows through `HeldRowStore.list_authorized` (Editors and above), each customer holding a
+verifying document assessed by `kyc.assess` as the reader; bounds of 10,000 visible alerts in the
+period and 2,000 customers answering `ReportLimitExceeded` (409) counted from what the reader sees.
+`GET …/reports` and `GET …/reports/feed` (`?format=json|csv`), both Viewer; every feed read written to
+the export ledger as `artefact_kind: report_feed`. The Glass's *Reports* view (spec 02 §3.3).
+**Data feeds** waits for ADR-110's run ledger, as decision 3 now says.
+
+**Tests, red first or shown red by planting.** `tests/services/api/test_reports.py`: the counts by
+typology, age and outcome; `test_a_hidden_alert_changes_no_figure` (planted: reading the store without
+the visibility check turned it red); held figures for Editors only (planted: held shown to everyone
+turned the route case red); the KYC book; the bound; `test_the_feed_carries_no_free_text`; the route
+case — view and feed equal, CSV header, outsider 404, two ledger entries (planted: the ledger write
+removed turned it red). Vitest `ReportsView.test.tsx` (5); keyboard `reports.spec.ts` and the new
+view-switch case. **Not yet:** the Superset demonstration (decision 9) and the dashboard service
+account, which arrives with ADR-112.
