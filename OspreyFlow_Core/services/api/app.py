@@ -210,6 +210,8 @@ from schemas.mapconfig import MapConfig, PublicMapConfig
 from schemas.packs import (
     AddPackItem,
     PackDraft,
+    PackExport,
+    PackExportRequest,
     PackHistory,
     PackInput,
     PackItem,
@@ -425,12 +427,14 @@ from .mapconfig_loader import load_map_config, public_view
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
 from .packs import (
+    PackExportRefused,
     PackHasWithheldItems,
     PackItemRefused,
     PackStore,
     StoredPackItem,
     assessment_item,
     entity_item,
+    export_pack,
     highest_marking,
     note_item,
     readable,
@@ -8666,6 +8670,46 @@ async def read_published_pack(
         withheld=withheld,
         marking=highest_marking(served, scheme),
     )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/packs/{pack_id}/export",
+    dependencies=[Depends(require_right(Right.EXPORT))],
+)
+async def export_pack_route(
+    pack_id: str,
+    body: PackExportRequest,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    packs: PackStoreDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    export_ledger: ExportLedgerDep,
+    config: ConfigDep,
+    audit: AuditDep,
+) -> PackExport:
+    """The newest live publication through the export gate (ADR-113 decision 6, ADR-045/047): the
+    approved manifest, from which the Glass renders the PDF. Editor and `export`, as every export."""
+    pack = await _pack_or_404(packs, investigation.id, pack_id)
+    version = await packs.latest_published(pack.id)
+    if version is None:
+        raise HTTPException(status_code=404, detail="this pack has no publication to export")
+    result = await export_pack(
+        pack=pack, version=version, request=body, exporter=principal, scheme=scheme, graph=graph,
+        ledger=export_ledger, policy=config.export_manifest_policy,
+    )
+    await audit.record(
+        principal=principal, action="export_pack", investigation_id=investigation.id,
+        resolved_query={"pack": pack.id, "version": version.version,
+                        "ledger_entry": result.ledger_entry_id},
+        result_cardinality=len(result.items), justification=body.justification,
+    )
+    return result
+
+
+@app.exception_handler(PackExportRefused)
+async def _pack_export_refused(request: Request, exc: PackExportRefused) -> JSONResponse:
+    return JSONResponse(status_code=403, content={"error": "export_refused", "detail": str(exc)})
 
 
 @app.exception_handler(PackHasWithheldItems)

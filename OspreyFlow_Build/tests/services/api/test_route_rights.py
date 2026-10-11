@@ -108,7 +108,7 @@ ROUTE_RIGHTS = {
  "reorder_pack": "record_assessment", "refresh_pack_item": "record_assessment",
  "pack_history": "record_assessment", "publish_pack": "record_assessment",
  "withdraw_pack_version": "record_assessment", "list_published_packs": "read_reports",
- "read_published_pack": "read_reports",
+ "read_published_pack": "read_reports", "export_pack_route": "export",
  "read_report_feed": "read_report_feed", "read_alert_queue": "read_alert_queue",
  "explain_alert": "read_alert_queue", "claim_alert": "triage_alerts", "release_alert": "triage_alerts",
  "dispose_alert": "triage_alerts", "alert_canvas": "triage_alerts",

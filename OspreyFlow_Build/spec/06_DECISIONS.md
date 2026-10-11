@@ -11832,3 +11832,36 @@ trend's counted events need the originator consulted; it can for an entity or an
 **Tests.** `tests/conformance/analytics_port/test_suite.py::test_trend_says_the_handling_it_counted_and_only_what_the_reader_sees`;
 `tests/services/api/test_packs.py` (13) and `test_pack_store.py` (4); the route-rights table's twelve
 rows.
+
+### ADR-113, Amendment 2 (11 October 2026) — a pack's export through the gate, and how its PDF is drawn
+
+Stage 4 (handover A4). Decision 6 is built as decided: `POST …/packs/{pack}/export` (`export`, at
+Editor like every export) takes the pack's newest publication not withdrawn — never a draft, never a
+withdrawn version — and runs it through the gate. What the decision left open, filled *(mine)*:
+
+1. **Item by item, as the exporter, now.** The exporter's access is checked again at export time
+   with the same rule a reader gets (Amendment 1: every handling an item rests on, and an entity or
+   assessment re-read in the graph). An item they may not see is **withheld and counted**, never
+   named — the manifest names only what they may see, and ADR-045's policy decides whether the count
+   is printed (`disclose`) or absent (`omit`). An exporter who may see **no** item is refused (403
+   `export_refused`, naming nothing) and nothing is written to the ledger: there is nothing to
+   export, and the refusal is what "refused above the exporter's handling" means for a pack.
+2. **The originator, as for any export.** An item resting on a handling whose originator must be
+   consulted (ADR-045/047) needs both a justification and an originator reference, or the export is
+   refused naming the item — the exporter can see it, or it would have been withheld. A trend's
+   events carry no sanitisation code (Amendment 1's limitation), so this can bite only an entity or
+   an assessment.
+3. **The mark** (ADR-047 Gap 1) carries the pack, its version, the exporter, the time, the highest
+   marking exported, and whether an entity or assessment rests on a record since superseded. A pack
+   is frozen snapshots, not a view of the graph, so it carries no resolution threshold.
+4. **The ledger** (ADR-047 Gap 2) gets one entry per allowed export, `artefact_kind = report_pack`,
+   with the items exported, the count withheld, the handling level, and whether an override was
+   given (never its words — those are in the audit stream).
+5. **The PDF is the browser's own.** The Glass draws the approved manifest as a print view — a
+   cover with the mark, then each item on its own page under a banner and footer giving that item's
+   marking — and opens the browser's print dialogue, from which the analyst saves the PDF. Nothing
+   but the manifest is drawn, no PDF library enters the licence register, and no page can carry a
+   marking lower than its item's.
+
+**Tests.** `tests/services/api/test_pack_export.py` (6, against the real export ledger); the
+route-rights row `export_pack_route`.

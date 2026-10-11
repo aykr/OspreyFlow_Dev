@@ -8,11 +8,10 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import pytest
-from services.api.config import PostgresConfig
-from services.api.packs import PackStore, StoredPackItem
-
 from conduit_common.identity import new_id
 from schemas.domain import Handling, Principal
+from services.api.config import PostgresConfig
+from services.api.packs import PackStore, StoredPackItem
 
 BY = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 HANDLING = Handling(classification="OFFICIAL", handling_code="P", owning_unit="unit-1", originator="unit-1")

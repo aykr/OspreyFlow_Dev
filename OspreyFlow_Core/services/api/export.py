@@ -310,7 +310,8 @@ class ExportLedgerEntry(BaseModel):
     principal_id: str
     #: `report_feed` (ADR-111 decision 8): a dashboard's read of the reporting feed — figures only,
     #: no element, so not through the item gate, but recorded here so compliance sees what left.
-    artefact_kind: Literal["chart", "subgraph", "report", "report_feed"]
+    #: `report_pack` (ADR-113 decision 6): a published report pack, through `packs.export_pack`.
+    artefact_kind: Literal["chart", "subgraph", "report", "report_feed", "report_pack"]
     handling_level: str
     exported_at: datetime
     item_count: int

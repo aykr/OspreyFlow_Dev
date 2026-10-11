@@ -226,3 +226,6 @@ export type { PackHistory } from "./PackHistory";
 export type { PublishedPack } from "./PublishedPack";
 export type { PublishedPackSummary } from "./PublishedPackSummary";
 export type { PackWithheldBody } from "./PackWithheldBody";
+export type { PackExportRequest } from "./PackExportRequest";
+export type { PackExportMark } from "./PackExportMark";
+export type { PackExport } from "./PackExport";

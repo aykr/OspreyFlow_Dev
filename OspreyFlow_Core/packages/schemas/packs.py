@@ -155,6 +155,48 @@ class PackWithheldBody(BaseModel):
     withheld: int
 
 
+class PackExportRequest(BaseModel):
+    """An override, when an item needs its originator consulted: both, or the export is refused
+    (ADR-045/047, as for every export)."""
+
+    justification: str | None = Field(default=None, max_length=2000)
+    originator_reference: str | None = Field(default=None, max_length=200)
+
+
+class PackExportMark(BaseModel):
+    """ADR-047's mark for a pack: what a recipient must act on, printed on every page. A pack is
+    frozen snapshots, not a view of the graph, so it carries its version, not a resolution
+    threshold."""
+
+    osprey_mark: Literal["OspreyFlow"] = "OspreyFlow"
+    investigation_id: str
+    pack_id: str
+    version: int
+    exported_at: datetime
+    exported_by: str
+    #: The highest marking among the items exported.
+    handling_level: str
+    #: An exported entity or assessment rests on a record since superseded (retracted or corrected).
+    rests_on_retracted_evidence: bool = False
+
+
+class PackExport(BaseModel):
+    """The approved manifest (ADR-113 decision 6): only what the exporter may see, in order, each
+    with its own marking for its page's banner. The Glass renders the PDF from this and nothing
+    else."""
+
+    mark: PackExportMark
+    title: str
+    version: int
+    published_at: datetime
+    published_by: str
+    items: list[PackItem]
+    policy: Literal["disclose", "omit"]
+    #: Items withheld from the exporter — `None` under `omit`, where the artefact carries no count.
+    withheld: int | None = None
+    ledger_entry_id: str
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     AssessmentSnapshot,
     EntitySnapshot,
@@ -170,4 +212,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     PublishedPack,
     PublishedPackSummary,
     PackWithheldBody,
+    PackExportRequest,
+    PackExportMark,
+    PackExport,
 )

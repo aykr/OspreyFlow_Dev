@@ -25,13 +25,16 @@ from pydantic import BaseModel, Field
 
 from conduit_common.identity import new_id
 from ontology.errors import HandlingSchemeError
-from ontology.handling import HandlingScheme, principal_may_view
+from ontology.handling import HandlingScheme, evaluate_handling, principal_may_view
 from ports.graph import GraphPort
 from schemas.analytics import CountedHandling
 from schemas.domain import Handling, Judgement, Node, Principal
 from schemas.packs import (
     AssessmentSnapshot,
     EntitySnapshot,
+    PackExport,
+    PackExportMark,
+    PackExportRequest,
     PackItem,
     PackItemKind,
     PackVersionSummary,
@@ -41,6 +44,13 @@ from schemas.trends import TrendFigures
 
 from .alert_queue import node_name
 from .assessments import judgement_visible_to, resolve_superseded_citation
+from .export import (
+    BlockedItem,
+    ExportLedgerEntry,
+    ExportLedgerStore,
+    ExportManifestPolicy,
+    OverrideRequiredError,
+)
 from .trends import highest
 
 
@@ -155,6 +165,113 @@ def reorder_visible(current: Sequence[str], visible: set[str], wanted: Sequence[
         raise ValueError("the new order must name each item you can see exactly once")
     order = iter(wanted)
     return [next(order) if i in visible else i for i in current]
+
+
+# --- exporting a publication (decision 6) ----------------------------------------------------
+
+
+class PackExportRefused(Exception):
+    """Nothing in the publication is within the exporter's handling: nothing to export, and nothing
+    recorded (a 403 that names no item)."""
+
+
+def _consult_originator(item: StoredPackItem, scheme: HandlingScheme) -> BlockedItem | None:
+    """An item resting on a handling whose originator must be consulted, named for the exporter —
+    who may see it, or it would already have been withheld."""
+    if not any(evaluate_handling(h, scheme).consult_originator for h in item.handlings):
+        return None
+    if item.entity is not None:
+        return BlockedItem(
+            id=item.entity.node_id, kind="node", label=item.entity.name, reason="consult_originator"
+        )
+    if item.assessment is not None:
+        return BlockedItem(
+            id=item.assessment.judgement_id,
+            kind="judgement",
+            label=item.assessment.statement[:80],
+            reason="consult_originator",
+        )
+    return BlockedItem(id=item.id, kind="node", label=item.kind, reason="consult_originator")
+
+
+async def _rests_on_retracted(
+    items: Sequence[StoredPackItem], exporter: Principal, graph: GraphPort
+) -> bool:
+    for item in items:
+        refs = (
+            [item.entity.node_id]
+            if item.entity is not None
+            else item.assessment.supporting
+            if item.assessment is not None
+            else []
+        )
+        for ref in refs:
+            if await graph.get_node(ref, exporter) is None and (
+                await resolve_superseded_citation(graph, exporter, ref) is not None
+            ):
+                return True
+    return False
+
+
+async def export_pack(
+    *,
+    pack: ReportPack,
+    version: PackVersion,
+    request: PackExportRequest,
+    exporter: Principal,
+    scheme: HandlingScheme,
+    graph: GraphPort,
+    ledger: ExportLedgerStore,
+    policy: ExportManifestPolicy,
+) -> PackExport:
+    """The gate for a pack. The exporter's access is checked again now, item by item, as every
+    export gate does (ADR-045: there is no second chance once it has left); what they may not see
+    is withheld and counted, never named. Only then the originator check, the mark and the ledger
+    entry — nothing before that point is recorded or returned."""
+    shown, withheld = await readable(version.items, exporter, scheme, graph, pack.investigation_id)
+    if not shown:
+        raise PackExportRefused("nothing in this pack is within your handling")
+    blocked = [b for b in (_consult_originator(i, scheme) for i in shown) if b is not None]
+    if blocked and not (request.justification and request.originator_reference):
+        raise OverrideRequiredError(blocked)
+    served = [i.served() for i in shown]
+    level = highest_marking(served, scheme)
+    assert level is not None
+    now = datetime.now(UTC)
+    entry = ExportLedgerEntry(
+        id=new_id(),
+        investigation_id=pack.investigation_id,
+        principal_id=exporter.id,
+        artefact_kind="report_pack",
+        handling_level=level,
+        exported_at=now,
+        item_count=len(served),
+        withheld_count=withheld,
+        manifest_policy=policy,
+        justification_given=bool(request.justification),
+        originator_reference_given=bool(request.originator_reference),
+    )
+    await ledger.record(entry)
+    mark = PackExportMark(
+        investigation_id=pack.investigation_id,
+        pack_id=pack.id,
+        version=version.version,
+        exported_at=now,
+        exported_by=exporter.id,
+        handling_level=level,
+        rests_on_retracted_evidence=await _rests_on_retracted(shown, exporter, graph),
+    )
+    return PackExport(
+        mark=mark,
+        title=pack.title,
+        version=version.version,
+        published_at=version.published_at,
+        published_by=version.published_by,
+        items=served,
+        policy=policy,
+        withheld=withheld if policy == "disclose" else None,
+        ledger_entry_id=entry.id,
+    )
 
 
 # --- building an item, as its adder ---------------------------------------------------------
