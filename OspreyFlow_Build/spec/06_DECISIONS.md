@@ -11587,3 +11587,63 @@ grants and the old role names — anything else refused) and only clients named 
 confidential client with a service account, its clearance and unit, the *Reports Viewer* role); a case
 **Author** grants that identity Viewer on their case through the case's existing access screen, as for
 a person. The administrator never reaches into a case to do it (decision 6).
+
+## ADR-113 — Trend reports, case report packs and their distribution; four demo personas — ACCEPTED
+
+Status: **accepted on the owner's rulings of 11 October 2026.** The owner asked that analysts "create
+summary reports for trends on Events based on the configured domain model", "include these on their
+dossier" and "distribute these reports to viewers", and asked which of it needs design decisions.
+Rulings, each chosen from options put to the owner: reports are **built in the Glass**; a report in a
+pack is **a dated snapshot**; distribution is **published within OspreyFlow, and exported as PDF**;
+"dossier" means **a case report pack** (the entity Dossier of scenario B6 keeps its meaning); and
+**four distinct demo personas**. Decisions marked *(mine)* are proposals the owner may overrule. Nothing
+is built yet.
+
+### Decisions
+
+1. **A trend report is a saved, closed definition — no expression language.** Per case: the event
+   types (the deployment ontology's temporal link types — what the analytics store holds as events,
+   e.g. TRANSACTED, CALLED), a measure (*count*; *sum* of a numeric property the ontology declares on
+   that type), a period and an interval (week or month), an optional grouping (by event type, or by a
+   categorical property the ontology declares), and optional filters (a property equals a value).
+   Every choice is validated against the ontology; nothing is typed as a formula.
+2. **Counted as the reader (rule 3).** A trend is computed through the `AnalyticsPort` with the
+   reader's `Principal`, so an event they may not see is in no bucket. *Count* uses the existing
+   `histogram` (fixed interval, filtered by type). *Sum* and *group by property* need a new port
+   method, `trend` — its conformance suite is written first (rule 1), including that a hidden event
+   moves no bucket and no total. **Bounds** *(mine)*: at most 104 buckets and 12 series; past either,
+   a typed `limit_exceeded` with the three options (rule 2) — never a silent cut.
+3. **A case report pack** — the analyst's intelligence product: an ordered list of items, each a
+   trend-report snapshot, an assessment or judgement (as written at that time), a chosen entity with a
+   caption, or a note. A case has any number of packs, each titled.
+4. **A trend in a pack is a dated snapshot.** Adding a trend freezes its figures with the definition,
+   the author and the time, and **marks the item at the highest classification among the events it
+   counted** (the analytics store carries handling per event). A reader below an item's marking does
+   not see that item, and the pack says how many items are withheld from them (never which). The
+   author may refresh a snapshot; the earlier one is kept in the pack's history.
+5. **Publishing within OspreyFlow.** A pack is a draft until published; a published version is
+   immutable, and a new publication is a new version. Anyone with **Viewer on the case and
+   `read_reports`** reads published packs under *Reports → Published* — a Reports Viewer sees them
+   without the graph. Withdrawing a publication is recorded. Every read is audited.
+6. **PDF export through the export gate.** Exporting a published pack asks the Conduit, which applies
+   the existing gate (ADR-045, 047: the exporter's handling, the items' markings and handling codes),
+   records an export-ledger entry (`artefact_kind = report_pack`) and returns the approved manifest;
+   the Glass renders the PDF from it with each page's marking banner *(mine: rendered in the browser
+   from the approved manifest, so no server-side PDF dependency enters the licence register)*.
+7. **Rights, from ADR-112's approved table — none added** *(mine)*: building and saving a trend is
+   `run_analysis`; assembling, refreshing and publishing a pack is `record_assessment` with Editor on
+   the case; reading published packs is `read_reports` with Viewer; exporting is `export`.
+8. **Four distinct demo personas.** `osprey-demo-analyst` holds Analyst only (its Data Engineer role
+   is removed); new `osprey-demo-engineer` holds Data Engineer; new `osprey-demo-report-viewer` holds
+   Reports Viewer; `osprey-demo-admin` stays the administrator. The two new accounts are rendered with
+   the realm like the others (their passwords in `deployment.env`, never printed) and given levels on
+   the synthetic demo cases — the engineer Editor, the viewer Viewer.
+
+**Tests to write first, named.** The `trend` conformance cases (a hidden event moves no bucket or
+total; sum over a declared property; grouping by a declared category; the bounds refused as
+`limit_exceeded`); a definition naming an undeclared type or property refused; a snapshot's marking
+the highest of what it counted and an item withheld from a reader below it, with the withheld count
+shown; a published version immutable; a reader without Viewer refused (404) and without
+`read_reports` refused (403); the PDF export refused above the exporter's handling and recorded in
+the ledger when allowed; keyboard cases for building a trend, adding it to a pack, publishing and
+exporting (rule 13); the demo personas each seeing exactly their own rail.
