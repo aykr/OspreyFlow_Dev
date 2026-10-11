@@ -103,7 +103,7 @@ from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, load_uk_le_scheme, principal_may_view
 from ontology.packs import load_deployment_ontology, pack_catalogue
 from ontology.yardstick import Yardstick, load_phia_yardstick
-from ports.analytics import AnalyticsPort
+from ports.analytics import AnalyticsPort, TrendLimitExceeded
 from ports.compute import ComputePort
 from ports.graph import GraphPort
 from ports.media import MediaStore
@@ -209,6 +209,13 @@ from schemas.ingest import (
 from schemas.mapconfig import MapConfig, PublicMapConfig
 from schemas.profile import SourceProfile
 from schemas.rights import Right, RightsResponse, rights_for
+from schemas.trends import (
+    TrendDefinition,
+    TrendDefinitionInput,
+    TrendFigures,
+    TrendLimitExceededBody,
+    TrendOptions,
+)
 
 from . import alert_queue
 from . import compute_routes as compute_routes_module
@@ -508,6 +515,15 @@ from .tile_cache import (
     write_cached_tile,
 )
 from .tile_proxy import build_upstream_url, fetch_tile
+from .trends import (
+    TrendDefinitionRefused,
+    TrendStore,
+    highest,
+    name_series,
+    to_request,
+    trend_options,
+    validate_definition,
+)
 from .typology_rules import TypologyRuleNotFoundError, TypologyRuleStore
 from .watch_routes import (
     AlertJumpResult,
@@ -586,6 +602,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     export_ledger = await ExportLedgerStore.connect(config.postgres.dsn)
     # ADR-111 Amendment 2: read-only, for the Admin area's Dashboards screen.
     report_freshness = await ReportFreshness.connect(config.postgres.dsn)
+    # ADR-113: the saved trend definitions of each case.
+    trend_store = await TrendStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
@@ -718,6 +736,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.assumptions_store = assumptions_store
     app.state.export_ledger = export_ledger
     app.state.report_freshness = report_freshness
+    app.state.trend_store = trend_store
     app.state.studio_recipes = studio_recipes
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
@@ -816,6 +835,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await assumptions_store.close()
         await export_ledger.close()
         await report_freshness.close()
+        await trend_store.close()
         await studio_recipes.close()
         await extraction_candidates.close()
         await questions_store.close()
@@ -1163,6 +1183,13 @@ GapsStoreDep = Annotated[IntelligenceGapStore, Depends(get_gaps_store)]
 AssumptionsStoreDep = Annotated[AssumptionStore, Depends(get_assumptions_store)]
 ExportLedgerDep = Annotated[ExportLedgerStore, Depends(get_export_ledger)]
 ReportFreshnessDep = Annotated[ReportFreshness, Depends(get_report_freshness)]
+
+
+def get_trend_store(request: Request) -> TrendStore:
+    return request.app.state.trend_store  # type: ignore[no-any-return]
+
+
+TrendStoreDep = Annotated[TrendStore, Depends(get_trend_store)]
 StudioRecipesDep = Annotated[StudioRecipeStore, Depends(get_studio_recipes)]
 ExtractionCandidatesDep = Annotated[ExtractionCandidateStore, Depends(get_extraction_candidates)]
 ModelDep = Annotated[ModelPort, Depends(get_model)]
@@ -7976,6 +8003,163 @@ async def system_status_route(
         await check("Identity provider", identity_admin.reachable),
     ]
     return SystemStatus(version=os.environ.get("OSPREY_VERSION"), components=components)
+
+
+# --- Trend reports (ADR-113 decisions 1 and 2) ---------------------------------------------
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/trends/options",
+    dependencies=[Depends(require_right(Right.RUN_ANALYSIS))],
+)
+async def trend_options_route(
+    investigation: InvestigationViewerDep, ontology: OntologyDep
+) -> TrendOptions:
+    """The event types and properties a trend may use, from this deployment's ontology."""
+    return trend_options(ontology)
+
+
+async def _trend_figures(
+    defn: TrendDefinitionInput,
+    case: Investigation,
+    principal: Principal,
+    ontology: OntologySchema,
+    analytics: AnalyticsPort,
+    investigations: InvestigationStore,
+    audit: AuditWriter,
+    working_set: WorkingSetService,
+    handling_scheme: HandlingScheme,
+) -> TrendFigures:
+    """The trend counted for this reader now (rule 3): the case's own events, a branch's inherited
+    ones with them, nothing the reader may not see."""
+    validate_definition(defn, ontology)
+    now = datetime.now(UTC)
+    request, start = to_request(defn, ontology, case.id, now)
+    scoped = await _case_event_filter(request.filter, principal, investigations, audit, working_set)
+    result = await analytics.trend(request.model_copy(update={"filter": scoped}), principal)
+    result = name_series(result, defn, ontology)
+    return TrendFigures(
+        definition=TrendDefinitionInput.model_validate(
+            defn.model_dump(include=set(TrendDefinitionInput.model_fields))
+        ),
+        result=result,
+        as_of=now,
+        window_start=start,
+        marking=highest(result.classifications, list(handling_scheme.classification)),
+    )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/trends/preview",
+    dependencies=[Depends(require_right(Right.RUN_ANALYSIS))],
+)
+async def preview_trend(
+    body: TrendDefinitionInput,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    ontology: OntologyDep,
+    analytics: AnalyticsDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
+    working_set: WorkingSetDep,
+    handling_scheme: HandlingSchemeDep,
+) -> TrendFigures:
+    figures = await _trend_figures(body, investigation, principal, ontology, analytics,
+                                   investigations, audit, working_set, handling_scheme)  # fmt: skip
+    await audit.record(principal=principal, action="preview_trend",
+                       investigation_id=investigation.id,
+                       resolved_query=body.model_dump(mode="json"),
+                       result_cardinality=figures.result.events)  # fmt: skip
+    return figures
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/trends",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.RUN_ANALYSIS))],
+)
+async def save_trend(
+    body: TrendDefinitionInput,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    ontology: OntologyDep,
+    trends: TrendStoreDep,
+    audit: AuditDep,
+) -> TrendDefinition:
+    """Saving writes to the case, so it needs Editor; the definition is checked first."""
+    validate_definition(body, ontology)
+    saved = await trends.create(investigation.id, body, principal)
+    await audit.record(principal=principal, action="save_trend", investigation_id=investigation.id,
+                       resolved_query={"trend": saved.id, "title": saved.title},
+                       result_cardinality=1)  # fmt: skip
+    return saved
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/trends",
+    dependencies=[Depends(require_right(Right.RUN_ANALYSIS))],
+)
+async def list_trends(
+    investigation: InvestigationViewerDep, trends: TrendStoreDep
+) -> list[TrendDefinition]:
+    return await trends.list_for_case(investigation.id)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/trends/{trend_id}/figures",
+    dependencies=[Depends(require_right(Right.RUN_ANALYSIS))],
+)
+async def trend_figures(
+    trend_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    ontology: OntologyDep,
+    analytics: AnalyticsDep,
+    investigations: InvestigationsDep,
+    audit: AuditDep,
+    working_set: WorkingSetDep,
+    handling_scheme: HandlingSchemeDep,
+    trends: TrendStoreDep,
+) -> TrendFigures:
+    saved = await trends.get(investigation.id, trend_id)
+    if saved is None:
+        raise HTTPException(status_code=404, detail="no such trend in this case")
+    figures = await _trend_figures(saved, investigation, principal, ontology, analytics,
+                                   investigations, audit, working_set, handling_scheme)  # fmt: skip
+    await audit.record(principal=principal, action="read_trend", investigation_id=investigation.id,
+                       resolved_query={"trend": trend_id},
+                       result_cardinality=figures.result.events)  # fmt: skip
+    return figures
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/trends/{trend_id}",
+    status_code=204,
+    dependencies=[Depends(require_right(Right.RUN_ANALYSIS))],
+)
+async def delete_trend(
+    trend_id: str,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    trends: TrendStoreDep,
+    audit: AuditDep,
+) -> None:
+    if not await trends.delete(investigation.id, trend_id):
+        raise HTTPException(status_code=404, detail="no such trend in this case")
+    await audit.record(principal=principal, action="delete_trend",
+                       investigation_id=investigation.id,
+                       resolved_query={"trend": trend_id}, result_cardinality=1)  # fmt: skip
+
+
+@app.exception_handler(TrendDefinitionRefused)
+async def _trend_refused(request: Request, exc: TrendDefinitionRefused) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": "trend_refused", "detail": str(exc)})
+
+
+@app.exception_handler(TrendLimitExceeded)
+async def _trend_limit(request: Request, exc: TrendLimitExceeded) -> JSONResponse:
+    body = TrendLimitExceededBody(cap_kind=exc.cap_kind, cap=exc.cap, would_be=exc.would_be)  # type: ignore[arg-type]
+    return JSONResponse(status_code=409, content=body.model_dump())
 
 
 async def _openable_dashboards(

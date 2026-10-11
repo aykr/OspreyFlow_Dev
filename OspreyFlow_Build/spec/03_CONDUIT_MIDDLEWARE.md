@@ -734,6 +734,12 @@ DELETE /v1/admin/dashboards/{client_id}                    remove one — only a
 GET    /v1/admin/system                                    each component asked now: graph, Postgres, Valkey, models, identity provider; administer_system
 GET    /v1/investigations/{id}/reports                     the Reports view's figures (ADR-111): every figure counted as the reader; held rows for Editors and above; 409 limit_exceeded past the bound; Viewer
 GET    /v1/investigations/{id}/reports/feed                the same figures for a dashboard, ?format=json|csv; figures only; every read in the export ledger (artefact_kind report_feed); Viewer
+GET    /v1/investigations/{id}/trends/options          the event types and properties a trend may use, from the deployment ontology (temporal link types; numeric and categorical properties, never a high-sensitivity one) — ADR-113; run_analysis, Viewer
+POST   /v1/investigations/{id}/trends/preview          a trend definition counted for the reader now, through AnalyticsPort.trend; marked at the highest classification counted; 422 trend_refused for anything the ontology does not declare; 409 limit_exceeded with its options past 104 periods or 12 series; run_analysis, Viewer
+POST   /v1/investigations/{id}/trends                  save a checked definition to the case; run_analysis, Editor
+GET    /v1/investigations/{id}/trends                  the case's saved definitions; run_analysis, Viewer
+GET    /v1/investigations/{id}/trends/{trend}/figures  a saved trend counted for the reader now; another case's trend is 404; run_analysis, Viewer
+DELETE /v1/investigations/{id}/trends/{trend}          remove a saved definition; run_analysis, Editor
 GET    /v1/reports/dashboards                              the Superset boards this person may open: each counted for a dashboard identity whose every figure they could count (unit, clearance, handling codes, a level on each of its cases — ADR-111 Am. 3); read_reports
 POST   /v1/reports/dashboards/{slug}/guest-token           a five-minute, read-only Superset guest token for one such board, its rows limited to that identity (row-level rule); otherwise 404; Superset refusing is a 502 in words; read_reports
 POST   /v1/investigations/{id}/documents/{document_id}/candidates/accept   the reader's Accept all pending: an enumerated list of candidate ids, never a filter (ADR-108 Q1); Editor

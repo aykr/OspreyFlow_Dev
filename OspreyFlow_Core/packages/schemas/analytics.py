@@ -488,3 +488,6 @@ class TrendResult(BaseModel):
     #: The distinct classifications among the events counted, so a snapshot can be marked at the
     #: highest of them (ADR-113 decision 4). Only what the reader could see.
     classifications: list[str] = Field(default_factory=list)
+
+
+ALL_MODELS = (*ALL_MODELS, TrendRequest, TrendPoint, TrendResult)

@@ -98,6 +98,9 @@ ROUTE_RIGHTS = {
  "ownership_canvas": "trace_ownership", "kyc_status_route": "trace_ownership",
  "neighbourhood_risk_route": "trace_ownership", "read_case_report": "read_reports", "list_embedded_dashboards": "read_reports",
  "embedded_dashboard_guest_token": "read_reports",
+ # ADR-113 decision 7: building, saving and reading trends is run_analysis.
+ "trend_options_route": "run_analysis", "preview_trend": "run_analysis", "save_trend": "run_analysis",
+ "list_trends": "run_analysis", "trend_figures": "run_analysis", "delete_trend": "run_analysis",
  "read_report_feed": "read_report_feed", "read_alert_queue": "read_alert_queue",
  "explain_alert": "read_alert_queue", "claim_alert": "triage_alerts", "release_alert": "triage_alerts",
  "dispose_alert": "triage_alerts", "alert_canvas": "triage_alerts",

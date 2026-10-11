@@ -33,6 +33,7 @@ from schemas.model import ALL_MODELS as MODEL_PORT_MODELS  # noqa: E402
 from schemas.profile import ALL_MODELS as PROFILE_MODELS  # noqa: E402
 from schemas.provider_profile import ALL_MODELS as PROVIDER_PROFILE_MODELS  # noqa: E402
 from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
+from schemas.trends import ALL_MODELS as TREND_MODELS  # noqa: E402
 
 #: Every Pydantic model in the repo the drift gate must cover: the real
 #: domain model, `AnalyticsPort`'s real shapes, the ingest recipe and load
@@ -53,6 +54,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *COMPUTE_PORT_MODELS,
     *DEPLOYMENT_MODELS,
     *EXPLORE_MODELS,
+    *TREND_MODELS,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
