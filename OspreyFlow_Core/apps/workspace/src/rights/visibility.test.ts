@@ -2,7 +2,17 @@
 // Each role's view of the rail and the view switch, from the rights `GET /v1/me/rights` returns.
 import { describe, expect, it } from "vitest";
 
-import { canDownloadFeed, landingView, railEntries, showsInspector, viewsFor } from "./visibility";
+import {
+  canAssemblePacks,
+  canBuildTrends,
+  canDownloadFeed,
+  canExportPacks,
+  canReadPublished,
+  landingView,
+  railEntries,
+  showsInspector,
+  viewsFor,
+} from "./visibility";
 
 const ANALYST = ["investigate", "keep_watches", "read_alert_queue", "trace_ownership", "ask_model", "read_reports", "add_ingest_files"];
 const ENGINEER = ["investigate", "read_alert_queue", "edit_pipelines", "read_reports"];
@@ -40,5 +50,30 @@ describe("what the Glass offers each role", () => {
     expect(railEntries(null)).not.toContain("admin");
     expect(railEntries(null)).not.toContain("dashboards"); // ADR-111 Am. 3: only once the right is known
     expect(viewsFor(null)).toEqual(["graph", "map", "reports"]);
+  });
+});
+
+describe("what the Reports place offers each role (ADR-113)", () => {
+  const FOUR = [canBuildTrends, canAssemblePacks, canReadPublished, canExportPacks];
+
+  it("offers everything while the rights are not yet known", () => {
+    for (const helper of FOUR) expect(helper(null)).toBe(true);
+  });
+
+  it("offers a reports viewer the published packs and nothing that builds or exports", () => {
+    const rights = new Set(READER);
+    expect(canReadPublished(rights)).toBe(true);
+    expect(canBuildTrends(rights)).toBe(false);
+    expect(canAssemblePacks(rights)).toBe(false);
+    expect(canExportPacks(rights)).toBe(false);
+  });
+
+  it("asks each helper for its own right and no other", () => {
+    expect(canBuildTrends(new Set(["run_analysis"]))).toBe(true);
+    expect(canBuildTrends(new Set(["record_assessment", "export", "read_reports"]))).toBe(false);
+    expect(canAssemblePacks(new Set(["record_assessment"]))).toBe(true);
+    expect(canAssemblePacks(new Set(["run_analysis", "export", "read_reports"]))).toBe(false);
+    expect(canExportPacks(new Set(["export"]))).toBe(true);
+    expect(canExportPacks(new Set(["run_analysis", "record_assessment", "read_reports"]))).toBe(false);
   });
 });

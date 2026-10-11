@@ -54,3 +54,24 @@ export function showsInspector(rights: Rights): boolean {
 export function canDownloadFeed(rights: Rights): boolean {
   return known(rights, "read_report_feed");
 }
+
+// ADR-113: the Reports place's tabs. Each is a convenience over a route that checks its own right.
+/** Trends are built from the case's events: the right to run analysis. */
+export function canBuildTrends(rights: Rights): boolean {
+  return has(rights, "run_analysis");
+}
+
+/** Packs are assembled from assessments and trends: the right to record an assessment. */
+export function canAssemblePacks(rights: Rights): boolean {
+  return has(rights, "record_assessment");
+}
+
+/** Published packs are what a Reports Viewer reads. */
+export function canReadPublished(rights: Rights): boolean {
+  return has(rights, "read_reports");
+}
+
+/** A pack leaves the platform only through the export right. */
+export function canExportPacks(rights: Rights): boolean {
+  return has(rights, "export");
+}

@@ -919,6 +919,31 @@ five-minute guest token the Conduit issues and the SDK asks for again before it 
 menus never appear; a refusal is said in words; with none to open, the panel says why one would
 appear (`reports/EmbeddedDashboards.tsx`, `reports/ReportsPlace.tsx`; `keyboard/reports.spec.ts`).
 
+**Trends, report packs and their distribution (ADR-113, Amendments 1 and 2).** The Reports view's
+tabs are *Figures*, then — each only with its right (`rights/visibility.ts`) — *Trends*
+(run_analysis), *Packs* (record_assessment), *Published* (read_reports), then *Dashboards*.
+*Trends* builds a trend from `GET …/trends/options` only — event types as checkboxes, *Count* or
+*Sum* of a number property every chosen type declares, week or month, weeks back, a series by event
+type or a category, up to five filters from the declared values — with nothing typed as a formula;
+*Preview* draws a bar per period, stacked by series with a key naming every series, the sentence in
+words (the events counted, and those with no value left out of a sum) and the server's marking; past
+a bound it says the three choices in words. A saved trend is chosen from the list, deleted, or added
+to a pack. *Packs* lists the case's packs and creates one; the chosen pack shows its marking, its
+versions in words (withdrawn ones with who and why, live ones with *Withdraw version n* and a
+reason), "n items in this pack are withheld from you" when any are — never which — and its items in
+order, each under a banner with its own marking, with *Move up*, *Move down*, *Refresh* (trend
+snapshots only) and *Remove*; *Add an item* adds a saved trend, an assessment or a note with its
+required marking; *Publish*, refused in words while an item is withheld from the publisher; *Show
+history* shows the earlier snapshots. *Published* lists each pack's newest live publication and
+shows it read-only — the Reports Viewer's view of packs. *Export PDF* (export) asks the Conduit for
+the approved manifest, asks for a justification and originator reference when an item needs its
+originator consulted, and prints the manifest from a hidden frame: a cover with the mark, then a
+page per item under a top and bottom banner of that item's own marking (`reports/packExport.ts`,
+styled with the light-theme ramp restated, every string escaped); the PDF is saved from the
+browser's print dialogue. Entity items are drawn when present; adding one from the canvas is not yet
+built. Keyboard cases: `keyboard/trends.spec.ts` (`TRENDS_ACTIONS`) and `keyboard/packs.spec.ts`
+(`PACKS_ACTIONS`).
+
 **The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
 running system, behind the same sign-in — *Admin* on the rail — with a tab per right: *People and
 roles* (each person's four roles as checkboxes, saved whole, other grants kept and shown), *Dashboards*

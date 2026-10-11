@@ -1163,7 +1163,7 @@ export function App() {
           />
         )}
         {view === "reports" && (
-          <ReportsPlace apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} />
+          <ReportsPlace apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} rights={rights} />
         )}
         {view === "dashboards" && (
           <div style={{ flex: 1, display: "flex", padding: "var(--sp-16)", minHeight: 0 }}>

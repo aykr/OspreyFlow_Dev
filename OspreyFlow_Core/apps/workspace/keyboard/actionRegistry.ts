@@ -562,7 +562,26 @@ export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
   "open-the-dashboards-tab-and-choose-a-board-by-keyboard",
 ] as const);
 
-export const LINK_CHANGE_ACTIONS = defineActionRegistry("LINK_CHANGE_ACTIONS", [
+// ADR-113 stage 5: the Trends tab, built and driven with the keyboard alone.
+export const TRENDS_ACTIONS = defineActionRegistry("TRENDS_ACTIONS", [
+  "build-and-preview-a-trend-by-keyboard",
+  "save-a-trend-by-keyboard",
+  "add-a-trend-to-a-pack-by-keyboard",
+] as const);
+
+// ADR-113 stage 5: the Packs and Published tabs.
+export const PACKS_ACTIONS = defineActionRegistry("PACKS_ACTIONS", [
+  "create-a-pack-by-keyboard",
+  "add-a-note-to-a-pack-by-keyboard",
+  "move-a-pack-item-by-keyboard",
+  "refresh-a-snapshot-by-keyboard",
+  "publish-a-pack-by-keyboard",
+  "withdraw-a-publication-by-keyboard",
+  "export-a-pack-by-keyboard",
+  "read-a-published-pack-by-keyboard",
+] as const);
+
+export const LINK_CHANGE_ACTIONS =defineActionRegistry("LINK_CHANGE_ACTIONS", [
   "enter-on-change-this-link-opens-the-form-at-the-type",
   "change-the-type-and-save-with-ctrl-enter",
   "save-needs-a-reason",

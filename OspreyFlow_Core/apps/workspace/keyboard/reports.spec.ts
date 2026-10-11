@@ -40,8 +40,11 @@ test("the Dashboards tab is opened and a board chosen by keyboard", async ({ pag
   const asked = await serve(page);
   await page.goto("/keyboard/reports-harness.html");
   await page.getByRole("tab", { name: "Figures" }).focus();
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("tab", { name: "Dashboards" })).toBeFocused();
+  // ADR-113: with every right assumed the tabs run Figures, Trends, Packs, Published, Dashboards.
+  for (const next of ["Trends", "Packs", "Published", "Dashboards"]) {
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("tab", { name: next })).toBeFocused();
+  }
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EMBEDDED__?.at(-1)?.id)).toBe("uuid-compliance-board");
   await page.getByRole("button", { name: "Fraud board" }).focus();
