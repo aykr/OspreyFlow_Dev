@@ -5,7 +5,8 @@ environment the deployment renders — nothing secret in this file.
 a confidential client). Their roles come from the access token the provider returns to Superset over
 the deployment's own network — `osprey-admin` is Superset's Admin, every other OspreyFlow role its
 read-only Gamma — synchronised at each sign-in. The browser is sent to the provider's public
-address; Superset's own calls use its internal one.
+address; Superset's own calls use its internal one, including fetching the keys its id_token is
+verified against.
 
 **It reads only the mart,** through `REPORT_MART_READER`, a login that may select from
 `osprey_reports` and nothing else (registered by `osprey_entrypoint.py`).
@@ -50,6 +51,15 @@ OAUTH_PROVIDERS = [
             "access_token_url": f"{_internal}/protocol/openid-connect/token",
             "authorize_url": f"{_public}/protocol/openid-connect/auth",
             "client_kwargs": {"scope": "openid profile"},
+            # The id_token is verified: signature against the realm's keys, fetched over the
+            # internal network; audience, nonce and issuer. A browser sign-in's id_token carries
+            # the public issuer — the address the person signed in at — even though Superset
+            # fetches it internally (measured: the internal issuer was refused, `invalid_claim`);
+            # `SUPERSET_IDP_ISSUER` names another for a realm with a fixed hostname. Without
+            # `jwks_uri` every sign-in was refused ("Missing jwks_uri in metadata", found live 11
+            # October 2026).
+            "jwks_uri": f"{_internal}/protocol/openid-connect/certs",
+            "issuer": os.environ.get("SUPERSET_IDP_ISSUER", _public),
         },
     }
 ]
