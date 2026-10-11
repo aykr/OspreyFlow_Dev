@@ -11,6 +11,12 @@ FROM apache/superset@sha256:15e110b8533d3cb6a0d529512ea71252b0ac62e3f72b1f7a5000
 USER root
 RUN pip install --no-cache-dir psycopg2-binary==2.9.6 authlib==1.3.2
 COPY superset_config.py /app/pythonpath/superset_config.py
+# The OspreyFlow mark and favicon, served by Superset itself (APP_ICON, FAVICONS).
+COPY brand/osprey-mark.svg brand/osprey-favicon.svg /app/superset/static/assets/images/
+# Superset's loading animation, replaced by the OspreyFlow mark (brand/make_loader.py). The hashed
+# name belongs to the pinned image above: re-check it whenever the digest changes.
+COPY brand/loading.gif /app/superset/static/assets/loading.cff8a5da.gif
+COPY brand/loading.gif /app/superset/static/assets/images/loading.gif
 COPY osprey_entrypoint.py /app/osprey_entrypoint.py
 USER superset
 EXPOSE 8088
