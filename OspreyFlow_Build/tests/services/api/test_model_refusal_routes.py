@@ -26,7 +26,7 @@ from schemas.domain import Principal
 from .test_investigation_access_routes import _Audit
 from .test_link_type_routes import _Cases
 
-ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1")
+ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 
 class _Refusing:

@@ -137,6 +137,7 @@ export type { ProfileAuth } from "./ProfileAuth";
 export type { ProfileVariable } from "./ProfileVariable";
 export type { ProfileZoom } from "./ProfileZoom";
 export type { ProviderProfile } from "./ProviderProfile";
+export type { RightsResponse } from "./RightsResponse";
 export type { ExtractionRequest } from "./ExtractionRequest";
 export type { ExtractionResult } from "./ExtractionResult";
 export type { TranscribeRequest } from "./TranscribeRequest";

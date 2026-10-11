@@ -27,7 +27,7 @@ from services.api.explore import ExploreService
 from schemas.domain import Principal
 from schemas.explore import RankedNodes, TypeCounts
 
-ENRON = Principal(id="a", clearance="OFFICIAL", org_unit="u", datasets=["enron"])
+ENRON = Principal(id="a", clearance="OFFICIAL", org_unit="u", datasets=["enron"], roles=["analyst"])
 FIXTURE = ENRON.model_copy(update={"datasets": ["fixture-corp"]})
 SECRET_ENRON = ENRON.model_copy(update={"clearance": "SECRET"})
 T0 = datetime(2026, 10, 8, 9, 0, tzinfo=UTC)

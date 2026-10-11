@@ -41,7 +41,7 @@ from schemas.domain import (
 from tests.conftest import default_claims, sign_token
 from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
 
-PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 _PLACEHOLDER_HANDLING = {
     "classification": "OFFICIAL",
@@ -161,7 +161,7 @@ def _membership_node(*, owning_unit: str, classification: str = "OFFICIAL") -> N
 #: (OFFICIAL) would silently drop it before it was ever stored. `_seed_working_set` below seeds as
 #: a principal cleared for everything the test hands it; the export itself still runs as
 #: `PRINCIPAL`, whose own access is what `withheld_count_for` measures.
-_SEEDER = Principal(id="seeder-1", clearance="SECRET", org_unit=PRINCIPAL.org_unit)
+_SEEDER = Principal(id="seeder-1", clearance="SECRET", org_unit=PRINCIPAL.org_unit, roles=["analyst"])
 
 
 async def _seed_working_set(investigation_id: str, nodes: list[Node]) -> None:
@@ -325,4 +325,5 @@ def test_exports_ledger_route_requires_the_compliance_role(
     with TestClient(app) as client:
         response = client.get("/v1/exports", headers=headers)
         assert response.status_code == 403, response.text
-        assert response.json()["error"] == "compliance_role_required"
+        # ADR-112: the route's own right is checked first, and says which right is missing.
+        assert response.json()["detail"] == {"error": "right_required", "right": "read_export_ledger"}

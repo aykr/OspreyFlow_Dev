@@ -24,11 +24,11 @@ from services.api.investigations import (
 
 from schemas.domain import Principal
 
-ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1")
-BOB = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1")
-EVE = Principal(id="eve", clearance="OFFICIAL", org_unit="unit-2")
+ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+BOB = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+EVE = Principal(id="eve", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
 ROOT = Principal(id="root", clearance="OFFICIAL", org_unit="unit-1", roles=["osprey-admin"])
-NOT_ADMIN = Principal(id="mallory", clearance="OFFICIAL", org_unit="unit-1")
+NOT_ADMIN = Principal(id="mallory", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 
 class _Store:

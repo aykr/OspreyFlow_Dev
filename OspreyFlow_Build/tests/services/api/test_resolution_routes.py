@@ -41,7 +41,7 @@ from services.api.working_set.models import (
 
 from schemas.domain import Principal
 
-PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 
 class _FakeWorkingSet:
@@ -217,7 +217,7 @@ def test_get_threshold_denies_a_principal_in_a_different_org_unit(client: TestCl
     """Every read path gets its own access-control test, no exceptions for an
     internal endpoint — mirrors `test_app.py`'s
     `test_get_investigation_denies_a_principal_in_a_different_org_unit`."""
-    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2")
+    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
     app.dependency_overrides[get_principal] = lambda: other_unit_principal
 
     response = client.get("/v1/investigations/inv-1/resolution/threshold")
@@ -227,7 +227,7 @@ def test_get_threshold_denies_a_principal_in_a_different_org_unit(client: TestCl
 
 
 def test_put_threshold_denies_a_principal_in_a_different_org_unit(client: TestClient) -> None:
-    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2")
+    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
     app.dependency_overrides[get_principal] = lambda: other_unit_principal
 
     response = client.put("/v1/investigations/inv-1/resolution/threshold", json={"threshold": 0.80})
@@ -304,7 +304,7 @@ def test_post_link_returns_404_when_a_node_is_not_in_the_working_set(
 
 
 def test_post_link_denies_a_principal_in_a_different_org_unit(client: TestClient) -> None:
-    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2")
+    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
     app.dependency_overrides[get_principal] = lambda: other_unit_principal
 
     response = client.post(
@@ -338,7 +338,7 @@ def test_post_split_returns_422_for_the_same_node_twice(client: TestClient) -> N
 
 
 def test_post_split_denies_a_principal_in_a_different_org_unit(client: TestClient) -> None:
-    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2")
+    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
     app.dependency_overrides[get_principal] = lambda: other_unit_principal
 
     response = client.post(
@@ -394,7 +394,7 @@ def test_get_explain_returns_404_for_an_unknown_cluster(client: TestClient) -> N
 
 
 def test_get_explain_denies_a_principal_in_a_different_org_unit(client: TestClient) -> None:
-    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2")
+    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
     app.dependency_overrides[get_principal] = lambda: other_unit_principal
 
     response = client.get("/v1/investigations/inv-1/resolution/explain/n1")

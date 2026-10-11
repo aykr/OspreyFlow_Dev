@@ -35,7 +35,7 @@ from schemas.explore import RankedNode, RankedNodes, TypeCounts
 from tests.services.api.any_case import AnyCase
 from tests.services.api.test_search_route import _FakeAudit, _node
 
-ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 
 class _Resolver:

@@ -237,7 +237,7 @@ def test_the_stream_route_is_not_an_http_route_and_is_covered_by_its_own_test() 
 
 # --- behaviour through the real dependency ---------------------------------------------------
 
-_PRINCIPAL = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1")
+_PRINCIPAL = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 _CASE = Investigation(
     id="inv-1",
     name="A case",

@@ -238,7 +238,9 @@ def api_env(jwks_url: str) -> Iterator[None]:
 
 
 def _as(private_key: rsa.RSAPrivateKey, sub: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {sign_token(private_key, default_claims(sub=sub))}"}
+    # ADR-112: the feed is the Reports Viewer's right; the case Viewer here holds that role.
+    claims = default_claims(sub=sub, roles=["reports_viewer"])
+    return {"Authorization": f"Bearer {sign_token(private_key, claims)}"}
 
 
 async def _case_with_an_alert() -> str:

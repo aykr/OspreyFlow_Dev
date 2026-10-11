@@ -24,7 +24,7 @@ from schemas.domain import Principal
 
 from .test_link_events import _Cases
 
-ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 
 class _Content:

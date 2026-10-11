@@ -36,7 +36,7 @@ from ontology.handling import load_uk_le_scheme
 from schemas.domain import Handling, Principal
 from tests.services.api.test_app import _FakeAudit, _FakeInvestigations
 
-PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 _CONTROL_POINTS: ControlPointQuad = (
     ControlPointRecord(px=0, py=0, lon=-1.836, lat=52.409),

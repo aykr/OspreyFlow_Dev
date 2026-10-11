@@ -18,7 +18,7 @@ from services.api.app import app, get_audit, get_graph, get_investigations, get_
 from schemas.domain import AuditStub, Node, Principal, Provenance, ProvenanceState, SourceRef
 from tests.services.api.any_case import AnyCase
 
-PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 
 def _node(node_id: str) -> Node:

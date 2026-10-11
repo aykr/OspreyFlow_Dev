@@ -27,8 +27,8 @@ from schemas.domain import Principal
 from .test_investigation_access_routes import _Audit, _Store
 from .test_link_type_service import Graph, MemoryStore, WorkingSet
 
-ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1")
-BOB = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1")
+ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+BOB = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-1", roles=["osprey-admin"])
 OTHER_ADMIN = Principal(
     id="admin-9", clearance="OFFICIAL", org_unit="unit-9", roles=["osprey-admin"]
@@ -95,7 +95,7 @@ def test_a_viewer_cannot_propose_and_a_stranger_cannot_tell_the_case_exists(worl
         world.client(BOB).post("/v1/investigations/inv-1/link-types", json=PROPOSAL).status_code
         == 403
     )
-    stranger = Principal(id="eve", clearance="OFFICIAL", org_unit="unit-2")
+    stranger = Principal(id="eve", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
     assert world.client(stranger).get("/v1/investigations/inv-1/link-types").status_code == 404
     assert world.store.rows == {}
 

@@ -42,7 +42,7 @@ from schemas.domain import (
     SourceRef,
 )
 
-PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 WHEN = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 
 
@@ -296,7 +296,7 @@ def test_a_principal_in_another_org_unit_cannot_change_or_read_history(
 ) -> None:
     app.dependency_overrides[get_principal] = lambda: Principal(
         id="analyst-2", clearance="OFFICIAL", org_unit="unit-2"
-    )
+    , roles=["analyst"])
     # `_FakeInvestigations` above always authorises; use one that applies the unit rule.
 
     class _UnitChecked(_FakeInvestigations):

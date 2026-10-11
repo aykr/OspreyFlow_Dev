@@ -25,7 +25,7 @@ from schemas.domain import Principal
 
 from .test_link_events import _Cases
 
-ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 URL = "/v1/investigations/inv-1/nodes/car-1/picture"
 PARAMS = {"name": "car.png", "classification": "OFFICIAL", "legal_basis": "Seized under PACE s19"}
 

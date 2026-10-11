@@ -27,7 +27,7 @@ from schemas.domain import (
 )
 from tests.services.api.any_case import AnyCase
 
-PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 
 def _node(node_id: str, node_type: str = "Person") -> Node:

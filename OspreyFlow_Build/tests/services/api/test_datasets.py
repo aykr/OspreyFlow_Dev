@@ -27,8 +27,8 @@ from services.api.investigations import AccessLevel, Investigation, Investigatio
 
 from schemas.domain import Principal
 
-ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1")
-CAROL = Principal(id="carol", clearance="OFFICIAL", org_unit="unit-2")
+ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+CAROL = Principal(id="carol", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
 
 
 def _dataset(dataset_id: str, unit: str, name: str) -> Dataset:

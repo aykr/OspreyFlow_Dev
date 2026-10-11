@@ -49,6 +49,7 @@ from conduit_common.identity import new_id
 from ontology.handling import HandlingScheme, evaluate_handling, principal_may_view
 from ports.graph import GraphPort
 from schemas.domain import Handling, Principal
+from schemas.rights import Right, rights_for
 
 from .assessments import JudgementStore, judgement_visible_to
 from .working_set.service import WorkingSetService
@@ -384,7 +385,7 @@ class ExportLedgerStore:
         by-design exemption `06_DECISIONS.md` ADR-038's own addendum already establishes for
         `evaluate_hotlists_for_entry` — gated by role instead, checked explicitly below, not by the
         query's own `WHERE` clause."""
-        if "compliance" not in principal.roles:
+        if Right.READ_EXPORT_LEDGER not in rights_for(principal.roles):
             raise ComplianceRoleRequiredError(principal.id)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch("SELECT * FROM export_ledger ORDER BY exported_at DESC")

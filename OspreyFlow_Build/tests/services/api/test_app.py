@@ -45,7 +45,7 @@ from schemas.domain import (
     SourceRef,
 )
 
-PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 
 def _node(node_id: str) -> Node:
@@ -236,7 +236,7 @@ def test_get_investigation_denies_a_principal_in_a_different_org_unit(
     gets the *same* 404 an unknown id would — existence-leak discipline
     extended to the investigation id, per `investigations.py`'s
     `InvestigationNotFoundError` docstring."""
-    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2")
+    other_unit_principal = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
     app.dependency_overrides[get_principal] = lambda: other_unit_principal
 
     response = client.get("/v1/investigations/inv-1")

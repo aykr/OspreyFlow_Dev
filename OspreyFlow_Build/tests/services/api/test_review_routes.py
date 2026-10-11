@@ -46,8 +46,8 @@ from schemas.domain import (
 from schemas.model import ExtractionRequest, ExtractionResult
 
 ONTOLOGY = load_default_ontology()
-PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
-OTHER_UNIT_PRINCIPAL = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2")
+PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+OTHER_UNIT_PRINCIPAL = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
 
 
 def _handling() -> Handling:

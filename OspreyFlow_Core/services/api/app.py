@@ -196,6 +196,7 @@ from schemas.ingest import (
 )
 from schemas.mapconfig import MapConfig, PublicMapConfig
 from schemas.profile import SourceProfile
+from schemas.rights import Right, RightsResponse, rights_for
 
 from . import alert_queue
 from . import compute_routes as compute_routes_module
@@ -1131,6 +1132,34 @@ PipelineRecognisersDep = Annotated[RecogniserFor, Depends(get_pipeline_recognise
 OnlineGeocodeDep = Annotated[OnlineGeocode | None, Depends(get_online_geocode)]
 
 
+def require_right(right: Right) -> Any:
+    """`06_DECISIONS.md` ADR-112: the right a route needs, declared in its decorator
+    (`dependencies=[Depends(require_right(Right.X))]`) and checked before anything else the route
+    does. A right is an action, never a licence to see: what the person then sees is still their
+    clearance and the case's datasets (rule 3), and a case route still needs its case level.
+    `required_right` is what `test_route_rights.py` reads to prove every route names one."""
+
+    async def _dependency(principal: PrincipalDep) -> Principal:
+        if right not in rights_for(principal.roles):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "right_required", "right": right.value},
+            )
+        return principal
+
+    _dependency.required_right = right  # type: ignore[attr-defined]
+    return _dependency
+
+
+#: ADR-112: a Studio role's check, read as the right it always meant, so `data_engineer` — which
+#: holds the rights and not the old role names — passes where `source_author` once did.
+_STUDIO_ROLE_RIGHT: dict[StudioRole, Right] = {
+    StudioRole.SOURCE_AUTHOR: Right.EDIT_PIPELINES,
+    StudioRole.SOURCE_APPROVER: Right.PUBLISH_PIPELINES,
+    StudioRole.LOADER: Right.RUN_PIPELINES,
+}
+
+
 def require_studio_role(role: StudioRole) -> Any:
     """Ingest Studio action authorisation (`09_INGEST_STUDIO.md` §8) — a
     dependency factory rather than a bare dependency, since which role a
@@ -1144,7 +1173,7 @@ def require_studio_role(role: StudioRole) -> Any:
     permits an action, never grants visibility into material."""
 
     async def _dependency(principal: PrincipalDep) -> Principal:
-        if role.value not in principal.roles:
+        if _STUDIO_ROLE_RIGHT[role] not in rights_for(principal.roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"principal lacks required studio role: {role.value}",
@@ -2004,7 +2033,11 @@ class CreateInvestigationInput(BaseModel):
     dataset_ids: list[str] | None = None
 
 
-@app.post("/v1/investigations", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.CREATE_CASE))],
+)
 async def create_investigation(
     principal: PrincipalDep,
     investigations: InvestigationsDep,
@@ -2041,7 +2074,11 @@ async def list_datasets_route(principal: PrincipalDep, datasets: DatasetsDep) ->
     return await datasets.list_for_unit(principal.org_unit)
 
 
-@app.post("/v1/datasets", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/datasets",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.CREATE_CASE))],
+)
 async def create_dataset_route(
     body: CreateDatasetRequest, principal: PrincipalDep, datasets: DatasetsDep, audit: AuditDep
 ) -> Dataset:
@@ -2064,7 +2101,10 @@ async def case_datasets_route(
     return await datasets.of_case(investigation.id)
 
 
-@app.put("/v1/investigations/{investigation_id}/datasets")
+@app.put(
+    "/v1/investigations/{investigation_id}/datasets",
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
 async def set_case_datasets_route(
     investigation: InvestigationAuthorDep,
     body: CaseDatasetsRequest,
@@ -2164,7 +2204,9 @@ class RenameInput(BaseModel):
         return value.strip()
 
 
-@app.patch("/v1/investigations/{investigation_id}")
+@app.patch(
+    "/v1/investigations/{investigation_id}", dependencies=[Depends(require_right(Right.SHARE_CASE))]
+)
 async def rename_investigation(
     investigation: InvestigationAuthorDep,
     body: RenameInput,
@@ -2183,7 +2225,11 @@ async def rename_investigation(
     return investigation.model_copy(update={"name": body.name})
 
 
-@app.delete("/v1/investigations/{investigation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete(
+    "/v1/investigations/{investigation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_right(Right.REMOVE_CASE))],
+)
 async def remove_investigation(
     investigation: InvestigationAccessManagerDep,
     principal: PrincipalDep,
@@ -2211,7 +2257,10 @@ class AccessView(BaseModel):
     grants: dict[str, AccessLevel] | None
 
 
-@app.get("/v1/investigations/{investigation_id}/access")
+@app.get(
+    "/v1/investigations/{investigation_id}/access",
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
 async def get_investigation_access(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -2234,7 +2283,11 @@ class UnitLevelInput(BaseModel):
     unit_level: Literal["viewer", "editor"] | None
 
 
-@app.put("/v1/investigations/{investigation_id}/access", status_code=status.HTTP_204_NO_CONTENT)
+@app.put(
+    "/v1/investigations/{investigation_id}/access",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
 async def set_investigation_unit_level(
     investigation: InvestigationAccessManagerDep,
     body: UnitLevelInput,
@@ -2273,6 +2326,7 @@ def _grantee(account_id: str) -> str:
 @app.put(
     "/v1/investigations/{investigation_id}/access/grants/{account_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
 )
 async def set_investigation_grant(
     investigation: InvestigationAccessManagerDep,
@@ -2296,6 +2350,7 @@ async def set_investigation_grant(
 @app.delete(
     "/v1/investigations/{investigation_id}/access/grants/{account_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
 )
 async def remove_investigation_grant(
     investigation: InvestigationAccessManagerDep,
@@ -2315,7 +2370,10 @@ async def remove_investigation_grant(
     )
 
 
-@app.get("/v1/investigations/{investigation_id}/access/history")
+@app.get(
+    "/v1/investigations/{investigation_id}/access/history",
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
 async def get_investigation_access_history(
     investigation: InvestigationAccessManagerDep, investigations: InvestigationsDep
 ) -> list[AccessHistoryEntry]:
@@ -2347,7 +2405,11 @@ class BranchRequest(BaseModel):
     name: str | None = None
 
 
-@app.post("/v1/investigations/{investigation_id}/branch", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/branch",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.BRANCH_CASE))],
+)
 async def branch_investigation(
     investigation: InvestigationEditorDep,
     principal: PrincipalDep,
@@ -2441,7 +2503,10 @@ class RemoveNodesRequest(BaseModel):
     node_ids: list[NodeId]
 
 
-@app.post("/v1/investigations/{investigation_id}/seed")
+@app.post(
+    "/v1/investigations/{investigation_id}/seed",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def seed(
     investigation: InvestigationEditorDep,
     body: SeedRequest,
@@ -2471,7 +2536,10 @@ async def seed(
     return outcome
 
 
-@app.post("/v1/investigations/{investigation_id}/expand")
+@app.post(
+    "/v1/investigations/{investigation_id}/expand",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def expand(
     investigation: InvestigationEditorDep,
     body: ExpandBody,
@@ -2510,7 +2578,10 @@ class LinksAmongBody(BaseModel):
     node_ids: list[NodeId] | None = None
 
 
-@app.post("/v1/investigations/{investigation_id}/links-among")
+@app.post(
+    "/v1/investigations/{investigation_id}/links-among",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def links_among_route(
     investigation: InvestigationEditorDep,
     body: LinksAmongBody,
@@ -2543,7 +2614,10 @@ async def links_among_route(
     return outcome
 
 
-@app.post("/v1/investigations/{investigation_id}/expand/preview")
+@app.post(
+    "/v1/investigations/{investigation_id}/expand/preview",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def expand_preview(
     investigation: InvestigationViewerDep,
     body: ExpandBody,
@@ -2562,7 +2636,10 @@ async def expand_preview(
     return preview
 
 
-@app.delete("/v1/investigations/{investigation_id}/nodes")
+@app.delete(
+    "/v1/investigations/{investigation_id}/nodes",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def remove_nodes(
     investigation: InvestigationEditorDep,
     body: RemoveNodesRequest,
@@ -2597,7 +2674,10 @@ async def remove_nodes(
 # --- resolution ---------------------------------------------------------------
 
 
-@app.get("/v1/investigations/{investigation_id}/resolution/threshold")
+@app.get(
+    "/v1/investigations/{investigation_id}/resolution/threshold",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def get_resolution_threshold_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -2615,7 +2695,10 @@ async def get_resolution_threshold_route(
     return result
 
 
-@app.put("/v1/investigations/{investigation_id}/resolution/threshold")
+@app.put(
+    "/v1/investigations/{investigation_id}/resolution/threshold",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def set_resolution_threshold_route(
     investigation: InvestigationEditorDep,
     body: SetThresholdRequest,
@@ -2642,7 +2725,10 @@ def _clean_reason(reason: str | None) -> str | None:
     return text or None
 
 
-@app.post("/v1/investigations/{investigation_id}/resolution/link")
+@app.post(
+    "/v1/investigations/{investigation_id}/resolution/link",
+    dependencies=[Depends(require_right(Right.RESOLVE_ENTITIES))],
+)
 async def link_resolution_route(
     investigation: InvestigationEditorDep,
     body: ManualAssertionRequest,
@@ -2695,7 +2781,10 @@ async def link_resolution_route(
     return delta
 
 
-@app.post("/v1/investigations/{investigation_id}/resolution/split")
+@app.post(
+    "/v1/investigations/{investigation_id}/resolution/split",
+    dependencies=[Depends(require_right(Right.RESOLVE_ENTITIES))],
+)
 async def split_resolution_route(
     investigation: InvestigationEditorDep,
     body: ManualAssertionRequest,
@@ -2717,7 +2806,10 @@ async def split_resolution_route(
     return delta
 
 
-@app.get("/v1/investigations/{investigation_id}/resolution/explain/{cluster_id}")
+@app.get(
+    "/v1/investigations/{investigation_id}/resolution/explain/{cluster_id}",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def explain_resolution_route(
     investigation: InvestigationViewerDep,
     cluster_id: str,
@@ -2739,7 +2831,10 @@ async def explain_resolution_route(
 # --- ComputePort: the metrics panel (Phase 7 Stage 3, 06_DECISIONS.md ADR-029) ----------------
 
 
-@app.post("/v1/investigations/{investigation_id}/compute/{metric}")
+@app.post(
+    "/v1/investigations/{investigation_id}/compute/{metric}",
+    dependencies=[Depends(require_right(Right.RUN_ANALYSIS))],
+)
 async def compute_metric_route(
     investigation: InvestigationViewerDep,
     metric: ComputeMetricName,
@@ -2783,7 +2878,10 @@ async def compute_metric_route(
 # `require_studio_role` this table never names for this path.
 
 
-@app.post("/v1/investigations/{investigation_id}/ingest/extract")
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/extract",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def run_extraction_route(
     investigation: InvestigationEditorDep,
     body: RunExtractionRequest,
@@ -2814,7 +2912,10 @@ async def run_extraction_route(
     return records
 
 
-@app.get("/v1/investigations/{investigation_id}/ingest/candidates")
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/candidates",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def list_extraction_candidates_route(
     investigation: InvestigationViewerDep,
     document_id: str,
@@ -2833,7 +2934,10 @@ async def list_extraction_candidates_route(
     return records
 
 
-@app.post("/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/accept")
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/accept",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def accept_extraction_candidate_route(
     investigation: InvestigationEditorDep,
     candidate_id: str,
@@ -2863,7 +2967,10 @@ async def accept_extraction_candidate_route(
     return NodeIdResponse(node_id=node_id)
 
 
-@app.post("/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/reject")
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/reject",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def reject_extraction_candidate_route(
     investigation: InvestigationEditorDep,
     candidate_id: str,
@@ -2889,7 +2996,10 @@ async def reject_extraction_candidate_route(
 # via `principal`, already is), only what the audit row is attributed against.
 
 
-@app.get("/v1/investigations/{investigation_id}/dossier/documents/{document_id}")
+@app.get(
+    "/v1/investigations/{investigation_id}/dossier/documents/{document_id}",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def get_dossier_document_route(
     investigation: InvestigationViewerDep,
     document_id: str,
@@ -2920,7 +3030,10 @@ async def get_dossier_document_route(
 # — there is no second, investigation-shaped gate to add.
 
 
-@app.post("/v1/investigations/{investigation_id}/nodes/{node_id}/confirm")
+@app.post(
+    "/v1/investigations/{investigation_id}/nodes/{node_id}/confirm",
+    dependencies=[Depends(require_right(Right.CONFIRM_INFERRED))],
+)
 async def confirm_node_route(
     investigation: InvestigationEditorDep,
     node_id: str,
@@ -2959,7 +3072,10 @@ class SuppressionMarkInput(BaseModel):
     reason: str
 
 
-@app.post("/v1/investigations/{investigation_id}/nodes/{node_id}/suppression-mark")
+@app.post(
+    "/v1/investigations/{investigation_id}/nodes/{node_id}/suppression-mark",
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
+)
 async def mark_node_for_suppression(
     investigation: InvestigationEditorDep,
     node_id: str,
@@ -2991,7 +3107,10 @@ async def mark_node_for_suppression(
     return mark
 
 
-@app.delete("/v1/investigations/{investigation_id}/nodes/{node_id}/suppression-mark")
+@app.delete(
+    "/v1/investigations/{investigation_id}/nodes/{node_id}/suppression-mark",
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
+)
 async def unmark_node_for_suppression(
     investigation: InvestigationEditorDep,
     node_id: str,
@@ -3018,7 +3137,10 @@ async def _node_not_visible_handler(request: Request, exc: NodeNotVisibleError) 
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "node_not_found"})
 
 
-@app.post("/v1/investigations/{investigation_id}/nodes/{node_id}/retract")
+@app.post(
+    "/v1/investigations/{investigation_id}/nodes/{node_id}/retract",
+    dependencies=[Depends(require_right(Right.CONFIRM_INFERRED))],
+)
 async def retract_node_route(
     investigation: InvestigationEditorDep,
     node_id: str,
@@ -3049,7 +3171,10 @@ async def retract_node_route(
 # --- named-step history -----------------------------------------------------
 
 
-@app.get("/v1/investigations/{investigation_id}/history")
+@app.get(
+    "/v1/investigations/{investigation_id}/history",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def get_investigation_history(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -3067,7 +3192,10 @@ async def get_investigation_history(
     return steps
 
 
-@app.post("/v1/investigations/{investigation_id}/history/{step_id}")
+@app.post(
+    "/v1/investigations/{investigation_id}/history/{step_id}",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def restore_history_step(
     investigation: InvestigationEditorDep,
     step_id: str,
@@ -3096,7 +3224,10 @@ async def restore_history_step(
 # --- search -------------------------------------------------------------------
 
 
-@app.post("/v1/investigations/{investigation_id}/search")
+@app.post(
+    "/v1/investigations/{investigation_id}/search",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def search_route(
     investigation: InvestigationViewerDep,
     body: SearchRequest,
@@ -3114,7 +3245,10 @@ async def search_route(
     return result
 
 
-@app.post("/v1/investigations/{investigation_id}/suggest")
+@app.post(
+    "/v1/investigations/{investigation_id}/suggest",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def suggest_route(
     investigation: InvestigationViewerDep,
     body: SuggestRequest,
@@ -3155,7 +3289,10 @@ def get_explore(request: Request, graph: GraphDep) -> ExploreService:
 ExploreDep = Annotated[ExploreService, Depends(get_explore)]
 
 
-@app.get("/v1/investigations/{investigation_id}/explore/counts")
+@app.get(
+    "/v1/investigations/{investigation_id}/explore/counts",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def explore_counts_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -3173,7 +3310,10 @@ async def explore_counts_route(
     return counts
 
 
-@app.get("/v1/investigations/{investigation_id}/explore/most-connected")
+@app.get(
+    "/v1/investigations/{investigation_id}/explore/most-connected",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def explore_most_connected_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -3196,7 +3336,10 @@ async def explore_most_connected_route(
     return ranked
 
 
-@app.get("/v1/investigations/{investigation_id}/explore/busiest-links")
+@app.get(
+    "/v1/investigations/{investigation_id}/explore/busiest-links",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def explore_busiest_links_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -3228,7 +3371,10 @@ async def explore_busiest_links_route(
     return ranked
 
 
-@app.get("/v1/investigations/{investigation_id}/explore/busiest-days")
+@app.get(
+    "/v1/investigations/{investigation_id}/explore/busiest-days",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def explore_busiest_days_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -3260,7 +3406,10 @@ async def explore_busiest_days_route(
     return days
 
 
-@app.get("/v1/investigations/{investigation_id}/explore/groups")
+@app.get(
+    "/v1/investigations/{investigation_id}/explore/groups",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def explore_groups_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -3281,7 +3430,10 @@ async def explore_groups_route(
     return found
 
 
-@app.get("/v1/investigations/{investigation_id}/explore/whats-new")
+@app.get(
+    "/v1/investigations/{investigation_id}/explore/whats-new",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def explore_whats_new_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -3303,7 +3455,10 @@ async def explore_whats_new_route(
     return news
 
 
-@app.get("/v1/investigations/{investigation_id}/explore/starter-questions")
+@app.get(
+    "/v1/investigations/{investigation_id}/explore/starter-questions",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def explore_starter_questions_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -3332,7 +3487,10 @@ class StarterRunOutcome(BaseModel):
     added_links: int
 
 
-@app.post("/v1/investigations/{investigation_id}/explore/starter-questions/{question_id}/run")
+@app.post(
+    "/v1/investigations/{investigation_id}/explore/starter-questions/{question_id}/run",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def explore_starter_run_route(
     investigation: InvestigationEditorDep,
     question_id: str,
@@ -3383,7 +3541,10 @@ def _shared_link_type(ontology: OntologySchema, edge_type: str) -> str:
     return edge_type
 
 
-@app.get("/v1/investigations/{investigation_id}/nodes/{node_id}/shared-contacts")
+@app.get(
+    "/v1/investigations/{investigation_id}/nodes/{node_id}/shared-contacts",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def shared_contacts_route(
     investigation: InvestigationViewerDep,
     node_id: str,
@@ -3410,7 +3571,10 @@ async def shared_contacts_route(
     return found
 
 
-@app.post("/v1/investigations/{investigation_id}/nodes/{node_id}/shared-contacts/{other_id}/canvas")
+@app.post(
+    "/v1/investigations/{investigation_id}/nodes/{node_id}/shared-contacts/{other_id}/canvas",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def shared_pair_canvas_route(
     investigation: InvestigationEditorDep,
     node_id: str,
@@ -3472,7 +3636,10 @@ async def _too_many_matches_handler(request: Request, exc: TooManyMatches) -> JS
 # same one `/v1/search` above already gives for its own lack of an `owning_unit` check.
 
 
-@app.post("/v1/investigations/{investigation_id}/patterns/preview")
+@app.post(
+    "/v1/investigations/{investigation_id}/patterns/preview",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def patterns_preview_route(
     investigation: InvestigationViewerDep,
     pattern: PatternQuery,
@@ -3490,7 +3657,10 @@ async def patterns_preview_route(
     return preview
 
 
-@app.post("/v1/investigations/{investigation_id}/patterns/run")
+@app.post(
+    "/v1/investigations/{investigation_id}/patterns/run",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def patterns_run_route(
     investigation: InvestigationViewerDep,
     pattern: PatternQuery,
@@ -3517,7 +3687,9 @@ async def patterns_run_route(
 
 
 @app.post(
-    "/v1/investigations/{investigation_id}/patterns/save", status_code=status.HTTP_201_CREATED
+    "/v1/investigations/{investigation_id}/patterns/save",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
 )
 async def patterns_save_route(
     investigation: InvestigationEditorDep,
@@ -3545,7 +3717,10 @@ async def patterns_save_route(
     return saved
 
 
-@app.get("/v1/investigations/{investigation_id}/patterns")
+@app.get(
+    "/v1/investigations/{investigation_id}/patterns",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def patterns_list_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -3556,7 +3731,10 @@ async def patterns_list_route(
     return SavedPatternList(patterns=await patterns_store.list_authorized(principal))
 
 
-@app.get("/v1/investigations/{investigation_id}/patterns/{pattern_id}")
+@app.get(
+    "/v1/investigations/{investigation_id}/patterns/{pattern_id}",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def patterns_load_route(
     investigation: InvestigationViewerDep,
     pattern_id: str,
@@ -3575,7 +3753,11 @@ async def patterns_load_route(
 # `POST /v1/alerts/{alert_id}/jump` branches a new investigation from.
 
 
-@app.post("/v1/investigations/{investigation_id}/hotlists", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/hotlists",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+)
 async def create_hotlist_route(
     investigation: InvestigationEditorDep,
     body: CreateHotlistRequest,
@@ -3595,14 +3777,21 @@ async def create_hotlist_route(
     return hotlist
 
 
-@app.get("/v1/investigations/{investigation_id}/hotlists")
+@app.get(
+    "/v1/investigations/{investigation_id}/hotlists",
+    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+)
 async def list_hotlists_route(
     investigation: InvestigationViewerDep, principal: PrincipalDep, hotlists_store: HotlistsStoreDep
 ) -> HotlistList:
     return HotlistList(hotlists=await hotlists_store.list_authorized(principal))
 
 
-@app.post("/v1/investigations/{investigation_id}/judgements", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/judgements",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
 async def save_judgement_route(
     investigation: InvestigationEditorDep,
     principal: PrincipalDep,
@@ -3635,7 +3824,10 @@ async def save_judgement_route(
     return saved
 
 
-@app.get("/v1/investigations/{investigation_id}/judgements")
+@app.get(
+    "/v1/investigations/{investigation_id}/judgements",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def list_judgements_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -3654,7 +3846,10 @@ async def list_judgements_route(
     )
 
 
-@app.post("/v1/investigations/{investigation_id}/links/{edge_id}/change")
+@app.post(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/change",
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
+)
 async def change_link_route(
     investigation: InvestigationEditorDep,
     edge_id: str,
@@ -3699,7 +3894,10 @@ async def change_link_route(
 # --- relationship types proposed by analysts (ADR-090) ------------------------------------
 
 
-@app.get("/v1/investigations/{investigation_id}/link-types")
+@app.get(
+    "/v1/investigations/{investigation_id}/link-types",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def case_link_types_route(
     investigation: InvestigationViewerDep, principal: PrincipalDep, link_types: LinkTypesDep
 ) -> CaseLinkTypesResponse:
@@ -3715,7 +3913,10 @@ async def case_link_types_route(
     )
 
 
-@app.post("/v1/investigations/{investigation_id}/link-types")
+@app.post(
+    "/v1/investigations/{investigation_id}/link-types",
+    dependencies=[Depends(require_right(Right.PROPOSE_LINK_TYPE))],
+)
 async def propose_link_type_route(
     investigation: InvestigationEditorDep,
     principal: PrincipalDep,
@@ -3748,7 +3949,10 @@ async def propose_link_type_route(
     return proposal
 
 
-@app.post("/v1/investigations/{investigation_id}/link-types/{proposal_id}/withdraw")
+@app.post(
+    "/v1/investigations/{investigation_id}/link-types/{proposal_id}/withdraw",
+    dependencies=[Depends(require_right(Right.PROPOSE_LINK_TYPE))],
+)
 async def withdraw_link_type_route(
     investigation: InvestigationEditorDep,
     proposal_id: str,
@@ -3778,7 +3982,7 @@ async def withdraw_link_type_route(
     return proposal
 
 
-@app.get("/v1/admin/link-types")
+@app.get("/v1/admin/link-types", dependencies=[Depends(require_right(Right.MANAGE_ONTOLOGY))])
 async def list_link_type_proposals_route(
     principal: Annotated[Principal, Depends(require_admin_role)], link_types: LinkTypesDep
 ) -> LinkTypeProposalList:
@@ -3786,7 +3990,10 @@ async def list_link_type_proposals_route(
     return LinkTypeProposalList(proposals=await link_types.proposals(principal))
 
 
-@app.post("/v1/admin/link-types/{proposal_id}/promote")
+@app.post(
+    "/v1/admin/link-types/{proposal_id}/promote",
+    dependencies=[Depends(require_right(Right.MANAGE_ONTOLOGY))],
+)
 async def promote_link_type_route(
     proposal_id: str,
     principal: Annotated[Principal, Depends(require_admin_role)],
@@ -3813,7 +4020,10 @@ async def promote_link_type_route(
     return proposal
 
 
-@app.post("/v1/admin/link-types/{proposal_id}/reject")
+@app.post(
+    "/v1/admin/link-types/{proposal_id}/reject",
+    dependencies=[Depends(require_right(Right.MANAGE_ONTOLOGY))],
+)
 async def reject_link_type_route(
     proposal_id: str,
     principal: Annotated[Principal, Depends(require_admin_role)],
@@ -3833,7 +4043,9 @@ async def reject_link_type_route(
     return proposal
 
 
-@app.post("/v1/admin/link-types/retire")
+@app.post(
+    "/v1/admin/link-types/retire", dependencies=[Depends(require_right(Right.MANAGE_ONTOLOGY))]
+)
 async def retire_link_type_route(
     principal: Annotated[Principal, Depends(require_admin_role)],
     body: RetireLinkTypeRequest,
@@ -3852,7 +4064,10 @@ async def retire_link_type_route(
     return LinkTypeProposalList(proposals=retired)
 
 
-@app.get("/v1/investigations/{investigation_id}/links/{edge_id}/history")
+@app.get(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/history",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def link_history_route(
     investigation: InvestigationViewerDep,
     edge_id: str,
@@ -3865,7 +4080,10 @@ async def link_history_route(
     return await link_changes.history(investigation.id, edge_id, principal)
 
 
-@app.get("/v1/investigations/{investigation_id}/links/{edge_id}/events")
+@app.get(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/events",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def list_link_events_route(
     investigation: InvestigationViewerDep,
     edge_id: str,
@@ -3880,7 +4098,10 @@ async def list_link_events_route(
     return await link_events.list(investigation.id, edge_id, principal, offset=offset, limit=limit)
 
 
-@app.post("/v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/extract")
+@app.post(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/extract",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def extract_email_route(
     investigation: InvestigationEditorDep,
     edge_id: str,
@@ -3913,7 +4134,10 @@ async def extract_email_route(
     return result
 
 
-@app.get("/v1/investigations/{investigation_id}/documents/{document_id}/reader")
+@app.get(
+    "/v1/investigations/{investigation_id}/documents/{document_id}/reader",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def read_document_route(
     investigation: InvestigationViewerDep,
     document_id: str,
@@ -3935,7 +4159,10 @@ async def read_document_route(
     return view
 
 
-@app.post("/v1/investigations/{investigation_id}/documents/{document_id}/designations")
+@app.post(
+    "/v1/investigations/{investigation_id}/documents/{document_id}/designations",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def designate_in_document_route(
     investigation: InvestigationEditorDep,
     document_id: str,
@@ -3960,7 +4187,10 @@ async def designate_in_document_route(
     return result
 
 
-@app.post("/v1/investigations/{investigation_id}/documents")
+@app.post(
+    "/v1/investigations/{investigation_id}/documents",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def upload_document_route(
     investigation: InvestigationEditorDep,
     request: Request,
@@ -4027,7 +4257,10 @@ async def upload_document_route(
     return result
 
 
-@app.get("/v1/investigations/{investigation_id}/documents/{document_id}/file")
+@app.get(
+    "/v1/investigations/{investigation_id}/documents/{document_id}/file",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def document_file_route(
     investigation: InvestigationViewerDep,
     document_id: str,
@@ -4056,7 +4289,10 @@ class PicturesRequest(BaseModel):
     node_ids: list[str] = Field(max_length=MAX_NODES)
 
 
-@app.put("/v1/investigations/{investigation_id}/nodes/{node_id}/picture")
+@app.put(
+    "/v1/investigations/{investigation_id}/nodes/{node_id}/picture",
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
+)
 async def set_entity_picture_route(
     investigation: InvestigationEditorDep,
     node_id: str,
@@ -4118,7 +4354,10 @@ async def set_entity_picture_route(
     return result
 
 
-@app.delete("/v1/investigations/{investigation_id}/nodes/{node_id}/picture")
+@app.delete(
+    "/v1/investigations/{investigation_id}/nodes/{node_id}/picture",
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
+)
 async def remove_entity_picture_route(
     investigation: InvestigationEditorDep,
     node_id: str,
@@ -4140,7 +4379,10 @@ async def remove_entity_picture_route(
     return delta
 
 
-@app.post("/v1/investigations/{investigation_id}/pictures")
+@app.post(
+    "/v1/investigations/{investigation_id}/pictures",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def entity_pictures_route(
     investigation: InvestigationViewerDep,
     body: PicturesRequest,
@@ -4160,7 +4402,10 @@ async def entity_pictures_route(
     return found
 
 
-@app.get("/v1/investigations/{investigation_id}/nodes/{node_id}/picture")
+@app.get(
+    "/v1/investigations/{investigation_id}/nodes/{node_id}/picture",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def entity_picture_file_route(
     investigation: InvestigationViewerDep,
     node_id: str,
@@ -4186,7 +4431,10 @@ class ExtractDocumentRequest(BaseModel):
     using: Literal["recogniser", "model"] = "recogniser"
 
 
-@app.post("/v1/investigations/{investigation_id}/documents/{document_id}/extract")
+@app.post(
+    "/v1/investigations/{investigation_id}/documents/{document_id}/extract",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def extract_document_route(
     investigation: InvestigationEditorDep,
     document_id: str,
@@ -4210,7 +4458,8 @@ async def extract_document_route(
 
 
 @app.post(
-    "/v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/accept"
+    "/v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/accept",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
 )
 async def accept_document_candidate_route(
     investigation: InvestigationEditorDep,
@@ -4234,7 +4483,10 @@ async def accept_document_candidate_route(
     return result
 
 
-@app.post("/v1/investigations/{investigation_id}/documents/{document_id}/candidates/accept")
+@app.post(
+    "/v1/investigations/{investigation_id}/documents/{document_id}/candidates/accept",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def accept_document_candidates_route(
     investigation: InvestigationEditorDep,
     document_id: str,
@@ -4267,7 +4519,8 @@ async def accept_document_candidates_route(
 
 
 @app.post(
-    "/v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/reject"
+    "/v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/reject",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
 )
 async def reject_document_candidate_route(
     investigation: InvestigationEditorDep,
@@ -4289,7 +4542,10 @@ async def reject_document_candidate_route(
     return RejectedResponse()
 
 
-@app.post("/v1/investigations/{investigation_id}/questions")
+@app.post(
+    "/v1/investigations/{investigation_id}/questions",
+    dependencies=[Depends(require_right(Right.ASK_MODEL))],
+)
 async def ask_question_route(
     investigation: InvestigationEditorDep,
     body: AskRequest,
@@ -4310,7 +4566,10 @@ async def ask_question_route(
     return answer
 
 
-@app.get("/v1/investigations/{investigation_id}/questions")
+@app.get(
+    "/v1/investigations/{investigation_id}/questions",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def list_questions_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -4323,7 +4582,10 @@ async def list_questions_route(
     return [q.model_copy(update={"author_name": names.get(q.author)}) for q in history]
 
 
-@app.post("/v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/accept")
+@app.post(
+    "/v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/accept",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def accept_question_candidate_route(
     investigation: InvestigationEditorDep,
     candidate_id: str,
@@ -4345,7 +4607,10 @@ async def accept_question_candidate_route(
     return result
 
 
-@app.post("/v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/reject")
+@app.post(
+    "/v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/reject",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def reject_question_candidate_route(
     investigation: InvestigationEditorDep,
     candidate_id: str,
@@ -4371,7 +4636,10 @@ class EmailDocumentsRequest(BaseModel):
     window: Interval | None = None
 
 
-@app.post("/v1/investigations/{investigation_id}/links/{edge_id}/events/documents")
+@app.post(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/events/documents",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+)
 async def show_emails_as_documents_route(
     investigation: InvestigationEditorDep,
     edge_id: str,
@@ -4399,7 +4667,8 @@ async def show_emails_as_documents_route(
 
 
 @app.post(
-    "/v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/accept"
+    "/v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/accept",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
 )
 async def accept_email_candidate_route(
     investigation: InvestigationEditorDep,
@@ -4429,7 +4698,8 @@ async def accept_email_candidate_route(
 
 
 @app.post(
-    "/v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/reject"
+    "/v1/investigations/{investigation_id}/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/reject",
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
 )
 async def reject_email_candidate_route(
     investigation: InvestigationEditorDep,
@@ -4453,7 +4723,10 @@ async def reject_email_candidate_route(
     return RejectedResponse()
 
 
-@app.get("/v1/investigations/{investigation_id}/links/{edge_id}/notes")
+@app.get(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/notes",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def list_link_notes_route(
     investigation: InvestigationViewerDep,
     edge_id: str,
@@ -4473,6 +4746,7 @@ async def list_link_notes_route(
 @app.post(
     "/v1/investigations/{investigation_id}/links/{edge_id}/notes",
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
 )
 async def add_link_note_route(
     investigation: InvestigationEditorDep,
@@ -4493,7 +4767,10 @@ async def add_link_note_route(
     return note
 
 
-@app.put("/v1/investigations/{investigation_id}/links/{edge_id}/notes/{note_id}")
+@app.put(
+    "/v1/investigations/{investigation_id}/links/{edge_id}/notes/{note_id}",
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
+)
 async def edit_link_note_route(
     investigation: InvestigationEditorDep,
     edge_id: str,
@@ -4517,6 +4794,7 @@ async def edit_link_note_route(
 @app.delete(
     "/v1/investigations/{investigation_id}/links/{edge_id}/notes/{note_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
 )
 async def remove_link_note_route(
     investigation: InvestigationEditorDep,
@@ -4537,7 +4815,11 @@ async def remove_link_note_route(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@app.post("/v1/investigations/{investigation_id}/gaps", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/gaps",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
 async def save_gap_route(
     investigation: InvestigationEditorDep,
     principal: PrincipalDep,
@@ -4563,7 +4845,10 @@ async def save_gap_route(
     return saved
 
 
-@app.get("/v1/investigations/{investigation_id}/gaps")
+@app.get(
+    "/v1/investigations/{investigation_id}/gaps",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def list_gaps_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -4577,7 +4862,11 @@ async def list_gaps_route(
     )
 
 
-@app.post("/v1/investigations/{investigation_id}/assumptions", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/assumptions",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.RECORD_ASSESSMENT))],
+)
 async def save_assumption_route(
     investigation: InvestigationEditorDep,
     principal: PrincipalDep,
@@ -4602,7 +4891,10 @@ async def save_assumption_route(
     return saved
 
 
-@app.get("/v1/investigations/{investigation_id}/assumptions")
+@app.get(
+    "/v1/investigations/{investigation_id}/assumptions",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def list_assumptions_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -4613,7 +4905,10 @@ async def list_assumptions_route(
     )
 
 
-@app.post("/v1/investigations/{investigation_id}/export")
+@app.post(
+    "/v1/investigations/{investigation_id}/export",
+    dependencies=[Depends(require_right(Right.EXPORT))],
+)
 async def submit_export_route(
     investigation: InvestigationEditorDep,
     principal: PrincipalDep,
@@ -4658,7 +4953,7 @@ class ExportLedgerListResponse(BaseModel):
     entries: list[ExportLedgerEntry]
 
 
-@app.get("/v1/exports")
+@app.get("/v1/exports", dependencies=[Depends(require_right(Right.READ_EXPORT_LEDGER))])
 async def list_exports_route(
     principal: PrincipalDep, export_ledger: ExportLedgerDep
 ) -> ExportLedgerListResponse:
@@ -4669,7 +4964,11 @@ async def list_exports_route(
     return ExportLedgerListResponse(entries=await export_ledger.list_all(principal))
 
 
-@app.post("/v1/investigations/{investigation_id}/monitors", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/monitors",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+)
 async def create_monitor_route(
     investigation: InvestigationEditorDep,
     body: CreateMonitorRequest,
@@ -4699,14 +4998,20 @@ async def create_monitor_route(
     return monitor
 
 
-@app.get("/v1/investigations/{investigation_id}/monitors")
+@app.get(
+    "/v1/investigations/{investigation_id}/monitors",
+    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+)
 async def list_monitors_route(
     investigation: InvestigationViewerDep, principal: PrincipalDep, monitors_store: MonitorsStoreDep
 ) -> MonitorList:
     return MonitorList(monitors=await monitors_store.list_authorized(principal))
 
 
-@app.get("/v1/investigations/{investigation_id}/alerts")
+@app.get(
+    "/v1/investigations/{investigation_id}/alerts",
+    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+)
 async def list_alerts_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -4718,7 +5023,10 @@ async def list_alerts_route(
     return AlertList(alerts=[await alert_to_view(a, principal, graph) for a in rows])
 
 
-@app.get("/v1/investigations/{investigation_id}/alerts/{alert_id}")
+@app.get(
+    "/v1/investigations/{investigation_id}/alerts/{alert_id}",
+    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+)
 async def get_alert_route(
     investigation: InvestigationViewerDep,
     alert_id: str,
@@ -4733,6 +5041,7 @@ async def get_alert_route(
 @app.post(
     "/v1/investigations/{investigation_id}/alerts/{alert_id}/jump",
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
 )
 async def jump_alert_route(
     investigation: InvestigationEditorDep,
@@ -4806,7 +5115,10 @@ async def jump_alert_route(
 # `ComputePort.shortest_paths` (unclaimed, `ports/compute.py`'s own disclosed stub).
 
 
-@app.post("/v1/investigations/{investigation_id}/paths")
+@app.post(
+    "/v1/investigations/{investigation_id}/paths",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def paths_route(
     investigation: InvestigationViewerDep,
     req: PathRequest,
@@ -4827,7 +5139,10 @@ async def paths_route(
 # --- the corpus-wide resolution trigger (06_DECISIONS.md ADR-025) -------------
 
 
-@app.post("/v1/resolution/{entity_type}/run")
+@app.post(
+    "/v1/resolution/{entity_type}/run",
+    dependencies=[Depends(require_right(Right.RESOLVE_ENTITIES))],
+)
 async def resolve_now_route(
     entity_type: str,
     principal: PrincipalDep,
@@ -5045,7 +5360,10 @@ class BuildBasemapResult(BaseModel):
     rejections: int
 
 
-@app.post("/v1/admin/geospatial/build-basemap")
+@app.post(
+    "/v1/admin/geospatial/build-basemap",
+    dependencies=[Depends(require_right(Right.MANAGE_GEOSPATIAL))],
+)
 async def build_basemap_route(
     body: BuildBasemapRequest,
     principal: Annotated[Principal, Depends(require_admin_role)],
@@ -5152,7 +5470,9 @@ class VerifyMapResult(BaseModel):
     issues: list[VerifyMapIssue]
 
 
-@app.post("/v1/admin/geospatial/verify")
+@app.post(
+    "/v1/admin/geospatial/verify", dependencies=[Depends(require_right(Right.MANAGE_GEOSPATIAL))]
+)
 async def verify_map_route(
     principal: Annotated[Principal, Depends(require_admin_role)],
     map_config: MapConfigDep,
@@ -5213,7 +5533,7 @@ class GeometriesRequest(BaseModel):
     geometry_refs: list[str]
 
 
-@app.post("/v1/analytics/histogram")
+@app.post("/v1/analytics/histogram", dependencies=[Depends(require_right(Right.INVESTIGATE))])
 async def histogram_route(
     body: HistogramRequest,
     principal: PrincipalDep,
@@ -5240,7 +5560,7 @@ async def histogram_route(
     return result
 
 
-@app.post("/v1/analytics/cross-filter")
+@app.post("/v1/analytics/cross-filter", dependencies=[Depends(require_right(Right.INVESTIGATE))])
 async def cross_filter_route(
     body: CrossFilterRequest,
     principal: PrincipalDep,
@@ -5267,7 +5587,7 @@ async def cross_filter_route(
     return result
 
 
-@app.post("/v1/analytics/first-seen")
+@app.post("/v1/analytics/first-seen", dependencies=[Depends(require_right(Right.INVESTIGATE))])
 async def first_seen_route(
     body: FirstSeenRequest,
     principal: PrincipalDep,
@@ -5296,7 +5616,7 @@ async def first_seen_route(
     return result
 
 
-@app.post("/v1/analytics/geobins")
+@app.post("/v1/analytics/geobins", dependencies=[Depends(require_right(Right.INVESTIGATE))])
 async def geo_bins_route(
     body: GeoBinRequest,
     principal: PrincipalDep,
@@ -5323,7 +5643,7 @@ async def geo_bins_route(
     return result
 
 
-@app.post("/v1/analytics/sightings")
+@app.post("/v1/analytics/sightings", dependencies=[Depends(require_right(Right.INVESTIGATE))])
 async def sightings_route(
     body: SightingRequest,
     principal: PrincipalDep,
@@ -5352,7 +5672,7 @@ async def sightings_route(
     return result
 
 
-@app.post("/v1/analytics/geometries")
+@app.post("/v1/analytics/geometries", dependencies=[Depends(require_right(Right.INVESTIGATE))])
 async def geometries_route(
     body: GeometriesRequest, principal: PrincipalDep, analytics: AnalyticsDep, audit: AuditDep
 ) -> list[GeometryRecord]:
@@ -5437,7 +5757,11 @@ class GridRequest(BaseModel):
     cols: int = 10
 
 
-@app.post("/v1/investigations/{investigation_id}/sites", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/investigations/{investigation_id}/sites",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
+)
 async def create_site(
     investigation: InvestigationEditorDep,
     principal: PrincipalDep,
@@ -5475,7 +5799,10 @@ async def create_site(
     return site
 
 
-@app.get("/v1/investigations/{investigation_id}/sites/{site_id}")
+@app.get(
+    "/v1/investigations/{investigation_id}/sites/{site_id}",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def get_site(site: SiteViewerDep, principal: PrincipalDep, audit: AuditDep) -> Site:
     await audit.record(
         principal=principal,
@@ -5487,7 +5814,10 @@ async def get_site(site: SiteViewerDep, principal: PrincipalDep, audit: AuditDep
     return site
 
 
-@app.get("/v1/investigations/{investigation_id}/sites/{site_id}/image")
+@app.get(
+    "/v1/investigations/{investigation_id}/sites/{site_id}/image",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
 async def get_site_image(site: SiteViewerDep, storage: SiteImageStorageDep) -> Response:
     """The browser never talks to the object store directly — the same
     reasoning as the tile proxy (`00_ARCHITECTURE.md` §1.2 "The tile
@@ -5497,7 +5827,10 @@ async def get_site_image(site: SiteViewerDep, storage: SiteImageStorageDep) -> R
     return Response(content=data, media_type=image_content_type(data))
 
 
-@app.patch("/v1/investigations/{investigation_id}/sites/{site_id}/control-points")
+@app.patch(
+    "/v1/investigations/{investigation_id}/sites/{site_id}/control-points",
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
+)
 async def set_site_control_points(
     site: SiteEditorDep,
     principal: PrincipalDep,
@@ -5516,7 +5849,10 @@ async def set_site_control_points(
     return updated
 
 
-@app.post("/v1/investigations/{investigation_id}/sites/{site_id}/grid")
+@app.post(
+    "/v1/investigations/{investigation_id}/sites/{site_id}/grid",
+    dependencies=[Depends(require_right(Right.EDIT_GRAPH))],
+)
 async def set_site_grid(
     site: SiteEditorDep,
     principal: PrincipalDep,
@@ -5793,7 +6129,10 @@ async def get_yardstick_route(principal: PrincipalDep, yardstick: YardstickDep) 
     return yardstick
 
 
-@app.get("/v1/investigations/{investigation_id}/ingest/source-files")
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/source-files",
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+)
 async def list_ingest_source_files(
     investigation: InvestigationViewerDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
@@ -5834,7 +6173,9 @@ _UPLOAD_REFUSAL_STATUS = {
 
 
 @app.post(
-    "/v1/investigations/{investigation_id}/ingest/source-files", status_code=status.HTTP_201_CREATED
+    "/v1/investigations/{investigation_id}/ingest/source-files",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
 )
 async def upload_ingest_source_file(
     investigation: InvestigationEditorDep,
@@ -5897,7 +6238,9 @@ def _with_default_classification(
 
 
 @app.post(
-    "/v1/investigations/{investigation_id}/ingest/recipes", status_code=status.HTTP_201_CREATED
+    "/v1/investigations/{investigation_id}/ingest/recipes",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
 )
 async def create_studio_recipe_draft(
     investigation: InvestigationEditorDep,
@@ -5928,7 +6271,10 @@ async def create_studio_recipe_draft(
     return draft
 
 
-@app.patch("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}")
+@app.patch(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
 async def update_studio_recipe_draft(
     investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
@@ -5960,7 +6306,10 @@ async def update_studio_recipe_draft(
     return updated
 
 
-@app.put("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/pipeline")
+@app.put(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/pipeline",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
 async def update_studio_recipe_pipeline(
     investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
@@ -5988,7 +6337,10 @@ async def update_studio_recipe_pipeline(
     return updated
 
 
-@app.get("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}")
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
 async def get_studio_recipe_draft(
     investigation: InvestigationViewerDep,
     recipe: AuthorizedStudioRecipeDep,
@@ -6016,7 +6368,10 @@ async def get_studio_recipe_draft(
     )
 
 
-@app.get("/v1/investigations/{investigation_id}/ingest/recipes")
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
 async def list_studio_recipe_drafts(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -6051,7 +6406,10 @@ async def list_studio_recipe_drafts(
 # --- ingest studio: profile (09_INGEST_STUDIO.md §3) -------------------------
 
 
-@app.get("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/profile")
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/profile",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
 async def get_studio_recipe_profile(
     investigation: InvestigationViewerDep,
     recipe: AuthorizedStudioRecipeDep,
@@ -6093,7 +6451,10 @@ async def list_transforms(principal: PrincipalDep) -> list[TransformDescriptor]:
     ]
 
 
-@app.put("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/row-template")
+@app.put(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/row-template",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
 async def update_studio_recipe_row_template(
     investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
@@ -6137,7 +6498,8 @@ async def update_studio_recipe_row_template(
 
 
 @app.get(
-    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}"
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
 )
 async def get_studio_recipe_sample_row(
     investigation: InvestigationViewerDep,
@@ -6161,7 +6523,10 @@ async def get_studio_recipe_sample_row(
     return row
 
 
-@app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/map/handling-preview")
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/map/handling-preview",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
 async def preview_studio_recipe_element_handling(
     investigation: InvestigationViewerDep,
     recipe: AuthorizedStudioRecipeDep,
@@ -6190,7 +6555,10 @@ async def preview_studio_recipe_element_handling(
 # --- ingest studio: verify (09_INGEST_STUDIO.md §5) ---------------------------
 
 
-@app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/verify")
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/verify",
+    dependencies=[Depends(require_right(Right.VERIFY_PIPELINES))],
+)
 async def verify_studio_recipe(
     investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
@@ -6228,7 +6596,10 @@ async def verify_studio_recipe(
 # --- ingest studio: publish (09_INGEST_STUDIO.md §6) --------------------------
 
 
-@app.get("/v1/investigations/{investigation_id}/ingest/recipe-registry")
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipe-registry",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
 async def list_studio_recipe_registry(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -6251,7 +6622,10 @@ async def list_studio_recipe_registry(
     return recipes
 
 
-@app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/publish")
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/publish",
+    dependencies=[Depends(require_right(Right.PUBLISH_PIPELINES))],
+)
 async def publish_studio_recipe(
     investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
@@ -6306,7 +6680,10 @@ async def publish_studio_recipe(
     return updated
 
 
-@app.patch("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule")
+@app.patch(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule",
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+)
 async def update_studio_recipe_schedule(
     investigation: InvestigationEditorDep,
     recipe: AuthorizedStudioRecipeDep,
@@ -6348,6 +6725,7 @@ async def update_studio_recipe_schedule(
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/versions",
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
 )
 async def create_studio_recipe_version(
     investigation: InvestigationEditorDep,
@@ -6373,7 +6751,10 @@ async def create_studio_recipe_version(
     return updated
 
 
-@app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/run")
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/run",
+    dependencies=[Depends(require_right(Right.RUN_PIPELINES))],
+)
 async def run_studio_recipe(
     investigation: InvestigationEditorDep,
     recipe: RunnableStudioRecipeDep,
@@ -6598,7 +6979,10 @@ async def _rule_gate(
 # --- ultimate beneficial ownership (ADR-109 phase C) ------------------------------
 
 
-@app.get("/v1/investigations/{investigation_id}/ownership/{node_id}")
+@app.get(
+    "/v1/investigations/{investigation_id}/ownership/{node_id}",
+    dependencies=[Depends(require_right(Right.TRACE_OWNERSHIP))],
+)
 async def trace_ownership_route(
     node_id: str,
     investigation: InvestigationViewerDep,
@@ -6622,7 +7006,10 @@ async def trace_ownership_route(
     return view
 
 
-@app.post("/v1/investigations/{investigation_id}/ownership/{node_id}/canvas")
+@app.post(
+    "/v1/investigations/{investigation_id}/ownership/{node_id}/canvas",
+    dependencies=[Depends(require_right(Right.TRACE_OWNERSHIP))],
+)
 async def ownership_canvas(
     node_id: str,
     investigation: InvestigationEditorDep,
@@ -6661,7 +7048,10 @@ async def ownership_canvas(
     )
 
 
-@app.get("/v1/investigations/{investigation_id}/kyc/{node_id}")
+@app.get(
+    "/v1/investigations/{investigation_id}/kyc/{node_id}",
+    dependencies=[Depends(require_right(Right.TRACE_OWNERSHIP))],
+)
 async def kyc_status_route(
     node_id: str,
     investigation: InvestigationViewerDep,
@@ -6685,7 +7075,10 @@ async def kyc_status_route(
     return status
 
 
-@app.get("/v1/investigations/{investigation_id}/risk/{node_id}")
+@app.get(
+    "/v1/investigations/{investigation_id}/risk/{node_id}",
+    dependencies=[Depends(require_right(Right.TRACE_OWNERSHIP))],
+)
 async def neighbourhood_risk_route(
     node_id: str,
     investigation: InvestigationViewerDep,
@@ -6770,7 +7163,10 @@ async def _case_report(
     )
 
 
-@app.get("/v1/investigations/{investigation_id}/reports")
+@app.get(
+    "/v1/investigations/{investigation_id}/reports",
+    dependencies=[Depends(require_right(Right.READ_REPORTS))],
+)
 async def read_case_report(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -6798,7 +7194,11 @@ async def read_case_report(
     return figures
 
 
-@app.get("/v1/investigations/{investigation_id}/reports/feed", response_model=None)
+@app.get(
+    "/v1/investigations/{investigation_id}/reports/feed",
+    response_model=None,
+    dependencies=[Depends(require_right(Right.READ_REPORT_FEED))],
+)
 async def read_report_feed(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -6854,7 +7254,10 @@ async def _report_limit_handler(request: Request, exc: ReportLimitExceededError)
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=exc.detail.model_dump())
 
 
-@app.get("/v1/investigations/{investigation_id}/alert-queue")
+@app.get(
+    "/v1/investigations/{investigation_id}/alert-queue",
+    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+)
 async def read_alert_queue(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -6884,7 +7287,10 @@ async def read_alert_queue(
     return rows
 
 
-@app.get("/v1/investigations/{investigation_id}/alert-queue/{alert_id}")
+@app.get(
+    "/v1/investigations/{investigation_id}/alert-queue/{alert_id}",
+    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+)
 async def explain_alert(
     alert_id: str,
     investigation: InvestigationViewerDep,
@@ -6925,7 +7331,10 @@ async def _triage_audit(
     )
 
 
-@app.post("/v1/investigations/{investigation_id}/alert-queue/{alert_id}/claim")
+@app.post(
+    "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/claim",
+    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+)
 async def claim_alert(
     alert_id: str,
     investigation: InvestigationEditorDep,
@@ -6939,7 +7348,10 @@ async def claim_alert(
     return alert
 
 
-@app.post("/v1/investigations/{investigation_id}/alert-queue/{alert_id}/release")
+@app.post(
+    "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/release",
+    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+)
 async def release_alert(
     alert_id: str,
     investigation: InvestigationEditorDep,
@@ -6953,7 +7365,10 @@ async def release_alert(
     return alert
 
 
-@app.post("/v1/investigations/{investigation_id}/alert-queue/{alert_id}/disposition")
+@app.post(
+    "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/disposition",
+    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+)
 async def dispose_alert(
     alert_id: str,
     body: AlertDispositionInput,
@@ -6978,7 +7393,10 @@ async def dispose_alert(
     return alert
 
 
-@app.post("/v1/investigations/{investigation_id}/alert-queue/{alert_id}/canvas")
+@app.post(
+    "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/canvas",
+    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+)
 async def alert_canvas(
     alert_id: str,
     investigation: InvestigationEditorDep,
@@ -7030,7 +7448,10 @@ async def _alert_triage_conflict_handler(
 # --- typology rules, their audit, and held rows (ADR-109 phase A) -------------
 
 
-@app.get("/v1/investigations/{investigation_id}/rules")
+@app.get(
+    "/v1/investigations/{investigation_id}/rules",
+    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+)
 async def list_typology_rules(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -7041,7 +7462,11 @@ async def list_typology_rules(
     return await typology_rules.list_for_case(investigation.id, principal)
 
 
-@app.post("/v1/investigations/{investigation_id}/rules", status_code=201)
+@app.post(
+    "/v1/investigations/{investigation_id}/rules",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+)
 async def deploy_typology_rule(
     investigation: InvestigationAuthorDep,
     principal: PrincipalDep,
@@ -7068,7 +7493,10 @@ async def deploy_typology_rule(
     return rule
 
 
-@app.post("/v1/investigations/{investigation_id}/rules/{rule_id}/retire")
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/retire",
+    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+)
 async def retire_typology_rule(
     rule_id: str,
     investigation: InvestigationAuthorDep,
@@ -7087,7 +7515,10 @@ async def retire_typology_rule(
     return rule
 
 
-@app.get("/v1/investigations/{investigation_id}/rules/audit")
+@app.get(
+    "/v1/investigations/{investigation_id}/rules/audit",
+    dependencies=[Depends(require_right(Right.READ_RULE_AUDIT))],
+)
 async def read_rule_audit(
     investigation: InvestigationAccessManagerDep,
     principal: PrincipalDep,
@@ -7123,7 +7554,10 @@ async def read_rule_audit(
     return page
 
 
-@app.get("/v1/investigations/{investigation_id}/held-rows")
+@app.get(
+    "/v1/investigations/{investigation_id}/held-rows",
+    dependencies=[Depends(require_right(Right.READ_HELD_ROWS))],
+)
 async def list_held_rows(
     investigation: InvestigationEditorDep,
     principal: PrincipalDep,
@@ -7143,7 +7577,10 @@ async def list_held_rows(
     return rows
 
 
-@app.post("/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/held-rows/release")
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/held-rows/release",
+    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS))],
+)
 async def release_held_rows_route(
     investigation: InvestigationAuthorDep,
     recipe: RunnableStudioRecipeDep,
@@ -7237,7 +7674,10 @@ async def release_held_rows_route(
     return report
 
 
-@app.post("/v1/investigations/{investigation_id}/held-rows/reject")
+@app.post(
+    "/v1/investigations/{investigation_id}/held-rows/reject",
+    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS))],
+)
 async def reject_held_rows(
     investigation: InvestigationAuthorDep,
     principal: PrincipalDep,
@@ -7335,6 +7775,13 @@ async def _evaluate_watches_best_effort(
 
 
 # --- the delta stream --------------------------------------------------------
+
+
+@app.get("/v1/me/rights")
+async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
+    """ADR-112: what the signed-in person may do, so the Glass and the Studio leave out what they
+    would only refuse. Not a gate — every route still checks its own right."""
+    return RightsResponse(rights=sorted(rights_for(principal.roles)))
 
 
 @app.post("/v1/ws-ticket", response_model=WsTicketResponse)

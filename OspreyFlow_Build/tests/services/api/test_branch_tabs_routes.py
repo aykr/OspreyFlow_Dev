@@ -51,9 +51,9 @@ from schemas.domain import (
     SourceRef,
 )
 
-ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1")
-BOB = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1")
-OTHER_UNIT = Principal(id="carol", clearance="OFFICIAL", org_unit="unit-2")
+ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+BOB = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+OTHER_UNIT = Principal(id="carol", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
 
 
 def _node(node_id: str) -> Node:

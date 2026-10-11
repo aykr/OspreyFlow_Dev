@@ -31,6 +31,7 @@ from schemas.mapconfig import ALL_MODELS as MAPCONFIG_MODELS  # noqa: E402
 from schemas.model import ALL_MODELS as MODEL_PORT_MODELS  # noqa: E402
 from schemas.profile import ALL_MODELS as PROFILE_MODELS  # noqa: E402
 from schemas.provider_profile import ALL_MODELS as PROVIDER_PROFILE_MODELS  # noqa: E402
+from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
 
 #: Every Pydantic model in the repo the drift gate must cover: the real
 #: domain model, `AnalyticsPort`'s real shapes, the ingest recipe and load
@@ -45,6 +46,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *PROFILE_MODELS,
     *MAPCONFIG_MODELS,
     *PROVIDER_PROFILE_MODELS,
+    *RIGHTS_MODELS,
     *MODEL_PORT_MODELS,
     *COMPUTE_PORT_MODELS,
     *DEPLOYMENT_MODELS,

@@ -39,7 +39,7 @@ from schemas.domain import Principal
 from .test_link_events import _Cases
 from .working_set.test_visible_link import edge, node
 
-ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 FILTER = {"investigation_scope": "branch-1"}
 BODIES: dict[str, dict[str, Any]] = {
