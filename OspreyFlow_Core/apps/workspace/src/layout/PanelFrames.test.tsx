@@ -136,15 +136,15 @@ describe("the sashes (ADR-086)", () => {
 
   it("the timeline has a sash while shown; ArrowUp raises its height and hiding removes the sash", () => {
     const { getByRole, getByLabelText, queryByRole, getByText } = render(
-      <BottomPanelFrame title="Timeline" height={252}>
+      <BottomPanelFrame title="Timeline" height={130}>
         <p>Brush</p>
       </BottomPanelFrame>,
     );
     const body = getByText("Brush").parentElement as HTMLElement;
-    expect(body.style.height).toBe("252px");
+    expect(body.style.height).toBe("130px");
     fireEvent.keyDown(getByRole("separator", { name: "Resize the timeline" }), { key: "ArrowUp" });
-    expect(body.style.height).toBe("268px");
-    expect(getLayoutSizes().timelineHeight).toBe(268);
+    expect(body.style.height).toBe("146px");
+    expect(getLayoutSizes().timelineHeight).toBe(146);
     fireEvent.click(getByLabelText("Hide the timeline"));
     expect(queryByRole("separator", { name: "Resize the timeline" })).toBeNull();
   });
@@ -202,5 +202,19 @@ describe("the right panel at each width", () => {
     expect((container.querySelector("[data-panel-mode]") as HTMLElement).dataset.panelMode).toBe("collapsed");
     fireEvent.click(getByRole("button", { name: "Details" }));
     expect((container.querySelector("[data-panel-mode]") as HTMLElement).dataset.panelMode).toBe("normal");
+  });
+});
+
+// ADR-115 E4: folded, the timeline's row still carries its summary; the toggle keeps its names.
+describe("the bottom panel's folded row", () => {
+  it("shows its summary beside the title, with the same Show and Hide", () => {
+    const { getByRole, getByText } = render(
+      <BottomPanelFrame title="Timeline" height={130} initiallyOpen={false} summary={<span>strip</span>}>
+        <p>Contents</p>
+      </BottomPanelFrame>,
+    );
+    expect(getByText("strip")).toBeTruthy();
+    fireEvent.click(getByRole("button", { name: "Show the timeline" }));
+    expect(getByRole("button", { name: "Hide the timeline" }).getAttribute("aria-expanded")).toBe("true");
   });
 });

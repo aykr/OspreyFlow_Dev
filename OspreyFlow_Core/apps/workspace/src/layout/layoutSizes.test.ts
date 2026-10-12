@@ -40,7 +40,8 @@ describe("the defaults", () => {
     });
     // DESIGN.md v0.3 §5a (ADR-115 decision 9): 340 by default, resizable from 300 to 480.
     expect([DEFAULT_SIDE_WIDTH, MIN_SIDE_WIDTH, MAX_SIDE_WIDTH]).toEqual([340, 300, 480]);
-    expect(DEFAULT_TIMELINE_HEIGHT).toBe(252);
+    // DESIGN.md v0.3 §5a: the open timeline's plot is 96px under its 34px row.
+    expect(DEFAULT_TIMELINE_HEIGHT).toBe(130);
   });
 });
 

@@ -37,6 +37,7 @@ import type {
   HistogramRequest,
 } from "../../../../packages/schemas/generated";
 import { fetchCaseEvents, fetchHistogram } from "../analytics/api";
+import { publishTimelineSummary } from "./timelineSummary";
 import { eventsElsewhereSentence } from "../analytics/eventsElsewhere";
 import { activePalette } from "../color/palette";
 import { currentTheme, onThemeChange, type Theme } from "../theme/theme";
@@ -227,11 +228,13 @@ export function Timeline({
         if (cancelled) return;
         setBucketSeconds(HOURLY_INTERVAL_SECONDS);
         setHistogram(hourly);
+        publishTimelineSummary(hourly);
         return;
       }
       if (cancelled) return;
       setBucketSeconds(DAILY_INTERVAL_SECONDS);
       setHistogram(daily);
+      publishTimelineSummary(daily);
     })();
     return () => {
       cancelled = true;

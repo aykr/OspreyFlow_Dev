@@ -31,6 +31,7 @@ vi.mock("../analytics/api", () => ({
 
 import { createCrossFilterStore } from "../crossfilter/store";
 import { Timeline } from "./Timeline";
+import { currentTimelineSummary, forgetTimelineSummaryForTest } from "./timelineSummary";
 
 afterEach(cleanup);
 
@@ -55,6 +56,9 @@ describe("Timeline's density strip", () => {
     expect(option.yAxis.axisLabel.fontFamily).toMatch(/IBM Plex Mono/);
     expect(option.xAxis.axisLabel.fontFamily).toMatch(/IBM Plex Mono/);
     expect(option.xAxis.data).toEqual(["2026-01-01", "2026-01-02"]);
+    // ADR-115 E4: the folded row draws the histogram the timeline itself read.
+    expect(currentTimelineSummary()?.total).toBe(3);
+    forgetTimelineSummaryForTest();
   });
 
   it("fills the brushed window translucently, so the bars within stay readable", async () => {

@@ -619,3 +619,14 @@
   color: var(--text-secondary); border: 1px solid var(--border-subtle); border-radius: var(--r-1);
 }
 .provenance-stroke line { stroke: var(--text-secondary); stroke-width: 1.5; }
+/* The bottom panel's row (ADR-115 E4; DESIGN.md §5a): 34px — the chevron, the title, the summary. */
+.bottom-panel__head {
+  box-sizing: border-box; height: var(--h-timeline); flex: none;
+  display: flex; align-items: center; gap: var(--sp-8); padding: 0 var(--sp-8);
+}
+.bottom-panel__toggle { min-width: var(--h-control-24); min-height: var(--h-control-24); padding: 0; }
+.bottom-panel__title { font-size: var(--fs-12); font-weight: 600; color: var(--text-secondary); }
+.timeline-strip { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-12); }
+.timeline-strip__bars { flex: 1; height: var(--sp-16); display: flex; align-items: flex-end; gap: 1px; overflow: hidden; }
+.timeline-strip__bar { flex: 1; min-width: 1px; background: var(--seq-2); }
+.timeline-strip__range { flex: none; font-size: var(--fs-11); color: var(--text-tertiary); }

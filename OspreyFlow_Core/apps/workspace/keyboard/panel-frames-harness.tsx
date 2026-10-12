@@ -29,7 +29,7 @@ createRoot(container).render(
         />
       </SidePanelFrame>
     </div>
-    <BottomPanelFrame title="Timeline" height={252}>
+    <BottomPanelFrame title="Timeline" height={130}>
       <div id="timeline-body" style={{ height: "100%" }}>
         Timeline
       </div>

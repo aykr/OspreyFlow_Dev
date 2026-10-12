@@ -49,7 +49,8 @@ test("Hide the timeline gives its height back, and Show restores it", async ({ p
   await page.goto(URL);
   const before = (await page.locator("#work-area").boundingBox())!.height;
   await press(page, "Hide the timeline");
-  await expect.poll(async () => (await page.locator("#work-area").boundingBox())!.height).toBeGreaterThan(before + 200);
+  // DESIGN.md §5a: open, the timeline is 130px under its row (ADR-115 E4).
+  await expect.poll(async () => (await page.locator("#work-area").boundingBox())!.height).toBeGreaterThan(before + 120);
   await expect(page.getByRole("button", { name: "Show the timeline" })).toHaveAttribute("aria-expanded", "false");
   await press(page, "Show the timeline");
   await expect.poll(async () => Math.round((await page.locator("#work-area").boundingBox())!.height)).toBe(Math.round(before));
@@ -167,15 +168,15 @@ test("a stacked panel's sash gives it a height of its own, and Home lets it shar
 test("the timeline's sash raises and lowers it with the arrow keys, and the height survives a reload", async ({ page }) => {
   await page.goto(URL);
   const body = page.locator("#timeline-body");
-  expect(Math.round((await body.boundingBox())!.height)).toBe(252);
+  expect(Math.round((await body.boundingBox())!.height)).toBe(130);
   await focusSash(page, "Resize the timeline");
   await page.keyboard.press("ArrowUp");
-  await expect.poll(async () => Math.round((await body.boundingBox())!.height)).toBe(268);
+  await expect.poll(async () => Math.round((await body.boundingBox())!.height)).toBe(146);
   await page.reload();
-  await expect.poll(async () => Math.round((await body.boundingBox())!.height)).toBe(268);
+  await expect.poll(async () => Math.round((await body.boundingBox())!.height)).toBe(146);
   await focusSash(page, "Resize the timeline");
   await page.keyboard.press("Home");
-  await expect.poll(async () => Math.round((await body.boundingBox())!.height)).toBe(252);
+  await expect.poll(async () => Math.round((await body.boundingBox())!.height)).toBe(130);
   registerCovered(REGISTRY, "resize-the-timeline-by-keyboard");
 });
 

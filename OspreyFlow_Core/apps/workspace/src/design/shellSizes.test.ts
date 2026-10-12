@@ -25,6 +25,7 @@ describe("the workspace's regions", () => {
     expect(rule(".view-toolbar").height).toBe("var(--h-canvas-toolbar)");
     expect(rule(".canvas-toolbar")["min-height"]).toBe("var(--h-canvas-toolbar)");
     expect(rule(".status-bar")["min-height"]).toBe("var(--h-status-bar)");
+    expect(rule(".bottom-panel__head").height).toBe("var(--h-timeline)");
   });
 
   it("set the status bar's counts in mono 11px with 16px between them", () => {

@@ -11,7 +11,8 @@ export const LAYOUT_SIZES_KEY = "ospreyflow.layout-sizes";
 
 // DESIGN.md v0.3 §5a (ADR-115 decision 9): the right panel is 340 by default, resizable 300 to 480.
 export const DEFAULT_SIDE_WIDTH = 340;
-export const DEFAULT_TIMELINE_HEIGHT = 252; // ADR-082's timeline height
+// DESIGN.md v0.3 §5a (ADR-115 decision 9): open, a 96px plot under the 34px row (ADR-082 had 252).
+export const DEFAULT_TIMELINE_HEIGHT = 130;
 export const MIN_SIDE_WIDTH = 300;
 export const MAX_SIDE_WIDTH = 480;
 /** The canvas keeps at least this much of the work area when the column is widened. */

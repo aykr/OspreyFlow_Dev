@@ -179,7 +179,7 @@ narrowed.
 │  │                                                   ├─────────────────────────────┤
 │  │ [3 selected  Expand  Branch…  Remove  Clear]      │ ⠿ Query builder          ⋯  │
 │  ├───────────────────────────────────────────────────┤                             │
-│  │ ▸ Timeline (folded until opened)                  │                             │
+│  │ ▸ Timeline ▁▂▅▃▁▆▂  2001-05-14 to 2001-12-03 (34px)│                             │
 ├──┴───────────────────────────────────────────────────┴─────────────────────────────┤
 │ 12,481 nodes  38,902 edges  214 dimmed by filter  6 hidden by handling    Tip …  Next tip │
 └────────────────────────────────────────────────────────────────────────────────────┘
@@ -198,7 +198,8 @@ the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at t
 appears when anything is selected (ADR-097 step 1; `keyboard/selection.spec.ts`), on the inverse
 surface (the tooltip's `n11`-on-`surface-app` pairing) so it never reads as part of the right-click
 menu, which sits on `surface-raised` (the owner, 9 October 2026). The timeline opens
-folded. Above the bar, the **classification strip** names the highest protective marking among what is
+folded: a 34px row — the chevron, *Timeline*, a small density strip of what the open timeline
+holds and its date range in mono; open, its plot is 130px by default (DESIGN.md §5a; ADR-115 E4). Above the bar, the **classification strip** names the highest protective marking among what is
 on screen, by the deployment's handling scheme's order, and is never hidden (`role="note"`, "Protective
 marking"). Chrome is these three rows — strip, bar, view toolbar — and no more (ADR-097 Amendment 1);
 their heights are DESIGN.md v0.3 §5a's (20, 44, 36; ADR-115 decision 9) and checked

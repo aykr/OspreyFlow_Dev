@@ -203,8 +203,11 @@ export function BottomPanelFrame({
   children,
   initiallyOpen = true,
   openSignal = 0,
+  summary,
 }: {
   title: string;
+  /** What the row says beside the title, folded or open (ADR-115 E4: the timeline's strip). */
+  summary?: ReactNode;
   /** The height to begin with; the analyst's own setting, once made, takes its place. */
   height: number;
   children: ReactNode;
@@ -237,19 +240,20 @@ export function BottomPanelFrame({
           onReset={resetTimelineHeight}
         />
       )}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "var(--sp-8)",
-          padding: "4px var(--sp-8)",
-        }}
-      >
-        <span style={{ color: "var(--text-secondary)" }}>{title}</span>
-        <Button aria-label={open ? `Hide the ${lower}` : `Show the ${lower}`} aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? "Hide" : "Show"}
-        </Button>
+      {/* ADR-115 E4 (DESIGN.md §5a, the reference): a 34px row — the chevron that folds it, the
+          title, then the summary. */}
+      <div className="bottom-panel__head">
+        <button
+          type="button"
+          className="btn btn--quiet bottom-panel__toggle"
+          aria-label={open ? `Hide the ${lower}` : `Show the ${lower}`}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+        </button>
+        <span className="bottom-panel__title">{title}</span>
+        {summary}
       </div>
       <div style={{ height: open ? current : 0, overflow: "hidden" }}>
         <div style={{ height: current }} aria-hidden={!open}>

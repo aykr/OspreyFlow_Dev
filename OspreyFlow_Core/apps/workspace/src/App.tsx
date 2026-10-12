@@ -90,6 +90,8 @@ import { emergence, type FirstSeen } from "./crossfilter/emergence";
 import type { WorkingSetDelta } from "./workingset/models";
 import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
+import { DEFAULT_TIMELINE_HEIGHT } from "./layout/layoutSizes";
+import { TimelineStrip } from "./timeline/TimelineStrip";
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
 import { AlertInbox } from "./watches/AlertInbox";
@@ -1622,7 +1624,13 @@ export function App() {
       {showsWorkingSetTools && (
         // ADR-097 step 1: folded to its header by default, so the canvas has the room; opened and
         // sized as before (ADR-086).
-        <BottomPanelFrame title="Timeline" height={252} initiallyOpen={false} openSignal={timelineOpenSignal}>
+        <BottomPanelFrame
+          title="Timeline"
+          height={DEFAULT_TIMELINE_HEIGHT}
+          initiallyOpen={false}
+          openSignal={timelineOpenSignal}
+          summary={<TimelineStrip />}
+        >
           <div style={{ height: "100%" }}>
             <Timeline
               apiBaseUrl={API_BASE_URL}
