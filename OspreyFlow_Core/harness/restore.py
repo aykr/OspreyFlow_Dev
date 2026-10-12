@@ -59,6 +59,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -327,9 +328,17 @@ def _psql(
     argv += ["-d", database, "-Atc", command] if command else [database]
     if sql is None:
         return subprocess.run(argv, capture_output=True, text=True, check=False)  # noqa: S603
-    import io
+    # `input=`, not an in-memory `stdin=`: `subprocess` needs a real file descriptor for `stdin`,
+    # and a `BytesIO` failed the first live restore (`io.UnsupportedOperation: fileno`, B2e).
+    return subprocess.run(argv, input=sql, capture_output=True, check=False)  # noqa: S603
 
-    return subprocess.run(argv, stdin=io.BytesIO(sql), capture_output=True, check=False)  # noqa: S603
+
+def _without_passwords(roles: bytes) -> bytes:
+    """The roles with any `PASSWORD '…'` clause taken out. A role's password belongs to the
+    deployment being restored into (its `deployment.env`), not to the one backed up: a set taken
+    before backups left passwords out (`--no-role-passwords`) carries the old hashes, and replaying
+    them refused the Conduit and Superset at sign-in (found at B2e)."""
+    return re.sub(rb" PASSWORD '(?:[^']|'')*'", b"", roles)
 
 
 def restore_postgres_all(compose_file: Path, dumps: list[Path], roles: Path | None) -> None:
@@ -338,7 +347,9 @@ def restore_postgres_all(compose_file: Path, dumps: list[Path], roles: Path | No
     `dump.sql` is the deployment's own database (ADR-114 Amendment 3)."""
     main_database = _env_value(compose_file.parent / "deployment.env", "POSTGRES_DB")
     if roles is not None:
-        replayed = _psql(compose_file, "postgres", roles.read_bytes(), stop_on_error=False)
+        replayed = _psql(
+            compose_file, "postgres", _without_passwords(roles.read_bytes()), stop_on_error=False
+        )
         errors = [
             line
             for line in _text(replayed.stderr).splitlines()
@@ -421,6 +432,8 @@ def restore_identity(compose_file: Path, held: Path) -> dict[str, int]:
     _register_sign_in(env_path)
     if carried.get("report_sync_dashboards"):
         _set_env_line(env_path, "REPORT_SYNC_DASHBOARDS", carried["report_sync_dashboards"])
+    if carried.get("superset_secret_key"):
+        _set_env_line(env_path, "SUPERSET_SECRET_KEY", carried["superset_secret_key"])
     return summary
 
 

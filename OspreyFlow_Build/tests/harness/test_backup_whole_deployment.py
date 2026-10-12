@@ -10,10 +10,12 @@ restoring the cases without the people who hold their grants locks everyone out.
 What a mistake would do, and the case that catches it:
 - a database left out of the set — `test_every_database_is_dumped_and_the_roles_with_them`;
 - a database that dumped nothing passed as a backup — `test_an_empty_dump_of_any_database_is_refused`;
-- the identity file readable by anyone, or the dashboards' setting lost —
+- the identity file readable by anyone, or the dashboards' setting or Superset's key lost —
   `test_the_identity_item_is_the_owners_alone_and_carries_report_syncs_dashboards`;
-- a restore refused by a fresh server for a missing role or database —
-  `test_restore_replays_roles_first_and_creates_a_missing_database`;
+- a restore refused by a fresh server for a missing role or database, or one that puts the old
+  deployment's role passwords over the new one's (found at B2e: the Conduit and Superset were
+  refused at sign-in) — `test_restore_replays_roles_first_and_creates_a_missing_database` and
+  `test_every_database_is_dumped_and_the_roles_with_them`;
 - the people not brought back, or their passwords not set again —
   `test_restore_brings_the_identity_back_and_sets_the_dashboards_setting`.
 
@@ -42,6 +44,7 @@ ENV = (
     "POSTGRES_USER=osprey\nPOSTGRES_DB=ospreyflow\nOSPREY_KEYCLOAK_PORT=8081\n"
     "OSPREY_KEYCLOAK_ADMIN_PASSWORD=kc-admin-secret\n"
     'REPORT_SYNC_DASHBOARDS=[{"client_id": "osprey-dashboard-c", "secret": "s", "weeks": 12}]\n'
+    "SUPERSET_SECRET_KEY=old-superset-key\n"
 )
 
 
@@ -59,6 +62,7 @@ def _fake_postgres(databases: dict[str, str], seen: list[list[str]]) -> Any:
         seen.append(command)
         tail = command[command.index("postgres") + 1 :] if "postgres" in command else command
         if tail[:1] == ["pg_dumpall"]:
+            assert "--no-role-passwords" in tail, "a role's password belongs to the deployment"
             return "CREATE ROLE osprey_reports_reader;\n"
         if tail[:1] == ["psql"]:
             return "\n".join(databases) + "\n"
@@ -104,6 +108,9 @@ def test_the_identity_item_is_the_owners_alone_and_carries_report_syncs_dashboar
     held = json.loads(path.read_text(encoding="utf-8"))
     assert held["realm"] == "osprey"
     assert json.loads(held["report_sync_dashboards"])[0]["client_id"] == "osprey-dashboard-c"
+    # Superset encrypts fields of its own database with this key; restored under a fresh install's
+    # new key it could not read them ("Invalid decryption key", found at B2e).
+    assert held["superset_secret_key"] == "old-superset-key"
 
 
 def test_restore_replays_roles_first_and_creates_a_missing_database(
@@ -113,19 +120,34 @@ def test_restore_replays_roles_first_and_creates_a_missing_database(
 
     def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         stdin = kwargs.get("stdin")
-        calls.append((command, stdin.read().decode() if stdin else kwargs.get("input") or ""))
+        if stdin is not None:
+            # What the real `subprocess.run` does with a stdin it is given: asks for its file
+            # descriptor. An in-memory buffer has none (`io.UnsupportedOperation: fileno`), which is
+            # how the first live restore failed at B2e while this fake read the buffer happily.
+            stdin.fileno()
+        body = stdin.read() if stdin is not None else kwargs.get("input") or b""
+        calls.append((command, body.decode() if isinstance(body, bytes) else body))
         out = "ospreyflow\n" if "-Atc" in command else ""
         return subprocess.CompletedProcess(command, 0, stdout=out, stderr="")
 
     monkeypatch.setattr(restore.subprocess, "run", run)
     folder = tmp_path / "set" / "postgres"
     folder.mkdir(parents=True)
-    (folder / "roles.sql").write_text("CREATE ROLE osprey_reports_reader;\n", encoding="utf-8")
+    (folder / "roles.sql").write_text(
+        "CREATE ROLE osprey_reports_reader;\n"
+        "ALTER ROLE osprey_reports_reader WITH NOSUPERUSER LOGIN PASSWORD 'SCRAM-SHA-256$4096:old';\n"
+        "ALTER ROLE osprey WITH SUPERUSER LOGIN PASSWORD 'md5old';\n",
+        encoding="utf-8",
+    )
     (folder / "dump.sql").write_text("CREATE TABLE investigations ();\n", encoding="utf-8")
     (folder / "superset.sql").write_text("CREATE TABLE dashboards ();\n", encoding="utf-8")
     restore.restore_postgres_all(deployment, [folder / "dump.sql", folder / "superset.sql"], folder / "roles.sql")
     sent = [body for _c, body in calls]
     assert sent[0].startswith("CREATE ROLE"), "roles before any database"
+    # Found at B2e: replaying the old hashes locked the Conduit and Superset out of the fresh
+    # server, whose passwords are the new deployment.env's.
+    assert "PASSWORD" not in sent[0] and "old" not in sent[0]
+    assert "ALTER ROLE osprey_reports_reader WITH NOSUPERUSER LOGIN" in sent[0], "the rest kept"
     created = [c for c, _b in calls if any("CREATE DATABASE" in part for part in c)]
     assert len(created) == 1 and any('"superset"' in part for part in created[0])
     targets = [c[-1] for c, body in calls if body.startswith("CREATE TABLE")]
@@ -142,17 +164,21 @@ def test_restore_brings_the_identity_back_and_sets_the_dashboards_setting(
                         lambda **kw: imported.append(kw["identity"]) or {"people": 4, "dashboards": 1, "replaced": 4})  # fmt: skip
     monkeypatch.setattr(restore, "_register_sign_in", lambda env_path: registered.append(env_path))
     env = deployment.parent / "deployment.env"
-    env.write_text("POSTGRES_USER=osprey\nOSPREY_KEYCLOAK_ADMIN_PASSWORD=new\nREPORT_SYNC_DASHBOARDS=[]\n",
-                   encoding="utf-8")  # fmt: skip
+    env.write_text("POSTGRES_USER=osprey\nOSPREY_KEYCLOAK_ADMIN_PASSWORD=new\nREPORT_SYNC_DASHBOARDS=[]\n"
+                   "SUPERSET_SECRET_KEY=fresh-key\n", encoding="utf-8")  # fmt: skip
     held = tmp_path / "realm.json"
     held.write_text(json.dumps({"format": 1, "realm": "osprey", "people": [], "dashboards": [],
-                                "report_sync_dashboards": '[{"client_id": "osprey-dashboard-c"}]'}),
+                                "report_sync_dashboards": '[{"client_id": "osprey-dashboard-c"}]',
+                                "superset_secret_key": "old-superset-key"}),
                     encoding="utf-8")  # fmt: skip
     summary = restore.restore_identity(deployment, held)
     assert summary["people"] == 4 and imported and registered == [env]
     lines = env.read_text(encoding="utf-8").splitlines()
     assert 'REPORT_SYNC_DASHBOARDS=[{"client_id": "osprey-dashboard-c"}]' in lines
     assert sum(line.startswith("REPORT_SYNC_DASHBOARDS=") for line in lines) == 1
+    assert [line for line in lines if line.startswith("SUPERSET_SECRET_KEY=")] == [
+        "SUPERSET_SECRET_KEY=old-superset-key"
+    ], "the key the restored dashboards were encrypted with"
 
 
 def test_the_published_recipes_repository_is_in_the_set(

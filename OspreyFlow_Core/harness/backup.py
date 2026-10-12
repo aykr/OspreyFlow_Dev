@@ -290,7 +290,12 @@ def backup_postgres_all(compose_file: Path, folder: Path) -> list[tuple[str, Pat
     on_postgres = _compose(compose_file) + ["exec", "-T", "postgres"]
     folder.mkdir(parents=True, exist_ok=True)
     written: list[tuple[str, Path]] = []
-    roles = _run(on_postgres + ["pg_dumpall", "--roles-only", "-U", user], item="postgres")
+    # No passwords: a role's password is the deployment's own secret (`deployment.env`), and a fresh
+    # install has minted new ones; carrying the old hashes locked the Conduit out at B2e.
+    roles = _run(
+        on_postgres + ["pg_dumpall", "--roles-only", "--no-role-passwords", "-U", user],
+        item="postgres",
+    )
     (folder / "roles.sql").write_text(roles, encoding="utf-8")
     written.append(("postgres-roles", folder / "roles.sql"))
     listed = _run(
@@ -320,9 +325,9 @@ def backup_postgres_all(compose_file: Path, folder: Path) -> list[tuple[str, Pat
 
 def backup_identity(compose_file: Path, destination: Path) -> Path:
     """The realm's people and dashboard identities, with their ids (`harness/identity.py`), and
-    report-sync's dashboards setting. Keycloak keeps no data of its own past a restart on this
-    profile, so this is the only copy of who holds a grant. It carries client secrets: written
-    readable by its owner only."""
+    report-sync's dashboards setting and Superset's key. Keycloak keeps no data of its own past a
+    restart on this profile, so this is the only copy of who holds a grant. It carries client
+    secrets: written readable by its owner only."""
     env_path = compose_file.parent / "deployment.env"
     port = _env_value_or(env_path, "OSPREY_KEYCLOAK_PORT", "8081")
     issuer = f"http://127.0.0.1:{port}"
@@ -338,6 +343,12 @@ def backup_identity(compose_file: Path, destination: Path) -> Path:
     dashboards = _env_value_or(env_path, "REPORT_SYNC_DASHBOARDS", "")
     if dashboards:
         held["report_sync_dashboards"] = dashboards
+    # Superset encrypts fields of its own database (`superset.sql`) with this key, so it belongs to
+    # the data, not to the deployment: restored under a fresh install's new key, Superset could not
+    # read its own records ("Invalid decryption key", found at B2e).
+    superset_key = _env_value_or(env_path, "SUPERSET_SECRET_KEY", "")
+    if superset_key:
+        held["superset_secret_key"] = superset_key
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.touch(mode=0o600, exist_ok=True)
     destination.chmod(0o600)
