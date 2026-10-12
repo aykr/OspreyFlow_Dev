@@ -349,22 +349,19 @@
 
 /* A part of a panel that folds away (ADR-096): minimalist and bordered, the owner's choice of style.
    One hairline box per part, a little space between them, the header a full-width quiet row. */
+/* ADR-115 E6 (review item 14): rows divided by a hairline, not boxes. */
 .accordion-section {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-control);
-  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-subtle);
 }
-.accordion-section + .accordion-section { margin-top: var(--sp-4); }
 .accordion-section__heading { margin: 0; font-size: inherit; font-weight: inherit; }
 .accordion-section__header {
   display: flex; align-items: center; gap: var(--sp-6); width: 100%;
-  padding: var(--sp-6) var(--sp-8);
+  min-height: var(--h-control-36); padding: var(--sp-6) var(--sp-8);
   background: none; border: none; border-radius: var(--r-control);
-  color: var(--text-primary); font: inherit; font-size: var(--fs-12); font-weight: 600;
-  line-height: var(--lh-12); text-align: left; cursor: pointer;
+  color: var(--text-primary); font: inherit; font-size: var(--fs-13); font-weight: 600;
+  line-height: var(--lh-13); text-align: left; cursor: pointer;
 }
 .accordion-section__header:hover, .accordion-section__header:focus-visible { background: var(--surface-hover); }
-.accordion-section__header[aria-expanded="true"] { border-bottom: 1px solid var(--border-subtle); border-radius: var(--r-control) var(--r-control) 0 0; }
 .accordion-section__chevron { color: var(--text-tertiary); flex: none; transition: transform var(--dur-fast) var(--ease); }
 .accordion-section__header[aria-expanded="true"] .accordion-section__chevron { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .accordion-section__chevron { transition: none; } }
