@@ -215,9 +215,11 @@
   color: var(--text-primary); font-size: var(--fs-13);
   display: flex; align-items: center; gap: var(--sp-8);
 }
-.toast--error { border-left: 3px solid var(--error); }
-.toast--warning { border-left: 3px solid var(--warning); }
-.toast--success { border-left: 3px solid var(--success); }
+/* A kind is said by a glyph and in words, never by a stripe (DESIGN.md §3.3, §10). */
+.toast__glyph { font-weight: 700; flex: none; }
+.toast--error .toast__glyph { color: var(--error); }
+.toast--warning .toast__glyph { color: var(--warning); }
+.toast--success .toast__glyph { color: var(--success); }
 
 /* The top bar (ADR-065). Whole items wrap to a second line when the window is narrow; a label is
    never broken in two. */
@@ -453,9 +455,9 @@
 .network-canvas {
   background-color: var(--surface-sunken);
   background-image:
-    linear-gradient(var(--border-subtle) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
-  background-size: 8px 8px;
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 16px 16px;
 }
 /* The zoom cluster and the legend: docked overlays on the canvas, a hairline and no shadow. */
 .canvas-zoom {

@@ -81,6 +81,10 @@ export type HandlingScheme = string;
  */
 export type Ontology = string;
 /**
+ * The protective marking shown where no case data is on screen: the welcome page, Home, the Ingest Studio and the Admin area; inside a case, the strip shows this or the highest marking on screen, whichever is higher (ADR-115 decision 2). One of the handling scheme's classifications. Default: the scheme's lowest.
+ */
+export type Marking = string | null;
+/**
  * Default: config/real_data_exceptions.yaml. A path to the gitignored list, never its contents.
  */
 export type RealDataExceptions = string;
@@ -256,6 +260,7 @@ export interface GovernanceConfig {
   identity_provider?: IdentityProvider;
   handling_scheme?: HandlingScheme;
   ontology?: Ontology;
+  marking?: Marking;
   real_data_exceptions?: RealDataExceptions;
 }
 /**

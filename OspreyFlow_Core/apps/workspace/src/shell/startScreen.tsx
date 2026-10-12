@@ -5,7 +5,7 @@ import type { ReactElement, ReactNode } from "react";
 import { CasePicker } from "../investigation/CasePicker";
 import { startFor, startPlaces, type Rights, type StartPlace } from "../rights/visibility";
 import { AdminWithoutCase } from "./AdminWithoutCase";
-import { StartPage } from "./StartPage";
+import { StartBar, StartPage } from "./StartPage";
 
 export type StartChoice = StartPlace | "start" | null;
 
@@ -19,6 +19,8 @@ export interface StartScreenInput {
   startChoice: StartChoice;
   setStartChoice: (choice: StartChoice) => void;
   account: ReactNode;
+  /** The deployment's marking, shown above every surface here (ADR-115 decision 2). */
+  marking: string | null;
   apiBaseUrl: string;
   bearerToken: string;
   lastCaseId: string | null;
@@ -43,6 +45,7 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
       <StartPage
         places={places}
         account={input.account}
+        marking={input.marking}
         onChoose={(place) => {
           if (!investigationId) return setStartChoice(place);
           // A case is open behind Start: the Glass offers the cases with a way back to it, and the
@@ -61,20 +64,25 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
         bearerToken={input.bearerToken}
         rights={rights}
         account={input.account}
+        marking={input.marking}
         onStart={() => setStartChoice("start")}
       />
     );
   }
   if (investigationId) return null;
+  const backToStart = places.length > 1 ? () => setStartChoice("start") : undefined;
   return (
+    <>
+    <StartBar account={input.account} marking={input.marking} onStart={backToStart} />
     <CasePicker
       apiBaseUrl={input.apiBaseUrl}
       bearerToken={input.bearerToken}
       lastCaseId={input.lastCaseId}
       isAdministrator={input.isAdministrator}
       title={where === "ingest" ? "Choose the case to load into" : "Choose a case"}
-      onStart={places.length > 1 ? () => setStartChoice("start") : undefined}
+      onStart={backToStart}
       onOpen={(id) => input.openCase(id, where === "ingest" ? "ingest" : undefined)}
     />
+    </>
   );
 }

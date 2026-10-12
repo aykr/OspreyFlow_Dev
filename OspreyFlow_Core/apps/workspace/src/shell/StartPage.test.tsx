@@ -15,7 +15,7 @@ afterEach(() => {
 describe("StartPage", () => {
   it("shows one tile per place and says where each goes", () => {
     const chose = vi.fn();
-    render(<StartPage places={["glass", "ingest", "admin"]} onChoose={chose} account={null} />);
+    render(<StartPage places={["glass", "ingest", "admin"]} onChoose={chose} account={null} marking={null} />);
     expect(screen.getByRole("heading", { name: "Where to?" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^The Glass/ }));
     fireEvent.click(screen.getByRole("button", { name: /^Ingest Studio/ }));
@@ -25,7 +25,7 @@ describe("StartPage", () => {
   });
 
   it("leaves out a place the person may not go", () => {
-    render(<StartPage places={["glass", "ingest"]} onChoose={() => undefined} account={null} />);
+    render(<StartPage places={["glass", "ingest"]} onChoose={() => undefined} account={null} marking={null} />);
     expect(screen.queryByRole("button", { name: /^Admin/ })).toBeNull();
   });
 });
@@ -35,7 +35,7 @@ describe("AdminWithoutCase", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { status: 200 })));
     const start = vi.fn();
     render(
-      <AdminWithoutCase apiBaseUrl="http://api" bearerToken="t" rights={new Set(["manage_people"])} onStart={start} account={null} />,
+      <AdminWithoutCase apiBaseUrl="http://api" bearerToken="t" rights={new Set(["manage_people"])} onStart={start} account={null} marking={null} />,
     );
     expect(screen.getByRole("tab", { name: "People and roles" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Start" }));

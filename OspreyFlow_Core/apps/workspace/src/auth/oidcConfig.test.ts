@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  deploymentMarking,
   loadDeploymentSettings,
   oidcAuthority,
   resetDeploymentSettings,
@@ -53,5 +54,22 @@ describe("the identity provider's address", () => {
       answering(200, "<!doctype html><title>the Glass</title>"),
     );
     expect(oidcAuthority()).toContain(":8081/realms/osprey");
+  });
+});
+
+// ADR-115 decision 2: the marking a surface with no case data shows comes with the deployment.
+describe("the deployment's marking", () => {
+  afterEach(() => resetDeploymentSettings());
+
+  it("is read with the identity provider", async () => {
+    await loadDeploymentSettings(
+      answering(200, JSON.stringify({ identity_provider: "http://id.osprey.test", realm: "osprey", marking: "OFFICIAL" })),
+    );
+    expect(deploymentMarking()).toBe("OFFICIAL");
+  });
+
+  it("is unknown where there is no deployment file", async () => {
+    await loadDeploymentSettings(answering(404, "not found"));
+    expect(deploymentMarking()).toBeNull();
   });
 });

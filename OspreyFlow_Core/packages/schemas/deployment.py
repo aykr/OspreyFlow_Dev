@@ -253,6 +253,15 @@ class GovernanceConfig(BaseModel):
         default="uk-law-enforcement", description="Default: uk-law-enforcement"
     )
     ontology: str = Field(default="default", description="Default: default")
+    marking: str | None = Field(
+        default=None,
+        description=(
+            "The protective marking shown where no case data is on screen: the welcome page, Home, "
+            "the Ingest Studio and the Admin area; inside a case, the strip shows this or the "
+            "highest marking on screen, whichever is higher (ADR-115 decision 2). One of the "
+            "handling scheme's classifications. Default: the scheme's lowest."
+        ),
+    )
     real_data_exceptions: str = Field(
         default="config/real_data_exceptions.yaml",
         description=(

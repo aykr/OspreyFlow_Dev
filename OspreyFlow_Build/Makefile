@@ -4,7 +4,7 @@
 # with this folder on `PYTHONPATH` — so every command and every relative path in it is unchanged.
 # The reasoning each target used to carry in Core's Makefile is in git history (`git log -p
 # OspreyFlow_Core/Makefile`) and in each tool's own docstring.
-.PHONY: publish-user-repo ci core-check lint-tools licence-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status bundle seed-enron
+.PHONY: publish-user-repo ci core-check lint-tools licence-check design-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status bundle seed-enron
 
 CORE := ../OspreyFlow_Core
 BUILD := $(CURDIR)
@@ -15,7 +15,7 @@ TOOLS := PYTHONPATH=$(BUILD)
 
 # Phase 0's exit criterion: CI green; a GPL dependency fails; a schema drift fails. Core's own
 # gates first (lint, type check, image scans, the harness's accessibility suite), then these.
-ci: core-check lint-tools licence-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard bundle
+ci: core-check lint-tools licence-check design-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard bundle
 
 core-check:
 	$(MAKE) -C $(CORE) check
@@ -29,6 +29,13 @@ licence-check:
 	$(IN_CORE) node $(BUILD)/tools/licence_check.mjs
 	$(IN_CORE) node --test $(BUILD)/tests/licence_check/*.test.mjs
 	@echo "licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof"
+
+# ADR-115 (E1): the design detector against DESIGN.md §9, Core's DESIGN.md held to the contract, and
+# no colour literal in the Glass that DESIGN.md does not hold. tests/test_design_check.py and
+# tests/test_colour_drift_check.py hold the proof that each can fail.
+design-check:
+	$(IN_CORE) $(TOOLS) $(PY) -m tools.design_check
+	$(IN_CORE) $(TOOLS) $(PY) -m tools.colour_drift_check
 
 # ADR-041: mechanical control for the fetch-then-check authorization bug class.
 authorized-query-check:

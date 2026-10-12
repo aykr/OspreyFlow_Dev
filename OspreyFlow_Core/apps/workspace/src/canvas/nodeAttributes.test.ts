@@ -97,7 +97,7 @@ describe("computeNodeGraphAttributes", () => {
       },
     });
     const attrs = computeNodeGraphAttributes(node, PERSON_VISUAL, baseState());
-    expect(decodeSvg(attrs.image)).toContain('stroke-dasharray="4 2"');
+    expect(decodeSvg(attrs.image)).toContain('stroke-dasharray="4 3"');
   });
 
   it("unresolved provenance renders a dotted stroke, distinct from dashed", () => {
@@ -109,7 +109,7 @@ describe("computeNodeGraphAttributes", () => {
       },
     });
     const attrs = computeNodeGraphAttributes(node, PERSON_VISUAL, baseState());
-    expect(decodeSvg(attrs.image)).not.toContain('stroke-dasharray="4 2"');
+    expect(decodeSvg(attrs.image)).not.toContain('stroke-dasharray="4 3"');
     expect(decodeSvg(attrs.image)).toContain("stroke-dasharray");
   });
 

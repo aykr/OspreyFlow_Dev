@@ -28,6 +28,7 @@ const ALLOWED_MARKERS = [
   "mpl-2.0",
   "sil open font",
   "open font license",
+  "ofl-1.1",
   "psf",
   "python-2.0",
   "python software foundation",

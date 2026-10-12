@@ -33,6 +33,8 @@ const DEFAULT_KEYCLOAK_PORT = 8081;
 interface DeploymentSettings {
   identityProvider: string;
   realm: string;
+  /** The marking a surface with no case data shows (ADR-115 decision 2). */
+  marking: string | null;
 }
 
 let deployment: DeploymentSettings | null = null;
@@ -48,17 +50,24 @@ export async function loadDeploymentSettings(
     const body = (await response.json()) as {
       identity_provider?: unknown;
       realm?: unknown;
+      marking?: unknown;
     };
     if (typeof body.identity_provider === "string" && body.identity_provider) {
       deployment = {
         identityProvider: body.identity_provider.replace(/\/+$/, ""),
         realm:
           typeof body.realm === "string" && body.realm ? body.realm : "osprey",
+        marking: typeof body.marking === "string" && body.marking ? body.marking : null,
       };
     }
   } catch {
     // Not a deployment: the development default stands.
   }
+}
+
+/** The deployment's marking, or `null` where there is no deployment file (the development server). */
+export function deploymentMarking(): string | null {
+  return deployment?.marking ?? null;
 }
 
 /** For tests: forget what was read. */

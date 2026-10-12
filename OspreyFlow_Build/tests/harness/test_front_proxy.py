@@ -110,9 +110,21 @@ def test_the_glass_learns_its_identity_provider_at_run_time() -> None:
     assert json.loads(artefacts["glass.json"]) == {
         "identity_provider": "http://id.a.test:8443",
         "realm": "osprey",
+        # ADR-115 decision 2: the marking a surface with no case data shows; the scheme's lowest
+        # when the deployment names none.
+        "marking": "PUBLIC",
     }
     volumes = _compose(artefacts)["workspace"]["volumes"]
     assert "./glass.json:/usr/share/nginx/html/deployment.json:ro" in volumes
+
+
+def test_the_marking_floor_is_the_deployments_own_and_one_its_scheme_knows() -> None:
+    """ADR-115 decision 2: the welcome page, Home, the Studio and the Admin area show the deployment's
+    marking; inside a case the strip shows that or the highest on screen, whichever is higher."""
+    artefacts = _render(governance={"marking": "OFFICIAL"})
+    assert json.loads(artefacts["glass.json"])["marking"] == "OFFICIAL"
+    with pytest.raises(ValueError, match="TOP SECRET.*PUBLIC, OFFICIAL, OFFICIAL-SENSITIVE, SECRET"):
+        _render(governance={"marking": "TOP SECRET"})
 
 
 def test_superset_origins_are_the_derived_names() -> None:

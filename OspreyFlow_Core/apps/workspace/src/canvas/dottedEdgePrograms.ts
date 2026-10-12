@@ -23,13 +23,9 @@ import {
 } from "sigma/rendering";
 import type { RenderParams } from "sigma/types";
 
-/** The pattern, in screen pixels: a dot this long, then a gap, repeating. One place to tune it. */
-export const DOT_LENGTH_PX = 3;
-export const DOT_PERIOD_PX = 7;
-/** An inferred link's dash (ADR-097 step 2): DESIGN.md §3.8's `4 2`, doubled so the gap survives the
- * canvas's rasterising at one or two pixels wide (a 2px gap reads as a solid line on screen). */
-export const DASH_LENGTH_PX = 8;
-export const DASH_PERIOD_PX = 12;
+import { DASH_LENGTH_PX, DASH_PERIOD_PX, DOT_LENGTH_PX, DOT_PERIOD_PX } from "./provenancePatterns";
+
+export { DASH_LENGTH_PX, DASH_PERIOD_PX, DOT_LENGTH_PX, DOT_PERIOD_PX };
 
 /** Sigma's own arrowhead is 2.5 times the line's width long and twice as wide, which at one pixel is
  * smaller than a 20px node's edge can show (ADR-097 step 2). These make it 6 by 5 at one pixel. */

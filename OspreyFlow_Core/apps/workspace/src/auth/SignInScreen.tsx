@@ -3,6 +3,7 @@
 // of objection 7, this is the surface the tests-owed list's "Glass's reaction to a 401" actually
 // tests — not the Conduit's already-covered refusal, but that this screen, specifically, is what
 // an unauthenticated or refused caller sees.
+import { ClassificationStrip } from "../shell/ClassificationStrip";
 import { Button } from "../design/primitives/Button";
 
 export interface SignInScreenProps {
@@ -16,19 +17,23 @@ export interface SignInScreenProps {
    * done by hand, the screen says which of the two the person is signing in to. */
   intent?: "ingest" | "questions" | "admin" | null;
   onSignIn: () => void;
+  /** The deployment's marking, in the strip above the page (ADR-115 decision 2). */
+  marking?: string | null;
 }
 
-export function SignInScreen({ reason, intent, onSignIn }: SignInScreenProps) {
+export function SignInScreen({ reason, intent, onSignIn, marking = null }: SignInScreenProps) {
   const studio = intent === "ingest";
   const admin = intent === "admin";
   return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+    {marking && <ClassificationStrip marking={marking} />}
     <div
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        height: "100vh",
+        flex: 1,
         gap: "var(--sp-16)",
         padding: "var(--sp-24)",
         textAlign: "center",
@@ -51,6 +56,7 @@ export function SignInScreen({ reason, intent, onSignIn }: SignInScreenProps) {
       <Button variant="primary" onClick={onSignIn}>
         Sign in
       </Button>
+    </div>
     </div>
   );
 }

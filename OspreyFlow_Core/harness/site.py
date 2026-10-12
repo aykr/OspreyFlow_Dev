@@ -121,9 +121,31 @@ def proxy_service(config: OspreyConfig) -> dict[str, Any]:
     return service
 
 
+def marking_floor(config: OspreyConfig) -> str:
+    """The marking a surface with no case data shows (ADR-115 decision 2): the deployment's own, or
+    its handling scheme's lowest. The scheme is the one the Conduit loads (UK law enforcement)."""
+    from ontology.handling import load_uk_le_scheme
+
+    known = load_uk_le_scheme().classification
+    chosen = config.governance.marking
+    if chosen is None:
+        return known[0]
+    if chosen not in known:
+        raise ValueError(
+            f"governance.marking {chosen!r} is not a classification of the handling scheme: "
+            f"use one of {', '.join(known)}"
+        )
+    return chosen
+
+
 def render_glass_settings(config: OspreyConfig) -> str:
-    """What the Glass reads at start (`/deployment.json`): where its identity provider is."""
-    settings = {"identity_provider": sites(config).identity, "realm": REALM}
+    """What the Glass reads at start (`/deployment.json`): where its identity provider is, and the
+    marking it shows before any case data is on screen."""
+    settings = {
+        "identity_provider": sites(config).identity,
+        "realm": REALM,
+        "marking": marking_floor(config),
+    }
     return json.dumps(settings, indent=2) + "\n"
 
 

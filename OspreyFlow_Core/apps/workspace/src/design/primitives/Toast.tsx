@@ -8,11 +8,28 @@ export interface ToastProps {
  * a silent state change (the status-bar
  * requirement: the analyst must never mistake a filtered picture for a
  * complete one). */
+const SAID: Record<Exclude<ToastProps["kind"], "info" | undefined>, { glyph: string; word: string }> = {
+  error: { glyph: "!", word: "Error" },
+  warning: { glyph: "△", word: "Warning" },
+  success: { glyph: "✓", word: "Done" },
+};
+
+/** A kind other than information is said by a glyph and in words, never by colour alone (DESIGN.md
+ * §3.3). */
 export function Toast({ message, kind = "info" }: ToastProps) {
-  const className = ["toast", kind !== "info" ? `toast--${kind}` : ""].filter(Boolean).join(" ");
+  const said = kind === "info" ? null : SAID[kind];
+  const className = ["toast", said ? `toast--${kind}` : ""].filter(Boolean).join(" ");
   return (
     <div className={className} role="status">
-      {message}
+      {said && (
+        <span className="toast__glyph" aria-hidden="true">
+          {said.glyph}
+        </span>
+      )}
+      <span>
+        {said && `${said.word}: `}
+        {message}
+      </span>
     </div>
   );
 }

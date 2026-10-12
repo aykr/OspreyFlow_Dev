@@ -31,6 +31,7 @@ function Harness() {
     startChoice,
     setStartChoice,
     account: <span>osprey-demo-admin</span>,
+    marking: "OFFICIAL",
     apiBaseUrl: "http://keyboard-test.invalid",
     bearerToken: "unused",
     lastCaseId: null,

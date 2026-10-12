@@ -50,14 +50,14 @@ describe("renderNodeSvg", () => {
     expect(svg).not.toContain("stroke-dasharray");
   });
 
-  it("inferred is dashed 4 2", () => {
+  it("inferred is dashed 4 3 (DESIGN.md v0.3 §3.8)", () => {
     const svg = renderNodeSvg({
       shape: "circle",
       fillHex: "#000",
       strokeHex: "#fff",
       strokeStyle: "dashed",
     });
-    expect(svg).toContain('stroke-dasharray="4 2"');
+    expect(svg).toContain('stroke-dasharray="4 3"');
   });
 
   it("unresolved is dotted, distinct from dashed", () => {
@@ -67,8 +67,8 @@ describe("renderNodeSvg", () => {
       strokeHex: "#fff",
       strokeStyle: "dotted",
     });
-    expect(svg).toMatch(/stroke-dasharray="[\d.]+ [\d.]+"/);
-    expect(svg).not.toContain('stroke-dasharray="4 2"');
+    // DESIGN.md v0.3 §3.8 and §5a: unresolved is `1 3`.
+    expect(svg).toContain('stroke-dasharray="1 3"');
   });
 });
 

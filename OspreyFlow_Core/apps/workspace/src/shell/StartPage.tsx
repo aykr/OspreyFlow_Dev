@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import type { StartPlace } from "../rights/visibility";
 import { BrandMark } from "./BrandMark";
+import { ClassificationStrip } from "./ClassificationStrip";
 
 const TILES: Record<StartPlace, { title: string; does: string; then: string }> = {
   glass: { title: "The Glass", does: "Investigate a case: the graph, the map and its reports.", then: "Choose a case" },
@@ -17,10 +18,15 @@ export interface StartPageProps {
   onChoose: (place: StartPlace) => void;
   /** The account menu, as the top bar shows it. */
   account: ReactNode;
+  /** The deployment's marking (ADR-115 decision 2); no strip where it is unknown. */
+  marking: string | null;
 }
 
-export function StartBar({ account, onStart }: { account: ReactNode; onStart?: () => void }) {
+/** The chrome every surface outside a case shares: the marking strip, then the bar (ADR-115 E1). */
+export function StartBar({ account, onStart, marking }: { account: ReactNode; onStart?: () => void; marking: string | null }) {
   return (
+    <>
+    {marking && <ClassificationStrip marking={marking} />}
     <header className="app-header top-bar">
       {onStart ? (
         <button type="button" className="brand-mark-button" aria-label="OspreyFlow, go to Start" onClick={onStart}>
@@ -33,13 +39,14 @@ export function StartBar({ account, onStart }: { account: ReactNode; onStart?: (
         {account}
       </div>
     </header>
+    </>
   );
 }
 
-export function StartPage({ places, onChoose, account }: StartPageProps) {
+export function StartPage({ places, onChoose, account, marking }: StartPageProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <StartBar account={account} />
+      <StartBar account={account} marking={marking} />
       <main style={{ display: "flex", justifyContent: "center", padding: "var(--sp-24)" }}>
         <div style={{ width: "min(960px, 100%)", display: "flex", flexDirection: "column", gap: "var(--sp-16)" }}>
           <h1>Where to?</h1>

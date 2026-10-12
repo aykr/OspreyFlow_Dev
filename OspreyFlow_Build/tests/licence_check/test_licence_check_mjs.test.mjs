@@ -32,3 +32,13 @@ test("a dual-licensed package naming both an allowed licence and GPL is rejected
   "the string must not let a GPL term slip through", () => {
   assert.equal(isAllowed("MIT AND GPL-3.0"), false);
 });
+
+// ADR-115 E1: the self-hosted typefaces (`@fontsource/*`) declare SIL OFL 1.1 by its SPDX short form,
+// which spec 00's licence register allows ("SIL-OFL-1.1") and the long-name markers did not match.
+test("an OFL-1.1 licence, by its SPDX short form, is allowed", () => {
+  assert.equal(isAllowed("OFL-1.1"), true);
+});
+
+test("OFL-1.1 beside GPL is still rejected", () => {
+  assert.equal(isAllowed("OFL-1.1 AND GPL-3.0"), false);
+});

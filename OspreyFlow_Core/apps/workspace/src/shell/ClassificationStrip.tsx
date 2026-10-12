@@ -19,6 +19,16 @@ export function highestMarking(classifications: readonly string[], order: readon
   return best ?? order[0] ?? "";
 }
 
+/** What the strip says inside a case (ADR-115 decision 2): the highest on screen, never below the
+ * deployment's own marking. */
+export function screenMarking(
+  classifications: readonly string[],
+  order: readonly string[],
+  floor: string | null,
+): string {
+  return highestMarking(floor ? [...classifications, floor] : classifications, order);
+}
+
 export function ClassificationStrip({ marking }: { marking: string }) {
   return (
     <div role="note" aria-label="Protective marking" className="classification-strip">

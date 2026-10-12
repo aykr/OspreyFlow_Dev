@@ -12,12 +12,13 @@ export interface AdminWithoutCaseProps {
   rights: ReadonlySet<string>;
   onStart: () => void;
   account: ReactNode;
+  marking: string | null;
 }
 
-export function AdminWithoutCase({ onStart, account, ...admin }: AdminWithoutCaseProps) {
+export function AdminWithoutCase({ onStart, account, marking, ...admin }: AdminWithoutCaseProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <StartBar account={account} onStart={onStart} />
+      <StartBar account={account} onStart={onStart} marking={marking} />
       <div style={{ padding: "var(--sp-8) var(--sp-16) 0" }}>
         <Button onClick={onStart}>Start</Button>
       </div>

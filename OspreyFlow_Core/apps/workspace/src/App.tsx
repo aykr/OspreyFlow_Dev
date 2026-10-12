@@ -24,6 +24,7 @@ import {
 import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
 import { installUnauthorisedWatch } from "./auth/unauthorised";
 import { SignInScreen } from "./auth/SignInScreen";
+import { deploymentMarking } from "./auth/oidcConfig";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import { linkTypeName } from "./canvas/linkLabel";
 import { DocumentReader } from "./reader/DocumentReader";
@@ -39,7 +40,7 @@ import {
 } from "./crossfilter/store";
 import { AccountMenu } from "./auth/AccountMenu";
 import { ThemeToggle } from "./theme/ThemeToggle";
-import { ClassificationStrip, highestMarking } from "./shell/ClassificationStrip";
+import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
 import { LeftRail } from "./shell/LeftRail";
 import { Drawer } from "./design/primitives/Drawer";
 import { TopBar } from "./shell/TopBar";
@@ -510,7 +511,7 @@ export function App() {
       const c = (attributes as { data?: { handling?: { classification?: string } } }).data?.handling?.classification;
       if (c) found.push(c);
     });
-    return highestMarking(found, classificationOrder);
+    return screenMarking(found, classificationOrder, deploymentMarking());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [counts, classificationOrder]);
 
@@ -920,6 +921,7 @@ export function App() {
   if (!isDevBypass && authChecked && !bearerToken) {
     return (
       <SignInScreen
+        marking={deploymentMarking()}
         reason={signInReason}
         intent={handoff.view}
         onSignIn={() => void signIn()}
@@ -938,6 +940,7 @@ export function App() {
           startChoice,
           setStartChoice,
           account,
+          marking: deploymentMarking(),
           apiBaseUrl: API_BASE_URL,
           bearerToken,
           lastCaseId: investigationIdFromSession(),

@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ClassificationStrip, highestMarking } from "./ClassificationStrip";
+import { ClassificationStrip, highestMarking, screenMarking } from "./ClassificationStrip";
 import { LeftRail } from "./LeftRail";
 
 afterEach(cleanup);
@@ -21,6 +21,14 @@ describe("the protective marking", () => {
 
   it("names a marking the scheme does not know rather than hiding it", () => {
     expect(highestMarking(["OFFICIAL", "UNKNOWN MARK"], ORDER)).toBe("UNKNOWN MARK");
+  });
+
+  // ADR-115 decision 2: the deployment's marking is the floor; data above it raises the strip.
+  it("is never below the deployment's marking, and rises with what is on screen", () => {
+    expect(screenMarking([], ORDER, "OFFICIAL-SENSITIVE")).toBe("OFFICIAL-SENSITIVE");
+    expect(screenMarking(["OFFICIAL"], ORDER, "OFFICIAL-SENSITIVE")).toBe("OFFICIAL-SENSITIVE");
+    expect(screenMarking(["SECRET"], ORDER, "OFFICIAL-SENSITIVE")).toBe("SECRET");
+    expect(screenMarking(["OFFICIAL"], ORDER, null)).toBe("OFFICIAL");
   });
 
   it("is shown in a strip of its own, neutral, labelled for assistive technology", () => {

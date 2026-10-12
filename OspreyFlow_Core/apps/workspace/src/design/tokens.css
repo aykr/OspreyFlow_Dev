@@ -6,8 +6,8 @@
    - Hue encodes entity type. Every channel is paired with a shape, so hue never
      carries a distinction on its own.
    - Provenance is carried by stroke, not colour, so it composes with all nine channels:
-     asserted = 1px solid border-strong; inferred = 1.5px dashed 4 2, channel colour;
-     unresolved = 1.5px dotted, channel colour.
+     asserted = 1px solid border-strong; inferred = 1.5px dashed 4 3, channel colour;
+     unresolved = 1.5px dotted 1 3, channel colour (DESIGN.md v0.3 §3.8).
    - State is an oklab mix toward the panel surface: dimmed 32%, filtered out 12%.
    - Hairline or shadow, never both. Docked panels get a hairline; overlays get a shadow.
    - Brass is struck out of the data palette permanently. It is the accent, not a channel.
@@ -109,6 +109,26 @@
   --r-panel:4px;     /* panels          */
   --r-overlay:6px;   /* overlays        */
   --r-chip:999px;    /* status chips    */
+  /* The same radii under DESIGN.md §5's names (ADR-115 E1). */
+  --r-0:var(--r-canvas); --r-1:var(--r-control); --r-2:var(--r-panel); --r-3:var(--r-overlay); --r-pill:var(--r-chip);
+
+  /* Layout dimensions (DESIGN.md v0.3 §5a). A size not listed there is drift. */
+  --h-marking:20px;
+  --h-top-bar:44px;            /* the workspace            */
+  --h-top-bar-page:48px;       /* the welcome page and Home */
+  --w-rail:48px; --h-rail-button:36px;
+  --h-canvas-toolbar:36px;
+  --w-right-panel:340px; --w-right-panel-min:300px; --w-right-panel-max:480px; --h-panel-tabs:36px;
+  --h-timeline:34px; --h-timeline-plot:96px;
+  --h-status-bar:26px;
+  --w-welcome-panel:320px; --w-welcome-panel-narrow:280px;
+  --w-sign-in-card:360px; --w-sign-in-card-min:300px;
+  /* Control heights: 24 a toolbar toggle, 26 a toolbar control, 28 the selection bar and zoom, 30 the
+     top bar, 32 a text input, 34 a secondary full-width button, 36 a primary full-width button. */
+  --h-control-24:24px; --h-control-26:26px; --h-control-28:28px; --h-control-30:30px;
+  --h-control-32:32px; --h-control-34:34px; --h-control-36:36px;
+  /* The canvas grid's line (DESIGN.md §9 exception 4): border-subtle mixed to 40% toward transparent. */
+  --grid-line:color-mix(in oklab, var(--border-subtle) 40%, transparent);
 
   /* Motion — spent on one thing: keeping track of where a node went. */
   --dur-fast:90ms;    /* control state change                    */
@@ -174,8 +194,8 @@ p { margin: 0; text-wrap: pretty; }
 .node--dimmed       { /* color-mix(in oklab, <channel> 32%, var(--surface-panel)) */ }
 .node--filtered-out { /* color-mix(in oklab, <channel> 12%, var(--surface-panel)); label dropped */ }
 .node--asserted     { /* 1px solid var(--border-strong) */ }
-.node--inferred     { /* 1.5px dashed 4 2, channel colour */ }
-.node--unresolved   { /* 1.5px dotted, channel colour */ }
+.node--inferred     { /* 1.5px dashed 4 3, channel colour */ }
+.node--unresolved   { /* 1.5px dotted 1 3, channel colour */ }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0s !important; animation-duration: 0s !important; }

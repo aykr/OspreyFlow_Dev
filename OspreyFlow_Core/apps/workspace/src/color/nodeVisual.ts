@@ -2,7 +2,7 @@
 // URI per distinct (shape, fill, stroke) combination — `docs/
 // 02_GLASS_FRONTEND.md` §4 ("Hue is entity type; shape is entity type
 // too") and `spec/design/tokens.css`'s provenance-stroke contract
-// (asserted solid, inferred dashed 4 2, unresolved dotted).
+// (asserted solid, inferred dashed 4 3, unresolved dotted 1 3 — DESIGN.md v0.3).
 //
 // **Why a generated SVG image rather than a custom WebGL shader.**
 // `spec/06_DECISIONS.md` ADR-002 anticipated "one parameterised program,
@@ -155,9 +155,9 @@ function strokeDasharray(style: StrokeStyle): string | null {
     case "solid":
       return null;
     case "dashed":
-      return "4 2";
+      return "4 3";
     case "dotted":
-      return "1.5 2";
+      return "1 3";
   }
 }
 
