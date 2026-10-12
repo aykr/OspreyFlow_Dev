@@ -121,6 +121,12 @@ def test_every_private_tree_marker_resolves_to_a_real_path_that_is_excluded() ->
     spec = _repo_spec()
     resolved = 0
     for marker in PRIVATE_TREE_MARKERS:
+        if marker == "OspreyFlow_Build/":
+            # ADR-114 Amendment 2: the images are built from the product folder alone, which the
+            # developer repository is never inside, and the product folder may not name it at all
+            # (`tests/test_core_stands_alone.py`; the publish step refuses any mention). Excluding
+            # it here would be the one thing that put its name back.
+            continue
         # A directory marker (round 14a: `process/`, `.claude/`) must glob *into* it, not just
         # match the directory's own name — `**/process*` matches the `process` directory itself
         # (skipped below, not a file) and nothing inside it, which would let this whole marker

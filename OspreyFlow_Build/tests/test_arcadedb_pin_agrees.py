@@ -15,6 +15,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CORE = ROOT / "OspreyFlow_Core"
+BUILD = ROOT / "OspreyFlow_Build"
 
 
 def _pinned() -> str:
@@ -42,7 +43,7 @@ def test_every_arcadedb_image_named_is_the_renderers_pin() -> None:
             (CORE / "deploy/compose/dev.yaml").read_text(encoding="utf-8"),
         ),
         "Makefile": re.findall(
-            r"arcadedata/arcadedb:\S+", (CORE / "Makefile").read_text(encoding="utf-8")
+            r"arcadedata/arcadedb:\S+", (BUILD / "Makefile").read_text(encoding="utf-8")
         ),
         ".github/workflows/ci.yml": [s["image"] for s in _ci_services()],
     }

@@ -1,8 +1,7 @@
 """`python -m harness <subcommand>` — the dispatcher `harness/Dockerfile`'s own `ENTRYPOINT` uses.
 
-Six named subcommands, one deliberate exception (`bundle` wraps `tools.osprey_bundle`, not
-`harness.bundle` — there is no such module) and one named bug this module's own first real run
-found: `preflight` is a package, and `import_module("harness.preflight").main` raises
+Five named subcommands, every one a `harness` module (`bundle` left for the developer repository's
+own Makefile, ADR-114 Amendment 2), and one named bug this module's own first real run found: `preflight` is a package, and `import_module("harness.preflight").main` raises
 `AttributeError` — only `harness.preflight.__main__` carries `main()`, the same distinction
 `python -m harness.preflight` itself resolves via `runpy` and a bare `import_module` does not.
 """
@@ -94,9 +93,10 @@ def test_dispatches_to_the_right_module_with_the_remaining_arguments() -> None:
     assert calls == [["--profile", "local-lite", "--check"]]
 
 
-def test_bundle_wraps_scripts_osprey_bundle_not_a_harness_module() -> None:
-    """`06_DECISIONS.md` ADR-049's own "wraps `tools/osprey_bundle.py`... rather than writing a
-    second implementation" — the one entry in `_SUBCOMMANDS` that does not follow the
-    `harness.<name>` pattern every other entry does, named directly rather than left to be
-    inferred from the dict."""
-    assert _SUBCOMMANDS["bundle"] == "tools.osprey_bundle"
+def test_bundle_is_no_longer_a_harness_subcommand() -> None:
+    """`06_DECISIONS.md` ADR-114 Amendment 2: building a bundle is a release step of the developer
+    repository (`make bundle` there), so the product's dispatcher names no module outside the
+    `harness` package, and asking it for `bundle` is an unknown subcommand."""
+    assert "bundle" not in _SUBCOMMANDS
+    assert all(module.startswith("harness.") for module in _SUBCOMMANDS.values())
+    assert main(["bundle"]) == 2

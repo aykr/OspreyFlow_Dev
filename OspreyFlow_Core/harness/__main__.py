@@ -5,11 +5,10 @@ exact same `python -m harness.<name>` entrypoint already built and tested on its
 through one name instead of remembering six.
 
 `05_DEPLOYMENT.md` §2's own bootstrap command runs this image. `07_BUILD_PLAN.md`'s Stage 2 §5b
-brief names the six subcommands this dispatcher wires: render, preflight, apply, backup, restore,
-bundle. `bundle` is the one exception to "its own `harness.<name>`" — it wraps
-`tools.osprey_bundle`, which predates this dispatcher and is deliberately not part of the
-`harness` package itself (`06_DECISIONS.md` ADR-049: "wraps `tools/osprey_bundle.py`... rather
-than writing a second implementation").
+brief named six subcommands; five remain: render, preflight, apply, backup, restore. The sixth,
+`bundle`, left this package when the product folder was made to stand on its own: building a
+bundle is a release step of the developer repository, not something a deployment runs
+(`06_DECISIONS.md` ADR-114 Amendment 2).
 
 **No subcommand is now the browser setup harness** (`Stage 2 §6` part A) — `05_DEPLOYMENT.md` §2's
 own bootstrap command (`docker run ... ghcr.io/ospreyflow/harness:latest`, no arguments) reaches
@@ -25,8 +24,7 @@ import importlib
 import sys
 from collections.abc import Callable
 
-#: `bundle` maps to `tools.osprey_bundle`, the one deliberate exception — see the module
-#: docstring. `preflight` is a package, not a module, and its own `main()` lives in its
+#: `preflight` is a package, not a module, and its own `main()` lives in its
 #: `__main__.py` (what `python -m harness.preflight` itself resolves via `runpy`, not a plain
 #: `import_module` of the package's `__init__.py` — found the moment this dispatcher first ran:
 #: `AttributeError: module 'harness.preflight' has no attribute 'main'`). Every other name is
@@ -39,7 +37,6 @@ _SUBCOMMANDS: dict[str, str] = {
     "apply": "harness.apply",
     "backup": "harness.backup",
     "restore": "harness.restore",
-    "bundle": "tools.osprey_bundle",
 }
 
 

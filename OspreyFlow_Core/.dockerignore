@@ -44,9 +44,9 @@ node_modules
 **/node_modules
 
 # --- The private build tree ---------------------------------------------------
-# `OspreyFlow_Build/tools/product_tree_link_check.py`'s own `PRIVATE_TREE_MARKERS` is the authoritative list and
-# `tests/test_dockerignore.py` imports it rather than trusting this comment to stay in step: every
-# marker's real path in this repository must be excluded by something below.
+# The developer repository's private-tree markers are the authoritative list, and its own test of
+# this file imports them rather than trusting this comment to stay in step. The images are built from
+# this folder alone, so the developer repository itself is never in their context (ADR-114 Amendment 2).
 #
 # **Round 14a (Trigger A): `docs/` dissolved into `spec/` (product) and `process/` (build-process,
 # private).** `spec/` is not excluded — it is the product's own specification, and
@@ -56,7 +56,6 @@ node_modules
 # gone rather than left matching nothing. `CLAUDE.md` at the root is now a one-line stub; the real
 # file and everything else build-process (`.claude/`, `.graphifyignore`) are listed by name.
 process
-OspreyFlow_Build
 CLAUDE.md
 .claude
 .graphifyignore

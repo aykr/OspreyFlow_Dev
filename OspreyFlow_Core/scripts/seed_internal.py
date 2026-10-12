@@ -1,6 +1,6 @@
 """Loads an internal demo dataset into the running deployment, in one command.
 
-    PYTHONPATH=.:packages:../OspreyFlow_Build python -m scripts.seed_internal <dataset> [--stop-api]
+    PYTHONPATH=.:packages python -m scripts.seed_internal <dataset> [--stop-api]
     (or: make seed-paysim | seed-hmp | seed-fixture-corp | seed-enron)
 
 The seed runs in a one-shot container from the Conduit's own image, **inside the deployment's

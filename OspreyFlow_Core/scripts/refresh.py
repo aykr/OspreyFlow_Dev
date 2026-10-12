@@ -1,6 +1,6 @@
 """Bring a running deployment up to date with this checkout, in one command.
 
-    PYTHONPATH=.:packages:../OspreyFlow_Build python -m scripts.refresh   # or: make refresh
+    PYTHONPATH=.:packages python -m scripts.refresh   # or: make refresh
 
 `docker compose up` starts the images that already exist; it never rebuilds one, and it never
 rewrites the sign-in theme that Keycloak mounts. So after any change to the code, the Glass, the

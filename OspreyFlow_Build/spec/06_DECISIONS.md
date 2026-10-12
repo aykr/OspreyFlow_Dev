@@ -11867,6 +11867,50 @@ gate refusing PaySim's data inside an artefact although `shipped`, and refusing 
 `delivery` is misspelled; CC BY-SA admitted for a download pack and flagged for a seeded one; the
 real registry with no data-licence offender.
 
+### ADR-114, Amendment 2 (12 October 2026) — stage B1: Core stands alone, and what the publish step refuses
+
+**The owner's rulings** (asked 12 October 2026, after a read-only sweep found 27 Makefile targets, two
+`package.json` scripts, `pyproject.toml`, `.dockerignore` and `harness bundle` reaching into
+`../OspreyFlow_Build`):
+
+1. **The gates move to a Makefile in Build** ("New Makefile in Build"). `OspreyFlow_Build/Makefile`
+   holds every quality gate, test suite and developer check; each recipe runs in the product folder
+   (`cd ../OspreyFlow_Core && …`, with this folder on `PYTHONPATH`), so each command behaves as it
+   did. `OspreyFlow_Core/Makefile` keeps only what runs without this repository — lint, type check,
+   the image scans, the Glass's and the harness's browser suites, the synthetic seeds, `dev-up`,
+   `launch`, `refresh` until stage B2 replaces them — and a `check` target of its own gates that
+   Build's `ci` calls. The root Makefile forwards a target to Build when Build has it, else to Core.
+   `ci.yml` is the owner's: the change it needs is written for the owner, not made.
+2. **Code that exists only for an internal demo moves to Build** ("Move Enron code to Build"). The
+   Enron reader (`packages/demo_fixtures/enron.py`), its seed (`scripts/seed_enron.py`), its registry
+   entry and its row in the seed runner's table leave Core for `OspreyFlow_Build/internal_demos/`.
+   Core's seed runner (`scripts/seed_internal.py`) learns to run a dataset its caller defines, with
+   the caller's code folder mounted beside Core's — generic, naming nothing in Build — and keeps
+   every real-data check (the local exceptions list, the attested checkout) for any caller.
+
+What B1 decides *(mine)*:
+
+3. **`harness bundle` leaves Core.** The bundle is a release step of this repository
+   (`tools/osprey_bundle.py`), run as `make bundle` from Build; the harness's dispatcher no longer
+   names it.
+4. **The publish step copies a commit, never the working folder.** `tools/publish_user_repo.py
+   <commit> <out>` takes `OspreyFlow_Core` as it is at that commit (`git archive`), so nothing
+   uncommitted — the owner's local `osprey.yaml`, which carries a machine path, or a gitignored data
+   folder — can leave. It writes into an empty folder outside this repository and nothing at all if
+   any check refuses. It refuses, naming each file: (a) any mention of `OspreyFlow_Build`; (b) an
+   internal demo's data or code (every path of an `internal` or not-seeded registry entry, Build's
+   internal-demo registry included) and the fixed internal locations (`config/real_data_exceptions.yaml`,
+   `demo-data/`, `OspreyFlow_Data/`); (c) an absolute path into a home folder (`/Users/…`, `/home/…`,
+   `C:\Users\…`); (d) the personal authorship identifiers the packaging gate already refuses
+   in a bundle. Pushing the result is the owner's.
+
+**Tests**, named before the code: the published copy names no Build path and Core's own `check`
+runs from Core alone; the root Makefile forwarding a gate to Build and a product target to Core; the
+Enron seed refused without its exceptions entry when run from Build; the publish step refusing a
+Build mention, an internal demo's data, an internal demo's code, a home-folder path and an authorship
+identifier — each planted in a commit made for the test — and writing nothing when it refuses; the
+uncommitted `osprey.yaml` never reaching the copy.
+
 ### ADR-113, Amendment 1 (11 October 2026) — report packs built: what an item rests on, and the gaps the decisions left
 
 Stage 3 (handover A3). Decisions 3 to 5 and 7 are built as decided. Building them found places where

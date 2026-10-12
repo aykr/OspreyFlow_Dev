@@ -84,12 +84,14 @@ import re
 import sys
 from pathlib import Path
 
+from tools.layout import BUILD
 from tools.layout import REPO as REPO_ROOT
 from tools.layout import rel
 
 TESTS_DIR = REPO_ROOT / "tests"
 CI_YML_PATH = REPO_ROOT / ".github" / "workflows" / "ci.yml"
-MAKEFILE_PATH = REPO_ROOT / "Makefile"
+#: The test targets live in the developer repository's Makefile (ADR-114 Amendment 2).
+MAKEFILE_PATH = BUILD / "Makefile"
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "test_file_coverage_allowlist.txt"
 
 #: Derived directly from this repo's own real live-service test files — not guessed. A file that

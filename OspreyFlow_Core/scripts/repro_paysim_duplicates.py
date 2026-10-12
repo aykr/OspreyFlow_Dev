@@ -2,7 +2,7 @@
 (ADR-056 Amendment 9).
 
     docker compose -f deploy/compose/dev.yaml up -d arcadedb
-    PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m scripts.repro_paysim_duplicates
+    PYTHONPATH=.:packages .venv/bin/python -m scripts.repro_paysim_duplicates
 
 Seen: a real load wrote 13,068 transactions and stored 13,076, eight ids twice. This runs the seed's
 own graph build and its own `write_graph` (the same batches of 40) against the dev ArcadeDB, in a
