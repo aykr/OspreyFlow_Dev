@@ -42,7 +42,7 @@ if [ -z "$product" ]; then
 fi
 
 # 3. The checkout's own environment, then the command.
-uv sync --project "$product"
+uv sync --inexact --project "$product"   # --inexact: never remove what the checkout already has
 uv tool install --editable "$product/cli"
 
 # 4. Remember where the checkout is, so the command finds it from any folder.

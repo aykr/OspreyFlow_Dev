@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from harness.backup import BackupFailed, _compose, _env_value
+from harness.backup import BackupFailed, _compose, _env_value, arcadedb_request
 
 #: ADR-035 §C5's own three. Not a range and not a parameter: these are the values Fixture Corp is
 #: built to separate, so a projection that stopped differing between them would itself be a finding.
@@ -57,9 +57,9 @@ class SnapshotFailed(RuntimeError):
 def _query(compose_file: Path, database: str, sql: str) -> list[dict[str, Any]]:
     """One SQL query against the store, through the container's own loopback.
 
-    `curl` inside the container rather than a published port, for the same reason the seed runs
-    there: `05_DEPLOYMENT.md` §7 puts the graph store on an internal network and a comparison tool
-    is not a reason to publish it.
+    Asked inside the container rather than through a published port, for the same reason the seed
+    runs there: `05_DEPLOYMENT.md` §7 puts the graph store on an internal network and a comparison
+    tool is not a reason to publish it.
     """
     password = _env_value(compose_file.parent / "deployment.env", "OSPREY_ARCADEDB_PASSWORD")
     body = json.dumps({"language": "sql", "command": sql})
@@ -71,11 +71,8 @@ def _query(compose_file: Path, database: str, sql: str) -> list[dict[str, Any]]:
             "arcadedb",
             "sh",
             "-c",
-            f"curl -s -u root:'{password}' -X POST "
-            f"http://127.0.0.1:2480/api/v1/query/{database} "
-            f"-H 'Content-Type: application/json' --data-binary @-",
+            arcadedb_request(password, f"/api/v1/query/{database}", body),
         ],
-        input=body,
         capture_output=True,
         text=True,
         check=False,
@@ -112,7 +109,7 @@ def server_is_ready(compose_file: Path) -> bool:
             "arcadedb",
             "sh",
             "-c",
-            f"curl -sf -u root:'{password}' http://127.0.0.1:2480/api/v1/databases",
+            arcadedb_request(password, "/api/v1/databases"),
         ],
         capture_output=True,
         text=True,
@@ -128,11 +125,36 @@ def total_records(compose_file: Path, database: str) -> int:
     that asks "is there anything in here" means to treat it that way. Collapsing it here rather than
     at each call site is what stops one of them getting it wrong — `harness/restore.py`'s emptiness
     refusal already did, in the other direction.
+
+    **Absent means the server says so, not that asking failed.** This used to count any failure as
+    zero, so when ArcadeDB 26.10.1's image dropped `curl` every question failed and a full store
+    read as empty — the restore's refusal to write over live data would have let it through (found
+    at B2e, `tests/harness/test_arcadedb_shell.py`). A store that cannot be asked raises.
     """
-    try:
-        return sum(type_record_counts(compose_file, database).values())
-    except (BackupFailed, SnapshotFailed):
+    if database not in database_names(compose_file):
         return 0
+    return sum(type_record_counts(compose_file, database).values())
+
+
+def database_names(compose_file: Path) -> list[str]:
+    """The databases the server holds, from its own listing; raises when it cannot be asked."""
+    password = _env_value(compose_file.parent / "deployment.env", "OSPREY_ARCADEDB_PASSWORD")
+    completed = subprocess.run(  # noqa: S603
+        _compose(compose_file)
+        + ["exec", "-T", "arcadedb", "sh", "-c", arcadedb_request(password, "/api/v1/databases")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise BackupFailed("graph", (completed.stderr or completed.stdout).strip()[:400])
+    try:
+        names = json.loads(completed.stdout)["result"]
+    except (json.JSONDecodeError, KeyError) as error:
+        raise BackupFailed(
+            "graph", f"ArcadeDB's database listing was not JSON: {completed.stdout[:300]}"
+        ) from error
+    return [str(name) for name in names]
 
 
 def type_record_counts(compose_file: Path, database: str) -> dict[str, int]:

@@ -22,6 +22,8 @@ __pycache__/
 /OspreyFlow_Data/*
 !/OspreyFlow_Data/README.md
 /data/
+# `harness.backup`'s default output folder: a backup set holds every store and the identity file.
+/OspreyFlow_Core/backups/
 
 # Internal-only demo datasets (spec/06_DECISIONS.md ADR-035, C1) — never committed, provisioned to
 # OSPREYFLOW_INTERNAL_DEMO_DATA_DIR at runtime, referenced by filename from a demo's own manifest.

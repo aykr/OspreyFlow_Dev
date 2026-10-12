@@ -76,9 +76,15 @@ from harness.backup import (
     _env_value,
     _env_value_or,
     _run,
+    arcadedb_request,
     schema_versions,
 )
-from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
+from harness.render import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_OUT_ROOT,
+    RECIPE_REPO_DIRNAME,
+    load_config,
+)
 
 #: Measured on `local-lite` against the seeded HMP + Fixture Corp set and recorded in
 #: `deploy/RUNBOOK.md`. Used only to project a duration for the dry run — see the docstring on why
@@ -260,8 +266,7 @@ def restore_graph_store(compose_file: Path, archive: Path, *, database: str) -> 
             "arcadedb",
             "sh",
             "-c",
-            f"curl -s -u root:'{password}' -X POST http://127.0.0.1:2480/api/v1/server "
-            f"-H 'Content-Type: application/json' -d '{drop}' > /dev/null 2>&1 || true; "
+            f"{arcadedb_request(password, '/api/v1/server', drop)} > /dev/null 2>&1 || true; "
             f"rm -rf /home/arcadedb/databases/{database}; "
             f"cd /home/arcadedb && ./bin/restore.sh "
             f"-f file:///home/arcadedb/backups/{name} -d /home/arcadedb/databases/{database}",
@@ -280,8 +285,7 @@ def restore_graph_store(compose_file: Path, archive: Path, *, database: str) -> 
             "arcadedb",
             "sh",
             "-c",
-            f"curl -s -u root:'{password}' -X POST http://127.0.0.1:2480/api/v1/server "
-            f"-H 'Content-Type: application/json' -d '{reopen}'",
+            arcadedb_request(password, "/api/v1/server", reopen),
         ],
         item="graph",
     )
@@ -435,11 +439,44 @@ def restore_object_store(compose_file: Path, archive: Path, *, work_dir: Path) -
     )
 
 
+def _give_to_conduit(compose_file: Path, container_path: str, *, item: str) -> None:
+    """`docker cp` leaves what it copies owned by the host's user (measured: uid 502, gid 0, mode
+    644), and the Conduit runs as `osprey`, so a restored file it writes to would be read-only to
+    it. A one-off container of the Conduit's own image, as root, on the same volume, hands it back —
+    whether or not the Conduit is running."""
+    _run(
+        _compose(compose_file)
+        + ["run", "--rm", "--no-deps", "--user", "root", "--entrypoint", "chown", "api"]
+        + ["-R", "osprey:osprey", container_path],
+        item=item,
+    )
+
+
 def restore_analytics(compose_file: Path, database_file: Path, *, container_path: str) -> None:
     _run(
         _compose(compose_file) + ["cp", str(database_file), f"api:{container_path}"],
         item="analytics",
     )
+    _give_to_conduit(compose_file, container_path, item="analytics")
+
+
+def restore_recipes(
+    compose_file: Path, archive: Path, *, container_path: str, work_dir: Path
+) -> None:
+    """The published-recipes repository back where the renderer points the Conduit, history and
+    all, owned by the Conduit so the next publish can commit to it."""
+    extracted = work_dir / "restore-recipes"
+    if extracted.exists():
+        shutil.rmtree(extracted)
+    extracted.mkdir(parents=True)
+    with tarfile.open(archive, "r:gz") as tar:
+        tar.extractall(extracted, filter="data")
+    _run(
+        _compose(compose_file) + ["cp", str(extracted / "recipes") + "/.", f"api:{container_path}"],
+        item="recipes",
+    )
+    shutil.rmtree(extracted)
+    _give_to_conduit(compose_file, container_path, item="recipes")
 
 
 def check_schema_compatibility(manifest: dict[str, Any]) -> None:
@@ -494,6 +531,13 @@ def run_restore(
         restore_object_store(compose_file, objects, work_dir=directory)
     for analytics in by_item.get("analytics", []):
         restore_analytics(compose_file, analytics, container_path=analytics_container_path)
+    for recipes in by_item.get("recipes", []):
+        restore_recipes(
+            compose_file,
+            recipes,
+            container_path=f"{analytics_container_path.rpartition('/')[0]}/{RECIPE_REPO_DIRNAME}",
+            work_dir=directory,
+        )
     for held in by_item.get("identity", []):
         restore_identity(compose_file, held)
     return plan

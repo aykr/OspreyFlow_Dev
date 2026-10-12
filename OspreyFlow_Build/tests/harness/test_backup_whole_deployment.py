@@ -16,6 +16,14 @@ What a mistake would do, and the case that catches it:
   `test_restore_replays_roles_first_and_creates_a_missing_database`;
 - the people not brought back, or their passwords not set again —
   `test_restore_brings_the_identity_back_and_sets_the_dashboards_setting`.
+
+Found taking the owner's backup before the replacement: the data volume holds the Ingest Studio's
+published-recipes repository (`<data>/recipes`, a git repository) beside the analytics file, and no
+item carried it; and `docker cp` into a container leaves a file owned by the host's user, so a
+restored analytics file was read-only to the Conduit, which runs as `osprey`:
+- the recipes repository left out of the set — `test_the_published_recipes_repository_is_in_the_set`
+  and `test_the_set_names_the_recipes_item`;
+- a restored file the Conduit cannot write — `test_restored_files_are_handed_to_the_conduits_user`.
 """
 
 from __future__ import annotations
@@ -23,6 +31,7 @@ from __future__ import annotations
 import json
 import stat
 import subprocess
+import tarfile
 from pathlib import Path
 from typing import Any
 
@@ -144,3 +153,84 @@ def test_restore_brings_the_identity_back_and_sets_the_dashboards_setting(
     lines = env.read_text(encoding="utf-8").splitlines()
     assert 'REPORT_SYNC_DASHBOARDS=[{"client_id": "osprey-dashboard-c"}]' in lines
     assert sum(line.startswith("REPORT_SYNC_DASHBOARDS=") for line in lines) == 1
+
+
+def test_the_published_recipes_repository_is_in_the_set(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    asked: list[list[str]] = []
+
+    def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        asked.append(command)
+        source, target = command[-2], Path(command[-1])
+        if not source.endswith("/var/lib/osprey/data/recipes"):
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="Could not find the file: does not exist")
+        (target / ".git").mkdir(parents=True)
+        (target / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+        (target / "recipes").mkdir()
+        (target / "recipes" / "r1.yaml").write_text("id: r1\n", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(backup.subprocess, "run", run)
+    archive = backup.backup_recipes(deployment, tmp_path / "set" / "recipes" / "recipes.tar.gz",
+                                    container_path="/var/lib/osprey/data/recipes", work_dir=tmp_path / "set")  # fmt: skip
+    assert archive is not None and asked[0][-2] == "api:/var/lib/osprey/data/recipes"
+    with tarfile.open(archive, "r:gz") as held:
+        names = set(held.getnames())
+    assert {"recipes/.git/HEAD", "recipes/recipes/r1.yaml"} <= names, "the history travels too"
+    assert not (tmp_path / "set" / ".recipes-staging").exists()
+    none = backup.backup_recipes(deployment, tmp_path / "other.tar.gz",
+                                 container_path="/elsewhere/recipes", work_dir=tmp_path)  # fmt: skip
+    assert none is None, "a deployment that never published has no repository, which is not an error"
+
+
+def test_the_set_names_the_recipes_item(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def touch(path: Path) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x")
+        return path
+
+    monkeypatch.setattr(backup, "_conduit_is_running", lambda compose_file: False)
+    monkeypatch.setattr(backup, "git_sha", lambda: "abc")
+    monkeypatch.setattr(backup, "schema_versions", lambda: {"ontology": "13"})
+    monkeypatch.setattr(backup, "CONFIGURATION_SOURCES", ())
+    monkeypatch.setattr(backup, "backup_graph_store", lambda c, d, **kw: touch(d))
+    monkeypatch.setattr(backup, "backup_postgres_all", lambda c, f: [("postgres", touch(f / "dump.sql"))])
+    monkeypatch.setattr(backup, "backup_identity", lambda c, d: touch(d))
+    monkeypatch.setattr(backup, "backup_object_store", lambda c, d, **kw: touch(d))
+    monkeypatch.setattr(backup, "backup_analytics", lambda c, d, **kw: touch(d))
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(backup, "backup_recipes",
+                        lambda c, d, **kw: seen.update(path=kw["container_path"]) or touch(d))  # fmt: skip
+    target = backup.run_backup(compose_file=deployment, out_root=tmp_path / "sets", profile="local-lite",
+                               database="ospreyflow", analytics_container_path="/var/lib/osprey/data/analytics.duckdb",
+                               require_quiesced=False)  # fmt: skip
+    manifest = json.loads((target / "manifest.json").read_text(encoding="utf-8"))
+    assert "recipes" in {entry["item"] for entry in manifest["files"]}
+    assert seen["path"] == "/var/lib/osprey/data/recipes", "where the renderer puts the repository"
+
+
+def test_restored_files_are_handed_to_the_conduits_user(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    ran: list[list[str]] = []
+    monkeypatch.setattr(restore, "_run", lambda command, **kw: ran.append(command) or "")
+    database = tmp_path / "analytics.duckdb"
+    database.write_bytes(b"duck")
+    restore.restore_analytics(deployment, database, container_path="/var/lib/osprey/data/analytics.duckdb")
+    staging = tmp_path / "held"
+    (staging / "recipes" / ".git").mkdir(parents=True)
+    archive = tmp_path / "recipes.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(staging / "recipes", arcname="recipes")
+    restore.restore_recipes(deployment, archive, container_path="/var/lib/osprey/data/recipes", work_dir=tmp_path)
+    copies = [c for c in ran if "cp" in c]
+    owners = [c for c in ran if "chown" in c]
+    assert [c[-1] for c in copies] == ["api:/var/lib/osprey/data/analytics.duckdb", "api:/var/lib/osprey/data/recipes"]
+    assert len(owners) == 2
+    for chown, path in zip(owners, ("/var/lib/osprey/data/analytics.duckdb", "/var/lib/osprey/data/recipes"), strict=True):
+        assert chown[chown.index("run"):][:6] == ["run", "--rm", "--no-deps", "--user", "root", "--entrypoint"]
+        assert chown[-3:] == ["-R", "osprey:osprey", path]
+        assert ran.index(chown) > ran.index(next(c for c in copies if c[-1].endswith(path))), "after the copy"

@@ -10,7 +10,11 @@ What a mistake would do, and the case that catches it:
 - the package declaring the wrong entry point or a dependency beyond PyYAML —
   `test_the_package_is_the_small_command_the_decision_describes`;
 - the Python and the Windows scripts disagreeing on where the home file lives —
-  `test_both_scripts_agree_with_the_command_on_the_home_file`.
+  `test_both_scripts_agree_with_the_command_on_the_home_file`;
+- the bootstrap stripping what a checkout already has installed — found running it on the owner's
+  developer checkout for B2e: a plain `uv sync` uninstalled the `extraction` extra (spaCy, torch,
+  deepparse and their dependencies) and left their folders behind as broken namespace packages —
+  `test_the_bootstrap_never_removes_installed_packages`.
 """
 
 from __future__ import annotations
@@ -40,6 +44,16 @@ def test_both_scripts_install_the_tool_and_record_the_home_file() -> None:
         assert "ospreyflow/home" in text.replace("\\", "/"), name
         assert "uv sync" in text, name
         assert "ospreyflow doctor" in text and "ospreyflow install --mode lite" in text, name
+
+
+def test_the_bootstrap_never_removes_installed_packages() -> None:
+    for name in ("install.sh", "install.ps1"):
+        lines = [
+            line for line in (CORE / name).read_text(encoding="utf-8").splitlines()
+            if line.strip().startswith("uv sync")
+        ]  # fmt: skip
+        assert lines, name
+        assert all("--inexact" in line.split() for line in lines), (name, lines)
 
 
 def test_both_scripts_refuse_in_words_without_a_repository() -> None:

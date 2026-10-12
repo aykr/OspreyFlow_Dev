@@ -149,7 +149,8 @@ def test_a_file_already_in_place_is_not_copied_again(rig: Rig, tmp_path: Path) -
 def test_the_demo_data_folder_reaches_the_seed(rig: Rig, tmp_path: Path) -> None:
     assert rig("demo", "add", "hmp") == 0
     (call,) = rig.runner.with_word("scripts.seed_internal")
-    assert call.env == {"OSPREYFLOW_DEMO_DATA": str(tmp_path / "demo-data")}
+    assert call.env is not None
+    assert call.env["OSPREYFLOW_DEMO_DATA"] == str(tmp_path / "demo-data")
     assert call.cwd == rig.product
 
 

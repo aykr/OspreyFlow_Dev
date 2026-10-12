@@ -13,12 +13,17 @@ What a mistake would do, and the case that catches it:
 - logs losing its service, follow or tail — `test_logs_passes_service_follow_and_tail`;
 - backup and restore not reaching the harness from the product folder —
   `test_backup_and_restore_pass_through_to_the_harness`;
-- `open` opening the wrong address — `test_open_opens_the_configured_address`.
+- `open` opening the wrong address — `test_open_opens_the_configured_address`;
+- a step that cannot import the checkout's own packages (`schemas`, `ports`) — found running
+  `ospreyflow backup` on the owner's machine for B2e, where it failed at its first import; every
+  test until then had a fake runner, and every live run a shell with `PYTHONPATH` already set —
+  `test_every_python_step_can_import_the_checkouts_packages`.
 """
 
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -130,3 +135,23 @@ def test_backup_and_restore_pass_through_to_the_harness(rig: Rig) -> None:
     assert first.argv == [python, "-m", "harness.backup", "--profile", "local-lite"]
     assert second.argv == [python, "-m", "harness.restore", "/tmp/x", "--yes"]
     assert first.cwd == second.cwd == rig.product
+
+
+def test_every_python_step_can_import_the_checkouts_packages(rig: Rig) -> None:
+    rig.install_deployment()
+    assert rig("backup") == 0
+    assert rig("restore", "/tmp/x") == 0
+    assert rig("start", "--build") == 0
+    assert rig("demo", "list") == 0
+    assert rig("install", "--mode", "lite", "--yes", "--force") == 0
+    python = str(rig.product / ".venv" / "bin" / "python")
+    stepped = [call for call in rig.runner.calls if call.argv[0] == python]
+    assert len(stepped) >= 6, [call.argv for call in rig.runner.calls]
+    wanted = {str(rig.product), str(rig.product / "packages")}
+    for call in stepped:
+        assert call.env is not None, call.argv
+        assert wanted <= set(call.env["PYTHONPATH"].split(os.pathsep)), call.argv
+    assert rig.capture_envs and all(
+        env is not None and wanted <= set(env["PYTHONPATH"].split(os.pathsep))
+        for env in rig.capture_envs
+    )

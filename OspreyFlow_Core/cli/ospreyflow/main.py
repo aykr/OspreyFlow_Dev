@@ -107,8 +107,24 @@ class _Context:
         self.free_port = free_port
         self.product = product
         self.env = env
-        self.run = run
-        self.capture = capture
+        # Every step runs a module of the checkout (`harness.*`, `scripts.*`), which imports the
+        # checkout's own packages (`schemas`, `ports`), as the Makefile's `PYTHONPATH=.:packages`
+        # allowed. Found running `ospreyflow backup` for B2e: without it the first import failed.
+        # Given to every step, so no verb can forget it.
+        importable = {"PYTHONPATH": os.pathsep.join((str(product), str(product / "packages")))}
+
+        def run_in_checkout(
+            argv: Sequence[str], *, env: Mapping[str, str] | None = None, cwd: Path | None = None
+        ) -> int:
+            return run(argv, env={**importable, **(env or {})}, cwd=cwd)
+
+        def capture_in_checkout(
+            argv: Sequence[str], *, env: Mapping[str, str] | None = None, cwd: Path | None = None
+        ) -> tuple[int, str]:
+            return capture(argv, env={**importable, **(env or {})}, cwd=cwd)
+
+        self.run: Runner = run_in_checkout
+        self.capture: Capture = capture_in_checkout
         self.probes = probes
         self.ask = ask
         self.open_url = open_url

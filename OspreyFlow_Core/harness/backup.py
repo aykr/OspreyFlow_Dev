@@ -61,8 +61,10 @@ stopped, and the manifest records which of the two it was.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
+import shlex
 import shutil
 import subprocess
 import sys
@@ -73,7 +75,13 @@ from pathlib import Path
 from typing import Any
 
 from harness import identity, keycloak_admin
-from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, git_sha, load_config
+from harness.render import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_OUT_ROOT,
+    RECIPE_REPO_DIRNAME,
+    git_sha,
+    load_config,
+)
 
 #: The realm the deployment's people live in (`harness/realm.py`).
 REALM = "osprey"
@@ -168,6 +176,23 @@ def _digest(path: Path) -> tuple[int, str]:
     return size, sha.hexdigest()
 
 
+def arcadedb_request(password: str, path: str, body: str | None = None) -> str:
+    """A shell command, run inside the ArcadeDB container, that asks the server's HTTP API on its
+    loopback and prints the answer; it exits non-zero on an HTTP error.
+
+    Busybox `wget`, because that is what the pinned image has: ArcadeDB 26.10.1 (ADR-101) ships no
+    `curl`, and every `curl` here failed with `sh: curl: not found` until the B2e backup found it
+    (`tests/harness/test_arcadedb_shell.py`). The password travels as a Basic header, quoted for the
+    shell like the body, so neither a quote nor a dollar in it can break the command; it reaches the
+    container's own shell and no further (05_DEPLOYMENT.md §2.5/§7).
+    """
+    token = base64.b64encode(f"root:{password}".encode()).decode()
+    words = ["wget", "-q", "-O", "-", "--header", f"Authorization: Basic {token}"]
+    if body is not None:
+        words += ["--header", "Content-Type: application/json", "--post-data", body]
+    return shlex.join([*words, f"http://127.0.0.1:2480{path}"])
+
+
 def _conduit_is_running(compose_file: Path) -> bool:
     return bool(_run(_compose(compose_file) + ["ps", "-q", "api"], item="quiesce").strip())
 
@@ -190,11 +215,8 @@ def backup_graph_store(compose_file: Path, destination: Path, *, database: str) 
             "arcadedb",
             "sh",
             "-c",
-            # The password reaches the container's own shell and no further. It is not printed and
-            # not written into the manifest (05_DEPLOYMENT.md §2.5/§7).
-            f"curl -sf -u root:'{password}' -X POST "
-            f"http://127.0.0.1:2480/api/v1/command/{database} "
-            f"-H 'Content-Type: application/json' -d '{command}'",
+            # The password is not printed and not written into the manifest.
+            arcadedb_request(password, f"/api/v1/command/{database}", command),
         ],
         item="graph",
     )
@@ -369,6 +391,37 @@ def backup_analytics(compose_file: Path, destination: Path, *, container_path: s
     return destination
 
 
+def backup_recipes(
+    compose_file: Path, destination: Path, *, container_path: str, work_dir: Path
+) -> Path | None:
+    """The Ingest Studio's published-recipes repository, tarred with its git history. Returns
+    `None` when the deployment has never published, which is not an error.
+
+    It lives on the data volume beside the analytics file (the renderer's
+    `OSPREY_RECIPE_REPO_ROOT`, `09_INGEST_STUDIO.md` §6), so `down -v` destroys it with everything
+    else. Found taking the owner's backup before the B2e replacement: no item carried it.
+    """
+    staging = work_dir / ".recipes-staging"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.parent.mkdir(parents=True, exist_ok=True)
+    copied = subprocess.run(  # noqa: S603
+        _compose(compose_file) + ["cp", f"api:{container_path}", str(staging)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if copied.returncode != 0:
+        if "not exist" in (copied.stderr + copied.stdout).lower():
+            return None
+        raise BackupFailed("recipes", (copied.stderr or copied.stdout).strip()[:400])
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(destination, "w:gz") as archive:
+        archive.add(staging, arcname="recipes")
+    shutil.rmtree(staging)
+    return destination
+
+
 def schema_versions() -> dict[str, str]:
     """What the restored data must be read back under.
 
@@ -451,6 +504,14 @@ def run_backup(
     )
     if analytics is not None:
         written.append(("analytics", analytics))
+    recipes = backup_recipes(
+        compose_file,
+        target / "recipes" / "recipes.tar.gz",
+        container_path=f"{analytics_container_path.rpartition('/')[0]}/{RECIPE_REPO_DIRNAME}",
+        work_dir=target,
+    )
+    if recipes is not None:
+        written.append(("recipes", recipes))
     for relative, source in CONFIGURATION_SOURCES:
         if not source.exists():
             raise BackupFailed("configuration", f"{source} does not exist")

@@ -103,10 +103,12 @@ class Rig:
     ps_code: int = 0
     use_real_runner: bool = False
     env: dict[str, str] = field(default_factory=dict)
+    capture_envs: list[Mapping[str, str] | None] = field(default_factory=list)
 
     def capture(
         self, argv: Sequence[str], *, env: Mapping[str, str] | None = None, cwd: Path | None = None
     ) -> tuple[int, str]:
+        self.capture_envs.append(env)
         if "--ids" in argv:
             return 0, PACKS_OUTPUT
         if "ps" in argv:
