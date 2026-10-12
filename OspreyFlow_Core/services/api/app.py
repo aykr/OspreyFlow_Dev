@@ -110,14 +110,17 @@ from ports.media import MediaStore
 from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
 from schemas.admin import (
+    AccessInput,
     ComponentHealth,
     DashboardGuestToken,
     DashboardIdentity,
     DashboardInput,
     EmbeddedDashboard,
+    InviteInput,
     PersonAccount,
     RegisteredDashboard,
     RolesInput,
+    SignInDelivery,
     SystemStatus,
 )
 from schemas.analytics import (
@@ -363,6 +366,7 @@ from .identity_admin import (
     DashboardExistsError,
     IdentityAdmin,
     IdentityAdminRefused,
+    PersonExistsError,
     UnknownRoleError,
 )
 from .ingest_sources import (
@@ -819,7 +823,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-106: display names for principal ids, resolved when a read is served.
     app.state.principal_names = PrincipalNameDirectory(config)
     # ADR-112: the Admin area's people and dashboards, through the Conduit's own account.
-    app.state.identity_admin = IdentityAdmin(config)
+    # ADR-114 Amendment 5: invitations by the identity provider's own email when the deployment has
+    # a mail server (rendered from the install answers), else by a one-time code.
+    app.state.identity_admin = IdentityAdmin(
+        config, by_email=os.environ.get("OSPREY_SIGN_IN_EMAIL", "").lower() == "true"
+    )
     # ADR-111 Amendment 3: Superset dashboards inside the Glass; None when not configured.
     superset_settings = SupersetSettings.from_env()
     app.state.superset_embedder = SupersetEmbedder(superset_settings) if superset_settings else None
@@ -7944,6 +7952,126 @@ async def set_person_roles_route(
     return person
 
 
+def _within_your_reach(
+    principal: Principal, access: AccessInput, handling_scheme: HandlingScheme
+) -> None:
+    """Nobody is given more than the administrator holds (ADR-114 Amendment 5) — the dashboard rule
+    (rule 3) for people: a clearance above one's own, or a handling code one cannot receive, would
+    be a way to read above them. Checked before the identity provider is asked."""
+    order = list(handling_scheme.classification)
+    if access.clearance not in order:
+        raise UnknownRoleError(f"{access.clearance} is not a classification of this deployment")
+    codes = access.receivable_handling_codes
+    unknown = [c for c in codes if c not in handling_scheme.handling_codes]
+    if unknown:
+        raise UnknownRoleError(f"not a handling code of this deployment: {', '.join(unknown)}")
+    if principal.clearance not in order or order.index(access.clearance) > order.index(
+        principal.clearance
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "above_your_clearance", "clearance": access.clearance},
+        )
+    beyond = sorted(set(codes) - set(principal.receivable_handling_codes))
+    if beyond:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "handling_code_you_do_not_hold", "codes": beyond},
+        )
+
+
+@app.post(
+    "/v1/admin/people",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def invite_person_route(
+    body: InviteInput,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> SignInDelivery:
+    """A new person (ADR-114 Amendment 5). The one-time code, when there is one, is in this answer
+    only — never in the audit record, never stored."""
+    _within_your_reach(principal, body, handling_scheme)
+    made = await identity_admin.invite(body)
+    await audit.record(principal=principal, action="invite_person",
+                       resolved_query={"user_id": made.person.id, "username": made.person.username,
+                                       "roles": made.person.roles, "clearance": body.clearance,
+                                       "org_unit": body.org_unit, "delivery": made.delivery},
+                       result_cardinality=1)  # fmt: skip
+    return made
+
+
+@app.put(
+    "/v1/admin/people/{user_id}/access", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def set_person_access_route(
+    user_id: str,
+    body: AccessInput,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> PersonAccount:
+    """A person's clearance, unit and receivable handling codes — none above the administrator's."""
+    _within_your_reach(principal, body, handling_scheme)
+    person = await identity_admin.set_access(user_id, body)
+    await audit.record(principal=principal, action="set_person_access",
+                       resolved_query={"user_id": user_id, "clearance": body.clearance,
+                                       "org_unit": body.org_unit,
+                                       "receivable_handling_codes": body.receivable_handling_codes},
+                       result_cardinality=1)  # fmt: skip
+    return person
+
+
+@app.post(
+    "/v1/admin/people/{user_id}/disable",
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def disable_person_route(
+    user_id: str, principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+) -> PersonAccount:
+    """Disabled at once: open sessions end too. Never one's own account — an administrator who did
+    that by mistake would have no way back in."""
+    if user_id == principal.id:
+        raise HTTPException(status_code=409, detail={"error": "cannot_disable_yourself"})
+    person = await identity_admin.set_enabled(user_id, False)
+    await audit.record(principal=principal, action="disable_person",
+                       resolved_query={"user_id": user_id}, result_cardinality=1)  # fmt: skip
+    return person
+
+
+@app.post(
+    "/v1/admin/people/{user_id}/enable",
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def enable_person_route(
+    user_id: str, principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+) -> PersonAccount:
+    person = await identity_admin.set_enabled(user_id, True)
+    await audit.record(principal=principal, action="enable_person",
+                       resolved_query={"user_id": user_id}, result_cardinality=1)  # fmt: skip
+    return person
+
+
+@app.post(
+    "/v1/admin/people/{user_id}/reset-sign-in",
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def reset_person_sign_in_route(
+    user_id: str, principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+) -> SignInDelivery:
+    """A new way in for someone locked out: their sessions end, and they choose a new password at
+    next sign-in — through an emailed link, or the one-time code in this answer only."""
+    reset = await identity_admin.reset_sign_in(user_id)
+    await audit.record(principal=principal, action="reset_person_sign_in",
+                       resolved_query={"user_id": user_id, "delivery": reset.delivery},
+                       result_cardinality=1)  # fmt: skip
+    return reset
+
+
 @app.get("/v1/admin/dashboards", dependencies=[Depends(require_right(Right.MANAGE_DASHBOARDS))])
 async def list_dashboards_route(
     principal: PrincipalDep,
@@ -8917,6 +9045,15 @@ async def _identity_admin_refused(request: Request, exc: IdentityAdminRefused) -
 @app.exception_handler(UnknownRoleError)
 async def _unknown_role(request: Request, exc: UnknownRoleError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"error": "not_allowed", "detail": str(exc)})
+
+
+@app.exception_handler(PersonExistsError)
+async def _person_exists(request: Request, exc: PersonExistsError) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={"error": "person_exists",
+                 "detail": "that sign-in name or email address is already held"},
+    )  # fmt: skip
 
 
 @app.exception_handler(DashboardExistsError)

@@ -4,6 +4,7 @@ and dashboard identities. Generated into TypeScript for the Glass's Admin area."
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -16,6 +17,45 @@ class PersonAccount(BaseModel):
     roles: list[str]
     clearance: str | None = None
     org_unit: str | None = None
+    email: str | None = None
+    receivable_handling_codes: list[str] = Field(default_factory=list)
+    #: Invited or reset, and not yet signed in to choose their own password.
+    must_set_password: bool = False
+
+
+#: A sign-in name the identity provider takes (measured: spaces and most punctuation are refused).
+USERNAME_PATTERN = r"^[a-z0-9][a-z0-9._-]{1,62}$"
+#: Enough to catch a slip; whether the address works is the mail server's to say.
+EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+
+class AccessInput(BaseModel):
+    """What a person may see (ADR-114 Amendment 5): clearance, unit and the handling codes they may
+    receive — none above the administrator's own."""
+
+    clearance: str = Field(min_length=1, max_length=40)
+    org_unit: str = Field(min_length=1, max_length=60)
+    receivable_handling_codes: list[str] = Field(default_factory=list, max_length=16)
+
+
+class InviteInput(AccessInput):
+    """A new person (ADR-114 Amendment 5): signed in by an emailed link when the deployment has a
+    mail server, else by a one-time code shown once to the administrator."""
+
+    username: str = Field(pattern=USERNAME_PATTERN)
+    first_name: str = Field(default="", max_length=60)
+    last_name: str = Field(default="", max_length=60)
+    email: str | None = Field(default=None, pattern=EMAIL_PATTERN, max_length=254)
+    roles: list[str] = Field(default_factory=list, max_length=64)
+
+
+class SignInDelivery(BaseModel):
+    """How the person signs in next: by the identity provider's own emailed link, or by the one-time
+    code in this answer — shown once, never stored by OspreyFlow, changed at first sign-in."""
+
+    person: PersonAccount
+    delivery: Literal["email", "one_time_code"]
+    one_time_code: str | None = None
 
 
 class DashboardIdentity(BaseModel):
@@ -94,4 +134,5 @@ class DashboardGuestToken(BaseModel):
 ALL_MODELS = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
+    AccessInput, InviteInput, SignInDelivery,
 ]  # fmt: skip

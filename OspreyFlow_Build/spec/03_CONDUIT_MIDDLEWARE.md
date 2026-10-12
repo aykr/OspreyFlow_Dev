@@ -728,6 +728,11 @@ blank map.
 GET    /v1/me/rights                                       the signed-in person's rights (ADR-112), so the Glass leaves out what it would be refused; any signed-in person
 GET    /v1/admin/people                                    every person in the realm with roles, clearance and unit, no service account (ADR-112); manage_people
 PUT    /v1/admin/people/{user_id}/roles                    a person's roles set whole — the four roles, right:<name>, the old role names; anything else 422; manage_people
+POST   /v1/admin/people                                    invite a person (ADR-114 Amendment 5): sign-in by the identity provider's emailed link when the deployment has a mail server and the person an address, else a one-time code in the answer only; clearance and handling codes no higher than the administrator's (403), a name or address already held 409; audited without the code; manage_people
+PUT    /v1/admin/people/{user_id}/access                   clearance, unit and receivable handling codes, the person's other attributes kept; same ceiling; manage_people
+POST   /v1/admin/people/{user_id}/disable                  disabled and their sessions ended; never one's own account (409); manage_people
+POST   /v1/admin/people/{user_id}/enable                   enabled again; manage_people
+POST   /v1/admin/people/{user_id}/reset-sign-in            sessions ended and a new password required at next sign-in — emailed link or one-time code, as for an invitation; manage_people
 GET    /v1/admin/dashboards                                the registered dashboard identities (ADR-111 decision 7), each with how fresh its figures are in the reporting mart — last pulled, standing failure and when, cases pulled; aggregates only, never a case id; manage_dashboards
 POST   /v1/admin/dashboards                                register one: its secret in this answer only; clearance capped at the registrar's (403); manage_dashboards
 DELETE /v1/admin/dashboards/{client_id}                    remove one — only an osprey-dashboard-* client; manage_dashboards

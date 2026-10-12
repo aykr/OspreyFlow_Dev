@@ -12170,11 +12170,30 @@ What B4 decides *(mine)*:
    carry the sign-in on through it — so it stays, under its old name. The console's own client
    (`osprey-harness`) stays while the harness console exists.
 
+6. **The people routes** (B4b): invite, set access (clearance, unit, receivable handling codes),
+   disable, enable and reset sign-in, each behind `manage_people` and audited. Measured first on
+   Keycloak 26.0.8, and the test fixture made to refuse the same: a name or address already held is
+   409; an actions email with no mail server is 500 ("No sender address configured"); a username with
+   a space or most punctuation is 400; Keycloak has no password policy of its own (a one-letter
+   password was accepted), so the one-time code carries its own strength — sixteen letters from an
+   alphabet without 0/O or 1/I, 80 bits; and a PUT naming `attributes` **replaces them whole** (setting
+   clearance alone wiped the unit and roles), so every change reads the person and writes them back
+   entire. Email or code is decided per person: by email only when the deployment has a mail server
+   **and** the person an address. An email that cannot be sent leaves no half-made account. **Nobody is
+   given more than the administrator holds** — a clearance above their own or a handling code they
+   cannot receive is refused (403) before the identity provider is asked, the dashboard rule (rule 3)
+   applied to people. **No administrator disables their own account** (409): they would have no way
+   back in. A one-time code is in the answer only — never in the audit record, never stored.
+
 **Tests**, named before the code: Keycloak in `start` on Postgres, its database made first and kept in
 step, every secret the compose file requires minted by `apply`, the backup leaving Keycloak's database
 to the identity item (`tests/harness/test_keycloak_persisted.py`); no launcher client in the realm and a
-retired one removed (`test_realm.py`, `test_register_sign_in.py`); and live, an account kept across a
-restart.
+retired one removed (`test_realm.py`, `test_register_sign_in.py`); invitation by code and by email,
+an unsendable email leaving no account, a held name refused, a role outside the set refused before
+any account is made, access kept whole, disable ending sessions, reset handing over a new code, a
+service account no person (`test_identity_admin.py`); each people route refused without
+`manage_people`, the code never in the audit, the ceiling, no self-disable, a held name a 409
+(`test_admin_routes.py`, `test_route_rights.py`); and live, an account kept across a restart.
 
 ### ADR-113, Amendment 1 (11 October 2026) — report packs built: what an item rests on, and the gaps the decisions left
 

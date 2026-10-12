@@ -7,6 +7,9 @@ export type Enabled = boolean;
 export type Roles = string[];
 export type Clearance = string | null;
 export type OrgUnit = string | null;
+export type Email = string | null;
+export type ReceivableHandlingCodes = string[];
+export type MustSetPassword = boolean;
 
 export interface PersonAccount {
   id: Id;
@@ -16,5 +19,8 @@ export interface PersonAccount {
   roles: Roles;
   clearance?: Clearance;
   org_unit?: OrgUnit;
+  email?: Email;
+  receivable_handling_codes?: ReceivableHandlingCodes;
+  must_set_password?: MustSetPassword;
   [k: string]: unknown;
 }

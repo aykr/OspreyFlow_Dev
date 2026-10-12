@@ -19,11 +19,11 @@ from services.api.app import (
     get_report_freshness,
     get_valkey,
 )
-from services.api.identity_admin import UnknownRoleError, allowed_role
+from services.api.identity_admin import PersonExistsError, UnknownRoleError, allowed_role
 from services.api.report_freshness import Freshness
 
 from ontology.handling import load_uk_le_scheme
-from schemas.admin import DashboardIdentity, PersonAccount, RegisteredDashboard
+from schemas.admin import AccessInput, DashboardIdentity, InviteInput, PersonAccount, RegisteredDashboard, SignInDelivery
 from schemas.domain import Principal
 
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="verify", roles=["osprey-admin"])
@@ -49,6 +49,30 @@ class _Identity:
         if not all(allowed_role(r) for r in roles):
             raise UnknownRoleError("not a role")
         return PersonAccount(id=user_id, username="x", name="x", enabled=True, roles=roles)
+
+    # ADR-114 Amendment 5 (B4b)
+    async def invite(self, invite: InviteInput) -> SignInDelivery:
+        if invite.username == "taken":
+            raise PersonExistsError("taken")
+        if not all(allowed_role(r) for r in invite.roles):
+            raise UnknownRoleError("not a role")
+        self.made.append(("invite", invite.username))
+        return SignInDelivery(person=PersonAccount(id="u-new", username=invite.username, name=invite.username,
+                                                   enabled=True, roles=invite.roles, must_set_password=True),
+                              delivery="one_time_code", one_time_code="ABCD-EFGH-JKLM-NPQR")  # fmt: skip
+
+    async def set_access(self, user_id: str, access: AccessInput) -> PersonAccount:
+        self.made.append(("access", user_id))
+        return PersonAccount(id=user_id, username="x", name="x", enabled=True, roles=[], clearance=access.clearance)
+
+    async def set_enabled(self, user_id: str, enabled: bool) -> PersonAccount:
+        self.made.append(("enabled" if enabled else "disabled", user_id))
+        return PersonAccount(id=user_id, username="x", name="x", enabled=enabled, roles=[])
+
+    async def reset_sign_in(self, user_id: str) -> SignInDelivery:
+        self.made.append(("reset", user_id))
+        return SignInDelivery(person=PersonAccount(id=user_id, username="x", name="x", enabled=True, roles=[]),
+                              delivery="one_time_code", one_time_code="WXYZ-WXYZ-WXYZ-WXYZ")  # fmt: skip
 
     async def list_dashboards(self) -> list[DashboardIdentity]:
         return [DashboardIdentity(client_id="osprey-dashboard-board", account_id="sa-1"),
@@ -164,3 +188,66 @@ def test_the_dashboards_screen_says_how_fresh_each_feed_is_and_never_which_cases
     assert (board["last_failure"], board["cases_pulled"]) == ("the feed was refused (403)", 2)
     assert (new["last_pulled"], new["last_failure"], new["cases_pulled"]) == (None, None, 0)
     assert "case_id" not in response.text
+
+
+
+# --- ADR-114 Amendment 5 (B4b): invite, access, disable, enable, reset — behind manage_people ----
+
+INVITE = {"username": "new.person", "first_name": "New", "last_name": "Person", "email": None,
+          "clearance": "OFFICIAL", "org_unit": "verify", "receivable_handling_codes": [], "roles": ["analyst"]}  # fmt: skip
+ACCESS = {"clearance": "OFFICIAL", "org_unit": "verify", "receivable_handling_codes": []}
+ROUTES = [("post", "/v1/admin/people", INVITE), ("put", "/v1/admin/people/u1/access", ACCESS),
+          ("post", "/v1/admin/people/u1/disable", None), ("post", "/v1/admin/people/u1/enable", None),
+          ("post", "/v1/admin/people/u1/reset-sign-in", None)]  # fmt: skip
+
+
+@pytest.mark.parametrize(("verb", "path", "body"), ROUTES)
+def test_each_people_route_is_refused_without_manage_people(client: Any, verb: str, path: str, body: Any) -> None:
+    _as(ANALYST)
+    response = getattr(client, verb)(path, **({"json": body} if body is not None else {}))
+    assert response.status_code == 403
+    assert client.identity.made == [] and client.audit.records == []
+
+
+def test_an_invitation_hands_the_code_over_once_and_never_into_the_audit(client: Any) -> None:
+    _as(ADMIN)
+    response = client.post("/v1/admin/people", json=INVITE)
+    assert response.status_code == 201, response.text
+    assert response.json()["one_time_code"] == "ABCD-EFGH-JKLM-NPQR"
+    (record,) = client.audit.records
+    assert record["action"] == "invite_person"
+    assert "ABCD-EFGH-JKLM-NPQR" not in repr(record), "the code is the person's, never the log's"
+    reset = client.post("/v1/admin/people/u1/reset-sign-in")
+    assert reset.status_code == 200 and "WXYZ" not in repr(client.audit.records[-1])
+    assert client.audit.records[-1]["action"] == "reset_person_sign_in"
+
+
+def test_nobody_is_given_more_than_the_administrator_holds(client: Any) -> None:
+    """The dashboard rule (rule 3) for people: inviting someone, or setting their access, above one's
+    own clearance or with a handling code one cannot receive would be a way to read above it."""
+    _as(ADMIN)
+    above = client.post("/v1/admin/people", json={**INVITE, "clearance": "SECRET"})
+    assert above.status_code == 403 and above.json()["detail"]["error"] == "above_your_clearance"
+    codes = client.put("/v1/admin/people/u1/access", json={**ACCESS, "receivable_handling_codes": ["C"]})
+    assert codes.status_code == 403 and codes.json()["detail"]["error"] == "handling_code_you_do_not_hold"
+    unknown = client.put("/v1/admin/people/u1/access", json={**ACCESS, "clearance": "COSMIC"})
+    assert unknown.status_code == 422
+    assert client.identity.made == [], "refused before the identity provider was asked"
+    fine = client.put("/v1/admin/people/u1/access", json=ACCESS)
+    assert fine.status_code == 200 and client.audit.records[-1]["action"] == "set_person_access"
+
+
+def test_an_administrator_cannot_disable_their_own_account(client: Any) -> None:
+    _as(ADMIN)
+    response = client.post(f"/v1/admin/people/{ADMIN.id}/disable")
+    assert response.status_code == 409 and response.json()["detail"]["error"] == "cannot_disable_yourself"
+    assert client.identity.made == []
+    assert client.post("/v1/admin/people/u1/disable").json()["enabled"] is False
+    assert client.post("/v1/admin/people/u1/enable").json()["enabled"] is True
+    assert [r["action"] for r in client.audit.records] == ["disable_person", "enable_person"]
+
+
+def test_a_name_already_held_is_a_conflict_said_in_words(client: Any) -> None:
+    _as(ADMIN)
+    response = client.post("/v1/admin/people", json={**INVITE, "username": "taken"})
+    assert response.status_code == 409 and response.json()["error"] == "person_exists"
