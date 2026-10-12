@@ -99,8 +99,19 @@ describe("packPrintHtml", () => {
     expect(html.match(/page-break-after: always/g)?.length).toBeGreaterThan(0);
   });
 
-  it("prints every point of a trend, not a sample", () => {
+  it("prints every point of a trend, not a sample, and a row for each period with none", () => {
     const rows = packPrintHtml(manifest([TREND_ITEM])).match(/<tr><td>/g);
-    expect(rows).toHaveLength(TREND_ITEM.trend!.result.points.length);
+    expect(rows).toHaveLength(TREND_ITEM.trend!.result.points.length + 10);
+  });
+
+  it("prints a week with no events as a row in its place, not a gap (Amendment 3, finding 4)", () => {
+    // As the server sends them: a full timestamp, not the day the row is keyed by.
+    const f = TREND_ITEM.trend!;
+    const points = f.result.points.map((p) => ({ ...p, period_start: `${p.period_start}T00:00:00Z` }));
+    const html = packPrintHtml(manifest([{ ...TREND_ITEM, trend: { ...f, result: { ...f.result, points } } }]));
+    expect(html).toContain('<tr><td>14 September 2026</td><td>card</td><td class="num">100</td></tr>');
+    expect(html).toContain('<tr><td>7 September 2026</td><td>No events</td><td class="num">0</td></tr>');
+    expect(html.indexOf("<td>7 September 2026</td>")).toBeLessThan(html.indexOf("<td>14 September 2026</td>"));
+    expect(html.indexOf("<td>13 July 2026</td>")).toBeLessThan(html.indexOf("<td>7 September 2026</td>"));
   });
 });

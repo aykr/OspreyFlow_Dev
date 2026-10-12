@@ -11868,8 +11868,8 @@ route-rights row `export_pack_route`.
 
 ### ADR-113, Amendment 3 (11 October 2026) — what the live walk found
 
-Stage 6 (handover A6), walked as `osprey-demo-analyst` on the deployment. Three findings; two
-fixed, one recorded.
+Stage 6 (handover A6), walked as `osprey-demo-analyst` on the deployment. Four findings; three
+fixed, one recorded (finding 4 added 12 October 2026, from the same walk's screens).
 
 1. **People are named (ADR-106), fixed.** The walk showed a version "published … by" a Keycloak
    subject UUID: the pack routes served `published_by`, `withdrawn_by` and the export mark's
@@ -11898,6 +11898,19 @@ fixed, one recorded.
    ("2026-08-03T00:00:00Z"); each is now said as a day ("3 August 2026"), in the words the rest of
    the pack uses.
 
+4. **Every period of a trend's window is drawn, the empty ones too, fixed.** The published pack
+   said "over 44 events in 12 weeks" above nine bars: `AnalyticsPort.trend` returns a point only
+   for a period with events (unchanged — a zero is not a fact the store holds), and the Glass drew
+   a bar only for a period it had a point for, so an empty week closed up the time axis without
+   saying so. The periods are now every period the snapshot's own window touches — from the
+   Monday week or calendar month holding `window_start` to the one holding `as_of`, in UTC, the
+   periods the AnalyticsPort suite pins (`test_trend_counts_events_per_week`,
+   `test_trend_counts_per_month`) — with any point outside them kept, never dropped. An empty
+   period is an empty bar on screen and a "No events" row of 0 in the PDF. The first and last
+   periods may be partial; their bars say "Week of" the period's own start. Computed in the Glass
+   from what every snapshot already carries, so a pack published before this is drawn correctly
+   with nothing stored changed, and no adapter changes.
+
 **Tests.** `test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up`
 (`tests/services/api/test_packs.py`, its directory fake recording every id asked for) and the names
 in `test_the_manifest_names_only_what_the_exporter_may_see_and_the_ledger_records_it`; the Glass's
@@ -11905,4 +11918,10 @@ version line, Published line and printed cover (`PacksTab`, `PublishedTab`, `pac
 Six planted faults, each red: a published read asking for every item's adder; the withdrawer, the
 exporter, the published list, the history's versions and the publish response each left unnamed. For
 finding 3: the cover's two banners (`packExport.test.ts`) and the days in the table and on the chart
-(`packExport.test.ts`, `TrendChart.test.tsx`), each red before the change.
+(`packExport.test.ts`, `TrendChart.test.tsx`), each red before the change. For finding 4:
+`packText.test.ts` (every Monday week and calendar month of the window; a point outside it kept),
+the empty bar in its place with each bar's stack (`TrendChart.test.tsx`) and the "No events" row
+(`packExport.test.ts`), the chart and print cases fed timestamps as the server sends them; eight
+planted faults, each red: no window fill, Sunday weeks, months bucketed as weeks, a point outside
+the window dropped, the empty row omitted from the print, and the chart's stacks, the chart's
+totals and the print's rows each matched on the raw timestamp.

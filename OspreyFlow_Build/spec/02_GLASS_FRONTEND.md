@@ -942,7 +942,9 @@ page per item under a top and bottom banner of that item's own marking (`reports
 styled with the light-theme ramp restated, every string escaped); the PDF is saved from the
 browser's print dialogue. Whoever published, withdrew or exported is shown by name, the id only when the server had none
 (ADR-106; Am. 3); the printed cover carries the mark's banner top and bottom, and a trend's periods
-are said and printed as days, never timestamps (Am. 3). Entity items are drawn when present; adding
+are said and printed as days, never timestamps; every period the trend's window touches is drawn
+(Monday weeks or calendar months, UTC), an empty one as an empty bar and a "No events" row in the
+PDF, never closed up (Am. 3). Entity items are drawn when present; adding
 one from the canvas is not yet built. Keyboard cases: `keyboard/trends.spec.ts` (`TRENDS_ACTIONS`) and `keyboard/packs.spec.ts`
 (`PACKS_ACTIONS`).
 

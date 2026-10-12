@@ -2,7 +2,7 @@
 // series when there are series — and a legend naming every series. Nothing is sampled or capped
 // (rule 2): a trend too large to draw is refused by the server with its choices, not sliced here.
 import type { TrendFigures } from "../../../../packages/schemas/generated";
-import { formatDay, formatNumber, periodsOf, trendSentence } from "./packText";
+import { formatDay, formatNumber, periodKey, periodsOf, trendSentence } from "./packText";
 
 export const CHANNELS = ["--ch-azure", "--ch-ochre", "--ch-jade", "--ch-plum", "--ch-rose", "--ch-cyan", "--ch-indigo", "--ch-moss"];
 
@@ -15,7 +15,7 @@ export function TrendChart({ figures }: { figures: TrendFigures }) {
     return at < 0 ? "--brass" : (CHANNELS[at % CHANNELS.length] ?? "--brass");
   };
   const totals = periods.map((period) =>
-    result.points.filter((p) => p.period_start === period).reduce((sum, p) => sum + Math.max(0, p.value), 0),
+    result.points.filter((p) => periodKey(p.period_start) === period).reduce((sum, p) => sum + Math.max(0, p.value), 0),
   );
   const most = Math.max(1, ...totals);
   const unit = result.interval === "month" ? "month" : "week";
@@ -33,7 +33,7 @@ export function TrendChart({ figures }: { figures: TrendFigures }) {
             style={{ display: "flex", alignItems: "flex-end", gap: "var(--sp-4)", height: 140 }}
           >
             {periods.map((period, i) => {
-              const here = result.points.filter((p) => p.period_start === period);
+              const here = result.points.filter((p) => periodKey(p.period_start) === period);
               return (
                 <div
                   key={period}

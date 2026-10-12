@@ -3,7 +3,7 @@
 // the PDF from the browser's own print dialogue. Every page carries THAT item's own marking, top
 // and bottom — never the pack's level — and every interpolated string is escaped.
 import type { PackExport, PackItem } from "../../../../packages/schemas/generated";
-import { KIND_LABEL, formatDay, formatNumber, trendSentence, withheldSentence } from "./packText";
+import { KIND_LABEL, formatDay, formatNumber, periodKey, periodsOf, trendSentence, withheldSentence } from "./packText";
 
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
@@ -35,12 +35,14 @@ td.num, th.num { text-align: right; }
 function trendTable(item: PackItem): string {
   const figures = item.trend;
   if (!figures) return "";
-  const rows = figures.result.points
-    .map(
-      (p) =>
-        `<tr><td>${escapeHtml(formatDay(p.period_start))}</td><td>${escapeHtml(p.series ?? "")}</td>` +
-        `<td class="num">${escapeHtml(formatNumber(p.value))}</td></tr>`,
-    )
+  const row = (period: string, series: string, value: number) =>
+    `<tr><td>${escapeHtml(formatDay(period))}</td><td>${escapeHtml(series)}</td>` +
+    `<td class="num">${escapeHtml(formatNumber(value))}</td></tr>`;
+  const rows = periodsOf(figures)
+    .map((period) => {
+      const here = figures.result.points.filter((p) => periodKey(p.period_start) === period);
+      return here.length === 0 ? row(period, "No events", 0) : here.map((p) => row(period, p.series ?? "", p.value)).join("");
+    })
     .join("");
   return (
     `<p>${escapeHtml(trendSentence(figures))}.</p>` +

@@ -76,7 +76,7 @@ describe("the trend builder", () => {
       title: "Payments by channel", event_types: ["payment"], measure: "sum", measure_field: "amount",
       interval: "week", weeks: 26, group_by: "channel", filters: [{ field: "channel", value: "card" }],
     });  // prettier-ignore
-    expect(chart.querySelectorAll("[data-period]")).toHaveLength(3);
+    expect(chart.querySelectorAll("[data-period]")).toHaveLength(13);
     const legend = screen.getByRole("list", { name: "Series legend" });
     expect(within(legend).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["card", "wire"]);
     expect(screen.getByText("Marked OFFICIAL")).toBeTruthy();

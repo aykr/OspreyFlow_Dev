@@ -57,7 +57,36 @@ export function trendSentence(figures: TrendFigures): string {
   return `${events} in ${weeks}`;
 }
 
-/** The distinct periods, in order — every one, never a sample. */
+/** The day a period starts on ("2026-09-14"), the key a point and its bar share; a value that is not
+ * a time is kept as it came. */
+export function periodKey(start: string): string {
+  const when = new Date(start);
+  return Number.isNaN(when.getTime()) ? start : when.toISOString().slice(0, 10);
+}
+
+/** The start of the Monday week or calendar month holding `when`, in UTC — the periods the
+ * AnalyticsPort suite pins (`test_trend_counts_events_per_week`, `test_trend_counts_per_month`). */
+function periodStart(when: Date, interval: TrendFigures["result"]["interval"]): Date {
+  if (interval === "month") return new Date(Date.UTC(when.getUTCFullYear(), when.getUTCMonth(), 1));
+  const day = new Date(Date.UTC(when.getUTCFullYear(), when.getUTCMonth(), when.getUTCDate()));
+  day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+  return day;
+}
+
+/** Every period the trend's window touches, in order, the empty ones too — the port returns points
+ * only where there were events, and an axis that skipped the empty ones would misstate time (ADR-113
+ * Amendment 3, finding 4). A point outside the window is kept, never dropped. */
 export function periodsOf(figures: TrendFigures): string[] {
-  return [...new Set(figures.result.points.map((p) => p.period_start))].sort();
+  const keys = new Set(figures.result.points.map((p) => periodKey(p.period_start)));
+  const from = new Date(figures.window_start);
+  const to = new Date(figures.as_of);
+  if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime())) {
+    const interval = figures.result.interval;
+    for (let at = periodStart(from, interval); at <= to; ) {
+      keys.add(at.toISOString().slice(0, 10));
+      if (interval === "month") at = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1));
+      else at = new Date(at.getTime() + 7 * 86_400_000);
+    }
+  }
+  return [...keys].sort();
 }
