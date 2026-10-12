@@ -11913,6 +11913,70 @@ Build mention, an internal demo's data, an internal demo's code, a home-folder p
 identifier — each planted in a commit made for the test — and writing nothing when it refuses; the
 uncommitted `osprey.yaml` never reaching the copy.
 
+### ADR-114, Amendment 3 (12 October 2026) — stage B2: the `ospreyflow` command, its answers file and its guided page
+
+**The owner's rulings** (asked 12 October 2026):
+
+1. **"Replace my deployment."** B2 is proven by replacing the owner's running deployment with one the
+   new command installs: back it up (`harness.backup`, every store and the configuration), uninstall
+   it, install fresh, restore, re-seed the synthetic packs, and sign in over the wire. Nothing of the
+   running deployment is touched until the backup is verified complete.
+2. **"Every mode, designed now."** The guided page covers Lite, Small and Enterprise from the start.
+   Lite installs from it; Small and Enterprise collect and save their answers and say, in words, that
+   their install arrives with stages B6 and B7 — never a button that silently does nothing.
+
+**What the drift survey found** (a fresh render into a scratch folder against the live deployment):
+the hand-edited Superset and report-sync are exactly what the renderer writes when `osprey.yaml`'s
+`reporting:` switches them on, and their secrets are minted at install (`harness.reporting`); the
+ingest and tiles folders are `storage:` settings; ArcadeDB's loopback port is the renderer's
+(ADR-054 Amendment 5) and the live deployment's missing one is the hand edit. So the drift is
+configuration, not code: an install that asks for those settings reproduces the deployment.
+
+What B2 decides *(mine)*:
+
+3. **A small command over the harness.** `ospreyflow` is its own package in the product folder
+   (`cli/`), depending on nothing but the standard library and PyYAML, installed as a `uv` tool by the
+   bootstrap (`install.sh`, `install.ps1`). The heavy work stays where it is — rendering, preflight,
+   build, up, verify (`harness.apply`), backup and restore — run inside the checkout's own
+   environment (`uv run --project <checkout>`) or as `docker compose` against the rendered
+   deployment. The command knows its checkout from `OSPREYFLOW_HOME`, else the folder the bootstrap
+   recorded, else the checkout it is run inside.
+4. **The verbs.** `doctor` checks each prerequisite of decision 4 for the chosen mode and says each
+   failure in words with its fix (Docker installed, running, Compose v2; memory; free disk; Git;
+   `uv`; for Lite, the ports the deployment publishes free or already its own). `install --mode
+   lite|small|enterprise [--config FILE] [--yes] [--gui]` runs `doctor` first and stops on any
+   failure; it writes `osprey.yaml` from the answers (never over an existing one without `--force`),
+   then `harness.apply`, then the chosen demo packs (`scripts/demo_packs.py`; PaySim from `--file` or,
+   once a release carries it, its release asset), and ends by saying the address and where the
+   sign-in details are kept — never a password. `start [--build]` brings the deployment up; `--build`
+   first rebuilds from the checkout, which is what `make refresh` did. `stop`, `status` (each service's
+   state and health in words), `open`, `logs [SERVICE] [--follow]`, `demo list | add PACK [--file]`,
+   `backup`, `restore DIR`, `uninstall [--keep-data]`. `update` is stage B5's. The `--install`-style
+   spellings are accepted as aliases.
+5. **The answers file** (`install.yaml`) is what every question writes and what `--config` reads, so
+   the page, the prompts and CI install the same way: `mode`; the components (dashboards on by
+   default — `reporting.sync` and `reporting.superset`); `storage` (the data, ingest and tiles
+   folders); the models; governance; the map; the demo packs; and, for Small and Enterprise, the
+   cloud, region, domain and sizing B6/B7 consume. Unknown keys are refused, as `osprey.yaml`'s are.
+6. **The guided page** is the Set-up console's own screens (`apps/harness`), served by `install
+   --gui` on `127.0.0.1` at a free port behind a one-time token, only while the install runs, then
+   gone. Its screens: *Mode*; then, for Lite, *Folders*, *Components*, *Map*, *Models*,
+   *Governance*, *Demo packs*, *Review*, and *Installing* (each step's progress in words); for Small
+   and Enterprise, *Cloud and region*, *Domain*, *Components*, *Models*, *Governance*, *Demo packs*
+   and *Review*, whose action saves `install.yaml` and says when that mode's install arrives.
+7. **The old ways in are removed** (ADR-114 decision 3): `make refresh` and `make launch`, the launcher
+   (`scripts/launch.py`), the welcome service, and `python -m harness` with no subcommand serving the
+   Set-up console on 7100 for good. `process/CLAUDE.md`'s "No `osprey` CLI yet" convention is replaced.
+
+**Tests**, named before the code: `doctor` refusing each missing prerequisite in words (each one
+faked absent); `install --yes --config` refusing to overwrite `osprey.yaml` without `--force`, and
+writing the reporting, storage and demo-pack settings the answers name; the answers file refusing an
+unknown key and a mode it does not know; `start`/`stop`/`status` driving Compose against the
+rendered deployment, round trip; `demo add paysim --file` refusing a wrong checksum before anything
+starts; the guided page refusing a request without its token and closing when the install ends; the
+removed targets and the launcher gone; and the over-the-wire proof — the owner's deployment
+replaced, signed in at its address, the restored cases present.
+
 ### ADR-113, Amendment 1 (11 October 2026) — report packs built: what an item rests on, and the gaps the decisions left
 
 Stage 3 (handover A3). Decisions 3 to 5 and 7 are built as decided. Building them found places where
