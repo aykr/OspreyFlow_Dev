@@ -641,3 +641,10 @@
 .timeline-strip__bar { flex: 1; min-width: 1px; background: var(--seq-2); }
 .timeline-strip__range { flex: none; font-size: var(--fs-11); color: var(--text-tertiary); }
 .layout-rerun { min-width: var(--h-control-24); min-height: var(--h-control-24); padding: 0; display: inline-grid; place-items: center; }
+/* A link's hover tooltip (ADR-115 E5): an overlay, so a shadow and no hairline (DESIGN.md §6). */
+.link-tooltip {
+  position: absolute; z-index: 30; pointer-events: none; display: grid; gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-8); background: var(--surface-raised); box-shadow: var(--overlay-shadow);
+  border-radius: var(--r-2); font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-secondary);
+}
+.link-tooltip__type { color: var(--text-primary); font-weight: 600; }

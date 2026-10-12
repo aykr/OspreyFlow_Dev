@@ -533,6 +533,11 @@ set's cap none of them is drawn and the canvas says so. For larger views, *Show 
 selection bar (two or more selected) and *Show links among all* in the View group draw them on demand, all
 or none, and say how many (`keyboard/selection.spec.ts`, `keyboard/keyboard.spec.ts`).
 
+**Hovering a link (ADR-115 E5, review item 11).** With the pointer over a link, a tooltip by the pointer
+names its type and how many links of that type join the same two entities ("3 links of this type between
+these two"), and goes when the pointer leaves (`keyboard/link-hover.spec.ts`). A keyboard user reads the
+same from the Inspector with the link selected.
+
 **Questions to the model, in a branch (ADR-098 decision 4).** While the selection holds a Document, the
 selection bar offers *Ask the model about these…*: it branches the selection into a new case named
 "Questions on <n> documents" and opens that case with its *Questions* panel open (the case address carries

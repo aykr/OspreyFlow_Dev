@@ -24,6 +24,7 @@
 //   (§5's own technique for the 50k/250k fixture), which is still not built
 //   and still unmeasured; past the cap the scatter stays as it is.
 import { DetailsToggle } from "../layout/PanelFrames";
+import { linkHoverText } from "./linkHover";
 import { createNodeBorderProgram } from "@sigma/node-border";
 import { createNodeImageProgram } from "@sigma/node-image";
 import type { StoreApi } from "zustand/vanilla";
@@ -399,6 +400,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const canvasDescriptionId = useId();
     const [zoomPercent, setZoomPercent] = useState<number | undefined>(undefined);
+    const [hoverLink, setHoverLink] = useState<{ key: string; x: number; y: number } | null>(null);
     // ADR-094 step 3: the Add files dialog, for the case or for one holder.
     const [addingFiles, setAddingFiles] = useState<{ holder?: { id: string; label: string } } | null>(null);
     const [hovered, setHovered] = useState<string | null>(null);
@@ -1606,6 +1608,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         });
       });
       sigma.on("clickEdge", ({ edge }) => selectLinkRef.current(edge));
+      // ADR-115 E5 (review item 11): hovering a link says its type and count, in a tooltip by the
+      // pointer; it goes when the pointer leaves the link.
+      // Sigma's own edge events do not fire for these programs, so the pointer is tested with the
+      // canvas's own `edgeAtViewport`; state changes only when the link under it changes.
+      sigma.on("moveBody", ({ event }) => {
+        const id = edgeAtViewport(event.x, event.y);
+        setHoverLink((shown) => (id === null ? null : shown?.key === id ? shown : { key: id, x: event.x, y: event.y }));
+      });
+      sigma.on("enterNode", () => setHoverLink(null));
+      sigma.on("leaveStage", () => setHoverLink(null));
       sigma.on("rightClickEdge", ({ edge, event }) => {
         event.preventSigmaDefault();
         openLinkMenuFor(edge, event.original as MouseEvent);
@@ -3186,6 +3198,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           }}
         />
         {/* ADR-097 step 2: the zoom cluster and the legend, after the view's own controls in Tab order. */}
+        {hoverLink &&
+          (() => {
+            const said = linkHoverText(graph, hoverLink.key, edgeTypesRef.current);
+            return said ? (
+              <div role="tooltip" className="link-tooltip" style={{ left: hoverLink.x + 12, top: hoverLink.y + 12 }}>
+                <span className="link-tooltip__type">{said.type}</span>
+                <span>{said.count}</span>
+              </div>
+            ) : null;
+          })()}
         <div className="canvas-corner">
           <CanvasLegend types={legendTypes} />
           <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} percent={zoomPercent} />
