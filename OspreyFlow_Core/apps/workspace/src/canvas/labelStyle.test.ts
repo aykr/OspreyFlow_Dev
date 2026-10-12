@@ -117,13 +117,13 @@ describe("drawNodeLabel (ADR-097 step 2)", () => {
   }
   const settings = { labelWeight: "normal" } as never;
 
-  it("draws a long literal label cut in the middle, in mono, at 12px", () => {
+  it("draws a long literal label cut in the middle, in mono, at 11px (DESIGN.md v0.3 §5a)", () => {
     const { context, drawn } = fakeContext(800);
     const draw = drawNodeLabel(paletteFor("dark"));
     draw(context, { x: 100, y: 100, size: 10, label: "jeffrey.skilling@enron.example.com", labelLiteral: true } as never, settings);
     expect(drawn).toHaveLength(1);
     expect(drawn[0]!.text).toHaveLength(24);
-    expect(drawn[0]!.font).toContain("12px");
+    expect(drawn[0]!.font).toContain("11px");
     expect(drawn[0]!.font).toContain("IBM Plex Mono");
   });
 

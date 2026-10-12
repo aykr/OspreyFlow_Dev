@@ -21,7 +21,7 @@ export function labelColoursFor(palette: Palette): LabelColours {
   };
 }
 
-/** The label as drawn: cut in the middle at 24 characters (ADR-097 step 2). */
+/** The label as drawn: over 28 characters, its first 19 and last 4 (DESIGN.md v0.3 §5a). */
 function drawnText(data: { label?: string | null }): string {
   return typeof data.label === "string" ? middleTruncate(data.label) : "";
 }
@@ -38,8 +38,8 @@ function cssWidth(context: CanvasRenderingContext2D): number {
   return canvas.clientWidth || canvas.width / (globalThis.devicePixelRatio || 1);
 }
 
-/** Draws a node's label at `--fs-12` in the theme's text colour, in mono for a literal value, cut
- * in the middle at 24 characters, and on the left of the node when the right would leave the canvas. */
+/** Draws a node's label at `--fs-11` in the theme's text colour, in mono for a literal value, cut
+ * in the middle over 28 characters, and on the left of the node when the right would leave the canvas. */
 export function drawNodeLabel(palette: Palette): NodeLabelDrawingFunction {
   return (context, data, settings) => {
     const text = drawnText(data);

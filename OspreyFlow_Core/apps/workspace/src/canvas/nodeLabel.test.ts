@@ -10,18 +10,18 @@ import { labelIsLiteral, labelStartX, middleTruncate, NODE_LABEL_MAX_CHARS } fro
 const node = (type: string, properties: Record<string, unknown>): Node =>
   ({ id: `${type}-1`, type, properties }) as unknown as Node;
 
+// DESIGN.md v0.3 §5a (ADR-115 decision 9): a label of 28 characters or fewer is drawn whole; a longer
+// one keeps its first 19 characters and its last 4, with an ellipsis between — 24 in all.
 describe("middleTruncate", () => {
-  it("leaves a label of 24 characters or fewer as it is", () => {
-    expect(NODE_LABEL_MAX_CHARS).toBe(24);
-    expect(middleTruncate("a".repeat(24))).toBe("a".repeat(24));
+  it("leaves a label of 28 characters or fewer as it is", () => {
+    expect(NODE_LABEL_MAX_CHARS).toBe(28);
+    expect(middleTruncate("a".repeat(28))).toBe("a".repeat(28));
   });
 
-  it("cuts a longer one in the middle, keeping both ends, to exactly 24 characters", () => {
-    const cut = middleTruncate("jeffrey.skilling@enron.example.com");
-    expect(cut).toHaveLength(24);
-    expect(cut.startsWith("jeffrey.ski")).toBe(true);
-    expect(cut.endsWith("example.com")).toBe(true);
-    expect(cut).toContain("…");
+  it("keeps a longer one's first 19 and last 4 characters, with an ellipsis between", () => {
+    const cut = middleTruncate("email:enron-ev-6be2a8f1c3d4e5f6a7b890c7");
+    expect(cut).toBe("email:enron-ev-6be2…90c7");
+    expect(Array.from(cut)).toHaveLength(24);
   });
 });
 
