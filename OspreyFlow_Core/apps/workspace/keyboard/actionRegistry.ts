@@ -553,6 +553,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "rail-shows-and-hides-names-by-keyboard",
   // ADR-111: the view switch, Reports included — never proved by keyboard before it.
   "views-chosen-by-keyboard",
+  // ADR-115 E6: the rail's Help reopens the welcome panel.
+  "help-from-the-rail-by-keyboard",
 ] as const);
 
 export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
@@ -577,6 +579,13 @@ export const START_ACTIONS = defineActionRegistry("START_ACTIONS", [
   "return-to-start-from-the-mark-by-keyboard",
   // ADR-115 E3: Home's G, I and A.
   "open-a-place-from-home-with-its-key",
+] as const);
+
+// ADR-115 E6: the workspace's welcome panel.
+export const WELCOME_ACTIONS = defineActionRegistry("WELCOME_ACTIONS", [
+  "open-the-welcome-panel-with-question-mark",
+  "pick-up-a-history-step-from-the-welcome-panel",
+  "close-the-welcome-panel",
 ] as const);
 
 export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [

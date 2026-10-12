@@ -67,6 +67,15 @@ test("the rail shows its names, and hides them again, by keyboard", async ({ pag
   registerCovered(REGISTRY, "rail-shows-and-hides-names-by-keyboard");
 });
 
+// ADR-115 E6: Help at the rail's foot, by keyboard (it reopens the workspace's welcome panel).
+test("the rail's Help is reached and pressed by keyboard", async ({ page }) => {
+  await page.goto("/keyboard/top-bar-harness.html");
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Help" }).focus();
+  await page.keyboard.press("Enter");
+  expect(await page.evaluate(() => window.__TOPBAR__?.help)).toBe(1);
+  registerCovered(REGISTRY, "help-from-the-rail-by-keyboard");
+});
+
 test("every registered shell action has its own proving test case above", () => {
   assertAllCovered("SHELL_ACTIONS", SHELL_ACTIONS);
 });

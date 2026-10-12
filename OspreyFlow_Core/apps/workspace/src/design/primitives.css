@@ -421,7 +421,17 @@
 }
 .left-rail__item:hover, .left-rail__item:focus-visible { background: var(--surface-hover); color: var(--text-primary); }
 .left-rail__item[aria-pressed="true"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 2px 0 0 var(--text-primary); }
+.left-rail__help { margin-top: auto; }
+.left-rail__help + .left-rail__toggle { margin-top: 0; }
 .left-rail__toggle { margin-top: auto; }
+.left-rail__item { position: relative; }
+/* A count on a rail entry (ADR-115 E6): mono, small, at the icon's top right. */
+.left-rail__badge {
+  position: absolute; top: var(--sp-2); left: var(--sp-20); min-width: var(--sp-12); padding: 0 var(--sp-2);
+  font-size: var(--fs-11); line-height: var(--lh-11); text-align: center;
+  color: var(--text-primary); background: var(--surface-hover); border-radius: var(--r-pill);
+}
+.left-rail__glyph { width: var(--sp-16); text-align: center; font-weight: 700; }
 .left-rail__name { white-space: nowrap; }
 /* A view's own toolbar (ADR-097 step 1): what belongs to one view, docked above it (DESIGN.md §5a). */
 .view-toolbar {
@@ -648,3 +658,26 @@
   border-radius: var(--r-2); font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-secondary);
 }
 .link-tooltip__type { color: var(--text-primary); font-weight: 600; }
+/* The workspace's welcome panel (ADR-115 E6; DESIGN.md §5a): an overlay at the canvas's top left —
+   a shadow, no hairline — 320px (280px below 1100), leaving 72px clear for the selection bar. */
+.workspace-welcome {
+  position: absolute; z-index: 15; left: var(--sp-8); top: calc(var(--h-canvas-toolbar) + var(--sp-8));
+  width: var(--w-welcome-panel); box-sizing: border-box; max-height: calc(100% - var(--h-canvas-toolbar) - 72px);
+  overflow-y: auto; padding: var(--sp-12) var(--sp-16) var(--sp-16);
+  background: var(--surface-raised); border-radius: var(--r-3); box-shadow: var(--overlay-shadow);
+  font-size: var(--fs-13); line-height: var(--lh-13);
+}
+@media (max-width: 1099px) { .workspace-welcome { width: var(--w-welcome-panel-narrow); } }
+.workspace-welcome__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8); }
+.workspace-welcome__head h2 { margin: 0; font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 700; }
+.workspace-welcome__close { min-width: var(--h-control-24); min-height: var(--h-control-24); padding: 0; }
+.workspace-welcome__summary { margin: var(--sp-8) 0 var(--sp-12); color: var(--text-secondary); }
+.workspace-welcome h3 { margin: var(--sp-12) 0 var(--sp-6); font-size: var(--fs-12); line-height: var(--lh-12); font-weight: 600; color: var(--text-secondary); }
+.workspace-welcome__history, .workspace-welcome__keys { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-4); }
+.workspace-welcome__step {
+  width: 100%; display: grid; gap: var(--sp-2); text-align: left; padding: var(--sp-4) var(--sp-6);
+  font: inherit; color: var(--text-primary); background: none; border: 0; border-radius: var(--r-1); cursor: pointer;
+}
+.workspace-welcome__step:hover { background: var(--surface-hover); }
+.workspace-welcome__step .value { font-size: var(--fs-11); color: var(--text-tertiary); }
+.workspace-welcome__keys li { display: grid; grid-template-columns: var(--sp-40) minmax(0, 1fr); align-items: center; gap: var(--sp-8); }

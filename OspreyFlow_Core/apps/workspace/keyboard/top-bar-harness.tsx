@@ -16,7 +16,7 @@ import { GlobalSearch } from "../src/search/GlobalSearch";
 
 declare global {
   interface Window {
-    __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean; rail: string[]; views: string[] };
+    __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean; rail: string[]; views: string[]; help?: number };
   }
 }
 
@@ -91,6 +91,7 @@ createRoot(container).render(
     />
     <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
       <LeftRail
+        onHelp={() => { window.__TOPBAR__!.help = (window.__TOPBAR__!.help ?? 0) + 1; }}
         items={[
           { id: "cases", label: "Cases", icon: "cases", onSelect: rail("cases") },
           { id: "watches", label: "Watches", icon: "watches", onSelect: rail("watches") },

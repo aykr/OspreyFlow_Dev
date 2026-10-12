@@ -92,6 +92,7 @@ import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { DEFAULT_TIMELINE_HEIGHT } from "./layout/layoutSizes";
 import { TimelineStrip } from "./timeline/TimelineStrip";
+import { setWelcomeDismissed, useHelpKey, welcomeDismissed, WorkspaceWelcome } from "./welcome/WorkspaceWelcome";
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
 import { AlertInbox } from "./watches/AlertInbox";
@@ -108,7 +109,7 @@ import {
   type StartPlace,
 } from "./rights/visibility";
 import { startScreen } from "./shell/startScreen";
-import { loadHome, summariseHome, type HomeSummary } from "./home/homeData";
+import { loadHome, openInQueue, summariseHome, type HomeSummary } from "./home/homeData";
 import { OwnershipPlace } from "./ownership/OwnershipPlace";
 import { HotlistPanel } from "./watches/HotlistPanel";
 import { MonitorPanel } from "./watches/MonitorPanel";
@@ -495,6 +496,16 @@ export function App() {
   // ADR-105 Amendment 1: the node menu's *Set picture…* opens the Inspector's Picture part.
   const [pictureOpenSignal, setPictureOpenSignal] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // ADR-115 E6: the workspace's welcome panel — open until this person closes it once — and `?`.
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const welcomeDecided = useRef(false);
+  useEffect(() => {
+    if (welcomeDecided.current || !principal?.sub) return;
+    welcomeDecided.current = true;
+    setWelcomeOpen(!welcomeDismissed(principal.sub));
+  }, [principal?.sub]);
+  const openWelcome = useCallback(() => setWelcomeOpen(true), []);
+  useHelpKey(openWelcome);
   // ADR-097 Amendment 1: the case and its branches, reached from the rail.
   const [casesOpen, setCasesOpen] = useState(false);
   // ADR-098 decision 4: the case's questions to the model, open at once in a case branched for them.
@@ -543,6 +554,28 @@ export function App() {
   const [view, setView] = useState<
     "graph" | "map" | "reports" | "admin" | "dashboards" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
   >(handoff.view === "ingest" ? "ingest" : handoff.view === "admin" ? "admin" : "graph");
+  // ADR-115 E6: the rail's Alerts badge, the case's queue counted as the reader (rule 3).
+  const [alertCount, setAlertCount] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!investigationId || !bearerToken || !rights?.has("read_alert_queue")) {
+      setAlertCount(undefined);
+      return;
+    }
+    let cancelled = false;
+    void fetch(`${API_BASE_URL}/v1/investigations/${encodeURIComponent(investigationId)}/alert-queue`, {
+      headers: { Authorization: `Bearer ${bearerToken}` },
+    })
+      .then((r) => (r.ok ? (r.json() as Promise<{ alert: { status: string } }[]>) : null))
+      .then((queue) => {
+        if (cancelled) return;
+        setAlertCount(Array.isArray(queue) ? openInQueue(queue) : undefined);
+      })
+      .catch(() => !cancelled && setAlertCount(undefined));
+    return () => {
+      cancelled = true;
+    };
+    // The count is read again when the analyst comes back from the Alerts place.
+  }, [investigationId, bearerToken, rights, view]);
   // Which application is open, and (so the switch can go back to it) the Glass view last open.
   const app = view === "ingest" ? "ingest" : "glass";
   const lastGlassView = useRef<"graph" | "map" | "reports" | "admin" | "dashboards" | "dossier" | "watches" | "alerts" | "ownership">("graph");
@@ -1103,7 +1136,7 @@ export function App() {
                 { id: "cases", label: "Cases", icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
                 { id: "watches", label: "Watches", icon: "watches" as const, onSelect: () => setView("watches"), pressed: view === "watches" },
                 // ADR-109 ruling 5: the case team's alert queue, its rules, held rows and audit.
-                { id: "alerts", label: "Alerts", icon: "alerts" as const, onSelect: () => setView("alerts"), pressed: view === "alerts" },
+                { id: "alerts", label: "Alerts", icon: "alerts" as const, onSelect: () => setView("alerts"), pressed: view === "alerts", badge: alertCount },
                 // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
                 { id: "ownership", label: "Ownership", icon: "ownership" as const, onSelect: () => setView("ownership"), pressed: view === "ownership" },
                 { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
@@ -1121,6 +1154,8 @@ export function App() {
                 { id: "investigation", label: "Back to the investigation", icon: "glass" as const, onSelect: () => setView(lastGlassView.current) },
               ]),
         ]}
+        // ADR-115 E6: Help reopens the welcome panel, as `?` does.
+        onHelp={app === "glass" ? () => setWelcomeOpen(true) : undefined}
       />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
       {(view === "graph" || view === "map") && (
@@ -1265,6 +1300,19 @@ export function App() {
         )}
         {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "admin" && view !== "dashboards" && (
           <div style={{ flex: 1, position: "relative" }}>
+            {view === "graph" && welcomeOpen && (
+              <WorkspaceWelcome
+                apiBaseUrl={API_BASE_URL}
+                bearerToken={bearerToken}
+                investigationId={investigationId}
+                nodeCount={counts.nodes}
+                onRestored={(snapshot) => workingSetRef.current.store.getState().applyDelta(snapshot)}
+                onClose={() => {
+                  setWelcomeOpen(false);
+                  if (principal?.sub) setWelcomeDismissed(principal.sub, true);
+                }}
+              />
+            )}
             {view === "graph" && (
               <GlassCanvas
                 ref={glassCanvasRef}

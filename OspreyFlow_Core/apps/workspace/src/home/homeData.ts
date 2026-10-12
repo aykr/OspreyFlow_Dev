@@ -86,6 +86,11 @@ function readable<T>(value: T | Unreadable | undefined): value is T {
   return value !== undefined && value !== "unreadable";
 }
 
+/** The alerts in a case's team queue: open or claimed, not decided (ADR-109; Home and the rail's badge). */
+export function openInQueue(queue: readonly { alert: { status: string } }[]): number {
+  return queue.filter(({ alert }) => alert.status === "open" || alert.status === "claimed").length;
+}
+
 export function summariseHome(input: HomeInputs): HomeSummary {
   const cases = readable(input.cases) ? input.cases : [];
   const names = new Map(cases.map((c) => [c.id, c.name]));

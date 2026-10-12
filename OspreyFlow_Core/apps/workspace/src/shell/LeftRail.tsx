@@ -12,9 +12,11 @@ export interface RailItem {
   onSelect: () => void;
   /** This place is the one open now. */
   pressed?: boolean;
+  /** How many are open there (ADR-115 E6: the alert queue's count); none drawn for nothing. */
+  badge?: number;
 }
 
-export function LeftRail({ items }: { items: readonly RailItem[] }) {
+export function LeftRail({ items, onHelp }: { items: readonly RailItem[]; onHelp?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <nav aria-label="Workspace" className="left-rail" data-expanded={expanded ? "true" : undefined}>
@@ -23,15 +25,27 @@ export function LeftRail({ items }: { items: readonly RailItem[] }) {
           key={item.id}
           type="button"
           className="left-rail__item"
-          aria-label={item.label}
+          aria-label={item.badge ? `${item.label}, ${item.badge.toLocaleString("en-GB")} open` : item.label}
           aria-pressed={item.pressed === undefined ? undefined : item.pressed}
           title={expanded ? undefined : item.label}
           onClick={item.onSelect}
         >
           <Icon name={item.icon} />
+          {item.badge ? (
+            <span className="value left-rail__badge" aria-hidden="true">
+              {item.badge > 99 ? "99+" : item.badge}
+            </span>
+          ) : null}
           {expanded && <span className="left-rail__name">{item.label}</span>}
         </button>
       ))}
+      {onHelp && (
+        // ADR-115 E6: reopens the workspace's welcome panel, as `?` does.
+        <button type="button" className="left-rail__item left-rail__help" aria-label="Help" title="Help (?)" aria-keyshortcuts="?" onClick={onHelp}>
+          <span aria-hidden="true" className="left-rail__glyph">?</span>
+          {expanded && <span className="left-rail__name">Help</span>}
+        </button>
+      )}
       <button
         type="button"
         className="left-rail__item left-rail__toggle"

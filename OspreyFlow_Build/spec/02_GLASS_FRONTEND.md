@@ -191,7 +191,13 @@ The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 
 questions to the model, ADR-098, §3.1), *Proposed types* (administrators only, ADR-090 C3) and the
 *Ingest Studio*; in the Ingest
 Studio it holds *Back to the investigation*. Each is an icon button whose accessible name is its label;
-*Show names* widens the rail to show the labels and *Hide names* narrows it again. *Cases* opens a
+*Show names* widens the rail to show the labels and *Hide names* narrows it again. *Alerts* carries the case's open
+and claimed alerts as a count (said in its name, "Alerts, 3 open"), and *Help*, above *Show names*,
+reopens the **welcome panel** (ADR-115 E6): over the canvas's top left (320px, 280 below 1100; a shadow, no
+hairline) it says what the canvas holds, offers the case's three latest history steps to pick up from
+(each restored as the History drawer restores one) and the keys worth knowing (`/`, the arrows, Enter, F,
+Escape, `?`). It is open until the person closes it once (kept per person in this browser); `?` anywhere
+but a text field opens it again (`keyboard/welcome.spec.ts`). *Cases* opens a
 drawer listing the open cases (the strip of tabs of ADR-084, as a list) with *Browse all cases*. The
 **view toolbar** above the canvas holds what belongs to that view alone: the resolution threshold on
 the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at the foot of the canvas

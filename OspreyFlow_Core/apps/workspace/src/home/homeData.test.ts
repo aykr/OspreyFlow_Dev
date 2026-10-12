@@ -3,7 +3,7 @@
 // is said, never counted as nothing (rule 2's spirit: no silent shortfall).
 import { describe, expect, it } from "vitest";
 
-import { loadHome, summariseHome, whenLabel, type HomeInputs } from "./homeData";
+import { loadHome, openInQueue, summariseHome, whenLabel, type HomeInputs } from "./homeData";
 
 const NOW = new Date("2026-10-13T09:00:00Z");
 const CASES = [
@@ -117,5 +117,12 @@ describe("reading Home's figures", () => {
     expect(read.perCase.c2!.held).toBeUndefined();
     expect(read.perCase.c2!.entities).toBe("unreadable");
     expect(read.system).toBeUndefined();
+  });
+});
+
+describe("the team queue's count", () => {
+  it("counts open and claimed alerts, never decided ones", () => {
+    const at = (status: string) => ({ alert: { status } });
+    expect(openInQueue([at("open"), at("claimed"), at("closed"), at("open")])).toBe(3);
   });
 });

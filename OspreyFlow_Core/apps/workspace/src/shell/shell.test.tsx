@@ -69,3 +69,25 @@ describe("the left rail", () => {
     expect(screen.getByText("History")).toBeTruthy();
   });
 });
+
+// ADR-115 E6 (the reference's rail): an entry may carry a count, said in its name and drawn as a badge
+// in mono; a Help button at the foot reopens the workspace's welcome panel.
+describe("the left rail's badge and Help", () => {
+  it("draws a count on an entry and says it in the entry's name", () => {
+    render(<LeftRail items={[{ id: "alerts", label: "Alerts", icon: "alerts", onSelect: () => undefined, badge: 3 }]} />);
+    const alerts = screen.getByRole("button", { name: "Alerts, 3 open" });
+    expect(alerts.querySelector(".left-rail__badge")?.textContent).toBe("3");
+  });
+
+  it("draws no badge for nothing open", () => {
+    render(<LeftRail items={[{ id: "alerts", label: "Alerts", icon: "alerts", onSelect: () => undefined, badge: 0 }]} />);
+    expect(screen.getByRole("button", { name: "Alerts" }).querySelector(".left-rail__badge")).toBeNull();
+  });
+
+  it("offers Help at the foot, which calls back", () => {
+    const help = vi.fn();
+    render(<LeftRail items={[]} onHelp={help} />);
+    fireEvent.click(screen.getByRole("button", { name: "Help" }));
+    expect(help).toHaveBeenCalled();
+  });
+});
