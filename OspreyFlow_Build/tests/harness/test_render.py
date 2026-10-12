@@ -299,7 +299,8 @@ def test_the_address_the_runbook_names_for_the_admin_console_is_served_in_the_de
     from fastapi.testclient import TestClient
     from harness.webapp import create_app
 
-    client = TestClient(create_app(config_path=tmp_path / "osprey.yaml"), client=("127.0.0.1", 1))
+    app = create_app(config_path=tmp_path / "osprey.yaml", out_root=tmp_path / "generated")
+    client = TestClient(app, client=("127.0.0.1", 1))
     assert client.get("/api/config").status_code == 200
     assert client.get("/admin").status_code == 404, "the removed address is indeed not served"
 

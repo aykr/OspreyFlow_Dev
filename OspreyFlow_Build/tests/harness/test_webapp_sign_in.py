@@ -299,7 +299,7 @@ def test_when_the_provider_is_not_running_the_person_is_told_to_start_it_not_to_
 
     assert response.status_code == 503
     assert "not running" in response.text.lower()
-    assert "make launch" in response.text
+    assert "ospreyflow start" in response.text
     assert "refused" not in response.text.lower()
     assert client.get("/api/config").status_code == 401, "fails closed, never open"
 

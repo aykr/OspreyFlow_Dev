@@ -65,7 +65,7 @@ export default defineConfig({
       // `uv run`, the same invocation `ci.yml`'s own jobs already use, rather than a bare
       // `python`, which this repo's own convention never assumes is the right interpreter.
       command:
-        `uv run python -m harness --host 127.0.0.1 --port ${API_PORT} ` +
+        `uv run python -m harness.webapp --host 127.0.0.1 --port ${API_PORT} ` +
         `--config ${SCRATCH_CONFIG} --real-data-exceptions ${SCRATCH_RDE} ` +
         `--out-root ${SCRATCH_OUT_ROOT} --apply-command '${FAKE_APPLY_COMMAND}'`,
       port: Number(API_PORT),

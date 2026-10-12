@@ -10,12 +10,10 @@ brief named six subcommands; five remain: render, preflight, apply, backup, rest
 bundle is a release step of the developer repository, not something a deployment runs
 (`06_DECISIONS.md` ADR-114 Amendment 2).
 
-**No subcommand is now the browser setup harness** (`Stage 2 §6` part A) — `05_DEPLOYMENT.md` §2's
-own bootstrap command (`docker run ... ghcr.io/ospreyflow/harness:latest`, no arguments) reaches
-`harness.webapp.main`, which serves the Profile/Components/Models screens' own API (and the built
-`apps/harness` frontend, once `dist/` exists) on loopback, per ruling R2. `-h`/`--help` still shows
-the subcommand list below, since those remain real, separate commands the browser app itself calls
-into rather than replaces.
+**No subcommand starts nothing** (`06_DECISIONS.md` ADR-114 decision 3, the owner's ruling "Remove
+them outright"): the Set-up console's screens are the guided install page, served by `ospreyflow
+install --gui` only while an install runs. A test that needs the screens' server runs
+`python -m harness.webapp` by name.
 """
 
 from __future__ import annotations
@@ -45,7 +43,7 @@ def _usage() -> str:
     return (
         "usage: python -m harness [<subcommand> [args...]]\n"
         f"subcommands: {names}\n"
-        "(no subcommand: the browser setup harness, Stage 2 §6 — see harness.webapp)"
+        "(no subcommand: see `ospreyflow install --gui` — ADR-114 decision 3)"
     )
 
 
@@ -55,15 +53,17 @@ def main(argv: list[str] | None = None) -> int:
         print(_usage())
         return 0
     if not argv or argv[0].startswith("-"):
-        # No subcommand, or a flag meant for the webapp itself (`--host`/`--port`/`--config` —
-        # `harness.webapp._parse_args`'s own options) rather than a subcommand name, which is
-        # always a bare word. Found needing this: `apps/harness/keyboard/playwright.config.ts`'s
-        # own test server passes `--config` to point the webapp at a scratch file rather than this
-        # checkout's real `osprey.yaml` — the empty-argv-only version of this branch silently
-        # discarded that flag and always served the real file.
-        from harness.webapp import main as webapp_main
-
-        return webapp_main(argv)
+        # The Set-up console no longer listens for good (`06_DECISIONS.md` ADR-114 decision 3, the
+        # owner's ruling "Remove them outright"): its screens are the guided install page, served
+        # by `ospreyflow install --gui` only while an install runs. A test server that needs the
+        # screens runs `python -m harness.webapp` by name.
+        print(
+            "The set-up screens are now the guided install page: run `ospreyflow install --gui`.\n"
+            "To start, stop or open an installed deployment: `ospreyflow start`, "
+            "`ospreyflow stop`, `ospreyflow open`.",
+            file=sys.stderr,
+        )
+        return 2
 
     subcommand, rest = argv[0], argv[1:]
     module_name = _SUBCOMMANDS.get(subcommand)

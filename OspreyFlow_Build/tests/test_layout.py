@@ -26,7 +26,7 @@ from tools import layout
         ("graphify-out/graph.json", "OspreyFlow_Build"),
         ("harness/apply.py", "core"),
         ("apps/workspace/src/App.tsx", "core"),
-        ("scripts/launch.py", "core"),
+        ("scripts/refresh.py", "core"),
         ("osprey.yaml", "core"),
         ("OspreyFlow_Data/enron/x.csv", ""),
         (".github/workflows/ci.yml", ""),

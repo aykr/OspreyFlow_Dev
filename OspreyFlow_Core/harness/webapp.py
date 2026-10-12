@@ -620,7 +620,7 @@ def create_app(
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="python -m harness",
+        prog="python -m harness.webapp",
         description="The browser setup harness — Stage 2 §6. No subcommand starts this server.",
     )
     parser.add_argument(

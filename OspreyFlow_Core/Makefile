@@ -1,4 +1,4 @@
-.PHONY: check lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness test-js launch refresh seed-paysim seed-hmp seed-fixture-corp seed-ledger register-sign-in dev-up dev-down docker-clean glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y
+.PHONY: check lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness test-js seed-paysim seed-hmp seed-fixture-corp seed-ledger register-sign-in dev-up dev-down docker-clean glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y
 
 PY := .venv/bin/python
 RUFF := .venv/bin/ruff
@@ -58,16 +58,8 @@ trivy-image-harness:
 	docker build -f harness/Dockerfile -t ospreyflow/harness:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/harness:ci
 
-# The one screen for starting and opening the Glass, the Ingest Studio or the Admin console
-# (`scripts/launch.py`'s own docstring). It starts an *already-rendered* deployment; the first time,
-# `python -m harness.apply` builds one.
-launch:
-	PYTHONPATH=.:packages $(PY) -m scripts.launch
-
-# Brings a running deployment up to date with this checkout: theme, image builds, up, Keycloak restart
-# when its theme changed, sign-in accounts registered again. The launcher's Start runs the same thing.
-refresh:
-	PYTHONPATH=.:packages $(PY) -m scripts.refresh
+# Install, start, stop and update the deployment with the `ospreyflow` command (`cli/`; ADR-114):
+# `ospreyflow install --mode lite`, `ospreyflow start [--build]`, `ospreyflow status`, `ospreyflow open`.
 
 # Loads the PaySim dataset into a named case the demo accounts can open, inside the deployment's own
 # network (06_DECISIONS.md ADR-055 Amendment 2). Stops the Conduit for the run and starts it again.

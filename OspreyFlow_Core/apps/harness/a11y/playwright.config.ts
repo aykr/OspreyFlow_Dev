@@ -33,7 +33,7 @@ export default defineConfig({
     },
     {
       command:
-        `uv run python -m harness --host 127.0.0.1 --port ${API_PORT} ` +
+        `uv run python -m harness.webapp --host 127.0.0.1 --port ${API_PORT} ` +
         `--config ${SCRATCH_CONFIG} --real-data-exceptions ${SCRATCH_RDE} ` +
         `--out-root ${SCRATCH_OUT_ROOT}`,
       port: Number(API_PORT),

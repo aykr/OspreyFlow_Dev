@@ -21,43 +21,51 @@ say — means writing one adapter and changing one line of configuration; nothin
 changes, and the adapter is only supported once it passes the same conformance suite every other
 adapter behind that port passes. `spec/00_ARCHITECTURE.md` has the full definitions.
 
-## Running it
+## Before you install
 
-One command, from a checkout with Docker running:
+| Mode | What you need |
+| --- | --- |
+| **Lite** — one machine | Docker (Docker Desktop on Windows with the WSL 2 back end, and on macOS; Docker Engine with Compose v2 on Linux), set to start when you sign in; 16 GB of memory for Docker (32 GB is comfortable); 60 GB of free disk plus the demo packs you choose; Git; internet for the first install |
+| **Small** — one VM in your cloud | an AWS or Azure account with the permissions the install lists; OpenTofu; that cloud's command line, signed in; a DNS name you control |
+| **Enterprise** — Kubernetes | everything Small needs, plus EKS or AKS quota (with GPU nodes for the models) and Helm |
 
-```
-python -m harness.apply
-```
+`ospreyflow doctor` checks these for the mode you choose and says what to fix.
 
-This reads `osprey.yaml` at the repository root (the demo/CI configuration — the `local-lite`
-profile, tier 1 map providers only) and brings the whole stack up: preflight checks, container
-build and start, and a verification pass. `spec/05_DEPLOYMENT.md` has every profile from a laptop
-to a cluster and what each one needs.
+## Installing and running it
 
-After that first apply, one screen starts and opens each interface — the Glass, the Ingest Studio
-and the Admin console — and shows which are running:
+Install the command once, from this repository (`install.ps1` on Windows):
 
 ```
-make launch
+sh install.sh
 ```
 
-It asks you to sign in first and then shows only what your account's roles allow. If OspreyFlow
-was set up before the admin account existed, run `make register-sign-in` once.
+Then:
 
-Once it is up, `DEMO_GUIDE.md` walks through seeding a fixture investigation and the analyst
-journey through the Glass.
+```
+ospreyflow doctor                      # are the prerequisites in place?
+ospreyflow install --mode lite         # asks a few questions; --gui opens the guided page instead
+ospreyflow open                        # the Glass in your browser
+```
+
+Every question `install` asks can be answered in a file instead (`--config install.yaml --yes`), so
+a tester or a CI job installs without prompts. The other verbs: `status`, `start` (`--build` to
+rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup`, `restore` and
+`uninstall`. Small and Enterprise save their answers now and install with the cloud stages.
+
+The sign-in details of the accounts the install makes are in the deployment's own
+`deploy/generated/<profile>/deployment.env`; the command never prints a password.
 
 ## Where things are
 
-- **`spec/`** — the binding specification: architecture, domain model, the Glass and Conduit and
-  Vault, deployment, the accepted decision log, acceptance scenarios, the Ingest Studio, and the
-  design tokens the Glass is built against. This is the product's own documentation, licensed the
-  same way the code is.
-- **`process/`** — this build's own record: the phased build plan, session handovers, and
-  superseded material. Not part of the product; kept for anyone continuing the build, not for
-  running or extending OspreyFlow itself.
-- **`apps/`, `services/`, `packages/`, `harness/`** — the Glass, the Conduit, the shared schemas
-  and port definitions, and the deployment harness `python -m harness.apply` runs.
+- **`apps/`** — the Glass (`apps/workspace`) and the guided install page (`apps/harness`).
+- **`services/`, `packages/`** — the Conduit, the workers, and the shared schemas, ports and
+  adapters.
+- **`harness/`** — what renders, starts, checks, backs up and restores a deployment; the
+  `ospreyflow` command (`cli/`) drives it.
+- **`scripts/`** — the demo packs (`python -m scripts.demo_packs`) and their seeds.
+
+The full specification and the build's own record are kept in the developer repository, alongside
+the test suites and the release tooling.
 
 ## Licence
 

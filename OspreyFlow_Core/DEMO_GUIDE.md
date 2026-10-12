@@ -735,7 +735,7 @@ this operator-facing guide adjudicates or grants.
 
 ## 8a. The four personas and the reporting walkthrough — `shipped`, 11 October 2026
 
-A demonstration deployment (`apply --demo-analyst`, then `make refresh`) has four accounts, one per
+A demonstration deployment (`ospreyflow install`, which registers the demo accounts) has four accounts, one per
 seat, each opening exactly its own rail (`spec/06_DECISIONS.md` ADR-113 decision 8). Their passwords
 are in `deploy/generated/<profile>/deployment.env`, never printed:
 
@@ -763,7 +763,7 @@ granted on a real dataset (rule 9).
 5. **Superset itself** — `http://localhost:8088`, *Sign in with Keycloak* as the admin, for building
    boards on the reporting mart (`spec/05_DEPLOYMENT.md` §2.7).
 
-Requires `reporting: {sync: true, superset: true}` in `osprey.yaml`; `make refresh` does not rebuild
+Requires `reporting: {sync: true, superset: true}` in `osprey.yaml` (on by default since `ospreyflow install`); `ospreyflow start --build` does not rebuild
 the Superset image — after a change under `deploy/superset/`, build it and recreate the service
 (§2.7 of `spec/05_DEPLOYMENT.md`).
 

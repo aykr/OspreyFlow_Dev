@@ -85,7 +85,7 @@ def test_the_root_makefile_sends_each_target_where_it_lives() -> None:
         return subprocess.run(["make", "-n", target], cwd=ROOT, capture_output=True, text=True).stdout
 
     assert "tools.route_coverage_check" in dry("route-coverage-check")
-    assert "scripts.launch" in dry("launch")
+    assert "scripts.seed_internal hmp" in dry("seed-hmp")
 
 
 def test_the_harness_no_longer_bundles() -> None:

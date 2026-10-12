@@ -107,8 +107,8 @@ def _unreachable_page() -> HTMLResponse:
         "The sign-in service is not running",
         "<p>OspreyFlow's identity provider did not answer, so nobody can be signed in. "
         "This is not a problem with your account.</p>"
-        "<p>Start OspreyFlow first: run <code>make launch</code>, choose <b>Start</b>, wait until "
-        "it says it is running, then reload this page.</p>",
+        "<p>Start OspreyFlow first: run <code>ospreyflow start</code>, wait until "
+        "<code>ospreyflow status</code> says it is running, then reload this page.</p>",
     )
 
 

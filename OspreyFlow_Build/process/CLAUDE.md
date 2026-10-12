@@ -162,10 +162,13 @@ outside the stated scope of the change — a correction to one section must not 
 - Ports are `Protocol` classes in `packages/ports`. Adapters live in `packages/adapters/<name>`.
 - British English in code comments, documentation and all user-facing copy.
 - Conventional Commits.
-- No `osprey` CLI yet. Operational work (seeding a fixture, minting a dev token, reverting a
-  load, building the local basemap) is a plain, directly-runnable module under `scripts/`, run as
-  `python -m scripts.<name>` — the shape an eventual CLI subcommand would wrap, not a shortcut
-  around one.
+- **The `ospreyflow` command** (`OspreyFlow_Core/cli/`, ADR-114) is how a deployment is
+  installed, started, stopped, checked, backed up, restored and given demo packs; `make refresh` and
+  `make launch` are gone (`ospreyflow start --build` rebuilds from the checkout). Other operational
+  work (minting a dev token, reverting a load, building the local basemap) stays a plain,
+  directly-runnable module under `scripts/`, run as `python -m scripts.<name>` — the shape a later
+  verb would wrap, not a shortcut around one. The gates and suites run from
+  `OspreyFlow_Build/Makefile` (`make ci`).
 
 ## Before you write code
 
