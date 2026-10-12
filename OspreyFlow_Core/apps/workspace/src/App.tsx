@@ -1481,6 +1481,8 @@ export function App() {
                     <>
                     <Inspector
                       node={selectedNode}
+                      // ADR-115 E4: the Inspector's Expand, through the canvas's own preview.
+                      onExpand={(id) => glassCanvasRef.current?.expandNode(id)}
                       // ADR-097 step 1: several selected are shown together (the list of ADR-093
                       // is one of their parts), not the first alone.
                       selection={{

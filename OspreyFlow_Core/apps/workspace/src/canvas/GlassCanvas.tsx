@@ -296,6 +296,10 @@ export interface GlassCanvasHandle {
   highlightNodes: (nodeIds: readonly string[]) => void;
   /** ADR-093: pans to `nodeId` and focuses it, leaving the selection as it is. */
   centreOn: (nodeId: string) => void;
+  /** Expands `nodeId` as the selection bar's Expand does: through its own preview, counted in the
+   * store before anything is drawn, and the working set's cap (rule 2). ADR-115 E4: the Inspector's
+   * Expand. A node not on the canvas is ignored. */
+  expandNode: (nodeId: string) => void;
   /** ADR-093: takes `nodeId` out of the selection. */
   deselect: (nodeId: string) => void;
   /** Where `nodeId` is drawn now, in pixels from the canvas's top-left corner, or `null` if it is
@@ -1647,6 +1651,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const present = nodeIds.filter((id) => graph.hasNode(id));
           setSelected(new Set(present));
           onSelectionChange?.(present);
+        },
+        expandNode: (nodeId: string) => {
+          if (!graph.hasNode(nodeId)) return;
+          const box = containerRef.current?.getBoundingClientRect();
+          const [x, y] = box ? [box.width / 2, box.height / 2] : [0, 0];
+          void requestExpansion(nodeId, null, x, y);
         },
         centreOn: (nodeId: string) => {
           if (!graph.hasNode(nodeId)) return;

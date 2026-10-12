@@ -283,12 +283,16 @@ is half-written in it. The three panels are denser than the rest of the Glass: b
 (`keyboard/inspector.spec.ts`, `keyboard/query-builder.spec.ts`, `keyboard/metrics-panel.spec.ts`).
 
 **What the Inspector shows (ADR-097 step 1).** With **one node** selected, its header is the node as
-the canvas draws it (shape in its channel's colour, then the type) and its name as a literal value in
-mono; its parts are *Properties* (open), *Picture* (only for a type a picture may depict, §3),
-*Relationships* (its links in view, by type, most first), *Shares contacts*, *Neighbourhood risk*
-(ADR-109 phase E, below), *Provenance*, *Source* and *Judgements*. With **several**, they are shown together, not the first
-alone: *Summary* (open: counts by type, and every property they all share with one value), *Selected
-(n)* (ADR-093's list: centre on one, take one out) and *Links between them (n)*, by type. With
+the canvas draws it (shape in its channel's colour, then the type), its name as a literal value in
+mono and its own marking as a badge (ADR-115 E4); its parts are *Properties* (open, keys in a 96px
+column), *Picture* (only for a type a picture may depict, §3),
+*Relationships* (its links in view, by type, most first; then "Drawn in this view. Expand counts the
+rest in the store before anything is drawn." and *Expand*, which goes through the canvas's own
+preview and cap), *Shares contacts*, *Neighbourhood risk*
+(ADR-109 phase E, below), *Provenance* (with the stroke the canvas draws it with), *Source* and
+*Judgements*. With **several**, they are shown together, not the first
+alone: *Summary* (open: counts by type, and every property they all share with one value), *Selected*
+(ADR-093's list: centre on one, take one out) and *Links between them (n)*, by type. With
 **nothing** selected: "Select a node, or press / to search." — and `/` anywhere outside a text field
 moves focus to search (`keyboard/shell.spec.ts`).
 

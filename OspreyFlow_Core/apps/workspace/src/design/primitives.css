@@ -609,3 +609,13 @@
 /* The canvas's own focus ring (DESIGN.md §8; ADR-115 E4): inset, so it is never clipped by the
    panels beside it. It used to be suppressed. */
 .network-canvas:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }
+/* The Inspector's single node (ADR-115 E4; the reference): a 96px key column, the node's marking as a
+   badge, and the provenance stroke as the canvas draws it. */
+.inspector-keys { margin: 0; display: grid; gap: var(--sp-4); }
+.inspector-keys > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-8); }
+.inspector-keys dd { margin: 0; overflow-wrap: anywhere; }
+.marking-badge {
+  margin-left: auto; flex: none; padding: 0 var(--sp-4); font-size: var(--fs-11); font-weight: 600;
+  color: var(--text-secondary); border: 1px solid var(--border-subtle); border-radius: var(--r-1);
+}
+.provenance-stroke line { stroke: var(--text-secondary); stroke-width: 1.5; }

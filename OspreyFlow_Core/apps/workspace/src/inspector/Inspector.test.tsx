@@ -263,6 +263,37 @@ describe("Inspector states (ADR-097 step 1, design review item 4)", () => {
     expect(screen.getByRole("button", { name: "Selected" })).toBeTruthy();
   });
 
+  // ADR-115 E4 (review item 4; the reference's Inspector): one node carries its marking beside its
+  // type, its properties in a 96px key column, its relationships with Expand and an honest caption,
+  // and its provenance with the stroke the canvas draws it with.
+  it("one node: its marking, a key column, Expand on its relationships, and its provenance's stroke", () => {
+    stubNotes();
+    const inferred = {
+      id: "p9", type: "Person", properties: { family_name: "Okafor" },
+      provenance: { state: "inferred", sources: [], first_seen: "x" },
+      handling: { classification: "OFFICIAL-SENSITIVE" },
+    } as unknown as Node; // prettier-ignore
+    const expand = vi.fn();
+    render(<Inspector node={inferred} assessment={assessment} onExpand={expand} />);
+    expect(screen.getByLabelText("Marking").textContent).toBe("OFFICIAL-SENSITIVE");
+    const keys = document.querySelector(".inspector-keys") as HTMLElement;
+    expect(keys.tagName).toBe("DL");
+    fireEvent.click(screen.getByRole("button", { name: "Relationships" }));
+    expect(screen.getByText("Drawn in this view. Expand counts the rest in the store before anything is drawn.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Expand Okafor" }));
+    expect(expand).toHaveBeenCalledWith("p9");
+    fireEvent.click(screen.getByRole("button", { name: "Provenance" }));
+    expect(document.querySelector(".provenance-stroke line")?.getAttribute("stroke-dasharray")).toBe("4 3");
+  });
+
+  it("one node without a marking or a way to expand shows neither", () => {
+    stubNotes();
+    render(<Inspector node={lay} assessment={assessment} />);
+    expect(screen.queryByLabelText("Marking")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Relationships" }));
+    expect(screen.queryByRole("button", { name: /^Expand/ })).toBeNull();
+  });
+
   it("nothing selected: says how to begin, with one action", () => {
     render(<Inspector node={null} />);
     expect(screen.getByText("Select a node, or press / to search.")).toBeTruthy();

@@ -199,6 +199,17 @@ test("an entity's own picture is removed by keyboard, back to its type's", async
   registerCovered(REGISTRY, "remove-an-entitys-own-picture-by-keyboard");
 });
 
+// ADR-115 E4: the Inspector's Expand reaches the canvas's own expansion, by keyboard.
+test("a node is expanded from the Inspector by keyboard", async ({ page }) => {
+  await page.goto("/keyboard/inspector-harness.html?view=node");
+  await page.getByRole("button", { name: "Relationships" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: /^Expand / }).focus();
+  await page.keyboard.press("Enter");
+  expect(await page.evaluate(() => window.__INSPECTOR__?.expanded)).toEqual(["a"]);
+  registerCovered("INSPECTOR_ACTIONS", "expand-a-node-from-the-inspector-by-keyboard");
+});
+
 test("every registered Inspector action has its own proving test case above", () => {
   assertAllCovered("INSPECTOR_ACTIONS", INSPECTOR_ACTIONS);
 });

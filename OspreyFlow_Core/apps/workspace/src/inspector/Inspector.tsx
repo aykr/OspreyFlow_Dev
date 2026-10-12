@@ -28,6 +28,9 @@ function isResolutionLink(type: string): boolean {
 
 export interface InspectorProps {
   node: Node | null;
+  /** Expand the node through the canvas's own preview, which counts in the store before anything is
+   * drawn (ADR-115 E4). Absent: not offered. */
+  onExpand?: (nodeId: string) => void;
   /** More than one node selected (ADR-097 step 1): the Inspector shows them together, not the
    * first alone. With fewer than two, the single node above is shown. */
   selection?: {
@@ -122,6 +125,7 @@ interface PartRequest {
  * not node-scoped (`02_GLASS_FRONTEND.md` §9). */
 export function Inspector({
   node,
+  onExpand,
   link,
   linkEditing,
   assessment,
@@ -193,6 +197,7 @@ export function Inspector({
       <NodeView
         key={node?.id ?? "no-node"}
         node={node}
+        onExpand={onExpand}
         assessment={assessment}
         visualFor={visualFor}
         sharedContacts={sharedContacts}
@@ -421,6 +426,7 @@ function LinkView({
 
 function NodeView({
   node,
+  onExpand,
   assessment,
   visualFor,
   sharedContacts,
@@ -429,6 +435,7 @@ function NodeView({
   openPictureSignal,
 }: {
   node: Node | null;
+  onExpand?: InspectorProps["onExpand"];
   assessment: InspectorProps["assessment"];
   visualFor?: InspectorProps["visualFor"];
   sharedContacts?: InspectorProps["sharedContacts"];
@@ -472,13 +479,19 @@ function NodeView({
           <span className="value" style={{ fontWeight: 400, overflowWrap: "anywhere" }}>
             {displayValue(node)}
           </span>
+          {/* ADR-115 E4: the node's own marking beside its type (the reference's badge). */}
+          {node.handling?.classification && (
+            <span aria-label="Marking" className="value marking-badge">
+              {node.handling.classification}
+            </span>
+          )}
         </h3>
       )}
       {node &&
         section(
           "properties",
           "Properties",
-          <dl style={{ margin: 0 }}>
+          <dl className="inspector-keys">
             <div>
               <dt style={{ color: "var(--text-secondary)" }}>Type</dt>
               <dd className="value">{node.type}</dd>
@@ -507,10 +520,25 @@ function NodeView({
             const rows = graph?.hasNode(node.id)
               ? linksByType(graph, () => true, graph.edges(node.id))
               : [];
-            return rows.length > 0 ? (
-              <CountList rows={rows} />
-            ) : (
-              <p style={{ margin: 0, color: "var(--text-tertiary)" }}>No links in this view.</p>
+            return (
+              <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+                {rows.length > 0 ? (
+                  <CountList rows={rows} />
+                ) : (
+                  <p style={{ margin: 0, color: "var(--text-tertiary)" }}>No links in this view.</p>
+                )}
+                {onExpand && (
+                  <>
+                    <p style={{ margin: 0, color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
+                      Drawn in this view. Expand counts the rest in the store before anything is drawn.
+                    </p>
+                    <button type="button" className="btn" style={{ justifySelf: "start" }}
+                            aria-label={`Expand ${displayValue(node)}`} onClick={() => onExpand(node.id)}>
+                      Expand
+                    </button>
+                  </>
+                )}
+              </div>
             );
           })(),
         )}
@@ -525,7 +553,12 @@ function NodeView({
           "provenance",
           "Provenance",
           <div>
-            <p style={{ margin: 0 }}>
+            <p style={{ margin: 0, display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
+              {/* ADR-115 E4: the stroke the canvas draws this provenance with (DESIGN.md §3.8). */}
+              <svg className="provenance-stroke" width="22" height="8" aria-hidden="true">
+                <line x1="1" y1="4" x2="21" y2="4"
+                      strokeDasharray={node.provenance.state === "asserted" ? undefined : node.provenance.state === "inferred" ? "4 3" : "1 3"} />
+              </svg>
               State: <span className="value">{node.provenance.state}</span>
             </p>
             <p style={{ margin: 0 }}>

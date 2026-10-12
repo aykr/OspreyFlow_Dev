@@ -35,10 +35,10 @@ const EDGE_TYPES: EdgeTypeDef[] = [{ name: "ASSOCIATE_OF", from: ["Person"], to:
 
 declare global {
   interface Window {
-    __INSPECTOR__?: { deltas: number[] };
+    __INSPECTOR__?: { deltas: number[]; expanded: string[] };
   }
 }
-window.__INSPECTOR__ = { deltas: [] };
+window.__INSPECTOR__ = { deltas: [], expanded: [] };
 
 /** `?view=node`: a person selected, with who shares contacts with them (ADR-100 Amendment 7). */
 const NODE_VIEW = new URLSearchParams(window.location.search).get("view") === "node";
@@ -67,6 +67,7 @@ function Harness() {
     return (
       <Inspector
         node={person("a", "Lay")}
+        onExpand={(id) => window.__INSPECTOR__!.expanded.push(id)}
         neighbourhoodRisk={{ apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused", investigationId: "inv-1" }}
         sharedContacts={{
           apiBaseUrl: "http://keyboard-test.invalid",

@@ -541,6 +541,8 @@ export const INSPECTOR_ACTIONS = defineActionRegistry("INSPECTOR_ACTIONS", [
   "remove-an-entitys-own-picture-by-keyboard",
   // ADR-109 phase E: the selected entity's neighbourhood risk, asked on demand.
   "score-a-neighbourhoods-risk-by-keyboard",
+  // ADR-115 E4: Expand from the Inspector, through the canvas's own preview.
+  "expand-a-node-from-the-inspector-by-keyboard",
 ] as const);
 
 /** The workspace shell (ADR-097 step 1): the top bar, the left rail, the classification strip.
