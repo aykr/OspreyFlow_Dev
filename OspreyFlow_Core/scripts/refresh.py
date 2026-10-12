@@ -24,7 +24,8 @@ the checkout's version is not touched, so an operator's edit to it is theirs.
 It also brings the deployment's models up to date with its own `osprey.yaml` (ADR-095): the chosen
 extraction model's pull line in `compose.yaml`, the proxy's routing table `litellm.yaml`, and the
 model lines of `deployment.env`, each exactly as `harness.render` writes them, and restarts the
-proxy when its table changed. Nothing else in those files is touched, and no secret changes.
+proxy when its table changed. Nothing else in those files is touched, and no secret changes. The
+Glass's `/deployment.json` (`glass.json`, no secret in it) is written as the checkout renders it.
 
 What it never does, on purpose: render the deployment again (that mints new secrets for stores that
 keep the old ones), remove a volume, force a container to be recreated, or seed. First-time set-up
@@ -217,6 +218,21 @@ def _new_services_added(directory: Path) -> None:
         compose_path.write_text(text[:header_end] + body, encoding="utf-8")
 
 
+def _glass_settings_up_to_date(directory: Path) -> None:
+    """`/deployment.json` as this checkout renders it (ADR-115 E1 added the deployment's marking).
+    It names no secret, so it is written whole; the workspace serves it per visit, so nothing
+    restarts."""
+    config_path = directory / "osprey.yaml"
+    if not config_path.is_file():
+        return
+    from harness.site import render_glass_settings
+
+    wanted = render_glass_settings(load_config(config_path))
+    path = directory / "glass.json"
+    if not path.is_file() or path.read_text(encoding="utf-8") != wanted:
+        path.write_text(wanted, encoding="utf-8")
+
+
 def _pins_moved(directory: Path) -> None:
     """A service built from no source here whose rendered image differs from the deployment's is
     moved to it, with the rendered values of its settings (a new version's launch options). Secrets
@@ -279,6 +295,7 @@ def refresh(
     proxy_changed = _models_up_to_date(directory)
     _new_services_added(directory)
     _pins_moved(directory)
+    _glass_settings_up_to_date(directory)
     run([*compose, "build"])
     run([*compose, "up", "-d", "--wait"])
     if proxy_changed:

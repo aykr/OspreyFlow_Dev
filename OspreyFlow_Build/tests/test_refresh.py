@@ -247,6 +247,35 @@ def test_bringing_the_models_up_to_date_twice_changes_nothing_the_second_time(re
     assert _subcommands(run.calls) == ["build", "up"]
 
 
+def test_the_glass_settings_are_brought_up_to_date(repo: Path) -> None:
+    """Found deploying ADR-115 E1: `/deployment.json` gained the deployment's marking, and refresh,
+    which never renders, left the old file — so the signed-out page drew no strip. It holds no
+    secret, so it is written as the checkout renders it; nothing restarts (it is read per visit)."""
+    import json
+
+    import yaml
+    from harness.site import render_glass_settings
+
+    from schemas.deployment import OspreyConfig
+
+    out = _rendered(repo)
+    refresh.refresh(repo, run=Recorder(), register=Registrar())  # the models settled first
+    config_path = out / "osprey.yaml"
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw.setdefault("governance", {})["marking"] = "OFFICIAL"
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    (out / "glass.json").write_text(
+        json.dumps({"identity_provider": "http://id.ospreyflow.localhost", "realm": "osprey"}),
+        encoding="utf-8",
+    )
+    run = Recorder()
+    refresh.refresh(repo, run=run, register=Registrar())
+    written = (out / "glass.json").read_text(encoding="utf-8")
+    assert written == render_glass_settings(OspreyConfig.model_validate(raw))
+    assert json.loads(written)["marking"] == "OFFICIAL"
+    assert _subcommands(run.calls) == ["build", "up"]
+
+
 # --- services a later render adds reach an existing deployment (ADR-098 decision 2) -------------
 
 
