@@ -882,3 +882,52 @@ def test_the_check_fails_when_nothing_has_been_rendered_yet(
     context = PreflightContext(config=config, out_dir=tmp_path / "never-rendered")
     result = oidc_audience.check(context)
     assert result.status is Status.FAIL
+
+
+class _MacLoopback:
+    """A socket as macOS gives an ordinary user (measured 12 October 2026, ADR-114 Amendment 4's
+    live proof): binding `127.0.0.1` below port 1024 is refused `EACCES` whether or not anything
+    holds the port, and Docker Desktop publishes it anyway. `listening` is what really holds it."""
+
+    listening: set[int] = set()
+
+    def __init__(self, *args: object) -> None:
+        pass
+
+    def bind(self, address: tuple[str, int]) -> None:
+        import errno
+
+        if address[1] in self.listening:
+            raise OSError(errno.EADDRINUSE, "Address already in use")
+        if address[1] < 1024:
+            raise OSError(errno.EACCES, "Permission denied")
+
+    def connect_ex(self, address: tuple[str, int]) -> int:
+        import errno
+
+        return 0 if address[1] in self.listening else errno.ECONNREFUSED
+
+    def settimeout(self, _seconds: float) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def __enter__(self) -> _MacLoopback:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        pass
+
+
+def test_a_low_port_refused_for_permission_is_not_reported_in_use(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The front proxy publishes port 80. A refusal to bind it is not the same as its being held:
+    only something answering on it is."""
+    monkeypatch.setattr(ports.socket, "socket", _MacLoopback)
+    monkeypatch.setattr(_MacLoopback, "listening", set())
+    assert ports._is_bindable(80)
+    monkeypatch.setattr(_MacLoopback, "listening", {80, 8080})
+    assert not ports._is_bindable(80), "something answers on it: it is held"
+    assert not ports._is_bindable(8080), "an ordinary port in use is still reported"

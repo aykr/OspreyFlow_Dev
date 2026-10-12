@@ -13,6 +13,7 @@ answer that is to try.
 from __future__ import annotations
 
 import contextlib
+import errno
 import os
 import re
 import socket
@@ -81,9 +82,21 @@ def _is_bindable(port: int) -> bool:
     with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as probe:
         try:
             probe.bind(("127.0.0.1", port))
-        except OSError:
-            return False
+        except OSError as error:
+            if error.errno not in (errno.EACCES, errno.EPERM):
+                return False
+            # **Refused, not held.** macOS refuses an ordinary user `127.0.0.1` below port 1024
+            # (`EACCES`) whether or not anything holds it, and Docker Desktop publishes it anyway —
+            # found on the front proxy's port 80 (ADR-114 Amendment 4). Held means something
+            # answers on it.
+            return not _answers(port)
     return True
+
+
+def _answers(port: int) -> bool:
+    with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as probe:
+        probe.settimeout(2)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
 
 
 def check(context: PreflightContext) -> CheckResult:
