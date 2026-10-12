@@ -357,6 +357,24 @@ def superset_client(origin: str) -> dict[str, Any]:
     }
 
 
+def sign_in_rules(config: OspreyConfig) -> dict[str, Any]:
+    """The realm's sign-in rules (ADR-115 decisions 5 and 6), which the sign-in page's words name.
+    Measured on Keycloak 26.0.8: four wrong passwords then the right one sign in; five wrong then
+    the right one is refused, the account locked for exactly 900 seconds (attempts under a second
+    apart trip Keycloak's own quick-login lock of 60 seconds as well); a reset asked for with no
+    mail server ends on Keycloak's error page, so reset is offered only where mail can carry the
+    link."""
+    return {
+        "bruteForceProtected": True,
+        "failureFactor": 5,
+        "waitIncrementSeconds": 900,
+        "maxFailureWaitSeconds": 900,
+        "permanentLockout": False,
+        "actionTokenGeneratedByUserLifespan": 1800,
+        "resetPasswordAllowed": config.mail is not None,
+    }
+
+
 def render_realm(
     config: OspreyConfig, *, realm_name: str = "osprey", demo_analyst: bool = False
 ) -> dict[str, Any]:
@@ -435,6 +453,7 @@ def render_realm(
         "displayName": REALM_DISPLAY_NAME,
         "loginTheme": LOGIN_THEME_NAME,
         "enabled": True,
+        **sign_in_rules(config),
         "clients": [
             {
                 "clientId": CONDUIT_CLIENT_ID,

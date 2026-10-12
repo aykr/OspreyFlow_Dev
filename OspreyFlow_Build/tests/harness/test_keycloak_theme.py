@@ -103,16 +103,95 @@ def test_the_sign_in_page_loads_the_shared_light_and_dark_script() -> None:
     the theme (Keycloak then never loads it), and one that differs from the shared file."""
     files = _theme()
     properties = files[THEME_PROPERTIES]
-    match = re.search(r"^scripts=(\S+)$", properties, flags=re.MULTILINE)
+    match = re.search(r"^scripts=(.+)$", properties, flags=re.MULTILINE)
     assert match is not None, "theme.properties does not name a script"
-    assert files[f"login/resources/{match.group(1)}"] == THEME_SCRIPT
+    # Keycloak's list is space-separated (ADR-115 E2 added the card's script beside this one).
+    named = match.group(1).split()
+    assert "js/osprey-theme.js" in named
+    assert all(f"login/resources/{name}" in files for name in named)
+    assert files["login/resources/js/osprey-theme.js"] == THEME_SCRIPT
 
 
 def test_the_page_says_ospreyflow_and_sign_in_in_plain_words() -> None:
-    """The stock heading is "Sign in to your account" under a shouted realm name."""
+    """The stock heading is "Sign in to your account" under a shouted realm name. ADR-115 E2: the
+    card says "Sign in" under the OspreyFlow lockup, as the handoff's card does."""
     messages = _theme()["login/messages/messages_en.properties"]
-    assert f"loginAccountTitle=Sign in to {DISPLAY_NAME}" in messages
+    assert "loginAccountTitle=Sign in\n" in messages
     assert "doLogIn=Sign in" in messages
+    assert DISPLAY_NAME == "OspreyFlow"
+
+
+# --- ADR-115 E2: the handoff's sign-in card, on Keycloak's own pages ------------------------------
+# Keycloak 26.0.8's stock words, measured: "Username or email", "Forgot Password?", "Forgot Your
+# Password?", "Enter your username or email address and we will send you instructions…",
+# "« Back to Login", and "Invalid username or password." for a wrong password and for a locked
+# account alike (it never says an account is locked).
+
+
+def _messages(reset_by_email: bool) -> dict[str, str]:
+    text = render_login_theme(TOKENS, reset_by_email=reset_by_email)["login/messages/messages_en.properties"]
+    return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
+
+
+def test_the_card_uses_the_handoffs_words() -> None:
+    messages = _messages(reset_by_email=True)
+    assert messages["usernameOrEmail"] == "Email or username"
+    assert messages["doForgotPassword"] == "Forgot password?"
+    assert messages["emailForgotTitle"] == "Reset your password"
+    assert messages["emailInstruction"] == (
+        "For OspreyFlow accounts only. If you sign in through your organisation, reset your password there instead."
+    )
+    assert messages["backToLogin"] == "Back to sign in"
+
+
+def test_a_refused_sign_in_names_the_lock_and_a_way_back_that_this_deployment_has() -> None:
+    """ADR-115 decisions 5 and 6: the lock-out the copy names is the realm's (5 failures, 15
+    minutes); "reset your password" only where a mail server can send the link."""
+    assert _messages(reset_by_email=True)["invalidUserMessage"] == (
+        "That email or username and password do not match an OspreyFlow account. Check for typos, or "
+        "reset your password. Five failed attempts lock the account for 15 minutes."
+    )
+    assert _messages(reset_by_email=False)["invalidUserMessage"] == (
+        "That email or username and password do not match an OspreyFlow account. Check for typos, or "
+        "ask your OspreyFlow administrator to reset your sign-in. Five failed attempts lock the account "
+        "for 15 minutes."
+    )
+
+
+def test_check_your_email_never_says_whether_the_account_exists_and_names_the_expiry() -> None:
+    sent = _messages(reset_by_email=True)["emailSentMessage"]
+    assert sent.startswith("If an OspreyFlow account matches what you entered, a reset link is on its way")
+    assert "It expires in 30 minutes." in sent
+
+
+def test_the_card_script_is_loaded_and_told_whether_reset_by_email_exists() -> None:
+    for reset_by_email in (True, False):
+        theme = render_login_theme(TOKENS, reset_by_email=reset_by_email)
+        assert "js/osprey-sign-in.js" in theme[THEME_PROPERTIES]
+        script = theme["login/resources/js/osprey-sign-in.js"]
+        assert script.startswith(f"window.OSPREY_RESET_BY_EMAIL = {'true' if reset_by_email else 'false'};\n")
+
+
+def test_the_realm_locks_after_five_failures_for_fifteen_minutes_and_resets_by_email_only_with_mail() -> None:
+    """Measured on Keycloak 26.0.8 with these settings: four wrong passwords then the right one
+    signs in; five wrong then the right one is refused, locked for exactly 900 seconds; a reset link
+    lives 1800 seconds; a reset asked for with no mail server ends on Keycloak's error page."""
+    realm = render_realm(_config())
+    assert {k: realm[k] for k in (
+        "bruteForceProtected", "failureFactor", "waitIncrementSeconds", "maxFailureWaitSeconds",
+        "permanentLockout", "actionTokenGeneratedByUserLifespan", "resetPasswordAllowed",
+    )} == {
+        "bruteForceProtected": True, "failureFactor": 5, "waitIncrementSeconds": 900,
+        "maxFailureWaitSeconds": 900, "permanentLockout": False,
+        "actionTokenGeneratedByUserLifespan": 1800, "resetPasswordAllowed": False,
+    }  # fmt: skip
+    mailed = OspreyConfig.model_validate(
+        yaml.safe_load(
+            "network:\n  public_origin: http://localhost:9999\n"
+            "mail:\n  host: smtp.test\n  port: 587\n  from_address: osprey@acme.test\n"
+        )
+    )
+    assert render_realm(mailed)["resetPasswordAllowed"] is True
 
 
 def test_the_realm_selects_the_theme_and_names_itself() -> None:
@@ -259,7 +338,9 @@ def test_the_wordmark_splits_on_weight_alone_and_still_reads_as_the_realm_name()
     messages = _theme()["login/messages/messages_en.properties"]
     match = re.search(r"^loginTitleHtml=(.*)$", messages, flags=re.MULTILINE)
     assert match is not None
-    assert match.group(1) == "<b>Osprey</b>Flow"
+    # One element: the header is a flex row, so a bare `<b>Osprey</b>Flow` made two flex items with
+    # the lockup's gap between them — "Osprey  Flow" on the live page (found at ADR-115 E2).
+    assert match.group(1) == '<span class="osprey-wordmark"><b>Osprey</b>Flow</span>'
     assert re.sub(r"<[^>]+>", "", match.group(1)) == DISPLAY_NAME
     own = _own_rules()
     bold = re.search(r"#kc-header-wrapper b\s*\{([^}]*)\}", own)
@@ -324,3 +405,9 @@ def test_each_label_has_room_above_its_field_and_the_fields_are_spaced_evenly() 
     form = re.search(r"\.pf-v5-c-form\s*\{([^}]*)\}", own)
     assert form is not None
     assert "--pf-v5-c-form--GridGap: var(--sp-20)" in form.group(1)
+
+
+def test_a_form_the_card_hides_stays_hidden() -> None:
+    """ADR-115 E2, found live: Keycloak's sheet gives the login form `display: grid`, which beats the
+    `hidden` attribute, so "Check your email" showed the form it had hidden."""
+    assert re.search(r"#kc-form-login\[hidden\]\s*\{\s*display:\s*none\s*!important;", _own_rules())

@@ -36,6 +36,7 @@ licence-check:
 design-check:
 	$(IN_CORE) $(TOOLS) $(PY) -m tools.design_check
 	$(IN_CORE) $(TOOLS) $(PY) -m tools.colour_drift_check
+	$(IN_CORE) node --test $(BUILD)/tests/keycloak_theme/*.test.mjs
 
 # ADR-041: mechanical control for the fetch-then-check authorization bug class.
 authorized-query-check:

@@ -194,6 +194,15 @@ nothing errors, and the fault surfaces later as something else entirely.
 token, an exchanged token verifies perfectly *as a token* and then fails *as a principal*, so the
 error names a missing claim rather than a missing mapper.
 
+**The sign-in rules (ADR-115 decisions 5 and 6).** Brute-force protection on — five failures lock an
+account for 900 seconds — a reset link living 1800 seconds, and reset by email only when the
+deployment has a mail server (`resetPasswordAllowed`). Measured on Keycloak 26.0.8: four wrong
+passwords then the right one sign in, five then the right one are refused for exactly 900 seconds
+(failures under a second apart also trip Keycloak's own 60-second quick-login lock), and a reset
+asked for with no mail server ends on Keycloak's error page. Keycloak says "Invalid username or
+password." for a locked account too, so the sign-in page's words name the rule. Registration
+writes these each time, since a kept realm never re-reads the file.
+
 **`unmanagedAttributePolicy` set to `ENABLED`.** Keycloak 26 discards user attributes it does not
 recognise, by default and **without reporting it**: the attributes are accepted on write, stored
 nowhere, and absent from the token, with no error at any point. A realm that looks correctly

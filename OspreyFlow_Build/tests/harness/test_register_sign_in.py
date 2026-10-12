@@ -706,3 +706,23 @@ def test_a_deployment_with_a_mail_server_gives_it_to_keycloak(keycloak: FakeKeyc
     assert not any("s3cret" in line for line in lines)
     plain = _register(_env(tmp_path))
     assert not any("mail server" in line for line in plain)
+
+
+def test_registration_writes_the_sign_in_rules_into_a_realm_kept_from_before(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    """ADR-115 decisions 5 and 6: the realm outlives a restart (ADR-114 Amendment 5), so a realm
+    imported before the rules existed never gets them from the file; registration writes them each
+    time — the lock the sign-in page names, and reset only where mail can carry the link."""
+    _register(_env(tmp_path))
+    assert {k: keycloak.realm.get(k) for k in ("bruteForceProtected", "failureFactor", "waitIncrementSeconds",
+            "maxFailureWaitSeconds", "permanentLockout", "actionTokenGeneratedByUserLifespan",
+            "resetPasswordAllowed")} == {
+        "bruteForceProtected": True, "failureFactor": 5, "waitIncrementSeconds": 900,
+        "maxFailureWaitSeconds": 900, "permanentLockout": False,
+        "actionTokenGeneratedByUserLifespan": 1800, "resetPasswordAllowed": False,
+    }  # fmt: skip
+    config = _config().model_copy(update={"mail": MailConfig(host="smtp.example.org", from_address="o@example.org")})
+    lines = register_sign_in.register(issuer=ISSUER, realm="osprey", env_path=_env(tmp_path), config=config)
+    assert keycloak.realm["resetPasswordAllowed"] is True
+    assert any("sign-in rules" in line for line in lines)

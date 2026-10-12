@@ -475,7 +475,7 @@ def main(argv: list[str] | None = None) -> int:
         (out_dir / "litellm.yaml").write_text(render_litellm_config(config), encoding="utf-8")
         # The sign-in page's look, beside the compose file that mounts it
         # (harness/keycloak_theme.py).
-        write_login_theme(out_dir)
+        write_login_theme(out_dir, reset_by_email=config.mail is not None)
         secret = generate_client_secret()
         admin_password = generate_client_secret()
         # ADR-114 Amendment 5: Keycloak's own login on the deployment's Postgres.

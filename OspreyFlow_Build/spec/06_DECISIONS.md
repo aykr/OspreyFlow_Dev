@@ -12429,3 +12429,18 @@ person cannot open and goes straight to a person's only place.
 10. **Order** (ruling "Phase E before B5"): Phase E runs next, then B5–B10, then Phase D.
 
 **Tests to write first** are named per stage in the handover note's Phase E table.
+
+**As built (12–13 October 2026).** *E1:* `governance.marking` (default the scheme's lowest), carried in
+`/deployment.json`, which `refresh` now keeps up to date. *E2:* `governance.organisation_sign_in` (a
+brokered provider's alias) and `welcome:` (`about`, `account_help`, `accessibility`, `privacy`,
+`service_status`, each an http(s) address) in `osprey.yaml`, also carried in `/deployment.json`; the
+welcome page in the Glass; the email form, its validation, *Reset your password* and *Check your
+email* as the `osprey` login theme on Keycloak's own `keycloak.v2` pages (messages, a script and
+rules — no copied templates, so a Keycloak upgrade keeps working), proven in a real Keycloak
+26.0.8 with a mail catcher. **Not matched, and why:** the welcome page's off-scale sizes (a 15/23
+lead, a 17px wordmark, gaps of 3/5/7/9/10/18/28/48px, 1px bar radii) take the nearest `DESIGN.md`
+step; "Check your email" says "what you entered" because Keycloak does not hand the typed value to
+its message; the Keycloak page's submit is the region's one brass action, since organisation sign-in
+lives on the welcome page; with no organisation provider the card's one button is *Sign in* and its
+note says the password is entered "only on the OspreyFlow sign-in page, never here" (the handoff's
+note names an organisation's page, which would then be untrue).

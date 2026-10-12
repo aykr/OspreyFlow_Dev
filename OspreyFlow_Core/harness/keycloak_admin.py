@@ -180,6 +180,27 @@ def ensure_realm_mail(
     return f"mail server {mail.host}:{mail.port} from {mail.from_address}"
 
 
+def ensure_realm_sign_in_rules(
+    *, issuer: str, realm: str, token: str, rules: dict[str, Any]
+) -> str:
+    """The realm's sign-in rules (ADR-115 decisions 5 and 6: lock-out, reset-link lifetime, reset
+    only with mail), written each registration: a realm imported before them keeps its old settings
+    across restarts (ADR-114 Amendment 5), so the file alone would never reach it."""
+    status, current = _call(f"{issuer}/admin/realms/{realm}", token=token)
+    if status != 200:
+        raise RealmConfigurationFailed(f"reading the realm was refused: {status}")
+    if all(current.get(key) == value for key, value in rules.items()):
+        return "sign-in rules: already set"
+    status, _body = _call(
+        f"{issuer}/admin/realms/{realm}", token=token, data={**current, **rules}, method="PUT"
+    )
+    if status not in (200, 204):
+        raise RealmConfigurationFailed(f"setting the realm's sign-in rules was refused: {status}")
+    return "sign-in rules: set (five failures lock for 15 minutes; reset by email " + (
+        "on)" if rules.get("resetPasswordAllowed") else "off: no mail is configured)"
+    )
+
+
 def ensure_unmanaged_attributes(*, issuer: str, realm: str, token: str) -> None:
     """Switch on custom user attributes. The policy lives in the realm's user profile, which is not
     part of `RealmRepresentation` and so cannot travel in the realm import. Without it Keycloak

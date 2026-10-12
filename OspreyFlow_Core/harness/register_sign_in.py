@@ -36,6 +36,7 @@ from harness.realm import (
     WITHDRAWN_DEMO_ROLES,
     generate_client_secret,
     render_realm,
+    sign_in_rules,
     superset_client,
 )
 from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
@@ -111,6 +112,11 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
     lines: list[str] = []
 
     keycloak_admin.ensure_unmanaged_attributes(issuer=issuer, realm=realm, token=token)
+    lines.append(
+        keycloak_admin.ensure_realm_sign_in_rules(
+            issuer=issuer, realm=realm, token=token, rules=sign_in_rules(config)
+        )
+    )
     if config.mail is not None:
         # ADR-114 Amendment 5: invitations and resets by email. Written each time — Keycloak never
         # gives the password back to compare with.

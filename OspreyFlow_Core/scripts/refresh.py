@@ -106,13 +106,16 @@ def _theme_changed(directory: Path, repo_root: Path) -> bool:
     """Write the theme; True when any file differs from what was on disk."""
     tokens = read_tokens(repo_root)
     root = directory / THEME_DIRECTORY / THEME_NAME
-    wanted = render_login_theme(tokens)
+    # ADR-115 decision 6: the page's words depend on whether the deployment can mail a reset link.
+    config_path = directory / "osprey.yaml"
+    reset_by_email = config_path.is_file() and load_config(config_path).mail is not None
+    wanted = render_login_theme(tokens, reset_by_email=reset_by_email)
     changed = any(
         not (root / name).is_file() or (root / name).read_text(encoding="utf-8") != content
         for name, content in wanted.items()
     )
     if changed:
-        write_login_theme(directory, tokens_css=tokens)
+        write_login_theme(directory, tokens_css=tokens, reset_by_email=reset_by_email)
     return changed
 
 

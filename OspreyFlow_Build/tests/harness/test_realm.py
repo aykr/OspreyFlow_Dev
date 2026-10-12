@@ -203,6 +203,12 @@ def test_the_realm_still_carries_only_fields_keycloak_defines_with_demo_analyst_
     # `displayName` and `loginTheme` are `RealmRepresentation` fields: the sign-in page's
     # name and look.
     known_top_level = {"realm", "displayName", "loginTheme", "enabled", "clients", "users"}
+    # ADR-115 decisions 5 and 6: the sign-in rules, each a `RealmRepresentation` field that Keycloak
+    # 26.0.8 accepted and read back when measured.
+    known_top_level |= {
+        "bruteForceProtected", "failureFactor", "waitIncrementSeconds", "maxFailureWaitSeconds",
+        "permanentLockout", "actionTokenGeneratedByUserLifespan", "resetPasswordAllowed",
+    }  # fmt: skip
     assert set(realm) <= known_top_level
 
     known_client_fields = {
