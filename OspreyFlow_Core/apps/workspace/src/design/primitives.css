@@ -441,7 +441,7 @@
   gap: var(--sp-4); padding: 0 var(--sp-4) 0 var(--sp-2); border-bottom: 1px solid var(--border-subtle);
   color: var(--text-secondary); font-size: var(--fs-12); line-height: var(--lh-12); font-weight: 600;
 }
-.side-panel-header__handle { cursor: grab; padding: var(--sp-4) var(--sp-6); color: var(--text-tertiary); user-select: none; font-weight: 400; }
+.side-panel-header[draggable="true"] { cursor: grab; }
 .side-panel-header__name { flex: 1; }
 .side-panel-header__menu {
   min-width: 24px; min-height: 24px; background: transparent; border: 0; border-radius: var(--r-control);

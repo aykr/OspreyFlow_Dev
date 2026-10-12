@@ -170,14 +170,14 @@ narrowed.
 ├────────────────────────────────────────────────────────────────────────────────────┤
 │ ◆ Osprey  Case 4471 — layering ▾  [ Search…  / ]  [Graph|Map]  Export ⚙        👤  │ top bar, 44px
 ├──┬───────────────────────────────────────────────────┬─────────────────────────────┤
-│▣ │ Resolution: ●Balanced            (view toolbar)   │ ⠿ Inspector              ⋯  │ header, 28px
+│▣ │ Resolution: ●Balanced            (view toolbar)   │ ▾ Inspector              ⋯  │ header, 28px
 │◷ ├───────────────────────────────────────────────────┤ ▸ Properties                │
 │↺ │  CANVAS — Graph · Map · Messages                  │ ▸ Relationships             │
 │⇪ │                                                   │ ▸ Provenance                │
 │  │  Selection drives the inspector.                  ├─────────────────────────────┤
-│  │  Every filter dims, never removes.                │ ⠿ Metrics                ⋯  │
+│  │  Every filter dims, never removes.                │ ▸ Metrics                ⋯  │
 │  │                                                   ├─────────────────────────────┤
-│  │ [3 selected  Expand  Branch…  Remove  Clear]      │ ⠿ Query builder          ⋯  │
+│  │ [3 selected  Expand  Branch…  Remove  Clear]      │ ▸ Query builder          ⋯  │
 │  ├───────────────────────────────────────────────────┤                             │
 │  │ ▸ Timeline ▁▂▅▃▁▆▂  2001-05-14 to 2001-12-03 (34px)│                             │
 ├──┴───────────────────────────────────────────────────┴─────────────────────────────┤
@@ -253,7 +253,7 @@ opens in its normal state on reload. Every one of these buttons is reachable by 
 
 **Reordering panels (ADR-085; header from ADR-097 step 1).** The three panels of the right-hand column
 (the Inspector, the Metrics panel and the Query builder) can be put in any order. Each has one header row
-(28px, a hairline below): a drag handle, the panel's name at `--fs-12` 600 in secondary text, and a menu
+(28px, a hairline below; the row itself is what a pointer drags — no grip glyph, ADR-115 E4): the panel's name at `--fs-12` 600 in secondary text, and a menu
 button, *Arrange the {panel}*, whose menu holds *Move up* and *Move down*. The panel's own title is not
 drawn a second time inside it. Dragging the handle onto another panel's place does the same as the
 buttons, and Alt+Up and Alt+Down with focus on the header move the panel without opening the menu. The

@@ -124,6 +124,13 @@ export function SidePanelStack({ panels }: { panels: SidePanelSlot[] }) {
               className="side-panel-header"
               role="toolbar"
               aria-label={`${panel.name} position`}
+              // ADR-115 E4 (review item 8): the row itself is dragged — no grip glyph at the weight of
+              // the content; the keyboard moves it by its menu or Alt+Up/Down.
+              draggable
+              onDragStart={onDragStart(panel.id)}
+              onDragEnd={() => {
+                dragging.current = null;
+              }}
               onKeyDown={(event) => {
                 if (!event.altKey) return;
                 if (event.key === "ArrowUp" && !first) {
@@ -135,18 +142,6 @@ export function SidePanelStack({ panels }: { panels: SidePanelSlot[] }) {
                 }
               }}
             >
-              <span
-                role="img"
-                aria-label={`Drag to move the ${lower}`}
-                draggable
-                onDragStart={onDragStart(panel.id)}
-                onDragEnd={() => {
-                  dragging.current = null;
-                }}
-                className="side-panel-header__handle"
-              >
-                ⠿
-              </span>
               <button
                 type="button"
                 className="side-panel-header__name side-panel-header__toggle"

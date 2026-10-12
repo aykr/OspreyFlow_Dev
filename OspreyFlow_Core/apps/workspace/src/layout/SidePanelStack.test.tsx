@@ -60,9 +60,13 @@ describe("SidePanelStack", () => {
     expect(getByLabelText("Move the metrics up").getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("dropping a dragged handle on another panel's place puts the panel there", () => {
-    const { container, getByLabelText } = render(<SidePanelStack panels={panels} />);
-    const handle = getByLabelText("Drag to move the query builder");
+  // ADR-115 E4 (review item 8): no grip glyph — the header row itself is what is dragged; the
+  // keyboard moves it by its menu or Alt+Up/Down.
+  it("dropping a dragged header on another panel's place puts the panel there", () => {
+    const { container, getByRole, queryByText } = render(<SidePanelStack panels={panels} />);
+    expect(queryByText("⠿")).toBeNull();
+    const handle = getByRole("toolbar", { name: "Query builder position" });
+    expect(handle.getAttribute("draggable")).toBe("true");
     const target = container.querySelector('[data-panel-slot="inspector"]')!;
     fireEvent.dragStart(handle);
     fireEvent.dragOver(target);
