@@ -738,7 +738,11 @@ Selecting nodes shows the **selection bar** (ADR-097 step 1, below), whose **Bra
 brass ring (§4's table). While anything is selected, the **selection bar** floats at the bottom centre
 of the canvas (an overlay: a shadow, no hairline): "n selected", the only live count of the selection
 in the page, then *Expand* (each selected node in turn, each through its own preview and the working
-set's cap), *Branch to a new case*, *Remove from view* and *Clear*; Escape clears. It replaces the
+set's cap), *Branch to a new case*, *Remove from view* and *Clear* (with its *Esc* key cap); Escape
+clears, on the bar or on the canvas itself. *Expand* is the bar's one primary action, in brass, and the bar's
+count the page's only one — the Inspector's several-node view repeats it nowhere (ADR-115 E4). The canvas
+shows its own focus ring (2px brass, inset) and its accessible description says what is selected
+("Selection of 2. Arrow keys move between nodes, Escape clears."). It replaces the
 corner chip and the toolbar's *Remove selected* and *Branch selected*. A branch is named "Branch of
 <case> (n nodes)", or "Branch of <case>" for the whole view; never a selection count with a middle dot. When more than one node is selected, the Inspector lists them
 by name under "Selected (n)": choosing a name centres the canvas on that node and leaves the

@@ -32,6 +32,7 @@ import { EdgeLineProgram, EdgeRectangleProgram, createNodeCompoundProgram } from
 import { animateNodes, graphExtent } from "sigma/utils";
 import Sigma from "sigma";
 import {
+  useId,
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -392,6 +393,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       WorkingSetEdgeAttributes
     > | null>(null);
     const [selected, setSelected] = useState<Set<string>>(new Set());
+    const canvasDescriptionId = useId();
     // ADR-094 step 3: the Add files dialog, for the case or for one holder.
     const [addingFiles, setAddingFiles] = useState<{ holder?: { id: string; label: string } } | null>(null);
     const [hovered, setHovered] = useState<string | null>(null);
@@ -1747,6 +1749,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // focus, and both overlays are opened from a radial-menu item whose own unmount drops focus to
       // `<body>`, past this div entirely.
       if (radialMenu) return;
+      // ADR-115 E4 (spec 02, "Escape clears"): Escape on the canvas itself clears the selection, as
+      // the selection bar's Clear does. An open overlay above has already taken it (see below).
+      if (e.key === "Escape" && !clusterExplain && !pathResult && !pathError && !actionError && (selected.size > 0 || selectedEdge !== null)) {
+        e.preventDefault();
+        setSelected(new Set());
+        setSelectedEdge(null);
+        onSelectionChange?.([]);
+        return;
+      }
       // `pathResult` (Phase 7 Stage 5) gets the identical exemption `clusterExplain`
       // already have, for the identical reason — `PathfinderOverlay` renders through the same
       // `Popover`, opened from the same radial-menu-item shape.
@@ -2832,6 +2843,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         ref={containerRef}
         role="application"
         aria-label="Network canvas"
+        aria-describedby={canvasDescriptionId}
         tabIndex={0}
         onKeyDown={onKeyDown}
         onFocus={(e) => {
@@ -2857,7 +2869,6 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           width: "100%",
           height: "100%",
           position: "relative",
-          outline: "none",
         }}
         onPointerDown={(e) => {
           if (!lassoActive) return;
@@ -3128,6 +3139,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             }
           />
         )}
+        {/* ADR-115 E4: what the canvas holds selected, read with its name (the reference's label). */}
+        <span id={canvasDescriptionId} className="visually-hidden">
+          {selected.size > 0
+            ? `Selection of ${selected.size.toLocaleString("en-GB")}. Arrow keys move between nodes, Escape clears.`
+            : "Nothing selected. Arrow keys select nodes."}
+        </span>
         {/* ADR-097 step 1: the selection's one count, and what can be done to all of it. */}
         <SelectionBar
           count={selected.size}

@@ -77,3 +77,20 @@ describe("SelectionBar: Show links among these", () => {
     expect(ask).toHaveBeenCalledTimes(1);
   });
 });
+
+// ADR-115 E4 (review items 2 and 5): Expand is the bar's one primary action, in brass; Clear shows
+// that Escape does the same.
+describe("the selection bar's actions", () => {
+  it("makes Expand the primary action and every other action quiet", () => {
+    render(<SelectionBar count={3} onExpand={() => undefined} onBranch={() => undefined} onRemove={() => undefined} onClear={() => undefined} />);
+    const bar = screen.getByRole("toolbar", { name: "Selection" });
+    const primary = Array.from(bar.querySelectorAll(".btn--primary")).map((b) => b.textContent);
+    expect(primary).toEqual(["Expand"]);
+  });
+
+  it("names Escape beside Clear, without changing what Clear is called", () => {
+    render(<SelectionBar count={1} onRemove={() => undefined} onClear={() => undefined} />);
+    const clear = screen.getByRole("button", { name: "Clear" });
+    expect(clear.querySelector("kbd")?.textContent).toBe("Esc");
+  });
+});

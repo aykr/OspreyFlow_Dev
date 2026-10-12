@@ -50,6 +50,25 @@ test("the selection bar says how many once, and its Clear empties the selection"
   registerCovered("SELECTION_ACTIONS", "clear-the-selection-from-the-selection-bar");
 });
 
+// ADR-115 E4 (spec 02: "Escape clears"; the reference's canvas): Escape on the canvas itself clears
+// the selection, the canvas's description says what is selected, and the canvas shows its focus ring
+// (DESIGN.md §8) — it used to suppress it.
+test("Escape on the canvas clears the selection, which the canvas describes, inside a visible focus ring", async ({ page }) => {
+  await selectTwo(page);
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await expect(canvas).toHaveAccessibleDescription(/^Selection of 2\. Arrow keys move between nodes, Escape clears\.$/);
+  const ring = await canvas.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return [style.outlineStyle, style.outlineWidth];
+  });
+  expect(ring).toEqual(["solid", "2px"]);
+  await page.keyboard.press("Escape");
+  await expect.poll(() => selection(page)).toEqual([]);
+  await expect(page.getByRole("toolbar", { name: "Selection" })).toHaveCount(0);
+  await expect(canvas).toHaveAccessibleDescription("Nothing selected. Arrow keys select nodes.");
+  registerCovered("SELECTION_ACTIONS", "clear-the-selection-with-escape-on-the-canvas");
+});
+
 test("the selection bar's Remove from view takes the selected nodes out, through a real DELETE", async ({ page }) => {
   let body: { node_ids: string[] } | null = null;
   await page.route("**/*/investigations/*/nodes", async (route) => {

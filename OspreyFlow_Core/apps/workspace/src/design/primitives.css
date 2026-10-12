@@ -599,3 +599,13 @@
 .start-tile__title { font-size: var(--fs-16); font-weight: 600; }
 .start-tile__does { color: var(--text-secondary); }
 .start-tile__then { margin-top: auto; }
+
+/* A key, as the reference sets one (ADR-115 E4): mono, in a hairline box. */
+.key-cap {
+  display: inline-block; min-width: var(--sp-16); box-sizing: border-box; padding: 0 var(--sp-4);
+  border: 1px solid var(--border); border-radius: var(--r-1);
+  font: 600 var(--fs-11) / var(--lh-11) var(--mono); text-align: center; color: inherit;
+}
+/* The canvas's own focus ring (DESIGN.md §8; ADR-115 E4): inset, so it is never clipped by the
+   panels beside it. It used to be suppressed. */
+.network-canvas:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }

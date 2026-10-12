@@ -257,6 +257,10 @@ describe("Inspector states (ADR-097 step 1, design review item 4)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Links between them (1)" }));
     expect(screen.getByText("Associate of")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Properties" })).toBeNull(); // not one node's view
+    // ADR-115 E4 (review item 2): the selection bar's count is the only one — the Inspector repeats
+    // neither "2 nodes" nor "Selected (2)".
+    expect(screen.queryByText("2 nodes")).toBeNull();
+    expect(screen.getByRole("button", { name: "Selected" })).toBeTruthy();
   });
 
   it("nothing selected: says how to begin, with one action", () => {

@@ -387,6 +387,8 @@ export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
   "show-links-among-the-selection-from-the-selection-bar",
   // ADR-098 decision 4.
   "ask-the-model-about-the-selected-documents-from-the-selection-bar",
+  // ADR-115 E4.
+  "clear-the-selection-with-escape-on-the-canvas",
 ] as const);
 
 /** What a case reads (ADR-099): ticked when the case is made, changed by its Author.

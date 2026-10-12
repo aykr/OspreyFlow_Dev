@@ -47,7 +47,8 @@ export function SelectionBar({
         {COUNT.format(count)} selected
       </span>
       {onExpand && (
-        <button type="button" className="btn btn--quiet" onClick={onExpand}>
+        // ADR-115 E4 (review items 2 and 5): the bar's one primary action, in brass.
+        <button type="button" className="btn btn--primary" onClick={onExpand}>
           Expand
         </button>
       )}
@@ -69,8 +70,8 @@ export function SelectionBar({
       <button type="button" className="btn btn--quiet" onClick={onRemove}>
         Remove from view
       </button>
-      <button type="button" className="btn btn--quiet" onClick={onClear}>
-        Clear
+      <button type="button" className="btn btn--quiet" onClick={onClear} aria-keyshortcuts="Escape">
+        Clear <kbd className="key-cap" aria-hidden="true">Esc</kbd>
       </button>
     </div>
   );

@@ -264,7 +264,6 @@ function SelectionView({
   );
   return (
     <>
-      <p style={{ margin: "0 0 var(--sp-8)", fontWeight: 600 }}>{nodes.length.toLocaleString("en-GB")} nodes</p>
       {section(
         "summary",
         "Summary",
@@ -292,7 +291,8 @@ function SelectionView({
       )}
       {section(
         "selected",
-        `Selected (${nodes.length})`,
+        // ADR-115 E4 (review item 2): the selection bar holds the one count.
+        "Selected",
         <SelectionList nodes={nodes} onCentre={selection.onCentre} onRemove={selection.onRemove} />,
       )}
       {section(
