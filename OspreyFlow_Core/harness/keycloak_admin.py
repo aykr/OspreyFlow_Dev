@@ -154,6 +154,32 @@ def remove_client(*, issuer: str, realm: str, token: str, client_id: str) -> str
     return "removed"
 
 
+def ensure_realm_mail(
+    *, issuer: str, realm: str, token: str, mail: Any, password: str | None
+) -> str:
+    """The realm's mail server (ADR-114 Amendment 5), so Keycloak sends invitations and resets.
+    Measured on Keycloak 26.0.8: Keycloak never gives the password back when the realm is read, so
+    it is written every time from the deployment's own secrets file. Says nothing of the
+    password."""
+    status, current = _call(f"{issuer}/admin/realms/{realm}", token=token)
+    if status != 200:
+        raise RealmConfigurationFailed(f"reading the realm was refused: {status}")
+    server = {
+        "host": mail.host, "port": str(mail.port), "from": mail.from_address,
+        "fromDisplayName": "OspreyFlow", "starttls": "true" if mail.starttls else "false",
+        "ssl": "false", "auth": "true" if mail.username else "false",
+    }  # fmt: skip
+    if mail.username:
+        server |= {"user": mail.username, "password": password or ""}
+    status, body = _call(
+        f"{issuer}/admin/realms/{realm}", token=token, data={**current, "smtpServer": server},
+        method="PUT",
+    )  # fmt: skip
+    if status not in (200, 204):
+        raise RealmConfigurationFailed(f"setting the realm's mail server was refused: {status}")
+    return f"mail server {mail.host}:{mail.port} from {mail.from_address}"
+
+
 def ensure_unmanaged_attributes(*, issuer: str, realm: str, token: str) -> None:
     """Switch on custom user attributes. The policy lives in the realm's user profile, which is not
     part of `RealmRepresentation` and so cannot travel in the realm import. Without it Keycloak

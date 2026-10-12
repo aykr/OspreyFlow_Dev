@@ -111,6 +111,15 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
     lines: list[str] = []
 
     keycloak_admin.ensure_unmanaged_attributes(issuer=issuer, realm=realm, token=token)
+    if config.mail is not None:
+        # ADR-114 Amendment 5: invitations and resets by email. Written each time — Keycloak never
+        # gives the password back to compare with.
+        lines.append(
+            keycloak_admin.ensure_realm_mail(
+                issuer=issuer, realm=realm, token=token, mail=config.mail,
+                password=values.get("OSPREY_SMTP_PASSWORD"),
+            )
+        )  # fmt: skip
     lines.append(
         keycloak_admin.ensure_service_account_roles(issuer=issuer, realm=realm, token=token)
     )

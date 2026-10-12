@@ -125,3 +125,15 @@ def test_the_answers_set_the_address_every_name_derives_from(tmp_path: Path) -> 
     small = load_answers({"mode": "small", "cloud": {"provider": "aws", "domain": "osprey.example.org"}},
                          packs=PACKS, home=tmp_path)  # fmt: skip
     assert osprey_config(small, _base())["network"]["public_origin"] == "https://osprey.example.org"
+
+
+def test_the_answers_carry_a_mail_server_without_its_password(tmp_path: Path) -> None:
+    """ADR-114 Amendment 5 (B4e): invitations by email when there is a mail server. Its password is
+    never an answer: the install reads it from `OSPREY_SMTP_PASSWORD` and keeps it in the deployment's
+    own secrets file."""
+    raw = {"mode": "lite", "mail": {"host": "smtp.example.org", "port": 587, "from": "osprey@example.org",
+                                    "starttls": True, "username": "osprey-mailer"}}  # fmt: skip
+    assert _config(raw, tmp_path).mail is not None
+    assert _config(raw, tmp_path).mail.from_address == "osprey@example.org"  # type: ignore[union-attr]
+    with pytest.raises(AnswersRefused, match="password"):
+        load_answers({**raw, "mail": {**raw["mail"], "password": "x"}}, packs=PACKS, home=tmp_path)  # type: ignore[dict-item]

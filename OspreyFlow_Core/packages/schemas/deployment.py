@@ -354,6 +354,25 @@ class ReportingConfig(BaseModel):
     superset_memory: str = Field(default="2g", description="Default: 2g")
 
 
+class MailConfig(BaseModel):
+    """The mail server the identity provider sends invitations and sign-in resets through
+    (`06_DECISIONS.md` ADR-114 Amendment 5). Without one, people are signed in by a one-time code.
+    **No password here**: `osprey.yaml` never holds a secret (§2.5); the install reads it from
+    `OSPREY_SMTP_PASSWORD` and keeps it in the deployment's own `deployment.env`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    host: str = Field(min_length=1, description="The mail server's name")
+    port: int = Field(default=587, ge=1, le=65535, description="Default: 587")
+    from_address: str = Field(min_length=3, description="The address invitations come from")
+    starttls: bool = Field(default=True, description="Default: true")
+    username: str | None = Field(
+        default=None,
+        description="Default: none — a relay that takes mail without signing in. With one, the "
+        "password comes from OSPREY_SMTP_PASSWORD at install.",
+    )
+
+
 class OspreyConfig(BaseModel):
     """The whole of `osprey.yaml`.
 
@@ -372,6 +391,7 @@ class OspreyConfig(BaseModel):
     network: NetworkConfig = Field(default_factory=NetworkConfig)
     map: MapConfig | None = Field(default=None, description="Default: none declared")
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
+    mail: MailConfig | None = Field(default=None, description="Default: none — one-time codes")
 
     @model_validator(mode="after")
     def _cluster_hosts_belong_to_the_cluster_profile(self) -> OspreyConfig:

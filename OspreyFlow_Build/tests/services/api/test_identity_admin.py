@@ -38,7 +38,7 @@ class _Realm:
     def __init__(self) -> None:
         self.users: dict[str, dict[str, object]] = {
             "u-analyst": {"id": "u-analyst", "username": "osprey-demo-analyst", "firstName": "Demo",
-                          "lastName": "Analyst", "enabled": True,
+                          "lastName": "Analyst", "enabled": True, "email": "analyst@example.org",
                           "attributes": {"roles": ["analyst"], "clearance": ["OFFICIAL"], "org_unit": ["verify"]}},
             "u-sa": {"id": "u-sa", "username": "service-account-osprey-conduit", "enabled": True, "attributes": {}},
         }  # fmt: skip
@@ -172,7 +172,11 @@ def _handler(realm: _Realm) -> type[BaseHTTPRequestHandler]:
                 return self._send(404, {"error": "User not found"})
             body = self._body()
             assert isinstance(body, dict)
-            # Measured: a PUT replaces each key it names — `attributes` whole, not merged.
+            # Measured on Keycloak 26.0.8: a PUT replaces `attributes` whole, and one that leaves out
+            # the email, or a name, erases it — only a whole representation keeps the person intact.
+            for field in ("email", "firstName", "lastName", "attributes"):
+                if field not in body:
+                    user.pop(field, None)
             user.update(body)
             self._send(204)
 
@@ -347,6 +351,7 @@ async def test_setting_access_keeps_everything_else_the_person_holds(idp: tuple[
     assert realm.users["u-analyst"]["attributes"] == {"roles": ["analyst"], "clearance": ["SECRET"],  # type: ignore[comparison-overlap]
                                                       "org_unit": ["intel"], "receivable_handling_codes": ["P", "C"]}  # fmt: skip
     assert realm.users["u-analyst"]["username"] == "osprey-demo-analyst"
+    assert (realm.users["u-analyst"]["firstName"], realm.users["u-analyst"]["email"]) == ("Demo", "analyst@example.org")
     await admin.aclose()
 
 

@@ -975,6 +975,8 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_GLASS_ORIGIN={sites(config).glass}",
         f"OSPREY_IDENTITY_ORIGIN={sites(config).identity}",
         f"OSPREY_DASHBOARDS_ORIGIN={sites(config).dashboards}",
+        # ADR-114 Amendment 5: invitations and resets by the identity provider's emailed link.
+        *(["OSPREY_SIGN_IN_EMAIL=true"] if config.mail is not None else []),
         "",
         "# Ports published besides the front proxy's: the Conduit only when network.expose_conduit",
         "# asks, ArcadeDB on loopback only (ADR-114 Amendment 4 decision 3). Each is overridable.",

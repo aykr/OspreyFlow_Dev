@@ -13,6 +13,12 @@ a person at the prompts and CI install the same way.
       local_only: true             # no case content leaves the deployment
     demo_packs: [operation-ledger, hmp]
     paysim_file: ~/Downloads/PS_20174392719_1491204439457_log.csv
+    mail:                          # optional: invitations by email (ADR-114 Amendment 5)
+      host: smtp.example.org       #   its password is never an answer: set OSPREY_SMTP_PASSWORD
+      port: 587
+      from: osprey@example.org
+      starttls: true
+      username: osprey-mailer      #   leave out for a relay that takes mail without signing in
     cloud:                         # small and enterprise only; used from stages B6 and B7
       provider: aws                # aws | azure
       region: eu-west-2
@@ -41,12 +47,15 @@ CLOUDS = ("aws", "azure")
 #: Each mode's `osprey.yaml` profile (`spec/05_DEPLOYMENT.md` §2).
 PROFILES = {"lite": "local-lite", "small": "small", "enterprise": "cluster"}
 
-_TOP = {"mode", "components", "folders", "models", "demo_packs", "paysim_file", "cloud", "config"}
+_TOP = {
+    "mode", "components", "folders", "models", "demo_packs", "paysim_file", "cloud", "config", "mail",
+}  # fmt: skip
 _SECTIONS = {
     "components": {"dashboards"},
     "folders": {"ingest", "tiles"},
     "models": {"local_only"},
     "cloud": {"provider", "region", "domain", "size"},
+    "mail": {"host", "port", "from", "starttls", "username"},
 }
 #: The sections a named `config:` replaces; giving both is refused rather than one silently winning.
 _CONFIG_SECTIONS = ("components", "folders", "models")
@@ -67,6 +76,7 @@ class Answers:
     paysim_file: Path | None = None
     cloud: dict[str, str] = field(default_factory=dict)
     config: Path | None = None
+    mail: dict[str, Any] = field(default_factory=dict)
 
 
 def _known(where: str, raw: Mapping[str, Any], allowed: set[str]) -> None:
@@ -164,6 +174,7 @@ def load_answers(
         else None,
         cloud=cloud,
         config=_host_path("config", config, home) if config is not None else None,
+        mail=dict(sections["mail"]),
     )
 
 
@@ -182,6 +193,14 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
     storage["tiles"] = str(answers.tiles)
     config.setdefault("models", {})["local_only"] = answers.local_only
     config["reporting"] = {"sync": answers.dashboards, "superset": answers.dashboards}
+    if answers.mail:
+        config["mail"] = {
+            "host": answers.mail.get("host"),
+            "port": answers.mail.get("port", 587),
+            "from_address": answers.mail.get("from"),
+            "starttls": answers.mail.get("starttls", True),
+            "username": answers.mail.get("username"),
+        }
     # ADR-114 Amendment 4: every address derives from this one. Lite answers on this machine by
     # name; a cloud install at the client's own domain, over HTTPS.
     network = config.setdefault("network", {})

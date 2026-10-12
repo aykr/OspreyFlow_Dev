@@ -12190,6 +12190,15 @@ What B4 decides *(mine)*:
    seed makes is one the administrator can open — naming a case they cannot would disclose that it
    exists. The pack catalogue now carries that case's name, held to the seed runner's by a test.
 
+8. **Email** (B4e): `osprey.yaml` gains an optional `mail:` (server, port, sender, STARTTLS, sign-in
+   name) — never a password. The install reads the password from `OSPREY_SMTP_PASSWORD` into
+   `deployment.env` and stops, in words, if a server that signs in has none. The render sets
+   `OSPREY_SIGN_IN_EMAIL=true` only with a mail server; registration writes the realm's
+   `smtpServer` every time (Keycloak never returns the password). Measured with a mail catcher: the
+   email arrives from the sender with Keycloak's set-password link; a person with no address is
+   refused (400, "User email missing"). **Also measured: a PUT that leaves out the email, or a name,
+   erases it** — the fixture now does the same, and every change writes the whole person back.
+
 **Tests**, named before the code: Keycloak in `start` on Postgres, its database made first and kept in
 step, every secret the compose file requires minted by `apply`, the backup leaving Keycloak's database
 to the identity item (`tests/harness/test_keycloak_persisted.py`); no launcher client in the realm and a

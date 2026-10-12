@@ -41,6 +41,7 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -88,6 +89,25 @@ class ApplyFailed(RuntimeError):
         self.stage = stage
         self.detail = detail
         super().__init__(f"{stage}: {detail}")
+
+
+def mail_secret_lines(config: OspreyConfig, environ: Mapping[str, str]) -> str:
+    """The mail server's password, carried from the installer's own environment into the
+    deployment's secrets file (ADR-114 Amendment 5) — never into `osprey.yaml`, never printed. A
+    server that needs
+    signing in to, installed without it, stops the install here rather than leaving invitations that
+    fail later."""
+    if config.mail is None or not config.mail.username:
+        return ""
+    password = environ.get("OSPREY_SMTP_PASSWORD", "")
+    if not password:
+        raise ApplyFailed(
+            "render",
+            f"the mail server signs in as {config.mail.username}, and OSPREY_SMTP_PASSWORD is not "
+            "set. Set it in this terminal (it is kept only in the deployment's own secrets file) "
+            "and run the install again.",
+        )
+    return f"OSPREY_SMTP_PASSWORD={password}\n"
 
 
 class SeedOrderingRefused(ApplyFailed):
@@ -504,6 +524,7 @@ def main(argv: list[str] | None = None) -> int:
             + f"OIDC_ADMIN_USERS_URL=http://keycloak:8080/admin/realms/{args.realm}/users\n"
             # ADR-111 Amendment 2: the reporting components' secrets, only for what is switched on.
             + reporting_secrets(config)
+            + mail_secret_lines(config, os.environ)
             + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\n"
             # **Every one of these four, not just the host.** `services/api/config.py` defaults
             # `POSTGRES_PORT` to **5433** — a workaround for `deploy/compose/dev.yaml` publishing

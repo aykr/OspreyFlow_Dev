@@ -155,6 +155,26 @@ export type Superset = boolean;
  * Default: 2g
  */
 export type SupersetMemory = string;
+/**
+ * The mail server's name
+ */
+export type Host = string;
+/**
+ * Default: 587
+ */
+export type Port = number;
+/**
+ * The address invitations come from
+ */
+export type FromAddress = string;
+/**
+ * Default: true
+ */
+export type Starttls = boolean;
+/**
+ * Default: none — a relay that takes mail without signing in. With one, the password comes from OSPREY_SMTP_PASSWORD at install.
+ */
+export type Username = string | null;
 
 /**
  * The whole of `osprey.yaml`.
@@ -176,6 +196,10 @@ export interface OspreyConfig {
    */
   map?: MapConfig | null;
   reporting?: ReportingConfig;
+  /**
+   * Default: none — one-time codes
+   */
+  mail?: MailConfig | null;
 }
 /**
  * `05_DEPLOYMENT.md` §2.1's Components screen. Defaults are the `local-lite` row of §1's own
@@ -325,4 +349,17 @@ export interface ReportingConfig {
   sync_memory?: SyncMemory;
   superset?: Superset;
   superset_memory?: SupersetMemory;
+}
+/**
+ * The mail server the identity provider sends invitations and sign-in resets through
+ * (`06_DECISIONS.md` ADR-114 Amendment 5). Without one, people are signed in by a one-time code.
+ * **No password here**: `osprey.yaml` never holds a secret (§2.5); the install reads it from
+ * `OSPREY_SMTP_PASSWORD` and keeps it in the deployment's own `deployment.env`.
+ */
+export interface MailConfig {
+  host: Host;
+  port?: Port;
+  from_address: FromAddress;
+  starttls?: Starttls;
+  username?: Username;
 }

@@ -32,7 +32,7 @@ from harness.realm import (
     render_realm,
 )
 
-from schemas.deployment import OspreyConfig
+from schemas.deployment import MailConfig, OspreyConfig
 
 ISSUER = "http://kc.test"
 ADMIN_PASSWORD = "the-keycloak-admin-password"
@@ -692,3 +692,17 @@ def test_a_retired_launcher_client_is_removed_and_its_absence_is_fine(
     assert any("osprey-launcher" in line and "removed" in line for line in lines)
     again = _register(_env(tmp_path))
     assert any("osprey-launcher" in line and "not present" in line for line in again)
+
+
+def test_a_deployment_with_a_mail_server_gives_it_to_keycloak(keycloak: FakeKeycloak, tmp_path: Path) -> None:
+    """ADR-114 Amendment 5 (B4e): registration writes the realm's mail server, password included,
+    from the deployment's own secrets file — every time, since Keycloak never gives it back."""
+    config = _config().model_copy(update={"mail": MailConfig(host="smtp.example.org", from_address="o@example.org",
+                                                              username="mailer")})  # fmt: skip
+    env = _env(tmp_path, "OSPREY_SMTP_PASSWORD=s3cret")
+    lines = register_sign_in.register(issuer=ISSUER, realm="osprey", env_path=env, config=config)
+    assert keycloak.realm["smtpServer"]["host"] == "smtp.example.org"
+    assert keycloak.realm["smtpServer"]["password"] == "s3cret"
+    assert not any("s3cret" in line for line in lines)
+    plain = _register(_env(tmp_path))
+    assert not any("mail server" in line for line in plain)
