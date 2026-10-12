@@ -5,6 +5,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { applyTheme } from "../theme/theme";
 import { EmbeddedDashboards, type Embed } from "./EmbeddedDashboards";
 import { ReportsPlace } from "./ReportsPlace";
 
@@ -59,6 +60,34 @@ describe("Superset dashboards in the Glass", () => {
     render(<EmbeddedDashboards apiBaseUrl="http://api" bearerToken="t" embed={embed} />);
     fireEvent.click(await screen.findByRole("button", { name: "Fraud board" }));
     await waitFor(() => expect(embed.mock.calls.at(-1)![0].id).toBe("uuid-fraud-board"));
+  });
+
+  // ADR-111 Amendment 4: a board is drawn in the Glass's own look, and only the Glass names it.
+  it("opens a board in the Glass's current mode, hiding Superset's own title and chart menus", async () => {
+    applyTheme("light");
+    serve(() => json(200, BOARDS), granted);
+    const embed = vi.fn<Embed>(async () => ({}));
+    render(<EmbeddedDashboards apiBaseUrl="http://api" bearerToken="t" embed={embed} />);
+    await waitFor(() => expect(embed).toHaveBeenCalledTimes(1));
+    const ui = embed.mock.calls[0]![0].dashboardUiConfig!;
+    expect(ui.urlParams?.themeMode).toBe("default");
+    expect([ui.hideTitle, ui.hideChartControls]).toEqual([true, true]);
+    applyTheme("dark");
+  });
+
+  it("follows the person switching between dark and light while a board is open", async () => {
+    applyTheme("dark");
+    serve(() => json(200, BOARDS), granted);
+    const setThemeMode = vi.fn();
+    const embed = vi.fn<Embed>(async () => ({ setThemeMode }));
+    render(<EmbeddedDashboards apiBaseUrl="http://api" bearerToken="t" embed={embed} />);
+    await waitFor(() => expect(embed).toHaveBeenCalledTimes(1));
+    expect(embed.mock.calls[0]![0].dashboardUiConfig!.urlParams?.themeMode).toBe("dark");
+    await waitFor(() => expect(setThemeMode).toHaveBeenCalledWith("dark"));
+    applyTheme("light");
+    await waitFor(() => expect(setThemeMode).toHaveBeenLastCalledWith("default"));
+    applyTheme("dark");
+    await waitFor(() => expect(setThemeMode).toHaveBeenLastCalledWith("dark"));
   });
 
   it("says when there is no board this person may open, and mounts nothing", async () => {

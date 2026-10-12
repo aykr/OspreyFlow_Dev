@@ -11602,6 +11602,49 @@ Superset refusing a wrong service password and an unknown dashboard (rule 15); t
 what the person may open; the Glass's tab and place each with a keyboard case (rule 13); a live check
 that the board draws inside the Glass.
 
+### ADR-111, Amendment 4 (12 October 2026) — the dashboards in the Glass's own look, light and dark
+
+**The owner's ruling** (asked 12 October 2026, after seeing the embedded Compliance board drawn light
+inside the dark Glass: "can you align the design system of the dashboards to be aligned with the rest
+of system"): **upgrade to Superset 6**, rather than staying on 4.1 light-only or recolouring 4.1 with
+a hand-written stylesheet. Superset 4.1 has one light look; Superset 6 themes from Ant Design tokens
+with a light and a dark theme, and its embedded SDK lets the page that frames a dashboard choose and
+change the mode.
+
+What it decides *(mine)* unless said:
+
+1. **Superset 6.1.0** (Apache-2.0; released 13 May 2026), the official image pinned by digest, with
+   psycopg2-binary (the recorded LGPL exception, unchanged) and Authlib installed into its own
+   environment (`uv`, as 6.x's image requires). Its migrations were run first against a copy of the
+   owner's restored 4.1 metadata database: clean, the Compliance board and its six charts kept, the
+   embedded configuration and allowed origin kept, and the Conduit's own embedding code
+   (`services/api/superset_embed.py`: the service user's sign-in, the dashboard list, the guest token)
+   working unchanged.
+2. **Both themes are generated from `tokens.css`, never written by hand.** `scripts/superset_theme.py`
+   reads the dark set (`:root`, the working default) and the light set (`[data-theme="light"]`) and
+   writes `deploy/superset/osprey_theme.json`: Superset's `THEME_DARK` and `THEME_DEFAULT` — surfaces,
+   text, borders, the one accent (brass), the semantic colours, the type families, the radii, the
+   dashboard tiles — and each theme's chart colours, the nine data channels of that theme (brass
+   excluded, as everywhere). The file is committed and a test fails if it differs from a fresh
+   generation, or names a colour `tokens.css` does not define. The `ospreyflow` palettes Superset
+   offers in its chart editor are the same channels.
+3. **Superset shows no theme editor** (`ENABLE_UI_THEME_ADMINISTRATION` off): a theme changed in
+   Superset would drift from the tokens unseen.
+4. **The Glass sets the mode.** The embedded SDK goes to 0.4.0 (Apache-2.0); the Glass opens a board
+   in its own current mode (`themeMode`) and changes it when the person switches (`setThemeMode`), so
+   a board never shows the other theme from the Glass around it. Superset's own title and each
+   chart's menu are hidden in the Glass (`hideTitle`, `hideChartControls`): the Glass names the board,
+   and the frame is for reading.
+5. **Fonts:** Superset names the Glass's own families (Atkinson Hyperlegible, IBM Plex Mono) and loads
+   no font from elsewhere, exactly as the Glass does — no font is fetched from a third party, and the
+   content security policy is unchanged.
+
+**Tests**, named before the code: the theme file regenerated from `tokens.css` and equal to the one
+committed; every colour in it defined in `tokens.css`; each theme's chart colours the nine channels of
+that theme and never brass (`tests/test_superset_theme.py`); the Glass opening a board in its current
+mode and following a switch, with the title and chart menus hidden (`EmbeddedDashboards.test.tsx`);
+and live, the restored board drawn inside the Glass in both modes.
+
 ### ADR-112, Amendment 1 (11 October 2026) — steps 1 and 2 built; who calls the identity provider for the Admin area
 
 **Built (steps 1 and 2, `51e7337`).** `packages/schemas/rights.py` and a right declared on every route

@@ -84,49 +84,30 @@ class OspreySecurityManager(SupersetSecurityManager):
 
 CUSTOM_SECURITY_MANAGER = OspreySecurityManager
 
-# --- OspreyFlow branding (spec/design/DESIGN.md; values from apps/workspace/src/design/tokens.css,
-# light theme, because Superset is light). The mark is its mesh cut (shown above 20px) in the light
-# theme's ink — brass is for the mark alone at 24px or more, and here it sits beside the short-form
-# wordmark, which stays separate text, never one locked image. Brass is the one accent: Superset's
-# primary action colour, and never a chart colour (the data palette excludes it). ---
+# --- OspreyFlow's look (ADR-111 Amendment 4): Superset 6's light and dark themes, generated from the
+# Glass's design tokens (`scripts/superset_theme.py` -> `osprey_theme.json`, copied in beside this
+# file) — surfaces, text, the one accent (brass), the type families and each theme's nine chart
+# channels. Nothing here names a colour of its own. The Glass chooses the mode of a board it frames
+# (the embedded SDK's `themeMode`); Superset's own pages follow the browser's preference. Themes are
+# not edited inside Superset: one changed there would drift from the tokens unseen. The mark and
+# favicon are the OspreyFlow mark in the light theme's ink, beside the short-form wordmark. ---
+with open(os.path.join(os.path.dirname(__file__), "osprey_theme.json"), encoding="utf-8") as _file:
+    _themes = json.load(_file)
+THEME_DEFAULT = _themes["default"]
+THEME_DARK = _themes["dark"]
+ENABLE_UI_THEME_ADMINISTRATION = False
 APP_NAME = "OspreyFlow Reports"
 APP_ICON = "/static/assets/images/osprey-mark.svg"
-APP_ICON_WIDTH = 32
 LOGO_TOOLTIP = "OspreyFlow"
 LOGO_RIGHT_TEXT = "Osprey"
 FAVICONS = [{"href": "/static/assets/images/osprey-favicon.svg", "type": "image/svg+xml"}]
-THEME_OVERRIDES = {
-    "colors": {
-        "primary": {
-            "base": "#8a6318",  # --brass
-            "dark1": "#6f4e10",  # --brass-hover
-            "dark2": "#573c08",  # --brass-press
-            "light1": "#a2a5a6",  # --n7
-            "light2": "#ced2d2",  # --n5
-            "light3": "#dde0e1",  # --n4
-            "light4": "#e8eced",  # --n3
-            "light5": "#f1f4f5",  # --n2
-        },
-        "error": {"base": "#a82f22"},  # --error
-        "warning": {"base": "#8f6410"},  # --warning
-        "success": {"base": "#2f6c4a"},  # --success
-        "grayscale": {"base": "#4b4e4e", "dark1": "#191b1c"},  # --n10, --n11
-    },
-    "typography": {
-        "families": {
-            "sansSerif": "'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif",
-            "monospace": "'IBM Plex Mono',ui-monospace,monospace",
-        }
-    },
-}
 EXTRA_CATEGORICAL_COLOR_SCHEMES = [
     {
         "id": "ospreyflow",
         "label": "OspreyFlow",
-        "description": "The OspreyFlow data palette, light theme: nine channels, never brass",
+        "description": "The OspreyFlow data palette: nine channels, never brass",
         "isDefault": True,
-        "colors": ["#3682b2", "#83330d", "#2f8364", "#562182", "#2b9095", "#7e032c", "#6c8c4a",
-                   "#5367cb", "#632a55"],  # azure, ochre, jade, violet, cyan, rose, moss, indigo, plum
+        "colors": _themes["categorical"]["colors"],
     }
 ]
 EXTRA_SEQUENTIAL_COLOR_SCHEMES = [
@@ -135,7 +116,7 @@ EXTRA_SEQUENTIAL_COLOR_SCHEMES = [
         "label": "OspreyFlow magnitude",
         "isDiverging": False,
         "isDefault": True,
-        "colors": ["#cfebec", "#a0ced0", "#6eaeb2", "#358f94", "#007177", "#00535b"],  # --seq-1..6
+        "colors": _themes["sequential"]["colors"],
     }
 ]
 FEATURE_FLAGS = {"DASHBOARD_RBAC": True, "EMBEDDED_SUPERSET": True}
@@ -143,7 +124,7 @@ FEATURE_FLAGS = {"DASHBOARD_RBAC": True, "EMBEDDED_SUPERSET": True}
 # --- Embedded in the Glass (ADR-111 Amendment 3). The Conduit asks for guest tokens as the local
 # service user `osprey-embedder` (made by osprey_setup.py); a guest reads only the mart, and its
 # token carries a row-level rule naming one dashboard identity. Superset's own content security
-# policy is kept as shipped (4.1.2) — only the Glass's origin is added as a permitted framer. ---
+# policy is kept as shipped — only the Glass's origin is added as a permitted framer. ---
 GUEST_ROLE_NAME = "OspreyEmbedded"
 GUEST_TOKEN_JWT_SECRET = os.environ["SUPERSET_GUEST_TOKEN_SECRET"]
 GUEST_TOKEN_JWT_EXP_SECONDS = 300

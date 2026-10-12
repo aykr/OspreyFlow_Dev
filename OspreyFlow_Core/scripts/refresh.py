@@ -57,6 +57,8 @@ from harness.render import (
 )
 from harness.site import answer_localhost_with_loopback, deployment_origins
 
+from schemas.deployment import OspreyConfig
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE = "local-lite"
 
@@ -167,6 +169,20 @@ def _models_up_to_date(directory: Path) -> bool:
     return False
 
 
+def _like_the_deployment(config: OspreyConfig, services: dict, directory: Path) -> OspreyConfig:
+    """Build or pull as the deployment does. `apply --build` builds the owned images from the
+    checkout but leaves the copied `osprey.yaml` without `source_path`, so the mode is read from the
+    deployment itself (found on the owner's: the recogniser was added in pull mode, a registry image
+    that does not exist)."""
+    api = services.get("api")
+    if isinstance(api, dict) and "build" in api and config.components.source_path is None:
+        root = directory.parent.parent.parent
+        return config.model_copy(
+            update={"components": config.components.model_copy(update={"source_path": str(root)})}
+        )
+    return config
+
+
 def _new_services_added(directory: Path) -> None:
     """Brings in what a render of this checkout has and the deployment does not (ADR-098: the
     recogniser): each new service, and each new setting of the Conduit's. Nothing the deployment
@@ -181,16 +197,7 @@ def _new_services_added(directory: Path) -> None:
     header_end = text.find("\nname:") + 1
     document = yaml.safe_load(text)
     services = document.setdefault("services", {})
-    # Build or pull as the deployment does: `apply --build` builds the owned images from the
-    # checkout but leaves the copied `osprey.yaml` without `source_path`, so the mode is read from
-    # the deployment itself (found on the owner's: the recogniser was added in pull mode, a registry
-    # image that does not exist).
-    api = services.get("api")
-    if isinstance(api, dict) and "build" in api and config.components.source_path is None:
-        root = directory.parent.parent.parent
-        config = config.model_copy(
-            update={"components": config.components.model_copy(update={"source_path": str(root)})}
-        )
+    config = _like_the_deployment(config, services, directory)
     rendered = yaml.safe_load(_render_compose(config, service_images(config)))["services"]
     changed = False
     for name, service in rendered.items():
@@ -223,6 +230,9 @@ def _pins_moved(directory: Path) -> None:
     header_end = text.find("\nname:") + 1
     document = yaml.safe_load(text)
     services = document.get("services", {})
+    # report-sync runs the Conduit's image with no `build` of its own: rendered in pull mode it
+    # looked "moved" to a registry image that does not exist (ADR-111 Amendment 4's refresh).
+    config = _like_the_deployment(config, services, directory)
     rendered = yaml.safe_load(_render_compose(config, service_images(config)))["services"]
     moved: dict[str, str] = {}
     for name, wanted in rendered.items():

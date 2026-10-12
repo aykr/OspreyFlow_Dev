@@ -404,3 +404,36 @@ def test_an_operators_edit_to_a_service_on_the_checkouts_pin_stays(repo: Path) -
 
     after = yaml.safe_load((out / "compose.yaml").read_text())
     assert after["services"]["arcadedb"]["environment"]["JAVA_OPTS"] == "-Doperator=own"
+
+
+def test_a_service_running_an_image_built_here_is_never_moved_to_a_registry(repo: Path) -> None:
+    """Found refreshing the owner's deployment for ADR-111 Amendment 4: report-sync runs the
+    Conduit's own image, built from the checkout, and has no `build` of its own. The step that moves
+    a store to the checkout's pinned version rendered the copied `osprey.yaml` (no `source_path`) in
+    pull mode, saw `osprey/api:local` differ from `ghcr.io/ospreyflow/api:<commit>`, and moved
+    report-sync to a registry image that does not exist (`denied`)."""
+    import yaml
+    from harness.render import render
+
+    from schemas.deployment import OspreyConfig
+
+    out = repo / "deploy" / "generated" / "local-lite"
+    for dockerfile in ("apps/workspace/Dockerfile", "services/api/Dockerfile",
+                       "services/ingest/Dockerfile", "services/ner/Dockerfile"):  # fmt: skip
+        (repo / dockerfile).parent.mkdir(parents=True, exist_ok=True)
+        (repo / dockerfile).write_text("FROM scratch\n", encoding="utf-8")
+    settings = {"reporting": {"sync": True}}
+    (out / "osprey.yaml").write_text(yaml.safe_dump(settings), encoding="utf-8")
+    plain = OspreyConfig.model_validate(settings)
+    building = plain.model_copy(
+        update={"components": plain.components.model_copy(update={"source_path": str(repo)})}
+    )
+    compose = render(building, allow_unpinned=True).artefacts["compose.yaml"]
+    (out / "compose.yaml").write_text(compose, encoding="utf-8")
+    assert yaml.safe_load(compose)["services"]["report-sync"]["image"] == "osprey/api:local"
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    after = yaml.safe_load((out / "compose.yaml").read_text())["services"]
+    assert after["report-sync"]["image"] == "osprey/api:local"
+    assert after["api"]["image"] == "osprey/api:local"

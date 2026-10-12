@@ -1,0 +1,144 @@
+{
+  "_generated": "by scripts/superset_theme.py from apps/workspace/src/design/tokens.css \u2014 do not edit; run `python -m scripts.superset_theme`",
+  "default": {
+    "algorithm": "default",
+    "token": {
+      "brandAppName": "OspreyFlow Reports",
+      "colorPrimary": "#8a6318",
+      "colorLink": "#8a6318",
+      "colorLinkHover": "#6f4e10",
+      "colorLinkActive": "#573c08",
+      "colorError": "#a82f22",
+      "colorWarning": "#8f6410",
+      "colorSuccess": "#2f6c4a",
+      "colorInfo": "#4b4e4e",
+      "colorBgBase": "#f7fbfc",
+      "colorBgLayout": "#f7fbfc",
+      "colorBgContainer": "#f1f4f5",
+      "colorBgElevated": "#e8eced",
+      "colorTextBase": "#191b1c",
+      "colorText": "#191b1c",
+      "colorTextSecondary": "#4b4e4e",
+      "colorTextTertiary": "#66696a",
+      "colorTextQuaternary": "#a2a5a6",
+      "colorBorder": "#bbbebf",
+      "colorBorderSecondary": "#ced2d2",
+      "fontFamily": "'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif",
+      "fontFamilyCode": "'IBM Plex Mono',ui-monospace,monospace",
+      "fontSize": 13,
+      "borderRadius": 2,
+      "borderRadiusLG": 4,
+      "borderRadiusSM": 2,
+      "dashboardTileBg": "#f1f4f5",
+      "dashboardTileBorder": "1px solid #ced2d2",
+      "dashboardTileBorderRadius": 4,
+      "dashboardTileBoxShadow": "none"
+    },
+    "echartsOptionsOverrides": {
+      "color": [
+        "#3682b2",
+        "#83330d",
+        "#2f8364",
+        "#562182",
+        "#2b9095",
+        "#7e032c",
+        "#6c8c4a",
+        "#5367cb",
+        "#632a55"
+      ],
+      "textStyle": {
+        "fontFamily": "'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif"
+      },
+      "tooltip": {
+        "backgroundColor": "#e8eced",
+        "borderColor": "#bbbebf",
+        "textStyle": {
+          "color": "#191b1c",
+          "fontFamily": "'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif"
+        }
+      }
+    }
+  },
+  "dark": {
+    "algorithm": "dark",
+    "token": {
+      "brandAppName": "OspreyFlow Reports",
+      "colorPrimary": "#c08a34",
+      "colorLink": "#c08a34",
+      "colorLinkHover": "#d49c44",
+      "colorLinkActive": "#a97427",
+      "colorError": "#e2695f",
+      "colorWarning": "#d9a63f",
+      "colorSuccess": "#6bab7e",
+      "colorInfo": "#c1c5c6",
+      "colorBgBase": "#101314",
+      "colorBgLayout": "#101314",
+      "colorBgContainer": "#161a1b",
+      "colorBgElevated": "#202425",
+      "colorTextBase": "#e8eced",
+      "colorText": "#e8eced",
+      "colorTextSecondary": "#c1c5c6",
+      "colorTextTertiary": "#a2a5a6",
+      "colorTextQuaternary": "#848788",
+      "colorBorder": "#4d5051",
+      "colorBorderSecondary": "#3a3e3f",
+      "fontFamily": "'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif",
+      "fontFamilyCode": "'IBM Plex Mono',ui-monospace,monospace",
+      "fontSize": 13,
+      "borderRadius": 2,
+      "borderRadiusLG": 4,
+      "borderRadiusSM": 2,
+      "dashboardTileBg": "#161a1b",
+      "dashboardTileBorder": "1px solid #3a3e3f",
+      "dashboardTileBorderRadius": 4,
+      "dashboardTileBoxShadow": "none"
+    },
+    "echartsOptionsOverrides": {
+      "color": [
+        "#61b1e6",
+        "#b34917",
+        "#72b99a",
+        "#8364a6",
+        "#35b9c0",
+        "#b74b5e",
+        "#90b667",
+        "#677bd6",
+        "#916384"
+      ],
+      "textStyle": {
+        "fontFamily": "'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif"
+      },
+      "tooltip": {
+        "backgroundColor": "#202425",
+        "borderColor": "#4d5051",
+        "textStyle": {
+          "color": "#e8eced",
+          "fontFamily": "'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif"
+        }
+      }
+    }
+  },
+  "categorical": {
+    "colors": [
+      "#3682b2",
+      "#83330d",
+      "#2f8364",
+      "#562182",
+      "#2b9095",
+      "#7e032c",
+      "#6c8c4a",
+      "#5367cb",
+      "#632a55"
+    ]
+  },
+  "sequential": {
+    "colors": [
+      "#cfebec",
+      "#a0ced0",
+      "#6eaeb2",
+      "#358f94",
+      "#007177",
+      "#00535b"
+    ]
+  }
+}

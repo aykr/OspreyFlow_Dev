@@ -7,10 +7,12 @@
 # tried first and does not work with Superset: it types a string parameter as varchar, and Superset
 # looks charts and dashboards up by the id in the URL as a string, so every edit and delete answered
 # "Not found" (found live, 11 October 2026).
-FROM apache/superset@sha256:15e110b8533d3cb6a0d529512ea71252b0ac62e3f72b1f7a5000f1361822ac26
+# Superset 6.1.0 (ADR-111 Amendment 4): themed from the tokens, light and dark.
+FROM apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88
 USER root
-RUN pip install --no-cache-dir psycopg2-binary==2.9.6 authlib==1.3.2
-COPY superset_config.py /app/pythonpath/superset_config.py
+# 6.x keeps Superset in its own environment, managed by uv.
+RUN uv pip install --no-cache --python /app/.venv/bin/python psycopg2-binary==2.9.6 authlib==1.3.2
+COPY superset_config.py osprey_theme.json /app/pythonpath/
 # The OspreyFlow mark and favicon, served by Superset itself (APP_ICON, FAVICONS).
 COPY brand/osprey-mark.svg brand/osprey-favicon.svg /app/superset/static/assets/images/
 # Superset's loading animation, replaced by the OspreyFlow mark (brand/make_loader.py). The hashed
