@@ -15,6 +15,8 @@ export interface DisplayPrincipal {
   sub: string;
   /** The identity provider's user name (`preferred_username`); empty when the token has none. */
   username: string;
+  /** The person's given name, for Home's greeting (ADR-115 E3); empty when the token has none. */
+  givenName?: string;
   clearance: string;
   orgUnit: string;
   roles: string[];
@@ -28,6 +30,7 @@ export function displayPrincipalFromUser(user: User): DisplayPrincipal {
   return {
     sub: String(profile.sub ?? ""),
     username: String(profile.preferred_username ?? ""),
+    givenName: String(profile.given_name ?? ""),
     clearance: String(profile.clearance ?? ""),
     orgUnit: String(profile.org_unit ?? ""),
     roles: asStringArray(profile.roles),

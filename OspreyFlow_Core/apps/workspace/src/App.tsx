@@ -106,6 +106,7 @@ import {
   type StartPlace,
 } from "./rights/visibility";
 import { startScreen } from "./shell/startScreen";
+import { loadHome, summariseHome, type HomeSummary } from "./home/homeData";
 import { OwnershipPlace } from "./ownership/OwnershipPlace";
 import { HotlistPanel } from "./watches/HotlistPanel";
 import { MonitorPanel } from "./watches/MonitorPanel";
@@ -376,6 +377,28 @@ export function App() {
   const [investigationId, setInvestigationId] = useState<string | null>(
     initialInvestigationId(),
   );
+  // ADR-115 E3: Home's figures, read whenever Home is on screen — each from a route the person's
+  // rights open, counted as them.
+  const [homeSummary, setHomeSummary] = useState<HomeSummary | null>(null);
+  const onHome = rightsSettled && !!bearerToken && (startChoice === "start" || (!investigationId && startChoice === null));
+  useEffect(() => {
+    if (!onHome || !bearerToken) return;
+    let cancelled = false;
+    setHomeSummary(null);
+    void loadHome({
+      apiBaseUrl: API_BASE_URL,
+      bearerToken,
+      rights: rights ?? new Set(),
+      me: principal?.sub ?? "",
+      lastCaseId: investigationIdFromSession(),
+    }).then((read) => {
+      if (!cancelled) setHomeSummary(summariseHome(read));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onHome, bearerToken, rights]);
   // Phase 7 Stage 3: the metrics panel's own "Show community hulls" toggle feeds this, `App.tsx`
   // (not `MetricsPanel` itself) turns it into hull geometry — `MetricsPanel` has no dependency on
   // Sigma/the canvas at all, the same separation `onSelectionChange`/`onViewMessages` already draw
@@ -942,6 +965,13 @@ export function App() {
           setStartChoice,
           account,
           marking: deploymentMarking(),
+          person: {
+            username: principal?.username ?? "",
+            givenName: principal?.givenName ?? null,
+            clearance: principal?.clearance ?? "",
+            roles: principal?.roles ?? [],
+          },
+          summary: homeSummary,
           apiBaseUrl: API_BASE_URL,
           bearerToken,
           lastCaseId: investigationIdFromSession(),

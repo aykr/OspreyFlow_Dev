@@ -571,6 +571,8 @@ export const START_ACTIONS = defineActionRegistry("START_ACTIONS", [
   "choose-the-ingest-studio-from-start-by-keyboard",
   "choose-admin-from-start-by-keyboard",
   "return-to-start-from-the-mark-by-keyboard",
+  // ADR-115 E3: Home's G, I and A.
+  "open-a-place-from-home-with-its-key",
 ] as const);
 
 export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [

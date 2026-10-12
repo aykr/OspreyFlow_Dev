@@ -46,10 +46,18 @@ export function startPlaces(rights: Rights): StartPlace[] {
   return places.filter(([, shown]) => shown).map(([place]) => place);
 }
 
-/** Start itself, or the place to go: the one chosen, else a person's only place. */
-export function startFor(places: readonly StartPlace[], chosen: StartPlace | "start" | null): StartPlace | "start" {
-  if (chosen) return chosen;
-  return places.length === 1 && places[0] ? places[0] : "start";
+/** Home itself, or the place chosen on it. ADR-115 decision 7: every signed-in person lands on Home
+ * with no case open — a person with one usable place still sees the others, and whom to ask. */
+export function startFor(chosen: StartPlace | "start" | null): StartPlace | "start" {
+  return chosen ?? "start";
+}
+
+/** ADR-115 decision 7: Home's three panels, each usable or not, with the role that opens it (by the
+ * name the Admin area's People tab gives it). */
+export function homePanels(rights: Rights): { place: StartPlace; allowed: boolean; role: string }[] {
+  const usable = new Set(startPlaces(rights));
+  const roles: Record<StartPlace, string> = { glass: "Analyst", ingest: "Data Engineer", admin: "Admin" };
+  return (["glass", "ingest", "admin"] as const).map((place) => ({ place, allowed: usable.has(place), role: roles[place] }));
 }
 
 export function viewsFor(rights: Rights): GlassView[] {

@@ -960,10 +960,18 @@ sign-in* goes straight to that brokered provider (`kc_idp_hint`) and *Sign in wi
 account* to Keycloak's form, which the OspreyFlow login theme draws. A hand-off from the Studio or
 Admin titles the card for it; a refused sign-in says why in the card.
 
-**Start (ADR-114 Amendment 5 point 9).** With no case open, the Glass opens on *Start*: a tile for each
-place the person's rights open — *The Glass* (to *Choose a case*), *Ingest Studio* (to *Choose the case
-to load into*, then the Studio) and *Admin* (the Admin area, no case needed). One place only goes
-straight there. The mark at the top left returns to Start from anywhere.
+**Home (ADR-114 Amendment 5 point 9; ADR-115 decision 7, E3).** With no case open, every signed-in
+person lands on Home (`design/handoff/OspreyFlow Home.dc.html`): a greeting naming the account, its
+clearance and roles; the three places — *Glass*, *Ingest Studio*, *Admin console* — each with a
+picture, its figures and an *Open* button with its key (G, I, A, page-wide, never while typing); a
+place the person cannot use is dimmed and says "You need the {role} role for this. Ask an
+administrator to add it." Only the first usable place's button is brass. *Needs your attention* lists
+open and own-claimed alerts, rows still held and failing dashboard pulls, newest first, only for
+usable places; *Recent cases* the person's cases with their level and what each holds as they see
+it; *Ways of working* four habits. Every figure comes from the route its place already has, case by
+case, counted as the reader — Home adds no read path; a case that refuses (403) is left out, one that
+fails is said. *The Glass* goes to *Choose a case*, *Ingest Studio* to *Choose the case to load into*,
+*Admin console* to the Admin area with no case; the mark returns to Home from anywhere.
 
 **The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
 running system, behind the same sign-in — *Admin* on the rail, or Start's *Admin* tile with no case

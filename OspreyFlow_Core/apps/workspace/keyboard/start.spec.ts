@@ -1,6 +1,6 @@
-// A keyboard-only walkthrough of Start (ADR-114 Amendment 5 point 9, `CLAUDE.md` rule 13): each tile,
-// and the mark back to Start from a case's workspace and from the Admin area — no `page.mouse`, no
-// `.click()`.
+// A keyboard-only walkthrough of Home (ADR-114 Amendment 5 point 9, ADR-115 E3, `CLAUDE.md` rule 13):
+// each place's button and its key, and the mark back to Home from a case's workspace and from the
+// Admin area — no `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
 import { START_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
@@ -32,8 +32,8 @@ const opened = (page: Page) => page.evaluate(() => window.__START__?.opened);
 test("the Glass is chosen from Start, then a case, by keyboard", async ({ page }) => {
   await serve(page);
   await page.goto("/keyboard/start-harness.html");
-  await expect(page.getByRole("heading", { name: "Where to?" })).toBeVisible();
-  await press(page, /^The Glass/);
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+  await press(page, /^Open Glass/);
   await expect(page.getByRole("heading", { name: "Choose a case" })).toBeVisible();
   await press(page, "Operation Ledger (synthetic demo)");
   await expect.poll(() => opened(page)).toEqual({ id: "c1" });
@@ -44,7 +44,7 @@ test("the Glass is chosen from Start, then a case, by keyboard", async ({ page }
 test("the Ingest Studio is chosen from Start, then the case to load into, by keyboard", async ({ page }) => {
   await serve(page);
   await page.goto("/keyboard/start-harness.html");
-  await press(page, /^Ingest Studio/);
+  await press(page, /^Open Ingest Studio/);
   await expect(page.getByRole("heading", { name: "Choose the case to load into" })).toBeVisible();
   await press(page, "Operation Ledger (synthetic demo)");
   await expect.poll(() => opened(page)).toEqual({ id: "c1", view: "ingest" });
@@ -55,13 +55,13 @@ test("the Ingest Studio is chosen from Start, then the case to load into, by key
 test("Admin is chosen from Start with no case, and Start is back by keyboard", async ({ page }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/start-harness.html");
-  await press(page, /^Admin/);
+  await press(page, /^Open Admin console/);
   await expect(page.getByRole("tab", { name: "People and roles" })).toBeVisible();
   await expect.poll(() => asked).toContain("/v1/admin/people");
   expect(await opened(page)).toBeNull();
   registerCovered(REGISTRY, "choose-admin-from-start-by-keyboard");
   await press(page, "Start");
-  await expect(page.getByRole("heading", { name: "Where to?" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 });
 
 test("the mark returns to Start from a case's workspace by keyboard", async ({ page }) => {
@@ -69,10 +69,24 @@ test("the mark returns to Start from a case's workspace by keyboard", async ({ p
   await page.goto("/keyboard/start-harness.html?case=c1");
   await expect(page.getByText("Workspace on c1, graph")).toBeVisible();
   await press(page, "OspreyFlow, go to Start");
-  await expect(page.getByRole("heading", { name: "Where to?" })).toBeVisible();
-  await press(page, /^Ingest Studio/);
+  await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+  await press(page, /^Open Ingest Studio/);
   await expect(page.getByText("Workspace on c1, ingest")).toBeVisible();
   registerCovered(REGISTRY, "return-to-start-from-the-mark-by-keyboard");
+});
+
+test("a usable place opens with its key from anywhere on Home, and a gated one does not", async ({ page }) => {
+  await serve(page);
+  await page.goto("/keyboard/start-harness.html?rights=investigate,manage_people");
+  await expect(page.getByText("You need the Data Engineer role for this. Ask an administrator to add it.")).toBeVisible();
+  await page.keyboard.press("i");
+  await expect(page.getByRole("heading", { level: 1, name: /^Good/ })).toBeVisible();
+  await page.keyboard.press("a");
+  await expect(page.getByRole("tab", { name: "People and roles" })).toBeVisible();
+  await press(page, "Start");
+  await page.keyboard.press("g");
+  await expect(page.getByRole("heading", { name: "Choose a case" })).toBeVisible();
+  registerCovered(REGISTRY, "open-a-place-from-home-with-its-key");
 });
 
 test("every registered Start action has its own proving test case above", () => {

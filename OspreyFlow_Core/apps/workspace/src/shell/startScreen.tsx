@@ -3,9 +3,11 @@
 import type { ReactElement, ReactNode } from "react";
 
 import { CasePicker } from "../investigation/CasePicker";
-import { startFor, startPlaces, type Rights, type StartPlace } from "../rights/visibility";
+import { startFor, type Rights, type StartPlace } from "../rights/visibility";
 import { AdminWithoutCase } from "./AdminWithoutCase";
-import { StartBar, StartPage } from "./StartPage";
+import { HomePage, type HomePerson } from "../home/HomePage";
+import type { HomeSummary } from "../home/homeData";
+import { StartBar } from "./StartPage";
 
 export type StartChoice = StartPlace | "start" | null;
 
@@ -21,6 +23,10 @@ export interface StartScreenInput {
   account: ReactNode;
   /** The deployment's marking, shown above every surface here (ADR-115 decision 2). */
   marking: string | null;
+  /** Who is signed in, for Home's greeting (ADR-115 E3). */
+  person: HomePerson;
+  /** Home's figures; `null` while they are read. */
+  summary: HomeSummary | null;
   apiBaseUrl: string;
   bearerToken: string;
   lastCaseId: string | null;
@@ -38,14 +44,16 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
   if (!input.rightsSettled) {
     return <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>Loading…</div>;
   }
-  const places = startPlaces(rights);
-  const where = investigationId ? startChoice : startFor(places, startChoice);
+  const where = investigationId ? startChoice : startFor(startChoice);
   if (where === "start") {
     return (
-      <StartPage
-        places={places}
+      <HomePage
+        rights={rights ?? new Set()}
+        person={input.person}
+        summary={input.summary}
         account={input.account}
         marking={input.marking}
+        onOpenCase={(id, place) => input.openCase(id, place === "ingest" ? "ingest" : undefined)}
         onChoose={(place) => {
           if (!investigationId) return setStartChoice(place);
           // A case is open behind Start: the Glass offers the cases with a way back to it, and the
@@ -70,7 +78,8 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
     );
   }
   if (investigationId) return null;
-  const backToStart = places.length > 1 ? () => setStartChoice("start") : undefined;
+  // ADR-115 decision 7: Home is everyone's, so every surface outside a case has its way back.
+  const backToStart = () => setStartChoice("start");
   return (
     <>
     <StartBar account={input.account} marking={input.marking} onStart={backToStart} />

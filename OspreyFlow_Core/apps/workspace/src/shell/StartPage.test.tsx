@@ -5,29 +5,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminWithoutCase } from "./AdminWithoutCase";
-import { StartPage } from "./StartPage";
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-});
-
-describe("StartPage", () => {
-  it("shows one tile per place and says where each goes", () => {
-    const chose = vi.fn();
-    render(<StartPage places={["glass", "ingest", "admin"]} onChoose={chose} account={null} marking={null} />);
-    expect(screen.getByRole("heading", { name: "Where to?" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^The Glass/ }));
-    fireEvent.click(screen.getByRole("button", { name: /^Ingest Studio/ }));
-    fireEvent.click(screen.getByRole("button", { name: /^Admin/ }));
-    expect(chose.mock.calls.map(([place]) => place)).toEqual(["glass", "ingest", "admin"]);
-    expect(screen.getByText(/no case needed/i)).toBeTruthy();
-  });
-
-  it("leaves out a place the person may not go", () => {
-    render(<StartPage places={["glass", "ingest"]} onChoose={() => undefined} account={null} marking={null} />);
-    expect(screen.queryByRole("button", { name: /^Admin/ })).toBeNull();
-  });
 });
 
 describe("AdminWithoutCase", () => {

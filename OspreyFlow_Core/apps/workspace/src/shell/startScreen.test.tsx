@@ -22,6 +22,8 @@ function shown(choice: StartChoice) {
     setStartChoice: () => undefined,
     account: null,
     marking: "OFFICIAL-SENSITIVE",
+    person: { username: "osprey-demo-admin", clearance: "OFFICIAL", roles: ["osprey-admin"] },
+    summary: null,
     apiBaseUrl: "http://api",
     bearerToken: "t",
     lastCaseId: null,

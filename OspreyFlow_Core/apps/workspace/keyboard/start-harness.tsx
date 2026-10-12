@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { TopBar } from "../src/shell/TopBar";
+import type { HomeSummary } from "../src/home/homeData";
 import { startScreen, type StartChoice } from "../src/shell/startScreen";
 
 declare global {
@@ -18,6 +19,25 @@ window.__START__ = { opened: null };
 
 const params = new URLSearchParams(location.search);
 const rights = new Set((params.get("rights") ?? "investigate,edit_pipelines,manage_people").split(","));
+
+// `?figures=1`: Home with figures in, for looking at it (the walkthroughs leave it reading).
+const FIGURES: HomeSummary = {
+  glass: [{ tone: "warn", text: "3 alerts in your team's queue, 1 claimed by you" },
+          { tone: "info", text: "8 cases open to you, last worked on Operation Ledger (synthetic demo)" }],
+  studio: [{ tone: "warn", text: "2 rows held for review" }],
+  admin: [{ tone: "ok", text: "6 of 6 services healthy" }],
+  attention: [
+    { place: "glass", tone: "warn", title: "KYC screening alert in Operation Ledger (synthetic demo)",
+      detail: "Halcyon Marine Ltd's beneficial owner matches a sanctions list entry. Claimed by you.", at: new Date().toISOString(), caseId: "c1" },
+    { place: "ingest", tone: "warn", title: "2 rows held for review in Operation Ledger (synthetic demo)",
+      detail: "A rule could not reach its screening list.", at: new Date(Date.now() - 3600_000).toISOString(), caseId: "c1" },
+  ],
+  recent: [{ id: "c1", name: "Operation Ledger (synthetic demo)", level: "Author", entities: 68, created: "2026-10-11T09:00:00Z" },
+           { id: "c2", name: "HMP fixture (synthetic demo)", level: "Viewer", entities: 1041, created: "2026-10-09T09:00:00Z" }],
+  services: [{ name: "Graph store", ok: true }, { name: "Analytics", ok: true }, { name: "Cache", ok: true },
+             { name: "Models", ok: true }, { name: "Identity", ok: true }, { name: "Search", ok: true }],
+  held: 2,
+}; // prettier-ignore
 
 function Harness() {
   const [investigationId, setInvestigationId] = useState<string | null>(params.get("case"));
@@ -32,6 +52,8 @@ function Harness() {
     setStartChoice,
     account: <span>osprey-demo-admin</span>,
     marking: "OFFICIAL",
+    person: { username: "osprey-demo-admin", clearance: "OFFICIAL", roles: ["osprey-admin"] },
+    summary: params.get("figures") ? FIGURES : null,
     apiBaseUrl: "http://keyboard-test.invalid",
     bearerToken: "unused",
     lastCaseId: null,

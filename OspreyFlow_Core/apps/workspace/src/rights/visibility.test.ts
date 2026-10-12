@@ -11,6 +11,7 @@ import {
   landingView,
   railEntries,
   showsInspector,
+  homePanels,
   startFor,
   startPlaces,
   viewsFor,
@@ -91,11 +92,17 @@ describe("Start", () => {
     expect(startPlaces(null)).toEqual(["glass", "ingest"]);
   });
 
-  it("goes straight to a person's only place, and to the place they chose", () => {
-    expect(startFor(["glass"], null)).toBe("glass");
-    expect(startFor(["admin"], null)).toBe("admin");
-    expect(startFor(["glass", "ingest", "admin"], null)).toBe("start");
-    expect(startFor(["glass", "ingest", "admin"], "admin")).toBe("admin");
-    expect(startFor(["glass", "admin"], "start")).toBe("start");
+  it("lands everyone on Home, a person with one place too, and goes to the place they chose", () => {
+    expect(startFor(null)).toBe("start");
+    expect(startFor("admin")).toBe("admin");
+    expect(startFor("start")).toBe("start");
+  });
+
+  it("gives Home all three panels, each usable or naming the role that opens it", () => {
+    expect(homePanels(new Set(READER))).toEqual([
+      { place: "glass", allowed: true, role: "Analyst" },
+      { place: "ingest", allowed: false, role: "Data Engineer" },
+      { place: "admin", allowed: false, role: "Admin" },
+    ]);
   });
 });
