@@ -29,9 +29,9 @@ from harness.realm import (
     DEMO_ENGINEER_SUBJECT,
     DEMO_REPORT_VIEWER_SUBJECT,
     HARNESS_CLIENT_ID,
-    LAUNCHER_CLIENT_ID,
     LOGIN_THEME_NAME,
     REALM_DISPLAY_NAME,
+    RETIRED_CLIENT_IDS,
     SUPERSET_CLIENT_ID,
     WITHDRAWN_DEMO_ROLES,
     generate_client_secret,
@@ -125,12 +125,16 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
                 client={**superset_client(origin), "secret": superset_secret},
             )
         )  # fmt: skip
-    for client_id in (LAUNCHER_CLIENT_ID, HARNESS_CLIENT_ID):
-        (client,) = [c for c in rendered["clients"] if c["clientId"] == client_id]
-        lines.append(
-            f"sign-in client {client_id}: "
-            + keycloak_admin.ensure_client(issuer=issuer, realm=realm, token=token, client=client)
+    (client,) = [c for c in rendered["clients"] if c["clientId"] == HARNESS_CLIENT_ID]
+    lines.append(
+        f"sign-in client {HARNESS_CLIENT_ID}: "
+        + keycloak_admin.ensure_client(issuer=issuer, realm=realm, token=token, client=client)
+    )
+    for retired in RETIRED_CLIENT_IDS:
+        outcome = keycloak_admin.remove_client(
+            issuer=issuer, realm=realm, token=token, client_id=retired
         )
+        lines.append(f"retired sign-in client {retired}: {outcome}")
     lines.append(
         f"account {DEMO_ADMIN_SUBJECT}: "
         + keycloak_admin.ensure_user(issuer=issuer, realm=realm, token=token, user=admin)

@@ -279,6 +279,16 @@ def _dump_or_refuse(dump: str, database: str) -> str:
     return dump
 
 
+#: Keycloak's own database (ADR-114 Amendment 5). Not dumped: the identity item carries the people
+#: and dashboard identities with their ids, and a fresh install's Keycloak makes its own realm —
+#: loading both would put every person in twice.
+KEYCLOAK_DATABASE = "keycloak"
+
+
+def databases_to_dump(listed: list[str]) -> list[str]:
+    return [name for name in listed if name and name != KEYCLOAK_DATABASE]
+
+
 def backup_postgres_all(compose_file: Path, folder: Path) -> list[tuple[str, Path]]:
     """Every database on the deployment's Postgres, and the roles they grant to (ADR-114
     Amendment 3). One dump was not the deployment: the dashboards keep their own `superset`
@@ -313,7 +323,7 @@ def backup_postgres_all(compose_file: Path, folder: Path) -> list[tuple[str, Pat
         ],
         item="postgres",
     )
-    for database in [name for name in listed.split() if name]:
+    for database in databases_to_dump(listed.split()):
         dump = _run(
             on_postgres + ["pg_dump", "--clean", "--if-exists", "-U", user, database],
             item="postgres",

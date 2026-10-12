@@ -652,48 +652,37 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
         },
     },
     "keycloak": {
-        # `--import-realm` reads the realm this harness renders beside the compose file.
-        # `--features=token-exchange` is not optional: without it the exchange grant does not
-        # exist at all and every principal resolution for a watch owner fails.
-        "command": ["start-dev", "--import-realm", "--features=token-exchange"],
+        # **Production mode, its data in the deployment's Postgres** (ADR-114 decision 12,
+        # Amendment 5): an account survives a restart. Measured on Keycloak 26.0.8 before it was
+        # written: `start` imports the realm once ("already exists. Import skipped" afterwards),
+        # keeps a user created later across a recreated container, and keeps the bootstrap admin of
+        # its first start — a new bootstrap password on a later start is refused. So the admin
+        # password, like Postgres's own, is never minted again while the database exists:
+        # `ospreyflow uninstall` removes both, and moving a deployment's data forward is `update`'s
+        # (stage B5). `--features=token-exchange` is not optional: without it the exchange grant
+        # does not exist and every principal resolution for a watch owner fails.
+        "command": ["start", "--import-realm", "--features=token-exchange"],
         "volumes": [
             "./realm.json:/opt/keycloak/data/import/realm.json:ro",
             # The sign-in page's look (`harness/keycloak_theme.py`), written beside this file by
             # `apply`. Mounted **beside** Keycloak's own themes: a mount onto `/opt/keycloak/themes`
             # itself would hide them and leave the realm with no sign-in page at all.
             "./keycloak-theme/osprey:/opt/keycloak/themes/osprey:ro",
-            # **Keycloak's database is deliberately NOT persisted, and both halves of that
-            # cost this project a round each — round 13cb added a volume here, round 13cd took
-            # it away again after measuring what it broke.**
-            #
-            # What persisting it fixes: a stopped-and-started deployment currently loses the
-            # `--demo-analyst` password. The realm and its users come back from the import above,
-            # but that password is set *after* the import through the admin API and nothing
-            # re-runs it, so the operator is shown a login form that refuses their own
-            # credentials with nothing naming the cause. That is a real defect and it is still
-            # open.
-            #
-            # Why a volume is not the fix as things stand, measured directly: Keycloak creates
-            # its bootstrap admin **only on a first start against an empty database**. Start it a
-            # second time on the same volume and `KC_BOOTSTRAP_ADMIN_PASSWORD` is ignored — the
-            # old password still works and the new one returns 401. `harness/apply.py` mints a
-            # fresh admin password on every apply, so with the volume in place *any* re-apply
-            # onto a host where the volume survived `docker compose down` fails at the grants
-            # step with `could not authenticate to Keycloak: 401 invalid_grant`. Floor A caught
-            # it: `test_both_names_of_a_split_credential_carry_the_same_value`.
-            #
-            # Closing this properly is a decision, not a line: either apply reuses an existing
-            # deployment's admin credential instead of minting one, or it removes the volume
-            # deliberately when it re-applies. Both change what `apply` means for an existing
-            # deployment, so it needs its own brief rather than being smuggled in here.
-            # `05_DEPLOYMENT.md` §2.1.1 records the open defect for an operator.
         ],
+        "depends_on": {
+            "postgres": {"condition": "service_healthy"},
+            "keycloak-db": {"condition": "service_completed_successfully"},
+        },
         "environment": {
             "KC_BOOTSTRAP_ADMIN_USERNAME": "${OSPREY_KEYCLOAK_ADMIN:-admin}",
             "KC_BOOTSTRAP_ADMIN_PASSWORD": "${OSPREY_KEYCLOAK_ADMIN_PASSWORD:?set in the "
             "deployment env file}",
             # Keycloak 26 serves health on a separate management port and only when asked.
             "KC_HEALTH_ENABLED": "true",
+            "KC_DB": "postgres",
+            "KC_DB_URL": "jdbc:postgresql://postgres:5432/keycloak",
+            "KC_DB_USERNAME": "keycloak",
+            "KC_DB_PASSWORD": "${OSPREY_KEYCLOAK_DB_PASSWORD:?set in the deployment env file}",
         },
         "healthcheck": {
             # Keycloak's image carries no shell utilities to curl with; its own bundled JRE does.
@@ -886,6 +875,8 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
     # ADR-111 Amendment 2: report-sync (the Conduit's own image) and Superset, when switched on.
     api = next(entry for entry in images if entry.service == "api")
     services.update(reporting_services(config, api_image=api.image, building=api.building))
+    if "keycloak" in services and "postgres" in services:
+        services["keycloak-db"] = _keycloak_database_step(str(services["postgres"]["image"]))  # type: ignore[index]
     document = {
         "name": f"osprey-{config.profile.value}",
         "services": services,
@@ -899,6 +890,40 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
     }
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     return _comment_block(_BANNER, "#") + body
+
+
+#: Keycloak's role and database on the deployment's Postgres, made before Keycloak starts and run at
+#: every `up`: created when missing, and the role's password set from the env file each time, so a
+#: password the file changes reaches the role (ADR-114 Amendment 5). psql's own `:'pw'` quoting, so
+#: no password is ever spliced into SQL by the shell.
+_KEYCLOAK_DATABASE_SQL = (
+    "SELECT 'CREATE ROLE keycloak LOGIN' "
+    "WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'keycloak')\\gexec\n"
+    "ALTER ROLE keycloak WITH LOGIN PASSWORD :'pw';\n"
+    "SELECT 'CREATE DATABASE keycloak OWNER keycloak' "
+    "WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')\\gexec\n"
+)
+
+
+def _keycloak_database_step(postgres_image: str) -> dict[str, object]:
+    # A quoted heredoc: the SQL reaches psql exactly as written, quotes and `\\gexec` included.
+    # `$$` is compose's escape for a `$` the container's own shell expands.
+    script = (
+        'psql -h postgres -U "$$OSPREY_POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 '
+        "-v pw=\"$$OSPREY_KEYCLOAK_DB_PASSWORD\" <<'SQL'\n" + _KEYCLOAK_DATABASE_SQL + "SQL\n"
+    )
+    return {
+        "restart": "no",
+        "image": postgres_image,
+        "entrypoint": ["sh", "-c"],
+        "command": [script],
+        "environment": {
+            "OSPREY_POSTGRES_USER": "${OSPREY_POSTGRES_USER:-osprey}",
+            "PGPASSWORD": "${OSPREY_POSTGRES_PASSWORD:?set in the deployment env file}",
+            "OSPREY_KEYCLOAK_DB_PASSWORD": "${OSPREY_KEYCLOAK_DB_PASSWORD:?set in the env file}",
+        },
+        "depends_on": {"postgres": {"condition": "service_healthy"}},
+    }
 
 
 def _render_env(config: OspreyConfig) -> str:

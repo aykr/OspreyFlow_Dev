@@ -458,6 +458,8 @@ def main(argv: list[str] | None = None) -> int:
         write_login_theme(out_dir)
         secret = generate_client_secret()
         admin_password = generate_client_secret()
+        # ADR-114 Amendment 5: Keycloak's own login on the deployment's Postgres.
+        keycloak_db_password = generate_client_secret()
         arcadedb_password = generate_client_secret()
         postgres_password = generate_client_secret()
         # Only minted when asked for, like every other secret here — never derived from anything
@@ -481,6 +483,7 @@ def main(argv: list[str] | None = None) -> int:
             + "\n# Generated at apply time, never version-controlled (05_DEPLOYMENT.md §2.5/§7).\n"
             + f"OSPREY_OIDC_CLIENT_SECRET={secret}\n"
             + f"OSPREY_KEYCLOAK_ADMIN_PASSWORD={admin_password}\n"
+            + f"OSPREY_KEYCLOAK_DB_PASSWORD={keycloak_db_password}\n"
             + f"OSPREY_POSTGRES_PASSWORD={postgres_password}\n"
             + f"OSPREY_MINIO_USER={minio_user}\n"
             + f"OSPREY_MINIO_PASSWORD={minio_password}\n"

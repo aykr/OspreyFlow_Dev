@@ -67,16 +67,10 @@ GLASS_CLIENT_ID = "osprey-glass"
 #: tweaks silently change what the three-sided verify asserts.
 DEMO_ANALYST_SUBJECT = "osprey-demo-analyst"
 
-#: `06_DECISIONS.md` ADR-051 — the launcher's own **public** client (authorization code with PKCE,
-#: no secret). It is *not* the Glass's client: it carries no audience mapper, so a launcher token is
-#: refused by the Conduit's `verify_aud` if it ever leaks. Its redirect is the launcher's fixed
-#: loopback address, not `network.public_origin`, because the launcher runs on the operator's own
-#: machine whatever origin the workspace is published at.
-LAUNCHER_CLIENT_ID = "osprey-launcher"
-#: The one definition of the launcher's port; `scripts/launch.py` imports it.
-LAUNCHER_PORT = 7070
-LAUNCHER_ORIGIN = f"http://localhost:{LAUNCHER_PORT}"
-LAUNCHER_REDIRECT_URI = f"{LAUNCHER_ORIGIN}/callback"
+#: Clients a deployment once registered that nothing uses any more. Keycloak keeps its realm across
+#: restarts (ADR-114 Amendment 5), so `register_sign_in` removes them: `osprey-launcher` was the
+#: launcher's (ADR-051), removed with the launcher in stage B2d.
+RETIRED_CLIENT_IDS = ("osprey-launcher",)
 
 #: ADR-051 — the Admin console's own **public** client, on the same terms as the launcher's: PKCE,
 #: no secret, no Conduit audience, an exact loopback redirect.
@@ -333,10 +327,6 @@ def _loopback_public_client(client_id: str, origin: str, redirect_uri: str) -> d
     }
 
 
-def _launcher_client() -> dict[str, Any]:
-    return _loopback_public_client(LAUNCHER_CLIENT_ID, LAUNCHER_ORIGIN, LAUNCHER_REDIRECT_URI)
-
-
 def _harness_client() -> dict[str, Any]:
     return _loopback_public_client(HARNESS_CLIENT_ID, HARNESS_ORIGIN, HARNESS_REDIRECT_URI)
 
@@ -466,7 +456,6 @@ def render_realm(
                 "standardFlowEnabled": False,
             },
             _glass_client(config),
-            _launcher_client(),
             _harness_client(),
         ],
         "users": users,

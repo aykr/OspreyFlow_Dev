@@ -29,7 +29,6 @@ from harness.realm import (
     HARNESS_CLIENT_ID,
     HARNESS_ORIGIN,
     HARNESS_REDIRECT_URI,
-    LAUNCHER_CLIENT_ID,
     render_realm,
 )
 
@@ -115,6 +114,10 @@ class FakeKeycloak:
             if unknown:
                 return 404, {"error": "Role not found"}
             self.granted += [r["name"] for r in data if r["name"] not in self.granted]
+            return 204, ""
+        if route.startswith("/clients/cid-") and verb == "DELETE":
+            if self.clients.pop(route.rsplit("/", 1)[1], None) is None:
+                return 404, {"error": "Could not find client"}
             return 204, ""
         if route.startswith("/clients/cid-") and verb == "PUT":
             self.clients[route.rsplit("/", 1)[1]] = data
@@ -239,7 +242,7 @@ def test_a_wrong_keycloak_admin_password_is_reported_as_refused(keycloak: FakeKe
 # --- registering on a running Keycloak ---
 
 
-def test_registering_adds_both_sign_in_clients_and_the_demo_admin_exactly_as_the_realm_renders_them(
+def test_registering_adds_the_sign_in_client_and_the_demo_admin_exactly_as_the_realm_renders_them(
     keycloak: FakeKeycloak, tmp_path: Path
 ) -> None:
     """Catches a registration that hand-writes its own copy of the client: the running deployment
@@ -252,12 +255,12 @@ def test_registering_adds_both_sign_in_clients_and_the_demo_admin_exactly_as_the
     wanted = {
         c["clientId"]: c
         for c in rendered["clients"]
-        if c["clientId"] in (LAUNCHER_CLIENT_ID, HARNESS_CLIENT_ID)
+        if c["clientId"] == HARNESS_CLIENT_ID
     }
     registered = {
         c["clientId"]: {k: v for k, v in c.items() if k != "id"} for c in keycloak.clients.values()
     }
-    assert registered == wanted, "both sign-in clients, exactly as a fresh apply renders them"
+    assert registered == wanted, "the sign-in client, exactly as a fresh apply renders it"
 
     (admin,) = [u for u in rendered["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
     (created,) = keycloak.users.values()
@@ -289,7 +292,7 @@ def test_registering_twice_changes_nothing_and_keeps_the_same_password(
 
     _register(env)
 
-    assert len(keycloak.clients) == 2
+    assert len(keycloak.clients) == 1, "the sign-in client once (the launcher's is retired)"
     assert len(keycloak.users) == 1
     assert _env_values(env)["OSPREY_DEMO_ADMIN_PASSWORD"] == first
     assert keycloak.passwords[DEMO_ADMIN_SUBJECT] == first
@@ -675,3 +678,17 @@ def test_the_analysts_data_engineer_role_is_withdrawn_and_nothing_else_is(keyclo
     assert any("withdrew data_engineer" in line for line in lines)
     admin = next(u for u in keycloak.users.values() if u["username"] == DEMO_ADMIN_SUBJECT)
     assert "data_engineer" in admin["attributes"]["roles"], "the admin keeps every surface"
+
+
+def test_a_retired_launcher_client_is_removed_and_its_absence_is_fine(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    """ADR-114 Amendment 5: Keycloak keeps its realm across restarts now, so the launcher's client a
+    deployment registered before B2d would stay — a loopback redirect nothing uses. Registration
+    removes it, and says nothing is wrong when it was never there."""
+    keycloak.clients["cid-old"] = {"clientId": "osprey-launcher", "id": "cid-old"}
+    lines = _register(_env(tmp_path))
+    assert "osprey-launcher" not in {c["clientId"] for c in keycloak.clients.values()}
+    assert any("osprey-launcher" in line and "removed" in line for line in lines)
+    again = _register(_env(tmp_path))
+    assert any("osprey-launcher" in line and "not present" in line for line in again)

@@ -1085,26 +1085,16 @@ def test_the_rendered_model_routing_names_this_deployments_own_services(
         )
 
 
-def test_keycloaks_database_is_not_persisted_while_apply_mints_a_new_admin_password(
+def test_keycloaks_data_lives_and_dies_with_the_deployments_postgres(
     rendered: RenderResult,
 ) -> None:
-    """**The constraint that replaced round 13cb's keycloak volume — round 13cd.**
-
-    13cb added `keycloak-data:/opt/keycloak/data` so a stopped-and-started deployment would keep
-    the `--demo-analyst` password. It broke re-apply, and Floor A caught it
-    (`test_both_names_of_a_split_credential_carry_the_same_value`, failing with
-    `could not authenticate to Keycloak: 401 invalid_grant`).
-
-    Measured directly, not reasoned about: Keycloak creates its bootstrap admin **only on a first
-    start against an empty database**. Second start on the same volume with a different
-    `KC_BOOTSTRAP_ADMIN_PASSWORD` — auth with the new password 401, auth with the *old* one 200.
-    `harness/apply.py` mints a fresh admin password every apply, so any re-apply onto a surviving
-    volume fails.
-
-    This asserts the constraint rather than the absence of a feature: **while apply mints a new
-    admin password, Keycloak's data directory must not be on a persistent volume.** Whoever
-    closes the demo-analyst-password defect has to change one side or the other, and this test is
-    what tells them the two are coupled — which is the thing 13cb did not know.
+    """**Superseded constraint, kept as a guard (ADR-114 Amendment 5).** Rounds 13cb and 13cd found
+    that Keycloak keeps the bootstrap admin of its first start — a later start's new
+    `KC_BOOTSTRAP_ADMIN_PASSWORD` is refused (401), measured — so a Keycloak volume broke every
+    re-apply while `apply` minted a fresh admin password. B4 persists Keycloak's data in the
+    deployment's Postgres instead: it is removed exactly when Postgres's own data is
+    (`ospreyflow uninstall`), and a fresh install mints both passwords together. A volume of its own
+    under `/opt/keycloak/data` would outlive that and bring the 401 back, which this still refuses.
     """
     document = yaml.safe_load(rendered.artefacts["compose.yaml"])
     keycloak = document["services"]["keycloak"]

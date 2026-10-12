@@ -233,8 +233,10 @@ is present, and is `ready` only when all are. A model extraction asked for befor
 refused in words (`503 model_unavailable`). On any later start the models are already on the volume and the
 tier is ready in seconds.
 
-**Open defect, 27 September 2026 — a stopped-and-started deployment loses the demo analyst's
-password.** `--demo-analyst` sets that password *after* the realm import, through the admin API,
+**Closed by ADR-114 Amendment 5 (12 October 2026): Keycloak runs in production mode with its data
+in the deployment's Postgres, so accounts and passwords survive a restart; its database goes when
+Postgres's does.** The history, kept: **an open defect from 27 September 2026 — a stopped-and-started
+deployment lost the demo analyst's password.** `--demo-analyst` sets that password *after* the realm import, through the admin API,
 and Keycloak's database is not on a persistent volume, so `docker compose down` discards it. On
 the next `up` the realm and the subject come back from the import but the credential does not: the
 sign-in page appears and refuses the operator's own password, with nothing naming the cause. Found
@@ -249,8 +251,8 @@ volume makes *any re-apply* fail at the grants step. Closing this needs apply to
 existing deployment's admin credential or reset the volume deliberately — a change to what `apply`
 means for an existing deployment, and so a decision rather than a patch.
 `tests/harness/test_render.py`'s
-`test_keycloaks_database_is_not_persisted_while_apply_mints_a_new_admin_password` records that the
-two are coupled. **Until then: re-apply rather than restart**, or re-run `--demo-analyst`.
+`test_keycloaks_data_lives_and_dies_with_the_deployments_postgres` now guards the coupling: Keycloak's
+data has no volume of its own, so it never outlives the Postgres data a fresh install re-mints.
 
 **Client secrets are generated at deployment time, never carried in the repository** (§2.5): the
 realm names the client, the deployment's own environment file carries the secret, and nothing

@@ -12135,6 +12135,47 @@ and `oidcConfig.test.ts`); Superset's origins (`test_superset_origins_are_the_de
 scan of the deployment showing only the proxy, and sign-in, the Glass, the embedded board and
 Superset all working through the names.
 
+### ADR-114, Amendment 5 (12 October 2026) — stage B4: accounts in production
+
+**The owner's rulings** (asked 12 October 2026):
+
+1. **Invitations: "Email if set, else one-time code".** With a mail server in the install answers,
+   Keycloak emails a set-your-password link; without one, the Admin area shows a one-time temporary
+   password once, for the administrator to pass on in person, and the person must choose their own at
+   first sign-in. Resetting someone's sign-in works the same way.
+2. **The Demo packs tab: "Show and explain".** It lists each pack — what it shows, its licence and
+   attribution, whether it is loaded and into which case — and the exact `ospreyflow demo add` command
+   to run on the host. The Conduit is never given control of Docker.
+
+What B4 decides *(mine)*:
+
+3. **Keycloak runs in production mode with its data in the deployment's Postgres** (B4a), in a
+   database and role of its own (`keycloak`), made before Keycloak starts by a one-shot step
+   (`keycloak-db`, the deployment's own Postgres image) that runs at every `up`, creates them when
+   missing and sets the role's password from `deployment.env` each time. Measured first against
+   Keycloak 26.0.8 and Postgres 16.4: `start` on plain HTTP behind `KC_HOSTNAME` imports the realm
+   once ("already exists. Import skipped" afterwards); a user created later survives a recreated
+   container; the bootstrap admin is made only on the first start, and a later start's new bootstrap
+   password is refused (401). So the admin password, like Postgres's own, is never minted again while
+   the database exists: `ospreyflow uninstall` removes both, and carrying a deployment's data forward
+   is `update`'s (stage B5). The step was run against a real Postgres twice, the password changed
+   between: each time only the current password signed in over the network.
+4. **The backup leaves Keycloak's database out**: the identity item carries the people and dashboard
+   identities with their ids (Amendment 3, point 9), and a fresh install's Keycloak makes its own
+   realm — dumping both would load every person twice.
+5. **The launcher's client is retired.** With the realm kept across restarts, a client nothing uses
+   would stay for good; `register_sign_in` removes `osprey-launcher` from a realm that still has it.
+   The Glass's hand-off (`auth/launcherHandoff.ts`) is **not** removed, although Amendment 4 listed it:
+   it outlived the launcher — switching cases and opening a branched case on its Questions panel
+   carry the sign-in on through it — so it stays, under its old name. The console's own client
+   (`osprey-harness`) stays while the harness console exists.
+
+**Tests**, named before the code: Keycloak in `start` on Postgres, its database made first and kept in
+step, every secret the compose file requires minted by `apply`, the backup leaving Keycloak's database
+to the identity item (`tests/harness/test_keycloak_persisted.py`); no launcher client in the realm and a
+retired one removed (`test_realm.py`, `test_register_sign_in.py`); and live, an account kept across a
+restart.
+
 ### ADR-113, Amendment 1 (11 October 2026) — report packs built: what an item rests on, and the gaps the decisions left
 
 Stage 3 (handover A3). Decisions 3 to 5 and 7 are built as decided. Building them found places where

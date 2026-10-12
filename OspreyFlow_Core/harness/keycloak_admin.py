@@ -140,6 +140,20 @@ def ensure_client(*, issuer: str, realm: str, token: str, client: dict[str, Any]
     return "registered"
 
 
+def remove_client(*, issuer: str, realm: str, token: str, client_id: str) -> str:
+    """Remove a retired client; a client already gone is not a failure."""
+    base = f"{issuer}/admin/realms/{realm}/clients"
+    status, found = _call(f"{base}?clientId={urllib.parse.quote(client_id)}", token=token)
+    if status != 200:
+        raise RealmConfigurationFailed(f"listing clients was refused: {status}")
+    if not found:
+        return "not present"
+    status, body = _call(f"{base}/{found[0]['id']}", token=token, method="DELETE")
+    if status not in (204, 404):
+        raise RealmConfigurationFailed(f"removing {client_id} was refused: {status} {body}")
+    return "removed"
+
+
 def ensure_unmanaged_attributes(*, issuer: str, realm: str, token: str) -> None:
     """Switch on custom user attributes. The policy lives in the realm's user profile, which is not
     part of `RealmRepresentation` and so cannot travel in the realm import. Without it Keycloak
