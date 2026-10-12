@@ -12367,3 +12367,61 @@ the empty bar in its place with each bar's stack (`TrendChart.test.tsx`) and the
 planted faults, each red: no window fill, Sunday weeks, months bucketed as weeks, a point outside
 the window dropped, the empty row omitted from the print, and the chart's stacks, the chart's
 totals and the print's rows each matched on the raw timestamp.
+
+## ADR-115 — The design handoff: the welcome page, Home and the Glass to `DESIGN.md` v0.2 — ACCEPTED (design)
+
+Status: **accepted on the owner's rulings of 12 October 2026; design only, nothing built.** The
+owner asked Claude Design for a review of the sign-in page, the page after sign-in and the Glass; its
+handoff (`design/handoff/` at the repository root, never committed — the workspace reference draws
+real Enron identifiers, `CLAUDE.md` rule 9) has a `README.md`, `DESIGN.md`, `Workspace Design
+Review.md`, three `.dc.html` references (rebuilt in the product's own components, never shipped, nor
+their `support.js` and `image-slot.js`) and seven screenshots of synthetic cases. Each decision below
+was put to the owner as options and ruled. The build is staged as Phase E (E0–E7) in the handover note.
+
+**What was true when decided:** the handoff's `DESIGN.md` equals `spec/design/DESIGN.md` but for one
+note on two band steps no token uses, which it drops; `tokens.css` already carries its ramps, brass,
+channels, scale and both typefaces; the Glass already has a marking strip (ADR-097 Amendment 1), the
+solid-cut mark, a legend, zoom and a brass-use test; the signed-out Glass shows a sign-in screen whose
+button starts the OIDC code flow with PKCE, and the password is typed only on Keycloak's own page,
+which `harness/keycloak_theme.py` restyles; the realm has no brute-force protection; most Lite
+installs have no mail server (Amendment 5 point 8); Start (Amendment 5 point 9) hides a place the
+person cannot open and goes straight to a person's only place.
+
+### Decisions
+
+1. **`DESIGN.md`.** `spec/design/DESIGN.md` stays the source, with the handoff's one change applied
+   (the stale note dropped). Core's root carries a copy for the design detector, held equal to the
+   source by a test. A value the product needs that is not in it is asked for, never invented.
+2. **The marking strip: the deployment's marking as a floor, the data above it** (ruling "Deployment
+   floor + data"). A surface with no case data — the welcome page, Home, the Admin area, the Ingest
+   Studio — shows the deployment's configured marking; inside a case the strip shows the higher of that
+   and the highest marking on screen (ADR-097 Amendment 1, kept). The strip is always shown: no "none".
+3. **Organisation sign-in only when one is configured** (ruling "Only when configured"). Until the
+   install answers name a brokered identity provider, the welcome page's card has one *Sign in*,
+   leading to the restyled Keycloak form. With one, *Continue with organisation sign-in* appears and
+   goes straight to it (`kc_idp_hint`). Configuring a broker is not built in this phase.
+4. **The credential form lives in Keycloak's login theme.** The Glass never takes a password and
+   direct grants stay off; the email-or-username form, its validation copy exactly as the handoff's
+   README writes it, *Reset your password* and *Check your email* are Keycloak's own pages, restyled
+   to the card.
+5. **Lock-out: five failed attempts, fifteen minutes** (ruling "Turn it on, 5 / 15 min"). The realm's
+   brute-force protection is set so, measured on a throwaway Keycloak before the copy relies on it.
+6. **Without a mail server, no reset by email** (ruling "Say ask your administrator"). *Forgot
+   password?* then says "Ask your OspreyFlow administrator to reset your sign-in. They'll give you a
+   one-time code." With a mail server, the designed reset and *Check your email*.
+7. **Home shows all three places to everyone** (ruling "Home design, always shown"), replacing Start's
+   hiding and skipping (Amendment 5 point 9): a place the person cannot open is dimmed with "You need
+   the {role} role for this. Ask an administrator to add it." Every signed-in person lands on Home when
+   no case is open; the tiles stay a convenience, never the gate.
+8. **About and the footer** (ruling "Build it; links from config"). About is built as designed, on by
+   default and switchable off in the install answers; each footer link (account help, accessibility
+   statement, privacy notice, service status) appears only when the deployment gives its address —
+   they are the deploying organisation's documents.
+9. **The handoff's conflicting values go back to Claude Design** (ruling "Ask Claude Design first"):
+   provenance dashes (README `4 3`/`1 3`, `DESIGN.md` §3.8 `4 2`/`1 2`), the canvas grid (README
+   16 px, `DESIGN.md` §9 8 px), the regions (README top bar 44, rail 48, right panel 340; the review
+   40, 44, 360) and node size (README radius 7; the review 20 px). Stages that draw them (E1's grid
+   token, E4–E6) wait for the answer; E2 and E3 do not.
+10. **Order** (ruling "Phase E before B5"): Phase E runs next, then B5–B10, then Phase D.
+
+**Tests to write first** are named per stage in the handover note's Phase E table.
