@@ -553,6 +553,11 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "register-a-dashboard-by-keyboard",
   "remove-a-dashboard-by-keyboard",
   "ask-the-system-again-by-keyboard",
+  // ADR-114 Amendment 5 (B4c): people.
+  "invite-a-person-by-keyboard",
+  "edit-a-persons-access-by-keyboard",
+  "disable-and-enable-a-person-by-keyboard",
+  "reset-a-persons-sign-in-by-keyboard",
 ] as const);
 
 export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [

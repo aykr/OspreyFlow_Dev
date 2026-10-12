@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PersonAccount(BaseModel):
@@ -35,7 +35,15 @@ class AccessInput(BaseModel):
 
     clearance: str = Field(min_length=1, max_length=40)
     org_unit: str = Field(min_length=1, max_length=60)
-    receivable_handling_codes: list[str] = Field(default_factory=list, max_length=16)
+    receivable_handling_codes: list[str] = Field(default_factory=list)
+
+    @field_validator("receivable_handling_codes")
+    @classmethod
+    def _few_codes(cls, codes: list[str]) -> list[str]:
+        # A bound, kept out of the field so the generated type stays a plain array.
+        if len(codes) > 16:
+            raise ValueError("at most 16 handling codes")
+        return codes
 
 
 class InviteInput(AccessInput):

@@ -2,60 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Clearance = string;
 export type OrgUnit = string;
-/**
- * @maxItems 16
- */
-export type ReceivableHandlingCodes =
-  | []
-  | [string]
-  | [string, string]
-  | [string, string, string]
-  | [string, string, string, string]
-  | [string, string, string, string, string]
-  | [string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
-  | [
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string
-    ]
-  | [
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string
-    ];
+export type ReceivableHandlingCodes = string[];
 
 /**
  * What a person may see (ADR-114 Amendment 5): clearance, unit and the handling codes they may

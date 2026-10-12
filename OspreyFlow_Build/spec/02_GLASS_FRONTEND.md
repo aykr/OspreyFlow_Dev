@@ -952,7 +952,11 @@ one from the canvas is not yet built. Keyboard cases: `keyboard/trends.spec.ts` 
 
 **The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
 running system, behind the same sign-in — *Admin* on the rail — with a tab per right: *People and
-roles* (each person's four roles as checkboxes, saved whole, other grants kept and shown), *Dashboards*
+roles* (each person's four roles as checkboxes, saved whole, other grants kept and shown; since ADR-114
+Amendment 5, each person's state — disabled, or invited and yet to set a password — with *Access*
+(clearance, unit and handling codes, edited in place), *Disable* (only after *Confirm disable*) or
+*Enable*, and *Reset sign-in*; and *Invite a person*, whose answer is either "an email went to …" or a
+one-time code shown once with what to do with it), *Dashboards*
 (register a dashboard identity — its secret shown once — and remove one; its account id is what a
 case's Author grants Viewer to), *System* (each component asked as the tab opens, with *Ask again*).
 Every action has its case in `keyboard/admin.spec.ts` (`ADMIN_ACTIONS`).

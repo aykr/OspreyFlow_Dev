@@ -2,60 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Clearance = string;
 export type OrgUnit = string;
-/**
- * @maxItems 16
- */
-export type ReceivableHandlingCodes =
-  | []
-  | [string]
-  | [string, string]
-  | [string, string, string]
-  | [string, string, string, string]
-  | [string, string, string, string, string]
-  | [string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string, string, string, string, string]
-  | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
-  | [
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string
-    ]
-  | [
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string
-    ];
+export type ReceivableHandlingCodes = string[];
 export type Username = string;
 export type FirstName = string;
 export type LastName = string;

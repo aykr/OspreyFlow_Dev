@@ -18,7 +18,17 @@ async function serve(page: Page): Promise<string[]> {
     asked.push(`${request.method()} ${path}`);
     const json = (status: number, body: unknown) =>
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "people" && request.method() === "POST") {
+      const sent = request.postDataJSON() as { username: string };
+      return json(201, { person: { ...PERSON, id: "u2", username: sent.username, name: sent.username, must_set_password: true },
+                         delivery: "one_time_code", one_time_code: "ABCD-EFGH-JKLM-NPQR" });  // prettier-ignore
+    }
     if (path === "people") return json(200, [PERSON]);
+    if (path === "people/u1/access") return json(200, { ...PERSON, ...(request.postDataJSON() as object) });
+    if (path === "people/u1/disable") return json(200, { ...PERSON, enabled: false });
+    if (path === "people/u1/enable") return json(200, { ...PERSON, enabled: true });
+    if (path === "people/u1/reset-sign-in")
+      return json(200, { person: { ...PERSON, must_set_password: true }, delivery: "one_time_code", one_time_code: "WXYZ-WXYZ-WXYZ-WXYZ" });
     if (path === "people/u1/roles") return json(200, { ...PERSON, roles: (request.postDataJSON() as { roles: string[] }).roles });
     if (path === "dashboards" && request.method() === "POST") {
       const made = { client_id: "osprey-dashboard-board", account_id: "sa-1", clearance: "OFFICIAL", org_unit: "verify" };
@@ -27,7 +37,7 @@ async function serve(page: Page): Promise<string[]> {
     }
     if (path === "dashboards") return json(200, dashboards);
     if (path.startsWith("dashboards/")) return route.fulfill({ status: 204 });
-    if (path === "/v1/handling-scheme") return json(200, { classification: ["OFFICIAL", "SECRET"] });
+    if (path === "/v1/handling-scheme") return json(200, { classification: ["OFFICIAL", "SECRET"], handling_codes: { P: {}, C: {} } });
     if (path === "system") return json(200, { components: [{ name: "Graph store", ok: true, millis: 12 }] });
     return json(404, {});
   });
@@ -70,6 +80,53 @@ test("the system is asked again by keyboard", async ({ page }) => {
   await press(page, "Ask again");
   await expect.poll(() => asked.filter((a) => a === "GET system").length).toBe(2);
   registerCovered(REGISTRY, "ask-the-system-again-by-keyboard");
+});
+
+// ADR-114 Amendment 5 (B4c): people, each action by keyboard alone.
+test("a person is invited by keyboard and their one-time code is shown", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await page.getByLabel("Sign-in name").fill("new.person");
+  await page.getByLabel("Invite unit").fill("verify");
+  await page.getByLabel("Invite with handling code P").focus();
+  await page.keyboard.press("Space");
+  await page.getByLabel("Invite as Analyst").focus();
+  await page.keyboard.press("Space");
+  await press(page, "Invite");
+  await expect(page.getByText("ABCD-EFGH-JKLM-NPQR")).toBeVisible();
+  expect(asked).toContain("POST people");
+  registerCovered(REGISTRY, "invite-a-person-by-keyboard");
+});
+
+test("a person's access is edited by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await press(page, "Edit access for osprey-demo-analyst");
+  await page.getByLabel("Unit for osprey-demo-analyst").fill("intel");
+  await press(page, "Save access for osprey-demo-analyst");
+  await expect.poll(() => asked).toContain("PUT people/u1/access");
+  registerCovered(REGISTRY, "edit-a-persons-access-by-keyboard");
+});
+
+test("a person is disabled and enabled again by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await press(page, "Disable osprey-demo-analyst");
+  await press(page, "Confirm disabling osprey-demo-analyst");
+  await expect(page.getByText("Disabled")).toBeVisible();
+  await press(page, "Enable osprey-demo-analyst");
+  await expect.poll(() => asked).toContain("POST people/u1/enable");
+  expect(asked).toContain("POST people/u1/disable");
+  registerCovered(REGISTRY, "disable-and-enable-a-person-by-keyboard");
+});
+
+test("a person's sign-in is reset by keyboard and the new code shown", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await press(page, "Reset sign-in for osprey-demo-analyst");
+  await expect(page.getByText("WXYZ-WXYZ-WXYZ-WXYZ")).toBeVisible();
+  expect(asked).toContain("POST people/u1/reset-sign-in");
+  registerCovered(REGISTRY, "reset-a-persons-sign-in-by-keyboard");
 });
 
 test("every registered Admin action has its own proving test case above", () => {

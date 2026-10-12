@@ -4,13 +4,23 @@
 // holding its right, and the Conduit refusing anything a stale view still offers.
 import { useEffect, useState } from "react";
 
-import type { DashboardIdentity, PersonAccount, SystemStatus } from "../../../../packages/schemas/generated";
+import type {
+  DashboardIdentity,
+  PersonAccount,
+  SignInDelivery,
+  SystemStatus,
+} from "../../../../packages/schemas/generated";
 import { Button, Input, Select, Tabs } from "../design/primitives";
 import {
+  disablePerson,
+  enablePerson,
+  invitePerson,
   listDashboards,
   listPeople,
   registerDashboard,
   removeDashboard,
+  resetSignIn,
+  setAccess,
   setRoles,
   systemStatus,
   type AdminApi,
@@ -45,70 +55,390 @@ export const ROLES: { id: string; label: string }[] = [
 ];
 const ROLE_IDS = new Set(ROLES.map((r) => r.id));
 
-function PersonRow({ api, person, onSaved }: { api: AdminApi; person: PersonAccount; onSaved: (p: PersonAccount) => void }) {
-  const [chosen, setChosen] = useState(new Set((person.roles ?? []).filter((r) => ROLE_IDS.has(r))));
-  const [said, setSaid] = useState<string | null>(null);
-  const others = (person.roles ?? []).filter((r) => !ROLE_IDS.has(r));
-  const changed = ROLES.some((r) => chosen.has(r.id) !== (person.roles ?? []).includes(r.id));
+/** The deployment's classifications and handling codes, for the access a person is given. */
+interface Scheme {
+  levels: string[];
+  codes: string[];
+}
+
+function useScheme(api: AdminApi): Scheme {
+  const [scheme, setScheme] = useState<Scheme>({ levels: [], codes: [] });
+  useEffect(() => {
+    fetch(`${api.apiBaseUrl}/v1/handling-scheme`, { headers: { Authorization: `Bearer ${api.bearerToken}` } })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((body: { classification?: string[]; handling_codes?: Record<string, unknown> }) =>
+        setScheme({ levels: body.classification ?? [], codes: Object.keys(body.handling_codes ?? {}) }),
+      )
+      .catch(() => setScheme({ levels: [], codes: [] }));
+  }, [api.apiBaseUrl, api.bearerToken]);
+  return scheme;
+}
+
+/** How the person signs in next (ADR-114 Amendment 5): the identity provider's emailed link, or a
+ * one-time code shown here once — never stored, changed by the person at first sign-in. */
+function Delivered({ delivery }: { delivery: SignInDelivery }) {
+  const who = delivery.person.name || delivery.person.username;
+  if (delivery.delivery === "email") {
+    return (
+      <p role="status" style={{ margin: 0 }}>
+        {`An email with a link to set a password went to ${delivery.person.email ?? who}. They choose their own password there.`}
+      </p>
+    );
+  }
   return (
-    <tr>
-      <td>
-        <span className="value">{person.name}</span>
-        <br />
-        <span className="label">{`${person.username} · ${person.clearance ?? "no clearance"} · ${person.org_unit ?? "no unit"}`}</span>
-      </td>
-      {ROLES.map((role) => (
-        <td key={role.id} style={{ textAlign: "center" }}>
+    <div role="status" style={{ border: "1px solid var(--warning)", padding: "var(--sp-8)", display: "grid", gap: "var(--sp-4)" }}>
+      <p style={{ margin: 0 }}>
+        {`Give this one-time code to ${who} in person. It is shown once, here; at first sign-in they choose their own password.`}
+      </p>
+      <code style={{ fontSize: "var(--fs-16)" }}>{delivery.one_time_code}</code>
+    </div>
+  );
+}
+
+function CodeChoices({
+  codes,
+  chosen,
+  onChange,
+  label,
+}: {
+  codes: string[];
+  chosen: Set<string>;
+  onChange: (next: Set<string>) => void;
+  label: (code: string) => string;
+}) {
+  return (
+    <span style={{ display: "inline-flex", gap: "var(--sp-8)" }}>
+      {codes.map((code) => (
+        <label key={code} className="label" style={{ display: "inline-flex", gap: "var(--sp-4)", alignItems: "center" }}>
           <input
             type="checkbox"
-            aria-label={`${role.label} for ${person.username}`}
-            checked={chosen.has(role.id)}
+            aria-label={label(code)}
+            checked={chosen.has(code)}
             onChange={(e) => {
               const next = new Set(chosen);
-              if (e.target.checked) next.add(role.id);
-              else next.delete(role.id);
-              setChosen(next);
+              if (e.target.checked) next.add(code);
+              else next.delete(code);
+              onChange(next);
             }}
           />
-        </td>
+          {code}
+        </label>
       ))}
-      <td className="label">{others.length ? others.join(", ") : "—"}</td>
-      <td>
-        <Button
-          disabled={!changed}
-          aria-label={`Save roles for ${person.username}`}
-          onClick={() =>
-            void setRoles(api, person.id, [...ROLES.map((r) => r.id).filter((id) => chosen.has(id)), ...others])
-              .then((saved) => {
-                setSaid("Saved.");
-                onSaved(saved);
-              })
-              .catch((e: Error) => setSaid(e.message))
-          }
-        >
-          Save
-        </Button>
-        {said && <span role="status" className="label">{` ${said}`}</span>}
-      </td>
-    </tr>
+    </span>
+  );
+}
+
+function AccessEditor({
+  api,
+  person,
+  scheme,
+  onSaved,
+}: {
+  api: AdminApi;
+  person: PersonAccount;
+  scheme: Scheme;
+  onSaved: (p: PersonAccount) => void;
+}) {
+  const [clearance, setClearance] = useState(person.clearance ?? scheme.levels[0] ?? "");
+  const [unit, setUnit] = useState(person.org_unit ?? "");
+  const [codes, setCodes] = useState(new Set(person.receivable_handling_codes ?? []));
+  const [said, setSaid] = useState<string | null>(null);
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-12)", alignItems: "center" }}>
+      <Select aria-label={`Clearance for ${person.username}`} value={clearance} onChange={(e) => setClearance(e.target.value)}>
+        {scheme.levels.map((l) => (
+          <option key={l} value={l}>{l}</option>
+        ))}
+      </Select>
+      <Input aria-label={`Unit for ${person.username}`} value={unit} onChange={(e) => setUnit(e.target.value)} />
+      <CodeChoices codes={scheme.codes} chosen={codes} onChange={setCodes} label={(c) => `Handling code ${c} for ${person.username}`} />
+      <Button
+        aria-label={`Save access for ${person.username}`}
+        disabled={!clearance || !unit.trim()}
+        onClick={() =>
+          void setAccess(api, person.id, { clearance, org_unit: unit.trim(), receivable_handling_codes: [...codes] })
+            .then((saved) => {
+              setSaid("Saved.");
+              onSaved(saved);
+            })
+            .catch((e: Error) => setSaid(e.message))
+        }
+      >
+        Save access
+      </Button>
+      {said && <span role="status" className="label">{said}</span>}
+    </div>
+  );
+}
+
+function PersonRow({
+  api,
+  person,
+  scheme,
+  onSaved,
+  onDelivered,
+}: {
+  api: AdminApi;
+  person: PersonAccount;
+  scheme: Scheme;
+  onSaved: (p: PersonAccount) => void;
+  onDelivered: (d: SignInDelivery) => void;
+}) {
+  const [chosen, setChosen] = useState(new Set((person.roles ?? []).filter((r) => ROLE_IDS.has(r))));
+  const [said, setSaid] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const others = (person.roles ?? []).filter((r) => !ROLE_IDS.has(r));
+  const changed = ROLES.some((r) => chosen.has(r.id) !== (person.roles ?? []).includes(r.id));
+  const status = !person.enabled ? "Disabled" : person.must_set_password ? "Invited — must set a password" : null;
+  const act = (done: Promise<PersonAccount>) =>
+    void done
+      .then((saved) => {
+        setSaid(null);
+        onSaved(saved);
+      })
+      .catch((e: Error) => setSaid(e.message));
+  return (
+    <>
+      <tr>
+        <td>
+          <span className="value">{person.name}</span>
+          <br />
+          <span className="label">{`${person.username} · ${person.clearance ?? "no clearance"} · ${person.org_unit ?? "no unit"}`}</span>
+          {status && (
+            <>
+              <br />
+              <span className="label" style={!person.enabled ? { color: "var(--warning)" } : undefined}>{status}</span>
+            </>
+          )}
+        </td>
+        {ROLES.map((role) => (
+          <td key={role.id} style={{ textAlign: "center" }}>
+            <input
+              type="checkbox"
+              aria-label={`${role.label} for ${person.username}`}
+              checked={chosen.has(role.id)}
+              onChange={(e) => {
+                const next = new Set(chosen);
+                if (e.target.checked) next.add(role.id);
+                else next.delete(role.id);
+                setChosen(next);
+              }}
+            />
+          </td>
+        ))}
+        <td className="label">{others.length ? others.join(", ") : "—"}</td>
+        <td>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)" }}>
+            <Button
+              disabled={!changed}
+              aria-label={`Save roles for ${person.username}`}
+              onClick={() =>
+                void setRoles(api, person.id, [...ROLES.map((r) => r.id).filter((id) => chosen.has(id)), ...others])
+                  .then((saved) => {
+                    setSaid("Saved.");
+                    onSaved(saved);
+                  })
+                  .catch((e: Error) => setSaid(e.message))
+              }
+            >
+              Save
+            </Button>
+            <Button aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
+              Access
+            </Button>
+            {person.enabled ? (
+              confirming ? (
+                <>
+                  <Button
+                    aria-label={`Confirm disabling ${person.username}`}
+                    onClick={() => {
+                      setConfirming(false);
+                      act(disablePerson(api, person.id));
+                    }}
+                  >
+                    Confirm disable
+                  </Button>
+                  <Button aria-label={`Keep ${person.username} enabled`} onClick={() => setConfirming(false)}>
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button aria-label={`Disable ${person.username}`} onClick={() => setConfirming(true)}>
+                  Disable
+                </Button>
+              )
+            ) : (
+              <Button aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
+                Enable
+              </Button>
+            )}
+            <Button
+              aria-label={`Reset sign-in for ${person.username}`}
+              onClick={() =>
+                void resetSignIn(api, person.id)
+                  .then((delivery) => {
+                    onSaved(delivery.person);
+                    onDelivered(delivery);
+                  })
+                  .catch((e: Error) => setSaid(e.message))
+              }
+            >
+              Reset sign-in
+            </Button>
+          </div>
+          {said && <span role="status" className="label">{` ${said}`}</span>}
+        </td>
+      </tr>
+      {editing && (
+        <tr>
+          <td colSpan={ROLES.length + 3}>
+            <AccessEditor api={api} person={person} scheme={scheme} onSaved={onSaved} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function InviteForm({
+  api,
+  scheme,
+  onInvited,
+}: {
+  api: AdminApi;
+  scheme: Scheme;
+  onInvited: (d: SignInDelivery) => void;
+}) {
+  const [username, setUsername] = useState("");
+  const [first, setFirst] = useState("");
+  const [last, setLast] = useState("");
+  const [email, setEmail] = useState("");
+  const [clearance, setClearance] = useState("");
+  const [unit, setUnit] = useState("");
+  const [codes, setCodes] = useState(new Set<string>());
+  const [roles, setRolesChosen] = useState(new Set<string>());
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    if (!clearance && scheme.levels[0]) setClearance(scheme.levels[0]);
+  }, [scheme.levels, clearance]);
+  const field = { display: "grid", gap: "var(--sp-4)" } as const;
+  return (
+    <form
+      aria-label="Invite a person"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setProblem(null);
+        void invitePerson(api, {
+          username: username.trim(),
+          first_name: first.trim(),
+          last_name: last.trim(),
+          email: email.trim() || null,
+          clearance,
+          org_unit: unit.trim(),
+          receivable_handling_codes: [...codes],
+          roles: ROLES.map((r) => r.id).filter((id) => roles.has(id)),
+        })
+          .then((delivery) => {
+            onInvited(delivery);
+            setUsername("");
+            setFirst("");
+            setLast("");
+            setEmail("");
+          })
+          .catch((err: Error) => setProblem(err.message));
+      }}
+      style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 520, border: "1px solid var(--border-subtle)", padding: "var(--sp-12)" }}
+    >
+      <h3 className="value" style={{ margin: 0 }}>Invite a person</h3>
+      <p className="label" style={{ margin: 0 }}>
+        They are signed in by an emailed link when this deployment has a mail server and you give an address; otherwise you
+        are shown a one-time code to give them in person. Nobody can be given more than you hold.
+      </p>
+      {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
+      <label className="label" style={field}>
+        Sign-in name
+        <Input aria-label="Sign-in name" value={username} onChange={(e) => setUsername(e.target.value)} />
+      </label>
+      <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+        <label className="label" style={{ ...field, flex: 1 }}>
+          First name
+          <Input aria-label="First name" value={first} onChange={(e) => setFirst(e.target.value)} />
+        </label>
+        <label className="label" style={{ ...field, flex: 1 }}>
+          Last name
+          <Input aria-label="Last name" value={last} onChange={(e) => setLast(e.target.value)} />
+        </label>
+      </div>
+      <label className="label" style={field}>
+        Email (optional)
+        <Input aria-label="Email (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      </label>
+      <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+        <label className="label" style={{ ...field, flex: 1 }}>
+          Clearance
+          <Select aria-label="Invite clearance" value={clearance} onChange={(e) => setClearance(e.target.value)}>
+            {scheme.levels.map((l) => (
+              <option key={l} value={l}>{l}</option>
+            ))}
+          </Select>
+        </label>
+        <label className="label" style={{ ...field, flex: 1 }}>
+          Unit
+          <Input aria-label="Invite unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
+        </label>
+      </div>
+      <div className="label" style={field}>
+        Handling codes they may receive
+        <CodeChoices codes={scheme.codes} chosen={codes} onChange={setCodes} label={(c) => `Invite with handling code ${c}`} />
+      </div>
+      <div className="label" style={field}>
+        Roles
+        <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "var(--sp-8)" }}>
+          {ROLES.map((role) => (
+            <label key={role.id} style={{ display: "inline-flex", gap: "var(--sp-4)", alignItems: "center" }}>
+              <input
+                type="checkbox"
+                aria-label={`Invite as ${role.label}`}
+                checked={roles.has(role.id)}
+                onChange={(e) => {
+                  const next = new Set(roles);
+                  if (e.target.checked) next.add(role.id);
+                  else next.delete(role.id);
+                  setRolesChosen(next);
+                }}
+              />
+              {role.label}
+            </label>
+          ))}
+        </span>
+      </div>
+      <Button type="submit" variant="primary" disabled={!username.trim() || !clearance || !unit.trim()}>
+        Invite
+      </Button>
+    </form>
   );
 }
 
 function People({ api }: { api: AdminApi }) {
   const [people, setPeople] = useState<PersonAccount[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [delivered, setDelivered] = useState<SignInDelivery | null>(null);
+  const scheme = useScheme(api);
   useEffect(() => {
     listPeople(api).then(setPeople).catch((e: Error) => setProblem(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api.apiBaseUrl, api.bearerToken]);
   if (problem) return <p role="alert">{problem}</p>;
   if (!people) return <p className="label">Reading the people…</p>;
+  const saved = (p: PersonAccount) => setPeople((current) => (current ?? []).map((x) => (x.id === p.id ? p : x)));
   return (
     <>
       <p className="label" style={{ margin: 0 }}>
         A role grants what a person may do, never what they may see: that stays their clearance and the cases they are given.
         Other grants (single rights, older roles) are kept as they are.
       </p>
+      {delivered && <Delivered delivery={delivered} />}
       <table className="table" aria-label="People and their roles">
         <thead>
           <tr>
@@ -122,10 +452,18 @@ function People({ api }: { api: AdminApi }) {
         </thead>
         <tbody>
           {people.map((p) => (
-            <PersonRow key={p.id} api={api} person={p} onSaved={(saved) => setPeople(people.map((x) => (x.id === saved.id ? saved : x)))} />
+            <PersonRow key={p.id} api={api} person={p} scheme={scheme} onSaved={saved} onDelivered={setDelivered} />
           ))}
         </tbody>
       </table>
+      <InviteForm
+        api={api}
+        scheme={scheme}
+        onInvited={(delivery) => {
+          setDelivered(delivery);
+          setPeople((current) => [...(current ?? []), delivery.person]);
+        }}
+      />
     </>
   );
 }
