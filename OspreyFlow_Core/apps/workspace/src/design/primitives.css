@@ -460,20 +460,30 @@
     linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 16px 16px;
 }
-/* The zoom cluster and the legend: docked overlays on the canvas, a hairline and no shadow. */
+/* The zoom cluster and the legend: docked overlays on the canvas, a hairline and no shadow; ADR-115 E4
+   (the reference): one column at the canvas's top right, the legend over the zoom group. */
+.canvas-corner {
+  position: absolute; z-index: 10; right: var(--sp-8); top: calc(var(--h-canvas-toolbar) + var(--sp-8));
+  display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-8); pointer-events: none;
+}
+.canvas-corner > * { pointer-events: auto; }
 .canvas-zoom {
-  position: absolute; z-index: 10; right: var(--sp-8); bottom: var(--sp-8);
   display: flex; flex-direction: column; background: var(--surface-panel);
   border: 1px solid var(--border-subtle); border-radius: var(--r-control);
 }
+.canvas-zoom__readout {
+  min-width: var(--h-control-28); min-height: var(--h-control-28); display: grid; place-items: center;
+  padding: 0 var(--sp-4); font-size: var(--fs-11); color: var(--text-secondary); border-top: 1px solid var(--border-subtle);
+}
+.canvas-zoom__readout + .canvas-zoom__button { border-top: 1px solid var(--border-subtle); }
 .canvas-zoom__button {
-  min-width: 28px; min-height: 28px; display: grid; place-items: center; padding: 0;
+  min-width: var(--h-control-28); min-height: var(--h-control-28); display: grid; place-items: center; padding: 0;
   background: transparent; border: 0; color: var(--text-secondary); font: inherit; font-size: var(--fs-13); cursor: pointer;
 }
 .canvas-zoom__button + .canvas-zoom__button { border-top: 1px solid var(--border-subtle); }
 .canvas-zoom__button:hover, .canvas-zoom__button:focus-visible { background: var(--surface-hover); color: var(--text-primary); }
 .canvas-legend {
-  position: absolute; z-index: 10; left: var(--sp-8); bottom: var(--sp-8); max-width: 220px;
+  max-width: 220px;
   background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-control);
   font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-secondary);
 }

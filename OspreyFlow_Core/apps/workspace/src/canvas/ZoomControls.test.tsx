@@ -24,4 +24,15 @@ describe("ZoomControls", () => {
     const { getByRole } = render(<ZoomControls onZoomIn={() => {}} onZoomOut={() => {}} onFit={() => {}} />);
     expect(getByRole("button", { name: "Fit to view" }).getAttribute("aria-keyshortcuts")).toBe("F");
   });
+
+  // ADR-115 E4 (review item 10; the reference's zoom group): out, the zoom as a percentage in mono,
+  // in, then Fit — top to bottom.
+  it("reads out the zoom between Zoom out and Zoom in, in mono", () => {
+    const { getByRole, getByText } = render(<ZoomControls onZoomIn={() => {}} onZoomOut={() => {}} onFit={() => {}} percent={125} />);
+    const group = getByRole("group", { name: "Zoom" });
+    const order = Array.from(group.children).map((c) => c.getAttribute("aria-label") ?? c.textContent);
+    expect(order).toEqual(["Zoom out", "Zoom 125%", "Zoom in", "Fit to view"]);
+    expect(getByText("125%").className).toContain("value");
+    expect((getByText("125%").closest(".canvas-zoom__readout") as HTMLElement).hidden).toBe(false);
+  });
 });

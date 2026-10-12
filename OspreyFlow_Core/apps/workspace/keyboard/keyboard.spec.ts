@@ -1727,6 +1727,11 @@ test("Zoom in and Zoom out move the camera by keyboard alone", async ({ page }) 
   await page.keyboard.press("Enter");
   await expect.poll(ratio).toBeLessThan(before);
   const zoomed = await ratio();
+  // ADR-115 E4: the zoom group's readout says the camera's zoom, as a percentage.
+  await expect(page.getByRole("group", { name: "Zoom" }).locator(".canvas-zoom__readout")).toHaveAttribute(
+    "aria-label",
+    `Zoom ${Math.round(100 / zoomed)}%`,
+  );
   const zoomOut = page.getByRole("button", { name: "Zoom out" });
   await zoomOut.focus();
   await page.keyboard.press("Enter");

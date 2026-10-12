@@ -1,19 +1,25 @@
-// The canvas's zoom cluster (ADR-097 step 2, design review item 10), at its lower right: zoom in, zoom
-// out, and fit everything in view, which F on the canvas also does.
+// The canvas's zoom group (ADR-097 step 2, design review item 10; ADR-115 E4, the reference): zoom
+// out, the zoom as a percentage in mono, zoom in, and fit everything in view, which F on the canvas
+// also does. It sits under the legend at the canvas's top right.
 export interface ZoomControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFit: () => void;
+  /** The camera's zoom, 100 at its starting scale; absent while unknown. */
+  percent?: number;
 }
 
-export function ZoomControls({ onZoomIn, onZoomOut, onFit }: ZoomControlsProps) {
+export function ZoomControls({ onZoomIn, onZoomOut, onFit, percent }: ZoomControlsProps) {
   return (
     <div role="group" aria-label="Zoom" className="canvas-zoom">
-      <button type="button" className="canvas-zoom__button" aria-label="Zoom in" title="Zoom in" onClick={onZoomIn}>
-        +
-      </button>
       <button type="button" className="canvas-zoom__button" aria-label="Zoom out" title="Zoom out" onClick={onZoomOut}>
         −
+      </button>
+      <span className="canvas-zoom__readout" aria-label={percent === undefined ? "Zoom" : `Zoom ${percent}%`}>
+        <span className="value">{percent === undefined ? "—" : `${percent}%`}</span>
+      </span>
+      <button type="button" className="canvas-zoom__button" aria-label="Zoom in" title="Zoom in" onClick={onZoomIn}>
+        +
       </button>
       <button
         type="button"

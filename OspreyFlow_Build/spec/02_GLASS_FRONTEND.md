@@ -493,8 +493,9 @@ the left edge. At 100% (a camera ratio of 1) a node is 20 pixels across in an un
 from the painted pixels (`keyboard/canvas-look.spec.ts`); the far overview keeps nodes small, and
 a crowded view still shrinks them as before.
 
-**Zoom, the legend and the grid (ADR-097 step 2).** A zoom cluster at the canvas's lower right, a group
-named *Zoom*: *Zoom in*, *Zoom out* and *Fit to view*; F with the canvas focused fits too (the whole graph
+**Zoom, the legend and the grid (ADR-097 step 2; ADR-115 E4).** At the canvas's top right, below the
+toolbar, the legend and under it a zoom group named *Zoom*: *Zoom out*, the zoom as a percentage in mono
+(100% at the camera's starting scale, following every move), *Zoom in* and *Fit to view*; F with the canvas focused fits too (the whole graph
 framed, as an arrangement frames it, inside an 80px margin so the outermost nodes clear the toolbar
 above the canvas and the selection bar below it — Sigma's 30px framed them under both, found live 11
 October 2026 and checked by eye, since jsdom draws no WebGL). A legend at the lower left lists each type in view as the canvas

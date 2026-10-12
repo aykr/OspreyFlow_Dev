@@ -398,6 +398,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     > | null>(null);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const canvasDescriptionId = useId();
+    const [zoomPercent, setZoomPercent] = useState<number | undefined>(undefined);
     // ADR-094 step 3: the Add files dialog, for the case or for one holder.
     const [addingFiles, setAddingFiles] = useState<{ holder?: { id: string; label: string } } | null>(null);
     const [hovered, setHovered] = useState<string | null>(null);
@@ -1413,6 +1414,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       });
       currentSigma = sigma;
       sigmaRef.current = sigma;
+      // ADR-115 E4: the zoom group's readout follows the camera (100% at its starting scale).
+      const camera = sigma.getCamera();
+      setZoomPercent(Math.round(100 / camera.getState().ratio));
+      camera.on("updated", (state) => setZoomPercent(Math.round(100 / state.ratio)));
 
       // The link under a point, within a few pixels of its line: a link that is not drawn (hidden by
       // the analyst, or inside a folded group) is not under it.
@@ -3181,8 +3186,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           }}
         />
         {/* ADR-097 step 2: the zoom cluster and the legend, after the view's own controls in Tab order. */}
-        <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} />
-        <CanvasLegend types={legendTypes} />
+        <div className="canvas-corner">
+          <CanvasLegend types={legendTypes} />
+          <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} percent={zoomPercent} />
+        </div>
         {addingFiles && bearerToken && investigationId && (
           <div style={{ position: "absolute", zIndex: 20, top: "var(--sp-40)", right: "var(--sp-8)" }}>
             <AddFiles
