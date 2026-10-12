@@ -919,7 +919,7 @@ five-minute guest token the Conduit issues and the SDK asks for again before it 
 menus never appear; a refusal is said in words; with none to open, the panel says why one would
 appear (`reports/EmbeddedDashboards.tsx`, `reports/ReportsPlace.tsx`; `keyboard/reports.spec.ts`).
 
-**Trends, report packs and their distribution (ADR-113, Amendments 1 and 2).** The Reports view's
+**Trends, report packs and their distribution (ADR-113, Amendments 1 to 3).** The Reports view's
 tabs are *Figures*, then — each only with its right (`rights/visibility.ts`) — *Trends*
 (run_analysis), *Packs* (record_assessment), *Published* (read_reports), then *Dashboards*.
 *Trends* builds a trend from `GET …/trends/options` only — event types as checkboxes, *Count* or
@@ -940,8 +940,10 @@ the approved manifest, asks for a justification and originator reference when an
 originator consulted, and prints the manifest from a hidden frame: a cover with the mark, then a
 page per item under a top and bottom banner of that item's own marking (`reports/packExport.ts`,
 styled with the light-theme ramp restated, every string escaped); the PDF is saved from the
-browser's print dialogue. Entity items are drawn when present; adding one from the canvas is not yet
-built. Keyboard cases: `keyboard/trends.spec.ts` (`TRENDS_ACTIONS`) and `keyboard/packs.spec.ts`
+browser's print dialogue. Whoever published, withdrew or exported is shown by name, the id only when the server had none
+(ADR-106; Am. 3); the printed cover carries the mark's banner top and bottom, and a trend's periods
+are said and printed as days, never timestamps (Am. 3). Entity items are drawn when present; adding
+one from the canvas is not yet built. Keyboard cases: `keyboard/trends.spec.ts` (`TRENDS_ACTIONS`) and `keyboard/packs.spec.ts`
 (`PACKS_ACTIONS`).
 
 **The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
