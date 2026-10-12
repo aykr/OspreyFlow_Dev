@@ -1676,7 +1676,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           if (!graph.hasNode(nodeId)) return;
           const box = containerRef.current?.getBoundingClientRect();
           const [x, y] = box ? [box.width / 2, box.height / 2] : [0, 0];
-          void requestExpansion(nodeId, null, x, y);
+          // Through the ref, as the canvas's own menus do: the handle is not rebuilt each render.
+          void requestExpansionRef.current?.(nodeId, null, x, y);
         },
         centreOn: (nodeId: string) => {
           if (!graph.hasNode(nodeId)) return;

@@ -42,6 +42,7 @@ declare global {
       cameraState: () => { x: number; y: number; ratio: number } | null;
       zoomTo: (ratio: number) => void;
       expandFrom: (nodeId: string, depth: number) => void;
+      expandNode: (nodeId: string) => void;
       /** The name the canvas draws beside a node now; empty when it draws none. */
       labelOf: (nodeId: string) => string | null;
       /** The fill colour stored on a node now, which is what the canvas paints it with. */
@@ -136,6 +137,7 @@ window.__CANVAS__ = {
   cameraState: () => canvasHandle.current?.cameraState() ?? null,
   zoomTo: (ratio) => canvasHandle.current?.zoomTo(ratio),
   expandFrom: (id, depth) => canvasHandle.current?.expandFrom(id, depth),
+  expandNode: (id) => canvasHandle.current?.expandNode(id),
   labelOf: (id) => canvasHandle.current?.labelOf(id) ?? null,
   nodeColour: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "color") as string) : null),
   setTheme: (theme) => applyTheme(theme),

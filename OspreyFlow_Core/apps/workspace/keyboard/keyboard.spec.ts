@@ -1716,6 +1716,21 @@ test("an expansion that adds nothing says so, and Escape dismisses the message",
 
 // --- The zoom cluster, Fit and the legend (ADR-097 step 2) ---------------------------------------
 
+// ADR-115 E4: the canvas handle's expandNode — what the Inspector's Expand calls — asks for the
+// expansion's preview, as the canvas's own menus do (counted in the store before anything is drawn).
+test("the canvas handle's expandNode asks for the node's expansion preview", async ({ page }) => {
+  const asked: string[] = [];
+  await page.route("**/*/expand/preview", async (route) => {
+    asked.push(JSON.stringify(route.request().postDataJSON()));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ counts: {}, total: 0, cap: 2000, working_set_size: 6 }) });
+  });
+  await page.goto("/keyboard/harness.html");
+  await layoutSettled(page, ["n0"]);
+  await page.evaluate(() => window.__CANVAS__?.expandNode("n0"));
+  await expect.poll(() => asked.length).toBeGreaterThan(0);
+  expect(asked[0]).toContain("n0");
+});
+
 test("Zoom in and Zoom out move the camera by keyboard alone", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   await layoutSettled(page, ["n0"]);
