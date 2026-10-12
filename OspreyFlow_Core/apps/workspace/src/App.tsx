@@ -24,7 +24,7 @@ import {
 import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
 import { installUnauthorisedWatch } from "./auth/unauthorised";
 import { SignInScreen } from "./auth/SignInScreen";
-import { deploymentMarking } from "./auth/oidcConfig";
+import { deploymentMarking, deploymentWelcome } from "./auth/oidcConfig";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import { linkTypeName } from "./canvas/linkLabel";
 import { DocumentReader } from "./reader/DocumentReader";
@@ -924,7 +924,8 @@ export function App() {
         marking={deploymentMarking()}
         reason={signInReason}
         intent={handoff.view}
-        onSignIn={() => void signIn()}
+        welcome={deploymentWelcome()}
+        onSignIn={(organisationProvider) => void signIn(organisationProvider)}
       />
     );
   }

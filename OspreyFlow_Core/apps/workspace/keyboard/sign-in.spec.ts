@@ -11,7 +11,7 @@
 // `code_challenge` — real application wiring, not a mocked callback. Both the discovery fetch and
 // the navigation are intercepted at the transport, the same shape `metrics-panel.spec.ts` already
 // uses for a `fetch`.
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { assertAllCovered, registerCovered, SIGN_IN_ACTIONS } from "./actionRegistry";
 
@@ -21,9 +21,7 @@ import { assertAllCovered, registerCovered, SIGN_IN_ACTIONS } from "./actionRegi
 // unrelated to and not reachable from this suite; every request to it is intercepted below.
 const AUTHORITY = "http://localhost:8081/realms/osprey";
 
-test("a keyboard-activated sign-in reaches a real OIDC discovery fetch and a real authorization redirect", async ({
-  page,
-}) => {
+async function serveIdentityProvider(page: Page) {
   await page.route(`${AUTHORITY}/.well-known/openid-configuration`, async (route) => {
     await route.fulfill({
       status: 200,
@@ -43,14 +41,26 @@ test("a keyboard-activated sign-in reaches a real OIDC discovery fetch and a rea
   await page.route(`${AUTHORITY}/protocol/openid-connect/auth**`, async (route) => {
     await route.fulfill({ status: 200, contentType: "text/html", body: "<html>stub IdP</html>" });
   });
+}
 
+/** Tab from the top of the page until `name` has focus — proving Tab reaches it, never focusing it
+ * directly. The welcome page's header (About, the theme) comes first (ADR-115 E2). */
+async function tabTo(page: Page, name: string) {
+  const target = page.getByRole("button", { name, exact: true });
+  await target.waitFor();
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press("Tab");
+    if (await target.evaluate((el) => el === document.activeElement)) return;
+  }
+  await expect(target).toBeFocused();
+}
+
+test("a keyboard-activated sign-in reaches a real OIDC discovery fetch and a real authorization redirect", async ({
+  page,
+}) => {
+  await serveIdentityProvider(page);
   await page.goto("/keyboard/sign-in-harness.html");
-
-  await page.getByRole("button", { name: "Sign in" }).waitFor();
-  // Starting focus point is the document body, not the button itself — proving Tab actually
-  // reaches it, the same discipline every other spec in this directory follows.
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeFocused();
+  await tabTo(page, "Sign in");
   await page.keyboard.press("Enter");
 
   await page.waitForURL(new RegExp(`${AUTHORITY}/protocol/openid-connect/auth`.replace(/\./g, "\\.")));
@@ -61,6 +71,29 @@ test("a keyboard-activated sign-in reaches a real OIDC discovery fetch and a rea
   expect(url.searchParams.get("code_challenge")).toBeTruthy();
 
   registerCovered("SIGN_IN_ACTIONS", "submit-sign-in");
+});
+
+// ADR-115 decision 3: with a brokered provider configured, the organisation's button goes straight
+// to it — Keycloak's `kc_idp_hint` on the real authorisation request.
+test("organisation sign-in by keyboard names the organisation's provider to the identity provider", async ({ page }) => {
+  await serveIdentityProvider(page);
+  await page.goto("/keyboard/sign-in-harness.html?organisation=acme-entra");
+  await tabTo(page, "Continue with organisation sign-in");
+  await page.keyboard.press("Enter");
+  await page.waitForURL(new RegExp(`${AUTHORITY}/protocol/openid-connect/auth`.replace(/\./g, "\\.")));
+  const url = new URL(page.url());
+  expect(url.searchParams.get("kc_idp_hint")).toBe("acme-entra");
+  expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+  registerCovered("SIGN_IN_ACTIONS", "continue-with-organisation-sign-in");
+});
+
+test("the welcome page's theme switches by keyboard", async ({ page }) => {
+  await page.goto("/keyboard/sign-in-harness.html");
+  await tabTo(page, "Light theme");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.getByRole("button", { name: "Dark theme", exact: true })).toBeFocused();
+  registerCovered("SIGN_IN_ACTIONS", "switch-the-welcome-theme");
 });
 
 test("every registered sign-in action has its own proving test case above", () => {

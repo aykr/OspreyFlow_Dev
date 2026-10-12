@@ -113,6 +113,11 @@ def test_the_glass_learns_its_identity_provider_at_run_time() -> None:
         # ADR-115 decision 2: the marking a surface with no case data shows; the scheme's lowest
         # when the deployment names none.
         "marking": "PUBLIC",
+        # ADR-115 decisions 3 and 8: no organisation sign-in until one is configured; About on, and
+        # no footer link the deployment has not given.
+        "organisation_sign_in": None,
+        "welcome": {"about": True, "links": {}},
+        "version": site.deployment_version(),
     }
     volumes = _compose(artefacts)["workspace"]["volumes"]
     assert "./glass.json:/usr/share/nginx/html/deployment.json:ro" in volumes
@@ -125,6 +130,22 @@ def test_the_marking_floor_is_the_deployments_own_and_one_its_scheme_knows() -> 
     assert json.loads(artefacts["glass.json"])["marking"] == "OFFICIAL"
     with pytest.raises(ValueError, match="TOP SECRET.*PUBLIC, OFFICIAL, OFFICIAL-SENSITIVE, SECRET"):
         _render(governance={"marking": "TOP SECRET"})
+
+
+def test_the_welcome_page_learns_its_sign_in_about_and_links_from_the_deployment() -> None:
+    """ADR-115 decisions 3 and 8: organisation sign-in appears only when a brokered provider is
+    named; About can be switched off; each footer link appears only when its address is given."""
+    settings = json.loads(
+        _render(
+            governance={"organisation_sign_in": "acme-entra"},
+            welcome={"about": False, "account_help": "https://help.acme.test/osprey"},
+        )["glass.json"]
+    )
+    assert settings["organisation_sign_in"] == "acme-entra"
+    assert settings["welcome"] == {"about": False, "links": {"account_help": "https://help.acme.test/osprey"}}
+    with pytest.raises(ValueError, match="privacy"):
+        _render(welcome={"privacy": "javascript:alert(1)"})
+    assert len(site.deployment_version()) >= 7
 
 
 def test_superset_origins_are_the_derived_names() -> None:

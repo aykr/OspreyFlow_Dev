@@ -310,6 +310,9 @@ export const TIMELINE_PLAYBACK_ACTIONS = defineActionRegistry("TIMELINE_PLAYBACK
  */
 export const SIGN_IN_ACTIONS = defineActionRegistry("SIGN_IN_ACTIONS", [
   "submit-sign-in",
+  // ADR-115 E2: the welcome page.
+  "continue-with-organisation-sign-in",
+  "switch-the-welcome-theme",
 ] as const);
 
 /**

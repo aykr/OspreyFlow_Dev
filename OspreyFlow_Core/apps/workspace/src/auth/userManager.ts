@@ -96,8 +96,14 @@ export function getUserManager(): UserManager {
   return manager;
 }
 
-export function signIn(): Promise<void> {
-  return getUserManager().signinRedirect();
+/** The authorisation request's extras: an organisation's brokered provider is named to Keycloak
+ * (`kc_idp_hint`) so it goes straight there (ADR-115 decision 3); otherwise none. */
+export function signInArgs(organisationProvider: string | undefined): { extraQueryParams: Record<string, string> } | undefined {
+  return organisationProvider ? { extraQueryParams: { kc_idp_hint: organisationProvider } } : undefined;
+}
+
+export function signIn(organisationProvider?: string): Promise<void> {
+  return getUserManager().signinRedirect(signInArgs(organisationProvider));
 }
 
 export function completeSignInFromRedirect(): Promise<User> {

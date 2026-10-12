@@ -214,7 +214,8 @@ describe("the launcher's hand-off (a person who has just signed in at the launch
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Ingest Studio" });
+    // ADR-115 E2: the welcome page's card says which of the two the person is signing in to.
+    await screen.findByRole("heading", { name: "Sign in to the Ingest Studio" });
   });
 
   test("the Glass tile's own sign-in screen keeps its heading", async () => {
@@ -224,7 +225,8 @@ describe("the launcher's hand-off (a person who has just signed in at the launch
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "OspreyFlow" });
+    await screen.findByRole("heading", { level: 2, name: "Sign in" });
+    expect(screen.getByRole("heading", { level: 1, name: "Crime analysis on one graph" })).toBeTruthy();
   });
 });
 

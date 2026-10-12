@@ -13,6 +13,10 @@ export type HandlingScheme = string;
  */
 export type Ontology = string;
 /**
+ * The alias of an organisation's own identity provider brokered by Keycloak. When set, the welcome page offers *Continue with organisation sign-in*, which goes straight to it (ADR-115 decision 3). Default: none — one *Sign in* to the OspreyFlow form.
+ */
+export type OrganisationSignIn = string | null;
+/**
  * The protective marking shown where no case data is on screen: the welcome page, Home, the Ingest Studio and the Admin area; inside a case, the strip shows this or the highest marking on screen, whichever is higher (ADR-115 decision 2). One of the handling scheme's classifications. Default: the scheme's lowest.
  */
 export type Marking = string | null;
@@ -36,6 +40,7 @@ export interface GovernanceConfig {
   identity_provider?: IdentityProvider;
   handling_scheme?: HandlingScheme;
   ontology?: Ontology;
+  organisation_sign_in?: OrganisationSignIn;
   marking?: Marking;
   real_data_exceptions?: RealDataExceptions;
 }

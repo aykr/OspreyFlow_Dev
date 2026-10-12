@@ -31,7 +31,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from schemas.mapconfig import MapConfig
 
@@ -253,6 +253,14 @@ class GovernanceConfig(BaseModel):
         default="uk-law-enforcement", description="Default: uk-law-enforcement"
     )
     ontology: str = Field(default="default", description="Default: default")
+    organisation_sign_in: str | None = Field(
+        default=None,
+        description=(
+            "The alias of an organisation's own identity provider brokered by Keycloak. When set, "
+            "the welcome page offers *Continue with organisation sign-in*, which goes straight to "
+            "it (ADR-115 decision 3). Default: none — one *Sign in* to the OspreyFlow form."
+        ),
+    )
     marking: str | None = Field(
         default=None,
         description=(
@@ -363,6 +371,29 @@ class ReportingConfig(BaseModel):
     superset_memory: str = Field(default="2g", description="Default: 2g")
 
 
+class WelcomeConfig(BaseModel):
+    """The welcome page before sign-in (ADR-115 decision 8): its About section, and the footer's
+    links — the deploying organisation's own documents, each shown only when its address is
+    given."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    about: bool = Field(
+        default=True, description="Default: on. Off for an internal-only deployment."
+    )
+    account_help: str | None = Field(default=None, description="Default: no link")
+    accessibility: str | None = Field(default=None, description="Default: no link")
+    privacy: str | None = Field(default=None, description="Default: no link")
+    service_status: str | None = Field(default=None, description="Default: no link")
+
+    @field_validator("account_help", "accessibility", "privacy", "service_status")
+    @classmethod
+    def _a_web_address(cls, value: str | None, info: ValidationInfo) -> str | None:
+        if value is not None and not value.startswith(("https://", "http://")):
+            raise ValueError(f"welcome.{info.field_name} must be an http(s) address, not {value!r}")
+        return value
+
+
 class MailConfig(BaseModel):
     """The mail server the identity provider sends invitations and sign-in resets through
     (`06_DECISIONS.md` ADR-114 Amendment 5). Without one, people are signed in by a one-time code.
@@ -401,6 +432,7 @@ class OspreyConfig(BaseModel):
     map: MapConfig | None = Field(default=None, description="Default: none declared")
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     mail: MailConfig | None = Field(default=None, description="Default: none — one-time codes")
+    welcome: WelcomeConfig = Field(default_factory=WelcomeConfig)
 
     @model_validator(mode="after")
     def _cluster_hosts_belong_to_the_cluster_profile(self) -> OspreyConfig:

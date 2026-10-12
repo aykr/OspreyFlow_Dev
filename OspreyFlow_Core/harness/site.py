@@ -138,13 +138,35 @@ def marking_floor(config: OspreyConfig) -> str:
     return chosen
 
 
+def deployment_version() -> str:
+    """What the welcome page's footer names: the commit the deployment was built from, short, until
+    stage B5's release tags exist."""
+    from harness.render import git_sha
+
+    return git_sha()[:7]
+
+
 def render_glass_settings(config: OspreyConfig) -> str:
-    """What the Glass reads at start (`/deployment.json`): where its identity provider is, and the
-    marking it shows before any case data is on screen."""
+    """What the Glass reads at start (`/deployment.json`): where its identity provider is, the
+    marking it shows before any case data is on screen, and the welcome page's settings."""
+    welcome = config.welcome
+    links = {
+        name: address
+        for name, address in (
+            ("account_help", welcome.account_help),
+            ("accessibility", welcome.accessibility),
+            ("privacy", welcome.privacy),
+            ("service_status", welcome.service_status),
+        )
+        if address
+    }
     settings = {
         "identity_provider": sites(config).identity,
         "realm": REALM,
         "marking": marking_floor(config),
+        "organisation_sign_in": config.governance.organisation_sign_in,
+        "welcome": {"about": welcome.about, "links": links},
+        "version": deployment_version(),
     }
     return json.dumps(settings, indent=2) + "\n"
 

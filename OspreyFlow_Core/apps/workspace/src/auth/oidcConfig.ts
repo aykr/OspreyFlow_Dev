@@ -35,6 +35,40 @@ interface DeploymentSettings {
   realm: string;
   /** The marking a surface with no case data shows (ADR-115 decision 2). */
   marking: string | null;
+  welcome: WelcomeSettingsRead;
+}
+
+/** What the welcome page offers (ADR-115 decisions 3 and 8). */
+export interface WelcomeSettingsRead {
+  /** The alias of an organisation's brokered identity provider, or `null` for none. */
+  organisationSignIn: string | null;
+  about: boolean;
+  /** The deploying organisation's own documents, each only when given. */
+  links: Partial<Record<WelcomeLink, string>>;
+  /** The build the deployment runs, for the footer. */
+  version: string | null;
+}
+
+export type WelcomeLink = "account_help" | "accessibility" | "privacy" | "service_status";
+const WELCOME_LINKS: readonly WelcomeLink[] = ["account_help", "accessibility", "privacy", "service_status"];
+const PLAIN_WELCOME: WelcomeSettingsRead = { organisationSignIn: null, about: true, links: {}, version: null };
+
+function readWelcome(body: Record<string, unknown>): WelcomeSettingsRead {
+  const welcome = (typeof body.welcome === "object" && body.welcome) as { about?: unknown; links?: unknown } | false;
+  const given = (welcome && typeof welcome.links === "object" && welcome.links) as Record<string, unknown> | false;
+  const links: Partial<Record<WelcomeLink, string>> = {};
+  for (const name of WELCOME_LINKS) {
+    const address = given ? given[name] : undefined;
+    // An address the deployment gives is the organisation's; only a web address is ever a link.
+    if (typeof address === "string" && /^https?:\/\//.test(address)) links[name] = address;
+  }
+  return {
+    organisationSignIn:
+      typeof body.organisation_sign_in === "string" && body.organisation_sign_in ? body.organisation_sign_in : null,
+    about: welcome ? welcome.about !== false : true,
+    links,
+    version: typeof body.version === "string" && body.version ? body.version : null,
+  };
 }
 
 let deployment: DeploymentSettings | null = null;
@@ -51,6 +85,9 @@ export async function loadDeploymentSettings(
       identity_provider?: unknown;
       realm?: unknown;
       marking?: unknown;
+      organisation_sign_in?: unknown;
+      welcome?: unknown;
+      version?: unknown;
     };
     if (typeof body.identity_provider === "string" && body.identity_provider) {
       deployment = {
@@ -58,6 +95,7 @@ export async function loadDeploymentSettings(
         realm:
           typeof body.realm === "string" && body.realm ? body.realm : "osprey",
         marking: typeof body.marking === "string" && body.marking ? body.marking : null,
+        welcome: readWelcome(body),
       };
     }
   } catch {
@@ -68,6 +106,11 @@ export async function loadDeploymentSettings(
 /** The deployment's marking, or `null` where there is no deployment file (the development server). */
 export function deploymentMarking(): string | null {
   return deployment?.marking ?? null;
+}
+
+/** The welcome page's settings, or the plain page where there is no deployment file. */
+export function deploymentWelcome(): WelcomeSettingsRead {
+  return deployment?.welcome ?? PLAIN_WELCOME;
 }
 
 /** For tests: forget what was read. */

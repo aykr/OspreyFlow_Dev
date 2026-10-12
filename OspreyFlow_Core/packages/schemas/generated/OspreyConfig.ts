@@ -81,6 +81,10 @@ export type HandlingScheme = string;
  */
 export type Ontology = string;
 /**
+ * The alias of an organisation's own identity provider brokered by Keycloak. When set, the welcome page offers *Continue with organisation sign-in*, which goes straight to it (ADR-115 decision 3). Default: none — one *Sign in* to the OspreyFlow form.
+ */
+export type OrganisationSignIn = string | null;
+/**
  * The protective marking shown where no case data is on screen: the welcome page, Home, the Ingest Studio and the Admin area; inside a case, the strip shows this or the highest marking on screen, whichever is higher (ADR-115 decision 2). One of the handling scheme's classifications. Default: the scheme's lowest.
  */
 export type Marking = string | null;
@@ -179,6 +183,26 @@ export type Starttls = boolean;
  * Default: none — a relay that takes mail without signing in. With one, the password comes from OSPREY_SMTP_PASSWORD at install.
  */
 export type Username = string | null;
+/**
+ * Default: on. Off for an internal-only deployment.
+ */
+export type About = boolean;
+/**
+ * Default: no link
+ */
+export type AccountHelp = string | null;
+/**
+ * Default: no link
+ */
+export type Accessibility = string | null;
+/**
+ * Default: no link
+ */
+export type Privacy = string | null;
+/**
+ * Default: no link
+ */
+export type ServiceStatus = string | null;
 
 /**
  * The whole of `osprey.yaml`.
@@ -204,6 +228,7 @@ export interface OspreyConfig {
    * Default: none — one-time codes
    */
   mail?: MailConfig | null;
+  welcome?: WelcomeConfig;
 }
 /**
  * `05_DEPLOYMENT.md` §2.1's Components screen. Defaults are the `local-lite` row of §1's own
@@ -260,6 +285,7 @@ export interface GovernanceConfig {
   identity_provider?: IdentityProvider;
   handling_scheme?: HandlingScheme;
   ontology?: Ontology;
+  organisation_sign_in?: OrganisationSignIn;
   marking?: Marking;
   real_data_exceptions?: RealDataExceptions;
 }
@@ -367,4 +393,16 @@ export interface MailConfig {
   from_address: FromAddress;
   starttls?: Starttls;
   username?: Username;
+}
+/**
+ * The welcome page before sign-in (ADR-115 decision 8): its About section, and the footer's
+ * links — the deploying organisation's own documents, each shown only when its address is
+ * given.
+ */
+export interface WelcomeConfig {
+  about?: About;
+  account_help?: AccountHelp;
+  accessibility?: Accessibility;
+  privacy?: Privacy;
+  service_status?: ServiceStatus;
 }

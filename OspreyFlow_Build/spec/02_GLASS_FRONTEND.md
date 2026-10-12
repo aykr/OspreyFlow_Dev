@@ -950,6 +950,16 @@ PDF, never closed up (Am. 3). Entity items are drawn when present; adding
 one from the canvas is not yet built. Keyboard cases: `keyboard/trends.spec.ts` (`TRENDS_ACTIONS`) and `keyboard/packs.spec.ts`
 (`PACKS_ACTIONS`).
 
+**The welcome page (ADR-115, E2).** Signed out, the Glass shows the welcome page of the design
+handoff: the deployment's marking, a 48px header (the mesh mark, *OspreyFlow*, About, the theme), the
+hero (what the product is, its four capabilities, a picture of a synthetic case drawn as the canvas
+draws), the sign-in card, About (switchable off in `welcome.about`) and a footer naming the build
+and only the documents the deployment links (`welcome.*`). The card never takes a password: its
+button starts the code flow; with `governance.organisation_sign_in` set, *Continue with organisation
+sign-in* goes straight to that brokered provider (`kc_idp_hint`) and *Sign in with an OspreyFlow
+account* to Keycloak's form, which the OspreyFlow login theme draws. A hand-off from the Studio or
+Admin titles the card for it; a refused sign-in says why in the card.
+
 **Start (ADR-114 Amendment 5 point 9).** With no case open, the Glass opens on *Start*: a tile for each
 place the person's rights open — *The Glass* (to *Choose a case*), *Ingest Studio* (to *Choose the case
 to load into*, then the Studio) and *Admin* (the Admin area, no case needed). One place only goes

@@ -12,8 +12,18 @@ import "../src/design/primitives.css";
 import { SignInScreen } from "../src/auth/SignInScreen";
 import { signIn } from "../src/auth/userManager";
 
+// ADR-115 E2: `?organisation=<alias>` stands for a deployment naming a brokered provider.
+const organisation = new URLSearchParams(location.search).get("organisation");
+
 function Harness() {
-  return <SignInScreen reason={null} onSignIn={() => void signIn()} />;
+  return (
+    <SignInScreen
+      reason={null}
+      marking="OFFICIAL"
+      welcome={{ organisationSignIn: organisation, about: true, links: {}, version: "c01833b" }}
+      onSignIn={(organisationProvider) => void signIn(organisationProvider)}
+    />
+  );
 }
 
 const container = document.getElementById("root");

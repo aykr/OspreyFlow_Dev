@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   deploymentMarking,
+  deploymentWelcome,
   loadDeploymentSettings,
   oidcAuthority,
   resetDeploymentSettings,
@@ -71,5 +72,40 @@ describe("the deployment's marking", () => {
   it("is unknown where there is no deployment file", async () => {
     await loadDeploymentSettings(answering(404, "not found"));
     expect(deploymentMarking()).toBeNull();
+  });
+});
+
+// ADR-115 decisions 3 and 8: what the welcome page offers comes with the deployment.
+describe("the deployment's welcome settings", () => {
+  afterEach(() => resetDeploymentSettings());
+
+  it("are read with the identity provider", async () => {
+    await loadDeploymentSettings(
+      answering(
+        200,
+        JSON.stringify({
+          identity_provider: "http://id.osprey.test",
+          realm: "osprey",
+          organisation_sign_in: "acme-entra",
+          welcome: {
+            about: false,
+            // A known name with a script address, and an unknown name: neither is ever a link.
+            links: { privacy: "https://privacy.test/", accessibility: "javascript:alert(1)", evil: "https://x.test/" },
+          },
+          version: "c01833b",
+        }),
+      ),
+    );
+    expect(deploymentWelcome()).toEqual({
+      organisationSignIn: "acme-entra",
+      about: false,
+      links: { privacy: "https://privacy.test/" },
+      version: "c01833b",
+    });
+  });
+
+  it("are the plain page where there is no deployment file", async () => {
+    await loadDeploymentSettings(answering(404, "not found"));
+    expect(deploymentWelcome()).toEqual({ organisationSignIn: null, about: true, links: {}, version: null });
   });
 });
