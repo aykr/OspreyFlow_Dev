@@ -11977,6 +11977,27 @@ starts; the guided page refusing a request without its token and closing when th
 removed targets and the launcher gone; and the over-the-wire proof — the owner's deployment
 replaced, signed in at its address, the restored cases present.
 
+**Added 12 October 2026, preparing the replacement (B2e): the backup now carries the whole
+deployment.** An inventory of the running deployment found two things no backup held. The dashboards
+keep their own Postgres database (`superset`) beside `ospreyflow`, and the backup dumped one; and
+Keycloak runs with no persistent store, so no backup held anyone's account — restoring cases without
+the people who hold their grants locks everyone out, because every grant, `created_by` and audit row
+names a person by the identity provider's subject id. So:
+
+8. **Every Postgres database, and the roles they grant to.** `harness.backup` dumps each database
+   (`dump.sql` is the deployment's own, `<name>.sql` each other) and the roles (`roles.sql`); the
+   restore replays the roles first, tolerating those the fresh install made, creates a database the
+   fresh server lacks, then loads each.
+9. **An identity item, with ids** (`harness/identity.py`). The realm's people and each dashboard
+   identity (`osprey-dashboard-*`) with its secret and its service account, exported through
+   Keycloak's admin API; imported with the same ids after removing what a fresh install made under
+   the same names; passwords never travel (the demo accounts' are set again from the new
+   deployment's own file). Measured first against a real Keycloak 26.0: an imported user keeps its
+   id, attributes and roles; ids are unique across a server (a duplicate is refused 409); a client
+   keeps its secret but not its internal id, which nothing names; a service account keeps its id —
+   the subject its case grants name — only when imported with its client named. report-sync's
+   dashboards setting travels in the same file, which is written readable by its owner only.
+
 ### ADR-113, Amendment 1 (11 October 2026) — report packs built: what an item rests on, and the gaps the decisions left
 
 Stage 3 (handover A3). Decisions 3 to 5 and 7 are built as decided. Building them found places where

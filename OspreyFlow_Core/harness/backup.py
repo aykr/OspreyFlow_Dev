@@ -72,7 +72,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from harness import identity, keycloak_admin
 from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, git_sha, load_config
+
+#: The realm the deployment's people live in (`harness/realm.py`).
+REALM = "osprey"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -145,6 +149,13 @@ def _env_value(env_path: Path, name: str) -> str:
         if line.startswith(f"{name}="):
             return line.partition("=")[2].strip()
     raise BackupFailed("environment", f"{name} is not in {env_path.name}")
+
+
+def _env_value_or(env_path: Path, name: str, default: str) -> str:
+    try:
+        return _env_value(env_path, name)
+    except BackupFailed:
+        return default
 
 
 def _digest(path: Path) -> tuple[int, str]:
@@ -231,6 +242,84 @@ def backup_postgres(compose_file: Path, destination: Path) -> Path:
         )
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(dump, encoding="utf-8")
+    return destination
+
+
+def _dump_or_refuse(dump: str, database: str) -> str:
+    if "CREATE TABLE" not in dump and "COPY " not in dump:
+        # An empty dump is far more often a silent authentication or database-name failure that
+        # `pg_dump` exited 0 on than a database nothing has written to.
+        raise BackupFailed(
+            "postgres",
+            f"the dump of '{database}' contains no schema and no data (got {len(dump)} bytes)",
+        )
+    return dump
+
+
+def backup_postgres_all(compose_file: Path, folder: Path) -> list[tuple[str, Path]]:
+    """Every database on the deployment's Postgres, and the roles they grant to (ADR-114
+    Amendment 3). One dump was not the deployment: the dashboards keep their own `superset`
+    database beside `ospreyflow`, and the reporting mart grants to a role the Conduit's database
+    does not create. The deployment's own database keeps the name `dump.sql`; each other is
+    `<name>.sql`; the roles are `roles.sql`, replayed first."""
+    env_path = compose_file.parent / "deployment.env"
+    user = _env_value(env_path, "POSTGRES_USER")
+    main_database = _env_value(env_path, "POSTGRES_DB")
+    on_postgres = _compose(compose_file) + ["exec", "-T", "postgres"]
+    folder.mkdir(parents=True, exist_ok=True)
+    written: list[tuple[str, Path]] = []
+    roles = _run(on_postgres + ["pg_dumpall", "--roles-only", "-U", user], item="postgres")
+    (folder / "roles.sql").write_text(roles, encoding="utf-8")
+    written.append(("postgres-roles", folder / "roles.sql"))
+    listed = _run(
+        on_postgres
+        + [
+            "psql",
+            "-U",
+            user,
+            "-d",
+            "postgres",
+            "-Atc",
+            "select datname from pg_database where not datistemplate and datname <> 'postgres' "
+            "order by datname",
+        ],
+        item="postgres",
+    )
+    for database in [name for name in listed.split() if name]:
+        dump = _run(
+            on_postgres + ["pg_dump", "--clean", "--if-exists", "-U", user, database],
+            item="postgres",
+        )
+        target = folder / ("dump.sql" if database == main_database else f"{database}.sql")
+        target.write_text(_dump_or_refuse(dump, database), encoding="utf-8")
+        written.append(("postgres", target))
+    return written
+
+
+def backup_identity(compose_file: Path, destination: Path) -> Path:
+    """The realm's people and dashboard identities, with their ids (`harness/identity.py`), and
+    report-sync's dashboards setting. Keycloak keeps no data of its own past a restart on this
+    profile, so this is the only copy of who holds a grant. It carries client secrets: written
+    readable by its owner only."""
+    env_path = compose_file.parent / "deployment.env"
+    port = _env_value_or(env_path, "OSPREY_KEYCLOAK_PORT", "8081")
+    issuer = f"http://127.0.0.1:{port}"
+    try:
+        token = keycloak_admin.admin_token(
+            issuer=issuer,
+            admin_user="admin",
+            admin_password=_env_value(env_path, "OSPREY_KEYCLOAK_ADMIN_PASSWORD"),
+        )
+        held = identity.export_identity(issuer=issuer, realm=REALM, token=token)
+    except (keycloak_admin.RealmConfigurationFailed, identity.IdentityFailed) as error:
+        raise BackupFailed("identity", str(error)) from error
+    dashboards = _env_value_or(env_path, "REPORT_SYNC_DASHBOARDS", "")
+    if dashboards:
+        held["report_sync_dashboards"] = dashboards
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.touch(mode=0o600, exist_ok=True)
+    destination.chmod(0o600)
+    destination.write_text(json.dumps(held, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return destination
 
 
@@ -347,7 +436,8 @@ def run_backup(
             ),
         )
     )
-    written.append(("postgres", backup_postgres(compose_file, target / "postgres" / "dump.sql")))
+    written.extend(backup_postgres_all(compose_file, target / "postgres"))
+    written.append(("identity", backup_identity(compose_file, target / "identity" / "realm.json")))
     written.append(
         (
             "objects",

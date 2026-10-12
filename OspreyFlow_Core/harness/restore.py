@@ -68,7 +68,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from harness.backup import BackupFailed, _compose, _env_value, _run, schema_versions
+from harness import identity, keycloak_admin
+from harness.backup import (
+    REALM,
+    BackupFailed,
+    _compose,
+    _env_value,
+    _env_value_or,
+    _run,
+    schema_versions,
+)
 from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
 
 #: Measured on `local-lite` against the seeded HMP + Fixture Corp set and recorded in
@@ -300,6 +309,117 @@ def restore_postgres(compose_file: Path, dump: Path) -> None:
         raise BackupFailed("postgres", (completed.stderr or completed.stdout).strip()[:800])
 
 
+def _psql(
+    compose_file: Path,
+    database: str,
+    sql: bytes | None = None,
+    *,
+    stop_on_error: bool = True,
+    command: str | None = None,
+) -> subprocess.CompletedProcess[Any]:
+    user = _env_value(compose_file.parent / "deployment.env", "POSTGRES_USER")
+    argv = _compose(compose_file) + ["exec", "-T", "postgres", "psql"]
+    argv += (["-v", "ON_ERROR_STOP=1"] if stop_on_error else []) + ["-U", user]
+    argv += ["-d", database, "-Atc", command] if command else [database]
+    if sql is None:
+        return subprocess.run(argv, capture_output=True, text=True, check=False)  # noqa: S603
+    import io
+
+    return subprocess.run(argv, stdin=io.BytesIO(sql), capture_output=True, check=False)  # noqa: S603
+
+
+def restore_postgres_all(compose_file: Path, dumps: list[Path], roles: Path | None) -> None:
+    """The roles first — the dumps grant to them — tolerating the ones the fresh install already
+    made; then each database, created first when the fresh server does not have it (`superset`);
+    `dump.sql` is the deployment's own database (ADR-114 Amendment 3)."""
+    main_database = _env_value(compose_file.parent / "deployment.env", "POSTGRES_DB")
+    if roles is not None:
+        replayed = _psql(compose_file, "postgres", roles.read_bytes(), stop_on_error=False)
+        errors = [
+            line
+            for line in _text(replayed.stderr).splitlines()
+            if "ERROR" in line and "already exists" not in line
+        ]
+        if errors:
+            raise BackupFailed("postgres", "replaying the roles: " + "; ".join(errors)[:600])
+    present = set(
+        _text(
+            _psql(compose_file, "postgres", command="select datname from pg_database").stdout
+        ).split()
+    )
+    for dump in dumps:
+        database = main_database if dump.name == "dump.sql" else dump.stem
+        if database not in present:
+            made = _psql(compose_file, "postgres", command=f'CREATE DATABASE "{database}"')
+            if made.returncode != 0:
+                raise BackupFailed(
+                    "postgres", f"creating '{database}': {_text(made.stderr).strip()[:400]}"
+                )
+        loaded = _psql(compose_file, database, dump.read_bytes())
+        if loaded.returncode != 0:
+            raise BackupFailed(
+                "postgres", f"'{database}': {_text(loaded.stderr or loaded.stdout).strip()[:800]}"
+            )
+
+
+def _text(value: str | bytes | None) -> str:
+    return value.decode(errors="replace") if isinstance(value, bytes) else (value or "")
+
+
+def _register_sign_in(env_path: Path) -> None:
+    """The demo accounts' passwords again, from the new deployment's own file: passwords never
+    travel with the identity."""
+    from harness import register_sign_in
+
+    issuer = f"http://127.0.0.1:{_env_value_or(env_path, 'OSPREY_KEYCLOAK_PORT', '8081')}"
+    status = register_sign_in.main(
+        [
+            "--out-root",
+            str(env_path.parent.parent),
+            "--profile",
+            env_path.parent.name,
+            "--keycloak-url",
+            issuer,
+            "--realm",
+            REALM,
+        ]
+    )
+    if status != 0:
+        raise BackupFailed("identity", "setting the demo accounts' passwords again was refused")
+
+
+def _set_env_line(env_path: Path, name: str, value: str) -> None:
+    lines = [
+        line
+        for line in env_path.read_text(encoding="utf-8").splitlines()
+        if not line.startswith(f"{name}=")
+    ]
+    env_path.write_text("\n".join([*lines, f"{name}={value}"]) + "\n", encoding="utf-8")
+
+
+def restore_identity(compose_file: Path, held: Path) -> dict[str, int]:
+    """The people and dashboard identities, with their ids (`harness/identity.py`); the demo
+    accounts' passwords set again; report-sync's dashboards setting written back."""
+    env_path = compose_file.parent / "deployment.env"
+    issuer = f"http://127.0.0.1:{_env_value_or(env_path, 'OSPREY_KEYCLOAK_PORT', '8081')}"
+    carried = json.loads(held.read_text(encoding="utf-8"))
+    try:
+        token = keycloak_admin.admin_token(
+            issuer=issuer,
+            admin_user="admin",
+            admin_password=_env_value(env_path, "OSPREY_KEYCLOAK_ADMIN_PASSWORD"),
+        )
+        summary = identity.import_identity(
+            issuer=issuer, realm=REALM, token=token, identity=carried
+        )
+    except (keycloak_admin.RealmConfigurationFailed, identity.IdentityFailed) as error:
+        raise BackupFailed("identity", str(error)) from error
+    _register_sign_in(env_path)
+    if carried.get("report_sync_dashboards"):
+        _set_env_line(env_path, "REPORT_SYNC_DASHBOARDS", carried["report_sync_dashboards"])
+    return summary
+
+
 def restore_object_store(compose_file: Path, archive: Path, *, work_dir: Path) -> None:
     extracted = work_dir / "restore-objects"
     if extracted.exists():
@@ -368,12 +488,14 @@ def run_restore(
 
     for archive in by_item.get("graph", []):
         restore_graph_store(compose_file, archive, database=database)
-    for dump in by_item.get("postgres", []):
-        restore_postgres(compose_file, dump)
+    roles = by_item.get("postgres-roles", [None])[0]
+    restore_postgres_all(compose_file, by_item.get("postgres", []), roles)
     for objects in by_item.get("objects", []):
         restore_object_store(compose_file, objects, work_dir=directory)
     for analytics in by_item.get("analytics", []):
         restore_analytics(compose_file, analytics, container_path=analytics_container_path)
+    for held in by_item.get("identity", []):
+        restore_identity(compose_file, held)
     return plan
 
 
