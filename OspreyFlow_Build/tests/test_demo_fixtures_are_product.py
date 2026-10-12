@@ -84,11 +84,12 @@ def test_the_recipes_the_hmp_generator_loads_travel_with_it() -> None:
 
 
 def test_the_registry_names_the_real_locations_of_the_shipped_demos() -> None:
-    """Shipped demos live in the tree, so their paths must exist. An internal dataset (PaySim,
-    Enron) is absent from CI and from any other machine by design, so it is not asserted here; its
-    own manifest test proves it is internal and refused by the packaging gate."""
-    from scripts.demo_registry import shipped_manifests
+    """Seeded demos live in the tree, so their paths must exist. A downloaded dataset (PaySim,
+    ADR-114 Amendment 1) or an internal one (Enron) is absent from CI and from any other machine
+    by design, so it is not asserted here; its own manifest test proves the packaging gate refuses
+    it."""
+    from scripts.demo_registry import seeded_manifests
 
-    for manifest in shipped_manifests():
+    for manifest in seeded_manifests():
         for path in manifest.paths:
             assert (REPO_ROOT / path).is_file(), f"{manifest.id}: {path} does not exist"

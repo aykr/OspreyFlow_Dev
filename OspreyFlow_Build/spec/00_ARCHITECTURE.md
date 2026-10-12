@@ -932,7 +932,10 @@ charts and dashboards up by the URL's id as a string, so every edit and delete a
 **PaySim (ADR-055 Amendment, ADR-114 decision 5, 11 October 2026) — data, CC BY-SA 4.0**, verified
 from Kaggle's metadata for `ealaxi/paysim1` (Edgar Lopez-Rojas). Redistributable as a downloadable demo
 pack, never in a repository, with its attribution and licence text; anything derived from it and
-redistributed carries the same licence. Not on the code allowlist: it is data, recorded here.
+redistributed carries the same licence. Not on the code allowlist: it is data, recorded here. `make
+licence-check` admits it only for a pack delivered by download (`delivery: download` in
+`scripts/demo_registry.py`) and flags it for anything seeded or bundled (ADR-114 Amendment 1); the
+pack carries `packages/demo_fixtures/licences/paysim/LICENSE.txt` and `ATTRIBUTION.md`.
 
 **ADR-109 data sources (10 October 2026) — data, not code, and never in the repository or CI.**
 **OpenSanctions** consolidated data: CC-BY-NC 4.0 for the bulk data — attribution required, and

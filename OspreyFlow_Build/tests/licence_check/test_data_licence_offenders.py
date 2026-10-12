@@ -54,8 +54,36 @@ def test_no_declared_data_licence_is_not_flagged() -> None:
 
 
 def test_the_real_registry_has_no_data_licence_offenders_today() -> None:
-    """Both real entries are generated and owned outright (ADR-035 §C3/§C5) — nothing declared,
-    nothing to flag."""
+    """The real registry: generated demos declare nothing, and PaySim's CC-BY-SA-4.0 is admitted
+    as a download only (ADR-114 Amendment 1)."""
+    from scripts.demo_registry import REGISTRY
+
+    assert find_data_licence_offenders(REGISTRY) == []
+
+
+def _manifest(licence: str, delivery: str) -> DemoManifest:
+    return DemoManifest(
+        id="x", distribution="shipped", seed_module="x", delivery=delivery, data_licence=licence
+    )
+
+
+def test_cc_by_sa_is_admitted_only_for_a_download_pack() -> None:
+    """ADR-114 Amendment 1 decision 5: share-alike data is acceptable only where it is fetched,
+    never where it would travel in the artefact. Built from the shape the real call site passes:
+    `DemoManifest` entries carrying a `delivery`."""
+    assert find_data_licence_offenders((_manifest("CC-BY-SA-4.0", "download"),)) == []
+    assert find_data_licence_offenders((_manifest("CC-BY-SA-4.0", "seed"),)) == [
+        ("x", "CC-BY-SA-4.0")
+    ]
+    assert find_data_licence_offenders((_manifest("CC-BY-SA-4.0", ""),)) == [
+        ("x", "CC-BY-SA-4.0")
+    ]
+    assert find_data_licence_offenders((_manifest("CDLA-Sharing-1.0", "download"),)) == [
+        ("x", "CDLA-Sharing-1.0")
+    ]
+
+
+def test_the_real_registry_has_no_data_licence_offender() -> None:
     from scripts.demo_registry import REGISTRY
 
     assert find_data_licence_offenders(REGISTRY) == []

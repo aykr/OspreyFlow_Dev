@@ -11,6 +11,8 @@ from scripts.demo_registry import (
     shipped_manifests,
 )
 
+from tools import packaging_gate
+
 
 def test_a_manifest_with_no_distribution_field_is_excluded_from_a_shipped_build() -> None:
     """A manifest literally lacking the field — `from_dict` on a raw dict with no `distribution`
@@ -41,9 +43,40 @@ def test_a_correctly_spelled_shipped_manifest_is_included() -> None:
 
 
 def test_the_real_registry_holds_exactly_the_datasets_it_is_known_to_hold() -> None:
-    """Checked directly, not assumed. Two shipped, synthetic, generated demos (`hmp`,
-    `fixture-corp`), and the internal ones the owner has ruled on: PaySim (ADR-055) and the Enron
-    corpus (ADR-053). The VAST-shaped fixture is not registered yet. Adding a dataset must change
-    this test, so a registry entry can never appear unnoticed."""
-    assert {m.id for m in shipped_manifests(REGISTRY)} == {"hmp", "fixture-corp"}
-    assert {m.id for m in internal_manifests(REGISTRY)} == {"paysim", "enron"}
+    """Checked directly, not assumed. Four shipped demos (`hmp`, `fixture-corp`,
+    `operation-ledger`, and `paysim` as a download, ADR-114 Amendment 1) and one internal one, the
+    Enron corpus (ADR-053). Adding a dataset must change this test, so a registry entry can never
+    appear unnoticed."""
+    assert {m.id for m in shipped_manifests(REGISTRY)} == {
+        "hmp",
+        "fixture-corp",
+        "operation-ledger",
+        "paysim",
+    }
+    assert {m.id for m in internal_manifests(REGISTRY)} == {"enron"}
+
+
+def test_a_misspelled_or_missing_delivery_is_not_seeded_and_its_data_is_refused() -> None:
+    """ADR-114 Amendment 1 decision 1: `delivery` fails closed as `distribution` does. A shipped
+    manifest whose delivery is misspelt, empty or absent is not seeded, so the gate refuses its
+    data rather than letting it into a bundle."""
+    path = "packages/demo_fixtures/x.csv"
+    from_dict = DemoManifest.from_dict(
+        {"id": "x", "distribution": "shipped", "seed_module": "x", "paths": [path]}
+    )
+    assert from_dict.delivery == ""
+    candidates = [
+        from_dict,
+        DemoManifest(
+            id="x", distribution="shipped", seed_module="x", delivery="Seed", paths=(path,)
+        ),
+        DemoManifest(id="x", distribution="shipped", seed_module="x", delivery="", paths=(path,)),
+    ]
+    for manifest in candidates:
+        assert manifest.is_seeded is False
+        assert packaging_gate.find_internal_demo_data([path], registry=(manifest,)) == [path]
+    seeded = DemoManifest(
+        id="x", distribution="shipped", seed_module="x", delivery="seed", paths=(path,)
+    )
+    assert seeded.is_seeded is True
+    assert packaging_gate.find_internal_demo_data([path], registry=(seeded,)) == []

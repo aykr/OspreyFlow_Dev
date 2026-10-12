@@ -49,9 +49,12 @@ it stopped.
 
 Every demo case below has a **distribution class** (`06_DECISIONS.md` ADR-035): `shipped` means it
 is allowed inside an artefact given to a customer or tester; `internal` means it must never leave
-this project, in any form, at packaging time — enforced by a fail-closed registry and a packaging
-gate ADR-035 designs and not yet built. Until that registry exists, treat the
-column below as the same binding statement in prose that the registry will enforce mechanically.
+this project, in any form, at packaging time. Both are enforced mechanically: the fail-closed
+registry `scripts/demo_registry.py` names every demo and its class, and the packaging gate refuses
+an internal demo's data in any built artefact. The installable **demo packs** are listed by
+`python -m scripts.demo_packs` — Operation Ledger, Fixture Corp and HMP are seeded from code in this
+repository; PaySim is a download, checked by size and SHA-256, that never travels inside an
+artefact (`06_DECISIONS.md` ADR-114 Amendment 1).
 
 | Demo case | Distribution | State | What it shows |
 | --- | --- | --- | --- |
@@ -62,6 +65,8 @@ column below as the same binding statement in prose that the registry will enfor
 | Scenario B (comms and identity pivot) | `shipped` | Partly built; the remaining work is split across several build stages by ADR-022 | — |
 | **Extraction and entity resolution** | `shipped` | Built, **API only** | Demonstrable to engineers through the API; there are no screens yet |
 | **Scenario C — "Fixture Corp"** (Enron-*shaped*, R24, AMLSim-*shaped* generator) | `shipped` | **Built** (`scripts.seed_fixture_corp`) — its four ADR-035 §C5 properties are **verified structurally** (`tests/scenarios/test_fixture_corp_shape.py`). Moving the resolution threshold live is now verified through the Glass. **`explain`, the pathfinder and path-length comparison are not, and currently cannot be: no Fixture Corp entity can be loaded into the working set** — 0 of its 65 Persons carry any of the identifiers search matches on, against 400 of 400 for HMP (measured directly). See §6 and the internal rehearsal log, §4. Not the ~150-employee Enron-shaped corporation §6 and Scenario C (C1–C20) describe — see §6 | See §6 |
+| **Operation Ledger** (preventive AML: structuring ring, onboarding screened before commit, ownership through a trust) | `shipped` | **Built and walked live** (`scripts.seed_ledger_fixture`; ADR-109, ADR-113) | Alerts explained in words, ownership traced, trends and report packs |
+| **PaySim** (6.36 million simulated mobile-money transactions; CC BY-SA 4.0, Lopez-Rojas, Elmir and Axelsson, EMSS 2016) | `shipped`, as a **download** only — never inside an artefact | **Built** (`scripts.seed_paysim`); the pack is checked by size and SHA-256 before it is seeded, and carries its licence and attribution | The same views at scale: where to start and the timeline over every event |
 | **The real Enron email corpus** | `internal`, **admitted only via the owner's own local exceptions list — see §6** | Owner-run demonstration only, on the owner's own device, never distributed to an attendee | — |
 | **VAST Challenge dataset** (generated fixture) | `internal` | Decided (ADR-026); fixture not yet built | See §7 |
 | **VAST Challenge dataset** (the published files themselves) | Not admitted, any class | ADR-026: "standing rule 3 is not amended" — never used, shaped or verbatim | See §7 |

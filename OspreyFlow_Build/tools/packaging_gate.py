@@ -112,11 +112,13 @@ def find_authorship_identifiers(text_blobs: dict[str, str]) -> list[str]:
 def find_internal_demo_data(
     artefact_paths: Iterable[str], registry: tuple[DemoManifest, ...] = REGISTRY
 ) -> list[str]:
-    """ADR-035 §C2. Returns every artefact path that must never appear in a shipped artefact:
-    either of the two fixed internal-only locations, or a path belonging to a registry entry whose
-    own `distribution` is not `"shipped"`."""
-    internal_paths = {
-        p for manifest in internal_manifests(registry) for p in manifest.paths
+    """ADR-035 §C2, extended by ADR-114 Amendment 1 decision 1. Returns every artefact path that
+    must never appear in a shipped artefact: either of the two fixed internal-only locations, a
+    path belonging to an `internal` registry entry, or a path belonging to any manifest that is not
+    seeded (`not is_seeded`, strict and fail-closed), whatever its `distribution`. A downloadable
+    pack such as PaySim is `shipped` yet its data must still never be bundled."""
+    internal_paths = {p for manifest in internal_manifests(registry) for p in manifest.paths} | {
+        p for manifest in registry if not manifest.is_seeded for p in manifest.paths
     }
     violations = []
     for path in artefact_paths:

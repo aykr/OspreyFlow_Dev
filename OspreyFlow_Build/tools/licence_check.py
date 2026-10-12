@@ -54,6 +54,11 @@ ALLOWED_MARKERS = (
 )
 
 
+#: ADR-114 Amendment 1 decision 5: a share-alike data licence is acceptable only for a pack
+#: whose data is downloaded, never bundled, so the obligation never attaches to an artefact.
+DOWNLOAD_ONLY_DATA_LICENCES = ("CC-BY-SA-4.0",)
+
+
 def is_allowed(license_text: str) -> bool:
     text = license_text.lower()
     if "lesser general public license" in text or "lgpl" in text:
@@ -111,14 +116,21 @@ def find_data_licence_offenders(
     like CDLA-Sharing-1.0 (§C6's own named case) above all — needs a human decision, not a silent
     pass.
 
-    `None` (both real registry entries today — ADR-035 §C3/§C5) means no third-party data licence
-    is declared at all and there is nothing to check; this function returns `(demo_id, licence)`
-    only for an entry that declares one and it fails `is_allowed`.
+    `None` (the generated demos — ADR-035 §C3/§C5) means no third-party data licence is declared
+    and there is nothing to check. ADR-114 Amendment 1 decision 5 adds one exception: a licence in
+    `DOWNLOAD_ONLY_DATA_LICENCES` is fine when the manifest's `delivery` is exactly `"download"`.
+    This function returns `(demo_id, licence)` for an entry that declares a licence which is
+    neither allowed nor a download-only licence on a download pack.
     """
     return [
         (manifest.id, manifest.data_licence)
         for manifest in registry
-        if manifest.data_licence and not is_allowed(manifest.data_licence)
+        if manifest.data_licence
+        and not is_allowed(manifest.data_licence)
+        and not (
+            manifest.data_licence in DOWNLOAD_ONLY_DATA_LICENCES
+            and manifest.delivery == "download"
+        )
     ]
 
 

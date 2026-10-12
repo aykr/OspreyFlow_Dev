@@ -11,21 +11,21 @@ is where "missing" actually manifests as an empty string rather than a raised ex
 "absence is the safe default, never inferred as permission" shape `scripts/real_data_exceptions.py`
 already holds itself to for a different registry.
 
-**What is actually shipped today, checked directly against `DEMO_GUIDE.md` §1's own table and
-`scripts/seed_hmp_fixture.py`/`scripts/seed_fixture_corp.py`'s own imports — not assumed from ADR
-prose:** exactly two demo datasets exist in this repository, both synthetic, both generated, both
-carrying no third-party licence (`06_DECISIONS.md` ADR-035 §C5's own "Generated output is owned
-outright" for Fixture Corp; the HMP fixture's own "Enron-*shaped*, not Enron-derived" framing, same
-ADR, §C3). Neither Enron (real data, admitted only via `scripts/real_data_exceptions.py`, never
-committed) nor the VAST-shaped fixture (§C4, not yet built) exists as a file in this tree today —
-checked directly, `git grep`/`find` for either name returns nothing. This registry therefore has
-two real entries, not the seven narrative rows `tools/demo_guide_check.py`'s own `DEMO_REGISTRY`
-enumerates — that module keys off `DEMO_GUIDE.md`'s own prose ("Scenario A", "the Ingest Studio"),
-a feature-level grain; this one keys off the packaging grain, "which files does the build have to
-either include or refuse to include" — the same "shares a shape, not an implementation" distinction
-`06_DECISIONS.md` ADR-034 §B10 already draws between `product_tree_link_check.py` and
-`decision_log_publication_check.py`. Both registries name the same underlying demos and must be
-kept in sync by hand when either changes; nothing today makes that automatic.
+**What the registry holds today, checked directly against `DEMO_GUIDE.md` §1's own table and the
+seed scripts' own imports.** Four entries are `shipped` and one is `internal`. Three shipped
+entries are synthetic, generated and seeded from code in this repository (`hmp`, `fixture-corp`,
+`operation-ledger`; ADR-035 §C5's "Generated output is owned outright"). `paysim` is shipped as a
+*download*: its data is third-party, CC-BY-SA-4.0, and is fetched by the person who wants it, never
+placed in an artefact (`06_DECISIONS.md` ADR-114 Amendment 1, which supersedes ADR-055 §3's
+`internal`). The one `internal` entry is the Enron corpus (ADR-053), real data admitted only through
+`scripts/real_data_exceptions.py`. The VAST-shaped fixture (§C4) is not built. This module keys off
+the packaging grain, "which files does the build include or refuse"; `tools/demo_guide_check.py`'s
+own `DEMO_REGISTRY` keys off `DEMO_GUIDE.md`'s prose, a feature-level grain (ADR-034 §B10's
+"shares a shape, not an implementation"). Both name the same demos and are kept in sync by hand.
+
+**`delivery` fails closed too** (ADR-114 Amendment 1 decision 1): `is_seeded` is a strict
+`== "seed"`, so a missing or misspelt value is not seeded, and the packaging gate then refuses that
+manifest's data whatever its `distribution`.
 """
 
 from __future__ import annotations
@@ -38,6 +38,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DISTRIBUTION_SHIPPED = "shipped"
 DISTRIBUTION_INTERNAL = "internal"
+
+#: ADR-114 Amendment 1: how a shipped demo's data reaches the person using it. `seed` means the
+#: data is generated from code in the artefact; `download` means it is fetched and never bundled.
+DELIVERY_SEED = "seed"
+DELIVERY_DOWNLOAD = "download"
+
+
+def _optional_text(value: object) -> str | None:
+    return None if value is None else str(value)
 
 
 @dataclass(frozen=True)
@@ -60,12 +69,24 @@ class DemoManifest:
     #: ADR §C3. A future dataset carrying real terms (§C6's own CDLA-Sharing-1.0 case, if IBM
     #: AML-Data were ever used as data rather than AMLSim as a generator) declares them here.
     data_licence: str | None = None
+    #: ADR-114 Amendment 1: `seed` or `download`; see `is_seeded`. Defaults to `seed`, but
+    #: `from_dict` defaults a missing key to empty, which is not seeded.
+    delivery: str = DELIVERY_SEED
+    #: The credit a share-alike or attribution licence requires, or `None` where none is owed.
+    attribution: str | None = None
 
     @property
     def is_shipped(self) -> bool:
         """Strict equality, not a membership test — a misspelled `"Shipped"`/`"SHIPPED"`/`"shiped"`
         or an empty string all fail this and fall to `internal`, exactly as ADR-035 §C1 requires."""
         return self.distribution == DISTRIBUTION_SHIPPED
+
+    @property
+    def is_seeded(self) -> bool:
+        """Strict equality, for the same fail-closed reason as `is_shipped`: a misspelt `"Seed"`,
+        an empty string or a missing key is not seeded, and the packaging gate refuses the data of
+        every manifest that is not seeded (ADR-114 Amendment 1 decision 1)."""
+        return self.delivery == DELIVERY_SEED
 
     @classmethod
     def from_dict(cls, raw: dict[str, object]) -> DemoManifest:
@@ -78,6 +99,9 @@ class DemoManifest:
             distribution=str(raw.get("distribution", "")),
             seed_module=str(raw.get("seed_module", "")),
             paths=tuple(str(p) for p in raw.get("paths", ())),  # type: ignore[union-attr]
+            delivery=str(raw.get("delivery", "")),
+            data_licence=_optional_text(raw.get("data_licence")),
+            attribution=_optional_text(raw.get("attribution")),
         )
 
 
@@ -87,6 +111,7 @@ REGISTRY: tuple[DemoManifest, ...] = (
     DemoManifest(
         id="hmp",
         distribution=DISTRIBUTION_SHIPPED,
+        delivery=DELIVERY_SEED,
         seed_module="scripts.seed_hmp_fixture",
         paths=(
             "packages/demo_fixtures/hmp.py",
@@ -96,17 +121,36 @@ REGISTRY: tuple[DemoManifest, ...] = (
     DemoManifest(
         id="fixture-corp",
         distribution=DISTRIBUTION_SHIPPED,
+        delivery=DELIVERY_SEED,
         seed_module="scripts.seed_fixture_corp",
         paths=("packages/demo_fixtures/fixture_corp.py",),
     ),
-    # ADR-055. Synthetic, but third-party (Kaggle `ealaxi/paysim1`; simulator GPL-3.0; the data
-    # licence is not verified, so `data_licence` stays empty until the owner records it from the
-    # Kaggle page). Never shipped; the data lives under `OspreyFlow_Data/`.
+    # ADR-114 Amendment 1. Synthetic and generated by this project, so owned outright.
+    DemoManifest(
+        id="operation-ledger",
+        distribution=DISTRIBUTION_SHIPPED,
+        delivery=DELIVERY_SEED,
+        seed_module="scripts.seed_ledger_fixture",
+        paths=(
+            "packages/demo_fixtures/ledger.py",
+            "packages/demo_fixtures/ledger_onboarding_applications.csv",
+            "packages/demo_fixtures/screening_list_synthetic.yaml",
+        ),
+    ),
+    # ADR-114 Amendment 1 (superseding ADR-055 §3's `internal`). Third-party simulated data
+    # (Kaggle `ealaxi/paysim1`), CC-BY-SA-4.0, so shipped as a download only: the file is fetched
+    # and checked, never placed in an artefact, and the packaging gate refuses it there.
     DemoManifest(
         id="paysim",
-        distribution=DISTRIBUTION_INTERNAL,
+        distribution=DISTRIBUTION_SHIPPED,
+        delivery=DELIVERY_DOWNLOAD,
         seed_module="scripts.seed_paysim",
         paths=("OspreyFlow_Data/PaySIM_Dataset/PS_20174392719_1491204439457_log.csv",),
+        data_licence="CC-BY-SA-4.0",
+        attribution=(
+            'E. A. Lopez-Rojas, A. Elmir and S. Axelsson, "PaySim: A financial mobile money '
+            'simulator for fraud detection", EMSS 2016 (Larnaca, Cyprus)'
+        ),
     ),
     # ADR-053. REAL data, admitted for the owner's own machine only through the local exceptions
     # list, never committed, never shipped. The path is a folder: the gate matches by prefix.
@@ -127,11 +171,21 @@ def internal_manifests(registry: tuple[DemoManifest, ...] = REGISTRY) -> tuple[D
     return tuple(m for m in registry if not m.is_shipped)
 
 
+def seeded_manifests(registry: tuple[DemoManifest, ...] = REGISTRY) -> tuple[DemoManifest, ...]:
+    return tuple(m for m in registry if m.is_shipped and m.is_seeded)
+
+
+def downloaded_manifests(
+    registry: tuple[DemoManifest, ...] = REGISTRY,
+) -> tuple[DemoManifest, ...]:
+    return tuple(m for m in registry if m.is_shipped and m.delivery == DELIVERY_DOWNLOAD)
+
+
 def main() -> int:
     """`make demo-manifest` — ADR-035 §C1: "prints each demo and its distribution class... so what
     will ship is inspectable before shipping rather than after." """
     for manifest in REGISTRY:
-        print(f"{manifest.id}: {manifest.distribution}")
+        print(f"{manifest.id}: {manifest.distribution} ({manifest.delivery or 'no delivery'})")
     return 0
 
 

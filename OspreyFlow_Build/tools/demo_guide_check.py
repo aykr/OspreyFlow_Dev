@@ -1,16 +1,12 @@
 """A drift gate for `DEMO_GUIDE.md` §1's own "What you can demo today" table —
 `06_DECISIONS.md` ADR-035, part of the documentation-refresh work.
 
-**`DEMO_REGISTRY` below is a stand-in, not the real thing, and says so rather than pretending
-otherwise.** ADR-035's own fail-closed `shipped`/`internal` registry — the packaging-time gate that
-mechanically enforces which demo ships in a built artefact — is still unbuilt, a disclosed
-gap. `DEMO_GUIDE.md` §1 already says as much: "Until that
-registry exists, treat the column below as the same binding statement in prose that the registry
-will enforce mechanically." This module is that same idea taken one small step further — a real,
-checkable list, not only prose — so "a new demo was added and the guide wasn't updated" fails a
-test today instead of waiting for Phase 8's own registry to exist. When that registry lands, this
-list is replaced by a real query against it; the check below (`find_undocumented`) does not need to
-change shape, only its data source.
+**`DEMO_REGISTRY` below is the guide's feature-level list, kept beside the packaging registry.**
+ADR-035's fail-closed `shipped`/`internal` registry now exists (`scripts/demo_registry.py`, with the
+demo packs of ADR-114 Amendment 1), but it keys off the packaging grain — which files may leave —
+while this list keys off the guide's own rows ("Scenario A", "the Ingest Studio"). Both name the
+same demos and are kept in sync by hand; this check fails when a demo is missing from the guide or
+carries no distribution class there.
 
 Deliberately weak, not a line-level cross-reference: a registry entry is "documented" if both its
 own name and its own distribution class appear anywhere in the guide's text. Strong enough to catch
@@ -37,6 +33,8 @@ DEMO_REGISTRY: tuple[tuple[str, str], ...] = (
     ("Scenario B (comms and identity pivot)", "shipped"),
     ("Extraction and entity resolution", "shipped"),
     ('Scenario C — "Fixture Corp"', "shipped"),
+    ("Operation Ledger", "shipped"),
+    ("PaySim", "shipped"),
     ("The real Enron email corpus", "internal"),
     ("VAST Challenge dataset", "internal"),
 )
