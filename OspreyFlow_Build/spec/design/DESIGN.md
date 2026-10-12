@@ -3,7 +3,8 @@
 The contract. Every font, colour, size, spacing step and radius used in the product appears here.
 Anything on a screen that is not in this file is drift.
 
-Version 0.2 — OspreyFlow identity. Brand motifs reworked; UI mechanics, palettes, type split and
+Version 0.3. Layout dimensions added (§5a), and dash and grid values settled against the prototypes.
+Version 0.2: the OspreyFlow identity. Brand motifs reworked; UI mechanics, palettes, type split and
 accessibility rules carried over from 0.1 unchanged.
 
 ---
@@ -114,9 +115,6 @@ rather than an inversion.
 | `--text-secondary` / n10 | `#c1c5c6` | `#4b4e4e` |
 | `--text-primary` / n11 | `#e8eced` | `#191b1c` |
 
-Dark theme adds `#313334` and light theme `#84878 8`-band steps only where a component needs them;
-both are already in the ramp above.
-
 ### 3.2 Brand accent — exactly one
 
 | Token | Dark | Light |
@@ -211,8 +209,8 @@ So it composes with all nine channels.
 | Provenance | Stroke |
 |---|---|
 | asserted (in source record) | solid 1px |
-| inferred (model-derived) | dashed 1px, `4 2` |
-| unresolved / single-source | dotted 1px, `1 2` |
+| inferred (model-derived) | dashed 1px, `4 3` |
+| unresolved / single-source | dotted 1px, `1 3` |
 
 Inferred edges also carry a confidence value in the detail panel. No red, no warning colour:
 inference is normal, not an alarm.
@@ -232,6 +230,67 @@ Minimum internal padding on any control with text: 6px horizontal, 3px vertical.
 `--r-0: 0` (canvas, table cells, full-height panels) · `--r-1: 2px` (inputs, buttons, chips) ·
 `--r-2: 4px` (panels, menus, popovers) · `--r-3: 6px` (modals, drawers) · `--r-pill: 999px`
 (status chips only). No other radius.
+
+## 5a. Layout dimensions
+
+These are fixed sizes for the shell, overlays and canvas. They count as part of the contract in the same way as the spacing and radius scales: a size that isn't listed here is drift.
+
+### Shell regions
+
+| Region | Size |
+|---|---|
+| Protective marking strip | 20px high |
+| Top bar (workspace) | 44px high |
+| Top bar (welcome, home) | 48px high |
+| Left rail | 48px wide, with 36×36 buttons |
+| Canvas toolbar | 36px high |
+| Right panel | 340px wide by default. Resizable from 300 to 480px. Its tab row is 36px high |
+| Timeline (collapsed) | 34px high |
+| Timeline (expanded) | 34px header plus a 96px plot |
+| Status bar | 26px high |
+
+### Breakpoints
+
+These are viewport widths.
+
+- At 1200px and above, the right panel is docked with a hairline. Below 1200px it becomes an overlay with a shadow, no hairline, and starts closed.
+- Below 1100px, the username text and the toolbar's "Last change" note are hidden, and the welcome panel narrows to 280px.
+
+### Overlays and cards
+
+| Element | Width |
+|---|---|
+| Welcome panel | 320px (280px below 1100) |
+| Sign-in card | 360px flex basis, 300px minimum |
+| Overlay right panel | 340px |
+
+The welcome panel's maximum height leaves a 72px strip clear for the selection bar.
+
+### Control heights
+
+24, 26, 28, 30, 32, 34 and 36px only.
+
+- 24 for a toggle inside a toolbar.
+- 26 for a toolbar control.
+- 28 for buttons in the selection bar and zoom group.
+- 30 for top-bar controls.
+- 32 for a text input.
+- 34 for a secondary full-width button.
+- 36 for a primary full-width button.
+
+### Canvas
+
+| Element | Size |
+|---|---|
+| Person node | radius 7, 14px across |
+| Email or document node | radius 6, 14.4px across |
+| Hub node | radius 8 |
+| Selection ring | radius 13, 2px brass |
+
+- **Hit area.** Every node also has an invisible 24×24 hit area, to meet WCAG 2.2 SC 2.5.8, and the canvas can also be operated fully by keyboard.
+- **Labels.** Mono 11px. Identifiers longer than 28 characters are truncated in the middle: the first 19 characters, an ellipsis, then the last 4.
+- **Label clearance.** The graph wrapper has 160px of horizontal padding.
+- **Dashes.** Inferred links use `4 3` and unresolved links use `1 3`. These patterns apply to edges and to the legend.
 
 ## 6. Borders and elevation
 
@@ -277,8 +336,8 @@ Intentional breaks of common detector rules. Anything not listed here is a genui
    3px of its container edge.
 3. **Monospace for small labels and values.** A semantic distinction ("literal value, safe to
    copy"), not styling.
-4. **Grid background on the graph canvas only.** A measurement grid at 1px/`--border-subtle` on an
-   8px lattice. No other surface gets a grid.
+4. **Grid background on the graph canvas only.** A measurement grid: 1px lines in `--border-subtle` mixed to 40% toward
+   transparent, on a 16px lattice. No other surface gets a grid.
 5. **Dense repeated rows in result tables.** Tabular data is repetitive; that is the point.
 6. **Tritanopia ΔE below threshold** in the 9-channel categorical palette — recorded in 3.4 with
    its structural mitigation rather than waved away.

@@ -12420,8 +12420,12 @@ person cannot open and goes straight to a person's only place.
 9. **The handoff's conflicting values go back to Claude Design** (ruling "Ask Claude Design first"):
    provenance dashes (README `4 3`/`1 3`, `DESIGN.md` §3.8 `4 2`/`1 2`), the canvas grid (README
    16 px, `DESIGN.md` §9 8 px), the regions (README top bar 44, rail 48, right panel 340; the review
-   40, 44, 360) and node size (README radius 7; the review 20 px). Stages that draw them (E1's grid
-   token, E4–E6) wait for the answer; E2 and E3 do not.
+   40, 44, 360) and node size (README radius 7; the review 20 px). **Settled the same day:** Claude
+   Design's `DESIGN.md` v0.3 adopts the prototypes' values — dashes `4 3`/`1 3`, a 16 px grid in
+   `--border-subtle` mixed to 40%, and a new §5a of layout dimensions (top bar 44, or 48 on the welcome
+   page and Home; rail 48; right panel 340, resizable 300–480; control heights 24–36; breakpoints at
+   1200 and 1100; person node radius 7 with a 24×24 hit area). v0.3 replaced `spec/design/DESIGN.md`
+   whole after a diff showed only those hunks and the stale note.
 10. **Order** (ruling "Phase E before B5"): Phase E runs next, then B5–B10, then Phase D.
 
 **Tests to write first** are named per stage in the handover note's Phase E table.
