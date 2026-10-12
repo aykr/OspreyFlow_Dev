@@ -53,4 +53,14 @@ describe("LayoutMenu", () => {
     expect(h.onArrange).toHaveBeenCalledOnce();
     expect(h.onChange).not.toHaveBeenCalled();
   });
+
+  // ADR-115 E4 (review item 12; the reference's toolbar): Arrange is a re-run icon, named for screen
+  // readers and in its tooltip, at a 24px hit target.
+  it("draws Arrange as a re-run icon with its name kept", () => {
+    const { getByRole } = render(<LayoutMenu mode="organic" onChange={vi.fn()} onArrange={vi.fn()} onBubbleKeyChange={vi.fn()} />);
+    const arrange = getByRole("button", { name: "Arrange" });
+    expect(arrange.querySelector("svg")).toBeTruthy();
+    expect(arrange.textContent).toBe("");
+    expect(arrange.getAttribute("title")).toBe("Arrange again with this layout");
+  });
 });

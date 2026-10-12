@@ -48,8 +48,11 @@ export function LayoutMenu({ mode, onChange, bubbleKey = "type", onBubbleKeyChan
           ))}
         </select>
       )}
-      <button type="button" className="radial-menu__item" title="Arrange again with this layout" onClick={onArrange}>
-        Arrange
+      {/* ADR-115 E4 (review item 12; the reference): a re-run icon, named Arrange. */}
+      <button type="button" className="btn btn--quiet layout-rerun" aria-label="Arrange" title="Arrange again with this layout" onClick={onArrange}>
+        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.5v2.8h-2.8" />
+        </svg>
       </button>
     </span>
   );

@@ -255,7 +255,7 @@ opens in its normal state on reload. Every one of these buttons is reachable by 
 (the Inspector, the Metrics panel and the Query builder) can be put in any order. Each has one header row
 (28px, a hairline below; the row itself is what a pointer drags — no grip glyph, ADR-115 E4): the panel's name at `--fs-12` 600 in secondary text, and a menu
 button, *Arrange the {panel}*, whose menu holds *Move up* and *Move down*. The panel's own title is not
-drawn a second time inside it. Dragging the handle onto another panel's place does the same as the
+drawn a second time inside it. Dragging the header onto another panel's place does the same as the
 buttons, and Alt+Up and Alt+Down with focus on the header move the panel without opening the menu. The
 top panel's *Move up* and the bottom panel's *Move down* are shown as unavailable but keep focus. The
 order is kept in this browser for this analyst (localStorage, as the theme is), is never sent to the
@@ -501,7 +501,7 @@ above the canvas and the selection bar below it — Sigma's 30px framed them und
 October 2026 and checked by eye, since jsdom draws no WebGL). The legend (at the top right, above the zoom group) lists each type in view as the canvas
 draws it (shape in its channel's colour), with how many, most first; *Legend* folds it to its title. The
 graph canvas, and no other surface, has DESIGN.md §9 exception 4's measurement grid: 1px `--border-subtle`
-lines on an 8px lattice, fixed to the screen. *Grid* in the toolbar's Show group switches it off and on
+lines mixed to 40% on a 16px lattice (DESIGN.md v0.3), fixed to the screen. *Grid* in the toolbar's Show group switches it off and on
 (pressed while it shows); the choice is kept in this browser (owner, 6 October 2026). All of them come after the view's own controls in Tab order.
 Reachable by keyboard (`keyboard/keyboard.spec.ts`); the painted grid is read from the pixels
 (`keyboard/canvas-look.spec.ts`).
@@ -509,7 +509,7 @@ Reachable by keyboard (`keyboard/keyboard.spec.ts`); the painted grid is read fr
 **The canvas toolbar (ADR-097 step 2, design review item 12).** The canvas's own tools are one docked
 row along its top edge, *Canvas tools* (36px, `--surface-panel`, a hairline below and no shadow:
 DESIGN.md §6), in labelled groups: **Select** (the lasso), **Layout** (the layout, *Bubbles by* for
-Clustered bubbles, *Arrange*, which arranges again with the layout chosen), **Show** — one segmented control of *Communities* (pressed while on),
+Clustered bubbles, *Arrange* — a re-run icon (ADR-115 E4) — which arranges again with the layout chosen), **Show** — one segmented control of *Communities* (pressed while on),
 *Labels* and *Icons*, followed while Communities is on by what it found and *Collapse all* / *Expand
 all* — and, at the right-hand end, **View** (*Hide selected link*, *Show hidden links (n)*, *Show links among all*, *Clear view*,
 *Add files*). A menu's panel and *Clear view*'s confirmation are laid over the canvas under their

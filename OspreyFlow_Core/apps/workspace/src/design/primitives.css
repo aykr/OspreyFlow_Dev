@@ -640,3 +640,4 @@
 .timeline-strip__bars { flex: 1; height: var(--sp-16); display: flex; align-items: flex-end; gap: 1px; overflow: hidden; }
 .timeline-strip__bar { flex: 1; min-width: 1px; background: var(--seq-2); }
 .timeline-strip__range { flex: none; font-size: var(--fs-11); color: var(--text-tertiary); }
+.layout-rerun { min-width: var(--h-control-24); min-height: var(--h-control-24); padding: 0; display: inline-grid; place-items: center; }
