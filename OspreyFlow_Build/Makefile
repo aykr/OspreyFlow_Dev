@@ -4,7 +4,7 @@
 # with this folder on `PYTHONPATH` — so every command and every relative path in it is unchanged.
 # The reasoning each target used to carry in Core's Makefile is in git history (`git log -p
 # OspreyFlow_Core/Makefile`) and in each tool's own docstring.
-.PHONY: ci core-check lint-tools licence-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status bundle seed-enron
+.PHONY: publish-user-repo ci core-check lint-tools licence-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status bundle seed-enron
 
 CORE := ../OspreyFlow_Core
 BUILD := $(CURDIR)
@@ -134,3 +134,11 @@ ci-status:
 # REAL data, this machine only (ADR-053): refuses without the local exceptions entry.
 seed-enron:
 	$(IN_CORE) PYTHONPATH=.:packages:$(BUILD) $(PY) -m internal_demos.seed enron --stop-api
+
+# The user repository (ADR-114 Amendment 2): Core exactly as committed at COMMIT, into the empty
+# folder OUT outside this repository — or nothing, naming each file that must not leave. Pushing is
+# the owner's. Example: make publish-user-repo COMMIT=HEAD OUT=../../ospreyflow-user
+COMMIT ?= HEAD
+publish-user-repo:
+	@test -n "$(OUT)" || { echo "publish-user-repo: say where, e.g. OUT=../../ospreyflow-user"; exit 2; }
+	$(IN_CORE) PYTHONPATH=.:packages:$(BUILD) $(PY) -m tools.publish_user_repo $(COMMIT) $(abspath $(OUT))

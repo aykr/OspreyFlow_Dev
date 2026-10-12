@@ -11902,7 +11902,8 @@ What B1 decides *(mine)*:
    internal demo's data or code (every path of an `internal` or not-seeded registry entry, Build's
    internal-demo registry included) and the fixed internal locations (`config/real_data_exceptions.yaml`,
    `demo-data/`, `OspreyFlow_Data/`); (c) an absolute path into a home folder (`/Users/…`, `/home/…`,
-   `C:\Users\…`); (d) the personal authorship identifiers the packaging gate already refuses
+   `C:\Users\…`), except the homes of the users the product's own images run as (`arcadedb`,
+   `ubuntu`), which are inside containers; (d) the personal authorship identifiers the packaging gate already refuses
    in a bundle. Pushing the result is the owner's.
 
 **Tests**, named before the code: the published copy names no Build path and Core's own `check`
