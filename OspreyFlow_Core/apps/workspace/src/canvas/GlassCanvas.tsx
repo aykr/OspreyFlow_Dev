@@ -230,6 +230,8 @@ export interface GlassCanvasProps {
   /** ADR-098 decision 4: the selection was branched to ask the model about its Documents; open
    * the new case on its questions. Absent: not offered. */
   onAskAboutDocuments?: (id: string, name: string) => void;
+  /** ADR-115 E6: the case's latest history step and when, for the toolbar's note. */
+  lastChange?: string | null;
   /** The link now selected, or `null` when none is. Selecting a link clears the node selection,
    * and selecting a node clears the link, so the Inspector shows one thing at a time. */
   onEdgeSelect?: (edge: Edge | null) => void;
@@ -376,6 +378,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       onSelectionChange,
       onBranchCreated,
       onAskAboutDocuments,
+      lastChange,
       onEdgeSelect,
       onFocusChange,
       onViewMessages,
@@ -3015,6 +3018,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               onAddFiles={bearerToken && investigationId ? () => setAddingFiles({}) : undefined}
               onLinksAmongAll={bearerToken && investigationId ? () => void linksAmongOnCanvas(null) : undefined}
             />
+            {/* ADR-115 E6: what last changed in the case, hidden below 1100px (DESIGN.md §5a). */}
+            {lastChange && <span className="canvas-toolbar__note canvas-toolbar__last-change">{lastChange}</span>}
             {/* ADR-115 E4: the right panel's toggle, docked or overlaid (DESIGN.md §5a). */}
             <DetailsToggle />
           </div>

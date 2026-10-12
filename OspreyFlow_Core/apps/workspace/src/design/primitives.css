@@ -678,3 +678,6 @@
 .workspace-welcome__step:hover { background: var(--surface-hover); }
 .workspace-welcome__step .value { font-size: var(--fs-11); color: var(--text-tertiary); }
 .workspace-welcome__keys li { display: grid; grid-template-columns: var(--sp-40) minmax(0, 1fr); align-items: center; gap: var(--sp-8); }
+/* ADR-115 E6 (DESIGN.md §5a): below 1100px the toolbar's "Last change" note gives its room back. */
+.canvas-toolbar__last-change { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-tertiary); }
+@media (max-width: 1099px) { .canvas-toolbar__last-change { display: none; } }

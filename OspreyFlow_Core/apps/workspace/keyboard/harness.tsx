@@ -171,6 +171,8 @@ const sameOrigin = new URLSearchParams(window.location.search).get("api") === "s
 // `?fixture=link-style` is how links are drawn by basis (ADR-081): five pairs of people, each pair
 // joined by one link of a type that is drawn a different way.
 const wantsLinkStyle = new URLSearchParams(window.location.search).get("fixture") === "link-style";
+/** `?last-change=…`: the toolbar's note, as App passes it (ADR-115 E6). */
+const lastChange = new URLSearchParams(window.location.search).get("last-change");
 const LINK_STYLE_TYPES: OntologySchema["edge_types"] = [
   { name: "KNOWS", from: ["Person"], to: ["Person"], directed: false, basis: "direct" },
   { name: "OWNS", from: ["Person"], to: ["Person"], directed: true, basis: "direct" },
@@ -356,6 +358,7 @@ const selectionListeners = new Set<(ids: string[]) => void>();
 createRoot(container).render(
   <>
     <GlassCanvas
+      lastChange={lastChange}
       ref={canvasHandle}
       judgementCounts={judged}
       graph={workingSet.graph}

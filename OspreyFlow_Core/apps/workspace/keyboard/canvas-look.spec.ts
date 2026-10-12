@@ -113,3 +113,14 @@ test("the canvas's tools are one docked toolbar of labelled groups, with Show as
   );
   expect(shadows.filter((s) => s !== "none" && !s.includes("inset"))).toEqual([]);
 });
+
+// ADR-115 E6 (the reference's toolbar, DESIGN.md §5a): the toolbar names the case's last change, and
+// gives that room back below a 1100px window.
+test("the toolbar's last change shows at desktop width and is hidden below 1100px", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/keyboard/harness.html?last-change=" + encodeURIComponent("Last change: Expanded n0 by one hop, yesterday"));
+  const note = page.getByRole("toolbar", { name: "Canvas tools" }).getByText("Last change: Expanded n0 by one hop, yesterday");
+  await expect(note).toBeVisible();
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect(note).toBeHidden();
+});

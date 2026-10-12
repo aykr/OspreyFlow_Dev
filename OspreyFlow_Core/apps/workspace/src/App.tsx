@@ -92,6 +92,8 @@ import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { DEFAULT_TIMELINE_HEIGHT } from "./layout/layoutSizes";
 import { TimelineStrip } from "./timeline/TimelineStrip";
+import { lastChangeText } from "./history/lastChange";
+import type { HistoryStepSummary } from "./workingset/models";
 import { setWelcomeDismissed, useHelpKey, welcomeDismissed, WorkspaceWelcome } from "./welcome/WorkspaceWelcome";
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
@@ -554,6 +556,21 @@ export function App() {
   const [view, setView] = useState<
     "graph" | "map" | "reports" | "admin" | "dashboards" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
   >(handoff.view === "ingest" ? "ingest" : handoff.view === "admin" ? "admin" : "graph");
+  // ADR-115 E6: the canvas toolbar's "Last change", read again as the working set changes.
+  const [lastChange, setLastChange] = useState<string | null>(null);
+  useEffect(() => {
+    if (!investigationId || !bearerToken) return;
+    let cancelled = false;
+    void fetch(`${API_BASE_URL}/v1/investigations/${encodeURIComponent(investigationId)}/history`, {
+      headers: { Authorization: `Bearer ${bearerToken}` },
+    })
+      .then((r) => (r.ok ? (r.json() as Promise<unknown>) : []))
+      .then((body) => !cancelled && setLastChange(lastChangeText(Array.isArray(body) ? (body as HistoryStepSummary[]) : [], new Date())))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [investigationId, bearerToken, counts.nodes, counts.edges]);
   // ADR-115 E6: the rail's Alerts badge, the case's queue counted as the reader (rule 3).
   const [alertCount, setAlertCount] = useState<number | undefined>(undefined);
   useEffect(() => {
@@ -1316,6 +1333,7 @@ export function App() {
             {view === "graph" && (
               <GlassCanvas
                 ref={glassCanvasRef}
+                lastChange={lastChange}
                 graph={workingSetRef.current.graph}
                 store={workingSetRef.current.store}
                 ontology={ontology}
