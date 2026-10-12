@@ -753,3 +753,72 @@ def test_replace_links_reaches_the_enron_seed_and_is_refused_for_any_other(repo:
     assert "--replace-links" in call and "--replace-events" in call
     with pytest.raises(seed_internal.SeedRefused, match="--replace-links is not built for"):
         _with(repo, replace_links=True)
+
+
+@pytest.fixture
+def user_repo(tmp_path: Path) -> Path:
+    """The user repository's layout (ADR-114): the product folder IS the repository root, so the
+    version-control folder is inside it, and there is no `OspreyFlow_Data` beside it."""
+    root = tmp_path / "ospreyflow"
+    (root / ".git").mkdir(parents=True)
+    out = root / "deploy" / "generated" / "local-lite"
+    out.mkdir(parents=True)
+    (out / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+    (out / "deployment.env").write_text("OSPREY_KEYCLOAK_PORT=8081\n", encoding="utf-8")
+    (root / "scripts").mkdir()
+    return root
+
+
+def test_a_user_repository_is_a_checkout_when_the_git_folder_is_in_the_product_itself(
+    user_repo: Path,
+) -> None:
+    """The check passed only when `.git` was one folder up (the developer layout), so a seed run
+    from the user repository was refused as 'not a checkout'. A synthetic dataset needs no data
+    folder, so nothing else can stand in the way."""
+    runner = Runner()
+    _go(user_repo, runner, dataset="hmp")
+    call = _seed_call(runner)
+    assert call[call.index("-m") + 1] == "scripts.seed_hmp_fixture"
+
+
+def test_neither_a_git_folder_in_the_product_nor_above_it_is_still_refused(user_repo: Path) -> None:
+    (user_repo / ".git").rmdir()
+    with pytest.raises(seed_internal.SeedRefused, match="checkout"):
+        _go(user_repo, Runner(), dataset="hmp")
+
+
+def test_the_data_root_is_the_environments_when_set(
+    user_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = tmp_path / "chosen-data"
+    (data / "PaySIM_Dataset").mkdir(parents=True)
+    monkeypatch.setenv("OSPREYFLOW_DEMO_DATA", str(data))
+    runner = Runner()
+    _go(user_repo, runner)
+    call = _seed_call(runner)
+    mounts = [call[i + 1] for i, a in enumerate(call) if a == "-v"]
+    assert f"{data}:/internal-data:ro" in mounts
+
+
+def test_a_data_root_from_the_environment_that_lacks_the_folder_is_named_in_the_refusal(
+    user_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Even with an `OspreyFlow_Data` beside the product, the environment's folder wins."""
+    (tmp_path / "OspreyFlow_Data" / "PaySIM_Dataset").mkdir(parents=True)
+    empty = tmp_path / "empty-data"
+    empty.mkdir()
+    monkeypatch.setenv("OSPREYFLOW_DEMO_DATA", str(empty))
+    with pytest.raises(seed_internal.SeedRefused, match="empty-data"):
+        _go(user_repo, Runner())
+
+
+def test_without_the_environment_the_data_root_is_the_sibling_as_before(
+    user_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OSPREYFLOW_DEMO_DATA", raising=False)
+    (tmp_path / "OspreyFlow_Data" / "PaySIM_Dataset").mkdir(parents=True)
+    runner = Runner()
+    _go(user_repo, runner)
+    call = _seed_call(runner)
+    mounts = [call[i + 1] for i, a in enumerate(call) if a == "-v"]
+    assert f"{tmp_path}/OspreyFlow_Data:/internal-data:ro" in mounts

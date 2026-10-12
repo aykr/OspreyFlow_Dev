@@ -143,3 +143,52 @@ def test_each_seeded_pack_names_a_seed_module_that_exists() -> None:
     for pack in seeded:
         assert pack.seed_module is not None
         assert importlib.util.find_spec(pack.seed_module) is not None, pack.seed_module
+
+
+def test_ids_prints_the_pack_ids_one_per_line_and_nothing_else(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The `ospreyflow` command reads this to know which packs a checkout offers (stage B2b)."""
+    assert demo_packs.main(["--ids"]) == 0
+    assert capsys.readouterr().out.splitlines() == [p.id for p in demo_packs.packs()]
+    assert demo_packs.main([]) == 0
+    assert "shows:" in capsys.readouterr().out  # a plain run still lists
+
+
+def _small_paysim(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, content: bytes) -> Path:
+    """PaySim expecting `content` exactly, so a real file small enough to write can be checked."""
+    download = demo_packs.pack("paysim").download
+    assert download is not None
+    file = tmp_path / "PS.csv"
+    file.write_bytes(content)
+    pinned = dataclasses.replace(
+        download, size_bytes=len(content), sha256=hashlib.sha256(content).hexdigest()
+    )
+    monkeypatch.setitem(
+        demo_packs._DESCRIPTIONS,
+        "paysim",
+        dataclasses.replace(demo_packs._DESCRIPTIONS["paysim"], download=pinned),
+    )
+    return file
+
+
+def test_verify_accepts_the_right_file_and_refuses_each_wrong_one(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Exit 0 for the pack's own file; exit 1 and the refusal's words for a file with the right size
+    but another checksum, a file that is missing, and a pack that has nothing to download."""
+    file = _small_paysim(monkeypatch, tmp_path, b"original\n")
+    assert demo_packs.main(["verify", "paysim", str(file)]) == 0
+    file.write_bytes(b"tampered\n")  # the same size, so only the checksum can tell
+    assert demo_packs.main(["verify", "paysim", str(file)]) == 1
+    assert "checksum" in capsys.readouterr().err
+    assert demo_packs.main(["verify", "paysim", str(tmp_path / "gone.csv")]) == 1
+    assert "no file" in capsys.readouterr().err.lower()
+    assert demo_packs.main(["verify", "hmp", str(file)]) == 1
+    assert "nothing to download" in capsys.readouterr().err
+    assert demo_packs.main(["verify", "enron", str(file)]) == 1
+    assert "no demo pack called 'enron'" in capsys.readouterr().err.lower()
+
+
+def test_verify_without_its_arguments_is_a_usage_error() -> None:
+    assert demo_packs.main(["verify", "paysim"]) == 2

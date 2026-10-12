@@ -6,7 +6,8 @@ list is derived from `scripts.demo_registry`'s shipped entries, so a pack cannot
 registry entry and an internal demo can never be offered. Each shipped manifest needs a description
 here; one without is a programming error and raises.
 
-Run `python -m scripts.demo_packs` to list the packs.
+Run `python -m scripts.demo_packs` to list the packs, `--ids` for just their ids, and
+`verify PACK FILE` to check a downloaded file (stage B2b: the `ospreyflow` command uses both).
 """
 
 from __future__ import annotations
@@ -157,7 +158,33 @@ def verify_download(path: Path, pack: DemoPack) -> None:
         )
 
 
-def main() -> int:
+def _verify(pack_id: str, file: str) -> int:
+    """Exit 0 when the file is the pack's own, else print why not and exit 1."""
+    try:
+        verify_download(Path(file), pack(pack_id))
+    except PackRefused as refusal:
+        print(refusal, file=sys.stderr)
+        return 1
+    print(f"{file} is the file the pack '{pack_id}' expects.")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """`demo_packs` lists the packs; `--ids` prints only their ids, one per line (what the
+    `ospreyflow` command reads); `verify PACK FILE` checks a downloaded file."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args == ["--ids"]:
+        for item in packs():
+            print(item.id)
+        return 0
+    if args and args[0] == "verify":
+        if len(args) != 3:
+            print("usage: demo_packs verify PACK FILE", file=sys.stderr)
+            return 2
+        return _verify(args[1], args[2])
+    if args:
+        print("usage: demo_packs [--ids | verify PACK FILE]", file=sys.stderr)
+        return 2
     for item in packs():
         size = f"{item.download.size_bytes:,} bytes" if item.download else "generated"
         print(f"{item.id}: {item.title}")

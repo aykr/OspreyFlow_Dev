@@ -29,6 +29,11 @@ LOCAL_LITE_PROJECT = "osprey-local-lite"
 #: Destroys the deployment it is pointed at, by design, and only one named by its operator.
 DESTROYS_BY_DESIGN = frozenset({"test_restore_exit_test.py"})
 
+#: Assert the argv `ospreyflow uninstall` would run, through the command's fake runner, and never
+#: run a process (ADR-114 Amendment 3). Passed only while the file never asks for the real runner:
+#: the moment it does, the scan treats it like any other teardown.
+FAKE_RUNNER_ONLY = frozenset({"test_uninstall.py"})
+
 _THIS_FILE_AND_ITS_TEST = frozenset({"deployment_guard.py", "test_deployment_guard.py"})
 
 
@@ -87,6 +92,8 @@ def teardowns_that_do_not_ask(tests_root: Path) -> list[str]:
         if path.name in _THIS_FILE_AND_ITS_TEST or path.name in DESTROYS_BY_DESIGN:
             continue
         text = path.read_text(encoding="utf-8")
+        if path.name in FAKE_RUNNER_ONLY and "use_real_runner" not in text:
+            continue
         if (
             _DOWN.search(text)
             and _VOLUMES.search(text)

@@ -93,3 +93,15 @@ def test_the_scan_finds_a_teardown_that_does_not_ask(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert teardowns_that_do_not_ask(tmp_path) == ["test_planted.py"]
+
+
+def test_an_argv_only_file_passes_only_while_it_never_asks_for_a_real_runner(tmp_path: Path) -> None:
+    """`ospreyflow uninstall`'s own test asserts `down -v` as an argv through a fake runner; the
+    moment that file reaches for the real runner, it is a teardown like any other."""
+    folder = tmp_path / "cli"
+    folder.mkdir()
+    fake = 'assert rig.runner.argvs() == [[*_compose(rig), "down", "-v"]]\n'
+    (folder / "test_uninstall.py").write_text(fake, encoding="utf-8")
+    assert teardowns_that_do_not_ask(tmp_path) == []
+    (folder / "test_uninstall.py").write_text("rig.use_real_runner = True\n" + fake, encoding="utf-8")
+    assert teardowns_that_do_not_ask(tmp_path) == ["cli/test_uninstall.py"]

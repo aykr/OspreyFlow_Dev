@@ -29,6 +29,7 @@ this refuses outside a checkout, and passes the container `--attested-checkout` 
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -285,7 +286,9 @@ def seed_internal(
             f"permitting {REAL_DATA_USE!r}. Add one with `python -m scripts.real_data_exceptions "
             "add` (ADR-035 §C3, ADR-053); nothing was started"
         )
-    if not (repo_root.parent / ".git").exists():
+    # The developer repository keeps the product one folder below the checkout; the user
+    # repository (ADR-114) is the product itself.
+    if not ((repo_root / ".git").exists() or (repo_root.parent / ".git").exists()):
         raise SeedRefused(
             "this is not a checkout of the repository: an internal dataset is only ever seeded "
             "from one, never from a built bundle"
@@ -294,7 +297,8 @@ def seed_internal(
         directory = _deployment_dir(repo_root)
     except NothingToRefresh as error:
         raise SeedRefused(str(error)) from error
-    data_root = repo_root.parent / "OspreyFlow_Data"
+    chosen_data = os.environ.get("OSPREYFLOW_DEMO_DATA")
+    data_root = Path(chosen_data) if chosen_data else repo_root.parent / "OspreyFlow_Data"
     if spec.data_folder and not (data_root / spec.data_folder).is_dir():
         raise SeedRefused(
             f"the dataset is not provisioned: {data_root / spec.data_folder} is missing"
