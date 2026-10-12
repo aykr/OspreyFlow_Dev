@@ -229,7 +229,22 @@ def _media_store_factories() -> list[MediaStoreFactory]:
     return [
         MediaStoreFactory(label="media_in_memory", context=in_memory_media_store),
         MediaStoreFactory(label="media_objectstore", context=object_store_media_store),
+        *_media_blob_factories(),
     ]
+
+
+def _media_blob_factories() -> list[MediaStoreFactory]:
+    """ADR-114 decision 8: Azure Blob, against the Blob service at `AZURE_BLOB_ENDPOINT` (Azurite,
+    which checks the Shared Key signature as Azure does). Offered only where one is configured —
+    the in-process `test` job has none — and `tests/test_media_blob.py`, which runs only where one
+    is, fails if it is missing from this list, so it cannot drop out unseen."""
+    import os
+
+    if not os.environ.get("AZURE_BLOB_ENDPOINT"):
+        return []
+    from adapters.media_blob.testing import blob_media_store
+
+    return [MediaStoreFactory(label="media_blob", context=blob_media_store)]
 
 
 ANALYTICS_PORT_ADAPTERS: list[AnalyticsAdapterFactory] = [

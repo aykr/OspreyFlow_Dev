@@ -936,6 +936,10 @@ digest in `versions.lock` like every other third-party image; nothing of OspreyF
 **ADR-114 decision 9 addition (13 October 2026):** ClickHouse server (Apache-2.0), the
 Enterprise profile's analytics store, the official image `clickhouse/clickhouse-server:25.8.33.6`
 run unmodified; the adapter talks to it over HTTP with `httpx`, so no ClickHouse driver is imported.
+**ADR-114 decision 8 addition (13 October 2026):** the Blob media adapter (`adapters/media_blob`)
+speaks Azure Blob's REST interface with `httpx` and Shared Key signing, so no Azure SDK is imported.
+Its tests run against Azurite (MIT), `mcr.microsoft.com/azure-storage/azurite:3.35.0`, a test-only
+image that never ships in a deployment.
 
 **PaySim (ADR-055 Amendment, ADR-114 decision 5, 11 October 2026) — data, CC BY-SA 4.0**, verified
 from Kaggle's metadata for `ealaxi/paysim1` (Edgar Lopez-Rojas). Redistributable as a downloadable demo

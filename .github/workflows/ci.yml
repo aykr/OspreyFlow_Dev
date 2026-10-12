@@ -309,6 +309,10 @@ jobs:
         env:
           CLICKHOUSE_USER: osprey
           CLICKHOUSE_PASSWORD: throwaway
+      # Azurite's published development account and key (ADR-114 decision 8), not a secret.
+      AZURE_STORAGE_ACCOUNT: devstoreaccount1
+      AZURE_STORAGE_KEY: "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
+      AZURE_BLOB_ENDPOINT: "http://127.0.0.1:10000/devstoreaccount1"
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
         options: >-
           --health-cmd "wget -q -O /dev/null http://localhost:8123/ping"
@@ -360,6 +364,13 @@ jobs:
       # MinIO's image needs `server /data --console-address :9001` as its
       # command, which GitHub Actions' `services:` block cannot override
       # (no `command:` key) — run it directly instead.
+      # Azurite needs its own command line, which `services:` cannot give it.
+      - name: Start Azurite
+        run: |
+          docker run -d --name azurite -p 10000:10000 \
+            mcr.microsoft.com/azure-storage/azurite:3.35.0 \
+            azurite-blob --blobHost 0.0.0.0 --loose=false
+          for _ in $(seq 1 20); do curl -s http://localhost:10000/ >/dev/null && break; sleep 2; done
       - name: Start MinIO
         run: |
           docker run -d --name minio -p 9000:9000 -p 9001:9001 \
@@ -444,6 +455,8 @@ jobs:
           uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/ingest
           ../OspreyFlow_Build/tests/conformance/analytics_port
           ../OspreyFlow_Build/tests/test_analytics_clickhouse.py
+          ../OspreyFlow_Build/tests/conformance/media_store
+          ../OspreyFlow_Build/tests/test_media_blob.py
           ../OspreyFlow_Build/tests/services/api/test_valkey_store.py
           ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py
           ../OspreyFlow_Build/tests/services/api/test_statelessness.py
@@ -702,6 +715,7 @@ jobs:
       - run: >-
           uv run pytest -c ../OspreyFlow_Build/pytest.ini --ignore=../OspreyFlow_Build/tests/conformance/graph_port
           --ignore=../OspreyFlow_Build/tests/conformance/analytics_port --ignore=../OspreyFlow_Build/tests/test_analytics_clickhouse.py
+          --ignore=../OspreyFlow_Build/tests/test_media_blob.py
           --ignore=../OspreyFlow_Build/tests/conformance/model_port --ignore=../OspreyFlow_Build/tests/golden --ignore=../OspreyFlow_Build/tests/ingest
           --ignore=../OspreyFlow_Build/tests/services/api/test_valkey_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_ws_ticket.py
