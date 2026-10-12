@@ -4,6 +4,7 @@
 import type {
   AccessInput,
   DashboardIdentity,
+  DemoPackStatus,
   InviteInput,
   PersonAccount,
   RegisteredDashboard,
@@ -72,4 +73,5 @@ export const registerDashboard = (api: AdminApi, name: string, clearance: string
   });
 export const removeDashboard = (api: AdminApi, clientId: string) =>
   call<void>(api, `dashboards/${encodeURIComponent(clientId)}`, { method: "DELETE" });
+export const listDemoPacks = (api: AdminApi) => call<DemoPackStatus[]>(api, "demo-packs");
 export const systemStatus = (api: AdminApi) => call<SystemStatus>(api, "system");

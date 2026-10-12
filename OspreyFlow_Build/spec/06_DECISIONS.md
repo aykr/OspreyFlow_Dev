@@ -12185,6 +12185,11 @@ What B4 decides *(mine)*:
    applied to people. **No administrator disables their own account** (409): they would have no way
    back in. A one-time code is in the answer only — never in the audit record, never stored.
 
+7. **The Demo packs tab** (B4d) reads the pack catalogue (`scripts/demo_packs.py`, in the Conduit's
+   image) and says each pack's command; it never runs one. A pack is "loaded" only when the case its
+   seed makes is one the administrator can open — naming a case they cannot would disclose that it
+   exists. The pack catalogue now carries that case's name, held to the seed runner's by a test.
+
 **Tests**, named before the code: Keycloak in `start` on Postgres, its database made first and kept in
 step, every secret the compose file requires minted by `apply`, the backup leaving Keycloak's database
 to the identity item (`tests/harness/test_keycloak_persisted.py`); no launcher client in the realm and a

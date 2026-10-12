@@ -65,6 +65,7 @@ def _small_pack(path: Path, data: bytes) -> DemoPack:
         seed_module=None,
         licence="CC-BY-SA-4.0",
         attribution="Someone",
+        case_name="Small (test)",
         download=PackDownload(
             filename=path.name,
             size_bytes=len(data),
@@ -192,3 +193,14 @@ def test_verify_accepts_the_right_file_and_refuses_each_wrong_one(
 
 def test_verify_without_its_arguments_is_a_usage_error() -> None:
     assert demo_packs.main(["verify", "paysim"]) == 2
+
+
+def test_each_pack_names_the_case_its_seed_makes() -> None:
+    """ADR-114 Amendment 5 (B4d): the Admin area's Demo packs tab says whether a pack is loaded by
+    the case it lands in. The Conduit cannot import the seed runner (it needs the harness), so the
+    pack carries the name — and must carry the seed's own."""
+    from ospreyflow.demo import PACK_KEYS
+    from scripts.seed_internal import DATASETS
+
+    for each in demo_packs.packs():
+        assert each.case_name == DATASETS[PACK_KEYS[each.id]].case_name, each.id

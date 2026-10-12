@@ -958,7 +958,9 @@ Amendment 5, each person's state — disabled, or invited and yet to set a passw
 *Enable*, and *Reset sign-in*; and *Invite a person*, whose answer is either "an email went to …" or a
 one-time code shown once with what to do with it), *Dashboards*
 (register a dashboard identity — its secret shown once — and remove one; its account id is what a
-case's Author grants Viewer to), *System* (each component asked as the tab opens, with *Ask again*).
+case's Author grants Viewer to), *System* (each component asked as the tab opens, with *Ask again*),
+*Demo packs* (ADR-114 Amendment 5: each pack, its licence and credit, "Loaded, in …" only for a case
+the administrator can open, and its `ospreyflow demo add` command with *Copy* — the page runs nothing).
 Every action has its case in `keyboard/admin.spec.ts` (`ADMIN_ACTIONS`).
 
 ### 3.4 Temporal analysis

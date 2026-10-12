@@ -156,6 +156,7 @@ export type { DashboardGuestToken } from "./DashboardGuestToken";
 export type { AccessInput } from "./AccessInput";
 export type { InviteInput } from "./InviteInput";
 export type { SignInDelivery } from "./SignInDelivery";
+export type { DemoPackStatus } from "./DemoPackStatus";
 export type { ExtractionRequest } from "./ExtractionRequest";
 export type { ExtractionResult } from "./ExtractionResult";
 export type { TranscribeRequest } from "./TranscribeRequest";

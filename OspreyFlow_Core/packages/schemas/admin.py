@@ -139,8 +139,26 @@ class DashboardGuestToken(BaseModel):
     superset_origin: str
 
 
+class DemoPackStatus(BaseModel):
+    """A demo pack as the Admin area shows it (ADR-114 Amendment 5, "Show and explain"): what it
+    shows, its licence and credit, whether it is loaded — only in a case the administrator can open
+    — and the command that adds it on the host. The Conduit never runs it."""
+
+    id: str
+    title: str
+    shows: str
+    delivery: Literal["seed", "download"]
+    licence: str
+    attribution: str | None = None
+    case_name: str
+    loaded_case_id: str | None = None
+    command: str
+    source_page: str | None = None
+    size_bytes: int | None = None
+
+
 ALL_MODELS = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
-    AccessInput, InviteInput, SignInDelivery,
+    AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
 ]  # fmt: skip

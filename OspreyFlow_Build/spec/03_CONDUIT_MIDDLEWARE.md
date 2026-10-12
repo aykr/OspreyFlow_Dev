@@ -733,6 +733,7 @@ PUT    /v1/admin/people/{user_id}/access                   clearance, unit and r
 POST   /v1/admin/people/{user_id}/disable                  disabled and their sessions ended; never one's own account (409); manage_people
 POST   /v1/admin/people/{user_id}/enable                   enabled again; manage_people
 POST   /v1/admin/people/{user_id}/reset-sign-in            sessions ended and a new password required at next sign-in — emailed link or one-time code, as for an invitation; manage_people
+GET    /v1/admin/demo-packs                                each shipped demo pack (ADR-114 Amendment 5, "Show and explain"): what it shows, licence and credit, the command that adds it on the host (PaySim's with `--file`), and the case it is loaded in only when the administrator can open that case; the Conduit runs nothing; audited; administer_system
 GET    /v1/admin/dashboards                                the registered dashboard identities (ADR-111 decision 7), each with how fresh its figures are in the reporting mart — last pulled, standing failure and when, cases pulled; aggregates only, never a case id; manage_dashboards
 POST   /v1/admin/dashboards                                register one: its secret in this answer only; clearance capped at the registrar's (403); manage_dashboards
 DELETE /v1/admin/dashboards/{client_id}                    remove one — only an osprey-dashboard-* client; manage_dashboards

@@ -46,6 +46,8 @@ class DemoPack:
     licence: str
     attribution: str | None
     download: PackDownload | None
+    #: The case the pack's seed makes (ADR-114 Amendment 5: how the Admin area tells it is loaded).
+    case_name: str
 
 
 class PackRefused(Exception):
@@ -56,6 +58,7 @@ class PackRefused(Exception):
 class _Description:
     title: str
     shows: str
+    case_name: str
     download: PackDownload | None = None
 
 
@@ -63,19 +66,23 @@ _DESCRIPTIONS: dict[str, _Description] = {
     "hmp": _Description(
         "HMP — organised crime (synthetic)",
         "A prison's people, phones, calls, visits and places.",
+        "HMP fixture (synthetic demo)",
     ),
     "fixture-corp": _Description(
         "Fixture Corp — network shapes and record matching (synthetic)",
         "A hub, rings of associates and duplicate records matched, not merged.",
+        "Fixture Corp (synthetic demo)",
     ),
     "operation-ledger": _Description(
         "Operation Ledger — preventive AML (synthetic)",
         "A structuring ring, an onboarding file screened before commit, and ownership traced "
         "through a trust.",
+        "Operation Ledger (synthetic demo)",
     ),
     "paysim": _Description(
         "PaySim — mobile-money fraud (simulated)",
         "6.36 million simulated mobile-money transactions with fraud labels.",
+        "PaySim mobile money (internal)",
         PackDownload(
             filename="PS_20174392719_1491204439457_log.csv",
             size_bytes=493534783,
@@ -107,6 +114,7 @@ def _build(manifest: DemoManifest) -> DemoPack:
         licence=manifest.data_licence or _OWNED,
         attribution=manifest.attribution,
         download=description.download if manifest.delivery == DELIVERY_DOWNLOAD else None,
+        case_name=description.case_name,
     )
 
 

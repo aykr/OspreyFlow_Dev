@@ -115,6 +115,7 @@ from schemas.admin import (
     DashboardGuestToken,
     DashboardIdentity,
     DashboardInput,
+    DemoPackStatus,
     EmbeddedDashboard,
     InviteInput,
     PersonAccount,
@@ -8070,6 +8071,35 @@ async def reset_person_sign_in_route(
                        resolved_query={"user_id": user_id, "delivery": reset.delivery},
                        result_cardinality=1)  # fmt: skip
     return reset
+
+
+@app.get("/v1/admin/demo-packs", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
+async def list_demo_packs_route(
+    principal: PrincipalDep, investigations: InvestigationsDep, audit: AuditDep
+) -> list[DemoPackStatus]:
+    """The demo packs (ADR-114 Amendment 5, the owner's "Show and explain"): each shipped pack and
+    the command that adds it on the host — the Conduit has no control of Docker and runs nothing.
+    "Loaded" is said only for a case this administrator can open: naming one they cannot would
+    disclose that it exists."""
+    from scripts.demo_packs import packs
+
+    opened = {case.name: case.id for case, _ in await investigations.list_for(principal)}
+    listed: list[DemoPackStatus] = []
+    for each in packs():
+        command = f"ospreyflow demo add {each.id}"
+        if each.download is not None:
+            command += f" --file <the downloaded {each.download.filename}>"
+        listed.append(DemoPackStatus(
+            id=each.id, title=each.title, shows=each.shows,
+            delivery="download" if each.download is not None else "seed",
+            licence=each.licence, attribution=each.attribution, case_name=each.case_name,
+            loaded_case_id=opened.get(each.case_name), command=command,
+            source_page=each.download.source_page if each.download else None,
+            size_bytes=each.download.size_bytes if each.download else None,
+        ))  # fmt: skip
+    await audit.record(principal=principal, action="list_demo_packs", resolved_query={},
+                       result_cardinality=len(listed))  # fmt: skip
+    return listed
 
 
 @app.get("/v1/admin/dashboards", dependencies=[Depends(require_right(Right.MANAGE_DASHBOARDS))])
