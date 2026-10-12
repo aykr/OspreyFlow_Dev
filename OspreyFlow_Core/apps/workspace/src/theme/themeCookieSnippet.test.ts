@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { readStoredTheme, storeTheme, THEME_COOKIE_NAME } from "./theme";
+import { readStoredTheme, storeTheme, THEME_COOKIE_NAME, themeCookieDomain, themeCookieWrites } from "./theme";
 
 const SCRIPT = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "harness", "theme_cookie.js"),
@@ -20,6 +20,7 @@ interface OspreyThemeApi {
   current: () => "light" | "dark";
   set: (theme: "light" | "dark") => void;
   mountButton: () => HTMLButtonElement;
+  cookieWrites: (theme: "light" | "dark", host: string) => string[];
 }
 
 function runScript(): OspreyThemeApi {
@@ -141,4 +142,19 @@ describe("theme_cookie.js", () => {
       Object.defineProperty(Document.prototype, "cookie", original);
     }
   });
+});
+
+// ADR-114 Amendment 4: the sign-in page at `id.` keeps the choice for the deployment's base name, by
+// exactly the rule the Glass uses.
+describe("theme_cookie.js and theme.ts agree on where the choice is kept", () => {
+  it.each(["ospreyflow.localhost", "id.ospreyflow.localhost", "bi.osprey.example.org", "localhost", "127.0.0.1", "::1"])(
+    "for %s",
+    (host) => {
+      const api = runScript();
+      for (const theme of ["light", "dark"] as const) {
+        expect(api.cookieWrites(theme, host)).toEqual(themeCookieWrites(theme, host));
+      }
+      expect(themeCookieDomain(host) === null).toBe(api.cookieWrites("dark", host).length === 1);
+    },
+  );
 });

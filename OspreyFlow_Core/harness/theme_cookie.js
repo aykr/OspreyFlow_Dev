@@ -2,8 +2,9 @@
    welcome page and Keycloak's sign-in page. The Glass and the setup harness use
    apps/workspace/src/theme/theme.ts, which reads and writes the same cookie.
 
-   The pages are on different ports of one host. A browser keeps a page's storage per port but a
-   cookie per host, so the choice is a cookie. It holds only "light" or "dark" and no server reads
+   The pages are on different names of one deployment (ADR-114 Amendment 4: the Glass at the base
+   name, this sign-in page at id., the dashboards at bi.), so the choice is a cookie kept for the
+   base name, which reaches all of them; apps/workspace/src/theme/theme.ts holds the same rule. It holds only "light" or "dark" and no server reads
    it. Dark is the default. Written in plain ES5 with no dependency, since it is put in a page
    as it is. Colours come only from the design tokens (var(--...)), which every one of these pages
    already has. */
@@ -40,9 +41,28 @@
     button.textContent = next === "light" ? "\u2600 Light" : "\u263E Dark";
   }
 
+  /* The base name the choice is kept for, or null for localhost or an address, where a browser takes
+     no Domain and the choice is kept for the host alone. */
+  function cookieDomain(hostname) {
+    var host = String(hostname).toLowerCase().replace(/\.$/, "");
+    if (host.indexOf(".") < 0 || /^[\d.]+$/.test(host) || host.indexOf(":") >= 0 || host.charAt(0) === "[") {
+      return null;
+    }
+    return host.replace(/^(id|bi)\./, "");
+  }
+
+  /* The assignments that keep the choice: a copy kept for this host alone (as the page wrote it before
+     the names) is cleared first, so it can never shadow the shared one. */
+  function cookieWrites(theme, hostname) {
+    var kept = NAME + "=" + theme + "; Path=/; Max-Age=31536000; SameSite=Lax";
+    var domain = cookieDomain(hostname);
+    return domain === null ? [kept] : [NAME + "=; Path=/; Max-Age=0", kept + "; Domain=" + domain];
+  }
+
   function set(theme) {
     try {
-      document.cookie = NAME + "=" + theme + "; Path=/; Max-Age=31536000; SameSite=Lax";
+      var writes = cookieWrites(theme, window.location.hostname);
+      for (var i = 0; i < writes.length; i++) document.cookie = writes[i];
     } catch (e) {
       /* The page still changes; the choice just does not travel to the other pages. */
     }
@@ -72,7 +92,7 @@
   }
 
   show(read() || "dark");
-  window.ospreyTheme = { current: current, set: set, mountButton: mountButton };
+  window.ospreyTheme = { current: current, set: set, mountButton: mountButton, cookieWrites: cookieWrites };
 
   if (document.body) {
     mountButton();

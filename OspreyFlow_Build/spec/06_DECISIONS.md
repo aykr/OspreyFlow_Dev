@@ -12110,7 +12110,15 @@ What B3 decides *(mine)*:
    reaches the proxy with its name intact on a machine whose resolver does not answer such names
    (Windows', unmeasured). Each reads the identity and Glass origins from `deployment.env`
    (`OSPREY_IDENTITY_ORIGIN`, `OSPREY_GLASS_ORIGIN`, not secrets).
-8. **Left for stage B4**, which reworks identity: the launcher's and the old console's loopback
+8. **The light and dark choice is kept for the base name** (added 12 October 2026, the owner's "fix
+   the theme cookie first"). ADR-072 shared it as a cookie kept per host, which stopped reaching the
+   sign-in page once it moved to `id.`. The Glass (`theme/theme.ts`) and the sign-in page's script
+   (`harness/theme_cookie.js`) now write it with `Domain=` the base name — `id.` or `bi.` stripped —
+   and clear the old copy kept for one host; `localhost` and an address keep it per host, where a
+   browser takes no `Domain`. Measured first in Safari 26.6, Chrome 155 and Firefox 155: a cookie for
+   `ospreyflow.localhost` reaches `id.` and `bi.`. Superset's own pages at `bi.` follow the operating
+   system's preference (a board in the Glass follows the Glass).
+9. **Left for stage B4**, which reworks identity: the launcher's and the old console's loopback
    clients in the realm (`harness/realm.py`) and the Glass's launcher hand-off
    (`auth/launcherHandoff.ts`).
 

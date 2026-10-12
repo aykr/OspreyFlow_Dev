@@ -13,6 +13,8 @@ import {
   storeTheme,
   THEME_COOKIE_NAME,
   THEME_STORAGE_KEY,
+  themeCookieDomain,
+  themeCookieWrites,
 } from "./theme";
 
 function clearThemeCookie(): void {
@@ -111,5 +113,44 @@ describe("theme, shared across the pages of one host", () => {
     });
     storeTheme("light");
     expect(readStoredTheme()).toBe("light"); // from this page's storage
+  });
+});
+
+// ADR-114 Amendment 4 put the sign-in page at `id.` and the dashboards at `bi.` in front of the Glass's
+// own name; a cookie kept per host stopped reaching them. The choice is now kept for the deployment's
+// base name, which covers every name under it (measured 12 October 2026 in Safari 26.6, Chrome 155
+// and Firefox 155: a cookie with `Domain=ospreyflow.localhost` reached both `id.` and `bi.`).
+describe("theme, shared across the deployment's names", () => {
+  it.each([
+    ["ospreyflow.localhost", "ospreyflow.localhost"],
+    ["id.ospreyflow.localhost", "ospreyflow.localhost"],
+    ["bi.ospreyflow.localhost", "ospreyflow.localhost"],
+    ["osprey.example.org", "osprey.example.org"],
+    ["id.osprey.example.org", "osprey.example.org"],
+    ["localhost", null],
+    ["127.0.0.1", null],
+    ["::1", null],
+    ["[::1]", null],
+  ])("keeps the choice made on %s for %s", (host, domain) => {
+    expect(themeCookieDomain(host)).toBe(domain);
+  });
+
+  it("writes the choice for the base name, and clears any copy kept for this host alone", () => {
+    expect(themeCookieWrites("light", "id.ospreyflow.localhost")).toEqual([
+      `${THEME_COOKIE_NAME}=; Path=/; Max-Age=0`,
+      `${THEME_COOKIE_NAME}=light; Path=/; Max-Age=31536000; SameSite=Lax; Domain=ospreyflow.localhost`,
+    ]);
+    expect(themeCookieWrites("dark", "localhost")).toEqual([
+      `${THEME_COOKIE_NAME}=dark; Path=/; Max-Age=31536000; SameSite=Lax`,
+    ]);
+  });
+
+  it("is what storeTheme writes", () => {
+    const written: string[] = [];
+    vi.spyOn(Document.prototype, "cookie", "set").mockImplementation((value: string) => {
+      written.push(value);
+    });
+    storeTheme("light");
+    expect(written).toEqual(themeCookieWrites("light", window.location.hostname));
   });
 });

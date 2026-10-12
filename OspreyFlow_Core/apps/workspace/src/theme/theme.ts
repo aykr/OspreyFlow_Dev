@@ -3,9 +3,9 @@
 // way of looking at the page, so it is never sent to the server and is not part of the case.
 //
 // It is kept in a cookie as well as in this page's storage (ADR-072). The pages of one deployment
-// (the Glass, the launcher, the sign-in page, the setup harness) are on different ports of one host,
-// and a browser keeps a page's storage per port but a cookie per host, so the cookie is how a choice
-// made on one page reaches the rest. The cookie holds only "light" or "dark" and is never read by a
+// are on different names of one base (ADR-114 Amendment 4: the Glass, `id.` for the sign-in page,
+// `bi.` for the dashboards), and a browser keeps a page's storage per origin, so the cookie, kept for
+// the base name, is how a choice made on one page reaches the rest. The cookie holds only "light" or "dark" and is never read by a
 // server. `harness/theme_cookie.js` is the same logic for the pages that are not React.
 //
 // Everything drawn by CSS follows `data-theme` on its own. What is painted to a canvas (the graph,
@@ -33,9 +33,27 @@ function readCookie(): Theme | null {
   }
 }
 
+/** Where the choice is kept, so it reaches every name of the deployment (ADR-114 Amendment 4): the
+ * Glass is at the base name, the sign-in page at `id.` and the dashboards at `bi.` in front of it,
+ * so a page at either keeps it for the base. `localhost` and an address keep it for the host alone —
+ * a browser takes no `Domain` there. `harness/theme_cookie.js` holds the same rule. */
+export function themeCookieDomain(hostname: string): string | null {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (!host.includes(".") || /^[\d.]+$/.test(host) || host.includes(":") || host.startsWith("[")) return null;
+  return host.replace(/^(id|bi)\./, "");
+}
+
+/** The cookie assignments that keep `theme`: a copy kept for this host alone (as every page wrote it
+ * before the names) is cleared first, so it can never shadow the shared one. */
+export function themeCookieWrites(theme: Theme, hostname: string): string[] {
+  const kept = `${THEME_COOKIE_NAME}=${theme}; Path=/; Max-Age=${THEME_COOKIE_MAX_AGE_S}; SameSite=Lax`;
+  const domain = themeCookieDomain(hostname);
+  return domain === null ? [kept] : [`${THEME_COOKIE_NAME}=; Path=/; Max-Age=0`, `${kept}; Domain=${domain}`];
+}
+
 function writeCookie(theme: Theme): void {
   try {
-    document.cookie = `${THEME_COOKIE_NAME}=${theme}; Path=/; Max-Age=${THEME_COOKIE_MAX_AGE_S}; SameSite=Lax`;
+    for (const assignment of themeCookieWrites(theme, window.location.hostname)) document.cookie = assignment;
   } catch {
     // Without a cookie the choice still holds for this page, through its own storage.
   }
