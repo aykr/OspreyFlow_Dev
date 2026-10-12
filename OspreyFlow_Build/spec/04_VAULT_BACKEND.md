@@ -134,8 +134,12 @@ absorbs: a JSON property read as `json_extract_string` reads it; `ST_Covers` as 
 plus an explicit on-ring test (ClickHouse's own boundary handling varies by edge, measured); a
 polygon kept as its WKB beside a MultiPolygon form for containment; updates as synchronous
 mutations. Its own cases (`tests/test_analytics_clickhouse.py`) prove a value cannot become SQL
-and that a polygon with a hole covers what DuckDB covers. Wiring it into the Conduit and the Helm
-chart is the rest of stage B7.
+and that a polygon with a hole covers what DuckDB covers. The Conduit and the prefetch job open
+the store `components.analytics_engine` names (`services/api/analytics_store.py`), refusing any
+other name rather than falling back to an in-process DuckDB; a deployment naming ClickHouse renders
+it as a service with its own volume and a password minted at apply. **`ospreyflow backup` refuses a
+ClickHouse deployment in words** until the set copies ClickHouse, rather than taking a set without
+its events. The Helm chart is the rest of stage B7.
 
 **Storage is Parquet in object storage, in both profiles.** DuckDB reads it directly; ClickHouse
 ingests from it. This is the second reason the staging layer earns its place: migrating from

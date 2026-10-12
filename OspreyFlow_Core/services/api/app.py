@@ -35,7 +35,6 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, cast
 
-import duckdb
 from fastapi import (
     Depends,
     FastAPI,
@@ -80,8 +79,6 @@ from services.resolve.trigger import (
 )
 from valkey.asyncio import Valkey
 
-from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
-from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
@@ -253,6 +250,7 @@ from . import review as review_module
 from . import risk as risk_module
 from . import search as search_module
 from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict
+from .analytics_store import open_analytics
 from .assessments import (
     AssumptionListResponse,
     AssumptionNotFoundError,
@@ -667,18 +665,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # once, right after the ontology this process will serve is known.
     await studio_recipes.flag_stale(ontology.version)
 
-    # A persistent (not `:memory:`) DuckDB file — first production wiring of
-    # `AnalyticsPort` anywhere in the Conduit yet; `analytics_duckdb/testing.py`'s own
-    # docstring records why
-    # this isn't yet the Parquet-in-object-storage store that module names
-    # as the longer-term design — a stated, deliberate deferral, not this
-    # checkpoint's job). `IF NOT EXISTS` in `schema.py` makes re-running this
-    # DDL against the same file on every restart safe.
-    Path(config.analytics_db_path).parent.mkdir(parents=True, exist_ok=True)
-    analytics_con = duckdb.connect(config.analytics_db_path)
-    create_events_table(analytics_con)
-    create_geometries_table(analytics_con)
-    analytics: AnalyticsPort = AnalyticsDuckDBAdapter(analytics_con, handling_scheme)
+    # The store `components.analytics_engine` names (ADR-114 decision 9): a DuckDB file on a
+    # single machine, ClickHouse where Conduits are replicated. `analytics_store.py` refuses any
+    # other name rather than falling back.
+    analytics, close_analytics = await open_analytics(
+        config.analytics_engine,
+        duckdb_path=config.analytics_db_path,
+        handling_scheme=handling_scheme,
+    )
 
     app.state.config = config
     app.state.graph = graph
@@ -894,7 +888,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.datasets = None
         await litellm_client.aclose()
         await app.state.principal_resolver.aclose()
-        analytics_con.close()
+        await close_analytics()
 
 
 app = FastAPI(title="OspreyFlow Conduit", lifespan=lifespan)

@@ -304,3 +304,18 @@ def test_restored_files_are_handed_to_the_conduits_user(
         assert chown[chown.index("run"):][:6] == ["run", "--rm", "--no-deps", "--user", "root", "--entrypoint"]
         assert chown[-3:] == ["-R", "osprey:osprey", path]
         assert ran.index(chown) > ran.index(next(c for c in copies if c[-1].endswith(path))), "after the copy"
+
+
+def test_a_clickhouse_deployment_is_refused_in_words_before_anything_is_written(tmp_path: Path) -> None:
+    """ADR-114 decision 9: the set does not yet copy ClickHouse, so a backup of a deployment whose
+    events are there is refused, not taken without them (rule 2: never a silent partial)."""
+    out_root = tmp_path / "sets"
+    with pytest.raises(backup.BackupFailed) as refused:
+        backup.run_backup(
+            compose_file=tmp_path / "compose.yaml", out_root=out_root, profile="small",
+            database="osprey", analytics_container_path="/data/analytics.duckdb",
+            require_quiesced=False, analytics_engine="clickhouse",
+        )
+    assert refused.value.item == "analytics"
+    assert "ClickHouse" in refused.value.detail
+    assert not out_root.exists()

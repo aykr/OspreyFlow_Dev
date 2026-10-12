@@ -144,6 +144,9 @@ class ApiConfig:
     #: `None` leaves the pre-check off and the exchange behaves exactly as before, which is what
     #: keeps every existing deployment and test working unchanged.
     oidc_admin_users_url: str | None = None
+    #: `components.analytics_engine` (ADR-114 decision 9): `duckdb` or `clickhouse`, opened by
+    #: `services/api/analytics_store.py`, which refuses anything else.
+    analytics_engine: str = "duckdb"
 
     @classmethod
     def from_env(cls) -> ApiConfig:
@@ -178,6 +181,7 @@ class ApiConfig:
             ),
             osprey_config_path=os.environ.get("OSPREY_CONFIG_PATH", "osprey.yaml"),
             analytics_db_path=os.environ.get("ANALYTICS_DB_PATH", DEFAULT_ANALYTICS_DB_PATH),
+            analytics_engine=os.environ.get("OSPREY_ANALYTICS_ENGINE", "duckdb"),
             hotlist_alert_policy=disclosure_policy_from_value(
                 os.environ.get("HOTLIST_ALERT_POLICY")
             ),

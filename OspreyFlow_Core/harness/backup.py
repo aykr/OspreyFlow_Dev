@@ -486,8 +486,21 @@ def run_backup(
     database: str,
     analytics_container_path: str,
     require_quiesced: bool,
+    analytics_engine: str = "duckdb",
 ) -> Path:
     """Writes the set and its manifest. Returns the directory."""
+    if analytics_engine != "duckdb":
+        store = "ClickHouse" if analytics_engine == "clickhouse" else analytics_engine
+        # ADR-114 decision 9: the events of a ClickHouse deployment are not in the DuckDB file this
+        # set copies. Taking the set without them would restore a deployment with no events, so it
+        # is refused before anything is written.
+        raise BackupFailed(
+            "analytics",
+            f"This deployment keeps its events in {store}, "
+            "which `ospreyflow backup` does not copy yet; a set without them would restore a "
+            "deployment with no events. Back ClickHouse up with its own BACKUP command until "
+            "then.",
+        )
     if require_quiesced and _conduit_is_running(compose_file):
         raise BackupFailed(
             "quiesce",
@@ -615,6 +628,7 @@ def main(argv: list[str] | None = None) -> int:
             database=args.database,
             analytics_container_path=f"{config.components.storage.data}/analytics.duckdb",
             require_quiesced=args.require_quiesced,
+            analytics_engine=config.components.analytics_engine.value,
         )
     except BackupFailed as failure:
         print(f"backup: FAILED on '{failure.item}'\n  {failure.detail}", file=sys.stderr)

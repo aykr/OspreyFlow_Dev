@@ -472,7 +472,8 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
     if config.components.search is SearchBackend.OPENSEARCH:
         images.append(ServiceImage("opensearch", "opensearchproject/opensearch:2.17.1"))
     if config.components.analytics_engine.value == "clickhouse":
-        images.append(ServiceImage("clickhouse", "clickhouse/clickhouse-server:24.8"))
+        # The version the ClickHouse adapter was proved against (ADR-114 decision 9).
+        images.append(ServiceImage("clickhouse", "clickhouse/clickhouse-server:25.8.33.6"))
     return images
 
 
@@ -534,6 +535,23 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
         "environment": {
             "MINIO_ROOT_USER": "${OSPREY_MINIO_USER:-ospreyflow}",
             "MINIO_ROOT_PASSWORD": "${OSPREY_MINIO_PASSWORD:?set in the deployment env file}",
+        },
+    },
+    # ADR-114 decision 9: the analytics store a cluster of Conduits shares. Its password is minted
+    # at apply time (`harness/apply.py`'s `analytics_secret_lines`), never written here.
+    "clickhouse": {
+        "environment": {
+            "CLICKHOUSE_USER": "osprey",
+            "CLICKHOUSE_PASSWORD": "${OSPREY_CLICKHOUSE_PASSWORD:?set in the deployment env file}",
+        },
+        "volumes": ["clickhouse-data:/var/lib/clickhouse"],
+        # ClickHouse's own recommendation; it warns at start with the default limit.
+        "ulimits": {"nofile": {"soft": 262144, "hard": 262144}},
+        "healthcheck": {
+            "test": ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8123/ping"],
+            "interval": "5s",
+            "timeout": "5s",
+            "retries": 20,
         },
     },
     "opensearch": {
@@ -839,7 +857,14 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             ]
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}
-                for dependency in ("keycloak", "arcadedb", "valkey", "postgres", "litellm")
+                for dependency in (
+                    "keycloak",
+                    "arcadedb",
+                    "valkey",
+                    "postgres",
+                    "litellm",
+                    *(("clickhouse",) if _uses_clickhouse(config) else ()),
+                )
             }
         # **The Conduit is not published unless `osprey.yaml` asks for it** (05_DEPLOYMENT.md
         # §2.6 item 1, owner's decision of 25 September 2026). The workspace's own nginx proxies
@@ -886,6 +911,7 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             # Round 13cda: without this the ~2.2GB model pull repeats on every `up`.
             "ollama-models": {"driver": "local"},
             **({"proxy-data": {"driver": "local"}} if sites(config).scheme == "https" else {}),
+            **({"clickhouse-data": {"driver": "local"}} if _uses_clickhouse(config) else {}),
         },
     }
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
@@ -926,6 +952,10 @@ def _keycloak_database_step(postgres_image: str) -> dict[str, object]:
     }
 
 
+def _uses_clickhouse(config: OspreyConfig) -> bool:
+    return config.components.analytics_engine.value == "clickhouse"
+
+
 def _render_env(config: OspreyConfig) -> str:
     lines = [
         f"OSPREY_PROFILE={config.profile.value}",
@@ -946,6 +976,12 @@ def _render_env(config: OspreyConfig) -> str:
         # `services/api/config.py`'s relative `data/analytics.duckdb` default — which resolves to
         # the container's own working directory, i.e. nowhere that survives the container.
         f"ANALYTICS_DB_PATH={config.components.storage.data}/analytics.duckdb",
+        # ADR-114 decision 9: where the Conduit finds ClickHouse. Its password is minted at apply.
+        *(
+            ["CLICKHOUSE_HOST=clickhouse", "CLICKHOUSE_HTTP_PORT=8123", "CLICKHOUSE_USER=osprey"]
+            if _uses_clickhouse(config)
+            else []
+        ),
         f"OSPREY_IDENTITY_PROVIDER={config.governance.identity_provider}",
         f"OSPREY_HANDLING_SCHEME={config.governance.handling_scheme}",
         f"OSPREY_ONTOLOGY={config.governance.ontology}",

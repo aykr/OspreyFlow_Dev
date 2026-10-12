@@ -91,6 +91,17 @@ class ApplyFailed(RuntimeError):
         super().__init__(f"{stage}: {detail}")
 
 
+
+def analytics_secret_lines(config: OspreyConfig) -> str:
+    """ClickHouse's password, minted here once and written under both names — the server's
+    (`OSPREY_CLICKHOUSE_PASSWORD`, read by the compose file) and the Conduit's
+    (`CLICKHOUSE_PASSWORD`, read by the adapter) — so the two cannot drift, as ArcadeDB's once did.
+    Nothing for a DuckDB deployment (ADR-114 decision 9)."""
+    if config.components.analytics_engine.value != "clickhouse":
+        return ""
+    password = generate_client_secret()
+    return f"OSPREY_CLICKHOUSE_PASSWORD={password}\nCLICKHOUSE_PASSWORD={password}\n"
+
 def mail_secret_lines(config: OspreyConfig, environ: Mapping[str, str]) -> str:
     """The mail server's password, carried from the installer's own environment into the
     deployment's secrets file (ADR-114 Amendment 5) — never into `osprey.yaml`, never printed. A
@@ -524,6 +535,7 @@ def main(argv: list[str] | None = None) -> int:
             + f"OIDC_ADMIN_USERS_URL=http://keycloak:8080/admin/realms/{args.realm}/users\n"
             # ADR-111 Amendment 2: the reporting components' secrets, only for what is switched on.
             + reporting_secrets(config)
+            + analytics_secret_lines(config)
             + mail_secret_lines(config, os.environ)
             + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\n"
             # **Every one of these four, not just the host.** `services/api/config.py` defaults

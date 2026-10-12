@@ -167,3 +167,35 @@ def test_a_polygon_becomes_a_multipolygon_of_one_in_either_byte_order() -> None:
 def test_a_boundary_that_is_not_a_polygon_is_refused(wkt: str) -> None:
     with pytest.raises(ValueError, match="Polygon or MultiPolygon"):
         as_multipolygon(_wkb(wkt))
+
+
+async def test_the_conduit_opens_clickhouse_when_the_deployment_names_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    """`open_analytics("clickhouse")` makes the deployment's database and tables if missing, and
+    what it loads it reads back; opening a second time keeps what the first loaded."""
+    from services.api.analytics_store import open_analytics
+
+    from adapters.analytics_clickhouse.adapter import AnalyticsClickHouseAdapter
+
+    database = f"conduit_{str(ULID()).lower()}"
+    monkeypatch.setenv("CLICKHOUSE_DATABASE", database)
+    request = HistogramRequest(
+        filter=EventFilter(investigation_scope=CASE),
+        bucketing=HistogramBucketing.CATEGORICAL,
+        field="edge_type",
+    )
+    analytics, close = await open_analytics("clickhouse", duckdb_path="", handling_scheme=SCHEME)
+    try:
+        assert isinstance(analytics, AnalyticsClickHouseAdapter)
+        await analytics.load_events([_event()])
+        assert (await analytics.histogram(request, READER)).total == 1
+    finally:
+        await close()
+    again, close_again = await open_analytics("clickhouse", duckdb_path="", handling_scheme=SCHEME)
+    try:
+        assert (await again.histogram(request, READER)).total == 1
+    finally:
+        client = again._ch  # type: ignore[attr-defined]  # noqa: SLF001
+        await client.command(f"DROP DATABASE IF EXISTS {database}", database=None)
+        await close_again()

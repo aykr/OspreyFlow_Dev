@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -177,8 +178,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 async def _run(args: argparse.Namespace) -> int:
-    from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
-    from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
+    from services.api.analytics_store import open_analytics
+
     from ontology.handling import load_uk_le_scheme
 
     config = load_map_config(args.config_path)
@@ -194,10 +195,12 @@ async def _run(args: argparse.Namespace) -> int:
         id="prefetch-job", clearance=scheme.classification[-1], org_unit="system"
     )
 
-    con = duckdb.connect(str(Path(args.config_path).parent / "analytics.duckdb"))
-    create_events_table(con)
-    create_geometries_table(con)
-    analytics = AnalyticsDuckDBAdapter(con, scheme)
+    # The Conduit's own store (`analytics_store.py`), so a pre-warm writes where the Conduit reads.
+    analytics, close = await open_analytics(
+        os.environ.get("OSPREY_ANALYTICS_ENGINE", "duckdb"),
+        duckdb_path=str(Path(args.config_path).parent / "analytics.duckdb"),
+        handling_scheme=scheme,
+    )
 
     reports = await prefetch_all(config, principal, analytics)
     for report in reports:
@@ -205,7 +208,7 @@ async def _run(args: argparse.Namespace) -> int:
             f"prefetch: {report.provider_id}/{report.geometry_ref}: "
             f"{report.tiles_fetched} fetched, {report.tiles_already_cached} already cached"
         )
-    con.close()
+    await close()
     return 0
 
 
