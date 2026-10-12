@@ -97,6 +97,22 @@ def _analytics_duckdb_factories() -> list[AnalyticsAdapterFactory]:
     return [AnalyticsAdapterFactory(label="analytics_duckdb", context=_context)]
 
 
+def _analytics_clickhouse_factories() -> list[AnalyticsAdapterFactory]:
+    """ADR-114 decision 9: the Enterprise profile's analytics store, held to the same suite
+    unchanged, against a live ClickHouse (`CLICKHOUSE_HTTP_PORT`) as ArcadeDB is held live."""
+    from adapters.analytics_clickhouse.testing import clickhouse_adapter
+    from ontology.handling import load_uk_le_scheme
+
+    scheme = load_uk_le_scheme()
+
+    def _context(
+        events: Sequence[EventRecord],
+    ) -> AbstractAsyncContextManager[AnalyticsPort]:
+        return clickhouse_adapter(events, scheme)
+
+    return [AnalyticsAdapterFactory(label="analytics_clickhouse", context=_context)]
+
+
 @dataclass(frozen=True)
 class ModelAdapterFactory:
     """One conformance-testable `ModelPort` adapter. Unlike `GraphAdapterFactory`/
@@ -216,7 +232,10 @@ def _media_store_factories() -> list[MediaStoreFactory]:
     ]
 
 
-ANALYTICS_PORT_ADAPTERS: list[AnalyticsAdapterFactory] = _analytics_duckdb_factories()
+ANALYTICS_PORT_ADAPTERS: list[AnalyticsAdapterFactory] = [
+    *_analytics_duckdb_factories(),
+    *_analytics_clickhouse_factories(),
+]
 COMPUTE_PORT_ADAPTERS: list[ComputeAdapterFactory] = [
     *_compute_rustworkx_factories(),
     *_compute_graphology_tier1_factories(),

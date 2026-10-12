@@ -933,6 +933,10 @@ charts and dashboards up by the URL's id as a string, so every edit and delete a
 proxy, the official image `caddy:2.11.4-alpine` run unmodified in its own container and locked by
 digest in `versions.lock` like every other third-party image; nothing of OspreyFlow imports it.
 
+**ADR-114 decision 9 addition (13 October 2026):** ClickHouse server (Apache-2.0), the
+Enterprise profile's analytics store, the official image `clickhouse/clickhouse-server:25.8.33.6`
+run unmodified; the adapter talks to it over HTTP with `httpx`, so no ClickHouse driver is imported.
+
 **PaySim (ADR-055 Amendment, ADR-114 decision 5, 11 October 2026) — data, CC BY-SA 4.0**, verified
 from Kaggle's metadata for `ealaxi/paysim1` (Edgar Lopez-Rojas). Redistributable as a downloadable demo
 pack, never in a repository, with its attribution and licence text; anything derived from it and

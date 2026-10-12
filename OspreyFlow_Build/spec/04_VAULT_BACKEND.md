@@ -126,6 +126,17 @@ Same SQL surface in both adapters, kept deliberately narrow: time bucketing, geo
 grouped counts, windowed baselines. Where dialects diverge, the adapter absorbs it; the
 `AnalyticsPort` contract does not change.
 
+**As built (13 October 2026, ADR-114 decision 9):** `adapters/analytics_clickhouse` passes the
+`AnalyticsPort` suite unchanged beside DuckDB, against a live ClickHouse 25.8. It speaks ClickHouse's
+HTTP interface through `httpx` with every value a typed query parameter (no driver, and no value in
+the SQL text), and reuses the DuckDB adapter's access predicate as it stands. The dialect gaps it
+absorbs: a JSON property read as `json_extract_string` reads it; `ST_Covers` as `pointInPolygon`
+plus an explicit on-ring test (ClickHouse's own boundary handling varies by edge, measured); a
+polygon kept as its WKB beside a MultiPolygon form for containment; updates as synchronous
+mutations. Its own cases (`tests/test_analytics_clickhouse.py`) prove a value cannot become SQL
+and that a polygon with a hole covers what DuckDB covers. Wiring it into the Conduit and the Helm
+chart is the rest of stage B7.
+
 **Storage is Parquet in object storage, in both profiles.** DuckDB reads it directly; ClickHouse
 ingests from it. This is the second reason the staging layer earns its place: migrating from
 laptop to cluster is a ClickHouse ingest against files that already exist, not an export from
