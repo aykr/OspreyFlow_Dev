@@ -498,7 +498,7 @@ toolbar, the legend and under it a zoom group named *Zoom*: *Zoom out*, the zoom
 (100% at the camera's starting scale, following every move), *Zoom in* and *Fit to view*; F with the canvas focused fits too (the whole graph
 framed, as an arrangement frames it, inside an 80px margin so the outermost nodes clear the toolbar
 above the canvas and the selection bar below it — Sigma's 30px framed them under both, found live 11
-October 2026 and checked by eye, since jsdom draws no WebGL). A legend at the lower left lists each type in view as the canvas
+October 2026 and checked by eye, since jsdom draws no WebGL). The legend (at the top right, above the zoom group) lists each type in view as the canvas
 draws it (shape in its channel's colour), with how many, most first; *Legend* folds it to its title. The
 graph canvas, and no other surface, has DESIGN.md §9 exception 4's measurement grid: 1px `--border-subtle`
 lines on an 8px lattice, fixed to the screen. *Grid* in the toolbar's Show group switches it off and on
