@@ -914,9 +914,11 @@ lands on Reports; the Reports view's download is offered only to holders of read
 *Figures* (the case's own counts, above) and *Dashboards*; the rail's *Dashboards* place shows the
 same thing full width. Both list only the boards the Conduit says this person may open
 (`GET /v1/reports/dashboards`) — those whose every figure they could count themselves — and draw the
-chosen one through Superset's embedded SDK (`@superset-ui/embedded-sdk` 0.1.3) in a frame, with a
+chosen one through Superset's embedded SDK (`@superset-ui/embedded-sdk` 0.4.0) in a frame, with a
 five-minute guest token the Conduit issues and the SDK asks for again before it lapses. Superset's
-menus never appear; a refusal is said in words; with none to open, the panel says why one would
+menus never appear, nor its own title or each chart's menu, and the board is drawn in
+Superset's theme generated from `tokens.css`, in the Glass's current mode and following a switch
+(ADR-111 Amendment 4); a refusal is said in words; with none to open, the panel says why one would
 appear (`reports/EmbeddedDashboards.tsx`, `reports/ReportsPlace.tsx`; `keyboard/reports.spec.ts`).
 
 **Trends, report packs and their distribution (ADR-113, Amendments 1 to 3).** The Reports view's

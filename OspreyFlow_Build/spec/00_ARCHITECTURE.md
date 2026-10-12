@@ -924,7 +924,7 @@ exception:** `psycopg2-binary` 2.9.6 (LGPL-3.0, with its bundled libpq under the
 licence) — Superset's own Postgres driver, installed unmodified as a separate package inside the
 Superset image only, never vendored, statically bundled into OspreyFlow or modified; assessed
 11 October 2026 by the owner ("psycopg2 + exception"). **ADR-111 Amendment 3:**
-`@superset-ui/embedded-sdk` 0.1.3 (Apache-2.0) in the Glass, with `@superset-ui/switchboard`
+`@superset-ui/embedded-sdk` (Apache-2.0; 0.4.0 since ADR-111 Amendment 4, with Superset 6.1.0) in the Glass, with `@superset-ui/switchboard`
 (Apache-2.0) and `jwt-decode` (MIT). The BSD alternative, pg8000, was tried first
 and does not work with Superset: it types a string parameter as `varchar`, and Superset looks
 charts and dashboards up by the URL's id as a string, so every edit and delete answered "Not found".
