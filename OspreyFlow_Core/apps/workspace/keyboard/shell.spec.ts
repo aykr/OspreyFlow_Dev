@@ -19,15 +19,19 @@ test("/ outside a text field moves focus to search", async ({ page }) => {
   registerCovered(REGISTRY, "slash-moves-focus-to-search");
 });
 
-test("the marking strip and the top bar take 20 and 40 pixels, and the rail 44", async ({ page }) => {
+// DESIGN.md v0.3 §5a (ADR-115 decision 9): the strip 20, the workspace's top bar 44, the rail 48 with
+// 36px buttons.
+test("the marking strip and the top bar take 20 and 44 pixels, and the rail 48 with 36px buttons", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/keyboard/top-bar-harness.html");
   const strip = (await page.getByRole("note", { name: "Protective marking" }).boundingBox())!;
   const bar = (await page.locator("header.top-bar").boundingBox())!;
   const railBox = (await page.getByRole("navigation", { name: "Workspace" }).boundingBox())!;
   expect(Math.round(strip.height)).toBe(20);
-  expect(Math.round(bar.height)).toBe(40);
-  expect(Math.round(railBox.width)).toBe(44);
+  expect(Math.round(bar.height)).toBe(44);
+  expect(Math.round(railBox.width)).toBe(48);
+  const item = (await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Cases" }).boundingBox())!;
+  expect([Math.round(item.width), Math.round(item.height)]).toEqual([36, 36]);
   await expect(page.getByRole("note", { name: "Protective marking" })).toHaveText("OFFICIAL");
 });
 

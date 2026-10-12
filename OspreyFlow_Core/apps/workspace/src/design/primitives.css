@@ -395,7 +395,7 @@
   background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);
   color: var(--text-primary); font-size: var(--fs-11); line-height: var(--lh-11); font-weight: 600;
 }
-.top-bar { box-sizing: border-box; height: 40px; flex: none; flex-wrap: nowrap; padding-top: 0; padding-bottom: 0; }
+.top-bar { box-sizing: border-box; height: var(--h-top-bar); flex: none; flex-wrap: nowrap; padding-top: 0; padding-bottom: 0; }
 .top-bar__search { flex: 1 1 280px; min-width: 280px; max-width: 480px; }
 .brand-mark { display: inline-flex; align-items: center; gap: var(--sp-6); flex: none; }
 .brand-mark__name { font-weight: 700; font-size: var(--fs-14); color: var(--text-primary); }
@@ -409,12 +409,13 @@
 .segmented__item:hover { background: var(--surface-hover); color: var(--text-primary); }
 .segmented__item[aria-pressed="true"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary); }
 .left-rail {
-  box-sizing: border-box; width: 44px; flex: none; display: flex; flex-direction: column; gap: var(--sp-4);
+  box-sizing: border-box; width: var(--w-rail); flex: none; display: flex; flex-direction: column; gap: var(--sp-4);
   padding: var(--sp-6) var(--sp-6); border-right: 1px solid var(--border-subtle); background: var(--surface-panel);
 }
 .left-rail[data-expanded="true"] { width: 180px; }
 .left-rail__item {
-  display: flex; align-items: center; gap: var(--sp-8); height: 32px; min-width: 32px; padding: 0 var(--sp-8);
+  display: flex; align-items: center; gap: var(--sp-8); height: var(--h-rail-button); min-width: var(--h-rail-button);
+  padding: 0 var(--sp-8); box-sizing: border-box;
   background: transparent; border: 0; border-radius: var(--r-control); color: var(--text-secondary);
   font: inherit; font-size: var(--fs-12); cursor: pointer; text-align: left;
 }
@@ -422,9 +423,9 @@
 .left-rail__item[aria-pressed="true"] { background: var(--surface-raised); color: var(--text-primary); box-shadow: inset 2px 0 0 var(--text-primary); }
 .left-rail__toggle { margin-top: auto; }
 .left-rail__name { white-space: nowrap; }
-/* A view's own toolbar (ADR-097 step 1): what belongs to one view, docked above it, 32px. */
+/* A view's own toolbar (ADR-097 step 1): what belongs to one view, docked above it (DESIGN.md §5a). */
 .view-toolbar {
-  box-sizing: border-box; height: 32px; flex: none; display: flex; align-items: center; gap: var(--sp-8); padding: 0 var(--sp-8);
+  box-sizing: border-box; height: var(--h-canvas-toolbar); flex: none; display: flex; align-items: center; gap: var(--sp-8); padding: 0 var(--sp-8);
   border-bottom: 1px solid var(--border-subtle); background: var(--surface-panel); font-size: var(--fs-12);
 }
 /* The case tabs in the rail's Cases panel (Amendment 1): a list, each branch indented beneath its case. */
@@ -488,7 +489,7 @@
    edge, a hairline below and no shadow (DESIGN.md §6); labelled groups, the Show group one segmented
    control. Its controls are quiet buttons here, not the floating overlay buttons they are elsewhere. */
 .canvas-toolbar {
-  box-sizing: border-box; position: absolute; z-index: 10; top: 0; left: 0; right: 0; min-height: 32px;
+  box-sizing: border-box; position: absolute; z-index: 10; top: 0; left: 0; right: 0; min-height: var(--h-canvas-toolbar);
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-4) var(--sp-12); padding: var(--sp-2) var(--sp-8);
   background: var(--surface-panel); border-bottom: 1px solid var(--border-subtle);
   font-size: var(--fs-12); line-height: var(--lh-12);
@@ -541,12 +542,17 @@
 .previous-positions__mark { fill: none; stroke: var(--text-secondary); stroke-width: 1.5; }
 /* The status bar (02_GLASS_FRONTEND.md §2 rule 4; ADR-097 step 3): counts as pairs. */
 .status-bar {
-  display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-12); padding: var(--sp-6) var(--sp-16);
-  border-top: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: var(--fs-12); line-height: var(--lh-12);
+  min-height: var(--h-status-bar); box-sizing: border-box;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-4) var(--sp-16);
+  padding: 0 var(--sp-16);
+  border-top: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: var(--fs-11); line-height: var(--lh-11);
 }
+.status-bar__counts { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-16); }
+.status-bar__tip { display: flex; align-items: center; gap: var(--sp-8); min-width: 0; }
+.status-bar__tip-label { font-weight: 600; color: var(--text-primary); }
+.status-bar__next { min-height: var(--h-control-24); padding: 0 var(--sp-6); font-size: var(--fs-11); }
 .status-pair { display: inline-flex; align-items: baseline; gap: var(--sp-4); white-space: nowrap; }
 .status-pair .value { color: var(--text-primary); }
-.status-pair__sep { color: var(--text-tertiary); }
 /* The grid switched off from the canvas toolbar's Show group (owner, 6 October 2026). */
 .network-canvas--no-grid { background-image: none; }
 /* A side panel's name folds the whole panel (owner, 6 October 2026). */

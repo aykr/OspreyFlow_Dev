@@ -627,4 +627,6 @@ export const PANEL_FRAME_ACTIONS = defineActionRegistry("PANEL_FRAME_ACTIONS", [
   "resize-the-side-panel-by-keyboard",
   "resize-a-stacked-panel-by-keyboard",
   "resize-the-timeline-by-keyboard",
+  // ADR-115 E4: the canvas toolbar's Details, docked and overlaid.
+  "close-and-open-the-details-panel-by-keyboard",
 ] as const);

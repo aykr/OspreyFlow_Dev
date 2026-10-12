@@ -19,6 +19,7 @@ import {
   setPanelHeight,
   setSideWidth,
   setTimelineHeight,
+  MAX_SIDE_WIDTH,
 } from "./layoutSizes";
 
 // ADR-086. The sizes an analyst drags the sashes to: the right-hand column's width, each stacked
@@ -37,8 +38,19 @@ describe("the defaults", () => {
       timelineHeight: DEFAULT_TIMELINE_HEIGHT,
       panelHeights: {},
     });
-    expect(DEFAULT_SIDE_WIDTH).toBe(320);
+    // DESIGN.md v0.3 §5a (ADR-115 decision 9): 340 by default, resizable from 300 to 480.
+    expect([DEFAULT_SIDE_WIDTH, MIN_SIDE_WIDTH, MAX_SIDE_WIDTH]).toEqual([340, 300, 480]);
     expect(DEFAULT_TIMELINE_HEIGHT).toBe(252);
+  });
+});
+
+describe("the column's width (DESIGN.md §5a)", () => {
+  it("is held within 300 to 480 when set and when read back", () => {
+    setSideWidth(900);
+    expect(getLayoutSizes().sideWidth).toBe(480);
+    setSideWidth(100);
+    expect(getLayoutSizes().sideWidth).toBe(300);
+    expect(normaliseLayoutSizes({ sideWidth: 1200 }).sideWidth).toBe(480);
   });
 });
 

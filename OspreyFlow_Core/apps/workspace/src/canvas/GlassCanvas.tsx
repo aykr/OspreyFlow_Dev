@@ -23,6 +23,7 @@
 //   `FORCE_LAYOUT_MAX_NODES` nodes. It is not ForceAtlas2 in a worker
 //   (§5's own technique for the 50k/250k fixture), which is still not built
 //   and still unmeasured; past the cap the scatter stays as it is.
+import { DetailsToggle } from "../layout/PanelFrames";
 import { createNodeBorderProgram } from "@sigma/node-border";
 import { createNodeImageProgram } from "@sigma/node-image";
 import type { StoreApi } from "zustand/vanilla";
@@ -2976,6 +2977,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               onAddFiles={bearerToken && investigationId ? () => setAddingFiles({}) : undefined}
               onLinksAmongAll={bearerToken && investigationId ? () => void linksAmongOnCanvas(null) : undefined}
             />
+            {/* ADR-115 E4: the right panel's toggle, docked or overlaid (DESIGN.md §5a). */}
+            <DetailsToggle />
           </div>
         </div>
         {lassoActive && lassoPoints.length > 1 && (

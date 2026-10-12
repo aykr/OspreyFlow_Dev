@@ -11,7 +11,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "../design/primitives/Button";
 import {
   MIN_CANVAS_WIDTH,
+  MAX_SIDE_WIDTH,
   MIN_SIDE_WIDTH,
+  DEFAULT_SIDE_WIDTH,
   MIN_TIMELINE_HEIGHT,
   resetSideWidth,
   resetTimelineHeight,
@@ -20,10 +22,17 @@ import {
   useLayoutSizes,
 } from "./layoutSizes";
 import { Sash } from "./Sash";
+import {
+  setSidePanelMode,
+  toggleSidePanel,
+  useSidePanelMode,
+  useWide,
+  type SidePanelMode,
+} from "./sidePanelState";
 
-export type SidePanelMode = "normal" | "collapsed" | "full";
+export type { SidePanelMode } from "./sidePanelState";
 
-export const SIDE_PANEL_WIDTH = 320;
+export const SIDE_PANEL_WIDTH = DEFAULT_SIDE_WIDTH;
 export const SIDE_PANEL_RAIL_WIDTH = 36;
 
 const headerStyle = {
@@ -39,7 +48,7 @@ const headerStyle = {
  * the frame is not yet laid out. */
 function widestSide(frame: HTMLElement | null): number {
   const room = frame?.parentElement?.clientWidth || window.innerWidth;
-  return Math.max(MIN_SIDE_WIDTH, room - MIN_CANVAS_WIDTH);
+  return Math.min(MAX_SIDE_WIDTH, Math.max(MIN_SIDE_WIDTH, room - MIN_CANVAS_WIDTH));
 }
 
 /**
@@ -58,12 +67,18 @@ export function SidePanelFrame({
   children: ReactNode;
   initialMode?: SidePanelMode;
 }) {
-  const [mode, setMode] = useState<SidePanelMode>(initialMode);
+  const mode = useSidePanelMode(initialMode);
+  const setMode = setSidePanelMode;
+  const wide = useWide();
   const frameRef = useRef<HTMLDivElement>(null);
   const { sideWidth } = useLayoutSizes();
   const lower = name.toLowerCase();
   const collapsed = mode === "collapsed";
   const full = mode === "full";
+  // Below 1200px (DESIGN.md §5a) a closed panel leaves no strip — *Details* brings it back — and an
+  // open one lies over the canvas, with a shadow and no hairline (DESIGN.md §6).
+  if (!wide && collapsed) return null;
+  const overlay = !wide && !full;
   return (
     <div
       ref={frameRef}
@@ -82,6 +97,21 @@ export function SidePanelFrame({
               flexDirection: "column",
               overflowY: "auto",
             }
+          : overlay
+          ? {
+              position: "absolute",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 20,
+              width: SIDE_PANEL_WIDTH,
+              maxWidth: "100%",
+              background: "var(--surface-panel)",
+              boxShadow: "var(--overlay-shadow)",
+              display: "flex",
+              flexDirection: "row",
+              overflow: "hidden",
+            }
           : {
               width: collapsed ? SIDE_PANEL_RAIL_WIDTH : sideWidth,
               maxWidth: collapsed ? undefined : `calc(100% - ${MIN_CANVAS_WIDTH}px)`,
@@ -92,7 +122,7 @@ export function SidePanelFrame({
             }
       }
     >
-      {!collapsed && !full && (
+      {!collapsed && !full && !overlay && (
         <Sash
           label="Resize the side panel"
           orientation="vertical"
@@ -111,7 +141,7 @@ export function SidePanelFrame({
           display: "flex",
           flexDirection: "column",
           overflowY: collapsed ? "hidden" : full ? "visible" : "hidden",
-          borderLeft: collapsed || full ? undefined : "1px solid var(--border-subtle)",
+          borderLeft: collapsed || full || overlay ? undefined : "1px solid var(--border-subtle)",
         }}
       >
         {collapsed ? (
@@ -227,5 +257,17 @@ export function BottomPanelFrame({
         </div>
       </div>
     </div>
+  );
+}
+
+/** The canvas toolbar's *Details* toggle (ADR-115 E4): opens and closes the right panel, docked or
+ * overlaid, and says which. */
+export function DetailsToggle() {
+  const mode = useSidePanelMode();
+  const open = mode !== "collapsed";
+  return (
+    <button type="button" className="btn btn--quiet" aria-pressed={open} onClick={toggleSidePanel}>
+      Details
+    </button>
   );
 }

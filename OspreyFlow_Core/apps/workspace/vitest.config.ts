@@ -9,6 +9,8 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "node",
+    // ADR-115 E4: a desktop-sized window for jsdom tests (`src/testSetup.ts`).
+    setupFiles: ["src/testSetup.ts"],
     // `compute-tier1/**/*.test.mjs`: Phase 7 Stage 3's Tier 1 harness is a plain Node script run
     // outside Vite/`tsconfig.json`'s own `include` (the same "outside `src/`, untyped, standalone"
     // shape `keyboard/`/`a11y/` already have) — its own adversarial unit test still needs a runner.

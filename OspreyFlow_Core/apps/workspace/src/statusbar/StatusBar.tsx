@@ -1,4 +1,6 @@
-import { Fragment } from "react";
+import { useState } from "react";
+
+import { WORKSPACE_TIPS } from "./tips";
 
 export interface StatusBarProps {
   nodeCount: number;
@@ -34,22 +36,26 @@ export function StatusBar({
     [filteredCount, "hidden by handling"],
     ...(groupedCount > 0 ? ([[groupedCount, "folded into groups"]] as [number, string][]) : []),
   ];
-  // ADR-097 step 3: each count a pair, the number a literal value in mono beside its words, with a
-  // quiet separator between pairs.
+  const [tip, setTip] = useState(0);
+  // ADR-097 step 3: each count a pair, the number a literal value in mono beside its words. ADR-115
+  // E4: the pairs stand 16px apart with no separator, and a tip sits at the right, outside the live
+  // counts so a new tip is not announced as a change to them.
   return (
-    <div role="status" className="status-bar">
-      {pairs.map(([count, words], i) => (
-        <Fragment key={words}>
-          {i > 0 && (
-            <span className="status-pair__sep" aria-hidden="true">
-              ·
-            </span>
-          )}
-          <span className="status-pair">
+    <div className="status-bar">
+      <div role="status" className="status-bar__counts">
+        {pairs.map(([count, words]) => (
+          <span key={words} className="status-pair">
             <span className="value">{count.toLocaleString("en-GB")}</span> {words}
           </span>
-        </Fragment>
-      ))}
+        ))}
+      </div>
+      <section aria-label="Tip" className="status-bar__tip">
+        <span className="status-bar__tip-label">Tip</span>
+        <span>{WORKSPACE_TIPS[tip % WORKSPACE_TIPS.length]}</span>
+        <button type="button" className="btn btn--quiet status-bar__next" onClick={() => setTip((t) => t + 1)}>
+          Next tip
+        </button>
+      </section>
     </div>
   );
 }

@@ -61,7 +61,8 @@ test("a node is 20 pixels across at 100%", async ({ page }) => {
   expect(diameter).toBeLessThanOrEqual(23);
 });
 
-test("the canvas shows its 8px measurement grid behind the graph", async ({ page }) => {
+// DESIGN.md v0.3 §9 exception 4 (ADR-115 decision 9): a 16px lattice, its lines border-subtle at 40%.
+test("the canvas shows its 16px measurement grid behind the graph", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   await page.waitForTimeout(600);
   const box = (await page.getByRole("application", { name: "Network canvas" }).boundingBox())!;
@@ -73,7 +74,7 @@ test("the canvas shows its 8px measurement grid behind the graph", async ({ page
   let found: number[] = [];
   for (let dy = 0; dy < 8 && found.length === 0; dy++) {
     const y = Math.round((box.y + 140 + dy) * scale);
-    const row = Array.from({ length: Math.round(64 * scale) }, (_, i) => pixels.at(x0 + i, y));
+    const row = Array.from({ length: Math.round(112 * scale) }, (_, i) => pixels.at(x0 + i, y));
     const key = (p: number[]) => p.slice(0, 3).join(",");
     const counts = new Map<string, number>();
     for (const p of row) counts.set(key(p), (counts.get(key(p)) ?? 0) + 1);
@@ -83,7 +84,7 @@ test("the canvas shows its 8px measurement grid behind the graph", async ({ page
   }
   expect(found.length).toBeGreaterThanOrEqual(6);
   const gaps = found.slice(1).map((x, i) => (x - found[i]!) / scale);
-  for (const gap of gaps) expect(gap).toBeCloseTo(8, 0);
+  for (const gap of gaps) expect(gap).toBeCloseTo(16, 0);
 });
 
 test("the canvas's tools are one docked toolbar of labelled groups, with Show as one segmented control and no shadows", async ({ page }) => {
@@ -94,6 +95,9 @@ test("the canvas's tools are one docked toolbar of labelled groups, with Show as
   for (const name of ["Select", "Layout", "Show", "View"]) {
     await expect(toolbar.getByRole("group", { name })).toBeVisible();
   }
+  // One row at the canvas width a 1440px window gives (1440 less the 48px rail and the 340px right
+  // panel, DESIGN.md §5a): the harness's own canvas is 900px; narrower than that the bar may wrap.
+  await page.evaluate(() => { document.getElementById("root")!.style.width = "1052px"; });
   const show = toolbar.getByRole("group", { name: "Show" });
   await expect(show).toHaveClass(/segmented/);
   await expect(show.getByRole("button", { name: "Communities" })).toBeVisible();

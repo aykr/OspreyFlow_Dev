@@ -9,9 +9,11 @@ import { SIDE_PANEL_IDS, type SidePanelId } from "./panelOrder";
 
 export const LAYOUT_SIZES_KEY = "ospreyflow.layout-sizes";
 
-export const DEFAULT_SIDE_WIDTH = 320; // ADR-082's normal width
+// DESIGN.md v0.3 §5a (ADR-115 decision 9): the right panel is 340 by default, resizable 300 to 480.
+export const DEFAULT_SIDE_WIDTH = 340;
 export const DEFAULT_TIMELINE_HEIGHT = 252; // ADR-082's timeline height
-export const MIN_SIDE_WIDTH = 240;
+export const MIN_SIDE_WIDTH = 300;
+export const MAX_SIDE_WIDTH = 480;
 /** The canvas keeps at least this much of the work area when the column is widened. */
 export const MIN_CANVAS_WIDTH = 320;
 export const MIN_TIMELINE_HEIGHT = 96; // the control row and a sliver of strip
@@ -56,7 +58,7 @@ export function normaliseLayoutSizes(value: unknown): LayoutSizes {
     }
   }
   return {
-    sideWidth: size(record.sideWidth, MIN_SIDE_WIDTH) ?? DEFAULT_SIDE_WIDTH,
+    sideWidth: sideWidthWithin(size(record.sideWidth, MIN_SIDE_WIDTH)) ?? DEFAULT_SIDE_WIDTH,
     timelineHeight: size(record.timelineHeight, MIN_TIMELINE_HEIGHT) ?? DEFAULT_TIMELINE_HEIGHT,
     panelHeights,
   };
@@ -98,8 +100,12 @@ function store(next: LayoutSizes): void {
   listeners.forEach((listener) => listener());
 }
 
+function sideWidthWithin(width: number | null): number | null {
+  return width === null ? null : Math.min(MAX_SIDE_WIDTH, width);
+}
+
 export function setSideWidth(px: number): void {
-  const next = size(px, MIN_SIDE_WIDTH);
+  const next = sideWidthWithin(size(px, MIN_SIDE_WIDTH));
   if (next === null || next === load().sideWidth) return;
   store({ ...load(), sideWidth: next });
 }

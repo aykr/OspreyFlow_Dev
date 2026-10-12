@@ -25,7 +25,9 @@ declare global {
 async function tabToButtonNamed(
   page: import("@playwright/test").Page,
   name: string,
-  maxTabs = 20,
+  // A bound, not a count: the canvas's toolbar comes first in this harness, and grows (ADR-115 E4
+  // added Details); what is proved is that Tab reaches the button.
+  maxTabs = 30,
 ): Promise<void> {
   for (let i = 0; i < maxTabs; i++) {
     await page.keyboard.press("Tab");

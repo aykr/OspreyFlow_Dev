@@ -168,7 +168,7 @@ narrowed.
 ┌────────────────────────────────────────────────────────────────────────────────────┐
 │                     OFFICIAL — the highest marking in view                         │ strip, 20px
 ├────────────────────────────────────────────────────────────────────────────────────┤
-│ ◆ Osprey  Case 4471 — layering ▾  [ Search…  / ]  [Graph|Map]  Export ⚙        👤  │ top bar, 40px
+│ ◆ Osprey  Case 4471 — layering ▾  [ Search…  / ]  [Graph|Map]  Export ⚙        👤  │ top bar, 44px
 ├──┬───────────────────────────────────────────────────┬─────────────────────────────┤
 │▣ │ Resolution: ●Balanced            (view toolbar)   │ ⠿ Inspector              ⋯  │ header, 28px
 │◷ ├───────────────────────────────────────────────────┤ ▸ Properties                │
@@ -181,11 +181,11 @@ narrowed.
 │  ├───────────────────────────────────────────────────┤                             │
 │  │ ▸ Timeline (folded until opened)                  │                             │
 ├──┴───────────────────────────────────────────────────┴─────────────────────────────┤
-│ 12,481 nodes · 38,902 edges · 214 dimmed by filter · 6 hidden by handling ⓘ         │
+│ 12,481 nodes  38,902 edges  214 dimmed by filter  6 hidden by handling    Tip …  Next tip │
 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The rail on the left (44px; ADR-097 step 1) holds the places the analyst goes to, in this order: *Cases*,
+The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the places the analyst goes to, in this order: *Cases*,
 *Watches*, *Alerts* (the case team's alert queue, its rules, held rows and audit — ADR-109, §3.3),
 *Ownership* (beneficial ownership and due diligence — ADR-109, §3.3), *History*, *Explore* (where to start in the case's data, ADR-100, §3.1), *Questions* (the case's
 questions to the model, ADR-098, §3.1), *Proposed types* (administrators only, ADR-090 C3) and the
@@ -201,7 +201,12 @@ menu, which sits on `surface-raised` (the owner, 9 October 2026). The timeline o
 folded. Above the bar, the **classification strip** names the highest protective marking among what is
 on screen, by the deployment's handling scheme's order, and is never hidden (`role="note"`, "Protective
 marking"). Chrome is these three rows — strip, bar, view toolbar — and no more (ADR-097 Amendment 1);
-their heights are checked (`keyboard/shell.spec.ts`).
+their heights are DESIGN.md v0.3 §5a's (20, 44, 36; ADR-115 decision 9) and checked
+(`keyboard/shell.spec.ts`, `design/shellSizes.test.ts`). The right panel is 340px by default and
+resizable from 300 to 480; at a viewport of 1200px or wider it docks, open; below, it starts closed
+and opens over the canvas (a shadow, no hairline), and the canvas toolbar's *Details* opens and closes
+it either way (ADR-115 E4). The status bar (26px) sets its counts as pairs 16px apart, with no
+separator, and a tip at the right with *Next tip*, outside the counts' live region.
 
 Four rules govern this layout, and they are what make it an analytical workspace rather than a
 set of widgets:
@@ -496,7 +501,7 @@ Reachable by keyboard (`keyboard/keyboard.spec.ts`); the painted grid is read fr
 (`keyboard/canvas-look.spec.ts`).
 
 **The canvas toolbar (ADR-097 step 2, design review item 12).** The canvas's own tools are one docked
-row along its top edge, *Canvas tools* (32px, `--surface-panel`, a hairline below and no shadow:
+row along its top edge, *Canvas tools* (36px, `--surface-panel`, a hairline below and no shadow:
 DESIGN.md §6), in labelled groups: **Select** (the lasso), **Layout** (the layout, *Bubbles by* for
 Clustered bubbles, *Arrange*, which arranges again with the layout chosen), **Show** — one segmented control of *Communities* (pressed while on),
 *Labels* and *Icons*, followed while Communities is on by what it found and *Collapse all* / *Expand

@@ -4,9 +4,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { forgetLayoutSizesForTest, getLayoutSizes } from "./layoutSizes";
 
-import { BottomPanelFrame, SidePanelFrame } from "./PanelFrames";
+import { BottomPanelFrame, DetailsToggle, SidePanelFrame } from "./PanelFrames";
+import { forgetSidePanelForTest } from "./sidePanelState";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  forgetSidePanelForTest();
+});
 
 const mode = (el: HTMLElement) => el.querySelector("[data-panel-mode]")!.getAttribute("data-panel-mode");
 
@@ -115,19 +119,19 @@ describe("the sashes (ADR-086)", () => {
     expect(queryByRole("separator", { name: "Resize the side panel" })).toBeNull();
   });
 
-  it("ArrowLeft on the side sash widens the column by a step, and Home returns it to 320", () => {
+  it("ArrowLeft on the side sash widens the column by a step, and Home returns it to 340", () => {
     const { container, getByRole } = render(
       <SidePanelFrame name="Inspector">
         <p>Contents</p>
       </SidePanelFrame>,
     );
     const frame = container.querySelector("[data-panel-mode]") as HTMLElement;
-    expect(frame.style.width).toBe("320px");
+    expect(frame.style.width).toBe("340px");
     fireEvent.keyDown(getByRole("separator", { name: "Resize the side panel" }), { key: "ArrowLeft" });
-    expect(frame.style.width).toBe("336px");
-    expect(getLayoutSizes().sideWidth).toBe(336);
+    expect(frame.style.width).toBe("356px");
+    expect(getLayoutSizes().sideWidth).toBe(356);
     fireEvent.keyDown(getByRole("separator", { name: "Resize the side panel" }), { key: "Home" });
-    expect(frame.style.width).toBe("320px");
+    expect(frame.style.width).toBe("340px");
   });
 
   it("the timeline has a sash while shown; ArrowUp raises its height and hiding removes the sash", () => {
@@ -143,5 +147,60 @@ describe("the sashes (ADR-086)", () => {
     expect(getLayoutSizes().timelineHeight).toBe(268);
     fireEvent.click(getByLabelText("Hide the timeline"));
     expect(queryByRole("separator", { name: "Resize the timeline" })).toBeNull();
+  });
+});
+
+// DESIGN.md v0.3 §5a, ADR-115 E4: at a viewport of 1200px or wider the right panel docks, open; below
+// it, it opens as an overlay on the canvas (a shadow, no hairline) and starts closed, leaving no
+// strip; the canvas toolbar's *Details* toggle opens and closes it either way.
+describe("the right panel at each width", () => {
+  const at = (width: number) => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
+    forgetSidePanelForTest();
+  };
+  afterEach(() => at(1440));
+
+  it("docks open at 1200 and wider", () => {
+    at(1200);
+    const { container } = render(<SidePanelFrame name="Inspector"><p>Contents</p></SidePanelFrame>);
+    const frame = container.querySelector("[data-panel-mode]") as HTMLElement;
+    expect(frame.dataset.panelMode).toBe("normal");
+    expect(frame.style.position).not.toBe("absolute");
+  });
+
+  it("below 1200 starts closed with no strip, and Details opens it as an overlay", () => {
+    at(1199);
+    const { container, getByRole, queryByText } = render(
+      <>
+        <DetailsToggle />
+        <SidePanelFrame name="Inspector"><p>Contents</p></SidePanelFrame>
+      </>,
+    );
+    const frame = () => container.querySelector("[data-panel-mode]") as HTMLElement | null;
+    expect(frame()?.dataset.panelMode ?? "absent").toBe("absent");
+    expect(queryByText("Contents")).toBeNull();
+    const details = getByRole("button", { name: "Details" });
+    expect(details.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(details);
+    expect(details.getAttribute("aria-pressed")).toBe("true");
+    expect(frame()!.style.position).toBe("absolute");
+    expect(frame()!.style.boxShadow).toBe("var(--overlay-shadow)");
+    expect(frame()!.style.borderLeft).toBe("");
+    fireEvent.click(details);
+    expect(frame()?.dataset.panelMode ?? "absent").toBe("absent");
+  });
+
+  it("Details closes and reopens the docked panel too", () => {
+    at(1440);
+    const { container, getByRole } = render(
+      <>
+        <DetailsToggle />
+        <SidePanelFrame name="Inspector"><p>Contents</p></SidePanelFrame>
+      </>,
+    );
+    fireEvent.click(getByRole("button", { name: "Details" }));
+    expect((container.querySelector("[data-panel-mode]") as HTMLElement).dataset.panelMode).toBe("collapsed");
+    fireEvent.click(getByRole("button", { name: "Details" }));
+    expect((container.querySelector("[data-panel-mode]") as HTMLElement).dataset.panelMode).toBe("normal");
   });
 });

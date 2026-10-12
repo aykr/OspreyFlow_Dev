@@ -20,7 +20,7 @@ async function press(page: Page, name: string | RegExp) {
 
 test("Hide leaves a strip with the contents kept, and Show brings the panel back", async ({ page }) => {
   await page.goto(URL);
-  expect(await widthOf(page, "[data-panel-mode]")).toBeCloseTo(320, -1); // 320 and a 1px border
+  expect(await widthOf(page, "[data-panel-mode]")).toBeCloseTo(340, -1); // 340 (DESIGN.md §5a) and a 1px border
   await page.getByLabel("Query", { exact: true }).fill("person where family_name = Volkov");
   await press(page, "Hide the inspector");
   await expect(panel(page)).toHaveAttribute("data-panel-mode", "collapsed");
@@ -41,7 +41,7 @@ test("Full width covers the whole work area, and Normal width returns it", async
   expect(Math.round(full.height)).toBe(Math.round(work.height));
   await press(page, "Return the inspector to its normal width");
   await expect(panel(page)).toHaveAttribute("data-panel-mode", "normal");
-  expect(await widthOf(page, "[data-panel-mode]")).toBeCloseTo(320, -1); // 320 and a 1px border
+  expect(await widthOf(page, "[data-panel-mode]")).toBeCloseTo(340, -1); // 340 (DESIGN.md §5a) and a 1px border
   registerCovered(REGISTRY, "open-the-side-panel-to-the-full-width-and-return-by-keyboard");
 });
 
@@ -131,23 +131,23 @@ test("the side panel's sash widens and narrows the column with the arrow keys, H
   page,
 }) => {
   await page.goto(URL);
-  expect(await widthOf(page, "[data-panel-mode]")).toBeCloseTo(320, -1);
+  expect(await widthOf(page, "[data-panel-mode]")).toBeCloseTo(340, -1);
   const sash = await focusSash(page, "Resize the side panel");
   await page.keyboard.press("ArrowLeft");
   await page.keyboard.press("ArrowLeft");
-  await expect.poll(() => widthOf(page, "[data-panel-mode]")).toBeCloseTo(352, -1);
-  await expect(sash).toHaveAttribute("aria-valuenow", "352");
+  await expect.poll(() => widthOf(page, "[data-panel-mode]")).toBeCloseTo(372, -1);
+  await expect(sash).toHaveAttribute("aria-valuenow", "372");
   // The canvas gave the room up: the two share the work area.
   const work = (await page.locator("#work-area").boundingBox())!;
   const canvas = (await page.locator("#canvas-stand-in").boundingBox())!;
-  expect(Math.round(canvas.width + 352)).toBe(Math.round(work.width));
+  expect(Math.round(canvas.width + 372)).toBe(Math.round(work.width));
   await page.keyboard.press("Shift+ArrowRight"); // a large step back
-  await expect(sash).toHaveAttribute("aria-valuenow", "288");
+  await expect(sash).toHaveAttribute("aria-valuenow", "308");
   await page.reload();
-  await expect.poll(() => widthOf(page, "[data-panel-mode]")).toBeCloseTo(288, -1);
+  await expect.poll(() => widthOf(page, "[data-panel-mode]")).toBeCloseTo(308, -1);
   await focusSash(page, "Resize the side panel");
   await page.keyboard.press("Home");
-  await expect.poll(() => widthOf(page, "[data-panel-mode]")).toBeCloseTo(320, -1);
+  await expect.poll(() => widthOf(page, "[data-panel-mode]")).toBeCloseTo(340, -1);
   registerCovered(REGISTRY, "resize-the-side-panel-by-keyboard");
 });
 
@@ -177,6 +177,28 @@ test("the timeline's sash raises and lowers it with the arrow keys, and the heig
   await page.keyboard.press("Home");
   await expect.poll(async () => Math.round((await body.boundingBox())!.height)).toBe(252);
   registerCovered(REGISTRY, "resize-the-timeline-by-keyboard");
+});
+
+// ADR-115 E4 (DESIGN.md §5a): at 1200px and wider the panel docks and Details closes and reopens it;
+// below, it starts closed with no strip and Details opens it over the canvas.
+test("Details closes and opens the side panel by keyboard, docked and overlaid", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(URL);
+  const panel = page.getByRole("region", { name: "Inspector" });
+  await expect(panel).toBeVisible();
+  await press(page, "Details");
+  await expect(page.getByRole("button", { name: "Details" })).toHaveAttribute("aria-pressed", "false");
+  await press(page, "Details");
+  await expect(page.getByRole("button", { name: "Details" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.goto(URL);
+  await expect(page.getByRole("region", { name: "Inspector" })).toHaveCount(0);
+  await press(page, "Details");
+  await expect(panel).toBeVisible();
+  expect(await panel.evaluate((el) => getComputedStyle(el).position)).toBe("absolute");
+  expect(await panel.evaluate((el) => getComputedStyle(el).boxShadow)).not.toBe("none");
+  registerCovered(REGISTRY, "close-and-open-the-details-panel-by-keyboard");
 });
 
 test("every registered panel-frame action has its own proving test case above", () => {
