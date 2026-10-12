@@ -3,7 +3,7 @@
 // keyboard-driven actions. Like `apps/workspace/keyboard/*.spec.ts`, this test never calls
 // `page.mouse`/`.click()`. Against the real `harness.webapp` server (this directory's own
 // `playwright.config.ts` starts it) and a real `PUT /api/config`, not a mocked response.
-import { expect, test } from "@playwright/test";
+import { expect, type Page, type Response, test } from "@playwright/test";
 
 import { assertAllCovered, registerCovered, SETUP_SCREENS_ACTIONS } from "./actions";
 
@@ -448,6 +448,231 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   await expect(page.getByText("apply: local-lite ready in 1s")).toBeVisible();
   await expect(page.getByText("Launch succeeded.")).toBeVisible();
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-launch");
+});
+
+// ---- the guided install page (`ospreyflow install --gui`, ADR-114 Amendment 3, stage B2c) --------
+//
+// The same screens, against `harness/install_page.py` (this directory's own `playwright.config.ts`
+// starts it behind a fixed token, with a stub where the real install would run). The page's token is
+// an HttpOnly cookie; the spec presents the same one the printed link would have set. These cases
+// share the page's one server and run in order: Lite's screens, then Small's, then Lite's Install
+// last, because the page shuts itself down when an install ends.
+const INSTALL_BASE = "http://localhost:5192";
+const INSTALL_TOKEN = "keyboard-spec-install-token"; // the same literal is in playwright.config.ts
+
+async function openInstallPage(page: Page) {
+  await page
+    .context()
+    .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+  await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+  await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+}
+
+/** Tab past `count` focusable controls from where focus is, saying which one each stop is. */
+async function tabTimes(page: Page, count: number) {
+  for (let i = 0; i < count; i += 1) await page.keyboard.press("Tab");
+}
+
+const isAnswersPut = (r: Response) =>
+  r.url().includes("/api/install/answers") && r.request().method() === "PUT";
+
+test("install page: Tab reaches the Mode screen's radio group and a real Enter saves the mode", async ({
+  page,
+}) => {
+  await openInstallPage(page);
+  // Starting focus is the document body. The summary rail comes first in the page: its light and
+  // dark button, then Lite's nine screens: Mode, Folders, Profile, Components, Map, Models,
+  // Governance, Demo packs, Review.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: /Switch to the light theme/ })).toBeFocused();
+  await tabTimes(page, 9);
+  await expect(page.getByRole("button", { name: "Review", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab"); // the radio group, on the checked radio
+  await expect(page.getByRole("radio", { name: /^Lite/ })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Save mode" })).toBeFocused();
+  const [response] = await Promise.all([
+    page.waitForResponse(isAnswersPut),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+  expect(((await response.json()) as { mode: string }).mode).toBe("lite");
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-mode");
+});
+
+test("install page: a keyboard-activated switch reaches Folders and a real Enter saves them", async ({
+  page,
+}) => {
+  await openInstallPage(page);
+  await page.getByRole("button", { name: "Folders", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("textbox", { name: "Ingest folder" }).waitFor();
+  await tabTimes(page, 7); // Profile, Components, Map, Models, Governance, Demo packs, Review
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("textbox", { name: "Ingest folder" })).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("/srv/osprey/ingest");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("textbox", { name: "Basemap folder" })).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("/srv/osprey/basemap");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Save folders" })).toBeFocused();
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/api/config") && r.request().method() === "PUT"),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+  const saved = (await response.json()) as { components: { storage: { ingest: string; tiles: string } } };
+  expect(saved.components.storage.ingest).toBe("/srv/osprey/ingest");
+  expect(saved.components.storage.tiles).toBe("/srv/osprey/basemap");
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-folders");
+});
+
+test("install page: a keyboard-activated switch reaches Demo packs and a real Enter saves the ticked pack", async ({
+  page,
+}) => {
+  await openInstallPage(page);
+  await page.getByRole("button", { name: "Demo packs", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  const boxes = page.getByRole("checkbox");
+  await boxes.first().waitFor();
+  const packs = await boxes.count();
+  await page.keyboard.press("Tab"); // Review nav button
+  await page.keyboard.press("Tab"); // the first pack
+  await expect(boxes.first()).toBeFocused();
+  await page.keyboard.press("Space"); // ticks it
+  await expect(boxes.first()).toBeChecked();
+  await tabTimes(page, packs - 1);
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Save demo packs" })).toBeFocused();
+  const [response] = await Promise.all([
+    page.waitForResponse(isAnswersPut),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+  expect(((await response.json()) as { answers: { demo_packs: string[] } }).answers.demo_packs).toHaveLength(1);
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-demo-packs");
+});
+
+test("install page: Small's Cloud and region screen is reached by keyboard and a real Enter saves it", async ({
+  page,
+}) => {
+  await openInstallPage(page);
+  // Choose Small on the Mode screen first: Tab to the radio group, ArrowDown, Tab to Save.
+  await tabTimes(page, 11); // the theme button, nine screens, the radio group
+  await expect(page.getByRole("radio", { name: /^Lite/ })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("radio", { name: /^Small/ })).toBeChecked();
+  await page.keyboard.press("Tab");
+  const [modeResponse] = await Promise.all([
+    page.waitForResponse(isAnswersPut),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(modeResponse.ok()).toBe(true);
+  // Small's screens only now: Mode, Cloud and region, Domain, Components, Models, Governance,
+  // Demo packs, Review.
+  await expect(page.getByRole("button", { name: "Folders", exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Cloud and region", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("textbox", { name: "Region" }).waitFor();
+  await tabTimes(page, 6); // Domain, Components, Models, Governance, Demo packs, Review
+  await page.keyboard.press("Tab"); // the provider radio group, on AWS
+  await expect(page.getByRole("radio", { name: /AWS/ })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("textbox", { name: "Region" })).toBeFocused();
+  await page.keyboard.type("eu-west-2");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("combobox", { name: "Size" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Save cloud and region" })).toBeFocused();
+  const [response] = await Promise.all([
+    page.waitForResponse(isAnswersPut),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+  expect(((await response.json()) as { answers: { cloud: { region: string } } }).answers.cloud.region).toBe(
+    "eu-west-2",
+  );
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-cloud");
+});
+
+test("install page: Small's Domain screen is reached by keyboard and a real Enter saves it", async ({
+  page,
+}) => {
+  await openInstallPage(page);
+  await page.getByRole("button", { name: "Domain", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("textbox", { name: "Domain name" }).waitFor();
+  await tabTimes(page, 5); // Components, Models, Governance, Demo packs, Review
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("textbox", { name: "Domain name" })).toBeFocused();
+  await page.keyboard.type("osprey.example.org");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Save domain" })).toBeFocused();
+  const [response] = await Promise.all([
+    page.waitForResponse(isAnswersPut),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+  const saved = (await response.json()) as { answers: { cloud: { domain: string; region: string } } };
+  expect(saved.answers.cloud.domain).toBe("osprey.example.org");
+  expect(saved.answers.cloud.region).toBe("eu-west-2"); // what the Cloud screen saved is kept
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-domain");
+});
+
+test("install page: Small's Review says when it arrives and a real Enter saves the answers", async ({
+  page,
+}) => {
+  await openInstallPage(page);
+  await page.getByRole("button", { name: "Review", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(/arrives with stage B6/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Install", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Save answers" })).toBeFocused();
+  const [response] = await Promise.all([
+    page.waitForResponse(isAnswersPut),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+  await expect(page.getByText("Your answers are saved.")).toBeVisible();
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-answers");
+});
+
+test("install page: Lite's Install is reached by keyboard, a real Enter runs it and the page says it closes", async ({
+  page,
+}) => {
+  await openInstallPage(page);
+  // Back to Lite: Small has eight screens before the radio group.
+  await tabTimes(page, 10); // the theme button, eight screens, the radio group
+  await expect(page.getByRole("radio", { name: /^Small/ })).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(page.getByRole("radio", { name: /^Lite/ })).toBeChecked();
+  await page.keyboard.press("Tab");
+  const [modeResponse] = await Promise.all([
+    page.waitForResponse(isAnswersPut),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(modeResponse.ok()).toBe(true);
+  await page.getByRole("button", { name: "Folders", exact: true }).waitFor();
+
+  await page.getByRole("button", { name: "Review", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  // The doctor's lines, as the page ran it (the stub echoes what it was asked to run).
+  await expect(page.getByRole("log").first()).toContainText("doctor --mode lite");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Install", exact: true })).toBeFocused();
+  const [run] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/api/install/run") && r.request().method() === "POST"),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(run.ok()).toBe(true);
+  await expect(page.getByRole("log", { name: "Install output" })).toContainText("install --mode lite");
+  await expect(page.getByText(/OspreyFlow is installed/)).toBeVisible();
+  await expect(page.getByText("This page closes now.")).toBeVisible();
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-install");
 });
 
 test("every registered setup-screen action has its own proving test case above", () => {

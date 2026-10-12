@@ -288,6 +288,7 @@ def create_app(
     apply_command: list[str] | None = None,
     oidc_issuer: str | None = None,
     sign_in: SignInSettings | None = None,
+    require_sign_in: bool = True,
 ) -> FastAPI:
     if mode not in ("setup", "console"):
         raise ValueError(f"mode must be 'setup' or 'console', got {mode!r}")
@@ -306,8 +307,15 @@ def create_app(
     # ADR-051: once a realm has been rendered there is an identity provider to ask, and the setup
     # console requires an `osprey-admin` session. Decided now, at start-up — see
     # `harness/webapp_signin.py`. Console mode keeps its own bearer-only `/admin` (R2).
-    sign_in_settings = sign_in
-    if sign_in_settings is None and mode == "setup" and rendered_realm_exists(out_root):
+    # `require_sign_in=False` (the guided install page: an install has no identity provider yet)
+    # keeps it off whatever is rendered.
+    sign_in_settings = sign_in if require_sign_in else None
+    if (
+        sign_in_settings is None
+        and require_sign_in
+        and mode == "setup"
+        and rendered_realm_exists(out_root)
+    ):
         sign_in_settings = make_settings(oidc_issuer or default_issuer(out_root))
     app.state.sign_in = sign_in_settings if mode == "setup" else None
     if app.state.sign_in is not None:
@@ -344,7 +352,7 @@ def create_app(
         try:
             config = OspreyConfig.model_validate(merged)
         except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+            raise HTTPException(status_code=422, detail=exc.errors(include_context=False)) from exc
 
         # §2.1's own filtering rule, not expressible in `ComponentsConfig` alone (it has no
         # `profile` field to check against) — checked here, the one place both fields are in
@@ -385,7 +393,7 @@ def create_app(
         try:
             config = OspreyConfig.model_validate(body)
         except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+            raise HTTPException(status_code=422, detail=exc.errors(include_context=False)) from exc
         return _consequences_json(consequences_for(config))
 
     @app.get("/api/real-data-exceptions")
@@ -448,7 +456,7 @@ def create_app(
                 make_default=bool(body.get("make_default", True)),
             )
         except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+            raise HTTPException(status_code=422, detail=exc.errors(include_context=False)) from exc
         return config.model_dump(mode="json", exclude_none=True)
 
     @app.post("/api/geospatial/build-basemap")

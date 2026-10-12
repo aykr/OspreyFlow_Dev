@@ -16,7 +16,7 @@ What a mistake would do, and the case that catches it:
 - a failed step reported as success — `test_a_failing_step_stops_the_install_and_names_it`;
 - Small or Enterprise pretending to install — `test_small_mode_saves_the_answers_and_runs_nothing`;
 - the prompts not being the answers' other door — `test_without_yes_or_config_the_prompts_make_the_answers`;
-- the guided page promised but not built — `test_gui_says_it_arrives_with_b2c_and_exits_two`.
+- the guided page — `test_install_gui.py` has its own cases.
 """
 
 from __future__ import annotations
@@ -215,14 +215,6 @@ def test_without_yes_or_config_the_prompts_make_the_answers(rig: Rig, tmp_path: 
     rig.questions.clear()
     assert rig("install", "--mode", "lite", "--yes", "--force") == 0
     assert rig.questions == []
-
-
-def test_gui_says_it_arrives_with_b2c_and_exits_two(
-    rig: Rig, capsys: pytest.CaptureFixture[str]
-) -> None:
-    assert rig("install", "--mode", "lite", "--gui") == 2
-    assert "B2c" in capsys.readouterr().out
-    assert rig.runner.calls == []
 
 
 def test_the_install_alias_is_accepted(rig: Rig) -> None:

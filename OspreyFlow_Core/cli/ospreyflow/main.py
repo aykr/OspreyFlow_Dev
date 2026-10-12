@@ -12,11 +12,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
+import shutil
+import socket
+import subprocess
 import sys
 import webbrowser
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import yaml
 
@@ -52,6 +56,29 @@ _STAGE = {"small": "B6", "enterprise": "B7"}
 Ask = Callable[[str, str], str]
 
 
+class PageProcess(Protocol):
+    """The guided page's server, as far as the command cares: it can be waited for."""
+
+    def wait(self) -> int: ...
+
+
+class StartServer(Protocol):
+    def __call__(
+        self, argv: Sequence[str], *, env: Mapping[str, str], cwd: Path
+    ) -> PageProcess: ...
+
+
+def _start_server(argv: Sequence[str], *, env: Mapping[str, str], cwd: Path) -> PageProcess:
+    return subprocess.Popen(list(argv), cwd=cwd, env={**os.environ, **env})
+
+
+def _free_port() -> int:
+    """A port nothing is listening on, asked of the system (bind 0, read it, close)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
 def _ask(prompt: str, default: str = "") -> str:
     reply = input(f"{prompt} [{default}] " if default else f"{prompt} ").strip()
     return reply or default
@@ -73,7 +100,11 @@ class _Context:
         probes: Probes,
         ask: Ask,
         open_url: Callable[[str], object],
+        start_server: StartServer = _start_server,
+        free_port: Callable[[], int] = _free_port,
     ) -> None:
+        self.start_server = start_server
+        self.free_port = free_port
         self.product = product
         self.env = env
         self.run = run
@@ -116,7 +147,7 @@ def _parser() -> argparse.ArgumentParser:
     install.add_argument("--yes", action="store_true", help="ask nothing; take the defaults")
     install.add_argument("--force", action="store_true", help="replace a different osprey.yaml")
     install.add_argument("--no-demo-accounts", action="store_true")
-    install.add_argument("--gui", action="store_true", help="the guided page (stage B2c)")
+    install.add_argument("--gui", action="store_true", help="answer on a guided page")
 
     start = verbs.add_parser("start", help="bring the deployment up")
     start.add_argument("--build", action="store_true", help="rebuild from the checkout first")
@@ -224,10 +255,51 @@ def _write_config(ctx: _Context, answers: Answers, force: bool) -> None:
     print(f"Wrote {path}.")
 
 
+def _gui(ctx: _Context) -> int:
+    """The guided page (ADR-114 Amendment 3, decision 6): the Set-up console's screens, served on
+    127.0.0.1 at a free port behind a one-time token, working on a draft copy of `osprey.yaml`, for
+    as long as the install lasts. The doctor is not run first: the page runs it on its Review
+    screen, where a failure can be shown beside its fix."""
+    scratch = ctx.product / ".install"
+    scratch.mkdir(exist_ok=True)
+    draft = scratch / "osprey.draft.yaml"
+    shutil.copyfile(ctx.product / "osprey.yaml", draft)
+    token = secrets.token_urlsafe(32)
+    port = ctx.free_port()
+    paths = os.pathsep.join(str(ctx.product / name) for name in ("cli", "packages", ""))
+    server = ctx.start_server(
+        [
+            *ctx.python, "-m", "harness.install_page",
+            "--product", str(ctx.product),
+            "--token", token,
+            "--port", str(port),
+            "--draft", str(draft),
+            "--answers", str(scratch / "install.yaml"),
+        ],
+        env={"PYTHONPATH": paths.rstrip(os.pathsep), "OSPREYFLOW_HOME": str(ctx.product)},
+        cwd=ctx.product,
+    )  # fmt: skip
+    link = f"http://127.0.0.1:{port}/?token={token}"
+    ctx.open_url(link)
+    print("The install page is open in your browser. If it did not open, use this link:")
+    print(f"  {link}")
+    print(
+        "It works only from this link and only on this computer. Closing this window or pressing "
+        "Ctrl+C ends the install page; it also closes itself when the install finishes."
+    )
+    try:
+        return server.wait()
+    except KeyboardInterrupt:
+        stop = getattr(server, "terminate", None)
+        if callable(stop):
+            stop()
+        print("The install page was closed.")
+        return 130
+
+
 def _install(args: argparse.Namespace, ctx: _Context) -> int:
     if args.gui:
-        print("The guided page arrives with stage B2c; use --yes or --config for now.")
-        return 2
+        return _gui(ctx)
     if not _print_checks(run_doctor(args.mode, ctx.probes, product=ctx.product)):
         print("Nothing was installed. Fix the above and run ospreyflow install again.")
         return 1
@@ -378,6 +450,8 @@ def main(
     ask: Ask = _ask,
     open_url: Callable[[str], object] = webbrowser.open,
     start: Path | None = None,
+    start_server: StartServer = _start_server,
+    free_port: Callable[[], int] = _free_port,
 ) -> int:
     args_in = list(sys.argv[1:] if argv is None else argv)
     if args_in and args_in[0].startswith("--") and args_in[0][2:] in VERBS:
@@ -413,6 +487,8 @@ def main(
             real_probes,
             ask,
             open_url,
+            start_server,
+            free_port,
         )
         if args.verb in ("backup", "restore"):
             module = f"harness.{args.verb}"

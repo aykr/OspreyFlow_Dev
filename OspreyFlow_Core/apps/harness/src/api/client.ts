@@ -5,6 +5,9 @@
 import type {
   ArtefactsResult,
   Consequences,
+  DoctorResult,
+  InstallAnswers,
+  InstallState,
   LaunchTarget,
   MapConfig,
   ModelChoices,
@@ -187,14 +190,70 @@ export function streamLaunch(
   onError: (message: string) => void,
   body: { seed?: string; demo_analyst?: boolean } = {},
 ): AbortController {
+  return streamPost("/api/launch/stream", body, onLine, onComplete, onError);
+}
+
+// The guided install page (`harness/install_page.py`): the same wire format, the same hand-read
+// stream. The page's token is a cookie, so every call here says `credentials: "same-origin"`.
+export async function getInstallState(): Promise<InstallState> {
+  return asJson(await fetch("/api/install/state", { credentials: "same-origin" }));
+}
+
+export async function putInstallAnswers(answers: InstallAnswers): Promise<InstallState> {
+  return asJson(
+    await fetch("/api/install/answers", {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(answers),
+    }),
+  );
+}
+
+export async function getInstallDoctor(): Promise<DoctorResult> {
+  return asJson(await fetch("/api/install/doctor", { credentials: "same-origin" }));
+}
+
+export function streamInstall(
+  onLine: (line: string) => void,
+  onComplete: (returncode: number) => void,
+  onError: (message: string) => void,
+): AbortController {
+  return streamPost("/api/install/run", {}, onLine, onComplete, onError);
+}
+
+/** An error's own sentence: the install page answers `{"error": "…"}`; anything else is shown as
+ * it came. */
+export function errorMessage(exc: unknown): string {
+  if (exc instanceof ApiError || (exc instanceof Error && "body" in exc)) {
+    const body = String((exc as { body: unknown }).body);
+    try {
+      const parsed = JSON.parse(body) as { error?: unknown };
+      if (typeof parsed.error === "string") return parsed.error;
+    } catch {
+      /* not JSON: show it as it came */
+    }
+    return body;
+  }
+  return String(exc);
+}
+
+function streamPost(
+  url: string,
+  requestBody: object,
+  onLine: (line: string) => void,
+  onComplete: (returncode: number) => void,
+  onError: (message: string) => void,
+): AbortController {
   const controller = new AbortController();
   (async () => {
     let response: Response;
     try {
-      response = await fetch("/api/launch/stream", {
+      response = await fetch(url, {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
     } catch (exc) {
@@ -202,7 +261,7 @@ export function streamLaunch(
       return;
     }
     if (!response.ok) {
-      onError(await response.text());
+      onError(errorMessage(new ApiError(response.status, await response.text())));
       return;
     }
     const reader = response.body?.getReader();

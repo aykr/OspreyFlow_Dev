@@ -19,10 +19,36 @@ export type ScreenName = (typeof SCREEN_NAMES)[number];
 // seventh tab, the same way the artefacts diff does.
 export const FUTURE_SCREEN_NAMES: readonly ScreenName[] = [];
 
-export function useDecidedScreens() {
-  const [decided, setDecided] = useState<Set<ScreenName>>(new Set());
-  const markDecided = useCallback((name: ScreenName) => {
+export function useDecidedScreens<T extends string = ScreenName>() {
+  const [decided, setDecided] = useState<Set<T>>(new Set());
+  const markDecided = useCallback((name: T) => {
     setDecided((previous) => new Set(previous).add(name));
   }, []);
   return { decided, markDecided };
+}
+
+// The guided install page (`06_DECISIONS.md` ADR-114 Amendment 3, decision 6): Mode first, then
+// the chosen mode's own screens in this order. "Map" is the Set-up console's Geospatial screen. The
+// Set-up console's own Preflight screen is not in the flow: the install runs the doctor on Review.
+export const INSTALL_MODES = ["lite", "small", "enterprise"] as const;
+
+export const INSTALL_SCREENS = {
+  lite: [
+    "Mode", "Folders", "Profile", "Components", "Map", "Models", "Governance", "Demo packs",
+    "Review", "Installing",
+  ],
+  small: [
+    "Mode", "Cloud and region", "Domain", "Components", "Models", "Governance", "Demo packs",
+    "Review",
+  ],
+  enterprise: [
+    "Mode", "Cloud and region", "Domain", "Components", "Models", "Governance", "Demo packs",
+    "Review",
+  ],
+} as const;
+export type InstallScreenName = (typeof INSTALL_SCREENS)[keyof typeof INSTALL_SCREENS][number];
+
+/** The screens a person can go to: Installing is where Install leads, never a place to go. */
+export function installNav(mode: (typeof INSTALL_MODES)[number]): InstallScreenName[] {
+  return INSTALL_SCREENS[mode].filter((name) => name !== "Installing");
 }

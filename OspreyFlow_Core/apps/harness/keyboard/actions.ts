@@ -34,4 +34,14 @@ export const SETUP_SCREENS_ACTIONS = defineActionRegistry("SETUP_SCREENS_ACTIONS
   "submit-recheck",
   "submit-confirm-target",
   "submit-launch",
+  // The guided install page's own screens (`ospreyflow install --gui`, ADR-114 Amendment 3, stage
+  // B2c) — the same screens and the same registry, driven in `setup-screens.spec.ts` against
+  // `harness/install_page.py`.
+  "submit-save-mode",
+  "submit-save-folders",
+  "submit-save-demo-packs",
+  "submit-save-cloud",
+  "submit-save-domain",
+  "submit-install",
+  "submit-save-answers",
 ] as const);

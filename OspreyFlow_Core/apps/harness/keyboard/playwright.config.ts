@@ -36,6 +36,17 @@ const FAKE_APPLY_COMMAND = JSON.stringify([
   'print("apply: local-lite ready in 1s"); print("  the Glass:   http://127.0.0.1:8080/")',
 ]);
 
+// The guided install page (`harness/install_page.py`) on its own scratch ports, behind a fixed
+// token the spec presents as the page's own cookie. Its `--product` is a scratch folder whose
+// `.venv/bin/python` is a stub that only echoes, so a keyboard-driven Install runs no real install
+// (the page runs `<product>/.venv/bin/python -m ospreyflow install …`). Its draft and answers are
+// scratch files too, never this checkout's `osprey.yaml`.
+const INSTALL_API_PORT = "7218";
+const INSTALL_VITE_PORT = 5192;
+const INSTALL_SCRATCH = join(tmpdir(), `osprey-install-keyboard-spec-${process.pid}`);
+const INSTALL_TOKEN = "keyboard-spec-install-token"; // the same literal is in setup-screens.spec.ts
+const STUB_PYTHON = '#!/bin/sh\necho "stub $*"\n';
+
 export default defineConfig({
   testDir: ".",
   testMatch: /.*\.spec\.ts$/,
@@ -61,6 +72,27 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       cwd: "../../..",
       env: { PYTHONPATH: ".:packages" },
+    },
+    {
+      command: `npx vite --port ${INSTALL_VITE_PORT} --strictPort`,
+      port: INSTALL_VITE_PORT,
+      reuseExistingServer: !process.env.CI,
+      cwd: "..",
+      env: { HARNESS_API_PORT: INSTALL_API_PORT },
+    },
+    {
+      command:
+        `mkdir -p ${INSTALL_SCRATCH}/product/.venv/bin ${INSTALL_SCRATCH}/product/cli && ` +
+        `printf '${STUB_PYTHON}' > ${INSTALL_SCRATCH}/product/.venv/bin/python && ` +
+        `chmod +x ${INSTALL_SCRATCH}/product/.venv/bin/python && ` +
+        `printf 'profile: local-lite\\n' > ${INSTALL_SCRATCH}/product/osprey.yaml && ` +
+        `uv run python -m harness.install_page --product ${INSTALL_SCRATCH}/product ` +
+        `--token ${INSTALL_TOKEN} --port ${INSTALL_API_PORT} ` +
+        `--draft ${INSTALL_SCRATCH}/osprey.draft.yaml --answers ${INSTALL_SCRATCH}/install.yaml`,
+      port: Number(INSTALL_API_PORT),
+      reuseExistingServer: !process.env.CI,
+      cwd: "../../..",
+      env: { PYTHONPATH: ".:packages:cli" },
     },
   ],
   use: {

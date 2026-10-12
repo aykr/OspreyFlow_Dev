@@ -99,3 +99,44 @@ export interface LaunchTarget {
   docker_context: string;
   confirmed: boolean;
 }
+
+// The guided install page (`harness/install_page.py`, ADR-114 Amendment 3, stage B2c). Hand-written
+// like the interfaces above: these are the page's own plain JSON, not Pydantic models.
+export type InstallMode = "lite" | "small" | "enterprise";
+
+export interface InstallCloud {
+  provider?: "aws" | "azure";
+  region?: string;
+  domain?: string;
+  size?: "small" | "medium" | "large";
+}
+
+/** The body of `PUT /api/install/answers`, which `ospreyflow.answers.load_answers` checks. */
+export interface InstallAnswers {
+  mode: InstallMode;
+  demo_packs?: string[];
+  paysim_file?: string;
+  cloud?: InstallCloud;
+}
+
+export interface InstallPack {
+  id: string;
+  title: string;
+  shows: string;
+  delivery: string;
+  licence: string;
+}
+
+export interface InstallState {
+  mode: InstallMode;
+  answers: InstallAnswers;
+  packs: InstallPack[];
+  modes: Record<InstallMode, { available: boolean; says?: string }>;
+  /** The person's home folder, where suggested folders go. */
+  home: string;
+}
+
+export interface DoctorResult {
+  lines: string[];
+  returncode: number;
+}
