@@ -12199,6 +12199,23 @@ What B4 decides *(mine)*:
    refused (400, "User email missing"). **Also measured: a PUT that leaves out the email, or a name,
    erases it** — the fixture now does the same, and every change writes the whole person back.
 
+9. **Start: where a person goes after signing in** (found at B4's live proof; owner's ruling "I should
+   be able to go Admin, Glass or Ingest Studio right after logging in"). ADR-107's welcome page, with
+   its Glass, Ingest Studio and Admin tiles, was the entry point; decision 3 removed it with the
+   launcher, and nothing in the Glass took its place — signed in with no case open, an administrator
+   met only *Choose a case*, and could reach the Admin area only by opening a case first (on a fresh
+   install, with no case, not at all). So the Glass opens on **Start** whenever no case is open: one
+   tile per place the person's rights (`GET /v1/me/rights`, ADR-112) open — *The Glass*
+   (`investigate` or `read_reports`), *Ingest Studio* (`edit_pipelines`, the rail's own rule) and
+   *Admin* (any administration right, only once known). *The Glass* goes to *Choose a case*; *Ingest
+   Studio* to *Choose the case to load into*, then the Studio on that case, because what it loads goes
+   into a case; *Admin* opens the Admin area **with no case**. A person with one place only (a Reports
+   Viewer) goes straight to it, without Start. The mark at the top left is a button back to Start from
+   anywhere, and *Choose a case* and the case-less Admin area both have *Start*. The tiles are a
+   convenience, never the gate: every route still checks its own right. A case already open in the
+   tab (`?investigation=` or the tab's session) still opens the workspace directly, so a reload keeps
+   the analyst where they were.
+
 **Tests**, named before the code: Keycloak in `start` on Postgres, its database made first and kept in
 step, every secret the compose file requires minted by `apply`, the backup leaving Keycloak's database
 to the identity item (`tests/harness/test_keycloak_persisted.py`); no launcher client in the realm and a
@@ -12207,7 +12224,10 @@ an unsendable email leaving no account, a held name refused, a role outside the 
 any account is made, access kept whole, disable ending sessions, reset handing over a new code, a
 service account no person (`test_identity_admin.py`); each people route refused without
 `manage_people`, the code never in the audit, the ceiling, no self-disable, a held name a 409
-(`test_admin_routes.py`, `test_route_rights.py`); and live, an account kept across a restart.
+(`test_admin_routes.py`, `test_route_rights.py`); Start's places per rights, one place going
+straight there, and Admin without a case (`visibility.test.ts`, `StartPage.test.tsx`), and each tile
+and the mark's way back by keyboard (`keyboard/start.spec.ts`, `START_ACTIONS`); and live, an account
+kept across a restart.
 
 ### ADR-113, Amendment 1 (11 October 2026) — report packs built: what an item rests on, and the gaps the decisions left
 

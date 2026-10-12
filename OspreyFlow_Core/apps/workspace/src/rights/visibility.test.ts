@@ -11,6 +11,8 @@ import {
   landingView,
   railEntries,
   showsInspector,
+  startFor,
+  startPlaces,
   viewsFor,
 } from "./visibility";
 
@@ -75,5 +77,25 @@ describe("what the Reports place offers each role (ADR-113)", () => {
     expect(canAssemblePacks(new Set(["run_analysis", "export", "read_reports"]))).toBe(false);
     expect(canExportPacks(new Set(["export"]))).toBe(true);
     expect(canExportPacks(new Set(["run_analysis", "record_assessment", "read_reports"]))).toBe(false);
+  });
+});
+
+// ADR-114 Amendment 5 point 9: Start — the places a person may go after signing in, with no case open.
+describe("Start", () => {
+  it("offers each place the person's rights open, Admin only once an administration right is known", () => {
+    expect(startPlaces(new Set(ANALYST))).toEqual(["glass"]);
+    expect(startPlaces(new Set(ENGINEER))).toEqual(["glass", "ingest"]);
+    expect(startPlaces(new Set(ADMIN))).toEqual(["admin"]);
+    expect(startPlaces(new Set([...ENGINEER, ...ADMIN]))).toEqual(["glass", "ingest", "admin"]);
+    expect(startPlaces(new Set(READER))).toEqual(["glass"]);
+    expect(startPlaces(null)).toEqual(["glass", "ingest"]);
+  });
+
+  it("goes straight to a person's only place, and to the place they chose", () => {
+    expect(startFor(["glass"], null)).toBe("glass");
+    expect(startFor(["admin"], null)).toBe("admin");
+    expect(startFor(["glass", "ingest", "admin"], null)).toBe("start");
+    expect(startFor(["glass", "ingest", "admin"], "admin")).toBe("admin");
+    expect(startFor(["glass", "admin"], "start")).toBe("start");
   });
 });

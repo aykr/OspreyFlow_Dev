@@ -33,6 +33,20 @@ function stubFetch(routes: Record<string, () => { status: number; body: unknown 
 }
 
 describe("CasePicker", () => {
+  // ADR-114 Amendment 5 point 9: reached from Start, it says what the case is for and goes back.
+  it("says what the chosen case is for and has a way back to Start", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
+    const start = vi.fn();
+    render(
+      <CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} onOpen={() => undefined}
+                  title="Choose the case to load into" onStart={start} />,  // prettier-ignore
+    );
+    expect(screen.getByRole("heading", { name: "Choose the case to load into" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Fixture Corp")).toBeTruthy();
+  });
+
   it("lists each case by name with the level the account holds, never an id alone", async () => {
     stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
 

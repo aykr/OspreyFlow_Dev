@@ -22,12 +22,20 @@ export interface TopBarProps {
   /** What acts on the whole case, such as Export. */
   actions?: ReactNode;
   account: ReactNode;
+  /** The mark as the way back to Start (ADR-114 Amendment 5 point 9). */
+  onStart?: () => void;
 }
 
-export function TopBar({ app, caseSwitcher, search, views = [], actions, account }: TopBarProps) {
+export function TopBar({ app, caseSwitcher, search, views = [], actions, account, onStart }: TopBarProps) {
   return (
     <header className="app-header top-bar" data-app={app}>
-      <BrandMark />
+      {onStart ? (
+        <button type="button" className="brand-mark-button" aria-label="OspreyFlow, go to Start" onClick={onStart}>
+          <BrandMark />
+        </button>
+      ) : (
+        <BrandMark />
+      )}
       {caseSwitcher}
       {search && <div className="top-bar__search">{search}</div>}
       {views.length > 0 && (

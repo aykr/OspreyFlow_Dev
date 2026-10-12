@@ -11,6 +11,9 @@ export type GlassView = "graph" | "map" | "reports";
 const has = (rights: Rights, ...any: string[]) => rights === null || any.some((r) => rights.has(r));
 const known = (rights: Rights, ...any: string[]) => rights !== null && any.some((r) => rights.has(r));
 
+/** Any one of these opens the Admin area. */
+const ADMINISTRATION = ["manage_people", "manage_dashboards", "administer_system", "operate_schedules"];
+
 export function railEntries(rights: Rights): RailEntry[] {
   const entries: [RailEntry, boolean][] = [
     ["cases", true],
@@ -26,9 +29,27 @@ export function railEntries(rights: Rights): RailEntry[] {
     ["ingest", has(rights, "edit_pipelines")],
     // ADR-111 Amendment 3: the Superset boards this person may open, drawn inside the Glass.
     ["dashboards", known(rights, "read_reports")],
-    ["admin", known(rights, "manage_people", "manage_dashboards", "administer_system", "operate_schedules")],
+    ["admin", known(rights, ...ADMINISTRATION)],
   ];
   return entries.filter(([, shown]) => shown).map(([entry]) => entry);
+}
+
+// ADR-114 Amendment 5 point 9: Start — where a person may go after signing in, with no case open.
+export type StartPlace = "glass" | "ingest" | "admin";
+
+export function startPlaces(rights: Rights): StartPlace[] {
+  const places: [StartPlace, boolean][] = [
+    ["glass", has(rights, "investigate", "read_reports")],
+    ["ingest", has(rights, "edit_pipelines")],
+    ["admin", known(rights, ...ADMINISTRATION)],
+  ];
+  return places.filter(([, shown]) => shown).map(([place]) => place);
+}
+
+/** Start itself, or the place to go: the one chosen, else a person's only place. */
+export function startFor(places: readonly StartPlace[], chosen: StartPlace | "start" | null): StartPlace | "start" {
+  if (chosen) return chosen;
+  return places.length === 1 && places[0] ? places[0] : "start";
 }
 
 export function viewsFor(rights: Rights): GlassView[] {

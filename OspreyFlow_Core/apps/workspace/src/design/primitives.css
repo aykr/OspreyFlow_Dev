@@ -575,3 +575,19 @@
   border-radius: var(--r-panel, 4px);
   background: var(--surface-panel);
 }
+
+/* Start (ADR-114 Amendment 5 point 9): a tile per place, and the mark as the way back to it. */
+.brand-mark-button { display: inline-flex; align-items: center; padding: var(--sp-4); margin: calc(-1 * var(--sp-4)); border: 0; border-radius: var(--r-control); background: none; color: inherit; font: inherit; cursor: pointer; }
+.brand-mark-button:hover, .brand-mark-button:focus-visible { background: var(--surface-hover); }
+.start-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-16); }
+.start-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-8); text-align: left;
+  padding: var(--sp-16); min-height: 160px; font: inherit; color: var(--text-primary); cursor: pointer;
+  background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-panel);
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.start-tile:hover { background: var(--surface-hover); }
+.start-tile:focus-visible { background: var(--surface-hover); border-color: var(--brass); }
+.start-tile__title { font-size: var(--fs-16); font-weight: 600; }
+.start-tile__does { color: var(--text-secondary); }
+.start-tile__then { margin-top: auto; }

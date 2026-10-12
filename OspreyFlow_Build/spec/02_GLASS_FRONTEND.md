@@ -950,8 +950,14 @@ PDF, never closed up (Am. 3). Entity items are drawn when present; adding
 one from the canvas is not yet built. Keyboard cases: `keyboard/trends.spec.ts` (`TRENDS_ACTIONS`) and `keyboard/packs.spec.ts`
 (`PACKS_ACTIONS`).
 
+**Start (ADR-114 Amendment 5 point 9).** With no case open, the Glass opens on *Start*: a tile for each
+place the person's rights open — *The Glass* (to *Choose a case*), *Ingest Studio* (to *Choose the case
+to load into*, then the Studio) and *Admin* (the Admin area, no case needed). One place only goes
+straight there. The mark at the top left returns to Start from anywhere.
+
 **The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
-running system, behind the same sign-in — *Admin* on the rail — with a tab per right: *People and
+running system, behind the same sign-in — *Admin* on the rail, or Start's *Admin* tile with no case
+open — with a tab per right: *People and
 roles* (each person's four roles as checkboxes, saved whole, other grants kept and shown; since ADR-114
 Amendment 5, each person's state — disabled, or invited and yet to set a password — with *Access*
 (clearance, unit and handling codes, edited in place), *Disable* (only after *Confirm disable*) or

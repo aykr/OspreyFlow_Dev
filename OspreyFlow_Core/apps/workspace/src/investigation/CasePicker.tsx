@@ -20,6 +20,10 @@ export interface CasePickerProps {
   openCaseId?: string | null;
   onClose?: () => void;
   onOpen: (id: string) => void;
+  /** What the chosen case is for, when Start sent the person here (ADR-114 Amendment 5 point 9). */
+  title?: string;
+  /** Back to Start. */
+  onStart?: () => void;
 }
 
 export function CasePicker({
@@ -30,6 +34,8 @@ export function CasePicker({
   openCaseId = null,
   onClose,
   onOpen,
+  title = "Choose a case",
+  onStart,
 }: CasePickerProps) {
   const [cases, setCases] = useState<CaseListing[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +79,12 @@ export function CasePicker({
       }}
     >
       <div style={{ width: "min(720px, 100%)", display: "flex", flexDirection: "column", gap: "var(--sp-16)" }}>
-        <h1>Choose a case</h1>
+        <h1>{title}</h1>
+        {onStart && (
+          <div>
+            <Button onClick={onStart}>Start</Button>
+          </div>
+        )}
         {onClose && openCaseId && cases?.some((entry) => entry.id === openCaseId) && (
           <div>
             <Button onClick={onClose}>

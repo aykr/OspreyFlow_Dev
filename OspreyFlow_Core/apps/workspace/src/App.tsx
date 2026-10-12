@@ -96,7 +96,15 @@ import { AlertsPlace } from "./alerts/AlertsPlace";
 import { AdminPlace } from "./admin/AdminPlace";
 import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
 import { ReportsPlace } from "./reports/ReportsPlace";
-import { canDownloadFeed, landingView, railEntries, showsInspector, viewsFor } from "./rights/visibility";
+import {
+  canDownloadFeed,
+  landingView,
+  railEntries,
+  showsInspector,
+  viewsFor,
+  type StartPlace,
+} from "./rights/visibility";
+import { startScreen } from "./shell/startScreen";
 import { OwnershipPlace } from "./ownership/OwnershipPlace";
 import { HotlistPanel } from "./watches/HotlistPanel";
 import { MonitorPanel } from "./watches/MonitorPanel";
@@ -191,6 +199,8 @@ export function App() {
   // ADR-112: what this person may do, so the Glass leaves out what it would only be refused. `null`
   // until known; the Conduit checks every right itself either way.
   const [rights, setRights] = useState<ReadonlySet<string> | null>(null);
+  // Start waits for the rights, so a tile does not appear late or a single place go unnoticed.
+  const [rightsSettled, setRightsSettled] = useState(false);
   const [principal, setPrincipal] = useState<DisplayPrincipal | null>(null);
   // `null` until the very first bootstrap effect below has run once — distinguishes "still
   // checking whether this load is a redirect callback" from "checked, and there is no session",
@@ -296,13 +306,15 @@ export function App() {
   useEffect(() => {
     if (!bearerToken) {
       setRights(null);
+      setRightsSettled(false);
       return;
     }
     let cancelled = false;
     fetch(`${API_BASE_URL}/v1/me/rights`, { headers: { Authorization: `Bearer ${bearerToken}` } })
       .then((r) => (r.ok ? (r.json() as Promise<{ rights: string[] }>) : null))
       .then((found) => !cancelled && found && setRights(new Set(found.rights)))
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => !cancelled && setRightsSettled(true));
     return () => {
       cancelled = true;
     };
@@ -355,6 +367,11 @@ export function App() {
   // The case picker shown over an open case ("All cases" in the header). It replaces the workspace
   // in the render, it does not unmount `App`, so the sign-in and the per-case state survive.
   const [browsingCases, setBrowsingCases] = useState(false);
+  // ADR-114 Amendment 5 point 9: Start, or the place chosen on it, while outside a case's workspace.
+  // `null` with a case open is the workspace itself; a hand-off naming the Studio or Admin is a choice.
+  const [startChoice, setStartChoice] = useState<StartPlace | "start" | null>(() =>
+    initialInvestigationId() ? null : handoff.view === "admin" ? "admin" : handoff.view === "ingest" ? "ingest" : null,
+  );
   const [investigationId, setInvestigationId] = useState<string | null>(
     initialInvestigationId(),
   );
@@ -910,11 +927,37 @@ export function App() {
     );
   }
 
-  if ((!investigationId || browsingCases) && (isDevBypass || bearerToken)) {
+  const account =
+    !isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : <ThemeToggle />;
+  const startScreenShown =
+    isDevBypass || bearerToken
+      ? startScreen({
+          rights,
+          rightsSettled: isDevBypass || rightsSettled,
+          investigationId,
+          startChoice,
+          setStartChoice,
+          account,
+          apiBaseUrl: API_BASE_URL,
+          bearerToken,
+          lastCaseId: investigationIdFromSession(),
+          isAdministrator: principal?.roles?.includes("osprey-admin") ?? false,
+          openCase,
+          browseCases: () => setBrowsingCases(true),
+          openStudio: () => setView("ingest"),
+        })
+      : null;
+  if (startScreenShown) return startScreenShown;
+
+  if (browsingCases && (isDevBypass || bearerToken)) {
     return (
       <CasePicker
         openCaseId={investigationId}
         onClose={investigationId ? () => setBrowsingCases(false) : undefined}
+        onStart={() => {
+          setBrowsingCases(false);
+          setStartChoice("start");
+        }}
         apiBaseUrl={API_BASE_URL}
         bearerToken={bearerToken}
         lastCaseId={investigationIdFromSession()}
@@ -946,6 +989,7 @@ export function App() {
       <ClassificationStrip marking={marking} />
       <TopBar
         app={app}
+        onStart={() => setStartChoice("start")}
         caseSwitcher={
           <CaseSwitcher
             apiBaseUrl={API_BASE_URL}

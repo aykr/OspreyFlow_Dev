@@ -562,6 +562,14 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "copy-a-demo-pack-command-by-keyboard",
 ] as const);
 
+// ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.
+export const START_ACTIONS = defineActionRegistry("START_ACTIONS", [
+  "choose-the-glass-from-start-by-keyboard",
+  "choose-the-ingest-studio-from-start-by-keyboard",
+  "choose-admin-from-start-by-keyboard",
+  "return-to-start-from-the-mark-by-keyboard",
+] as const);
+
 export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
   "change-the-reports-period-by-keyboard",
   "download-the-figures-by-keyboard",
