@@ -64,6 +64,13 @@ from harness.images import (
 from harness.profiles import arcadedb_java_memory_opts
 from harness.realm import CONDUIT_CLIENT_ID, HARNESS_PORT
 from harness.reporting import reporting_env, reporting_services
+from harness.site import (
+    PROXY_IMAGE,
+    proxy_service,
+    render_caddyfile,
+    render_glass_settings,
+    sites,
+)
 from schemas.deployment import (
     EXTRACTION_CONTEXT_TOKENS,
     EXTRACTION_MODELS,
@@ -427,6 +434,8 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
             ServiceImage("minio", "quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z"),
             ServiceImage("postgres", "postgres:16.4"),
             ServiceImage("keycloak", "quay.io/keycloak/keycloak:26.0"),
+            # ADR-114 Amendment 4: the front proxy, the deployment's one door.
+            ServiceImage("proxy", PROXY_IMAGE),
             ServiceImage(
                 "ollama",
                 "ollama/ollama@sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3",
@@ -480,23 +489,21 @@ BUILD_CONTEXT_FROM_OUTPUT_DIR = "../../.."
 #: that cannot move its own ports is one an operator has to fight. The defaults are the
 #: specification's (`05_DEPLOYMENT.md` §3: the workspace at 8080, the Conduit at 8000), so a
 #: deployment that overrides nothing matches the documentation exactly.
+#:
+#: **ADR-114 Amendment 4: the front proxy is the only door.** The Glass, Keycloak and Superset are
+#: reached through it by name and publish nothing; the proxy publishes `network.public_origin`'s
+#: own port (`harness/site.py`). What is left here is opt-in or loopback-only.
 PORT_OVERRIDES: dict[str, tuple[str, int]] = {
-    "workspace": ("OSPREY_WORKSPACE_PORT", 8080),
     # Published only when `network.expose_conduit` is on — see `render_compose`. The entry stays
     # here because the port number and its override variable are the same either way.
     "api": ("OSPREY_API_PORT", 8000),
-    # Published because the post-launch verify talks to it from the host, and because an operator
-    # diagnosing a principal-resolution fault needs the admin console.
-    "keycloak": ("OSPREY_KEYCLOAK_PORT", 8081),
     # Published to this machine only (`LOOPBACK_ONLY`): the place-name load and the dataset seeds
     # run on the host and need the database (owner's ruling of 29 September 2026).
     "arcadedb": ("OSPREY_ARCADEDB_PORT", 2480),
 }
 
 _CONTAINER_PORTS: dict[str, int] = {
-    "workspace": 8080,
     "api": 8000,
-    "keycloak": 8080,
     "arcadedb": 2480,
 }
 
@@ -761,7 +768,10 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             # `/fonts/`, the bundled style's `glyphs` URL. Read-only. An empty folder is fine: the
             # Glass probes for the glyphs and draws the map unlabelled without them.
             service["volumes"] = [
-                f"{config.components.storage.tiles}/fonts:{GLYPHS_CONTAINER_PATH}:ro"
+                f"{config.components.storage.tiles}/fonts:{GLYPHS_CONTAINER_PATH}:ro",
+                # ADR-114 Amendment 4 decision 5: where the identity provider is, read by the Glass
+                # at start — so the one bundle serves every deployment.
+                "./glass.json:/usr/share/nginx/html/deployment.json:ro",
             ]
         if entry.service == "api":
             # **Round 13bf — the recipe repository, on the persistent volume.** Publishing writes
@@ -858,6 +868,18 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
         if entry.service == "ingest":
             service["volumes"] = [f"osprey-staging:{config.components.storage.staging}"]
         service.update(_SERVICE_EXTRAS.get(entry.service, {}))
+        if entry.service == "proxy":
+            service.update(proxy_service(config))
+        if entry.service == "keycloak":
+            # ADR-114 Amendment 4 decision 4: one issuer, whichever door a token came through —
+            # the browser's, by name through the proxy, or the services' inside the network.
+            service["environment"] = {
+                **_SERVICE_EXTRAS["keycloak"]["environment"],  # type: ignore[dict-item]
+                "KC_HOSTNAME": sites(config).identity,
+                "KC_HOSTNAME_BACKCHANNEL_DYNAMIC": "true",
+                "KC_PROXY_HEADERS": "xforwarded",
+                "KC_HTTP_ENABLED": "true",
+            }
         if entry.service == "ollama":
             service["command"] = [render_ollama_pull_script(config)]
         services[entry.service] = service
@@ -872,6 +894,7 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             "osprey-staging": {"driver": "local"},
             # Round 13cda: without this the ~2.2GB model pull repeats on every `up`.
             "ollama-models": {"driver": "local"},
+            **({"proxy-data": {"driver": "local"}} if sites(config).scheme == "https" else {}),
         },
     }
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
@@ -922,17 +945,19 @@ def _render_env(config: OspreyConfig) -> str:
         # it, which is exactly why nothing had noticed; still not something a shipped artefact
         # should carry. `network.public_origin` is the field ADR-050 objection 2 already added
         # for the OIDC redirect: the origin a browser genuinely uses to reach this deployment.
-        f"CORS_ALLOWED_ORIGINS={config.network.public_origin}",
+        f"CORS_ALLOWED_ORIGINS={sites(config).glass}",
+        # ADR-114 Amendment 4: the addresses, for the tools on the host (not secrets).
+        f"OSPREY_GLASS_ORIGIN={sites(config).glass}",
+        f"OSPREY_IDENTITY_ORIGIN={sites(config).identity}",
+        f"OSPREY_DASHBOARDS_ORIGIN={sites(config).dashboards}",
         "",
-        "# Published host ports. Every one is overridable: Preflight found 8000 already held by an",
-        "# unrelated container on a real machine, and a deployment that cannot move its own ports",
-        "# is one an operator has to fight. These are the specification's own defaults",
-        "# (05_DEPLOYMENT.md §3), so overriding nothing matches the documentation exactly.",
+        "# Ports published besides the front proxy's: the Conduit only when network.expose_conduit",
+        "# asks, ArcadeDB on loopback only (ADR-114 Amendment 4 decision 3). Each is overridable.",
         *[f"{variable}={default}" for variable, default in PORT_OVERRIDES.values()],
     ]
     if config.models.hosted_fallback is not None:
         lines.append(f"OSPREY_HOSTED_FALLBACK={config.models.hosted_fallback}")
-    lines += reporting_env(config, keycloak_port=PORT_OVERRIDES["keycloak"][1])
+    lines += reporting_env(config)
     # §2.5: "It never sees a secret. Credentials are entered as references." Nothing above is a
     # value; every one of these is a name, a path or a choice already written in osprey.yaml.
     return _comment_block(_BANNER, "#") + "\n".join(lines) + "\n"
@@ -1047,12 +1072,20 @@ Search backend: `{config.components.search.value}`{
 | Backups | `{config.components.storage.backups}` |
 | Ingest (read-only into the Conduit) | `{config.components.storage.ingest}` |
 
-## Ports
+## Addresses
+
+Every app is reached by name through the front proxy (ADR-114 Amendment 4); nothing else is
+published but what is listed here.
 
 | Service | URL |
 | --- | --- |
-| Workspace | `http://localhost:8080` |
-| Conduit | `http://localhost:8000` |
+| Workspace | `{sites(config).glass}` |
+| Identity provider | `{sites(config).identity}` |
+{f"| Dashboards | `{sites(config).dashboards}` |" + chr(10) if config.reporting.superset else ""}{
+        "| Conduit (network.expose_conduit) | `http://localhost:8000` |" + chr(10)
+        if config.network.expose_conduit
+        else ""
+    }| Graph store (this machine only) | `http://127.0.0.1:2480` |
 | Admin console | `http://localhost:{HARNESS_PORT}/` |
 
 ## Governance
@@ -1137,6 +1170,8 @@ def render(
                 resolved_source_label=resolved_source_label,
             ),
             "RUNBOOK.md": _render_runbook(config, images),
+            "Caddyfile": _comment_block(_BANNER, "#") + render_caddyfile(config),
+            "glass.json": render_glass_settings(config),
         },
     )
 

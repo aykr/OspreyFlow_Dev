@@ -1,6 +1,6 @@
 """The reporting components' deployment pieces (`06_DECISIONS.md` ADR-111 Amendment 2): off by
-default; when on, each its own container with its own memory limit; Superset published on loopback
-only; secrets minted only for what is switched on and never in the deterministic render."""
+default; when on, each its own container with its own memory limit; Superset reached through the
+front proxy (ADR-114 Amendment 4); secrets minted only for what is switched on and never in the deterministic render."""
 
 from __future__ import annotations
 
@@ -29,15 +29,15 @@ def test_each_component_is_its_own_container_with_its_own_memory() -> None:
     assert sync["entrypoint"] == ["python", "-m", "services.report_sync"] and "command" not in sync  # type: ignore[index,operator]
     assert sync["healthcheck"]["test"] == ["CMD", "python", "-m", "services.report_sync", "--health"]  # type: ignore[index]
     assert (sync["mem_limit"], superset["mem_limit"]) == ("256m", "2g")  # type: ignore[index]
-    assert superset["ports"] == ["127.0.0.1:${OSPREY_SUPERSET_PORT:-8088}:8088"], "loopback only"  # type: ignore[index]
+    assert "ports" not in superset, "reached at bi. through the front proxy (ADR-114 Amendment 4)"
     assert superset["build"] == {"context": "../../superset", "dockerfile": "Dockerfile"}  # type: ignore[index]
 
 
 def test_the_render_carries_no_secret_and_apply_mints_only_what_is_on() -> None:
     config = _config(sync=True, superset=True)
     env = "\n".join(reporting_env(config))
-    assert "SUPERSET_PUBLIC_ORIGIN=http://localhost:8088" in env
-    assert "SUPERSET_IDP_PUBLIC=http://localhost:8081/realms/osprey" in env
+    assert "SUPERSET_PUBLIC_ORIGIN=http://bi.localhost:8080" in env
+    assert "SUPERSET_IDP_PUBLIC=http://id.localhost:8080/realms/osprey" in env
     # ADR-111 Amendment 3: framed only by the Glass's own origin; the Conduit reaches it inside.
     assert "SUPERSET_GLASS_ORIGIN=http://localhost:8080" in env
     assert "SUPERSET_INTERNAL_URL=http://superset:8088" in env

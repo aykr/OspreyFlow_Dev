@@ -55,10 +55,10 @@ from harness.render import (
     render_ollama_pull_script,
     service_images,
 )
+from harness.site import answer_localhost_with_loopback, deployment_origins
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE = "local-lite"
-DEFAULT_KEYCLOAK_PORT = 8081
 
 
 class NothingToRefresh(Exception):
@@ -93,16 +93,10 @@ def _deployment_dir(repo_root: Path) -> Path:
     )
 
 
-def _keycloak_port(env_file: Path) -> int:
-    """`OSPREY_KEYCLOAK_PORT` from the deployment's env file; the only line read."""
-    try:
-        for line in env_file.read_text(encoding="utf-8").splitlines():
-            key, _, value = line.partition("=")
-            if key.strip() == "OSPREY_KEYCLOAK_PORT":
-                return int(value.strip())
-    except (OSError, ValueError):
-        pass
-    return DEFAULT_KEYCLOAK_PORT
+def _identity_origin(env_file: Path) -> str:
+    """Where this machine reaches the deployment's Keycloak: its identity origin through the front
+    proxy (ADR-114 Amendment 4), or a pre-B3 deployment's published port."""
+    return deployment_origins(env_file)[1]
 
 
 def _theme_changed(directory: Path, repo_root: Path) -> bool:
@@ -285,7 +279,7 @@ def refresh(
     if theme_changed:
         run([*compose, "restart", "keycloak"])
         run([*compose, "up", "-d", "--wait"])
-    port = _keycloak_port(directory / "deployment.env")
+    identity = _identity_origin(directory / "deployment.env")
     code = register(
         [
             "--out-root",
@@ -293,7 +287,7 @@ def refresh(
             "--profile",
             directory.name,
             "--keycloak-url",
-            f"http://127.0.0.1:{port}",
+            identity,
         ]
     )
     if code != 0:
@@ -305,6 +299,8 @@ def refresh(
 
 
 def main() -> int:
+    # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine.
+    answer_localhost_with_loopback()
     try:
         refresh()
     except (NothingToRefresh, RefreshFailed) as error:

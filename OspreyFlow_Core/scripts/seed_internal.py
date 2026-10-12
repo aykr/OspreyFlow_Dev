@@ -44,7 +44,7 @@ from harness.realm import (
     DEMO_ENGINEER_SUBJECT,
     DEMO_REPORT_VIEWER_SUBJECT,
 )
-from scripts.refresh import NothingToRefresh, _deployment_dir, _keycloak_port
+from scripts.refresh import NothingToRefresh, _deployment_dir, _identity_origin
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 #: Where the data folder is mounted inside the seed's container.
@@ -171,7 +171,7 @@ def _lookup_subs(directory: Path) -> dict[str, str]:
     from harness.register_sign_in import ADMIN_PASSWORD_KEY, _read_env
 
     values = _read_env(directory / "deployment.env")
-    issuer = f"http://127.0.0.1:{_keycloak_port(directory / 'deployment.env')}"
+    issuer = _identity_origin(directory / "deployment.env")
     token = keycloak_admin.admin_token(
         issuer=issuer, admin_user="admin", admin_password=values[ADMIN_PASSWORD_KEY]
     )
@@ -639,6 +639,10 @@ def main(
     code_mounts: Sequence[tuple[Path, str]] = (),
 ) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine.
+    from harness.site import answer_localhost_with_loopback
+
+    answer_localhost_with_loopback()
     stop_api = "--stop-api" in args
     replace_graph = "--replace-graph" in args
     replace_events = "--replace-events" in args

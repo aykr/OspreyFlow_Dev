@@ -5,7 +5,7 @@
  */
 export type ExposeConduit = boolean;
 /**
- * Default: http://localhost:8080 — the workspace's own default published port (`OSPREY_WORKSPACE_PORT`). The origin a browser uses to reach this deployment. `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Override this when `OSPREY_WORKSPACE_PORT` is overridden or the deployment is reached at a different host; the renderer does not infer either from the environment.
+ * Default: http://ospreyflow.localhost. The origin a browser uses to reach the Glass; the identity provider is `id.` and the dashboards `bi.` in front of the same host, with the same scheme and port, and the front proxy publishes that port (ADR-114 Amendment 4). `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Change this to move the deployment to another name or port; nothing else needs to agree with it.
  */
 export type PublicOrigin = string;
 

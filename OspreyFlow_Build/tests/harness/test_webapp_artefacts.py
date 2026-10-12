@@ -34,6 +34,8 @@ def test_generate_writes_the_four_artefacts_and_a_copy_of_osprey_yaml(tmp_path: 
         "deployment.env",
         "versions.lock",
         "RUNBOOK.md",
+        "Caddyfile",
+        "glass.json",
     }
     assert body["confirmed"] is False
     assert body["osprey_yaml"] == config_path.read_text(encoding="utf-8")
@@ -53,7 +55,8 @@ def test_the_first_generate_shows_every_artefact_as_changed(tmp_path: Path) -> N
     client.put("/api/config", json={"profile": "local-lite"})
 
     body = client.post("/api/artefacts/generate").json()
-    assert set(body["diffs"]) == {"compose.yaml", "deployment.env", "versions.lock", "RUNBOOK.md"}
+    assert set(body["diffs"]) == {"compose.yaml", "deployment.env", "versions.lock", "RUNBOOK.md",
+                                  "Caddyfile", "glass.json"}  # fmt: skip
 
 
 def test_generating_again_with_no_change_shows_nothing_changed(tmp_path: Path) -> None:

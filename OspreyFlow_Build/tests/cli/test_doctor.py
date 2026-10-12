@@ -56,9 +56,7 @@ def test_a_healthy_machine_passes_with_exit_zero(
         ("disk", lambda p: setattr(p, "disk_gb", 20.0), "20", "Free up"),
         ("git", lambda p: p.missing.add("git"), "Git is not installed", "Install"),
         ("uv", lambda p: p.missing.add("uv"), "uv is not installed", "Install"),
-        ("port-8080", lambda p: p.busy_ports.add(8080), "8080", "Stop whatever"),
-        ("port-8081", lambda p: p.busy_ports.add(8081), "8081", "Stop whatever"),
-        ("port-8088", lambda p: p.busy_ports.add(8088), "8088", "Stop whatever"),
+        ("port-80", lambda p: p.busy_ports.add(80), "80", "Stop whatever"),
     ],
 )
 def test_each_lite_prerequisite_faked_absent_fails_in_words(
@@ -108,12 +106,20 @@ def test_memory_below_sixteen_gigabytes_is_refused(tmp_path: Path) -> None:
 
 def test_a_port_held_by_our_own_deployment_passes(tmp_path: Path) -> None:
     probes = FakeProbes()
-    probes.busy_ports = {8080, 8081, 8088}
-    probes.ours_ports = {8080, 8081, 8088}
+    probes.busy_ports = {80}
+    probes.ours_ports = {80}
     assert all(c.ok for c in run_doctor("lite", probes, product=tmp_path))
-    probes.ours_ports = {8080, 8081}
+    probes.ours_ports = set()
     failed = [c.name for c in run_doctor("lite", probes, product=tmp_path) if not c.ok]
-    assert failed == ["port-8088"]
+    assert failed == ["port-80"]
+
+
+def test_lite_checks_only_the_front_proxys_port(tmp_path: Path) -> None:
+    """ADR-114 Amendment 4: the Glass, Keycloak and Superset publish nothing of their own, so a
+    machine using 8080, 8081 or 8088 for something else can still install."""
+    probes = FakeProbes()
+    probes.busy_ports = {8080, 8081, 8088}
+    assert all(c.ok for c in run_doctor("lite", probes, product=tmp_path))
 
 
 def test_small_and_enterprise_check_tofu_and_the_cloud_cli_not_docker(tmp_path: Path) -> None:

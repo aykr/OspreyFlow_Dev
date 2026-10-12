@@ -34,6 +34,8 @@ from typing import Any
 
 import yaml
 
+from ospreyflow.home import LITE_ORIGIN
+
 MODES = ("lite", "small", "enterprise")
 CLOUDS = ("aws", "azure")
 #: Each mode's `osprey.yaml` profile (`spec/05_DEPLOYMENT.md` §2).
@@ -180,4 +182,11 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
     storage["tiles"] = str(answers.tiles)
     config.setdefault("models", {})["local_only"] = answers.local_only
     config["reporting"] = {"sync": answers.dashboards, "superset": answers.dashboards}
+    # ADR-114 Amendment 4: every address derives from this one. Lite answers on this machine by
+    # name; a cloud install at the client's own domain, over HTTPS.
+    network = config.setdefault("network", {})
+    if answers.mode == "lite":
+        network["public_origin"] = LITE_ORIGIN
+    elif answers.cloud.get("domain"):
+        network["public_origin"] = f"https://{answers.cloud['domain']}"
     return config

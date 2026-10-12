@@ -25,7 +25,7 @@ BASE_CONFIG = {
     "profile": "local-lite",
     "components": {"storage": {"data": "/var/lib/osprey/data"}},
     "models": {"local_only": True},
-    "network": {"public_origin": "http://localhost:8080"},
+    "network": {"public_origin": "http://ospreyflow.localhost"},
 }
 
 

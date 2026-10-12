@@ -52,7 +52,9 @@ from tools.layout import CORE
 from tools.layout import REPO as REPO_ROOT
 from tools.layout import REPO as _REPO
 
-ARTEFACTS = ("compose.yaml", "deployment.env", "versions.lock", "RUNBOOK.md")
+ARTEFACTS = ("compose.yaml", "deployment.env", "versions.lock", "RUNBOOK.md", "Caddyfile")
+#: Read by the Glass as JSON (ADR-114 Amendment 4), so it carries no comment banner.
+ALL_ARTEFACTS = (*ARTEFACTS, "glass.json")
 
 FIXTURE_CONFIG = """
 profile: small
@@ -151,7 +153,7 @@ def test_resolved_source_label_defaults_to_local_docker_daemon(config: OspreyCon
 def test_all_four_artefacts_are_produced_and_none_is_trivial(rendered: RenderResult) -> None:
     """§2.1 names four. A renderer producing two of them passes a "does it render" test and fails
     the specification, which is the gap this case exists for."""
-    assert set(rendered.artefacts) == set(ARTEFACTS)
+    assert set(rendered.artefacts) == set(ALL_ARTEFACTS)
     for name in ARTEFACTS:
         content = rendered.artefacts[name]
         assert content.strip(), f"{name} is empty"
@@ -496,7 +498,7 @@ def test_local_lite_and_small_both_render() -> None:
     for profile in ("local-lite", "small"):
         config = OspreyConfig.model_validate({"profile": profile})
         result = render(config, resolver=_fake_resolver)
-        assert set(result.artefacts) == set(ARTEFACTS)
+        assert set(result.artefacts) == set(ALL_ARTEFACTS)
         assert f"osprey-{profile}" in result.artefacts["compose.yaml"]
 
 
@@ -659,8 +661,10 @@ def test_every_published_port_is_overridable_with_the_spec_s_own_default(
     compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
     env = rendered.artefacts["deployment.env"]
 
-    assert compose["services"]["workspace"]["ports"] == ["${OSPREY_WORKSPACE_PORT:-8080}:8080"]
-    assert "OSPREY_WORKSPACE_PORT=8080" in env
+    # ADR-114 Amendment 4: the workspace is reached through the front proxy, which publishes the
+    # public origin's own port; moving it is an edit to `network.public_origin`.
+    assert "ports" not in compose["services"]["workspace"]
+    assert compose["services"]["proxy"]["ports"] == ["80:8080"]
     assert "OSPREY_API_PORT=8000" in env
 
 
@@ -694,7 +698,7 @@ def test_the_conduit_is_not_published_by_default_and_is_when_asked_for() -> None
     assert "ports" not in closed["services"]["api"], (
         "the Conduit is published by default — the Glass does not need it and §7 does not want it"
     )
-    assert closed["services"]["workspace"]["ports"], "the workspace must still be reachable"
+    assert closed["services"]["proxy"]["ports"], "the workspace must still be reachable"
 
     opened = yaml.safe_load(
         render(

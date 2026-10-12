@@ -11998,6 +11998,72 @@ names a person by the identity provider's subject id. So:
    the subject its case grants name — only when imported with its client named. report-sync's
    dashboards setting travels in the same file, which is written readable by its owner only.
 
+### ADR-114, Amendment 4 (12 October 2026) — stage B3: one address per app
+
+Decision 6 asked for `*.localhost` to be checked on Safari, Chrome, Edge and Firefox before it is
+relied on. **Measured 12 October 2026 on macOS 26.7.1**, with a loopback-only page that reports
+back: Safari 26.6.2, Chrome 155 and Firefox 155 (Playwright's build) each reached
+`ospreyflow.localhost`, `id.ospreyflow.localhost` and `bi.ospreyflow.localhost` on this machine, and
+each treated them as a **secure context** over plain HTTP (`isSecureContext` true, `crypto.subtle`
+present — which the Glass's PKCE sign-in needs). macOS's own resolver also answers every
+`*.localhost` name with loopback. **Edge was not installed and is not measured**; it is Chrome's
+engine, and it is to be checked on Windows, together with Windows' own resolver, before a Windows
+pilot. The fallback decision 6 allowed for is therefore not built.
+
+What B3 decides *(mine)*:
+
+1. **Every address derives from `network.public_origin`.** Its default becomes
+   `http://ospreyflow.localhost`. The identity provider is `id.` and the dashboards `bi.` in front of
+   the same host, with the same scheme and port; the front proxy publishes that port (80 for a bare
+   `http://`, 443 for `https://`), so moving the deployment's address or port is one edit, never two
+   that can disagree. The install's answers set it: Lite `http://ospreyflow.localhost`, Small and
+   Enterprise `https://<cloud.domain>`.
+2. **The front proxy is Caddy 2.11.4** (Apache-2.0; released 3 June 2026), a `proxy` service with a
+   rendered `Caddyfile` beside the compose file, routing each name to its service on the internal
+   network and nothing else; its admin API is off. On a laptop it serves plain HTTP: the three
+   browsers measured treat `*.localhost` as secure, so no local certificate authority has to be
+   trusted. An `https://` origin turns on Caddy's automatic HTTPS, which stage B6 proves in the cloud.
+3. **Nothing else is published** — the Glass, Keycloak and Superset lose their ports. Two exceptions,
+   neither reachable from another machine: ArcadeDB's loopback port stays, because the basemap's
+   place-name load runs on the host (the owner's ruling of 29 September 2026); closing it means moving
+   that load into a container, for the owner to rule. And `network.expose_conduit` stays an explicit,
+   off-by-default opt-in for debugging the Conduit.
+4. **Keycloak has a fixed hostname**: `KC_HOSTNAME` is the identity origin, with
+   `KC_HOSTNAME_BACKCHANNEL_DYNAMIC` on so the Conduit, report-sync and Superset still reach it inside
+   the network at `keycloak:8080`, and `KC_PROXY_HEADERS=xforwarded`. Every token then names the same
+   issuer, whichever door it was minted through.
+5. **The Glass reads the identity provider's address at run time.** The renderer writes `glass.json`
+   (the identity origin and the realm) and mounts it read-only into the workspace image as
+   `/deployment.json`; the Glass reads it before it draws anything. The bundle is the same for every
+   deployment. Where the file is absent — the Vite development server — the development default
+   stands.
+6. **Superset's and the Conduit's origins are derived**: Superset's public origin is the dashboards
+   origin, its identity provider the identity origin, its permitted framer and the Conduit's CORS
+   origin the Glass's; Superset trusts the proxy's forwarded headers (`ENABLE_PROXY_FIX`), which only
+   the proxy can send it.
+7. **Tools on the host never depend on the operating system resolving `*.localhost`.** Each host
+   entry point (apply, the sign-in registration, backup, restore, the seeds, the CLI's checks) answers
+   any `*.localhost` name with loopback for its own process (RFC 6761 §6.3), so the same request
+   reaches the proxy with its name intact on a machine whose resolver does not answer such names
+   (Windows', unmeasured). Each reads the identity and Glass origins from `deployment.env`
+   (`OSPREY_IDENTITY_ORIGIN`, `OSPREY_GLASS_ORIGIN`, not secrets).
+8. **Left for stage B4**, which reworks identity: the launcher's and the old console's loopback
+   clients in the realm (`harness/realm.py`) and the Glass's launcher hand-off
+   (`auth/launcherHandoff.ts`).
+
+**Tests**, named before the code: only the proxy publishing a port on every interface, and each
+exception loopback or opted into (`test_only_the_proxy_is_published`); each name routed to its
+service and to nothing else, and `bi.` only when Superset is on (`test_each_name_reaches_its_service`);
+the identity and dashboards origins derived from `public_origin`, port and scheme included
+(`test_every_address_derives_from_the_public_origin`); Keycloak's fixed hostname
+(`test_keycloak_names_one_issuer`); the Glass's run-time file mounted and naming the identity origin,
+and the Glass reading it, not a build-time value (`test_the_glass_learns_its_identity_provider_at_run_time`
+and `oidcConfig.test.ts`); Superset's origins (`test_superset_origins_are_the_derived_names`); a
+`*.localhost` name reached on loopback by a host tool against a resolver that refuses it
+(`test_a_localhost_name_reaches_loopback_where_the_resolver_refuses_it`); and over the wire, a port
+scan of the deployment showing only the proxy, and sign-in, the Glass, the embedded board and
+Superset all working through the names.
+
 ### ADR-113, Amendment 1 (11 October 2026) — report packs built: what an item rests on, and the gaps the decisions left
 
 Stage 3 (handover A3). Decisions 3 to 5 and 7 are built as decided. Building them found places where

@@ -38,7 +38,7 @@ AUTH_ROLES_MAPPING = {
 }
 
 _internal = os.environ.get("SUPERSET_IDP_INTERNAL", "http://keycloak:8080/realms/osprey")
-_public = os.environ.get("SUPERSET_IDP_PUBLIC", "http://localhost:8081/realms/osprey")
+_public = os.environ.get("SUPERSET_IDP_PUBLIC", "http://id.ospreyflow.localhost/realms/osprey")
 OAUTH_PROVIDERS = [
     {
         "name": "keycloak",
@@ -147,7 +147,7 @@ FEATURE_FLAGS = {"DASHBOARD_RBAC": True, "EMBEDDED_SUPERSET": True}
 GUEST_ROLE_NAME = "OspreyEmbedded"
 GUEST_TOKEN_JWT_SECRET = os.environ["SUPERSET_GUEST_TOKEN_SECRET"]
 GUEST_TOKEN_JWT_EXP_SECONDS = 300
-_glass = os.environ.get("SUPERSET_GLASS_ORIGIN", "http://localhost:8080")
+_glass = os.environ.get("SUPERSET_GLASS_ORIGIN", "http://ospreyflow.localhost")
 TALISMAN_CONFIG = {
     "content_security_policy": {
         "base-uri": ["'self'"],
@@ -167,4 +167,7 @@ TALISMAN_CONFIG = {
 }  # fmt: skip
 # Superset's own content security policy stays on (its default); rate limits are counted in the
 # deployment's Valkey, so every worker and replica counts together.
+# Reached only through the deployment's front proxy (ADR-114 Amendment 4), which is the only thing
+# that can send these headers: trust its scheme and host when building sign-in redirects.
+ENABLE_PROXY_FIX = True
 RATELIMIT_STORAGE_URI = os.environ.get("SUPERSET_RATELIMIT_STORAGE", "redis://valkey:6379/5")

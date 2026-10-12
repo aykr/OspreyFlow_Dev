@@ -124,7 +124,7 @@ def test_logs_passes_service_follow_and_tail(rig: Rig) -> None:
 
 def test_open_opens_the_configured_address(rig: Rig) -> None:
     assert rig("open") == 0
-    assert rig.opened == ["http://localhost:8080"]
+    assert rig.opened == ["http://ospreyflow.localhost"]
 
 
 def test_backup_and_restore_pass_through_to_the_harness(rig: Rig) -> None:

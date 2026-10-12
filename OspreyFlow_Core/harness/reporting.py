@@ -11,16 +11,9 @@ image with another command — the same code, not a second copy.
 from __future__ import annotations
 
 import secrets
-from urllib.parse import urlparse
 
+from harness.site import sites
 from schemas.deployment import OspreyConfig
-
-SUPERSET_PORT_VARIABLE, SUPERSET_PORT = "OSPREY_SUPERSET_PORT", 8088
-
-
-def _origin_on(config: OspreyConfig, port: int) -> str:
-    public = urlparse(config.network.public_origin)
-    return f"{public.scheme}://{public.hostname}:{port}"
 
 
 def reporting_services(
@@ -56,7 +49,7 @@ def reporting_services(
             "image": "osprey/superset:local",
             "env_file": ["deployment.env"],
             "mem_limit": reporting.superset_memory,
-            "ports": [f"127.0.0.1:${{{SUPERSET_PORT_VARIABLE}:-{SUPERSET_PORT}}}:8088"],
+            # No port: reached at `bi.` through the front proxy (ADR-114 Amendment 4).
             "depends_on": {
                 name: {"condition": "service_healthy"}
                 for name in ("postgres", "keycloak", "valkey")
@@ -74,10 +67,9 @@ def reporting_services(
     return services
 
 
-def reporting_env(
-    config: OspreyConfig, *, realm: str = "osprey", keycloak_port: int = 8081
-) -> list[str]:
+def reporting_env(config: OspreyConfig, *, realm: str = "osprey") -> list[str]:
     """The settings the reporting components read that are not secrets."""
+    names = sites(config)
     reporting = config.reporting
     lines: list[str] = []
     if not (reporting.sync or reporting.superset):
@@ -93,13 +85,12 @@ def reporting_env(
         ]
     if reporting.superset:
         lines += [
-            f"{SUPERSET_PORT_VARIABLE}={SUPERSET_PORT}",
-            f"SUPERSET_PUBLIC_ORIGIN={_origin_on(config, SUPERSET_PORT)}",
+            f"SUPERSET_PUBLIC_ORIGIN={names.dashboards}",
             f"SUPERSET_IDP_INTERNAL=http://keycloak:8080/realms/{realm}",
-            f"SUPERSET_IDP_PUBLIC={_origin_on(config, keycloak_port)}/realms/{realm}",
+            f"SUPERSET_IDP_PUBLIC={names.identity}/realms/{realm}",
             "SUPERSET_RATELIMIT_STORAGE=redis://valkey:6379/5",
             # ADR-111 Amendment 3: Superset framed by the Glass; the Conduit's way in to Superset.
-            f"SUPERSET_GLASS_ORIGIN={config.network.public_origin.rstrip('/')}",
+            f"SUPERSET_GLASS_ORIGIN={names.glass}",
             "SUPERSET_INTERNAL_URL=http://superset:8088",
         ]
     return lines

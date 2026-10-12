@@ -104,9 +104,13 @@ def deployment_dir(product: Path) -> Path:
     return product / "deploy" / "generated" / str(profile)
 
 
+#: Where a Lite install answers (ADR-114 Amendment 4): the front proxy on this machine's port 80.
+LITE_ORIGIN = "http://ospreyflow.localhost"
+
+
 def public_origin(product: Path) -> str:
     """The address the Glass is reached at: `network.public_origin`, else the Lite default."""
     network = read_config(product).get("network")
     if isinstance(network, dict) and network.get("public_origin"):
         return str(network["public_origin"])
-    return "http://localhost:8080"
+    return LITE_ORIGIN

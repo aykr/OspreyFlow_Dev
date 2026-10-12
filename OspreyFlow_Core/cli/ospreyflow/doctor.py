@@ -16,7 +16,9 @@ from typing import Protocol
 
 MIN_MEMORY_GB = 16.0
 MIN_DISK_GB = 60.0
-LITE_PORTS = (8080, 8081, 8088)
+#: The front proxy's, for the Lite address `http://ospreyflow.localhost` (ADR-114 Amendment 4): the
+#: only port a Lite deployment publishes to other machines.
+LITE_PORTS = (80,)
 _CLOUD_CLI = {"aws": ("aws", "AWS"), "azure": ("az", "Azure")}
 _STAGE = {"small": "B6", "enterprise": "B7"}
 

@@ -116,3 +116,12 @@ def test_a_cloud_modes_answers_are_kept(tmp_path: Path) -> None:
         load_answers({"mode": "small", "cloud": {"provider": "gcp"}}, packs=PACKS, home=tmp_path)
     with pytest.raises(AnswersRefused, match="cloud"):
         load_answers({"mode": "lite", "cloud": {"provider": "aws"}}, packs=PACKS, home=tmp_path)
+
+
+def test_the_answers_set_the_address_every_name_derives_from(tmp_path: Path) -> None:
+    """ADR-114 Amendment 4: whatever the committed `osprey.yaml` says, a Lite install answers at
+    `http://ospreyflow.localhost` and a cloud install at its own domain over HTTPS."""
+    assert _config({"mode": "lite"}, tmp_path).network.public_origin == "http://ospreyflow.localhost"
+    small = load_answers({"mode": "small", "cloud": {"provider": "aws", "domain": "osprey.example.org"}},
+                         packs=PACKS, home=tmp_path)  # fmt: skip
+    assert osprey_config(small, _base())["network"]["public_origin"] == "https://osprey.example.org"

@@ -75,7 +75,6 @@ from harness.backup import (
     BackupFailed,
     _compose,
     _env_value,
-    _env_value_or,
     _run,
     arcadedb_request,
     schema_versions,
@@ -86,6 +85,7 @@ from harness.render import (
     RECIPE_REPO_DIRNAME,
     load_config,
 )
+from harness.site import answer_localhost_with_loopback, deployment_origins
 
 #: Measured on `local-lite` against the seeded HMP + Fixture Corp set and recorded in
 #: `deploy/RUNBOOK.md`. Used only to project a duration for the dry run — see the docstring on why
@@ -386,7 +386,7 @@ def _register_sign_in(env_path: Path) -> None:
     travel with the identity."""
     from harness import register_sign_in
 
-    issuer = f"http://127.0.0.1:{_env_value_or(env_path, 'OSPREY_KEYCLOAK_PORT', '8081')}"
+    issuer = deployment_origins(env_path)[1]
     status = register_sign_in.main(
         [
             "--out-root",
@@ -416,7 +416,7 @@ def restore_identity(compose_file: Path, held: Path) -> dict[str, int]:
     """The people and dashboard identities, with their ids (`harness/identity.py`); the demo
     accounts' passwords set again; report-sync's dashboards setting written back."""
     env_path = compose_file.parent / "deployment.env"
-    issuer = f"http://127.0.0.1:{_env_value_or(env_path, 'OSPREY_KEYCLOAK_PORT', '8081')}"
+    issuer = deployment_origins(env_path)[1]
     carried = json.loads(held.read_text(encoding="utf-8"))
     try:
         token = keycloak_admin.admin_token(
@@ -579,6 +579,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
+    # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine.
+    answer_localhost_with_loopback()
     config = load_config(args.config)
     profile = args.profile or config.profile.value
     compose_file = args.generated_root / profile / "compose.yaml"

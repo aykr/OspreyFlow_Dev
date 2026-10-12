@@ -82,6 +82,7 @@ from harness.render import (
     git_sha,
     load_config,
 )
+from harness.site import answer_localhost_with_loopback, deployment_origins
 
 #: The realm the deployment's people live in (`harness/realm.py`).
 REALM = "osprey"
@@ -329,8 +330,7 @@ def backup_identity(compose_file: Path, destination: Path) -> Path:
     restart on this profile, so this is the only copy of who holds a grant. It carries client
     secrets: written readable by its owner only."""
     env_path = compose_file.parent / "deployment.env"
-    port = _env_value_or(env_path, "OSPREY_KEYCLOAK_PORT", "8081")
-    issuer = f"http://127.0.0.1:{port}"
+    issuer = deployment_origins(env_path)[1]
     try:
         token = keycloak_admin.admin_token(
             issuer=issuer,
@@ -584,6 +584,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
+    # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine.
+    answer_localhost_with_loopback()
     config = load_config(args.config)
     profile = args.profile or config.profile.value
     compose_file = args.generated_root / profile / "compose.yaml"

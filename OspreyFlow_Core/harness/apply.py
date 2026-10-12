@@ -72,6 +72,7 @@ from harness.render import (
 )
 from harness.render import write as write_artefacts
 from harness.reporting import reporting_secrets
+from harness.site import answer_localhost_with_loopback, sites
 from schemas.deployment import OspreyConfig, Profile
 
 #: How long any one service gets to become healthy. Generous because the Conduit applies the graph
@@ -213,9 +214,9 @@ def _conduit_is_running(compose_file: Path) -> bool:
     )
 
 
-def _workspace_url() -> str:
-    """The one surface a `local-lite` deployment publishes by default."""
-    return f"http://127.0.0.1:{os.environ.get('OSPREY_WORKSPACE_PORT', '8080')}"
+def _workspace_url(config: OspreyConfig) -> str:
+    """The Glass, by name through the front proxy (ADR-114 Amendment 4)."""
+    return sites(config).glass
 
 
 def _conduit_url(args: argparse.Namespace, config: OspreyConfig) -> str:
@@ -228,7 +229,7 @@ def _conduit_url(args: argparse.Namespace, config: OspreyConfig) -> str:
     """
     if config.network.expose_conduit:
         return f"http://127.0.0.1:{args.api_port}"
-    return _workspace_url()
+    return _workspace_url(config)
 
 
 def create_investigation(issuer: str, realm: str, secret: str, api_url: str) -> str:
@@ -384,8 +385,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--keycloak-url",
-        default="http://127.0.0.1:8081",
-        help="Where the rendered Keycloak is reachable, for the post-launch verify.",
+        default=None,
+        help=(
+            "Where the rendered Keycloak is reachable, for the post-launch verify. Default: the "
+            "deployment's identity origin, through the front proxy."
+        ),
     )
     parser.add_argument("--realm", default="osprey")
     parser.add_argument(
@@ -431,6 +435,11 @@ def main(argv: list[str] | None = None) -> int:
         config = config.model_copy(update={"components": components})
     out_dir = args.out_root / config.profile.value
     result = ApplyResult(profile=config.profile.value)
+    # ADR-114 Amendment 4 decision 7: the deployment's names reach the proxy on this machine
+    # whatever the operating system's resolver does with `*.localhost`.
+    answer_localhost_with_loopback()
+    if args.keycloak_url is None:
+        args.keycloak_url = sites(config).identity
 
     try:
         # 1. Render.
@@ -658,7 +667,7 @@ def main(argv: list[str] | None = None) -> int:
     # internal network. The investigation id is carried in the query string because the Glass reads
     # it from there on first load; without it the workspace opens on an empty working set and the
     # seeded data looks as though it never arrived.
-    glass_url = f"{_workspace_url()}/"
+    glass_url = f"{_workspace_url(config)}/"
     if investigation_id:
         glass_url += f"?investigation={investigation_id}"
     print(f"\n  the Glass:   {glass_url}")

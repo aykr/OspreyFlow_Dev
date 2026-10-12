@@ -22,16 +22,63 @@
 // `network.expose_conduit`). `VITE_OIDC_ISSUER_ORIGIN` overrides it at build time for a deployment
 // that has moved `OSPREY_KEYCLOAK_PORT` away from its default — the same shape `--keycloak-url`
 // already requires an operator to pass explicitly in that case, not a new burden this build adds.
+//
+// **Superseded for a deployment by ADR-114 Amendment 4 (stage B3): the address is read at run
+// time.** A deployment serves `/deployment.json` (rendered by `harness/site.py`, mounted read-only
+// into the workspace image), naming its identity provider — `id.` in front of the Glass's own name,
+// through the front proxy. `loadDeploymentSettings()` reads it before the Glass draws anything. The
+// default above remains only for the Vite development server, which serves no such file.
 const DEFAULT_KEYCLOAK_PORT = 8081;
 
+interface DeploymentSettings {
+  identityProvider: string;
+  realm: string;
+}
+
+let deployment: DeploymentSettings | null = null;
+
+/** Reads `/deployment.json` once. A missing or unreadable file (the development server, which
+ * answers any path with the page itself) leaves the development default in place. */
+export async function loadDeploymentSettings(
+  fetcher: typeof fetch = (input, init) => fetch(input, init),
+): Promise<void> {
+  try {
+    const response = await fetcher("/deployment.json", { cache: "no-store" });
+    if (!response.ok) return;
+    const body = (await response.json()) as {
+      identity_provider?: unknown;
+      realm?: unknown;
+    };
+    if (typeof body.identity_provider === "string" && body.identity_provider) {
+      deployment = {
+        identityProvider: body.identity_provider.replace(/\/+$/, ""),
+        realm:
+          typeof body.realm === "string" && body.realm ? body.realm : "osprey",
+      };
+    }
+  } catch {
+    // Not a deployment: the development default stands.
+  }
+}
+
+/** For tests: forget what was read. */
+export function resetDeploymentSettings(): void {
+  deployment = null;
+}
+
 function identityProviderOrigin(): string {
+  if (deployment) return deployment.identityProvider;
   const override = import.meta.env.VITE_OIDC_ISSUER_ORIGIN;
   if (override) return override;
   return `${window.location.protocol}//${window.location.hostname}:${DEFAULT_KEYCLOAK_PORT}`;
 }
 
 /** `harness/apply.py`'s own `--realm` default. */
-export const OIDC_REALM = import.meta.env.VITE_OIDC_REALM || "osprey";
+const BUILD_REALM = import.meta.env.VITE_OIDC_REALM || "osprey";
+
+export function oidcRealm(): string {
+  return deployment?.realm ?? BUILD_REALM;
+}
 
 /** `harness/realm.py`'s `GLASS_CLIENT_ID` — restated here rather than imported: this bundle has no
  * dependency on the harness, the same separation `network.public_origin`'s own schema comment
@@ -39,7 +86,7 @@ export const OIDC_REALM = import.meta.env.VITE_OIDC_REALM || "osprey";
 export const GLASS_CLIENT_ID = "osprey-glass";
 
 export function oidcAuthority(): string {
-  return `${identityProviderOrigin()}/realms/${OIDC_REALM}`;
+  return `${identityProviderOrigin()}/realms/${oidcRealm()}`;
 }
 
 /** The Glass's own origin — the redirect and post-logout URI both derive from this, matching

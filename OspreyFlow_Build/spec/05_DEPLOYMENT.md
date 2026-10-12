@@ -474,8 +474,8 @@ Each is a container of its own with its own memory limit, outside the three tier
   is shown there once), `REPORT_SYNC_TOKEN_URL` and `REPORT_SYNC_CONDUIT_URL`, and creates the mart's
   read-only login from `REPORT_MART_READER` / `REPORT_MART_READER_PASSWORD`.
 - **Superset** is `deploy/superset/`: the official image pinned by digest, plus psycopg2-binary (the
-  recorded LGPL exception, §7 of `00_ARCHITECTURE.md`) and Authlib. Published on loopback only
-  (`OSPREY_SUPERSET_PORT`, 8088). Its start is idempotent: it makes its metadata database, migrates,
+  recorded LGPL exception, §7 of `00_ARCHITECTURE.md`) and Authlib. Reached at `bi.` in front of the
+  deployment's name through the front proxy, publishing nothing of its own (ADR-114 Amendment 4). Its start is idempotent: it makes its metadata database, migrates,
   and registers the mart as its one data source through the read-only login. People sign in through
   the realm's confidential client `osprey-superset` — the browser to the identity provider's public
   address, Superset's own calls (token, keys) to the internal one; the id_token's issuer is the public
@@ -524,7 +524,8 @@ confirm the artefacts, and let Preflight run. Click Launch, then **Seed demo dat
 that follows.
 
 Roughly fifteen minutes end to end, most of it pulling model weights and building tiles, with
-progress shown throughout. The workspace is then at `http://localhost:8080`, its *Admin* area
+progress shown throughout. The workspace is then at `http://ospreyflow.localhost` (ADR-114 Amendment 4: one address per
+app, the identity provider at `id.`, the dashboards at `bi.`), its *Admin* area
 included (ADR-110 Amendment 1). **The Set-up console stays at `http://localhost:7100`** — the
 harness's own port, its screens served at the root; its old `/admin` placeholder for a post-launch
 console is superseded by the workspace's Admin area.

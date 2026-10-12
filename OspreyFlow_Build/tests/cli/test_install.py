@@ -168,7 +168,7 @@ def test_a_finished_install_says_the_address_and_where_the_sign_in_details_are(
 ) -> None:
     assert rig("install", "--mode", "lite", "--yes", "--force") == 0
     out = capsys.readouterr().out
-    assert "http://localhost:8080" in out
+    assert "http://ospreyflow.localhost" in out
     assert "deployment.env" in out
     assert "ospreyflow status" in out and "ospreyflow open" in out
 

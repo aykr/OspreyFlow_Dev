@@ -330,6 +330,9 @@ def default_issuer(out_root: Path) -> str:
         try:
             for line in env_file.read_text(encoding="utf-8").splitlines():
                 key, _, value = line.partition("=")
+                # ADR-114 Amendment 4: the identity origin, by name through the front proxy.
+                if key.strip() == "OSPREY_IDENTITY_ORIGIN":
+                    return f"{value.strip().rstrip('/')}/realms/{REALM_NAME}"
                 if key.strip() == "OSPREY_KEYCLOAK_PORT":
                     port = int(value.strip())
         except (OSError, ValueError):

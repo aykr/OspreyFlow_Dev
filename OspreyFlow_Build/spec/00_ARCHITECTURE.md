@@ -929,6 +929,10 @@ Superset image only, never vendored, statically bundled into OspreyFlow or modif
 and does not work with Superset: it types a string parameter as `varchar`, and Superset looks
 charts and dashboards up by the URL's id as a string, so every edit and delete answered "Not found".
 
+**ADR-114 Amendment 4 addition (12 October 2026):** Caddy (Apache-2.0), the deployment's front
+proxy, the official image `caddy:2.11.4-alpine` run unmodified in its own container and locked by
+digest in `versions.lock` like every other third-party image; nothing of OspreyFlow imports it.
+
 **PaySim (ADR-055 Amendment, ADR-114 decision 5, 11 October 2026) — data, CC BY-SA 4.0**, verified
 from Kaggle's metadata for `ealaxi/paysim1` (Edgar Lopez-Rojas). Redistributable as a downloadable demo
 pack, never in a repository, with its attribution and licence text; anything derived from it and

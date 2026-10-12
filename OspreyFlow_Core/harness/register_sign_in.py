@@ -39,6 +39,7 @@ from harness.realm import (
     superset_client,
 )
 from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
+from harness.site import answer_localhost_with_loopback, deployment_origins
 from schemas.deployment import OspreyConfig
 
 ADMIN_PASSWORD_KEY = "OSPREY_KEYCLOAK_ADMIN_PASSWORD"
@@ -116,7 +117,7 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
     superset_secret = values.get("SUPERSET_OIDC_CLIENT_SECRET")
     if superset_secret:
         # ADR-111 Amendment 2: Superset's sign-in, only when the deployment runs Superset.
-        origin = values.get("SUPERSET_PUBLIC_ORIGIN", "http://localhost:8088")
+        origin = values["SUPERSET_PUBLIC_ORIGIN"]
         lines.append(
             f"sign-in client {SUPERSET_CLIENT_ID}: "
             + keycloak_admin.ensure_client(
@@ -218,14 +219,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", default="local-lite")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
-    parser.add_argument("--keycloak-url", default="http://127.0.0.1:8081")
+    parser.add_argument(
+        "--keycloak-url", default=None, help="Default: the deployment's identity origin."
+    )
     parser.add_argument("--realm", default="osprey")
     args = parser.parse_args(argv)
 
     env_path = args.out_root / args.profile / "deployment.env"
+    answer_localhost_with_loopback()
     try:
         lines = register(
-            issuer=args.keycloak_url,
+            issuer=args.keycloak_url or deployment_origins(env_path)[1],
             realm=args.realm,
             env_path=env_path,
             config=load_config(args.config),

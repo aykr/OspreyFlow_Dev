@@ -618,6 +618,8 @@ def test_accepting_re_renders_through_the_stage_2_1_renderer(
         "deployment.env",
         "versions.lock",
         "RUNBOOK.md",
+        "Caddyfile",
+        "glass.json",
     }
     compose = yaml.safe_load((rendered_dir / "compose.yaml").read_text(encoding="utf-8"))
     assert "opensearch" not in compose["services"]
