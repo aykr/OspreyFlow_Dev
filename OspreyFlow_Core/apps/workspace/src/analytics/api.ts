@@ -2,6 +2,7 @@
 // `map/providers.ts`/`site/api.ts`'s conventions exactly: one bare `fetch`
 // per call, a bearer header, throw on a non-OK response.
 import type {
+  CaseEvents,
   CrossFilterRequest,
   EventFilter,
   FirstSeenRequest,
@@ -35,6 +36,23 @@ async function postJson<T>(
     throw new Error(`${action} failed: ${response.status}`);
   }
   return (await response.json()) as T;
+}
+
+/** Whether a case holds events the reader may count, and which cases they can open hold its
+ * datasets' events when it holds none (ADR-099 Amendment 9). */
+export async function fetchCaseEvents(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+): Promise<CaseEvents> {
+  const response = await fetch(
+    `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/events/holders`,
+    { headers: authHeaders(bearerToken) },
+  );
+  if (!response.ok) {
+    throw new Error(`GET .../events/holders failed: ${response.status}`);
+  }
+  return (await response.json()) as CaseEvents;
 }
 
 export async function fetchHistogram(

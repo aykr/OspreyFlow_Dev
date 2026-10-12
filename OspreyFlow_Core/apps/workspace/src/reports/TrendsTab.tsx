@@ -12,6 +12,8 @@ import type {
   TrendFigures,
   TrendOptions,
 } from "../../../../packages/schemas/generated";
+import { fetchCaseEvents } from "../analytics/api";
+import { eventsElsewhereSentence } from "../analytics/eventsElsewhere";
 import { Button, Checkbox, Input, RadioGroup, Select } from "../design/primitives";
 import type { ReportsApi } from "./api";
 import { addItem, listPacks } from "./packsApi";
@@ -100,6 +102,8 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
   const [form, setForm] = useState<TrendForm>(EMPTY);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // ADR-099 Amendment 9: a case reading a dataset whose events another case holds says where they are.
+  const [elsewhere, setElsewhere] = useState<string | null>(null);
 
   const fail = (e: unknown) => setProblem((e as Error).message);
 
@@ -107,6 +111,10 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
     let live = true;
     fetchTrendOptions(api).then((o) => live && setOptions(o)).catch((e: Error) => live && setProblem(e.message));
     listTrends(api).then((t) => live && setSaved(t)).catch((e: Error) => live && setProblem(e.message));
+    // Only a help to the reader: if it cannot be asked, nothing is said and the builder still works.
+    fetchCaseEvents(api.apiBaseUrl, api.bearerToken, api.investigationId)
+      .then((found) => live && setElsewhere(eventsElsewhereSentence(found)))
+      .catch(() => live && setElsewhere(null));
     if (canAssemble) {
       listPacks(api)
         .then((p) => {
@@ -329,6 +337,9 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
       </div>
 
       <section aria-label="Trend" style={{ display: "grid", gap: "var(--sp-8)", alignContent: "start" }}>
+        {elsewhere && (
+          <p role="note" aria-label="Where this case's events are" className="label" style={{ margin: 0 }}>{elsewhere}</p>
+        )}
         {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
         {notice && <p role="status" style={{ margin: 0 }}>{notice}</p>}
         {!pane && !problem && <p className="label" style={{ margin: 0 }}>Preview a trend, or choose a saved one, to see it here.</p>}

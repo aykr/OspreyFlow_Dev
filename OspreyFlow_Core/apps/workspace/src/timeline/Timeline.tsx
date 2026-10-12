@@ -36,7 +36,8 @@ import type {
   Histogram,
   HistogramRequest,
 } from "../../../../packages/schemas/generated";
-import { fetchHistogram } from "../analytics/api";
+import { fetchCaseEvents, fetchHistogram } from "../analytics/api";
+import { eventsElsewhereSentence } from "../analytics/eventsElsewhere";
 import { activePalette } from "../color/palette";
 import { currentTheme, onThemeChange, type Theme } from "../theme/theme";
 import { buildEventFilter, type CrossFilterStore } from "../crossfilter/store";
@@ -129,6 +130,22 @@ export function Timeline({
   const [moreOpen, setMoreOpen] = useState(false);
   // `null` until the first answer: the strip is not declared empty before it has been asked.
   const hasEvents = histogram === null || histogram.total > 0;
+  // ADR-099 Amendment 9: with no events, ask whether another case the reader can open holds this
+  // case's datasets' events, and say so rather than that the data carries no dates.
+  const [elsewhere, setElsewhere] = useState<string | null>(null);
+  useEffect(() => {
+    if (hasEvents) {
+      setElsewhere(null);
+      return;
+    }
+    let live = true;
+    fetchCaseEvents(apiBaseUrl, bearerToken, investigationScope)
+      .then((found) => live && setElsewhere(eventsElsewhereSentence(found)))
+      .catch(() => live && setElsewhere(null));
+    return () => {
+      live = false;
+    };
+  }, [hasEvents, apiBaseUrl, bearerToken, investigationScope]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[] | null>(
     crossFilterStore.store.getState().selectedNodeIds,
   );
@@ -672,8 +689,14 @@ export function Timeline({
           out of sight, so a case that gains events later needs no remount. */}
       {!hasEvents && (
         <p role="status" style={{ margin: "var(--sp-8)", color: "var(--text-secondary)" }}>
-          No dated events in this case. The timeline, its brush and playback need events with a date,
-          which this case&rsquo;s data does not carry.
+          {elsewhere ? (
+            <>No dated events in this case. {elsewhere}</>
+          ) : (
+            <>
+              No dated events in this case. The timeline, its brush and playback need events with a date,
+              which this case&rsquo;s data does not carry.
+            </>
+          )}
         </p>
       )}
       <div

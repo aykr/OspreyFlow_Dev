@@ -35,6 +35,22 @@ async function build() {
 }
 
 describe("the trend builder", () => {
+  it("says where a reading case's events are, naming only the cases the server named (ADR-099 Am. 9)", async () => {
+    const held = { has_events: false, held_by: [{ investigation_id: "l1", name: "Operation Ledger (synthetic demo)" }] };
+    serve(routes((c) => (c.method === "GET" && c.path === "events/holders" ? json(200, held) : null)));
+    place();
+    const note = await screen.findByRole("note", { name: "Where this case's events are" });
+    expect(note.textContent).toContain("The events of the datasets it reads are in Operation Ledger (synthetic demo).");
+  });
+
+  it("says nothing of the kind in a case that holds its own events", async () => {
+    const calls = serve(routes((c) => (c.path === "events/holders" ? json(200, { has_events: true, held_by: [] }) : null)));
+    place();
+    await screen.findByLabelText("Payments");
+    await waitFor(() => expect(calls.some((c) => c.path === "events/holders")).toBe(true));
+    expect(screen.queryByRole("note", { name: "Where this case's events are" })).toBeNull();
+  });
+
   it("offers only the options' event types, and only fields every chosen type declares", async () => {
     serve(routes());
     place();

@@ -10148,6 +10148,38 @@ Status: accepted 9 October 2026 (the owner: "The new case section is very confus
    `CaseDatasets.test.tsx` brought to the new labels; the keyboard case
    `tick-datasets-and-create-a-case-by-keyboard` now reaches the radio first (rule 13).
 
+### ADR-099, Amendment 9 (12 October 2026) — a case with no events of its own says where they are
+
+**The owner's ruling**, on ADR-113 Amendment 3 finding 2 (asked 12 October 2026): *say so, change
+nothing.* Decision 7 stands: events belong to the case they were loaded into, and a case that only
+reads a dataset counts none of that dataset's events. What changes is that such a case now says so.
+
+1. **The question asked is the reader's own.** `GET /v1/investigations/{id}/events/holders`
+   (investigate right, Viewer on the case) answers `CaseEvents`: whether the case holds any event the
+   reader may count — its own, with a branch's inherited ones, through the case's own event filter —
+   and, only when it holds none, `held_by`: the other cases that read one of its datasets and hold
+   events the reader may count.
+2. **No case is named that the reader cannot open.** No dataset records which case loaded it, and
+   several cases can load into one, so the holders are found among the cases the reader holds a level
+   on (`list_for`), never among all cases reading the dataset: a case without a level is "not found"
+   (ADR-052), and naming it would reveal it. Each is counted as the reader, so an event they may not
+   see makes no case a holder (rule 3). Only whether there are events is answered, never how many.
+3. **Where it is said.** The Trends tab shows a note — "This case holds no events of its own: events
+   stay with the case they were loaded into. The events of the datasets it reads are in …" — naming
+   every holder, never a sample; the Timeline's empty strip says the same in place of "this case's
+   data does not carry" dates, which was wrong for such a case. With no holder, nothing new is said.
+
+**Tests**, written first and red: `tests/services/api/test_case_events.py` (the real DuckDB adapter,
+so a hidden event is hidden by the store): a case with its own events; a reading case told its
+holder; a case the reader cannot open never named; an event the reader may not see makes no holder;
+a case reading another dataset not named; a branch counts what it inherits; Viewer and the right.
+Six planted faults, each red: a sharing case named without events, no dataset overlap required,
+holders counted as a fully cleared reader, candidates not limited to the reader's cases, the right
+dropped, and the case's own event filter skipped (first green — no test had a branch; the branch case
+made it red). The Glass: `analytics/eventsElsewhere.test.ts`, `timeline/Timeline.elsewhere.test.tsx`
+and two cases in `reports/TrendsTab.test.tsx`; five planted faults, each red (one first green until a
+case holding events was given a holder too).
+
 ### ADR-100, Amendment 3 (8 October 2026) — stage 4: the figures are measured, then kept
 
 Status: accepted 8 October 2026 (mine, within the owner's "Go ahead all 5 stage on ADR-100"; recorded so it can be overruled).
@@ -11888,7 +11920,8 @@ fixed, one recorded (finding 4 added 12 October 2026, from the same walk's scree
    they were loaded into, because the analytics store keys events to their case, not a dataset
    (ADR-099 decision 7). Its Timeline is empty for the same reason. The walk was made in the case
    the events belong to. Whether a case that reads a dataset should also count that dataset's
-   events is a decision about ADR-099, for the owner; nothing here changes it.
+   events is a decision about ADR-099, for the owner; nothing here changes it. **Ruled 12 October
+   2026: say so, change nothing** — ADR-099 Amendment 9.
 
 3. **The printed cover is marked, and periods are days, fixed.** Amendment 2 gave each item's page
    its own banner but left the cover — a printed page carrying the title, the publisher and the

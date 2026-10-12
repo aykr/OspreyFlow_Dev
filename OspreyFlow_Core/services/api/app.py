@@ -121,8 +121,11 @@ from schemas.admin import (
     SystemStatus,
 )
 from schemas.analytics import (
+    CaseEventHolder,
+    CaseEvents,
     CrossFilterRequest,
     EventFilter,
+    EventListRequest,
     FirstSeenRequest,
     FirstSeenResult,
     GeoBin,
@@ -8047,6 +8050,43 @@ async def system_status_route(
 
 
 # --- Trend reports (ADR-113 decisions 1 and 2) ---------------------------------------------
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/events/holders",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def case_event_holders_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    analytics: AnalyticsDep,
+    audit: AuditDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
+    datasets: DatasetsDep,
+) -> CaseEvents:
+    """Whether this case holds events the reader may count and, when it holds none, which cases
+    the reader can open read one of its datasets and do (ADR-099 Amendment 9). Each is counted as
+    the reader, through the case's own event filter, so a hidden event makes no holder (rule 3); a
+    case the reader holds no level on is never listed, so never named (ADR-052)."""
+
+    async def holds(case_id: str) -> bool:
+        scoped = await _case_event_filter(
+            EventFilter(investigation_scope=case_id), principal, investigations, audit, working_set
+        )
+        found = await analytics.list_events(EventListRequest(filter=scoped, limit=1), principal)
+        return found.total > 0
+
+    if await holds(investigation.id):
+        return CaseEvents(has_events=True)
+    reads = set(await datasets.ids_of_case(investigation.id))
+    held_by: list[CaseEventHolder] = []
+    for case, _level in await investigations.list_for(principal):
+        if case.id == investigation.id or not reads & set(await datasets.ids_of_case(case.id)):
+            continue
+        if await holds(case.id):
+            held_by.append(CaseEventHolder(investigation_id=case.id, name=case.name))
+    return CaseEvents(has_events=False, held_by=held_by)
 
 
 @app.get(

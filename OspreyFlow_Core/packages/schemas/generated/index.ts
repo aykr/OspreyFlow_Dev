@@ -89,6 +89,8 @@ export type { TrendRequest } from "./TrendRequest";
 export type { TrendPoint } from "./TrendPoint";
 export type { CountedHandling } from "./CountedHandling";
 export type { TrendResult } from "./TrendResult";
+export type { CaseEventHolder } from "./CaseEventHolder";
+export type { CaseEvents } from "./CaseEvents";
 export type { ConnectorCatalogueEntry } from "./ConnectorCatalogueEntry";
 export type { ConnectDraftInput } from "./ConnectDraftInput";
 export type { DomainPackEntry } from "./DomainPackEntry";

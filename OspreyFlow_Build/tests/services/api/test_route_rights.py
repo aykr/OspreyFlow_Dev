@@ -80,7 +80,7 @@ ROUTE_RIGHTS = {
  "readiness_route": None, "liveness_route": None, "get_ontology_route": None,
  "get_map_providers_route": None, "get_map_tile_route": None, "get_map_local_source_route": None,
  "build_basemap_route": "manage_geospatial", "verify_map_route": "manage_geospatial",
- "histogram_route": "investigate", "cross_filter_route": "investigate", "first_seen_route": "investigate",
+ "histogram_route": "investigate", "case_event_holders_route": "investigate", "cross_filter_route": "investigate", "first_seen_route": "investigate",
  "geo_bins_route": "investigate", "sightings_route": "investigate", "geometries_route": "investigate",
  "create_site": "edit_graph", "get_site": "investigate", "get_site_image": "investigate",
  "set_site_control_points": "edit_graph", "set_site_grid": "edit_graph",

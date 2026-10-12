@@ -976,7 +976,10 @@ The timeline is the second most important control in the product after the canva
   timeline's own movement and short enough not to feel stalled at 0.5× (4s) or rushed at 8× (1s).
 - **No dated events** — a case whose data carries no dated events (Fixture Corp today) says so in
   the strip's place and offers neither a brush nor playback (ADR-087), so the graph is never dimmed
-  for a reason the analyst cannot see. The strip returns the moment the case gains events.
+  for a reason the analyst cannot see. The strip returns the moment the case gains events. A case
+  that only reads a dataset whose events another case holds says which, instead of that its data
+  carries no dates: "The events of the datasets it reads are in …", naming only cases the reader can
+  open (ADR-099 Amendment 9); the Trends tab carries the same note.
 - **Cyclical view** — the HMP analysis is a day-of-week and hour-of-day analysis, and a linear
   timeline cannot show that. Provide a second mode that folds the window into a weekday × hour
   grid with counts, which is the same finding the source report reached with a polar plot.

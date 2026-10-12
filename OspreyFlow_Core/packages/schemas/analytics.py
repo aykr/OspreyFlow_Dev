@@ -504,3 +504,21 @@ class TrendResult(BaseModel):
 
 
 ALL_MODELS = (*ALL_MODELS, TrendRequest, TrendPoint, CountedHandling, TrendResult)
+
+
+class CaseEventHolder(BaseModel):
+    investigation_id: str
+    name: str | None = None
+
+
+class CaseEvents(BaseModel):
+    """Whether a case holds events this reader may count, and — when it holds none — which other
+    cases the reader can open read one of its datasets and do (ADR-099 Amendment 9). Events stay
+    with the case they were loaded into (decision 7); this only says where they are. A case the
+    reader cannot open is never named, and an event they may not see makes no case a holder."""
+
+    has_events: bool
+    held_by: list[CaseEventHolder] = Field(default_factory=list)
+
+
+ALL_MODELS = (*ALL_MODELS, CaseEventHolder, CaseEvents)
