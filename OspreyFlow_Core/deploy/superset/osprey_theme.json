@@ -36,15 +36,15 @@
     },
     "echartsOptionsOverrides": {
       "color": [
-        "#3682b2",
-        "#83330d",
-        "#2f8364",
-        "#562182",
-        "#2b9095",
-        "#7e032c",
-        "#6c8c4a",
-        "#5367cb",
-        "#632a55"
+        "#2290c8",
+        "#ac4a06",
+        "#369974",
+        "#804dc3",
+        "#0a7376",
+        "#ba3457",
+        "#629136",
+        "#6574eb",
+        "#b16ca6"
       ],
       "textStyle": {
         "fontFamily": "'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif"
@@ -95,15 +95,15 @@
     },
     "echartsOptionsOverrides": {
       "color": [
-        "#61b1e6",
-        "#b34917",
-        "#72b99a",
-        "#8364a6",
-        "#35b9c0",
-        "#b74b5e",
-        "#90b667",
-        "#677bd6",
-        "#916384"
+        "#2290c8",
+        "#ac4a06",
+        "#369974",
+        "#804dc3",
+        "#0a7376",
+        "#ba3457",
+        "#629136",
+        "#6574eb",
+        "#b16ca6"
       ],
       "textStyle": {
         "fontFamily": "'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif"
@@ -120,15 +120,15 @@
   },
   "categorical": {
     "colors": [
-      "#3682b2",
-      "#83330d",
-      "#2f8364",
-      "#562182",
-      "#2b9095",
-      "#7e032c",
-      "#6c8c4a",
-      "#5367cb",
-      "#632a55"
+      "#2290c8",
+      "#ac4a06",
+      "#369974",
+      "#804dc3",
+      "#0a7376",
+      "#ba3457",
+      "#629136",
+      "#6574eb",
+      "#b16ca6"
     ]
   },
   "sequential": {

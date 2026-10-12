@@ -20,7 +20,7 @@ COPY brand/osprey-mark.svg brand/osprey-favicon.svg /app/superset/static/assets/
 COPY brand/loading.gif /app/superset/static/assets/loading.cff8a5da.gif
 COPY brand/loading.gif /app/superset/static/assets/images/loading.gif
 COPY osprey_entrypoint.py /app/osprey_entrypoint.py
-COPY osprey_setup.py /app/osprey_setup.py
+COPY osprey_setup.py osprey_palette.py /app/
 USER superset
 EXPOSE 8088
 ENTRYPOINT ["python", "/app/osprey_entrypoint.py"]

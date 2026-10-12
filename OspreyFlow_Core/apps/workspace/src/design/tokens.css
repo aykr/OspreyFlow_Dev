@@ -63,6 +63,17 @@
   --ch-jade:#72b99a;    /* default: Vehicle    · shape triangle */
   --ch-moss:#90b667;    /* default: Event      · shape diamond  */
 
+  /* Chart palette — one set for both themes (the owner's ruling of 12 October 2026, ADR-111
+     Amendment 4). A dashboard's chart keeps its series colours whichever mode it is shown in, so
+     these are the nine channels moved into the lightness band that reads on both panels: each holds
+     at least 3.1:1 against the dark panel (n2) and the light panel, keeps its channel's hue within
+     a few degrees and its chroma near the brand's, and the set separates further than either
+     per-theme set under normal vision and simulated deutan, protan and tritan vision. Not redefined
+     in the light theme's block: it is the same in both. Brass is not among them. */
+  --chart-ochre:#ac4a06;  --chart-rose:#ba3457;   --chart-plum:#b16ca6;
+  --chart-violet:#804dc3; --chart-indigo:#6574eb; --chart-azure:#2290c8;
+  --chart-cyan:#0a7376;   --chart-jade:#369974;   --chart-moss:#629136;
+
   /* Sequential ramp — magnitude. Monotonic in lightness, survives greyscale print. */
   --seq-1:#0a3537; --seq-2:#1d575a; --seq-3:#2d787c;
   --seq-4:#3b999e; --seq-5:#4abbc1; --seq-6:#5de1e8;

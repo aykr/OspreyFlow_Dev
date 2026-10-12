@@ -46,5 +46,20 @@ with app.app_context():
     else:
         user.roles = [embedder_role]
         sm.reset_password(user.id, password)
+    # ADR-111 Amendment 4: a board drawn before a palette change forgets the old colours.
+    import json
+    import os.path
+
+    from osprey_palette import forget_stale_label_colours
+    from superset.models.dashboard import Dashboard
+
+    with open(os.path.join(os.path.dirname(__file__), "pythonpath", "osprey_theme.json")) as themes:
+        palette = json.load(themes)["categorical"]["colors"]
+    refreshed = 0
+    for dashboard in db.session.query(Dashboard).all():
+        changed = forget_stale_label_colours(dashboard.json_metadata, palette)
+        if changed is not None:
+            dashboard.json_metadata = changed
+            refreshed += 1
     db.session.commit()
-    print("osprey_setup: roles and the embedder user are in place")
+    print(f"osprey_setup: roles and embedder in place; {refreshed} board(s) recoloured")

@@ -8,7 +8,10 @@ What a mistake would do, and the case that catches it:
   `test_the_committed_theme_is_what_the_tokens_make`;
 - a colour typed into the theme by hand — `test_every_colour_in_the_theme_is_a_token`;
 - the dark theme built from the light set, or the reverse — `test_each_theme_comes_from_its_own_set`;
-- a chart drawn in brass, or in the other theme's channels — `test_each_themes_chart_colours_are_its_nine_channels`.
+- a chart drawn in brass, or in anything but the both-modes chart set —
+  `test_both_themes_draw_charts_in_the_both_modes_set`;
+- a chart colour that fades into either panel (the owner's ruling of 12 October 2026: one set that
+  reads in both modes, at least 3:1 against each) — `test_every_chart_colour_holds_three_to_one_on_both_panels`.
 """
 
 from __future__ import annotations
@@ -55,11 +58,34 @@ def test_each_theme_comes_from_its_own_set() -> None:
     assert themes["dark"]["token"]["fontFamily"].startswith("'Atkinson Hyperlegible Next'")
 
 
-def test_each_themes_chart_colours_are_its_nine_channels() -> None:
+def test_both_themes_draw_charts_in_the_both_modes_set() -> None:
     dark, light = superset_theme.token_sets(TOKENS)
     themes = json.loads(superset_theme.render(TOKENS))
-    for mode, tokens in (("dark", dark), ("default", light)):
-        colours = themes[mode]["echartsOptionsOverrides"]["color"]
-        assert colours == [tokens[f"ch-{name}"] for name in CHANNELS], mode
-        assert tokens["brass"] not in colours and tokens["brass-hover"] not in colours
-    assert themes["categorical"]["colors"] == [light[f"ch-{name}"] for name in CHANNELS]
+    chart = [dark[f"chart-{name}"] for name in CHANNELS]
+    assert chart == [light[f"chart-{name}"] for name in CHANNELS], "one set, not tuned per theme"
+    for mode in ("dark", "default"):
+        assert themes[mode]["echartsOptionsOverrides"]["color"] == chart, mode
+    assert themes["categorical"]["colors"] == chart
+    assert not {dark["brass"], light["brass"], dark["brass-hover"], light["brass-hover"]} & set(chart)
+
+
+def _luminance(colour: str) -> float:
+    def linear(channel: int) -> float:
+        c = channel / 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (int(colour[i : i + 2], 16) for i in (1, 3, 5))
+    return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+
+
+def _contrast(a: str, b: str) -> float:
+    high, low = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_every_chart_colour_holds_three_to_one_on_both_panels() -> None:
+    dark, light = superset_theme.token_sets(TOKENS)
+    for name in CHANNELS:
+        colour = dark[f"chart-{name}"]
+        for panel in (dark["surface-panel"], light["surface-panel"]):
+            assert _contrast(colour, panel) >= 3.0, (name, colour, panel, _contrast(colour, panel))

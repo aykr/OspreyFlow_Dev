@@ -11639,9 +11639,29 @@ What it decides *(mine)* unless said:
    no font from elsewhere, exactly as the Glass does — no font is fetched from a third party, and the
    content security policy is unchanged.
 
+6. **One chart palette for both modes** (the owner's ruling, 12 October 2026, "New both-modes
+   palette", then "Approve these values"). Superset 6.1 deals a chart's series colours from its colour
+   scheme in either mode — the theme's own chart-colour list is overridden by it, and there is no
+   per-theme scheme — so the per-theme channels showed the light set on the dark panel at about 1.6:1.
+   `tokens.css` gains `--chart-*`: the nine channels moved into the lightness band that reads on both
+   panels, derived and measured before they were proposed — each at least 3.1:1 against the dark and
+   the light panel, hue within a few degrees of its channel, chroma near the brand's, and the set
+   further apart than either per-theme set under normal vision and simulated deutan, protan and tritan
+   vision (closest pair 0.072 in OKLab, against 0.058 and 0.070). Both of Superset's themes and its
+   chart editor use it. The canvas keeps its per-theme channels.
+7. **A palette change reaches boards already drawn.** Superset remembers the colour each label was
+   first given on a dashboard (`map_label_colors`) and a guest viewer cannot update it, so the board
+   kept the old colours (found live). Superset's start forgets every remembered colour not in the
+   current palette (`deploy/superset/osprey_palette.py`); a colour a person chose for a label
+   (`label_colors`) is kept.
+8. **Found, not decided here:** Superset 6.1's embedded page ignores the SDK's `themeMode` address
+   parameter and answers `setThemeMode`, which the Glass sends once the board is mounted — so a board
+   can show light for a moment before it turns dark.
+
 **Tests**, named before the code: the theme file regenerated from `tokens.css` and equal to the one
-committed; every colour in it defined in `tokens.css`; each theme's chart colours the nine channels of
-that theme and never brass (`tests/test_superset_theme.py`); the Glass opening a board in its current
+committed; every colour in it defined in `tokens.css`; both themes' chart colours the `--chart-*`
+set, never brass, each at least 3:1 against both panels (`tests/test_superset_theme.py`); stale
+remembered label colours forgotten and a chosen one kept (`tests/test_superset_label_colours.py`); the Glass opening a board in its current
 mode and following a switch, with the title and chart menus hidden (`EmbeddedDashboards.test.tsx`);
 and live, the restored board drawn inside the Glass in both modes.
 

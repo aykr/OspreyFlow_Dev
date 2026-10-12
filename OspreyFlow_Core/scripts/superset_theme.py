@@ -5,8 +5,9 @@ ADR-111 Amendment 4).
 
 `tokens.css` is authoritative: no colour outside it. Its `:root` set is the dark theme (the working
 default) and `[data-theme="light"]` the separately tuned light one; each becomes one of Superset 6's
-themes (Ant Design tokens plus Superset's own), with that theme's nine data channels as its chart
-colours — never brass, which is the accent and no channel. The Superset image is built from
+themes (Ant Design tokens plus Superset's own). Charts use the both-modes chart set (`--chart-*`)
+in either theme, because a chart's series keep the colours of its scheme whichever mode it is shown
+in — never brass, which is the accent and no channel. The Superset image is built from
 `deploy/superset/` alone, so the result is committed there, and `tests/test_superset_theme.py` fails
 when it differs from what the tokens make.
 """
@@ -60,8 +61,13 @@ def _px(value: str) -> int:
     return int(value.removesuffix("px"))
 
 
+def _chart(t: dict[str, str]) -> list[str]:
+    """The both-modes chart set (`--chart-*`): a chart keeps its series colours in either mode."""
+    return [t[f"chart-{name}"] for name in CHANNELS]
+
+
 def _theme(t: dict[str, str], *, algorithm: str) -> dict[str, object]:
-    channels = [t[f"ch-{name}"] for name in CHANNELS]
+    channels = _chart(t)
     return {
         "algorithm": algorithm,
         "token": {
@@ -116,8 +122,8 @@ def render(css: str) -> str:
         "do not edit; run `python -m scripts.superset_theme`",
         "default": _theme(light, algorithm="default"),
         "dark": _theme(dark, algorithm="dark"),
-        # The palettes Superset's chart editor offers: the light theme's channels and ramp.
-        "categorical": {"colors": [light[f"ch-{name}"] for name in CHANNELS]},
+        # The palettes Superset's chart editor offers: the both-modes chart set, the light ramp.
+        "categorical": {"colors": _chart(dark)},
         "sequential": {"colors": [light[f"seq-{n}"] for n in range(1, 7)]},
     }
     return json.dumps(document, indent=2) + "\n"
