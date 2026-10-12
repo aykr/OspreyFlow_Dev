@@ -16,6 +16,11 @@ What a mistake would do, and the case that catches it:
   deployment's role passwords over the new one's (found at B2e: the Conduit and Superset were
   refused at sign-in) — `test_restore_replays_roles_first_and_creates_a_missing_database` and
   `test_every_database_is_dumped_and_the_roles_with_them`;
+- Superset's dump loaded over the schema the fresh install's Superset made for itself, which a
+  `--clean` dump cannot clear because it drops only what it made (found at B4's replacement:
+  Superset 6.1 built fresh has `slices_table_id_fkey`, the same revision reached by upgrading from
+  4.1 has not, and `DROP CONSTRAINT tables_pkey` was refused) —
+  `test_a_database_the_fresh_install_made_is_replaced_whole_before_its_dump_is_loaded`;
 - the people not brought back, or their passwords not set again —
   `test_restore_brings_the_identity_back_and_sets_the_dashboards_setting`.
 
@@ -152,6 +157,45 @@ def test_restore_replays_roles_first_and_creates_a_missing_database(
     assert len(created) == 1 and any('"superset"' in part for part in created[0])
     targets = [c[-1] for c, body in calls if body.startswith("CREATE TABLE")]
     assert targets == ["ospreyflow", "superset"]
+
+
+def test_a_database_the_fresh_install_made_is_replaced_whole_before_its_dump_is_loaded(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Each database's schema: who made it. The fresh install's Superset made its own; Postgres
+    # refuses a dump's `--clean` drops over a schema the dump did not make, as the real one did.
+    schema = {"ospreyflow": "conduit", "superset": "fresh-superset", "postgres": ""}
+    loaded: list[str] = []
+
+    def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        if "-Atc" in command:
+            sql = command[-1]
+            target = command[command.index("-d") + 1]
+            assert target == "postgres", "a database is dropped or made from another one"
+            if sql.startswith("DROP DATABASE"):
+                assert "WITH (FORCE)" in sql, "the running Superset holds connections to it"
+                schema.pop(sql.split('"')[1])
+            elif sql.startswith("CREATE DATABASE"):
+                schema[sql.split('"')[1]] = ""
+            return subprocess.CompletedProcess(command, 0, stdout="\n".join(schema) + "\n", stderr="")
+        database = command[-1]
+        if schema.get(database) == "fresh-superset":
+            return subprocess.CompletedProcess(
+                command, 3, stdout=b"", stderr=b"ERROR:  cannot drop constraint tables_pkey on table public.tables"
+            )
+        loaded.append(database)
+        return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(restore.subprocess, "run", run)
+    folder = tmp_path / "set" / "postgres"
+    folder.mkdir(parents=True)
+    (folder / "dump.sql").write_text("CREATE TABLE investigations ();\n", encoding="utf-8")
+    (folder / "superset.sql").write_text("CREATE TABLE dashboards ();\n", encoding="utf-8")
+    restore.restore_postgres_all(deployment, [folder / "dump.sql", folder / "superset.sql"], None)
+    assert loaded == ["ospreyflow", "superset"]
+    # The deployment's own database is the Conduit's, whose schema is this commit's own and which
+    # the running Conduit is connected to: it is loaded over, as B2e and B3 proved live, not dropped.
+    assert schema["ospreyflow"] == "conduit"
 
 
 def test_restore_brings_the_identity_back_and_sets_the_dashboards_setting(

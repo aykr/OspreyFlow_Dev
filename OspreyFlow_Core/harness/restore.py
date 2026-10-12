@@ -343,8 +343,13 @@ def _without_passwords(roles: bytes) -> bytes:
 
 def restore_postgres_all(compose_file: Path, dumps: list[Path], roles: Path | None) -> None:
     """The roles first — the dumps grant to them — tolerating the ones the fresh install already
-    made; then each database, created first when the fresh server does not have it (`superset`);
-    `dump.sql` is the deployment's own database (ADR-114 Amendment 3)."""
+    made; then each database. `dump.sql` is the deployment's own database (ADR-114 Amendment 3),
+    loaded over the schema the running Conduit made, which is this commit's own. Any other
+    (`superset`) is dropped, ending the running service's connections, and made again empty before
+    its dump is loaded: the fresh install's service built that schema for itself, and a `--clean`
+    dump drops only what it made — Superset 6.1 built fresh has a foreign key the same revision
+    reached by upgrading from 4.1 has not, and the dump's `DROP CONSTRAINT` was refused (found at
+    B4's replacement)."""
     main_database = _env_value(compose_file.parent / "deployment.env", "POSTGRES_DB")
     if roles is not None:
         replayed = _psql(
@@ -364,6 +369,15 @@ def restore_postgres_all(compose_file: Path, dumps: list[Path], roles: Path | No
     )
     for dump in dumps:
         database = main_database if dump.name == "dump.sql" else dump.stem
+        if database != main_database and database in present:
+            dropped = _psql(
+                compose_file, "postgres", command=f'DROP DATABASE "{database}" WITH (FORCE)'
+            )
+            if dropped.returncode != 0:
+                raise BackupFailed(
+                    "postgres", f"emptying '{database}': {_text(dropped.stderr).strip()[:400]}"
+                )
+            present.discard(database)
         if database not in present:
             made = _psql(compose_file, "postgres", command=f'CREATE DATABASE "{database}"')
             if made.returncode != 0:
