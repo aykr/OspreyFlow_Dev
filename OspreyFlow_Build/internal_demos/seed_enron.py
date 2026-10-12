@@ -11,7 +11,7 @@ copies the corpus.
 
 The graph takes the company's own addresses and the links between them (about one node per address
 and one edge per directed pair); the analytics store takes every distinct message, one event per
-recipient. See `demo_fixtures/enron.py`.
+recipient. See `internal_demos/enron.py`.
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
-from demo_fixtures import enron
 from demo_fixtures.datasets import ENRON
+from internal_demos import enron
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
@@ -113,7 +113,9 @@ def authorise(
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="python -m scripts.seed_enron", description=__doc__)
+    parser = argparse.ArgumentParser(
+        prog="python -m internal_demos.seed_enron", description=__doc__
+    )
     parser.add_argument("--case-name", required=True)
     parser.add_argument("--grant", action="append", default=[], metavar="ACCOUNT=LEVEL")
     parser.add_argument("--attested-checkout", action="store_true")

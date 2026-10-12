@@ -3,8 +3,8 @@ Amendment 1).
 
 **This is real data.** It is admitted only through `config/real_data_exceptions.yaml`, is never
 committed, and is never read by anything that ships. This module is pure: it reads and shapes
-records, and holds no path to any corpus. Writing them is `scripts/seed_enron.py`, which refuses
-first unless the exceptions entry, the provisioned folder and a checkout are all there.
+records, and holds no path to any corpus. Writing them is `internal_demos/seed_enron.py`, which
+refuses first unless the exceptions entry, the provisioned folder and a checkout are all there.
 
 **Shape (the owner chose "option A", 30 September 2026).** An email address is an `Endpoint` of kind
 `email`; a person is not invented from an address. Each sender-to-recipient pair is one summarised

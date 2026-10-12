@@ -40,6 +40,8 @@ BUILD_NAMES = frozenset(
         "Claude outputs",
         "dist",
         "pytest.ini",
+        "Makefile",
+        "internal_demos",
     }
 )
 #: First segments that must stay at the root because a tool requires it.

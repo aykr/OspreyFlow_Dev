@@ -1,7 +1,12 @@
 """Loads an internal demo dataset into the running deployment, in one command.
 
     PYTHONPATH=.:packages python -m scripts.seed_internal <dataset> [--stop-api]
-    (or: make seed-paysim | seed-hmp | seed-fixture-corp | seed-enron)
+    (or: make seed-paysim | seed-hmp | seed-fixture-corp | seed-ledger)
+
+A caller may run a dataset of its own (`seed_internal(datasets=…, code_mounts=…)`, `main(…)`): its
+code folder is mounted read-only beside this checkout's, and every check below — the local
+real-data exceptions list, the attested checkout — applies to it unchanged (`06_DECISIONS.md`
+ADR-114 Amendment 2: code that exists only for an internal demo lives outside this folder).
 
 The seed runs in a one-shot container from the Conduit's own image, **inside the deployment's
 network**, the way `harness.apply` runs its own seeds: the deployment's analytics store is a Docker
@@ -27,7 +32,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -68,6 +73,8 @@ class Dataset:
     #: Whether the seed writes its edges through the bulk loader, its default since ADR-058
     #: Amendment 5 (`--method upsert` still takes the older path).
     bulk: bool = False
+    #: Whether the seed keeps its addresses and rewrites its links on `--replace-links`.
+    rewrites_links: bool = False
 
 
 #: The PaySim graph sample: the first fraud transactions and everything touching their accounts.
@@ -85,13 +92,6 @@ DATASETS: dict[str, Dataset] = {
     "fixture-corp": Dataset(
         script="scripts.seed_fixture_corp", case_name="Fixture Corp (synthetic demo)"
     ),
-    "enron": Dataset(
-        script="scripts.seed_enron",
-        case_name="Enron corpus (real data, this machine only)",
-        data_folder="Enron_Mails",
-        real_dataset="enron",
-        bulk=True,
-    ),
     "paysim": Dataset(
         script="scripts.seed_paysim",
         case_name="PaySim mobile money (internal)",
@@ -102,7 +102,7 @@ DATASETS: dict[str, Dataset] = {
 }
 
 
-def _checkout_mounts(repo_root: Path) -> list[str]:
+def _checkout_mounts(repo_root: Path, code: Sequence[tuple[Path, str]] = ()) -> list[str]:
     """What every seed container takes from the checkout, read-only: the scripts **and the
     packages they import**. The image carries its own copy of both, built when it was last
     refreshed, so a script that imports something added since (ADR-058's `BulkGraphLoader`, which
@@ -112,7 +112,7 @@ def _checkout_mounts(repo_root: Path) -> list[str]:
     `services.api.dataset_scope` and make their case's datasets with `services.api.datasets`, and
     the image's older copy of the stamping graph refused the Enron seed's bulk write after it had
     deleted its links (7 October 2026)."""
-    return [
+    mounts = [
         "-v",
         f"{repo_root}/scripts:/app/scripts:ro",
         "-v",
@@ -120,6 +120,10 @@ def _checkout_mounts(repo_root: Path) -> list[str]:
         "-v",
         f"{repo_root}/services:/app/services:ro",
     ]
+    # A caller's own code folder, read-only too, at the place its modules are imported from.
+    for host, container in code:
+        mounts += ["-v", f"{host}:{container}:ro"]
+    return mounts
 
 
 def _run(argv: Sequence[str]) -> str:
@@ -212,11 +216,13 @@ def seed_internal(
     clear_shared_stores: bool = False,
     confirm: str | None = None,
     accept_strays: int = 0,
+    datasets: Mapping[str, Dataset] = DATASETS,
+    code_mounts: Sequence[tuple[Path, str]] = (),
 ) -> list[str]:
     """Return the seed report, one line each. Raises `SeedRefused` before starting anything."""
-    if dataset not in DATASETS:
-        raise SeedRefused(f"unknown dataset {dataset!r}; known: {', '.join(sorted(DATASETS))}")
-    spec = DATASETS[dataset]
+    if dataset not in datasets:
+        raise SeedRefused(f"unknown dataset {dataset!r}; known: {', '.join(sorted(datasets))}")
+    spec = datasets[dataset]
     if repair_strays and restore_missing:
         raise SeedRefused("--repair-strays and --restore-missing are run one at a time")
     if apply and not (repair_strays or restore_missing):
@@ -262,7 +268,9 @@ def seed_internal(
     if probe_lookup_cost and not spec.sampled:
         raise SeedRefused("--probe-lookup-cost is only built for paysim so far")
     if method != "upsert" and not spec.bulk:
-        raise SeedRefused("--method bulk is only built for enron and paysim so far")
+        raise SeedRefused(
+            f"--method bulk is not built for {dataset}: its seed does not write in bulk"
+        )
     if vault is not None:
         if not spec.sampled:
             raise SeedRefused("--vault is only built for paysim so far")
@@ -298,7 +306,7 @@ def seed_internal(
     if probe_lookup_cost:
         return _probe_lookup_cost(repo_root, directory, run, probe_sizes)
     if inspect:
-        return _inspect(spec, repo_root, directory, run, inspect_record, vault)
+        return _inspect(spec, repo_root, directory, run, inspect_record, vault, code_mounts)
     if repair_strays or restore_missing:
         return _repair_strays(
             spec,
@@ -332,7 +340,7 @@ def seed_internal(
             "Run again with --stop-api to stop it for the seed and start it again after; "
             "stopping it is your choice, so it is not done for you"
         )
-    mounts = _checkout_mounts(repo_root)
+    mounts = _checkout_mounts(repo_root, code_mounts)
     if spec.data_folder:
         mounts += ["-v", f"{data_root}:{CONTAINER_DATA}:ro"]
     argv = [
@@ -373,9 +381,9 @@ def seed_internal(
     if replace_events and spec.data_folder:
         argv.append("--replace-events")
     if replace_links:
-        # Only the Enron seed keeps its addresses and rewrites its links (7 October 2026).
-        if dataset != "enron":
-            raise SeedRefused(f"--replace-links is the Enron seed's alone, not {dataset}'s")
+        # Only a seed that keeps its addresses rewrites its links (the Enron seed, 7 October 2026).
+        if not spec.rewrites_links:
+            raise SeedRefused(f"--replace-links is not built for {dataset}")
         argv.append("--replace-links")
     if reset_graph_database:
         argv.append("--reset-graph-database")
@@ -405,6 +413,7 @@ def _inspect(
     run: Callable[[Sequence[str]], str],
     record: str | None,
     vault: str | None = None,
+    code_mounts: Sequence[tuple[Path, str]] = (),
 ) -> list[str]:
     """Read the graph without changing anything: no case, no grants, and the Conduit is left
     running (only `SELECT` is sent, and nothing is written to the analytics store)."""
@@ -415,7 +424,7 @@ def _inspect(
         "--no-deps",
         "--entrypoint",
         "python",
-        *_checkout_mounts(repo_root),
+        *_checkout_mounts(repo_root, code_mounts),
         "api",
         "-m",
         spec.script,
@@ -619,7 +628,12 @@ def _clear_shared_stores(
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    datasets: Mapping[str, Dataset] = DATASETS,
+    code_mounts: Sequence[tuple[Path, str]] = (),
+) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     stop_api = "--stop-api" in args
     replace_graph = "--replace-graph" in args
@@ -724,7 +738,7 @@ def main(argv: list[str] | None = None) -> int:
     ]
     if len(names) != 1:
         print(
-            f"usage: seed_internal <{'|'.join(sorted(DATASETS))}> [--stop-api] "
+            f"usage: seed_internal <{'|'.join(sorted(datasets))}> [--stop-api] "
             "[--replace-graph] [--replace-events] [--replace-links] [--reset-graph-database] "
             "[--vault ID] "
             "[--method upsert|bulk] "
@@ -762,6 +776,8 @@ def main(argv: list[str] | None = None) -> int:
             clear_shared_stores=clear_shared_stores,
             confirm=confirm,
             accept_strays=accept_strays,
+            datasets=datasets,
+            code_mounts=code_mounts,
         )
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)

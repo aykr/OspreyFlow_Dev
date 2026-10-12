@@ -44,7 +44,9 @@ import tarfile
 from collections.abc import Iterable
 from pathlib import Path
 
-from scripts.demo_registry import REGISTRY, DemoManifest, internal_manifests
+#: The product's registry and the internal demos registered beside their code (ADR-114 Amendment 2).
+from internal_demos.registry import ALL as REGISTRY
+from scripts.demo_registry import DemoManifest, internal_manifests
 
 from tools.layout import REPO as REPO_ROOT
 from tools.product_tree_link_check import PRIVATE_TREE_MARKERS

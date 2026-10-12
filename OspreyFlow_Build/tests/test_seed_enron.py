@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 from scripts import real_data_exceptions as rde
-from scripts.seed_enron import (
+from internal_demos.seed_enron import (
     DATASET,
     FOLDER,
     USE,
@@ -104,7 +104,8 @@ def test_the_enron_seed_can_replace_its_graph_and_refuses_a_second_events_load()
     (ADR-055 Amendments 3 and 4)."""
     assert _parse_args(["--case-name", "x", "--replace-graph"]).replace_graph is True
     assert _parse_args(["--case-name", "x"]).replace_graph is False
-    from scripts import seed_enron, seed_support
+    from internal_demos import seed_enron
+    from scripts import seed_support
 
     assert seed_enron.write_graph is seed_support.write_graph
     assert seed_enron.events_already_loaded is seed_support.events_already_loaded
@@ -116,7 +117,7 @@ def test_the_enron_seed_can_replace_a_cases_events_after_the_loader_changed() ->
     them again, keeping the graph; without it the guard still refuses."""
     assert _parse_args(["--case-name", "x", "--replace-events"]).replace_events is True
     assert _parse_args(["--case-name", "x"]).replace_events is False
-    from scripts import seed_enron
+    from internal_demos import seed_enron
 
     assert seed_enron.events_plan(already_loaded=True, replace_events=False) == "refuse"
     assert seed_enron.events_plan(already_loaded=True, replace_events=True) == "replace"
@@ -128,7 +129,7 @@ def test_replacing_only_the_links_keeps_the_cases_events() -> None:
     """Seen 8 Oct 2026: `--replace-links` alone refused on the Enron case, because its events were
     already loaded and the events guard ran first; it had to be given `--replace-events` too and
     load 1.36 million events again for nothing. Rewriting the links keeps the events."""
-    from scripts import seed_enron
+    from internal_demos import seed_enron
 
     assert seed_enron.events_plan(
         already_loaded=True, replace_events=False, replace_links=True
@@ -148,7 +149,7 @@ def test_the_graph_plan_for_each_combination_of_options() -> None:
     """Which graph phase the Enron seed runs. Catches `--replace-links` taking the "events only"
     path when the addresses are still there (they are: it keeps them), which would write no link
     and leave the old counts in place."""
-    from scripts.seed_enron import graph_plan as plan
+    from internal_demos.seed_enron import graph_plan as plan
 
     assert plan(present=False, replace_graph=False, replace_links=False, events="load") == "write"
     assert plan(present=True, replace_graph=False, replace_links=False, events="replace") == "keep"

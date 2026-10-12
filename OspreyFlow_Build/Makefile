@@ -133,4 +133,4 @@ ci-status:
 
 # REAL data, this machine only (ADR-053): refuses without the local exceptions entry.
 seed-enron:
-	$(IN_CORE) PYTHONPATH=.:packages $(PY) -m scripts.seed_internal enron --stop-api
+	$(IN_CORE) PYTHONPATH=.:packages:$(BUILD) $(PY) -m internal_demos.seed enron --stop-api

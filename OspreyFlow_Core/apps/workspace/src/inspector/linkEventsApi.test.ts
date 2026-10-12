@@ -1,6 +1,6 @@
 // Whether a link's events are emails (ADR-089, ADR-092). The defect this pins: the Glass read
 // `properties.kind`, while the ontology and the Enron loader carry `endpoint_kind`
-// (`packages/demo_fixtures/enron.py`), so every Enron link said "Show events" and was never put on
+// (the Enron reader), so every Enron link said "Show events" and was never put on
 // the canvas as Documents. The node is the one the loader really writes (rule 15).
 import { describe, expect, it } from "vitest";
 

@@ -7706,7 +7706,8 @@ otherwise.
    before starting anything and tells the seed with `--attested-permission`; run directly on the host
    the seed checks it itself. Both refuse, with a sentence, when the entry is missing.
 
-**Built, tests first:** `demo_fixtures/enron.py`, `scripts/seed_enron.py`, the `enron` registry manifest
+**Built, tests first:** the Enron reader and its seed (now `internal_demos/enron.py` and
+`internal_demos/seed_enron.py`, ADR-114 Amendment 2), the `enron` registry manifest
 (`internal`), `make seed-enron`. The case is "Enron corpus (real data, this machine only)", with no
 unit-wide level, the demo admin as Author and the demo analyst as Editor (ADR-053 point 5).
 **Not yet run** against the real corpus or a real ArcadeDB from here.
@@ -11882,8 +11883,8 @@ real registry with no data-licence offender.
    Build's `ci` calls. The root Makefile forwards a target to Build when Build has it, else to Core.
    `ci.yml` is the owner's: the change it needs is written for the owner, not made.
 2. **Code that exists only for an internal demo moves to Build** ("Move Enron code to Build"). The
-   Enron reader (`packages/demo_fixtures/enron.py`), its seed (`scripts/seed_enron.py`), its registry
-   entry and its row in the seed runner's table leave Core for `OspreyFlow_Build/internal_demos/`.
+   Enron reader and its seed (from the product's `packages/demo_fixtures/` and `scripts/`), its
+   registry entry and its row in the seed runner's table leave Core for `internal_demos/` here.
    Core's seed runner (`scripts/seed_internal.py`) learns to run a dataset its caller defines, with
    the caller's code folder mounted beside Core's — generic, naming nothing in Build — and keeps
    every real-data check (the local exceptions list, the attested checkout) for any caller.

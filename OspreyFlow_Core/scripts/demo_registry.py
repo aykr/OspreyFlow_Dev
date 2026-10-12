@@ -12,13 +12,15 @@ is where "missing" actually manifests as an empty string rather than a raised ex
 already holds itself to for a different registry.
 
 **What the registry holds today, checked directly against `DEMO_GUIDE.md` §1's own table and the
-seed scripts' own imports.** Four entries are `shipped` and one is `internal`. Three shipped
+seed scripts' own imports.** Four entries, every one `shipped`. Three
 entries are synthetic, generated and seeded from code in this repository (`hmp`, `fixture-corp`,
 `operation-ledger`; ADR-035 §C5's "Generated output is owned outright"). `paysim` is shipped as a
 *download*: its data is third-party, CC-BY-SA-4.0, and is fetched by the person who wants it, never
 placed in an artefact (`06_DECISIONS.md` ADR-114 Amendment 1, which supersedes ADR-055 §3's
-`internal`). The one `internal` entry is the Enron corpus (ADR-053), real data admitted only through
-`scripts/real_data_exceptions.py`. The VAST-shaped fixture (§C4) is not built. This module keys off
+`internal`). An `internal` demo — real data admitted only through `scripts/real_data_exceptions.py`
+— is registered outside this repository, beside its own code, and never published with it
+(ADR-114 Amendment 2); the packaging and publishing gates judge an artefact against both lists. The
+VAST-shaped fixture (§C4) is not built. This module keys off
 the packaging grain, "which files does the build include or refuse"; `tools/demo_guide_check.py`'s
 own `DEMO_REGISTRY` keys off `DEMO_GUIDE.md`'s prose, a feature-level grain (ADR-034 §B10's
 "shares a shape, not an implementation"). Both name the same demos and are kept in sync by hand.
@@ -151,14 +153,6 @@ REGISTRY: tuple[DemoManifest, ...] = (
             'E. A. Lopez-Rojas, A. Elmir and S. Axelsson, "PaySim: A financial mobile money '
             'simulator for fraud detection", EMSS 2016 (Larnaca, Cyprus)'
         ),
-    ),
-    # ADR-053. REAL data, admitted for the owner's own machine only through the local exceptions
-    # list, never committed, never shipped. The path is a folder: the gate matches by prefix.
-    DemoManifest(
-        id="enron",
-        distribution=DISTRIBUTION_INTERNAL,
-        seed_module="scripts.seed_enron",
-        paths=("OspreyFlow_Data/Enron_Mails",),
     ),
 )
 

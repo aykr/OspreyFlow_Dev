@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from demo_fixtures import enron
+from internal_demos import enron
 from schemas.domain import Handling
 
 HANDLING = Handling(

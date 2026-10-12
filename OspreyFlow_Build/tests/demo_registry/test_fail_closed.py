@@ -44,16 +44,20 @@ def test_a_correctly_spelled_shipped_manifest_is_included() -> None:
 
 def test_the_real_registry_holds_exactly_the_datasets_it_is_known_to_hold() -> None:
     """Checked directly, not assumed. Four shipped demos (`hmp`, `fixture-corp`,
-    `operation-ledger`, and `paysim` as a download, ADR-114 Amendment 1) and one internal one, the
-    Enron corpus (ADR-053). Adding a dataset must change this test, so a registry entry can never
-    appear unnoticed."""
+    `operation-ledger`, and `paysim` as a download, ADR-114 Amendment 1) and no internal one: the
+    Enron corpus (ADR-053) is registered beside its code in the developer repository (ADR-114
+    Amendment 2), and the gates judge against both. Adding a dataset must change this test, so a
+    registry entry can never appear unnoticed."""
     assert {m.id for m in shipped_manifests(REGISTRY)} == {
         "hmp",
         "fixture-corp",
         "operation-ledger",
         "paysim",
     }
-    assert {m.id for m in internal_manifests(REGISTRY)} == {"enron"}
+    assert {m.id for m in internal_manifests(REGISTRY)} == set()
+    from internal_demos.registry import ALL
+
+    assert {m.id for m in internal_manifests(ALL)} == {"enron"}
 
 
 def test_a_misspelled_or_missing_delivery_is_not_seeded_and_its_data_is_refused() -> None:

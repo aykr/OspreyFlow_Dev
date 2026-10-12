@@ -84,9 +84,8 @@ import re
 import sys
 from pathlib import Path
 
-from tools.layout import BUILD
+from tools.layout import BUILD, rel
 from tools.layout import REPO as REPO_ROOT
-from tools.layout import rel
 
 TESTS_DIR = REPO_ROOT / "tests"
 CI_YML_PATH = REPO_ROOT / ".github" / "workflows" / "ci.yml"

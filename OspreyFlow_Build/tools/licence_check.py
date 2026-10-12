@@ -36,7 +36,8 @@ from tools.layout import REPO as REPO_ROOT
 
 sys.path.insert(0, str(CORE))
 
-from scripts.demo_registry import REGISTRY, DemoManifest  # noqa: E402
+from internal_demos.registry import ALL as REGISTRY  # noqa: E402
+from scripts.demo_registry import DemoManifest  # noqa: E402
 
 from tools.packaging_gate import check_license_and_notice  # noqa: E402
 

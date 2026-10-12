@@ -18,6 +18,15 @@ from pathlib import Path
 import pytest
 from scripts import seed_internal
 
+@pytest.fixture(autouse=True)
+def _enron_from_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The runner's real-data handling, exercised with the internal dataset the developer repository
+    adds to it (`internal_demos/seed.py`; ADR-114 Amendment 2) — the product's own table has none."""
+    from internal_demos.seed import ENRON
+
+    monkeypatch.setitem(seed_internal.DATASETS, "enron", ENRON)
+
+
 ADMIN = "osprey-demo-admin"
 ANALYST = "osprey-demo-analyst"
 SUBS = {ADMIN: "sub-admin-111", ANALYST: "sub-analyst-222"}
@@ -252,7 +261,7 @@ def test_enron_passes_the_hosts_attestations_and_its_own_case_name(repo: Path) -
     runner = Runner()
     _go(repo, runner, dataset="enron")
     call = _seed_call(runner)
-    assert call[call.index("-m") + 1] == "scripts.seed_enron"
+    assert call[call.index("-m") + 1] == "internal_demos.seed_enron"
     assert "--attested-permission" in call and "--attested-checkout" in call
     assert call[call.index("--case-name") + 1] == "Enron corpus (real data, this machine only)"
     assert f"{SUBS[ADMIN]}=author" in call and f"{SUBS[ANALYST]}=editor" in call
@@ -742,5 +751,5 @@ def test_replace_links_reaches_the_enron_seed_and_is_refused_for_any_other(repo:
     )
     call = _seed_call(runner)
     assert "--replace-links" in call and "--replace-events" in call
-    with pytest.raises(seed_internal.SeedRefused, match="Enron seed's alone"):
+    with pytest.raises(seed_internal.SeedRefused, match="--replace-links is not built for"):
         _with(repo, replace_links=True)

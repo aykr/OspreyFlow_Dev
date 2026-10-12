@@ -13,7 +13,7 @@ import pytest
 from ports.graph import BulkEdgeResult
 from scripts import seed_internal, seed_support
 
-from tests.test_seed_internal import SUBS, Runner, _seed_call
+from tests.test_seed_internal import SUBS, Runner, _enron_from_build, _seed_call  # noqa: F401 — autouse
 
 
 @pytest.fixture
@@ -200,7 +200,7 @@ def test_method_is_refused_for_a_dataset_that_cannot_take_it(repo: Path) -> None
     """Catches `--method bulk` on a seed that would ignore it, and so run slowly while saying it
     did not."""
     runner = Runner()
-    with pytest.raises(seed_internal.SeedRefused, match="only built for enron and paysim"):
+    with pytest.raises(seed_internal.SeedRefused, match="not built for hmp"):
         seed_internal.seed_internal(
             "hmp",
             repo,
@@ -474,7 +474,7 @@ def test_the_lookup_probe_runs_in_the_deployment_and_takes_its_sizes(
     assert seed_internal.main(["paysim", "--probe-lookup-cost", "--probe-sizes"]) == 2
 
 
-@pytest.mark.parametrize("module", ["scripts.seed_enron", "scripts.seed_paysim"])
+@pytest.mark.parametrize("module", ["internal_demos.seed_enron", "scripts.seed_paysim"])
 def test_run_directly_the_enron_and_paysim_seeds_default_to_bulk(module: str) -> None:
     """A direct run of either script defaults as `seed_internal` does, so it is not slower."""
     import importlib
