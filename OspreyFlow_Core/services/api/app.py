@@ -152,6 +152,8 @@ from schemas.domain import (
     AlertDispositionInput,
     AlertExplanation,
     Assumption,
+    Connections,
+    ConnectionsRequest,
     Edge,
     EdgeWrite,
     ExpandRequest,
@@ -249,6 +251,7 @@ from schemas.trends import (
 
 from . import alert_queue
 from . import compute_routes as compute_routes_module
+from . import connections as connections_module
 from . import dossier as dossier_module
 from . import kyc as kyc_module
 from . import ownership as ownership_module
@@ -5333,6 +5336,35 @@ async def paths_route(
         action="paths",
         resolved_query=req.model_dump(mode="json"),
         result_cardinality=len(found),
+    )
+    return found
+
+
+# --- Find connections (ADR-116) ----------------------------------------------
+#
+# Under the case, as the pathfinder is: the case's datasets bound what is walked (ADR-099), and the
+# graph store filters each step for the reader (rule 3). No preview: at most ten routes come back
+# for a degree, and more than that is said, not hidden (rule 2).
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/connections",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def connections_route(
+    investigation: InvestigationViewerDep,
+    req: ConnectionsRequest,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    audit: AuditDep,
+) -> Connections:
+    found = await connections_module.find_connections(graph, req, principal)
+    await audit.record(
+        principal=principal,
+        action="connections",
+        investigation_id=investigation.id,
+        resolved_query=req.model_dump(mode="json"),
+        result_cardinality=len(found.paths),
     )
     return found
 

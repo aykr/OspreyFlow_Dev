@@ -171,6 +171,7 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("PATCH", P + "/ingest/recipes/{recipe_id}/schedule"): E,
     ("POST", P + "/ingest/recipes/{recipe_id}/versions"): E,
     ("POST", P + "/paths"): V,
+    ("POST", P + "/connections"): V,
     ("POST", P + "/nodes/{node_id}/confirm"): E,
     ("POST", P + "/nodes/{node_id}/retract"): E,
     ("POST", P + "/nodes/{node_id}/suppression-mark"): E,

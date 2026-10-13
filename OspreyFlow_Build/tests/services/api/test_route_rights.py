@@ -76,7 +76,7 @@ ROUTE_RIGHTS = {
  "submit_export_route": "export", "list_exports_route": "read_export_ledger",
  "create_monitor_route": "keep_watches", "list_monitors_route": "keep_watches",
  "list_alerts_route": "keep_watches", "get_alert_route": "keep_watches", "jump_alert_route": "keep_watches",
- "paths_route": "investigate", "resolve_now_route": "resolve_entities",
+ "paths_route": "investigate", "connections_route": "investigate", "resolve_now_route": "resolve_entities",
  "readiness_route": None, "liveness_route": None, "get_ontology_route": None,
  "get_map_providers_route": None, "get_map_tile_route": None, "get_map_local_source_route": None,
  "build_basemap_route": "manage_geospatial", "verify_map_route": "manage_geospatial",
