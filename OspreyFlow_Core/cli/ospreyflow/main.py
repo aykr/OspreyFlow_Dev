@@ -27,6 +27,7 @@ import yaml
 
 from . import demo
 from .answers import MODES, Answers, AnswersRefused, load_answers, osprey_config
+from .cloud import build_small
 from .doctor import Check, Probes, SystemProbes, format_check, run_doctor
 from .home import (
     CommandRefused,
@@ -168,6 +169,14 @@ def _parser() -> argparse.ArgumentParser:
     install.add_argument(
         "--build", action="store_true", help="build from this checkout even on a release tag"
     )
+    install.add_argument(
+        "--cloud", choices=("aws", "azure"),
+        help="small: build the server on this cloud with OpenTofu, from this machine",
+    )  # fmt: skip
+    install.add_argument(
+        "--first-admin-code-file", type=Path,
+        help="small, on the server: where the first boot collects the first administrator's code",
+    )  # fmt: skip
 
     start = verbs.add_parser("start", help="bring the deployment up")
     start.add_argument("--build", action="store_true", help="rebuild from the checkout first")
@@ -323,12 +332,28 @@ def _gui(ctx: _Context) -> int:
 def _install(args: argparse.Namespace, ctx: _Context) -> int:
     if args.gui:
         return _gui(ctx)
-    if not _print_checks(run_doctor(args.mode, ctx.probes, product=ctx.product)):
-        print("Nothing was installed. Fix the above and run ospreyflow install again.")
-        return 1
     packs = demo.pack_ids(ctx.product, ctx.capture)
     raw = _raw_answers(args, ctx, packs)
     answers = load_answers(raw, packs=packs)
+    # ADR-114 Amendment 10 point 1: Small is built from the operator's machine (`--cloud`), and
+    # installed on the server by its first boot, whose answers name the managed services.
+    on_server = args.mode == "small" and not args.cloud and bool(answers.external)
+    if args.mode == "small" and not args.cloud and not on_server:
+        raise CommandRefused(
+            "small runs on a cloud server: give --cloud aws or --cloud azure here to build it, or "
+            "run this on the server with the answers its first boot wrote (they name its managed "
+            "services)"
+        )
+    # The server runs the stack as Lite does, so it needs what Lite needs (Docker and its ports).
+    doctor_mode = "lite" if on_server else args.mode
+    checks = run_doctor(doctor_mode, ctx.probes, product=ctx.product, cloud=args.cloud)
+    if not _print_checks(checks):
+        print("Nothing was installed. Fix the above and run ospreyflow install again.")
+        return 1
+    if args.mode == "small" and args.cloud:
+        return build_small(ctx, args, answers)
+    if on_server:
+        return _install_on_server(ctx, args, answers)
 
     if args.mode != "lite":
         target = ctx.product / "install.yaml"
@@ -340,19 +365,7 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
         return 0
 
     _write_config(ctx, answers, args.force)
-    release = None if args.build else _release_at_head(ctx)
-    if release is not None:
-        # ADR-114 Amendment 8 point 10: a release's signed images, verified before anything starts.
-        (ctx.product / ".install").mkdir(exist_ok=True)
-        lock = ctx.product / ".install" / "release.lock"
-        ctx.step(
-            "verify the release's images",
-            [*ctx.python, "-m", "harness.update", "--deployment", str(ctx.deployment),
-             "--verify-install", release, "--lock-out", str(lock)],
-        )  # fmt: skip
-        apply = [*ctx.python, "-m", "harness.apply", "--images-from", str(lock)]
-    else:
-        apply = [*ctx.python, "-m", "harness.apply", "--build"]
+    apply = _apply_argv(ctx, args)
     if not args.no_demo_accounts:
         apply.append("--demo-analyst")
     ctx.step("build and start the deployment", apply)
@@ -366,6 +379,38 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
     print(f"OspreyFlow is installed. Open it at {public_origin(ctx.product)}")
     print(f"Sign in with the accounts in {ctx.deployment / 'deployment.env'}")
     print("Look after it with: ospreyflow status, ospreyflow open")
+    return 0
+
+
+def _apply_argv(ctx: _Context, args: argparse.Namespace) -> list[str]:
+    release = None if args.build else _release_at_head(ctx)
+    if release is None:
+        return [*ctx.python, "-m", "harness.apply", "--build"]
+    # ADR-114 Amendment 8 point 10: a release's signed images, verified before anything starts.
+    (ctx.product / ".install").mkdir(exist_ok=True)
+    lock = ctx.product / ".install" / "release.lock"
+    ctx.step(
+        "verify the release's images",
+        [*ctx.python, "-m", "harness.update", "--deployment", str(ctx.deployment),
+         "--verify-install", release, "--lock-out", str(lock)],
+    )  # fmt: skip
+    return [*ctx.python, "-m", "harness.apply", "--images-from", str(lock)]
+
+
+def _install_on_server(ctx: _Context, args: argparse.Namespace, answers: Answers) -> int:
+    """A Small server's install, run by its first boot (ADR-114 Amendment 10 points 1 and 4): onto
+    the managed services, with no demo accounts — its first administrator signs in by a one-time
+    code, which goes to `--first-admin-code-file` for the first boot to hand to the secret store."""
+    _write_config(ctx, answers, args.force)
+    ctx.step("build and start the deployment", _apply_argv(ctx, args))
+    admin = [*ctx.python, "-m", "harness.first_admin", "--deployment", str(ctx.deployment)]
+    if answers.cloud.get("admin_email"):
+        admin += ["--email", answers.cloud["admin_email"]]
+    if args.first_admin_code_file is not None:
+        admin += ["--code-file", str(args.first_admin_code_file)]
+    ctx.step("make the first administrator", admin)
+    print()
+    print(f"OspreyFlow is installed. It answers at {public_origin(ctx.product)}")
     return 0
 
 

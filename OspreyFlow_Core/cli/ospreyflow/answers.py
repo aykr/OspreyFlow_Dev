@@ -19,10 +19,14 @@ a person at the prompts and CI install the same way.
       from: osprey@example.org
       starttls: true
       username: osprey-mailer      #   leave out for a relay that takes mail without signing in
-    cloud:                         # small and enterprise only; used from stages B6 and B7
+    cloud:                         # small and enterprise only
       provider: aws                # aws | azure
       region: eu-west-2
       domain: osprey.example.org
+      dns_zone: example.org        # optional: the Route 53 / Azure DNS zone to add the record to
+      admin_email: ops@example.org # optional: the first administrator's email
+    external:                      # written by OpenTofu for the server's first boot: the managed
+      postgres: {host: …}          #   services (`05_DEPLOYMENT.md` §3a), copied into osprey.yaml
     config: ./osprey.yaml          # instead of the sections above: use this osprey.yaml as it is
 
 Unknown keys are refused by name, as `osprey.yaml`'s are, so a typo never silently means the
@@ -49,13 +53,13 @@ PROFILES = {"lite": "local-lite", "small": "small", "enterprise": "cluster"}
 
 _TOP = {
     "mode", "components", "folders", "models", "demo_packs", "paysim_file", "cloud", "config",
-    "mail",
+    "mail", "external",
 }  # fmt: skip
 _SECTIONS = {
     "components": {"dashboards"},
     "folders": {"ingest", "tiles"},
     "models": {"local_only"},
-    "cloud": {"provider", "region", "domain", "size"},
+    "cloud": {"provider", "region", "domain", "size", "dns_zone", "admin_email"},
     "mail": {"host", "port", "from", "starttls", "username"},
 }
 #: The sections a named `config:` replaces; giving both is refused rather than one silently winning.
@@ -78,6 +82,8 @@ class Answers:
     cloud: dict[str, str] = field(default_factory=dict)
     config: Path | None = None
     mail: dict[str, Any] = field(default_factory=dict)
+    #: The managed services a cloud server runs on (05 §3a); checked by the deployment's schema.
+    external: dict[str, Any] = field(default_factory=dict)
 
 
 def _known(where: str, raw: Mapping[str, Any], allowed: set[str]) -> None:
@@ -143,6 +149,15 @@ def load_answers(
             f"cloud provider is one of {', '.join(CLOUDS)}, not {cloud.get('provider')!r}"
         )
 
+    external = raw.get("external") or {}
+    if not isinstance(external, Mapping):
+        raise AnswersRefused(f"external holds settings, not {external!r}")
+    if mode == "lite" and external:
+        raise AnswersRefused(
+            "external services are for the small and enterprise modes, which run on a cloud's "
+            "managed services; lite runs its own"
+        )
+
     offered = tuple(packs)
     chosen = tuple(str(p) for p in raw.get("demo_packs") or ())
     for pack in chosen:
@@ -176,6 +191,7 @@ def load_answers(
         cloud=cloud,
         config=_host_path("config", config, home) if config is not None else None,
         mail=dict(sections["mail"]),
+        external=copy.deepcopy(dict(external)),
     )
 
 
@@ -202,6 +218,8 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
             "starttls": answers.mail.get("starttls", True),
             "username": answers.mail.get("username"),
         }
+    if answers.external:
+        config["external"] = copy.deepcopy(answers.external)
     # ADR-114 Amendment 4: every address derives from this one. Lite answers on this machine by
     # name; a cloud install at the client's own domain, over HTTPS.
     network = config.setdefault("network", {})

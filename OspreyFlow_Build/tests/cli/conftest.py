@@ -106,11 +106,19 @@ class Rig:
     capture_envs: list[Mapping[str, str] | None] = field(default_factory=list)
     #: What `git tag --points-at HEAD` says of the checkout (ADR-114 Amendment 8 point 10).
     tags_at_head: str = ""
+    #: Answers for captured commands, by a word in their argv: each answer is used once, in turn,
+    #: and the last stays (`tofu output`, the secret store asked until the code is there).
+    responses: dict[str, list[tuple[int, str]]] = field(default_factory=dict)
+    captured: list[list[str]] = field(default_factory=list)
 
     def capture(
         self, argv: Sequence[str], *, env: Mapping[str, str] | None = None, cwd: Path | None = None
     ) -> tuple[int, str]:
         self.capture_envs.append(env)
+        self.captured.append(list(argv))
+        for word, queued in self.responses.items():
+            if word in argv:
+                return queued.pop(0) if len(queued) > 1 else queued[0]
         if "--ids" in argv:
             return 0, PACKS_OUTPUT
         if "--points-at" in argv:

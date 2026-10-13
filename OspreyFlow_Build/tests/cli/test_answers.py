@@ -137,3 +137,19 @@ def test_the_answers_carry_a_mail_server_without_its_password(tmp_path: Path) ->
     assert _config(raw, tmp_path).mail.from_address == "osprey@example.org"  # type: ignore[union-attr]
     with pytest.raises(AnswersRefused, match="password"):
         load_answers({**raw, "mail": {**raw["mail"], "password": "x"}}, packs=PACKS, home=tmp_path)  # type: ignore[dict-item]
+
+
+def test_a_servers_managed_services_reach_osprey_yaml_and_validate(tmp_path: Path) -> None:
+    """ADR-114 Amendment 10 point 1: the answers OpenTofu writes for the first boot name the managed
+    services; they reach `osprey.yaml` as `external:`, which the deployment's schema checks."""
+    external = {"postgres": {"host": "osprey-db.postgres.database.azure.com"},
+                "media": {"blob_account": "ospreymedia1a2b"}}  # fmt: skip
+    config = _config({"mode": "small", "external": external,
+                      "cloud": {"provider": "azure", "domain": "osprey.example.org",
+                                "dns_zone": "example.org", "admin_email": "ops@example.org"}},
+                     tmp_path)  # fmt: skip
+    assert config.external.postgres is not None
+    assert config.external.postgres.host == "osprey-db.postgres.database.azure.com"
+    assert config.external.media is not None and config.external.media.blob_account == "ospreymedia1a2b"
+    with pytest.raises(AnswersRefused, match="external"):
+        load_answers({"mode": "lite", "external": external}, packs=PACKS, home=tmp_path)
