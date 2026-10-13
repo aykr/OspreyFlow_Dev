@@ -52,3 +52,30 @@ describe("ThemeToggle", () => {
     expect(screen.getByRole("button", { name: "Switch to the dark theme" }).textContent).toContain("Dark");
   });
 });
+
+// ADR-115 Amendment 1: in the top bar the switch is an icon of its own; its name still says which
+// theme a press switches to, for a screen reader and as a tooltip.
+describe("ThemeToggle as the bar's icon", () => {
+  it("is an icon button named for the theme it switches to", () => {
+    render(<ThemeToggle variant="icon" />);
+    const button = screen.getByRole("button", { name: "Switch to the light theme" });
+    expect(button.classList.contains("icon-btn")).toBe(true);
+    expect(button.getAttribute("title")).toBe("Switch to the light theme");
+    expect(button.textContent?.trim()).toBe("☀");
+    fireEvent.click(button);
+    expect(currentTheme()).toBe("light");
+    expect(screen.getByRole("button", { name: "Switch to the dark theme" }).textContent?.trim()).toBe("☾");
+  });
+});
+
+describe("the bars carry the theme icon", () => {
+  it("TopBar and StartBar each hold it beside the account", async () => {
+    const { TopBar } = await import("../shell/TopBar");
+    const { StartBar } = await import("../shell/StartPage");
+    render(<TopBar app="glass" account={<span>account</span>} />);
+    expect(screen.getByRole("button", { name: "Switch to the light theme" })).toBeTruthy();
+    cleanup();
+    render(<StartBar account={<span>account</span>} marking={null} />);
+    expect(screen.getByRole("button", { name: "Switch to the light theme" })).toBeTruthy();
+  });
+});

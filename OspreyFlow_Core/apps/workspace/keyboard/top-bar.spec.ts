@@ -80,38 +80,33 @@ test("with the keyboard: tabbing out of an open menu closes it, and the account 
 
   await page.getByRole("button", { name: /osprey-demo-analyst/ }).focus();
   await page.keyboard.press("Enter");
-  // The theme (ADR-097 step 3), then Sign out.
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Switch to the light theme" })).toBeFocused();
+  // ADR-115 Amendment 1: the theme is an icon in the bar now, so the menu goes straight to Sign out.
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Sign out" })).toBeFocused();
   await page.keyboard.press("Enter");
   expect(await page.evaluate(() => window.__TOPBAR__?.signedOut)).toBe(true);
 });
 
-test("with the keyboard: the theme is switched from the account menu, and the page changes (ADR-097 step 3)", async ({ page }) => {
+test("with the keyboard: the theme is switched from its icon in the bar, and the page changes (ADR-115 Amendment 1)", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
   const before = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  // No theme button of its own in the bar: it is in the account menu.
-  await expect(page.locator("header.app-header > button[title^='Switch to the']")).toHaveCount(0);
-  const account = page.getByRole("button", { name: /osprey-demo-analyst/ });
-  await account.focus();
-  await page.keyboard.press("Enter");
   const theme = page.getByRole("button", { name: "Switch to the light theme" });
+  // In the bar, just before the account, and not in the account menu.
+  const account = page.getByRole("button", { name: /osprey-demo-analyst/ });
+  await theme.focus();
   await page.keyboard.press("Tab");
-  await expect(theme).toBeFocused();
-  await expect(theme).toContainText("Light");
+  await expect(account).toBeFocused();
+  await account.press("Enter");
+  await expect(page.getByRole("menu").or(page.getByRole("group")).getByRole("button", { name: /Switch to the/ })).toHaveCount(0);
+  await account.press("Escape");
+  await theme.focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   const after = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   expect(after).not.toBe(before);
-  // And back, from the menu again.
-  if ((await account.getAttribute("aria-expanded")) !== "true") {
-    await account.focus();
-    await page.keyboard.press("Enter");
-  }
+  // The same icon, now offering dark, keeps focus and switches back.
   const back = page.getByRole("button", { name: "Switch to the dark theme" });
-  await back.focus();
+  await expect(back).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   // The bar is still one line.

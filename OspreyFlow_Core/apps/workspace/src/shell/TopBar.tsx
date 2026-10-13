@@ -2,6 +2,7 @@
 // view switch, then what acts on the whole case, and the account at the right. The places the
 // analyst goes to (cases, watches, history, proposed types, the Ingest Studio) are on the left rail,
 // and what belongs to one view is on that view's own toolbar.
+import { ThemeToggle } from "../theme/ThemeToggle";
 import type { ReactNode } from "react";
 
 import { BrandMark } from "./BrandMark";
@@ -55,6 +56,8 @@ export function TopBar({ app, caseSwitcher, search, views = [], actions, account
       )}
       {actions}
       <div className="app-header__account" style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
+        {/* ADR-115 Amendment 1: the theme, an icon of its own, just before the account. */}
+        <ThemeToggle variant="icon" />
         {account}
       </div>
     </header>

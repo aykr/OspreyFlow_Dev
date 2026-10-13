@@ -1,5 +1,4 @@
 import { DropdownPanel } from "../design/primitives/DropdownPanel";
-import { ThemeToggle } from "../theme/ThemeToggle";
 import type { DisplayPrincipal } from "./userManager";
 
 export interface AccountMenuProps {
@@ -42,8 +41,6 @@ export function AccountMenu({ principal, onSignOut }: AccountMenuProps) {
             </div>
           )}
           <hr className="menu-panel__rule" />
-          {/* ADR-097 step 3: the theme is the account's preference, so it is here, not in the bar. */}
-          <ThemeToggle className="menu-panel__item" />
           <button
             type="button"
             className="menu-panel__item"

@@ -65,15 +65,12 @@ describe("displayPrincipalFromUser", () => {
   });
 });
 
-// ADR-097 step 3: the theme lives in the account menu, not as a button of its own in the bar.
+// ADR-115 Amendment 1: the theme is an icon in the bar, so the account menu no longer holds it.
 describe("AccountMenu and the theme", () => {
-  it("offers the other theme, and switching to it changes the page's theme", async () => {
-    const { applyTheme, currentTheme } = await import("../theme/theme");
-    applyTheme("dark");
+  it("no longer offers the theme", () => {
     render(<AccountMenu principal={PRINCIPAL} onSignOut={() => undefined} />);
     fireEvent.click(screen.getByRole("button", { name: /osprey-demo-analyst/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Switch to the light theme" }));
-    expect(currentTheme()).toBe("light");
-    applyTheme("dark");
+    expect(screen.queryByRole("button", { name: /Switch to the/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 });

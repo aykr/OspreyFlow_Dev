@@ -39,7 +39,6 @@ import {
   type CrossFilterStoreState,
 } from "./crossfilter/store";
 import { AccountMenu } from "./auth/AccountMenu";
-import { ThemeToggle } from "./theme/ThemeToggle";
 import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
 import { LeftRail } from "./shell/LeftRail";
 import { Drawer } from "./design/primitives/Drawer";
@@ -1006,7 +1005,7 @@ export function App() {
   }
 
   const account =
-    !isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : <ThemeToggle />;
+    !isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : null;
   const startScreenShown =
     isDevBypass || bearerToken
       ? startScreen({
@@ -1133,8 +1132,6 @@ export function App() {
         }
         account={
           <>
-            {/* ADR-097 step 3: the theme is in the account menu; a button of its own only without one. */}
-            {(isDevBypass || !principal) && <ThemeToggle />}
             {!isDevBypass && principal && (
               // `06_DECISIONS.md` ADR-050: the principal's identity and clearance are shown in the
               // chrome, informationally only. ADR-065 folds the subject, unit and Sign out behind one
