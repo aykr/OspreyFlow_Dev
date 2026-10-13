@@ -12529,11 +12529,24 @@ Amendment 6 point 1 settled the policy; these are the mechanics it leaves open, 
 8. **`release.yml` is the owner's file.** The signing steps (`id-token: write`, cosign-installer,
    `cosign sign --yes` per pushed digest), the changelog check, the notes and the `versions.lock`
    asset are written as a change for the owner to apply (`process/B5_release_workflow.md`).
+6a. **A release moves the checkout, not only the images** (added in building B5c): a release can
+   change configuration as well as images — a new service, a new launch option, a third-party
+   version — so swapping images alone would leave a deployment half on each. A release install is
+   a checkout of the user repository at a tag, so `update` checks out the target tag (refused, before
+   anything is backed up, if the checkout has changes of its own), brings the deployment's files up
+   to date with refresh's existing steps (which never touch a secret), and then pins every image by
+   the digest in the target's lock (`repository@digest`, stronger than a tag). The rollback point
+   therefore includes the commit the checkout was on and every file in the deployment's folder that
+   `update` may write. **`--from` (a bundle for a deployment without GitHub) is stage B5d**, after
+   the online path is proved: the bundle must then carry the tag's source, the images and their
+   signatures.
 9. **What can be proved before a real release, and how:** everything but the keyless identity is
    proved against real tools — a throwaway local registry, images signed with a throwaway cosign
    key (the verifier's key/identity is the one seam a test sets), a real `update` and a real rollback
-   of a throwaway deployment. The keyless check itself is proved only by the first real release; until
-   then it is a disclosed gap, not a claim.
+   of a throwaway deployment. **The throwaway key's signatures are never uploaded** to Sigstore's
+   public transparency log (`--tlog-upload=false`; verified with the log check off for that key
+   only): a test must publish nothing. The keyless check itself is proved only by the first real
+   release; until then it is a disclosed gap, not a claim.
 
 ## ADR-115 — The design handoff: the welcome page, Home and the Glass to `DESIGN.md` v0.2 — ACCEPTED (design)
 
