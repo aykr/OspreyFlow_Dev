@@ -210,6 +210,8 @@ from schemas.ingest import (
     PublishRecipeInput,
     RowTemplateUpdateInput,
     RunRecipeInput,
+    SchedulePreview,
+    SchedulePreviewInput,
     ScheduleUpdateInput,
     StudioRecipeDraft,
     StudioRecipeStatus,
@@ -508,6 +510,7 @@ from .scheduler import (
     ScheduleRefused,
     describe,
     next_slot,
+    next_slots,
     run_every_minute,
     validate_schedule,
 )
@@ -6909,6 +6912,87 @@ async def update_studio_recipe_schedule(
         result_cardinality=1,
     )
     return updated
+
+
+@app.post(
+    "/v1/ingest/schedule-preview",
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+)
+async def schedule_preview_route(body: SchedulePreviewInput) -> SchedulePreview:
+    """ADR-110 decision 7: a schedule in words and its next five runs, before it is saved — the
+    executor's own arithmetic, so the editor never promises what the executor would not keep. A
+    schedule it could not keep is refused in words (rule 2)."""
+    zone = body.timezone or DEFAULT_TIMEZONE
+    validate_schedule(body.cron, zone)
+    after = body.after or datetime.now(UTC)
+    return SchedulePreview(
+        words=describe(body.cron, zone), next_runs=next_slots(body.cron, zone, after=after)
+    )
+
+
+async def _set_recipe_schedule_paused(
+    recipe: StudioRecipeDraft,
+    principal: Principal,
+    studio_recipes: StudioRecipeStore,
+    audit: AuditWriter,
+    *,
+    paused: bool,
+) -> StudioRecipeDraft:
+    await studio_recipes.set_paused(
+        recipe.recipe_id, paused=paused, reason=f"paused by {principal.id}" if paused else None
+    )
+    await audit.record(principal=principal,
+                       action="pause_recipe_schedule" if paused else "resume_recipe_schedule",
+                       resolved_query={"recipe_id": recipe.recipe_id}, result_cardinality=1)  # fmt: skip
+    return await studio_recipes.get(recipe.recipe_id)
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule/pause",
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+)
+async def pause_recipe_schedule(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+) -> StudioRecipeDraft:
+    """ADR-110 decision 7: *Pause* in the Studio, by the source approver; *Resume* below."""
+    return await _set_recipe_schedule_paused(recipe, principal, studio_recipes, audit, paused=True)
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule/resume",
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+)
+async def resume_recipe_schedule(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+) -> StudioRecipeDraft:
+    return await _set_recipe_schedule_paused(recipe, principal, studio_recipes, audit, paused=False)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/runs",
+    dependencies=[Depends(require_right(Right.READ_DATA_FEEDS))],
+)
+async def recipe_runs_route(
+    investigation: InvestigationViewerDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    recipe_runs: RecipeRunsDep,
+    handling_scheme: HandlingSchemeDep,
+) -> list[ScheduleRunView]:
+    """ADR-110 decisions 6 and 7: the recipe's runs beneath its schedule, newest first — counts
+    withheld where the reader may not view the source (rule 3)."""
+    return [
+        _schedule_run_view(run, principal, handling_scheme)
+        for run in await recipe_runs.for_recipe(recipe.recipe_id)
+    ]
 
 
 @app.post(

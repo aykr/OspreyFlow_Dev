@@ -103,6 +103,19 @@ def next_slot(cron: str, timezone: str, *, after: datetime) -> datetime:
     return croniter(cron, after.astimezone(zone)).get_next(datetime).astimezone(UTC)  # type: ignore[no-any-return]
 
 
+def next_slots(cron: str, timezone: str, *, after: datetime, count: int = 5) -> list[datetime]:
+    """The next `count` slots after `after`, as the executor will keep them (October's repeated
+    wall-clock time once), in UTC — what the Studio shows before a schedule is saved."""
+    slots: list[datetime] = []
+    window = timedelta(days=8)
+    start = after
+    while len(slots) < count:
+        found = due_slots(cron, timezone, after=start, until=start + window)
+        slots.extend(found)
+        start = found[-1] if found else start + window
+    return slots[:count]
+
+
 def describe(cron: str, timezone: str) -> str:
     """The schedule in words (decision 7), for the common shapes; otherwise the expression."""
     minute, hour, day, month, weekday = cron.split()

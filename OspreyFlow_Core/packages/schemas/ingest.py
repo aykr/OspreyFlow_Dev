@@ -646,6 +646,22 @@ class ScheduleUpdateInput(BaseModel):
     schedule_timezone: str | None = None
 
 
+class SchedulePreviewInput(BaseModel):
+    """Body of `POST /v1/ingest/schedule-preview` (ADR-110 decision 7): a schedule to explain
+    before it is saved. `after` defaults to now."""
+
+    cron: str
+    timezone: str | None = None
+    after: datetime | None = None
+
+
+class SchedulePreview(BaseModel):
+    """The schedule in words and its next five runs, in UTC."""
+
+    words: str
+    next_runs: list[datetime]
+
+
 class RunRecipeInput(BaseModel):
     """Body of `POST /v1/investigations/{id}/ingest/recipes/{id}/run` —
     §8: "Loader: run a published recipe against a file", not necessarily
@@ -895,6 +911,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     ScheduleConfig,
     PublishRecipeInput,
     ScheduleUpdateInput,
+    SchedulePreviewInput,
+    SchedulePreview,
     RunRecipeInput,
     Recipe,
     RejectionRecord,

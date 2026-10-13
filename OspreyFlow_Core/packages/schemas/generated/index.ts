@@ -116,6 +116,8 @@ export type { MapHandlingPreviewResult } from "./MapHandlingPreviewResult";
 export type { ScheduleConfig } from "./ScheduleConfig";
 export type { PublishRecipeInput } from "./PublishRecipeInput";
 export type { ScheduleUpdateInput } from "./ScheduleUpdateInput";
+export type { SchedulePreviewInput } from "./SchedulePreviewInput";
+export type { SchedulePreview } from "./SchedulePreview";
 export type { RunRecipeInput } from "./RunRecipeInput";
 export type { Recipe } from "./Recipe";
 export type { RejectionRecord } from "./RejectionRecord";
