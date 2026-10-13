@@ -224,7 +224,8 @@ class ScheduleExecutor:
             await self._not_run(
                 recipe, latest, "refused", str(refused), counts=refused.about_the_owner
             )
-            if refused.about_the_owner and await self.runs.refusals_in_a_row(recipe.recipe_id) >= REFUSALS_BEFORE_PAUSE:
+            in_a_row = await self.runs.refusals_in_a_row(recipe.recipe_id)
+            if refused.about_the_owner and in_a_row >= REFUSALS_BEFORE_PAUSE:
                 await self.recipes.set_paused(
                     recipe.recipe_id,
                     paused=True,
