@@ -11330,6 +11330,25 @@ Ideally this should be more integrated into the system." **Decided (design):**
   and versions — what the harness's preflight shows, for a running deployment).
 - Spec 05's "becomes the deployment's admin console at `/admin`" is corrected to this.
 
+### ADR-110, Amendment 2 (13 October 2026) — reconciled with ADR-112's rights and ADR-114's command
+
+Recorded from the plan the owner approved (`process/HANDOVER_2026-10-11.md`, Phase D stage D0)
+before any of ADR-110 is built. It makes no new decision; it carries three later accepted ones into
+this record, so the build does not follow the superseded wording.
+
+1. **Decision 8's screen is the Admin area's *Schedules and runs*** (Amendment 1), not the harness,
+   which ADR-114 removed. Its routes, `/v1/admin/schedules`, are gated by ADR-112's
+   **`operate_schedules`** right (A4), not by `require_admin_role`; the `osprey-harness` client and
+   its Conduit audience (decision 8's last sentence) no longer exist, so nothing is added to them.
+2. **"Source approver" in decisions 3 and 7 is ADR-112's `schedule_pipelines` right** (D5), held by
+   the *Source approver* role and by Admin. The *schedule owner* is the person holding
+   `schedule_pipelines` who last set the schedule; a run is refused when that person no longer holds
+   it, as well as for decision 3's reasons.
+3. **The executor is safe across Conduit replicas** (ADR-114 decision 9): decision 2's Valkey claim
+   per `(recipe, slot)` and per-recipe lock are what make it so, and its tests include two executors
+   against one Valkey and one ledger — the named "one claim across two replicas" case, run as two
+   processes rather than two objects.
+
 
 ## ADR-111 — The Reports view and a read-only reporting feed for business dashboards — ACCEPTED
 
