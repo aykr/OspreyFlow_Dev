@@ -11350,6 +11350,18 @@ this record, so the build does not follow the superseded wording.
    processes rather than two objects.
 
 
+### ADR-110, Amendment 3 (13 October 2026) — owner rulings after the build
+
+1. **Decision 10's notice** is an alert in the schedule owner's own inbox, with no typology (so it never
+   enters the case team's queue), and **the personal alert view gains the alert's words** so it can be
+   read there.
+2. **The Admin area's *Run now* and *Change schedule* act as the schedule's owner**, with every check
+   the executor makes on the owner; a changed schedule keeps its owner; the administrator is named in
+   the audit as who asked.
+3. **An unreachable identity provider does not count toward the three refusals that pause a
+   schedule.** It is still recorded *refused*, in words; only refusals about the owner count.
+4. **The 15-minute floor stands**: a schedule more often than every 15 minutes is refused.
+
 ## ADR-111 — The Reports view and a read-only reporting feed for business dashboards — ACCEPTED
 
 Status: **ACCEPTED by the owner, 11 October 2026**: build both — a *Reports* view in the Glass
@@ -12387,6 +12399,35 @@ planted faults, each red: no window fill, Sunday weeks, months bucketed as weeks
 the window dropped, the empty row omitted from the print, and the chart's stacks, the chart's
 totals and the print's rows each matched on the raw timestamp.
 
+### ADR-114, Amendment 6 (13 October 2026) — owner rulings for stages B5–B8
+
+The owner's answers to the questions the overnight run of 12–13 October recorded (`process/
+07_BUILD_PLAN.md`, the 13 October rows), each the recommended option:
+
+1. **Releases (B5, decision 13).** A Lite install from a release **pulls the signed images by digest**
+   and checks their signatures; a developer checkout keeps building from source. Images are signed
+   **keyless** — through GitHub's OIDC in `release.yml`, verified against that workflow's identity — so no
+   private key is held. `ospreyflow update` looks at **the user repository's GitHub releases** at the
+   address `install.sh` cloned from, and `update --from <bundle>` serves a deployment that cannot reach
+   GitHub. A failed update **restores both** the previous release's images and the backup taken just
+   before it. Admin → System learns of an update from a file **`ospreyflow update --check` writes**,
+   which the Conduit reads: the deployment itself never calls out. Versions are **`vMAJOR.MINOR.PATCH`**
+   tags; until the first, the short commit is shown.
+2. **Small on Azure (B6, decision 8).** One plain VM: **Azure's service healing plus Docker's restart
+   policy** are its recovery — a single VM has no automatic repair, only a scale set does, and
+   decision 8's "VM auto-repair" is read as this. The database takes a password, so **the OpenTofu state
+   is kept as a secret**, in the client's own encrypted, access-restricted storage, which the install
+   says; the password is also in Key Vault for the server.
+3. **The three background workers (B7, decision 9)** are the processes that already run apart from
+   the Conduit: **the job worker** (`services/api/worker_main.py`), **report-sync** and **the ingest
+   service**. Extraction, resolution and compute stay libraries the job worker calls.
+4. **A client's own model provider (B8, decision 11)** **replaces the local model for the roles named**,
+   subject to the sendable handling codes; a request above them **runs on the local model where the
+   deployment has one, and is refused in words where it does not** — never sent. Admin → System shows
+   each role's model, where it runs, and that case content leaves the deployment. The codes are enforced
+   in the model path with B8 (they are enforced nowhere today), with a test that a request above them is
+   not sent.
+
 ## ADR-115 — The design handoff: the welcome page, Home and the Glass to `DESIGN.md` v0.2 — ACCEPTED (design)
 
 Status: **accepted on the owner's rulings of 12 October 2026; design only, nothing built.** The
@@ -12463,3 +12504,19 @@ its message; the Keycloak page's submit is the region's one brass action, since 
 lives on the welcome page; with no organisation provider the card's one button is *Sign in* and its
 note says the password is entered "only on the OspreyFlow sign-in page, never here" (the handoff's
 note names an organisation's page, which would then be untrue).
+
+### ADR-115, Amendment 1 (13 October 2026) — owner rulings on the seven E4 questions
+
+The design reference conflicted with accepted decisions in seven places (`process/HANDOVER_2026-10-11.md`,
+Phase E row E4). The owner ruled:
+
+1. **The right panel stays a stack** (ADR-097 conflict 1 stands): no Inspector / Query / Case tabs.
+2. **No Timeline view tab, and the Match strictness row stays visible** (ADR-097 Amendment 1 stands).
+3. **`Enter` keeps spec 02's meaning**: it expands the focused node, or opens a Document in the reader.
+4. **The theme switch moves to an icon in the top bar**, as the reference has it — amending ADR-097
+   step 3 and the review's item 15, which kept it in the account menu.
+5. **A case shows a mono scope badge** beside its name, as the reference has it. Cases carry no scope
+   today, so what a scope is (and its values) is decided before it is built.
+6. **Nodes are drawn at radius 7 (14px) with a 24×24 hit area** (`DESIGN.md` v0.3 §5a), amending ADR-097
+   step 2's 20px node; the in-node icons are dropped, since at that size they cannot be read — the type
+   is carried by colour, the legend and the label.
