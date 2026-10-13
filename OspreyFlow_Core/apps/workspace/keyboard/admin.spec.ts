@@ -58,6 +58,11 @@ async function serve(page: Page): Promise<string[]> {
     if (path === "schedules") return json(200, [SCHEDULE]);
     if (path === "schedules/feed/pause") return json(200, { ...SCHEDULE, paused: true, paused_reason: "paused by admin-1" });
     if (path === "schedules/feed/resume") return json(200, SCHEDULE);
+    if (path === "schedules/feed/run") return json(200, SCHEDULE);
+    if (path === "schedules/feed" && request.method() === "PUT")
+      return json(200, { ...SCHEDULE, cron: "30 7 * * 1-5", schedule: "every weekday at 07:30 (Europe/London)" });
+    if (path === "/v1/ingest/schedule-preview")
+      return json(200, { words: "every weekday at 07:30 (Europe/London)", next_runs: ["2026-06-08T06:30:00Z"] });
     if (path === "schedules/feed/runs")
       return json(200, [{ ...SCHEDULE.last_run, run_id: "r0", outcome: "missed", rows_read: null, failure: "the deployment was not running then" }]);
     return json(404, {});
@@ -185,6 +190,32 @@ test("a schedule's runs are shown by keyboard", async ({ page }) => {
   expect(asked).toContain("GET schedules/feed/runs");
   await expect(page.getByRole("button", { name: "Hide runs of Daily custody export" })).toBeFocused();
   registerCovered(REGISTRY, "show-a-schedules-runs-by-keyboard");
+});
+
+test("a schedule is run now by keyboard, as its owner", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=operate_schedules");
+  await press(page, "Run Daily custody export now");
+  await expect(page.getByRole("status")).toContainText("runs as approver-1");
+  expect(asked).toContain("POST schedules/feed/run");
+  registerCovered(REGISTRY, "run-a-schedule-now-by-keyboard");
+});
+
+test("a schedule is changed by keyboard, keeping its owner", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=operate_schedules");
+  await press(page, "Change schedule of Daily custody export");
+  const often = page.getByLabel("How often");
+  await often.selectOption("weekdays"); // a native select, as the other walkthroughs drive one
+  await often.focus();
+  await page.keyboard.press("Tab");
+  await expect(page.getByLabel("Time", { exact: true })).toBeFocused();
+  await page.keyboard.type("0730");
+  await expect(page.getByRole("status", { name: "Schedule preview" })).toContainText("every weekday at 07:30");
+  await press(page, "Save schedule of Daily custody export");
+  await expect(page.getByText("now runs every weekday at 07:30 (Europe/London), still as approver-1")).toBeVisible();
+  expect(asked).toContain("PUT schedules/feed");
+  registerCovered(REGISTRY, "change-a-schedule-by-keyboard");
 });
 
 test("every registered Admin action has its own proving test case above", () => {

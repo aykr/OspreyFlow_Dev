@@ -7,7 +7,17 @@ import { useEffect, useState } from "react";
 
 import type { AdminSchedule, ScheduleRunView } from "../../../../packages/schemas/generated";
 import { Button } from "../design/primitives";
-import { listSchedules, pauseSchedule, resumeSchedule, scheduleRuns, type AdminApi } from "./api";
+import { DEFAULT_TIMEZONE, ScheduleEditor } from "../ingest/publish/ScheduleEditor";
+import { choiceOf, cronOf, type ScheduleChoice } from "../ingest/publish/scheduleChoice";
+import {
+  changeSchedule,
+  listSchedules,
+  pauseSchedule,
+  resumeSchedule,
+  runScheduleNow,
+  scheduleRuns,
+  type AdminApi,
+} from "./api";
 
 const OUTCOME: Record<ScheduleRunView["outcome"], string> = {
   running: "Running",
@@ -62,6 +72,9 @@ export function Schedules({ api }: { api: AdminApi }) {
   const [schedules, setSchedules] = useState<AdminSchedule[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  // ADR-110 Amendment 3: the schedule being changed, as the Studio's structured choice.
+  const [editing, setEditing] = useState<{ recipeId: string; choice: ScheduleChoice; timezone: string } | null>(null);
 
   useEffect(() => {
     listSchedules(api).then(setSchedules).catch((e: Error) => setProblem(e.message));
@@ -70,9 +83,23 @@ export function Schedules({ api }: { api: AdminApi }) {
 
   const replace = (changed: AdminSchedule) =>
     setSchedules((all) => (all ?? []).map((s) => (s.recipe_id === changed.recipe_id ? changed : s)));
-  const act = (step: Promise<AdminSchedule>) => {
+  const act = (step: Promise<AdminSchedule>, done?: (s: AdminSchedule) => string) => {
     setProblem(null);
-    step.then(replace).catch((e: Error) => setProblem(e.message));
+    setSaid(null);
+    step
+      .then((s) => {
+        replace(s);
+        if (done) setSaid(done(s));
+      })
+      .catch((e: Error) => setProblem(e.message));
+  };
+  const save = (s: AdminSchedule) => {
+    const cron = editing ? cronOf(editing.choice) : null;
+    if (!editing || !cron) return;
+    act(changeSchedule(api, s.recipe_id, cron, editing.timezone), (changed) => {
+      setEditing(null);
+      return `${changed.label} now runs ${changed.schedule}, still as ${changed.owner ?? "its owner"}.`;
+    });
   };
 
   return (
@@ -82,6 +109,7 @@ export function Schedules({ api }: { api: AdminApi }) {
         in. A run&apos;s counts are shown only where its source is within your clearance.
       </p>
       {problem && <p role="alert">{problem}</p>}
+      {said && <p role="status">{said}</p>}
       {schedules?.length === 0 && <p className="label" style={{ margin: 0 }}>No recipe is scheduled.</p>}
       {schedules && schedules.length > 0 && (
         <table className="table" aria-label="Scheduled recipes">
@@ -104,6 +132,26 @@ export function Schedules({ api }: { api: AdminApi }) {
                   {s.flagged && <div className="label">Blocked: the ontology changed since it was published</div>}
                   {s.paused && <div className="label">{s.paused_reason ?? "paused"}</div>}
                   {open === s.recipe_id && <History api={api} schedule={s} />}
+                  {editing?.recipeId === s.recipe_id && (
+                    <div style={{ display: "grid", gap: "var(--sp-8)", marginTop: "var(--sp-8)" }}>
+                      <ScheduleEditor
+                        apiBaseUrl={api.apiBaseUrl}
+                        bearerToken={api.bearerToken}
+                        choice={editing.choice}
+                        timezone={editing.timezone}
+                        onChange={(choice, timezone) => setEditing({ recipeId: s.recipe_id, choice, timezone })}
+                      />
+                      <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+                        <Button variant="primary" aria-label={`Save schedule of ${s.label}`} onClick={() => save(s)}>
+                          Save
+                        </Button>
+                        <Button aria-label={`Cancel changing ${s.label}`} onClick={() => setEditing(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                      <p className="label" style={{ margin: 0 }}>{`It keeps its owner, ${s.owner ?? "—"}.`}</p>
+                    </div>
+                  )}
                 </td>
                 <td>{s.case_id ?? "—"}</td>
                 <td>{s.schedule}</td>
@@ -120,6 +168,22 @@ export function Schedules({ api }: { api: AdminApi }) {
                       Pause
                     </Button>
                   )}{" "}
+                  <Button
+                    aria-label={`Run ${s.label} now`}
+                    onClick={() =>
+                      act(runScheduleNow(api, s.recipe_id), (ran) => `${ran.label} was run now; it runs as ${ran.owner ?? "its owner"}.`)
+                    }
+                  >
+                    Run now
+                  </Button>{" "}
+                  <Button
+                    aria-label={`Change schedule of ${s.label}`}
+                    onClick={() =>
+                      setEditing({ recipeId: s.recipe_id, choice: choiceOf(s.cron), timezone: s.timezone || DEFAULT_TIMEZONE })
+                    }
+                  >
+                    Change
+                  </Button>{" "}
                   <Button
                     aria-label={`${open === s.recipe_id ? "Hide" : "Show"} runs of ${s.label}`}
                     aria-expanded={open === s.recipe_id}

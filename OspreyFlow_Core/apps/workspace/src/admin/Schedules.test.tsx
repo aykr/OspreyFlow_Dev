@@ -31,19 +31,29 @@ const SCHEDULE = {
 };  // prettier-ignore
 const SECRET = { ...SCHEDULE, recipe_id: "secret", label: "Informant returns", last_run: WITHHELD };
 
+/** What each request carried, by `METHOD path`. */
+const bodies = new Map<string, unknown>();
+
 function serve(handler: (path: string, init?: RequestInit) => Response | null = () => null) {
   const sent: string[] = [];
+  bodies.clear();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const path = new URL(url).pathname.replace("/v1/admin/", "");
       sent.push(`${init?.method ?? "GET"} ${path}`);
+      if (init?.body) bodies.set(`${init.method} ${path}`, JSON.parse(String(init.body)));
       const answered = handler(path, init);
       if (answered) return answered;
       if (path === "schedules") return json(200, [SCHEDULE, SECRET]);
       if (path === "schedules/feed/pause")
         return json(200, { ...SCHEDULE, paused: true, paused_reason: "paused by admin-1", next_run: null });
       if (path === "schedules/feed/resume") return json(200, SCHEDULE);
+      if (path === "schedules/feed/run") return json(200, { ...SCHEDULE, last_run: { ...RUN, run_id: "r9", trigger: "manual" } });
+      if (path === "schedules/feed" && init?.method === "PUT")
+        return json(200, { ...SCHEDULE, cron: "30 7 * * 1-5", schedule: "every weekday at 07:30 (Europe/London)" });
+      if (path === "/v1/ingest/schedule-preview")
+        return json(200, { words: "every weekday at 07:30 (Europe/London)", next_runs: ["2026-06-08T06:30:00Z"] });
       if (path === "schedules/feed/runs") return json(200, [RUN, MISSED]);
       return json(404, {});
     }),
@@ -102,6 +112,37 @@ describe("Schedules and runs", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Show runs of Daily custody export" }));
     const history = await screen.findByRole("list", { name: "Runs of Daily custody export" });
     expect(within(history).getByText(/Missed: the deployment was not running then/)).toBeTruthy();
+  });
+
+  it("runs a schedule now, as its owner, and says a refusal in the Conduit's words", async () => {
+    const sent = serve();
+    place(["operate_schedules"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Run Daily custody export now" }));
+    await waitFor(() => expect(sent).toContain("POST schedules/feed/run"));
+    expect(await screen.findByText(/runs as approver-1/)).toBeTruthy();
+    cleanup();
+    serve((path) =>
+      path === "schedules/feed/run"
+        ? json(409, { error: "run_refused", detail: "the schedule's owner, approver-1, can no longer sign in" })
+        : null,
+    );
+    place(["operate_schedules"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Run Daily custody export now" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Not run: the schedule's owner, approver-1, can no longer sign in",
+    );
+  });
+
+  it("changes a schedule's time, keeping its owner", async () => {
+    const sent = serve();
+    place(["operate_schedules"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Change schedule of Daily custody export" }));
+    fireEvent.change(screen.getByLabelText("How often"), { target: { value: "weekdays" } });
+    fireEvent.change(screen.getByLabelText("Time"), { target: { value: "07:30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save schedule of Daily custody export" }));
+    await waitFor(() => expect(sent).toContain("PUT schedules/feed"));
+    expect(bodies.get("PUT schedules/feed")).toEqual({ cron: "30 7 * * 1-5", timezone: "Europe/London" });
+    expect(await screen.findByText("every weekday at 07:30 (Europe/London)")).toBeTruthy();
   });
 
   it("says when nothing is scheduled, and says a refusal", async () => {

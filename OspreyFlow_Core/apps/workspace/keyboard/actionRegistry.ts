@@ -572,6 +572,9 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   // ADR-110 decision 8 (D4): Schedules and runs.
   "pause-and-resume-a-schedule-by-keyboard",
   "show-a-schedules-runs-by-keyboard",
+  // ADR-110 Amendment 3: Run now and Change schedule, as the schedule's owner.
+  "run-a-schedule-now-by-keyboard",
+  "change-a-schedule-by-keyboard",
 ] as const);
 
 // ADR-110 decision 7 (D5): the Publish screen's structured schedule.

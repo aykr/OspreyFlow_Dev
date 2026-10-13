@@ -35,6 +35,9 @@ async function failure(response: Response): Promise<Error> {
   if (typeof detail === "object" && detail?.error === "cannot_disable_yourself") {
     return new Error("You cannot disable your own account.");
   }
+  // ADR-110 Amendment 3: Run now and Change schedule, refused in the Conduit's words.
+  if (body.error === "run_refused" && typeof detail === "string") return new Error(`Not run: ${detail}`);
+  if (body.error === "schedule_refused" && typeof detail === "string") return new Error(detail);
   if (body.error === "person_exists") return new Error("That sign-in name or email address is already held.");
   if (body.error === "dashboard_exists") return new Error("A dashboard of that name is already registered.");
   if (body.error === "not_allowed" && typeof detail === "string") return new Error(detail);
@@ -85,3 +88,10 @@ export const pauseSchedule = (api: AdminApi, recipeId: string) =>
   call<AdminSchedule>(api, schedule(recipeId, "pause"), { method: "POST", body: JSON.stringify({}) });
 export const resumeSchedule = (api: AdminApi, recipeId: string) =>
   call<AdminSchedule>(api, schedule(recipeId, "resume"), { method: "POST" });
+export const runScheduleNow = (api: AdminApi, recipeId: string) =>
+  call<AdminSchedule>(api, schedule(recipeId, "run"), { method: "POST" });
+export const changeSchedule = (api: AdminApi, recipeId: string, cron: string, timezone: string) =>
+  call<AdminSchedule>(api, `schedules/${encodeURIComponent(recipeId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ cron, timezone }),
+  });
