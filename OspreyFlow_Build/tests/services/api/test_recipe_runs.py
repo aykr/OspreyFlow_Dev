@@ -12,12 +12,11 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from services.api.config import PostgresConfig
-from services.api.recipe_runs import RecipeRunStore
-
 from conduit_common.identity import new_id
 from schemas.domain import Handling
 from schemas.ingest import LoadReport, RejectionRecord
+from services.api.config import PostgresConfig
+from services.api.recipe_runs import RecipeRunStore
 
 SOURCE = Handling(
     classification="OFFICIAL", handling_code="P", owning_unit="unit-1", originator="unit-1"
