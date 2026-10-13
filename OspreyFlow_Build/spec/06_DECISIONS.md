@@ -12554,3 +12554,42 @@ Phase E row E4). The owner ruled:
 6. **Nodes are drawn at radius 7 (14px) with a 24×24 hit area** (`DESIGN.md` v0.3 §5a), amending ADR-097
    step 2's 20px node; the in-node icons are dropped, since at that size they cannot be read — the type
    is carried by colour, the legend and the label.
+
+## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
+
+Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;
+"grouped by degree, widened step by step". Nothing here is built yet.
+
+**Context.** The Pathfinder (spec 02 §3.1, ADR-033) finds up to ten shortest paths between two nodes
+already on the canvas and shows them one at a time in a popover. The owner asked to search for the
+connections between two nodes and explore them by degrees of separation.
+
+**Decisions.**
+
+1. **A *Find connections* panel** in the Glass's side-panel stack: *From* and *To*, each a search box
+   over the case's datasets (the existing entity search), each also fillable from the selected canvas
+   node (*Use selected*). Neither end need be on the canvas.
+2. **Shortest first, then widened one degree at a time.** The panel first finds the fewest degrees
+   that connect the two ("3 degrees apart") and lists the routes at exactly that degree; *Show routes
+   at N+1 degrees* widens one step, up to six degrees (the domain model's default, §6.3) and never past
+   ADR-033's ceiling of eight. Each degree is its own group, so a longer route never hides a shorter.
+3. **Never cut silently (rule 2).** A degree with more routes than are shown (ten) says so — "10 of
+   more than 10 routes at 4 degrees" — rather than presenting ten as all of them.
+4. **Explored on the canvas.** Any route can be added to the canvas; a route added marks each node
+   with its degree from *From*. Several routes may be added; the panel shows which are on the canvas.
+5. **Access in the traversal (rule 3).** Routes are found in the graph store, filtered as they are
+   walked: a route through a node the reader cannot see does not exist for them, and neither the
+   shortest degree nor any count can reveal that such a route exists. A new `GraphPort` method,
+   `paths_at_length(source, target, length, limit, principal)`, gives the simple paths of exactly
+   `length` hops; its conformance cases are written before the adapter (rule 1).
+6. **A Conduit route** under the case — `POST /v1/investigations/{id}/connections` with `source`,
+   `target`, an optional `degree` (absent: the shortest) and optional link types — answering the
+   degree, its routes, and whether more exist; Viewer level and the `investigate` right; audited.
+
+**Tests to write first, named.** The conformance suite: routes of exactly the asked length and no
+other; none through a hidden node, and the shortest degree unchanged by a hidden shorter route (rule
+3's path-length leak); `limit` honoured with "more exist" said. The route: the shortest found when no
+degree is asked; refused past eight; refused to a principal without `investigate`; a hidden end
+answers as an unknown one. The Glass: the two ends by search and by *Use selected*; the shortest
+degree said in words; widening by one; "of more than"; a route added to the canvas with its nodes
+marked by degree; every action by keyboard (rule 13).
