@@ -198,6 +198,7 @@ class DocumentContentService:
                     text=VISION_PROMPT,
                     json_schema=VISION_SCHEMA,
                     model=self._vision_model,
+                    handling=node.handling,
                 )
             )
             description = str(analysis.data.get("description") or "").strip()
@@ -205,7 +206,12 @@ class DocumentContentService:
             return f"{description}\n\nText in the image: {visible}" if visible else description
         if kind == "video":
             transcript = await self._model.transcribe(
-                TranscribeRequest(document_id=node.id, audio=data, model=self._transcribe_model)
+                TranscribeRequest(
+                    document_id=node.id,
+                    audio=data,
+                    model=self._transcribe_model,
+                    handling=node.handling,
+                )
             )
             return " ".join(segment.text.strip() for segment in transcript.segments).strip()
         return data.decode("utf-8", errors="replace")

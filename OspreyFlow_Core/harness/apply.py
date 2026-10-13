@@ -102,6 +102,24 @@ def analytics_secret_lines(config: OspreyConfig) -> str:
     password = generate_client_secret()
     return f"OSPREY_CLICKHOUSE_PASSWORD={password}\nCLICKHOUSE_PASSWORD={password}\n"
 
+def provider_secret_lines(config: OspreyConfig, environ: Mapping[str, str]) -> str:
+    """A client's own model provider's key (ADR-114 Amendment 6, point 4), carried from the
+    installer's environment into the deployment's secrets file only — read there by the LiteLLM
+    gateway alone, never by the Conduit, never in `osprey.yaml` or a generated file, never printed.
+    A provider named without its key stops the install here, in words."""
+    if config.models.provider is None:
+        return ""
+    key = environ.get("OSPREY_MODEL_PROVIDER_KEY", "")
+    if not key:
+        raise ApplyFailed(
+            "render",
+            f"models.provider names {config.models.provider.name}, and "
+            "OSPREY_MODEL_PROVIDER_KEY is not set. Set it in this terminal (it is kept only in the "
+            "deployment's own secrets file) and run the install again.",
+        )
+    return f"OSPREY_MODEL_PROVIDER_KEY={key}\n"
+
+
 def mail_secret_lines(config: OspreyConfig, environ: Mapping[str, str]) -> str:
     """The mail server's password, carried from the installer's own environment into the
     deployment's secrets file (ADR-114 Amendment 5) — never into `osprey.yaml`, never printed. A
@@ -537,6 +555,7 @@ def main(argv: list[str] | None = None) -> int:
             + reporting_secrets(config)
             + analytics_secret_lines(config)
             + mail_secret_lines(config, os.environ)
+            + provider_secret_lines(config, os.environ)
             + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\n"
             # **Every one of these four, not just the host.** `services/api/config.py` defaults
             # `POSTGRES_PORT` to **5433** — a workaround for `deploy/compose/dev.yaml` publishing

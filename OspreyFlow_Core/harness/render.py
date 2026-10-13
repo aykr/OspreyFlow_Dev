@@ -249,6 +249,32 @@ def render_litellm_config(config: OspreyConfig) -> str:
     This file only wires names to backends, so the pin stays in one place.
     """
     extraction = config.models.extraction
+    table = yaml.safe_load(_local_model_table(config, extraction))
+    table["model_list"] += provider_model_entries(config)
+    return yaml.safe_dump(table, sort_keys=False)
+
+
+def provider_model_entries(config: OspreyConfig) -> list[dict[str, object]]:
+    """ADR-114 Amendment 6, point 4: the client's provider's models, each routed through the
+    gateway as `provider/model`, its key read by LiteLLM from the gateway's own environment
+    (`os.environ/OSPREY_MODEL_PROVIDER_KEY`) — never written into this file."""
+    provider = config.models.provider
+    if provider is None:
+        return []
+    entries: list[dict[str, object]] = []
+    for model in dict.fromkeys(provider.roles.values()):
+        name = f"{provider.name}/{model}"
+        params: dict[str, object] = {
+            "model": name,
+            "api_key": "os.environ/OSPREY_MODEL_PROVIDER_KEY",
+        }
+        if provider.api_base:
+            params["api_base"] = provider.api_base
+        entries.append({"model_name": name, "litellm_params": params})
+    return entries
+
+
+def _local_model_table(config: OspreyConfig, extraction: str) -> str:
     return yaml.safe_dump(
         {
             "model_list": [
@@ -894,6 +920,12 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
                 "KC_PROXY_HEADERS": "xforwarded",
                 "KC_HTTP_ENABLED": "true",
             }
+        if entry.service == "litellm" and config.models.provider is not None:
+            # ADR-114 Amendment 6: the gateway alone reads the client's provider key.
+            service["environment"] = {
+                **_SERVICE_EXTRAS["litellm"]["environment"],  # type: ignore[dict-item]
+                "OSPREY_MODEL_PROVIDER_KEY": "${OSPREY_MODEL_PROVIDER_KEY:?set in the env file}",
+            }
         if entry.service == "ollama":
             service["command"] = [render_ollama_pull_script(config)]
         services[entry.service] = service
@@ -1020,6 +1052,15 @@ def _render_env(config: OspreyConfig) -> str:
     ]
     if config.models.hosted_fallback is not None:
         lines.append(f"OSPREY_HOSTED_FALLBACK={config.models.hosted_fallback}")
+    # ADR-114 Amendment 6: each role the client's provider takes, and what may be sent to it. The
+    # key is not here: only the gateway reads it, from the secrets apply writes.
+    if config.models.provider is not None:
+        provider = config.models.provider
+        for role, model in provider.roles.items():
+            lines.append(f"OSPREY_PROVIDER_{role.upper()}_MODEL={provider.name}/{model}")
+        lines.append(
+            "OSPREY_SENDABLE_HANDLING_CODES=" + ",".join(config.models.sendable_handling_codes)
+        )
     lines += reporting_env(config)
     # §2.5: "It never sees a secret. Credentials are entered as references." Nothing above is a
     # value; every one of these is a name, a path or a choice already written in osprey.yaml.

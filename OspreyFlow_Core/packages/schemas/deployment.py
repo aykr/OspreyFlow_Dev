@@ -28,6 +28,7 @@ build (`tools/schemas_check.py`), per `CLAUDE.md`'s own Conventions.
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import Literal
 
@@ -182,6 +183,54 @@ TranscriptionModel = Literal["Systran/faster-whisper-tiny.en"]
 EXTRACTION_CONTEXT_TOKENS = 32768
 
 
+ModelRole = Literal["extraction", "vision", "transcription", "embedding"]
+
+
+class ModelProviderConfig(BaseModel):
+    """A client's own model provider (ADR-114 decision 11, Amendment 6 point 4), reached through the
+    deployment's LiteLLM gateway. For each role it names, it **replaces** the local model — for
+    material whose handling code is in `models.sendable_handling_codes` only; anything else runs on
+    the local model. Its key is never here: it is `OSPREY_MODEL_PROVIDER_KEY` at install."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: LiteLLM's name for the provider: `openai`, `anthropic`, `gemini`, `azure`, `bedrock`…
+    name: str
+    #: The roles it takes, each with the provider's model for it.
+    roles: dict[ModelRole, str]
+    #: The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy).
+    api_base: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name_is_plain(cls, value: str) -> str:
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", value):
+            raise ValueError(
+                f"the provider name {value!r} is not one LiteLLM knows the shape of (lower-case, "
+                "such as openai or anthropic)"
+            )
+        return value
+
+    @field_validator("roles")
+    @classmethod
+    def _some_roles(cls, value: dict[str, str]) -> dict[str, str]:
+        if not value:
+            raise ValueError("a provider takes at least one role (extraction, vision, …)")
+        for role, model in value.items():
+            if not model.strip() or any(ch.isspace() for ch in model):
+                raise ValueError(f"the {role} model {model!r} is not a model name")
+        return value
+
+    @field_validator("api_base")
+    @classmethod
+    def _https_only(cls, value: str | None) -> str | None:
+        if value is not None and not value.startswith("https://"):
+            raise ValueError(
+                "the provider's address must be https://, so case content is encrypted"
+            )
+        return value
+
+
 class ModelsConfig(BaseModel):
     """`05_DEPLOYMENT.md` §2.1's Models screen: "Local only, or local with a named hosted fallback
     — and if hosted, which handling codes may be sent to it. **Defaults to none**."
@@ -200,6 +249,9 @@ class ModelsConfig(BaseModel):
         default_factory=list,
         description="Default: empty. Which handling codes may leave for a hosted model.",
     )
+    #: ADR-114 decision 11, Amendment 6: a client's own provider, replacing the local model for the
+    #: roles it names (sendable material only). Supersedes `hosted_fallback`, which nothing acts on.
+    provider: ModelProviderConfig | None = None
     extraction: ExtractionModel = Field(
         default="qwen2.5:7b-instruct",
         description="ADR-095: the local model that extracts entities from text. Default: "
@@ -220,12 +272,21 @@ class ModelsConfig(BaseModel):
 
     @model_validator(mode="after")
     def _hosted_fallback_and_local_only_are_consistent(self) -> ModelsConfig:
+        if self.provider is not None and self.local_only:
+            raise ValueError(
+                "models.local_only is true but a provider is named; set local_only: false to "
+                "declare that case content may leave the deployment"
+            )
+        if self.provider is not None and self.hosted_fallback is not None:
+            raise ValueError(
+                "models.provider replaces the old hosted_fallback; name only the provider"
+            )
         if self.local_only and self.hosted_fallback is not None:
             raise ValueError(
                 "models.local_only is true but a hosted_fallback is named; set local_only: false "
                 "to declare the egress exception explicitly rather than by implication"
             )
-        if self.sendable_handling_codes and self.hosted_fallback is None:
+        if self.sendable_handling_codes and self.hosted_fallback is None and self.provider is None:
             raise ValueError(
                 "models.sendable_handling_codes is set but no hosted_fallback is named; handling "
                 "codes cannot be sendable to nothing"

@@ -24,7 +24,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from schemas.domain import DocumentId
+from schemas.domain import DocumentId, Handling
 
 
 class ExtractionRequest(BaseModel):
@@ -38,6 +38,10 @@ class ExtractionRequest(BaseModel):
     #: name to a backend (`06_DECISIONS.md` ADR-020 pins the one the conformance suite runs
     #: against; a deployment's own `osprey.yaml` may point extraction at a larger model instead).
     model: str
+    #: ADR-114 Amendment 6: the handling of what is sent. A client's own provider is used only when
+    #: its handling code is sendable; `None` is treated as not sendable (`services/api/
+    #: model_routing.py`).
+    handling: Handling | None = None
 
 
 class ExtractionResult(BaseModel):
@@ -62,6 +66,10 @@ class TranscribeRequest(BaseModel):
     #: nothing.
     diarize: bool = False
     model: str
+    #: ADR-114 Amendment 6: the handling of what is sent. A client's own provider is used only when
+    #: its handling code is sendable; `None` is treated as not sendable (`services/api/
+    #: model_routing.py`).
+    handling: Handling | None = None
 
 
 class TranscriptWord(BaseModel):
@@ -96,6 +104,10 @@ class VisionRequest(BaseModel):
     text: str
     json_schema: dict[str, Any]
     model: str
+    #: ADR-114 Amendment 6: the handling of what is sent. A client's own provider is used only when
+    #: its handling code is sendable; `None` is treated as not sendable (`services/api/
+    #: model_routing.py`).
+    handling: Handling | None = None
 
 
 class ImageAnalysis(BaseModel):

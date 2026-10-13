@@ -441,6 +441,7 @@ from .link_types import (
     public_ontology,
 )
 from .mapconfig_loader import load_map_config, public_view
+from .model_routing import ModelEgressRefused, RoutedModel, routes_from_env
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
 from .packs import (
@@ -681,7 +682,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # own opinion (`services/api/review.py`'s own docstring on `RunExtractionRequest.model`).
     # ADR-095: the deployment's own models, never the conformance suite's.
     models = DeploymentModels.from_env()
-    model: ModelPort = ModelLiteLLMAdapter(litellm_client, embed_model=models.embedding)
+    # ADR-114 Amendment 6: every model call goes through the routes, so a client's own provider
+    # sees only material whose handling code the deployment declared sendable.
+    routes, sendable = routes_from_env(models, os.environ)
+    model: ModelPort = RoutedModel(
+        ModelLiteLLMAdapter(litellm_client, embed_model=models.embedding),
+        routes=routes,
+        sendable_handling_codes=sendable,
+    )
     # `spec/09_INGEST_STUDIO.md` §6's reverse index: "an ontology edit flags
     # every recipe that depends on the changed version". This deployment's
     # only "ontology reload" trigger today is a process restart after a new
@@ -2030,6 +2038,14 @@ async def _provenance_transition_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT, content={"error": "provenance_transition_invalid"}
+    )
+
+
+@app.exception_handler(ModelEgressRefused)
+async def _model_egress_refused_handler(request: Request, exc: ModelEgressRefused) -> JSONResponse:
+    """ADR-114 Amendment 6: material that may not leave, for a role with no local model."""
+    return JSONResponse(
+        status_code=409, content={"error": "model_egress_refused", "detail": str(exc)}
     )
 
 

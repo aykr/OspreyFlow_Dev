@@ -95,6 +95,8 @@ async def test_run_extraction_persists_pending_candidates(store: ExtractionCandi
     assert records[0].status == CandidateStatus.PENDING
     assert model.requests[0].document_id == document_id
     assert model.requests[0].model == "qwen2.5:0.5b-instruct"
+    # ADR-114 Amendment 6: the document's handling travels with it, or it is never sent.
+    assert model.requests[0].handling == _handling()
 
     listed = await store.list_for_document(document_id, ANALYST)
     assert len(listed) == 1

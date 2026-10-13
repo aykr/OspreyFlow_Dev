@@ -378,7 +378,11 @@ async def run_extraction(
     for offset, window in text_windows(text, window_chars, overlap_chars):
         result = await model.extract(
             ExtractionRequest(
-                document_id=document_id, text=window, json_schema=schema, model=extraction_model
+                document_id=document_id,
+                text=window,
+                json_schema=schema,
+                model=extraction_model,
+                handling=handling,
             )
         )
         for found in extract_candidates(result, profile, ontology, window, handling):

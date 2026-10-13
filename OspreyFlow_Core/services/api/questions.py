@@ -148,6 +148,14 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
 
 
+def shared_handling(handlings: Sequence[Handling]) -> Handling | None:
+    """The handling a question about several Documents is sent under (ADR-114 Amendment 6): theirs
+    when every one carries the same handling code, otherwise none — and material whose handling is
+    not given is never sent to a client's provider (`model_routing.py`)."""
+    codes = {h.handling_code for h in handlings}
+    return handlings[0] if len(codes) == 1 else None
+
+
 class NoDocumentsError(Exception):
     """The case holds no Document the analyst can see, so there is nothing to ask about."""
 
@@ -286,17 +294,18 @@ class QuestionsService:
 
     async def _documents(
         self, investigation_id: str, principal: Principal
-    ) -> list[tuple[str, str | None, str]]:
-        """`(id, title, text)` of every Document in the case's view the analyst can see."""
+    ) -> list[tuple[str, str | None, str, Handling]]:
+        """`(id, title, text, handling)` of every Document in the case's view the analyst can
+        see."""
         nodes, _ = await self._working_set.visible_membership(investigation_id, principal)
-        found: list[tuple[str, str | None, str]] = []
+        found: list[tuple[str, str | None, str, Handling]] = []
         for node in sorted(
             (n for n in nodes if n.type == DOCUMENT_TYPE),
             key=lambda n: str(n.properties.get("title", n.id)),
         ):
             view = await self._reader.read(investigation_id, node.id, principal)
             if view.text.strip():
-                found.append((node.id, view.title, view.text))
+                found.append((node.id, view.title, view.text, node.handling))
         return found
 
     async def ask(
@@ -305,12 +314,12 @@ class QuestionsService:
         documents = await self._documents(investigation_id, principal)
         if not documents:
             raise NoDocumentsError(investigation_id)
-        total = sum(len(text) for _, _, text in documents)
+        total = sum(len(text) for _, _, text, _ in documents)
         if total > QUESTIONS_MAX_CHARS:
             raise QuestionsTooLargeError(total, QUESTIONS_MAX_CHARS)
         numbered = "\n\n".join(
             f"Document {i}: {title or '(no title)'}\n{text}"
-            for i, (_, title, text) in enumerate(documents, start=1)
+            for i, (_, title, text, _) in enumerate(documents, start=1)
         )
         result = await self._model.extract(
             ExtractionRequest(
@@ -318,6 +327,7 @@ class QuestionsService:
                 text=f"{_INSTRUCTIONS}\n\n{numbered}\n\nQuestion: {question}",
                 json_schema=_schema(),
                 model=self._default_model,
+                handling=shared_handling([h for _, _, _, h in documents]),
             )
         )
         data = result.data
@@ -335,7 +345,7 @@ class QuestionsService:
             if not isinstance(number, int) or not 1 <= number <= len(documents):
                 unplaced += 1
                 continue
-            document_id, _, text = documents[number - 1]
+            document_id, _, text, _ = documents[number - 1]
             place = _locate(text, str(item.get("quote") or "")) or _locate(
                 text, str(item.get("name") or "")
             )
@@ -361,7 +371,7 @@ class QuestionsService:
                 )
             )
         # The reader's marks point into each document's kept text; one never extracted has none.
-        for document_id, _, text in documents:
+        for document_id, _, text, _ in documents:
             if any(p.document_id == document_id for p in proposals):
                 try:
                     await self._candidates.get_document_text(document_id, principal)
@@ -375,14 +385,14 @@ class QuestionsService:
             question=question,
             answer=answer,
             document_ids=list(dict.fromkeys(cited)),
-            read_ids=[d for d, _, _ in documents],
+            read_ids=[d for d, _, _, _ in documents],
             candidate_ids=[r.id for r in records],
             unplaced=unplaced,
             model=result.model,
             created_at=datetime.now(UTC),
         )
         await self._store.add(entry)
-        titles = {d: t for d, t, _ in documents}
+        titles = {d: t for d, t, _, _ in documents}
         return QuestionAnswer(
             id=entry.id,
             author=entry.author,

@@ -52,6 +52,8 @@ export type HostedFallback = string | null;
  * Default: empty. Which handling codes may leave for a hosted model.
  */
 export type SendableHandlingCodes = string[];
+export type Name = string;
+export type ApiBase = string | null;
 /**
  * ADR-095: the local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with.
  */
@@ -92,9 +94,9 @@ export type Marking = string | null;
  * Default: config/real_data_exceptions.yaml. A path to the gitignored list, never its contents.
  */
 export type RealDataExceptions = string;
-export type Name = string;
+export type Name1 = string;
 export type Address = string;
-export type Roles = string[];
+export type Roles1 = string[];
 export type Hosts = ClusterHost[];
 /**
  * Default: false. Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass.
@@ -265,10 +267,25 @@ export interface ModelsConfig {
   local_only?: LocalOnly;
   hosted_fallback?: HostedFallback;
   sendable_handling_codes?: SendableHandlingCodes;
+  provider?: ModelProviderConfig | null;
   extraction?: Extraction;
   vision?: Vision;
   transcription?: Transcription;
   embedding?: Embedding;
+}
+/**
+ * A client's own model provider (ADR-114 decision 11, Amendment 6 point 4), reached through the
+ * deployment's LiteLLM gateway. For each role it names, it **replaces** the local model — for
+ * material whose handling code is in `models.sendable_handling_codes` only; anything else runs on
+ * the local model. Its key is never here: it is `OSPREY_MODEL_PROVIDER_KEY` at install.
+ */
+export interface ModelProviderConfig {
+  name: Name;
+  roles: Roles;
+  api_base?: ApiBase;
+}
+export interface Roles {
+  [k: string]: string;
 }
 /**
  * `05_DEPLOYMENT.md` §2.1's Governance screen: "Identity provider, handling scheme, ontology.
@@ -302,9 +319,9 @@ export interface ClusterConfig {
  * declaration.
  */
 export interface ClusterHost {
-  name: Name;
+  name: Name1;
   address: Address;
-  roles?: Roles;
+  roles?: Roles1;
 }
 /**
  * What this deployment publishes to its host.

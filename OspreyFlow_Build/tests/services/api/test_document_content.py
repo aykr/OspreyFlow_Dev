@@ -152,6 +152,7 @@ async def test_an_image_is_described_and_its_text_read_then_extracted_from() -> 
     result = await service.extract("inv-1", "image-1", ANALYST)
     (vision,) = model.vision
     assert vision.image == PNG and vision.model == "vision-model"
+    assert vision.handling is not None and vision.handling.handling_code == HANDLING.handling_code
     (extraction,) = model.requests
     assert "beside a grey van at a dock gate." in extraction.text and "AB12 CDE" in extraction.text
     assert candidates.texts["image-1"][0] == extraction.text
@@ -164,6 +165,7 @@ async def test_a_video_is_transcribed_then_extracted_from() -> None:
     await service.extract("inv-1", "video-1", ANALYST)
     (transcription,) = model.transcriptions
     assert transcription.audio == MP4 and transcription.model == "speech-model"
+    assert transcription.handling is not None
     (extraction,) = model.requests
     assert extraction.text == "Tomasz is driving. Gate three."
 
