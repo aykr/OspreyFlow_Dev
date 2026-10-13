@@ -30,7 +30,7 @@ from schemas.ingest import LoadReport, StudioRecipeDraft, StudioRecipeStatus
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.investigations import AccessLevel, InsufficientAccessError
 from services.api.recipe_runs import RecipeRunStore
-from services.api.scheduler import ScheduleExecutor
+from services.api.scheduler import ScheduleExecutor, ScheduleRunRefused
 from valkey.asyncio import Valkey
 
 SCHEME = load_uk_le_scheme()
@@ -93,7 +93,7 @@ class _Recipes:
 class _Edges:
     owner: Principal | Exception = field(default_factory=lambda: OWNER)
     case_level_ok: bool = True
-    runs_made: list[tuple[str, datetime]] = field(default_factory=list)
+    runs_made: list[tuple[str, datetime | None]] = field(default_factory=list)
     hold_run: asyncio.Event | None = None
     fail_run: Exception | None = None
     notices: list[tuple[str, str, str]] = field(default_factory=list)
@@ -135,13 +135,13 @@ def _executor(
     recipes: _Recipes, edges: _Edges, runs: RecipeRunStore, valkey: Valkey
 ) -> ScheduleExecutor:
     async def run(
-        owner: Principal, recipe: StudioRecipeDraft, case: str, slot: datetime
+        owner: Principal, recipe: StudioRecipeDraft, case: str, slot: datetime | None
     ) -> LoadReport:
         """What `run_recipe_as` does to the ledger, around a load that writes nothing."""
         edges.runs_made.append((owner.id, slot))
         run_id = await runs.start(
             recipe_id=recipe.recipe_id, recipe_version=recipe.version, investigation_id=case,
-            trigger="schedule", slot=slot, run_as=owner.id, source=_source(recipe),
+            trigger="schedule" if slot else "manual", slot=slot, run_as=owner.id, source=_source(recipe),
             now=datetime.now(UTC),
         )  # fmt: skip
         if edges.hold_run is not None:
@@ -277,8 +277,7 @@ async def test_a_slot_due_while_the_last_run_is_still_going_is_skipped(
     executor = _executor(_Recipes([recipe]), edges, runs, valkey)
     first = datetime(2026, 6, 2, 5, tzinfo=UTC)
     running = asyncio.create_task(executor.tick(first))
-    while not edges.runs_made:
-        await asyncio.sleep(0.01)
+    await _until_running(edges, running)
     # Bounded: were the second slot run rather than skipped, it would wait on the first for ever.
     await asyncio.wait_for(executor.tick(first + timedelta(hours=1)), timeout=10)
     assert edges.hold_run is not None
@@ -287,6 +286,18 @@ async def test_a_slot_due_while_the_last_run_is_still_going_is_skipped(
     outcomes = await _outcomes(runs, recipe)
     assert ("skipped", first + timedelta(hours=1)) in outcomes
     assert ("succeeded", first) in outcomes and len(edges.runs_made) == 1
+
+
+async def _until_running(edges: _Edges, task: asyncio.Task[Any]) -> None:
+    """Bounded: a run that fails at once must fail the test, not leave it waiting for ever."""
+    for _ in range(500):
+        if edges.runs_made:
+            return
+        if task.done():
+            task.result()  # raises what the run raised
+            raise AssertionError("the run finished without starting")
+        await asyncio.sleep(0.01)
+    raise AssertionError("the run never started")
 
 
 def _tick_in_a_process(recipe_json: str, at: str, ready: Any, go: Any, result: Any) -> None:
@@ -389,3 +400,44 @@ async def test_a_run_that_succeeds_or_is_missed_tells_nobody(
     recipe, edges = _recipe(), _Edges()
     await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT + timedelta(days=2))
     assert edges.notices == []
+
+
+# --- ADR-110 Amendment 3, point 2: the Admin area's Run now, as the schedule's owner ------------
+
+
+async def test_run_now_runs_at_once_as_the_owner(runs: RecipeRunStore, valkey: Valkey) -> None:
+    recipe, edges = _recipe(), _Edges()
+    await _executor(_Recipes([recipe]), edges, runs, valkey).run_now(recipe)
+    assert edges.runs_made == [(OWNER.id, None)]
+
+
+@pytest.mark.parametrize(
+    ("edges", "words"),
+    [
+        (_Edges(owner=PrincipalRevoked("disabled")), "can no longer sign in"),
+        (_Edges(case_level_ok=False), "Editor"),
+    ],
+    ids=["revoked", "case-access-lowered"],
+)
+async def test_run_now_is_refused_in_words_when_the_owner_may_not_run_it(
+    runs: RecipeRunStore, valkey: Valkey, edges: _Edges, words: str
+) -> None:
+    recipe = _recipe()
+    with pytest.raises(ScheduleRunRefused, match=words):
+        await _executor(_Recipes([recipe]), edges, runs, valkey).run_now(recipe)
+    assert edges.runs_made == []
+
+
+async def test_run_now_is_refused_while_a_run_of_the_recipe_is_going(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe = _recipe()
+    edges = _Edges(hold_run=asyncio.Event())
+    executor = _executor(_Recipes([recipe]), edges, runs, valkey)
+    running = asyncio.create_task(executor.run_now(recipe))
+    await _until_running(edges, running)
+    with pytest.raises(ScheduleRunRefused, match="still going"):
+        await asyncio.wait_for(executor.run_now(recipe), timeout=10)
+    assert edges.hold_run is not None
+    edges.hold_run.set()
+    await asyncio.wait_for(running, timeout=10)

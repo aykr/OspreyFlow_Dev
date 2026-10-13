@@ -212,6 +212,13 @@ class DataFeed(BaseModel):
     last_run: ScheduleRunView | None = None
 
 
+class ChangeScheduleInput(BaseModel):
+    """The Admin area's *Change schedule* (ADR-110 Amendment 3): a new time, the owner kept."""
+
+    cron: str
+    timezone: str | None = None
+
+
 class PauseScheduleInput(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
@@ -220,5 +227,5 @@ ALL_MODELS = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
-    ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed,
+    ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed, ChangeScheduleInput,
 ]  # fmt: skip

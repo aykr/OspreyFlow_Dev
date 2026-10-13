@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from ontology.loader import load_default_ontology
+from schemas.ingest import FieldBinding, RecipeEntity, RowTemplate, StudioRecipeStatus
 from services.api.app import (
     app,
     get_graph,
@@ -30,8 +32,6 @@ from services.api.app import (
     get_recipes_repo_root,
 )
 
-from ontology.loader import load_default_ontology
-from schemas.ingest import FieldBinding, RecipeEntity, RowTemplate, StudioRecipeStatus
 from tests.services.api.any_case import AnyCase
 from tests.services.api.test_app import _FakeInvestigations
 from tests.services.api.test_studio_recipe_routes import (
@@ -338,7 +338,12 @@ def test_a_pipeline_recipe_runs_through_the_pipeline_runner(
     back to `run_published_recipe` for a recipe holding a pipeline, the response here would be a
     single `LoadReport` and this test — not the live runner suite, which never crosses HTTP —
     is what fails. The runner itself is proven in `tests/ingest/test_pipeline_run.py`."""
-    from schemas.ingest import BranchRunReport, LoadReport, PipelineGraph, PipelineRunReport
+    from schemas.ingest import (
+        BranchRunReport,
+        LoadReport,
+        PipelineGraph,
+        PipelineRunReport,
+    )
 
     pipeline = PipelineGraph.model_validate(
         {
@@ -390,7 +395,7 @@ def test_a_pipeline_recipe_runs_through_the_pipeline_runner(
     app.dependency_overrides[app_module.get_pipeline_recogniser_for] = lambda: (lambda name: None)
     app.dependency_overrides[app_module.get_online_geocode] = lambda: None
 
-    async def fake_runner(draft, principal, **kwargs):  # noqa: ANN001, ANN003
+    async def fake_runner(draft, principal, **kwargs):
         def branch(source_id: str) -> BranchRunReport:
             return BranchRunReport(
                 source_id=source_id,
@@ -416,3 +421,17 @@ def test_a_pipeline_recipe_runs_through_the_pipeline_runner(
     assert response.status_code == 200, response.text
     body = response.json()
     assert [b["source_id"] for b in body["branches"]] == ["source", "source-b"]
+
+
+async def test_an_admin_change_of_schedule_is_re_committed_to_the_recipe_yaml(
+    tmp_path: Path, git_repo: Path
+) -> None:
+    """ADR-110 Amendment 3, point 2: the recipe repository stays the record of a schedule."""
+    from services.api.app import _commit_schedule
+
+    recipe = _verified_draft(tmp_path).model_copy(
+        update={"status": StudioRecipeStatus.PUBLISHED, "ontology_version": 1,
+                "schedule_cron": "30 7 * * 1-5", "git_path": "recipes/recipe-1.yaml"}
+    )  # fmt: skip
+    await _commit_schedule(recipe, git_repo)
+    assert "30 7 * * 1-5" in (git_repo / "recipes" / "recipe-1.yaml").read_text()

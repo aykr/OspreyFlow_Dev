@@ -163,6 +163,7 @@ export type { ScheduleRunView } from "./ScheduleRunView";
 export type { AdminSchedule } from "./AdminSchedule";
 export type { PauseScheduleInput } from "./PauseScheduleInput";
 export type { DataFeed } from "./DataFeed";
+export type { ChangeScheduleInput } from "./ChangeScheduleInput";
 export type { ExtractionRequest } from "./ExtractionRequest";
 export type { ExtractionResult } from "./ExtractionResult";
 export type { TranscribeRequest } from "./TranscribeRequest";

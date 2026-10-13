@@ -9,15 +9,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from services.api.config import PostgresConfig
-from services.api.studio_recipes import (
-    StudioRecipeCannotVersionError,
-    StudioRecipeNotADraftError,
-    StudioRecipeNotFoundError,
-    StudioRecipeNotVerifiedError,
-    StudioRecipeStore,
-)
-
 from schemas.domain import Principal
 from schemas.ingest import (
     PipelineEdge,
@@ -29,6 +20,14 @@ from schemas.ingest import (
     StudioRecipeDraft,
     StudioRecipeStatus,
     UnmappedField,
+)
+from services.api.config import PostgresConfig
+from services.api.studio_recipes import (
+    StudioRecipeCannotVersionError,
+    StudioRecipeNotADraftError,
+    StudioRecipeNotFoundError,
+    StudioRecipeNotVerifiedError,
+    StudioRecipeStore,
 )
 
 AUTHOR = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["source_author"])
@@ -458,6 +457,28 @@ async def test_the_feeds_of_a_case_are_its_datasets_published_recipes_only(
     assert feeding == [published[0].recipe_id]
     assert still_a_draft.recipe_id not in feeding
     assert await store.feeding([]) == []
+
+
+async def test_retime_keeps_the_owner_case_and_pause_and_moves_the_set_time(
+    store: StudioRecipeStore,
+) -> None:
+    """ADR-110 Amendment 3, point 2: the Admin area's *Change schedule* keeps the owner."""
+    draft = await _verified_draft(store)
+    await store.publish(
+        draft.recipe_id, AUTHOR, ontology_version=3, git_path="recipes/r.yaml",
+        schedule_cron="0 6 * * *", schedule_watch=None, now=datetime(2026, 1, 2, tzinfo=UTC),
+        schedule_case="case-9",
+    )  # fmt: skip
+    await store.set_paused(draft.recipe_id, paused=True, reason="by hand")
+    moved = datetime(2026, 2, 1, 9, tzinfo=UTC)
+    await store.retime(draft.recipe_id, cron="30 7 * * 1-5", timezone="Europe/Paris", now=moved)
+    after = await store.get(draft.recipe_id)
+    assert (after.schedule_cron, after.schedule_timezone, after.schedule_set_at) == (
+        "30 7 * * 1-5", "Europe/Paris", moved,
+    )  # fmt: skip
+    assert (after.schedule_owner, after.schedule_case, after.schedule_paused) == (
+        AUTHOR.id, "case-9", True,
+    )  # fmt: skip
 
 
 async def test_create_new_version_supersedes_the_published_row_and_opens_a_draft(

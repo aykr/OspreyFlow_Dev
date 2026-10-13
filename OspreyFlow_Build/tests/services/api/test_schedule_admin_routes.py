@@ -18,19 +18,21 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from ontology.handling import load_uk_le_scheme
+from schemas.domain import Handling, Principal
+from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from services.api.app import (
     app,
     get_audit,
     get_handling_scheme,
     get_principal,
     get_recipe_runs,
+    get_recipes_repo_root,
+    get_schedule_executor,
     get_studio_recipes,
 )
 from services.api.recipe_runs import RecipeRun
-
-from ontology.handling import load_uk_le_scheme
-from schemas.domain import Handling, Principal
-from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
+from services.api.scheduler import ScheduleRunRefused
 
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-9", roles=["osprey-admin"])
 ANALYST = Principal(id="analyst-1", clearance="SECRET", org_unit="unit-1", roles=["analyst"])
@@ -83,6 +85,27 @@ class _Recipes:
         else:
             self.paused.pop(recipe_id, None)
 
+    async def retime(self, recipe_id: str, *, cron: str, timezone: str, now: datetime) -> None:
+        self.held = [
+            r.model_copy(update={"schedule_cron": cron, "schedule_timezone": timezone,
+                                 "schedule_set_at": now})
+            if r.recipe_id == recipe_id else r
+            for r in self.held
+        ]  # fmt: skip
+
+
+class _Executor:
+    """Stands in for `ScheduleExecutor.run_now`, refusing as it does (in words)."""
+
+    def __init__(self) -> None:
+        self.ran: list[str] = []
+        self.refuse: str | None = None
+
+    async def run_now(self, recipe: StudioRecipeDraft) -> None:
+        if self.refuse:
+            raise ScheduleRunRefused(self.refuse)
+        self.ran.append(recipe.recipe_id)
+
 
 class _Runs:
     async def for_recipe(self, recipe_id: str, *, limit: int = 50) -> list[RecipeRun]:
@@ -98,8 +121,11 @@ class _Audit:
 
 
 @pytest.fixture
-def client() -> Any:
-    recipes, audit = _Recipes(), _Audit()
+def client(tmp_path: Any) -> Any:
+    recipes, audit, executor = _Recipes(), _Audit(), _Executor()
+    app.dependency_overrides[get_schedule_executor] = lambda: executor
+    # These recipes carry no mapping, so there is no YAML to re-commit (`_commit_schedule`).
+    app.dependency_overrides[get_recipes_repo_root] = lambda: tmp_path
     app.dependency_overrides[get_principal] = lambda: ADMIN
     app.dependency_overrides[get_studio_recipes] = lambda: recipes
     app.dependency_overrides[get_recipe_runs] = lambda: _Runs()
@@ -107,6 +133,7 @@ def client() -> Any:
     app.dependency_overrides[get_handling_scheme] = load_uk_le_scheme
     test_client = TestClient(app)
     test_client.recipes, test_client.audit = recipes, audit  # type: ignore[attr-defined]
+    test_client.executor = executor  # type: ignore[attr-defined]
     yield test_client
     app.dependency_overrides.clear()
 
@@ -159,13 +186,73 @@ def test_a_recipe_with_no_schedule_is_not_found(client: Any) -> None:
         ("get", "/v1/admin/schedules/open/runs"),
         ("post", "/v1/admin/schedules/open/pause"),
         ("post", "/v1/admin/schedules/open/resume"),
+        ("post", "/v1/admin/schedules/open/run"),
+        ("put", "/v1/admin/schedules/open"),
     ],
 )
 def test_an_account_without_operate_schedules_is_refused(
     client: Any, method: str, path: str
 ) -> None:
     app.dependency_overrides[get_principal] = lambda: ANALYST
-    response = getattr(client, method)(path, **({"json": {}} if method == "post" else {}))
+    body = {"cron": "0 7 * * *"} if method == "put" else {}
+    response = getattr(client, method)(path, **({"json": body} if method != "get" else {}))
     assert response.status_code == 403
     assert response.json()["detail"]["right"] == "operate_schedules"
-    assert client.recipes.paused == {}
+    assert client.recipes.paused == {} and client.executor.ran == []
+    assert client.recipes.held[0].schedule_cron == "0 6 * * 1-5"
+
+
+# --- ADR-110 Amendment 3, point 2: Run now and Change schedule, as the schedule's owner ---------
+
+
+def test_run_now_runs_as_the_owner_and_names_the_administrator(client: Any) -> None:
+    response = client.post("/v1/admin/schedules/open/run")
+    assert response.status_code == 200
+    assert client.executor.ran == ["open"]
+    (record,) = [r for r in client.audit.records if r["action"] == "run_schedule_now"]
+    assert record["principal"].id == "admin-1"
+    assert record["resolved_query"] == {"recipe_id": "open", "run_as": "approver-1"}
+
+
+def test_run_now_refused_says_why(client: Any) -> None:
+    client.executor.refuse = "the schedule's owner, approver-1, can no longer sign in"
+    response = client.post("/v1/admin/schedules/open/run")
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "run_refused",
+        "detail": "the schedule's owner, approver-1, can no longer sign in",
+    }
+
+
+def test_change_schedule_keeps_the_owner_and_is_audited(client: Any) -> None:
+    response = client.put(
+        "/v1/admin/schedules/open", json={"cron": "30 7 * * 1-5", "timezone": "Europe/London"}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["schedule"] == "every weekday at 07:30 (Europe/London)"
+    assert body["owner"] == "approver-1"
+    actions = [(r["action"], r["principal"].id) for r in client.audit.records]
+    assert ("change_schedule", "admin-1") in actions
+
+
+def test_change_schedule_refuses_one_it_could_not_keep(client: Any) -> None:
+    response = client.put("/v1/admin/schedules/open", json={"cron": "*/5 * * * *"})
+    assert response.status_code == 422
+    assert "more often than every 15 minutes" in response.json()["detail"]
+    assert client.recipes.held[0].schedule_cron == "0 6 * * 1-5"
+
+
+def test_change_schedule_re_commits_the_recipe_with_its_new_time(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import services.api.app as app_module
+
+    committed: list[str | None] = []
+
+    async def commit(recipe: StudioRecipeDraft, repo_root: Any) -> None:
+        committed.append(recipe.schedule_cron)
+
+    monkeypatch.setattr(app_module, "_commit_schedule", commit)
+    client.put("/v1/admin/schedules/open", json={"cron": "30 7 * * 1-5"})
+    assert committed == ["30 7 * * 1-5"]

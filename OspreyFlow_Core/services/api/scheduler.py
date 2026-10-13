@@ -172,6 +172,10 @@ class ScheduledRecipes(Protocol):
     async def set_paused(self, recipe_id: str, *, paused: bool, reason: str | None) -> None: ...
 
 
+class ScheduleRunRefused(ValueError):
+    """The Admin area's *Run now* refused, in words (ADR-110 Amendment 3, point 2)."""
+
+
 class _Refused(Exception):
     """A slot that may not run, and why, in words for the ledger. `about_the_owner` is false for a
     refusal that says nothing about the owner (Amendment 3), which never pauses the schedule."""
@@ -207,7 +211,8 @@ class ScheduleExecutor:
     #: The case's own Editor check (`InvestigationStore.get_authorized`) and `scope_to_case`.
     check_case: Callable[[Principal, str], Awaitable[Principal]]
     #: `run_recipe_as` with the deployment's dependencies, as the owner, trigger `schedule`.
-    run: Callable[[Principal, StudioRecipeDraft, str, datetime], Awaitable[Any]]
+    #: `slot` is `None` for a run asked for now (the Admin area's *Run now*), recorded as manual.
+    run: Callable[[Principal, StudioRecipeDraft, str, datetime | None], Awaitable[Any]]
     #: Decision 10: a notice in the owner's own inbox when a scheduled run fails or is refused.
     notify: Callable[[str, StudioRecipeDraft, str], Awaitable[None]] | None = None
 
@@ -270,6 +275,25 @@ class ScheduleExecutor:
         except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
             log.exception("scheduled run of recipe %s failed", recipe.recipe_id)
             await self._tell_owner(recipe, latest, f"failed: {error}")
+        finally:
+            held = await reply(self.valkey.get(lock))
+            if held in (token, token.encode()):
+                await reply(self.valkey.delete(lock))
+
+    async def run_now(self, recipe: StudioRecipeDraft) -> Any:
+        """The Admin area's *Run now* (Amendment 3, point 2): at once, as the schedule's owner, with
+        every check a scheduled slot gets — refused in words if the owner may not run it, or while
+        a run of the recipe is still going."""
+        try:
+            owner, case = await self._owner(recipe)
+        except _Refused as refused:
+            raise ScheduleRunRefused(str(refused)) from refused
+        lock = f"schedule:lock:{recipe.recipe_id}"
+        token = uuid4().hex
+        if not await reply(self.valkey.set(lock, token, nx=True, ex=_LOCK_SECONDS)):
+            raise ScheduleRunRefused("the previous run of this recipe is still going")
+        try:
+            return await self.run(owner, recipe, case, None)
         finally:
             held = await reply(self.valkey.get(lock))
             if held in (token, token.encode()):

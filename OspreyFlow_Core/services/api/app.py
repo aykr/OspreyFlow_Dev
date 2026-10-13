@@ -111,6 +111,7 @@ from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
 from schemas.admin import (
     AccessInput,
     AdminSchedule,
+    ChangeScheduleInput,
     ComponentHealth,
     DashboardGuestToken,
     DashboardIdentity,
@@ -508,6 +509,7 @@ from .scheduler import (
     DEFAULT_TIMEZONE,
     ScheduleExecutor,
     ScheduleRefused,
+    ScheduleRunRefused,
     describe,
     next_slot,
     next_slots,
@@ -874,7 +876,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # ADR-110 decision 2: scheduled pipeline runs, ticking each minute on every replica, each slot
     # run by the one that claims it, as the schedule's owner through the one run path.
-    schedule_task = asyncio.create_task(run_every_minute(_schedule_executor(app)))
+    app.state.schedule_executor = _schedule_executor(app)
+    schedule_task = asyncio.create_task(run_every_minute(app.state.schedule_executor))
 
     try:
         yield
@@ -6944,7 +6947,8 @@ async def _set_recipe_schedule_paused(
     )
     await audit.record(principal=principal,
                        action="pause_recipe_schedule" if paused else "resume_recipe_schedule",
-                       resolved_query={"recipe_id": recipe.recipe_id}, result_cardinality=1)  # fmt: skip
+                       resolved_query={"recipe_id": recipe.recipe_id},
+                       result_cardinality=1)  # fmt: skip
     return await studio_recipes.get(recipe.recipe_id)
 
 
@@ -7187,14 +7191,16 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
         await state.investigations.get_authorized(case, owner, need=AccessLevel.EDITOR)
         return await scope_to_case(owner, case, state.datasets)
 
-    async def run(owner: Principal, recipe: StudioRecipeDraft, case: str, slot: datetime) -> Any:
+    async def run(
+        owner: Principal, recipe: StudioRecipeDraft, case: str, slot: datetime | None
+    ) -> Any:
         return await run_recipe_as(
             RecipeRunDeps.from_state(state),
             principal=owner,
             recipe=recipe,
             investigation_id=case,
             source_location=None,
-            trigger="schedule",
+            trigger="schedule" if slot else "manual",
             slot=slot,
         )
 
@@ -8640,6 +8646,85 @@ async def pause_schedule_route(
                        resolved_query={"recipe_id": recipe_id, "reason": reason},
                        result_cardinality=1)  # fmt: skip
     recipe = await _scheduled_recipe(studio_recipes, recipe_id)
+    return await _admin_schedule(recipe, recipe_runs, principal, handling_scheme)
+
+
+def get_schedule_executor(request: Request) -> ScheduleExecutor:
+    return request.app.state.schedule_executor  # type: ignore[no-any-return]
+
+
+ScheduleExecutorDep = Annotated[ScheduleExecutor, Depends(get_schedule_executor)]
+
+
+@app.exception_handler(ScheduleRunRefused)
+async def _schedule_run_refused_handler(request: Request, exc: ScheduleRunRefused) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"error": "run_refused", "detail": str(exc)})
+
+
+@app.post(
+    "/v1/admin/schedules/{recipe_id}/run",
+    dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))],
+)
+async def run_schedule_now_route(
+    recipe_id: str,
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    recipe_runs: RecipeRunsDep,
+    handling_scheme: HandlingSchemeDep,
+    executor: ScheduleExecutorDep,
+    audit: AuditDep,
+) -> AdminSchedule:
+    """*Run now* (ADR-110 Amendment 3, point 2): at once, **as the schedule's owner**, with every
+    check a scheduled slot gets — refused in words (409) if the owner may not run it. The
+    administrator is named in the audit as who asked; the run itself is the owner's."""
+    recipe = await _scheduled_recipe(studio_recipes, recipe_id)
+    await audit.record(principal=principal, action="run_schedule_now",
+                       resolved_query={"recipe_id": recipe_id, "run_as": recipe.schedule_owner},
+                       result_cardinality=1)  # fmt: skip
+    await executor.run_now(recipe)
+    return await _admin_schedule(recipe, recipe_runs, principal, handling_scheme)
+
+
+async def _commit_schedule(recipe: StudioRecipeDraft, repo_root: Path) -> None:
+    """The recipe repository stays the record of a schedule too (`update_studio_recipe_schedule`):
+    the recipe's YAML re-committed at its own path, the mapping and version unchanged."""
+    if recipe.row_template is None or recipe.ontology_version is None:
+        return
+    built = build_recipe(
+        recipe,
+        ontology_version=recipe.ontology_version,
+        schedule_cron=recipe.schedule_cron,
+        schedule_watch=recipe.schedule_watch,
+    )
+    await write_and_commit_recipe(built, repo_root=repo_root)
+
+
+@app.put(
+    "/v1/admin/schedules/{recipe_id}",
+    dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))],
+)
+async def change_schedule_route(
+    recipe_id: str,
+    body: ChangeScheduleInput,
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    recipe_runs: RecipeRunsDep,
+    handling_scheme: HandlingSchemeDep,
+    repo_root: RecipesRepoRootDep,
+    audit: AuditDep,
+) -> AdminSchedule:
+    """*Change schedule* (ADR-110 Amendment 3, point 2): a new time, refused in words if it could
+    not be kept; **the owner is kept**, and the administrator named in the audit."""
+    await _scheduled_recipe(studio_recipes, recipe_id)
+    zone = body.timezone or DEFAULT_TIMEZONE
+    validate_schedule(body.cron, zone)
+    await studio_recipes.retime(recipe_id, cron=body.cron, timezone=zone, now=datetime.now(UTC))
+    recipe = await _scheduled_recipe(studio_recipes, recipe_id)
+    await _commit_schedule(recipe, repo_root)
+    await audit.record(principal=principal, action="change_schedule",
+                       resolved_query={"recipe_id": recipe_id, "cron": body.cron, "timezone": zone,
+                                       "owner": recipe.schedule_owner},
+                       result_cardinality=1)  # fmt: skip
     return await _admin_schedule(recipe, recipe_runs, principal, handling_scheme)
 
 

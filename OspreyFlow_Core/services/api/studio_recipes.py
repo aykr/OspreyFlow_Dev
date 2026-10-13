@@ -516,6 +516,24 @@ class StudioRecipeStore:
             )
         return [_row_to_draft(r) for r in rows]
 
+    async def retime(
+        self, recipe_id: str, *, cron: str, timezone: str, now: datetime
+    ) -> None:
+        """A new time for an existing schedule (ADR-110 Amendment 3, point 2: the Admin area's
+        *Change schedule*): the owner, the case and the paused state are kept; the time it was set
+        moves to now, so slots before the change are not counted as missed."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE studio_recipes SET schedule_cron = $2, schedule_timezone = $3, "
+                "schedule_set_at = $4 WHERE recipe_id = $1 AND status = ANY($5::text[]) "
+                "AND schedule_cron IS NOT NULL",
+                recipe_id,
+                cron,
+                timezone,
+                now,
+                [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
+            )
+
     async def set_paused(self, recipe_id: str, *, paused: bool, reason: str | None) -> None:
         """Pause (with the reason) or resume a schedule, at the recipe's current version."""
         async with self._pool.acquire() as conn:

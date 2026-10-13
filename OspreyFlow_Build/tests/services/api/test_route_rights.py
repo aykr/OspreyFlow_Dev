@@ -127,6 +127,7 @@ ROUTE_RIGHTS = {
  "list_schedules_route": "operate_schedules", "schedule_runs_route": "operate_schedules",
  "pause_schedule_route": "operate_schedules", "resume_schedule_route": "operate_schedules",
  "data_feeds_route": "read_data_feeds",
+ "run_schedule_now_route": "operate_schedules", "change_schedule_route": "operate_schedules",
  "schedule_preview_route": "schedule_pipelines", "pause_recipe_schedule": "schedule_pipelines",
  "resume_recipe_schedule": "schedule_pipelines", "recipe_runs_route": "read_data_feeds",
 }
