@@ -97,6 +97,12 @@ def due_slots(cron: str, timezone: str, *, after: datetime, until: datetime) -> 
         slots.append(slot.astimezone(UTC))
 
 
+def next_slot(cron: str, timezone: str, *, after: datetime) -> datetime:
+    """The first slot after `after`, in UTC — the *next run* the Admin area shows."""
+    zone = _zone(timezone)
+    return croniter(cron, after.astimezone(zone)).get_next(datetime).astimezone(UTC)  # type: ignore[no-any-return]
+
+
 def describe(cron: str, timezone: str) -> str:
     """The schedule in words (decision 7), for the common shapes; otherwise the expression."""
     minute, hour, day, month, weekday = cron.split()

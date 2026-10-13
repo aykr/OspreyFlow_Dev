@@ -157,8 +157,55 @@ class DemoPackStatus(BaseModel):
     size_bytes: int | None = None
 
 
+class ScheduleRunView(BaseModel):
+    """One row of the run ledger as the Admin area shows it (ADR-110 decisions 6 and 8). Where the
+    reader may not view the source, `withheld` is set and the counts and the failure's words are
+    left out: a count of what a load wrote is a read (rule 3)."""
+
+    run_id: str
+    trigger: Literal["manual", "schedule", "watch", "release"]
+    slot: datetime | None = None
+    started_at: datetime
+    finished_at: datetime | None = None
+    outcome: Literal["running", "succeeded", "failed", "refused", "blocked", "skipped", "missed"]
+    run_as: str
+    withheld: bool = False
+    rows_read: int | None = None
+    nodes_created: int | None = None
+    nodes_referenced: int | None = None
+    edges_created: int | None = None
+    rows_rejected: int | None = None
+    rows_held: int | None = None
+    load_id: str | None = None
+    failure: str | None = None
+
+
+class AdminSchedule(BaseModel):
+    """A scheduled recipe in the Admin area's *Schedules and runs* (ADR-110 decision 8)."""
+
+    recipe_id: str
+    label: str
+    case_id: str | None = None
+    cron: str
+    timezone: str
+    #: The schedule in words: "every weekday at 06:00 (Europe/London)".
+    schedule: str
+    owner: str | None = None
+    next_run: datetime | None = None
+    paused: bool = False
+    paused_reason: str | None = None
+    #: The ontology changed since it was published: due slots are blocked until it is again.
+    flagged: bool = False
+    last_run: ScheduleRunView | None = None
+
+
+class PauseScheduleInput(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+
 ALL_MODELS = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
+    ScheduleRunView, AdminSchedule, PauseScheduleInput,
 ]  # fmt: skip

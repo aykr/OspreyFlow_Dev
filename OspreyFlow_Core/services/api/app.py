@@ -110,6 +110,7 @@ from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
 from schemas.admin import (
     AccessInput,
+    AdminSchedule,
     ComponentHealth,
     DashboardGuestToken,
     DashboardIdentity,
@@ -117,9 +118,11 @@ from schemas.admin import (
     DemoPackStatus,
     EmbeddedDashboard,
     InviteInput,
+    PauseScheduleInput,
     PersonAccount,
     RegisteredDashboard,
     RolesInput,
+    ScheduleRunView,
     SignInDelivery,
     SystemStatus,
 )
@@ -208,6 +211,7 @@ from schemas.ingest import (
     RunRecipeInput,
     ScheduleUpdateInput,
     StudioRecipeDraft,
+    StudioRecipeStatus,
     StudioRole,
     TransformDescriptor,
     VerifyReport,
@@ -478,14 +482,7 @@ from .questions import (
     QuestionsService,
     QuestionsTooLargeError,
 )
-from .recipe_runs import RecipeRunStore, RunTrigger
-from .scheduler import (
-    DEFAULT_TIMEZONE,
-    ScheduleExecutor,
-    ScheduleRefused,
-    run_every_minute,
-    validate_schedule,
-)
+from .recipe_runs import RecipeRun, RecipeRunStore, RunTrigger
 from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
@@ -504,6 +501,15 @@ from .review import (
 from .risk import NeighbourhoodTooLarge
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .rule_holds import ReleaseRefused, readable_rule_audit, release_held_rows
+from .scheduler import (
+    DEFAULT_TIMEZONE,
+    ScheduleExecutor,
+    ScheduleRefused,
+    describe,
+    next_slot,
+    run_every_minute,
+    validate_schedule,
+)
 from .screening import ScreeningListStore
 from .search import SearchRequest, SearchResponse, SuggestRequest, SuggestResponse
 from .site_images import (
@@ -8372,6 +8378,158 @@ async def remove_dashboard_route(
     await audit.record(principal=principal, action="remove_dashboard",
                        resolved_query={"client_id": client_id}, result_cardinality=1)  # fmt: skip
     return Response(status_code=204)
+
+
+# --- Schedules and runs (ADR-110 decision 8, Amendment 2) -----------------------------------------
+
+
+def _schedule_run_view(
+    run: RecipeRun, reader: Principal, scheme: HandlingScheme
+) -> ScheduleRunView:
+    """A ledger row for `reader`: a run's counts, and the words of a load's failure, only where the
+    reader may view the source (rule 3) — the scheduler's own words for a slot it did not run are
+    its own, not the source's, and are always shown."""
+    view = ScheduleRunView(
+        run_id=run.run_id,
+        trigger=run.trigger,
+        slot=run.slot,
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+        outcome=run.outcome,
+        run_as=run.run_as,
+        failure=run.failure if run.outcome not in ("failed", "succeeded", "running") else None,
+    )
+    if not principal_may_view(run.source, reader, scheme):
+        return view.model_copy(update={"withheld": True})
+    return view.model_copy(
+        update={
+            "rows_read": run.rows_read,
+            "nodes_created": run.nodes_created,
+            "nodes_referenced": run.nodes_referenced,
+            "edges_created": run.edges_created,
+            "rows_rejected": run.rows_rejected,
+            "rows_held": run.rows_held,
+            "load_id": run.load_id,
+            "failure": run.failure,
+        }
+    )
+
+
+async def _admin_schedule(
+    recipe: StudioRecipeDraft, runs: RecipeRunStore, reader: Principal, scheme: HandlingScheme
+) -> AdminSchedule:
+    assert recipe.schedule_cron is not None
+    zone = recipe.schedule_timezone or DEFAULT_TIMEZONE
+    latest = await runs.for_recipe(recipe.recipe_id, limit=1)
+    return AdminSchedule(
+        recipe_id=recipe.recipe_id,
+        label=recipe.label,
+        case_id=recipe.schedule_case,
+        cron=recipe.schedule_cron,
+        timezone=zone,
+        schedule=describe(recipe.schedule_cron, zone),
+        owner=recipe.schedule_owner,
+        next_run=None
+        if recipe.schedule_paused
+        else next_slot(recipe.schedule_cron, zone, after=datetime.now(UTC)),
+        paused=recipe.schedule_paused,
+        paused_reason=recipe.schedule_paused_reason,
+        flagged=recipe.status is StudioRecipeStatus.FLAGGED,
+        last_run=_schedule_run_view(latest[0], reader, scheme) if latest else None,
+    )
+
+
+async def _scheduled_recipe(studio_recipes: StudioRecipeStore, recipe_id: str) -> StudioRecipeDraft:
+    for recipe in await studio_recipes.scheduled():
+        if recipe.recipe_id == recipe_id:
+            return recipe
+    raise HTTPException(status_code=404, detail={"error": "schedule_not_found"})
+
+
+@app.get("/v1/admin/schedules", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))])
+async def list_schedules_route(
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    recipe_runs: RecipeRunsDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> list[AdminSchedule]:
+    """Every scheduled recipe across the deployment (ADR-110 decision 8): its metadata and last
+    outcome for every recipe; a run's counts only where the administrator may view the source."""
+    listed = [
+        await _admin_schedule(recipe, recipe_runs, principal, handling_scheme)
+        for recipe in await studio_recipes.scheduled()
+    ]
+    await audit.record(principal=principal, action="list_schedules", resolved_query={},
+                       result_cardinality=len(listed))  # fmt: skip
+    return listed
+
+
+@app.get(
+    "/v1/admin/schedules/{recipe_id}/runs",
+    dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))],
+)
+async def schedule_runs_route(
+    recipe_id: str,
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    recipe_runs: RecipeRunsDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> list[ScheduleRunView]:
+    await _scheduled_recipe(studio_recipes, recipe_id)
+    history = [
+        _schedule_run_view(run, principal, handling_scheme)
+        for run in await recipe_runs.for_recipe(recipe_id)
+    ]
+    await audit.record(principal=principal, action="list_schedule_runs",
+                       resolved_query={"recipe_id": recipe_id},
+                       result_cardinality=len(history))  # fmt: skip
+    return history
+
+
+@app.post(
+    "/v1/admin/schedules/{recipe_id}/pause",
+    dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))],
+)
+async def pause_schedule_route(
+    recipe_id: str,
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    recipe_runs: RecipeRunsDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+    body: PauseScheduleInput | None = None,
+) -> AdminSchedule:
+    await _scheduled_recipe(studio_recipes, recipe_id)
+    reason = body.reason.strip() if body and body.reason and body.reason.strip() else None
+    words = f"paused by {principal.id}" + (f": {reason}" if reason else "")
+    await studio_recipes.set_paused(recipe_id, paused=True, reason=words)
+    await audit.record(principal=principal, action="pause_schedule",
+                       resolved_query={"recipe_id": recipe_id, "reason": reason},
+                       result_cardinality=1)  # fmt: skip
+    recipe = await _scheduled_recipe(studio_recipes, recipe_id)
+    return await _admin_schedule(recipe, recipe_runs, principal, handling_scheme)
+
+
+@app.post(
+    "/v1/admin/schedules/{recipe_id}/resume",
+    dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))],
+)
+async def resume_schedule_route(
+    recipe_id: str,
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    recipe_runs: RecipeRunsDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> AdminSchedule:
+    await _scheduled_recipe(studio_recipes, recipe_id)
+    await studio_recipes.set_paused(recipe_id, paused=False, reason=None)
+    await audit.record(principal=principal, action="resume_schedule",
+                       resolved_query={"recipe_id": recipe_id}, result_cardinality=1)  # fmt: skip
+    recipe = await _scheduled_recipe(studio_recipes, recipe_id)
+    return await _admin_schedule(recipe, recipe_runs, principal, handling_scheme)
 
 
 @app.get("/v1/admin/system", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])

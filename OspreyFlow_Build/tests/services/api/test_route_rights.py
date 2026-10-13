@@ -124,6 +124,8 @@ ROUTE_RIGHTS = {
  "list_demo_packs_route": "administer_system",
  "list_dashboards_route": "manage_dashboards", "register_dashboard_route": "manage_dashboards",
  "remove_dashboard_route": "manage_dashboards", "system_status_route": "administer_system",
+ "list_schedules_route": "operate_schedules", "schedule_runs_route": "operate_schedules",
+ "pause_schedule_route": "operate_schedules", "resume_schedule_route": "operate_schedules",
 }
 
 
@@ -172,9 +174,9 @@ def test_every_right_guards_at_least_one_route() -> None:
     """A right no route checks is a right stated and exercised by nothing (rule 12) — except the
     two the Conduit has no route for yet: people, dashboards and data feeds arrive with the Admin
     area (ADR-110 Amendment 1, ADR-112) and ADR-110's run ledger; screening lists load by a script;
-    reverting a load has no route (spec 09 §6); operating schedules arrives with ADR-110."""
+    reverting a load has no route (spec 09 §6)."""
     not_yet = {"read_data_feeds", "load_screening_lists",
-               "revert_loads", "operate_schedules", "read_audit",
+               "revert_loads", "read_audit",
                "export_override"}  # fmt: skip
     guarded = {r for r in ROUTE_RIGHTS.values() if r}
     assert {r.value for r in Right} - guarded == not_yet
