@@ -29,7 +29,9 @@ with app.app_context():
     # Superset's own name for the schema permission — since 4.1 it includes the catalog
     # ("[db].[catalog].[schema]"); a name written by hand without it matched no chart.
     database = db.session.query(Database).filter_by(database_name=MART_DATABASE).one()
-    schema_perm = sm.get_schema_perm(database.database_name, database.get_default_catalog(), MART_SCHEMA)
+    schema_perm = sm.get_schema_perm(
+        database.database_name, database.get_default_catalog(), MART_SCHEMA
+    )
     mart = sm.add_permission_view_menu("schema_access", schema_perm)
     guest = sm.find_role(GUEST) or sm.add_role(GUEST)
     guest.permissions = unique([*gamma.permissions, mart])

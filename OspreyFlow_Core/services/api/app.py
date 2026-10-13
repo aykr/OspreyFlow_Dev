@@ -4319,7 +4319,8 @@ async def extract_email_route(
 ) -> EmailExtractionResult:
     """Entities from one email behind a link (ADR-089 step 3): the email becomes a Document node
     linked to both addresses, both go into the working set, and the model's findings are stored
-    pending for a person to accept. Only to someone who can see the link; Editor, since it writes."""
+    pending for a person to accept. Only to someone who can see the link; Editor, since it
+    writes."""
     result = await email_extraction.extract(
         investigation.id, edge_id, event_id, principal, model=body.model, using=body.using
     )
@@ -6463,7 +6464,8 @@ def _with_default_classification(
 ) -> dict[str, Any]:
     """**ADR-068.** Connect's classification is optional: left blank it is recorded as the scheme's
     lowest level, which for the UK scheme is `PUBLIC`. Done here, not in the Glass, so a draft never
-    carries an empty marking whichever client wrote it; an analyst's own choice is never replaced."""
+    carries an empty marking whichever client wrote it; an analyst's own choice is never
+    replaced."""
     chosen = handling.get("classification")
     if isinstance(chosen, str) and chosen.strip():
         return handling

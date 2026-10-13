@@ -161,7 +161,8 @@ class EdgeTypeDef(BaseModel):
     #: ADR-090 decision 4: proposed by an analyst, not authored in `default.yaml`.
     analyst_defined: bool = False
     #: ADR-090: a proposal's own storage label, declared so its links can be written, never
-    #: offered or shown; its links read as the name it is an alias of (`OntologySchema.storage_aliases`).
+    #: offered or shown; its links read as the name it is an alias of
+    #: (`OntologySchema.storage_aliases`).
     hidden: bool = False
     properties: list[PropertyDef] = Field(default_factory=list)
 
@@ -177,7 +178,8 @@ class OntologySchema(BaseModel):
     entity_types: list[EntityTypeDef]
     edge_types: list[EdgeTypeDef]
     #: ADR-090: each proposal's storage label -> the link-type name its links read as (the
-    #: proposal's name while pending, rejected, withdrawn or retired; the promoted name once promoted,
+    #: proposal's name while pending, rejected, withdrawn or retired; the promoted name once
+    #: promoted,
     #: merged or renamed). Applied by the graph store, so nothing is ever rewritten.
     storage_aliases: dict[str, str] = Field(default_factory=dict)
     #: ADR-090 decision 2: rises by one at every promotion and retirement; the version does not.

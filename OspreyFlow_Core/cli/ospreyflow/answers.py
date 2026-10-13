@@ -48,7 +48,8 @@ CLOUDS = ("aws", "azure")
 PROFILES = {"lite": "local-lite", "small": "small", "enterprise": "cluster"}
 
 _TOP = {
-    "mode", "components", "folders", "models", "demo_packs", "paysim_file", "cloud", "config", "mail",
+    "mode", "components", "folders", "models", "demo_packs", "paysim_file", "cloud", "config",
+    "mail",
 }  # fmt: skip
 _SECTIONS = {
     "components": {"dashboards"},

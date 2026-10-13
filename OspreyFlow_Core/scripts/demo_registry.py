@@ -47,6 +47,11 @@ DELIVERY_SEED = "seed"
 DELIVERY_DOWNLOAD = "download"
 
 
+def _sequence(value: object) -> tuple[object, ...]:
+    """A manifest's list, or nothing when it is absent or not a list."""
+    return tuple(value) if isinstance(value, list | tuple) else ()
+
+
 def _optional_text(value: object) -> str | None:
     return None if value is None else str(value)
 
@@ -100,7 +105,7 @@ class DemoManifest:
             id=str(raw.get("id", "")),
             distribution=str(raw.get("distribution", "")),
             seed_module=str(raw.get("seed_module", "")),
-            paths=tuple(str(p) for p in raw.get("paths", ())),  # type: ignore[union-attr]
+            paths=tuple(str(p) for p in _sequence(raw.get("paths", ()))),
             delivery=str(raw.get("delivery", "")),
             data_licence=_optional_text(raw.get("data_licence")),
             attribution=_optional_text(raw.get("attribution")),

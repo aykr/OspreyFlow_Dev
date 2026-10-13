@@ -12567,6 +12567,30 @@ Amendment 6 point 1 settled the policy; these are the mechanics it leaves open, 
    only): a test must publish nothing. The keyless check itself is proved only by the first real
    release; until then it is a disclosed gap, not a claim.
 
+### ADR-114, Amendment 9 (13 October 2026) — CI that runs, and an object store that can be installed
+
+Found reading the developer repository's own CI runs for the first time (the owner: "can you help step
+me through this"; `aykr/OspreyFlow_Dev` runs every push — an older note that Actions had never run was
+about the previous repository and wrong for this one):
+
+1. **`ci.yml` had drifted from the layout** (ADR-054's two folders, ADR-114 Amendment 2's Build
+   Makefile): every `tools.*` gate ran with `PYTHONPATH=OspreyFlow_Build` from inside Core (no such
+   folder there); the model jobs mounted LiteLLM's configuration from the repository root; and **the
+   `test` job, and `make test`, collected no tests at all** — pytest ignores `testpaths` when it is not
+   run from the ini file's own folder, so the unit suite has not run in CI since the folders split.
+   Each is fixed, and the tests folder is now named on the command line.
+2. **The whole-deployment exit tests run on demand** (the owner's ruling, from options: "Run them on
+   demand"): they need 16 GiB and GitHub's runners for a private repository have 7.8 GiB, so in
+   `ci.yml` they could never pass. They move to `.github/workflows/exit-tests.yml`, started by hand
+   (with a runner label, for a larger runner if one is ever added), and `test-file-coverage-check`
+   reads both workflows.
+3. **MinIO's public images are withdrawn** — Quay answers "no such manifest" and Docker Hub "access
+   denied" for every tag, `latest` included — so a new install fails at the object store, and only a
+   machine with the image cached still runs. **The object store becomes SeaweedFS** (the owner's
+   ruling, from options: "Switch to SeaweedFS"; Apache-2.0, actively published, S3-compatible): the S3
+   adapter stays, the MediaStore conformance suite proves the change, and a running deployment's
+   objects move across by backup and restore. Recorded here; built as its own stage.
+
 ## ADR-115 — The design handoff: the welcome page, Home and the Glass to `DESIGN.md` v0.2 — ACCEPTED (design)
 
 Status: **accepted on the owner's rulings of 12 October 2026; design only, nothing built.** The

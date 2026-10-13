@@ -66,7 +66,8 @@ dev = [
 ]
 
 [tool.mypy]
-mypy_path = "packages"
+# `cli`: the `ospreyflow` command's own package, which the install page imports (ADR-114).
+mypy_path = "packages:cli"
 python_version = "3.12"
 strict = true
 namespace_packages = true
@@ -106,6 +107,12 @@ ignore_missing_imports = true
 # `geopy` (spec/06_DECISIONS.md ADR-108 ruling Q5's online geocoding) ships no py.typed marker.
 [[tool.mypy.overrides]]
 module = "geopy.*"
+ignore_missing_imports = true
+
+# The recognisers' own model libraries (ADR-098) are installed only in their own images, not in the
+# development environment CI type-checks from; and none ships a py.typed marker.
+[[tool.mypy.overrides]]
+module = ["stanza.*", "transformers.*", "spacy.*"]
 ignore_missing_imports = true
 
 [tool.ruff]

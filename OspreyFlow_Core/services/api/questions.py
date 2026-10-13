@@ -215,7 +215,8 @@ class PostgresQuestionStore:
     @classmethod
     async def connect(cls, dsn: str) -> PostgresQuestionStore:
         # Bounded, as every store here is: the default ten-connection floor per store pushed the
-        # lifespan past its ceiling (`test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling`).
+        # lifespan past its ceiling
+        # (`test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling`).
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)

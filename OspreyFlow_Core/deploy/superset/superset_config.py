@@ -24,7 +24,8 @@ _pg = (
     f"@{os.environ.get('POSTGRES_HOST', 'postgres')}:{os.environ.get('POSTGRES_PORT', '5432')}"
 )
 SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
-SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{_pg}/{os.environ.get('SUPERSET_METADATA_DB', 'superset')}"
+_metadata_db = os.environ.get("SUPERSET_METADATA_DB", "superset")
+SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{_pg}/{_metadata_db}"
 
 AUTH_TYPE = AUTH_OAUTH
 AUTH_USER_REGISTRATION = True
@@ -72,21 +73,23 @@ class OspreySecurityManager(SupersetSecurityManager):
     def oauth_user_info(self, provider, response=None):  # type: ignore[no-untyped-def]
         token = (response or {}).get("access_token", "")
         payload = token.split(".")[1] if token.count(".") == 2 else ""
-        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))) if payload else {}
+        padded = payload + "=" * (-len(payload) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(padded)) if payload else {}
         return {
             "username": claims.get("preferred_username", ""),
             "first_name": claims.get("given_name", ""),
             "last_name": claims.get("family_name", ""),
-            "email": claims.get("email") or f"{claims.get('preferred_username', 'user')}@ospreyflow.invalid",
+            "email": claims.get("email")
+            or f"{claims.get('preferred_username', 'user')}@ospreyflow.invalid",
             "role_keys": claims.get("roles", []),
         }
 
 
 CUSTOM_SECURITY_MANAGER = OspreySecurityManager
 
-# --- OspreyFlow's look (ADR-111 Amendment 4): Superset 6's light and dark themes, generated from the
-# Glass's design tokens (`scripts/superset_theme.py` -> `osprey_theme.json`, copied in beside this
-# file) — surfaces, text, the one accent (brass), the type families and each theme's nine chart
+# --- OspreyFlow's look (ADR-111 Amendment 4): Superset 6's light and dark themes, generated from
+# the Glass's design tokens (`scripts/superset_theme.py` -> `osprey_theme.json`, copied in beside
+# this file) — surfaces, text, the one accent (brass), the type families and each theme's nine chart
 # channels. Nothing here names a colour of its own. The Glass chooses the mode of a board it frames
 # (the embedded SDK's `themeMode`); Superset's own pages follow the browser's preference. Themes are
 # not edited inside Superset: one changed there would drift from the tokens unseen. The mark and

@@ -8,11 +8,15 @@ import sys
 
 import psycopg2
 
-host, port = os.environ.get("POSTGRES_HOST", "postgres"), int(os.environ.get("POSTGRES_PORT", "5432"))
+host = os.environ.get("POSTGRES_HOST", "postgres")
+port = int(os.environ.get("POSTGRES_PORT", "5432"))
 user, password = os.environ["POSTGRES_USER"], os.environ["POSTGRES_PASSWORD"]
 metadata = os.environ.get("SUPERSET_METADATA_DB", "superset")
 
-conn = psycopg2.connect(user=user, host=host, port=port, password=password, dbname=os.environ.get("POSTGRES_DB", "ospreyflow"))
+conn = psycopg2.connect(
+    user=user, host=host, port=port, password=password,
+    dbname=os.environ.get("POSTGRES_DB", "ospreyflow"),
+)
 conn.autocommit = True  # CREATE DATABASE cannot run inside a transaction
 with conn.cursor() as cur:
     cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (metadata,))
@@ -27,8 +31,10 @@ def superset(*args: str) -> None:
 
 superset("db", "upgrade")
 superset("init")
-reader, reader_password = os.environ.get("REPORT_MART_READER", "osprey_reports_reader"), os.environ["REPORT_MART_READER_PASSWORD"]
-mart = f"postgresql+psycopg2://{reader}:{reader_password}@{host}:{port}/{os.environ.get('POSTGRES_DB', 'ospreyflow')}"
+reader = os.environ.get("REPORT_MART_READER", "osprey_reports_reader")
+reader_password = os.environ["REPORT_MART_READER_PASSWORD"]
+mart_db = os.environ.get("POSTGRES_DB", "ospreyflow")
+mart = f"postgresql+psycopg2://{reader}:{reader_password}@{host}:{port}/{mart_db}"
 superset("set-database-uri", "--database_name", "OspreyFlow reports", "--uri", mart)
 # ADR-111 Amendment 3: the guest role and the Conduit's service user, after the mart is a source.
 subprocess.run([sys.executable, "/app/osprey_setup.py"], check=True)

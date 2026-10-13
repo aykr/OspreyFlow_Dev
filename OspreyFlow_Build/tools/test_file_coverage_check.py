@@ -89,6 +89,8 @@ from tools.layout import REPO as REPO_ROOT
 
 TESTS_DIR = REPO_ROOT / "tests"
 CI_YML_PATH = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+#: ADR-114 Amendment 9: the whole-deployment exit tests, run on demand — read as part of CI too.
+EXIT_TESTS_YML_PATH = REPO_ROOT / ".github" / "workflows" / "exit-tests.yml"
 #: The test targets live in the developer repository's Makefile (ADR-114 Amendment 2).
 MAKEFILE_PATH = BUILD / "Makefile"
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "test_file_coverage_allowlist.txt"
@@ -402,8 +404,12 @@ def find_stale_entries(
     return sorted(entry for entry in allowlist if entry not in live_set or entry not in orphaned)
 
 
-def _load(ci_yml_path: Path = CI_YML_PATH) -> tuple[set[str], dict[str, set[str]]]:
+def _load(
+    ci_yml_path: Path = CI_YML_PATH, exit_tests_path: Path = EXIT_TESTS_YML_PATH
+) -> tuple[set[str], dict[str, set[str]]]:
     ci_text = ci_yml_path.read_text(encoding="utf-8")
+    if exit_tests_path.is_file():
+        ci_text += "\n" + exit_tests_path.read_text(encoding="utf-8")
     blocks = _job_blocks(ci_text)
     test_ignored, _ = job_tokens(blocks.get("test", ""))
     live_job_tokens: dict[str, set[str]] = {}

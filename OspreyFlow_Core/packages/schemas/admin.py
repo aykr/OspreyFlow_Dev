@@ -255,7 +255,7 @@ class PauseScheduleInput(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
-ALL_MODELS = [
+ALL_MODELS: list[type[BaseModel]] = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, UpdateNotice, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,

@@ -291,7 +291,8 @@ class LinkChangeService:
         self, investigation_id: str, principal: Principal, name: str, old_type: str
     ) -> tuple[EdgeTypeDef, str] | None:
         """The type a link is changed to and the label it is written under: one the case is
-        offered (a pending proposal's own label, ADR-090 Amendment 1), or the type it already has."""
+        offered (a pending proposal's own label, ADR-090 Amendment 1), or the type it already
+        has."""
         if self._types is None:
             found = self._ontology.edge_type(name)
             return (found, name) if found is not None else None

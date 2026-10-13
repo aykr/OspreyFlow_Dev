@@ -279,3 +279,27 @@ def test_a_test_that_merely_renders_a_compose_file_is_not_misclassified() -> Non
         "from harness.render import render_compose\n"
     )
     assert is_live_service_file(source) is False
+
+
+def test_a_job_in_the_on_demand_exit_test_workflow_counts_as_covering_its_files(
+    tmp_path: Path,
+) -> None:
+    """ADR-114 Amendment 9 point 2: the whole-deployment exit tests moved to `exit-tests.yml`; the
+    gate reads both workflows, so a file run only there is still covered."""
+    ci = tmp_path / "ci.yml"
+    ci.write_text(
+        "jobs:\n"
+        "  test:\n"
+        "    steps:\n"
+        "      - run: pytest --ignore=../OspreyFlow_Build/tests/harness/test_sustained_load.py\n"
+    )
+    exits = tmp_path / "exit-tests.yml"
+    exits.write_text(
+        "jobs:\n"
+        "  sustained-load-exit-test:\n"
+        "    steps:\n"
+        "      - run: pytest ../OspreyFlow_Build/tests/harness/test_sustained_load.py\n"
+    )
+    ignored, live = _load(ci, exits)
+    assert "tests/harness/test_sustained_load.py" in ignored
+    assert "tests/harness/test_sustained_load.py" in live["sustained-load-exit-test"]

@@ -322,7 +322,8 @@ def withdraw_roles(*, issuer: str, realm: str, token: str, username: str, roles:
 
 
 def user_id(*, issuer: str, realm: str, token: str, username: str) -> str:
-    """The subject Keycloak gives an account: the Conduit's principal id for it, which is what a case
+    """The subject Keycloak gives an account: the Conduit's principal id for it, which is what a
+    case
     grant is written to. Raises, naming the account, when the realm has no such account (a Keycloak
     restart drops accounts created after its first start: `make register-sign-in` restores them)."""
     status, found = _call(
