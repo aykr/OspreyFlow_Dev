@@ -83,6 +83,8 @@ class _Host:
         self.oneshot_fails_with: str | None = None
         self.backup_vanishes = False
         self.lock_signed = True
+        self.loaded_ids: dict[str, str] = {}
+        self.bundle_refused = False
 
     # -- the command runner ------------------------------------------------------------------
     def run(self, argv: Sequence[str]) -> tuple[int, str]:
@@ -92,6 +94,10 @@ class _Host:
         if argv[:2] == ["docker", "compose"]:
             return self._compose(argv[argv.index("-f") + 2 :])
         if argv[:3] == ["docker", "inspect", "--format"]:
+            service = argv[-1].removeprefix("osprey-test-").removesuffix("-1")
+            if self.loaded_ids:  # images loaded from a bundle: compared by image ID
+                repo = f"{REG}/api" if service == "report-sync" else _repo_of(service)
+                return 0, self.loaded_ids.get(repo, "sha256:unknown")
             return 0, f"image-of-{argv[-1]}"
         if argv[:4] == ["docker", "image", "inspect", "--format"]:
             service = argv[-1].removeprefix("image-of-osprey-test-").removesuffix("-1")
@@ -132,7 +138,12 @@ class _Host:
             return (1, f"manifest unknown: {missing}") if missing else (0, "")
         if args[0] == "up":
             images = self._images()
-            self.running = {n: i.split("@")[1] for n, i in images.items() if "@" in i}
+            # Whatever each service names runs: by digest, or (from a bundle) by a loaded tag.
+            self.running = {
+                n: (i.split("@")[1] if "@" in i else i)
+                for n, i in images.items()
+                if "@" in i or ":ospreyflow-" in i
+            }
             if any(d in self.broken for d in self.running.values()):
                 return 1, "dependency failed to start: container osprey-test-api-1 is unhealthy"
             return 0, ""
@@ -192,6 +203,10 @@ class _Host:
             files_up_to_date=self.files_up_to_date,
             find_release=self.find_release,
         )
+
+
+def _repo_of(service: str) -> str:
+    return "arcadedata/arcadedb" if service == "arcadedb" else f"{REG}/{service}"
 
 
 def _update(fake: _Host, **kwargs: Any) -> int:
@@ -427,3 +442,117 @@ def test_the_lock_is_verified_before_any_image(tmp_path: Path) -> None:
     assert _update(fake) == 0
     assert fake.actions[:2] == ["find None", "verify the lock"]
 
+
+# --- from a bundle (Amendment 8 point 10) ------------------------------------------------------
+
+
+def _from_bundle(fake: _Host, tmp_path: Path) -> update.Host:
+    from harness.bundle import BundleRefused
+
+    configs = {_repo_of(s): "sha256:" + str(i) * 64 for i, s in
+               enumerate(("workspace", "api", "ingest", "ner", "arcadedb"), 3)}  # fmt: skip
+
+    def open_bundle(path: Path) -> dict[str, Any]:
+        fake.actions.append(f"open {path.name}")
+        return {"tag": "v0.5.0", "notes": "- new", "lock": _lock(NEW), "lock_signature": "{}",
+                "root": tmp_path / "opened"}  # fmt: skip
+
+    def check_bundle(root: Path, identity: Any) -> dict[str, tuple[str, str]]:
+        fake.actions.append("check the bundle offline")
+        if fake.bundle_refused:
+            raise BundleRefused(f"{REG}/api: its image file loaded as another image")
+        fake.loaded_ids = dict(configs)
+        return {r: (f"{r}:ospreyflow-v0.5.0", c) for r, c in configs.items()}
+
+    host = fake.host()
+    host.open_bundle = open_bundle
+    host.check_bundle = check_bundle
+    return host
+
+
+def test_an_update_from_a_bundle_pulls_nothing_and_runs_the_loaded_images(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path)
+    host = _from_bundle(fake, tmp_path)
+    bundle = tmp_path / "ospreyflow-v0.5.0.tar"
+    assert update.apply_update(fake.directory, fake.repo, host, bundle=bundle,
+                               confirm=lambda _: True) == 0  # fmt: skip
+    assert fake.actions[:2] == ["open ospreyflow-v0.5.0.tar", "check the bundle offline"]
+    assert not any(a.startswith("compose pull") for a in fake.actions)
+    assert "compose up -d --wait --pull never" in fake.actions
+    source = str(tmp_path / "opened" / "source.bundle")
+    assert f"git fetch {source} refs/tags/v0.5.0:refs/tags/v0.5.0" in fake.actions
+    assert not any(a.startswith("git fetch --tags origin") for a in fake.actions)
+    images = fake._images()
+    assert images["api"] == f"{REG}/api:ospreyflow-v0.5.0"
+    assert images["report-sync"] == f"{REG}/api:ospreyflow-v0.5.0"
+    assert images["arcadedb"] == "arcadedata/arcadedb:ospreyflow-v0.5.0"
+    assert "Updated to v0.5.0" in capsys.readouterr().out
+
+
+def test_a_bundle_that_fails_its_checks_changes_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path)
+    fake.bundle_refused = True
+    host = _from_bundle(fake, tmp_path)
+    before = _files(fake)
+    assert update.apply_update(fake.directory, fake.repo, host, bundle=tmp_path / "b.tar",
+                               confirm=lambda _: True) == 1  # fmt: skip
+    said = capsys.readouterr().err
+    assert "loaded as another image" in said and "Nothing was changed" in said
+    assert "backup" not in fake.actions and not _changed(fake, before)
+
+
+def test_from_a_bundle_a_container_on_another_image_than_loaded_is_a_failed_update(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path)
+    host = _from_bundle(fake, tmp_path)
+    original = host.check_bundle
+
+    def check(root: Path, identity: Any) -> dict[str, tuple[str, str]]:
+        images = original(root, identity)
+        fake.loaded_ids[f"{REG}/ner"] = "sha256:" + "f" * 64  # running something else
+        return images
+
+    host.check_bundle = check
+    assert update.apply_update(fake.directory, fake.repo, host, bundle=tmp_path / "b.tar",
+                               confirm=lambda _: True) == 1  # fmt: skip
+    assert "ner runs another image" in capsys.readouterr().err
+
+
+
+# --- making a bundle: only of a release verified online (Amendment 8 point 10) ------------------
+
+
+def test_a_bundle_is_made_only_of_a_release_that_verifies_online(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path)
+    fake.signed = {OLD}
+    made: list[Path] = []
+    host = fake.host()
+    out = tmp_path / "ospreyflow-v0.5.0.tar"
+    code = update.make_bundle_for(fake.repo, host, out, to=None,
+                                  write=lambda *a, **k: made.append(out))  # fmt: skip
+    assert code == 1 and made == [] and not out.exists()
+    assert f"{REG}/api@{NEW}" in capsys.readouterr().err
+
+
+def test_a_bundle_of_a_verified_release_is_written_and_named(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path)
+    written: list[tuple[Path, str]] = []
+    out = tmp_path / "ospreyflow-v0.5.0.tar"
+
+    def write(path: Path, release: dict[str, str], *_: Any, **__: Any) -> Path:
+        written.append((path, release["tag"]))
+        return path
+
+    assert update.make_bundle_for(fake.repo, fake.host(), out, to="v0.5.0", write=write) == 0
+    assert written == [(out, "v0.5.0")]
+    said = capsys.readouterr().out
+    assert "ospreyflow update --from" in said and out.name in said

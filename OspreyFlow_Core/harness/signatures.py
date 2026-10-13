@@ -136,6 +136,18 @@ class Cosign:
         code, said = self._run(argv)
         return code == 0, said
 
+    def save(self, ref: str, dest: Path) -> tuple[bool, str]:
+        """The image and its signatures as an OCI layout in `dest` (`cosign save`), for a bundle."""
+        if self._binary is not None:
+            argv = [self._binary, "save", "--dir", str(dest), ref]
+        else:
+            argv = [
+                "docker", "run", "--rm", *self._docker_args, "-v", f"{dest.parent}:/out",
+                COSIGN_IMAGE, "save", "--dir", f"/out/{dest.name}", ref,
+            ]  # fmt: skip
+        code, said = self._run(argv)
+        return code == 0, said
+
     def verify_blob(
         self, blob: Path, signature: Path, identity: Identity, *, offline: bool = False
     ) -> None:

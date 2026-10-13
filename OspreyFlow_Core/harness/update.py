@@ -133,6 +133,10 @@ class Host:
     restore: Callable[[Path], None]
     files_up_to_date: Callable[[], dict[str, bool]]
     find_release: Callable[[str | None], dict[str, str]]
+    #: `update --from` (Amendment 8 point 10): unpack a bundle, and check and load it offline.
+    #: `None` uses `harness.bundle` with this host's runner and cosign.
+    open_bundle: Callable[[Path], dict[str, Any]] | None = None
+    check_bundle: Callable[[Path, Identity], dict[str, tuple[str, str]]] | None = None
 
 
 def _compose_argv(directory: Path) -> list[str]:
@@ -163,15 +167,16 @@ def _split_banner(text: str) -> tuple[str, dict[str, Any]]:
     return text[:at], yaml.safe_load(text) or {}
 
 
-def pin_images(directory: Path, lock_text: str) -> None:
-    """Each service whose image the lock names runs it by the lock's digest; the lock is written."""
+def pin_images(directory: Path, lock_text: str, references: dict[str, str] | None = None) -> None:
+    """Each service whose image the lock names runs the release's: by the lock's digest, or (from a
+    bundle) by the reference it was loaded as. The lock is written."""
     path = directory / "compose.yaml"
     banner, document = _split_banner(path.read_text(encoding="utf-8"))
-    digests = _lock_digests(lock_text)
+    wanted = references or {r: f"{r}@{d}" for r, d in _lock_digests(lock_text).items()}
     for service in (document.get("services") or {}).values():
         image = service.get("image") if isinstance(service, dict) else None
-        if isinstance(image, str) and _repository(image) in digests:
-            service["image"] = f"{_repository(image)}@{digests[_repository(image)]}"
+        if isinstance(image, str) and _repository(image) in wanted:
+            service["image"] = wanted[_repository(image)]
     path.write_text(
         banner + yaml.safe_dump(document, sort_keys=False, default_flow_style=False),
         encoding="utf-8",
@@ -204,9 +209,12 @@ def _ok(host: Host, argv: Sequence[str], step: str) -> str:
     return said
 
 
-def verify_running(host: Host, directory: Path, lock_text: str | None) -> None:
+def verify_running(
+    host: Host, directory: Path, lock_text: str | None, image_ids: dict[str, str] | None = None
+) -> None:
     """Every service running and healthy (a one-shot step finished cleanly counts), and each owned
-    container running the image the lock names."""
+    container running the image the lock names — or, from a bundle, every container running the
+    image ID it was checked as (`image_ids`)."""
     said = _ok(host, [*_compose_argv(directory), "ps", "--all", "--format", "json"], "verify")
     rows = [json.loads(line) for line in said.splitlines() if line.strip().startswith("{")]
     if not rows:
@@ -221,6 +229,20 @@ def verify_running(host: Host, directory: Path, lock_text: str | None) -> None:
     digests = _lock_digests(lock_text)
     document = yaml.safe_load((directory / "compose.yaml").read_text(encoding="utf-8")) or {}
     services = document.get("services") or {}
+    if image_ids is not None:
+        for row in rows:
+            name = str(row.get("Service"))
+            repository = _repository(str((services.get(name) or {}).get("image", "")))
+            if repository not in image_ids:
+                continue
+            running = _ok(
+                host, ["docker", "inspect", "--format", "{{.Image}}", str(row["Name"])], "verify"
+            ).strip()
+            if running != image_ids[repository]:
+                raise UpdateFailed(
+                    "verify", f"{name} runs another image than the one checked ({running})"
+                )
+        return
     for row in rows:
         name = str(row.get("Service"))
         image = (services.get(name) or {}).get("image", "")
@@ -281,15 +303,56 @@ def _conflicts(host: Host, repo: Path, tag: str) -> list[str]:
     ]  # fmt: skip
 
 
+@dataclass
+class _Prepared:
+    """A release ready to apply: checked, its tag fetched, and how its images are named."""
+
+    tag: str
+    lock: str
+    references: dict[str, str] | None  # None: by the lock's digests
+    image_ids: dict[str, str] | None  # from a bundle: what each container must run
+    pull: bool
+
+
+def _prepare_online(host: Host, repo: Path, release: dict[str, Any]) -> _Prepared:
+    tag, lock = release["tag"], release["lock"]
+    verify_lock(host.cosign, lock, release.get("lock_signature", ""), host.identity(tag))
+    verify_release(lock, host.identity(tag), host.cosign)
+    _ok(host, ["git", "-C", str(repo), "fetch", "--tags", "origin"], "fetch the release's tag")
+    return _Prepared(tag, lock, None, None, pull=True)
+
+
+def _prepare_bundle(host: Host, repo: Path, release: dict[str, Any]) -> _Prepared:
+    from harness.bundle import check_bundle as check_offline
+
+    tag, root = release["tag"], Path(release["root"])
+    identity = host.identity(tag)
+    if host.check_bundle is not None:
+        images = host.check_bundle(root, identity)
+    else:
+        images = check_offline(root, identity, host.cosign, host.run)
+    source = str(root / "source.bundle")
+    _ok(host, ["git", "-C", str(repo), "fetch", source, f"refs/tags/{tag}:refs/tags/{tag}"],
+        "take the release's source from the bundle")  # fmt: skip
+    return _Prepared(
+        tag, release["lock"], {r: local for r, (local, _) in images.items()},
+        {r: image_id for r, (_, image_id) in images.items()}, pull=False,
+    )  # fmt: skip
+
+
 def apply_update(
     directory: Path,
     repo: Path,
     host: Host,
     *,
     to: str | None = None,
+    bundle: Path | None = None,
     confirm: Callable[[str], bool],
 ) -> int:
     """0 updated (or already current), 1 refused or failed and rolled back, 2 rollback failed."""
+    from harness.bundle import BundleRefused
+    from harness.bundle import open_bundle as unpack
+
     if _builds_from_checkout(directory):
         print(
             "ospreyflow: this deployment builds from its checkout; it moves with git pull and "
@@ -302,11 +365,17 @@ def apply_update(
         print(f"ospreyflow: this deployment ({current}) is not a release.", file=sys.stderr)
         return 1
     try:
-        release = host.find_release(to)
-    except ReleaseRefused as refused:
+        if bundle is not None:
+            opener = host.open_bundle or (
+                lambda path: unpack(path, directory.parent / ".update-bundle")
+            )
+            release: dict[str, Any] = opener(bundle)
+        else:
+            release = host.find_release(to)
+    except (ReleaseRefused, BundleRefused) as refused:
         print(f"ospreyflow: {refused}", file=sys.stderr)
         return 1
-    tag, lock = release["tag"], release["lock"]
+    tag = release["tag"]
     if tag == current:
         print(f"Already at {current}; nothing to do.")
         return 0
@@ -317,9 +386,7 @@ def apply_update(
         )
         return 1
     try:
-        verify_lock(host.cosign, lock, release.get("lock_signature", ""), host.identity(tag))
-        verify_release(lock, host.identity(tag), host.cosign)
-        _ok(host, ["git", "-C", str(repo), "fetch", "--tags", "origin"], "fetch the release's tag")
+        prepared = (_prepare_bundle if bundle is not None else _prepare_online)(host, repo, release)
         conflicts = _conflicts(host, repo, tag)
         if conflicts:
             raise UpdateFailed(
@@ -328,7 +395,7 @@ def apply_update(
                 + ", ".join(conflicts)
                 + ". Commit or undo them first.",
             )
-    except (SignatureRefused, UpdateFailed) as refused:
+    except (SignatureRefused, UpdateFailed, BundleRefused) as refused:
         print(f"ospreyflow: {refused}. Nothing was changed.", file=sys.stderr)
         return 1
     if not confirm(
@@ -348,17 +415,19 @@ def apply_update(
         return 1
     point = _keep_rollback_point(directory, current, commit)
     compose = _compose_argv(directory)
+    up = [*compose, "up", "-d", "--wait", *([] if prepared.pull else ["--pull", "never"])]
     try:
         _ok(host, ["git", "-C", str(repo), "checkout", "--quiet", tag], "check out the release")
         changed = host.files_up_to_date()
-        pin_images(directory, lock)
-        _ok(host, [*compose, "pull"], "pull the release's images")
-        _ok(host, [*compose, "up", "-d", "--wait"], "start the release")
+        pin_images(directory, prepared.lock, prepared.references)
+        if prepared.pull:
+            _ok(host, [*compose, "pull"], "pull the release's images")
+        _ok(host, up, "start the release")
         for service, flag in (("litellm", "proxy_changed"), ("keycloak", "theme_changed")):
             if changed.get(flag):
                 _ok(host, [*compose, "restart", service], "start the release")
-                _ok(host, [*compose, "up", "-d", "--wait"], "start the release")
-        verify_running(host, directory, lock)
+                _ok(host, up, "start the release")
+        verify_running(host, directory, prepared.lock, prepared.image_ids)
     except UpdateFailed as failed:
         print(
             f"ospreyflow: the update to {tag} failed at '{failed.step}': {failed.why}",
@@ -371,6 +440,34 @@ def apply_update(
         notice.update(current=tag, update_available=bool(latest) and newer(str(latest), tag))
         write_notice(directory, notice)
     print(f"Updated to {tag}. The backup taken before it is {backup}.")
+    return 0
+
+
+def make_bundle_for(
+    repo: Path,
+    host: Host,
+    out: Path,
+    *,
+    to: str | None,
+    write: Callable[..., Path] | None = None,
+) -> int:
+    """`update --make-bundle` (Amendment 8 point 10): a release verified online, written to one
+    file for a deployment that cannot reach GitHub or a registry."""
+    from harness.bundle import BundleRefused, make_bundle
+
+    try:
+        release = host.find_release(to)
+        tag = release["tag"]
+        verify_lock(host.cosign, release["lock"], release.get("lock_signature", ""),
+                    host.identity(tag))  # fmt: skip
+        verify_release(release["lock"], host.identity(tag), host.cosign)
+        (write or make_bundle)(out, release, repo, host.run, host.cosign)
+    except (ReleaseRefused, SignatureRefused, BundleRefused) as refused:
+        print(f"ospreyflow: {refused}. No bundle was written.", file=sys.stderr)
+        return 1
+    print(
+        f"Wrote {out} ({tag}). On the machine to update, run: ospreyflow update --from {out.name}"
+    )
     return 0
 
 
@@ -416,7 +513,9 @@ def _subprocess(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]
     return done.returncode, (done.stdout + done.stderr).strip()
 
 
-def real_host(directory: Path, repo: Path, *, github_api: str = GITHUB_API) -> Host:
+def real_host(
+    directory: Path, repo: Path, *, github_api: str = GITHUB_API, repository: str | None = None
+) -> Host:
     python = [sys.executable]
 
     def run(argv: Sequence[str]) -> tuple[int, str]:
@@ -444,7 +543,11 @@ def real_host(directory: Path, repo: Path, *, github_api: str = GITHUB_API) -> H
         return {str(k): bool(v) for k, v in changed.items()}
 
     def identity(tag: str) -> Identity:
-        owner, name = github_repository(origin_url(repo))
+        # An offline checkout's origin may be no GitHub address; `--repository` names it then.
+        if repository is not None:
+            owner, _, name = repository.partition("/")
+        else:
+            owner, name = github_repository(origin_url(repo))
         return Keyless(owner, name, tag)
 
     def release(tag: str | None) -> dict[str, str]:
@@ -471,17 +574,33 @@ def main(argv: Sequence[str] | None = None, *, repo_root: Path = REPO_ROOT) -> i
     )
     parser.add_argument("--to", help="a release to move to; the newest if not given")
     parser.add_argument("--yes", action="store_true", help="ask nothing")
+    parser.add_argument(
+        "--make-bundle", type=Path, metavar="FILE",
+        help="write the release, verified, to one file for a machine that cannot reach GitHub",
+    )  # fmt: skip
+    parser.add_argument("--from", dest="bundle", type=Path, metavar="FILE",
+                        help="update from a file --make-bundle wrote, with no network")  # fmt: skip
+    parser.add_argument(
+        "--repository", help="owner/repo of the user repository, when the origin does not say"
+    )
     args = parser.parse_args(argv)
     if args.check:
         return check(args.deployment, repo_root, github_api=args.github_api)
-    host = real_host(args.deployment, repo_root, github_api=args.github_api)
+    host = real_host(
+        args.deployment, repo_root, github_api=args.github_api, repository=args.repository
+    )
+    if args.make_bundle is not None:
+        return make_bundle_for(repo_root, host, args.make_bundle.resolve(), to=args.to)
 
     def confirm(question: str) -> bool:
         if args.yes:
             return True
         return input(f"{question} Continue? [y/N] ").strip().lower() in ("y", "yes")
 
-    return apply_update(args.deployment, repo_root, host, to=args.to, confirm=confirm)
+    bundle = args.bundle.resolve() if args.bundle is not None else None
+    return apply_update(
+        args.deployment, repo_root, host, to=args.to, bundle=bundle, confirm=confirm
+    )
 
 
 if __name__ == "__main__":
