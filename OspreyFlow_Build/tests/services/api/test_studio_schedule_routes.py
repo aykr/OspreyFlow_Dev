@@ -16,6 +16,9 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from ontology.handling import load_uk_le_scheme
+from schemas.domain import Handling, Principal
+from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from services.api.app import (
     app,
     get_audit,
@@ -27,9 +30,6 @@ from services.api.app import (
 )
 from services.api.recipe_runs import RecipeRun
 
-from ontology.handling import load_uk_le_scheme
-from schemas.domain import Handling, Principal
-from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from tests.services.api.any_case import AnyCase
 
 CASE = "/v1/investigations/inv-1/ingest/recipes"
