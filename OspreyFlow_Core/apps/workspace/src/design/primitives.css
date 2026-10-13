@@ -630,7 +630,7 @@
 /* The Inspector's single node (ADR-115 E4; the reference): a 96px key column, the node's marking as a
    badge, and the provenance stroke as the canvas draws it. */
 .inspector-keys { margin: 0; display: grid; gap: var(--sp-4); }
-.inspector-keys > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-8); }
+.inspector-keys > div { display: grid; grid-template-columns: var(--w-inspector-key) minmax(0, 1fr); gap: var(--sp-8); }
 .inspector-keys dd { margin: 0; overflow-wrap: anywhere; }
 .marking-badge {
   margin-left: auto; flex: none; padding: 0 var(--sp-4); font-size: var(--fs-11); font-weight: 600;

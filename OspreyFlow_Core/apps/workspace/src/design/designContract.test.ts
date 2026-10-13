@@ -65,9 +65,6 @@ export function undeclared(css: string, design: string): string[] {
   const found: string[] = [];
   for (const theme of ["dark", "light"] as const) {
     for (const [name, value] of Object.entries(layer[theme])) {
-      // The chart set (ADR-111 Amendment 4, owner-approved) is Superset's, not in DESIGN.md: put to
-      // the owner at E1, recorded in ADR-115, never a precedent for another colour.
-      if (name.startsWith("--chart-")) continue;
       for (const [hex] of value.matchAll(/#[0-9a-f]{3,8}\b/gi)) {
         if (!allowed.has(hex.toLowerCase())) found.push(`${theme} ${name} ${hex}`);
       }
@@ -113,10 +110,12 @@ describe("DESIGN.md and tokens.css", () => {
       panelTabs: dark["--h-panel-tabs"], timeline: dark["--h-timeline"], timelinePlot: dark["--h-timeline-plot"],
       status: dark["--h-status-bar"], welcome: dark["--w-welcome-panel"], welcomeNarrow: dark["--w-welcome-panel-narrow"],
       signIn: dark["--w-sign-in-card"], signInMin: dark["--w-sign-in-card-min"],
+      inspectorKeys: dark["--w-inspector-key"],
     }).toEqual({
       marking: "20px", topBar: "44px", topBarPage: "48px", rail: "48px", railButton: "36px", toolbar: "36px",
       panel: "340px", panelMin: "300px", panelMax: "480px", panelTabs: "36px", timeline: "34px", timelinePlot: "96px",
       status: "26px", welcome: "320px", welcomeNarrow: "280px", signIn: "360px", signInMin: "300px",
+      inspectorKeys: "96px",
     });
     expect([24, 26, 28, 30, 32, 34, 36].map((h) => dark[`--h-control-${h}`])).toEqual(
       ["24px", "26px", "28px", "30px", "32px", "34px", "36px"],

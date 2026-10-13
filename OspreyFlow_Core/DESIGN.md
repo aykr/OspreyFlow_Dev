@@ -3,6 +3,8 @@
 The contract. Every font, colour, size, spacing step and radius used in the product appears here.
 Anything on a screen that is not in this file is drift.
 
+Version 0.3.1 (13 October 2026, the owner's ruling): the chart palette (§3.4a) and the Inspector's
+key column (§5a) recorded as built, so nothing on a screen is outside this file.
 Version 0.3. Layout dimensions added (§5a), and dash and grid values settled against the prototypes.
 Version 0.2: the OspreyFlow identity. Brand motifs reworked; UI mechanics, palettes, type split and
 accessibility rules carried over from 0.1 unchanged.
@@ -172,6 +174,26 @@ triangle, ring) cross with the nine channels.
 
 Minimum contrast of every channel against its own theme's panel surface: 3.1:1 dark, 3.3:1 light.
 
+### 3.4a Chart palette — one set for both themes
+
+The nine channels moved into the lightness band that reads on both panels, for dashboards and charts
+(ADR-111 Amendment 4, the owner's values of 12 October 2026). A chart keeps its series colours in
+either mode, so each value is the same in both themes. Each holds at least 3.1:1 against the dark
+and the light panel, keeps its channel's hue within a few degrees, and separates further than either
+per-theme set under normal and simulated deutan, protan and tritan vision. Brass is not among them.
+
+| Token | Dark | Light |
+|---|---|---|
+| `--chart-ochre` | `#ac4a06` | `#ac4a06` |
+| `--chart-rose` | `#ba3457` | `#ba3457` |
+| `--chart-plum` | `#b16ca6` | `#b16ca6` |
+| `--chart-violet` | `#804dc3` | `#804dc3` |
+| `--chart-indigo` | `#6574eb` | `#6574eb` |
+| `--chart-azure` | `#2290c8` | `#2290c8` |
+| `--chart-cyan` | `#0a7376` | `#0a7376` |
+| `--chart-jade` | `#369974` | `#369974` |
+| `--chart-moss` | `#629136` | `#629136` |
+
 ### 3.5 Sequential ramp — magnitude (centrality, volume, weight)
 
 Single family, hue 200, six steps, monotonic in lightness so it survives greyscale printing.
@@ -248,6 +270,7 @@ These are fixed sizes for the shell, overlays and canvas. They count as part of 
 | Timeline (collapsed) | 34px high |
 | Timeline (expanded) | 34px header plus a 96px plot |
 | Status bar | 26px high |
+| Inspector key column | 96px wide (a property's name beside its value) |
 
 ### Breakpoints
 

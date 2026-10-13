@@ -119,7 +119,7 @@
   --w-rail:48px; --h-rail-button:36px;
   --h-canvas-toolbar:36px;
   --w-right-panel:340px; --w-right-panel-min:300px; --w-right-panel-max:480px; --h-panel-tabs:36px;
-  --h-timeline:34px; --h-timeline-plot:96px;
+  --h-timeline:34px; --h-timeline-plot:96px; --w-inspector-key:96px;
   --h-status-bar:26px;
   --w-welcome-panel:320px; --w-welcome-panel-narrow:280px;
   --w-sign-in-card:360px; --w-sign-in-card-min:300px;
