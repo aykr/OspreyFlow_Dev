@@ -16,6 +16,9 @@ from pathlib import Path
 from typing import Protocol
 
 _SECRET = re.compile(r"(?i)(password|secret|token|client_secret)")
+#: A variable named, with no value after it, is advice, not a secret (ADR-114 Amendment 8: a
+#: private repository is read with `GITHUB_TOKEN`). Its value, and every other line, stays hidden.
+_NAMED_ONLY = re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN)\b(?!\s*[=:])")
 
 
 class Runner(Protocol):
@@ -47,7 +50,7 @@ class Redactor:
         )
 
     def __call__(self, line: str) -> str:
-        return self._notice if _SECRET.search(line) else line
+        return self._notice if _SECRET.search(_NAMED_ONLY.sub("", line)) else line
 
 
 class SubprocessRunner:

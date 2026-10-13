@@ -11,6 +11,7 @@ the Conduit reads (read-only) for Admin → System.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import urllib.error
@@ -89,16 +90,24 @@ def github_repository(origin: str) -> tuple[str, str]:
 
 def _fetch_releases(owner: str, repo: str, api_base: str) -> list[dict[str, Any]]:
     url = f"{api_base}/repos/{owner}/{repo}/releases?per_page=100"
-    request = urllib.request.Request(
-        url, headers={"Accept": "application/vnd.github+json", "User-Agent": "ospreyflow-update"}
-    )
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "ospreyflow-update"}
+    # A private repository is read with the host's own token, sent to the API only, kept nowhere.
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 - https or loopback
             body = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as refused:
         if refused.code == 404:
+            hint = (
+                "or GITHUB_TOKEN on this machine cannot read it"
+                if token
+                else "or it is private: set GITHUB_TOKEN to one that can read it"
+            )
             raise ReleaseRefused(
-                f"The repository {owner}/{repo} was not found on GitHub."
+                f"The repository {owner}/{repo} was not found on GitHub ({hint})."
             ) from None
         if refused.code in (403, 429) and refused.headers.get("X-RateLimit-Remaining") == "0":
             raise ReleaseRefused(

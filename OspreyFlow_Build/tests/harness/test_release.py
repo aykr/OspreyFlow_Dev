@@ -48,6 +48,7 @@ class _GitHub:
         self.rate_limited = False
         self.failing = False
         self.asked: list[str] = []
+        self.authorisations: list[str | None] = []
 
     def handler(self) -> type[BaseHTTPRequestHandler]:
         github = self
@@ -62,6 +63,14 @@ class _GitHub:
                                  {"X-RateLimit-Remaining": "0"})  # fmt: skip
                 elif self.path.startswith("/repos/acme/ospreyflow/releases"):
                     self._answer(200, github.releases)
+                elif self.path.startswith("/repos/acme/private/releases"):
+                    # As GitHub does: a private repository is "Not Found" to a request without a
+                    # token that can read it.
+                    github.authorisations.append(self.headers.get("Authorization"))
+                    if self.headers.get("Authorization") == "Bearer good-token":
+                        self._answer(200, github.releases)
+                    else:
+                        self._answer(404, {"message": "Not Found"})
                 else:
                     self._answer(404, {"message": "Not Found"})
 
@@ -254,3 +263,23 @@ def test_no_file_or_a_damaged_one_reads_as_never_checked(tmp_path: Path) -> None
     (tmp_path / "state").mkdir()
     (tmp_path / "state" / "update.json").write_text("{not json")
     assert read_notice(tmp_path / "state") is None
+
+
+def test_a_private_repository_is_read_with_the_hosts_token_and_said_when_there_is_none(
+    github: tuple[_GitHub, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Found running the check on the owner's machine: a private repository is "not found" to an
+    anonymous request, so the words must allow for it, and a token on the host must be used. The
+    token is read from the environment, sent only to the API, and written nowhere."""
+    fake, base = github
+    fake.releases = [_release("v0.5.0")]
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    anonymous = check_for_update("v0.4.1", ("acme", "private"), api_base=base, now=NOW)
+    assert "not found" in anonymous["problem"] and "GITHUB_TOKEN" in anonymous["problem"]
+    monkeypatch.setenv("GH_TOKEN", "good-token")
+    with_token = check_for_update("v0.4.1", ("acme", "private"), api_base=base, now=NOW)
+    assert with_token["latest"] == "v0.5.0" and with_token["problem"] is None
+    assert fake.authorisations == [None, "Bearer good-token"]
+    assert "good-token" not in json.dumps(with_token)
+

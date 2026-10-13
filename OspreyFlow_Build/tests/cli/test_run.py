@@ -72,3 +72,18 @@ def test_compose_matches_the_harness_prefix(tmp_path: Path) -> None:
     assert mine[4:] == ["-f", str(directory / "compose.yaml")]
     theirs = _compose(directory / "compose.yaml")
     assert mine == [str(x) for x in theirs]
+
+
+def test_naming_the_github_variable_is_not_a_secret_but_its_value_still_is() -> None:
+    """Found running `ospreyflow update --check` live: its advice for a private repository names
+    `GITHUB_TOKEN`, and the redactor hid the whole line. A variable's name with no value is shown;
+    any value, and any other line with the words, is still hidden."""
+    from ospreyflow.run import Redactor
+
+    redact = Redactor("/x/deployment.env")
+    advice = "or it is private: set GITHUB_TOKEN to a token that can read it"
+    assert redact(advice.replace("a token", "one")) == advice.replace("a token", "one")
+    assert redact("set GH_TOKEN first") == "set GH_TOKEN first"
+    for leaking in ("GITHUB_TOKEN=ghp_abc123", "GH_TOKEN: ghp_abc", "token ghp_abc",
+                    "set GITHUB_TOKEN and the client secret"):  # fmt: skip
+        assert redact(leaking) != leaking, leaking
