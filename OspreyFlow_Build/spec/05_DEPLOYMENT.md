@@ -788,6 +788,16 @@ external:
   server for the S3-protocol stores (Amendment 10 point 2).
 - Any container that reaches a managed service joins the `egress` network (Amendment 7): reaching
   it is a configured feature's need.
+- `object_store.credentials: keys` instead reads `OSPREY_S3_ACCESS_KEY` and `OSPREY_S3_SECRET_KEY`
+  at apply, for an S3 store that has no instance identity to offer.
+- **How a Small server comes to exist** (Amendment 10): `ospreyflow install --mode small --cloud
+  aws|azure` runs OpenTofu (`deploy/opentofu/small/<cloud>`, state in `.cloud/` of the checkout,
+  owner-only) — plan, then apply on confirmation; the server's first boot reads its passwords with
+  its own identity, installs onto the services above, and leaves the first administrator's one-time
+  code (`harness.first_admin`, made with Keycloak's own `kcadm.sh` inside its container) in the
+  cloud's secret store; the operator's command waits for the name and the server, shows the code
+  once and deletes it. Servers start at 32 GB: a nominal 16 GB machine shows its system less than
+  Preflight's 16 GiB floor.
 - **`ospreyflow backup` refuses a deployment with an external Postgres**, in words: the cloud's own
   backups (AWS Backup, RDS snapshots, Azure Backup) protect it, and a dump from inside the server
   would be a second, unscheduled copy no one restores from.
