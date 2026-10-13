@@ -115,6 +115,7 @@ from schemas.admin import (
     DashboardGuestToken,
     DashboardIdentity,
     DashboardInput,
+    DataFeed,
     DemoPackStatus,
     EmbeddedDashboard,
     InviteInput,
@@ -8444,6 +8445,47 @@ async def _scheduled_recipe(studio_recipes: StudioRecipeStore, recipe_id: str) -
         if recipe.recipe_id == recipe_id:
             return recipe
     raise HTTPException(status_code=404, detail={"error": "schedule_not_found"})
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/data-feeds",
+    dependencies=[Depends(require_right(Right.READ_DATA_FEEDS))],
+)
+async def data_feeds_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    recipe_runs: RecipeRunsDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> list[DataFeed]:
+    """The pipelines feeding the case's datasets (ADR-110 decision 9), read-only: each schedule in
+    words, its next run and last outcome — a run's counts only where the reader may view the source
+    (rule 3). Viewer level: how fresh a case's data is is for everyone who reads the case."""
+    feeds: list[DataFeed] = []
+    for recipe in await studio_recipes.feeding(principal.datasets or []):
+        zone = recipe.schedule_timezone or DEFAULT_TIMEZONE
+        latest = await recipe_runs.for_recipe(recipe.recipe_id, limit=1)
+        scheduled = recipe.schedule_cron is not None
+        feeds.append(
+            DataFeed(
+                recipe_id=recipe.recipe_id,
+                label=recipe.label,
+                schedule=describe(recipe.schedule_cron, zone) if recipe.schedule_cron else None,
+                next_run=next_slot(recipe.schedule_cron, zone, after=datetime.now(UTC))
+                if recipe.schedule_cron and not recipe.schedule_paused
+                else None,
+                paused=scheduled and recipe.schedule_paused,
+                flagged=recipe.status is StudioRecipeStatus.FLAGGED,
+                last_run=_schedule_run_view(latest[0], principal, handling_scheme)
+                if latest
+                else None,
+            )
+        )
+    await audit.record(principal=principal, action="list_data_feeds",
+                       investigation_id=investigation.id, resolved_query={},
+                       result_cardinality=len(feeds))  # fmt: skip
+    return feeds
 
 
 @app.get("/v1/admin/schedules", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))])

@@ -29,6 +29,7 @@ every version that was ever published.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import asyncpg
@@ -498,6 +499,20 @@ class StudioRecipeStore:
                 "WHERE status = ANY($1::text[]) AND schedule_cron IS NOT NULL "
                 "ORDER BY recipe_id",
                 [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
+            )
+        return [_row_to_draft(r) for r in rows]
+
+    async def feeding(self, dataset_ids: Sequence[str]) -> list[StudioRecipeDraft]:
+        """The published (or flagged) recipes that load into any of `dataset_ids` — the pipelines
+        feeding a case (ADR-110 decision 9), read through the case's own datasets."""
+        if not dataset_ids:
+            return []
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM studio_recipes WHERE status = ANY($1::text[]) "
+                "AND dataset_id = ANY($2::text[]) ORDER BY label, recipe_id",
+                [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
+                list(dataset_ids),
             )
         return [_row_to_draft(r) for r in rows]
 

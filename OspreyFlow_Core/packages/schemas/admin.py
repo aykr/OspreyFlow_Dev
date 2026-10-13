@@ -199,6 +199,19 @@ class AdminSchedule(BaseModel):
     last_run: ScheduleRunView | None = None
 
 
+class DataFeed(BaseModel):
+    """A pipeline feeding a case's datasets, as the Glass's *Data feeds* shows it (ADR-110
+    decision 9): how fresh the case's data is. `schedule` is `None` for a recipe run only by hand."""
+
+    recipe_id: str
+    label: str
+    schedule: str | None = None
+    next_run: datetime | None = None
+    paused: bool = False
+    flagged: bool = False
+    last_run: ScheduleRunView | None = None
+
+
 class PauseScheduleInput(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
@@ -207,5 +220,5 @@ ALL_MODELS = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
-    ScheduleRunView, AdminSchedule, PauseScheduleInput,
+    ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed,
 ]  # fmt: skip

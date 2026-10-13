@@ -424,6 +424,42 @@ async def test_the_scheduler_lists_scheduled_recipes_and_a_pause_keeps_its_reaso
     assert (resumed.schedule_paused, resumed.schedule_paused_reason) == (False, None)
 
 
+_CONNECT: dict[str, object] = {
+    "connector_profile": "generic-csv",
+    "source_location": "s3://bucket/feed.csv",
+    "handling": {"classification": "OFFICIAL", "handling_code": "P", "originator": "unit-1",
+                 "owning_unit": "unit-1"},
+    "legal_basis": "synthetic test basis",
+}  # fmt: skip
+
+
+async def test_the_feeds_of_a_case_are_its_datasets_published_recipes_only(
+    store: StudioRecipeStore,
+) -> None:
+    """ADR-110 decision 9: what feeds a case is read through the case's datasets."""
+    from uuid import uuid4
+
+    mine, theirs = f"ds-{uuid4().hex[:8]}", f"ds-{uuid4().hex[:8]}"
+    published = []
+    for dataset in (mine, theirs):
+        author = AUTHOR.model_copy(update={"datasets": [dataset]})
+        draft = await store.create_draft(author, label=f"Feed {dataset}", **_CONNECT)
+        await store.mark_verified(
+            draft.recipe_id, draft.version, now=datetime(2026, 1, 1, tzinfo=UTC)
+        )
+        published.append(await store.publish(
+            draft.recipe_id, AUTHOR, ontology_version=3, git_path="recipes/f.yaml",
+            schedule_cron=None, schedule_watch=None, now=datetime(2026, 1, 2, tzinfo=UTC),
+        ))  # fmt: skip
+    still_a_draft = await store.create_draft(
+        AUTHOR.model_copy(update={"datasets": [mine]}), label="Unpublished", **_CONNECT
+    )
+    feeding = [r.recipe_id for r in await store.feeding([mine])]
+    assert feeding == [published[0].recipe_id]
+    assert still_a_draft.recipe_id not in feeding
+    assert await store.feeding([]) == []
+
+
 async def test_create_new_version_supersedes_the_published_row_and_opens_a_draft(
     store: StudioRecipeStore,
 ) -> None:
