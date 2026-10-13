@@ -12,14 +12,15 @@ afterEach(() => {
 });
 
 describe("AdminWithoutCase", () => {
-  it("opens the Admin area with no case, and goes back to Start", () => {
+  it("opens the Admin area with no case, and goes back to Home by the mark", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { status: 200 })));
     const start = vi.fn();
     render(
       <AdminWithoutCase apiBaseUrl="http://api" bearerToken="t" rights={new Set(["manage_people"])} onStart={start} account={null} marking={null} />,
     );
     expect(screen.getByRole("tab", { name: "People and roles" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "OspreyFlow, go to Home" }));
     expect(start).toHaveBeenCalledTimes(1);
   });
 });

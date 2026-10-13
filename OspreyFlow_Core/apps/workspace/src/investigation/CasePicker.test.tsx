@@ -42,7 +42,7 @@ describe("CasePicker", () => {
                   title="Choose the case to load into" onStart={start} />,  // prettier-ignore
     );
     expect(screen.getByRole("heading", { name: "Choose the case to load into" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "← Back to Home" }));
     expect(start).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Fixture Corp")).toBeTruthy();
   });

@@ -82,7 +82,7 @@ export function CasePicker({
         <h1>{title}</h1>
         {onStart && (
           <div>
-            <Button onClick={onStart}>Start</Button>
+            <Button onClick={onStart}>← Back to Home</Button>
           </div>
         )}
         {onClose && openCaseId && cases?.some((entry) => entry.id === openCaseId) && (

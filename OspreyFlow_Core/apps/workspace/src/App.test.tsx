@@ -338,7 +338,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     expect(within(rail()).getByRole("button", { name: "Ingest Studio" })).toBeTruthy();
     const header = document.querySelector("header.app-header")!;
     // ADR-114 Amendment 5 point 9: the mark is the way back to Start.
-    expect(header.firstElementChild?.getAttribute("aria-label")).toBe("OspreyFlow, go to Start");
+    expect(header.firstElementChild?.getAttribute("aria-label")).toBe("OspreyFlow, go to Home");
     expect(header.firstElementChild?.firstElementChild?.className).toBe("brand-mark");
     expect(header.textContent).toContain("Osprey");
     expect(header.getAttribute("data-app")).toBe("glass");

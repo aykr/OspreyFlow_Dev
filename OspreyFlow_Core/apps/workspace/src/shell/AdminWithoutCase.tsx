@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 
 import { AdminPlace } from "../admin/AdminPlace";
-import { Button } from "../design/primitives/Button";
 import { StartBar } from "./StartPage";
 
 export interface AdminWithoutCaseProps {
@@ -19,9 +18,6 @@ export function AdminWithoutCase({ onStart, account, marking, ...admin }: AdminW
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <StartBar account={account} onStart={onStart} marking={marking} />
-      <div style={{ padding: "var(--sp-8) var(--sp-16) 0" }}>
-        <Button onClick={onStart}>Start</Button>
-      </div>
       <AdminPlace {...admin} />
     </div>
   );

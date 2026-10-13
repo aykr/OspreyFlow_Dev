@@ -60,7 +60,7 @@ test("Admin is chosen from Start with no case, and Start is back by keyboard", a
   await expect.poll(() => asked).toContain("/v1/admin/people");
   expect(await opened(page)).toBeNull();
   registerCovered(REGISTRY, "choose-admin-from-start-by-keyboard");
-  await press(page, "Start");
+  await press(page, "OspreyFlow, go to Home");
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 });
 
@@ -68,7 +68,7 @@ test("the mark returns to Start from a case's workspace by keyboard", async ({ p
   await serve(page);
   await page.goto("/keyboard/start-harness.html?case=c1");
   await expect(page.getByText("Workspace on c1, graph")).toBeVisible();
-  await press(page, "OspreyFlow, go to Start");
+  await press(page, "OspreyFlow, go to Home");
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
   await press(page, /^Open Ingest Studio/);
   await expect(page.getByText("Workspace on c1, ingest")).toBeVisible();
@@ -83,7 +83,7 @@ test("a usable place opens with its key from anywhere on Home, and a gated one d
   await expect(page.getByRole("heading", { level: 1, name: /^Good/ })).toBeVisible();
   await page.keyboard.press("a");
   await expect(page.getByRole("tab", { name: "People and roles" })).toBeVisible();
-  await press(page, "Start");
+  await press(page, "OspreyFlow, go to Home");
   await page.keyboard.press("g");
   await expect(page.getByRole("heading", { name: "Choose a case" })).toBeVisible();
   registerCovered(REGISTRY, "open-a-place-from-home-with-its-key");

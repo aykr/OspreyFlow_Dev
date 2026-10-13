@@ -12,7 +12,7 @@ export function StartBar({ account, onStart, marking }: { account: ReactNode; on
     {marking && <ClassificationStrip marking={marking} />}
     <header className="app-header top-bar">
       {onStart ? (
-        <button type="button" className="brand-mark-button" aria-label="OspreyFlow, go to Start" onClick={onStart}>
+        <button type="button" className="brand-mark-button" aria-label="OspreyFlow, go to Home" onClick={onStart}>
           <BrandMark />
         </button>
       ) : (
