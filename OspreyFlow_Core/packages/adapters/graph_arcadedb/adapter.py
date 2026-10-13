@@ -50,6 +50,7 @@ from schemas.domain import (
     PatternQuery,
     Principal,
     Provenance,
+    RoutesAtLength,
     SchemaReport,
     Subgraph,
     TxId,
@@ -81,6 +82,7 @@ from .builders import (
     MostConnectedBuilder,
     NeighbourhoodStatsBuilder,
     PathBuilder,
+    RoutesAtLengthBuilder,
     SearchNodesBuilder,
     SuggestLocationsBuilder,
     SuggestNodesBuilder,
@@ -689,7 +691,33 @@ class GraphArcadeDBAdapter:
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]:
         query = PathBuilder(req).render_gremlin(self._access, principal)
         results = await self._client.gremlin(query)
-        raw_paths: list[list[str]] = [record["result"] for record in results]
+        return await self._hydrate_paths([record["result"] for record in results], principal)
+
+    async def paths_at_length(
+        self,
+        source: NodeId,
+        target: NodeId,
+        length: int,
+        limit: int,
+        principal: Principal,
+        *,
+        edge_types: list[str] | None = None,
+    ) -> RoutesAtLength:
+        builder = RoutesAtLengthBuilder(
+            source, target, length, limit, tuple(edge_types) if edge_types is not None else None
+        )
+        query = builder.render_gremlin(self._access, principal)
+        if query is None:
+            return RoutesAtLength(length=length, paths=[], more=False)
+        raw_paths: list[list[str]] = [r["result"] for r in await self._client.gremlin(query)]
+        return RoutesAtLength(
+            length=length,
+            paths=await self._hydrate_paths(raw_paths[:limit], principal),
+            more=len(raw_paths) > limit,
+        )
+
+    async def _hydrate_paths(self, raw_paths: list[list[str]], principal: Principal) -> list[Path]:
+        """Each found path's alternating node and link ids, as full nodes and links."""
         if not raw_paths:
             return []
 

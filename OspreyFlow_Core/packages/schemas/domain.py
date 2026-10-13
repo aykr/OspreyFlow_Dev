@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -493,6 +493,51 @@ class Path(BaseModel):
     nodes: list[Node]
     edges: list[Edge]
     length: int
+
+
+#: ADR-116: the degree a Find connections search looks to when none is asked (01 §6.3's default),
+#: and the furthest it may be asked to look (ADR-033's ceiling, `PathRequest.max_hops`).
+CONNECTIONS_DEFAULT_REACH: Final[int] = 6
+CONNECTIONS_CEILING: Final[int] = 8
+#: ADR-116 decision 3: the routes shown at one degree, past which the answer says more exist.
+CONNECTIONS_SHOWN: Final[int] = 10
+
+
+class RoutesAtLength(BaseModel):
+    """ADR-116: the simple routes of exactly `length` links between two nodes, as the reader may see
+    them — at most the number asked for, and `more` when others exist beyond it (rule 2: never cut
+    silently)."""
+
+    length: int
+    paths: list[Path]
+    more: bool
+
+
+class ConnectionsRequest(BaseModel):
+    """ADR-116 decision 6. With no `degree`, the fewest degrees that connect the two, looked for up
+    to `CONNECTIONS_DEFAULT_REACH`; with one, the routes at exactly that degree."""
+
+    source: NodeId
+    target: NodeId
+    degree: int | None = Field(default=None, ge=1, le=CONNECTIONS_CEILING)
+    edge_types: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _two_ends(self) -> ConnectionsRequest:
+        if self.source == self.target:
+            raise ValueError("From and To are the same node; choose two different ones")
+        return self
+
+
+class Connections(BaseModel):
+    """ADR-116: the answer. `degree` is `None` when no route was found up to `searched_to`; a hidden
+    end and an unknown one answer alike, since no route can pass through a node the reader cannot
+    see (rule 3)."""
+
+    degree: int | None
+    paths: list[Path]
+    more: bool
+    searched_to: int
 
 
 class PatternNode(BaseModel):
@@ -1186,6 +1231,9 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     Principal,
     ExpandRequest,
     PathRequest,
+    RoutesAtLength,
+    ConnectionsRequest,
+    Connections,
     Path,
     PatternNode,
     PatternEdge,

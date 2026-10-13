@@ -728,6 +728,149 @@ async def test_paths_returns_hydrated_nodes_and_edges_not_bare_ids(
         assert found.edges[0].type == "USES"
 
 
+# --- routes at one degree (ADR-116) ------------------------------------------
+
+
+async def _fewest_degrees(adapter: GraphPort, a: str, b: str, principal: Principal) -> int | None:
+    """What the Conduit works out from `paths_at_length`: the first degree with a route."""
+    for length in range(1, 7):
+        if (await adapter.paths_at_length(a, b, length, 1, principal)).paths:
+            return length
+    return None
+
+
+async def test_routes_at_a_length_are_exactly_that_long_and_every_such_route_is_found(
+    factory: GraphAdapterFactory,
+) -> None:
+    """a—d directly, a—x—d, and a—b—c—d: one simple route at each of 1, 2 and 3 links, none at 4."""
+    async with factory.context() as adapter:
+        (a, b, c, d, x), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL") for _ in "abcdx"], []
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", a, d, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", a, x, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", x, d, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", b, c, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", c, d, classification="OFFICIAL"),
+            ],
+        )
+        routes = {n: await adapter.paths_at_length(a, d, n, 10, CLEARED) for n in (1, 2, 3, 4)}
+        assert [[node.id for node in p.nodes] for p in routes[1].paths] == [[a, d]]
+        assert [[node.id for node in p.nodes] for p in routes[2].paths] == [[a, x, d]]
+        assert [[node.id for node in p.nodes] for p in routes[3].paths] == [[a, b, c, d]]
+        assert routes[4].paths == [] and routes[4].more is False
+        assert all(p.length == n and len(p.edges) == n for n, r in routes.items() for p in r.paths)
+        assert {r.length for r in routes.values()} == {1, 2, 3, 4}
+
+
+async def test_no_route_passes_through_a_hidden_node_or_link_and_the_fewest_degrees_do_not_move(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Rule 3's path-length leak, for degrees: a SECRET link a—d and a route through a SECRET node
+    are invisible to an OFFICIAL reader, who sees a and d three degrees apart, as if neither
+    existed."""
+    async with factory.context() as adapter:
+        (a, b, c, d), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL") for _ in "abcd"], []
+        )
+        (hidden,), _ = await _write(adapter, [_node("Person", classification="SECRET")], [])
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", b, c, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", c, d, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", a, hidden, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", hidden, d, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", a, d, classification="SECRET"),
+            ],
+        )
+        assert await _fewest_degrees(adapter, a, d, OFFICIAL) == 3
+        assert await _fewest_degrees(adapter, a, d, CLEARED) == 1  # the filter is real
+        through_hidden = await adapter.paths_at_length(a, d, 2, 10, OFFICIAL)
+        assert through_hidden.paths == [] and through_hidden.more is False
+        assert len((await adapter.paths_at_length(a, d, 2, 10, CLEARED)).paths) == 1
+        # A hidden end has no route at all, the same answer as a node that does not exist.
+        assert (await adapter.paths_at_length(a, hidden, 1, 10, OFFICIAL)).paths == []
+
+
+async def test_routes_at_a_length_honour_the_limit_and_say_when_more_exist(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Four two-link routes a—m—d. Asked for three: three, and `more`. Asked for four: no `more`."""
+    async with factory.context() as adapter:
+        (a, d, *middle), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL") for _ in range(6)], []
+        )
+        edges = [_edge("ASSOCIATE_OF", a, m, classification="OFFICIAL") for m in middle]
+        edges += [_edge("ASSOCIATE_OF", m, d, classification="OFFICIAL") for m in middle]
+        await _write(adapter, [], edges)
+
+        three = await adapter.paths_at_length(a, d, 2, 3, CLEARED)
+        assert len(three.paths) == 3 and three.more is True
+        four = await adapter.paths_at_length(a, d, 2, 4, CLEARED)
+        assert len(four.paths) == 4 and four.more is False
+        assert {p.nodes[1].id for p in four.paths} == set(middle)
+
+
+async def test_a_not_same_as_judgement_is_never_a_step_on_a_route(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`NOT_SAME_AS` says two records are different people; it is not a connection between them."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL") for _ in "ab"], []
+        )
+        await _write(adapter, [], [_edge("NOT_SAME_AS", a, b, classification="OFFICIAL")])
+        assert (await adapter.paths_at_length(a, b, 1, 10, CLEARED)).paths == []
+        await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")])
+        [route] = (await adapter.paths_at_length(a, b, 1, 10, CLEARED)).paths
+        assert route.edges[0].type == "ASSOCIATE_OF"
+
+
+async def test_routes_at_a_length_follow_only_the_link_types_asked_for(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL") for _ in "ab"], []
+        )
+        await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")])
+        typed = await adapter.paths_at_length(a, b, 1, 10, CLEARED, edge_types=["ASSOCIATE_OF"])
+        assert len(typed.paths) == 1
+        other = await adapter.paths_at_length(a, b, 1, 10, CLEARED, edge_types=["USES"])
+        assert other.paths == []
+
+
+async def test_routes_in_one_dataset_match_a_graph_without_the_other_datasets_link(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-099: a case reads only its datasets, so a link of another dataset is no step for it."""
+    async with factory.context() as adapter:
+        both = ["enron", "fixture"]
+        (a, b, target), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=both) for _ in "abc"], []
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["fixture"]),
+                _edge("ASSOCIATE_OF", b, target, classification="OFFICIAL", datasets=["fixture"]),
+                _edge("ASSOCIATE_OF", a, target, classification="OFFICIAL", datasets=["enron"]),
+            ],
+        )
+        assert await _fewest_degrees(adapter, a, target, IN_FIXTURE) == 2
+        assert await _fewest_degrees(adapter, a, target, IN_ENRON) == 1
+        assert await _fewest_degrees(adapter, a, target, IN_NOTHING) is None
+
+
 # --- pattern match ------------------------------------------------------------
 
 

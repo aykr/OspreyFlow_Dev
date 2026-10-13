@@ -444,6 +444,51 @@ class PathBuilder:
 
 
 @dataclass(frozen=True)
+class RoutesAtLengthBuilder:
+    """ADR-116 decision 5: `PathBuilder`'s traversal held to exactly `length` links — `times()`
+    where `PathBuilder` has `until()` — with the access predicate at the source, every link and
+    every node walked onto, so a route through anything the principal cannot see is never found.
+    `simplePath()` keeps a route from coming back to a node, the target included, so a route that
+    ends at the target after `length` links never passed it sooner. One more than `limit` is asked
+    for, so the caller can say that more exist (rule 2). A `NOT_SAME_AS` link is never a step: it is
+    an analyst's judgement that two records are different, not a connection."""
+
+    source: str
+    target: str
+    length: int
+    limit: int
+    edge_types: tuple[str, ...] | None = None
+
+    def _edge_filter(self) -> str | None:
+        """The step's label filter, or `None` when no type asked for may be walked at all."""
+        never = physical_type_name("NOT_SAME_AS")
+        if self.edge_types is None:
+            return f'.not(hasLabel("{never}"))'
+        physical = [
+            label for t in self.edge_types for label in physical_edge_labels(t) if label != never
+        ]
+        if not physical:
+            return None
+        return f".hasLabel({groovy_args_literal(physical)})"
+
+    def render_gremlin(self, access: AccessFilter, principal: Principal) -> str | None:
+        """The traversal, or `None` when it could find nothing (no walkable link type asked)."""
+        edge_filter = self._edge_filter()
+        if edge_filter is None:
+            return None
+        has_access = access.gremlin_has_step(principal)
+        source_lit = groovy_string_literal(self.source)
+        target_lit = groovy_string_literal(self.target)
+        return (
+            f'g.V().has("id",{source_lit}).{has_access}'
+            f".repeat(bothE(){edge_filter}.{has_access}.otherV().{has_access}.simplePath())"
+            f".times({self.length})"
+            f'.has("id",{target_lit})'
+            f'.limit({self.limit + 1}).path().by("id").by("id")'
+        )
+
+
+@dataclass(frozen=True)
 class NeighbourhoodStatsBuilder:
     node_id: str
 

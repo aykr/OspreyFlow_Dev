@@ -29,6 +29,7 @@ from schemas.domain import (
     PathRequest,
     PatternQuery,
     Principal,
+    RoutesAtLength,
     SchemaReport,
     Subgraph,
     TxId,
@@ -266,6 +267,25 @@ class GraphPort(Protocol):
         ...
 
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]: ...
+
+    async def paths_at_length(
+        self,
+        source: NodeId,
+        target: NodeId,
+        length: int,
+        limit: int,
+        principal: Principal,
+        *,
+        edge_types: list[str] | None = None,
+    ) -> RoutesAtLength:
+        """ADR-116 decision 5: the simple routes of exactly `length` links from `source` to
+        `target` — at most `limit` of them, with `more` set when others exist (rule 2) — found with
+        the access predicate at every step, as `paths` is (01 §6.3): a route through a node or link
+        the principal cannot see is never found, so nothing here, nor the fewest degrees a caller
+        works out from it, can show that one exists. A `NOT_SAME_AS` link (an analyst's judgement
+        that two records are different people) is never a step on a route."""
+        ...
+
     async def match(self, pattern: PatternQuery, principal: Principal) -> Subgraph: ...
 
     async def match_count(
