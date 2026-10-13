@@ -203,16 +203,17 @@ def run_doctor(
             uv,
             *(_port_check(probes, port) for port in LITE_PORTS),
         ]
-    stage = _STAGE.get(mode, "B6")
+    # Small is built; Enterprise is still a stage to come (B7), and says so.
+    stage = f", stage {_STAGE[mode]} — not built yet" if mode == "enterprise" else ""
     tofu = _tool(
         probes, "tofu", "tofu", "OpenTofu",
         "Install OpenTofu from https://opentofu.org/docs/intro/install/.",
-        f" (it is needed for the {mode} install, stage {stage})",
+        f" (it builds the {mode} install's servers{stage})",
     )  # fmt: skip
     tofu = Check(
         tofu.name,
         tofu.ok,
-        tofu.says if not tofu.ok else f"OpenTofu is installed (needed for stage {stage}).",
+        tofu.says if not tofu.ok else "OpenTofu is installed.",
         tofu.fix,
     )
     clouds = [cloud] if cloud else list(_CLOUD_CLI)
@@ -224,7 +225,7 @@ def run_doctor(
         cli = Check(
             "cloud-cli",
             False,
-            f"The {label} command line is not installed (it is needed for stage {stage}).",
+            f"The {label} command line is not installed (the {mode} install needs it{stage}).",
             "Install it and sign in to your account.",
         )
     return [git, uv, tofu, cli]

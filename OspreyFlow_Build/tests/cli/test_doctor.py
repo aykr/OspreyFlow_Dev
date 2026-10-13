@@ -126,7 +126,7 @@ def test_small_and_enterprise_check_tofu_and_the_cloud_cli_not_docker(tmp_path: 
     probes = FakeProbes()
     probes.missing = {"docker", "tofu", "aws", "az"}
     probes.info = None
-    for mode, cloud, stage in [("small", "aws", "B6"), ("enterprise", "azure", "B7")]:
+    for mode, cloud, stage in [("small", "aws", "small install"), ("enterprise", "azure", "B7")]:
         checks = _by_name(run_doctor(mode, probes, product=tmp_path, cloud=cloud))
         assert {n for n, c in checks.items() if not c.ok} == {"tofu", "cloud-cli"}
         assert "docker-installed" not in checks

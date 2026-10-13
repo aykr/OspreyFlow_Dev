@@ -36,6 +36,12 @@ body {
   font-size: var(--fs-11);
 }
 
+/* A host path has no spaces to break at: without this it ran across the screen beside the rail and
+   over its text (seen on the Review screen's checks, 13 October 2026). */
+.summary-rail__status code {
+  overflow-wrap: anywhere;
+}
+
 .summary-rail__future {
   opacity: 0.6;
 }
