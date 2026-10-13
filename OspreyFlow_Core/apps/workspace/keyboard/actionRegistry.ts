@@ -574,6 +574,12 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "show-a-schedules-runs-by-keyboard",
 ] as const);
 
+// ADR-110 decision 7 (D5): the Publish screen's structured schedule.
+export const PUBLISH_ACTIONS = defineActionRegistry("PUBLISH_ACTIONS", [
+  "set-a-schedule-by-keyboard",
+  "pause-and-resume-a-schedule-by-keyboard",
+] as const);
+
 // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.
 export const START_ACTIONS = defineActionRegistry("START_ACTIONS", [
   "choose-the-glass-from-start-by-keyboard",

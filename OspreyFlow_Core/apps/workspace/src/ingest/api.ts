@@ -17,6 +17,8 @@ import type {
   PipelineRunReport,
   PublishRecipeInput,
   RowTemplate,
+  SchedulePreview,
+  ScheduleRunView,
   ScheduleUpdateInput,
   SourceProfile,
   StudioRecipeDraft,
@@ -538,4 +540,48 @@ export async function fetchDomainPacks(
 ): Promise<DomainPackEntry[]> {
   const response = await fetch(`${apiBaseUrl}/v1/ingest/packs`, { headers: authHeaders(bearerToken) });
   return parseOrThrow(response, "GET /v1/ingest/packs");
+}
+
+// --- ADR-110 decision 7: the structured schedule editor ------------------------------------------
+
+/** The schedule in words and its next five runs, or a `StudioActionError` with the refusal in words
+ * (`schedule_refused`). */
+export async function previewSchedule(
+  apiBaseUrl: string,
+  bearerToken: string,
+  cron: string,
+  timezone: string,
+): Promise<SchedulePreview> {
+  const response = await fetch(`${apiBaseUrl}/v1/ingest/schedule-preview`, {
+    method: "POST",
+    headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ cron, timezone }),
+  });
+  return parseActionErrorOrThrow(response, "POST /v1/ingest/schedule-preview");
+}
+
+export async function setRecipeSchedulePaused(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  recipeId: string,
+  paused: boolean,
+): Promise<StudioRecipeDraft> {
+  const response = await fetch(
+    `${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/schedule/${paused ? "pause" : "resume"}`,
+    { method: "POST", headers: authHeaders(bearerToken) },
+  );
+  return parseActionErrorOrThrow(response, `POST …/schedule/${paused ? "pause" : "resume"}`);
+}
+
+export async function fetchRecipeRuns(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  recipeId: string,
+): Promise<ScheduleRunView[]> {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/runs`, {
+    headers: authHeaders(bearerToken),
+  });
+  return parseActionErrorOrThrow(response, "GET …/runs");
 }

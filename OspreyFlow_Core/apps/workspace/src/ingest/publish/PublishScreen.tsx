@@ -9,7 +9,13 @@
 // error.
 import { useEffect, useState } from "react";
 
-import type { LoadReport, PipelineRunReport, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
+import type {
+  LoadReport,
+  PipelineRunReport,
+  ScheduleRunView,
+  StudioRecipeDraft,
+} from "../../../../../packages/schemas/generated";
+import { runInWords } from "../../admin/Schedules";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Panel } from "../../design/primitives/Panel";
@@ -18,10 +24,14 @@ import {
   createNewVersion,
   fetchDraft,
   fetchRecipeRegistry,
+  fetchRecipeRuns,
   publishRecipe,
   runRecipe,
+  setRecipeSchedulePaused,
   updateSchedule,
 } from "../api";
+import { DEFAULT_TIMEZONE, ScheduleEditor } from "./ScheduleEditor";
+import { choiceOf, cronOf, type ScheduleChoice } from "./scheduleChoice";
 
 /** The run route answers one of two shapes; both carry index signatures in the generated types,
  * so `in` cannot discriminate them — a pipeline run is the one whose `branches` is a real list. */
@@ -152,8 +162,11 @@ export function PublishScreen({
   onReopenedForEditing,
 }: PublishScreenProps) {
   const [draft, setDraft] = useState<StudioRecipeDraft | null>(null);
-  const [scheduleCron, setScheduleCron] = useState("");
+  // ADR-110 decision 7: the schedule as a structured choice in a named zone.
+  const [choice, setChoice] = useState<ScheduleChoice>({ kind: "none" });
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [scheduleWatch, setScheduleWatch] = useState("");
+  const [runs, setRuns] = useState<ScheduleRunView[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadReport, setLoadReport] = useState<LoadReport | PipelineRunReport | null>(null);
@@ -165,13 +178,27 @@ export function PublishScreen({
     void fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeIdOrNull).then((d) => {
       if (cancelled) return;
       setDraft(d);
-      setScheduleCron(d.schedule_cron ?? "");
+      setChoice(choiceOf(d.schedule_cron));
+      setTimezone(d.schedule_timezone ?? DEFAULT_TIMEZONE);
       setScheduleWatch(d.schedule_watch ?? "");
     });
     return () => {
       cancelled = true;
     };
   }, [apiBaseUrl, bearerToken, recipeIdOrNull, investigationId]);
+
+  // ADR-110 decisions 6 and 7: the recipe's runs beneath its schedule, once it is published.
+  const published = draft?.status === "published" || draft?.status === "flagged";
+  useEffect(() => {
+    if (!recipeIdOrNull || !published) return;
+    let cancelled = false;
+    fetchRecipeRuns(apiBaseUrl, bearerToken, investigationId, recipeIdOrNull)
+      .then((r) => !cancelled && setRuns(r))
+      .catch(() => !cancelled && setRuns(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken, recipeIdOrNull, investigationId, published, loadReport]);
 
   if (!recipeIdOrNull) {
     return (
@@ -181,7 +208,8 @@ export function PublishScreen({
         bearerToken={bearerToken}
         onSelect={(selected) => {
           setDraft(selected);
-          setScheduleCron(selected.schedule_cron ?? "");
+          setChoice(choiceOf(selected.schedule_cron));
+          setTimezone(selected.schedule_timezone ?? DEFAULT_TIMEZONE);
           setScheduleWatch(selected.schedule_watch ?? "");
           onSelectRecipe?.(selected);
         }}
@@ -194,7 +222,8 @@ export function PublishScreen({
   async function refresh() {
     const fresh = await fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeId);
     setDraft(fresh);
-    setScheduleCron(fresh.schedule_cron ?? "");
+    setChoice(choiceOf(fresh.schedule_cron));
+    setTimezone(fresh.schedule_timezone ?? DEFAULT_TIMEZONE);
     setScheduleWatch(fresh.schedule_watch ?? "");
     return fresh;
   }
@@ -204,8 +233,9 @@ export function PublishScreen({
     setError(null);
     try {
       await publishRecipe(apiBaseUrl, bearerToken, investigationId, recipeId, {
-        schedule_cron: scheduleCron || null,
+        schedule_cron: cronOf(choice),
         schedule_watch: scheduleWatch || null,
+        schedule_timezone: cronOf(choice) ? timezone : null,
       });
       await refresh();
     } catch (err) {
@@ -220,10 +250,23 @@ export function PublishScreen({
     setError(null);
     try {
       await updateSchedule(apiBaseUrl, bearerToken, investigationId, recipeId, {
-        schedule_cron: scheduleCron || null,
+        schedule_cron: cronOf(choice),
         schedule_watch: scheduleWatch || null,
+        schedule_timezone: cronOf(choice) ? timezone : null,
       });
       await refresh();
+    } catch (err) {
+      setError(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePause(paused: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      setDraft(await setRecipeSchedulePaused(apiBaseUrl, bearerToken, investigationId, recipeId, paused));
     } catch (err) {
       setError(friendlyError(err));
     } finally {
@@ -329,29 +372,56 @@ export function PublishScreen({
 
       <Panel title="Schedule">
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8)", maxWidth: 480 }}>
+          <ScheduleEditor
+            apiBaseUrl={apiBaseUrl}
+            bearerToken={bearerToken}
+            choice={choice}
+            timezone={timezone}
+            disabled={status === "draft" ? false : !canEditSchedule}
+            onChange={(next, zone) => {
+              setChoice(next);
+              setTimezone(zone);
+            }}
+          />
+          {draft?.schedule_paused && (
+            <p role="status" style={{ margin: 0 }}>{`Paused — ${draft.schedule_paused_reason ?? "by hand"}.`}</p>
+          )}
+          {draft?.schedule_owner && (
+            <p style={{ color: "var(--text-secondary)", fontSize: "0.85em", margin: 0 }}>
+              {`Scheduled runs act as ${draft.schedule_owner}, who set this schedule, in the case it was set in.`}
+            </p>
+          )}
           <label>
-            Cron
-            <Input
-              value={scheduleCron}
-              onChange={(e) => setScheduleCron(e.target.value)}
-              placeholder="0 6 * * *"
-              disabled={status === "draft" ? false : !canEditSchedule}
-            />
-          </label>
-          <label>
-            Watch (object storage prefix)
+            Watch (not yet acted on — folder watching arrives with ADR-110 decision 5)
             <Input
               value={scheduleWatch}
               onChange={(e) => setScheduleWatch(e.target.value)}
-              placeholder="s3://ingest/carrier-a/*.csv"
               disabled={status === "draft" ? false : !canEditSchedule}
             />
           </label>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.85em" }}>
-            Both are optional — a recipe may be published unscheduled and run only on demand.
+            A recipe may be published unscheduled and run only on demand.
           </p>
         </div>
       </Panel>
+
+      {runs && (
+        <Panel title="Runs">
+          {runs.length === 0 ? (
+            <p style={{ margin: 0, color: "var(--text-secondary)" }}>It has not run yet.</p>
+          ) : (
+            <ul aria-label="Runs of this recipe" style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
+              {runs.slice(0, 20).map((run) => (
+                <li key={run.run_id}>
+                  {`${new Date(run.slot ?? run.started_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} — ${
+                    run.trigger === "schedule" ? "" : `${run.trigger}: `
+                  }${runInWords(run)}`}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      )}
 
       {status === "published" && (
         <Panel title="Run">
@@ -377,6 +447,11 @@ export function PublishScreen({
         {canEditSchedule && (
           <Button onClick={() => void handleUpdateSchedule()} disabled={busy}>
             {busy ? "Saving…" : "Update schedule"}
+          </Button>
+        )}
+        {canEditSchedule && draft?.schedule_cron && (
+          <Button onClick={() => void handlePause(!draft.schedule_paused)} disabled={busy}>
+            {draft.schedule_paused ? "Resume schedule" : "Pause schedule"}
           </Button>
         )}
         {(status === "published" || status === "flagged") && (
