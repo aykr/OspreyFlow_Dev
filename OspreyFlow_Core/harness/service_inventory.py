@@ -71,10 +71,36 @@ INVENTORY: tuple[ServiceEntry, ...] = (
         imported_by=(),
         created_in="Phase 3",
         note=(
-            "The Conduit. Also contains services/api/worker.py, the job-queue consumer — a "
-            "JobWorker class with no entrypoint of its own, which is why §3's 'three workers' "
-            "cannot be satisfied by this tree today. See WORKER_FINDING."
+            "The Conduit. Also holds the job worker's code (services/api/worker.py, run by "
+            "worker_main.py), which services/worker builds as an image of its own."
         ),
+    ),
+    ServiceEntry(
+        directory="services/worker",
+        kind=Kind.DEPLOYABLE,
+        entrypoint="python -m services.api.worker_main",
+        imported_by=(),
+        created_in="ADR-114 B7",
+        note=(
+            "Only a Dockerfile: the job worker's image (ADR-114 Amendment 10 point 6), built "
+            "from services/api's code. Lite runs the same loop inside the Conduit."
+        ),
+    ),
+    ServiceEntry(
+        directory="services/report_sync",
+        kind=Kind.DEPLOYABLE,
+        entrypoint="python -m services.report_sync",
+        imported_by=(),
+        created_in="ADR-111 Amendment 2",
+        note="Pulls each case's figures into the reporting mart; its own image since ADR-114 B7.",
+    ),
+    ServiceEntry(
+        directory="services/ner",
+        kind=Kind.DEPLOYABLE,
+        entrypoint="uvicorn app:app",
+        imported_by=(),
+        created_in="ADR-098",
+        note="The fast recogniser (Stanza) sidecar, its model inside its own image.",
     ),
     ServiceEntry(
         directory="services/ingest",
@@ -170,8 +196,8 @@ RULE_8_DEBT: tuple[tuple[str, str], ...] = (("apps/workspace", "Phase 4"),)
 #: tree without first writing an entrypoint, which is service code and outside Stage 2 §5a.
 #: Raised as Proposed in `05_DEPLOYMENT.md` §3 rather than resolved by inventing one.
 WORKER_FINDING = (
-    "05_DEPLOYMENT.md §3 names three worker containers; services/api/worker.py is a JobWorker "
-    "class with no process entrypoint, so zero worker containers are renderable today."
+    "Resolved: the owner's decision of 24 September 2026 made §3's three workers three replicas "
+    "of services/api/worker_main.py; ADR-114 Amendment 10 point 6 builds it as services/worker."
 )
 
 _ENTRYPOINT_MARKERS = (
@@ -213,7 +239,9 @@ def discover(repo_root: Path = REPO_ROOT) -> dict[str, Kind]:
             continue
         files = _python_files(directory)
         if not files:
-            found[entry.directory] = Kind.PLACEHOLDER
+            # Only a Dockerfile: an image of code kept elsewhere (services/worker).
+            has_image = (directory / "Dockerfile").is_file()
+            found[entry.directory] = Kind.DEPLOYABLE if has_image else Kind.PLACEHOLDER
             continue
         if (directory / "__main__.py").is_file():
             found[entry.directory] = Kind.DEPLOYABLE

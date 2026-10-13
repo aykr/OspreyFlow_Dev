@@ -84,7 +84,6 @@ from valkey.asyncio import Valkey
 from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from adapters.media_objectstore import MediaStoreConfig, ObjectStoreMediaStore
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from adapters.model_litellm.errors import ExtractionFailedError, ModelUnavailableError
@@ -445,6 +444,7 @@ from .link_types import (
     public_ontology,
 )
 from .mapconfig_loader import load_map_config, public_view
+from .media_store import open_media_store
 from .model_routing import ModelEgressRefused, RoutedModel, model_status, routes_from_env
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
@@ -755,7 +755,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.link_events = LinkEventsService(app.state.working_set, analytics, investigations)
     # ADR-094: where a content item's file is kept; never the graph.
-    media = ObjectStoreMediaStore(MediaStoreConfig.from_env())
+    media = open_media_store()
     # ADR-098 decision 2: the fast recogniser, the `ner` sidecar.
     recogniser = RecogniseStanzaAdapter(RecogniserConfig.from_env())
     # ADR-108 phase C: the pipeline runner's recogniser lookup and the online geocoding

@@ -474,6 +474,62 @@ class MailConfig(BaseModel):
     )
 
 
+class ExternalPostgres(BaseModel):
+    """A cloud's managed PostgreSQL (`05_DEPLOYMENT.md` §3a). The password is never here: it arrives
+    at apply as `OSPREY_POSTGRES_PASSWORD`, from the cloud's secret store."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    host: str = Field(min_length=1)
+    port: int = 5432
+    database: str = "ospreyflow"
+    user: str = "osprey"
+    sslmode: Literal["require", "verify-ca", "verify-full"] = Field(
+        default="require", description="Default: require. A managed server is reached over TLS."
+    )
+
+
+class ExternalObjectStore(BaseModel):
+    """A cloud's S3 (`05_DEPLOYMENT.md` §3a) for staging, site images, tiles, backups and media."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    endpoint: str = Field(min_length=1, description="Host and port, no scheme: always HTTPS")
+    region: str = Field(min_length=1)
+    credentials: Literal["instance", "keys"] = Field(
+        default="instance",
+        description="Default: instance — the server's own cloud identity, no key anywhere; `keys` "
+        "reads OSPREY_S3_ACCESS_KEY and OSPREY_S3_SECRET_KEY at apply.",
+    )
+    bucket_prefix: str = Field(
+        default="ospreyflow-", description="Each bucket is <prefix><name>, as OpenTofu made them"
+    )
+
+
+class ExternalMedia(BaseModel):
+    """Media on Azure Blob (`05_DEPLOYMENT.md` §3a); the account key arrives at apply as
+    `AZURE_STORAGE_KEY`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    blob_account: str = Field(min_length=1)
+    blob_container: str = "media"
+
+
+class ExternalConfig(BaseModel):
+    """What a cloud runs for the deployment instead of a container (ADR-114 decision 8)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    postgres: ExternalPostgres | None = None
+    object_store: ExternalObjectStore | None = None
+    media: ExternalMedia | None = None
+
+    @property
+    def any(self) -> bool:
+        return any((self.postgres, self.object_store, self.media))
+
+
 class OspreyConfig(BaseModel):
     """The whole of `osprey.yaml`.
 
@@ -494,6 +550,16 @@ class OspreyConfig(BaseModel):
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     mail: MailConfig | None = Field(default=None, description="Default: none — one-time codes")
     welcome: WelcomeConfig = Field(default_factory=WelcomeConfig)
+    external: ExternalConfig = Field(default_factory=ExternalConfig)
+
+    @model_validator(mode="after")
+    def _external_services_belong_to_a_cloud(self) -> OspreyConfig:
+        if self.external.any and self.profile is Profile.LOCAL_LITE:
+            raise ValueError(
+                "external services are for the small and cluster profiles, which run on a "
+                "cloud's managed services; local-lite runs its own"
+            )
+        return self
 
     @model_validator(mode="after")
     def _cluster_hosts_belong_to_the_cluster_profile(self) -> OspreyConfig:
@@ -512,6 +578,10 @@ class OspreyConfig(BaseModel):
 #: writes one file per model name, so listing a model twice writes it twice.
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     StorageRoots,
+    ExternalPostgres,
+    ExternalObjectStore,
+    ExternalMedia,
+    ExternalConfig,
     ComponentsConfig,
     ModelsConfig,
     GovernanceConfig,

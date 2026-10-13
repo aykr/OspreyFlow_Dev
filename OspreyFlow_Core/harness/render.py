@@ -473,7 +473,7 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
             ServiceImage("valkey", "valkey/valkey:8.0"),
             # ADR-114 Amendment 9: MinIO's public images were withdrawn; SeaweedFS (Apache-2.0).
             ServiceImage("objectstore", "chrislusf/seaweedfs:4.48"),
-            ServiceImage("postgres", "postgres:16.4"),
+            ServiceImage("postgres", POSTGRES_IMAGE),
             ServiceImage("keycloak", "quay.io/keycloak/keycloak:26.0"),
             # ADR-114 Amendment 4: the front proxy, the deployment's one door.
             ServiceImage("proxy", PROXY_IMAGE),
@@ -510,6 +510,12 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
             ),
         ]
     )
+    # 05 §3a: what a cloud runs for the deployment is not a container of it.
+    managed = {
+        *(("postgres",) if config.external.postgres is not None else ()),
+        *(("objectstore",) if config.external.object_store is not None else ()),
+    }
+    images = [image for image in images if image.service not in managed]
     if config.components.search is SearchBackend.OPENSEARCH:
         images.append(ServiceImage("opensearch", "opensearchproject/opensearch:2.17.1"))
     if config.components.analytics_engine.value == "clickhouse":
@@ -982,8 +988,11 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
     # ADR-111 Amendment 2: report-sync (the Conduit's own image) and Superset, when switched on.
     api = next(entry for entry in images if entry.service == "api")
     services.update(reporting_services(config, api_image=api.image, building=api.building))
-    if "keycloak" in services and "postgres" in services:
-        services["keycloak-db"] = _keycloak_database_step(str(services["postgres"]["image"]))  # type: ignore[index]
+    if "keycloak" in services and ("postgres" in services or config.external.postgres is not None):
+        services["keycloak-db"] = _keycloak_database_step(config)
+    if config.external.postgres is not None:
+        services["keycloak"]["environment"]["KC_DB_URL"] = _keycloak_jdbc_url(config)  # type: ignore[index]
+    _drop_absent_dependencies(services)
     _place_on_networks(config, services)
     document = {
         "name": f"osprey-{config.profile.value}",
@@ -1004,6 +1013,9 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     return _comment_block(_BANNER, "#") + body
 
+
+#: The Postgres image: the deployment's own server, and the client its Keycloak step runs.
+POSTGRES_IMAGE = "postgres:16.4"
 
 #: Where the speech server keeps its downloaded models (measured: speaches runs as uid 1000).
 _HF_CACHE = "/home/ubuntu/.cache/huggingface"
@@ -1030,6 +1042,14 @@ def egress_needs(config: OspreyConfig) -> set[str]:
     """The services that reach outside the deployment, each because a configured feature needs it
     (ADR-114 Amendment 7; 04 §4). Everything else is on the internal network alone."""
     needs = {"proxy", "ollama-models", "whisper-models"}
+    external = config.external
+    if external.postgres is not None:
+        # 05 §3a: everything that reads Postgres reaches the managed server.
+        needs |= {"api", "keycloak", "keycloak-db", "report-sync", "superset"}
+    if external.object_store is not None:
+        needs |= {"api", "ingest"}  # staging, site images, the tile cache, media: the cloud's S3
+    if external.media is not None:
+        needs.add("api")  # media on Blob
     if config.models.provider is not None:
         needs.add("litellm")  # the client's own model provider
     if config.mail is not None or config.governance.organisation_sign_in:
@@ -1061,25 +1081,49 @@ _KEYCLOAK_DATABASE_SQL = (
 )
 
 
-def _keycloak_database_step(postgres_image: str) -> dict[str, object]:
+def _keycloak_database_step(config: OspreyConfig) -> dict[str, object]:
     # A quoted heredoc: the SQL reaches psql exactly as written, quotes and `\\gexec` included.
-    # `$$` is compose's escape for a `$` the container's own shell expands.
+    # `$$` is compose's escape for a `$` the container's own shell expands. On a managed server
+    # (05 §3a) the same step runs against its host, over TLS; its login needs CREATEROLE/CREATEDB.
+    managed = config.external.postgres
+    host, port = (managed.host, managed.port) if managed is not None else ("postgres", 5432)
     script = (
-        'psql -h postgres -U "$$OSPREY_POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 '
+        f'psql -h {host} -p {port} -U "$$OSPREY_POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 '
         "-v pw=\"$$OSPREY_KEYCLOAK_DB_PASSWORD\" <<'SQL'\n" + _KEYCLOAK_DATABASE_SQL + "SQL\n"
     )
-    return {
+    step: dict[str, object] = {
         "restart": "no",
-        "image": postgres_image,
+        "image": POSTGRES_IMAGE,
         "entrypoint": ["sh", "-c"],
         "command": [script],
         "environment": {
             "OSPREY_POSTGRES_USER": "${OSPREY_POSTGRES_USER:-osprey}",
             "PGPASSWORD": "${OSPREY_POSTGRES_PASSWORD:?set in the deployment env file}",
             "OSPREY_KEYCLOAK_DB_PASSWORD": "${OSPREY_KEYCLOAK_DB_PASSWORD:?set in the env file}",
+            **({"PGSSLMODE": managed.sslmode} if managed is not None else {}),
         },
         "depends_on": {"postgres": {"condition": "service_healthy"}},
     }
+    return step
+
+
+def _keycloak_jdbc_url(config: OspreyConfig) -> str:
+    managed = config.external.postgres
+    assert managed is not None
+    return f"jdbc:postgresql://{managed.host}:{managed.port}/keycloak?sslmode={managed.sslmode}"
+
+
+def _drop_absent_dependencies(services: dict[str, Any]) -> None:
+    """A dependency on what the deployment does not run as a container — a cloud's managed
+    Postgres or object store (05 §3a) — is no dependency: compose would refuse the file."""
+    for service in services.values():
+        depends = service.get("depends_on")
+        if isinstance(depends, dict):
+            kept = {name: rule for name, rule in depends.items() if name in services}
+            if kept:
+                service["depends_on"] = kept
+            else:
+                service.pop("depends_on")
 
 
 def _uses_clickhouse(config: OspreyConfig) -> bool:

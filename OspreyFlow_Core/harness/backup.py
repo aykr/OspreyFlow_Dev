@@ -497,8 +497,18 @@ def run_backup(
     analytics_container_path: str,
     require_quiesced: bool,
     analytics_engine: str = "duckdb",
+    managed_postgres: str | None = None,
 ) -> Path:
     """Writes the set and its manifest. Returns the directory."""
+    if managed_postgres is not None:
+        # 05 §3a: a managed database is the cloud's to back up; there is no container to dump from.
+        raise BackupFailed(
+            "postgres",
+            f"This deployment's database is the cloud's managed server ({managed_postgres}), "
+            "which the cloud's own backups protect (AWS Backup and RDS snapshots, or Azure "
+            "Backup); `ospreyflow backup` does not take a second copy of it. Restore from the "
+            "cloud's console.",
+        )
     if analytics_engine != "duckdb":
         store = "ClickHouse" if analytics_engine == "clickhouse" else analytics_engine
         # ADR-114 decision 9: the events of a ClickHouse deployment are not in the DuckDB file this
@@ -639,6 +649,9 @@ def main(argv: list[str] | None = None) -> int:
             analytics_container_path=f"{config.components.storage.data}/analytics.duckdb",
             require_quiesced=args.require_quiesced,
             analytics_engine=config.components.analytics_engine.value,
+            managed_postgres=(
+                config.external.postgres.host if config.external.postgres is not None else None
+            ),
         )
     except BackupFailed as failure:
         print(f"backup: FAILED on '{failure.item}'\n  {failure.detail}", file=sys.stderr)

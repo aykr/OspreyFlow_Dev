@@ -319,3 +319,22 @@ def test_a_clickhouse_deployment_is_refused_in_words_before_anything_is_written(
     assert refused.value.item == "analytics"
     assert "ClickHouse" in refused.value.detail
     assert not out_root.exists()
+
+
+def test_a_deployment_on_a_managed_database_is_refused_in_words_before_anything_is_written(
+    tmp_path: Path,
+) -> None:
+    """05 §3a: the cloud's own backups protect a managed database; a dump from inside the server
+    would be a second, unscheduled copy no one restores from — and `compose exec postgres` has no
+    container to run in."""
+    out_root = tmp_path / "sets"
+    with pytest.raises(backup.BackupFailed) as refused:
+        backup.run_backup(
+            compose_file=tmp_path / "compose.yaml", out_root=out_root, profile="small",
+            database="osprey", analytics_container_path="/data/analytics.duckdb",
+            require_quiesced=False, managed_postgres="osprey-db.abc.eu-west-2.rds.amazonaws.com",
+        )
+    assert refused.value.item == "postgres"
+    assert "osprey-db.abc.eu-west-2.rds.amazonaws.com" in refused.value.detail
+    assert "cloud's own backups" in refused.value.detail
+    assert not out_root.exists()

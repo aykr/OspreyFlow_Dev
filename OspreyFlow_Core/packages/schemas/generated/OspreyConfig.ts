@@ -205,6 +205,29 @@ export type Privacy = string | null;
  * Default: no link
  */
 export type ServiceStatus = string | null;
+export type Host1 = string;
+export type Port1 = number;
+export type Database = string;
+export type User = string;
+/**
+ * Default: require. A managed server is reached over TLS.
+ */
+export type Sslmode = "require" | "verify-ca" | "verify-full";
+/**
+ * Host and port, no scheme: always HTTPS
+ */
+export type Endpoint1 = string;
+export type Region = string;
+/**
+ * Default: instance — the server's own cloud identity, no key anywhere; `keys` reads OSPREY_S3_ACCESS_KEY and OSPREY_S3_SECRET_KEY at apply.
+ */
+export type Credentials = "instance" | "keys";
+/**
+ * Each bucket is <prefix><name>, as OpenTofu made them
+ */
+export type BucketPrefix = string;
+export type BlobAccount = string;
+export type BlobContainer = string;
 
 /**
  * The whole of `osprey.yaml`.
@@ -231,6 +254,7 @@ export interface OspreyConfig {
    */
   mail?: MailConfig | null;
   welcome?: WelcomeConfig;
+  external?: ExternalConfig;
 }
 /**
  * `05_DEPLOYMENT.md` §2.1's Components screen. Defaults are the `local-lite` row of §1's own
@@ -422,4 +446,40 @@ export interface WelcomeConfig {
   accessibility?: Accessibility;
   privacy?: Privacy;
   service_status?: ServiceStatus;
+}
+/**
+ * What a cloud runs for the deployment instead of a container (ADR-114 decision 8).
+ */
+export interface ExternalConfig {
+  postgres?: ExternalPostgres | null;
+  object_store?: ExternalObjectStore | null;
+  media?: ExternalMedia | null;
+}
+/**
+ * A cloud's managed PostgreSQL (`05_DEPLOYMENT.md` §3a). The password is never here: it arrives
+ * at apply as `OSPREY_POSTGRES_PASSWORD`, from the cloud's secret store.
+ */
+export interface ExternalPostgres {
+  host: Host1;
+  port?: Port1;
+  database?: Database;
+  user?: User;
+  sslmode?: Sslmode;
+}
+/**
+ * A cloud's S3 (`05_DEPLOYMENT.md` §3a) for staging, site images, tiles, backups and media.
+ */
+export interface ExternalObjectStore {
+  endpoint: Endpoint1;
+  region: Region;
+  credentials?: Credentials;
+  bucket_prefix?: BucketPrefix;
+}
+/**
+ * Media on Azure Blob (`05_DEPLOYMENT.md` §3a); the account key arrives at apply as
+ * `AZURE_STORAGE_KEY`.
+ */
+export interface ExternalMedia {
+  blob_account: BlobAccount;
+  blob_container?: BlobContainer;
 }

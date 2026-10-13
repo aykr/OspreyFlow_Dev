@@ -28,6 +28,7 @@ from scripts.load_screening_list import parse_list
 from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
 from services.api.config import PostgresConfig
 from services.api.dataset_scope import stamping
+from services.api.media_store import open_media_store
 from services.api.rule_evaluation import transaction_key
 from services.api.screening import ScreeningListStore
 
@@ -36,7 +37,6 @@ from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
-from adapters.media_objectstore import MediaStoreConfig, ObjectStoreMediaStore
 from demo_fixtures.datasets import LEDGER
 from demo_fixtures.ledger import build_ledger_graph, geometry_records
 from ontology.handling import load_uk_le_scheme
@@ -110,7 +110,7 @@ async def _run(args: argparse.Namespace) -> int:
     principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
     scope = await scope_for(args, seeder=principal, dataset=LEDGER)
 
-    media = ObjectStoreMediaStore(MediaStoreConfig.from_env())
+    media = open_media_store()
     try:
         result = await build_ledger_graph(
             graph=graph,

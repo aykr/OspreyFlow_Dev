@@ -416,10 +416,95 @@ def object_store_lines(user: str, password: str) -> str:
     """Where the services find the object store, and its credentials (ADR-114 Amendment 9: the
     store is SeaweedFS, its S3 face on 8333; the `MINIO_*` names the services read are kept)."""
     return (
-        f"OSPREY_MINIO_USER={user}\nOSPREY_MINIO_PASSWORD={password}\n"
+        f"OSPREY_MINIO_USER={user}\n"
+        f"OSPREY_MINIO_PASSWORD={password}\n"
         "MINIO_ENDPOINT=objectstore:8333\n"
-        f"MINIO_ACCESS_KEY={user}\nMINIO_SECRET_KEY={password}\n"
+        f"MINIO_ACCESS_KEY={user}\n"
+        f"MINIO_SECRET_KEY={password}\n"
     )
+
+
+class ApplyRefused(ApplyFailed):
+    """Apply cannot go on, said in words: what is missing and where it comes from."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__("render", detail)
+
+
+def _needed(environ: Mapping[str, str], name: str, why: str) -> str:
+    value = environ.get(name)
+    if not value:
+        raise ApplyRefused(
+            f"{name} is not set: {why}. On a cloud server the first boot reads it from the cloud's "
+            "secret store; by hand, export it before running the install"
+        )
+    return value
+
+
+def managed_service_lines(
+    config: OspreyConfig,
+    *,
+    environ: Mapping[str, str],
+    minted: str,
+    object_store_password: str,
+    object_store_user: str = "ospreyflow",
+) -> str:
+    """Where the services find Postgres and the object stores (`05_DEPLOYMENT.md` §3a): the
+    deployment's own containers, or what `external:` names — a managed server's password and a Blob
+    key read from `environ` (the first boot put them there from the cloud's secret store), never
+    minted and never in `osprey.yaml`."""
+    external = config.external
+    pg = external.postgres
+    if pg is not None:
+        password = _needed(environ, "OSPREY_POSTGRES_PASSWORD", "the managed database's password")
+        host, port, user, database = pg.host, pg.port, pg.user, pg.database
+    else:
+        password, host, port, user, database = minted, "postgres", 5432, "osprey", "ospreyflow"
+    lines = [
+        f"OSPREY_POSTGRES_PASSWORD={password}",
+        # **Every one of these, not just the host**: `services/api/config.py` defaults the port to
+        # 5433 (the developer stack's), and the containers read `OSPREY_POSTGRES_*` while the
+        # Conduit reads `POSTGRES_*` — both names carry one value or they silently disagree.
+        f"POSTGRES_HOST={host}",
+        f"POSTGRES_PORT={port}",
+        f"POSTGRES_USER={user}",
+        f"POSTGRES_PASSWORD={password}",
+        f"POSTGRES_DB={database}",
+        f"OSPREY_POSTGRES_USER={user}",
+        f"OSPREY_POSTGRES_DB={database}",
+    ]
+    if pg is not None:
+        lines.append(f"POSTGRES_SSLMODE={pg.sslmode}")
+    store = external.object_store
+    if store is not None:
+        lines += [
+            f"MINIO_ENDPOINT={store.endpoint}",
+            "MINIO_USE_SSL=true",
+            f"MINIO_REGION={store.region}",
+            f"MINIO_BUCKET_PREFIX={store.bucket_prefix}",
+            f"MINIO_CREDENTIALS={store.credentials}",
+        ]
+        if store.credentials == "keys":
+            lines += [
+                "MINIO_ACCESS_KEY="
+                + _needed(environ, "OSPREY_S3_ACCESS_KEY", "the object store's access key"),
+                "MINIO_SECRET_KEY="
+                + _needed(environ, "OSPREY_S3_SECRET_KEY", "the object store's secret key"),
+            ]
+        text = "\n".join(lines) + "\n"
+    else:
+        own_store = object_store_lines(object_store_user, object_store_password)
+        text = "\n".join(lines) + "\n" + own_store
+    media = external.media
+    if media is not None:
+        key = _needed(environ, "AZURE_STORAGE_KEY", "the Blob storage account's key")
+        text += (
+            "OSPREY_MEDIA_STORE=blob\n"
+            f"AZURE_STORAGE_ACCOUNT={media.blob_account}\n"
+            f"AZURE_MEDIA_CONTAINER={media.blob_container}\n"
+            f"AZURE_STORAGE_KEY={key}\n"
+        )
+    return text
 
 
 def release_registry(lock_text: str) -> str:
@@ -572,8 +657,6 @@ def main(argv: list[str] | None = None) -> int:
         # The second demo subject (ADR-051) exists exactly when the first does, and has its own
         # password: two people, two credentials.
         demo_admin_password = generate_client_secret() if args.demo_analyst else None
-        postgres_user = "osprey"
-        postgres_database = "ospreyflow"
         minio_user = "ospreyflow"
         minio_password = generate_client_secret()
         env_path = out_dir / "deployment.env"
@@ -587,7 +670,6 @@ def main(argv: list[str] | None = None) -> int:
             + f"OSPREY_OIDC_CLIENT_SECRET={secret}\n"
             + f"OSPREY_KEYCLOAK_ADMIN_PASSWORD={admin_password}\n"
             + f"OSPREY_KEYCLOAK_DB_PASSWORD={keycloak_db_password}\n"
-            + f"OSPREY_POSTGRES_PASSWORD={postgres_password}\n"
             # One value, two names: the compose file sets the server's own root password from
             # `OSPREY_ARCADEDB_PASSWORD`, and the Conduit's adapter reads `ARCADEDB_ROOT_PASSWORD`.
             # They were generated separately at first, and the Conduit died on a 403 "User/Password
@@ -609,27 +691,14 @@ def main(argv: list[str] | None = None) -> int:
             + mail_secret_lines(config, os.environ)
             + provider_secret_lines(config, os.environ)
             + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\n"
-            # **Every one of these four, not just the host.** `services/api/config.py` defaults
-            # `POSTGRES_PORT` to **5433** — a workaround for `deploy/compose/dev.yaml` publishing
-            # there to dodge a native Postgres on 5432 — while a rendered container listens on
-            # 5432 internally. Setting only the host left the Conduit dialling `postgres:5433` and
-            # failing with a refused connection that named neither the port nor Postgres. The
-            # database name and password diverge the same way: the container is configured from
-            # `OSPREY_POSTGRES_*` and the Conduit reads `POSTGRES_*`, so both names carry one
-            # value or they silently disagree.
-            + "POSTGRES_HOST=postgres\nPOSTGRES_PORT=5432\n"
-            + f"POSTGRES_USER={postgres_user}\nPOSTGRES_PASSWORD={postgres_password}\n"
-            + f"POSTGRES_DB={postgres_database}\n"
-            + f"OSPREY_POSTGRES_USER={postgres_user}\n"
-            + f"OSPREY_POSTGRES_DB={postgres_database}\n"
-            # **The third instance of one value under two names**, after ArcadeDB and Postgres
-            # above. `MinIO` is configured from `OSPREY_MINIO_*` and `services/ingest/staging.py`
-            # reads `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`, falling back to `minioadmin`/`minioadmin`
-            # — so the seed reached the staging bucket with the wrong credentials and MinIO answered
-            # `ACCESS_DENIED during HeadBucket`, naming neither variable. Found running the seed.
-            # `tests/harness/test_apply_env.py` is the case that fails if a fourth pair appears
-            # and only one side of it is written.
-            + object_store_lines(minio_user, minio_password)
+            # Postgres and the object stores: the deployment's own, or the cloud's (05 §3a).
+            + managed_service_lines(
+                config,
+                environ=os.environ,
+                minted=postgres_password,
+                object_store_password=minio_password,
+                object_store_user=minio_user,
+            )
             + (
                 f"OSPREY_DEMO_ANALYST_PASSWORD={demo_analyst_password}\n"
                 if demo_analyst_password is not None
