@@ -141,23 +141,25 @@ services:
       timeout: 5s
       retries: 20
 
-  minio:
-    # MinIO's `minio/minio` Docker Hub image is no longer publicly
-    # pullable (denied without login as of 2024's distribution change);
-    # `quay.io/minio/minio` is the maintained public mirror.
-    image: quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
-    command: server /data --console-address ":9001"
+  objectstore:
+    # ADR-114 Amendment 9: MinIO's public images were withdrawn; SeaweedFS (Apache-2.0), with the
+    # settings `harness/render.py` gives a deployment. Published on 9000 with the development
+    # credentials, so every `MINIO_*` default (`localhost:9000`, `minioadmin`) still reaches it.
+    image: chrislusf/seaweedfs:4.48
+    command: >-
+      server -s3 -dir=/data -s3.port=8333 -volume.max=1000
+      -master.volumeSizeLimitMB=1024 -master.volumePreallocate=false
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9000:8333"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      WEED_MASTER_VOLUME_GROWTH_COPY_1: "1"
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"]
       interval: 5s
       timeout: 5s
-      retries: 20
+      retries: 30
 
   valkey:
     image: valkey/valkey:8.0

@@ -248,7 +248,7 @@ def test_backup_destroy_restore_preserves_everything_that_matters(
     destroyed = _compose("down", "-v", "--remove-orphans")
     assert destroyed.returncode == 0, destroyed.stderr
 
-    started = _compose("up", "-d", "--wait", "arcadedb", "postgres", "minio")
+    started = _compose("up", "-d", "--wait", "arcadedb", "postgres", "objectstore")
     assert started.returncode == 0, started.stderr
     # **The Conduit's container has to exist, and must not be running.** Exist, because the restored
     # analytics DuckDB is copied into its data volume and `docker compose cp` addresses a container,

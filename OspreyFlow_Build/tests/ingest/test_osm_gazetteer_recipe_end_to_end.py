@@ -101,3 +101,17 @@ async def test_osm_places_load_as_location_entities_with_a_resolvable_geometry(
             # own floating-point tolerance for a same-CRS pipeline.
             assert stored.lon == pytest.approx(stored.source_x, abs=1e-9)
             assert stored.lat == pytest.approx(stored.source_y, abs=1e-9)
+
+
+def test_the_products_copy_of_the_recipe_is_the_tested_one() -> None:
+    """`scripts/build_local_basemap.py` reads Core's copy; this file tests the fixture copy. Every
+    line but the leading comment is the same."""
+    from tools.layout import BUILD, CORE
+
+    def body(path: object) -> list[str]:
+        lines = open(path, encoding="utf-8").read().splitlines()  # noqa: SIM115
+        return [line for line in lines if not line.startswith("#")]
+
+    fixture = BUILD / "tests" / "scenarios" / "fixtures" / "osm_gazetteer_recipe.yaml"
+    assert body(CORE / "recipes" / "osm_gazetteer.yaml") == body(fixture)
+

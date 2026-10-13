@@ -471,7 +471,8 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
     images.extend(
         [
             ServiceImage("valkey", "valkey/valkey:8.0"),
-            ServiceImage("minio", "quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z"),
+            # ADR-114 Amendment 9: MinIO's public images were withdrawn; SeaweedFS (Apache-2.0).
+            ServiceImage("objectstore", "chrislusf/seaweedfs:4.48"),
             ServiceImage("postgres", "postgres:16.4"),
             ServiceImage("keycloak", "quay.io/keycloak/keycloak:26.0"),
             # ADR-114 Amendment 4: the front proxy, the deployment's one door.
@@ -570,11 +571,27 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
             "retries": 12,
         },
     },
-    "minio": {
-        "command": ["server", "/data"],
+    # ADR-114 Amendment 9 point 3a: SeaweedFS in one process, its S3 face on 8333. Its defaults
+    # (8 volumes, 30 GiB each, seven grown per bucket) ran out of volumes by the third bucket when
+    # probed; these settings are the ones the object-store suites pass with. The `MINIO_*` names
+    # the services read are kept (`harness/apply.py`'s `object_store_lines`).
+    "objectstore": {
+        "command": [
+            "server", "-s3", "-dir=/data", "-s3.port=8333", "-volume.max=1000",
+            "-master.volumeSizeLimitMB=1024", "-master.volumePreallocate=false",
+        ],
         "environment": {
-            "MINIO_ROOT_USER": "${OSPREY_MINIO_USER:-ospreyflow}",
-            "MINIO_ROOT_PASSWORD": "${OSPREY_MINIO_PASSWORD:?set in the deployment env file}",
+            "AWS_ACCESS_KEY_ID": "${OSPREY_MINIO_USER:-ospreyflow}",
+            "AWS_SECRET_ACCESS_KEY": "${OSPREY_MINIO_PASSWORD:?set in the deployment env file}",
+            "WEED_MASTER_VOLUME_GROWTH_COPY_1": "1",
+        },
+        # A named volume: MinIO's data was on an anonymous one, emptied by a `down` and `up`.
+        "volumes": ["objectstore-data:/data"],
+        "healthcheck": {
+            "test": ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"],
+            "interval": "5s",
+            "timeout": "5s",
+            "retries": 30,
         },
     },
     # ADR-114 decision 9: the analytics store a cluster of Conduits shares. Its password is minted
@@ -977,6 +994,7 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             # Round 13cda: without this the ~2.2GB model pull repeats on every `up`.
             "ollama-models": {"driver": "local"},
             **({"whisper-models": {"driver": "local"}} if "whisper" in services else {}),
+            **({"objectstore-data": {"driver": "local"}} if "objectstore" in services else {}),
             **({"proxy-data": {"driver": "local"}} if sites(config).scheme == "https" else {}),
             **({"clickhouse-data": {"driver": "local"}} if _uses_clickhouse(config) else {}),
         },

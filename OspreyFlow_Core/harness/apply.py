@@ -412,6 +412,16 @@ def seed(compose_file: Path, datasets: list[str], investigation_id: str) -> None
                 print(f"  seed[{dataset}]: {line.strip()}")
 
 
+def object_store_lines(user: str, password: str) -> str:
+    """Where the services find the object store, and its credentials (ADR-114 Amendment 9: the
+    store is SeaweedFS, its S3 face on 8333; the `MINIO_*` names the services read are kept)."""
+    return (
+        f"OSPREY_MINIO_USER={user}\nOSPREY_MINIO_PASSWORD={password}\n"
+        "MINIO_ENDPOINT=objectstore:8333\n"
+        f"MINIO_ACCESS_KEY={user}\nMINIO_SECRET_KEY={password}\n"
+    )
+
+
 def release_registry(lock_text: str) -> str:
     """Where a release's owned images live (ADR-114 Amendment 8 point 10): the Conduit's repository
     in the release's lock, without its name — a user repository's own `ghcr.io/<owner>`."""
@@ -578,8 +588,6 @@ def main(argv: list[str] | None = None) -> int:
             + f"OSPREY_KEYCLOAK_ADMIN_PASSWORD={admin_password}\n"
             + f"OSPREY_KEYCLOAK_DB_PASSWORD={keycloak_db_password}\n"
             + f"OSPREY_POSTGRES_PASSWORD={postgres_password}\n"
-            + f"OSPREY_MINIO_USER={minio_user}\n"
-            + f"OSPREY_MINIO_PASSWORD={minio_password}\n"
             # One value, two names: the compose file sets the server's own root password from
             # `OSPREY_ARCADEDB_PASSWORD`, and the Conduit's adapter reads `ARCADEDB_ROOT_PASSWORD`.
             # They were generated separately at first, and the Conduit died on a 403 "User/Password
@@ -621,9 +629,7 @@ def main(argv: list[str] | None = None) -> int:
             # `ACCESS_DENIED during HeadBucket`, naming neither variable. Found running the seed.
             # `tests/harness/test_apply_env.py` is the case that fails if a fourth pair appears
             # and only one side of it is written.
-            + "MINIO_ENDPOINT=minio:9000\n"
-            + f"MINIO_ACCESS_KEY={minio_user}\n"
-            + f"MINIO_SECRET_KEY={minio_password}\n"
+            + object_store_lines(minio_user, minio_password)
             + (
                 f"OSPREY_DEMO_ANALYST_PASSWORD={demo_analyst_password}\n"
                 if demo_analyst_password is not None

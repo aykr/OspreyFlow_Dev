@@ -122,7 +122,7 @@ def test_the_stores_and_case_readers_never_reach_outside_whatever_is_configured(
         {"host": "smtp.example.org", "port": 587, "from_address": "osprey@example.org"}
     )
     outside = _reaching_outside(_compose(_config(tmp_path, models=models, mail=mail)))
-    never = {"arcadedb", "postgres", "valkey", "minio", "opensearch", "ollama", "whisper", "ner",
+    never = {"arcadedb", "postgres", "valkey", "objectstore", "opensearch", "ollama", "whisper", "ner",
              "ingest", "workspace", "superset", "report-sync"}  # fmt: skip
     assert outside.isdisjoint(never), outside & never
 

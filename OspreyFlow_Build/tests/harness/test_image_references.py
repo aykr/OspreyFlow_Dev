@@ -64,8 +64,8 @@ def test_every_third_party_image_reference_resolves(reference: str) -> None:
     written for: two of eight references written for Stage 2 §5a did not exist, and a real
     `docker compose up` aborted the whole pull because of it. **It refuses to answer** — rate
     limited, unauthorised, timed out — which is not evidence either way, so this skips with the
-    reason rather than inventing a verdict. A locally-present image satisfies any of the three,
-    since `compose` will not need the registry for it.
+    reason rather than inventing a verdict. A locally-present image is no answer to "it is not
+    here": the machine that has it cached is the only one that will not need the registry.
 
     The skip is the honest weakness and is stated rather than hidden: a skipped reference is one
     nobody checked.
@@ -100,11 +100,16 @@ def test_every_third_party_image_reference_resolves(reference: str) -> None:
             "being fine"
         )
 
-    locally = subprocess.run(
+    # **Present on this machine is not present for an installer** (ADR-114 Amendment 9, found 13
+    # October 2026): MinIO's image was withdrawn from both of its registries while this test kept
+    # passing on the developer's machine, which had it cached — every new install would have failed
+    # at it. The registry's own "it is not here" fails, cached or not.
+    cached = subprocess.run(
         ["docker", "image", "inspect", reference], capture_output=True, timeout=60, check=False
-    )
-    assert locally.returncode == 0, (
-        f"{reference} resolves neither at its registry nor on this machine: {error}. A reference "
-        "that does not exist aborts the whole `docker compose up`, taking every other image's "
-        "download with it."
+    ).returncode == 0
+    raise AssertionError(
+        f"{reference} does not resolve at its registry ({error})"
+        + ("; it is cached on this machine, which hides it here and nowhere else" if cached else "")
+        + ". A reference that does not exist aborts the whole `docker compose up`, taking every "
+        "other image's download with it."
     )

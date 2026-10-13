@@ -69,6 +69,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from harness import identity, keycloak_admin
 from harness.backup import (
     REALM,
@@ -452,6 +454,10 @@ def restore_identity(compose_file: Path, held: Path) -> dict[str, int]:
 
 
 def restore_object_store(compose_file: Path, archive: Path, *, work_dir: Path) -> None:
+    """The objects of a backup put back. An S3-level export (ADR-114 Amendment 9 point 3a) is
+    imported through the Conduit's image; a backup taken before that holds MinIO's own data
+    folder, which restores only into a deployment that still runs MinIO, and is refused by name
+    otherwise."""
     extracted = work_dir / "restore-objects"
     if extracted.exists():
         shutil.rmtree(extracted)
@@ -460,6 +466,26 @@ def restore_object_store(compose_file: Path, archive: Path, *, work_dir: Path) -
         # `filter="data"` is Python 3.12's own safe extraction: no absolute paths, no `..`, no
         # device or setuid entries. A backup set is operator-supplied input like any other.
         tar.extractall(extracted, filter="data")
+    if (extracted / "objects-export" / "manifest.json").is_file():
+        _run(
+            _compose(compose_file) + [
+                "run", "--rm", "--no-deps", "--entrypoint", "python",
+                "-v", f"{(extracted / 'objects-export').resolve()}:/transfer:ro",
+                "api", "-m", "services.api.object_transfer", "import", "/transfer",
+            ],
+            item="objects",
+        )  # fmt: skip
+        return
+    services = (yaml.safe_load(compose_file.read_text(encoding="utf-8")) or {}).get(
+        "services"
+    ) or {}
+    if "minio" not in services:
+        raise RestoreRefused(
+            "this backup holds the object store in MinIO's own format, and this deployment's "
+            "object store is SeaweedFS (ADR-114 Amendment 9)",
+            "restore it into a deployment of the version that took it, then take a new backup "
+            "there",
+        )
     _run(
         _compose(compose_file) + ["cp", str(extracted / "data") + "/.", "minio:/data"],
         item="objects",

@@ -367,13 +367,14 @@ def backup_identity(compose_file: Path, destination: Path) -> Path:
 
 
 def backup_object_store(compose_file: Path, destination: Path, *, work_dir: Path) -> Path:
-    """The object store's whole `/data` tree, tarred.
+    """Every object in the object store, as plain files with their checksums, tarred.
 
     §6 has two rows that both land here — "Staged Parquet / Object store replication" and the
-    staging bucket itself — because on `local-lite` MinIO *is* where the staged Parquet lives. A tar
-    rather than a directory copy so the manifest can checksum one artefact, and so empty buckets
-    survive the round trip: a bucket is a directory to MinIO, and an empty directory is exactly what
-    a naive copy drops.
+    staging bucket itself — because on `local-lite` the object store *is* where the staged Parquet
+    lives. **Exported at the S3 level** (ADR-114 Amendment 9 point 3a), through the Conduit's own
+    image inside the deployment's network (`services.api.object_transfer`), never as a copy of one
+    store's private data folder, which no other store can read: so a backup taken on MinIO restores
+    into SeaweedFS. Empty buckets are in the manifest, so they survive the round trip.
     """
     # **Not `work_dir / "objects"`.** That is the directory `destination` lives in, and the
     # `rmtree` below then deleted the tar that had just been written into it — the backup reported
@@ -383,10 +384,19 @@ def backup_object_store(compose_file: Path, destination: Path, *, work_dir: Path
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
-    _run(_compose(compose_file) + ["cp", "minio:/data", str(staging)], item="objects")
+    # The Conduit's image runs as its own user, which must be able to write here.
+    staging.chmod(0o777)
+    _run(
+        _compose(compose_file) + [
+            "run", "--rm", "--no-deps", "--entrypoint", "python",
+            "-v", f"{staging.resolve()}:/transfer",
+            "api", "-m", "services.api.object_transfer", "export", "/transfer",
+        ],
+        item="objects",
+    )  # fmt: skip
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(destination, "w:gz") as archive:
-        archive.add(staging, arcname="data")
+        archive.add(staging, arcname="objects-export")
     shutil.rmtree(staging)
     return destination
 

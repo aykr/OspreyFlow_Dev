@@ -584,7 +584,7 @@ def test_owned_services_render_a_build_context_and_third_party_ones_do_not(
             f"{owned} must carry a local tag so versions.lock can name it and `up` need not rebuild"
         )
 
-    for third_party in ("arcadedb", "postgres", "valkey", "minio", "keycloak"):
+    for third_party in ("arcadedb", "postgres", "valkey", "objectstore", "keycloak"):
         assert "build" not in services[third_party], f"{third_party} is not ours to build"
         assert "/" in services[third_party]["image"] or ":" in services[third_party]["image"]
 

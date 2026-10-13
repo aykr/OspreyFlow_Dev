@@ -23,7 +23,7 @@ case, rule 15):
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -346,7 +346,10 @@ async def test_a_document_that_lapses_is_caught_by_the_daily_sweep_once(stores: 
         async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
             gate = _gate(stores, graph, [rule], case)
             gate.expiries = expiries
-            lapsing = "2026-10-12"
+            # A month ahead of today, not a fixed day: written as "2026-10-12", this test began
+            # failing on 13 October 2026, when the document had already lapsed at loading.
+            lapses = datetime.now(UTC).date() + timedelta(days=30)
+            lapsing = lapses.isoformat()
             await _onboard(graph, gate, [
                 _application("Halcyon Marine Ltd", owner_company="", document_title="Passport",
                              document_kind="passport", document_expires=lapsing),
@@ -361,13 +364,14 @@ async def test_a_document_that_lapses_is_caught_by_the_daily_sweep_once(stores: 
                            document_expires="2099-01-01")])  # fmt: skip
             assert await _alerts(stores, case) == [], "both verified when loaded"
 
-            before = await _swept(stores, graph, expiries, date(2026, 10, 12))
-            assert before.alerts == 0, "not lapsed until after the 12th"
-            after = await _swept(stores, graph, expiries, date(2026, 10, 13))
+            before = await _swept(stores, graph, expiries, lapses)
+            assert before.alerts == 0, "not lapsed until after its day"
+            after = await _swept(stores, graph, expiries, lapses + timedelta(days=1))
             assert after.alerts == 1
             (alert,) = await _alerts(stores, case)
-            assert "Halcyon Marine Ltd is no longer verified: passport expired on 2026-10-12" in (alert.words or "")
-            again = await _swept(stores, graph, expiries, date(2026, 10, 14))
+            said = f"Halcyon Marine Ltd is no longer verified: passport expired on {lapsing}"
+            assert said in (alert.words or "")
+            again = await _swept(stores, graph, expiries, lapses + timedelta(days=2))
             assert again.alerts == 0 and len(await _alerts(stores, case)) == 1
     finally:
         await expiries.close()

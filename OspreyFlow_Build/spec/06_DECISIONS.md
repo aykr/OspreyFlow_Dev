@@ -12590,6 +12590,25 @@ about the previous repository and wrong for this one):
    ruling, from options: "Switch to SeaweedFS"; Apache-2.0, actively published, S3-compatible): the S3
    adapter stays, the MediaStore conformance suite proves the change, and a running deployment's
    objects move across by backup and restore. Recorded here; built as its own stage.
+3a. **SeaweedFS, as built** (probed first against the real image, `chrislusf/seaweedfs:4.48`, signed by
+   its publisher): one process (`server -s3`), credentials from `AWS_ACCESS_KEY_ID`/
+   `AWS_SECRET_ACCESS_KEY` (a wrong secret and an anonymous request are each refused, reading and
+   writing); `-volume.max=1000`, 1 GiB volumes, no preallocation and volumes grown one at a time
+   (`WEED_MASTER_VOLUME_GROWTH_COPY_1=1`) — its defaults ran out of volumes by the third bucket. The
+   MediaStore suite and every object-store test pass against it unchanged. The service is
+   `objectstore`; the settings keep their `MINIO_*` names, so nothing that reads them changes. **Its
+   data is on a named volume** — MinIO's was on an anonymous one (found reading the owner's
+   deployment), which a `down` and `up` would have replaced with an empty one. **Backup and restore
+   move to the S3 level** — every object as a plain file with its size and SHA-256, exported and
+   imported through the Conduit's image inside the deployment's network — instead of copying one
+   store's private data folder, which no other store can read; a MinIO-format backup is refused by
+   name if restored into SeaweedFS.
+4. **The owner's rulings of the same day, from options, on what follows:** the owner's own deployment
+   moves to SeaweedFS **once SeaweedFS is proven** (conformance and a throwaway rehearsal), by backup,
+   switch and restore with every store compared, the backup kept; the steps that need a signed-in
+   browser (B10's screenshots, E7) are **left to one sitting at the end**; B7's Helm chart is
+   **published beside the images**, as an OCI artefact in the user repository's own registry, signed
+   like them, by its release workflow.
 
 ## ADR-115 — The design handoff: the welcome page, Home and the Glass to `DESIGN.md` v0.2 — ACCEPTED (design)
 

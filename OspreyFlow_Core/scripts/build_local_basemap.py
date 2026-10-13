@@ -111,10 +111,7 @@ GEOFABRIK_REGIONS: dict[str, str] = {
     "texas": "https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf",
 }
 
-_OSM_GAZETTEER_RECIPE_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "tests" / "scenarios" / "fixtures" / "osm_gazetteer_recipe.yaml"
-)
+_OSM_GAZETTEER_RECIPE_PATH = Path(__file__).resolve().parents[1] / "recipes" / "osm_gazetteer.yaml"
 
 
 class UnknownRegionError(ValueError):
