@@ -12652,6 +12652,33 @@ about the previous repository and wrong for this one):
    MinIO volume. S3-level backups cannot nest (they name each object by bucket and key); restoring
    an old MinIO-format archive into MinIO now takes it from the level it was taken at.
 
+### ADR-114, Amendment 10 (13 October 2026) — how Small is installed, and Enterprise's shape
+
+The owner's rulings, from options, each the recommended one, on what decisions 8 and 9 left open:
+
+1. **Small installs itself on first boot.** OpenTofu writes the install answers — the managed database's
+   host, the buckets, the names of the secrets — into the server's first-boot file; the server reads its
+   passwords with its own cloud identity (instance role, managed identity), never from the file, and runs
+   `ospreyflow install --yes`. `ospreyflow install --mode small --cloud aws|azure` on the operator's
+   machine runs plan, then apply on confirmation, then waits until the address answers.
+2. **On Azure, the S3-protocol stores run on the server:** staged Parquet, site images, the tile cache
+   and the backup transfer use SeaweedFS (Amendment 9 point 3a) on the server's own data disk, covered by
+   Azure Backup's daily VM backup. Media stays on Blob (decision 8). On AWS they use S3.
+3. **DNS:** when the answers name a Route 53 or Azure DNS zone, OpenTofu makes the record; otherwise the
+   install prints the record to create and waits until the name resolves to the server before Caddy asks
+   for the certificate.
+4. **The first administrator's sign-in is a one-time code** (as B4's invites): made on the server, put
+   in the cloud's secret store, shown once by the operator's command and then deleted from the store.
+5. **Enterprise runs ArcadeDB and ClickHouse in the cluster**, as StatefulSets on persistent volumes —
+   ArcadeDB as three Raft replicas, ClickHouse as a replicated pair with ClickHouse Keeper. Postgres,
+   Valkey, object storage and (on AWS) OpenSearch are the cloud's managed services. The Helm chart's
+   test reads "every stateful component external" as **every one the cloud manages**.
+6. **The three workers are one image each** — the job worker, report-sync and the ingest service, each
+   its own Dockerfile over the Conduit's code with only its own entrypoint, signed and locked with the
+   rest by `release.yml`.
+7. **Enterprise's front door is Caddy**, the same routing as Lite and Small (the base name, `id.`,
+   `bi.`), as a Deployment behind the cloud's load balancer, getting its own certificates.
+
 ## ADR-115 — The design handoff: the welcome page, Home and the Glass to `DESIGN.md` v0.2 — ACCEPTED (design)
 
 Status: **accepted on the owner's rulings of 12 October 2026; design only, nothing built.** The
