@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 
 import { DropdownPanel } from "../design/primitives/DropdownPanel";
-import { type CaseListing, caseLabel, listCases, orderCases } from "./cases";
+import { type CaseListing, caseLabel, listCases, orderCases, scopeBadge } from "./cases";
 import { NewCaseForm } from "./NewCaseForm";
 
 export interface CaseSwitcherProps {
@@ -43,8 +43,10 @@ export function CaseSwitcher({
 
   const current = cases.find((entry) => entry.id === currentId);
   const currentName = current ? caseLabel(current) : "Current case";
+  const scope = scopeBadge(current?.datasets);
   return (
-    // ADR-097 step 3: the bar shows the case's name alone; "Case:" stays for a screen reader.
+    <>
+    {/* ADR-097 step 3: the bar shows the case's name alone; "Case:" stays for a screen reader. */}
     <DropdownPanel
       label={
         <>
@@ -103,5 +105,13 @@ export function CaseSwitcher({
         </>
       )}
     </DropdownPanel>
+    {scope && (
+      // ADR-115 Amendment 1 point 5: what the case reads, beside its name; a label, not a control.
+      <span className="value case-scope" title={scope.title}>
+        <span className="visually-hidden">Reads: </span>
+        {scope.text}
+      </span>
+    )}
+    </>
   );
 }

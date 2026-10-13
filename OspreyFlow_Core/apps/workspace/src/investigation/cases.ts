@@ -87,6 +87,20 @@ function utcStamp(made: Date): string {
 
 /** What a case is called on screen. A case made before names existed has none; it is shown as
  * untitled with when it was made, never as an empty button. */
+/** ADR-115 Amendment 1 point 5 (the owner's ruling of 13 October 2026): a case's scope is the
+ * datasets it reads (ADR-099), shown as a mono badge beside its name — the first by name, then how
+ * many more — with all of them named in its title. Unknown datasets: no badge. */
+export function scopeBadge(datasets: readonly string[] | undefined): { text: string; title: string } | null {
+  if (datasets === undefined) return null;
+  if (datasets.length === 0) return { text: "NO DATA", title: "This case reads no dataset" };
+  const [first, ...rest] = datasets;
+  const named = rest.length === 0 ? first! : `${datasets.slice(0, -1).join(", ")} and ${datasets.at(-1)}`;
+  return {
+    text: rest.length === 0 ? first!.toUpperCase() : `${first!.toUpperCase()} +${rest.length}`,
+    title: `This case reads ${named}`,
+  };
+}
+
 export function caseLabel(entry: Pick<CaseListing, "name" | "created_at">): string {
   const name = entry.name.trim();
   if (name) return name;
