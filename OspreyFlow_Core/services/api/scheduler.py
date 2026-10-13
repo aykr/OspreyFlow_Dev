@@ -13,11 +13,12 @@ runs in both real hours; and a time that does not exist in March runs once, at t
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -33,8 +34,11 @@ from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from schemas.rights import Right, rights_for
 
 from .investigations import InsufficientAccessError, InvestigationNotFoundError
-from .recipe_runs import NotRunOutcome, RecipeRunStore
+from .recipe_runs import NotRunOutcome, RecipeRunStore, RunTrigger
 from .studio_map import resolve_source_handling
+
+if TYPE_CHECKING:
+    from .folder_watch import WatchedFile
 
 log = logging.getLogger(__name__)
 
@@ -172,6 +176,21 @@ class ScheduledRecipes(Protocol):
     async def set_paused(self, recipe_id: str, *, paused: bool, reason: str | None) -> None: ...
 
 
+class RunAs(Protocol):
+    """`run_recipe_as` with the deployment's dependencies, as the owner: trigger `schedule` for a
+    slot, `manual` for the Admin area's *Run now* (`slot` `None`), `watch` for a file
+    (`source_file`, read from its location)."""
+
+    async def __call__(
+        self,
+        owner: Principal,
+        recipe: StudioRecipeDraft,
+        case: str,
+        slot: datetime | None,
+        source_file: WatchedFile | None = None,
+    ) -> Any: ...
+
+
 class ScheduleRunRefused(ValueError):
     """The Admin area's *Run now* refused, in words (ADR-110 Amendment 3, point 2)."""
 
@@ -199,6 +218,11 @@ class ScheduleExecutor:
       hold `schedule_pipelines`, still be an Editor of the schedule's case, and still be cleared for
       the source; otherwise the slot is *refused*, in words, and three refusals in a row pause it;
     - **no overlap**: while a run of the recipe is still going, a newly due slot is *skipped*.
+
+    A recipe's **folder watch** (decision 5, Amendment 4) is judged in the same tick: the earliest
+    waiting file it has not taken is claimed (Valkey `SET NX`, then the ledger), under the recipe's
+    lock, and run as the owner with the same checks; one file a tick; a file that waits while a run
+    is going is not taken; a flagged recipe's files wait; a refused or failed file is not retried.
     """
 
     recipes: ScheduledRecipes
@@ -210,11 +234,11 @@ class ScheduleExecutor:
     resolve_owner: Callable[[str], Awaitable[Principal]]
     #: The case's own Editor check (`InvestigationStore.get_authorized`) and `scope_to_case`.
     check_case: Callable[[Principal, str], Awaitable[Principal]]
-    #: `run_recipe_as` with the deployment's dependencies, as the owner, trigger `schedule`.
-    #: `slot` is `None` for a run asked for now (the Admin area's *Run now*), recorded as manual.
-    run: Callable[[Principal, StudioRecipeDraft, str, datetime | None], Awaitable[Any]]
+    run: RunAs
     #: Decision 10: a notice in the owner's own inbox when a scheduled run fails or is refused.
     notify: Callable[[str, StudioRecipeDraft, str], Awaitable[None]] | None = None
+    #: Amendment 4: the files waiting in the recipe's folder (`folder_watch.waiting_files`).
+    watch_files: Callable[[StudioRecipeDraft, datetime], Awaitable[list[WatchedFile]]] | None = None
 
     async def tick(self, now: datetime) -> None:
         for recipe in await self.recipes.scheduled():
@@ -224,8 +248,15 @@ class ScheduleExecutor:
                 log.exception("schedule of recipe %s could not be judged", recipe.recipe_id)
 
     async def _consider(self, recipe: StudioRecipeDraft, now: datetime) -> None:
-        if recipe.schedule_paused or recipe.schedule_cron is None:
+        if recipe.schedule_paused:
             return
+        if recipe.schedule_cron is not None:
+            await self._consider_slot(recipe, now)
+        if recipe.schedule_watch is not None and self.watch_files is not None:
+            await self._consider_watch(recipe, now)
+
+    async def _consider_slot(self, recipe: StudioRecipeDraft, now: datetime) -> None:
+        assert recipe.schedule_cron is not None
         after = await self.runs.last_slot(recipe.recipe_id) or recipe.schedule_set_at
         if after is None:
             return
@@ -254,14 +285,8 @@ class ScheduleExecutor:
             await self._not_run(
                 recipe, latest, "refused", str(refused), counts=refused.about_the_owner
             )
-            await self._tell_owner(recipe, latest, f"was refused: {refused}")
-            in_a_row = await self.runs.refusals_in_a_row(recipe.recipe_id)
-            if refused.about_the_owner and in_a_row >= REFUSALS_BEFORE_PAUSE:
-                await self.recipes.set_paused(
-                    recipe.recipe_id,
-                    paused=True,
-                    reason=f"paused after three refused runs in a row; the last: {refused}",
-                )
+            await self._tell_owner(recipe, f"{self._due(recipe, latest)} was refused: {refused}")
+            await self._pause_if_refused_again(recipe, refused)
             return
         lock = f"schedule:lock:{recipe.recipe_id}"
         token = uuid4().hex
@@ -274,11 +299,66 @@ class ScheduleExecutor:
             await self.run(owner, recipe, case, latest)
         except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
             log.exception("scheduled run of recipe %s failed", recipe.recipe_id)
-            await self._tell_owner(recipe, latest, f"failed: {error}")
+            await self._tell_owner(recipe, f"{self._due(recipe, latest)} failed: {error}")
         finally:
-            held = await reply(self.valkey.get(lock))
-            if held in (token, token.encode()):
-                await reply(self.valkey.delete(lock))
+            await self._release(lock, token)
+
+    async def _consider_watch(self, recipe: StudioRecipeDraft, now: datetime) -> None:
+        if recipe.status is StudioRecipeStatus.FLAGGED:
+            return  # its files wait until it is published again (Amendment 4, point 6)
+        assert self.watch_files is not None
+        taken = await self.runs.watched_files(recipe.recipe_id)
+        waiting = [f for f in await self.watch_files(recipe, now) if f.identity not in taken]
+        if not waiting:
+            return
+        lock = f"schedule:lock:{recipe.recipe_id}"
+        token = uuid4().hex
+        if not await reply(self.valkey.set(lock, token, nx=True, ex=_LOCK_SECONDS)):
+            return  # a run is going; the file waits, untaken
+        try:
+            file = waiting[0]
+            digest = hashlib.sha256(file.identity.encode()).hexdigest()
+            claim = f"schedule:watch:{recipe.recipe_id}:{digest}"
+            if not await reply(self.valkey.set(claim, "1", nx=True, ex=_CLAIM_SECONDS)):
+                return
+            words = f"The run of {recipe.label} on the file {file.name}"
+            try:
+                owner, case = await self._owner(recipe)
+                if recipe.dataset_id not in (owner.datasets or []):
+                    # Rule 4: the folder is the dataset's, read only through a case that has it.
+                    raise _Refused(
+                        f"the recipe's dataset, {recipe.dataset_id}, is no longer in the case the "
+                        "watch was set in"
+                    )
+            except _Refused as refused:
+                await self._not_run(
+                    recipe, None, "refused", str(refused), counts=refused.about_the_owner,
+                    trigger="watch", source_file=file.identity,
+                )  # fmt: skip
+                await self._tell_owner(recipe, f"{words} was refused: {refused}")
+                await self._pause_if_refused_again(recipe, refused)
+                return
+            try:
+                await self.run(owner, recipe, case, None, file)
+            except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
+                log.exception("watched run of recipe %s failed", recipe.recipe_id)
+                await self._tell_owner(recipe, f"{words} failed: {error}")
+        finally:
+            await self._release(lock, token)
+
+    async def _release(self, lock: str, token: str) -> None:
+        held = await reply(self.valkey.get(lock))
+        if held in (token, token.encode()):
+            await reply(self.valkey.delete(lock))
+
+    async def _pause_if_refused_again(self, recipe: StudioRecipeDraft, refused: _Refused) -> None:
+        in_a_row = await self.runs.refusals_in_a_row(recipe.recipe_id)
+        if refused.about_the_owner and in_a_row >= REFUSALS_BEFORE_PAUSE:
+            await self.recipes.set_paused(
+                recipe.recipe_id,
+                paused=True,
+                reason=f"paused after three refused runs in a row; the last: {refused}",
+            )
 
     async def run_now(self, recipe: StudioRecipeDraft) -> Any:
         """The Admin area's *Run now* (Amendment 3, point 2): at once, as the schedule's owner, with
@@ -295,17 +375,18 @@ class ScheduleExecutor:
         try:
             return await self.run(owner, recipe, case, None)
         finally:
-            held = await reply(self.valkey.get(lock))
-            if held in (token, token.encode()):
-                await reply(self.valkey.delete(lock))
+            await self._release(lock, token)
 
-    async def _tell_owner(self, recipe: StudioRecipeDraft, slot: datetime, what: str) -> None:
-        if self.notify is None or recipe.schedule_owner is None:
-            return
+    @staticmethod
+    def _due(recipe: StudioRecipeDraft, slot: datetime) -> str:
         zone = _zone(recipe.schedule_timezone or DEFAULT_TIMEZONE)
         due = slot.astimezone(zone).strftime("%-d %B %Y at %H:%M")
+        return f"The scheduled run of {recipe.label} due {due}"
+
+    async def _tell_owner(self, recipe: StudioRecipeDraft, words: str) -> None:
+        if self.notify is None or recipe.schedule_owner is None:
+            return
         try:
-            words = f"The scheduled run of {recipe.label} due {due} {what}"
             await self.notify(recipe.schedule_owner, recipe, words)
         except Exception:  # noqa: BLE001 - a notice that cannot be written is logged, not raised
             log.exception("could not tell the owner of recipe %s", recipe.recipe_id)
@@ -346,17 +427,20 @@ class ScheduleExecutor:
     async def _not_run(
         self,
         recipe: StudioRecipeDraft,
-        slot: datetime,
+        slot: datetime | None,
         outcome: NotRunOutcome,
         why: str,
         *,
         counts: bool = True,
+        trigger: RunTrigger = "schedule",
+        source_file: str | None = None,
     ) -> None:
         await self.runs.record_not_run(
             recipe_id=recipe.recipe_id,
             recipe_version=recipe.version,
             investigation_id=recipe.schedule_case or "",
-            trigger="schedule",
+            trigger=trigger,
+            source_file=source_file,
             slot=slot,
             run_as=recipe.schedule_owner or "",
             source=resolve_source_handling(recipe),

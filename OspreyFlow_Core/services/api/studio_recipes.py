@@ -496,7 +496,8 @@ class StudioRecipeStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT * FROM studio_recipes "
-                "WHERE status = ANY($1::text[]) AND schedule_cron IS NOT NULL "
+                "WHERE status = ANY($1::text[]) "
+                "AND (schedule_cron IS NOT NULL OR schedule_watch IS NOT NULL) "
                 "ORDER BY recipe_id",
                 [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
             )
@@ -526,7 +527,7 @@ class StudioRecipeStore:
             await conn.execute(
                 "UPDATE studio_recipes SET schedule_cron = $2, schedule_timezone = $3, "
                 "schedule_set_at = $4 WHERE recipe_id = $1 AND status = ANY($5::text[]) "
-                "AND schedule_cron IS NOT NULL",
+                "AND (schedule_cron IS NOT NULL OR schedule_watch IS NOT NULL)",
                 recipe_id,
                 cron,
                 timezone,

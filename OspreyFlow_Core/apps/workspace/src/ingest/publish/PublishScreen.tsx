@@ -15,7 +15,7 @@ import type {
   ScheduleRunView,
   StudioRecipeDraft,
 } from "../../../../../packages/schemas/generated";
-import { runInWords } from "../../admin/Schedules";
+import { runInWords, triggerInWords } from "../../admin/Schedules";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Panel } from "../../design/primitives/Panel";
@@ -391,14 +391,21 @@ export function PublishScreen({
               {`Scheduled runs act as ${draft.schedule_owner}, who set this schedule, in the case it was set in.`}
             </p>
           )}
+          {/* ADR-110 decision 5, Amendment 4: the recipe's own dataset folder, watched for a pattern. */}
           <label>
-            Watch (not yet acted on — folder watching arrives with ADR-110 decision 5)
+            Run when a file arrives — filename pattern
             <Input
               value={scheduleWatch}
+              placeholder="*.csv"
               onChange={(e) => setScheduleWatch(e.target.value)}
-              disabled={status === "draft" ? false : !canEditSchedule}
+              disabled={!draft?.dataset_id || (status === "draft" ? false : !canEditSchedule)}
             />
           </label>
+          <p style={{ color: "var(--text-secondary)", fontSize: "0.85em", margin: 0 }}>
+            {draft?.dataset_id
+              ? `Each new file whose name matches, in the ${draft.dataset_id} folder, runs once, a minute after it stops changing. Leave it blank to watch nothing.`
+              : "This recipe belongs to no dataset, so it has no folder to watch."}
+          </p>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.85em" }}>
             A recipe may be published unscheduled and run only on demand.
           </p>
@@ -414,7 +421,7 @@ export function PublishScreen({
               {runs.slice(0, 20).map((run) => (
                 <li key={run.run_id}>
                   {`${new Date(run.slot ?? run.started_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} — ${
-                    run.trigger === "schedule" ? "" : `${run.trigger}: `
+                    run.trigger === "schedule" ? "" : `${triggerInWords(run)}: `
                   }${runInWords(run)}`}
                 </li>
               ))}
@@ -449,7 +456,7 @@ export function PublishScreen({
             {busy ? "Saving…" : "Update schedule"}
           </Button>
         )}
-        {canEditSchedule && draft?.schedule_cron && (
+        {canEditSchedule && (draft?.schedule_cron || draft?.schedule_watch) && (
           <Button onClick={() => void handlePause(!draft.schedule_paused)} disabled={busy}>
             {draft.schedule_paused ? "Resume schedule" : "Pause schedule"}
           </Button>

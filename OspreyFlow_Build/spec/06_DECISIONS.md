@@ -11362,6 +11362,38 @@ this record, so the build does not follow the superseded wording.
    schedule.** It is still recorded *refused*, in words; only refusals about the owner count.
 4. **The 15-minute floor stands**: a schedule more often than every 15 minutes is refused.
 
+### ADR-110, Amendment 4 (13 October 2026) — the folder watch, as built
+
+Decision 5 named the folder and the identity of a file; building it needed six more answers, none a
+new decision of principle. Each is *(mine)*, recorded so the owner may overrule it.
+
+1. **The folder is the recipe's own dataset's**, not chosen: `<root>/<dataset>/` and
+   `<root>/uploaded/<dataset>/`, exactly as the Studio's Connect stage lists them for that dataset
+   (`list_source_files`; no subfolders, no dotfiles, nothing resolving outside). The root's own,
+   dataset-less files are never watched. A recipe that belongs to no dataset cannot be watched, and
+   setting a watch on one is refused in words. So `schedule_watch` holds **only a filename pattern**
+   — `*.csv`, `carrier-b-*.xlsx` — matched against the whole name, case-sensitively, with `*`, `?`
+   and `[…]` and nothing else (no folder part, no expression language: rule 8).
+2. **A file runs once it has settled**: when neither its modification nor its status-change time is
+   within the last minute, so a file still being copied in is not loaded half-written.
+3. **Only files that arrived after the watch was set** (modification or status-change time later than
+   when the schedule was set), so setting a watch on a full folder does not load its history. The
+   status-change time is the one a copy cannot carry over, so a file copied in with its old
+   modification time kept still counts as arriving.
+4. **At most one watched file per recipe per tick, the earliest arrival first**, under the recipe's
+   own lock; while a run of the recipe is going, a waiting file simply waits (nothing is recorded —
+   it has not been taken).
+5. **A file is taken once, whatever happens to it**: claimed across replicas (Valkey `SET NX`) and
+   recorded in the ledger with its identity (`source_file`: name, size, modification time). A run
+   that fails or is refused is not retried; the owner is told (decision 10) and may run it by hand,
+   or replace the file, which is a new file. A refusal about the owner counts toward the three that
+   pause, as for a slot.
+6. **A flagged recipe's files wait** rather than being recorded *blocked* one by one: they run once it
+   is published again, if they are still there. A paused watch takes nothing.
+
+The ledger's trigger is `watch`; *Schedules and runs* and *Data feeds* list a watched recipe, its
+schedule in words naming the folder and pattern.
+
 ## ADR-111 — The Reports view and a read-only reporting feed for business dashboards — ACCEPTED
 
 Status: **ACCEPTED by the owner, 11 October 2026**: build both — a *Reports* view in the Glass

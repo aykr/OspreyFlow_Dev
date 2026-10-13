@@ -256,3 +256,41 @@ def test_change_schedule_re_commits_the_recipe_with_its_new_time(
     monkeypatch.setattr(app_module, "_commit_schedule", commit)
     client.put("/v1/admin/schedules/open", json={"cron": "30 7 * * 1-5"})
     assert committed == ["30 7 * * 1-5"]
+
+
+def test_a_watched_recipe_is_listed_with_its_watch_in_words(client: Any) -> None:
+    """ADR-110 Amendment 4: a recipe run by its folder watch alone is a schedule too."""
+    watched = client.recipes.held[0].model_copy(
+        update={"recipe_id": "watched", "schedule_cron": None, "schedule_watch": "*.csv",
+                "dataset_id": "carrier-b"}
+    )  # fmt: skip
+    both = client.recipes.held[0].model_copy(
+        update={"recipe_id": "both", "schedule_watch": "*.xlsx", "dataset_id": "carrier-b"}
+    )
+    client.recipes.held += [watched, both]
+    listed = {s["recipe_id"]: s for s in client.get("/v1/admin/schedules").json()}
+    assert listed["watched"]["schedule"] == (
+        "when a file matching `*.csv` arrives in the carrier-b folder"
+    )
+    assert (listed["watched"]["cron"], listed["watched"]["watch"]) == (None, "*.csv")
+    assert listed["watched"]["next_run"] is None
+    assert listed["both"]["schedule"] == (
+        "every weekday at 06:00 (Europe/London); and when a file matching `*.xlsx` arrives in the "
+        "carrier-b folder"
+    )
+
+
+def test_a_watched_runs_file_is_named_only_where_its_source_may_be_viewed(client: Any) -> None:
+    """ADR-110 Amendment 4: a file's name in the source's folder is a read, like the counts."""
+
+    class _WatchRuns:
+        async def for_recipe(self, recipe_id: str, *, limit: int = 50) -> list[RecipeRun]:
+            run = _run(recipe_id, "SECRET" if recipe_id == "secret" else "OFFICIAL")
+            return [run.model_copy(update={"trigger": "watch", "slot": None,
+                                           "source_file": "informants-0612.csv|9|1.0"})]  # fmt: skip
+
+    app.dependency_overrides[get_recipe_runs] = _WatchRuns
+    (shown,) = client.get("/v1/admin/schedules/open/runs").json()
+    (withheld,) = client.get("/v1/admin/schedules/secret/runs").json()
+    assert (shown["trigger"], shown["file"]) == ("watch", "informants-0612.csv")
+    assert withheld["withheld"] is True and withheld["file"] is None

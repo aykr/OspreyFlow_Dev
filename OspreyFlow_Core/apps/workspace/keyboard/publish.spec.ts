@@ -11,7 +11,7 @@ const RECIPE = {
   source_location: "/exports/a.csv", handling: {}, legal_basis: "RIPA s22", owning_unit: "unit-1", created_by: "a1",
   created_at: "2026-10-10T09:00:00Z", git_path: "recipes/r1.yaml", pipeline: null, unmapped_fields: [],
   ready_for_profile: true, schedule_cron: "0 6 * * *", schedule_timezone: "Europe/London", schedule_owner: "approver-1",
-  schedule_paused: false, schedule_paused_reason: null,
+  schedule_paused: false, schedule_paused_reason: null, dataset_id: "carrier-b",
 };  // prettier-ignore
 
 async function serve(page: Page): Promise<{ method: string; path: string; body: unknown }[]> {
@@ -72,6 +72,21 @@ test("a schedule is paused and resumed by keyboard", async ({ page }) => {
     "/v1/investigations/c1/ingest/recipes/r1/schedule/pause", "/v1/investigations/c1/ingest/recipes/r1/schedule/resume",
   ]));  // prettier-ignore
   registerCovered(REGISTRY, "pause-and-resume-a-schedule-by-keyboard");
+});
+
+test("a folder watch is set by keyboard", async ({ page }) => {
+  // ADR-110 decision 5, Amendment 4: the recipe's own dataset folder, watched for a pattern.
+  const asked = await serve(page);
+  await page.goto("/keyboard/publish-harness.html");
+  const watch = page.getByLabel("Run when a file arrives — filename pattern");
+  await expect(page.getByText(/in the carrier-b folder/)).toBeVisible();
+  await watch.focus();
+  await page.keyboard.type("*.csv");
+  await press(page, "Update schedule");
+  await expect
+    .poll(() => asked.find((a) => a.method === "PATCH")?.body)
+    .toEqual({ schedule_cron: "0 6 * * *", schedule_watch: "*.csv", schedule_timezone: "Europe/London" });
+  registerCovered(REGISTRY, "set-a-folder-watch-by-keyboard");
 });
 
 test("every registered Publish action has its own proving test case above", () => {

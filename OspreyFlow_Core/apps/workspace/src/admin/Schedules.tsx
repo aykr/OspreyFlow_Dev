@@ -46,6 +46,13 @@ export function runInWords(run: ScheduleRunView): string {
   return run.failure ? `${outcome}: ${run.failure}` : outcome;
 }
 
+/** What started a run, for a list of runs: a watched run names its file (ADR-110 Amendment 4),
+ * which the Conduit leaves out where the reader may not view the source. */
+export function triggerInWords(run: ScheduleRunView): string {
+  if (run.trigger === "watch") return run.file ? `watch, ${run.file}` : "watch";
+  return run.trigger;
+}
+
 function History({ api, schedule }: { api: AdminApi; schedule: AdminSchedule }) {
   const [runs, setRuns] = useState<ScheduleRunView[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -61,7 +68,7 @@ function History({ api, schedule }: { api: AdminApi; schedule: AdminSchedule }) 
       {runs.map((run) => (
         <li key={run.run_id}>
           <span className="value">{when(run.slot ?? run.started_at)}</span>{" "}
-          <span className="label">{`${run.trigger === "schedule" ? "" : `(${run.trigger}) `}${runInWords(run)}`}</span>
+          <span className="label">{`${run.trigger === "schedule" ? "" : `(${triggerInWords(run)}) `}${runInWords(run)}`}</span>
         </li>
       ))}
     </ul>

@@ -366,6 +366,7 @@ from .export import (
     OverrideRequiredError,
     submit_export,
 )
+from .folder_watch import WatchedFile, describe_watch, validate_watch, waiting_files
 from .held_rows import HeldRowNotFoundError, HeldRowStore
 from .history import (
     HistoryStep,
@@ -6899,6 +6900,8 @@ async def publish_studio_recipe(
     )
     if body.schedule_cron is not None:
         validate_schedule(body.schedule_cron, body.schedule_timezone or DEFAULT_TIMEZONE)
+    if body.schedule_watch is not None:
+        validate_watch(body.schedule_watch, recipe)
     git_path = await write_and_commit_recipe(built, repo_root=repo_root)
     updated = await studio_recipes.publish(
         recipe.recipe_id,
@@ -6944,6 +6947,8 @@ async def update_studio_recipe_schedule(
     and whoever sets it becomes its owner (decision 3)."""
     if body.schedule_cron is not None:
         validate_schedule(body.schedule_cron, body.schedule_timezone or DEFAULT_TIMEZONE)
+    if body.schedule_watch is not None:
+        validate_watch(body.schedule_watch, recipe)
     updated = await studio_recipes.update_schedule(
         recipe.recipe_id,
         principal,
@@ -7243,17 +7248,26 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
         return await scope_to_case(owner, case, state.datasets)
 
     async def run(
-        owner: Principal, recipe: StudioRecipeDraft, case: str, slot: datetime | None
+        owner: Principal,
+        recipe: StudioRecipeDraft,
+        case: str,
+        slot: datetime | None,
+        source_file: WatchedFile | None = None,
     ) -> Any:
         return await run_recipe_as(
             RecipeRunDeps.from_state(state),
             principal=owner,
             recipe=recipe,
             investigation_id=case,
-            source_location=None,
-            trigger="schedule" if slot else "manual",
+            source_location=source_file.location if source_file else None,
+            trigger="watch" if source_file else "schedule" if slot else "manual",
             slot=slot,
+            source_file=source_file.identity if source_file else None,
         )
+
+    async def watch_files(recipe: StudioRecipeDraft, now: datetime) -> list[WatchedFile]:
+        # A folder listing and a stat per file: off the event loop.
+        return await asyncio.to_thread(waiting_files, recipe, now=now)
 
     async def notify(owner_id: str, recipe: StudioRecipeDraft, words: str) -> None:
         await state.alerts_store.save(schedule_notice(owner_id, recipe, words, datetime.now(UTC)))
@@ -7267,6 +7281,7 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
         check_case=check_case,
         run=run,
         notify=notify,
+        watch_files=watch_files,
     )
 
 
@@ -7279,6 +7294,7 @@ async def run_recipe_as(
     source_location: str | None,
     trigger: RunTrigger,
     slot: datetime | None = None,
+    source_file: str | None = None,
 ) -> LoadReport | PipelineRunReport:
     """One run of a published recipe as `principal` (ADR-110 decision 1): the route's *Run now* and
     the scheduler both come here, so a scheduled load is judged, published, watched and resolved
@@ -7293,6 +7309,7 @@ async def run_recipe_as(
         run_as=principal.id,
         source=resolve_source_handling(recipe),
         now=datetime.now(UTC),
+        source_file=source_file,
     )
     try:
         report = await _execute_recipe_run(
@@ -8558,6 +8575,7 @@ def _schedule_run_view(
             "rows_held": run.rows_held,
             "load_id": run.load_id,
             "failure": run.failure,
+            "file": run.source_file.rsplit("|", 2)[0] if run.source_file else None,
         }
     )
 
@@ -8565,7 +8583,6 @@ def _schedule_run_view(
 async def _admin_schedule(
     recipe: StudioRecipeDraft, runs: RecipeRunStore, reader: Principal, scheme: HandlingScheme
 ) -> AdminSchedule:
-    assert recipe.schedule_cron is not None
     zone = recipe.schedule_timezone or DEFAULT_TIMEZONE
     latest = await runs.for_recipe(recipe.recipe_id, limit=1)
     return AdminSchedule(
@@ -8573,17 +8590,28 @@ async def _admin_schedule(
         label=recipe.label,
         case_id=recipe.schedule_case,
         cron=recipe.schedule_cron,
+        watch=recipe.schedule_watch,
         timezone=zone,
-        schedule=describe(recipe.schedule_cron, zone),
+        schedule=_schedule_in_words(recipe) or "",
         owner=recipe.schedule_owner,
         next_run=None
-        if recipe.schedule_paused
+        if recipe.schedule_paused or recipe.schedule_cron is None
         else next_slot(recipe.schedule_cron, zone, after=datetime.now(UTC)),
         paused=recipe.schedule_paused,
         paused_reason=recipe.schedule_paused_reason,
         flagged=recipe.status is StudioRecipeStatus.FLAGGED,
         last_run=_schedule_run_view(latest[0], reader, scheme) if latest else None,
     )
+
+
+def _schedule_in_words(recipe: StudioRecipeDraft) -> str | None:
+    """A recipe's schedule and folder watch in words (ADR-110 decision 7, Amendment 4); `None`
+    for a recipe run only by hand."""
+    zone = recipe.schedule_timezone or DEFAULT_TIMEZONE
+    parts = [describe(recipe.schedule_cron, zone)] if recipe.schedule_cron else []
+    if recipe.schedule_watch and recipe.dataset_id:
+        parts.append(describe_watch(recipe.schedule_watch, recipe.dataset_id))
+    return "; and ".join(parts) or None
 
 
 async def _scheduled_recipe(studio_recipes: StudioRecipeStore, recipe_id: str) -> StudioRecipeDraft:
@@ -8612,12 +8640,12 @@ async def data_feeds_route(
     for recipe in await studio_recipes.feeding(principal.datasets or []):
         zone = recipe.schedule_timezone or DEFAULT_TIMEZONE
         latest = await recipe_runs.for_recipe(recipe.recipe_id, limit=1)
-        scheduled = recipe.schedule_cron is not None
+        scheduled = recipe.schedule_cron is not None or recipe.schedule_watch is not None
         feeds.append(
             DataFeed(
                 recipe_id=recipe.recipe_id,
                 label=recipe.label,
-                schedule=describe(recipe.schedule_cron, zone) if recipe.schedule_cron else None,
+                schedule=_schedule_in_words(recipe),
                 next_run=next_slot(recipe.schedule_cron, zone, after=datetime.now(UTC))
                 if recipe.schedule_cron and not recipe.schedule_paused
                 else None,

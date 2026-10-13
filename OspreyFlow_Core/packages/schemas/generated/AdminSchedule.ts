@@ -3,7 +3,8 @@
 export type RecipeId = string;
 export type Label = string;
 export type CaseId = string | null;
-export type Cron = string;
+export type Cron = string | null;
+export type Watch = string | null;
 export type Timezone = string;
 export type Schedule = string;
 export type Owner = string | null;
@@ -27,6 +28,7 @@ export type RowsRejected = number | null;
 export type RowsHeld = number | null;
 export type LoadId = string | null;
 export type Failure = string | null;
+export type File = string | null;
 
 /**
  * A scheduled recipe in the Admin area's *Schedules and runs* (ADR-110 decision 8).
@@ -35,7 +37,8 @@ export interface AdminSchedule {
   recipe_id: RecipeId;
   label: Label;
   case_id?: CaseId;
-  cron: Cron;
+  cron?: Cron;
+  watch?: Watch;
   timezone: Timezone;
   schedule: Schedule;
   owner?: Owner;
@@ -68,5 +71,6 @@ export interface ScheduleRunView {
   rows_held?: RowsHeld;
   load_id?: LoadId;
   failure?: Failure;
+  file?: File;
   [k: string]: unknown;
 }

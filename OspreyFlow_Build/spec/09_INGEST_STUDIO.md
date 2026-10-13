@@ -715,8 +715,11 @@ time runs once at the end of the gap. **The run ledger** (`recipe_runs`) records
 scheduled, and every slot that did not run, with the counts and the failure in words; the Publish
 screen lists the recipe's runs, the Admin area's *Schedules and runs* every schedule, and the Reports
 view's *Data feeds* the pipelines feeding the case — a run's counts withheld wherever the reader may not
-view the source. **Not yet built:** decision 5's folder watch (the *Watch* field is saved and not acted
-on) and decision 10's notice to the owner.
+view the source. **A folder watch** (ADR-110 decision 5, Amendment 4) runs the recipe on each new
+file in its own dataset's folder whose name matches a pattern (`*.csv`): once the file has settled
+for a minute, once per file (by name, size and modification time), one at a time, as the owner, with
+the same checks; the run's trigger is `watch`. A refused or failed scheduled or watched run tells
+its owner in words, on their alerts (decision 10).
 
 ## 7. The review queue — where unstructured material actually lands
 

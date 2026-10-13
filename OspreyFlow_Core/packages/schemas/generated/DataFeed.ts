@@ -22,6 +22,7 @@ export type RowsRejected = number | null;
 export type RowsHeld = number | null;
 export type LoadId = string | null;
 export type Failure = string | null;
+export type File = string | null;
 
 /**
  * A pipeline feeding a case's datasets, as the Glass's *Data feeds* shows it (ADR-110
@@ -60,5 +61,6 @@ export interface ScheduleRunView {
   rows_held?: RowsHeld;
   load_id?: LoadId;
   failure?: Failure;
+  file?: File;
   [k: string]: unknown;
 }

@@ -135,3 +135,28 @@ def test_an_author_cannot_pause_a_schedule(client: Any) -> None:
 def test_the_recipes_runs_are_listed_with_counts_withheld_above_the_reader(client: Any) -> None:
     (run,) = client.get(f"{CASE}/recipe-1/runs").json()
     assert run["outcome"] == "succeeded" and run["withheld"] is True and run["rows_read"] is None
+
+
+@pytest.mark.parametrize(
+    ("dataset", "watch", "words"),
+    [
+        ("carrier-b", "in/*.csv", "no folder"),
+        ("carrier-b", "", "a filename pattern"),
+        (None, "*.csv", "belongs to no dataset"),
+    ],
+    ids=["folder-part", "empty", "no-dataset"],
+)
+def test_a_watch_it_could_not_keep_is_refused_in_words_and_nothing_saved(
+    client: Any, tmp_path: Any, dataset: str | None, watch: str, words: str
+) -> None:
+    """ADR-110 Amendment 4, point 1. The route's other dependencies are stand-ins: the refusal
+    comes before either is used."""
+    from services.api.app import get_ontology, get_recipes_repo_root
+
+    app.dependency_overrides[get_ontology] = object
+    app.dependency_overrides[get_recipes_repo_root] = lambda: tmp_path
+    client.recipes.draft = client.recipes.draft.model_copy(update={"dataset_id": dataset})
+    response = client.patch(f"{CASE}/recipe-1/schedule", json={"schedule_watch": watch})
+    assert response.status_code == 422
+    assert words in response.json()["detail"]
+    assert client.recipes.draft.schedule_watch is None

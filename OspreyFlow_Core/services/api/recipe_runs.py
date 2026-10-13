@@ -53,13 +53,16 @@ CREATE TABLE IF NOT EXISTS recipe_runs (
 -- ADR-110 Amendment 3: a refusal that is not about the owner (an unreachable identity provider)
 -- does not count toward the three that pause a schedule.
 ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS counts_toward_pause BOOLEAN NOT NULL DEFAULT TRUE;
+-- ADR-110 Amendment 4: the file a folder watch took (name, size, modification time), so it is
+-- taken once.
+ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS source_file TEXT;
 CREATE INDEX IF NOT EXISTS recipe_runs_recipe_idx ON recipe_runs (recipe_id, started_at DESC);
 """
 
 _COLUMNS = (
     "run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source_handling, "
     "started_at, finished_at, outcome, rows_read, nodes_created, nodes_referenced, edges_created, "
-    "rows_rejected, rows_held, load_id, failure"
+    "rows_rejected, rows_held, load_id, failure, source_file"
 )
 
 
@@ -83,6 +86,8 @@ class RecipeRun(BaseModel):
     rows_held: int | None
     load_id: str | None
     failure: str | None
+    #: For a folder watch's run (trigger `watch`): the file's name, size and modification time.
+    source_file: str | None = None
 
 
 def _row(record: asyncpg.Record) -> RecipeRun:
@@ -116,12 +121,14 @@ class RecipeRunStore:
         run_as: str,
         source: Handling,
         now: datetime,
+        source_file: str | None = None,
     ) -> str:
         run_id = new_id()
         await self._insert(
             run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source,
             started_at=now, finished_at=None, outcome="running", failure=None,
-        )
+            source_file=source_file,
+        )  # fmt: skip
         return run_id
 
     async def finish(
@@ -167,6 +174,7 @@ class RecipeRunStore:
         failure: str | None,
         now: datetime,
         counts_toward_pause: bool = True,
+        source_file: str | None = None,
     ) -> str:
         """A slot that did not run, and why (decisions 2–4)."""
         if outcome not in _NOT_RUN:
@@ -175,7 +183,8 @@ class RecipeRunStore:
         await self._insert(
             run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source,
             started_at=now, finished_at=now, outcome=outcome, failure=failure,
-        )
+            source_file=source_file,
+        )  # fmt: skip
         if not counts_toward_pause:
             async with self._pool.acquire() as conn:
                 await conn.execute(
@@ -198,13 +207,14 @@ class RecipeRunStore:
         finished_at: datetime | None,
         outcome: RunOutcome,
         failure: str | None,
+        source_file: str | None = None,
     ) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO recipe_runs (run_id, recipe_id, recipe_version, investigation_id, "
                 "trigger, slot, run_as, source_handling, started_at, finished_at, outcome, "
-                "failure) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)",
+                "failure, source_file) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13)",
                 run_id,
                 recipe_id,
                 recipe_version,
@@ -217,6 +227,7 @@ class RecipeRunStore:
                 finished_at,
                 outcome,
                 failure,
+                source_file,
             )
 
     async def for_recipe(self, recipe_id: str, *, limit: int = 50) -> list[RecipeRun]:
@@ -239,15 +250,26 @@ class RecipeRunStore:
             )
         return value  # type: ignore[no-any-return]
 
+    async def watched_files(self, recipe_id: str) -> set[str]:
+        """Every file the recipe's folder watch has taken, whatever came of it (Amendment 4)."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT DISTINCT source_file FROM recipe_runs WHERE recipe_id = $1 "
+                "AND trigger = 'watch' AND source_file IS NOT NULL",
+                recipe_id,
+            )
+        return {row["source_file"] for row in rows}
+
     async def refusals_in_a_row(self, recipe_id: str) -> int:
-        """How many of the recipe's latest scheduled runs were refused, back to the last that was
-        not (decision 3: three pause the schedule). A refusal that does not count toward the pause
-        (Amendment 3: the identity provider unreachable) is passed over — neither counted nor
-        ending the run of refusals."""
+        """How many of the recipe's latest scheduled or watched runs were refused, back to the last
+        that was not (decision 3: three pause the schedule). A refusal that does not count toward
+        the pause (Amendment 3: the identity provider unreachable) is passed over — neither counted
+        nor ending the run of refusals."""
         async with self._pool.acquire() as conn:
             outcomes = await conn.fetch(
                 "SELECT outcome, counts_toward_pause FROM recipe_runs WHERE recipe_id = $1 "
-                "AND trigger = 'schedule' ORDER BY started_at DESC, run_id DESC LIMIT 50",
+                "AND trigger IN ('schedule', 'watch') "
+                "ORDER BY started_at DESC, run_id DESC LIMIT 50",
                 recipe_id,
             )
         count = 0

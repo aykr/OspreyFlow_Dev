@@ -16,6 +16,7 @@ export type RowsRejected = number | null;
 export type RowsHeld = number | null;
 export type LoadId = string | null;
 export type Failure = string | null;
+export type File = string | null;
 
 /**
  * One row of the run ledger as the Admin area shows it (ADR-110 decisions 6 and 8). Where the
@@ -39,5 +40,6 @@ export interface ScheduleRunView {
   rows_held?: RowsHeld;
   load_id?: LoadId;
   failure?: Failure;
+  file?: File;
   [k: string]: unknown;
 }

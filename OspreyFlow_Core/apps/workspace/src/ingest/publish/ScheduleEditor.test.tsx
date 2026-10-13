@@ -26,7 +26,7 @@ const RUN = { run_id: "x", trigger: "schedule", slot: "2026-06-02T05:00:00Z", st
   finished_at: null, outcome: "refused", run_as: "approver-1", withheld: false, rows_read: null,
   failure: "the schedule's owner, approver-1, can no longer sign in" };  // prettier-ignore
 
-function serve(draft: StudioRecipeDraft = PUBLISHED) {
+function serve(draft: StudioRecipeDraft = PUBLISHED, runs: unknown[] = [RUN]) {
   const sent: { method: string; path: string; body: unknown }[] = [];
   let current = draft;
   vi.stubGlobal(
@@ -43,7 +43,7 @@ function serve(draft: StudioRecipeDraft = PUBLISHED) {
       }
       if (path.endsWith("/schedule/pause")) return ok((current = { ...current, schedule_paused: true, schedule_paused_reason: "paused by approver-1" }));
       if (path.endsWith("/schedule/resume")) return ok((current = { ...current, schedule_paused: false, schedule_paused_reason: null }));
-      if (path.endsWith("/runs")) return ok([RUN]);
+      if (path.endsWith("/runs")) return ok(runs);
       if (path.endsWith("/schedule")) return ok((current = { ...current, ...(body as object) }));
       return ok(current);
     }),
@@ -102,5 +102,41 @@ describe("the structured schedule", () => {
     place();
     const runs = await screen.findByRole("list", { name: "Runs of this recipe" });
     expect(within(runs).getByText(/Refused: the schedule's owner, approver-1, can no longer sign in/)).toBeTruthy();
+  });
+
+  // ADR-110 decision 5, Amendment 4: the folder watch.
+  const WATCHABLE = { ...PUBLISHED, schedule_cron: null, dataset_id: "carrier-b" } as unknown as StudioRecipeDraft;
+
+  it("watches the recipe's own dataset folder for a filename pattern, and saves it", async () => {
+    const sent = serve(WATCHABLE);
+    place();
+    const field = await screen.findByLabelText("Run when a file arrives — filename pattern");
+    expect(screen.getByText(/in the carrier-b folder/)).toBeTruthy();
+    fireEvent.change(field, { target: { value: "*.csv" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update schedule" }));
+    await waitFor(() =>
+      expect(sent.find((s) => s.method === "PATCH")?.body).toEqual({
+        schedule_cron: null, schedule_watch: "*.csv", schedule_timezone: null,
+      }),
+    );  // prettier-ignore
+    // A watch alone is a schedule that can be paused.
+    expect(await screen.findByRole("button", { name: "Pause schedule" })).toBeTruthy();
+  });
+
+  it("says a recipe in no dataset has no folder to watch", async () => {
+    serve({ ...WATCHABLE, dataset_id: null } as unknown as StudioRecipeDraft);
+    place();
+    const field = (await screen.findByLabelText("Run when a file arrives — filename pattern")) as HTMLInputElement;
+    expect(field.disabled).toBe(true);
+    expect(screen.getByText(/belongs to no dataset, so it has no folder to watch/)).toBeTruthy();
+  });
+
+  it("names the file a watched run took", async () => {
+    const watched = { ...RUN, run_id: "w", trigger: "watch", slot: null, outcome: "succeeded", file: "2026-06-02.csv",
+      rows_read: 4, nodes_created: 2, nodes_referenced: 0, rows_rejected: 0, failure: null };  // prettier-ignore
+    serve(WATCHABLE, [watched]);
+    place();
+    const runs = await screen.findByRole("list", { name: "Runs of this recipe" });
+    expect(within(runs).getByText(/watch, 2026-06-02\.csv: Succeeded: 4 rows read/)).toBeTruthy();
   });
 });

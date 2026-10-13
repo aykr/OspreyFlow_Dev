@@ -28,6 +28,7 @@ from principal_auth import PrincipalExchangeUnavailable, PrincipalRevoked
 from schemas.domain import Principal
 from schemas.ingest import LoadReport, StudioRecipeDraft, StudioRecipeStatus
 from services.api.config import PostgresConfig, ValkeyConfig
+from services.api.folder_watch import WatchedFile
 from services.api.investigations import AccessLevel, InsufficientAccessError
 from services.api.recipe_runs import RecipeRunStore
 from services.api.scheduler import ScheduleExecutor, ScheduleRunRefused
@@ -97,6 +98,12 @@ class _Edges:
     hold_run: asyncio.Event | None = None
     fail_run: Exception | None = None
     notices: list[tuple[str, str, str]] = field(default_factory=list)
+    #: ADR-110 Amendment 4: the files the recipe's folder watch finds waiting, earliest first.
+    waiting: list[WatchedFile] = field(default_factory=list)
+    files_run: list[str] = field(default_factory=list)
+
+    async def watch_files(self, recipe: StudioRecipeDraft, now: datetime) -> list[WatchedFile]:
+        return list(self.waiting)
 
     async def notify(self, owner_id: str, recipe: StudioRecipeDraft, words: str) -> None:
         self.notices.append((owner_id, recipe.recipe_id, words))
@@ -135,14 +142,21 @@ def _executor(
     recipes: _Recipes, edges: _Edges, runs: RecipeRunStore, valkey: Valkey
 ) -> ScheduleExecutor:
     async def run(
-        owner: Principal, recipe: StudioRecipeDraft, case: str, slot: datetime | None
+        owner: Principal,
+        recipe: StudioRecipeDraft,
+        case: str,
+        slot: datetime | None,
+        source_file: WatchedFile | None = None,
     ) -> LoadReport:
         """What `run_recipe_as` does to the ledger, around a load that writes nothing."""
         edges.runs_made.append((owner.id, slot))
+        if source_file is not None:
+            edges.files_run.append(source_file.location)
+        trigger = "watch" if source_file else "schedule" if slot else "manual"
         run_id = await runs.start(
             recipe_id=recipe.recipe_id, recipe_version=recipe.version, investigation_id=case,
-            trigger="schedule" if slot else "manual", slot=slot, run_as=owner.id, source=_source(recipe),
-            now=datetime.now(UTC),
+            trigger=trigger, slot=slot, run_as=owner.id, source=_source(recipe),
+            now=datetime.now(UTC), source_file=source_file.identity if source_file else None,
         )  # fmt: skip
         if edges.hold_run is not None:
             await edges.hold_run.wait()
@@ -162,6 +176,7 @@ def _executor(
         check_case=edges.check_case,
         run=run,
         notify=edges.notify,
+        watch_files=edges.watch_files,
     )
 
 
@@ -300,7 +315,9 @@ async def _until_running(edges: _Edges, task: asyncio.Task[Any]) -> None:
     raise AssertionError("the run never started")
 
 
-def _tick_in_a_process(recipe_json: str, at: str, ready: Any, go: Any, result: Any) -> None:
+def _tick_in_a_process(
+    recipe_json: str, at: str, ready: Any, go: Any, result: Any, waiting_json: str = ""
+) -> None:
     """One replica: its own Valkey and Postgres connections, its own executor."""
 
     async def main() -> None:
@@ -308,6 +325,8 @@ def _tick_in_a_process(recipe_json: str, at: str, ready: Any, go: Any, result: A
         config = ValkeyConfig.from_env()
         client = Valkey(host=config.host, port=config.port)
         edges = _Edges()
+        if waiting_json:
+            edges.waiting = [WatchedFile.model_validate_json(waiting_json)]
         recipe = StudioRecipeDraft.model_validate_json(recipe_json)
         executor = _executor(_Recipes([recipe]), edges, store, client)
         ready.set()
@@ -322,14 +341,23 @@ def _tick_in_a_process(recipe_json: str, at: str, ready: Any, go: Any, result: A
 
 def test_two_replicas_ticking_together_run_a_slot_once() -> None:
     """Amendment 2, point 3: two executors, two processes, one Valkey, one ledger."""
-    recipe = _recipe()
+    _two_replicas_run_it_once(_recipe(), FIRST_SLOT, "")
+
+
+def test_two_replicas_ticking_together_take_a_watched_file_once() -> None:
+    """Amendment 4, point 5: the file's claim, as the slot's, across two processes."""
+    recipe = _recipe(schedule_cron=None, schedule_watch="*.csv", dataset_id="ds-1")
+    _two_replicas_run_it_once(recipe, FIRST_SLOT, _file("a.csv").model_dump_json())
+
+
+def _two_replicas_run_it_once(recipe: StudioRecipeDraft, at: datetime, waiting: str) -> None:
     context = multiprocessing.get_context("spawn")
     go, result = context.Event(), context.Queue()
     readies = [context.Event(), context.Event()]
     processes = [
         context.Process(
             target=_tick_in_a_process,
-            args=(recipe.model_dump_json(), FIRST_SLOT.isoformat(), ready, go, result),
+            args=(recipe.model_dump_json(), at.isoformat(), ready, go, result, waiting),
         )
         for ready in readies
     ]
@@ -441,3 +469,201 @@ async def test_run_now_is_refused_while_a_run_of_the_recipe_is_going(
     assert edges.hold_run is not None
     edges.hold_run.set()
     await asyncio.wait_for(running, timeout=10)
+
+
+# --- ADR-110 decision 5, Amendment 4: the folder watch ------------------------------------------
+
+
+def _file(name: str, size: int = 10, minute: int = 0) -> WatchedFile:
+    arrived = FIRST_SLOT + timedelta(minutes=minute)
+    return WatchedFile(
+        name=name,
+        location=f"/var/lib/osprey/ingest/ds-1/{name}",
+        identity=f"{name}|{size}|{arrived.timestamp():.6f}",
+        arrived_at=arrived,
+    )
+
+
+def _watched(**overrides: Any) -> StudioRecipeDraft:
+    return _recipe(schedule_cron=None, schedule_watch="*.csv", dataset_id="ds-1", **overrides)
+
+
+async def _watch_rows(runs: RecipeRunStore, recipe: StudioRecipeDraft) -> list[tuple[str, Any]]:
+    return [
+        (r.outcome, r.source_file)
+        for r in reversed(await runs.for_recipe(recipe.recipe_id))
+        if r.trigger == "watch"
+    ]
+
+
+async def test_a_waiting_file_runs_once_as_the_owner_on_that_file(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe, edges = _watched(), _Edges(waiting=[_file("a.csv")])
+    executor = _executor(_Recipes([recipe]), edges, runs, valkey)
+    await executor.tick(FIRST_SLOT)
+    await executor.tick(FIRST_SLOT + timedelta(minutes=1))
+    assert edges.runs_made == [(OWNER.id, None)]
+    assert edges.files_run == ["/var/lib/osprey/ingest/ds-1/a.csv"]
+    assert await _watch_rows(runs, recipe) == [("succeeded", _file("a.csv").identity)]
+
+
+async def test_a_replaced_file_is_a_new_file_and_runs_again(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe, edges = _watched(), _Edges(waiting=[_file("a.csv")])
+    executor = _executor(_Recipes([recipe]), edges, runs, valkey)
+    await executor.tick(FIRST_SLOT)
+    edges.waiting = [_file("a.csv", size=20, minute=5)]
+    await executor.tick(FIRST_SLOT + timedelta(minutes=6))
+    assert len(edges.files_run) == 2
+
+
+async def test_one_file_a_tick_the_earliest_first(runs: RecipeRunStore, valkey: Valkey) -> None:
+    recipe = _watched()
+    edges = _Edges(waiting=[_file("first.csv", minute=0), _file("second.csv", minute=1)])
+    executor = _executor(_Recipes([recipe]), edges, runs, valkey)
+    await executor.tick(FIRST_SLOT + timedelta(minutes=2))
+    assert [f.rsplit("/", 1)[1] for f in edges.files_run] == ["first.csv"]
+    await executor.tick(FIRST_SLOT + timedelta(minutes=3))
+    assert [f.rsplit("/", 1)[1] for f in edges.files_run] == ["first.csv", "second.csv"]
+
+
+async def test_a_file_waits_while_a_run_of_the_recipe_is_going(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe = _watched()
+    edges = _Edges(waiting=[_file("first.csv")], hold_run=asyncio.Event())
+    executor = _executor(_Recipes([recipe]), edges, runs, valkey)
+    running = asyncio.create_task(executor.tick(FIRST_SLOT))
+    await _until_running(edges, running)
+    edges.waiting = [_file("first.csv"), _file("second.csv", minute=1)]
+    await asyncio.wait_for(executor.tick(FIRST_SLOT + timedelta(minutes=2)), timeout=10)
+    assert len(edges.files_run) == 1
+    assert [o for o, _ in await _watch_rows(runs, recipe)] == ["running"]  # nothing recorded
+    assert edges.hold_run is not None
+    edges.hold_run.set()
+    await asyncio.wait_for(running, timeout=10)
+    await executor.tick(FIRST_SLOT + timedelta(minutes=3))
+    assert [f.rsplit("/", 1)[1] for f in edges.files_run] == ["first.csv", "second.csv"]
+
+
+async def test_a_flagged_recipes_files_wait_and_run_once_it_is_published_again(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe, edges = _watched(status=StudioRecipeStatus.FLAGGED), _Edges(waiting=[_file("a.csv")])
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    assert edges.files_run == [] and await _watch_rows(runs, recipe) == []
+    republished = recipe.model_copy(update={"status": StudioRecipeStatus.PUBLISHED})
+    await _executor(_Recipes([republished]), edges, runs, valkey).tick(FIRST_SLOT)
+    assert len(edges.files_run) == 1
+
+
+async def test_a_paused_watch_takes_nothing(runs: RecipeRunStore, valkey: Valkey) -> None:
+    recipe, edges = _watched(), _Edges(waiting=[_file("a.csv")])
+    await _executor(_Recipes([recipe], paused={recipe.recipe_id: "by hand"}), edges, runs,
+                    valkey).tick(FIRST_SLOT)  # fmt: skip
+    assert edges.files_run == [] and await _watch_rows(runs, recipe) == []
+
+
+async def test_a_refused_file_is_recorded_its_owner_told_and_it_is_not_retried(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe = _watched()
+    edges = _Edges(owner=PrincipalRevoked("disabled"), waiting=[_file("a.csv")])
+    executor = _executor(_Recipes([recipe]), edges, runs, valkey)
+    await executor.tick(FIRST_SLOT)
+    await executor.tick(FIRST_SLOT + timedelta(minutes=1))
+    assert edges.files_run == []
+    assert await _watch_rows(runs, recipe) == [("refused", _file("a.csv").identity)]
+    ((owner, _, words),) = edges.notices
+    assert owner == OWNER.id
+    assert words.startswith("The run of Daily export on the file a.csv was refused: ")
+    assert "can no longer sign in" in words
+
+
+async def test_a_failed_file_tells_its_owner_and_is_not_retried(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe = _watched()
+    edges = _Edges(fail_run=ValueError("column amount is missing"), waiting=[_file("a.csv")])
+    executor = _executor(_Recipes([recipe]), edges, runs, valkey)
+    await executor.tick(FIRST_SLOT)
+    await executor.tick(FIRST_SLOT + timedelta(minutes=1))
+    assert len(edges.files_run) == 1
+    ((_, _, words),) = edges.notices
+    assert words == "The run of Daily export on the file a.csv failed: column amount is missing"
+
+
+async def test_three_refused_files_in_a_row_pause_the_watch(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe = _watched()
+    edges, recipes = _Edges(owner=PrincipalRevoked("disabled")), _Recipes([recipe])
+    executor = _executor(recipes, edges, runs, valkey)
+    for minute in range(3):
+        assert recipe.recipe_id not in recipes.paused
+        edges.waiting = [_file(f"{minute}.csv", minute=minute)]
+        await executor.tick(FIRST_SLOT + timedelta(minutes=minute + 1))
+    assert "three refused runs in a row" in recipes.paused[recipe.recipe_id]
+
+
+async def test_a_schedule_and_a_watch_on_one_recipe_both_run(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe = _recipe(schedule_watch="*.csv", dataset_id="ds-1")
+    edges = _Edges(waiting=[_file("a.csv")])
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    assert sorted(edges.runs_made, key=str) == sorted([(OWNER.id, FIRST_SLOT), (OWNER.id, None)],
+                                                      key=str)  # fmt: skip
+    assert len(edges.files_run) == 1
+
+
+async def test_a_watch_whose_dataset_left_the_case_is_refused_and_reads_nothing(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """Rule 4: the folder read is the recipe's dataset's, so the owner, scoped to the case the watch
+    was set in, must still have that dataset there (the case check scopes the owner to `ds-1`)."""
+    recipe = _recipe(schedule_cron=None, schedule_watch="*.csv", dataset_id="ds-2")
+    edges = _Edges(waiting=[_file("a.csv")])
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    assert edges.files_run == []
+    (row,) = await runs.for_recipe(recipe.recipe_id)
+    assert row.outcome == "refused" and "ds-2" in (row.failure or "")
+
+
+async def test_a_file_taken_before_valkey_lost_its_claims_is_not_taken_again(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """Amendment 4, point 5: the ledger, not only the claim, remembers a taken file — Valkey keeps
+    its claims a week at most, and a restart can lose them sooner."""
+    recipe, edges = _watched(), _Edges(waiting=[_file("a.csv")])
+    executor = _executor(_Recipes([recipe]), edges, runs, valkey)
+    await executor.tick(FIRST_SLOT)
+    async for key in valkey.scan_iter(match=f"schedule:watch:{recipe.recipe_id}:*"):
+        await valkey.delete(key)
+    await executor.tick(FIRST_SLOT + timedelta(minutes=1))
+    assert len(edges.files_run) == 1
+
+
+async def test_a_replica_that_read_the_ledger_before_anothers_run_began_does_not_take_it_too(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """Amendment 4, point 5: the claim covers the gap the ledger cannot — a replica that read which
+    files were taken just before another started the run, and took the lock once it was free."""
+
+    class _StaleLedger:
+        def __init__(self, real: RecipeRunStore) -> None:
+            self._real = real
+
+        async def watched_files(self, recipe_id: str) -> set[str]:
+            return set()  # read before the other replica's run began
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._real, name)
+
+    recipe, edges = _watched(), _Edges(waiting=[_file("a.csv")])
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    stale = _executor(_Recipes([recipe]), edges, _StaleLedger(runs), valkey)  # type: ignore[arg-type]
+    await stale.tick(FIRST_SLOT + timedelta(seconds=30))
+    assert len(edges.files_run) == 1

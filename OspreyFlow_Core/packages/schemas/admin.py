@@ -209,6 +209,8 @@ class ScheduleRunView(BaseModel):
     rows_held: int | None = None
     load_id: str | None = None
     failure: str | None = None
+    #: ADR-110 Amendment 4: the name of the file a watched run took; withheld like the counts.
+    file: str | None = None
 
 
 class AdminSchedule(BaseModel):
@@ -217,9 +219,12 @@ class AdminSchedule(BaseModel):
     recipe_id: str
     label: str
     case_id: str | None = None
-    cron: str
+    #: `None` for a recipe run only by its folder watch.
+    cron: str | None = None
+    #: ADR-110 Amendment 4: the filename pattern its dataset's folder is watched for.
+    watch: str | None = None
     timezone: str
-    #: The schedule in words: "every weekday at 06:00 (Europe/London)".
+    #: The schedule in words: "every weekday at 06:00 (Europe/London)", and the watch's.
     schedule: str
     owner: str | None = None
     next_run: datetime | None = None

@@ -581,6 +581,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
 export const PUBLISH_ACTIONS = defineActionRegistry("PUBLISH_ACTIONS", [
   "set-a-schedule-by-keyboard",
   "pause-and-resume-a-schedule-by-keyboard",
+  // ADR-110 Amendment 4: the folder watch.
+  "set-a-folder-watch-by-keyboard",
 ] as const);
 
 // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.
