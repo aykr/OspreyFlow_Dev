@@ -230,6 +230,12 @@ deployment that wants a hosted model enables it deliberately, per role, with the
 that may be sent to it declared explicitly. An extraction request carrying `OFFICIAL-SENSITIVE`
 material must not be able to reach a hosted endpoint by a routing accident.
 
+**As built (13 October 2026, ADR-114 Amendments 6 and 7):** a hosted model is the client's own provider,
+used for a role only for material whose handling code is sendable (`services/api/model_routing.py`,
+material with no handling given never sent); and the rendered deployment's containers sit on an
+internal network with no route out, the model gateway joining the `egress` network only when a
+provider is named.
+
 ## 5. Supporting services
 
 | Service | Choice | Licence | Role |

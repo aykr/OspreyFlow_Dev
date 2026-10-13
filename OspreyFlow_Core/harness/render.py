@@ -52,6 +52,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -892,19 +893,10 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
                     *(("clickhouse",) if _uses_clickhouse(config) else ()),
                 )
             }
-        # **The Conduit is not published unless `osprey.yaml` asks for it** (05_DEPLOYMENT.md
-        # §2.6 item 1, owner's decision of 25 September 2026). The workspace's own nginx proxies
-        # `/v1` and the delta WebSocket to it on the internal network, so a published API port
-        # buys nothing for the Glass and widens the exposed surface by a tier. `network.
-        # expose_conduit: true` is for an operator debugging the Conduit directly.
-        publishes = entry.service in PORT_OVERRIDES and (
-            entry.service != "api" or config.network.expose_conduit
-        )
-        if publishes:
-            variable, default = PORT_OVERRIDES[entry.service]
-            container_port = _CONTAINER_PORTS[entry.service]
-            bind = "127.0.0.1:" if entry.service in LOOPBACK_ONLY else ""
-            service["ports"] = [f"{bind}${{{variable}:-{default}}}:{container_port}"]
+        # **Nothing but the proxy publishes a port** (ADR-114 Amendment 7): a published port needs a
+        # network with a route out (measured on Docker Desktop), so the graph store's loopback door
+        # and the Conduit's opt-in one (`network.expose_conduit`, the owner's decision of 25
+        # September 2026) are served through the proxy (`harness/site.py`'s `loopback_doors`).
         if entry.service == "ingest":
             service["volumes"] = [f"osprey-staging:{config.components.storage.staging}"]
         service.update(_SERVICE_EXTRAS.get(entry.service, {}))
@@ -927,13 +919,40 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
                 "OSPREY_MODEL_PROVIDER_KEY": "${OSPREY_MODEL_PROVIDER_KEY:?set in the env file}",
             }
         if entry.service == "ollama":
-            service["command"] = [render_ollama_pull_script(config)]
+            # ADR-114 Amendment 7: the server that reads case content has no route out; the
+            # weights are fetched by `ollama-models` below, into the volume it reads.
+            service["entrypoint"] = ["/bin/ollama"]
+            service["command"] = ["serve"]
+            services["ollama-models"] = _model_download_step(
+                str(service["image"]),
+                volume="ollama-models:/root/.ollama",
+                entrypoint=["/bin/sh", "-c"],
+                command=[render_ollama_pull_script(config).replace("wait\n", "")],
+            )
+        if entry.service == "whisper":
+            # The same for speech: its model downloaded once, read offline.
+            service["volumes"] = [f"whisper-models:{_HF_CACHE}"]
+            service["environment"] = {"HF_HUB_OFFLINE": "1"}
+            service["depends_on"] = {
+                "whisper-models": {"condition": "service_completed_successfully"}
+            }
+            services["whisper-models"] = _model_download_step(
+                str(service["image"]),
+                volume=f"whisper-models:{_HF_CACHE}",
+                entrypoint=["/bin/sh", "-c"],
+                command=[
+                    f"huggingface-cli download {config.models.transcription} "
+                    f"&& chown -R 1000:1000 {_HF_CACHE}"
+                ],
+                user="0",
+            )
         services[entry.service] = service
     # ADR-111 Amendment 2: report-sync (the Conduit's own image) and Superset, when switched on.
     api = next(entry for entry in images if entry.service == "api")
     services.update(reporting_services(config, api_image=api.image, building=api.building))
     if "keycloak" in services and "postgres" in services:
         services["keycloak-db"] = _keycloak_database_step(str(services["postgres"]["image"]))  # type: ignore[index]
+    _place_on_networks(config, services)
     document = {
         "name": f"osprey-{config.profile.value}",
         "services": services,
@@ -942,12 +961,58 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             "osprey-staging": {"driver": "local"},
             # Round 13cda: without this the ~2.2GB model pull repeats on every `up`.
             "ollama-models": {"driver": "local"},
+            **({"whisper-models": {"driver": "local"}} if "whisper" in services else {}),
             **({"proxy-data": {"driver": "local"}} if sites(config).scheme == "https" else {}),
             **({"clickhouse-data": {"driver": "local"}} if _uses_clickhouse(config) else {}),
         },
+        # ADR-114 Amendment 7: `osprey` has no route out; `egress` only for what needs one.
+        "networks": {"osprey": {"internal": True}, "egress": {}},
     }
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     return _comment_block(_BANNER, "#") + body
+
+
+#: Where the speech server keeps its downloaded models (measured: speaches runs as uid 1000).
+_HF_CACHE = "/home/ubuntu/.cache/huggingface"
+
+
+def _model_download_step(
+    image: str, *, volume: str, entrypoint: list[str], command: list[str], user: str | None = None
+) -> dict[str, Any]:
+    """A one-shot step that fetches model weights into a volume and exits (ADR-114 Amendment 7):
+    the only part of model serving with a route out, and it never sees case content."""
+    step: dict[str, Any] = {
+        "image": image,
+        "entrypoint": entrypoint,
+        "command": command,
+        "volumes": [volume],
+        "restart": "no",
+    }
+    if user is not None:
+        step["user"] = user
+    return step
+
+
+def egress_needs(config: OspreyConfig) -> set[str]:
+    """The services that reach outside the deployment, each because a configured feature needs it
+    (ADR-114 Amendment 7; 04 §4). Everything else is on the internal network alone."""
+    needs = {"proxy", "ollama-models", "whisper-models"}
+    if config.models.provider is not None:
+        needs.add("litellm")  # the client's own model provider
+    if config.mail is not None or config.governance.organisation_sign_in:
+        needs.add("keycloak")  # mail for invitations; an organisation's sign-in
+    if any(
+        p.proxy != "none" and (p.source or "").startswith(("http://", "https://"))
+        for p in (config.map.providers if config.map is not None else [])
+    ):
+        needs.add("api")  # map tiles fetched through the Conduit's tile proxy
+    return needs
+
+
+def _place_on_networks(config: OspreyConfig, services: dict[str, Any]) -> None:
+    reaching_out = egress_needs(config)
+    for name, service in services.items():
+        service["networks"] = ["osprey", "egress"] if name in reaching_out else ["osprey"]
 
 
 #: Keycloak's role and database on the deployment's Postgres, made before Keycloak starts and run at

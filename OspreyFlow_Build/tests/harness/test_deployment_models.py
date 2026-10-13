@@ -55,7 +55,7 @@ def test_the_render_pulls_routes_and_names_the_chosen_model() -> None:
     compose = yaml.safe_load(rendered["compose.yaml"])
     assert (
         "pull_and_verify qwen2.5:14b-instruct 7cdf5a0187d5\n"
-        in compose["services"]["ollama"]["command"][0]
+        in compose["services"]["ollama-models"]["command"][0]
     )
     routes = {
         m["model_name"]: m["litellm_params"]

@@ -12428,6 +12428,40 @@ The owner's answers to the questions the overnight run of 12–13 October record
    in the model path with B8 (they are enforced nowhere today), with a test that a request above them is
    not sent.
 
+### ADR-114, Amendment 7 (13 October 2026) — nothing reaches outside unless a configured feature needs it
+
+**Owner-directed** ("add the fix for the outbound traffic from the containers since that will breach
+the security promise of the product"). Found: every container of a rendered deployment could reach the
+internet, against 04 §4's "egress is default-denied".
+
+**Measured on Docker Desktop first:** a container on an `internal` network cannot reach the internet
+and cannot publish a port; a bridge with masquerading turned off still reaches the internet there. So:
+
+1. **Every service is on the internal `osprey` network.** Only a service whose configured feature needs
+   the outside world also joins `egress`: the **front proxy** (the one door in — a published port
+   cannot be had without a route out — and, in the cloud, its certificates); the **model gateway** only
+   when a client provider is named (Amendment 6); **Keycloak** only when mail or an organisation's
+   sign-in is configured; the **Conduit** only when a map provider proxies remote tiles.
+2. **Model weights are fetched by one-shot steps that exit** (`ollama-models`, `whisper-models`), into
+   the volumes the model servers read; Ollama and the speech server, which read case content, never
+   have a route out (speech reads its cache with `HF_HUB_OFFLINE=1`).
+3. **Only the proxy publishes a port.** The graph store's loopback door (Amendment 4 decision 3, the
+   owner's ruling of 29 September that seeds run on the host) and the Conduit's opt-in door
+   (`network.expose_conduit`) are served through the proxy (`harness/site.py`'s `loopback_doors`),
+   so neither service needs a route out.
+
+**Proved live** on a rendered slice (the proxy, ArcadeDB, the speech download and server): no route out
+from the internal network, and the speech server unable even to resolve a name; ArcadeDB answering on
+`127.0.0.1` through the proxy; the speech model downloaded once, then listed and used for a
+transcription with no route out; the `egress` network reaching out. **Not measured live:** the Ollama
+download step (some 2 GB) — the same pull script, now run as its own step. **Applying it to a running
+deployment needs it rendered again**; `ospreyflow start --build` does not re-render.
+
+**Tests:** `tests/harness/test_render_egress.py` (8), with the front-proxy and render tests moved to the
+new layout; plants red: the internal network made ordinary, the model server given a route out, the
+gateway always reaching out, speech allowed to fetch, the graph store's door lost, a door published
+but not routed.
+
 ## ADR-115 — The design handoff: the welcome page, Home and the Glass to `DESIGN.md` v0.2 — ACCEPTED (design)
 
 Status: **accepted on the owner's rulings of 12 October 2026; design only, nothing built.** The

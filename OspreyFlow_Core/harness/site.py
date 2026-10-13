@@ -67,13 +67,19 @@ def render_caddyfile(config: OspreyConfig) -> str:
     lines.append("}")
     for name, upstream in routes:
         lines += ["", f"{names.scheme}://{name} {{", f"\treverse_proxy {upstream}", "}"]
+    # ADR-114 Amendment 7: the doors this machine alone uses, through the proxy, so the services
+    # behind them need no published port — and so no route out (measured: a published port needs
+    # a network that reaches the internet).
+    for port, upstream in loopback_doors(config):
+        lines += ["", f"http://:{port} {{", f"\treverse_proxy {upstream}", "}"]
     # Anything else — an unknown name, or the proxy's own health — answers here and nowhere else.
     catch_all = f":{PROXY_HTTP_PORT}" if plain else ":443"
     lines += ["", f"{catch_all} {{", "\trespond /healthz 200", "\trespond 404", "}", ""]
     return "\n".join(lines)
 
 
-_SITE = re.compile(r"^(?:https?://)(?P<name>[^\s{]+)\s*\{\s*$")
+#: A site named by host; a bare `:port` door (`loopback_doors`) is not a name and is not listed.
+_SITE = re.compile(r"^(?:https?://)(?P<name>[^\s{:][^\s{]*)\s*\{\s*$")
 _UPSTREAM = re.compile(r"^\s*reverse_proxy\s+(?P<upstream>\S+)\s*$")
 
 
@@ -89,6 +95,23 @@ def routes(caddyfile: str) -> dict[str, str]:
         elif line.strip() == "}":
             current = None
     return found
+
+
+#: ADR-114 Amendment 7: `(port, upstream, published-as)` for each door through the proxy. The graph
+#: store on this machine only (the owner's ruling of 29 September: seeds run on the host); the
+#: Conduit only when `network.expose_conduit` asks, as before.
+def loopback_doors(config: OspreyConfig) -> list[tuple[int, str]]:
+    doors = [(2480, "arcadedb:2480")]
+    if config.network.expose_conduit:
+        doors.append((8000, "api:8000"))
+    return doors
+
+
+def _door_ports(config: OspreyConfig) -> list[str]:
+    published = ["127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"]
+    if config.network.expose_conduit:
+        published.append("${OSPREY_API_PORT:-8000}:8000")
+    return published
 
 
 def proxy_service(config: OspreyConfig) -> dict[str, Any]:
@@ -108,7 +131,7 @@ def proxy_service(config: OspreyConfig) -> dict[str, Any]:
     service: dict[str, Any] = {
         "restart": "unless-stopped",
         "image": PROXY_IMAGE,
-        "ports": ports,
+        "ports": [*ports, *_door_ports(config)],
         **extra,
     }
     service.setdefault("volumes", []).insert(0, "./Caddyfile:/etc/caddy/Caddyfile:ro")

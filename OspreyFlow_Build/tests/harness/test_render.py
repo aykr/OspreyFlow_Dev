@@ -664,7 +664,9 @@ def test_every_published_port_is_overridable_with_the_spec_s_own_default(
     # ADR-114 Amendment 4: the workspace is reached through the front proxy, which publishes the
     # public origin's own port; moving it is an edit to `network.public_origin`.
     assert "ports" not in compose["services"]["workspace"]
-    assert compose["services"]["proxy"]["ports"] == ["80:8080"]
+    assert compose["services"]["proxy"]["ports"] == [
+        "80:8080", "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"
+    ]  # fmt: skip
     assert "OSPREY_API_PORT=8000" in env
 
 
@@ -674,9 +676,9 @@ def test_arcadedb_is_published_to_this_machine_only(rendered: RenderResult) -> N
     `2480:2480` would put an unauthenticated-by-network database on the office LAN."""
     compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
 
-    assert compose["services"]["arcadedb"]["ports"] == [
-        "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"
-    ]
+    # ADR-114 Amendment 7: served through the proxy, so the graph store needs no route out.
+    assert "ports" not in compose["services"]["arcadedb"]
+    assert "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480" in compose["services"]["proxy"]["ports"]
     assert "OSPREY_ARCADEDB_PORT=2480" in rendered.artefacts["deployment.env"]
 
 
@@ -695,7 +697,8 @@ def test_the_conduit_is_not_published_by_default_and_is_when_asked_for() -> None
     from schemas.deployment import NetworkConfig
 
     closed = yaml.safe_load(render(OspreyConfig(), allow_unpinned=True).artefacts["compose.yaml"])
-    assert "ports" not in closed["services"]["api"], (
+    assert "ports" not in closed["services"]["api"]
+    assert "${OSPREY_API_PORT:-8000}:8000" not in closed["services"]["proxy"]["ports"], (
         "the Conduit is published by default — the Glass does not need it and §7 does not want it"
     )
     assert closed["services"]["proxy"]["ports"], "the workspace must still be reachable"
@@ -705,7 +708,8 @@ def test_the_conduit_is_not_published_by_default_and_is_when_asked_for() -> None
             OspreyConfig(network=NetworkConfig(expose_conduit=True)), allow_unpinned=True
         ).artefacts["compose.yaml"]
     )
-    assert opened["services"]["api"]["ports"] == ["${OSPREY_API_PORT:-8000}:8000"], (
+    # ADR-114 Amendment 7: through the proxy, so the Conduit itself needs no route out.
+    assert "${OSPREY_API_PORT:-8000}:8000" in opened["services"]["proxy"]["ports"], (
         "network.expose_conduit: true did not publish the Conduit, so the option does nothing"
     )
 

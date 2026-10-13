@@ -62,12 +62,13 @@ def _env(artefacts: dict[str, str]) -> dict[str, str]:
 def test_only_the_proxy_is_published() -> None:
     services = _compose(_render())
     published = {name: s["ports"] for name, s in services.items() if s.get("ports")}
-    assert published.pop("proxy") == ["80:8080"]
-    # The one named exception, reachable from this machine only (Amendment 4 decision 3).
-    assert published == {"arcadedb": ["127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"]}
-    # The Conduit only when an operator opts in, and then nothing else changes.
+    # ADR-114 Amendment 7: the proxy alone publishes — the public origin, and the graph store's door
+    # on this machine only (Amendment 4 decision 3), which the proxy now serves.
+    assert published == {"proxy": ["80:8080", "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"]}
+    # The Conduit only when an operator opts in — through the proxy too.
     opted = _compose(_render(network={"expose_conduit": True}))
-    assert {n for n, s in opted.items() if s.get("ports")} == {"proxy", "arcadedb", "api"}
+    assert {n for n, s in opted.items() if s.get("ports")} == {"proxy"}
+    assert "${OSPREY_API_PORT:-8000}:8000" in opted["proxy"]["ports"]
 
 
 def test_each_name_reaches_its_service() -> None:
@@ -92,7 +93,7 @@ def test_every_address_derives_from_the_public_origin() -> None:
         "http://a.test:8443", "http://id.a.test:8443", "http://bi.a.test:8443"
     )  # fmt: skip
     assert names.port == 8443
-    assert _compose(_render("http://a.test:8443"))["proxy"]["ports"] == ["8443:8080"]
+    assert _compose(_render("http://a.test:8443"))["proxy"]["ports"][0] == "8443:8080"
     secure = site.sites(OspreyConfig.model_validate({"network": {"public_origin": "https://osprey.example.org"}}))
     assert (secure.identity, secure.port) == ("https://id.osprey.example.org", 443)
     assert site.sites(OspreyConfig()).glass == "http://ospreyflow.localhost", "the Lite default"
