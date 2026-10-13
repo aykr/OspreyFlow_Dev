@@ -12552,8 +12552,17 @@ Phase E row E4). The owner ruled:
 5. **A case shows a mono scope badge** beside its name, as the reference has it. Cases carry no scope
    today, so what a scope is (and its values) is decided before it is built.
 6. **Nodes are drawn at radius 7 (14px) with a 24×24 hit area** (`DESIGN.md` v0.3 §5a), amending ADR-097
-   step 2's 20px node; the in-node icons are dropped, since at that size they cannot be read — the type
-   is carried by colour, the legend and the label.
+   step 2's 20px node. **Refined by the owner the same day ("small, icons on zoom-in"):** the icon or
+   picture is not dropped but drawn only from the neighbourhood zoom band in (a camera ratio of 0.4 or
+   closer, `zoomBands.ts`), where the node is drawn large enough to read it; below that the node is
+   drawn plain and the type is carried by colour, the legend and the label. The canvas redraws when
+   the zoom crosses a band (`cameraMoves.ts` `redrawOnBandChange`), since the renderer reruns its
+   reducers only when asked and a wheel zoom does not ask. Tests that fail if this is violated:
+   `keyboard/canvas-look.spec.ts` ("a node is 14 pixels across at 100%"; "a click just beside a node
+   selects it, and one well clear of it does not") and `keyboard/keyboard.spec.ts` ("a picture given
+   from a file is drawn in the shape…", which checks it is drawn when closed in and not at 100%).
+   Found building the hit area: the renderer's display cache can hold unframed positions at the first
+   click after loading, so the hit area reads node positions from the graph itself.
 
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
