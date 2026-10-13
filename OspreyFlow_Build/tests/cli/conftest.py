@@ -104,6 +104,8 @@ class Rig:
     use_real_runner: bool = False
     env: dict[str, str] = field(default_factory=dict)
     capture_envs: list[Mapping[str, str] | None] = field(default_factory=list)
+    #: What `git tag --points-at HEAD` says of the checkout (ADR-114 Amendment 8 point 10).
+    tags_at_head: str = ""
 
     def capture(
         self, argv: Sequence[str], *, env: Mapping[str, str] | None = None, cwd: Path | None = None
@@ -111,6 +113,8 @@ class Rig:
         self.capture_envs.append(env)
         if "--ids" in argv:
             return 0, PACKS_OUTPUT
+        if "--points-at" in argv:
+            return 0, self.tags_at_head
         if "ps" in argv:
             return self.ps_code, self.ps_output
         return 0, ""

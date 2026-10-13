@@ -443,6 +443,25 @@ def apply_update(
     return 0
 
 
+def verify_for_install(host: Host, tag: str, out: Path) -> int:
+    """`install` on a release tag (Amendment 8 point 10): that release found, its lock and every
+    owned image verified, and the lock written for `harness.apply --images-from`."""
+    try:
+        release = host.find_release(tag)
+        if release["tag"] != tag:
+            raise ReleaseRefused(f"GitHub answered {release['tag']} when asked for {tag}")
+        verify_lock(host.cosign, release["lock"], release.get("lock_signature", ""),
+                    host.identity(tag))  # fmt: skip
+        verify_release(release["lock"], host.identity(tag), host.cosign)
+    except (ReleaseRefused, SignatureRefused) as refused:
+        print(f"ospreyflow: {refused}. Nothing was installed.", file=sys.stderr)
+        return 1
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(release["lock"], encoding="utf-8")
+    print(f"{tag}: the lock and every owned image are signed by the release workflow.")
+    return 0
+
+
 def make_bundle_for(
     repo: Path,
     host: Host,
@@ -583,12 +602,17 @@ def main(argv: Sequence[str] | None = None, *, repo_root: Path = REPO_ROOT) -> i
     parser.add_argument(
         "--repository", help="owner/repo of the user repository, when the origin does not say"
     )
+    parser.add_argument("--verify-install", metavar="TAG", help=argparse.SUPPRESS)
+    parser.add_argument("--lock-out", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.check:
         return check(args.deployment, repo_root, github_api=args.github_api)
     host = real_host(
         args.deployment, repo_root, github_api=args.github_api, repository=args.repository
     )
+    if args.verify_install is not None:
+        out = args.lock_out or Path(".install/release.lock")
+        return verify_for_install(host, args.verify_install, out)
     if args.make_bundle is not None:
         return make_bundle_for(repo_root, host, args.make_bundle.resolve(), to=args.to)
 

@@ -556,3 +556,29 @@ def test_a_bundle_of_a_verified_release_is_written_and_named(
     assert written == [(out, "v0.5.0")]
     said = capsys.readouterr().out
     assert "ospreyflow update --from" in said and out.name in said
+
+
+# --- an install from a release (Amendment 8 point 10, B5e) --------------------------------------
+
+
+def test_an_install_s_release_is_verified_before_its_lock_is_written(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path)
+    out = tmp_path / ".install" / "release.lock"
+    fake.signed = {OLD}
+    assert update.verify_for_install(fake.host(), "v0.5.0", out) == 1
+    assert not out.exists()
+    assert f"{REG}/api@{NEW}" in capsys.readouterr().err
+    fake.signed = {OLD, NEW}
+    assert update.verify_for_install(fake.host(), "v0.5.0", out) == 0
+    assert out.read_text() == _lock(NEW)
+    assert fake.actions[-2:] == ["find v0.5.0", "verify the lock"]
+
+
+def test_an_install_names_the_release_its_checkout_is_on(tmp_path: Path) -> None:
+    fake = _Host(tmp_path)
+    fake.release_tag = "v0.6.0"  # what GitHub answers is not the tag asked for
+    out = tmp_path / "release.lock"
+    assert update.verify_for_install(fake.host(), "v0.5.0", out) == 1
+    assert not out.exists()

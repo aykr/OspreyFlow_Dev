@@ -220,3 +220,42 @@ def test_without_yes_or_config_the_prompts_make_the_answers(rig: Rig, tmp_path: 
 def test_the_install_alias_is_accepted(rig: Rig) -> None:
     assert rig("--install", "--mode", "lite", "--yes", "--force", "--no-demo-accounts") == 0
     assert rig.runner.with_word("harness.apply")
+
+
+# --- an install from a release pulls its signed images (ADR-114 Amendment 8 point 10, B5e) ------
+
+
+def test_an_install_on_a_release_tag_verifies_the_release_then_runs_its_images(rig: Rig) -> None:
+    rig.tags_at_head = "v0.5.0\n"
+    assert rig("install", "--mode", "lite", "--yes", "--force") == 0
+    python = str(rig.product / ".venv" / "bin" / "python")
+    stepped = [c.argv for c in rig.runner.calls if c.argv[0] == python]
+    lock = str(rig.product / ".install" / "release.lock")
+    assert stepped[0] == [python, "-m", "harness.update", "--deployment", str(rig.deployment),
+                          "--verify-install", "v0.5.0", "--lock-out", lock]  # fmt: skip
+    assert stepped[1] == [python, "-m", "harness.apply", "--images-from", lock, "--demo-analyst"]
+
+
+def test_a_release_that_does_not_verify_stops_the_install_before_anything_starts(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rig.tags_at_head = "v0.5.0\n"
+    rig.runner.fail["harness.update"] = 1
+    assert rig("install", "--mode", "lite", "--yes", "--force") == 1
+    assert not rig.runner.with_word("harness.apply")
+    assert "verify the release" in capsys.readouterr().err
+
+
+def test_install_build_builds_even_on_a_release_tag(rig: Rig) -> None:
+    rig.tags_at_head = "v0.5.0\n"
+    assert rig("install", "--mode", "lite", "--yes", "--force", "--build") == 0
+    assert not rig.runner.with_word("harness.update")
+    assert rig.runner.with_word("harness.apply")[0].argv[3] == "--build"
+
+
+def test_a_checkout_on_no_release_tag_builds(rig: Rig) -> None:
+    rig.tags_at_head = "nightly\nv0.5\n"
+    assert rig("install", "--mode", "lite", "--yes", "--force") == 0
+    assert not rig.runner.with_word("harness.update")
+    assert rig.runner.with_word("harness.apply")[0].argv[3] == "--build"
+

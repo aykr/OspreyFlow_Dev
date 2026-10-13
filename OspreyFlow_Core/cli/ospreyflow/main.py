@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -164,6 +165,9 @@ def _parser() -> argparse.ArgumentParser:
     install.add_argument("--force", action="store_true", help="replace a different osprey.yaml")
     install.add_argument("--no-demo-accounts", action="store_true")
     install.add_argument("--gui", action="store_true", help="answer on a guided page")
+    install.add_argument(
+        "--build", action="store_true", help="build from this checkout even on a release tag"
+    )
 
     start = verbs.add_parser("start", help="bring the deployment up")
     start.add_argument("--build", action="store_true", help="rebuild from the checkout first")
@@ -336,7 +340,19 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
         return 0
 
     _write_config(ctx, answers, args.force)
-    apply = [*ctx.python, "-m", "harness.apply", "--build"]
+    release = None if args.build else _release_at_head(ctx)
+    if release is not None:
+        # ADR-114 Amendment 8 point 10: a release's signed images, verified before anything starts.
+        (ctx.product / ".install").mkdir(exist_ok=True)
+        lock = ctx.product / ".install" / "release.lock"
+        ctx.step(
+            "verify the release's images",
+            [*ctx.python, "-m", "harness.update", "--deployment", str(ctx.deployment),
+             "--verify-install", release, "--lock-out", str(lock)],
+        )  # fmt: skip
+        apply = [*ctx.python, "-m", "harness.apply", "--images-from", str(lock)]
+    else:
+        apply = [*ctx.python, "-m", "harness.apply", "--build"]
     if not args.no_demo_accounts:
         apply.append("--demo-analyst")
     ctx.step("build and start the deployment", apply)
@@ -351,6 +367,22 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
     print(f"Sign in with the accounts in {ctx.deployment / 'deployment.env'}")
     print("Look after it with: ospreyflow status, ospreyflow open")
     return 0
+
+
+_RELEASE_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+
+
+def _release_at_head(ctx: _Context) -> str | None:
+    """The release the checkout sits on (its newest `vX.Y.Z` tag at HEAD), or None to build."""
+    code, said = ctx.capture(
+        ["git", "-C", str(ctx.product), "tag", "--points-at", "HEAD"], cwd=ctx.product
+    )
+    tags = (
+        [t.strip() for t in said.splitlines() if _RELEASE_TAG.match(t.strip())] if code == 0 else []
+    )
+    if not tags:
+        return None
+    return max(tags, key=lambda t: tuple(int(p) for p in _RELEASE_TAG.match(t).groups()))  # type: ignore[union-attr]
 
 
 def _start(args: argparse.Namespace, ctx: _Context) -> int:

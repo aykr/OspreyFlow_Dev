@@ -46,6 +46,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from harness.keycloak_admin import (
     grant_service_account_roles,
     set_demo_admin_password,
@@ -91,7 +93,6 @@ class ApplyFailed(RuntimeError):
         super().__init__(f"{stage}: {detail}")
 
 
-
 def analytics_secret_lines(config: OspreyConfig) -> str:
     """ClickHouse's password, minted here once and written under both names — the server's
     (`OSPREY_CLICKHOUSE_PASSWORD`, read by the compose file) and the Conduit's
@@ -101,6 +102,7 @@ def analytics_secret_lines(config: OspreyConfig) -> str:
         return ""
     password = generate_client_secret()
     return f"OSPREY_CLICKHOUSE_PASSWORD={password}\nCLICKHOUSE_PASSWORD={password}\n"
+
 
 def provider_secret_lines(config: OspreyConfig, environ: Mapping[str, str]) -> str:
     """A client's own model provider's key (ADR-114 Amendment 6, point 4), carried from the
@@ -410,6 +412,33 @@ def seed(compose_file: Path, datasets: list[str], investigation_id: str) -> None
                 print(f"  seed[{dataset}]: {line.strip()}")
 
 
+def release_registry(lock_text: str) -> str:
+    """Where a release's owned images live (ADR-114 Amendment 8 point 10): the Conduit's repository
+    in the release's lock, without its name — a user repository's own `ghcr.io/<owner>`."""
+    entries = (yaml.safe_load(lock_text) or {}).get("images") or []
+    api = [e for e in entries if isinstance(e, dict) and e.get("service") == "api"]
+    if not api:
+        raise ApplyFailed("release", "the release's lock names no image of the Conduit (api)")
+    return str(api[0]["repository"]).rsplit("/", 1)[0]
+
+
+def pin_release_images(out_dir: Path, lock_path: Path) -> None:
+    """Every image the verified lock names, pinned by its digest before anything starts."""
+    from harness.update import pin_images
+
+    pin_images(out_dir, lock_path.read_text(encoding="utf-8"))
+
+
+def render_deployment(config: OspreyConfig, out_dir: Path, *, images_from: Path | None) -> Any:
+    """Step 1: the deployment's files, and — for an install from a release — its images pinned to
+    the verified lock before anything can start them."""
+    rendered = render(config, allow_unpinned=True)
+    write_artefacts(rendered, out_dir)
+    if images_from is not None:
+        pin_release_images(out_dir, images_from)
+    return rendered
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m harness.apply",
@@ -441,6 +470,16 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument("--realm", default="osprey")
+    parser.add_argument(
+        "--images-from",
+        type=Path,
+        default=None,
+        help=(
+            "A release's verified versions.lock (ADR-114 Amendment 8 point 10): run exactly its "
+            "images, pinned by digest, and build nothing. `ospreyflow install` passes it on a "
+            "release tag, after verifying the release."
+        ),
+    )
     parser.add_argument(
         "--no-build",
         action="store_true",
@@ -482,6 +521,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.build:
         components = config.components.model_copy(update={"source_path": str(REPO_ROOT)})
         config = config.model_copy(update={"components": components})
+    if args.images_from is not None:
+        # The release's own registry, so the render names the images the lock pins.
+        os.environ["OSPREY_IMAGE_REGISTRY"] = release_registry(
+            args.images_from.read_text(encoding="utf-8")
+        )
+        args.no_build = True
     out_dir = args.out_root / config.profile.value
     result = ApplyResult(profile=config.profile.value)
     # ADR-114 Amendment 4 decision 7: the deployment's names reach the proxy on this machine
@@ -492,8 +537,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         # 1. Render.
-        rendered = render(config, allow_unpinned=True)
-        write_artefacts(rendered, out_dir)
+        rendered = render_deployment(config, out_dir, images_from=args.images_from)
         write_config_copy(args.config, out_dir)
         (out_dir / "realm.json").write_text(
             render_realm_json(config, demo_analyst=args.demo_analyst), encoding="utf-8"
