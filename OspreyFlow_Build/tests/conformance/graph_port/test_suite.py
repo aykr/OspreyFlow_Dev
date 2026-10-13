@@ -728,6 +728,29 @@ async def test_paths_returns_hydrated_nodes_and_edges_not_bare_ids(
         assert found.edges[0].type == "USES"
 
 
+async def test_paths_never_walk_a_not_same_as_judgement(factory: GraphAdapterFactory) -> None:
+    """ADR-116 Amendment 1, the owner's ruling of 13 October 2026: a judgement that two records are
+    different people is no step on any route, in the Pathfinder as in Find connections."""
+    async with factory.context() as adapter:
+        (a, b, c), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL") for _ in "abc"], []
+        )
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("NOT_SAME_AS", a, c, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", b, c, classification="OFFICIAL"),
+            ],
+        )
+        found = await adapter.paths(PathRequest(source=a, target=c, max_hops=6, k=5), CLEARED)
+        assert {p.length for p in found} == {2}
+        assert all(e.type != "NOT_SAME_AS" for p in found for e in p.edges)
+        asked = PathRequest(source=a, target=c, max_hops=6, k=5, edge_types=["NOT_SAME_AS"])
+        assert await adapter.paths(asked, CLEARED) == []
+
+
 # --- routes at one degree (ADR-116) ------------------------------------------
 
 

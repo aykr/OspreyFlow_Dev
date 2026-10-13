@@ -376,6 +376,20 @@ class ExpandBuilder:
         )
 
 
+def _route_step_filter(edge_types: tuple[str, ...] | list[str] | None) -> str | None:
+    """The label filter on each link a route may take, or `None` when no type asked for may be
+    walked. A `NOT_SAME_AS` link is never a step (ADR-116 Amendment 1, the owner's ruling): it is an
+    analyst's judgement that two records are different, not a connection between them."""
+    never = physical_type_name("NOT_SAME_AS")
+    if edge_types is None:
+        return f'.not(hasLabel("{never}"))'
+    physical = [label for t in edge_types for label in physical_edge_labels(t) if label != never]
+    if not physical:
+        return None
+    # See `ExpandBuilder._edge_label_filter`'s comment — the varargs-not-list bug, same fix.
+    return f".hasLabel({groovy_args_literal(physical)})"
+
+
 @dataclass(frozen=True)
 class PathBuilder:
     """Compiles a `PathRequest` into a `has_access`-filtered `repeat()`/`until()` traversal —
@@ -399,16 +413,14 @@ class PathBuilder:
 
     request: PathRequest
 
-    def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
+    def render_gremlin(self, access: AccessFilter, principal: Principal) -> str | None:
+        """The traversal, or `None` when it could find nothing (no walkable link type asked)."""
         has_access = access.gremlin_has_step(principal)
         source_lit = groovy_string_literal(self.request.source)
         target_lit = groovy_string_literal(self.request.target)
-        edge_filter = ""
-        if self.request.edge_types:
-            physical = [label for t in self.request.edge_types for label in physical_edge_labels(t)]
-            # See `ExpandBuilder._edge_label_filter`'s comment — the same
-            # varargs-not-list bug, same fix.
-            edge_filter = f".hasLabel({groovy_args_literal(physical)})"
+        edge_filter = _route_step_filter(self.request.edge_types or None)
+        if edge_filter is None:
+            return None
         return (
             f'g.V().has("id",{source_lit}).{has_access}'
             f".repeat(bothE(){edge_filter}.{has_access}.as('e').otherV().{has_access}.simplePath())"
@@ -459,21 +471,9 @@ class RoutesAtLengthBuilder:
     limit: int
     edge_types: tuple[str, ...] | None = None
 
-    def _edge_filter(self) -> str | None:
-        """The step's label filter, or `None` when no type asked for may be walked at all."""
-        never = physical_type_name("NOT_SAME_AS")
-        if self.edge_types is None:
-            return f'.not(hasLabel("{never}"))'
-        physical = [
-            label for t in self.edge_types for label in physical_edge_labels(t) if label != never
-        ]
-        if not physical:
-            return None
-        return f".hasLabel({groovy_args_literal(physical)})"
-
     def render_gremlin(self, access: AccessFilter, principal: Principal) -> str | None:
         """The traversal, or `None` when it could find nothing (no walkable link type asked)."""
-        edge_filter = self._edge_filter()
+        edge_filter = _route_step_filter(self.edge_types)
         if edge_filter is None:
             return None
         has_access = access.gremlin_has_step(principal)

@@ -690,6 +690,8 @@ class GraphArcadeDBAdapter:
 
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]:
         query = PathBuilder(req).render_gremlin(self._access, principal)
+        if query is None:
+            return []
         results = await self._client.gremlin(query)
         return await self._hydrate_paths([record["result"] for record in results], principal)
 
