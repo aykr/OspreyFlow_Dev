@@ -210,6 +210,8 @@ test("Reject on a finding, by keyboard, sends the reject and marks it rejected",
   await page.keyboard.press("Enter");
   await tabTo(page, /^Quick scan$/);
   await page.keyboard.press("Enter");
+  // Waited for: tabbing before the findings arrive ran out of steps on a slower run.
+  await expect(page.getByRole("button", { name: "Reject Person · MERCER, Dana" })).toBeVisible();
   await tabTo(page, /^Reject Person · MERCER, Dana$/, 20);
   await page.keyboard.press("Enter");
   await expect.poll(() => asked.rejected.length).toBe(1);
