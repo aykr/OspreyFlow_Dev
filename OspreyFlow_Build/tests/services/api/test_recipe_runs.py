@@ -131,3 +131,17 @@ async def test_refusals_in_a_row_are_counted_and_a_success_resets_them(
     assert await runs.refusals_in_a_row(recipe) == 0
     await refuse(3)
     assert await runs.refusals_in_a_row(recipe) == 1
+
+
+async def test_a_refusal_that_does_not_count_is_skipped_over_not_counted(
+    runs: RecipeRunStore,
+) -> None:
+    """ADR-110 Amendment 3: an unreachable identity provider neither counts nor resets."""
+    recipe = new_id()
+    for minute, counts in enumerate([True, False, True, False]):
+        await runs.record_not_run(
+            recipe_id=recipe, recipe_version=1, investigation_id="case-1", trigger="schedule",
+            slot=T0 + timedelta(minutes=minute), run_as="a", source=SOURCE, outcome="refused",
+            failure="x", now=T0 + timedelta(minutes=minute), counts_toward_pause=counts,
+        )  # fmt: skip
+    assert await runs.refusals_in_a_row(recipe) == 2

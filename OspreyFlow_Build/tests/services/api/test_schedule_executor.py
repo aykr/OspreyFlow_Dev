@@ -333,3 +333,26 @@ def test_two_replicas_ticking_together_run_a_slot_once() -> None:
 
     assert asyncio.run(ledger()) == ["succeeded"]
     assert os.environ.get("POSTGRES_PORT"), "needs the live Postgres"
+
+
+async def test_an_identity_provider_outage_is_refused_but_never_pauses_the_schedule(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 3, point 3: only refusals about the owner count toward the three."""
+    recipe = _recipe()
+    recipes, edges = _Recipes([recipe]), _Edges(owner=PrincipalExchangeUnavailable("down"))
+    executor = _executor(recipes, edges, runs, valkey)
+    for day in range(4):
+        await executor.tick(FIRST_SLOT + timedelta(days=day))
+    assert recipe.recipe_id not in recipes.paused
+    assert [o for o, _ in await _outcomes(runs, recipe)] == ["refused"] * 4
+    # An outage between owner refusals neither counts nor resets them.
+    edges.owner = PrincipalRevoked("disabled")
+    await executor.tick(FIRST_SLOT + timedelta(days=4))
+    await executor.tick(FIRST_SLOT + timedelta(days=5))
+    edges.owner = PrincipalExchangeUnavailable("down")
+    await executor.tick(FIRST_SLOT + timedelta(days=6))
+    assert recipe.recipe_id not in recipes.paused
+    edges.owner = PrincipalRevoked("disabled")
+    await executor.tick(FIRST_SLOT + timedelta(days=7))
+    assert "three refused runs in a row" in recipes.paused[recipe.recipe_id]

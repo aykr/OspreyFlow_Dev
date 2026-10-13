@@ -150,7 +150,12 @@ class ScheduledRecipes(Protocol):
 
 
 class _Refused(Exception):
-    """A slot that may not run, and why, in words for the ledger."""
+    """A slot that may not run, and why, in words for the ledger. `about_the_owner` is false for a
+    refusal that says nothing about the owner (Amendment 3), which never pauses the schedule."""
+
+    def __init__(self, why: str, *, about_the_owner: bool = True) -> None:
+        super().__init__(why)
+        self.about_the_owner = about_the_owner
 
 
 @dataclass
@@ -216,8 +221,10 @@ class ScheduleExecutor:
         try:
             owner, case = await self._owner(recipe)
         except _Refused as refused:
-            await self._not_run(recipe, latest, "refused", str(refused))
-            if await self.runs.refusals_in_a_row(recipe.recipe_id) >= REFUSALS_BEFORE_PAUSE:
+            await self._not_run(
+                recipe, latest, "refused", str(refused), counts=refused.about_the_owner
+            )
+            if refused.about_the_owner and await self.runs.refusals_in_a_row(recipe.recipe_id) >= REFUSALS_BEFORE_PAUSE:
                 await self.recipes.set_paused(
                     recipe.recipe_id,
                     paused=True,
@@ -250,7 +257,8 @@ class ScheduleExecutor:
             raise _Refused(f"the schedule's owner, {owner_id}, can no longer sign in") from error
         except PrincipalExchangeUnavailable as error:
             raise _Refused(
-                "the identity provider could not be reached to act as the schedule's owner"
+                "the identity provider could not be reached to act as the schedule's owner",
+                about_the_owner=False,
             ) from error
         except Exception as error:  # noqa: BLE001 - any other refusal of the exchange
             raise _Refused(
@@ -273,7 +281,13 @@ class ScheduleExecutor:
         return owner, case
 
     async def _not_run(
-        self, recipe: StudioRecipeDraft, slot: datetime, outcome: NotRunOutcome, why: str
+        self,
+        recipe: StudioRecipeDraft,
+        slot: datetime,
+        outcome: NotRunOutcome,
+        why: str,
+        *,
+        counts: bool = True,
     ) -> None:
         await self.runs.record_not_run(
             recipe_id=recipe.recipe_id,
@@ -286,6 +300,7 @@ class ScheduleExecutor:
             outcome=outcome,
             failure=why,
             now=datetime.now(UTC),
+            counts_toward_pause=counts,
         )
 
 

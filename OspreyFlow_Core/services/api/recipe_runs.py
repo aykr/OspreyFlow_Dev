@@ -50,6 +50,9 @@ CREATE TABLE IF NOT EXISTS recipe_runs (
     load_id TEXT,
     failure TEXT
 );
+-- ADR-110 Amendment 3: a refusal that is not about the owner (an unreachable identity provider)
+-- does not count toward the three that pause a schedule.
+ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS counts_toward_pause BOOLEAN NOT NULL DEFAULT TRUE;
 CREATE INDEX IF NOT EXISTS recipe_runs_recipe_idx ON recipe_runs (recipe_id, started_at DESC);
 """
 
@@ -163,6 +166,7 @@ class RecipeRunStore:
         outcome: NotRunOutcome,
         failure: str | None,
         now: datetime,
+        counts_toward_pause: bool = True,
     ) -> str:
         """A slot that did not run, and why (decisions 2–4)."""
         if outcome not in _NOT_RUN:
@@ -172,6 +176,11 @@ class RecipeRunStore:
             run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source,
             started_at=now, finished_at=now, outcome=outcome, failure=failure,
         )
+        if not counts_toward_pause:
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE recipe_runs SET counts_toward_pause = FALSE WHERE run_id = $1", run_id
+                )
         return run_id
 
     async def _insert(
@@ -232,15 +241,19 @@ class RecipeRunStore:
 
     async def refusals_in_a_row(self, recipe_id: str) -> int:
         """How many of the recipe's latest scheduled runs were refused, back to the last that was
-        not (decision 3: three pause the schedule)."""
+        not (decision 3: three pause the schedule). A refusal that does not count toward the pause
+        (Amendment 3: the identity provider unreachable) is passed over — neither counted nor
+        ending the run of refusals."""
         async with self._pool.acquire() as conn:
             outcomes = await conn.fetch(
-                "SELECT outcome FROM recipe_runs WHERE recipe_id = $1 AND trigger = 'schedule' "
-                "ORDER BY started_at DESC, run_id DESC LIMIT 50",
+                "SELECT outcome, counts_toward_pause FROM recipe_runs WHERE recipe_id = $1 "
+                "AND trigger = 'schedule' ORDER BY started_at DESC, run_id DESC LIMIT 50",
                 recipe_id,
             )
         count = 0
         for row in outcomes:
+            if row["outcome"] == "refused" and not row["counts_toward_pause"]:
+                continue
             if row["outcome"] != "refused":
                 break
             count += 1
