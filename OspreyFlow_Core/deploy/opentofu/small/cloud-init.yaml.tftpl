@@ -1,0 +1,20 @@
+#cloud-config
+# The Small server's first boot, the same on AWS and Azure (ADR-114 decisions 7 and 8): Docker from
+# Ubuntu's own archive, set to start at boot, and the OspreyFlow checkout with its command. It stops
+# there. Rendering a deployment onto the cloud's managed database and object store is the part of
+# stage B6 not yet built, so nothing here guesses at it: the message of the day says what is next.
+package_update: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - git
+  - curl
+runcmd:
+  - systemctl enable --now docker
+  - git clone ${repository} /opt/ospreyflow
+  - sh /opt/ospreyflow/install.sh
+write_files:
+  - path: /etc/motd
+    content: |
+      OspreyFlow server for ${domain}. The checkout is /opt/ospreyflow.
+      Next: ospreyflow install --mode small (stage B6: the managed-services install).

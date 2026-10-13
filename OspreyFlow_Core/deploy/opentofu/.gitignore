@@ -1,0 +1,5 @@
+# Provider downloads, made by `tofu init`. The lock files beside them are kept: they pin the
+# providers by hash for every platform.
+.terraform/
+*.tfstate
+*.tfstate.backup

@@ -70,7 +70,7 @@ class _ConduitInstance:
     """One real `uvicorn services.api.app:app` process on its own port,
     sharing the ambient ArcadeDB/Valkey/Postgres env with the test."""
 
-    def __init__(self, jwks_url: str) -> None:
+    def __init__(self, jwks_url: str, extra_env: dict[str, str] | None = None) -> None:
         self.port = _free_port()
         self.base_url = f"http://127.0.0.1:{self.port}"
         repo_root = _REPO
@@ -91,6 +91,7 @@ class _ConduitInstance:
             "ARCADEDB_DATABASE": "ospreyflow",
             "PYTHONPATH": f"{repo_root}:{packages_root}:{os.environ.get('PYTHONPATH', '')}",
             "ANALYTICS_DB_PATH": str(analytics_db_path),
+            **(extra_env or {}),
         }
         self._process = subprocess.Popen(
             [

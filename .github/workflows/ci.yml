@@ -279,6 +279,15 @@ jobs:
   # four stores `deploy/compose/dev.yaml` (`make dev-up`) brings up
   # locally, so this job and a developer's laptop run the identical test
   # set against the identical stack.
+  # ADR-114 decision 10: the Small modules for both clouds — formatted, valid, and planned against
+  # mock providers by their own tests — with no cloud credentials.
+  opentofu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -C OspreyFlow_Build opentofu-check
+        working-directory: .
+
   conformance:
     runs-on: ubuntu-latest
     services:
@@ -457,6 +466,7 @@ jobs:
           ../OspreyFlow_Build/tests/test_analytics_clickhouse.py
           ../OspreyFlow_Build/tests/conformance/media_store
           ../OspreyFlow_Build/tests/test_media_blob.py
+          ../OspreyFlow_Build/tests/services/api/test_statelessness_clickhouse.py
           ../OspreyFlow_Build/tests/services/api/test_valkey_store.py
           ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py
           ../OspreyFlow_Build/tests/services/api/test_statelessness.py
@@ -716,6 +726,7 @@ jobs:
           uv run pytest -c ../OspreyFlow_Build/pytest.ini --ignore=../OspreyFlow_Build/tests/conformance/graph_port
           --ignore=../OspreyFlow_Build/tests/conformance/analytics_port --ignore=../OspreyFlow_Build/tests/test_analytics_clickhouse.py
           --ignore=../OspreyFlow_Build/tests/test_media_blob.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness_clickhouse.py
           --ignore=../OspreyFlow_Build/tests/conformance/model_port --ignore=../OspreyFlow_Build/tests/golden --ignore=../OspreyFlow_Build/tests/ingest
           --ignore=../OspreyFlow_Build/tests/services/api/test_valkey_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_ws_ticket.py

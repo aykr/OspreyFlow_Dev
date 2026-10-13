@@ -941,6 +941,11 @@ speaks Azure Blob's REST interface with `httpx` and Shared Key signing, so no Az
 Its tests run against Azurite (MIT), `mcr.microsoft.com/azure-storage/azurite:3.35.0`, a test-only
 image that never ships in a deployment.
 
+**ADR-114 decision 10 addition (13 October 2026):** the Small modules (`deploy/opentofu/small/`)
+use OpenTofu 1.10.6 (MPL-2.0, run from its image `ghcr.io/opentofu/opentofu:1.10.6`) and the
+`hashicorp/aws`, `hashicorp/azurerm` and `hashicorp/random` providers (each MPL-2.0), pinned by the
+lock files beside the modules. Nothing of Terraform's BSL-licensed core is used.
+
 **PaySim (ADR-055 Amendment, ADR-114 decision 5, 11 October 2026) — data, CC BY-SA 4.0**, verified
 from Kaggle's metadata for `ealaxi/paysim1` (Edgar Lopez-Rojas). Redistributable as a downloadable demo
 pack, never in a repository, with its attribution and licence text; anything derived from it and
