@@ -55,6 +55,7 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         "typology_rules": given["typology_rules"], "held_rows": given["held_rows"],
         "screening_lists": given["screening_lists"], "compute": given["compute"],
         "kyc_expiries": given["kyc_expiries"],
+        "recipe_runs": given["recipe_runs"],
     }
     investigation, recipe, principal = SimpleNamespace(id="case-1"), object(), object()
     result = await run_studio_recipe(

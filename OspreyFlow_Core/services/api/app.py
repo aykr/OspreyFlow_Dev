@@ -31,10 +31,10 @@ import os
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime
-from pathlib import Path
 from dataclasses import dataclass
 from dataclasses import fields as dataclass_fields
+from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Annotated, Any, Final, Literal, cast
 
 from fastapi import (
@@ -478,6 +478,7 @@ from .questions import (
     QuestionsService,
     QuestionsTooLargeError,
 )
+from .recipe_runs import RecipeRunStore, RunTrigger
 from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
@@ -631,6 +632,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     held_rows = await HeldRowStore.connect(config.postgres.dsn, handling_scheme)
     screening_lists = await ScreeningListStore.connect(config.postgres.dsn)
     kyc_expiries = await KycExpiryStore.connect(config.postgres.dsn)
+    # ADR-110 decision 6: the run ledger.
+    recipe_runs = await RecipeRunStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
     link_notes_store = await LinkNoteStore.connect(config.postgres.dsn)
     link_changes_store = await LinkChangeStore.connect(config.postgres.dsn)
@@ -699,6 +702,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.held_rows = held_rows
     app.state.screening_lists = screening_lists
     app.state.kyc_expiries = kyc_expiries
+    app.state.recipe_runs = recipe_runs
     app.state.judgements_store = judgements_store
     app.state.link_notes = LinkNoteService(link_notes_store, app.state.working_set)
     # ADR-090: the ontology in force is `default.yaml` plus every proposal, composed here and after
@@ -868,6 +872,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await held_rows.close()
         await screening_lists.close()
         await kyc_expiries.close()
+        await recipe_runs.close()
         await judgements_store.close()
         await link_notes_store.close()
         await link_changes_store.close()
@@ -1140,6 +1145,13 @@ TypologyRulesDep = Annotated[TypologyRuleStore, Depends(get_typology_rules)]
 HeldRowsDep = Annotated[HeldRowStore, Depends(get_held_rows)]
 ScreeningListsDep = Annotated[ScreeningListStore, Depends(get_screening_lists)]
 KycExpiriesDep = Annotated[KycExpiryStore, Depends(get_kyc_expiries)]
+
+
+def get_recipe_runs(request: Request) -> RecipeRunStore:
+    return request.app.state.recipe_runs  # type: ignore[no-any-return]
+
+
+RecipeRunsDep = Annotated[RecipeRunStore, Depends(get_recipe_runs)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 PrincipalNamesDep = Annotated[PrincipalNameDirectory, Depends(get_principal_names)]
 IdentityAdminDep = Annotated[IdentityAdmin, Depends(get_identity_admin)]
@@ -6922,6 +6934,7 @@ async def run_studio_recipe(
     screening_lists: ScreeningListsDep,
     compute: ComputeDep,
     kyc_expiries: KycExpiriesDep,
+    recipe_runs: RecipeRunsDep,
 ) -> LoadReport | PipelineRunReport:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -6986,6 +6999,7 @@ async def run_studio_recipe(
             screening_lists=screening_lists,
             compute=compute,
             kyc_expiries=kyc_expiries,
+            recipe_runs=recipe_runs,
         ),
         principal=principal,
         recipe=recipe,
@@ -6993,10 +7007,6 @@ async def run_studio_recipe(
         source_location=body.source_location,
         trigger="manual",
     )
-
-
-#: How a run began (ADR-110 decision 6's `trigger`).
-RunTrigger = Literal["manual", "schedule", "watch", "release"]
 
 
 @dataclass(frozen=True)
@@ -7026,6 +7036,7 @@ class RecipeRunDeps:
     screening_lists: ScreeningListStore
     compute: ComputePort
     kyc_expiries: KycExpiryStore
+    recipe_runs: RecipeRunStore
 
     @classmethod
     def from_state(cls, state: Any) -> RecipeRunDeps:
@@ -7053,10 +7064,50 @@ async def run_recipe_as(
     investigation_id: str,
     source_location: str | None,
     trigger: RunTrigger,
+    slot: datetime | None = None,
 ) -> LoadReport | PipelineRunReport:
     """One run of a published recipe as `principal` (ADR-110 decision 1): the route's *Run now* and
     the scheduler both come here, so a scheduled load is judged, published, watched and resolved
-    exactly as a manual one. `run_studio_recipe`'s docstring has what each step is for."""
+    exactly as a manual one, and every run is in the ledger (decision 6) — started before it
+    loads, so one that dies with its Conduit shows as never finished rather than as nothing."""
+    run_id = await deps.recipe_runs.start(
+        recipe_id=recipe.recipe_id,
+        recipe_version=recipe.version,
+        investigation_id=investigation_id,
+        trigger=trigger,
+        slot=slot,
+        run_as=principal.id,
+        source=resolve_source_handling(recipe),
+        now=datetime.now(UTC),
+    )
+    try:
+        report = await _execute_recipe_run(
+            deps,
+            principal=principal,
+            recipe=recipe,
+            investigation_id=investigation_id,
+            source_location=source_location,
+            trigger=trigger,
+        )
+    except Exception as error:
+        await deps.recipe_runs.fail(
+            run_id, failure=f"{type(error).__name__}: {error}"[:1000], now=datetime.now(UTC)
+        )
+        raise
+    await deps.recipe_runs.finish(run_id, report=report, now=datetime.now(UTC))
+    return report
+
+
+async def _execute_recipe_run(
+    deps: RecipeRunDeps,
+    *,
+    principal: Principal,
+    recipe: StudioRecipeDraft,
+    investigation_id: str,
+    source_location: str | None,
+    trigger: RunTrigger,
+) -> LoadReport | PipelineRunReport:
+    """The load itself, `run_studio_recipe`'s docstring has what each step is for."""
     load_id = new_id()
     # ADR-109 ruling 1: the case's typology rules judge this load, at the point each declares.
     rules = await _rule_gate(
