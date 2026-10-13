@@ -1,7 +1,7 @@
 # What the install needs next, and what the client points their DNS name at.
 
 output "address" {
-  description = "Point the domain's A record here."
+  description = "Point the domain's A records (the name, id. and bi.) here."
   value       = aws_eip.server.public_ip
 }
 
@@ -18,8 +18,17 @@ output "database_password_secret" {
   value       = aws_db_instance.postgres.master_user_secret[0].secret_arn
 }
 
-output "media_bucket" {
-  value = aws_s3_bucket.media.bucket
+output "bucket_prefix" {
+  value = local.bucket_prefix
+}
+
+output "region" {
+  value = var.region
+}
+
+output "first_admin_secret" {
+  description = "Where the first boot leaves the first administrator's one-time code."
+  value       = aws_secretsmanager_secret.first_admin.arn
 }
 
 output "deployment_secret" {
@@ -29,4 +38,9 @@ output "deployment_secret" {
 output "server" {
   description = "Reach it with: aws ssm start-session --target <this>"
   value       = aws_instance.server.id
+}
+
+output "install_answers" {
+  description = "What the server's first boot installs from (no secret in it)."
+  value       = yamlencode(local.answers)
 }

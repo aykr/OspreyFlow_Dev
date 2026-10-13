@@ -2,7 +2,7 @@
 # AWS module's where the two mean the same thing.
 
 output "address" {
-  description = "Point the domain's A record here."
+  description = "Point the domain's A records (the name, id. and bi.) here."
   value       = azurerm_public_ip.server.ip_address
 }
 
@@ -28,7 +28,13 @@ output "media_container" {
 }
 
 output "key_vault" {
-  value = azurerm_key_vault.main.vault_uri
+  description = "The vault's name: the first administrator's code is its first-admin-code secret."
+  value       = azurerm_key_vault.main.name
+}
+
+output "install_answers" {
+  description = "What the server's first boot installs from (no secret in it)."
+  value       = yamlencode(local.answers)
 }
 
 output "server" {

@@ -26,7 +26,7 @@ variable "domain" {
 }
 
 variable "size" {
-  description = "small (16 GB server), medium (32 GB) or large (64 GB); the database follows."
+  description = "small (32 GB server), medium (64 GB) or large (128 GB); the database follows."
   type        = string
   default     = "small"
   validation {
@@ -48,4 +48,22 @@ variable "backup_days" {
     condition     = var.backup_days >= 7 && var.backup_days <= 35
     error_message = "backup_days is between 7 and 35 (RDS keeps at most 35)."
   }
+}
+
+variable "release" {
+  description = "The release tag the server installs (empty: the repository's default branch)."
+  type        = string
+  default     = ""
+}
+
+variable "dns_zone" {
+  description = "A DNS zone in this account to add the deployment's names to; empty to add them by hand."
+  type        = string
+  default     = ""
+}
+
+variable "admin_email" {
+  description = "The first administrator's email (optional)."
+  type        = string
+  default     = ""
 }

@@ -11,6 +11,9 @@ mock_provider "aws" {
   mock_data "aws_region" {
     defaults = { name = "eu-west-2" }
   }
+  mock_data "aws_route53_zone" {
+    defaults = { zone_id = "Z0123456789ABCDEFGHIJ" }
+  }
   mock_data "aws_iam_policy_document" {
     defaults = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
   }
@@ -86,13 +89,64 @@ run "the_database_is_private_encrypted_backed_up_and_guarded" {
 run "the_object_store_is_private_and_encrypted" {
   command = plan
   assert {
+    condition = alltrue([
+      for block in aws_s3_bucket_public_access_block.store : (
+        block.block_public_acls && block.block_public_policy &&
+        block.ignore_public_acls && block.restrict_public_buckets
+      )
+    ])
+    error_message = "every bucket must refuse every form of public access"
+  }
+  assert {
     condition = (
-      aws_s3_bucket_public_access_block.media.block_public_acls &&
-      aws_s3_bucket_public_access_block.media.block_public_policy &&
-      aws_s3_bucket_public_access_block.media.ignore_public_acls &&
-      aws_s3_bucket_public_access_block.media.restrict_public_buckets
+      toset(keys(aws_s3_bucket.store)) == toset(["media", "staging", "site-images", "tile-cache"])
     )
-    error_message = "the media bucket must refuse every form of public access"
+    error_message = "the four S3 stores the deployment uses (05 §3a) each have a bucket"
+  }
+}
+
+run "the_first_boot_installs_onto_rds_and_s3_with_no_secret_in_it" {
+  # Applied against the mock provider: the database's address and the buckets' prefix are known only
+  # after an apply.
+  command = apply
+  assert {
+    condition     = yamldecode(output.install_answers).external.object_store.credentials == "instance"
+    error_message = "the server reaches S3 with its own role, no key"
+  }
+  assert {
+    condition     = yamldecode(output.install_answers).external.postgres.sslmode == "require"
+    error_message = "the server reaches RDS over TLS"
+  }
+  assert {
+    condition     = !strcontains(output.install_answers, "password")
+    error_message = "the install answers name no password: the server reads it from Secrets Manager"
+  }
+  assert {
+    condition = startswith(
+      yamldecode(output.install_answers).external.object_store.bucket_prefix, "osprey-test-"
+    )
+    error_message = "the buckets the server is told of are the ones made here"
+  }
+}
+
+run "without_a_zone_no_name_is_made" {
+  command = plan
+  assert {
+    condition     = length(aws_route53_record.names) == 0
+    error_message = "with no zone named, the operator makes the records"
+  }
+}
+
+run "with_a_zone_the_name_and_its_id_and_bi_names_are_made" {
+  command = plan
+  variables {
+    dns_zone = "example.org"
+  }
+  assert {
+    condition = toset(keys(aws_route53_record.names)) == toset([
+      "osprey.example.org", "id.osprey.example.org", "bi.osprey.example.org",
+    ])
+    error_message = "the three names the front proxy answers (Amendment 4) each get a record"
   }
 }
 

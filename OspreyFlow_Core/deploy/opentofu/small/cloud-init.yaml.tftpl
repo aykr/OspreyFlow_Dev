@@ -1,20 +1,92 @@
 #cloud-config
-# The Small server's first boot, the same on AWS and Azure (ADR-114 decisions 7 and 8): Docker from
-# Ubuntu's own archive, set to start at boot, and the OspreyFlow checkout with its command. It stops
-# there. Rendering a deployment onto the cloud's managed database and object store is the part of
-# stage B6 not yet built, so nothing here guesses at it: the message of the day says what is next.
+# The Small server's first boot, the same on AWS and Azure (ADR-114 decisions 7 and 8, Amendment
+# 10 points 1 and 4): Docker from Ubuntu's own archive, the OspreyFlow checkout at the release, and
+# then the install itself, onto the managed services OpenTofu made. The passwords are read here with
+# the server's own cloud identity — never written into this file — and the first administrator's
+# one-time code goes to the cloud's secret store, from which the operator's `ospreyflow install
+# --mode small --cloud ${provider}` shows it once and deletes it.
 package_update: true
 packages:
   - docker.io
   - docker-compose-v2
   - git
   - curl
-runcmd:
-  - systemctl enable --now docker
-  - git clone ${repository} /opt/ospreyflow
-  - sh /opt/ospreyflow/install.sh
+  - python3
 write_files:
+  - path: /etc/ospreyflow/install.yaml
+    permissions: "0600"
+    content: |
+      ${indent(6, answers)}
+  - path: /usr/local/sbin/ospreyflow-first-boot
+    permissions: "0700"
+    content: |
+      #!/bin/sh
+      set -eu
+      exec >>/var/log/ospreyflow-first-boot.log 2>&1
+      export HOME=/root  # cloud-init's commands may run without one; the installer needs it
+      echo "first boot started $(date -u +%FT%TZ)"
+      product=/opt/ospreyflow
+      if [ ! -d "$product/.git" ]; then
+        git clone ${release == "" ? "" : "--branch ${release} "}${repository} "$product"
+      fi
+      cd "$product"
+      sh ./install.sh
+      PATH="/root/.local/bin:$PATH"
+      mkdir -p /run/ospreyflow && chmod 700 /run/ospreyflow
+      code_file=/run/ospreyflow/first-admin-code
+%{ if provider == "aws" ~}
+      command -v aws >/dev/null || snap install aws-cli --classic
+      PATH="/snap/bin:$PATH"
+      OSPREY_POSTGRES_PASSWORD="$(aws secretsmanager get-secret-value --region ${region} \
+        --secret-id '${database_secret}' --query SecretString --output text \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin)["password"])')"
+      export OSPREY_POSTGRES_PASSWORD
+%{ else ~}
+      vault_token() {
+        curl -sf -H Metadata:true \
+          "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net" \
+          | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])'
+      }
+      # The server's right to read the vault is granted after the server exists, and takes a few
+      # minutes to apply: each read is retried for up to twenty minutes before the boot gives up.
+      vault_secret() {
+        for _ in $(seq 1 80); do
+          if value="$(curl -sf -H "Authorization: Bearer $(vault_token)" \
+              "https://${key_vault}.vault.azure.net/secrets/$1?api-version=7.4" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')"; then
+            printf %s "$value"
+            return 0
+          fi
+          sleep 15
+        done
+        echo "could not read $1 from the vault" >&2
+        return 1
+      }
+      OSPREY_POSTGRES_PASSWORD="$(vault_secret database-password)"
+      AZURE_STORAGE_KEY="$(vault_secret media-storage-key)"
+      export OSPREY_POSTGRES_PASSWORD AZURE_STORAGE_KEY
+%{ endif ~}
+      OSPREYFLOW_HOME="$product" ospreyflow install --mode small --config /etc/ospreyflow/install.yaml \
+        --yes --force --first-admin-code-file "$code_file"
+%{ if provider == "aws" ~}
+      aws secretsmanager put-secret-value --region ${region} --secret-id '${first_admin_secret}' \
+        --secret-string "file://$code_file" >/dev/null
+%{ else ~}
+      body="$(python3 -c 'import json,sys; print(json.dumps({"value": open(sys.argv[1]).read().strip()}))' "$code_file")"
+      for _ in $(seq 1 80); do
+        printf %s "$body" | curl -sf -X PUT -H "Authorization: Bearer $(vault_token)" \
+          -H "Content-Type: application/json" --data-binary @- \
+          "https://${key_vault}.vault.azure.net/secrets/first-admin-code?api-version=7.4" \
+          >/dev/null && break
+        sleep 15
+      done
+%{ endif ~}
+      shred -u "$code_file" 2>/dev/null || rm -f "$code_file"
+      echo "first boot finished $(date -u +%FT%TZ)"
   - path: /etc/motd
     content: |
-      OspreyFlow server for ${domain}. The checkout is /opt/ospreyflow.
-      Next: ospreyflow install --mode small (stage B6: the managed-services install).
+      OspreyFlow server for ${domain}. The checkout is /opt/ospreyflow; the first boot's log is
+      /var/log/ospreyflow-first-boot.log. Look after it with: ospreyflow status
+runcmd:
+  - systemctl enable --now docker
+  - /usr/local/sbin/ospreyflow-first-boot

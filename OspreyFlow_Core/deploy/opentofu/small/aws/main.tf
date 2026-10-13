@@ -16,6 +16,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.80"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 }
 
@@ -27,7 +31,9 @@ provider "aws" {
 }
 
 locals {
-  server_type = { small = "t3.xlarge", medium = "m6i.2xlarge", large = "m6i.4xlarge" }[var.size]
+  # Memory-optimised: a nominal 16 GiB server shows its system less than the 16 GiB floor
+  # Preflight holds a deployment to, so the smallest is 32 GiB.
+  server_type = { small = "r6i.xlarge", medium = "r6i.2xlarge", large = "r6i.4xlarge" }[var.size]
   db_class    = { small = "db.t4g.medium", medium = "db.m6g.large", large = "db.m6g.xlarge" }[var.size]
   zones       = slice(data.aws_availability_zones.here.names, 0, 2)
 }
@@ -155,20 +161,34 @@ resource "aws_db_instance" "postgres" {
   auto_minor_version_upgrade  = true
 }
 
-resource "aws_s3_bucket" "media" {
-  bucket_prefix = "${var.name}-media-"
+# The S3 stores (05_DEPLOYMENT.md §3a): media, staged Parquet, site images and the tile cache,
+# each `<prefix><name>` — bucket names are global, so the prefix carries a random part.
+resource "random_id" "buckets" {
+  byte_length = 3
 }
 
-resource "aws_s3_bucket_public_access_block" "media" {
-  bucket                  = aws_s3_bucket.media.id
+locals {
+  bucket_prefix = "${var.name}-${random_id.buckets.hex}-"
+  stores        = toset(["media", "staging", "site-images", "tile-cache"])
+}
+
+resource "aws_s3_bucket" "store" {
+  for_each = local.stores
+  bucket   = "${local.bucket_prefix}${each.key}"
+}
+
+resource "aws_s3_bucket_public_access_block" "store" {
+  for_each                = local.stores
+  bucket                  = aws_s3_bucket.store[each.key].id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "media" {
-  bucket = aws_s3_bucket.media.id
+resource "aws_s3_bucket_server_side_encryption_configuration" "store" {
+  for_each = local.stores
+  bucket   = aws_s3_bucket.store[each.key].id
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -177,10 +197,17 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "media" {
 }
 
 resource "aws_s3_bucket_versioning" "media" {
-  bucket = aws_s3_bucket.media.id
+  bucket = aws_s3_bucket.store["media"].id
   versioning_configuration {
     status = "Enabled"
   }
+}
+
+# The first administrator's one-time code (Amendment 10 point 4): written by the server's first
+# boot, read once and deleted by the operator's install command. Made empty here.
+resource "aws_secretsmanager_secret" "first_admin" {
+  name_prefix             = "${var.name}-first-admin-"
+  recovery_window_in_days = 0
 }
 
 # The deployment's own secrets (the sign-in client's, the service passwords), written by the
@@ -213,9 +240,16 @@ resource "aws_iam_role_policy_attachment" "session_manager" {
 
 data "aws_iam_policy_document" "server" {
   statement {
-    sid       = "MediaBucket"
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
-    resources = [aws_s3_bucket.media.arn, "${aws_s3_bucket.media.arn}/*"]
+    sid     = "Stores"
+    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
+    resources = flatten([
+      for bucket in aws_s3_bucket.store : [bucket.arn, "${bucket.arn}/*"]
+    ])
+  }
+  statement {
+    sid       = "FirstAdministratorCode"
+    actions   = ["secretsmanager:PutSecretValue"]
+    resources = [aws_secretsmanager_secret.first_admin.arn]
   }
   statement {
     sid       = "DeploymentSecrets"
@@ -246,8 +280,15 @@ resource "aws_instance" "server" {
   vpc_security_group_ids = [aws_security_group.server.id]
   iam_instance_profile   = aws_iam_instance_profile.server.name
   user_data = templatefile("${path.module}/../cloud-init.yaml.tftpl", {
-    repository = var.repository
-    domain     = var.domain
+    provider           = "aws"
+    repository         = var.repository
+    release            = var.release
+    domain             = var.domain
+    region             = var.region
+    answers            = yamlencode(local.answers)
+    database_secret    = aws_db_instance.postgres.master_user_secret[0].secret_arn
+    first_admin_secret = aws_secretsmanager_secret.first_admin.arn
+    key_vault          = ""
   })
   metadata_options {
     http_tokens = "required"
@@ -323,4 +364,48 @@ resource "aws_backup_selection" "server" {
   plan_id      = aws_backup_plan.daily.id
   iam_role_arn = aws_iam_role.backup.arn
   resources    = [aws_instance.server.arn]
+}
+
+# --- the install's answers, and the names (Amendment 10 points 1 and 3) ---------------------------
+
+locals {
+  # What the server's first boot installs from: no secret in it — the passwords are read on the
+  # server with its own identity.
+  answers = {
+    mode = "small"
+    cloud = merge(
+      { provider = "aws", region = var.region, domain = var.domain },
+      var.admin_email == "" ? {} : { admin_email = var.admin_email },
+    )
+    external = {
+      postgres = {
+        host     = aws_db_instance.postgres.address
+        port     = 5432
+        database = "ospreyflow"
+        user     = "osprey"
+        sslmode  = "require"
+      }
+      object_store = {
+        endpoint      = "s3.${var.region}.amazonaws.com"
+        region        = var.region
+        credentials   = "instance"
+        bucket_prefix = local.bucket_prefix
+      }
+    }
+  }
+  names = [var.domain, "id.${var.domain}", "bi.${var.domain}"]
+}
+
+data "aws_route53_zone" "names" {
+  count = var.dns_zone == "" ? 0 : 1
+  name  = var.dns_zone
+}
+
+resource "aws_route53_record" "names" {
+  for_each = var.dns_zone == "" ? toset([]) : toset(local.names)
+  zone_id  = data.aws_route53_zone.names[0].zone_id
+  name     = each.key
+  type     = "A"
+  ttl      = 300
+  records  = [aws_eip.server.public_ip]
 }

@@ -38,7 +38,7 @@ provider "azurerm" {
 }
 
 locals {
-  vm_size = { small = "Standard_D4s_v5", medium = "Standard_D8s_v5", large = "Standard_D16s_v5" }[var.size]
+  vm_size = { small = "Standard_E4s_v5", medium = "Standard_E8s_v5", large = "Standard_E16s_v5" }[var.size]
   db_sku = {
     small  = "B_Standard_B2ms"
     medium = "GP_Standard_D2ds_v5"
@@ -246,6 +246,25 @@ resource "azurerm_key_vault_secret" "storage_key" {
   depends_on   = [azurerm_role_assignment.deployer_writes_secrets]
 }
 
+# The first administrator's one-time code (Amendment 10 point 4): made holding "pending"; the
+# server's first boot writes the code — the one secret it may write, by a role on this secret alone
+# — and the operator's install command reads it once and deletes it.
+resource "azurerm_key_vault_secret" "first_admin_code" {
+  name         = "first-admin-code"
+  value        = "pending"
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.deployer_writes_secrets]
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "azurerm_role_assignment" "server_writes_first_admin_code" {
+  scope                = azurerm_key_vault_secret.first_admin_code.resource_versionless_id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = azurerm_linux_virtual_machine.server.identity[0].principal_id
+}
+
 # --- the server ----------------------------------------------------------------------------------
 
 resource "azurerm_linux_virtual_machine" "server" {
@@ -256,8 +275,15 @@ resource "azurerm_linux_virtual_machine" "server" {
   admin_username        = "osprey"
   network_interface_ids = [azurerm_network_interface.server.id]
   custom_data = base64encode(templatefile("${path.module}/../cloud-init.yaml.tftpl", {
-    repository = var.repository
-    domain     = var.domain
+    provider           = "azure"
+    repository         = var.repository
+    release            = var.release
+    domain             = var.domain
+    region             = var.region
+    answers            = yamlencode(local.answers)
+    database_secret    = ""
+    first_admin_secret = ""
+    key_vault          = azurerm_key_vault.main.name
   }))
   admin_ssh_key {
     username   = "osprey"
@@ -306,4 +332,51 @@ resource "azurerm_backup_protected_vm" "server" {
   recovery_vault_name = azurerm_recovery_services_vault.main.name
   source_vm_id        = azurerm_linux_virtual_machine.server.id
   backup_policy_id    = azurerm_backup_policy_vm.daily.id
+}
+
+# --- the install's answers, and the names (Amendment 10 points 1, 2 and 3) ------------------------
+
+locals {
+  # What the server's first boot installs from: no secret in it — the passwords are read on the
+  # server with its own identity. No `object_store`: on Azure the S3-protocol stores stay on the
+  # server (Amendment 10 point 2); media goes to Blob.
+  answers = {
+    mode = "small"
+    cloud = merge(
+      { provider = "azure", region = var.region, domain = var.domain },
+      var.admin_email == "" ? {} : { admin_email = var.admin_email },
+    )
+    external = {
+      postgres = {
+        host     = azurerm_postgresql_flexible_server.main.fqdn
+        port     = 5432
+        database = "ospreyflow"
+        user     = "osprey"
+        sslmode  = "require"
+      }
+      media = {
+        blob_account   = azurerm_storage_account.media.name
+        blob_container = azurerm_storage_container.media.name
+      }
+    }
+  }
+  # Each name the front proxy answers, relative to the zone ("@" for the zone's own apex).
+  names = {
+    for name in [var.domain, "id.${var.domain}", "bi.${var.domain}"] :
+    name => (name == var.dns_zone ? "@" : trimsuffix(name, ".${var.dns_zone}"))
+  }
+}
+
+data "azurerm_dns_zone" "names" {
+  count = var.dns_zone == "" ? 0 : 1
+  name  = var.dns_zone
+}
+
+resource "azurerm_dns_a_record" "names" {
+  for_each            = var.dns_zone == "" ? {} : local.names
+  name                = each.value
+  zone_name           = data.azurerm_dns_zone.names[0].name
+  resource_group_name = data.azurerm_dns_zone.names[0].resource_group_name
+  ttl                 = 300
+  records             = [azurerm_public_ip.server.ip_address]
 }
