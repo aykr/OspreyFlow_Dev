@@ -470,12 +470,32 @@ def _status(ctx: _Context) -> int:
     if not rows:
         print("Nothing is running. Start it with ospreyflow start.")
         return 1
+    one_shots = _one_shot_steps(directory)
     healthy = True
     for row in sorted(rows, key=lambda r: str(r.get("Service", ""))):
+        service = str(row.get("Service", "?"))
         state, health = str(row.get("State", "unknown")), str(row.get("Health") or "")
-        print(f"{row.get('Service', '?')}: {state}" + (f", {health}" if health else ""))
+        if service in one_shots and state == "exited":
+            # A step that runs once and exits (Keycloak's database, a model download).
+            code = row.get("ExitCode")
+            print(f"{service}: finished" if code == 0 else f"{service}: exited (code {code})")
+            healthy &= code == 0
+            continue
+        print(f"{service}: {state}" + (f", {health}" if health else ""))
         healthy &= state == "running" and health in ("", "healthy")
     return 0 if healthy else 1
+
+
+def _one_shot_steps(directory: Path) -> set[str]:
+    """The services the deployment runs once (`restart: "no"`), read from its compose file."""
+    try:
+        services = (yaml.safe_load((directory / "compose.yaml").read_text(encoding="utf-8")) or {})
+    except (OSError, yaml.YAMLError):
+        return set()
+    return {
+        name for name, service in (services.get("services") or {}).items()
+        if isinstance(service, dict) and str(service.get("restart")) in ("no", "False")
+    }  # fmt: skip
 
 
 def _logs(args: argparse.Namespace, ctx: _Context) -> int:

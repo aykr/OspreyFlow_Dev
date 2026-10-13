@@ -175,3 +175,31 @@ def test_every_python_step_can_import_the_checkouts_packages(rig: Rig) -> None:
         env is not None and wanted <= set(env["PYTHONPATH"].split(os.pathsep))
         for env in rig.capture_envs
     )
+
+
+def test_a_one_shot_step_that_finished_is_not_a_fault(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Seen on the owner's deployment, 13 October 2026: `status` exited 1 on a healthy deployment
+    because its one-shot steps (Keycloak's database step, the speech model download) had exited —
+    which is what they are for. A step rendered `restart: "no"` that exited 0 is *finished*; one that
+    exited otherwise is a fault; and a long-running service that exited is a fault however it
+    exited (after `ospreyflow stop`, every service exits 0)."""
+    rig.install_deployment()
+    (rig.deployment / "compose.yaml").write_text(
+        "services:\n  glass: {restart: unless-stopped}\n  keycloak-db: {restart: 'no'}\n",
+        encoding="utf-8",
+    )
+
+    def ps(*rows: tuple[str, str, int]) -> str:
+        return "\n".join(json.dumps({"Service": s, "State": state, "Health": "", "ExitCode": code})
+                         for s, state, code in rows)  # fmt: skip
+
+    rig.ps_output = ps(("glass", "running", 0), ("keycloak-db", "exited", 0))
+    assert rig("status") == 0
+    assert "keycloak-db: finished" in capsys.readouterr().out
+    rig.ps_output = ps(("glass", "running", 0), ("keycloak-db", "exited", 3))
+    assert rig("status") == 1
+    assert "keycloak-db: exited (code 3)" in capsys.readouterr().out
+    rig.ps_output = ps(("glass", "exited", 0), ("keycloak-db", "exited", 0))
+    assert rig("status") == 1
