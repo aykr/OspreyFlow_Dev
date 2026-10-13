@@ -33,6 +33,8 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
+from dataclasses import dataclass
+from dataclasses import fields as dataclass_fields
 from typing import Annotated, Any, Final, Literal, cast
 
 from fastapi import (
@@ -6959,24 +6961,120 @@ async def run_studio_recipe(
     ingest response itself — the load already happened; a failure to also check watches against it
     is a narrower, disclosed problem, not a reason to tell the caller their load failed when it
     didn't."""
+    return await run_recipe_as(
+        RecipeRunDeps(
+            graph=graph,
+            ontology=ontology,
+            analytics=analytics,
+            media=media,
+            recipe_repo_root=repo_root,
+            audit=audit,
+            jobs=jobs,
+            valkey=valkey,
+            handling_scheme=handling_scheme,
+            config=config,
+            hotlists_store=hotlists_store,
+            monitors_store=monitors_store,
+            patterns_store=patterns_store,
+            alerts_store=alerts_store,
+            principal_resolver=principal_resolver,
+            extraction_candidates=extraction_candidates,
+            recogniser_for=recogniser_for,
+            online_geocode=online_geocode,
+            typology_rules=typology_rules,
+            held_rows=held_rows,
+            screening_lists=screening_lists,
+            compute=compute,
+            kyc_expiries=kyc_expiries,
+        ),
+        principal=principal,
+        recipe=recipe,
+        investigation_id=investigation.id,
+        source_location=body.source_location,
+        trigger="manual",
+    )
+
+
+#: How a run began (ADR-110 decision 6's `trigger`).
+RunTrigger = Literal["manual", "schedule", "watch", "release"]
+
+
+@dataclass(frozen=True)
+class RecipeRunDeps:
+    """What a recipe run needs, the same whichever path started it (ADR-110 decision 1)."""
+
+    graph: GraphPort
+    ontology: OntologySchema
+    analytics: AnalyticsPort
+    media: MediaStore
+    recipe_repo_root: Path
+    audit: AuditWriter
+    jobs: JobQueue
+    valkey: Valkey
+    handling_scheme: HandlingScheme
+    config: ApiConfig
+    hotlists_store: HotlistStore
+    monitors_store: MonitorStore
+    patterns_store: PatternStore
+    alerts_store: AlertStore
+    principal_resolver: PrincipalResolver
+    extraction_candidates: ExtractionCandidateStore
+    recogniser_for: RecogniserFor
+    online_geocode: OnlineGeocode | None
+    typology_rules: TypologyRuleStore
+    held_rows: HeldRowStore
+    screening_lists: ScreeningListStore
+    compute: ComputePort
+    kyc_expiries: KycExpiryStore
+
+    @classmethod
+    def from_state(cls, state: Any) -> RecipeRunDeps:
+        """The scheduler's way in: the application's state, read where the route's getters read
+        it, so the two paths cannot be handed different stores."""
+        return cls(
+            **{
+                f.name: getattr(state, _RUN_DEP_STATE_NAMES.get(f.name, f.name))
+                for f in dataclass_fields(cls)
+            }
+        )
+
+
+_RUN_DEP_STATE_NAMES = {
+    "recipe_repo_root": "recipes_repo_root",
+    "recogniser_for": "pipeline_recogniser_for",
+}
+
+
+async def run_recipe_as(
+    deps: RecipeRunDeps,
+    *,
+    principal: Principal,
+    recipe: StudioRecipeDraft,
+    investigation_id: str,
+    source_location: str | None,
+    trigger: RunTrigger,
+) -> LoadReport | PipelineRunReport:
+    """One run of a published recipe as `principal` (ADR-110 decision 1): the route's *Run now* and
+    the scheduler both come here, so a scheduled load is judged, published, watched and resolved
+    exactly as a manual one. `run_studio_recipe`'s docstring has what each step is for."""
     load_id = new_id()
     # ADR-109 ruling 1: the case's typology rules judge this load, at the point each declares.
     rules = await _rule_gate(
-        investigation.id,
+        investigation_id,
         loader=principal,
-        graph=graph,
-        analytics=analytics,
-        scheme=handling_scheme,
-        typology_rules=typology_rules,
-        held_rows=held_rows,
-        alerts_store=alerts_store,
-        audit=audit,
-        valkey=valkey,
-        principal_resolver=principal_resolver,
-        screening=screening_lists,
-        compute=compute,
-        expiries=kyc_expiries,
-        patterns=patterns_store,
+        graph=deps.graph,
+        analytics=deps.analytics,
+        scheme=deps.handling_scheme,
+        typology_rules=deps.typology_rules,
+        held_rows=deps.held_rows,
+        alerts_store=deps.alerts_store,
+        audit=deps.audit,
+        valkey=deps.valkey,
+        principal_resolver=deps.principal_resolver,
+        screening=deps.screening_lists,
+        compute=deps.compute,
+        expiries=deps.kyc_expiries,
+        patterns=deps.patterns_store,
     )
     report: LoadReport | PipelineRunReport
     if recipe.pipeline is not None:
@@ -6985,70 +7083,70 @@ async def run_studio_recipe(
         report = await run_published_pipeline(
             recipe,
             principal,
-            graph=graph,
-            ontology=ontology,
-            scheme=handling_scheme,
+            graph=deps.graph,
+            ontology=deps.ontology,
+            scheme=deps.handling_scheme,
             load_id=load_id,
-            investigation_scope=investigation.id,
-            repo_root=repo_root,
-            recogniser_for=recogniser_for,
-            candidates=extraction_candidates,
-            analytics=analytics,
-            media=media,
-            source_location=body.source_location,
-            online_geocode=online_geocode,
+            investigation_scope=investigation_id,
+            repo_root=deps.recipe_repo_root,
+            recogniser_for=deps.recogniser_for,
+            candidates=deps.extraction_candidates,
+            analytics=deps.analytics,
+            media=deps.media,
+            source_location=source_location,
+            online_geocode=deps.online_geocode,
             rules=rules,
         )
         for branch in report.branches:
             await resolution_trigger_module.submit_post_ingest_resolution_jobs(
-                branch.report, recipe.row_template, ontology=ontology, jobs=jobs
+                branch.report, recipe.row_template, ontology=deps.ontology, jobs=deps.jobs
             )
     else:
         report = await run_published_recipe(
             recipe,
             principal,
-            graph=graph,
-            ontology=ontology,
+            graph=deps.graph,
+            ontology=deps.ontology,
             load_id=load_id,
-            investigation_scope=investigation.id,
-            source_location=body.source_location,
-            repo_root=repo_root,
-            analytics=analytics,
-            media=media,
+            investigation_scope=investigation_id,
+            source_location=source_location,
+            repo_root=deps.recipe_repo_root,
+            analytics=deps.analytics,
+            media=deps.media,
             rules=rules,
         )
         await resolution_trigger_module.submit_post_ingest_resolution_jobs(
-            report, recipe.row_template, ontology=ontology, jobs=jobs
+            report, recipe.row_template, ontology=deps.ontology, jobs=deps.jobs
         )
-    entry = await ChangeStreamWriter(valkey).publish(
+    entry = await ChangeStreamWriter(deps.valkey).publish(
         "ingest",
         node_ids=report.created_node_ids,
         edge_ids=report.touched_edge_ids,
-        investigation_id=investigation.id,
+        investigation_id=investigation_id,
     )
     if entry is not None:
         await _evaluate_watches_best_effort(
             entry,
             principal=principal,
-            graph=graph,
-            handling_scheme=handling_scheme,
-            config=config,
-            hotlists_store=hotlists_store,
-            monitors_store=monitors_store,
-            patterns_store=patterns_store,
-            alerts_store=alerts_store,
-            audit=audit,
-            valkey=valkey,
-            investigation_id=investigation.id,
+            graph=deps.graph,
+            handling_scheme=deps.handling_scheme,
+            config=deps.config,
+            hotlists_store=deps.hotlists_store,
+            monitors_store=deps.monitors_store,
+            patterns_store=deps.patterns_store,
+            alerts_store=deps.alerts_store,
+            audit=deps.audit,
+            valkey=deps.valkey,
+            investigation_id=investigation_id,
             action_on_failure="watch_evaluation_failed",
             error_context={"load_id": load_id},
-            principal_resolver=principal_resolver,
+            principal_resolver=deps.principal_resolver,
         )
-    await audit.record(
+    await deps.audit.record(
         principal=principal,
         action="run_studio_recipe",
-        investigation_id=investigation.id,
-        resolved_query={"recipe_id": recipe.recipe_id, "load_id": load_id},
+        investigation_id=investigation_id,
+        resolved_query={"recipe_id": recipe.recipe_id, "load_id": load_id, "trigger": trigger},
         result_cardinality=report.nodes_created + report.edges_created,
     )
     return report
