@@ -479,6 +479,7 @@ from .questions import (
     QuestionsTooLargeError,
 )
 from .recipe_runs import RecipeRunStore, RunTrigger
+from .scheduler import DEFAULT_TIMEZONE, ScheduleRefused, validate_schedule
 from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
@@ -2004,6 +2005,14 @@ async def _provenance_transition_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT, content={"error": "provenance_transition_invalid"}
+    )
+
+
+@app.exception_handler(ScheduleRefused)
+async def _schedule_refused_handler(request: Request, exc: ScheduleRefused) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "schedule_refused", "detail": str(exc)},
     )
 
 
@@ -6812,6 +6821,8 @@ async def publish_studio_recipe(
         schedule_cron=body.schedule_cron,
         schedule_watch=body.schedule_watch,
     )
+    if body.schedule_cron is not None:
+        validate_schedule(body.schedule_cron, body.schedule_timezone or DEFAULT_TIMEZONE)
     git_path = await write_and_commit_recipe(built, repo_root=repo_root)
     updated = await studio_recipes.publish(
         recipe.recipe_id,
@@ -6821,6 +6832,7 @@ async def publish_studio_recipe(
         schedule_cron=body.schedule_cron,
         schedule_watch=body.schedule_watch,
         now=datetime.now(UTC),
+        schedule_timezone=body.schedule_timezone,
     )
     await audit.record(
         principal=principal,
@@ -6849,12 +6861,18 @@ async def update_studio_recipe_schedule(
     `publish`. Re-commits the recipe YAML with the new schedule (the
     repository stays the record for the schedule too, not only the
     mapping) at the same `git_path`, without bumping `version` — the
-    mapping itself is unchanged."""
+    mapping itself is unchanged.
+
+    ADR-110 decision 7: a schedule it could not keep is refused in words before anything is saved,
+    and whoever sets it becomes its owner (decision 3)."""
+    if body.schedule_cron is not None:
+        validate_schedule(body.schedule_cron, body.schedule_timezone or DEFAULT_TIMEZONE)
     updated = await studio_recipes.update_schedule(
         recipe.recipe_id,
         principal,
         schedule_cron=body.schedule_cron,
         schedule_watch=body.schedule_watch,
+        schedule_timezone=body.schedule_timezone,
     )
     assert updated.row_template is not None and updated.ontology_version is not None
     built = build_recipe(

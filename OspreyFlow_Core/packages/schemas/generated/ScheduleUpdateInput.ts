@@ -2,6 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type ScheduleCron = string | null;
 export type ScheduleWatch = string | null;
+export type ScheduleTimezone = string | null;
 
 /**
  * Body of `PATCH /v1/ingest/recipes/{id}/schedule` — §8's "schedule
@@ -12,5 +13,6 @@ export type ScheduleWatch = string | null;
 export interface ScheduleUpdateInput {
   schedule_cron?: ScheduleCron;
   schedule_watch?: ScheduleWatch;
+  schedule_timezone?: ScheduleTimezone;
   [k: string]: unknown;
 }

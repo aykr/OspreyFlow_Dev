@@ -946,6 +946,10 @@ use OpenTofu 1.10.6 (MPL-2.0, run from its image `ghcr.io/opentofu/opentofu:1.10
 `hashicorp/aws`, `hashicorp/azurerm` and `hashicorp/random` providers (each MPL-2.0), pinned by the
 lock files beside the modules. Nothing of Terraform's BSL-licensed core is used.
 
+**ADR-110 addition (13 October 2026):** `croniter` 6.2.4 (MIT; its one dependency,
+`python-dateutil`, is already in the set) reads a scheduled recipe's cron expression; time zones
+come from the standard library's `zoneinfo`.
+
 **PaySim (ADR-055 Amendment, ADR-114 decision 5, 11 October 2026) — data, CC BY-SA 4.0**, verified
 from Kaggle's metadata for `ealaxi/paysim1` (Edgar Lopez-Rojas). Redistributable as a downloadable demo
 pack, never in a repository, with its attribution and licence text; anything derived from it and

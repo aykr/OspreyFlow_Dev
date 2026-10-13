@@ -377,6 +377,15 @@ class StudioRecipeDraft(BaseModel):
     published_at: datetime | None = None
     schedule_cron: str | None = None
     schedule_watch: str | None = None
+    #: ADR-110 decision 7: the time zone `schedule_cron` is read in (Europe/London when unset).
+    schedule_timezone: str | None = None
+    #: ADR-110 decision 3 and Amendment 2: who last set the schedule, and when. A scheduled run acts
+    #: as this person, never as the system.
+    schedule_owner: PrincipalId | None = None
+    schedule_set_at: datetime | None = None
+    #: ADR-110 decisions 3 and 8: paused by a person, or by three refused runs in a row, and why.
+    schedule_paused: bool = False
+    schedule_paused_reason: str | None = None
     #: ADR-099 Amendment 3: the dataset of the case it was made in; found, listed and run only in a
     #: case reading it. `None` for one made before, until `stamp_datasets` places it.
     dataset_id: str | None = None
@@ -618,6 +627,8 @@ class PublishRecipeInput(BaseModel):
 
     schedule_cron: str | None = None
     schedule_watch: str | None = None
+    #: ADR-110 decision 7: the zone the schedule is read in; Europe/London when not given.
+    schedule_timezone: str | None = None
 
 
 class ScheduleUpdateInput(BaseModel):
@@ -628,6 +639,8 @@ class ScheduleUpdateInput(BaseModel):
 
     schedule_cron: str | None = None
     schedule_watch: str | None = None
+    #: ADR-110 decision 7: the zone the schedule is read in; Europe/London when not given.
+    schedule_timezone: str | None = None
 
 
 class RunRecipeInput(BaseModel):

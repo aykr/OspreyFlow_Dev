@@ -383,6 +383,47 @@ async def test_update_schedule_changes_only_the_schedule(store: StudioRecipeStor
     assert rescheduled.git_path == "recipes/some-id.yaml"
 
 
+async def test_setting_a_schedule_makes_its_setter_the_owner_and_resumes_it(
+    store: StudioRecipeStore,
+) -> None:
+    """ADR-110 decision 3: a scheduled run acts as whoever last set the schedule."""
+    draft = await _verified_draft(store)
+    published = await store.publish(
+        draft.recipe_id, AUTHOR, ontology_version=3, git_path="recipes/x.yaml",
+        schedule_cron=None, schedule_watch=None, now=datetime(2026, 1, 2, tzinfo=UTC),
+    )  # fmt: skip
+    assert published.schedule_owner is None
+    await store.set_paused(published.recipe_id, paused=True, reason="three refusals")
+    set_at = datetime(2026, 1, 3, 9, tzinfo=UTC)
+    scheduled = await store.update_schedule(
+        published.recipe_id, AUTHOR, schedule_cron="0 7 * * *", schedule_watch=None,
+        schedule_timezone="Europe/Paris", now=set_at,
+    )  # fmt: skip
+    assert (scheduled.schedule_owner, scheduled.schedule_set_at) == (AUTHOR.id, set_at)
+    assert scheduled.schedule_timezone == "Europe/Paris"
+    assert scheduled.schedule_paused is False and scheduled.schedule_paused_reason is None
+
+
+async def test_the_scheduler_lists_scheduled_recipes_and_a_pause_keeps_its_reason(
+    store: StudioRecipeStore,
+) -> None:
+    draft = await _verified_draft(store)
+    await store.publish(
+        draft.recipe_id, AUTHOR, ontology_version=3, git_path="recipes/y.yaml",
+        schedule_cron="0 6 * * *", schedule_watch=None, now=datetime(2026, 1, 2, tzinfo=UTC),
+    )  # fmt: skip
+    listed = {r.recipe_id: r for r in await store.scheduled()}
+    assert listed[draft.recipe_id].schedule_owner == AUTHOR.id
+    await store.set_paused(draft.recipe_id, paused=True, reason="three refusals in a row")
+    paused = {r.recipe_id: r for r in await store.scheduled()}[draft.recipe_id]
+    assert (paused.schedule_paused, paused.schedule_paused_reason) == (
+        True, "three refusals in a row",
+    )  # fmt: skip
+    await store.set_paused(draft.recipe_id, paused=False, reason="ignored when resuming")
+    resumed = {r.recipe_id: r for r in await store.scheduled()}[draft.recipe_id]
+    assert (resumed.schedule_paused, resumed.schedule_paused_reason) == (False, None)
+
+
 async def test_create_new_version_supersedes_the_published_row_and_opens_a_draft(
     store: StudioRecipeStore,
 ) -> None:

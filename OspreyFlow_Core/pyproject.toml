@@ -48,6 +48,7 @@ dependencies = [
     # the full finding; `04_VAULT_BACKEND.md` already named NetworkX as a conformance
     # reference implementation before this pin made it a real one.
     "networkx>=3.4",
+    "croniter>=6.2.4",
 ]
 
 [dependency-groups]
@@ -95,6 +96,11 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "pandas.*"
+ignore_missing_imports = true
+
+# `croniter` (spec/06_DECISIONS.md ADR-110) ships no py.typed marker.
+[[tool.mypy.overrides]]
+module = "croniter.*"
 ignore_missing_imports = true
 
 # `geopy` (spec/06_DECISIONS.md ADR-108 ruling Q5's online geocoding) ships no py.typed marker.

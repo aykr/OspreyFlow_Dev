@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS studio_recipes (
 );
 -- ADR-099 Amendment 3: the dataset a recipe belongs to; none for one made before it.
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS dataset_id TEXT;
+-- ADR-110: whose schedule it is, in which zone, since when, and whether it is paused.
+ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_timezone TEXT;
+ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_owner TEXT;
+ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_set_at TIMESTAMPTZ;
+ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_paused BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_paused_reason TEXT;
 """
 
 
@@ -157,6 +163,11 @@ def _row_to_draft(row: asyncpg.Record) -> StudioRecipeDraft:
         published_at=data["published_at"],
         schedule_cron=data["schedule_cron"],
         schedule_watch=data["schedule_watch"],
+        schedule_timezone=data.get("schedule_timezone"),
+        schedule_owner=data.get("schedule_owner"),
+        schedule_set_at=data.get("schedule_set_at"),
+        schedule_paused=bool(data.get("schedule_paused") or False),
+        schedule_paused_reason=data.get("schedule_paused_reason"),
         dataset_id=data.get("dataset_id"),
     )
 
@@ -398,6 +409,7 @@ class StudioRecipeStore:
         schedule_cron: str | None,
         schedule_watch: str | None,
         now: datetime,
+        schedule_timezone: str | None = None,
     ) -> StudioRecipeDraft:
         """§6: draft → published. The caller (`services/api/app.py`'s
         publish route) has already serialised `content` to YAML and
@@ -413,7 +425,9 @@ class StudioRecipeStore:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE studio_recipes SET status = $1, ontology_version = $2, git_path = $3, "
-                "published_by = $4, published_at = $5, schedule_cron = $6, schedule_watch = $7 "
+                "published_by = $4, published_at = $5, schedule_cron = $6, schedule_watch = $7, "
+                "schedule_timezone = $10, schedule_owner = $11, schedule_set_at = $12, "
+                "schedule_paused = FALSE, schedule_paused_reason = NULL "
                 "WHERE recipe_id = $8 AND version = $9",
                 StudioRecipeStatus.PUBLISHED.value,
                 ontology_version,
@@ -424,6 +438,9 @@ class StudioRecipeStore:
                 schedule_watch,
                 recipe_id,
                 draft.version,
+                schedule_timezone,
+                principal.id if (schedule_cron or schedule_watch) else None,
+                now if (schedule_cron or schedule_watch) else None,
             )
         return await self.get(recipe_id)
 
@@ -434,6 +451,8 @@ class StudioRecipeStore:
         *,
         schedule_cron: str | None,
         schedule_watch: str | None,
+        schedule_timezone: str | None = None,
+        now: datetime | None = None,
     ) -> StudioRecipeDraft:
         """§8: "schedule it" — a source approver action distinct from
         `publish`, so pausing or retiming a recipe's own schedule never
@@ -447,14 +466,46 @@ class StudioRecipeStore:
             raise StudioRecipeNotADraftError(recipe_id)
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "UPDATE studio_recipes SET schedule_cron = $1, schedule_watch = $2 "
+                # ADR-110 decision 3: whoever sets the schedule becomes its owner; setting it
+                # resumes it.
+                "UPDATE studio_recipes SET schedule_cron = $1, schedule_watch = $2, "
+                "schedule_timezone = $5, schedule_owner = $6, schedule_set_at = $7, "
+                "schedule_paused = FALSE, schedule_paused_reason = NULL "
                 "WHERE recipe_id = $3 AND version = $4",
                 schedule_cron,
                 schedule_watch,
                 recipe_id,
                 draft.version,
+                schedule_timezone,
+                principal.id if (schedule_cron or schedule_watch) else None,
+                (now or datetime.now(UTC)) if (schedule_cron or schedule_watch) else None,
             )
         return await self.get(recipe_id)
+
+    async def scheduled(self) -> list[StudioRecipeDraft]:
+        """Every recipe with a schedule, at its current version (published or flagged), paused or
+        not — read by the scheduler (ADR-110 decision 2), a backend pass like the KYC sweep, so it
+        takes no principal; what it does with each is judged as the schedule's owner."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM studio_recipes "
+                "WHERE status = ANY($1::text[]) AND schedule_cron IS NOT NULL "
+                "ORDER BY recipe_id",
+                [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
+            )
+        return [_row_to_draft(r) for r in rows]
+
+    async def set_paused(self, recipe_id: str, *, paused: bool, reason: str | None) -> None:
+        """Pause (with the reason) or resume a schedule, at the recipe's current version."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE studio_recipes SET schedule_paused = $2, schedule_paused_reason = $3 "
+                "WHERE recipe_id = $1 AND status = ANY($4::text[])",
+                recipe_id,
+                paused,
+                reason if paused else None,
+                [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
+            )
 
     async def create_new_version(
         self, recipe_id: str, principal: Principal, *, now: datetime

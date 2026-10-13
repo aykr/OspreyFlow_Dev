@@ -58,6 +58,10 @@ export type PublishedByName = string | null;
 export type PublishedAt = string | null;
 export type ScheduleCron = string | null;
 export type ScheduleWatch = string | null;
+export type ScheduleTimezone = string | null;
+export type ScheduleSetAt = string | null;
+export type SchedulePaused = boolean;
+export type SchedulePausedReason = string | null;
 export type DatasetId = string | null;
 export type Id = string;
 /**
@@ -101,6 +105,11 @@ export interface StudioRecipeDraft {
   published_at?: PublishedAt;
   schedule_cron?: ScheduleCron;
   schedule_watch?: ScheduleWatch;
+  schedule_timezone?: ScheduleTimezone;
+  schedule_owner?: PrincipalId | null;
+  schedule_set_at?: ScheduleSetAt;
+  schedule_paused?: SchedulePaused;
+  schedule_paused_reason?: SchedulePausedReason;
   dataset_id?: DatasetId;
   pipeline?: PipelineGraph | null;
   [k: string]: unknown;

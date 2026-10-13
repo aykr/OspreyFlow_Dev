@@ -175,6 +175,52 @@ def test_schedule_as_source_approver_succeeds(publish_client: TestClient, tmp_pa
     assert response.json()["schedule_cron"] == "0 7 * * *"
 
 
+@pytest.mark.parametrize(
+    ("body", "words"),
+    [
+        ({"schedule_cron": "every morning"}, "not a schedule"),
+        ({"schedule_cron": "*/5 * * * *"}, "more often than every 15 minutes"),
+        ({"schedule_cron": "0 7 * * *", "schedule_timezone": "Mars/Olympus"}, "not a time zone"),
+    ],
+)
+def test_a_schedule_it_could_not_keep_is_refused_in_words_and_not_saved(
+    publish_client: TestClient, tmp_path: Path, body: dict[str, str], words: str
+) -> None:
+    """ADR-110 decision 7 (rule 2): refused before anything is saved."""
+    published = _verified_draft(tmp_path).model_copy(
+        update={
+            "status": StudioRecipeStatus.PUBLISHED,
+            "ontology_version": 1,
+            "git_path": "recipes/recipe-1.yaml",
+        }
+    )
+    publish_client.studio_recipes.draft = published  # type: ignore[attr-defined]
+    app.dependency_overrides[get_principal] = lambda: SOURCE_APPROVER
+    app.dependency_overrides[get_investigations] = AnyCase
+
+    response = publish_client.patch(f"{CASE}/ingest/recipes/recipe-1/schedule", json=body)
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "schedule_refused"
+    assert words in response.json()["detail"]
+    assert publish_client.studio_recipes.draft.schedule_cron is None  # type: ignore[attr-defined]
+
+
+def test_publish_refuses_a_schedule_it_could_not_keep_before_committing(
+    publish_client: TestClient, tmp_path: Path, git_repo: Path
+) -> None:
+    publish_client.studio_recipes.draft = _verified_draft(tmp_path)  # type: ignore[attr-defined]
+    app.dependency_overrides[get_principal] = lambda: SOURCE_APPROVER
+    app.dependency_overrides[get_investigations] = AnyCase
+
+    response = publish_client.post(
+        f"{CASE}/ingest/recipes/recipe-1/publish", json={"schedule_cron": "61 * * * *"}
+    )
+
+    assert response.status_code == 422
+    assert not (git_repo / "recipes" / "recipe-1.yaml").exists()
+
+
 def test_schedule_without_approver_role_is_forbidden(
     publish_client: TestClient, tmp_path: Path
 ) -> None:
