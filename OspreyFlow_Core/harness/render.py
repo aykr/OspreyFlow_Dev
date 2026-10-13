@@ -145,6 +145,19 @@ def render_ollama_pull_script(config: OspreyConfig) -> str:
     return _OLLAMA_PULL_SCRIPT.replace("wait\n", line + "wait\n")
 
 
+def render_ollama_download_script(config: OspreyConfig) -> str:
+    """ADR-114 Amendment 7: `ollama-models`' script — the same pulls, then the server it ran for
+    them stopped and the step left idle rather than exited, because `up --wait` counts a container
+    that has exited as a failure unless a service waits on it, and the model server must not wait
+    for a first pull of gigabytes. A failed pull still exits non-zero (`set -e`)."""
+    script = render_ollama_pull_script(config)
+    script = script.replace("ollama serve &\n", "ollama serve &\nserver=$$!\n", 1)
+    # Reaped, so no zombie is left behind; its exit status is the kill's, not a failure.
+    return script.replace(
+        "wait\n", 'kill "$$server"\nwait "$$server" || true\nexec sleep infinity\n'
+    )
+
+
 #: **Healthy once the two models the Conduit actually serves with are present — not all three.**
 #:
 #: `deploy/compose/dev.yaml` waits for all three, which is right for a developer stack about to
@@ -927,7 +940,7 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
                 str(service["image"]),
                 volume="ollama-models:/root/.ollama",
                 entrypoint=["/bin/sh", "-c"],
-                command=[render_ollama_pull_script(config).replace("wait\n", "")],
+                command=[render_ollama_download_script(config)],
             )
         if entry.service == "whisper":
             # The same for speech: its model downloaded once, read offline.

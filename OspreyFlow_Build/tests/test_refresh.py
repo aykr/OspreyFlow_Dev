@@ -190,7 +190,9 @@ def _rendered(repo: Path, extraction: str = "qwen2.5:7b-instruct") -> Path:
     banner = compose[: compose.index("\nname:") + 1]
     document = yaml.safe_load(compose)
     # ADR-114 Amendment 7: the weights are pulled by the one-shot `ollama-models`, not the server.
-    document["services"]["ollama-models"]["command"] = [_OLLAMA_PULL_SCRIPT.replace("wait\n", "")]
+    document["services"]["ollama-models"]["command"] = [
+        _OLLAMA_PULL_SCRIPT.replace("wait\n", "exec sleep infinity\n")
+    ]
     old = banner + yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     assert old != compose  # the old file really lacks the line
     (out / "compose.yaml").write_text(old, encoding="utf-8")

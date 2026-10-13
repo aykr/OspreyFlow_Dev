@@ -125,3 +125,26 @@ def test_the_stores_and_case_readers_never_reach_outside_whatever_is_configured(
     never = {"arcadedb", "postgres", "valkey", "minio", "opensearch", "ollama", "whisper", "ner",
              "ingest", "workspace", "superset", "report-sync"}  # fmt: skip
     assert outside.isdisjoint(never), outside & never
+
+
+def test_the_weights_step_stays_running_after_its_pulls_and_stops_its_own_server(
+    tmp_path: Path,
+) -> None:
+    """Found re-rendering the owner's deployment, 13 October 2026: `up --wait` counts a container
+    that has exited as a failure unless a service waits on it, and nothing waits on
+    `ollama-models` (the server must not wait for a 2 GB first pull). So after its pulls it stops
+    the server it ran for them and idles; a failed pull still exits non-zero (`set -e`), which
+    `up --wait` reports."""
+    from harness.render import render_ollama_download_script
+
+    config = _config(tmp_path)
+    command = _compose(config)["services"]["ollama-models"]["command"][0]
+    assert command == render_ollama_download_script(config)
+    assert command.startswith("set -e\n")
+    lines = command.splitlines()
+    assert lines[1] == "ollama serve &" and lines[2] == "server=$$!"
+    assert lines[-3:] == ['kill "$$server"', 'wait "$$server" || true', "exec sleep infinity"]
+    assert "wait" not in lines
+    assert lines.index('kill "$$server"') > max(
+        i for i, line in enumerate(lines) if line.startswith("pull_and_verify ")
+    )

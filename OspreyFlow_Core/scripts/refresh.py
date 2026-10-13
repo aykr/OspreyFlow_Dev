@@ -53,6 +53,7 @@ from harness.render import (
     _render_compose,
     load_config,
     render_litellm_config,
+    render_ollama_download_script,
     render_ollama_pull_script,
     service_images,
 )
@@ -157,7 +158,7 @@ def _models_up_to_date(directory: Path) -> bool:
     script = render_ollama_pull_script(config)
     if _on_the_internal_network(document):
         puller = document.get("services", {}).get("ollama-models")
-        wanted_command = [script.replace("wait\n", "")]
+        wanted_command = [render_ollama_download_script(config)]
     else:
         puller = document.get("services", {}).get("ollama")
         wanted_command = [script]
