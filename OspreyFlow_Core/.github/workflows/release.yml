@@ -1,6 +1,6 @@
 # The user repository's release (ADR-114 decision 13, Amendment 6 point 1, Amendment 8).
 #
-# A `vMAJOR.MINOR.PATCH` tag builds, scans, pushes and signs the four images this repository owns,
+# A `vMAJOR.MINOR.PATCH` tag builds, scans, pushes and signs the six images this repository owns,
 # then publishes the release: its notes (the tag's CHANGELOG.md section) and its `versions.lock`
 # (every image by digest), which `ospreyflow update` reads. Signing is keyless — GitHub's OIDC
 # identity for this workflow at this tag — so no private key exists anywhere; `ospreyflow update`
@@ -48,6 +48,9 @@ jobs:
           - { service: api, dockerfile: services/api/Dockerfile }
           - { service: ingest, dockerfile: services/ingest/Dockerfile }
           - { service: ner, dockerfile: services/ner/Dockerfile }
+          # ADR-114 Amendment 10 point 6: the workers as images of their own (Enterprise's chart).
+          - { service: worker, dockerfile: services/worker/Dockerfile }
+          - { service: report-sync, dockerfile: services/report_sync/Dockerfile }
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3

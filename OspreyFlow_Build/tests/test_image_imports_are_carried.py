@@ -34,6 +34,8 @@ from tools.layout import REPO as REPO_ROOT
 PYTHON_IMAGES: dict[str, Path] = {
     "services/api": REPO_ROOT / "services" / "api" / "Dockerfile",
     "services/ingest": REPO_ROOT / "services" / "ingest" / "Dockerfile",
+    # ADR-114 Amendment 10 point 6: the workers' own images.
+    "services/report_sync": REPO_ROOT / "services" / "report_sync" / "Dockerfile",
     "harness": REPO_ROOT / "harness" / "Dockerfile",
 }
 
