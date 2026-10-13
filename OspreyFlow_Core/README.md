@@ -55,6 +55,30 @@ rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup
 The sign-in details of the accounts the install makes are in the deployment's own
 `deploy/generated/<profile>/deployment.env`; the command never prints a password.
 
+## Releases and updates
+
+A checkout of a release tag (`vMAJOR.MINOR.PATCH`) installs that release's own images, after
+checking they are signed by this repository's release workflow; any other checkout builds from
+source (`install --build` builds on a tag too). Each release's notes are its section of
+`CHANGELOG.md`.
+
+```
+ospreyflow update --check              # is there a newer release? Admin → System says so too
+ospreyflow update                      # move to the newest (or --to vX.Y.Z)
+```
+
+`update` checks every image's signature first and changes nothing if one fails; then it backs up
+every store, moves to the release and checks it is running. If anything goes wrong, it puts the
+previous release and its data back. For a machine that cannot reach GitHub, make one file on a
+machine that can and carry it across; it is checked again there with no network at all:
+
+```
+ospreyflow update --make-bundle ospreyflow-v1.2.0.tar --to v1.2.0     # on the connected machine
+ospreyflow update --from ospreyflow-v1.2.0.tar                         # on the one to update
+```
+
+A private repository needs `GITHUB_TOKEN` set to a token that can read it.
+
 ## Where things are
 
 - **`apps/`** — the Glass (`apps/workspace`) and the guided install page (`apps/harness`).
