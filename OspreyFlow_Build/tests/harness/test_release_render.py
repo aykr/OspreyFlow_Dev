@@ -4,6 +4,7 @@ deployment's `state/` folder read-only, where `ospreyflow update --check` writes
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 from harness.release import checkout_version
@@ -35,3 +36,23 @@ def test_the_conduit_reads_the_state_folder_and_cannot_write_it(tmp_path: Path) 
     for name, service in compose["services"].items():
         if name != "api":
             assert not any("./state:" in str(v) for v in service.get("volumes") or []), name
+
+
+def test_a_release_names_its_own_registry_for_the_owned_images(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Amendment 8: the user repository's release pushes to `ghcr.io/<its owner>`, so its lock must
+    name that, not the default. A deployment that builds from its checkout is unaffected."""
+    from harness.render import service_images
+
+    path = tmp_path / "osprey.yaml"
+    path.write_text(FIXTURE_CONFIG, encoding="utf-8")
+    pulling = load_config(path)
+    monkeypatch.setenv("OSPREY_IMAGE_REGISTRY", "ghcr.io/acme")
+    owned = {i.service: i.image for i in service_images(pulling)}
+    assert owned["api"].startswith("ghcr.io/acme/api:")
+    assert owned["arcadedb"].startswith("arcadedata/arcadedb:")
+    monkeypatch.delenv("OSPREY_IMAGE_REGISTRY")
+    assert {i.service: i.image for i in service_images(pulling)}["api"].startswith(
+        "ghcr.io/ospreyflow/api:"
+    )

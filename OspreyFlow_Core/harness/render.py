@@ -445,9 +445,9 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
                 build_context=BUILD_CONTEXT_FROM_OUTPUT_DIR,
                 dockerfile=dockerfile,
             )
-        return ServiceImage(
-            service, f"{OWNED_IMAGE_REGISTRY}/{service}:{sha}", dockerfile=dockerfile
-        )
+        # ADR-114 Amendment 8: a user repository's release pushes to its own owner's registry.
+        registry = os.environ.get("OSPREY_IMAGE_REGISTRY") or OWNED_IMAGE_REGISTRY
+        return ServiceImage(service, f"{registry}/{service}:{sha}", dockerfile=dockerfile)
 
     # **These third-party references are verified to resolve, and that is not a given.** Two of the
     # eight written for Stage 2 §5a did not exist at all — `minio/minio:RELEASE.2024-10-13…` and
