@@ -69,14 +69,17 @@ export interface NodeFrameAttributes {
   size: number;
   label: string;
   hidden: false;
+  /** Whether the node is drawn large enough here for its icon or picture (`ICON_BANDS`). */
+  iconsShown: boolean;
 }
 
-// A node's radius in screen pixels. At 100% (a camera ratio of 1, the structure band) a node is 20px
-// across (ADR-097 step 2, design review item 9), big enough to hold its icon and to be hit; the far
-// overview stays small so 50,000 nodes do not merge into one blot.
+// A node's radius in screen pixels. At 100% (a camera ratio of 1, the structure band) a node is 14px
+// across (DESIGN.md v0.3 §5a, ADR-115 Amendment 1), with a 24×24 hit area (`nodeHitArea.ts`); from
+// the neighbourhood band in it is drawn large enough to show its icon or picture (`ICON_BANDS`). The
+// far overview stays small so 50,000 nodes do not merge into one blot.
 const BAND_SIZE: Record<ZoomBand, number> = {
   overview: 3,
-  structure: 10,
+  structure: 7,
   neighbourhood: 12,
   "link-detail": 16,
 };
@@ -84,6 +87,10 @@ const BAND_SIZE: Record<ZoomBand, number> = {
 /** Exported for reuse outside the per-frame reducer — `ClusterExplainOverlay` (Phase 6a Stage 3)
  * needs the same human-readable label for a `PairwiseExplanation`'s `node_a`/`node_b`, and
  * duplicating this lookup rather than sharing it would be a second place to keep in sync. */
+/** ADR-115 Amendment 1, the owner's ruling of 13 October: the bands where a node is large enough
+ * for its icon or picture to be read. Below them it is drawn plain (`imagePlain`). */
+const ICON_BANDS: ReadonlySet<ZoomBand> = new Set(["neighbourhood", "link-detail"]);
+
 export function nodeLabel(node: Node): string {
   // The analyst's own choice for this type first (ADR-076), else the default.
   return chosenLabel(node) ?? defaultLabel(node);
@@ -109,6 +116,7 @@ export function computeNodeFrameAttributes(
     size: Math.max(2, BAND_SIZE[band] * crowdingScale(context.viewNodeCount)),
     label: labelEligible ? nodeLabel(node) : "",
     hidden: false,
+    iconsShown: ICON_BANDS.has(band),
   };
 }
 
@@ -125,6 +133,8 @@ export interface NodeVisualState {
 
 export interface NodeGraphAttributes {
   image: string;
+  /** The same node with no icon or picture, drawn where it is too small to read one. */
+  imagePlain: string;
   color: string;
   borderColor: string;
   borderSize: number;
@@ -181,6 +191,14 @@ export function computeNodeGraphAttributes(
     icon: resolveIconForNode(node.id, node.type, visual.icon, fillHex),
     iconOpacity: state.filteredOut ? 0.2 : state.dimmed ? 0.45 : 1,
   });
+  const imagePlain = cachedNodeSvgDataUri({
+    shape: visual.shape,
+    fillHex,
+    strokeHex: stroke.hex,
+    strokeStyle: stroke.style,
+    icon: null,
+    iconOpacity: state.filteredOut ? 0.2 : state.dimmed ? 0.45 : 1,
+  });
 
   // Interaction-state ring — `@sigma/node-border`'s own layer, never
   // baked into `image`: on-path first (path highlighting takes priority
@@ -194,6 +212,7 @@ export function computeNodeGraphAttributes(
 
   return {
     image,
+    imagePlain,
     color: fillHex,
     borderColor,
     borderSize,

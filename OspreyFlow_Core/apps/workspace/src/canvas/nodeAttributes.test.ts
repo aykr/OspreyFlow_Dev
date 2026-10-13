@@ -215,10 +215,22 @@ describe("computeNodeFrameAttributes", () => {
   });
 });
 
-describe("node size at 100% (ADR-097 step 2, design review item 9)", () => {
-  it("is 20px across (a radius of 10) at a camera ratio of 1 in an uncrowded view", () => {
+describe("node size at 100% (DESIGN.md v0.3 §5a, ADR-115 Amendment 1)", () => {
+  it("is 14px across (a radius of 7) at a camera ratio of 1 in an uncrowded view", () => {
     const frame = computeNodeFrameAttributes(makeNode("n1"), { cameraRatio: 1, degree: 1, viewNodeCount: 20 });
-    expect(frame.size).toBe(10);
+    expect(frame.size).toBe(7);
+  });
+
+  // The owner's ruling (13 October): small at normal zoom with no icon; icons and pictures appear
+  // once a node is drawn large enough to read them, from the neighbourhood band in.
+  it("shows icons and pictures only from the neighbourhood band in", () => {
+    const at = (cameraRatio: number) =>
+      computeNodeFrameAttributes(makeNode("n1"), { cameraRatio, degree: 1, viewNodeCount: 20 });
+    expect(at(5).iconsShown).toBe(false); // overview
+    expect(at(1).iconsShown).toBe(false); // structure, 100%
+    expect(at(0.3).iconsShown).toBe(true); // neighbourhood
+    expect(at(0.1).iconsShown).toBe(true); // link detail
+    expect(at(0.3).size).toBeGreaterThanOrEqual(12);
   });
 });
 

@@ -1410,7 +1410,15 @@ test("the Icons control is reached by Tab, and a drawing chosen with the arrow k
 test("a picture given from a file is drawn in the shape, and is still there after a reload", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   await settle(page, "n0");
-  await page.waitForTimeout(500);
+  // ADR-115 Amendment 1: pictures are drawn from the neighbourhood band in (a camera ratio of 0.3),
+  // closed in on the node so it stays in view.
+  const closeIn = async () => {
+    await page.evaluate(() => window.__CANVAS__?.centreOn("n0"));
+    await page.waitForTimeout(600);
+    await page.evaluate(() => window.__CANVAS__?.zoomTo(0.3));
+    await page.waitForTimeout(500);
+  };
+  await closeIn();
   const box = (await page.getByRole("application", { name: "Network canvas" }).boundingBox())!;
   // The position is read at each check, not once: the view is fitted a moment after the layout
   // settles, and a position kept from before that points beside the node under load.
@@ -1439,8 +1447,15 @@ test("a picture given from a file is drawn in the shape, and is still there afte
   });
   await expect(page.getByRole("combobox", { name: "Icon for Person" })).toHaveValue("image");
   await expect.poll(async () => isRed(await centreOf())).toBe(true);
+  // At 100% the node is too small for it: drawn plain, the picture back on closing in.
+  await page.evaluate(() => window.__CANVAS__?.zoomTo(1));
+  await page.waitForTimeout(500);
+  await expect.poll(async () => isRed(await centreOf())).toBe(false);
+  await closeIn();
 
   await page.reload();
+  await settle(page, "n0");
+  await closeIn();
   const again = await settle(page, "n0");
   await page.waitForTimeout(800);
   const pixels = readPng(await page.screenshot());

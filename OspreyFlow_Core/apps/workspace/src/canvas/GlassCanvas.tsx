@@ -25,6 +25,7 @@
 //   and still unmeasured; past the cap the scatter stays as it is.
 import { DetailsToggle } from "../layout/PanelFrames";
 import { linkHoverText } from "./linkHover";
+import { nodeWithinReach } from "./nodeHitArea";
 import { createNodeBorderProgram } from "@sigma/node-border";
 import { createNodeImageProgram } from "@sigma/node-image";
 import type { StoreApi } from "zustand/vanilla";
@@ -73,7 +74,7 @@ import {
   RadialMenu,
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
-import { redrawWhenCameraStops } from "./cameraMoves";
+import { redrawOnBandChange, redrawWhenCameraStops } from "./cameraMoves";
 import { emailsOutcomeText, showEmailsAsDocuments } from "../inspector/emailDocuments";
 import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEventsApi";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
@@ -1309,6 +1310,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const drawn = {
             ...data,
             ...frame,
+            // ADR-115 Amendment 1: no icon or picture until the node is drawn large enough to read it.
+            ...(frame.iconsShown ? {} : { image: data.imagePlain }),
             ...(data.emphasised === true ? { forceLabel: true } : {}),
             ...(data.selected === true ? { size: frame.size * SELECTED_SCALE } : {}),
             labelLiteral:
@@ -1423,6 +1426,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const camera = sigma.getCamera();
       setZoomPercent(Math.round(100 / camera.getState().ratio));
       camera.on("updated", (state) => setZoomPercent(Math.round(100 / state.ratio)));
+      camera.on("updated", redrawOnBandChange(sigma, camera.getState().ratio));
 
       // The link under a point, within a few pixels of its line: a link that is not drawn (hidden by
       // the analyst, or inside a folded group) is not under it.
@@ -1530,12 +1534,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // into a pan (found by `node-drag.spec.ts`'s drag to the canvas's bottom edge).
       endDragRef.current = endDrag;
       captor.on("mouseup", endDrag);
-      sigma.on("clickNode", ({ node, event }) => {
-        // The click that ends a drag is the drag, not a click: the selection stays as it was.
-        if (swallowClickRef.current) {
-          swallowClickRef.current = false;
-          return;
-        }
+      const clickOnNode = (node: string, event: { original: Event }) => {
         // Shift, Ctrl or Cmd with the click adds the node to the selection, or takes it out again
         // (ADR-084 Amendment 1: Shift is the key most people reach for; the other two stay).
         const flags = event.original instanceof MouseEvent ? event.original : null;
@@ -1552,11 +1551,39 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           return next;
         });
         setFocused(node);
+      };
+      sigma.on("clickNode", ({ node, event }) => {
+        // The click that ends a drag is the drag, not a click: the selection stays as it was.
+        if (swallowClickRef.current) {
+          swallowClickRef.current = false;
+          return;
+        }
+        clickOnNode(node, event);
       });
       sigma.on("clickStage", ({ event }) => {
         // A drag that ended off its node is not a click on empty space.
         if (swallowClickRef.current) {
           swallowClickRef.current = false;
+          return;
+        }
+        // DESIGN.md v0.3 §5a: a node's hit area is 24×24 though it is drawn 14px across; a click
+        // near a node is a click on it, before a link or empty space is considered.
+        // Positions from the graph itself, as `viewportPositionOf` reads them: the renderer's display
+        // cache still held unframed positions at the first click after loading, so a near miss then
+        // reached nothing (found by the hit-area walkthrough, 13 October 2026).
+        const near = nodeWithinReach(
+          graph.reduceNodes<{ id: string; x: number; y: number; size: number }[]>((reach, id, attrs) => {
+            const shown = sigma.getNodeDisplayData(id);
+            if (shown?.hidden) return reach;
+            const at = sigma.graphToViewport({ x: attrs.x ?? 0, y: attrs.y ?? 0 });
+            reach.push({ id, x: at.x, y: at.y, size: sigma.scaleSize(shown?.size ?? 0) });
+            return reach;
+          }, []),
+          event.x,
+          event.y,
+        );
+        if (near !== null) {
+          clickOnNode(near, event);
           return;
         }
         // The renderer picks a link only where its thin line is drawn, which is hard to hit. A

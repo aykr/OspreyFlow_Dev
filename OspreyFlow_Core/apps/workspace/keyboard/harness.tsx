@@ -41,6 +41,8 @@ declare global {
       viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
       cameraState: () => { x: number; y: number; ratio: number } | null;
       zoomTo: (ratio: number) => void;
+      /** Pans to a node and focuses it (ADR-093). */
+      centreOn: (nodeId: string) => void;
       expandFrom: (nodeId: string, depth: number) => void;
       expandNode: (nodeId: string) => void;
       /** The name the canvas draws beside a node now; empty when it draws none. */
@@ -136,6 +138,7 @@ window.__CANVAS__ = {
   viewportPositionOf: (id) => canvasHandle.current?.viewportPositionOf(id) ?? null,
   cameraState: () => canvasHandle.current?.cameraState() ?? null,
   zoomTo: (ratio) => canvasHandle.current?.zoomTo(ratio),
+  centreOn: (id) => canvasHandle.current?.centreOn(id),
   expandFrom: (id, depth) => canvasHandle.current?.expandFrom(id, depth),
   expandNode: (id) => canvasHandle.current?.expandNode(id),
   labelOf: (id) => canvasHandle.current?.labelOf(id) ?? null,

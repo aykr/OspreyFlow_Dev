@@ -1,5 +1,5 @@
 // What the canvas paints, read from the pixels (ADR-097 step 2, design review item 9). A node's size
-// is a number handed to Sigma; this checks the number becomes 20 painted pixels across at 100%.
+// is a number handed to Sigma; this checks the number becomes 14 painted pixels across at 100%.
 import { expect, test, type Page } from "@playwright/test";
 
 import { layoutSettled } from "./layoutSettled";
@@ -50,15 +50,55 @@ async function paintedDiameter(page: Page, nodeId: string): Promise<number> {
   return Math.min(across, down) / scale;
 }
 
-test("a node is 20 pixels across at 100%", async ({ page }) => {
+// DESIGN.md v0.3 §5a, ADR-115 Amendment 1: 14px across at 100%.
+test("a node is 14 pixels across at 100%", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   // Measured once the layout has stopped moving the node (`layoutSettled.ts`), at 100%.
   await layoutSettled(page, ["n3"]);
   await page.evaluate(() => window.__CANVAS__?.zoomTo(1));
   await layoutSettled(page, ["n3"]);
   const diameter = await paintedDiameter(page, "n3");
-  expect(diameter).toBeGreaterThanOrEqual(18);
-  expect(diameter).toBeLessThanOrEqual(23);
+  expect(diameter).toBeGreaterThanOrEqual(12);
+  expect(diameter).toBeLessThanOrEqual(17);
+});
+
+// ADR-115 Amendment 1: a node drawn 14px across is clicked on anywhere in a 24×24 area round it, so
+// a click just off its painted edge still selects it; one well clear of it selects nothing.
+test("a click just beside a node selects it, and one well clear of it does not", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await layoutSettled(page, ["n4"]);
+  await page.evaluate(() => window.__CANVAS__?.zoomTo(1));
+  const at = (await layoutSettled(page, ["n4"]))["n4"]!;
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  const box = (await canvas.boundingBox())!;
+  // Read with the controls and grid hidden, as `paintedDiameter` does; shown again to click.
+  const hide = await page.addStyleTag({
+    content:
+      "button, select, label, .canvas-toolbar, .canvas-legend, .canvas-zoom { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
+  });
+  const pixels = readPng(await page.screenshot());
+  const scale = pixels.width / page.viewportSize()!.width;
+  const background = pixels.at(Math.round((box.x + 4) * scale), Math.round((box.y + 40) * scale));
+  const bare = (x: number, y: number) => {
+    const p = pixels.at(Math.round((box.x + x) * scale), Math.round((box.y + y) * scale));
+    return Math.abs(p[0]! - background[0]!) + Math.abs(p[1]! - background[1]!) + Math.abs(p[2]! - background[2]!) < 24;
+  };
+  // 10px out along an axis with nothing drawn there: past the 7px radius and the square the renderer
+  // picks within (a diagonal's corner is still inside that square), inside the 12px reach.
+  // Bare all the way out to the far click, so neither lands on a link the renderer would take first.
+  const side = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dy]) =>
+    [9, 10, 12, 14, 16, 18, 20].every((out) => bare(at.x + dx! * out, at.y + dy! * out)),
+  );
+  await hide.evaluate((tag) => tag.remove());
+  expect(side, "a bare side of the node").toBeDefined();
+  const [dx, dy] = side!;
+  const selection = () => page.evaluate(() => window.__KEYBOARD__?.selection ?? []);
+  await canvas.click({ position: { x: at.x + dx! * 10, y: at.y + dy! * 10 } });
+  await expect.poll(selection).toEqual(["n4"]);
+  // On empty space it clears the selection; after a pause, or the renderer reads a double-click.
+  await page.waitForTimeout(500);
+  await canvas.click({ position: { x: at.x + dx! * 18, y: at.y + dy! * 18 } });
+  await expect.poll(selection).toEqual([]);
 });
 
 // DESIGN.md v0.3 §9 exception 4 (ADR-115 decision 9): a 16px lattice, its lines border-subtle at 40%.

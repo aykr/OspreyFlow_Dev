@@ -43,6 +43,8 @@ export type WorkingSetNodeAttributes = {
   x?: number;
   y?: number;
   image?: string;
+  /** The same node with no icon or picture, drawn below the neighbourhood band (ADR-115). */
+  imagePlain?: string;
   color?: string;
   borderColor?: string;
   borderSize?: number;
