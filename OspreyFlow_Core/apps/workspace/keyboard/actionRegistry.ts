@@ -657,3 +657,14 @@ export const PANEL_FRAME_ACTIONS = defineActionRegistry("PANEL_FRAME_ACTIONS", [
   // ADR-115 E4: the canvas toolbar's Details, docked and overlaid.
   "close-and-open-the-details-panel-by-keyboard",
 ] as const);
+
+/** Find connections (ADR-116): the two ends, the search, widening by a degree, a route put on the
+ * canvas and its marks cleared. `keyboard/connections.spec.ts`. */
+export const CONNECTIONS_ACTIONS = defineActionRegistry("CONNECTIONS_ACTIONS", [
+  "choose-from-and-to-by-search-by-keyboard",
+  "use-the-selected-node-by-keyboard",
+  "find-connections-by-keyboard",
+  "widen-by-one-degree-by-keyboard",
+  "add-a-route-to-the-canvas-by-keyboard",
+  "clear-the-degree-marks-by-keyboard",
+] as const);

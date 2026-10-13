@@ -58,6 +58,7 @@ import {
 import { computeCommunityHulls } from "./metrics/hulls";
 import { MetricsPanel } from "./metrics/MetricsPanel";
 import { QueryBuilderPanel } from "./patterns/QueryBuilderPanel";
+import { FindConnectionsPanel } from "./connections/FindConnectionsPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
 import { resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram";
@@ -196,6 +197,8 @@ export function App() {
   const [groupedCount, setGroupedCount] = useState(0);
   // How many judgements rest on each node, drawn as a small count beside it (ADR-070).
   const [judgementCounts, setJudgementCounts] = useState<ReadonlyMap<string, number>>(new Map());
+  // ADR-116: the degree from From of each node of a route put on the canvas by Find connections.
+  const [degreeMarks, setDegreeMarks] = useState<ReadonlyMap<string, number>>(new Map());
 
   // `06_DECISIONS.md` ADR-050 — sign-in. `bearerToken` is the one value every child component
   // already took as a prop before this stage; only its *source* changes, from the dev-only
@@ -739,6 +742,9 @@ export function App() {
       cancelled = true;
     };
   }, [investigationId, bearerToken, isDevBypass]);
+
+  // A case's degree marks are its own: another case opens with none.
+  useEffect(() => setDegreeMarks(new Map()), [investigationId]);
 
   // The count of judgements beside each node (ADR-070): fetched when the case opens, then kept
   // current by the Judgements tab each time it reloads the list. A failure leaves no badges; it
@@ -1343,6 +1349,7 @@ export function App() {
                 dimmedEdgeIds={dimmedEdgeIds}
                 onGroupedCountChange={setGroupedCount}
                 judgementCounts={judgementCounts}
+                degreeMarks={degreeMarks}
                 communityHulls={communityHulls}
                 onEdgeSelect={setSelectedLink}
                 getEventsWindow={() => crossFilterRef.current?.store.getState().window ?? null}
@@ -1674,6 +1681,26 @@ export function App() {
                             bearerToken={bearerToken}
                             investigationId={investigationId}
                             schema={ontologySchema}
+                          />
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(view === "graph" && investigationId
+                  ? [
+                      {
+                        id: "connections" as const,
+                        name: "Find connections",
+                        content: (
+                          <FindConnectionsPanel
+                            apiBaseUrl={API_BASE_URL}
+                            bearerToken={bearerToken}
+                            investigationId={investigationId}
+                            selected={selectedNode}
+                            canvas={workingSetRef.current.graph}
+                            onDelta={(delta) => workingSetRef.current.store.getState().applyDelta(delta)}
+                            onMark={(marks) => setDegreeMarks((prev) => new Map([...prev, ...marks]))}
+                            onClearMarks={() => setDegreeMarks(new Map())}
                           />
                         ),
                       },

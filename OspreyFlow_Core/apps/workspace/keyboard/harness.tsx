@@ -331,6 +331,16 @@ if (!container) throw new Error("#root not found");
 
 // `?judged=n1:2,n2:1` gives those nodes that many judgements, for the count drawn beside a node
 // (ADR-070).
+// `?degrees=n0:0,n1:1` marks those nodes with their degree from From (ADR-116), as Find connections does.
+const degrees = new Map<string, number>(
+  (new URLSearchParams(window.location.search).get("degrees") ?? "")
+    .split(",")
+    .filter(Boolean)
+    .map((pair) => {
+      const [id = "", degree = "0"] = pair.split(":");
+      return [id, Number(degree)] as [string, number];
+    }),
+);
 const judged = new Map<string, number>(
   (new URLSearchParams(window.location.search).get("judged") ?? "")
     .split(",")
@@ -366,6 +376,7 @@ createRoot(container).render(
       lastChange={lastChange}
       ref={canvasHandle}
       judgementCounts={judged}
+      degreeMarks={degrees}
       graph={workingSet.graph}
       store={workingSet.store}
       ontology={ontology}

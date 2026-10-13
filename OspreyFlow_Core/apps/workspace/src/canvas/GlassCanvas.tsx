@@ -111,6 +111,7 @@ import { arrange, enclosingCircle, linkKey, treeLinkKeys, type LayoutMode } from
 import { LayoutMenu, type BubbleKey } from "./LayoutMenu";
 import { CommunitiesStatus, CommunitiesToggle } from "./CommunitiesControls";
 import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
+import { DegreeMarkOverlay } from "./DegreeMarkOverlay";
 import { JudgementBadgeOverlay } from "./JudgementBadgeOverlay";
 import { activePalette } from "../color/palette";
 import { onThemeChange } from "../theme/theme";
@@ -261,6 +262,9 @@ export interface GlassCanvasProps {
   /** ADR-070: how many judgements rest on each node, drawn as a small count beside it. Omitted or
    * empty, nothing is drawn. */
   judgementCounts?: ReadonlyMap<string, number>;
+  /** ADR-116: each node of a route put on the canvas from Find connections, with its degree from
+   * From, drawn as a small mark beside it. Omitted or empty, nothing is drawn. */
+  degreeMarks?: ReadonlyMap<string, number>;
   /** ADR-080: the link menu's *Add a note*, *Change link…* and *Show change history* select the
    * link and then ask the caller to bring that part of the Inspector forward. */
   onLinkAction?: (edge: Edge, action: "note" | "change" | "history" | "events") => void;
@@ -386,6 +390,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       communityHulls,
       onGroupedCountChange,
       judgementCounts,
+      degreeMarks,
       onLinkAction,
       getEventsWindow,
       onOpenDocument,
@@ -3161,6 +3166,20 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             y={pathError.y}
             message={pathError.message}
             onClose={dismissPathError}
+          />
+        )}
+        {degreeMarks && degreeMarks.size > 0 && (
+          <DegreeMarkOverlay
+            sigmaRef={sigmaRef}
+            degrees={degreeMarks}
+            positionOf={(nodeId) => {
+              const sigma = sigmaRef.current;
+              if (!sigma || !graph.hasNode(nodeId) || isHiddenInGroup(nodeId)) return null;
+              return sigma.graphToViewport({
+                x: graph.getNodeAttribute(nodeId, "x") ?? 0,
+                y: graph.getNodeAttribute(nodeId, "y") ?? 0,
+              });
+            }}
           />
         )}
         {judgementCounts && judgementCounts.size > 0 && (

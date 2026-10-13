@@ -22,6 +22,11 @@ export interface GlobalSearchProps {
   entityTypes?: readonly string[];
   /** The nodes drawn on the canvas now, for "Only nodes on screen". Called per search, not stored. */
   screenNodes?: () => readonly Node[];
+  /** The box's name, where there is more than one on the page (ADR-116's From and To). */
+  label?: string;
+  /** Whether / takes the analyst to this box. Only the top bar's should: every box listening would
+   * leave / with whichever was drawn last. */
+  slashFocuses?: boolean;
 }
 
 /** A prefix shorter than this is not worth asking about; the Conduit refuses it too (ADR-059, ADR-074). */
@@ -40,7 +45,16 @@ type Outcome = "idle" | "short" | "found" | "none" | "unavailable";
  * `POST /v1/suggest` for nodes whose identifiers *start with* what is typed (`/v1/search` stays an
  * exact match). An answer to a question the analyst has already moved past is dropped, a list cut
  * off at ten says so, and an unanswered question says so instead of leaving the last list standing. */
-export function GlobalSearch({ apiBaseUrl, bearerToken, investigationId, onSelect, entityTypes = [], screenNodes }: GlobalSearchProps) {
+export function GlobalSearch({
+  apiBaseUrl,
+  bearerToken,
+  investigationId,
+  onSelect,
+  entityTypes = [],
+  screenNodes,
+  label = "Search entities, identifiers, documents",
+  slashFocuses = true,
+}: GlobalSearchProps) {
   const [results, setResults] = useState<Node[]>([]);
   const [query, setQuery] = useState("");
   const [more, setMore] = useState(false);
@@ -144,6 +158,7 @@ export function GlobalSearch({ apiBaseUrl, bearerToken, investigationId, onSelec
   // empty state says. Typed into a field, it stays a slash.
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (!slashFocuses) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
@@ -160,14 +175,14 @@ export function GlobalSearch({ apiBaseUrl, bearerToken, investigationId, onSelec
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [slashFocuses]);
 
   return (
     <div className="global-search" ref={rootRef}>
       <div className="global-search__field">
         <Combobox
-          aria-label="Search entities, identifiers, documents"
-          placeholder="Search entities, identifiers, documents"
+          aria-label={label}
+          placeholder={label}
           value={query}
           options={results.map((node) => ({ value: node.id, label: `${node.type}: ${displayValue(node)}` }))}
           onQueryChange={onQueryChange}

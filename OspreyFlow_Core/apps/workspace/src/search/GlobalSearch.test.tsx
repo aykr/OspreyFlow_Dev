@@ -224,6 +224,25 @@ describe("GlobalSearch: / to search (ADR-097 step 1)", () => {
     expect(document.activeElement).toBe(screen.getByRole("combobox", { name: /Search entities/ }));
   });
 
+  it("/ goes to the top bar's box, not to a named box that does not take it (ADR-116's From and To)", () => {
+    render(
+      <>
+        <GlobalSearch investigationId="inv-1" apiBaseUrl="http://api.test" bearerToken="tok" onSelect={() => undefined} />
+        <GlobalSearch
+          investigationId="inv-1"
+          apiBaseUrl="http://api.test"
+          bearerToken="tok"
+          onSelect={() => undefined}
+          label="Search for From"
+          slashFocuses={false}
+        />
+      </>,
+    );
+    fireEvent.keyDown(document.body, { key: "/" });
+    expect(document.activeElement).toBe(screen.getByRole("combobox", { name: /Search entities/ }));
+    expect(screen.getByRole("combobox", { name: "Search for From" })).toBeTruthy();
+  });
+
   it("/ typed into another field stays there", () => {
     render(
       <>

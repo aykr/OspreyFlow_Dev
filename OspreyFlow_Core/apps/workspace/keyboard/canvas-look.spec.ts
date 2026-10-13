@@ -101,6 +101,21 @@ test("a click just beside a node selects it, and one well clear of it does not",
   await expect.poll(selection).toEqual([]);
 });
 
+// ADR-116 decision 4: the nodes of a route put on the canvas from Find connections are marked with
+// their degree from From, beside each node, wherever the layout put it.
+test("a route's nodes are marked on the canvas with their degree from From", async ({ page }) => {
+  await page.goto("/keyboard/harness.html?degrees=n0:0,n1:1,n2:2");
+  const at = await layoutSettled(page, ["n0", "n2"]);
+  const box = (await page.getByRole("application", { name: "Network canvas" }).boundingBox())!;
+  const from = page.getByRole("img", { name: "From", exact: true });
+  await expect(from).toHaveText("From");
+  await expect(page.getByRole("img", { name: "1 degree from From" })).toHaveText("1°");
+  const two = (await page.getByRole("img", { name: "2 degrees from From" }).boundingBox())!;
+  // Beside n2, not somewhere else on the canvas.
+  expect(Math.abs(two.x + two.width / 2 - (box.x + at.n2!.x))).toBeLessThan(40);
+  expect(Math.abs(two.y - (box.y + at.n2!.y))).toBeLessThan(30);
+});
+
 // DESIGN.md v0.3 §9 exception 4 (ADR-115 decision 9): a 16px lattice, its lines border-subtle at 40%.
 test("the canvas shows its 16px measurement grid behind the graph", async ({ page }) => {
   await page.goto("/keyboard/harness.html");

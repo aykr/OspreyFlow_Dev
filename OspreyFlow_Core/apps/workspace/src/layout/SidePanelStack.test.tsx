@@ -36,7 +36,7 @@ describe("SidePanelStack", () => {
     const { container, getByLabelText } = render(<SidePanelStack panels={panels} />);
     fireEvent.click(getByLabelText("Move the inspector down"));
     expect(slotsOf(container)).toEqual(["metrics", "inspector", "query-builder"]);
-    expect(getSidePanelOrder()).toEqual(["metrics", "inspector", "query-builder"]);
+    expect(getSidePanelOrder()).toEqual(["metrics", "inspector", "query-builder", "connections"]);
   });
 
   it("the top panel's Move up is unavailable, changes nothing and keeps focus", () => {
@@ -72,7 +72,7 @@ describe("SidePanelStack", () => {
     fireEvent.dragOver(target);
     fireEvent.drop(target);
     expect(slotsOf(container)).toEqual(["query-builder", "inspector", "metrics"]);
-    expect(getSidePanelOrder()).toEqual(["query-builder", "inspector", "metrics"]);
+    expect(getSidePanelOrder()).toEqual(["query-builder", "inspector", "metrics", "connections"]);
   });
 
   it("a drop with nothing dragged changes nothing", () => {
@@ -89,7 +89,7 @@ describe("SidePanelStack", () => {
     // Alone on screen, it can go neither way.
     expect(getByLabelText("Move the inspector up").getAttribute("aria-disabled")).toBe("true");
     expect(getByLabelText("Move the inspector down").getAttribute("aria-disabled")).toBe("true");
-    expect(getSidePanelOrder()).toEqual(["metrics", "inspector", "query-builder"]);
+    expect(getSidePanelOrder()).toEqual(["metrics", "inspector", "query-builder", "connections"]);
   });
 });
 

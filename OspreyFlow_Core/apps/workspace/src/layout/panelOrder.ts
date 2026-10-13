@@ -13,7 +13,7 @@ import { useSyncExternalStore } from "react";
 export const SIDE_PANEL_ORDER_KEY = "ospreyflow.side-panel-order";
 
 /** The panels of the right-hand column, in their default order (ADR-082's layout). */
-export const SIDE_PANEL_IDS = ["inspector", "metrics", "query-builder"] as const;
+export const SIDE_PANEL_IDS = ["inspector", "metrics", "query-builder", "connections"] as const;
 
 export type SidePanelId = (typeof SIDE_PANEL_IDS)[number];
 export type SidePanelOrder = readonly SidePanelId[];
