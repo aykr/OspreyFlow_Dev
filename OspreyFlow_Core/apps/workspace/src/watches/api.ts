@@ -26,7 +26,12 @@ export interface AlertView {
   evidence_available: boolean;
   investigation_id: string | null;
   created_at: string;
+  /** ADR-110 Amendment 3: the alert in words; a scheduled run's notice is nothing else. */
+  words?: string | null;
 }
+
+/** ADR-110 decision 10: a notice that a scheduled run failed or was refused, not a match. */
+export const isScheduleNotice = (alert: AlertView) => alert.rule_id.startsWith("schedule:");
 
 /** Mirrors `services/api/investigations.py::Investigation` field-for-field. */
 export interface InvestigationSummary {

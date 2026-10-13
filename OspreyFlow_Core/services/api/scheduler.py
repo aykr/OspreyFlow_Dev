@@ -24,10 +24,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from croniter import croniter
 from valkey.asyncio import Valkey
 
+from conduit_common.identity import new_id
 from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme, principal_may_view
 from principal_auth import PrincipalExchangeUnavailable, PrincipalRevoked
-from schemas.domain import Principal
+from schemas.domain import Alert, AlertMode, Principal
 from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from schemas.rights import Right, rights_for
 
@@ -135,6 +136,28 @@ def describe(cron: str, timezone: str) -> str:
     return f"{words or f'on the cron schedule `{cron}`'} ({timezone})"
 
 
+def schedule_notice(
+    owner_id: str, recipe: StudioRecipeDraft, words: str, now: datetime
+) -> Alert:
+    """Decision 10's notice (Amendment 3, point 1): an alert in the owner's own inbox, carrying its
+    words and no referent, and no typology — so the case team's queue, which reads typology alerts
+    only, never shows it. `rule_id` names the recipe as `schedule:<recipe id>`."""
+    return Alert(
+        id=new_id(),
+        rule_id=f"{NOTICE_RULE_PREFIX}{recipe.recipe_id}",
+        owner_id=owner_id,
+        mode=AlertMode.FULL,
+        referent_node_ids=[],
+        investigation_id=recipe.schedule_case,
+        created_at=now,
+        words=words,
+    )
+
+
+#: The `rule_id` prefix of a schedule notice; the Glass's inbox reads it as a notice, not a match.
+NOTICE_RULE_PREFIX = "schedule:"
+
+
 # --- the executor --------------------------------------------------------------------------------
 
 #: A claimed slot is remembered a week; a run of one recipe holds its lock at most six hours.
@@ -185,6 +208,8 @@ class ScheduleExecutor:
     check_case: Callable[[Principal, str], Awaitable[Principal]]
     #: `run_recipe_as` with the deployment's dependencies, as the owner, trigger `schedule`.
     run: Callable[[Principal, StudioRecipeDraft, str, datetime], Awaitable[Any]]
+    #: Decision 10: a notice in the owner's own inbox when a scheduled run fails or is refused.
+    notify: Callable[[str, StudioRecipeDraft, str], Awaitable[None]] | None = None
 
     async def tick(self, now: datetime) -> None:
         for recipe in await self.recipes.scheduled():
@@ -224,6 +249,7 @@ class ScheduleExecutor:
             await self._not_run(
                 recipe, latest, "refused", str(refused), counts=refused.about_the_owner
             )
+            await self._tell_owner(recipe, latest, f"was refused: {refused}")
             in_a_row = await self.runs.refusals_in_a_row(recipe.recipe_id)
             if refused.about_the_owner and in_a_row >= REFUSALS_BEFORE_PAUSE:
                 await self.recipes.set_paused(
@@ -241,12 +267,24 @@ class ScheduleExecutor:
             return
         try:
             await self.run(owner, recipe, case, latest)
-        except Exception:  # noqa: BLE001 - the ledger has it as failed, in words
+        except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
             log.exception("scheduled run of recipe %s failed", recipe.recipe_id)
+            await self._tell_owner(recipe, latest, f"failed: {error}")
         finally:
             held = await reply(self.valkey.get(lock))
             if held in (token, token.encode()):
                 await reply(self.valkey.delete(lock))
+
+    async def _tell_owner(self, recipe: StudioRecipeDraft, slot: datetime, what: str) -> None:
+        if self.notify is None or recipe.schedule_owner is None:
+            return
+        zone = _zone(recipe.schedule_timezone or DEFAULT_TIMEZONE)
+        due = slot.astimezone(zone).strftime("%-d %B %Y at %H:%M")
+        try:
+            words = f"The scheduled run of {recipe.label} due {due} {what}"
+            await self.notify(recipe.schedule_owner, recipe, words)
+        except Exception:  # noqa: BLE001 - a notice that cannot be written is logged, not raised
+            log.exception("could not tell the owner of recipe %s", recipe.recipe_id)
 
     async def _owner(self, recipe: StudioRecipeDraft) -> tuple[Principal, str]:
         owner_id, case = recipe.schedule_owner, recipe.schedule_case

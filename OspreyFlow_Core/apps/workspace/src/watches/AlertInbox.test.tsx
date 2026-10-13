@@ -114,3 +114,26 @@ describe("test_jump_result_never_frames_unreadable_count_as_newly_visible_conten
     expect(getByTestId("jump-unreadable-summary").textContent ?? "").toMatch(/new|found|hidden/i);
   });
 });
+
+// ADR-110 decision 10, Amendment 3: a notice that a scheduled run failed or was refused reads as
+// its words — not as a match whose evidence vanished, and with nothing to jump into.
+describe("a schedule notice", () => {
+  const NOTICE: AlertView = {
+    id: "n1", rule_id: "schedule:recipe-1", owner_id: "approver-1", mode: "full", referent_node_ids: [],
+    evidence_available: true, investigation_id: "case-1", created_at: "2026-06-02T05:00:00Z",
+    words: "The scheduled run of Daily export due 2 June 2026 at 06:00 was refused: the owner can no longer sign in",
+  };  // prettier-ignore
+
+  test("reads as its words, with no evidence line and no jump", () => {
+    const { container, queryByRole } = render(
+      <ul>
+        <AlertRow alert={NOTICE} onJump={() => undefined} jumping={false} />
+      </ul>,
+    );
+    const text = container.textContent ?? "";
+    expect(text).toContain("Scheduled run");
+    expect(text).toContain("was refused: the owner can no longer sign in");
+    expect(text).not.toContain("Evidence no longer available");
+    expect(queryByRole("button", { name: /Jump/ })).toBeNull();
+  });
+});

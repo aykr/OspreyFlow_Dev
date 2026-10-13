@@ -512,6 +512,7 @@ from .scheduler import (
     next_slot,
     next_slots,
     run_every_minute,
+    schedule_notice,
     validate_schedule,
 )
 from .screening import ScreeningListStore
@@ -7197,6 +7198,9 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
             slot=slot,
         )
 
+    async def notify(owner_id: str, recipe: StudioRecipeDraft, words: str) -> None:
+        await state.alerts_store.save(schedule_notice(owner_id, recipe, words, datetime.now(UTC)))
+
     return ScheduleExecutor(
         recipes=state.studio_recipes,
         runs=state.recipe_runs,
@@ -7205,6 +7209,7 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
         resolve_owner=state.principal_resolver.resolve_for_owner_detailed,
         check_case=check_case,
         run=run,
+        notify=notify,
     )
 
 

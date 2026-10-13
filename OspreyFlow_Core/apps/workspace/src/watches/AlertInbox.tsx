@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
-import { type AlertJumpResult, type AlertView, jumpAlert, listAlerts } from "./api";
+import { type AlertJumpResult, type AlertView, isScheduleNotice, jumpAlert, listAlerts } from "./api";
 
 export interface AlertRowProps {
   alert: AlertView;
@@ -20,7 +20,23 @@ export interface AlertRowProps {
   jumping: boolean;
 }
 
+/** ADR-110 decision 10: a scheduled run that failed or was refused, told to its owner in words.
+ * It names no entity and has no case to jump into, so it is read, not jumped. */
+function ScheduleNoticeRow({ alert }: { alert: AlertView }) {
+  return (
+    <li style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)", padding: "var(--sp-8) 0",
+                 borderBottom: "1px solid var(--border-subtle)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span className="value">Scheduled run</span>
+        <span className="label">{new Date(alert.created_at).toLocaleString()}</span>
+      </div>
+      <p className="label" style={{ margin: 0 }}>{alert.words}</p>
+    </li>
+  );
+}
+
 export function AlertRow({ alert, onJump, jumping }: AlertRowProps) {
+  if (isScheduleNotice(alert)) return <ScheduleNoticeRow alert={alert} />;
   const hasReferents = alert.mode === "full" && alert.referent_node_ids.length > 0;
   return (
     <li

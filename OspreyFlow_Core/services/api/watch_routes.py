@@ -67,6 +67,9 @@ class AlertView(BaseModel):
     evidence_available: bool
     investigation_id: str | None
     created_at: datetime
+    #: ADR-110 Amendment 3: what the alert says in words — a scheduled run's notice is nothing
+    #: but its words (a typology finding has them too); `None` for a hotlist or monitor match.
+    words: str | None = None
 
 
 class AlertList(BaseModel):
@@ -97,6 +100,7 @@ async def alert_to_view(alert: Alert, principal: Principal, graph: GraphPort) ->
         evidence_available=available,
         investigation_id=alert.investigation_id,
         created_at=alert.created_at,
+        words=alert.words,
     )
 
 

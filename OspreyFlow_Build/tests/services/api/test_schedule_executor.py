@@ -95,6 +95,11 @@ class _Edges:
     case_level_ok: bool = True
     runs_made: list[tuple[str, datetime]] = field(default_factory=list)
     hold_run: asyncio.Event | None = None
+    fail_run: Exception | None = None
+    notices: list[tuple[str, str, str]] = field(default_factory=list)
+
+    async def notify(self, owner_id: str, recipe: StudioRecipeDraft, words: str) -> None:
+        self.notices.append((owner_id, recipe.recipe_id, words))
 
     async def resolve_owner(self, owner_id: str) -> Principal:
         if isinstance(self.owner, Exception):
@@ -141,6 +146,9 @@ def _executor(
         )  # fmt: skip
         if edges.hold_run is not None:
             await edges.hold_run.wait()
+        if edges.fail_run is not None:
+            await runs.fail(run_id, failure=str(edges.fail_run), now=datetime.now(UTC))
+            raise edges.fail_run
         report = LoadReport(load_id=new_id(), recipe_id=recipe.recipe_id, recipe_version=2)
         await runs.finish(run_id, report=report, now=datetime.now(UTC))
         return report
@@ -153,6 +161,7 @@ def _executor(
         resolve_owner=edges.resolve_owner,
         check_case=edges.check_case,
         run=run,
+        notify=edges.notify,
     )
 
 
@@ -355,3 +364,28 @@ async def test_an_identity_provider_outage_is_refused_but_never_pauses_the_sched
     edges.owner = PrincipalRevoked("disabled")
     await executor.tick(FIRST_SLOT + timedelta(days=7))
     assert "three refused runs in a row" in recipes.paused[recipe.recipe_id]
+
+
+async def test_a_refused_run_tells_its_owner_in_words(runs: RecipeRunStore, valkey: Valkey) -> None:
+    """ADR-110 decision 10 and Amendment 3, point 1."""
+    recipe, edges = _recipe(), _Edges(owner=PrincipalRevoked("disabled"))
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    ((owner, recipe_id, words),) = edges.notices
+    assert (owner, recipe_id) == ("approver-1", recipe.recipe_id)
+    assert words.startswith("The scheduled run of Daily export due ")
+    assert "was refused: the schedule's owner, approver-1, can no longer sign in" in words
+
+
+async def test_a_failed_run_tells_its_owner_in_words(runs: RecipeRunStore, valkey: Valkey) -> None:
+    recipe, edges = _recipe(), _Edges(fail_run=FileNotFoundError("no such file: a.csv"))
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    ((owner, _, words),) = edges.notices
+    assert owner == "approver-1" and "failed: no such file: a.csv" in words
+
+
+async def test_a_run_that_succeeds_or_is_missed_tells_nobody(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe, edges = _recipe(), _Edges()
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT + timedelta(days=2))
+    assert edges.notices == []
