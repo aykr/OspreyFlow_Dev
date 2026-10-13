@@ -12462,6 +12462,30 @@ new layout; plants red: the internal network made ordinary, the model server giv
 gateway always reaching out, speech allowed to fetch, the graph store's door lost, a door published
 but not routed.
 
+**Applied to the owner's deployment, 13 October 2026 (the owner: "Re-render now").** Two defects found
+doing it, both fixed with a test shown red first:
+
+1. **A refresh gave a deployment half of the layout.** `ospreyflow start --build`'s refresh brings in
+   any service the checkout renders and the deployment lacks; it copied `ollama-models` and
+   `whisper-models`, with their `networks`, into a deployment that defines none, and the build step
+   refused the file (nothing had restarted; the two services were taken out again by hand). Now a
+   deployment without the internal network is never given those steps, and says so; any other new
+   service joins its default network; and the model pull is written to whichever service pulls.
+   (`tests/test_refresh.py`, two cases on a deployment of the old shape.) Contrary to the line above,
+   refresh does write the compose file — it never renders it whole.
+2. **`up --wait` read the finished weights step as a failure:** a container that has exited fails it
+   unless a service waits on it, and the model server must not wait on a first pull of gigabytes. So
+   `ollama-models` now stops and reaps the server it ran for its pulls and idles (`sleep infinity`); a
+   failed pull still exits non-zero and is reported. It reads no case content and serves nothing.
+
+The re-render took only `compose.yaml` and the Caddyfile from a fresh render of the deployment's own
+`osprey.yaml` (`deployment.env`, which holds the secrets, untouched; a fresh `apply` would have minted
+new ones); apart from the layout the render matched the deployment's file exactly. **Proved on the
+owner's deployment:** every service but the proxy and the idle weights step is on the `osprey` network
+alone, which is `internal`; the Conduit has no route out; the proxy does; ArcadeDB answers 204 on
+`127.0.0.1:2480` through the proxy; the Glass answers 200; the Conduit reaches the model server; both
+weights steps completed (the Ollama one, unmeasured before, verified every model's digest).
+
 ## ADR-115 — The design handoff: the welcome page, Home and the Glass to `DESIGN.md` v0.2 — ACCEPTED (design)
 
 Status: **accepted on the owner's rulings of 12 October 2026; design only, nothing built.** The
@@ -12549,8 +12573,12 @@ Phase E row E4). The owner ruled:
 3. **`Enter` keeps spec 02's meaning**: it expands the focused node, or opens a Document in the reader.
 4. **The theme switch moves to an icon in the top bar**, as the reference has it — amending ADR-097
    step 3 and the review's item 15, which kept it in the account menu.
-5. **A case shows a mono scope badge** beside its name, as the reference has it. Cases carry no scope
-   today, so what a scope is (and its values) is decided before it is built.
+5. **A case shows a mono scope badge** beside its name, as the reference has it. **Its scope is the
+   datasets the case reads** (ADR-099; the owner's ruling of 13 October, from options): the first by
+   name in capitals, then how many more ("ENRON +1"), all named in its title; "NO DATA" for a case
+   that reads none. Nothing new is stored: the case listing already carries them. Built
+   (`scopeBadge`, `CaseSwitcher.test.tsx`; plants red: others not counted, a no-data case unmarked,
+   the badge not in mono).
 6. **Nodes are drawn at radius 7 (14px) with a 24×24 hit area** (`DESIGN.md` v0.3 §5a), amending ADR-097
    step 2's 20px node. **Refined by the owner the same day ("small, icons on zoom-in"):** the icon or
    picture is not dropped but drawn only from the neighbourhood zoom band in (a camera ratio of 0.4 or
@@ -12616,16 +12644,16 @@ empty. A hidden end and an unknown one answer alike, since neither has a route. 
 connections* panel sits in the side-panel stack; marks are drawn by the canvas's badge overlay,
 below and to the left of a node, clear of a judgement count.
 
-**Decided in building, for the owner to confirm:**
+**Decided in building, then confirmed by the owner the same day, from options:**
 
-1. **A `NOT_SAME_AS` link is never a step on a route.** It records an analyst's judgement that two
-   records are *different* people, so it is not a connection between them. The Pathfinder
-   (`GraphPort.paths`) still walks it; that is unchanged here and is listed for the owner.
+1. **A `NOT_SAME_AS` link is never a step on a route — in Find connections and in the Pathfinder
+   ("Never, in both").** It records an analyst's judgement that two records are *different* people,
+   so it is not a connection between them. Both builders share one step filter; asked for by name,
+   it is still not walked (`test_paths_never_walk_a_not_same_as_judgement`).
 2. **Degrees are counted in stored links, a `SAME_AS` link counting as one, as the Pathfinder
-   counts them.** 01 §4 collapses `SAME_AS` components at query time for display, so two records
-   of one person drawn as one node are "1 degree apart" here. Counting a match as no degree needs
-   the resolution threshold in the traversal, which neither the Pathfinder nor this does; it is a
-   decision for the owner, not taken here.
+   counts them ("Count it as 1 for now").** 01 §4 collapses `SAME_AS` components at query time for
+   display, so two records of one person drawn as one node are "1 degree apart" here. Counting a
+   match as no degree would need the resolution threshold in the traversal; not built.
 
 **Tests that fail if this is violated.** The conformance suite (`test_routes_at_a_length_are_
 exactly_that_long_and_every_such_route_is_found`, `test_no_route_passes_through_a_hidden_node_or_
