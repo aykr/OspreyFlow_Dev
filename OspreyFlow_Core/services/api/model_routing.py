@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ports.model import ModelPort
+from schemas.admin import ModelRoleStatus
 from schemas.domain import Handling, Vector
 from schemas.model import (
     ExtractionRequest,
@@ -115,3 +116,40 @@ def routes_from_env(
         c.strip() for c in environ.get("OSPREY_SENDABLE_HANDLING_CODES", "").split(",") if c.strip()
     )
     return routes, codes
+
+
+def model_status(
+    routes: dict[Role, RoleRoute], sendable: frozenset[str]
+) -> tuple[list[ModelRoleStatus], str | None]:
+    """Each role's model, where it runs, and the notice the Admin area shows when case content
+    leaves the deployment (ADR-114 decision 11). Built from model names only — no key reaches it."""
+    statuses: list[ModelRoleStatus] = []
+    outside: dict[str, list[str]] = {}
+    for role, route in routes.items():
+        if route.provider is not None:
+            provider = route.provider.split("/", 1)[0]
+            outside.setdefault(provider, []).append(role)
+            statuses.append(
+                ModelRoleStatus(
+                    role=role, model=route.provider, runs_at=provider, local_model=route.local
+                )
+            )
+        else:
+            statuses.append(
+                ModelRoleStatus(
+                    role=role,
+                    model=route.local or "none",
+                    runs_at="this deployment",
+                    local_model=route.local,
+                )
+            )
+    if not outside:
+        return statuses, None
+    codes = ", ".join(sorted(sendable)) or "none"
+    plural = "s" if len(sendable) > 1 else ""
+    where = "; ".join(f"to {p} for {' and '.join(rs)}" for p, rs in outside.items())
+    notice = (
+        f"Case content with handling code{plural} {codes} is sent {where}. Anything else runs on "
+        "this deployment's own models."
+    )
+    return statuses, notice

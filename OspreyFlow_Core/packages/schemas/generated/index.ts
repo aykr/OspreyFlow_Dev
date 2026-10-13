@@ -159,6 +159,7 @@ export type { AccessInput } from "./AccessInput";
 export type { InviteInput } from "./InviteInput";
 export type { SignInDelivery } from "./SignInDelivery";
 export type { DemoPackStatus } from "./DemoPackStatus";
+export type { ModelRoleStatus } from "./ModelRoleStatus";
 export type { ScheduleRunView } from "./ScheduleRunView";
 export type { AdminSchedule } from "./AdminSchedule";
 export type { PauseScheduleInput } from "./PauseScheduleInput";

@@ -114,12 +114,27 @@ class ComponentHealth(BaseModel):
     detail: str | None = None
 
 
+class ModelRoleStatus(BaseModel):
+    """One model role and where it runs (ADR-114 decision 11, Amendment 6)."""
+
+    role: Literal["extraction", "vision", "transcription", "embedding"]
+    #: The model the role uses for material that may be sent; the local one otherwise.
+    model: str
+    #: "this deployment", or the client's provider by name.
+    runs_at: str
+    local_model: str | None = None
+
+
 class SystemStatus(BaseModel):
     """The Admin area's *System* screen (ADR-110 Amendment 1): each component, asked as the screen
     opens — what the harness's preflight showed before launch, for a running deployment."""
 
     version: str | None = None
     components: list[ComponentHealth]
+    #: ADR-114 decision 11: each role's model and where it runs; never a key.
+    models: list[ModelRoleStatus] = Field(default_factory=list)
+    #: Said whenever a role runs at the client's provider: what case content leaves, and to whom.
+    model_notice: str | None = None
 
 
 class EmbeddedDashboard(BaseModel):
@@ -201,7 +216,8 @@ class AdminSchedule(BaseModel):
 
 class DataFeed(BaseModel):
     """A pipeline feeding a case's datasets, as the Glass's *Data feeds* shows it (ADR-110
-    decision 9): how fresh the case's data is. `schedule` is `None` for a recipe run only by hand."""
+    decision 9): how fresh the case's data is. `schedule` is `None` for a recipe run only by
+    hand."""
 
     recipe_id: str
     label: str
@@ -227,5 +243,6 @@ ALL_MODELS = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
-    ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed, ChangeScheduleInput,
+    ModelRoleStatus, ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed,
+    ChangeScheduleInput,
 ]  # fmt: skip

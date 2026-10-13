@@ -602,6 +602,36 @@ function System({ api }: { api: AdminApi }) {
           ))}
         </ul>
       )}
+      {status?.model_notice && (
+        <p role="note" style={{ margin: 0, border: "1px solid var(--warning)", padding: "var(--sp-8)" }}>
+          {status.model_notice}
+        </p>
+      )}
+      {status?.models && status.models.length > 0 && (
+        <table className="table" aria-label="Models">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Model</th>
+              <th>Runs at</th>
+            </tr>
+          </thead>
+          <tbody>
+            {status.models.map((m) => (
+              <tr key={m.role}>
+                <td>{m.role}</td>
+                <td>
+                  <code>{m.model}</code>
+                  {m.runs_at !== "this deployment" && m.local_model && (
+                    <div className="label">{`Anything that may not be sent runs on ${m.local_model}.`}</div>
+                  )}
+                </td>
+                <td>{m.runs_at}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       {status?.version && <p className="label" style={{ margin: 0 }}>{`Version ${status.version}`}</p>}
       <Button onClick={ask}>Ask again</Button>
     </>

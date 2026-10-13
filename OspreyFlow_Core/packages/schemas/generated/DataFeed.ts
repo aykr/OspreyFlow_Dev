@@ -25,7 +25,8 @@ export type Failure = string | null;
 
 /**
  * A pipeline feeding a case's datasets, as the Glass's *Data feeds* shows it (ADR-110
- * decision 9): how fresh the case's data is. `schedule` is `None` for a recipe run only by hand.
+ * decision 9): how fresh the case's data is. `schedule` is `None` for a recipe run only by
+ * hand.
  */
 export interface DataFeed {
   recipe_id: RecipeId;

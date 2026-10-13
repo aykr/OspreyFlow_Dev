@@ -6,6 +6,12 @@ export type Ok = boolean;
 export type Millis = number;
 export type Detail = string | null;
 export type Components = ComponentHealth[];
+export type Role = "extraction" | "vision" | "transcription" | "embedding";
+export type Model = string;
+export type RunsAt = string;
+export type LocalModel = string | null;
+export type Models = ModelRoleStatus[];
+export type ModelNotice = string | null;
 
 /**
  * The Admin area's *System* screen (ADR-110 Amendment 1): each component, asked as the screen
@@ -14,6 +20,8 @@ export type Components = ComponentHealth[];
 export interface SystemStatus {
   version?: Version;
   components: Components;
+  models?: Models;
+  model_notice?: ModelNotice;
   [k: string]: unknown;
 }
 /**
@@ -24,5 +32,15 @@ export interface ComponentHealth {
   ok: Ok;
   millis: Millis;
   detail?: Detail;
+  [k: string]: unknown;
+}
+/**
+ * One model role and where it runs (ADR-114 decision 11, Amendment 6).
+ */
+export interface ModelRoleStatus {
+  role: Role;
+  model: Model;
+  runs_at: RunsAt;
+  local_model?: LocalModel;
   [k: string]: unknown;
 }

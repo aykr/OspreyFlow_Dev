@@ -246,3 +246,37 @@ describe("the Demo packs tab", () => {
     expect(await screen.findByText("Copied. Run it in a terminal on the machine OspreyFlow runs on.")).toBeTruthy();
   });
 });
+
+// ADR-114 decision 11: the System tab says where each model runs, and when case content leaves.
+describe("the System tab's models", () => {
+  it("shows each role's model and where it runs, with the notice when content leaves", async () => {
+    serve((path) =>
+      path === "system"
+        ? json(200, {
+            version: "1.2", components: [],
+            models: [
+              { role: "extraction", model: "openai/gpt-4o-mini", runs_at: "openai", local_model: "qwen2.5:7b-instruct" },
+              { role: "vision", model: "moondream", runs_at: "this deployment", local_model: "moondream" },
+            ],
+            model_notice: "Case content with handling code P is sent to openai for extraction. Anything else runs on this deployment's own models.",
+          })
+        : null,
+    );  // prettier-ignore
+    place(["administer_system"]);
+    const table = await screen.findByRole("table", { name: "Models" });
+    expect(table.textContent).toContain("openai/gpt-4o-mini");
+    expect(table.textContent).toContain("this deployment");
+    expect((await screen.findByRole("note")).textContent).toContain("is sent to openai for extraction");
+  });
+
+  it("has no notice when every model runs here", async () => {
+    serve((path) =>
+      path === "system"
+        ? json(200, { components: [], models: [{ role: "extraction", model: "qwen", runs_at: "this deployment", local_model: "qwen" }], model_notice: null })
+        : null,
+    );  // prettier-ignore
+    place(["administer_system"]);
+    await screen.findByRole("table", { name: "Models" });
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+});

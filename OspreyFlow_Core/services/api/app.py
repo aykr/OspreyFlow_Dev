@@ -441,7 +441,7 @@ from .link_types import (
     public_ontology,
 )
 from .mapconfig_loader import load_map_config, public_view
-from .model_routing import ModelEgressRefused, RoutedModel, routes_from_env
+from .model_routing import ModelEgressRefused, RoutedModel, model_status, routes_from_env
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
 from .packs import (
@@ -8798,7 +8798,14 @@ async def system_status_route(
         await check("Model server", models),
         await check("Identity provider", identity_admin.reachable),
     ]
-    return SystemStatus(version=os.environ.get("OSPREY_VERSION"), components=components)
+    # ADR-114 decision 11: each role's model and where it runs, from names only — never a key.
+    statuses, notice = model_status(*routes_from_env(DeploymentModels.from_env(), os.environ))
+    return SystemStatus(
+        version=os.environ.get("OSPREY_VERSION"),
+        components=components,
+        models=statuses,
+        model_notice=notice,
+    )
 
 
 # --- Trend reports (ADR-113 decisions 1 and 2) ---------------------------------------------

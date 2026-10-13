@@ -23,7 +23,14 @@ from services.api.identity_admin import PersonExistsError, UnknownRoleError, all
 from services.api.report_freshness import Freshness
 
 from ontology.handling import load_uk_le_scheme
-from schemas.admin import AccessInput, DashboardIdentity, InviteInput, PersonAccount, RegisteredDashboard, SignInDelivery
+from schemas.admin import (
+    AccessInput,
+    DashboardIdentity,
+    InviteInput,
+    PersonAccount,
+    RegisteredDashboard,
+    SignInDelivery,
+)
 from schemas.domain import Principal
 
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="verify", roles=["osprey-admin"])
@@ -251,3 +258,58 @@ def test_a_name_already_held_is_a_conflict_said_in_words(client: Any) -> None:
     _as(ADMIN)
     response = client.post("/v1/admin/people", json={**INVITE, "username": "taken"})
     assert response.status_code == 409 and response.json()["error"] == "person_exists"
+
+
+def _system(client: Any, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    from services.api import readiness as readiness_module
+
+    async def ready() -> object:
+        return readiness_module.Readiness(ready=True, models=[])
+
+    async def reachable() -> None:
+        return None
+
+    monkeypatch.setattr(readiness_module, "deployment_readiness", ready)
+    client.identity.reachable = reachable
+    app.dependency_overrides[get_graph] = _Fine
+    app.dependency_overrides[get_investigations] = _Fine
+    app.dependency_overrides[get_valkey] = _Fine
+    _as(ADMIN)
+    response = client.get("/v1/admin/system")
+    assert response.status_code == 200, response.text
+    return response
+
+
+def test_the_system_screen_shows_each_roles_model_and_where_it_runs(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-114 decision 11, Amendment 6: the choice is shown, with the notice that case content
+    then leaves the deployment — and the provider's key is in no answer."""
+    key = "sk-client-NEVER-IN-A-RESPONSE"
+    monkeypatch.setenv("OSPREY_MODEL_PROVIDER_KEY", key)
+    monkeypatch.setenv("OSPREY_EXTRACTION_MODEL", "qwen2.5:7b-instruct")
+    monkeypatch.setenv("OSPREY_PROVIDER_EXTRACTION_MODEL", "openai/gpt-4o-mini")
+    monkeypatch.setenv("OSPREY_SENDABLE_HANDLING_CODES", "P")
+    response = _system(client, monkeypatch)
+    assert key not in response.text
+    body = response.json()
+    roles = {m["role"]: m for m in body["models"]}
+    assert roles["extraction"] == {
+        "role": "extraction", "model": "openai/gpt-4o-mini", "runs_at": "openai",
+        "local_model": "qwen2.5:7b-instruct",
+    }  # fmt: skip
+    assert roles["vision"]["runs_at"] == "this deployment"
+    assert body["model_notice"] == (
+        "Case content with handling code P is sent to openai for extraction. Anything else runs on "
+        "this deployment's own models."
+    )
+
+
+def test_the_system_screen_has_no_notice_when_every_model_is_local(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("OSPREY_PROVIDER_EXTRACTION_MODEL", "OSPREY_SENDABLE_HANDLING_CODES"):
+        monkeypatch.delenv(name, raising=False)
+    body = _system(client, monkeypatch).json()
+    assert body["model_notice"] is None
+    assert all(m["runs_at"] == "this deployment" for m in body["models"])
