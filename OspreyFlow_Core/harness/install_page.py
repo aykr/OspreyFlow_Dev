@@ -63,7 +63,10 @@ HEADER = "X-Install-Token"
 REFUSED = "This install page opens only from the link ospreyflow printed."
 LOOPBACK = "127.0.0.1"
 MODE_SAYS = {
-    "small": "The small install arrives with stage B6. Your answers are saved for it.",
+    "small": (
+        "Your answers are saved. A small server is built from a terminal on this computer: "
+        "ospreyflow install --mode small --cloud aws (or azure) --config .install/install.yaml"
+    ),
     "enterprise": "The enterprise install arrives with stage B7. Your answers are saved for it.",
 }
 _ALREADY = "The install is already running."

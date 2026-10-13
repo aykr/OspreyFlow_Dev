@@ -173,7 +173,7 @@ def test_state_names_the_modes_and_the_packs(rig: Rig) -> None:
     assert state["modes"]["lite"] == {"available": True}
     assert state["modes"]["small"] == {
         "available": False,
-        "says": "The small install arrives with stage B6. Your answers are saved for it.",
+        "says": install_page.MODE_SAYS["small"],
     }
     assert "stage B7" in state["modes"]["enterprise"]["says"]
     assert state["modes"]["enterprise"]["available"] is False
@@ -265,13 +265,16 @@ def test_a_failing_doctor_reports_its_code(rig: Rig) -> None:
     assert body["returncode"] == 1 and body["lines"] == ["Git is not installed."]
 
 
-@pytest.mark.parametrize("mode,stage", [("small", "B6"), ("enterprise", "B7")])
-def test_small_and_enterprise_do_not_install(rig: Rig, mode: str, stage: str) -> None:
+@pytest.mark.parametrize(
+    "mode,said", [("small", "--mode small --cloud aws"), ("enterprise", "stage B7")]
+)
+def test_small_and_enterprise_do_not_install(rig: Rig, mode: str, said: str) -> None:
+    """The page never builds in a cloud: Small is built from a terminal (ADR-114 Amendment 10)."""
     client = rig.signed()
     client.put("/api/install/answers", json={"mode": mode})
     reply = client.post("/api/install/run")
     assert reply.status_code == 409
-    assert f"stage {stage}" in reply.json()["error"]
+    assert said in reply.json()["error"]
     assert rig.install_args == [] and rig.shut == []
 
 

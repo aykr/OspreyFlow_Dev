@@ -1,6 +1,12 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
+/**
+ * How long a fetched tile is kept, in days
+ */
 export type TtlDays = number;
+/**
+ * Areas whose tiles are fetched ahead of use
+ */
 export type PrefetchAreas = string[];
 
 /**

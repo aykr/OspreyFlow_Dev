@@ -1,15 +1,15 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 /**
- * Default: keycloak (03_CONDUIT_MIDDLEWARE.md §6)
+ * Default: keycloak. The identity provider people sign in through.
  */
 export type IdentityProvider = string;
 /**
- * Default: uk-law-enforcement
+ * Default: uk-law-enforcement. The handling scheme every item is marked under.
  */
 export type HandlingScheme = string;
 /**
- * Default: default
+ * Default: default. The ontology the deployment starts from.
  */
 export type Ontology = string;
 /**

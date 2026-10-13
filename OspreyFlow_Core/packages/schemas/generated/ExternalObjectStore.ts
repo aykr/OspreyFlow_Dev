@@ -4,6 +4,9 @@
  * Host and port, no scheme: always HTTPS
  */
 export type Endpoint = string;
+/**
+ * The region the buckets live in
+ */
 export type Region = string;
 /**
  * Default: instance — the server's own cloud identity, no key anywhere; `keys` reads OSPREY_S3_ACCESS_KEY and OSPREY_S3_SECRET_KEY at apply.

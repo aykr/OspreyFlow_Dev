@@ -95,12 +95,23 @@ class StorageRoots(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    data: str = Field(default="/var/lib/osprey/data", description="Default: /var/lib/osprey/data")
+    data: str = Field(
+        default="/var/lib/osprey/data",
+        description=(
+            "Default: /var/lib/osprey/data. Where the deployment keeps its data inside the "
+            "containers."
+        ),
+    )
     staging: str = Field(
-        default="/var/lib/osprey/staging", description="Default: /var/lib/osprey/staging"
+        default="/var/lib/osprey/staging",
+        description=(
+            "Default: /var/lib/osprey/staging. Where loads stage their rows before they reach the "
+            "graph."
+        ),
     )
     backups: str = Field(
-        default="/var/lib/osprey/backups", description="Default: /var/lib/osprey/backups"
+        default="/var/lib/osprey/backups",
+        description="Default: /var/lib/osprey/backups. Where backups are written.",
     )
     #: **Owner ruling R6, 27 September 2026 — the fourth root, and the one an analyst touches.**
     #: Round 13b's over-the-wire exit test found that a rendered deployment gives an analyst no
@@ -116,7 +127,11 @@ class StorageRoots(BaseModel):
     #: existing canvas. The Conduit never writes here — an operator, or whatever moves evidence
     #: onto the host, owns the contents. A browser upload route is explicitly post-milestone.
     ingest: str = Field(
-        default="/var/lib/osprey/ingest", description="Default: /var/lib/osprey/ingest"
+        default="/var/lib/osprey/ingest",
+        description=(
+            "Default: /var/lib/osprey/ingest. The host folder of source files the Ingest Studio "
+            "lists (read-only to it; uploads go to its uploaded/ folder)."
+        ),
     )
     #: **The folder the built basemap lives in (ADR-054 Amendment 4).** A map provider's
     #: `source` is a path inside the Conduit's container (`/data/tiles/...`,
@@ -125,7 +140,8 @@ class StorageRoots(BaseModel):
     #: deployment mounted nothing at that path, so tiles built on the host were never visible to the
     #: process that serves them.
     tiles: str = Field(
-        default="/var/lib/osprey/tiles", description="Default: /var/lib/osprey/tiles"
+        default="/var/lib/osprey/tiles",
+        description="Default: /var/lib/osprey/tiles. The host folder a built basemap lives in.",
     )
 
 
@@ -135,13 +151,19 @@ class ComponentsConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    graph_store: GraphStore = Field(default=GraphStore.ARCADEDB, description="Default: arcadedb")
+    graph_store: GraphStore = Field(
+        default=GraphStore.ARCADEDB, description="Default: arcadedb. The graph store."
+    )
     analytics_engine: AnalyticsEngine = Field(
-        default=AnalyticsEngine.DUCKDB, description="Default: duckdb"
+        default=AnalyticsEngine.DUCKDB,
+        description=(
+            "Default: duckdb. Where events are counted: DuckDB inside the Conduit, or ClickHouse "
+            "shared by several."
+        ),
     )
     search: SearchBackend = Field(
         default=SearchBackend.OPENSEARCH,
-        description="Default: opensearch. postgres-fulltext is §3's reduced variant.",
+        description="Default: opensearch. Search; postgres-fulltext is the lighter variant.",
     )
     storage: StorageRoots = Field(default_factory=StorageRoots)
     source_path: str | None = Field(
@@ -194,12 +216,17 @@ class ModelProviderConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    #: LiteLLM's name for the provider: `openai`, `anthropic`, `gemini`, `azure`, `bedrock`…
-    name: str
-    #: The roles it takes, each with the provider's model for it.
-    roles: dict[ModelRole, str]
-    #: The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy).
-    api_base: str | None = None
+    name: str = Field(
+        description="LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock…"
+    )
+    roles: dict[ModelRole, str] = Field(
+        description="The roles it takes, each with the provider's model for it"
+    )
+    api_base: str | None = Field(
+        default=None,
+        description="The provider's address, where it is not LiteLLM's default (an Azure "
+        "deployment, a proxy)",
+    )
 
     @field_validator("name")
     @classmethod
@@ -308,12 +335,16 @@ class GovernanceConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     identity_provider: str = Field(
-        default="keycloak", description="Default: keycloak (03_CONDUIT_MIDDLEWARE.md §6)"
+        default="keycloak",
+        description="Default: keycloak. The identity provider people sign in through.",
     )
     handling_scheme: str = Field(
-        default="uk-law-enforcement", description="Default: uk-law-enforcement"
+        default="uk-law-enforcement",
+        description="Default: uk-law-enforcement. The handling scheme every item is marked under.",
     )
-    ontology: str = Field(default="default", description="Default: default")
+    ontology: str = Field(
+        default="default", description="Default: default. The ontology the deployment starts from."
+    )
     organisation_sign_in: str | None = Field(
         default=None,
         description=(
@@ -347,9 +378,9 @@ class ClusterHost(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str
-    address: str
-    roles: list[str] = Field(default_factory=list)
+    name: str = Field(description="The machine's name")
+    address: str = Field(description="Where the machine is reached")
+    roles: list[str] = Field(default_factory=list, description="What runs on it")
 
 
 class ClusterConfig(BaseModel):
@@ -406,7 +437,9 @@ class NetworkConfig(BaseModel):
 
     @model_validator(mode="after")
     def _public_origin_is_a_bare_origin(self) -> NetworkConfig:
-        if not (self.public_origin.startswith("http://") or self.public_origin.startswith("https://")):
+        if not (
+            self.public_origin.startswith("http://") or self.public_origin.startswith("https://")
+        ):
             raise ValueError(
                 f"network.public_origin {self.public_origin!r} must start with http:// or https:// "
                 "— it is an origin the realm renders an exact redirect URI from, not a path"
@@ -426,10 +459,16 @@ class ReportingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sync: bool = Field(default=False, description="Default: false — run report-sync")
-    sync_interval_seconds: int = Field(default=900, ge=60, description="Default: 900")
-    sync_memory: str = Field(default="256m", description="Default: 256m")
+    sync_interval_seconds: int = Field(
+        default=900,
+        ge=60,
+        description="Default: 900. How often each case is pulled into the mart, in seconds.",
+    )
+    sync_memory: str = Field(
+        default="256m", description="Default: 256m. Report sync's memory limit."
+    )
     superset: bool = Field(default=False, description="Default: false — run Superset")
-    superset_memory: str = Field(default="2g", description="Default: 2g")
+    superset_memory: str = Field(default="2g", description="Default: 2g. Superset's memory limit.")
 
 
 class WelcomeConfig(BaseModel):
@@ -442,10 +481,18 @@ class WelcomeConfig(BaseModel):
     about: bool = Field(
         default=True, description="Default: on. Off for an internal-only deployment."
     )
-    account_help: str | None = Field(default=None, description="Default: no link")
-    accessibility: str | None = Field(default=None, description="Default: no link")
-    privacy: str | None = Field(default=None, description="Default: no link")
-    service_status: str | None = Field(default=None, description="Default: no link")
+    account_help: str | None = Field(
+        default=None, description="Default: no link. Where people get help with their account."
+    )
+    accessibility: str | None = Field(
+        default=None, description="Default: no link. The organisation's accessibility statement."
+    )
+    privacy: str | None = Field(
+        default=None, description="Default: no link. The organisation's privacy notice."
+    )
+    service_status: str | None = Field(
+        default=None, description="Default: no link. A page saying whether the service is up."
+    )
 
     @field_validator("account_help", "accessibility", "privacy", "service_status")
     @classmethod
@@ -464,9 +511,13 @@ class MailConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     host: str = Field(min_length=1, description="The mail server's name")
-    port: int = Field(default=587, ge=1, le=65535, description="Default: 587")
+    port: int = Field(
+        default=587, ge=1, le=65535, description="Default: 587. The mail server's port."
+    )
     from_address: str = Field(min_length=3, description="The address invitations come from")
-    starttls: bool = Field(default=True, description="Default: true")
+    starttls: bool = Field(
+        default=True, description="Default: true. Whether mail is sent over TLS (STARTTLS)."
+    )
     username: str | None = Field(
         default=None,
         description="Default: none — a relay that takes mail without signing in. With one, the "
@@ -480,10 +531,12 @@ class ExternalPostgres(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    host: str = Field(min_length=1)
-    port: int = 5432
-    database: str = "ospreyflow"
-    user: str = "osprey"
+    host: str = Field(min_length=1, description="The managed server's address")
+    port: int = Field(default=5432, description="Its port")
+    database: str = Field(default="ospreyflow", description="The deployment's database on it")
+    user: str = Field(
+        default="osprey", description="The login, which needs CREATEROLE and CREATEDB there"
+    )
     sslmode: Literal["require", "verify-ca", "verify-full"] = Field(
         default="require", description="Default: require. A managed server is reached over TLS."
     )
@@ -495,7 +548,7 @@ class ExternalObjectStore(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     endpoint: str = Field(min_length=1, description="Host and port, no scheme: always HTTPS")
-    region: str = Field(min_length=1)
+    region: str = Field(min_length=1, description="The region the buckets live in")
     credentials: Literal["instance", "keys"] = Field(
         default="instance",
         description="Default: instance — the server's own cloud identity, no key anywhere; `keys` "
@@ -512,8 +565,8 @@ class ExternalMedia(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    blob_account: str = Field(min_length=1)
-    blob_container: str = "media"
+    blob_account: str = Field(min_length=1, description="The Blob storage account")
+    blob_container: str = Field(default="media", description="The container media is kept in")
 
 
 class ExternalConfig(BaseModel):
@@ -540,7 +593,13 @@ class OspreyConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    profile: Profile = Field(default=Profile.LOCAL_LITE, description="Default: local-lite")
+    profile: Profile = Field(
+        default=Profile.LOCAL_LITE,
+        description=(
+            "Default: local-lite. Which kind of deployment: one machine (local-lite), a cloud "
+            "server on managed services (small), or a cluster."
+        ),
+    )
     components: ComponentsConfig = Field(default_factory=ComponentsConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)

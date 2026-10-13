@@ -27,9 +27,9 @@ from pathlib import Path
 import pytest
 import yaml
 from harness.images import ImageRef, ServiceImage
+from harness.realm import HARNESS_PORT
 from harness.render import (
     _OLLAMA_PULL_SCRIPT,
-    HARNESS_PORT,
     INGEST_CONTAINER_PATH,
     LITELLM_KEY,  # noqa: F401
     ClusterRendererNotBuilt,
@@ -268,7 +268,7 @@ def test_the_runbook_carries_this_deployment_s_own_paths_not_a_template(
     assert "/srv/osprey/data" in runbook
     assert "/srv/osprey/staging" in runbook
     assert "/srv/osprey/backups" in runbook
-    assert "| Admin console | `http://localhost:7100/` |" in runbook
+    assert "| Admin area | `" in runbook
     assert "config/real_data_exceptions.yaml" in runbook
     assert "deploy/RUNBOOK.md" in runbook, (
         "the generated runbook must point at §6's hand-written recovery-time runbook rather than "
@@ -289,8 +289,10 @@ def test_the_runbook_does_not_send_the_operator_to_a_workspace_admin_page(
     what `make launch` opens."""
     runbook = rendered.artefacts["RUNBOOK.md"]
     assert "localhost:8080/admin" not in runbook
-    assert f"localhost:{HARNESS_PORT}/admin" not in runbook
-    assert f"| Admin console | `http://localhost:{HARNESS_PORT}/` |" in runbook
+    # ADR-114 Amendment 1/2: the console on the harness's port is gone; the Admin area is inside
+    # the Glass, at the deployment's own address.
+    assert f"localhost:{HARNESS_PORT}" not in runbook
+    assert "| Admin area | `http://" in runbook and "*Admin* on Start" in runbook
 
 
 def test_the_address_the_runbook_names_for_the_admin_console_is_served_in_the_default_mode(

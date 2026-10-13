@@ -63,7 +63,7 @@ from harness.images import (
     unresolved_digest_resolver,
 )
 from harness.profiles import arcadedb_java_memory_opts
-from harness.realm import CONDUIT_CLIENT_ID, HARNESS_PORT
+from harness.realm import CONDUIT_CLIENT_ID
 from harness.reporting import reporting_env, reporting_services
 from harness.site import (
     PROXY_IMAGE,
@@ -1348,7 +1348,7 @@ published but what is listed here.
         if config.network.expose_conduit
         else ""
     }| Graph store (this machine only) | `http://127.0.0.1:2480` |
-| Admin console | `http://localhost:{HARNESS_PORT}/` |
+| Admin area | `{sites(config).glass}` — *Admin* on Start, for an administration right |
 
 ## Governance
 

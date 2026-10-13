@@ -66,10 +66,12 @@ class ClientScope(StrEnum):
 
 
 class ProviderLicence(BaseModel):
-    id: str
-    redistributable: bool
-    client_scope: ClientScope
-    note: str | None = None
+    id: str = Field(description="The licence's identifier, e.g. ODbL-1.0 or OGL-UK-3.0")
+    redistributable: bool = Field(description="Whether the tiles may be passed on to others")
+    client_scope: ClientScope = Field(
+        description="Who the licence covers: anyone, this deployment, or each seat"
+    )
+    note: str | None = Field(default=None, description="Anything the licence asks to be said")
 
 
 class PrefetchCache(BaseModel):
@@ -77,8 +79,10 @@ class PrefetchCache(BaseModel):
     operations") — absent for tiers 1/2/4, which either need no cache
     (local files) or aren't proxied through it the same way."""
 
-    ttl_days: int = Field(gt=0)
-    prefetch_areas: list[str] = Field(default_factory=list)
+    ttl_days: int = Field(gt=0, description="How long a fetched tile is kept, in days")
+    prefetch_areas: list[str] = Field(
+        default_factory=list, description="Areas whose tiles are fetched ahead of use"
+    )
 
 
 #: `credential` is a reference, never a value (`00_ARCHITECTURE.md` §1.2:
@@ -89,16 +93,20 @@ _ENV_REFERENCE = re.compile(r"^env:[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class MapProvider(BaseModel):
-    id: str = Field(min_length=1)
-    label: str
+    id: str = Field(min_length=1, description="The provider's own name, as map.default names it")
+    label: str = Field(description="What the Glass's map menu calls it")
     kind: MapSourceKind
-    licence: ProviderLicence
+    licence: ProviderLicence = Field(description="The terms the tiles come under")
 
     #: Tiers 1-3: a direct source URI (`file://...pmtiles`, `os-datahub://...`).
     #: Mutually exclusive with `service`/`endpoint` (tier 4) and `profile`
     #: (a `providers/*.yaml` reference) — exactly one of the three names
     #: how this provider resolves to tiles.
-    source: str | None = None
+    source: str | None = Field(
+        default=None,
+        description="Where the tiles are: a file (file://…pmtiles) or a provider's address; one of "
+        "source, service and endpoint, or profile",
+    )
 
     #: Tier 4 (ADR-016): capabilities are parsed at registration, not typed
     #: in by hand — `endpoint`/`layer` are what registration discovers.
@@ -108,42 +116,58 @@ class MapProvider(BaseModel):
     #: it for `service: wmts`, Phase 5's known-gaps closure fixing the
     #: conflict this field's own history used to record here).
     service: OgcServiceKind | None = None
-    endpoint: str | None = None
-    layer: str | None = None
+    endpoint: str | None = Field(
+        default=None, description="An OGC service's base address (with service), never a tile URL"
+    )
+    layer: str | None = Field(default=None, description="The service's layer to show")
 
     #: WMTS KVP `GetTile` parameters, discovered by `register_tier4_provider`
     #: alongside `layer` and hand-copied into `osprey.yaml` the same way —
     #: only meaningful for `service: wmts`, but not enforced as required
     #: even then, since a provider entry is written by hand before this
     #: module ever validates it against a live capabilities document.
-    tile_matrix_set: str | None = None
-    format: str | None = None
+    tile_matrix_set: str | None = Field(default=None, description="WMTS: the tile matrix set")
+    format: str | None = Field(default=None, description="WMTS: the tile image format")
     #: The WMTS `STYLE` KVP parameter — deliberately not named `style`,
     #: which already means the MapLibre style reference below; conflating
     #: the two would be a silent, confusing collision between an OGC wire
     #: parameter and a client rendering concern.
-    wmts_style: str | None = None
+    wmts_style: str | None = Field(default=None, description="WMTS: the service's STYLE")
 
     #: Discovered by the same registration call, alongside the above —
     #: `PrefetchCache`'s scheduled pre-warm job (`services/api/prefetch.py`)
     #: needs a zoom range and nothing else in this schema states one.
-    zoom_min: int | None = None
-    zoom_max: int | None = None
+    zoom_min: int | None = Field(default=None, description="The lowest zoom the provider serves")
+    zoom_max: int | None = Field(default=None, description="The highest zoom the provider serves")
 
     #: A `providers/<profile>.yaml` reference (`00_ARCHITECTURE.md` §1.2's
     #: "Provider profiles") rather than an inline definition.
-    profile: str | None = None
-    variables: dict[str, str] = Field(default_factory=dict)
+    profile: str | None = Field(
+        default=None, description="A ready-made provider (providers/<profile>.yaml) to use"
+    )
+    variables: dict[str, str] = Field(
+        default_factory=dict, description="Values the profile's addresses are filled with"
+    )
 
-    credential: str | None = None
-    proxy: Literal["required", "recommended", "none"] = "none"
-    cache: PrefetchCache | None = None
+    credential: str | None = Field(
+        default=None,
+        description="The provider's key, as env:VARIABLE — a name, never the key itself",
+    )
+    proxy: Literal["required", "recommended", "none"] = Field(
+        default="none",
+        description="Whether tiles are fetched through the Conduit (which caches them and keeps "
+        "the key on the server) rather than by the browser",
+    )
+    cache: PrefetchCache | None = Field(default=None, description="Keep fetched tiles a while")
 
     #: `bundled:osprey-dark` / `bundled:osprey-light`, or a profile's own
     #: style reference. `None` only for `kind: image` (a site aerial photo
     #: has no basemap style of its own) and `kind: dem`.
-    style: str | None = None
-    attribution: str
+    style: str | None = Field(
+        default=None, description="The map style: bundled:osprey-dark, bundled:osprey-light, or "
+        "the profile's own",
+    )
+    attribution: str = Field(description="The credit shown on the map, as the licence asks")
 
     @model_validator(mode="after")
     def _exactly_one_resolution_path(self) -> MapProvider:
@@ -174,8 +198,8 @@ class MapProvider(BaseModel):
 class MapConfig(BaseModel):
     """`osprey.yaml`'s `map:` section."""
 
-    default: str = Field(min_length=1)
-    providers: list[MapProvider] = Field(min_length=1)
+    default: str = Field(min_length=1, description="The provider the map opens on, by its id")
+    providers: list[MapProvider] = Field(min_length=1, description="Every basemap offered")
 
     @model_validator(mode="after")
     def _default_and_ids_are_consistent(self) -> MapConfig:

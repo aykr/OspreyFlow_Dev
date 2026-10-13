@@ -28,13 +28,21 @@ export type Min = number;
 export type Max = number;
 export type Style = string | null;
 export type Attribution = string;
+/**
+ * The licence's identifier, e.g. ODbL-1.0 or OGL-UK-3.0
+ */
 export type Id1 = string;
+/**
+ * Whether the tiles may be passed on to others
+ */
 export type Redistributable = boolean;
 /**
- * `00_ARCHITECTURE.md` §1.2: "`client_scope` is a required field on
- * every provider" — the three values named there exactly.
+ * Who the licence covers: anyone, this deployment, or each seat
  */
 export type ClientScope = "open" | "per-deployment" | "per-seat";
+/**
+ * Anything the licence asks to be said
+ */
 export type Note = string | null;
 export type Proxy = "required" | "recommended" | "none";
 

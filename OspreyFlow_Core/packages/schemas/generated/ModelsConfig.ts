@@ -12,7 +12,13 @@ export type HostedFallback = string | null;
  * Default: empty. Which handling codes may leave for a hosted model.
  */
 export type SendableHandlingCodes = string[];
+/**
+ * LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock…
+ */
 export type Name = string;
+/**
+ * The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy)
+ */
 export type ApiBase = string | null;
 /**
  * ADR-095: the local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with.
@@ -60,6 +66,9 @@ export interface ModelProviderConfig {
   roles: Roles;
   api_base?: ApiBase;
 }
+/**
+ * The roles it takes, each with the provider's model for it
+ */
 export interface Roles {
   [k: string]: string;
 }

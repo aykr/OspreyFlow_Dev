@@ -1,35 +1,35 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 /**
- * Default: arcadedb
+ * Default: arcadedb. The graph store.
  */
 export type GraphStore = "arcadedb" | "janusgraph";
 /**
- * Default: duckdb
+ * Default: duckdb. Where events are counted: DuckDB inside the Conduit, or ClickHouse shared by several.
  */
 export type AnalyticsEngine = "duckdb" | "clickhouse";
 /**
- * Default: opensearch. postgres-fulltext is §3's reduced variant.
+ * Default: opensearch. Search; postgres-fulltext is the lighter variant.
  */
 export type SearchBackend = "opensearch" | "postgres-fulltext";
 /**
- * Default: /var/lib/osprey/data
+ * Default: /var/lib/osprey/data. Where the deployment keeps its data inside the containers.
  */
 export type Data = string;
 /**
- * Default: /var/lib/osprey/staging
+ * Default: /var/lib/osprey/staging. Where loads stage their rows before they reach the graph.
  */
 export type Staging = string;
 /**
- * Default: /var/lib/osprey/backups
+ * Default: /var/lib/osprey/backups. Where backups are written.
  */
 export type Backups = string;
 /**
- * Default: /var/lib/osprey/ingest
+ * Default: /var/lib/osprey/ingest. The host folder of source files the Ingest Studio lists (read-only to it; uploads go to its uploaded/ folder).
  */
 export type Ingest = string;
 /**
- * Default: /var/lib/osprey/tiles
+ * Default: /var/lib/osprey/tiles. The host folder a built basemap lives in.
  */
 export type Tiles = string;
 /**

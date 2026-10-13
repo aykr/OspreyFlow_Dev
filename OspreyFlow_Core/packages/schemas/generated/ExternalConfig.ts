@@ -1,8 +1,20 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
+/**
+ * The managed server's address
+ */
 export type Host = string;
+/**
+ * Its port
+ */
 export type Port = number;
+/**
+ * The deployment's database on it
+ */
 export type Database = string;
+/**
+ * The login, which needs CREATEROLE and CREATEDB there
+ */
 export type User = string;
 /**
  * Default: require. A managed server is reached over TLS.
@@ -12,6 +24,9 @@ export type Sslmode = "require" | "verify-ca" | "verify-full";
  * Host and port, no scheme: always HTTPS
  */
 export type Endpoint = string;
+/**
+ * The region the buckets live in
+ */
 export type Region = string;
 /**
  * Default: instance — the server's own cloud identity, no key anywhere; `keys` reads OSPREY_S3_ACCESS_KEY and OSPREY_S3_SECRET_KEY at apply.
@@ -21,7 +36,13 @@ export type Credentials = "instance" | "keys";
  * Each bucket is <prefix><name>, as OpenTofu made them
  */
 export type BucketPrefix = string;
+/**
+ * The Blob storage account
+ */
 export type BlobAccount = string;
+/**
+ * The container media is kept in
+ */
 export type BlobContainer = string;
 
 /**

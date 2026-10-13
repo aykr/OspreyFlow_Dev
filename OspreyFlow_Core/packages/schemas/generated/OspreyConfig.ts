@@ -1,39 +1,39 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 /**
- * Default: local-lite
+ * Default: local-lite. Which kind of deployment: one machine (local-lite), a cloud server on managed services (small), or a cluster.
  */
 export type Profile = "local-lite" | "small" | "cluster";
 /**
- * Default: arcadedb
+ * Default: arcadedb. The graph store.
  */
 export type GraphStore = "arcadedb" | "janusgraph";
 /**
- * Default: duckdb
+ * Default: duckdb. Where events are counted: DuckDB inside the Conduit, or ClickHouse shared by several.
  */
 export type AnalyticsEngine = "duckdb" | "clickhouse";
 /**
- * Default: opensearch. postgres-fulltext is §3's reduced variant.
+ * Default: opensearch. Search; postgres-fulltext is the lighter variant.
  */
 export type SearchBackend = "opensearch" | "postgres-fulltext";
 /**
- * Default: /var/lib/osprey/data
+ * Default: /var/lib/osprey/data. Where the deployment keeps its data inside the containers.
  */
 export type Data = string;
 /**
- * Default: /var/lib/osprey/staging
+ * Default: /var/lib/osprey/staging. Where loads stage their rows before they reach the graph.
  */
 export type Staging = string;
 /**
- * Default: /var/lib/osprey/backups
+ * Default: /var/lib/osprey/backups. Where backups are written.
  */
 export type Backups = string;
 /**
- * Default: /var/lib/osprey/ingest
+ * Default: /var/lib/osprey/ingest. The host folder of source files the Ingest Studio lists (read-only to it; uploads go to its uploaded/ folder).
  */
 export type Ingest = string;
 /**
- * Default: /var/lib/osprey/tiles
+ * Default: /var/lib/osprey/tiles. The host folder a built basemap lives in.
  */
 export type Tiles = string;
 /**
@@ -52,7 +52,13 @@ export type HostedFallback = string | null;
  * Default: empty. Which handling codes may leave for a hosted model.
  */
 export type SendableHandlingCodes = string[];
+/**
+ * LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock…
+ */
 export type Name = string;
+/**
+ * The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy)
+ */
 export type ApiBase = string | null;
 /**
  * ADR-095: the local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with.
@@ -71,15 +77,15 @@ export type Transcription = "Systran/faster-whisper-tiny.en";
  */
 export type Embedding = "all-minilm:22m-l6-v2-fp16";
 /**
- * Default: keycloak (03_CONDUIT_MIDDLEWARE.md §6)
+ * Default: keycloak. The identity provider people sign in through.
  */
 export type IdentityProvider = string;
 /**
- * Default: uk-law-enforcement
+ * Default: uk-law-enforcement. The handling scheme every item is marked under.
  */
 export type HandlingScheme = string;
 /**
- * Default: default
+ * Default: default. The ontology the deployment starts from.
  */
 export type Ontology = string;
 /**
@@ -94,8 +100,17 @@ export type Marking = string | null;
  * Default: config/real_data_exceptions.yaml. A path to the gitignored list, never its contents.
  */
 export type RealDataExceptions = string;
+/**
+ * The machine's name
+ */
 export type Name1 = string;
+/**
+ * Where the machine is reached
+ */
 export type Address = string;
+/**
+ * What runs on it
+ */
 export type Roles1 = string[];
 export type Hosts = ClusterHost[];
 /**
@@ -106,55 +121,119 @@ export type ExposeConduit = boolean;
  * Default: http://ospreyflow.localhost. The origin a browser uses to reach the Glass; the identity provider is `id.` and the dashboards `bi.` in front of the same host, with the same scheme and port, and the front proxy publishes that port (ADR-114 Amendment 4). `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Change this to move the deployment to another name or port; nothing else needs to agree with it.
  */
 export type PublicOrigin = string;
+/**
+ * The provider the map opens on, by its id
+ */
 export type Default = string;
 /**
+ * Every basemap offered
+ *
  * @minItems 1
  */
 export type Providers = [MapProvider, ...MapProvider[]];
+/**
+ * The provider's own name, as map.default names it
+ */
 export type Id = string;
+/**
+ * What the Glass's map menu calls it
+ */
 export type Label = string;
 /**
  * `00_ARCHITECTURE.md` §1.2: "Four source kinds cover the field."
  */
 export type MapSourceKind = "vector" | "raster" | "image" | "dem";
+/**
+ * The licence's identifier, e.g. ODbL-1.0 or OGL-UK-3.0
+ */
 export type Id1 = string;
+/**
+ * Whether the tiles may be passed on to others
+ */
 export type Redistributable = boolean;
 /**
- * `00_ARCHITECTURE.md` §1.2: "`client_scope` is a required field on
- * every provider" — the three values named there exactly.
+ * Who the licence covers: anyone, this deployment, or each seat
  */
 export type ClientScope = "open" | "per-deployment" | "per-seat";
+/**
+ * Anything the licence asks to be said
+ */
 export type Note = string | null;
+/**
+ * Where the tiles are: a file (file://…pmtiles) or a provider's address; one of source, service and endpoint, or profile
+ */
 export type Source = string | null;
 /**
  * Tier 4 (ADR-016): the four generic OGC service types. `None` on a
  * provider means it is tiers 1-3 (a direct `source`), not tier 4.
  */
 export type OgcServiceKind = "wmts" | "wms" | "wfs" | "ogc-features";
+/**
+ * An OGC service's base address (with service), never a tile URL
+ */
 export type Endpoint = string | null;
+/**
+ * The service's layer to show
+ */
 export type Layer = string | null;
+/**
+ * WMTS: the tile matrix set
+ */
 export type TileMatrixSet = string | null;
+/**
+ * WMTS: the tile image format
+ */
 export type Format = string | null;
+/**
+ * WMTS: the service's STYLE
+ */
 export type WmtsStyle = string | null;
+/**
+ * The lowest zoom the provider serves
+ */
 export type ZoomMin = number | null;
+/**
+ * The highest zoom the provider serves
+ */
 export type ZoomMax = number | null;
+/**
+ * A ready-made provider (providers/<profile>.yaml) to use
+ */
 export type Profile1 = string | null;
+/**
+ * The provider's key, as env:VARIABLE — a name, never the key itself
+ */
 export type Credential = string | null;
+/**
+ * Whether tiles are fetched through the Conduit (which caches them and keeps the key on the server) rather than by the browser
+ */
 export type Proxy = "required" | "recommended" | "none";
+/**
+ * How long a fetched tile is kept, in days
+ */
 export type TtlDays = number;
+/**
+ * Areas whose tiles are fetched ahead of use
+ */
 export type PrefetchAreas = string[];
+/**
+ * The map style: bundled:osprey-dark, bundled:osprey-light, or the profile's own
+ */
 export type Style = string | null;
+/**
+ * The credit shown on the map, as the licence asks
+ */
 export type Attribution = string;
 /**
  * Default: false — run report-sync
  */
 export type Sync = boolean;
 /**
- * Default: 900
+ * Default: 900. How often each case is pulled into the mart, in seconds.
  */
 export type SyncIntervalSeconds = number;
 /**
- * Default: 256m
+ * Default: 256m. Report sync's memory limit.
  */
 export type SyncMemory = string;
 /**
@@ -162,7 +241,7 @@ export type SyncMemory = string;
  */
 export type Superset = boolean;
 /**
- * Default: 2g
+ * Default: 2g. Superset's memory limit.
  */
 export type SupersetMemory = string;
 /**
@@ -170,7 +249,7 @@ export type SupersetMemory = string;
  */
 export type Host = string;
 /**
- * Default: 587
+ * Default: 587. The mail server's port.
  */
 export type Port = number;
 /**
@@ -178,7 +257,7 @@ export type Port = number;
  */
 export type FromAddress = string;
 /**
- * Default: true
+ * Default: true. Whether mail is sent over TLS (STARTTLS).
  */
 export type Starttls = boolean;
 /**
@@ -190,24 +269,36 @@ export type Username = string | null;
  */
 export type About = boolean;
 /**
- * Default: no link
+ * Default: no link. Where people get help with their account.
  */
 export type AccountHelp = string | null;
 /**
- * Default: no link
+ * Default: no link. The organisation's accessibility statement.
  */
 export type Accessibility = string | null;
 /**
- * Default: no link
+ * Default: no link. The organisation's privacy notice.
  */
 export type Privacy = string | null;
 /**
- * Default: no link
+ * Default: no link. A page saying whether the service is up.
  */
 export type ServiceStatus = string | null;
+/**
+ * The managed server's address
+ */
 export type Host1 = string;
+/**
+ * Its port
+ */
 export type Port1 = number;
+/**
+ * The deployment's database on it
+ */
 export type Database = string;
+/**
+ * The login, which needs CREATEROLE and CREATEDB there
+ */
 export type User = string;
 /**
  * Default: require. A managed server is reached over TLS.
@@ -217,6 +308,9 @@ export type Sslmode = "require" | "verify-ca" | "verify-full";
  * Host and port, no scheme: always HTTPS
  */
 export type Endpoint1 = string;
+/**
+ * The region the buckets live in
+ */
 export type Region = string;
 /**
  * Default: instance — the server's own cloud identity, no key anywhere; `keys` reads OSPREY_S3_ACCESS_KEY and OSPREY_S3_SECRET_KEY at apply.
@@ -226,7 +320,13 @@ export type Credentials = "instance" | "keys";
  * Each bucket is <prefix><name>, as OpenTofu made them
  */
 export type BucketPrefix = string;
+/**
+ * The Blob storage account
+ */
 export type BlobAccount = string;
+/**
+ * The container media is kept in
+ */
 export type BlobContainer = string;
 
 /**
@@ -308,6 +408,9 @@ export interface ModelProviderConfig {
   roles: Roles;
   api_base?: ApiBase;
 }
+/**
+ * The roles it takes, each with the provider's model for it
+ */
 export interface Roles {
   [k: string]: string;
 }
@@ -386,11 +489,17 @@ export interface MapProvider {
   variables?: Variables;
   credential?: Credential;
   proxy?: Proxy;
+  /**
+   * Keep fetched tiles a while
+   */
   cache?: PrefetchCache | null;
   style?: Style;
   attribution: Attribution;
   [k: string]: unknown;
 }
+/**
+ * The terms the tiles come under
+ */
 export interface ProviderLicence {
   id: Id1;
   redistributable: Redistributable;
@@ -398,6 +507,9 @@ export interface ProviderLicence {
   note?: Note;
   [k: string]: unknown;
 }
+/**
+ * Values the profile's addresses are filled with
+ */
 export interface Variables {
   [k: string]: string;
 }

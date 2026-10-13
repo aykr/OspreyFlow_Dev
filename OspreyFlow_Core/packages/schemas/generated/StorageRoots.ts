@@ -1,23 +1,23 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 /**
- * Default: /var/lib/osprey/data
+ * Default: /var/lib/osprey/data. Where the deployment keeps its data inside the containers.
  */
 export type Data = string;
 /**
- * Default: /var/lib/osprey/staging
+ * Default: /var/lib/osprey/staging. Where loads stage their rows before they reach the graph.
  */
 export type Staging = string;
 /**
- * Default: /var/lib/osprey/backups
+ * Default: /var/lib/osprey/backups. Where backups are written.
  */
 export type Backups = string;
 /**
- * Default: /var/lib/osprey/ingest
+ * Default: /var/lib/osprey/ingest. The host folder of source files the Ingest Studio lists (read-only to it; uploads go to its uploaded/ folder).
  */
 export type Ingest = string;
 /**
- * Default: /var/lib/osprey/tiles
+ * Default: /var/lib/osprey/tiles. The host folder a built basemap lives in.
  */
 export type Tiles = string;
 

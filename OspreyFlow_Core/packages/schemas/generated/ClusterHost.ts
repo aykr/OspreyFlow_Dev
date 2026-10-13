@@ -1,7 +1,16 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
+/**
+ * The machine's name
+ */
 export type Name = string;
+/**
+ * Where the machine is reached
+ */
 export type Address = string;
+/**
+ * What runs on it
+ */
 export type Roles = string[];
 
 /**
