@@ -128,3 +128,74 @@ def test_the_command_line_says_the_answer_and_exits_non_zero_on_a_refusal(
     signed = _FakeCosign(set(owned_references(lock.read_text())))
     assert main(["--lock", str(lock), "--repository", "acme/ospreyflow", "--tag", "v0.5.0"],
                 cosign=Cosign(signed)) == 0  # fmt: skip
+
+
+# --- the lock's own signature, and offline verification (Amendment 8 points 10 and 11) ----------
+
+
+def test_the_lock_is_verified_as_a_blob_against_the_same_identity(tmp_path: Path) -> None:
+    lock, signature = tmp_path / "versions.lock", tmp_path / "versions.lock.sigstore.json"
+    lock.write_text("images: []\n")
+    signature.write_text("{}")
+    asked: list[list[str]] = []
+
+    def cosign(argv: Sequence[str]) -> tuple[int, str]:
+        asked.append(list(argv))
+        return 0, "Verified OK"
+
+    Cosign(cosign).verify_blob(lock, signature, Keyless("acme", "ospreyflow", "v0.5.0"))
+    argv = asked[0]
+    assert argv[argv.index(COSIGN_IMAGE) + 1] == "verify-blob"
+    assert f"{tmp_path}:/blob:ro" in argv
+    assert argv[-3:] == ["--bundle", "/blob/versions.lock.sigstore.json", "/blob/versions.lock"]
+    workflow = "https://github.com/acme/ospreyflow/.github/workflows/release.yml"
+    assert f"{workflow}@refs/tags/v0.5.0" in argv
+
+
+def test_a_lock_whose_signature_does_not_verify_is_refused(tmp_path: Path) -> None:
+    lock, signature = tmp_path / "versions.lock", tmp_path / "versions.lock.sigstore.json"
+    lock.write_text("images: [evil]\n")
+    signature.write_text("{}")
+    refusing = Cosign(lambda argv: (1, "invalid signature when validating ASN.1 encoded signature"))
+    with pytest.raises(SignatureRefused, match="the release's versions.lock is not signed by"):
+        refusing.verify_blob(lock, signature, Keyless("acme", "ospreyflow", "v0.5.0"))
+
+
+def test_offline_verification_never_reaches_out_and_reads_a_saved_image(tmp_path: Path) -> None:
+    """`update --from`: each image as `cosign save` kept it, verified with no network at all."""
+    saved = tmp_path / "signed" / "api"
+    argv = Cosign.docker_argv_local(saved, PublicKey(tmp_path / "keys" / "cosign.pub"))
+    assert ["--network", "none"] == argv[3:5]
+    assert f"{saved.parent}:/saved:ro" in argv
+    tail = argv[argv.index(COSIGN_IMAGE) + 1 :]
+    assert tail[0] == "verify" and "--offline" in tail
+    assert tail[-2:] == ["--local-image", "/saved/api"]
+
+
+def test_a_blob_check_offline_never_reaches_out(tmp_path: Path) -> None:
+    lock = tmp_path / "versions.lock"
+    asked: list[list[str]] = []
+    Cosign(lambda argv: (asked.append(list(argv)) or (0, "ok"))).verify_blob(
+        lock, tmp_path / "s.json", Keyless("a", "b", "v1.0.0"), offline=True
+    )
+    assert asked[0][3:5] == ["--network", "none"] and "--offline" in asked[0]
+
+
+def test_the_command_line_also_checks_the_locks_own_signature(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lock = tmp_path / "versions.lock"
+    lock.write_text(_lock(workspace=D, api=E, ingest=D, ner=E))
+    (tmp_path / "versions.lock.sigstore.json").write_text("{}")
+    signed = set(owned_references(lock.read_text()))
+
+    def cosign(argv: Sequence[str]) -> tuple[int, str]:
+        if "verify-blob" in argv:
+            return 1, "invalid signature when validating ASN.1 encoded signature"
+        return (0, "ok") if argv[-1] in signed else (1, "no signatures found")
+
+    argv = ["--lock", str(lock), "--repository", "acme/ospreyflow", "--tag", "v0.5.0",
+            "--lock-signature", str(tmp_path / "versions.lock.sigstore.json")]  # fmt: skip
+    assert main(argv, cosign=Cosign(cosign)) == 1
+    assert "versions.lock is not signed" in capsys.readouterr().err
+

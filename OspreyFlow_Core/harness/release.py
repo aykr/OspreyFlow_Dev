@@ -183,23 +183,34 @@ def find_release(
         release = max(published, key=lambda r: _parts(str(r["tag_name"])))
     else:
         raise ReleaseRefused(f"{owner}/{repo} has published no release yet.")
-    assets = [a for a in release.get("assets") or [] if a.get("name") == "versions.lock"]
-    if not assets:
+    by_name = {str(a.get("name")): a for a in release.get("assets") or []}
+    if "versions.lock" not in by_name:
         raise ReleaseRefused(
             f"{release['tag_name']} has no versions.lock, so it cannot be applied: it says which "
             "image digests the release is."
         )
+    if "versions.lock.sigstore.json" not in by_name:
+        raise ReleaseRefused(
+            f"{release['tag_name']} has no signed versions.lock (versions.lock.sigstore.json), so "
+            "its third-party images cannot be trusted."
+        )
+    return {
+        "tag": str(release["tag_name"]),
+        "notes": str(release.get("body") or ""),
+        "lock": _asset(by_name["versions.lock"], release["tag_name"]),
+        "lock_signature": _asset(by_name["versions.lock.sigstore.json"], release["tag_name"]),
+    }
+
+
+def _asset(asset: dict[str, Any], tag: str) -> str:
     request = urllib.request.Request(
-        str(assets[0]["url"]), headers=_headers("application/octet-stream")
+        str(asset["url"]), headers=_headers("application/octet-stream")
     )
     try:
         with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
-            lock = response.read().decode("utf-8")
+            return str(response.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError) as failed:
-        raise ReleaseRefused(
-            f"{release['tag_name']}'s versions.lock could not be read ({failed})."
-        ) from None
-    return {"tag": str(release["tag_name"]), "notes": str(release.get("body") or ""), "lock": lock}
+        raise ReleaseRefused(f"{tag}'s {asset.get('name')} could not be read ({failed}).") from None
 
 
 def write_notice(deployment: Path, notice: dict[str, Any]) -> Path:

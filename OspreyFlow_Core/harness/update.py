@@ -21,6 +21,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -185,6 +186,16 @@ def _builds_from_checkout(directory: Path) -> bool:
     )
 
 
+def verify_lock(cosign: Cosign, lock: str, signature: str, identity: Identity) -> None:
+    """The release's lock against its own signature (Amendment 8 point 11), before any image."""
+    with tempfile.TemporaryDirectory(prefix="ospreyflow-lock-") as folder:
+        lock_path = Path(folder) / "versions.lock"
+        signature_path = Path(folder) / "versions.lock.sigstore.json"
+        lock_path.write_text(lock, encoding="utf-8")
+        signature_path.write_text(signature, encoding="utf-8")
+        cosign.verify_blob(lock_path, signature_path, identity)
+
+
 def _ok(host: Host, argv: Sequence[str], step: str) -> str:
     code, said = host.run(argv)
     if code != 0:
@@ -306,6 +317,7 @@ def apply_update(
         )
         return 1
     try:
+        verify_lock(host.cosign, lock, release.get("lock_signature", ""), host.identity(tag))
         verify_release(lock, host.identity(tag), host.cosign)
         _ok(host, ["git", "-C", str(repo), "fetch", "--tags", "origin"], "fetch the release's tag")
         conflicts = _conflicts(host, repo, tag)

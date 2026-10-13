@@ -85,6 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write # the lock is signed keyless too
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
@@ -102,13 +103,19 @@ jobs:
       - uses: sigstore/cosign-installer@v3
         with:
           cosign-release: ${{ env.COSIGN_VERSION }}
-      # The check `ospreyflow update` makes, made here first: a release whose images do not verify
-      # against this workflow's identity is never published.
-      - name: Verify every owned image as an update will
+      # The lock names the third-party images' digests, so it is signed too (Amendment 8 point 11).
+      - name: Sign the lock, keyless
+        run: cosign sign-blob --yes --bundle versions.lock.sigstore.json versions.lock
+      # The checks `ospreyflow update` makes, made here first: a release whose lock or images do not
+      # verify against this workflow's identity is never published.
+      - name: Verify the lock and every owned image as an update will
         run: |
           PYTHONPATH=.:packages uv run python -m harness.signatures \
-            --lock versions.lock --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" --cosign cosign
+            --lock versions.lock --lock-signature versions.lock.sigstore.json \
+            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" --cosign cosign
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "OspreyFlow $GITHUB_REF_NAME" --notes-file notes.md versions.lock
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "OspreyFlow $GITHUB_REF_NAME" \
+            --notes-file notes.md versions.lock versions.lock.sigstore.json

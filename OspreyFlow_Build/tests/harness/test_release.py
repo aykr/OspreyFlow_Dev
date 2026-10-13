@@ -305,14 +305,19 @@ def test_a_private_repository_is_read_with_the_hosts_token_and_said_when_there_i
 # --- finding a release to update to (Amendment 8 points 4 and 6) ---------------------------------
 
 
-def _with_lock(fake: _GitHub, base: str, tag: str, asset: int, lock: bytes | None) -> dict:
+def _with_lock(
+    fake: _GitHub, base: str, tag: str, asset: int, lock: bytes | None, *, signed: bool = True
+) -> dict:
     release = _release(tag, body=f"notes of {tag}")
+    release["assets"] = []
     if lock is not None:
         fake.assets[asset] = lock
         url = f"{base}/repos/acme/ospreyflow/releases/assets/{asset}"
-        release["assets"] = [{"name": "versions.lock", "url": url}]
-    else:
-        release["assets"] = []
+        release["assets"].append({"name": "versions.lock", "url": url})
+    if signed:
+        fake.assets[asset + 1000] = b'{"signature of": "' + tag.encode() + b'"}'
+        url = f"{base}/repos/acme/ospreyflow/releases/assets/{asset + 1000}"
+        release["assets"].append({"name": "versions.lock.sigstore.json", "url": url})
     return release
 
 
@@ -323,7 +328,10 @@ def test_the_newest_release_and_its_lock_are_found(github: tuple[_GitHub, str]) 
         _with_lock(fake, base, "v0.4.1", 6, b"images: [four]\n"),
     ]
     found = find_release(("acme", "ospreyflow"), None, api_base=base)
-    assert found == {"tag": "v0.5.0", "notes": "notes of v0.5.0", "lock": "images: [five]\n"}
+    assert found == {
+        "tag": "v0.5.0", "notes": "notes of v0.5.0", "lock": "images: [five]\n",
+        "lock_signature": '{"signature of": "v0.5.0"}',
+    }  # fmt: skip
 
 
 def test_a_named_release_is_found_and_one_not_published_is_refused(
@@ -346,5 +354,13 @@ def test_a_release_without_its_lock_cannot_be_applied(github: tuple[_GitHub, str
     fake, base = github
     fake.releases = [_with_lock(fake, base, "v0.5.0", 7, None)]
     with pytest.raises(ReleaseRefused, match="has no versions.lock"):
+        find_release(("acme", "ospreyflow"), None, api_base=base)
+
+
+def test_a_release_whose_lock_is_not_signed_cannot_be_applied(github: tuple[_GitHub, str]) -> None:
+    """Amendment 8 point 11: the lock names the third-party images' digests, so it is signed too."""
+    fake, base = github
+    fake.releases = [_with_lock(fake, base, "v0.5.0", 7, b"five", signed=False)]
+    with pytest.raises(ReleaseRefused, match="no signed versions.lock"):
         find_release(("acme", "ospreyflow"), None, api_base=base)
 

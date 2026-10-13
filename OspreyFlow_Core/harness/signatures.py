@@ -113,6 +113,55 @@ class Cosign:
         code, said = self._run(argv)
         return code == 0, said
 
+    @staticmethod
+    def _keys(identity: Identity) -> list[str]:
+        return ["-v", f"{identity.path.parent}:/keys:ro"] if isinstance(identity, PublicKey) else []
+
+    @staticmethod
+    def docker_argv_local(saved: Path, identity: Identity) -> list[str]:
+        """An image as `cosign save` kept it, verified with no network at all (`update --from`)."""
+        return [
+            "docker", "run", "--rm", "--network", "none", *Cosign._keys(identity),
+            "-v", f"{saved.parent}:/saved:ro", COSIGN_IMAGE,
+            "verify", *identity.arguments(mounted=True), "--offline",
+            "--local-image", f"/saved/{saved.name}",
+        ]  # fmt: skip
+
+    def verify_local(self, saved: Path, identity: Identity) -> tuple[bool, str]:
+        if self._binary is not None:
+            argv = [self._binary, "verify", *identity.arguments(mounted=False), "--offline",
+                    "--local-image", str(saved)]  # fmt: skip
+        else:
+            argv = self.docker_argv_local(saved, identity)
+        code, said = self._run(argv)
+        return code == 0, said
+
+    def verify_blob(
+        self, blob: Path, signature: Path, identity: Identity, *, offline: bool = False
+    ) -> None:
+        """The release's `versions.lock` against its `cosign sign-blob` bundle (Amendment 8 point
+        11); refuses in words. The two files must sit in one folder."""
+        if self._binary is not None:
+            argv = [
+                self._binary, "verify-blob", *identity.arguments(mounted=False),
+                *(["--offline"] if offline else []), "--bundle", str(signature), str(blob),
+            ]  # fmt: skip
+        else:
+            network = ["--network", "none"] if offline else list(self._docker_args)
+            argv = [
+                "docker", "run", "--rm", *network, *self._keys(identity),
+                "-v", f"{blob.parent}:/blob:ro", COSIGN_IMAGE,
+                "verify-blob", *identity.arguments(mounted=True),
+                *(["--offline"] if offline else []),
+                "--bundle", f"/blob/{signature.name}", f"/blob/{blob.name}",
+            ]  # fmt: skip
+        code, said = self._run(argv)
+        if code != 0:
+            last = said.splitlines()[-1] if said else "no answer"
+            raise SignatureRefused(
+                f"the release's versions.lock is not signed by {identity.describe()} ({last})"
+            )
+
 
 def owned_references(lock_text: str) -> list[str]:
     """`repository@digest` of each owned image in a lock, in the lock's order. An owned image with
@@ -153,10 +202,13 @@ def main(argv: Sequence[str] | None = None, *, cosign: Cosign | None = None) -> 
     parser.add_argument("--repository", required=True, help="owner/repo of the user repository")
     parser.add_argument("--tag", required=True)
     parser.add_argument("--cosign", help="a cosign binary, instead of its image")
+    parser.add_argument("--lock-signature", type=Path, help="the lock's cosign sign-blob bundle")
     args = parser.parse_args(argv)
     owner, _, repo = args.repository.partition("/")
     checker = cosign or Cosign(binary=args.cosign)
     try:
+        if args.lock_signature is not None:
+            checker.verify_blob(args.lock, args.lock_signature, Keyless(owner, repo, args.tag))
         verify_release(
             args.lock.read_text(encoding="utf-8"), Keyless(owner, repo, args.tag), checker
         )

@@ -12540,6 +12540,25 @@ Amendment 6 point 1 settled the policy; these are the mechanics it leaves open, 
    `update` may write. **`--from` (a bundle for a deployment without GitHub) is stage B5d**, after
    the online path is proved: the bundle must then carry the tag's source, the images and their
    signatures.
+10. **B5d and B5e, the owner's rulings of 13 October 2026, from options.** *Offline updates carry full
+    signatures* ("Full signatures carried"): `ospreyflow update --make-bundle <file> [--to vX.Y.Z]`, on
+    a machine that reaches GitHub, verifies the release online first, then writes one file holding the
+    release's notes and lock, the tag's source (`git bundle`), and each image twice — as `cosign save`
+    keeps it (the image with its signatures and their transparency-log proofs) and as `docker save`
+    writes it. `ospreyflow update --from <file>`, on the machine that cannot reach anything, verifies
+    each image itself with cosign `--offline` against the same identity, then loads the images and
+    checks the chain: the signature covers the manifest, the manifest names the image's configuration
+    digest, and the loaded image's ID must be that digest — so a bundle altered anywhere is refused.
+    The release is then applied as online, with nothing pulled. *An install from a release pulls the
+    signed images* ("Now, after B5d"): when the checkout sits on a release tag, `ospreyflow install`
+    verifies the release's images before starting them; a developer checkout keeps building.
+11. **The lock is signed too** (found designing B5d): third-party images are trusted only through the
+    lock's digests, and a lock in a bundle — or a release asset replaced on GitHub — could be altered
+    to name another image. So `release.yml` also signs `versions.lock` itself (`cosign sign-blob`,
+    keyless, published beside it as `versions.lock.sigstore.json`), and `update` verifies the lock's
+    signature against the same identity before anything else, online and offline; a release without
+    a signed lock is refused. Probed first with the real cosign: a lock altered by one character is
+    refused offline.
 9. **What can be proved before a real release, and how:** everything but the keyless identity is
    proved against real tools — a throwaway local registry, images signed with a throwaway cosign
    key (the verifier's key/identity is the one seam a test sets), a real `update` and a real rollback

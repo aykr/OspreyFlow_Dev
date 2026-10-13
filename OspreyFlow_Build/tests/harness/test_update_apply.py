@@ -82,6 +82,7 @@ class _Host:
         self.release_tag = "v0.5.0"
         self.oneshot_fails_with: str | None = None
         self.backup_vanishes = False
+        self.lock_signed = True
 
     # -- the command runner ------------------------------------------------------------------
     def run(self, argv: Sequence[str]) -> tuple[int, str]:
@@ -152,6 +153,9 @@ class _Host:
 
     # -- the other seams -----------------------------------------------------------------------
     def cosign_run(self, argv: Sequence[str]) -> tuple[int, str]:
+        if "verify-blob" in argv:
+            self.actions.append("verify the lock")
+            return (0, "Verified OK") if self.lock_signed else (1, "invalid signature")
         digest = argv[-1].split("@")[1]
         return (0, "verified") if digest in self.signed else (1, "no signatures found")
 
@@ -175,7 +179,8 @@ class _Host:
 
     def find_release(self, tag: str | None) -> dict[str, str]:
         self.actions.append(f"find {tag}")
-        return {"tag": self.release_tag, "notes": "- new", "lock": _lock(self.release_digest)}
+        return {"tag": self.release_tag, "notes": "- new", "lock": _lock(self.release_digest),
+                "lock_signature": "{}"}  # fmt: skip
 
     def host(self) -> update.Host:
         return update.Host(
@@ -402,4 +407,23 @@ def test_a_one_shot_step_that_failed_fails_the_update(
     fake.oneshot_fails_with = NEW
     assert _update(fake) == 1
     assert "keycloak-db is exited" in capsys.readouterr().err
+
+
+def test_a_release_whose_lock_does_not_verify_changes_nothing_and_is_checked_first(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path)
+    fake.lock_signed = False
+    before = _files(fake)
+    assert _update(fake) == 1
+    said = capsys.readouterr().err
+    assert "versions.lock is not signed" in said and "Nothing was changed" in said
+    assert fake.actions == ["find None", "verify the lock"]
+    assert not _changed(fake, before)
+
+
+def test_the_lock_is_verified_before_any_image(tmp_path: Path) -> None:
+    fake = _Host(tmp_path)
+    assert _update(fake) == 0
+    assert fake.actions[:2] == ["find None", "verify the lock"]
 
