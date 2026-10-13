@@ -72,7 +72,7 @@ describe("the bars carry the theme icon", () => {
   it("TopBar and StartBar each hold it beside the account", async () => {
     const { TopBar } = await import("../shell/TopBar");
     const { StartBar } = await import("../shell/StartPage");
-    render(<TopBar app="glass" account={<span>account</span>} />);
+    render(<TopBar app="glass" caseSwitcher={<span>case</span>} account={<span>account</span>} />);
     expect(screen.getByRole("button", { name: "Switch to the light theme" })).toBeTruthy();
     cleanup();
     render(<StartBar account={<span>account</span>} marking={null} />);
