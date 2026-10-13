@@ -798,6 +798,9 @@ views cross-filter each other without a round trip.
 - **The daily KYC expiry sweep** is the deployment's first periodic pass: a lifespan task that one
   replica a day claims through Valkey (`SET NX`), raising an alert when a verifying document lapses —
   the change stream never sees a clock pass (`services/api/kyc_sweep.py`).
+- **Scheduled pipeline runs** are the second periodic pass (ADR-110): a lifespan task ticking each
+  minute on every replica, each due slot run once by the replica that claims it in Valkey, as the
+  schedule's owner, through the same run path as *Run now* (`services/api/scheduler.py`).
 
 Expanding beyond the working-set cap does not silently truncate. The Glass offers three explicit
 choices: expand into a new branch tab, apply a filter before expanding, or promote the expansion

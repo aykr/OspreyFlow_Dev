@@ -263,6 +263,11 @@ streams its progress.
 
 ```
 POST   /v1/ingest/upload                multipart; returns a document id and a job id
+POST   /v1/ingest/schedule-preview      a schedule in words and its next five runs, or refused in words (ADR-110)
+POST   /v1/investigations/{id}/ingest/recipes/{rid}/schedule/pause    and …/resume — schedule_pipelines
+GET    /v1/investigations/{id}/ingest/recipes/{rid}/runs   the recipe's run ledger; counts withheld above the reader
+GET    /v1/investigations/{id}/data-feeds   the pipelines feeding the case (Viewer, read_data_feeds)
+GET    /v1/admin/schedules              every schedule (operate_schedules); …/{rid}/runs, …/pause, …/resume
 POST   /v1/ingest/connector/{name}/run  trigger a configured connector
 GET    /v1/handling-scheme              the active deployment's classification/handling-code vocabulary
 GET    /v1/yardstick                    the active deployment's probability yardstick (01_DOMAIN_MODEL.md §5)

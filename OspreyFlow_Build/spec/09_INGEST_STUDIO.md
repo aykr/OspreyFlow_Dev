@@ -695,6 +695,29 @@ before, which stays readable in every case of its owner, Amendment 5).
   at actual run time and is unchanged by this — the registry is what surfaces the problem before
   someone tries to run a flagged recipe, not a replacement for the run-time check.
 
+### Scheduled runs (ADR-110, as built 13 October 2026)
+
+A published recipe may run on a schedule. **The editor** (the Publish screen's *Schedule* panel)
+offers every hour, every day, every weekday or every week at a time, in a named time zone (Europe/
+London by default), or an advanced cron expression; before anything is saved the Conduit explains it
+in words with its next five runs (`POST /v1/ingest/schedule-preview`), and a schedule it could not keep
+— not five fields, an unknown zone, more often than every 15 minutes — is refused in words. **The
+owner** is whoever last set the schedule (holding `schedule_pipelines`), and **the case** is the one it
+was set in: a scheduled run acts as that person, through the case's datasets and rules, exactly as
+their *Run now* there would (`run_recipe_as`, the one run path). **The executor** ticks each minute on
+every replica; the replica that claims a slot runs it; after downtime only the latest due slot runs and
+the others are recorded *missed*; a flagged recipe's slot is *blocked*; an owner who can no longer
+sign in, no longer holds `schedule_pipelines`, is no longer an Editor of the case, or is cleared below
+the source is *refused* in words, and three refusals in a row pause the schedule with the reason; a
+slot due while the last run is still going is *skipped*. **Daylight saving**: a schedule naming its
+hours runs a repeated October wall-clock time once; an hourly one runs both real hours; a missing March
+time runs once at the end of the gap. **The run ledger** (`recipe_runs`) records every run, manual or
+scheduled, and every slot that did not run, with the counts and the failure in words; the Publish
+screen lists the recipe's runs, the Admin area's *Schedules and runs* every schedule, and the Reports
+view's *Data feeds* the pipelines feeding the case — a run's counts withheld wherever the reader may not
+view the source. **Not yet built:** decision 5's folder watch (the *Watch* field is saved and not acted
+on) and decision 10's notice to the owner.
+
 ## 7. The review queue — where unstructured material actually lands
 
 Extraction produces candidates, not graph. The review queue is where a human turns one into the
