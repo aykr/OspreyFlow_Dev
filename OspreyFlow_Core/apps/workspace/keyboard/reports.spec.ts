@@ -28,6 +28,11 @@ async function serve(page: import("@playwright/test").Page): Promise<string[]> {
       return route.fulfill({ status: 200, contentType: "application/json",
         body: JSON.stringify({ token: "g", uuid: `uuid-${board[1]}`, superset_origin: "http://bi.invalid" }) });
     }
+    if (url.pathname.endsWith("/data-feeds")) {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([
+        { recipe_id: "daily", label: "Custody export", schedule: "every day at 06:00 (Europe/London)",
+          next_run: "2026-06-03T05:00:00Z", paused: false, flagged: false, last_run: null }]) });  // prettier-ignore
+    }
     if (url.pathname.endsWith("/reports/feed")) {
       return route.fulfill({ status: 200, contentType: "text/csv", body: "section,label,typology,week_start,value\n" });
     }
@@ -40,8 +45,9 @@ test("the Dashboards tab is opened and a board chosen by keyboard", async ({ pag
   const asked = await serve(page);
   await page.goto("/keyboard/reports-harness.html");
   await page.getByRole("tab", { name: "Figures" }).focus();
-  // ADR-113: with every right assumed the tabs run Figures, Trends, Packs, Published, Dashboards.
-  for (const next of ["Trends", "Packs", "Published", "Dashboards"]) {
+  // ADR-113, ADR-110: with every right assumed the tabs run Figures, Trends, Packs, Published,
+  // Data feeds, Dashboards.
+  for (const next of ["Trends", "Packs", "Published", "Data feeds", "Dashboards"]) {
     await page.keyboard.press("Tab");
     await expect(page.getByRole("tab", { name: next })).toBeFocused();
   }
@@ -74,6 +80,16 @@ test("the figures are downloaded by keyboard", async ({ page }) => {
   expect((await download).suggestedFilename()).toBe("case-report-12-weeks.csv");
   expect(asked).toContain("reports/feed?weeks=12&format=csv");
   registerCovered(REGISTRY, "download-the-figures-by-keyboard");
+});
+
+test("the Data feeds tab is opened by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/reports-harness.html");
+  await page.getByRole("tab", { name: "Data feeds" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("table", { name: "Data feeds" })).toContainText("every day at 06:00 (Europe/London)");
+  expect(asked).toContain("data-feeds");
+  registerCovered(REGISTRY, "open-the-data-feeds-tab-by-keyboard");
 });
 
 test("every registered Reports action has its own proving test case above", () => {

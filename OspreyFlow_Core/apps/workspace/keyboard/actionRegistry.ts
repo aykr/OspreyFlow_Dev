@@ -596,6 +596,8 @@ export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
   "download-the-figures-by-keyboard",
   // ADR-111 Amendment 3: the Dashboards tab, and choosing one of several boards.
   "open-the-dashboards-tab-and-choose-a-board-by-keyboard",
+  // ADR-110 decision 9 (D5): the Data feeds tab.
+  "open-the-data-feeds-tab-by-keyboard",
 ] as const);
 
 // ADR-113 stage 5: the Trends tab, built and driven with the keyboard alone.

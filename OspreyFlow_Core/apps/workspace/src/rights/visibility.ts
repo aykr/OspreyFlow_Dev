@@ -96,6 +96,11 @@ export function canAssemblePacks(rights: Rights): boolean {
 }
 
 /** Published packs are what a Reports Viewer reads. */
+/** ADR-110 decision 9: the Reports view's Data feeds tab. */
+export function canReadDataFeeds(rights: Rights): boolean {
+  return has(rights, "read_data_feeds");
+}
+
 export function canReadPublished(rights: Rights): boolean {
   return has(rights, "read_reports");
 }

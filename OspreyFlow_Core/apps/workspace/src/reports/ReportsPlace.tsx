@@ -1,17 +1,26 @@
 // The Reports view (ADR-111) with its tabs: the case's own figures (always), then — each only when
 // the person holds the right it rests on (ADR-112) — Trends, Packs, Published (ADR-113), and the
-// Superset dashboards this person may open (Amendment 3 of ADR-111).
+// Superset dashboards this person may open (Amendment 3 of ADR-111), and Data feeds (ADR-110
+// decision 9).
 import { useState } from "react";
 
 import { Tabs } from "../design/primitives/Tabs";
-import { canAssemblePacks, canBuildTrends, canExportPacks, canReadPublished, type Rights } from "../rights/visibility";
+import {
+  canAssemblePacks,
+  canBuildTrends,
+  canExportPacks,
+  canReadDataFeeds,
+  canReadPublished,
+  type Rights,
+} from "../rights/visibility";
+import { DataFeedsTab } from "./DataFeedsTab";
 import { EmbeddedDashboards, type Embed } from "./EmbeddedDashboards";
 import { PacksTab } from "./PacksTab";
 import { PublishedTab } from "./PublishedTab";
 import { ReportsView } from "./ReportsView";
 import { TrendsTab } from "./TrendsTab";
 
-type TabId = "figures" | "trends" | "packs" | "published" | "dashboards";
+type TabId = "figures" | "trends" | "packs" | "published" | "feeds" | "dashboards";
 
 export interface ReportsPlaceProps {
   apiBaseUrl: string;
@@ -33,6 +42,7 @@ export function ReportsPlace({ embed, rights = null, print, ...props }: ReportsP
     ...(canBuildTrends(rights) ? [{ id: "trends" as const, label: "Trends" }] : []),
     ...(canAssemblePacks(rights) ? [{ id: "packs" as const, label: "Packs" }] : []),
     ...(canReadPublished(rights) ? [{ id: "published" as const, label: "Published" }] : []),
+    ...(canReadDataFeeds(rights) ? [{ id: "feeds" as const, label: "Data feeds" }] : []),
     { id: "dashboards", label: "Dashboards" },
   ];
   // A tab the rights no longer offer falls back to Figures rather than showing a screen to be refused.
@@ -46,6 +56,7 @@ export function ReportsPlace({ embed, rights = null, print, ...props }: ReportsP
       {active === "trends" && <TrendsTab api={api} canAssemble={canAssemblePacks(rights)} />}
       {active === "packs" && <PacksTab api={api} canExport={canExportPacks(rights)} print={print} />}
       {active === "published" && <PublishedTab api={api} canExport={canExportPacks(rights)} print={print} />}
+      {active === "feeds" && <DataFeedsTab api={api} />}
       {active === "dashboards" && (
         <div style={{ flex: 1, display: "flex", padding: "var(--sp-16)", minHeight: 0 }}>
           <EmbeddedDashboards apiBaseUrl={props.apiBaseUrl} bearerToken={props.bearerToken} embed={embed} />
