@@ -479,7 +479,13 @@ from .questions import (
     QuestionsTooLargeError,
 )
 from .recipe_runs import RecipeRunStore, RunTrigger
-from .scheduler import DEFAULT_TIMEZONE, ScheduleRefused, validate_schedule
+from .scheduler import (
+    DEFAULT_TIMEZONE,
+    ScheduleExecutor,
+    ScheduleRefused,
+    run_every_minute,
+    validate_schedule,
+)
 from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
@@ -855,10 +861,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     sweep_task = asyncio.create_task(run_daily_kyc_sweep(valkey, _sweep_day))
 
+    # ADR-110 decision 2: scheduled pipeline runs, ticking each minute on every replica, each slot
+    # run by the one that claims it, as the schedule's owner through the one run path.
+    schedule_task = asyncio.create_task(run_every_minute(_schedule_executor(app)))
+
     try:
         yield
     finally:
         sweep_task.cancel()
+        schedule_task.cancel()
         await arcadedb_client.aclose()
         await valkey.aclose()
         await audit.close()
@@ -6833,6 +6844,7 @@ async def publish_studio_recipe(
         schedule_watch=body.schedule_watch,
         now=datetime.now(UTC),
         schedule_timezone=body.schedule_timezone,
+        schedule_case=investigation.id,
     )
     await audit.record(
         principal=principal,
@@ -6873,6 +6885,7 @@ async def update_studio_recipe_schedule(
         schedule_cron=body.schedule_cron,
         schedule_watch=body.schedule_watch,
         schedule_timezone=body.schedule_timezone,
+        schedule_case=investigation.id,
     )
     assert updated.row_template is not None and updated.ontology_version is not None
     built = build_recipe(
@@ -7072,6 +7085,36 @@ _RUN_DEP_STATE_NAMES = {
     "recipe_repo_root": "recipes_repo_root",
     "recogniser_for": "pipeline_recogniser_for",
 }
+
+
+def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
+    """The executor over the running Conduit's own stores (ADR-110 decisions 2 and 3)."""
+    state = application.state
+
+    async def check_case(owner: Principal, case: str) -> Principal:
+        await state.investigations.get_authorized(case, owner, need=AccessLevel.EDITOR)
+        return await scope_to_case(owner, case, state.datasets)
+
+    async def run(owner: Principal, recipe: StudioRecipeDraft, case: str, slot: datetime) -> Any:
+        return await run_recipe_as(
+            RecipeRunDeps.from_state(state),
+            principal=owner,
+            recipe=recipe,
+            investigation_id=case,
+            source_location=None,
+            trigger="schedule",
+            slot=slot,
+        )
+
+    return ScheduleExecutor(
+        recipes=state.studio_recipes,
+        runs=state.recipe_runs,
+        valkey=state.valkey,
+        scheme=state.handling_scheme,
+        resolve_owner=state.principal_resolver.resolve_for_owner_detailed,
+        check_case=check_case,
+        run=run,
+    )
 
 
 async def run_recipe_as(

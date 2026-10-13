@@ -397,10 +397,10 @@ async def test_setting_a_schedule_makes_its_setter_the_owner_and_resumes_it(
     set_at = datetime(2026, 1, 3, 9, tzinfo=UTC)
     scheduled = await store.update_schedule(
         published.recipe_id, AUTHOR, schedule_cron="0 7 * * *", schedule_watch=None,
-        schedule_timezone="Europe/Paris", now=set_at,
+        schedule_timezone="Europe/Paris", now=set_at, schedule_case="case-7",
     )  # fmt: skip
     assert (scheduled.schedule_owner, scheduled.schedule_set_at) == (AUTHOR.id, set_at)
-    assert scheduled.schedule_timezone == "Europe/Paris"
+    assert (scheduled.schedule_timezone, scheduled.schedule_case) == ("Europe/Paris", "case-7")
     assert scheduled.schedule_paused is False and scheduled.schedule_paused_reason is None
 
 

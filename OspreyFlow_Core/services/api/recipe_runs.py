@@ -221,6 +221,15 @@ class RecipeRunStore:
             )
         return [_row(r) for r in rows]
 
+    async def last_slot(self, recipe_id: str) -> datetime | None:
+        """The latest scheduled slot the ledger has any row for — run, or not run and why."""
+        async with self._pool.acquire() as conn:
+            value = await conn.fetchval(
+                "SELECT max(slot) FROM recipe_runs WHERE recipe_id = $1 AND trigger = 'schedule'",
+                recipe_id,
+            )
+        return value  # type: ignore[no-any-return]
+
     async def refusals_in_a_row(self, recipe_id: str) -> int:
         """How many of the recipe's latest scheduled runs were refused, back to the last that was
         not (decision 3: three pause the schedule)."""

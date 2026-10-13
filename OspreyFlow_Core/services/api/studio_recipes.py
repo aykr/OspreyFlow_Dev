@@ -70,6 +70,7 @@ ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS dataset_id TEXT;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_timezone TEXT;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_owner TEXT;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_set_at TIMESTAMPTZ;
+ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_case TEXT;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_paused BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_paused_reason TEXT;
 """
@@ -166,6 +167,7 @@ def _row_to_draft(row: asyncpg.Record) -> StudioRecipeDraft:
         schedule_timezone=data.get("schedule_timezone"),
         schedule_owner=data.get("schedule_owner"),
         schedule_set_at=data.get("schedule_set_at"),
+        schedule_case=data.get("schedule_case"),
         schedule_paused=bool(data.get("schedule_paused") or False),
         schedule_paused_reason=data.get("schedule_paused_reason"),
         dataset_id=data.get("dataset_id"),
@@ -410,6 +412,7 @@ class StudioRecipeStore:
         schedule_watch: str | None,
         now: datetime,
         schedule_timezone: str | None = None,
+        schedule_case: str | None = None,
     ) -> StudioRecipeDraft:
         """§6: draft → published. The caller (`services/api/app.py`'s
         publish route) has already serialised `content` to YAML and
@@ -427,7 +430,7 @@ class StudioRecipeStore:
                 "UPDATE studio_recipes SET status = $1, ontology_version = $2, git_path = $3, "
                 "published_by = $4, published_at = $5, schedule_cron = $6, schedule_watch = $7, "
                 "schedule_timezone = $10, schedule_owner = $11, schedule_set_at = $12, "
-                "schedule_paused = FALSE, schedule_paused_reason = NULL "
+                "schedule_case = $13, schedule_paused = FALSE, schedule_paused_reason = NULL "
                 "WHERE recipe_id = $8 AND version = $9",
                 StudioRecipeStatus.PUBLISHED.value,
                 ontology_version,
@@ -441,6 +444,7 @@ class StudioRecipeStore:
                 schedule_timezone,
                 principal.id if (schedule_cron or schedule_watch) else None,
                 now if (schedule_cron or schedule_watch) else None,
+                schedule_case if (schedule_cron or schedule_watch) else None,
             )
         return await self.get(recipe_id)
 
@@ -453,6 +457,7 @@ class StudioRecipeStore:
         schedule_watch: str | None,
         schedule_timezone: str | None = None,
         now: datetime | None = None,
+        schedule_case: str | None = None,
     ) -> StudioRecipeDraft:
         """§8: "schedule it" — a source approver action distinct from
         `publish`, so pausing or retiming a recipe's own schedule never
@@ -470,7 +475,7 @@ class StudioRecipeStore:
                 # resumes it.
                 "UPDATE studio_recipes SET schedule_cron = $1, schedule_watch = $2, "
                 "schedule_timezone = $5, schedule_owner = $6, schedule_set_at = $7, "
-                "schedule_paused = FALSE, schedule_paused_reason = NULL "
+                "schedule_case = $8, schedule_paused = FALSE, schedule_paused_reason = NULL "
                 "WHERE recipe_id = $3 AND version = $4",
                 schedule_cron,
                 schedule_watch,
@@ -479,6 +484,7 @@ class StudioRecipeStore:
                 schedule_timezone,
                 principal.id if (schedule_cron or schedule_watch) else None,
                 (now or datetime.now(UTC)) if (schedule_cron or schedule_watch) else None,
+                schedule_case if (schedule_cron or schedule_watch) else None,
             )
         return await self.get(recipe_id)
 

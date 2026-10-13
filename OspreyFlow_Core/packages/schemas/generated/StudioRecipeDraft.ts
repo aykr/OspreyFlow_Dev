@@ -60,6 +60,7 @@ export type ScheduleCron = string | null;
 export type ScheduleWatch = string | null;
 export type ScheduleTimezone = string | null;
 export type ScheduleSetAt = string | null;
+export type ScheduleCase = string | null;
 export type SchedulePaused = boolean;
 export type SchedulePausedReason = string | null;
 export type DatasetId = string | null;
@@ -108,6 +109,7 @@ export interface StudioRecipeDraft {
   schedule_timezone?: ScheduleTimezone;
   schedule_owner?: PrincipalId | null;
   schedule_set_at?: ScheduleSetAt;
+  schedule_case?: ScheduleCase;
   schedule_paused?: SchedulePaused;
   schedule_paused_reason?: SchedulePausedReason;
   dataset_id?: DatasetId;

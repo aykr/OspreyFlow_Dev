@@ -383,6 +383,9 @@ class StudioRecipeDraft(BaseModel):
     #: as this person, never as the system.
     schedule_owner: PrincipalId | None = None
     schedule_set_at: datetime | None = None
+    #: The case the schedule was set in: whose rules judge each scheduled load, and whose datasets
+    #: the owner reads it through (`scope_to_case`), as a *Run now* there would be.
+    schedule_case: str | None = None
     #: ADR-110 decisions 3 and 8: paused by a person, or by three refused runs in a row, and why.
     schedule_paused: bool = False
     schedule_paused_reason: str | None = None
