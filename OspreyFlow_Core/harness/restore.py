@@ -486,8 +486,14 @@ def restore_object_store(compose_file: Path, archive: Path, *, work_dir: Path) -
             "restore it into a deployment of the version that took it, then take a new backup "
             "there",
         )
+    # The backup that wrote this format copied `minio:/data` into a folder that already existed and
+    # tarred that folder as `data`, so its archives hold `data/data/…`; copying `data/.` back buried
+    # the buckets one level deeper with every restore (found migrating the owner's deployment).
+    source = extracted / "data"
+    if [entry.name for entry in source.iterdir()] == ["data"] and (source / "data").is_dir():
+        source = source / "data"
     _run(
-        _compose(compose_file) + ["cp", str(extracted / "data") + "/.", "minio:/data"],
+        _compose(compose_file) + ["cp", str(source) + "/.", "minio:/data"],
         item="objects",
     )
 

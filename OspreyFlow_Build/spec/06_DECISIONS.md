@@ -12609,6 +12609,16 @@ about the previous repository and wrong for this one):
    browser (B10's screenshots, E7) are **left to one sitting at the end**; B7's Helm chart is
    **published beside the images**, as an OCI artefact in the user repository's own registry, signed
    like them, by its release workflow.
+5. **The owner's deployment moved, 13 October 2026, and the move found a defect older than it.** The
+   application's two buckets had been out of its sight since 12 October: **the MinIO backup wrote
+   every archive one level too deep** (it copied `minio:/data` into a staging folder that already
+   existed, making `staging/data`, then tarred that folder as `data`), so each restore put the
+   buckets one level further down, where MinIO served them as objects of a bucket named `data`. The
+   owner's store was three restores deep (B2e, B3, B4). Its 71 objects were read out at the right
+   level by a throwaway MinIO on a copy of the data folder, and imported into SeaweedFS; all 71
+   compare equal by size and SHA-256. A full backup was taken first and is kept, as is the old
+   MinIO volume. S3-level backups cannot nest (they name each object by bucket and key); restoring
+   an old MinIO-format archive into MinIO now takes it from the level it was taken at.
 
 ## ADR-115 — The design handoff: the welcome page, Home and the Glass to `DESIGN.md` v0.2 — ACCEPTED (design)
 

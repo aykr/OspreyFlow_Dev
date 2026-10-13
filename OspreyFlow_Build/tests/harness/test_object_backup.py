@@ -2,8 +2,8 @@
 
 The commands are recorded rather than run: what matters here is that the export and import go
 through the Conduit's image inside the deployment's network, never through a store's own data
-folder, and that a MinIO-format backup restored into SeaweedFS is refused rather than copied in wrongly. The
-transfer itself is proved against real stores (`tests/services/api/test_object_transfer.py`, and the
+folder, and that a MinIO-format backup restored into SeaweedFS is refused rather than copied in
+wrongly. The transfer itself is proved against real stores (`test_object_transfer.py`, and the
 MinIO-to-SeaweedFS rehearsal recorded in `07_BUILD_PLAN.md`).
 """
 
@@ -101,3 +101,22 @@ def test_a_minio_format_backup_still_restores_into_minio(
     archive = _archive(tmp_path, {"data/.minio.sys/format.json": b"{}"})
     restore.restore_object_store(compose, archive, work_dir=tmp_path / "work")
     assert ran[0][-1] == "minio:/data"
+
+
+def test_a_minio_backup_is_put_back_at_the_level_it_was_taken_from(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The old backup copied `minio:/data` into a staging folder that already existed, so `docker
+    cp` made `staging/data`, and then tarred the staging folder as `data`: every such archive holds
+    `data/data/…`. Copied back as it was, each restore buried the buckets one level deeper, out of
+    the application's sight (found migrating the owner's deployment, 13 October 2026: three restores
+    deep)."""
+    compose = _deployment(tmp_path, {"minio": {}, "api": {}})
+    ran: list[list[str]] = []
+    monkeypatch.setattr(restore, "_run", lambda command, **_: ran.append(command) or "")
+    archive = _archive(tmp_path, {"data/data/.minio.sys/format.json": b"{}",
+                                  "data/data/ospreyflow-media/a/xl.meta": b"x"})  # fmt: skip
+    restore.restore_object_store(compose, archive, work_dir=tmp_path / "work")
+    source, target = ran[0][-2:]
+    assert target == "minio:/data"
+    assert source.endswith("restore-objects/data/data/.")
