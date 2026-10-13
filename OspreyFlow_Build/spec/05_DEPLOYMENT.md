@@ -753,6 +753,45 @@ back to PostgreSQL full-text, stating the trade-off on screen: search quality de
 semantic search is unavailable, and the platform otherwise works. It is offered, not applied
 silently.
 
+## 3a. Small on a cloud's managed services (ADR-114 decision 8, Amendment 10)
+
+A `small` deployment names what the cloud runs for it in `osprey.yaml`'s `external:` section; what it
+names is not rendered as a container. `osprey.yaml` still holds no secret: every password and key
+arrives at apply from the environment, put there by the server's first boot from the cloud's secret
+store (Secrets Manager, Key Vault) with the server's own identity.
+
+```yaml
+profile: small
+external:
+  postgres:                 # RDS / Azure Database for PostgreSQL; password: OSPREY_POSTGRES_PASSWORD
+    host: osprey-db.abc.eu-west-2.rds.amazonaws.com
+    port: 5432
+    database: ospreyflow
+    user: osprey
+    sslmode: require
+  object_store:             # AWS only: S3 for staging, site images, the tile cache, backups, media
+    endpoint: s3.eu-west-2.amazonaws.com
+    region: eu-west-2
+    credentials: instance   # the server's role; no key anywhere
+    bucket_prefix: osprey-small-   # each bucket is <prefix><name>
+  media:                    # Azure only: media on Blob; key: AZURE_STORAGE_KEY
+    blob_account: ospreymedia1a2b
+    blob_container: media
+```
+
+- **Postgres external** — no `postgres` container; Keycloak and the one-shot step that makes its
+  database reach the managed server over TLS; the deployment's own login needs `CREATEROLE` and
+  `CREATEDB` there (RDS's master user and Azure's administrator have both).
+- **Object store external (AWS)** — no `objectstore` container; every S3 client uses the server's
+  instance role (pyarrow's default credential chain) in the named region, over HTTPS.
+- **Media on Blob (Azure)** — the Conduit's media store is the Blob adapter; SeaweedFS stays on the
+  server for the S3-protocol stores (Amendment 10 point 2).
+- Any container that reaches a managed service joins the `egress` network (Amendment 7): reaching
+  it is a configured feature's need.
+- **`ospreyflow backup` refuses a deployment with an external Postgres**, in words: the cloud's own
+  backups (AWS Backup, RDS snapshots, Azure Backup) protect it, and a dump from inside the server
+  would be a second, unscheduled copy no one restores from.
+
 ## 4. Moving up a profile
 
 The migration path is the property that makes the setup-time choices safe, so it is specified

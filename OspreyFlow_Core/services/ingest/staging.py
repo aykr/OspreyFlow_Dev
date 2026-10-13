@@ -42,25 +42,36 @@ import pyarrow as pa
 import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
 
+from conduit_common.s3 import s3_bucket, s3_keys, s3_region
+
 
 @dataclass(frozen=True)
 class ObjectStorageConfig:
     endpoint: str = "localhost:9000"
-    access_key: str = "minioadmin"
-    secret_key: str = "minioadmin"
+    #: `None` for both: the server's own cloud identity (`conduit_common.s3`).
+    access_key: str | None = "minioadmin"
+    secret_key: str | None = "minioadmin"
     bucket: str = "ospreyflow-staging"
     use_ssl: bool = False
+    region: str | None = None
 
     @classmethod
     def from_env(cls) -> ObjectStorageConfig:
         """CI and local `docker run` both read connection info from the
         environment — the same pattern `ArcadeDBConfig.from_env` uses."""
+        return cls.named("MINIO_BUCKET", "staging")
+
+    @classmethod
+    def named(cls, variable: str, name: str) -> ObjectStorageConfig:
+        """The deployment's connection (`conduit_common.s3`) and one of its buckets."""
+        access_key, secret_key = s3_keys()
         return cls(
             endpoint=os.environ.get("MINIO_ENDPOINT", "localhost:9000"),
-            access_key=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
-            secret_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin"),
-            bucket=os.environ.get("MINIO_BUCKET", "ospreyflow-staging"),
+            access_key=access_key,
+            secret_key=secret_key,
+            bucket=s3_bucket(variable, name),
             use_ssl=os.environ.get("MINIO_USE_SSL", "false").lower() == "true",
+            region=s3_region(),
         )
 
 
@@ -70,6 +81,7 @@ def filesystem(config: ObjectStorageConfig) -> pa_fs.S3FileSystem:
         access_key=config.access_key,
         secret_key=config.secret_key,
         scheme="https" if config.use_ssl else "http",
+        region=config.region,
         # The staging bucket is provisioned once per deployment (or once
         # per test database, here) — allowed so a fresh MinIO/test run
         # doesn't need a separate provisioning step.

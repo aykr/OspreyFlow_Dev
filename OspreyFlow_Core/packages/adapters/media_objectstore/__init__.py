@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 import pyarrow.fs as pa_fs
 
+from conduit_common.s3 import s3_bucket, s3_keys, s3_region
 from ports.media import MediaNotFoundError
 
 #: The extension a reference carries for each content type the Studio and the reader handle.
@@ -57,20 +58,24 @@ def content_type_of(ref: str) -> str:
 @dataclass(frozen=True)
 class MediaStoreConfig:
     endpoint: str = "localhost:9000"
-    access_key: str = "minioadmin"
-    secret_key: str = "minioadmin"
+    #: `None` for both: the server's own cloud identity (`conduit_common.s3`).
+    access_key: str | None = "minioadmin"
+    secret_key: str | None = "minioadmin"
     bucket: str = "ospreyflow-media"
     use_ssl: bool = False
+    region: str | None = None
 
     @classmethod
     def from_env(cls) -> MediaStoreConfig:
-        """Read as ingest staging reads its own (`services/ingest/staging.py`)."""
+        """Read as every S3 client reads its own (`conduit_common.s3`)."""
+        access_key, secret_key = s3_keys()
         return cls(
             endpoint=os.environ.get("MINIO_ENDPOINT", "localhost:9000"),
-            access_key=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
-            secret_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin"),
-            bucket=os.environ.get("MINIO_MEDIA_BUCKET", "ospreyflow-media"),
+            access_key=access_key,
+            secret_key=secret_key,
+            bucket=s3_bucket("MINIO_MEDIA_BUCKET", "media"),
             use_ssl=os.environ.get("MINIO_USE_SSL", "false").lower() == "true",
+            region=s3_region(),
         )
 
 
@@ -82,6 +87,7 @@ class ObjectStoreMediaStore:
             access_key=config.access_key,
             secret_key=config.secret_key,
             scheme="https" if config.use_ssl else "http",
+            region=config.region,
             # As ingest staging does: the media bucket is made on first use, so a fresh deployment
             # needs no separate provisioning step.
             allow_bucket_creation=True,

@@ -14,19 +14,11 @@ server-side and every image read is a request the Conduit can audit.
 
 from __future__ import annotations
 
-import os
-
 from services.ingest.staging import ObjectStorageConfig, filesystem
 
 
 def site_image_storage_config() -> ObjectStorageConfig:
-    return ObjectStorageConfig(
-        endpoint=os.environ.get("MINIO_ENDPOINT", "localhost:9000"),
-        access_key=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
-        secret_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin"),
-        bucket=os.environ.get("MINIO_SITE_IMAGES_BUCKET", "ospreyflow-site-images"),
-        use_ssl=os.environ.get("MINIO_USE_SSL", "false").lower() == "true",
-    )
+    return ObjectStorageConfig.named("MINIO_SITE_IMAGES_BUCKET", "site-images")
 
 
 def object_key_for(site_id: str) -> str:

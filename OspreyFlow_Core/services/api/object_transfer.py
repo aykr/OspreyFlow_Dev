@@ -26,6 +26,8 @@ from typing import Any
 
 from pyarrow import fs
 
+from conduit_common.s3 import s3_keys, s3_region
+
 FORMAT = 1
 _CHUNK = 1 << 20
 
@@ -36,12 +38,13 @@ class TransferRefused(Exception):
 
 def store_from_env(*, allow_bucket_deletion: bool = False) -> fs.S3FileSystem:
     secure = os.environ.get("MINIO_USE_SSL", "false").lower() == "true"
+    access_key, secret_key = s3_keys()
     return fs.S3FileSystem(
         endpoint_override=os.environ.get("MINIO_ENDPOINT", "localhost:9000"),
         scheme="https" if secure else "http",
-        access_key=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
-        secret_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin"),
-        region=os.environ.get("MINIO_REGION", "us-east-1"),
+        access_key=access_key,
+        secret_key=secret_key,
+        region=s3_region() or "us-east-1",
         allow_bucket_creation=True,
         allow_bucket_deletion=allow_bucket_deletion,
     )

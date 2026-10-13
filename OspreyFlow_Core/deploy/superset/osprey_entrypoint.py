@@ -5,6 +5,7 @@ database if it is missing, migrate it, register the reporting mart as Superset's
 import os
 import subprocess
 import sys
+from urllib.parse import quote
 
 import psycopg2
 
@@ -12,10 +13,12 @@ host = os.environ.get("POSTGRES_HOST", "postgres")
 port = int(os.environ.get("POSTGRES_PORT", "5432"))
 user, password = os.environ["POSTGRES_USER"], os.environ["POSTGRES_PASSWORD"]
 metadata = os.environ.get("SUPERSET_METADATA_DB", "superset")
+# A managed server's TLS requirement and a password its secret store made (`05_DEPLOYMENT.md` §3a).
+sslmode = os.environ.get("POSTGRES_SSLMODE") or None
 
 conn = psycopg2.connect(
     user=user, host=host, port=port, password=password,
-    dbname=os.environ.get("POSTGRES_DB", "ospreyflow"),
+    dbname=os.environ.get("POSTGRES_DB", "ospreyflow"), sslmode=sslmode,
 )
 conn.autocommit = True  # CREATE DATABASE cannot run inside a transaction
 with conn.cursor() as cur:
@@ -34,7 +37,8 @@ superset("init")
 reader = os.environ.get("REPORT_MART_READER", "osprey_reports_reader")
 reader_password = os.environ["REPORT_MART_READER_PASSWORD"]
 mart_db = os.environ.get("POSTGRES_DB", "ospreyflow")
-mart = f"postgresql+psycopg2://{reader}:{reader_password}@{host}:{port}/{mart_db}"
+mart = (f"postgresql+psycopg2://{quote(reader, safe='')}:{quote(reader_password, safe='')}"
+        f"@{host}:{port}/{mart_db}" + (f"?sslmode={sslmode}" if sslmode else ""))
 superset("set-database-uri", "--database_name", "OspreyFlow reports", "--uri", mart)
 # ADR-111 Amendment 3: the guest role and the Conduit's service user, after the mart is a source.
 subprocess.run([sys.executable, "/app/osprey_setup.py"], check=True)

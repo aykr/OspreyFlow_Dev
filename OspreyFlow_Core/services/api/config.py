@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from urllib.parse import quote
 
 from schemas.deployment import ModelsConfig
 
@@ -59,6 +60,8 @@ class PostgresConfig:
     user: str
     password: str
     database: str
+    #: A managed server's TLS requirement (`05_DEPLOYMENT.md` §3a): `require`, `verify-full`…
+    sslmode: str | None = None
 
     @classmethod
     def from_env(cls) -> PostgresConfig:
@@ -72,12 +75,17 @@ class PostgresConfig:
             user=os.environ.get("POSTGRES_USER", "osprey"),
             password=os.environ.get("POSTGRES_PASSWORD", "playwithdata123"),
             database=os.environ.get("POSTGRES_DB", "ospreyflow"),
+            sslmode=os.environ.get("POSTGRES_SSLMODE") or None,
         )
 
     @property
     def dsn(self) -> str:
+        """Every part escaped: a password a cloud's secret store made may hold any character."""
+        user, password = quote(self.user, safe=""), quote(self.password, safe="")
+        tls = f"?sslmode={quote(self.sslmode, safe='')}" if self.sslmode else ""
         return (
-            f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+            f"postgresql://{user}:{password}@{self.host}:{self.port}/"
+            f"{quote(self.database, safe='')}{tls}"
         )
 
 

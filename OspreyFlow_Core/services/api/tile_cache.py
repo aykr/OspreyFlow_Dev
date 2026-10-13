@@ -15,7 +15,6 @@ this is the read-through cache half only.
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime, timedelta
 
 import pyarrow.fs as pa_fs
@@ -23,13 +22,7 @@ from services.ingest.staging import ObjectStorageConfig, filesystem
 
 
 def tile_cache_storage_config() -> ObjectStorageConfig:
-    return ObjectStorageConfig(
-        endpoint=os.environ.get("MINIO_ENDPOINT", "localhost:9000"),
-        access_key=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
-        secret_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin"),
-        bucket=os.environ.get("MINIO_TILE_CACHE_BUCKET", "ospreyflow-tile-cache"),
-        use_ssl=os.environ.get("MINIO_USE_SSL", "false").lower() == "true",
-    )
+    return ObjectStorageConfig.named("MINIO_TILE_CACHE_BUCKET", "tile-cache")
 
 
 def cache_key_for(provider_id: str, z: int, x: int, y: int) -> str:

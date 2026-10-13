@@ -15,17 +15,22 @@ verified against.
 import base64
 import json
 import os
+from urllib.parse import quote
 
 from flask_appbuilder.security.manager import AUTH_OAUTH
 from superset.security import SupersetSecurityManager
 
+# Escaped: a password a cloud's secret store made may hold any character (`05_DEPLOYMENT.md` §3a).
+_user = quote(os.environ["POSTGRES_USER"], safe="")
+_password = quote(os.environ["POSTGRES_PASSWORD"], safe="")
 _pg = (
-    f"{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}"
+    f"{_user}:{_password}"
     f"@{os.environ.get('POSTGRES_HOST', 'postgres')}:{os.environ.get('POSTGRES_PORT', '5432')}"
 )
+_tls = f"?sslmode={os.environ['POSTGRES_SSLMODE']}" if os.environ.get("POSTGRES_SSLMODE") else ""
 SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
 _metadata_db = os.environ.get("SUPERSET_METADATA_DB", "superset")
-SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{_pg}/{_metadata_db}"
+SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{_pg}/{_metadata_db}{_tls}"
 
 AUTH_TYPE = AUTH_OAUTH
 AUTH_USER_REGISTRATION = True
