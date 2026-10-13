@@ -435,6 +435,8 @@ def _load(
         # reported "not run by any live-service job" about a file the job plainly runs, and
         # the short list was the reason, exactly as predicted.
         "over-the-wire-exit-test",
+        # ADR-114 Amendment 9: kept out of `make test`, where it would delete a real deployment.
+        "apply-env-exit-test",
     ):
         _, positional = job_tokens(blocks.get(name, ""))
         live_job_tokens[name] = positional
