@@ -48,7 +48,7 @@ from .run import (
 
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
-    "uninstall",
+    "update", "uninstall",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
 _STAGE = {"small": "B6", "enterprise": "B7"}
@@ -185,6 +185,9 @@ def _parser() -> argparse.ArgumentParser:
 
     verbs.add_parser("backup", help="back up every store (arguments go to harness.backup)")
     verbs.add_parser("restore", help="restore a backup (arguments go to harness.restore)")
+    verbs.add_parser(
+        "update", help="check for or move to a newer release (arguments go to harness.update)"
+    )
 
     uninstall = verbs.add_parser("uninstall", help="remove the deployment")
     uninstall.add_argument("--keep-data", action="store_true")
@@ -475,7 +478,7 @@ def main(
     env = os.environ if home_env is None else home_env
 
     passthrough: list[str] = []
-    if args_in and args_in[0] in ("backup", "restore"):
+    if args_in and args_in[0] in ("backup", "restore", "update"):
         args_in, passthrough = args_in[:1], args_in[1:]
     try:
         args = _parser().parse_args(args_in)
@@ -506,6 +509,13 @@ def main(
             start_server,
             free_port,
         )
+        if args.verb == "update":
+            # ADR-114 Amendment 8: the checkout's own `harness.update`, told which deployment.
+            directory = ctx.deployed()
+            return ctx.run(
+                [*ctx.python, "-m", "harness.update", "--deployment", str(directory), *passthrough],
+                cwd=product,
+            )
         if args.verb in ("backup", "restore"):
             module = f"harness.{args.verb}"
             return ctx.run([*ctx.python, "-m", module, *passthrough], cwd=product)

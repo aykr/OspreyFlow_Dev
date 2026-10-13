@@ -530,3 +530,40 @@ def test_before_the_internal_network_the_server_still_pulls_the_chosen_model(rep
     ollama = yaml.safe_load((out / "compose.yaml").read_text())["services"]["ollama"]
     assert ollama["command"] == [render_ollama_pull_script(load_config(out / "osprey.yaml"))]
     assert "pull_and_verify qwen2.5:14b-instruct" in ollama["command"][0]
+
+
+# --- the version and the update notice reach a deployment rendered before them (Amendment 8) ---
+
+
+def test_the_version_and_the_state_folder_reach_an_existing_deployment(repo: Path) -> None:
+    """Refresh never renders, so a deployment made before B5 would never learn its version nor
+    see the notice. The Conduit's version line is kept current, its read-only `state/` mount
+    added, and the folder made (Docker would otherwise make it, as root, and a check could not
+    write there)."""
+    import yaml
+    from harness.render import load_config, release_version
+
+    out = _rendered(repo)
+    text = (out / "compose.yaml").read_text()
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    document["services"]["api"]["volumes"].remove("./state:/var/lib/osprey/state:ro")
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+    env = [
+        line
+        for line in (out / "deployment.env").read_text().splitlines()
+        if not line.startswith(("OSPREY_RELEASE_VERSION=", "OSPREY_STATE_DIR="))
+    ]
+    (out / "deployment.env").write_text("\n".join(env + ["OSPREY_RELEASE_VERSION=v0.0.1"]) + "\n")
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    api = yaml.safe_load((out / "compose.yaml").read_text())["services"]["api"]
+    assert "./state:/var/lib/osprey/state:ro" in api["volumes"]
+    lines = (out / "deployment.env").read_text().splitlines()
+    version = release_version(load_config(out / "osprey.yaml"))
+    assert lines.count(f"OSPREY_RELEASE_VERSION={version}") == 1
+    assert not any(line == "OSPREY_RELEASE_VERSION=v0.0.1" for line in lines)
+    assert "OSPREY_STATE_DIR=/var/lib/osprey/state" in lines
+    assert (out / "state").is_dir()
+

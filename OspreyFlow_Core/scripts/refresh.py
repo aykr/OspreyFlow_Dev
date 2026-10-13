@@ -50,8 +50,10 @@ from harness.keycloak_theme import (
     write_login_theme,
 )
 from harness.render import (
+    STATE_CONTAINER_PATH,
     _render_compose,
     load_config,
+    release_version,
     render_litellm_config,
     render_ollama_download_script,
     render_ollama_pull_script,
@@ -240,6 +242,15 @@ def _new_services_added(directory: Path) -> None:
             "(ADR-114 Amendment 7), which only a fresh render of the deployment brings."
         )
     api = services.get("api")
+    # A mount the render gives the Conduit at a place nothing is mounted yet (Amendment 8: the
+    # `state/` folder). A place already mounted keeps the deployment's own source, which may be an
+    # operator's edit (the ingest folder).
+    if isinstance(api, dict):
+        mounted = {str(v).split(":")[1] for v in api.get("volumes") or [] if ":" in str(v)}
+        for volume in rendered.get("api", {}).get("volumes") or []:
+            if ":" in str(volume) and str(volume).split(":")[1] not in mounted:
+                api.setdefault("volumes", []).append(volume)
+                changed = True
     wanted = rendered.get("api", {}).get("environment", {})
     if isinstance(api, dict) and isinstance(wanted, dict):
         environment = api.setdefault("environment", {})
@@ -250,6 +261,41 @@ def _new_services_added(directory: Path) -> None:
     if changed:
         body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
         compose_path.write_text(text[:header_end] + body, encoding="utf-8")
+
+
+def _release_up_to_date(directory: Path) -> None:
+    """The Conduit's version and the notice folder (ADR-114 Amendment 8), exactly as `render` writes
+    them (the same `release_version`, so a refresh never disagrees with a render): each line
+    replaced where it stands, or added after `OSPREY_PROFILE=` as render places it, nothing else in
+    `deployment.env` touched; and `state/` made here so that Docker does not make it (as root, where
+    a check could not write)."""
+    (directory / "state").mkdir(exist_ok=True)
+    config_path = directory / "osprey.yaml"
+    if not config_path.is_file():
+        return
+    services = (yaml.safe_load((directory / "compose.yaml").read_text(encoding="utf-8")) or {}).get(
+        "services", {}
+    )
+    config = _like_the_deployment(load_config(config_path), services, directory)
+    wanted = {
+        "OSPREY_RELEASE_VERSION": release_version(config),
+        "OSPREY_STATE_DIR": STATE_CONTAINER_PATH,
+    }
+    env_path = directory / "deployment.env"
+    lines = env_path.read_text(encoding="utf-8").splitlines()
+    updated = [
+        f"{k}={wanted[k]}" if (k := line.split("=", 1)[0]) in wanted else line for line in lines
+    ]
+    missing = [
+        f"{k}={v}" for k, v in wanted.items() if not any(x.startswith(f"{k}=") for x in lines)
+    ]
+    at = next(
+        (i + 1 for i, line in enumerate(updated) if line.startswith("OSPREY_PROFILE=")),
+        len(updated),
+    )
+    updated[at:at] = missing
+    if updated != lines:
+        env_path.write_text("\n".join(updated) + "\n", encoding="utf-8")
 
 
 def _glass_settings_up_to_date(directory: Path) -> None:
@@ -330,6 +376,7 @@ def refresh(
     _new_services_added(directory)
     _pins_moved(directory)
     _glass_settings_up_to_date(directory)
+    _release_up_to_date(directory)
     run([*compose, "build"])
     run([*compose, "up", "-d", "--wait"])
     if proxy_changed:

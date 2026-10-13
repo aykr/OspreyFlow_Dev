@@ -125,6 +125,20 @@ class ModelRoleStatus(BaseModel):
     local_model: str | None = None
 
 
+class UpdateNotice(BaseModel):
+    """The last `ospreyflow update --check` (ADR-114 Amendment 8 point 2), as it wrote it."""
+
+    current: str
+    checked_at: str
+    latest: str | None
+    update_available: bool
+    #: The release's changelog section.
+    notes: str | None
+    url: str | None
+    #: Why the check could not answer, in words; then nothing is offered.
+    problem: str | None
+
+
 class SystemStatus(BaseModel):
     """The Admin area's *System* screen (ADR-110 Amendment 1): each component, asked as the screen
     opens — what the harness's preflight showed before launch, for a running deployment."""
@@ -135,6 +149,8 @@ class SystemStatus(BaseModel):
     models: list[ModelRoleStatus] = Field(default_factory=list)
     #: Said whenever a role runs at the client's provider: what case content leaves, and to whom.
     model_notice: str | None = None
+    #: ADR-114 Amendment 8: the last update check; none when there has been none.
+    update: UpdateNotice | None = None
 
 
 class EmbeddedDashboard(BaseModel):
@@ -241,7 +257,7 @@ class PauseScheduleInput(BaseModel):
 
 ALL_MODELS = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
-    ComponentHealth, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
+    ComponentHealth, UpdateNotice, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
     ModelRoleStatus, ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed,
     ChangeScheduleInput,

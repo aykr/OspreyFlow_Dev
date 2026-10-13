@@ -491,6 +491,7 @@ from .questions import (
     QuestionsTooLargeError,
 )
 from .recipe_runs import RecipeRun, RecipeRunStore, RunTrigger
+from .release_notice import read_update_notice
 from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
@@ -8833,10 +8834,12 @@ async def system_status_route(
     # ADR-114 decision 11: each role's model and where it runs, from names only — never a key.
     statuses, notice = model_status(*routes_from_env(DeploymentModels.from_env(), os.environ))
     return SystemStatus(
-        version=os.environ.get("OSPREY_VERSION"),
+        # ADR-114 Amendment 8: the version the deployment was rendered with, and the last check.
+        version=os.environ.get("OSPREY_RELEASE_VERSION") or os.environ.get("OSPREY_VERSION"),
         components=components,
         models=statuses,
         model_notice=notice,
+        update=read_update_notice(),
     )
 
 

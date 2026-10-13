@@ -137,6 +137,26 @@ def test_backup_and_restore_pass_through_to_the_harness(rig: Rig) -> None:
     assert first.cwd == second.cwd == rig.product
 
 
+def test_update_passes_through_to_the_harness_naming_the_deployment(rig: Rig) -> None:
+    """ADR-114 Amendment 8: `update` is the checkout's `harness.update`, told which deployment."""
+    rig.install_deployment()
+    python = str(rig.product / ".venv" / "bin" / "python")
+    assert rig("update", "--check") == 0
+    (call,) = rig.runner.calls
+    assert call.argv == [
+        python, "-m", "harness.update", "--deployment", str(rig.deployment), "--check",
+    ]  # fmt: skip
+    assert call.cwd == rig.product
+
+
+def test_update_with_nothing_installed_is_refused_in_words(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert rig("update", "--check") == 1
+    assert "Nothing is installed here yet" in capsys.readouterr().err
+    assert rig.runner.calls == []
+
+
 def test_every_python_step_can_import_the_checkouts_packages(rig: Rig) -> None:
     rig.install_deployment()
     assert rig("backup") == 0

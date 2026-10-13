@@ -280,3 +280,36 @@ describe("the System tab's models", () => {
     expect(screen.queryByRole("note")).toBeNull();
   });
 });
+
+// ADR-114 decision 13, Amendment 8 point 2: the version and the last update check.
+describe("the System tab's version", () => {
+  it("says the version and an update offered, with its notes and address", async () => {
+    serve((path) =>
+      path === "system"
+        ? json(200, {
+            version: "v0.4.1", components: [], models: [], model_notice: null,
+            update: { current: "v0.4.1", checked_at: "2026-10-13T08:00:00Z", latest: "v0.5.0", update_available: true,
+                      notes: "- Find connections", url: "https://github.com/acme/ospreyflow/releases/tag/v0.5.0", problem: null },
+          })
+        : null,
+    );  // prettier-ignore
+    place(["administer_system"]);
+    const version = await screen.findByRole("region", { name: "Version" });
+    expect(version.textContent).toContain("OspreyFlow v0.4.1");
+    expect(version.textContent).toContain("v0.5.0 is available.");
+    expect(version.textContent).toContain("ospreyflow update");
+    expect(version.textContent).toContain("- Find connections");
+    expect(screen.getByRole("link", { name: "The v0.5.0 release" }).getAttribute("href")).toBe(
+      "https://github.com/acme/ospreyflow/releases/tag/v0.5.0",
+    );
+  });
+
+  it("says when there has been no check", async () => {
+    serve((path) => (path === "system" ? json(200, { version: "v0.4.1", components: [], models: [], model_notice: null, update: null }) : null));
+    place(["administer_system"]);
+    const version = await screen.findByRole("region", { name: "Version" });
+    expect(version.textContent).toContain("Not checked for updates yet.");
+    expect(version.textContent).toContain("ospreyflow update --check");
+  });
+});
+

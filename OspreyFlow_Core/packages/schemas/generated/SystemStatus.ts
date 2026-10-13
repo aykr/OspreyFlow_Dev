@@ -12,6 +12,13 @@ export type RunsAt = string;
 export type LocalModel = string | null;
 export type Models = ModelRoleStatus[];
 export type ModelNotice = string | null;
+export type Current = string;
+export type CheckedAt = string;
+export type Latest = string | null;
+export type UpdateAvailable = boolean;
+export type Notes = string | null;
+export type Url = string | null;
+export type Problem = string | null;
 
 /**
  * The Admin area's *System* screen (ADR-110 Amendment 1): each component, asked as the screen
@@ -22,6 +29,7 @@ export interface SystemStatus {
   components: Components;
   models?: Models;
   model_notice?: ModelNotice;
+  update?: UpdateNotice | null;
   [k: string]: unknown;
 }
 /**
@@ -42,5 +50,18 @@ export interface ModelRoleStatus {
   model: Model;
   runs_at: RunsAt;
   local_model?: LocalModel;
+  [k: string]: unknown;
+}
+/**
+ * The last `ospreyflow update --check` (ADR-114 Amendment 8 point 2), as it wrote it.
+ */
+export interface UpdateNotice {
+  current: Current;
+  checked_at: CheckedAt;
+  latest: Latest;
+  update_available: UpdateAvailable;
+  notes: Notes;
+  url: Url;
+  problem: Problem;
   [k: string]: unknown;
 }

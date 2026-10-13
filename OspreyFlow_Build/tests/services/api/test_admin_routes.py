@@ -313,3 +313,43 @@ def test_the_system_screen_has_no_notice_when_every_model_is_local(
     body = _system(client, monkeypatch).json()
     assert body["model_notice"] is None
     assert all(m["runs_at"] == "this deployment" for m in body["models"])
+
+
+# --- the version and the update notice (ADR-114 decision 13, Amendment 8 points 1–2) -----------
+
+
+def test_the_system_screen_says_the_deployments_version_and_the_last_check(
+    client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    import json
+
+    notice = {"current": "v0.4.1", "checked_at": "2026-10-13T08:00:00Z", "latest": "v0.5.0",
+              "update_available": True, "notes": "- Find connections",
+              "url": "https://github.com/acme/ospreyflow/releases/tag/v0.5.0", "problem": None}  # fmt: skip
+    (tmp_path / "update.json").write_text(json.dumps(notice))
+    monkeypatch.setenv("OSPREY_RELEASE_VERSION", "v0.4.1")
+    monkeypatch.setenv("OSPREY_STATE_DIR", str(tmp_path))
+    body = _system(client, monkeypatch).json()
+    assert body["version"] == "v0.4.1"
+    assert body["update"] == notice
+
+
+def test_the_notice_is_read_on_each_request_so_a_check_needs_no_restart(
+    client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    monkeypatch.setenv("OSPREY_RELEASE_VERSION", "v0.4.1")
+    monkeypatch.setenv("OSPREY_STATE_DIR", str(tmp_path))
+    assert _system(client, monkeypatch).json()["update"] is None  # never checked
+    (tmp_path / "update.json").write_text(
+        '{"current": "v0.4.1", "checked_at": "2026-10-13T09:00:00Z", "latest": "v0.4.1", '
+        '"update_available": false, "notes": null, "url": null, "problem": null}'
+    )
+    assert _system(client, monkeypatch).json()["update"]["latest"] == "v0.4.1"
+
+
+def test_a_damaged_notice_reads_as_never_checked_and_the_screen_still_answers(
+    client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    (tmp_path / "update.json").write_text('{"latest": 5')
+    monkeypatch.setenv("OSPREY_STATE_DIR", str(tmp_path))
+    assert _system(client, monkeypatch).json()["update"] is None

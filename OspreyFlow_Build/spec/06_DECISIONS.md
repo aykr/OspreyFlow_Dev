@@ -12486,6 +12486,55 @@ alone, which is `internal`; the Conduit has no route out; the proxy does; Arcade
 `127.0.0.1:2480` through the proxy; the Glass answers 200; the Conduit reaches the model server; both
 weights steps completed (the Ollama one, unmeasured before, verified every model's digest).
 
+### ADR-114, Amendment 8 (13 October 2026) — how B5 is built: versions, the update notice, `update`
+
+Amendment 6 point 1 settled the policy; these are the mechanics it leaves open, taken in building
+*(mine)* and recorded before the code (rule 11).
+
+1. **A deployment's version** is the release tag its images came from. A deployment built from a
+   checkout reports the checkout's exact `vMAJOR.MINOR.PATCH` tag if it sits on one, else
+   `dev-<short commit>`. `harness.render` writes it as `OSPREY_RELEASE_VERSION` in
+   `deployment.env` (refresh keeps it current); the Conduit reports it on Admin → System.
+2. **The update notice is a file.** `ospreyflow update --check` (run by a person, or their own
+   scheduler — the deployment never calls out) asks the user repository's GitHub releases and writes
+   `state/update.json` in the deployment's directory: the version checked against, the newest
+   release, its notes (the release's changelog section), its address and when it was checked; or
+   why the check failed, in words. The Conduit reads `state/` read-only (a mount) on each System
+   request, so a check needs no restart. No file: "Never checked", and how to check.
+3. **The repository is the checkout's own `origin`**, read from its git configuration — the
+   address `install.sh` cloned from. Only `https://github.com/<owner>/<repo>(.git)` is accepted;
+   anything else is refused in words (a mirror is served by `update --from`).
+4. **A release is its `versions.lock`**, published as a release asset beside the bundle: every
+   image by digest. `update` reads it from the release (or the bundle), never computes it.
+5. **Signatures.** Every owned image in the target lock is checked with cosign (Apache-2.0, run from
+   its pinned image, as OpenTofu is) before anything changes: keyless, against the certificate
+   identity `https://github.com/<owner>/<repo>/.github/workflows/release.yml@refs/tags/v…` and the
+   issuer `https://token.actions.githubusercontent.com`. Any image unsigned or signed by anything
+   else refuses the whole update, naming the image; nothing is changed. Third-party images are
+   pinned by digest and not signature-checked (their publishers do not sign to one identity).
+6. **`update` in order:** refuse a deployment that builds from a checkout (it moves with `git pull`
+   and `ospreyflow start --build`); find the target (newest, or `--to vX.Y.Z`); refuse one not newer;
+   verify signatures; back up every store (`harness.backup`); keep the rollback point (the
+   deployment's compose file and lock, beside the backup's name); write the target's digests into the
+   compose file and lock (owned and third-party images; nothing else changes); pull (or `docker load`
+   from `--from`); `up -d --wait`; **verify** — every service running and healthy, and each owned
+   container running the target's digest. A failure at any step after the backup **rolls back**: the
+   kept compose file and lock put back, `up -d --wait`, then the backup restored (`harness.restore`),
+   then the same verification against the old version. The result is said in words: updated, or
+   which step failed, why, and that it was rolled back (or, if the rollback failed too, exactly what
+   state the deployment is in and the backup to restore by hand).
+7. **The changelog** is `CHANGELOG.md` in Core, one `## vX.Y.Z — DATE` section per release. A tag
+   with no section is refused by `tools/changelog_check.py`, which `release.yml` runs first; the
+   release's notes are that section.
+8. **`release.yml` is the owner's file.** The signing steps (`id-token: write`, cosign-installer,
+   `cosign sign --yes` per pushed digest), the changelog check, the notes and the `versions.lock`
+   asset are written as a change for the owner to apply (`process/B5_release_workflow.md`).
+9. **What can be proved before a real release, and how:** everything but the keyless identity is
+   proved against real tools — a throwaway local registry, images signed with a throwaway cosign
+   key (the verifier's key/identity is the one seam a test sets), a real `update` and a real rollback
+   of a throwaway deployment. The keyless check itself is proved only by the first real release; until
+   then it is a disclosed gap, not a claim.
+
 ## ADR-115 — The design handoff: the welcome page, Home and the Glass to `DESIGN.md` v0.2 — ACCEPTED (design)
 
 Status: **accepted on the owner's rulings of 12 October 2026; design only, nothing built.** The

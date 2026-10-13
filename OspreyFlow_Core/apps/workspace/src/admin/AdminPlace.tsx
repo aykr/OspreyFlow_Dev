@@ -10,9 +10,11 @@ import type {
   PersonAccount,
   SignInDelivery,
   SystemStatus,
+  UpdateNotice,
 } from "../../../../packages/schemas/generated";
 import { Button, Input, Select, Tabs } from "../design/primitives";
 import { Schedules } from "./Schedules";
+import { updateWords } from "./updateNotice";
 import {
   disablePerson,
   enablePerson,
@@ -632,9 +634,42 @@ function System({ api }: { api: AdminApi }) {
           </tbody>
         </table>
       )}
-      {status?.version && <p className="label" style={{ margin: 0 }}>{`Version ${status.version}`}</p>}
+      {status && <VersionSection version={status.version} update={status.update} />}
       <Button onClick={ask}>Ask again</Button>
     </>
+  );
+}
+
+/** The version and the last update check (ADR-114 decision 13, Amendment 8 point 2). */
+function VersionSection({ version, update }: { version?: string | null; update?: UpdateNotice | null }) {
+  const words = updateWords(version, update);
+  return (
+    <section aria-label="Version" style={{ display: "grid", gap: "var(--sp-6)" }}>
+      {version && <p className="value" style={{ margin: 0 }}>{`OspreyFlow ${version}`}</p>}
+      <p
+        role={words.tone === "problem" ? "alert" : "status"}
+        style={{
+          margin: 0,
+          ...(words.tone === "available" ? { border: "1px solid var(--border-strong)", padding: "var(--sp-8)" } : {}),
+        }}
+      >
+        {words.headline}
+      </p>
+      <p className="label" style={{ margin: 0 }}>
+        {words.detail}
+      </p>
+      {update?.update_available && update.url && (
+        <p style={{ margin: 0 }}>
+          <a href={update.url} target="_blank" rel="noreferrer">{`The ${update.latest} release`}</a>
+        </p>
+      )}
+      {update?.update_available && update.notes && (
+        <details>
+          <summary>{`What is new in ${update.latest}`}</summary>
+          <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>{update.notes}</pre>
+        </details>
+      )}
+    </section>
   );
 }
 

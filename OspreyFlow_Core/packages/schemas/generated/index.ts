@@ -155,6 +155,7 @@ export type { RegisteredDashboard } from "./RegisteredDashboard";
 export type { RolesInput } from "./RolesInput";
 export type { DashboardInput } from "./DashboardInput";
 export type { ComponentHealth } from "./ComponentHealth";
+export type { UpdateNotice } from "./UpdateNotice";
 export type { SystemStatus } from "./SystemStatus";
 export type { EmbeddedDashboard } from "./EmbeddedDashboard";
 export type { DashboardGuestToken } from "./DashboardGuestToken";

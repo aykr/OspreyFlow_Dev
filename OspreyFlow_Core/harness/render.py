@@ -866,6 +866,8 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             # about where that config file originally lived.
             service["volumes"] = [
                 "./osprey.yaml:/app/osprey.yaml:ro",
+                # Amendment 8: the update notice, written on the host by `update --check`.
+                f"./state:{STATE_CONTAINER_PATH}:ro",
                 # **The declared volumes were mounted by nothing.** `osprey-data` and
                 # `osprey-staging` were emitted under `volumes:` from the first render and no
                 # service ever used them, so the Conduit's analytics DuckDB lived in the container
@@ -1066,9 +1068,25 @@ def _uses_clickhouse(config: OspreyConfig) -> bool:
     return config.components.analytics_engine.value == "clickhouse"
 
 
+#: ADR-114 Amendment 8: where the Conduit reads the deployment's `state/` folder (read-only), in
+#: which `ospreyflow update --check` writes the update notice.
+STATE_CONTAINER_PATH = "/var/lib/osprey/state"
+
+
+def release_version(config: OspreyConfig) -> str:
+    """The deployment's version (Amendment 8 point 1): the release its checkout sits on, else
+    `dev-<short commit>`."""
+    from harness.release import checkout_version
+
+    source = config.components.source_path
+    return checkout_version(Path(source) if source is not None else REPO_ROOT)
+
+
 def _render_env(config: OspreyConfig) -> str:
     lines = [
         f"OSPREY_PROFILE={config.profile.value}",
+        f"OSPREY_RELEASE_VERSION={release_version(config)}",
+        f"OSPREY_STATE_DIR={STATE_CONTAINER_PATH}",
         f"OSPREY_GRAPH_STORE={config.components.graph_store.value}",
         f"OSPREY_ANALYTICS_ENGINE={config.components.analytics_engine.value}",
         f"OSPREY_SEARCH_BACKEND={config.components.search.value}",
