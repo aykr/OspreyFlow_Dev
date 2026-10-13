@@ -88,13 +88,19 @@ def github_repository(origin: str) -> tuple[str, str]:
     return match.group(1), match.group(2)
 
 
-def _fetch_releases(owner: str, repo: str, api_base: str) -> list[dict[str, Any]]:
-    url = f"{api_base}/repos/{owner}/{repo}/releases?per_page=100"
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "ospreyflow-update"}
+def _headers(accept: str) -> dict[str, str]:
+    headers = {"Accept": accept, "User-Agent": "ospreyflow-update"}
     # A private repository is read with the host's own token, sent to the API only, kept nowhere.
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def _fetch_releases(owner: str, repo: str, api_base: str) -> list[dict[str, Any]]:
+    url = f"{api_base}/repos/{owner}/{repo}/releases?per_page=100"
+    headers = _headers("application/vnd.github+json")
+    token = headers.get("Authorization")
     request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 - https or loopback
@@ -138,11 +144,7 @@ def check_for_update(
     except ReleaseRefused as why:
         notice["problem"] = str(why)
         return notice
-    published = [
-        r
-        for r in releases
-        if not r.get("draft") and not r.get("prerelease") and is_version(str(r.get("tag_name")))
-    ]
+    published = _published(releases)
     if not published:
         notice["problem"] = f"{owner}/{repo} has published no release yet."
         return notice
@@ -152,6 +154,52 @@ def check_for_update(
     notice["url"] = latest.get("html_url") or None
     notice["update_available"] = is_version(current) and newer(latest["tag_name"], current)
     return notice
+
+
+def _published(releases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        r
+        for r in releases
+        if not r.get("draft") and not r.get("prerelease") and is_version(str(r.get("tag_name")))
+    ]
+
+
+def find_release(
+    repository: tuple[str, str], tag: str | None, *, api_base: str = GITHUB_API
+) -> dict[str, str]:
+    """The release to update to — `tag`, or the newest published — with its notes and its
+    `versions.lock`, fetched as a release asset through the API (so a private repository is read
+    with the host's token). Refused in words when there is none to apply."""
+    if tag is not None and not is_version(tag):
+        raise ReleaseRefused(f"{tag!r} is not a version (vMAJOR.MINOR.PATCH)")
+    owner, repo = repository
+    published = _published(_fetch_releases(owner, repo, api_base))
+    if tag is not None:
+        chosen = [r for r in published if r["tag_name"] == tag]
+        if not chosen:
+            raise ReleaseRefused(f"{owner}/{repo} has no published release {tag}.")
+        release = chosen[0]
+    elif published:
+        release = max(published, key=lambda r: _parts(str(r["tag_name"])))
+    else:
+        raise ReleaseRefused(f"{owner}/{repo} has published no release yet.")
+    assets = [a for a in release.get("assets") or [] if a.get("name") == "versions.lock"]
+    if not assets:
+        raise ReleaseRefused(
+            f"{release['tag_name']} has no versions.lock, so it cannot be applied: it says which "
+            "image digests the release is."
+        )
+    request = urllib.request.Request(
+        str(assets[0]["url"]), headers=_headers("application/octet-stream")
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
+            lock = response.read().decode("utf-8")
+    except (urllib.error.URLError, OSError, ValueError) as failed:
+        raise ReleaseRefused(
+            f"{release['tag_name']}'s versions.lock could not be read ({failed})."
+        ) from None
+    return {"tag": str(release["tag_name"]), "notes": str(release.get("body") or ""), "lock": lock}
 
 
 def write_notice(deployment: Path, notice: dict[str, Any]) -> Path:

@@ -567,3 +567,20 @@ def test_the_version_and_the_state_folder_reach_an_existing_deployment(repo: Pat
     assert "OSPREY_STATE_DIR=/var/lib/osprey/state" in lines
     assert (out / "state").is_dir()
 
+
+
+def test_files_only_brings_the_files_up_to_date_and_runs_nothing(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR-114 Amendment 8 point 6a: `update` runs the new checkout's refresh for its files alone,
+    then pins the release's images itself and brings the stack up once. It must start, build and
+    restart nothing, and say which services must restart for what changed."""
+    import json
+
+    out = _rendered(repo, "qwen2.5:14b-instruct")
+    changed = refresh.files_up_to_date(repo)
+    assert changed == {"proxy_changed": True, "theme_changed": False}
+    assert "pull_and_verify qwen2.5:14b-instruct" in (out / "compose.yaml").read_text()
+    assert refresh.main(["--files-only"], repo_root=repo) == 0
+    said = capsys.readouterr().out.strip().splitlines()[-1]
+    assert json.loads(said) == {"proxy_changed": False, "theme_changed": False}

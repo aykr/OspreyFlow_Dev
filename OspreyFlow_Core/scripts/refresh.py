@@ -34,6 +34,7 @@ is still `python -m harness.apply`. Every compose call reads the deployment's ow
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -363,6 +364,19 @@ def _pins_moved(directory: Path) -> None:
         )
 
 
+def files_up_to_date(repo_root: Path = REPO_ROOT) -> dict[str, bool]:
+    """Every file of the deployment as this checkout writes it, and nothing run: `update` uses this
+    from the new checkout (ADR-114 Amendment 8 point 6a). Says which services must restart."""
+    directory = _deployment_dir(repo_root)
+    theme_changed = _theme_changed(directory, repo_root)
+    proxy_changed = _models_up_to_date(directory)
+    _new_services_added(directory)
+    _pins_moved(directory)
+    _glass_settings_up_to_date(directory)
+    _release_up_to_date(directory)
+    return {"proxy_changed": proxy_changed, "theme_changed": theme_changed}
+
+
 def refresh(
     repo_root: Path = REPO_ROOT,
     *,
@@ -371,12 +385,8 @@ def refresh(
 ) -> None:
     directory = _deployment_dir(repo_root)
     compose = _compose(directory / "compose.yaml")
-    theme_changed = _theme_changed(directory, repo_root)
-    proxy_changed = _models_up_to_date(directory)
-    _new_services_added(directory)
-    _pins_moved(directory)
-    _glass_settings_up_to_date(directory)
-    _release_up_to_date(directory)
+    changed = files_up_to_date(repo_root)
+    theme_changed, proxy_changed = changed["theme_changed"], changed["proxy_changed"]
     run([*compose, "build"])
     run([*compose, "up", "-d", "--wait"])
     if proxy_changed:
@@ -406,11 +416,20 @@ def refresh(
         )
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None, *, repo_root: Path = REPO_ROOT) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args == ["--files-only"]:
+        try:
+            changed = files_up_to_date(repo_root)
+        except NothingToRefresh as error:
+            print(f"refresh: {error}", file=sys.stderr)
+            return 1
+        print(json.dumps(changed, sort_keys=True))
+        return 0
     # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine.
     answer_localhost_with_loopback()
     try:
-        refresh()
+        refresh(repo_root)
     except (NothingToRefresh, RefreshFailed) as error:
         print(f"refresh: {error}", file=sys.stderr)
         return 1

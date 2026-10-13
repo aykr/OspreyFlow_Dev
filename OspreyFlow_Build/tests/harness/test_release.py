@@ -20,6 +20,7 @@ from harness.release import (
     ReleaseRefused,
     check_for_update,
     checkout_version,
+    find_release,
     github_repository,
     newer,
     read_notice,
@@ -49,6 +50,8 @@ class _GitHub:
         self.failing = False
         self.asked: list[str] = []
         self.authorisations: list[str | None] = []
+        #: asset id -> its bytes, served at /repos/acme/ospreyflow/releases/assets/<id>
+        self.assets: dict[int, bytes] = {}
 
     def handler(self) -> type[BaseHTTPRequestHandler]:
         github = self
@@ -61,6 +64,14 @@ class _GitHub:
                 elif github.rate_limited:
                     self._answer(403, {"message": "API rate limit exceeded"},
                                  {"X-RateLimit-Remaining": "0"})  # fmt: skip
+                elif self.path.startswith("/repos/acme/ospreyflow/releases/assets/"):
+                    asset = int(self.path.rsplit("/", 1)[1])
+                    if self.headers.get("Accept") != "application/octet-stream":
+                        self._answer(200, {"id": asset, "name": "versions.lock"})  # metadata
+                    elif asset in github.assets:
+                        self._raw(200, github.assets[asset])
+                    else:
+                        self._answer(404, {"message": "Not Found"})
                 elif self.path.startswith("/repos/acme/ospreyflow/releases"):
                     self._answer(200, github.releases)
                 elif self.path.startswith("/repos/acme/private/releases"):
@@ -80,6 +91,13 @@ class _GitHub:
                 for name, value in (headers or {}).items():
                     self.send_header(name, value)
                 self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def _raw(self, status: int, data: bytes) -> None:
+                self.send_response(status)
+                self.send_header("Content-Type", "application/octet-stream")
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
@@ -282,4 +300,51 @@ def test_a_private_repository_is_read_with_the_hosts_token_and_said_when_there_i
     assert with_token["latest"] == "v0.5.0" and with_token["problem"] is None
     assert fake.authorisations == [None, "Bearer good-token"]
     assert "good-token" not in json.dumps(with_token)
+
+
+# --- finding a release to update to (Amendment 8 points 4 and 6) ---------------------------------
+
+
+def _with_lock(fake: _GitHub, base: str, tag: str, asset: int, lock: bytes | None) -> dict:
+    release = _release(tag, body=f"notes of {tag}")
+    if lock is not None:
+        fake.assets[asset] = lock
+        url = f"{base}/repos/acme/ospreyflow/releases/assets/{asset}"
+        release["assets"] = [{"name": "versions.lock", "url": url}]
+    else:
+        release["assets"] = []
+    return release
+
+
+def test_the_newest_release_and_its_lock_are_found(github: tuple[_GitHub, str]) -> None:
+    fake, base = github
+    fake.releases = [
+        _with_lock(fake, base, "v0.5.0", 7, b"images: [five]\n"),
+        _with_lock(fake, base, "v0.4.1", 6, b"images: [four]\n"),
+    ]
+    found = find_release(("acme", "ospreyflow"), None, api_base=base)
+    assert found == {"tag": "v0.5.0", "notes": "notes of v0.5.0", "lock": "images: [five]\n"}
+
+
+def test_a_named_release_is_found_and_one_not_published_is_refused(
+    github: tuple[_GitHub, str],
+) -> None:
+    fake, base = github
+    fake.releases = [
+        _with_lock(fake, base, "v0.5.0", 7, b"five"),
+        _with_lock(fake, base, "v0.4.1", 6, b"four"),
+        {**_with_lock(fake, base, "v0.6.0", 8, b"six"), "draft": True},
+    ]
+    assert find_release(("acme", "ospreyflow"), "v0.4.1", api_base=base)["lock"] == "four"
+    with pytest.raises(ReleaseRefused, match="no published release v0.6.0"):
+        find_release(("acme", "ospreyflow"), "v0.6.0", api_base=base)
+    with pytest.raises(ReleaseRefused, match="not a version"):
+        find_release(("acme", "ospreyflow"), "latest", api_base=base)
+
+
+def test_a_release_without_its_lock_cannot_be_applied(github: tuple[_GitHub, str]) -> None:
+    fake, base = github
+    fake.releases = [_with_lock(fake, base, "v0.5.0", 7, None)]
+    with pytest.raises(ReleaseRefused, match="has no versions.lock"):
+        find_release(("acme", "ospreyflow"), None, api_base=base)
 
