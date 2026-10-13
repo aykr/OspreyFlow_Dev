@@ -12567,7 +12567,7 @@ Phase E row E4). The owner ruled:
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;
-"grouped by degree, widened step by step". Nothing here is built yet.
+"grouped by degree, widened step by step". Built the same day (Amendment 1).
 
 **Context.** The Pathfinder (spec 02 §3.1, ADR-033) finds up to ten shortest paths between two nodes
 already on the canvas and shows them one at a time in a popover. The owner asked to search for the
@@ -12602,3 +12602,37 @@ degree is asked; refused past eight; refused to a principal without `investigate
 answers as an unknown one. The Glass: the two ends by search and by *Use selected*; the shortest
 degree said in words; widening by one; "of more than"; a route added to the canvas with its nodes
 marked by degree; every action by keyboard (rule 13).
+
+### ADR-116, Amendment 1 (13 October 2026) — built, and two things the decision did not say
+
+**Built.** `GraphPort.paths_at_length(source, target, length, limit, principal, *, edge_types)`
+returns `RoutesAtLength` (the routes and `more`); the ArcadeDB adapter holds `PathBuilder`'s
+traversal to exactly `length` links (`times()` in place of `until()`), with the access step at the
+source, every link and every node walked onto, and asks for one more than `limit` to say whether
+more exist. `services/api/connections.py` asks one length at a time from one link up and stops at
+the first with a route, so the fewest degrees are the fewest the reader can see. The route answers
+`Connections` (`degree`, `paths`, `more`, `searched_to`); with no route up to six, `degree` is
+empty. A hidden end and an unknown one answer alike, since neither has a route. The Glass's *Find
+connections* panel sits in the side-panel stack; marks are drawn by the canvas's badge overlay,
+below and to the left of a node, clear of a judgement count.
+
+**Decided in building, for the owner to confirm:**
+
+1. **A `NOT_SAME_AS` link is never a step on a route.** It records an analyst's judgement that two
+   records are *different* people, so it is not a connection between them. The Pathfinder
+   (`GraphPort.paths`) still walks it; that is unchanged here and is listed for the owner.
+2. **Degrees are counted in stored links, a `SAME_AS` link counting as one, as the Pathfinder
+   counts them.** 01 §4 collapses `SAME_AS` components at query time for display, so two records
+   of one person drawn as one node are "1 degree apart" here. Counting a match as no degree needs
+   the resolution threshold in the traversal, which neither the Pathfinder nor this does; it is a
+   decision for the owner, not taken here.
+
+**Tests that fail if this is violated.** The conformance suite (`test_routes_at_a_length_are_
+exactly_that_long_and_every_such_route_is_found`, `test_no_route_passes_through_a_hidden_node_or_
+link_and_the_fewest_degrees_do_not_move`, `…_honour_the_limit_and_say_when_more_exist`,
+`test_a_not_same_as_judgement_is_never_a_step_on_a_route`, the link-type and dataset cases);
+`test_connections_route.py` (11); `FindConnectionsPanel.test.tsx`, `connectionsApi.test.ts`,
+`DegreeMarkOverlay.test.tsx`; `keyboard/connections.spec.ts` (`CONNECTIONS_ACTIONS`, six actions)
+and the canvas walkthrough "a route's nodes are marked on the canvas with their degree from From".
+**Unmeasured:** a search that finds nothing walks every simple route up to six links; on a dense
+store (Enron's hubs) that may be slow, as the Pathfinder's six-hop search already may be.

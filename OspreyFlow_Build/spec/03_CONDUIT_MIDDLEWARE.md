@@ -197,6 +197,7 @@ POST   /v1/investigations/{id}/explore/starter-questions/{question}/run    an of
 GET    /v1/investigations/{id}/nodes/{node}/shared-contacts    who shares (`edge_type` required) at least two of this node's contacts by the link type, most first, counted as the reader (ADR-100)
 POST   /v1/investigations/{id}/nodes/{node}/shared-contacts/{other}/canvas    the two (`edge_type` required), their shared contacts and the links among them onto the canvas, all or limit_exceeded, Editor (ADR-100)
 POST   /v1/investigations/{id}/paths       k-shortest paths between two entities, within the case's datasets (ADR-099)
+POST   /v1/investigations/{id}/connections the fewest degrees connecting two nodes and the routes there, or the routes at a degree asked for (ADR-116)
 POST   /v1/investigations/{id}/patterns/preview   cardinality estimate for a visual query, within the case's datasets (ADR-099)
 POST   /v1/investigations/{id}/patterns/run   execute; large results return a job id, which keeps the case's datasets (ADR-099)
 POST   /v1/investigations/{id}/patterns/save   persist the calling principal's own pattern, in the case's first dataset (a version bump if it exists, in its own dataset), Editor (ADR-099 Amendment 3)
