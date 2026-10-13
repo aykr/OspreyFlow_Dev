@@ -569,6 +569,9 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "reset-a-persons-sign-in-by-keyboard",
   // ADR-114 Amendment 5 (B4d): the Demo packs tab.
   "copy-a-demo-pack-command-by-keyboard",
+  // ADR-110 decision 8 (D4): Schedules and runs.
+  "pause-and-resume-a-schedule-by-keyboard",
+  "show-a-schedules-runs-by-keyboard",
 ] as const);
 
 // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.

@@ -9,6 +9,17 @@ const REGISTRY = "ADMIN_ACTIONS";
 const PERSON = { id: "u1", username: "osprey-demo-analyst", name: "Demo Analyst", enabled: true, roles: ["analyst"],
                  clearance: "OFFICIAL", org_unit: "verify" };  // prettier-ignore
 
+// ADR-110 decision 8: one scheduled recipe, last run succeeded.
+const SCHEDULE = {
+  recipe_id: "feed", label: "Daily custody export", case_id: "case-1", cron: "0 6 * * 1-5", timezone: "Europe/London",
+  schedule: "every weekday at 06:00 (Europe/London)", owner: "approver-1", next_run: "2026-06-03T05:00:00Z",
+  paused: false, paused_reason: null, flagged: false,
+  last_run: { run_id: "r1", trigger: "schedule", slot: "2026-06-02T05:00:00Z", started_at: "2026-06-02T05:00:01Z",
+              finished_at: "2026-06-02T05:00:09Z", outcome: "succeeded", run_as: "approver-1", withheld: false,
+              rows_read: 40, nodes_created: 12, nodes_referenced: 3, edges_created: 20, rows_rejected: 1, rows_held: 0,
+              load_id: "l1", failure: null },
+};  // prettier-ignore
+
 async function serve(page: Page): Promise<string[]> {
   const asked: string[] = [];
   let dashboards = [{ client_id: "osprey-dashboard-old", account_id: "sa-0", clearance: "OFFICIAL", org_unit: "verify" }];
@@ -44,6 +55,11 @@ async function serve(page: Page): Promise<string[]> {
                           case_name: "HMP fixture (synthetic demo)", loaded_case_id: null,
                           command: "ospreyflow demo add hmp", source_page: null, size_bytes: null }]);  // prettier-ignore
     if (path === "system") return json(200, { components: [{ name: "Graph store", ok: true, millis: 12 }] });
+    if (path === "schedules") return json(200, [SCHEDULE]);
+    if (path === "schedules/feed/pause") return json(200, { ...SCHEDULE, paused: true, paused_reason: "paused by admin-1" });
+    if (path === "schedules/feed/resume") return json(200, SCHEDULE);
+    if (path === "schedules/feed/runs")
+      return json(200, [{ ...SCHEDULE.last_run, run_id: "r0", outcome: "missed", rows_read: null, failure: "the deployment was not running then" }]);
     return json(404, {});
   });
   return asked;
@@ -145,6 +161,30 @@ test("a demo pack's command is copied by keyboard", async ({ page, context }) =>
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("ospreyflow demo add hmp");
   expect(asked).toContain("GET demo-packs");
   registerCovered(REGISTRY, "copy-a-demo-pack-command-by-keyboard");
+});
+
+test("a schedule is paused and resumed by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=operate_schedules");
+  await press(page, "Pause Daily custody export");
+  await expect(page.getByText("paused by admin-1")).toBeVisible();
+  expect(asked).toContain("POST schedules/feed/pause");
+  await press(page, "Resume Daily custody export");
+  await expect(page.getByRole("button", { name: "Pause Daily custody export" })).toBeVisible();
+  expect(asked).toContain("POST schedules/feed/resume");
+  registerCovered(REGISTRY, "pause-and-resume-a-schedule-by-keyboard");
+});
+
+test("a schedule's runs are shown by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=operate_schedules");
+  await press(page, "Show runs of Daily custody export");
+  await expect(page.getByRole("list", { name: "Runs of Daily custody export" })).toContainText(
+    "Missed: the deployment was not running then",
+  );
+  expect(asked).toContain("GET schedules/feed/runs");
+  await expect(page.getByRole("button", { name: "Hide runs of Daily custody export" })).toBeFocused();
+  registerCovered(REGISTRY, "show-a-schedules-runs-by-keyboard");
 });
 
 test("every registered Admin action has its own proving test case above", () => {

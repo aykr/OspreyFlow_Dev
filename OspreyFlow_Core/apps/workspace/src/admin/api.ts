@@ -3,11 +3,13 @@
 // provider directly. Shapes are the generated ones.
 import type {
   AccessInput,
+  AdminSchedule,
   DashboardIdentity,
   DemoPackStatus,
   InviteInput,
   PersonAccount,
   RegisteredDashboard,
+  ScheduleRunView,
   SignInDelivery,
   SystemStatus,
 } from "../../../../packages/schemas/generated";
@@ -75,3 +77,11 @@ export const removeDashboard = (api: AdminApi, clientId: string) =>
   call<void>(api, `dashboards/${encodeURIComponent(clientId)}`, { method: "DELETE" });
 export const listDemoPacks = (api: AdminApi) => call<DemoPackStatus[]>(api, "demo-packs");
 export const systemStatus = (api: AdminApi) => call<SystemStatus>(api, "system");
+// ADR-110 decision 8: Schedules and runs.
+const schedule = (recipeId: string, what: string) => `schedules/${encodeURIComponent(recipeId)}/${what}`;
+export const listSchedules = (api: AdminApi) => call<AdminSchedule[]>(api, "schedules");
+export const scheduleRuns = (api: AdminApi, recipeId: string) => call<ScheduleRunView[]>(api, schedule(recipeId, "runs"));
+export const pauseSchedule = (api: AdminApi, recipeId: string) =>
+  call<AdminSchedule>(api, schedule(recipeId, "pause"), { method: "POST", body: JSON.stringify({}) });
+export const resumeSchedule = (api: AdminApi, recipeId: string) =>
+  call<AdminSchedule>(api, schedule(recipeId, "resume"), { method: "POST" });
