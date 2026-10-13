@@ -189,7 +189,8 @@ def _rendered(repo: Path, extraction: str = "qwen2.5:7b-instruct") -> Path:
     compose = artefacts["compose.yaml"]
     banner = compose[: compose.index("\nname:") + 1]
     document = yaml.safe_load(compose)
-    document["services"]["ollama"]["command"] = [_OLLAMA_PULL_SCRIPT]
+    # ADR-114 Amendment 7: the weights are pulled by the one-shot `ollama-models`, not the server.
+    document["services"]["ollama-models"]["command"] = [_OLLAMA_PULL_SCRIPT.replace("wait\n", "")]
     old = banner + yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     assert old != compose  # the old file really lacks the line
     (out / "compose.yaml").write_text(old, encoding="utf-8")
@@ -228,10 +229,9 @@ def test_the_chosen_models_are_brought_up_to_date_and_no_secret_changes(repo: Pa
     env = (out / "deployment.env").read_text().splitlines()
     assert [line for line in env if "_MODEL=" not in line] == secrets_before
     assert "OSPREY_EXTRACTION_MODEL=qwen2.5:14b-instruct" in env
-    assert (
-        "pull_and_verify qwen2.5:14b-instruct"
-        in yaml.safe_load((out / "compose.yaml").read_text())["services"]["ollama"]["command"][0]
-    )
+    services = yaml.safe_load((out / "compose.yaml").read_text())["services"]
+    assert "pull_and_verify qwen2.5:14b-instruct" in services["ollama-models"]["command"][0]
+    assert services["ollama"]["command"] == ["serve"]  # the server itself never pulls
     # The proxy reads its routing table at start: restarted after `up`, and waited on.
     assert _subcommands(run.calls) == ["build", "up", "restart", "up"]
     assert run.calls[2][-1] == "litellm"
@@ -307,7 +307,7 @@ def test_a_service_added_since_the_deployment_was_rendered_is_brought_in_and_not
     # What the deployment already had is left exactly as it was, including a local setting.
     assert after["services"]["api"]["environment"]["OSPREY_LOCAL_SETTING"] == "kept"
     for name, service in before["services"].items():
-        if name in {"api", "ollama"}:  # ollama: the model step brings its pull up to date
+        if name in {"api", "ollama-models"}:  # the model step brings its pull up to date
             continue
         assert after["services"][name] == service
     assert (out / "deployment.env").read_text().splitlines()[: len(secrets_before.splitlines())]
@@ -406,7 +406,7 @@ def test_a_third_party_service_moves_to_the_checkouts_pin_with_its_launch_option
     # A new version's probe comes with it (26.10.1's image has no `curl`).
     assert arcadedb["healthcheck"] == wanted["healthcheck"]
     for name, service in before["services"].items():
-        if name in {"arcadedb", "ollama"}:  # ollama: the model step brings its pull up to date
+        if name in {"arcadedb", "ollama-models"}:  # the model step brings its pull up to date
             continue
         assert after["services"][name] == service
     lock = yaml.safe_load((out / "versions.lock").read_text())
@@ -466,3 +466,65 @@ def test_a_service_running_an_image_built_here_is_never_moved_to_a_registry(repo
     after = yaml.safe_load((out / "compose.yaml").read_text())["services"]
     assert after["report-sync"]["image"] == "osprey/api:local"
     assert after["api"]["image"] == "osprey/api:local"
+
+
+# --- a deployment rendered before the internal network (ADR-114 Amendment 7) ------------------
+
+
+def _before_the_internal_network(repo: Path) -> Path:
+    """A deployment rendered before Amendment 7: no networks of its own (every service on the
+    default one), no model-download steps, and the Ollama server pulling its own weights — the
+    shape of the owner's deployment on 13 October 2026, where a refresh broke it."""
+    import yaml
+    from harness.render import _OLLAMA_PULL_SCRIPT
+
+    out = _rendered(repo)
+    text = (out / "compose.yaml").read_text()
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    document.pop("networks")
+    for service in document["services"].values():
+        service.pop("networks", None)
+    for step in ("ollama-models", "whisper-models"):
+        document["services"].pop(step)
+    document["services"]["ollama"]["entrypoint"] = ["/bin/sh", "-c"]
+    document["services"]["ollama"]["command"] = [_OLLAMA_PULL_SCRIPT]
+    document["services"].pop("ner")  # a service this checkout adds that the deployment lacks
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+    return out
+
+
+def test_a_deployment_before_the_internal_network_is_not_given_half_of_it(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Found deploying 13 October 2026: refresh copied the two model-download steps, with their
+    `networks`, into a deployment that defines none, and `docker compose build` refused the file.
+    They come with the layout a fresh render brings, so they are left out and named; a service
+    that is simply new still arrives, on the default network like the rest."""
+    import yaml
+
+    out = _before_the_internal_network(repo)
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    after = yaml.safe_load((out / "compose.yaml").read_text())
+    assert "networks" not in after
+    assert {"ollama-models", "whisper-models"}.isdisjoint(after["services"])
+    assert "ner" in after["services"] and "networks" not in after["services"]["ner"]
+    assert all("networks" not in s for s in after["services"].values())
+    said = capsys.readouterr().out
+    assert "ollama-models" in said and "whisper-models" in said and "Amendment 7" in said
+
+
+def test_before_the_internal_network_the_server_still_pulls_the_chosen_model(repo: Path) -> None:
+    import yaml
+    from harness.render import load_config, render_ollama_pull_script
+
+    out = _before_the_internal_network(repo)
+    raw = yaml.safe_load((out / "osprey.yaml").read_text())
+    raw["models"]["extraction"] = "qwen2.5:14b-instruct"
+    (out / "osprey.yaml").write_text(yaml.safe_dump(raw, sort_keys=False))
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    ollama = yaml.safe_load((out / "compose.yaml").read_text())["services"]["ollama"]
+    assert ollama["command"] == [render_ollama_pull_script(load_config(out / "osprey.yaml"))]
+    assert "pull_and_verify qwen2.5:14b-instruct" in ollama["command"][0]

@@ -129,6 +129,15 @@ _MODEL_LINES = (
 )
 _BEFORE_MODELS = "OSPREY_MODELS_LOCAL_ONLY="
 
+#: ADR-114 Amendment 7: the steps that fetch model weights exist only with the internal network
+#: (the servers that read case content have no route out, so the weights are fetched by these).
+#: A deployment rendered before it has neither; only a fresh render brings the layout whole.
+_WITH_THE_INTERNAL_NETWORK = ("ollama-models", "whisper-models")
+
+
+def _on_the_internal_network(document: dict) -> bool:
+    return "osprey" in (document.get("networks") or {})
+
 
 def _models_up_to_date(directory: Path) -> bool:
     """Write the model parts of the deployment's files from its `osprey.yaml`, as `render` would;
@@ -143,10 +152,17 @@ def _models_up_to_date(directory: Path) -> bool:
     text = compose_path.read_text(encoding="utf-8")
     header_end = text.find("\nname:") + 1
     document = yaml.safe_load(text)
-    ollama = document.get("services", {}).get("ollama")
-    wanted_command = [render_ollama_pull_script(config)]
-    if ollama is not None and ollama.get("command") != wanted_command:
-        ollama["command"] = wanted_command
+    # Before the internal network the server pulls its own weights; with it, `ollama-models` does
+    # and then exits (ADR-114 Amendment 7).
+    script = render_ollama_pull_script(config)
+    if _on_the_internal_network(document):
+        puller = document.get("services", {}).get("ollama-models")
+        wanted_command = [script.replace("wait\n", "")]
+    else:
+        puller = document.get("services", {}).get("ollama")
+        wanted_command = [script]
+    if puller is not None and puller.get("command") != wanted_command:
+        puller["command"] = wanted_command
         body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
         compose_path.write_text(text[:header_end] + body, encoding="utf-8")
 
@@ -204,10 +220,24 @@ def _new_services_added(directory: Path) -> None:
     config = _like_the_deployment(config, services, directory)
     rendered = yaml.safe_load(_render_compose(config, service_images(config)))["services"]
     changed = False
+    layout = _on_the_internal_network(document)
+    left_out = []
     for name, service in rendered.items():
-        if name not in services:
-            services[name] = service
-            changed = True
+        if name in services:
+            continue
+        if not layout:
+            if name in _WITH_THE_INTERNAL_NETWORK:
+                left_out.append(name)
+                continue
+            # On the default network, like every other service of this deployment.
+            service.pop("networks", None)
+        services[name] = service
+        changed = True
+    if left_out:
+        print(
+            f"refresh: not added: {', '.join(left_out)}. They come with the internal network "
+            "(ADR-114 Amendment 7), which only a fresh render of the deployment brings."
+        )
     api = services.get("api")
     wanted = rendered.get("api", {}).get("environment", {})
     if isinstance(api, dict) and isinstance(wanted, dict):
