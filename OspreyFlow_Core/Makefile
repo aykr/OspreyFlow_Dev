@@ -1,4 +1,4 @@
-.PHONY: check lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness test-js seed-paysim seed-hmp seed-fixture-corp seed-ledger register-sign-in dev-up dev-down docker-clean glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y
+.PHONY: check lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness test-js dev-up dev-down docker-clean glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y
 
 PY := .venv/bin/python
 RUFF := .venv/bin/ruff
@@ -60,26 +60,8 @@ trivy-image-harness:
 
 # Install, start, stop and update the deployment with the `ospreyflow` command (`cli/`; ADR-114):
 # `ospreyflow install --mode lite`, `ospreyflow start [--build]`, `ospreyflow status`, `ospreyflow open`.
-
-# Loads the PaySim dataset into a named case the demo accounts can open, inside the deployment's own
-# network (06_DECISIONS.md ADR-055 Amendment 2). Stops the Conduit for the run and starts it again.
-seed-paysim:
-	PYTHONPATH=.:packages $(PY) -m scripts.seed_internal paysim --stop-api
-
-# The synthetic demos, into named cases the demo accounts can open (ADR-052 Amendment 9).
-seed-hmp:
-	PYTHONPATH=.:packages $(PY) -m scripts.seed_internal hmp --stop-api
-
-seed-fixture-corp:
-	PYTHONPATH=.:packages $(PY) -m scripts.seed_internal fixture-corp --stop-api
-
-seed-ledger:
-	PYTHONPATH=.:packages $(PY) -m scripts.seed_internal ledger --stop-api
-
-# Adds the launcher's sign-in (client and demo admin) to a Keycloak that is already running; a
-# realm import only happens at first start (06_DECISIONS.md ADR-051). Safe to run again.
-register-sign-in:
-	PYTHONPATH=.:packages $(PY) -m harness.register_sign_in
+# Demo packs: `ospreyflow demo add <pack>`. The sign-in again: `ospreyflow repair-sign-in`.
+# What remains here is the developer's (ADR-114 Amendment 22).
 
 dev-up:
 	docker compose -f deploy/compose/dev.yaml up -d --wait
