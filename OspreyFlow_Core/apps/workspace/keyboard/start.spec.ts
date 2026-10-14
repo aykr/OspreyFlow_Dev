@@ -55,7 +55,7 @@ test("the Ingest Studio is chosen from Start, then the case to load into, by key
 test("Admin is chosen from Start with no case, and Start is back by keyboard", async ({ page }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/start-harness.html");
-  await press(page, /^Open Admin console/);
+  await press(page, /^Open Admin area/);
   await expect(page.getByRole("tab", { name: "People and roles" })).toBeVisible();
   await expect.poll(() => asked).toContain("/v1/admin/people");
   expect(await opened(page)).toBeNull();

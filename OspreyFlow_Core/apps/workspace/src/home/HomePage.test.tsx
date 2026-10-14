@@ -45,10 +45,10 @@ describe("Home", () => {
   it("shows all three places to everyone; one the person cannot use names the role it needs", () => {
     const { chose } = home(["investigate"]);
     expect(screen.getAllByRole("region").map((r) => r.getAttribute("aria-label")).slice(0, 3)).toEqual([
-      "Glass", "Ingest Studio", "Admin console",
+      "Glass", "Ingest Studio", "Admin area",
     ]);
     expect(panel("Ingest Studio").getByText("You need the Data Engineer role for this. Ask an administrator to add it.")).toBeTruthy();
-    expect(panel("Admin console").getByText("You need the Admin role for this. Ask an administrator to add it.")).toBeTruthy();
+    expect(panel("Admin area").getByText("You need the Admin role for this. Ask an administrator to add it.")).toBeTruthy();
     expect(panel("Ingest Studio").queryByRole("button")).toBeNull();
     fireEvent.click(panel("Glass").getByRole("button", { name: /^Open Glass/ }));
     expect(chose).toHaveBeenCalledWith("glass");
@@ -58,7 +58,7 @@ describe("Home", () => {
     home(["investigate", "edit_pipelines", "manage_people"]);
     expect(panel("Glass").getByRole("button", { name: /^Open Glass/ }).className).toContain("btn--primary");
     expect(panel("Ingest Studio").getByRole("button", { name: /^Open Ingest Studio/ }).className).not.toContain("btn--primary");
-    expect(panel("Admin console").getByRole("button", { name: /^Open Admin console/ }).className).not.toContain("btn--primary");
+    expect(panel("Admin area").getByRole("button", { name: /^Open Admin area/ }).className).not.toContain("btn--primary");
   });
 
   it("opens a usable place with its key from anywhere on the page, and never a gated one", () => {

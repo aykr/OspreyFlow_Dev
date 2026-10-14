@@ -39,11 +39,11 @@ const PANELS: Record<StartPlace, { title: string; who: string; what: string; key
            what: "Work a case on the graph, map and timeline. Record assessments with their evidence, and build trends and report packs." },
   ingest: { title: "Ingest Studio", who: "For data engineers", key: "I",
             what: "Draw pipelines from source to load over the domain model. Each transform is tested, and nothing is scripted." },
-  admin: { title: "Admin console", who: "For administrators", key: "A",
+  admin: { title: "Admin area", who: "For administrators", key: "A",
            what: "Manage people, roles and dashboard identities, and watch the services. The console never reads case content." },
 }; // prettier-ignore
 
-const APP: Record<Place, string> = { glass: "Glass", ingest: "Ingest Studio", admin: "Admin console" };
+const APP: Record<Place, string> = { glass: "Glass", ingest: "Ingest Studio", admin: "Admin area" };
 const GLYPH: Record<Fact["tone"], string> = { ok: "✓", warn: "△", error: "!", info: "·" };
 
 function greeting(now: Date): string {

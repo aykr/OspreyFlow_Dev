@@ -394,6 +394,11 @@
 }
 .top-bar { box-sizing: border-box; height: var(--h-top-bar); flex: none; flex-wrap: nowrap; padding-top: 0; padding-bottom: 0; }
 .top-bar__search { flex: 1 1 280px; min-width: 280px; max-width: 480px; }
+/* Narrow windows (ADR-115 Amendment 2): two lines rather than one too wide to see — the case and
+   search on the first, the views and the account, clearance included, on the second. */
+@media (max-width: 1099px) {
+  .top-bar { height: auto; min-height: var(--h-top-bar); flex-wrap: wrap; padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
+}
 .brand-mark { display: inline-flex; align-items: center; gap: var(--sp-6); flex: none; }
 .brand-mark__name { font-weight: 700; font-size: var(--fs-14); color: var(--text-primary); }
 /* A segmented control: one choice of several, current shown as current (ADR-097, review item 7). */

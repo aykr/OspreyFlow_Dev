@@ -139,3 +139,20 @@ test("the Filters panel floats over the page too, so opening it does not grow th
   await expect(page.getByText("Ignore case")).toBeVisible();
   expect((await page.locator("header.app-header").boundingBox())!.height).toBeLessThan(60);
 });
+
+test("at 924 wide the bar wraps to two lines and nothing leaves the window (ADR-115 Amendment 2)", async ({ page }) => {
+  // Found in the signed-in sitting, 14 October 2026: one fixed-height line 1,189 px wide, the account
+  // menu off screen and the page scrolling sideways.
+  await page.setViewportSize({ width: 924, height: 600 });
+  await page.goto("/keyboard/top-bar-harness.html");
+  const account = page.getByRole("button", { name: /osprey-demo-analyst · OFFICIAL/ });
+  await expect(account).toBeVisible();
+  const box = (await account.boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(924);
+  await expect(account).toContainText("OFFICIAL"); // the clearance stays on screen
+  const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+  expect(widths[0]).toBeLessThanOrEqual(widths[1]);
+  const height = (await page.locator("header.app-header").boundingBox())!.height;
+  expect(height).toBeGreaterThan(60); // two lines
+  expect(height).toBeLessThan(110); // not three
+});

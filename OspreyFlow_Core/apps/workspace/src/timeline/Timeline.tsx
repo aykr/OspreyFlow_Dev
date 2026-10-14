@@ -45,6 +45,7 @@ import { buildEventFilter, type CrossFilterStore } from "../crossfilter/store";
 import { Button } from "../design/primitives/Button";
 import { Select } from "../design/primitives/Select";
 import { PLAYBACK_SPEEDS, usePlayback } from "../playback/usePlayback";
+import { cyclicalOption } from "./cyclicalOption";
 import { allOnOneDay, bucketLabel, bucketRangeOfWindow, windowFromBucketRange } from "./math";
 
 echarts.use([
@@ -58,8 +59,6 @@ echarts.use([
   CanvasRenderer,
 ]);
 
-const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => String(h));
 
 // `AnalyticsPort.histogram`'s `interval_seconds` has no "size this to the
 // window" mode yet — `02_GLASS_FRONTEND.md` §3.4's own "bucketed
@@ -463,37 +462,7 @@ export function Timeline({
       const buckets = histogram.buckets;
       const data = buckets.map((b) => [b.hour ?? 0, b.weekday ?? 0, b.count]);
       const max = Math.max(1, ...buckets.map((b) => b.count));
-      chart.setOption(
-        {
-          backgroundColor: "transparent",
-          grid: { left: 48, right: 16, top: 8, bottom: 24, containLabel: true },
-          xAxis: {
-            type: "category",
-            data: HOUR_LABELS,
-            axisLabel: { color: textSecondaryHex, fontSize: 11 },
-            splitArea: { show: true },
-          },
-          yAxis: {
-            type: "category",
-            data: WEEKDAY_LABELS,
-            axisLabel: { color: textSecondaryHex, fontSize: 11 },
-            splitArea: { show: true },
-          },
-          visualMap: {
-            min: 0,
-            max,
-            calculable: true,
-            orient: "horizontal",
-            left: "center",
-            bottom: 0,
-            inRange: { color: seqHex },
-            textStyle: { color: textSecondaryHex },
-          },
-          series: [{ type: "heatmap", data, label: { show: false } }],
-          tooltip: {},
-        },
-        true,
-      );
+      chart.setOption(cyclicalOption({ data, max, colours: seqHex, text: textSecondaryHex }), true);
     }
   }, [
     histogram,
