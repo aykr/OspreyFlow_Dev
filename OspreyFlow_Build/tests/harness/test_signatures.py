@@ -226,3 +226,67 @@ def test_another_signed_file_of_the_release_is_checked_too(tmp_path: Path) -> No
     assert main(common, cosign=Cosign(run(True))) == 0
     assert any("verify-blob" in a and any(x.endswith(page.name) for x in a) for a in asked)
     assert main(common, cosign=Cosign(run(False))) == 1
+
+
+CHART_REF = "ghcr.io/acme/charts/ospreyflow@" + D
+
+
+def test_every_signed_file_of_the_release_is_checked_not_only_the_first(tmp_path: Path) -> None:
+    """ADR-114 Amendment 17: the release carries the install page and the chart, each with its
+    bundle; each is verified before the release is published, and an unsigned one refuses it."""
+    lock = tmp_path / "versions.lock"
+    lock.write_text(_lock(workspace=D, api=E, ingest=D, ner=E))
+    files = {name: tmp_path / name for name in ("install-page.tar.gz", "ospreyflow-0.5.0.tgz")}
+    for path in files.values():
+        path.write_bytes(b"x")
+        (tmp_path / f"{path.name}.sigstore.json").write_text("{}")
+    refs = set(owned_references(lock.read_text()))
+
+    def run(unsigned: str | None) -> Any:
+        def answer(argv: Sequence[str]) -> tuple[int, str]:
+            if "verify-blob" in argv:
+                return (1, "no matching signatures") if any(
+                    unsigned and a.endswith(unsigned) for a in argv) else (0, "Verified OK")  # fmt: skip
+            return (0, "ok") if any(r in argv for r in refs) else (1, "x")
+        return answer
+
+    args = ["--lock", str(lock), "--repository", "acme/ospreyflow", "--tag", "v0.5.0"]
+    for path in files.values():
+        args += ["--blob", str(path), "--blob-signature", str(tmp_path / f"{path.name}.sigstore.json")]
+    assert main(args, cosign=Cosign(run(None))) == 0
+    assert main(args, cosign=Cosign(run("ospreyflow-0.5.0.tgz"))) == 1
+    assert main(args, cosign=Cosign(run("install-page.tar.gz"))) == 1
+
+
+def test_an_oci_artifact_of_the_release_is_checked_like_an_image(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR-114 Amendment 17: the chart pushed to the registry, verified by digest against the
+    release workflow's identity, as every owned image is."""
+    lock = tmp_path / "versions.lock"
+    lock.write_text(_lock(workspace=D, api=E, ingest=D, ner=E))
+    refs = set(owned_references(lock.read_text()))
+    asked: list[list[str]] = []
+
+    def run(chart_signed: bool) -> Any:
+        def answer(argv: Sequence[str]) -> tuple[int, str]:
+            asked.append(list(argv))
+            if CHART_REF in argv:
+                return (0, "ok") if chart_signed else (1, "no signatures found")
+            return (0, "ok") if any(r in argv for r in refs) else (1, "x")
+        return answer
+
+    args = ["--lock", str(lock), "--repository", "acme/ospreyflow", "--tag", "v0.5.0",
+            "--artifact", CHART_REF]  # fmt: skip
+    assert main(args, cosign=Cosign(run(True))) == 0
+    assert any(CHART_REF in a and "verify" in a for a in asked)
+    assert main(args, cosign=Cosign(run(False))) == 1
+    assert CHART_REF in capsys.readouterr().err
+
+
+def test_a_blob_without_its_signature_is_refused(tmp_path: Path) -> None:
+    lock = tmp_path / "versions.lock"
+    lock.write_text(_lock(workspace=D, api=E, ingest=D, ner=E))
+    with pytest.raises(SystemExit):
+        main(["--lock", str(lock), "--repository", "acme/ospreyflow", "--tag", "v0.5.0",
+              "--blob", "a", "--blob", "b", "--blob-signature", "a.json"])  # fmt: skip

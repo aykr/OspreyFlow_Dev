@@ -884,6 +884,10 @@ carry a `nodeSelector`, which nothing sets); the on-demand loader (`ingest`), wh
 the recipes repository on the shared volume, where one at a time publishes safely and two at once
 are not yet guarded.
 
+**Published with each release** (Amendment 17): the chart at the tag's version, attached to the
+release and pushed to `oci://ghcr.io/<owner>/charts/ospreyflow`, both signed keyless by the release
+workflow and verified before the release is published.
+
 **The install** (Amendment 16): `ospreyflow install --mode enterprise`, from a machine whose
 `kubectl` and `helm` reach the cluster, with the answers naming the managed services (`external:`)
 and the cluster's `namespace` and `shared_storage_class` (`cluster:`). It renders the values, makes

@@ -208,6 +208,18 @@ def verify_release(lock_text: str, identity: Identity, cosign: Cosign) -> None:
         raise SignatureRefused(f"not signed by {identity.describe()}: " + "; ".join(failed))
 
 
+def verify_artifacts(refs: Sequence[str], identity: Identity, cosign: Cosign) -> None:
+    """An OCI artifact of the release (the chart, ADR-114 Amendment 17) checked by digest as an
+    owned image is; refuses naming every one that does not verify."""
+    failed = []
+    for ref in refs:
+        ok, said = cosign.verify(ref, identity)
+        if not ok:
+            failed.append(f"{ref} ({said.splitlines()[-1] if said else 'no answer'})")
+    if failed:
+        raise SignatureRefused(f"not signed by {identity.describe()}: " + "; ".join(failed))
+
+
 def main(argv: Sequence[str] | None = None, *, cosign: Cosign | None = None) -> int:
     parser = argparse.ArgumentParser(prog="signatures", description=__doc__)
     parser.add_argument("--lock", type=Path, required=True)
@@ -215,22 +227,33 @@ def main(argv: Sequence[str] | None = None, *, cosign: Cosign | None = None) -> 
     parser.add_argument("--tag", required=True)
     parser.add_argument("--cosign", help="a cosign binary, instead of its image")
     parser.add_argument("--lock-signature", type=Path, help="the lock's cosign sign-blob bundle")
-    parser.add_argument("--blob", type=Path, help="another signed file of the release")
-    parser.add_argument("--blob-signature", type=Path, help="that file's sign-blob bundle")
+    parser.add_argument(
+        "--blob", type=Path, action="append", default=[],
+        help="another signed file of the release (repeatable)",
+    )  # fmt: skip
+    parser.add_argument(
+        "--blob-signature", type=Path, action="append", default=[],
+        help="each --blob's sign-blob bundle, in the same order",
+    )  # fmt: skip
+    parser.add_argument(
+        "--artifact", action="append", default=[],
+        help="an OCI artifact of the release by digest, the chart among them (repeatable)",
+    )  # fmt: skip
     args = parser.parse_args(argv)
-    if (args.blob is None) != (args.blob_signature is None):
-        parser.error("--blob and --blob-signature are given together")
+    if len(args.blob) != len(args.blob_signature):
+        parser.error("each --blob is given with its --blob-signature")
     owner, _, repo = args.repository.partition("/")
     checker = cosign or Cosign(binary=args.cosign)
     try:
         if args.lock_signature is not None:
             checker.verify_blob(args.lock, args.lock_signature, Keyless(owner, repo, args.tag))
-        if args.blob is not None:
-            # ADR-114 Amendment 11: the install page, checked as an install will check it.
-            checker.verify_blob(args.blob, args.blob_signature, Keyless(owner, repo, args.tag))
+        # ADR-114 Amendments 11 and 17: the install page and the chart, as an install checks them.
+        for blob, signature in zip(args.blob, args.blob_signature, strict=True):
+            checker.verify_blob(blob, signature, Keyless(owner, repo, args.tag))
         verify_release(
             args.lock.read_text(encoding="utf-8"), Keyless(owner, repo, args.tag), checker
         )
+        verify_artifacts(args.artifact, Keyless(owner, repo, args.tag), checker)
     except (SignatureRefused, OSError) as refused:
         print(f"signatures: {refused}", file=sys.stderr)
         return 1

@@ -13036,6 +13036,33 @@ it can be overruled). Built in parts; each part's own point says what it proved.
    `test_deployment_schema.py`, `test_register_sign_in.py`, `test_cluster_render.py`; red first,
    and plants red: 9 in the schema, answers and identity, 8 in the install.
 
+### ADR-114, Amendment 17 (14 October 2026) — B7: each release publishes the chart
+
+Status: accepted 14 October 2026 (mine, within the owner's "proceed to the next stage"; recorded so
+it can be overruled).
+
+1. **Packaged at the tag's version** (`helm package … --version X.Y.Z --app-version vX.Y.Z`) in the
+   release job, after the install page.
+2. **Signed twice, keyless, as the rest of the release is:** the packaged file by a `cosign
+   sign-blob` bundle, attached to the release beside it; and, pushed to the registry as an OCI
+   artifact (`oci://ghcr.io/<owner>/charts/ospreyflow`), by its digest, as each owned image is. The
+   job takes `packages: write` for the push.
+3. **Verified before the release is published:** `harness.signatures` now takes any number of
+   `--blob`/`--blob-signature` pairs (the install page and the chart) and `--artifact` references
+   (the chart in the registry), each checked against the release workflow's identity at the tag;
+   an unsigned one refuses the release.
+4. **Proved with a throwaway key against a throwaway registry** (`--tlog-upload=false`, never
+   uploaded): the workflow's own commands at `v9.9.9` packaged the chart, signed it, pushed it, read
+   the digest from `helm push`'s answer, signed the artifact by digest; both signatures verified, a
+   tampered file was refused, and the chart pulled back from the registry was 9.9.9 (app v9.9.9),
+   carried no `Icon` file, and rendered. **Not provable before the first real release:** the keyless
+   identity on GitHub, and `helm push` to `ghcr.io` with the workflow's token.
+5. **An Enterprise install uses the chart in its checkout**, as Lite and Small use their checkout's
+   code: on a release tag it is byte for byte the published one. Installing from the registry alone,
+   with no checkout, is not built.
+6. **Tests:** `tests/harness/test_release_chart.py` (4, read from the workflow), `test_signatures.py`
+   (+3); red first; plants red: 3; actionlint clean (`rhysd/actionlint:1.7.3`).
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;
