@@ -9,8 +9,8 @@
       "images/admin/06-demo-packs.png": "46ff5e939c137a1e32ff3a4009e57eeda9e8aa1d50b13c36c49ed91aa2f25dc2",
       "images/admin/07-superset.png": "821b76c53a1481b17f26ee5006a9ef80a452c3d61ab5206330eb4c367f5514fd"
     },
-    "pdf": "1e97b3e07372551ee36ea9040b532c31018ed8ceca456618845faed088516127",
-    "source": "f9867faac659c8f700e5629933240e7259c8a8dc2acee7b917df17836a71590f"
+    "pdf": "c0d3220184b19803af46161c3dc39c8592d210ad9dcfe370c45fb574aeb1c10b",
+    "source": "07beb841bae90a53a12efc9f76d06f3db6d495af22c3dacf80a2e87ea47ddcc8"
   },
   "developer-guide.md": {
     "images": {
@@ -27,7 +27,7 @@
       "images/developer/10-data-feeds.png": "f4d75e449663b2e98c9438d81846935bde194fcfd6ba0d8fe1aa41e014a966b1",
       "images/developer/11-held-rows.png": "3f46e1e001d99f6a9f3d8655be47ec594706b2d849bd101862a0e95ea4968f52"
     },
-    "pdf": "0eea585d1bde62bf1938312c25898bfb84b13bc45ffc88f0d224cb83e8d4a8b8",
+    "pdf": "0dbdbf05547fc441783ee8a0eece26c2367b38f187786a11d2e4c7925659ffad",
     "source": "bde0467006e4ac672f8c26348bab6c1a171e963f286cf8c8cce1ee70ce6fd1c5"
   },
   "user-guide.md": {
@@ -53,7 +53,7 @@
       "images/user/19-export.png": "b28c8956e0c450791b4e7a83577c1085c2b5fdfe6af7db4eff20f4491e5abb54",
       "images/user/20-metrics.png": "bb0659af72c65773c860d4d261299171bc0a4a997318af3fec7ae326ee6bcdbc"
     },
-    "pdf": "59e0630b7a5fbf7e1156c0e8511eedf79f587d8633e1c366cd3f699bba6e24d5",
+    "pdf": "16d5b83a54a2c8dca00f56a3cc539bd9057951dd979fb911dafc6006a4194eeb",
     "source": "7c0c5d1c559ff0a703287482a6c1c07df529d9ff18f418da0b85adab2a1c38f6"
   }
 }
