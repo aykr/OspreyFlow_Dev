@@ -339,7 +339,8 @@ def test_an_unreachable_declared_host_fails_and_names_it() -> None:
     config = OspreyConfig.model_validate(
         {
             "profile": "cluster",
-            "cluster": {"hosts": [{"name": "node-a", "address": "192.0.2.1"}]},
+            "cluster": {"hosts": [{"name": "node-a", "address": "192.0.2.1"}],
+                        "shared_storage_class": "efs-sc"},
             "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}},
         }
     )

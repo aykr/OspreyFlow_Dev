@@ -202,12 +202,15 @@ def test_on_the_server_small_installs_onto_the_managed_services(
     assert config["external"] == SERVER_ANSWERS["external"]
     assert config["network"]["public_origin"] == "https://osprey.example.org"  # type: ignore[index]
     python = str(rig.product / ".venv" / "bin" / "python")
-    apply, admin = rig.runner.argvs()
+    apply, identity, admin = rig.runner.argvs()
     assert apply == [python, "-m", "harness.apply", "--build"]  # no demo accounts on a server
+    # ADR-114 Amendment 16: the identity provider's settings beyond the realm import (Superset's
+    # sign-in among them), without demo accounts — Small once had none of it.
+    assert identity == [python, "-m", "harness.register_sign_in", "--profile", "small",
+                        "--no-demo-accounts"]  # fmt: skip
     assert admin[:3] == [python, "-m", "harness.first_admin"]
     assert admin[admin.index("--code-file") + 1] == str(code_file)
     assert admin[admin.index("--email") + 1] == "ops@example.org"
-    assert not rig.runner.with_word("harness.register_sign_in")
     assert "deployment.env" not in capsys.readouterr().out  # no demo passwords to point at
 
 

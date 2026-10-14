@@ -19,6 +19,7 @@ printed.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 from pathlib import Path
 
 from harness import keycloak_admin
@@ -109,60 +110,15 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
 
     rendered = render_realm(config, realm_name=realm, demo_analyst=True)
     (admin,) = [u for u in rendered["users"] if u["username"] == DEMO_ADMIN_SUBJECT]
-    lines: list[str] = []
-
-    keycloak_admin.ensure_unmanaged_attributes(issuer=issuer, realm=realm, token=token)
-    lines.append(
-        keycloak_admin.ensure_realm_sign_in_rules(
-            issuer=issuer, realm=realm, token=token, rules=sign_in_rules(config)
-        )
-    )
-    if config.mail is not None:
-        # ADR-114 Amendment 5: invitations and resets by email. Written each time — Keycloak never
-        # gives the password back to compare with.
-        lines.append(
-            keycloak_admin.ensure_realm_mail(
-                issuer=issuer, realm=realm, token=token, mail=config.mail,
-                password=values.get("OSPREY_SMTP_PASSWORD"),
-            )
-        )  # fmt: skip
-    lines.append(
-        keycloak_admin.ensure_service_account_roles(issuer=issuer, realm=realm, token=token)
-    )
-    superset_secret = values.get("SUPERSET_OIDC_CLIENT_SECRET")
-    if superset_secret:
-        # ADR-111 Amendment 2: Superset's sign-in, only when the deployment runs Superset.
-        origin = values["SUPERSET_PUBLIC_ORIGIN"]
-        lines.append(
-            f"sign-in client {SUPERSET_CLIENT_ID}: "
-            + keycloak_admin.ensure_client(
-                issuer=issuer, realm=realm, token=token,
-                client={**superset_client(origin), "secret": superset_secret},
-            )
-        )  # fmt: skip
+    lines = ensure_identity(issuer=issuer, realm=realm, token=token, config=config, values=values)
     (client,) = [c for c in rendered["clients"] if c["clientId"] == HARNESS_CLIENT_ID]
     lines.append(
         f"sign-in client {HARNESS_CLIENT_ID}: "
         + keycloak_admin.ensure_client(issuer=issuer, realm=realm, token=token, client=client)
     )
-    for retired in RETIRED_CLIENT_IDS:
-        outcome = keycloak_admin.remove_client(
-            issuer=issuer, realm=realm, token=token, client_id=retired
-        )
-        lines.append(f"retired sign-in client {retired}: {outcome}")
     lines.append(
         f"account {DEMO_ADMIN_SUBJECT}: "
         + keycloak_admin.ensure_user(issuer=issuer, realm=realm, token=token, user=admin)
-    )
-
-    lines.append(
-        keycloak_admin.ensure_realm_look(
-            issuer=issuer,
-            realm=realm,
-            token=token,
-            theme=LOGIN_THEME_NAME,
-            display_name=REALM_DISPLAY_NAME,
-        )
     )
 
     password = values.get(DEMO_ADMIN_PASSWORD_KEY) or generate_client_secret()
@@ -223,6 +179,73 @@ def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -
     return lines
 
 
+def ensure_identity(
+    *, issuer: str, realm: str, token: str, config: OspreyConfig, values: Mapping[str, str]
+) -> list[str]:
+    """What every deployment's identity provider needs beyond its realm import, demo accounts aside
+    (ADR-114 Amendment 16): Lite's registration, Small's server and a cluster's install all run it,
+    so none can miss a part — Small once missed Superset's sign-in, registered only beside the demo
+    accounts. `values` are the deployment's settings and secrets (its env file, or a cluster's
+    Secret). Safe to run again."""
+    lines: list[str] = []
+    keycloak_admin.ensure_unmanaged_attributes(issuer=issuer, realm=realm, token=token)
+    lines.append(
+        keycloak_admin.ensure_realm_sign_in_rules(
+            issuer=issuer, realm=realm, token=token, rules=sign_in_rules(config)
+        )
+    )
+    if config.mail is not None:
+        # ADR-114 Amendment 5: invitations and resets by email. Written each time — Keycloak never
+        # gives the password back to compare with.
+        lines.append(
+            keycloak_admin.ensure_realm_mail(
+                issuer=issuer, realm=realm, token=token, mail=config.mail,
+                password=values.get("OSPREY_SMTP_PASSWORD"),
+            )
+        )  # fmt: skip
+    lines.append(
+        keycloak_admin.ensure_service_account_roles(issuer=issuer, realm=realm, token=token)
+    )
+    superset_secret = values.get("SUPERSET_OIDC_CLIENT_SECRET")
+    if superset_secret:
+        # ADR-111 Amendment 2: Superset's sign-in, only when the deployment runs Superset.
+        origin = values["SUPERSET_PUBLIC_ORIGIN"]
+        lines.append(
+            f"sign-in client {SUPERSET_CLIENT_ID}: "
+            + keycloak_admin.ensure_client(
+                issuer=issuer, realm=realm, token=token,
+                client={**superset_client(origin), "secret": superset_secret},
+            )
+        )  # fmt: skip
+    for retired in RETIRED_CLIENT_IDS:
+        outcome = keycloak_admin.remove_client(
+            issuer=issuer, realm=realm, token=token, client_id=retired
+        )
+        lines.append(f"retired sign-in client {retired}: {outcome}")
+    lines.append(
+        keycloak_admin.ensure_realm_look(
+            issuer=issuer,
+            realm=realm,
+            token=token,
+            theme=LOGIN_THEME_NAME,
+            display_name=REALM_DISPLAY_NAME,
+        )
+    )
+    return lines
+
+
+def _identity_only(
+    *, issuer: str, realm: str, values: Mapping[str, str], config: OspreyConfig
+) -> list[str]:
+    admin_password = values.get(ADMIN_PASSWORD_KEY)
+    if not admin_password:
+        raise RealmConfigurationFailed(f"no {ADMIN_PASSWORD_KEY} — it was not written by `apply`")
+    token = keycloak_admin.admin_token(
+        issuer=issuer, admin_user="admin", admin_password=admin_password
+    )
+    return ensure_identity(issuer=issuer, realm=realm, token=token, config=config, values=values)
+
+
 def print_summary(lines: list[str], env_path: Path) -> None:
     print("Sign-in registered on the running identity provider:")
     for line in lines:
@@ -242,10 +265,29 @@ def main(argv: list[str] | None = None) -> int:
         "--keycloak-url", default=None, help="Default: the deployment's identity origin."
     )
     parser.add_argument("--realm", default="osprey")
+    parser.add_argument(
+        "--no-demo-accounts", action="store_true",
+        help="a server's install: the identity provider's settings only, no demo account",
+    )  # fmt: skip
     args = parser.parse_args(argv)
 
     env_path = args.out_root / args.profile / "deployment.env"
     answer_localhost_with_loopback()
+    if args.no_demo_accounts:
+        try:
+            lines = _identity_only(
+                issuer=args.keycloak_url or deployment_origins(env_path)[1],
+                realm=args.realm,
+                values=_read_env(env_path),
+                config=load_config(args.config),
+            )
+        except RealmConfigurationFailed as error:
+            print(f"Could not configure sign-in: {error}")
+            return 1
+        print("Sign-in configured on the running identity provider:")
+        for line in lines:
+            print(f"  - {line}")
+        return 0
     try:
         lines = register(
             issuer=args.keycloak_url or deployment_origins(env_path)[1],

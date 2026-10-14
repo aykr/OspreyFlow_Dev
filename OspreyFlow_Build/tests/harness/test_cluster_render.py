@@ -39,6 +39,7 @@ def cluster_config(external: dict[str, Any] = AWS, **more: Any) -> OspreyConfig:
             "network": {"public_origin": "https://osprey.example.org"},
             "reporting": {"sync": True, "superset": True},
             "external": external,
+            "cluster": {"shared_storage_class": "efs-sc"},
             **more,
         }
     )
@@ -213,8 +214,9 @@ def test_what_a_cluster_cannot_run_is_refused_in_words(
     components: dict[str, str], said: str
 ) -> None:
     config = OspreyConfig.model_validate(
-        {"profile": "cluster", "components": components, "external": AWS}
-    )
+        {"profile": "cluster", "components": components, "external": AWS,
+         "cluster": {"shared_storage_class": "efs-sc"}}
+    )  # fmt: skip
     with pytest.raises(ClusterNotRenderable, match=re.escape(said)):
         render(config, resolver=_resolver)
 
@@ -266,3 +268,12 @@ def test_the_workspace_names_the_conduit_by_its_full_service_name() -> None:
         {"name": "POD_NAMESPACE", "field": "metadata.namespace"},
         {"name": "OSPREY_CONDUIT_HOST", "value": "api.$(POD_NAMESPACE).svc.cluster.local"},
     ]
+
+
+def test_the_storage_classes_are_the_clusters_own() -> None:
+    storage = values_for(
+        cluster_config(cluster={"storage_class": "gp3", "shared_storage_class": "efs-sc"})
+    )["storage"]
+    assert (storage["className"], storage["sharedClassName"]) == ("gp3", "efs-sc")
+    default = values_for(cluster_config())["storage"]
+    assert (default["className"], default["sharedClassName"]) == ("", "efs-sc")

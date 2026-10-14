@@ -127,18 +127,18 @@ def test_a_cluster_names_the_managed_services_it_runs_on(missing: str) -> None:
     naming none of one would render workloads with nothing to reach (ADR-114 Amendment 10)."""
     services = {k: v for k, v in CLUSTER_SERVICES.items() if k != missing}
     with pytest.raises(ValidationError, match=missing):
-        OspreyConfig.model_validate({"profile": "cluster", "external": services})
+        OspreyConfig.model_validate({"profile": "cluster", "external": services, "cluster": SHARED})
 
 
 def test_a_cluster_on_its_managed_services_is_valid() -> None:
-    ok = OspreyConfig.model_validate({"profile": "cluster", "external": CLUSTER_SERVICES})
+    ok = OspreyConfig.model_validate({"profile": "cluster", "external": CLUSTER_SERVICES, "cluster": SHARED})
     assert ok.profile is Profile.CLUSTER
     assert ok.external.valkey is not None and ok.external.valkey.tls is True
     azure = {**CLUSTER_SERVICES, "object_store": None,
              "media": {"blob_account": "ospreymedia1a2b"}}  # fmt: skip
-    assert OspreyConfig.model_validate({"profile": "cluster", "external": azure}).external.media
+    assert OspreyConfig.model_validate({"profile": "cluster", "external": azure, "cluster": SHARED}).external.media
     with_search = {**CLUSTER_SERVICES, "search": {"url": "https://search-osprey.eu-west-2.es.amazonaws.com"}}
-    assert OspreyConfig.model_validate({"profile": "cluster", "external": with_search}).external.search
+    assert OspreyConfig.model_validate({"profile": "cluster", "external": with_search, "cluster": SHARED}).external.search
 
 
 def test_managed_valkey_and_search_are_for_a_cluster() -> None:
@@ -181,3 +181,35 @@ def test_the_tiles_folder_has_a_default_and_an_unknown_storage_key_is_still_refu
     except Exception:  # noqa: BLE001 - the refusal is what is asserted
         return
     raise AssertionError("a misspelt storage key must be refused, not ignored")
+
+
+# --- A cluster's own settings (05 §3b, ADR-114 Amendment 16) ------------------------------------
+
+SHARED = {"shared_storage_class": "efs-sc"}
+
+
+def test_a_cluster_names_the_storage_class_its_pods_share() -> None:
+    """The ingest folder, the recipes and the model weights are one volume every Conduit mounts
+    (ReadWriteMany): EKS and AKS have no default class that can do that, so a cluster names one."""
+    with pytest.raises(ValidationError, match="shared_storage_class"):
+        OspreyConfig.model_validate({"profile": "cluster", "external": CLUSTER_SERVICES})
+    ok = OspreyConfig.model_validate(
+        {"profile": "cluster", "external": CLUSTER_SERVICES, "cluster": SHARED}
+    )
+    assert ok.cluster.namespace == "ospreyflow"
+    assert ok.cluster.shared_storage_class == "efs-sc" and ok.cluster.storage_class is None
+
+
+@pytest.mark.parametrize("namespace", ["OspreyFlow", "osprey_flow", "-osprey", "x" * 64, ""])
+def test_a_cluster_namespace_is_a_kubernetes_name(namespace: str) -> None:
+    with pytest.raises(ValidationError, match="namespace"):
+        OspreyConfig.model_validate(
+            {"profile": "cluster", "external": CLUSTER_SERVICES,
+             "cluster": {**SHARED, "namespace": namespace}}
+        )  # fmt: skip
+
+
+@pytest.mark.parametrize("setting", [{"namespace": "osprey"}, {"storage_class": "gp3"}, SHARED])
+def test_a_clusters_settings_belong_to_the_cluster_profile_only(setting: dict[str, str]) -> None:
+    with pytest.raises(ValidationError, match="only meaningful at profile: cluster"):
+        OspreyConfig.model_validate({"profile": "small", "cluster": setting})

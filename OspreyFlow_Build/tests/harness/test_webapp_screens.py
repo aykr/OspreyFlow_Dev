@@ -191,7 +191,8 @@ def test_a_cluster_the_chart_cannot_run_is_refused_in_words(tmp_path: Path) -> N
         "/api/config",
         json={
             "profile": "cluster",
-            "cluster": {"hosts": [{"name": "node-1", "address": "10.0.0.1"}]},
+            "cluster": {"hosts": [{"name": "node-1", "address": "10.0.0.1"}],
+                        "shared_storage_class": "efs-sc"},
             "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}},
             "components": {"graph_store": "janusgraph", "analytics_engine": "clickhouse"},
         },

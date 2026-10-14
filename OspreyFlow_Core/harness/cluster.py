@@ -526,7 +526,11 @@ def render_cluster(
             "keys": sorted(translate.secret_keys | {"OSPREY_ARCADEDB_CLUSTER_TOKEN"}),
             "defaults": dict(sorted(translate.secret_defaults.items())),
         },
-        "storage": {"className": "", "sharedClassName": "", "sharedSize": "200Gi"},
+        "storage": {
+            "className": config.cluster.storage_class or "",
+            "sharedClassName": config.cluster.shared_storage_class or "",
+            "sharedSize": "200Gi",
+        },
         "imagePullSecrets": [],
         "environment": environment,
         "files": files,

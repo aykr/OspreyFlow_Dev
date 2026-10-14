@@ -509,6 +509,7 @@ def test_the_cluster_profile_renders_the_charts_values_rather_than_compose() -> 
     values' own promises)."""
     config = OspreyConfig.model_validate(
         {"profile": "cluster", "components": {"analytics_engine": "clickhouse"},
+         "cluster": {"shared_storage_class": "efs-sc"},
          "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}}}
     )  # fmt: skip
     assert set(render(config, resolver=_fake_resolver).artefacts) == {"values.yaml", "versions.lock"}

@@ -431,11 +431,14 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `governance.organisation_sign_in` | str or none | none | The alias of an organisation's own identity provider brokered by Keycloak. When set, the welcome page offers *Continue with organisation sign-in*, which goes straight to it. Default: none — one *Sign in* to the OspreyFlow form. |
 | `governance.marking` | str or none | none | The protective marking shown where no case data is on screen: the welcome page, Home, the Ingest Studio and the Admin area; inside a case, the strip shows this or the highest marking on screen, whichever is higher. One of the handling scheme's classifications. Default: the scheme's lowest. |
 | `governance.real_data_exceptions` | str | `config/real_data_exceptions.yaml` | A path to the gitignored list, never its contents. |
-| `cluster` | section | — | The machines of a cluster deployment. |
+| `cluster` | section | — | A Kubernetes deployment: its namespace, storage classes and machines. |
 | `cluster.hosts` | list of section | — | One machine. |
 | `cluster.hosts.name` | str | required | The machine's name |
 | `cluster.hosts.address` | str | required | Where the machine is reached |
 | `cluster.hosts.roles` | list of str | — | What runs on it |
+| `cluster.namespace` | str | `ospreyflow` | The Kubernetes namespace the deployment is installed in |
+| `cluster.storage_class` | str or none | none | The storage class each store's own volumes use; the cluster's default when unset |
+| `cluster.shared_storage_class` | str or none | none | Required for a cluster: the storage class of the one volume every Conduit shares (ReadWriteMany) — EFS on AWS, Azure Files on Azure |
 | `network` | section | — | The address the deployment answers at, and what it publishes. |
 | `network.expose_conduit` | bool | false | Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass. |
 | `network.public_origin` | str | `http://ospreyflow.localhost` | The origin a browser uses to reach the Glass; the identity provider is `id.` and the dashboards `bi.` in front of the same host, with the same scheme and port, and the front proxy publishes that port. `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Change this to move the deployment to another name or port; nothing else needs to agree with it. |

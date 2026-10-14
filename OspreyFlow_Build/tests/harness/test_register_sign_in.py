@@ -726,3 +726,47 @@ def test_registration_writes_the_sign_in_rules_into_a_realm_kept_from_before(
     lines = register_sign_in.register(issuer=ISSUER, realm="osprey", env_path=_env(tmp_path), config=config)
     assert keycloak.realm["resetPasswordAllowed"] is True
     assert any("sign-in rules" in line for line in lines)
+
+
+def test_a_cloud_deployments_identity_is_configured_without_demo_accounts(
+    keycloak: FakeKeycloak,
+) -> None:
+    """ADR-114 Amendment 16: Small and Enterprise have no demo accounts, but need everything else
+    registration does — Superset's sign-in among it, which Small never had (it was registered only
+    beside the demo accounts). One function for every deployment, so none can miss a part."""
+    token = keycloak_admin.admin_token(
+        issuer=ISSUER, admin_user="admin", admin_password=ADMIN_PASSWORD
+    )
+    lines = register_sign_in.ensure_identity(
+        issuer=ISSUER, realm="osprey", token=token, config=_config(),
+        values={"SUPERSET_OIDC_CLIENT_SECRET": "superset-secret",
+                "SUPERSET_PUBLIC_ORIGIN": "https://bi.osprey.example.org"},
+    )  # fmt: skip
+    clients = {c["clientId"] for c in keycloak.clients.values()}
+    assert "osprey-superset" in clients
+    assert "osprey-harness" not in clients
+    assert keycloak.users.keys() <= {"service-account-osprey-conduit"}
+    assert keycloak.unmanaged_attributes == "ENABLED"
+    assert any("osprey-superset" in line for line in lines)
+
+
+def test_without_demo_accounts_registration_makes_none_and_writes_nothing(
+    tmp_path: Path, keycloak: FakeKeycloak, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--no-demo-accounts` (a Small server, ADR-114 Amendment 16): the shared settings, and no
+    demo account, password or harness client; the env file is left as it was."""
+    out = tmp_path / "out"
+    (out / "small").mkdir(parents=True)
+    env = _env(out / "small", "SUPERSET_OIDC_CLIENT_SECRET=superset-secret",
+               "SUPERSET_PUBLIC_ORIGIN=https://bi.osprey.example.org")  # fmt: skip
+    before = env.read_text(encoding="utf-8")
+    config = tmp_path / "osprey.yaml"
+    config.write_text("profile: small\n", encoding="utf-8")
+    code = register_sign_in.main(["--profile", "small", "--out-root", str(out), "--config",
+                                  str(config), "--keycloak-url", ISSUER, "--no-demo-accounts"])  # fmt: skip
+    assert code == 0
+    assert "osprey-superset" in {c["clientId"] for c in keycloak.clients.values()}
+    assert "osprey-harness" not in {c["clientId"] for c in keycloak.clients.values()}
+    assert not keycloak.passwords
+    assert env.read_text(encoding="utf-8") == before
+    assert "demo" not in capsys.readouterr().out.lower()

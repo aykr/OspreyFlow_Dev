@@ -12987,6 +12987,27 @@ choices between presented options, each the recommended one.
    OpenTofu; Enterprise's chart, proven, its install still to come; `deploy/`), and again when the
    guides land, to point at them.
 
+### ADR-114, Amendment 16 (14 October 2026) — B7: the Enterprise install
+
+Status: accepted 14 October 2026 (mine, within the owner's "proceed to the next stage"; recorded so
+it can be overruled). Built in parts; each part's own point says what it proved.
+
+1. **A cluster names its namespace and storage classes** (`cluster.namespace`, default
+   `ospreyflow`, a Kubernetes name; `cluster.storage_class`, each store's own volumes, the cluster's
+   default when unset; `cluster.shared_storage_class`, **required**: the one volume every Conduit
+   mounts needs a class several pods can share, which neither EKS nor AKS has by default). Declared at
+   any other profile, they are refused, as `hosts` already was. The chart's values take the classes.
+2. **The answers file carries them** (`cluster:`, Enterprise only), and Enterprise sets
+   `analytics_engine: clickhouse` — before this an Enterprise answers file made a configuration the
+   cluster renderer refuses.
+3. **One identity step for every deployment** (`register_sign_in.ensure_identity`): the sign-in rules,
+   mail, the Conduit's service-account roles, Superset's sign-in, the retired clients, the realm's look.
+   Lite's registration runs it and adds the harness client and the demo accounts; a Small server now
+   runs it too (`register_sign_in --no-demo-accounts`), **which it never did: Superset's sign-in was
+   registered only beside the demo accounts, so a Small deployment's Superset had no client to sign
+   in through**. Not proved on a running Small server (no cloud here): the same function the cluster
+   install runs live is what it runs.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;

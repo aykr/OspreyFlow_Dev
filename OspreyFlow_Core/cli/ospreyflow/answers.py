@@ -27,6 +27,10 @@ a person at the prompts and CI install the same way.
       admin_email: ops@example.org # optional: the first administrator's email
     external:                      # written by OpenTofu for the server's first boot: the managed
       postgres: {host: …}          #   services (`05_DEPLOYMENT.md` §3a), copied into osprey.yaml
+    cluster:                       # enterprise only (05 §3b)
+      namespace: ospreyflow        #   the Kubernetes namespace
+      storage_class: gp3           #   each store's own volumes; the cluster's default when left out
+      shared_storage_class: efs-sc #   the volume every Conduit shares: EFS on AWS, Azure Files
     config: ./osprey.yaml          # instead of the sections above: use this osprey.yaml as it is
 
 Unknown keys are refused by name, as `osprey.yaml`'s are, so a typo never silently means the
@@ -53,7 +57,7 @@ PROFILES = {"lite": "local-lite", "small": "small", "enterprise": "cluster"}
 
 _TOP = {
     "mode", "components", "folders", "models", "demo_packs", "paysim_file", "cloud", "config",
-    "mail", "external",
+    "mail", "external", "cluster",
 }  # fmt: skip
 _SECTIONS = {
     "components": {"dashboards"},
@@ -61,6 +65,7 @@ _SECTIONS = {
     "models": {"local_only"},
     "cloud": {"provider", "region", "domain", "size", "dns_zone", "admin_email"},
     "mail": {"host", "port", "from", "starttls", "username"},
+    "cluster": {"namespace", "storage_class", "shared_storage_class"},
 }
 #: The sections a named `config:` replaces; giving both is refused rather than one silently winning.
 _CONFIG_SECTIONS = ("components", "folders", "models")
@@ -84,6 +89,8 @@ class Answers:
     mail: dict[str, Any] = field(default_factory=dict)
     #: The managed services a cloud server runs on (05 §3a); checked by the deployment's schema.
     external: dict[str, Any] = field(default_factory=dict)
+    #: Enterprise's namespace and storage classes (05 §3b).
+    cluster: dict[str, str] = field(default_factory=dict)
 
 
 def _known(where: str, raw: Mapping[str, Any], allowed: set[str]) -> None:
@@ -158,6 +165,10 @@ def load_answers(
             "managed services; lite runs its own"
         )
 
+    cluster = {k: str(v) for k, v in sections["cluster"].items()}
+    if cluster and mode != "enterprise":
+        raise AnswersRefused(f"cluster settings are for the enterprise mode, not {mode}")
+
     offered = tuple(packs)
     chosen = tuple(str(p) for p in raw.get("demo_packs") or ())
     for pack in chosen:
@@ -192,6 +203,7 @@ def load_answers(
         config=_host_path("config", config, home) if config is not None else None,
         mail=dict(sections["mail"]),
         external=copy.deepcopy(dict(external)),
+        cluster=cluster,
     )
 
 
@@ -220,6 +232,10 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         }
     if answers.external:
         config["external"] = copy.deepcopy(answers.external)
+    if answers.mode == "enterprise":
+        # 05 §3b: a cluster's Conduits share ClickHouse; DuckDB would give each its own events.
+        config.setdefault("components", {})["analytics_engine"] = "clickhouse"
+        config["cluster"] = {**config.get("cluster", {}), **answers.cluster}
     # ADR-114 Amendment 4: every address derives from this one. Lite answers on this machine by
     # name; a cloud install at the client's own domain, over HTTPS.
     network = config.setdefault("network", {})

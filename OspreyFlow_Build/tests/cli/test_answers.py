@@ -153,3 +153,33 @@ def test_a_servers_managed_services_reach_osprey_yaml_and_validate(tmp_path: Pat
     assert config.external.media is not None and config.external.media.blob_account == "ospreymedia1a2b"
     with pytest.raises(AnswersRefused, match="external"):
         load_answers({"mode": "lite", "external": external}, packs=PACKS, home=tmp_path)
+
+
+ENTERPRISE_EXTERNAL = {
+    "postgres": {"host": "osprey.cluster-x.eu-west-2.rds.amazonaws.com"},
+    "valkey": {"host": "osprey.x.cache.amazonaws.com"},
+    "object_store": {"endpoint": "s3.eu-west-2.amazonaws.com", "region": "eu-west-2"},
+}
+
+
+def test_an_enterprise_install_is_a_valid_cluster(tmp_path: Path) -> None:
+    """ADR-114 Amendment 16: an Enterprise answers file makes an `osprey.yaml` a cluster renders —
+    ClickHouse (a cluster's Conduits share it), and the cluster's namespace and storage classes."""
+    config = _config({"mode": "enterprise", "external": ENTERPRISE_EXTERNAL,
+                      "cloud": {"provider": "aws", "domain": "osprey.example.org"},
+                      "cluster": {"namespace": "intel", "storage_class": "gp3",
+                                  "shared_storage_class": "efs-sc"}},
+                     tmp_path)  # fmt: skip
+    assert config.profile.value == "cluster"
+    assert config.components.analytics_engine.value == "clickhouse"
+    assert (config.cluster.namespace, config.cluster.storage_class) == ("intel", "gp3")
+    assert config.cluster.shared_storage_class == "efs-sc"
+    assert config.network.public_origin == "https://osprey.example.org"
+
+
+def test_cluster_answers_are_for_an_enterprise_install(tmp_path: Path) -> None:
+    for mode in ("lite", "small"):
+        with pytest.raises(AnswersRefused, match="cluster settings are for the enterprise mode"):
+            load_answers({"mode": mode, "cluster": {"namespace": "x"}}, packs=PACKS, home=tmp_path)
+    with pytest.raises(AnswersRefused, match="nodes"):
+        load_answers({"mode": "enterprise", "cluster": {"nodes": 3}}, packs=PACKS, home=tmp_path)

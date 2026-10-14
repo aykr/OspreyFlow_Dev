@@ -86,7 +86,7 @@ SECTIONS = {
     "models": "The local models, and a client's own model provider if one is chosen.",
     "models.provider": "A client's own model provider, reached through the deployment's gateway.",
     "governance": "Identity, handling, ontology and the marking shown on screen.",
-    "cluster": "The machines of a cluster deployment.",
+    "cluster": "A Kubernetes deployment: its namespace, storage classes and machines.",
     "cluster.hosts": "One machine.",
     "network": "The address the deployment answers at, and what it publishes.",
     "map": "The basemaps the map offers.",

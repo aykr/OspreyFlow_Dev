@@ -410,6 +410,12 @@ def _install_on_server(ctx: _Context, args: argparse.Namespace, answers: Answers
     code, which goes to `--first-admin-code-file` for the first boot to hand to the secret store."""
     _write_config(ctx, answers, args.force)
     ctx.step("build and start the deployment", _apply_argv(ctx, args))
+    # ADR-114 Amendment 16: the identity provider's settings beyond its realm import — Superset's
+    # sign-in among them — with no demo account.
+    ctx.step(
+        "configure the sign-in",
+        [*ctx.python, "-m", "harness.register_sign_in", "--profile", "small", "--no-demo-accounts"],
+    )
     admin = [*ctx.python, "-m", "harness.first_admin", "--deployment", str(ctx.deployment)]
     if answers.cloud.get("admin_email"):
         admin += ["--email", answers.cloud["admin_email"]]

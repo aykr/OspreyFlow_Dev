@@ -114,6 +114,18 @@ export type Address = string;
 export type Roles1 = string[];
 export type Hosts = ClusterHost[];
 /**
+ * The Kubernetes namespace the deployment is installed in (05_DEPLOYMENT.md §3b)
+ */
+export type Namespace = string;
+/**
+ * The storage class each store's own volumes use; the cluster's default when unset
+ */
+export type StorageClass = string | null;
+/**
+ * Required for a cluster: the storage class of the one volume every Conduit shares (ReadWriteMany) — EFS on AWS, Azure Files on Azure
+ */
+export type SharedStorageClass = string | null;
+/**
  * Default: false. Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass.
  */
 export type ExposeConduit = boolean;
@@ -455,6 +467,9 @@ export interface GovernanceConfig {
  */
 export interface ClusterConfig {
   hosts?: Hosts;
+  namespace?: Namespace;
+  storage_class?: StorageClass;
+  shared_storage_class?: SharedStorageClass;
 }
 /**
  * One declared machine. `05_DEPLOYMENT.md` §2.1's Preflight screen runs "for `cluster`

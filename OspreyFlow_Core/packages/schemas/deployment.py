@@ -390,6 +390,31 @@ class ClusterConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     hosts: list[ClusterHost] = Field(default_factory=list)
+    namespace: str = Field(
+        default="ospreyflow",
+        pattern=r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+        description="The Kubernetes namespace the deployment is installed in (05_DEPLOYMENT.md §3b)",
+    )
+    storage_class: str | None = Field(
+        default=None,
+        description="The storage class each store's own volumes use; the cluster's default when "
+        "unset",
+    )
+    shared_storage_class: str | None = Field(
+        default=None,
+        description="Required for a cluster: the storage class of the one volume every Conduit "
+        "shares (ReadWriteMany) — EFS on AWS, Azure Files on Azure",
+    )
+
+    @property
+    def declared(self) -> bool:
+        """Anything set that only a cluster reads."""
+        return bool(
+            self.hosts
+            or self.namespace != "ospreyflow"
+            or self.storage_class
+            or self.shared_storage_class
+        )
 
     @model_validator(mode="after")
     def _host_names_are_unique(self) -> ClusterConfig:
@@ -643,10 +668,16 @@ class OspreyConfig(BaseModel):
 
     @model_validator(mode="after")
     def _cluster_hosts_belong_to_the_cluster_profile(self) -> OspreyConfig:
-        if self.cluster.hosts and self.profile is not Profile.CLUSTER:
+        if self.cluster.declared and self.profile is not Profile.CLUSTER:
             raise ValueError(
-                f"cluster.hosts is declared but profile is {self.profile.value!r}; hosts are only "
-                "meaningful at profile: cluster"
+                f"cluster settings are declared but profile is {self.profile.value!r}; they are "
+                "only meaningful at profile: cluster"
+            )
+        if self.profile is Profile.CLUSTER and not self.cluster.shared_storage_class:
+            raise ValueError(
+                "a cluster names cluster.shared_storage_class: the one volume every Conduit "
+                "shares needs a class several pods can mount at once (EFS on AWS, Azure Files on "
+                "Azure), which neither cloud has by default"
             )
         return self
 
