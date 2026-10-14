@@ -884,13 +884,19 @@ carry a `nodeSelector`, which nothing sets); the on-demand loader (`ingest`), wh
 the recipes repository on the shared volume, where one at a time publishes safely and two at once
 are not yet guarded.
 
+**Proved in a running cluster** (Amendment 14): k3s with the cloud's services stood in for — the
+stores formed their clusters and kept them through a restart, the Conduit was reached by name
+through the one load balancer, the policies refused what they should, and the Conduit's client
+followed a new ArcadeDB leader and wrote once.
+
 **The chart's test** (Amendment 10 point 5; `make chart-check`): `helm lint`, and the chart rendered
 with `helm template` from the values both clouds produce, validated against Kubernetes 1.31's schemas
 (kubeconform, strict), with no Secret, no workload for any store the cloud manages, every store on
 volumes of its own and its peers named by a headless Service, every Service selecting a workload,
 every `$(VAR)` defined before it is named, nothing but the proxy published, and only what needs a
-route out given one (`tests/harness/test_helm_chart.py`, `test_cluster_render.py`); and every image a
-pulled deployment names is one the release builds (`test_release_matrix.py`).
+route out given one (`tests/harness/test_helm_chart.py`, `test_cluster_render.py`); every image a
+pulled deployment names is one the release builds (`test_release_matrix.py`); and the proxy's own
+health check passes against the real Caddy on HTTPS and HTTP (`test_proxy_health.py`).
 
 ## 4. Moving up a profile
 

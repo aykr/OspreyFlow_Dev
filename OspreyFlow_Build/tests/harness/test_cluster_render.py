@@ -238,3 +238,31 @@ def test_a_variable_inside_a_value_is_defined_before_the_value_that_names_it() -
         {"name": "WHOLE", "secret": "PASS"},
     ]
     assert translate.secret_keys == {"PASS"}
+
+
+@pytest.mark.parametrize(
+    ("origin", "ports"),
+    [
+        ("https://osprey.example.org", [{"port": 80, "target": 80}, {"port": 443, "target": 443}]),
+        # Plain HTTP: Caddy runs unprivileged on 8080; the balancer answers on the address's port.
+        ("http://osprey.example.org", [{"port": 80, "target": 8080}]),
+        ("http://osprey.example.org:8081", [{"port": 8081, "target": 8080}]),
+    ],
+)
+def test_the_load_balancer_reaches_the_port_caddy_listens_on(
+    origin: str, ports: list[dict[str, int]]
+) -> None:
+    proxy = _workloads(values_for(cluster_config(network={"public_origin": origin})))["proxy"]
+    assert proxy["ports"] == ports
+    probed = re.search(r"127\.0\.0\.1:(\d+)/healthz", proxy["probe"]["exec"][-1])
+    assert probed is not None and int(probed[1]) in {p["target"] for p in ports}
+
+
+def test_the_workspace_names_the_conduit_by_its_full_service_name() -> None:
+    """nginx's resolver applies no search domain, so `api` alone resolves nowhere on a cluster
+    (`test_workspace_proxy.py`); the namespace is the pod's own."""
+    workspace = _workloads(values_for(cluster_config()))["workspace"]
+    assert workspace["env"] == [
+        {"name": "POD_NAMESPACE", "field": "metadata.namespace"},
+        {"name": "OSPREY_CONDUIT_HOST", "value": "api.$(POD_NAMESPACE).svc.cluster.local"},
+    ]

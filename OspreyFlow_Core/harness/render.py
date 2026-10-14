@@ -81,7 +81,8 @@ from schemas.deployment import (
     SearchBackend,
 )
 
-#: Where the workspace's nginx serves the basemap's glyph files from (`apps/workspace/nginx.conf`).
+#: Where the workspace's nginx serves the basemap's glyph files from
+#: (`apps/workspace/nginx.conf.template`).
 GLYPHS_CONTAINER_PATH = "/usr/share/nginx/fonts"
 
 #: **Where the ingest root is mounted inside the Conduit — fixed, not configurable** (owner ruling

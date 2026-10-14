@@ -74,7 +74,10 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
     for port, upstream in loopback_doors(config) if doors else []:
         lines += ["", f"http://:{port} {{", f"\treverse_proxy {upstream}", "}"]
     # Anything else — an unknown name, or the proxy's own health — answers here and nowhere else.
-    catch_all = f":{PROXY_HTTP_PORT}" if plain else ":443"
+    # On HTTPS that is plain HTTP on 80: the health check asks a bare address, which has no
+    # certificate, and a name's own plain-HTTP request still goes to HTTPS first (measured against
+    # Caddy; `tests/harness/test_proxy_health.py`).
+    catch_all = f":{PROXY_HTTP_PORT}" if plain else "http://:80"
     lines += ["", f"{catch_all} {{", "\trespond /healthz 200", "\trespond 404", "}", ""]
     return "\n".join(lines)
 

@@ -59,7 +59,7 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
   {{- with .w.ports }}
   ports:
     {{- range . }}
-    - containerPort: {{ . }}
+    - containerPort: {{ .target }}
     {{- end }}
   {{- end }}
   {{- with .w.probe }}

@@ -56,11 +56,17 @@ server {
         # worst case becomes a 502 on `/v1` rather than a workspace that
         # will not start.
         #
-        # 127.0.0.11 is Docker's embedded DNS on a compose network. A
-        # short `valid=` matters because a recreated Conduit gets a new
-        # address and nginx would otherwise hold the old one until reload.
-        resolver 127.0.0.11 valid=10s ipv6=off;
-        set $conduit http://api:8000;
+        # The container's own resolver (`/etc/resolv.conf`, filled in at
+        # start by the nginx image's NGINX_ENTRYPOINT_LOCAL_RESOLVERS):
+        # Docker's embedded DNS on a compose network, the cluster's DNS on
+        # Kubernetes, where `127.0.0.11` does not exist (found installing
+        # the chart: every `/v1` request answered 502). The Conduit's name
+        # is OSPREY_CONDUIT_HOST — `api` on compose; on a cluster the
+        # Service's full name, since nginx's resolver applies no search
+        # domain. A short `valid=` matters because a recreated Conduit gets
+        # a new address and nginx would otherwise hold the old one.
+        resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
+        set $conduit http://${OSPREY_CONDUIT_HOST}:8000;
         # `$request_uri` is explicit because a `proxy_pass` with a
         # variable does not substitute the matched location prefix — it
         # passes the URI unchanged only if told to, and silently drops the
@@ -105,8 +111,8 @@ server {
     # readiness, it touches no store, and its anonymous and authenticated
     # responses are asserted identical.
     location = /healthz {
-        resolver 127.0.0.11 valid=10s ipv6=off;
-        set $conduit_health http://api:8000;
+        resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
+        set $conduit_health http://${OSPREY_CONDUIT_HOST}:8000;
         proxy_pass $conduit_health$request_uri;
         proxy_set_header Host $host;
     }

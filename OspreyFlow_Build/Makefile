@@ -142,11 +142,12 @@ opentofu-check:
 
 # 05 §3b: the Enterprise chart linted, and rendered from the cluster values both clouds produce —
 # valid Kubernetes, no Secret, only the proxy published, every store on its own volumes; the
-# images it names are ones the release builds. Helm and kubeconform as pinned images.
+# images it names are ones the release builds; the proxy's own health check passes against the
+# real Caddy on HTTPS and HTTP. Helm, kubeconform and Caddy as pinned images.
 HELM := docker run --rm -v "$(CURDIR)/$(CORE)/deploy/helm/ospreyflow:/chart:ro" alpine/helm:3.16.3
 chart-check:
 	$(HELM) lint /chart
-	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/harness/test_helm_chart.py ../OspreyFlow_Build/tests/harness/test_cluster_render.py ../OspreyFlow_Build/tests/harness/test_release_matrix.py
+	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/harness/test_helm_chart.py ../OspreyFlow_Build/tests/harness/test_cluster_render.py ../OspreyFlow_Build/tests/harness/test_release_matrix.py ../OspreyFlow_Build/tests/harness/test_proxy_health.py
 
 # ADR-114 decision 9: two Conduit processes on one ClickHouse, against the `dev-up` stores and a
 # throwaway ClickHouse on 18123 (run by `test-all` once `dev-up` is up).

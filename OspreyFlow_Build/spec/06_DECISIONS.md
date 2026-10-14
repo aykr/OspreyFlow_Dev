@@ -12918,6 +12918,49 @@ it can be overruled). `05_DEPLOYMENT.md` §3b has the shape; this is why.
    Conduits publishing recipes at once (§3b says so); the Secret's creation, which is the install's
    (B7's install stage); and the chart in a running cluster, which is the next stage.
 
+### ADR-114, Amendment 14 (14 October 2026) — B7: the chart in a running cluster, and what it found
+
+Status: accepted 14 October 2026 (mine, within the owner's "proceed to the next stage"; recorded so it
+can be overruled).
+
+1. **The proof.** k3s 1.31 in a container capped at 9 GiB (so nothing it does can take memory from
+   the owner's deployment on the same machine), the chart installed from this checkout with values
+   `harness.render` wrote for an HTTPS Azure-shaped cluster, and the cloud's services stood in for
+   in a namespace of their own: Postgres over TLS, Valkey, Azurite for Blob. The Secret was built
+   from the same functions `apply` writes Lite's secrets with, and held every key the values name.
+   Images built from this checkout, imported (no registry). Proof-only changes, so it fitted the
+   machine: ArcadeDB's heap 768 MiB (the cluster's 8 GiB is per replica), no model downloads, and the
+   six workloads whose images were not imported at no replicas (Superset, OpenSearch, the recogniser,
+   Ollama, LiteLLM, whisper) — the disk had room for one copy of the rest, not two.
+2. **What held.** All 22 pods ready. ArcadeDB's three formed one Raft group and kept it through a
+   rolling restart (leadership moved; nothing lost); ClickHouse's database was made `Replicated` and its
+   tables `ReplicatedMergeTree` on both replicas by the Conduit itself; the Keepers elected a leader;
+   Keycloak's two pods formed one cache cluster. Through the load balancer by name: the workspace,
+   Keycloak's realm, the Conduit's `/healthz` through the workspace, `/v1` answering the Conduit's own
+   401; plain HTTP redirected; an unknown name refused. The policies held: the Conduit reached the
+   managed Postgres, Valkey and the internet; ArcadeDB and the workspace reached neither the managed
+   services nor the internet, and still reached their peers. The adapter's own client in a Conduit pod
+   wrote through the leader, followed a new one after the leader's pod was deleted, and stored each
+   write once.
+3. **Found and fixed:**
+   - The proxy's Service named 80 and 443 whatever the address; on plain HTTP Caddy listens,
+     unprivileged, on 8080. Its ports now follow the address.
+   - **On HTTPS the proxy never became healthy, on Lite and Small too:** its check asked
+     `http://127.0.0.1:80/healthz`, Caddy redirected it to HTTPS, and a bare address has no
+     certificate. The catch-all that answers `/healthz` is plain HTTP on 80 on HTTPS addresses; a name's
+     own HTTP request still redirects (`tests/harness/test_proxy_health.py`, against the real Caddy).
+   - **The workspace's nginx named Docker's DNS** (`resolver 127.0.0.11`), which a pod does not have:
+     every `/v1` request answered 502. Its configuration is now a template filled at start — the
+     container's own resolver (`NGINX_ENTRYPOINT_LOCAL_RESOLVERS`) and `OSPREY_CONDUIT_HOST` (`api`; on
+     a cluster the Service's full name, since nginx's resolver applies no search domain)
+     (`tests/harness/test_workspace_proxy.py`, against the image built from this checkout).
+4. **Found, not fixed (for B9):** the Conduit refuses to start without a `map:` section in
+   `osprey.yaml` (`load_map_config`), while the schema says a deployment with no basemap is a real
+   state. An install writes one; a hand-written configuration without one crashes the Conduit on
+   every profile.
+5. **Still owed:** a signed-in round trip on the cluster (Keycloak's grants and a first account are
+   the install stage's, as on Small); the six workloads not run here; the cluster on EKS and AKS.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;

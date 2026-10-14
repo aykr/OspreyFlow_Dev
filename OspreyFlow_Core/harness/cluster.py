@@ -75,7 +75,6 @@ PORTS: dict[str, list[int]] = {
     "litellm": [4000],
     "ner": [8000],
     "whisper": [8000],
-    "proxy": [80, 443],
 }
 
 #: A StatefulSet's own volumes: `(name, mount path, size)`. ArcadeDB keeps its Raft log inside
@@ -264,6 +263,17 @@ class _Pins:
             self.unresolved.append(image)
             return image
         return f"{image}@{digest}"
+
+
+def _proxy_ports(config: OspreyConfig) -> list[dict[str, int]]:
+    """The load balancer answers on the address's port, and reaches the port Caddy listens on: 80
+    and 443 for HTTPS; on plain HTTP, Caddy runs unprivileged on `PROXY_HTTP_PORT`."""
+    from harness.site import PROXY_HTTP_PORT, sites
+
+    names = sites(config)
+    if names.scheme == "https":
+        return [{"port": 80, "target": 80}, {"port": 443, "target": 443}]
+    return [{"port": names.port, "target": PROXY_HTTP_PORT}]
 
 
 def _owned(api_image: str, service: str) -> str:
@@ -481,8 +491,10 @@ def render_cluster(
             continue
         workload["kind"] = "StatefulSet" if name in STATEFUL else "Deployment"
         workload["replicas"] = REPLICAS.get(name, 1)
-        if name in PORTS:
-            workload["ports"] = PORTS[name]
+        if name == "proxy":
+            workload["ports"] = _proxy_ports(config)
+        elif name in PORTS:
+            workload["ports"] = [{"port": port, "target": port} for port in PORTS[name]]
         if name in CLAIMS:
             workload["claims"] = [
                 {"name": claim, "mountPath": path, "size": size}
@@ -580,7 +592,7 @@ def _keeper(pin: _Pins) -> dict[str, Any]:
         # `$$(` is the chart's escape for a `$(` the shell reads.
         "args": ["export KEEPER_ID=$$((${HOSTNAME##*-} + 1)); exec /entrypoint.sh"],
         "egress": False,
-        "ports": PORTS["clickhouse-keeper"],
+        "ports": [{"port": port, "target": port} for port in PORTS["clickhouse-keeper"]],
         "files": [
             {"key": "keeper.xml", "mountPath": "/etc/clickhouse-keeper/keeper_config.d/raft.xml"}
         ],
@@ -633,3 +645,10 @@ def _cluster_changes(workload: dict[str, Any]) -> None:
         workload["jgroups"] = True
     if name == "proxy":
         workload["public"] = True
+    if name == "workspace":
+        # Its nginx resolves the Conduit with no search domain: the Service's full name.
+        workload["env"] = [
+            *workload.get("env", []),
+            {"name": "POD_NAMESPACE", "field": "metadata.namespace"},
+            {"name": "OSPREY_CONDUIT_HOST", "value": "api.$(POD_NAMESPACE).svc.cluster.local"},
+        ]

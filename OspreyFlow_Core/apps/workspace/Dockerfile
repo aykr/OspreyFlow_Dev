@@ -61,11 +61,16 @@ RUN apk upgrade --no-cache
 # not a 404, or a deep link into an investigation breaks on refresh.
 # spec/05_DEPLOYMENT.md §7 requires a non-root, read-only-root posture, so
 # nginx runs unprivileged on 8080 rather than root on 80.
-COPY apps/workspace/nginx.conf /etc/nginx/conf.d/default.conf
+# A template, filled in at start (the nginx image's own entrypoint): the resolver from the
+# container's `/etc/resolv.conf`, and the Conduit's name, `api` unless a cluster names its Service.
+COPY apps/workspace/nginx.conf.template /etc/nginx/templates/default.conf.template
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+ENV OSPREY_CONDUIT_HOST=api
 COPY --from=builder /app/apps/workspace/dist /usr/share/nginx/html
 
 RUN touch /var/run/nginx.pid \
-    && chown -R nginx:nginx /var/run/nginx.pid /var/cache/nginx /usr/share/nginx/html
+    && rm -f /etc/nginx/conf.d/default.conf \
+    && chown -R nginx:nginx /var/run/nginx.pid /var/cache/nginx /usr/share/nginx/html /etc/nginx/conf.d
 
 USER nginx
 EXPOSE 8080

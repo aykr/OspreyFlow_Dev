@@ -15,9 +15,9 @@ spec:
     {{- include "ospreyflow.selector" $ctx | nindent 4 }}
   ports:
     {{- range .ports }}
-    - name: {{ printf "p%v" . }}
-      port: {{ . }}
-      targetPort: {{ . }}
+    - name: {{ printf "p%v" .port }}
+      port: {{ .port }}
+      targetPort: {{ .target }}
     {{- end }}
 {{- if eq .kind "StatefulSet" }}
 ---
@@ -36,9 +36,9 @@ spec:
     {{- include "ospreyflow.selector" $ctx | nindent 4 }}
   ports:
     {{- range .ports }}
-    - name: {{ printf "p%v" . }}
-      port: {{ . }}
-      targetPort: {{ . }}
+    - name: {{ printf "p%v" .port }}
+      port: {{ .port }}
+      targetPort: {{ .target }}
     {{- end }}
 {{- end }}
 {{- end }}
