@@ -888,6 +888,13 @@ are not yet guarded.
 release and pushed to `oci://ghcr.io/<owner>/charts/ospreyflow`, both signed keyless by the release
 workflow and verified before the release is published.
 
+**The cluster itself** (Amendment 18): `deploy/opentofu/cluster/aws` (EKS, RDS, ElastiCache, S3,
+OpenSearch, EFS) and `cluster/azure` (AKS, PostgreSQL flexible server, Azure Cache for Redis, Blob,
+Azure Files; search and the S3-protocol stores in the cluster) make the cluster and its managed
+services, with the API open only to the operator's addresses, the stores reached only from inside the
+network, network policy enforced, and both storage classes made. Each writes `install_answers` with no
+secret in it; the passwords and keys are named, in the cloud's secret store.
+
 **The install** (Amendment 16): `ospreyflow install --mode enterprise`, from a machine whose
 `kubectl` and `helm` reach the cluster, with the answers naming the managed services (`external:`)
 and the cluster's `namespace` and `shared_storage_class` (`cluster:`). It renders the values, makes

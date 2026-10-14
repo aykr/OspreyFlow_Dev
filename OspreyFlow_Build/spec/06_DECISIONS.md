@@ -13063,6 +13063,62 @@ it can be overruled).
 6. **Tests:** `tests/harness/test_release_chart.py` (4, read from the workflow), `test_signatures.py`
    (+3); red first; plants red: 3; actionlint clean (`rhysd/actionlint:1.7.3`).
 
+### ADR-114, Amendment 18 (14 October 2026) — B7: the Enterprise cluster on each cloud, in OpenTofu
+
+Status: accepted 14 October 2026 (mine, within the owner's "proceed to the next stage"; recorded so
+it can be overruled).
+
+1. **Two modules, one shape** (decision 10): `deploy/opentofu/cluster/aws` and `cluster/azure` make
+   the cluster the chart is installed on and the managed services under it, take the same inputs
+   (`name`, `region`, `domain`, `size`, `kubernetes_version`, `api_cidrs`, `backup_days`,
+   `namespace`, `admin_email`; AWS adds `search`), and give the same outputs where the two mean the
+   same thing — above all `install_answers`, the answers `ospreyflow install --mode enterprise`
+   installs from, which hold no secret.
+2. **On AWS:** EKS (secrets encrypted with a key of their own; a node group in three private subnets
+   behind one NAT gateway), RDS for PostgreSQL 16 (two zones, password kept by Secrets Manager,
+   deletion protection), ElastiCache for Valkey 8 (two nodes, TLS, a token), the S3 buckets Small
+   makes, Amazon OpenSearch Service (decision 9; `search = false` leaves it out and the chart's own
+   runs), and EFS for the shared volume. **On Azure:** AKS (no local accounts: every sign-in is an
+   Entra ID one; a system pool for Kubernetes' add-ons and the deployment's own pool, three zones),
+   PostgreSQL flexible server 16 (zone-redundant, a delete lock), Azure Cache for Redis (TLS only,
+   port 6380), Blob for media; search and the S3-protocol stores run in the cluster (decision 9;
+   Amendment 10 point 2).
+3. **The cluster's API answers only `api_cidrs`**, and `0.0.0.0/0` is refused; on Azure, Key Vault
+   answers the same addresses. Every managed store is reached only from inside the network — the
+   cluster's security group on AWS; a delegated subnet or a private endpoint, each with its private
+   DNS zone, on Azure — and no node has a public address.
+4. **The chart's NetworkPolicies are enforced:** the VPC CNI's policy engine on AWS, Azure network
+   policy on AKS. Without one, Kubernetes accepts the policies and nothing enforces them.
+5. **The two storage classes the answers name are made by the module**, through the cluster's own
+   API: `ospreyflow-volumes` (encrypted gp3 on AWS; zone-redundant premium disks on Azure, so a
+   store's volume follows its pod to another zone) and `ospreyflow-shared` (EFS access points on
+   AWS; premium Azure Files behind a private endpoint on Azure), both owned by 1000:1000.
+6. **Pods reach S3 as the node does** (`credentials: instance`, as Small's server does): the node's
+   role, with the instance metadata hop limit raised to 2 and tokens required.
+7. **Secrets:** no secret is in the answers or an output. The AWS database password is RDS's own;
+   the Valkey token is made in the state and copied to Secrets Manager. On Azure the database
+   password and the cache's and Blob account's keys are in the state and copied to Key Vault. The
+   state is therefore a secret, as Small's is.
+8. **The database is guarded against deletion** by RDS's deletion protection and, on Azure, a
+   `CanNotDelete` lock, which Azure enforces against `tofu destroy` too. Small's Azure module uses
+   `prevent_destroy` instead; a lock replaces it here because it is checked by a test, and because a
+   module test that applies cannot tear down a `prevent_destroy` resource.
+9. **Kubernetes 1.34 by default**, on both modules: by October 2026 1.31 is in paid extended support
+   on EKS and out of support on AKS.
+10. **The operator needs, besides `kubectl` and `helm`:** the `aws` command line on AWS (the
+    Kubernetes provider and kubeconfig sign in through `aws eks get-token`), and `az` with
+    `kubelogin` on Azure. The doctor does not yet check for `kubelogin`.
+11. **Not proved:** neither module has been applied to a real account; no cloud is reachable from
+    this build. Microsoft has announced the retirement of Azure Cache for Redis in favour of Azure
+    Managed Redis; moving to it is a later change. Feeding `install_answers` and the named secrets
+    to `ospreyflow install` is the next stage.
+12. **Tests:** `cluster/aws/tests/cluster.tftest.hcl` (12) and `cluster/azure/tests/cluster.tftest.hcl`
+    (11), against mock providers, run by `make opentofu-check` with the Small modules'. Every promise
+    above that a plan can see has a run; plants red: 15 on AWS, 18 on Azure, each failing the run
+    that holds its promise, against a baseline that passes. One plant (the AWS nodes moved to the
+    public subnets) first passed unnoticed, because the mock provider gives `public[i]` and
+    `private[i]` the same identifier; the run now pins each set to an identifier of its own.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;

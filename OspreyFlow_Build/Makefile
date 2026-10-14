@@ -129,15 +129,16 @@ conformance-media-blob:
 	  $(PYTEST) ../OspreyFlow_Build/tests/conformance/media_store -k "blob" ../OspreyFlow_Build/tests/test_media_blob.py; \
 	  status=$$?; docker rm -f osprey-test-azurite >/dev/null 2>&1; exit $$status
 
-# ADR-114 decision 10: the Small modules for both clouds formatted, valid, and holding their own
-# promises (`tests/*.tftest.hcl`, planned against mock providers) — no cloud credentials needed.
+# ADR-114 decision 10: the Small and Enterprise (`cluster/`, Amendment 18) modules for both clouds
+# formatted, valid, and holding their own promises (`tests/*.tftest.hcl`, against mock providers) —
+# no cloud credentials needed.
 TOFU := docker run --rm -v "$(CURDIR)/$(CORE)/deploy/opentofu:/w" ghcr.io/opentofu/opentofu:1.10.6
 opentofu-check:
 	$(TOFU) -chdir=/w fmt -check -recursive
-	@for cloud in aws azure; do \
-	  $(TOFU) -chdir=/w/small/$$cloud init -backend=false -input=false -no-color >/dev/null && \
-	  $(TOFU) -chdir=/w/small/$$cloud validate -no-color && \
-	  $(TOFU) -chdir=/w/small/$$cloud test -no-color || exit 1; \
+	@for module in small/aws small/azure cluster/aws cluster/azure; do \
+	  $(TOFU) -chdir=/w/$$module init -backend=false -input=false -no-color >/dev/null && \
+	  $(TOFU) -chdir=/w/$$module validate -no-color && \
+	  $(TOFU) -chdir=/w/$$module test -no-color || exit 1; \
 	done
 
 # 05 §3b: the Enterprise chart linted, and rendered from the cluster values both clouds produce —
