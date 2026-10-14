@@ -12961,6 +12961,28 @@ can be overruled).
 5. **Still owed:** a signed-in round trip on the cluster (Keycloak's grants and a first account are
    the install stage's, as on Small); the six workloads not run here; the cluster on EKS and AKS.
 
+### ADR-114, Amendment 15 (14 October 2026) — the install package's documentation
+
+Status: accepted 14 October 2026 — the owner's request ("a /docs folder that includes a developers
+guide (for data engineers), a users guide (for analysts) and an administration & installation guide
+for admins, with sufficient details around the architecture design … all the interfaces that would
+be relevant for the target user group", "both as PDFs (with screenshots) and .md"), and their three
+choices between presented options, each the recommended one.
+
+1. **Three guides in the install package**, `OspreyFlow_Core/docs/`: a developer guide for data
+   engineers, a user guide for analysts, and an administration and installation guide for
+   administrators — each with the architecture its reader needs and every interface that reader uses
+   (screens, commands, files, endpoints).
+2. **Markdown is the source; PDFs are built from it** into `docs/pdf/`, screenshots in
+   `docs/images/`, and a test holds each PDF in step with its Markdown.
+3. **After B7** ("Finish B7 first"): the administration guide's Enterprise chapter describes the
+   finished, proven install.
+4. **Screenshots from a signed-in sitting:** a browser window is opened, the owner signs in, and only
+   the synthetic cases are captured — never real data (rule 9).
+5. `spec/10_ADMINISTRATION_GUIDE.md` (B10) is the specification's copy; the shipped administration
+   guide is written for the reader who has only the package, and is checked against the same schema
+   reference so the two cannot drift.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;
