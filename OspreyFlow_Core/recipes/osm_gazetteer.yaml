@@ -9,8 +9,8 @@
 # The product's copy, read by `scripts/build_local_basemap.py` (moved out of the developer
 # repository's test fixtures on 13 October 2026: the script pointed at `OspreyFlow_Core/tests/`,
 # which has not existed since the folders split, so building the basemap failed on every checkout).
-# `OspreyFlow_Build/tests/scenarios/fixtures/osm_gazetteer_recipe.yaml` stays the connector test's
-# own copy; `test_osm_gazetteer_recipe_end_to_end.py` holds the two equal.
+# The developer repository keeps the connector test's own copy, and its end-to-end test holds the
+# two equal.
 id: osm-gazetteer
 version: 1
 label: "OSM-derived gazetteer (tier 1)"

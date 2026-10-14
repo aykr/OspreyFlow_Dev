@@ -46,6 +46,9 @@ GUIDES: tuple[tuple[str, str], ...] = (
     ("developer-guide.md", "OspreyFlow — Developer Guide"),
 )
 _IMAGE = re.compile(r"^!\[[^\]]*\]\(([^)\s]+)\)\s*$", re.MULTILINE)
+_GUIDE_LINK = re.compile(r'<a href="([a-z0-9-]+)\.md(?:#[^"]*)?">([^<]*)</a>')
+#: A local address in a printed PDF — the printing machine's own folders.
+_LOCAL_ADDRESS = re.compile(rb"file://(/[^/\s)]+/[^/\s)]+/)?")
 
 #: The page's own rules: sizes and spacing only, every colour a token (CLAUDE.md: no colour outside
 #: the tokens). `tests/test_docs_pdf.py` refuses a literal colour here.
@@ -96,9 +99,11 @@ def images_of(markdown: str) -> list[str]:
 
 
 def page(markdown: str, title: str, base: Path) -> str:
-    """The whole printable page for one guide: links between guides point at their PDFs."""
+    """The whole printable page for one guide. A link to another guide is printed as its words and
+    the guide's file — never as a link, since the browser would print it as an absolute
+    `file:///…` address naming the printing machine's home folder (the publish refused that)."""
     body = render_markdown(markdown)
-    body = re.sub(r'href="([a-z0-9-]+)\.md(#[^"]*)?"', r'href="\1.pdf\2"', body)
+    body = _GUIDE_LINK.sub(r"\2 (\1.pdf)", body)
     tokens = TOKENS.read_text(encoding="utf-8")
     return (
         '<!doctype html>\n<html lang="en-GB" data-theme="light"><head><meta charset="utf-8">'
@@ -181,6 +186,10 @@ def check(docs: Path = DOCS) -> list[str]:
             problems.append(f"{name}'s images changed since {source.stem}.pdf was made: {rebuild}")
         if made["pdf"] != _sha(pdf):
             problems.append(f"{source.stem}.pdf is not the one made from {name}: {rebuild}")
+        local = _LOCAL_ADDRESS.search(pdf.read_bytes())
+        if local:
+            where = local.group(1).decode(errors="replace") if local.group(1) else ""
+            problems.append(f"{source.stem}.pdf carries a local address (file://{where}…)")
     for image in sorted((docs / "images").rglob("*.png")):
         relative = image.relative_to(docs).as_posix()
         if relative not in shown:

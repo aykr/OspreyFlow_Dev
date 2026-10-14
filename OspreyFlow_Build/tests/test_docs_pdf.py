@@ -99,9 +99,22 @@ def test_the_page_takes_every_colour_from_the_tokens() -> None:
     assert named and all(f"{token}:" in tokens for token in named), "a token the page names is not defined"
 
 
-def test_links_between_guides_point_at_their_pdfs(tmp_path: Path) -> None:
+def test_a_link_between_guides_is_printed_as_its_name_never_as_an_address(tmp_path: Path) -> None:
+    """A browser prints a link as an absolute address — `file:///Users/<you>/…` — which would carry the
+    printing machine's home folder out with the install package (the publish refused it, 14 October
+    2026). So in the PDF a link to another guide is its words, naming the guide's file."""
     made = docs_pdf.page("See the [user guide](user-guide.md#start).", "t", tmp_path)
-    assert 'href="user-guide.pdf#start"' in made and 'data-theme="light"' in made
+    assert "href" not in made.split("<main>")[1]
+    assert "the user guide (user-guide.pdf)" in made and 'data-theme="light"' in made
+
+
+def test_a_pdf_carrying_a_local_address_is_named(docs: Path) -> None:
+    pdf = docs / "pdf" / "user-guide.pdf"
+    pdf.write_bytes(b"%PDF /URI (file:///Users/someone/docs/admin.pdf)")
+    manifest = json.loads((docs / "pdf" / "manifest.json").read_text(encoding="utf-8"))
+    manifest["user-guide.md"]["pdf"] = _sha(pdf.read_bytes())
+    (docs / "pdf" / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    assert docs_pdf.check(docs) == ["user-guide.pdf carries a local address (file:///Users/someone/…)"]
 
 
 def test_the_guides_and_their_pdfs_are_in_step() -> None:

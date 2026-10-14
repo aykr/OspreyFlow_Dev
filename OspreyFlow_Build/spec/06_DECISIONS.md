@@ -13275,6 +13275,31 @@ overruled).
    copies), `test_doc_site.py` (+2, one replaced); plants red: 12 (renderer and PDF check), 4 (site),
    1 (a flag missing from the package copy only).
 
+### ADR-114, Amendment 21 (14 October 2026) — the user repository is aykr/ospreyflow, private
+
+Status: accepted 14 October 2026 — the owner: "the user repo should be aykr/ospreyflow, private".
+
+1. **The user repository** (decision 1; `make publish-user-repo`) is `aykr/ospreyflow` on GitHub,
+   **private**. It does not exist yet; creating it and pushing to it are the owner's (the agent's
+   push authority is `git push origin main` of the development repository only).
+2. **A trial publish refused, as it should, and the causes are fixed:** the guides' PDFs printed each
+   link between guides as an absolute `file:///Users/<owner>/…` address (now printed as the guide's
+   name, and `tools/docs_pdf.check` refuses a PDF carrying any `file://` address — shown red on the
+   real PDFs before they were made again); a harness test's synthetic home was shaped like a real
+   one (`/home/ada` → `/u/ada`); a recipe's comment named the developer repository's folder.
+3. **What private means, not yet built — each for the owner to schedule:** its images and chart on
+   GitHub's registry are private too, so every machine that pulls them must be signed in with a token
+   that can read packages:
+   - Lite install and update pull without signing in, and the signature check runs cosign in its
+     own container, which does not see the machine's Docker sign-in;
+   - a Small server's first boot pulls them: a token in the cloud's secret store, read as the
+     database password is;
+   - Enterprise's chart needs an image-pull secret;
+   - `update --check`, and fetching a release's install page or bundle, need `GITHUB_TOKEN`
+     (documented, Amendment 8).
+   The alternative the owner may prefer: the repository private, its packages (images, chart) made
+   public on GitHub's registry — then only the source and the update check need a token.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;

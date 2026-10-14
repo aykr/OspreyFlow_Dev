@@ -100,15 +100,15 @@ describe("FoldersScreen", () => {
       <FoldersScreen
         config={{ components: { storage: { ingest: "/var/lib/osprey/ingest" } } }}
         onSave={vi.fn()}
-        home="/home/ada"
+        home="/u/ada"
       />,
     );
-    expect((screen.getByLabelText("Ingest folder") as HTMLInputElement).value).toBe("/home/ada/OspreyFlow/ingest");
-    expect((screen.getByLabelText("Basemap folder") as HTMLInputElement).value).toBe("/home/ada/OspreyFlow/basemap");
+    expect((screen.getByLabelText("Ingest folder") as HTMLInputElement).value).toBe("/u/ada/OspreyFlow/ingest");
+    expect((screen.getByLabelText("Basemap folder") as HTMLInputElement).value).toBe("/u/ada/OspreyFlow/basemap");
   });
 
   it("keeps a folder the person's own configuration already names", () => {
-    render(<FoldersScreen config={{ components: { storage: { ingest: "/srv/in" } } }} onSave={vi.fn()} home="/home/ada" />);
+    render(<FoldersScreen config={{ components: { storage: { ingest: "/srv/in" } } }} onSave={vi.fn()} home="/u/ada" />);
     expect((screen.getByLabelText("Ingest folder") as HTMLInputElement).value).toBe("/srv/in");
   });
 });
