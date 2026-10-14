@@ -644,7 +644,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     await graph.apply_schema(ontology)
 
-    valkey = Valkey(host=config.valkey.host, port=config.valkey.port, db=config.valkey.db)
+    valkey = Valkey(**config.valkey.client_kwargs())
     audit = await AuditWriter.connect(config.postgres.dsn)
     investigations = await InvestigationStore.connect(config.postgres.dsn)
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)

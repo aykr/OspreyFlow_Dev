@@ -802,13 +802,23 @@ external:
   backups (AWS Backup, RDS snapshots, Azure Backup) protect it, and a dump from inside the server
   would be a second, unscheduled copy no one restores from.
 
-## 3b. Enterprise on Kubernetes (ADR-114 decision 9, Amendment 10)
+## 3b. Enterprise on Kubernetes (ADR-114 decision 9, Amendments 10, 12 and 13)
 
 `profile: cluster` renders no compose file. `harness.render` writes `deploy/generated/cluster/`:
-`values.yaml` for the chart `deploy/helm/ospreyflow`, and the same configuration files Lite renders
-(`osprey.yaml`, `Caddyfile`, `realm.json`, `litellm.yaml`, `glass.json`), which the chart carries as
-ConfigMaps — one renderer, so a cluster and a laptop cannot disagree about what a deployment is. The
-Kubernetes service names are the compose service names, so every rendered address works unchanged.
+`values.yaml` for the chart `deploy/helm/ospreyflow`, and its `versions.lock`. **Every workload in it
+is translated from the compose stanza Lite and Small are written from** (`harness/cluster.py`):
+image, environment, command, health check, files and volumes; a cluster then changes only what a
+cluster changes (replicas, the stores' clustering, the job workers, what the cloud runs). One
+renderer, so a cluster and a laptop cannot disagree about what a service is. The configuration files
+Lite writes beside its compose file (`osprey.yaml`, `Caddyfile` without the loopback doors,
+`realm.json`, `litellm.yaml`, `glass.json`, the sign-in theme) are in `values.yaml` itself, since a
+chart reads no file outside it; the chart carries them as one ConfigMap, and Lite's `deployment.env`
+as another. The Kubernetes service names are the compose service names, so every rendered address
+works unchanged. The chart is generic: it creates nothing from its own defaults.
+
+A cluster runs ClickHouse and ArcadeDB and pulls the release's images: `analytics_engine: duckdb`
+(each replica would keep its own events), `graph_store: janusgraph` and `source_path` are refused in
+words.
 
 **What the cloud runs** (`external:`, §3a, all required at `cluster`): PostgreSQL, Valkey
 (`external.valkey`: host, port, TLS — ElastiCache or Azure Cache for Redis), and the object store
@@ -852,9 +862,35 @@ Conduit replica, as Lite mounts a host folder. **Secrets** are never in `values.
 one Kubernetes Secret (`secrets.name`, `ospreyflow-secrets` by default) holding what `deployment.env`
 holds on Lite, which the install creates. Every image is pinned by digest from the release's lock.
 
-**The chart's test** (Amendment 10 point 5): rendered with `helm template` and validated against the
-Kubernetes schemas, with no workload for any store the cloud manages, every stateful workload on its
-own volume, and nothing but the proxy published.
+**Translated, in particular** (Amendment 13):
+
+- A compose `${VAR}` becomes a read of the Secret, or of the environment ConfigMap when the render
+  writes it there; one inside a longer value is defined first and named as `$(VAR)`, which Kubernetes
+  expands only from earlier entries.
+- A one-shot step becomes a **Job** when it reaches out (the model downloads: the server reading case
+  content keeps no route out, and a policy is per pod), and a service that waited for it waits for
+  the Job's mark on the volume they share; Keycloak's database step runs **before Keycloak**, in its
+  pod, at every start, as compose runs it at every `up`.
+- The networks become **NetworkPolicies**: every pod reaches the deployment's pods and the cluster's
+  DNS; what Lite puts on its `egress` network (and the job workers, which reach the managed Valkey)
+  may reach out; only the proxy is reached from outside, through the one LoadBalancer.
+- The job workers run the release's own images (`worker`, `report-sync`), as does Superset, which
+  the release now builds beside the Conduit; the Conduit and the workers reach a managed Valkey with
+  its password (`VALKEY_PASSWORD`, in the Secret) over TLS (`VALKEY_TLS`).
+
+**Not in the chart yet:** resource requests and limits; a GPU node pool for `ollama` (a workload may
+carry a `nodeSelector`, which nothing sets); the on-demand loader (`ingest`), which Lite runs with
+`compose run`; the update notice (`state/`, written on a Lite host); and two Conduit replicas share
+the recipes repository on the shared volume, where one at a time publishes safely and two at once
+are not yet guarded.
+
+**The chart's test** (Amendment 10 point 5; `make chart-check`): `helm lint`, and the chart rendered
+with `helm template` from the values both clouds produce, validated against Kubernetes 1.31's schemas
+(kubeconform, strict), with no Secret, no workload for any store the cloud manages, every store on
+volumes of its own and its peers named by a headless Service, every Service selecting a workload,
+every `$(VAR)` defined before it is named, nothing but the proxy published, and only what needs a
+route out given one (`tests/harness/test_helm_chart.py`, `test_cluster_render.py`); and every image a
+pulled deployment names is one the release builds (`test_release_matrix.py`).
 
 ## 4. Moving up a profile
 

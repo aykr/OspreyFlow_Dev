@@ -12879,6 +12879,45 @@ needs of the Conduit, proved in containers before the chart is written.
    server's unchanged, a cluster name that is not a plain name refused); red first, and each branch
    shown red by a planted fault.
 
+### ADR-114, Amendment 13 (14 October 2026) — B7: the chart, translated from the compose services
+
+Status: accepted 14 October 2026 (mine, within the owner's "carry on to the next stage"; recorded so
+it can be overruled). `05_DEPLOYMENT.md` §3b has the shape; this is why.
+
+1. **The chart is generic and the renderer fills it.** Writing each service again as a template would
+   be a second description of the deployment, free to drift from the first; so `harness/cluster.py`
+   translates the compose stanzas `harness.render` already writes (`compose_services`) into the
+   chart's `workloads`, and changes only what a cluster changes. The chart creates nothing from its
+   own defaults.
+2. **The configuration files are inside `values.yaml`**, not beside it as §3b first said: Helm reads no
+   file outside the chart, and one file to install from cannot be half-forgotten. They fit a
+   ConfigMap with room to spare (43 KB of the 1 MiB limit, measured; the test holds it under).
+3. **A one-shot step that reaches out is a Job**, never an init container of the server it feeds: a
+   NetworkPolicy applies to a whole pod, so a download inside Ollama's pod would give Ollama a route
+   out (Amendment 7). A service compose starts only after such a step waits for the Job's mark on
+   their shared volume. Keycloak's database step reaches only the managed Postgres Keycloak itself
+   reaches, so it runs in Keycloak's pod first, at every start.
+4. **The stores' peers start together** (`podManagementPolicy: Parallel`) and are named before they
+   are ready (`publishNotReadyAddresses`): a Raft member becomes ready only once it has peers, so
+   starting them one at a time would wait for ever.
+5. **Superset is a release image** (`release.yml` builds `deploy/superset`): pull mode named
+   `osprey/superset:local`, which exists only where it was built — a release install of Small could not
+   start Superset either. `tests/harness/test_release_matrix.py` holds every pulled owned image to the
+   release's matrix; nothing compared the two before.
+6. **A managed Valkey takes a password and TLS** (`ValkeyConfig.client_kwargs`, used by the Conduit and
+   the worker alike), proved against a password-and-TLS Valkey 8.0: answered with both, refused with a
+   wrong password, refused in plain text.
+7. **Tests:** `test_cluster_render.py` (21), `test_helm_chart.py` (19, both clouds, Helm and
+   kubeconform as pinned images), `test_release_matrix.py` (2), `test_valkey_config.py` (3),
+   `test_reporting.py` +1; `make chart-check` in `make ci`. Red: 26 planted faults across the
+   templates and the renderer, each turning its own test red, and a 27th that survived — the
+   translator's order, which the cluster's changes rebuild for the only value it applied to — replaced
+   by two plants where the real output is ordered and a direct case for the translator; 4 more in
+   the Valkey settings and 3 in the release matrix.
+8. **Not yet:** resource requests, a GPU pool, the on-demand loader, the update notice, guarding two
+   Conduits publishing recipes at once (§3b says so); the Secret's creation, which is the install's
+   (B7's install stage); and the chart in a running cluster, which is the next stage.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;

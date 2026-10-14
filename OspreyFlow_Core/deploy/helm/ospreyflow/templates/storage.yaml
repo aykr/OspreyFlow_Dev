@@ -1,0 +1,22 @@
+{{- if or .Values.workloads .Values.jobs }}
+---
+# One shared volume (05 §3b): ingest, tiles, the recipes repository, the model weights, the
+# proxy's certificates. Every Conduit replica reads the same files, as Lite reads a host folder.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ospreyflow-shared
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "shared" "root" $) | nindent 4 }}
+  annotations:
+    # Kept when the release is removed: it holds the evidence and the recipes.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteMany"]
+  {{- with .Values.storage.sharedClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.sharedSize }}
+{{- end }}

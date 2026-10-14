@@ -1,0 +1,65 @@
+{{- if or .Values.workloads .Values.jobs }}
+---
+# ADR-114 Amendment 7 on Kubernetes: a pod reaches the deployment's own pods and the cluster's DNS,
+# and nothing else; anything from outside reaches nothing but the proxy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ospreyflow-internal
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "internal" "root" $) | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: ospreyflow
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: ospreyflow
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: ospreyflow
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# What a configured feature needs a route out for — the cloud's managed stores, a model provider,
+# mail, the model downloads, certificates — as on Lite's `egress` network.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ospreyflow-egress
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "egress" "root" $) | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      ospreyflow.io/egress: "true"
+  policyTypes: ["Egress"]
+  egress:
+    - {}
+---
+# The one door: the proxy, from anywhere.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ospreyflow-public
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "public" "root" $) | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      ospreyflow.io/public: "true"
+  policyTypes: ["Ingress"]
+  ingress:
+    - {}
+{{- end }}

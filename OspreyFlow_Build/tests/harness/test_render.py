@@ -32,7 +32,6 @@ from harness.render import (
     _OLLAMA_PULL_SCRIPT,
     INGEST_CONTAINER_PATH,
     LITELLM_KEY,  # noqa: F401
-    ClusterRendererNotBuilt,
     MissingDockerfileError,
     RenderResult,
     UnpinnedImagesError,
@@ -46,11 +45,11 @@ from harness.render import (
     write,
     write_config_copy,
 )
-
-from schemas.deployment import DEFAULT_PUBLIC_ORIGIN, OspreyConfig, SearchBackend
 from tools.layout import CORE
 from tools.layout import REPO as REPO_ROOT
 from tools.layout import REPO as _REPO
+
+from schemas.deployment import DEFAULT_PUBLIC_ORIGIN, OspreyConfig, SearchBackend
 
 ARTEFACTS = ("compose.yaml", "deployment.env", "versions.lock", "RUNBOOK.md", "Caddyfile")
 #: Read by the Glass as JSON (ADR-114 Amendment 4), so it carries no comment banner.
@@ -504,16 +503,15 @@ def test_local_lite_and_small_both_render() -> None:
         assert f"osprey-{profile}" in result.artefacts["compose.yaml"]
 
 
-def test_the_cluster_profile_fails_loudly_rather_than_rendering_compose() -> None:
+def test_the_cluster_profile_renders_the_charts_values_rather_than_compose() -> None:
     """ADR-011: "Compose for `local-lite` and `small`; generated Kubernetes manifests for
-    `cluster`" — a different renderer, not a toggle. Not built in Stage 2 §1, and a silent compose
-    render would be the worse failure."""
+    `cluster`" — a different renderer, not a toggle (05 §3b; `test_cluster_render.py` has the
+    values' own promises)."""
     config = OspreyConfig.model_validate(
-        {"profile": "cluster", "cluster": {"hosts": [{"name": "a", "address": "10.0.0.1"}]},
+        {"profile": "cluster", "components": {"analytics_engine": "clickhouse"},
          "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}}}
-    )
-    with pytest.raises(ClusterRendererNotBuilt, match="not built in Stage 2"):
-        render(config, resolver=_fake_resolver)
+    )  # fmt: skip
+    assert set(render(config, resolver=_fake_resolver).artefacts) == {"values.yaml", "versions.lock"}
 
 
 # --- The digest refusal ------------------------------------------------------
@@ -1315,7 +1313,7 @@ def test_the_ingest_root_is_mounted_read_only_into_the_conduit_for_every_rendere
     exists".
 
     **"Every profile" means every profile this renderer emits compose for.** `cluster` is a
-    different renderer (ADR-011, `ClusterRendererNotBuilt`) and is deliberately not asserted here
+    different renderer (ADR-011, `harness/cluster.py`) and is deliberately not asserted here
     rather than silently skipped — when that renderer is built, its own equivalent case is part of
     building it.
     """
@@ -1408,9 +1406,8 @@ def test_only_the_uploaded_folder_inside_the_ingest_root_is_writable_for_the_con
 
 
 def test_the_writable_folder_is_the_one_the_conduit_writes_uploads_to() -> None:
-    from services.api.ingest_sources import UPLOAD_SUBDIR
-
     from harness.render import INGEST_UPLOAD_SUBDIR
+    from services.api.ingest_sources import UPLOAD_SUBDIR
 
     assert INGEST_UPLOAD_SUBDIR == UPLOAD_SUBDIR
 

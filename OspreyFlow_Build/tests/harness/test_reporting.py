@@ -49,3 +49,17 @@ def test_the_render_carries_no_secret_and_apply_mints_only_what_is_on() -> None:
     assert reporting_secrets(config) != minted, "freshly minted each time, never derived"
     sync_only = reporting_secrets(_config(sync=True))
     assert "SUPERSET" not in sync_only
+
+
+def test_a_pulled_superset_is_the_releases_own_image_beside_the_conduits() -> None:
+    """Pull mode (a release install, a cluster) names an image a registry has: `osprey/superset:local`
+    exists only where it was built. The release publishes Superset beside the Conduit, by the same
+    commit (`release.yml`'s matrix), so it is named the way the Conduit is."""
+    config = OspreyConfig.model_validate({"reporting": {"superset": True}})
+    pulled = reporting_services(
+        config, api_image="ghcr.io/someone/api:0123abc", building=False
+    )
+    assert pulled["superset"]["image"] == "ghcr.io/someone/superset:0123abc"  # type: ignore[index]
+    assert "build" not in pulled["superset"]  # type: ignore[operator]
+    built = reporting_services(config, api_image="osprey/api:local", building=True)
+    assert built["superset"]["image"] == "osprey/superset:local"  # type: ignore[index]

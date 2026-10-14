@@ -118,7 +118,7 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
     graph = GraphArcadeDBAdapter(arcadedb, load_uk_le_scheme())
     await graph.apply_schema(load_default_ontology())
 
-    client = Valkey(host=config.valkey.host, port=config.valkey.port, db=config.valkey.db)
+    client = Valkey(**config.valkey.client_kwargs())
     worker = JobWorker(client, JobQueue(client), graph, consumer_name=consumer_name())
 
     for job_type, dotted in registered_job_types().items():

@@ -8,9 +8,9 @@ names four generated artefacts and this module produces all four, for `local-lit
      paths filled in."
 
 **The `cluster` profile is a different renderer, not a flag** — ADR-011: "Compose for `local-lite`
-and `small`; generated Kubernetes manifests for `cluster`." It is deliberately a loud stub here
-(`ClusterRendererNotBuilt`), because a `cluster` render that silently emitted compose would be a
-worse failure than one that refuses.
+and `small`; generated Kubernetes manifests for `cluster`." A cluster renders the chart's values
+(`harness/cluster.py`, 05 §3b), translated from the same services this module writes compose
+from.
 
 **`deploy/compose/dev.yaml` is neither read nor written by this module.** Its own header already
 says what it is — "a dev convenience, not the harness… This file exists only to run the test suite
@@ -209,11 +209,6 @@ _BANNER = (
     "regenerate instead (spec/05_DEPLOYMENT.md §2.1). A hand edit is reported by\n"
     "`python -m harness.render --check` as drift, naming this path."
 )
-
-
-class ClusterRendererNotBuilt(RuntimeError):
-    """`profile: cluster` renders Kubernetes manifests through a separate renderer (ADR-011), not
-    built in Stage 2 §1."""
 
 
 class MissingDockerfileError(RuntimeError):
@@ -799,8 +794,11 @@ _SERVICE_EXTRAS["ner"] = {
 }
 
 
-def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str:
-    services: dict[str, object] = {}
+def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> dict[str, Any]:
+    """Every service the deployment runs, as compose stanzas: what the compose file is written from,
+    and what the cluster's chart values are translated from (`harness/cluster.py`), so a laptop and
+    a cluster cannot disagree about what a service is."""
+    services: dict[str, Any] = {}
     for entry in images:
         # A run-once batch job that exits is not a crash. `unless-stopped` restarts it forever,
         # which looks exactly like a crash loop in `docker ps` and never becomes healthy — found
@@ -991,9 +989,14 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
     if "keycloak" in services and ("postgres" in services or config.external.postgres is not None):
         services["keycloak-db"] = _keycloak_database_step(config)
     if config.external.postgres is not None:
-        services["keycloak"]["environment"]["KC_DB_URL"] = _keycloak_jdbc_url(config)  # type: ignore[index]
+        services["keycloak"]["environment"]["KC_DB_URL"] = _keycloak_jdbc_url(config)
     _drop_absent_dependencies(services)
     _place_on_networks(config, services)
+    return services
+
+
+def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str:
+    services = compose_services(config, images)
     document = {
         "name": f"osprey-{config.profile.value}",
         "services": services,
@@ -1398,16 +1401,25 @@ def render(
     `"registry"`) rather than this function silently mislabelling a registry-resolved digest as a
     local-daemon one.
     """
-    if config.profile is Profile.CLUSTER:
-        raise ClusterRendererNotBuilt(
-            "profile: cluster renders Kubernetes manifests through a separate renderer "
-            "(06_DECISIONS.md ADR-011) — not built in Stage 2 §1"
-        )
     if resolver is None:
         resolver = (
             unresolved_digest_resolver if allow_unpinned else daemon_then_registry_digest_resolver
         )
     images = service_images(config)
+    if config.profile is Profile.CLUSTER:
+        # 05 §3b: the chart's values, translated from the same services (`harness/cluster.py`).
+        from harness.cluster import render_cluster
+
+        return RenderResult(
+            profile=config.profile,
+            artefacts=render_cluster(
+                config,
+                images,
+                resolver=resolver,
+                allow_unpinned=allow_unpinned,
+                resolved_source_label=resolved_source_label,
+            ),
+        )
     source_path = config.components.source_path
     # Round 07: only checked when a source tree is actually declared. The pull path (the
     # default) never looks at the local filesystem for a Dockerfile at all — the whole point,

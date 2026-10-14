@@ -25,7 +25,8 @@ from pathlib import Path
 import pytest
 import yaml
 from fastapi.testclient import TestClient
-from harness.render import ClusterRendererNotBuilt, load_config, render
+from harness.cluster import ClusterNotRenderable
+from harness.render import load_config, render
 from harness.webapp import create_app
 
 from schemas.deployment import OspreyConfig
@@ -168,12 +169,9 @@ def test_small_profile_matches_stage_2_section_1s_own_fixture_byte_for_byte(tmp_
     assert api_rendered.artefacts == fixture_rendered.artefacts
 
 
-def test_cluster_profile_stub_behaviour_is_asserted_not_skipped(tmp_path: Path) -> None:
-    """`06_DECISIONS.md` ADR-011: `profile: cluster` renders through a separate, not-yet-built
-    renderer — `harness.render.render` already raises `ClusterRendererNotBuilt` rather than
-    silently producing nothing or a wrong artefact. This test proves the API-driven round-trip
-    reaches that same, real refusal — not a `pytest.skip`, which would prove nothing about
-    `cluster`'s own behaviour at all.
+def test_a_cluster_the_chart_cannot_run_is_refused_in_words(tmp_path: Path) -> None:
+    """A cluster runs ArcadeDB's Raft replicas (05 §3b): the API's round trip reaches the
+    renderer's refusal, in words naming the setting, and generating artefacts answers 422 with it.
 
     **`profile` and `components` submitted in one request, not two, and that is a real property
     found building this test, not a test-only convenience.** `PUT /api/config` validates the whole
@@ -201,8 +199,8 @@ def test_cluster_profile_stub_behaviour_is_asserted_not_skipped(tmp_path: Path) 
     assert switch_response.status_code == 200, switch_response.text
 
     config = load_config(config_path)
-    with pytest.raises(ClusterRendererNotBuilt):
-        render(config)
+    with pytest.raises(ClusterNotRenderable, match="components.graph_store"):
+        render(config, resolver=_fake_resolver)
 
 
 def test_an_invalid_component_for_the_profile_is_refused_with_a_named_field(tmp_path: Path) -> None:

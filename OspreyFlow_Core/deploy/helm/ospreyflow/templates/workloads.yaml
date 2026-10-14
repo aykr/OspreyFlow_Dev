@@ -1,0 +1,52 @@
+{{- range .Values.workloads }}
+{{- $ctx := dict "w" . "name" .name "root" $ }}
+---
+apiVersion: apps/v1
+kind: {{ .kind }}
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ .replicas }}
+  {{- if eq .kind "StatefulSet" }}
+  serviceName: {{ printf "%s-headless" .name }}
+  # The Raft stores need their peers up together to elect a leader; one at a time would wait for
+  # a readiness that needs the next one.
+  podManagementPolicy: Parallel
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ospreyflow.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ospreyflow.labels" $ctx | nindent 8 }}
+        {{- if .egress }}
+        ospreyflow.io/egress: "true"
+        {{- end }}
+        {{- if .public }}
+        ospreyflow.io/public: "true"
+        {{- end }}
+      annotations:
+        # A changed configuration restarts what reads it.
+        checksum/files: {{ toJson $.Values.files | sha256sum | trunc 16 }}
+        checksum/environment: {{ toJson $.Values.environment | sha256sum | trunc 16 }}
+    spec:
+      {{- include "ospreyflow.podSpec" $ctx | nindent 6 }}
+  {{- if .claims }}
+  volumeClaimTemplates:
+    {{- range .claims }}
+    - metadata:
+        name: {{ .name }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $.Values.storage.className }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .size }}
+    {{- end }}
+  {{- end }}
+{{- end }}

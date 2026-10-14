@@ -1,0 +1,45 @@
+{{- range .Values.workloads }}
+{{- if .ports }}
+{{- $ctx := dict "w" . "name" .name "root" $ }}
+---
+# Named as compose names the service, so every rendered address works unchanged (05 §3b).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  type: {{ if .public }}LoadBalancer{{ else }}ClusterIP{{ end }}
+  selector:
+    {{- include "ospreyflow.selector" $ctx | nindent 4 }}
+  ports:
+    {{- range .ports }}
+    - name: {{ printf "p%v" . }}
+      port: {{ . }}
+      targetPort: {{ . }}
+    {{- end }}
+{{- if eq .kind "StatefulSet" }}
+---
+# Each replica by name (`<name>-0.<name>-headless`), for the stores' Raft and Keycloak's caches;
+# published before a replica is ready, since peers find each other in order to become ready.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-headless" .name }}
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "ospreyflow.selector" $ctx | nindent 4 }}
+  ports:
+    {{- range .ports }}
+    - name: {{ printf "p%v" . }}
+      port: {{ . }}
+      targetPort: {{ . }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

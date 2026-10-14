@@ -4,7 +4,7 @@
 # with this folder on `PYTHONPATH` — so every command and every relative path in it is unchanged.
 # The reasoning each target used to carry in Core's Makefile is in git history (`git log -p
 # OspreyFlow_Core/Makefile`) and in each tool's own docstring.
-.PHONY: publish-user-repo ci core-check lint-tools licence-check design-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status bundle seed-enron
+.PHONY: publish-user-repo ci core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status bundle seed-enron
 
 CORE := ../OspreyFlow_Core
 BUILD := $(CURDIR)
@@ -15,7 +15,7 @@ TOOLS := PYTHONPATH=$(BUILD)
 
 # Phase 0's exit criterion: CI green; a GPL dependency fails; a schema drift fails. Core's own
 # gates first (lint, type check, image scans, the harness's accessibility suite), then these.
-ci: core-check lint-tools licence-check design-check opentofu-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard bundle
+ci: core-check lint-tools licence-check design-check opentofu-check chart-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard bundle
 
 core-check:
 	$(MAKE) -C $(CORE) check
@@ -139,6 +139,14 @@ opentofu-check:
 	  $(TOFU) -chdir=/w/small/$$cloud validate -no-color && \
 	  $(TOFU) -chdir=/w/small/$$cloud test -no-color || exit 1; \
 	done
+
+# 05 §3b: the Enterprise chart linted, and rendered from the cluster values both clouds produce —
+# valid Kubernetes, no Secret, only the proxy published, every store on its own volumes; the
+# images it names are ones the release builds. Helm and kubeconform as pinned images.
+HELM := docker run --rm -v "$(CURDIR)/$(CORE)/deploy/helm/ospreyflow:/chart:ro" alpine/helm:3.16.3
+chart-check:
+	$(HELM) lint /chart
+	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/harness/test_helm_chart.py ../OspreyFlow_Build/tests/harness/test_cluster_render.py ../OspreyFlow_Build/tests/harness/test_release_matrix.py
 
 # ADR-114 decision 9: two Conduit processes on one ClickHouse, against the `dev-up` stores and a
 # throwaway ClickHouse on 18123 (run by `test-all` once `dev-up` is up).

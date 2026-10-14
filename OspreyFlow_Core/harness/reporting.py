@@ -46,7 +46,9 @@ def reporting_services(
     if reporting.superset:
         stanza: dict[str, object] = {
             "restart": "unless-stopped",
-            "image": "osprey/superset:local",
+            # Built here from `deploy/superset`, or the release's own image beside the Conduit's
+            # (the same registry and commit; `release.yml` publishes both).
+            "image": "osprey/superset:local" if building else _beside(api_image, "superset"),
             "env_file": ["deployment.env"],
             "mem_limit": reporting.superset_memory,
             # No port: reached at `bi.` through the front proxy (ADR-114 Amendment 4).
@@ -65,6 +67,12 @@ def reporting_services(
             stanza["build"] = {"context": "../../superset", "dockerfile": "Dockerfile"}
         services["superset"] = stanza
     return services
+
+
+def _beside(api_image: str, service: str) -> str:
+    """`<registry>/api:<tag>` → `<registry>/<service>:<tag>`."""
+    repository, _, tag = api_image.rpartition(":")
+    return f"{repository.rpartition('/')[0]}/{service}:{tag}"
 
 
 def reporting_env(config: OspreyConfig, *, realm: str = "osprey") -> list[str]:

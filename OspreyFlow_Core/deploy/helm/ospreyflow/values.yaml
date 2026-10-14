@@ -1,0 +1,28 @@
+# The chart is generic: every workload, file and setting comes from the values `harness.render`
+# writes for `profile: cluster` (deploy/generated/cluster/values.yaml). Installed with nothing but
+# these defaults it creates nothing, rather than a deployment nobody configured.
+
+secrets:
+  # The Kubernetes Secret every workload reads; created by the install, never by the chart.
+  name: ospreyflow-secrets
+  keys: []
+  defaults: {}
+
+storage:
+  # Each store's own volumes (ReadWriteOnce); empty means the cluster's default class.
+  className: ""
+  # The shared volume (ReadWriteMany): ingest, tiles, the recipes repository, model weights and
+  # the proxy's certificates. EFS on EKS, Azure Files on AKS.
+  sharedClassName: ""
+  sharedSize: 200Gi
+
+imagePullSecrets: []
+
+# Lite's deployment.env: what every owned service reads that is not a secret.
+environment: {}
+
+# Configuration files, mounted from one ConfigMap.
+files: {}
+
+workloads: []
+jobs: []

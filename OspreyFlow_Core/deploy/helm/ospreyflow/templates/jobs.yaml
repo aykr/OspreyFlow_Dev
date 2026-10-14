@@ -1,0 +1,23 @@
+{{- range .Values.jobs }}
+{{- $ctx := dict "w" . "name" .name "root" $ }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Named by what it runs: a Job's template cannot change, so a changed step is a new Job.
+  name: {{ printf "%s-%s" .name (toJson . | sha256sum | trunc 8) }}
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        {{- include "ospreyflow.labels" $ctx | nindent 8 }}
+        {{- if .egress }}
+        ospreyflow.io/egress: "true"
+        {{- end }}
+    spec:
+      restartPolicy: OnFailure
+      {{- include "ospreyflow.podSpec" $ctx | nindent 6 }}
+{{- end }}

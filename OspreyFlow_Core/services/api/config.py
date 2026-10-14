@@ -12,7 +12,8 @@ stack runs locally with zero env configuration.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 from urllib.parse import quote
 
 from schemas.deployment import ModelsConfig
@@ -36,9 +37,14 @@ DEFAULT_ANALYTICS_DB_PATH = "../OspreyFlow_Data/_local-runtime/analytics.duckdb"
 
 @dataclass(frozen=True)
 class ValkeyConfig:
+    """The deployment's own Valkey, or a cloud's managed one (`05_DEPLOYMENT.md` §3b), reached with
+    its password (`VALKEY_PASSWORD`) and over TLS (`VALKEY_TLS`)."""
+
     host: str
     port: int
     db: int
+    password: str | None = field(default=None, repr=False)
+    tls: bool = False
 
     @classmethod
     def from_env(cls) -> ValkeyConfig:
@@ -46,7 +52,18 @@ class ValkeyConfig:
             host=os.environ.get("VALKEY_HOST", "localhost"),
             port=int(os.environ.get("VALKEY_PORT", "6379")),
             db=int(os.environ.get("VALKEY_DB", "0")),
+            password=os.environ.get("VALKEY_PASSWORD") or None,
+            tls=os.environ.get("VALKEY_TLS", "").lower() in {"1", "true", "yes"},
         )
+
+    def client_kwargs(self) -> dict[str, Any]:
+        """What the Conduit and the worker both open Valkey with."""
+        kwargs: dict[str, Any] = {"host": self.host, "port": self.port, "db": self.db}
+        if self.password is not None:
+            kwargs["password"] = self.password
+        if self.tls:
+            kwargs["ssl"] = True
+        return kwargs
 
     @property
     def url(self) -> str:

@@ -137,6 +137,7 @@ from scripts.real_data_exceptions import (
     remove_exception,
 )
 
+from harness.cluster import ClusterNotRenderable
 from harness.geospatial import (
     GeospatialError,
     build_basemap_step,
@@ -151,7 +152,6 @@ from harness.realm import HARNESS_PORT
 from harness.render import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_OUT_ROOT,
-    ClusterRendererNotBuilt,
     MissingDockerfileError,
     UnpinnedImagesError,
     diff_for,
@@ -510,8 +510,8 @@ def create_app(
         out_dir = _out_dir()
         try:
             result = render(config, resolver=render_resolver)
-        except ClusterRendererNotBuilt as exc:
-            raise HTTPException(status_code=501, detail=str(exc)) from exc
+        except ClusterNotRenderable as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         except MissingDockerfileError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except UnpinnedImagesError as exc:

@@ -1,0 +1,10 @@
+{{- if .Values.workloads }}
+OspreyFlow is starting in {{ .Release.Namespace }}. Its one address is the proxy's load balancer:
+
+  kubectl get service proxy -n {{ .Release.Namespace }}
+
+Point the deployment's names (the address, id. and bi.) at it. Every workload reads the Secret
+{{ .Values.secrets.name }}; a pod waiting on a missing key names it in its events.
+{{- else }}
+No workloads: install with the values harness.render writes for profile: cluster.
+{{- end }}

@@ -48,9 +48,10 @@ def sites(config: OspreyConfig) -> Sites:
     return Sites(scheme, host, port, named(""), named("id."), named("bi."))
 
 
-def render_caddyfile(config: OspreyConfig) -> str:
+def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
     """The front proxy's routing table: each name to its service on the internal network, and any
-    other name refused. Admin API off; on plain HTTP, no certificates at all."""
+    other name refused. Admin API off; on plain HTTP, no certificates at all. A cluster has no host
+    to open the loopback doors to (`doors=False`)."""
     names = sites(config)
     routes = [(names.host, "workspace:8080"), (f"id.{names.host}", "keycloak:8080")]
     if config.reporting.superset:
@@ -70,7 +71,7 @@ def render_caddyfile(config: OspreyConfig) -> str:
     # ADR-114 Amendment 7: the doors this machine alone uses, through the proxy, so the services
     # behind them need no published port — and so no route out (measured: a published port needs
     # a network that reaches the internet).
-    for port, upstream in loopback_doors(config):
+    for port, upstream in loopback_doors(config) if doors else []:
         lines += ["", f"http://:{port} {{", f"\treverse_proxy {upstream}", "}"]
     # Anything else — an unknown name, or the proxy's own health — answers here and nowhere else.
     catch_all = f":{PROXY_HTTP_PORT}" if plain else ":443"
