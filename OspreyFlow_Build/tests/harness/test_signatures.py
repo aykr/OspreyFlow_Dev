@@ -10,6 +10,7 @@ the B5c row), against a throwaway registry and key.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 from pathlib import Path
 
 import pytest
@@ -199,3 +200,29 @@ def test_the_command_line_also_checks_the_locks_own_signature(
     assert main(argv, cosign=Cosign(cosign)) == 1
     assert "versions.lock is not signed" in capsys.readouterr().err
 
+
+
+def test_another_signed_file_of_the_release_is_checked_too(tmp_path: Path) -> None:
+    """ADR-114 Amendment 11: the release's install page is verified, as an install will verify it,
+    before the release is published."""
+    lock = tmp_path / "versions.lock"
+    lock.write_text(_lock(workspace=D, api=E, ingest=D, ner=E))
+    page, bundle = tmp_path / "install-page.tar.gz", tmp_path / "install-page.tar.gz.sigstore.json"
+    page.write_bytes(b"page")
+    bundle.write_text("{}")
+    refs = set(owned_references(lock.read_text()))
+    asked: list[list[str]] = []
+
+    def run(page_signed: bool) -> Any:
+        def answer(argv: Sequence[str]) -> tuple[int, str]:
+            asked.append(list(argv))
+            if "verify-blob" in argv and any(a.endswith(page.name) for a in argv):
+                return (0, "Verified OK") if page_signed else (1, "no matching signatures")
+            return (0, "ok") if any(r in argv for r in refs) or "verify-blob" in argv else (1, "x")
+        return answer
+
+    common = ["--lock", str(lock), "--repository", "acme/ospreyflow", "--tag", "v0.5.0",
+              "--blob", str(page), "--blob-signature", str(bundle)]  # fmt: skip
+    assert main(common, cosign=Cosign(run(True))) == 0
+    assert any("verify-blob" in a and any(x.endswith(page.name) for x in a) for a in asked)
+    assert main(common, cosign=Cosign(run(False))) == 1

@@ -202,6 +202,34 @@ def find_release(
     }
 
 
+def release_assets(
+    repository: tuple[str, str], tag: str, names: tuple[str, ...], *, api_base: str = GITHUB_API
+) -> dict[str, bytes]:
+    """Named assets of one published release, as bytes, through the API (a private repository is
+    read with the host's token) — the guided install page and its signature (ADR-114 Amendment
+    11). Refused in words when the release or an asset is not there."""
+    owner, repo = repository
+    chosen = [r for r in _published(_fetch_releases(owner, repo, api_base)) if r["tag_name"] == tag]
+    if not chosen:
+        raise ReleaseRefused(f"{owner}/{repo} has no published release {tag}.")
+    by_name = {str(a.get("name")): a for a in chosen[0].get("assets") or []}
+    missing = [n for n in names if n not in by_name]
+    if missing:
+        raise ReleaseRefused(f"{tag} has no {', '.join(missing)}.")
+    return {name: _asset_bytes(by_name[name], tag) for name in names}
+
+
+def _asset_bytes(asset: dict[str, Any], tag: str) -> bytes:
+    request = urllib.request.Request(
+        str(asset["url"]), headers=_headers("application/octet-stream")
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
+            return bytes(response.read())
+    except (urllib.error.URLError, OSError, ValueError) as failed:
+        raise ReleaseRefused(f"{tag}'s {asset.get('name')} could not be read ({failed}).") from None
+
+
 def _asset(asset: dict[str, Any], tag: str) -> str:
     request = urllib.request.Request(
         str(asset["url"]), headers=_headers("application/octet-stream")

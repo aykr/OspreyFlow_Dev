@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/stamp.mjs",
     "test": "vitest run",
     "test:keyboard": "playwright test --config keyboard/playwright.config.ts",
     "test:a11y": "playwright test --config a11y/playwright.config.ts"

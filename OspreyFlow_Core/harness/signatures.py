@@ -171,7 +171,7 @@ class Cosign:
         if code != 0:
             last = said.splitlines()[-1] if said else "no answer"
             raise SignatureRefused(
-                f"the release's versions.lock is not signed by {identity.describe()} ({last})"
+                f"the release's {blob.name} is not signed by {identity.describe()} ({last})"
             )
 
 
@@ -215,12 +215,19 @@ def main(argv: Sequence[str] | None = None, *, cosign: Cosign | None = None) -> 
     parser.add_argument("--tag", required=True)
     parser.add_argument("--cosign", help="a cosign binary, instead of its image")
     parser.add_argument("--lock-signature", type=Path, help="the lock's cosign sign-blob bundle")
+    parser.add_argument("--blob", type=Path, help="another signed file of the release")
+    parser.add_argument("--blob-signature", type=Path, help="that file's sign-blob bundle")
     args = parser.parse_args(argv)
+    if (args.blob is None) != (args.blob_signature is None):
+        parser.error("--blob and --blob-signature are given together")
     owner, _, repo = args.repository.partition("/")
     checker = cosign or Cosign(binary=args.cosign)
     try:
         if args.lock_signature is not None:
             checker.verify_blob(args.lock, args.lock_signature, Keyless(owner, repo, args.tag))
+        if args.blob is not None:
+            # ADR-114 Amendment 11: the install page, checked as an install will check it.
+            checker.verify_blob(args.blob, args.blob_signature, Keyless(owner, repo, args.tag))
         verify_release(
             args.lock.read_text(encoding="utf-8"), Keyless(owner, repo, args.tag), checker
         )

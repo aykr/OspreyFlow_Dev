@@ -113,7 +113,9 @@ other link, is refused). It walks through the same answers as screens:
   never from the page.
 
 Everything is worked on a draft copy of `osprey.yaml`; the page closes itself when the install
-finishes, or after 30 idle minutes.
+finishes, or after 30 idle minutes. On a release, the page is the release's own — fetched the first time,
+with its signature checked against the release; in a developer's checkout it is built with
+`cd apps/harness && npm ci && npm run build`, and the command says so if it is missing or out of date.
 
 ## 5. Installing Small
 

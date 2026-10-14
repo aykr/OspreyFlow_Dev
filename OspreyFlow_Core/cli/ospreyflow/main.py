@@ -291,7 +291,14 @@ def _gui(ctx: _Context) -> int:
     """The guided page (ADR-114 Amendment 3, decision 6): the Set-up console's screens, served on
     127.0.0.1 at a free port behind a one-time token, working on a draft copy of `osprey.yaml`, for
     as long as the install lasts. The doctor is not run first: the page runs it on its Review
-    screen, where a failure can be shown beside its fix."""
+    screen, where a failure can be shown beside its fix.
+
+    The page itself is made ready first (ADR-114 Amendment 11): built from this checkout, or the
+    release's own, its signature checked — and refused in words, naming the build, otherwise."""
+    ctx.step(
+        "make the install page ready",
+        [*ctx.python, "-m", "harness.install_page_build", "--product", str(ctx.product)],
+    )
     scratch = ctx.product / ".install"
     scratch.mkdir(exist_ok=True)
     draft = scratch / "osprey.draft.yaml"

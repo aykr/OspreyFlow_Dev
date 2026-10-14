@@ -14,7 +14,9 @@ What a mistake would do, and the case that catches it:
   `test_gui_does_not_run_the_doctor_first`;
 - a secret printed — `test_gui_prints_no_secret`;
 - the page started for a mode that is not an install on this machine, or a build with no
-  checkout — `test_gui_on_a_missing_checkout_is_refused`.
+  checkout — `test_gui_on_a_missing_checkout_is_refused`;
+- a page served unbuilt or stale (ADR-114 Amendment 11) —
+  `test_gui_makes_the_page_ready_before_it_starts_it`, `test_with_no_page_to_serve_nothing_is_started`.
 """
 
 from __future__ import annotations
@@ -125,7 +127,7 @@ def test_gui_does_not_run_the_doctor_first(rig: Rig) -> None:
     rig.probes.missing.add("git")  # the doctor would refuse; the page shows it on Review instead
     starter = Starter()
     assert gui(rig, starter) == 0
-    assert rig.runner.calls == []
+    assert [c.argv[1:3] for c in rig.runner.calls] == [["-m", "harness.install_page_build"]]
     assert len(starter.calls) == 1
 
 
@@ -157,3 +159,22 @@ def test_gui_on_a_missing_checkout_is_refused(rig: Rig, capsys: pytest.CaptureFi
     )
     assert code == 1 and starter.calls == [] and rig.opened == []
     assert "OSPREYFLOW_HOME" in capsys.readouterr().err
+
+
+def test_gui_makes_the_page_ready_before_it_starts_it(rig: Rig) -> None:
+    """ADR-114 Amendment 11: built from this checkout, or the release's own, signed — first."""
+    starter = Starter()
+    assert gui(rig, starter) == 0
+    (call,) = rig.runner.calls
+    assert call.argv[1:] == ["-m", "harness.install_page_build", "--product", str(rig.product)]
+    assert len(starter.calls) == 1
+
+
+def test_with_no_page_to_serve_nothing_is_started(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rig.runner.fail["harness.install_page_build"] = 1
+    starter = Starter()
+    assert gui(rig, starter) == 1
+    assert starter.calls == [] and rig.opened == []
+    assert "install page" in capsys.readouterr().err
