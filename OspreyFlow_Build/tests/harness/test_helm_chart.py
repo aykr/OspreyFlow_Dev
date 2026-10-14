@@ -28,7 +28,7 @@ KUBECONFORM = "ghcr.io/yannh/kubeconform:v0.6.7"
 def _docker(*args: str, stdin: str | None = None) -> str:
     done = subprocess.run(
         ["docker", "run", "--rm", "-i", *args], input=stdin, capture_output=True, text=True,
-        timeout=300,
+        timeout=300, check=False,
     )  # fmt: skip
     assert done.returncode == 0, done.stderr or done.stdout
     return done.stdout

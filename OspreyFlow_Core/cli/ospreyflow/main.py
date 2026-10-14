@@ -53,7 +53,6 @@ VERBS = (
     "update", "uninstall",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
-_STAGE = {"small": "B6", "enterprise": "B7"}
 
 Ask = Callable[[str, str], str]
 
@@ -166,6 +165,10 @@ def _parser() -> argparse.ArgumentParser:
     install.add_argument("--force", action="store_true", help="replace a different osprey.yaml")
     install.add_argument("--no-demo-accounts", action="store_true")
     install.add_argument("--gui", action="store_true", help="answer on a guided page")
+    install.add_argument(
+        "--chart-values", type=Path, action="append", default=[],
+        help="enterprise: a site's own Helm values, applied over the rendered ones",
+    )  # fmt: skip
     install.add_argument(
         "--build", action="store_true", help="build from this checkout even on a release tag"
     )
@@ -345,6 +348,12 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
     # ADR-114 Amendment 10 point 1: Small is built from the operator's machine (`--cloud`), and
     # installed on the server by its first boot, whose answers name the managed services.
     on_server = args.mode == "small" and not args.cloud and bool(answers.external)
+    if args.mode == "enterprise" and not answers.external:
+        raise CommandRefused(
+            "enterprise runs on the cloud's managed services: name them under external: in the "
+            "answers file (postgres, valkey, and object_store or media), with the cluster's "
+            "shared_storage_class under cluster:"
+        )
     if args.mode == "small" and not args.cloud and not on_server:
         raise CommandRefused(
             "small runs on a cloud server: give --cloud aws or --cloud azure here to build it, or "
@@ -361,15 +370,8 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
         return build_small(ctx, args, answers)
     if on_server:
         return _install_on_server(ctx, args, answers)
-
-    if args.mode != "lite":
-        target = ctx.product / "install.yaml"
-        target.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
-        print(
-            f"Your answers are saved in {target}. The {args.mode} install arrives with stage "
-            f"{_STAGE[args.mode]}; nothing was installed."
-        )
-        return 0
+    if args.mode == "enterprise":
+        return _install_on_cluster(ctx, args, answers)
 
     _write_config(ctx, answers, args.force)
     apply = _apply_argv(ctx, args)
@@ -424,6 +426,20 @@ def _install_on_server(ctx: _Context, args: argparse.Namespace, answers: Answers
     ctx.step("make the first administrator", admin)
     print()
     print(f"OspreyFlow is installed. It answers at {public_origin(ctx.product)}")
+    return 0
+
+
+def _install_on_cluster(ctx: _Context, args: argparse.Namespace, answers: Answers) -> int:
+    """Enterprise (ADR-114 Amendment 16): onto the cluster `kubectl` reaches, from this machine —
+    the chart, its Secret, the identity provider and the first administrator."""
+    _write_config(ctx, answers, args.force)
+    step = [*ctx.python, "-m", "harness.cluster_install", "--config",
+            str(ctx.product / "osprey.yaml")]  # fmt: skip
+    if answers.cloud.get("admin_email"):
+        step += ["--email", answers.cloud["admin_email"]]
+    for extra in args.chart_values:
+        step += ["--values", str(extra)]
+    ctx.step("install onto the cluster", step)
     return 0
 
 
@@ -502,7 +518,7 @@ def _status(ctx: _Context) -> int:
 def _one_shot_steps(directory: Path) -> set[str]:
     """The services the deployment runs once (`restart: "no"`), read from its compose file."""
     try:
-        services = (yaml.safe_load((directory / "compose.yaml").read_text(encoding="utf-8")) or {})
+        services = yaml.safe_load((directory / "compose.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError):
         return set()
     return {

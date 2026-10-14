@@ -122,17 +122,33 @@ def test_lite_checks_only_the_front_proxys_port(tmp_path: Path) -> None:
     assert all(c.ok for c in run_doctor("lite", probes, product=tmp_path))
 
 
-def test_small_and_enterprise_check_tofu_and_the_cloud_cli_not_docker(tmp_path: Path) -> None:
+def test_small_checks_tofu_and_the_cloud_cli_not_docker(tmp_path: Path) -> None:
     probes = FakeProbes()
     probes.missing = {"docker", "tofu", "aws", "az"}
     probes.info = None
-    for mode, cloud, stage in [("small", "aws", "small install"), ("enterprise", "azure", "B7")]:
-        checks = _by_name(run_doctor(mode, probes, product=tmp_path, cloud=cloud))
-        assert {n for n, c in checks.items() if not c.ok} == {"tofu", "cloud-cli"}
-        assert "docker-installed" not in checks
-        assert stage in checks["tofu"].says
+    checks = _by_name(run_doctor("small", probes, product=tmp_path, cloud="aws"))
+    assert {n for n, c in checks.items() if not c.ok} == {"tofu", "cloud-cli"}
+    assert "docker-installed" not in checks
+    assert "small install" in checks["tofu"].says
     azure = _by_name(run_doctor("small", probes, product=tmp_path, cloud="azure"))["cloud-cli"]
     assert "Azure" in azure.says
     probes.missing = {"aws"}
     assert _by_name(run_doctor("small", probes, product=tmp_path, cloud="azure"))["cloud-cli"].ok
     assert not _by_name(run_doctor("small", probes, product=tmp_path, cloud="aws"))["cloud-cli"].ok
+
+
+def test_enterprise_checks_kubectl_helm_and_a_cluster_that_answers(tmp_path: Path) -> None:
+    """ADR-114 Amendment 16: Enterprise installs onto a cluster `kubectl` already reaches; OpenTofu
+    and the cloud's command line arrive with the stage that builds the cluster."""
+    probes = FakeProbes()
+    probes.missing = {"docker", "tofu", "aws", "az"}
+    probes.info = None
+    checks = _by_name(run_doctor("enterprise", probes, product=tmp_path))
+    assert all(c.ok for c in checks.values()), checks
+    assert {"kubectl", "helm", "cluster"} <= set(checks) and "docker-installed" not in checks
+    assert "osprey-test-context" in checks["cluster"].says
+    probes.missing |= {"kubectl", "helm"}
+    probes.kube = None
+    checks = _by_name(run_doctor("enterprise", probes, product=tmp_path))
+    assert {n for n, c in checks.items() if not c.ok} == {"kubectl", "helm", "cluster"}
+    assert "kubectl" in checks["cluster"].fix

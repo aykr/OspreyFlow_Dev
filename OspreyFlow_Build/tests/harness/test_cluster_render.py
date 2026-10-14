@@ -15,7 +15,6 @@ import pytest
 import yaml
 from harness.cluster import REPLICAS, ClusterNotRenderable
 from harness.render import render
-
 from schemas.deployment import OspreyConfig
 
 MANAGED = {

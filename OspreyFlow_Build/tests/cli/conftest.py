@@ -69,6 +69,8 @@ class FakeProbes:
         self.disk_gb = 500.0
         self.busy_ports: set[int] = set()
         self.ours_ports: set[int] = set()
+        #: The cluster `kubectl` reaches (its context), or None (ADR-114 Amendment 16).
+        self.kube: str | None = "osprey-test-context"
 
     def which(self, tool: str) -> str | None:
         return None if tool in self.missing else f"/usr/bin/{tool}"
@@ -87,6 +89,9 @@ class FakeProbes:
 
     def ours(self, port: int) -> bool:
         return port in self.ours_ports
+
+    def kube_context(self) -> str | None:
+        return self.kube
 
 
 @dataclass

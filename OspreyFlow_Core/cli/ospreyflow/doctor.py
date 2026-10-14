@@ -20,7 +20,6 @@ MIN_DISK_GB = 60.0
 #: only port a Lite deployment publishes to other machines.
 LITE_PORTS = (80,)
 _CLOUD_CLI = {"aws": ("aws", "AWS"), "azure": ("az", "Azure")}
-_STAGE = {"small": "B6", "enterprise": "B7"}
 
 
 @dataclass(frozen=True)
@@ -38,6 +37,7 @@ class Probes(Protocol):
     def free_disk_gb(self, path: Path) -> float: ...
     def port_free(self, port: int) -> bool: ...
     def ours(self, port: int) -> bool: ...
+    def kube_context(self) -> str | None: ...
 
 
 class SystemProbes:
@@ -67,6 +67,16 @@ class SystemProbes:
     def compose_version(self) -> str | None:
         text = self._run(["docker", "compose", "version"])
         return text.strip() if text else None
+
+    def kube_context(self) -> str | None:
+        """The context `kubectl` uses, when the cluster behind it answers."""
+        context = self._run(["kubectl", "config", "current-context"])
+        if (
+            not context
+            or self._run(["kubectl", "get", "--raw", "/readyz", "--request-timeout=10s"]) is None
+        ):
+            return None
+        return context.strip()
 
     def free_disk_gb(self, path: Path) -> float:
         probe = path
@@ -203,12 +213,30 @@ def run_doctor(
             uv,
             *(_port_check(probes, port) for port in LITE_PORTS),
         ]
-    # Small is built; Enterprise is still a stage to come (B7), and says so.
-    stage = f", stage {_STAGE[mode]} — not built yet" if mode == "enterprise" else ""
+    if mode == "enterprise":
+        # ADR-114 Amendment 16: onto a cluster `kubectl` already reaches. OpenTofu and the cloud's
+        # command line arrive with the stage that builds the cluster.
+        context = probes.kube_context() if probes.which("kubectl") else None
+        cluster = Check(
+            "cluster",
+            context is not None,
+            f"kubectl reaches the cluster {context}." if context
+            else "No cluster answers kubectl.",
+            "" if context else "Point kubectl at the cluster (kubectl config use-context …) and "
+            "check `kubectl get nodes` answers.",
+        )  # fmt: skip
+        return [
+            git,
+            uv,
+            _tool(probes, "kubectl", "kubectl", "kubectl",
+                  "Install kubectl: https://kubernetes.io/docs/tasks/tools/."),
+            _tool(probes, "helm", "helm", "Helm", "Install Helm: https://helm.sh/docs/intro/install/."),
+            cluster,
+        ]  # fmt: skip
     tofu = _tool(
         probes, "tofu", "tofu", "OpenTofu",
         "Install OpenTofu from https://opentofu.org/docs/intro/install/.",
-        f" (it builds the {mode} install's servers{stage})",
+        f" (it builds the {mode} install's servers)",
     )  # fmt: skip
     tofu = Check(
         tofu.name,
@@ -225,7 +253,7 @@ def run_doctor(
         cli = Check(
             "cloud-cli",
             False,
-            f"The {label} command line is not installed (the {mode} install needs it{stage}).",
+            f"The {label} command line is not installed (the {mode} install needs it).",
             "Install it and sign in to your account.",
         )
     return [git, uv, tofu, cli]

@@ -14,10 +14,11 @@ What a mistake would do, and the case that catches it:
 - a password on the screen — `test_a_line_naming_a_password_from_a_step_is_hidden`;
 - demo packs out of order or under the wrong key — `test_the_chosen_demo_packs_run_in_order_with_their_seed_keys`;
 - a failed step reported as success — `test_a_failing_step_stops_the_install_and_names_it`;
-- Small installed on a server without its managed services, or Enterprise pretending to install —
+- Small installed on a server without its managed services, or Enterprise without its own —
   `test_on_the_server_small_installs_onto_the_managed_services`,
   `test_small_with_no_cloud_and_no_managed_services_is_refused_in_words`,
-  `test_enterprise_saves_the_answers_and_runs_nothing`;
+  `test_enterprise_installs_onto_the_cluster_kubectl_reaches`,
+  `test_enterprise_without_its_managed_services_is_refused_in_words`;
 - the prompts not being the answers' other door — `test_without_yes_or_config_the_prompts_make_the_answers`;
 - the guided page — `test_install_gui.py` has its own cases.
 """
@@ -225,11 +226,43 @@ def test_small_with_no_cloud_and_no_managed_services_is_refused_in_words(
     assert rig.runner.calls == []
 
 
-def test_enterprise_saves_the_answers_and_runs_nothing(
+ENTERPRISE_ANSWERS = {
+    "mode": "enterprise",
+    "cloud": {"provider": "aws", "region": "eu-west-2", "domain": "osprey.example.org",
+              "admin_email": "ops@example.org"},
+    "cluster": {"namespace": "intel", "shared_storage_class": "efs-sc"},
+    "external": {
+        "postgres": {"host": "osprey.cluster-x.eu-west-2.rds.amazonaws.com"},
+        "valkey": {"host": "osprey.x.cache.amazonaws.com"},
+        "object_store": {"endpoint": "s3.eu-west-2.amazonaws.com", "region": "eu-west-2"},
+    },
+}  # fmt: skip
+
+
+def test_enterprise_installs_onto_the_cluster_kubectl_reaches(rig: Rig, tmp_path: Path) -> None:
+    """ADR-114 Amendment 16: the answers become a cluster's `osprey.yaml`, and the cluster install
+    runs with it — the first administrator's email passed on, a site's own chart values too."""
+    answers = tmp_path / "answers.yaml"
+    answers.write_text(yaml.safe_dump(ENTERPRISE_ANSWERS), encoding="utf-8")
+    site = tmp_path / "site.yaml"
+    assert rig("install", "--mode", "enterprise", "--config", str(answers), "--yes", "--force",
+               "--chart-values", str(site)) == 0  # fmt: skip
+    config = rig.config()
+    assert config["profile"] == "cluster"
+    assert config["cluster"]["namespace"] == "intel"  # type: ignore[index]
+    python = str(rig.product / ".venv" / "bin" / "python")
+    (step,) = rig.runner.argvs()
+    assert step[:3] == [python, "-m", "harness.cluster_install"]
+    assert step[step.index("--config") + 1] == str(rig.product / "osprey.yaml")
+    assert step[step.index("--email") + 1] == "ops@example.org"
+    assert step[step.index("--values") + 1] == str(site)
+
+
+def test_enterprise_without_its_managed_services_is_refused_in_words(
     rig: Rig, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert rig("install", "--mode", "enterprise", "--yes") == 0
-    assert "B7" in capsys.readouterr().out
+    assert rig("install", "--mode", "enterprise", "--yes") == 1
+    assert "managed services" in capsys.readouterr().err
     assert rig.runner.calls == []
 
 

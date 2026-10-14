@@ -26,7 +26,9 @@ TEMPLATE = WORKSPACE / "nginx.conf.template"
 
 
 def _docker(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    done = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=120)
+    done = subprocess.run(
+        ["docker", *args], capture_output=True, text=True, timeout=120, check=False
+    )
     if check:
         assert done.returncode == 0, done.stderr or done.stdout
     return done
@@ -36,7 +38,7 @@ def _dockerfile_runtime() -> tuple[str, dict[str, str]]:
     text = (WORKSPACE / "Dockerfile").read_text(encoding="utf-8")
     runtime = text[text.rindex("FROM nginx:") :]
     image = runtime.split()[1]
-    env = dict(re.findall(r"^ENV (\w+)=(\S+)", runtime, flags=re.M))
+    env = dict(re.findall(r"^ENV (\w+)=(\S+)", runtime, flags=re.MULTILINE))
     copied = "COPY apps/workspace/nginx.conf.template /etc/nginx/templates/default.conf.template"
     assert copied in runtime
     assert "USER nginx" in runtime

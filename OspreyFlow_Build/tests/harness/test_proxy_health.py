@@ -19,12 +19,13 @@ from pathlib import Path
 import pytest
 from harness.render import compose_services, service_images
 from harness.site import PROXY_IMAGE, render_caddyfile
-
 from schemas.deployment import OspreyConfig
 
 
 def _docker(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    done = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=120)
+    done = subprocess.run(
+        ["docker", *args], capture_output=True, text=True, timeout=120, check=False
+    )
     if check:
         assert done.returncode == 0, done.stderr or done.stdout
     return done

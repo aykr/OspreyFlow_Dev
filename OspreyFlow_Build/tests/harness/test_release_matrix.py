@@ -11,8 +11,8 @@ import re
 
 import yaml
 from harness.render import OWNED_IMAGE_REGISTRY, REPO_ROOT, render
-
 from schemas.deployment import OspreyConfig
+
 from tests.harness.test_cluster_render import _resolver, cluster_config
 
 RELEASE = REPO_ROOT / ".github" / "workflows" / "release.yml"
