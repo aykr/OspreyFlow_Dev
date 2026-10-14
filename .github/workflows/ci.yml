@@ -47,7 +47,7 @@ jobs:
         with: { node-version: "22" }
       - run: uv sync
       - run: npm ci
-      - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.licence_check
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.licence_check
       - run: npm run licence-check
       # Deterministic proof that a GPL dependency fails the build
       # (Phase 0 exit criterion, process/07_BUILD_PLAN.md) — see
@@ -69,7 +69,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.authorized_query_check
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.authorized_query_check
       # Deterministic proof it actually fails on the bug class it exists to catch — see
       # OspreyFlow_Build/tests/authorized_query_check/test_principal_predicate_required.py.
       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/authorized_query_check
@@ -84,7 +84,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.demo_guide_check
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.demo_guide_check
       # Deterministic proof it is not vacuous — see
       # OspreyFlow_Build/tests/test_demo_guide_registry_check.py's own two negative cases.
       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_demo_guide_registry_check.py
@@ -99,7 +99,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.domain_model_coverage_check
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.domain_model_coverage_check
       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_domain_model_coverage_check.py
 
   # Same shape, for `spec/03_CONDUIT_MIDDLEWARE.md`'s own route table — allowlist at
@@ -111,7 +111,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.route_coverage_check
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.route_coverage_check
       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_route_coverage_check.py
 
   # Same shape, for the product-tree link-integrity gate — `06_DECISIONS.md` ADR-034 §B8.
@@ -125,7 +125,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.product_tree_link_check
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.product_tree_link_check
       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_product_tree_link_check.py
 
   # Same shape, one level down — does a PRODUCT-classified ADR in 06_DECISIONS.md cite a
@@ -138,7 +138,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.decision_log_publication_check
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.decision_log_publication_check
       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_decision_log_publication_check.py
 
   # Same shape, for test-file CI coverage — found four test files running in no intended job
@@ -160,7 +160,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
-      - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.test_file_coverage_check
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.test_file_coverage_check
       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_test_file_coverage_check.py
 
   trivy:
@@ -259,7 +259,7 @@ jobs:
       - run: uv sync
       - run: npm ci
       # OspreyFlow_Build/tools/schemas_check.py shells out to node_modules/.bin/json2ts.
-      - run: PYTHONPATH=OspreyFlow_Build uv run python -m tools.schemas_check
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.schemas_check
 
   conformance-guard:
     runs-on: ubuntu-latest
