@@ -16,10 +16,11 @@ others:
   engine, model servers, object store.
 
 A port is a narrow interface (a Python `Protocol`) that everything above it is allowed to call and
-nothing else. Swapping the engine behind a port — a laptop's ArcadeDB for JanusGraph on a cluster,
-say — means writing one adapter and changing one line of configuration; nothing above the port
-changes, and the adapter is only supported once it passes the same conformance suite every other
-adapter behind that port passes. `spec/00_ARCHITECTURE.md` has the full definitions.
+nothing else. Swapping the engine behind a port — a laptop's in-process DuckDB for ClickHouse shared
+by a cluster's Conduits, say — means writing one adapter and changing one line of configuration;
+nothing above the port changes, and the adapter is only supported once it passes the same
+conformance suite every other adapter behind that port passes. `spec/00_ARCHITECTURE.md` has the
+full definitions.
 
 ## Before you install
 
@@ -27,7 +28,7 @@ adapter behind that port passes. `spec/00_ARCHITECTURE.md` has the full definiti
 | --- | --- |
 | **Lite** — one machine | Docker (Docker Desktop on Windows with the WSL 2 back end, and on macOS; Docker Engine with Compose v2 on Linux), set to start when you sign in; 16 GB of memory for Docker (32 GB is comfortable); 60 GB of free disk plus the demo packs you choose; Git; internet for the first install |
 | **Small** — one VM in your cloud | an AWS or Azure account with the permissions the install lists; OpenTofu; that cloud's command line, signed in; a DNS name you control |
-| **Enterprise** — Kubernetes | everything Small needs, plus EKS or AKS quota (with GPU nodes for the models) and Helm |
+| **Enterprise** — Kubernetes | everything Small needs, plus EKS or AKS quota, a storage class that several pods can share (EFS on AWS, Azure Files on Azure), and Helm; the models run on ordinary nodes for now |
 
 `ospreyflow doctor` checks these for the mode you choose and says what to fix.
 
@@ -50,7 +51,15 @@ ospreyflow open                        # the Glass in your browser
 Every question `install` asks can be answered in a file instead (`--config install.yaml --yes`), so
 a tester or a CI job installs without prompts. The other verbs: `status`, `start` (`--build` to
 rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup`, `restore` and
-`uninstall`. Small and Enterprise save their answers now and install with the cloud stages.
+`uninstall`.
+
+**Small** is built from your own machine: `ospreyflow install --mode small --cloud aws` (or
+`azure`) creates the server and the cloud's managed database and storage with OpenTofu, and the
+server installs OspreyFlow on its first boot. **Enterprise** runs on Kubernetes from the Helm chart
+in `deploy/helm/ospreyflow`, whose values are rendered from your `osprey.yaml` (`profile: cluster`);
+it has been proven in a running cluster. Until the Enterprise install itself arrives (it creates
+the chart's Secret and the first administrator), `install --mode enterprise` saves your answers and
+installs nothing.
 
 The sign-in details of the accounts the install makes are in the deployment's own
 `deploy/generated/<profile>/deployment.env`; the command never prints a password.
@@ -86,6 +95,8 @@ A private repository needs `GITHUB_TOKEN` set to a token that can read it.
   adapters.
 - **`harness/`** — what renders, starts, checks, backs up and restores a deployment; the
   `ospreyflow` command (`cli/`) drives it.
+- **`deploy/`** — the Helm chart for Enterprise (`helm/ospreyflow`), the OpenTofu modules that build
+  Small's server (`opentofu/small/aws`, `opentofu/small/azure`), and the Superset image.
 - **`scripts/`** — the demo packs (`python -m scripts.demo_packs`) and their seeds.
 
 The full specification and the build's own record are kept in the developer repository, alongside

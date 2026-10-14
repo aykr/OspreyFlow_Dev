@@ -12982,6 +12982,10 @@ choices between presented options, each the recommended one.
 5. `spec/10_ADMINISTRATION_GUIDE.md` (B10) is the specification's copy; the shipped administration
    guide is written for the reader who has only the package, and is checked against the same schema
    reference so the two cannot drift.
+6. **Core's README is kept current with them** (the owner: "update the readme in the core as needed
+   as well"): updated on 14 October for what B6 and B7 changed (Small builds its server with
+   OpenTofu; Enterprise's chart, proven, its install still to come; `deploy/`), and again when the
+   guides land, to point at them.
 
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
