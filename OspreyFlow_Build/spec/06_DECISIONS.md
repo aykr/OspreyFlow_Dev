@@ -12785,6 +12785,30 @@ Phase E row E4). The owner ruled:
    Found building the hit area: the renderer's display cache can hold unframed positions at the first
    click after loading, so the hit area reads node positions from the graph itself.
 
+### ADR-115, Amendment 2 (14 October 2026) — owner rulings after the signed-in sitting
+
+Found capturing E7's screens (`process/07_BUILD_PLAN.md`, 14 October), put as options and ruled, each
+the recommended one:
+
+1. **Narrow screens: the header wraps to two lines.** Below 1100 pixels the Glass's header becomes two
+   rows — the brand, the case and search on the first; the views, the theme and the account (name *and*
+   clearance) on the second. Nothing is hidden; the canvas gives up one row's height. (At 924 the
+   one-line header was 1,189 pixels wide: the account menu off screen, the page scrolling sideways.)
+   The test: at 924 the document is no wider than the window and the account menu is on screen.
+2. **The weekly timeline's colour key sits beside the hour axis**, never over it.
+3. **"Admin area" is the one name**: Start's tile and its button say *Admin area*, as the guide, the
+   runbook and the deck do.
+
+### ADR-114, Amendment 11 (14 October 2026) — the guided install page ships built
+
+Found capturing B10's screens: the guided page's front end (`apps/harness/dist`) is gitignored and
+built by nothing in the install, so `ospreyflow install --gui` had no page on a fresh checkout and an
+old one on the owner's. **The owner's ruling, from options: the release builds it.** `release.yml`
+builds `apps/harness` and ships the built page with each release (an asset unpacked into the checkout
+by `install.sh` and by `update`); a developer checkout builds it with `npm run build`, and
+`install --gui` refuses in words — naming that command — when the page is missing or older than its
+sources.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;
