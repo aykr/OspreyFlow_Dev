@@ -41,6 +41,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from "react";
 
 import type {
@@ -591,6 +592,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const [showPrevious, setShowPrevious] = useState(false);
     // The measurement grid (DESIGN.md §9 exception 4) can be switched off (owner, 6 October 2026);
     // the choice is this browser's, like the theme.
+    // The toolbar wraps to a second row on a narrow canvas; the legend and zoom group sit below it as
+    // drawn, not one row down (the owner, 14 October 2026: the legend covered its second row).
+    const toolbarRef = useRef<HTMLDivElement | null>(null);
+    const [toolbarHeight, setToolbarHeight] = useState<number | null>(null);
+    useEffect(() => {
+      const bar = toolbarRef.current;
+      if (!bar || typeof ResizeObserver !== "function") return;
+      const measure = () => setToolbarHeight(Math.ceil(bar.getBoundingClientRect().height) || null);
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(bar);
+      return () => observer.disconnect();
+    }, []);
     const [gridOn, setGridOn] = useState<boolean>(() => {
       try {
         return localStorage.getItem(GRID_KEY) !== "off";
@@ -2969,7 +2983,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       >
         {/* ADR-097 step 2 (design review item 12): the canvas's tools, one docked row of labelled
             groups; Show is one segmented control. */}
-        <div role="toolbar" aria-label="Canvas tools" className="canvas-toolbar">
+        <div role="toolbar" aria-label="Canvas tools" className="canvas-toolbar" ref={toolbarRef}>
           <div role="group" aria-label="Select" className="canvas-toolbar__group">
             <button
               type="button"
@@ -3260,7 +3274,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               </div>
             ) : null;
           })()}
-        <div className="canvas-corner">
+        <div
+          className="canvas-corner"
+          style={toolbarHeight ? ({ "--canvas-toolbar-height": `${toolbarHeight}px` } as CSSProperties) : undefined}
+        >
           <CanvasLegend types={legendTypes} />
           <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} percent={zoomPercent} />
         </div>

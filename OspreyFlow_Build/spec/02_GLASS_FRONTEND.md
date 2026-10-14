@@ -506,7 +506,14 @@ toolbar, the legend and under it a zoom group named *Zoom*: *Zoom out*, the zoom
 framed, as an arrangement frames it, inside an 80px margin so the outermost nodes clear the toolbar
 above the canvas and the selection bar below it — Sigma's 30px framed them under both, found live 11
 October 2026 and checked by eye, since jsdom draws no WebGL). The legend (at the top right, above the zoom group) lists each type in view as the canvas
-draws it (shape in its channel's colour), with how many, most first; *Legend* folds it to its title. The
+draws it (shape in its channel's colour), with how many, most first; *Legend* folds it to its title.
+**The legend floats** (the owner, 14 October 2026: "the legend is hiding the button behind, can the
+legend panel be a floating panel"): its grip, *Move legend*, drags it, or with the grip focused the
+arrows move it 16px (64px with Shift) and Home puts it back; it never rises above its dock, so it
+cannot cover the toolbar, stays inside the canvas, and where it was put is kept in this browser.
+Moved, it is an overlay — a shadow, no hairline. **The corner sits below the toolbar as drawn**: the
+toolbar wraps to a second row on a narrow canvas, and the canvas measures it, so neither the legend
+nor the zoom group covers that row (`keyboard/keyboard.spec.ts`, at a width where the toolbar wraps). The
 graph canvas, and no other surface, has DESIGN.md §9 exception 4's measurement grid: 1px `--border-subtle`
 lines mixed to 40% on a 16px lattice (DESIGN.md v0.3), fixed to the screen. *Grid* in the toolbar's Show group switches it off and on
 (pressed while it shows); the choice is kept in this browser (owner, 6 October 2026). All of them come after the view's own controls in Tab order.

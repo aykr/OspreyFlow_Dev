@@ -473,9 +473,11 @@
   background-size: 16px 16px;
 }
 /* The zoom cluster and the legend: docked overlays on the canvas, a hairline and no shadow; ADR-115 E4
-   (the reference): one column at the canvas's top right, the legend over the zoom group. */
+   (the reference): one column at the canvas's top right, the legend over the zoom group. Below the
+   toolbar as drawn — the canvas measures it into `--canvas-toolbar-height`, since it wraps to a
+   second row on a narrow canvas (the owner, 14 October 2026). */
 .canvas-corner {
-  position: absolute; z-index: 10; right: var(--sp-8); top: calc(var(--h-canvas-toolbar) + var(--sp-8));
+  position: absolute; z-index: 10; right: var(--sp-8); top: calc(var(--canvas-toolbar-height, var(--h-canvas-toolbar)) + var(--sp-8));
   display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-8); pointer-events: none;
 }
 .canvas-corner > * { pointer-events: auto; }
@@ -499,8 +501,17 @@
   background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-control);
   font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-secondary);
 }
+/* Moved from its dock it floats: an overlay's shadow, no hairline (DESIGN.md §6). */
+.canvas-legend--moved { border-color: transparent; box-shadow: var(--overlay-shadow); }
+.canvas-legend__head { display: flex; align-items: center; }
+.canvas-legend__grip {
+  flex: none; min-width: 24px; min-height: 24px; display: grid; place-items: center; padding: 0;
+  background: transparent; border: 0; color: var(--text-tertiary); font: inherit; cursor: grab; touch-action: none;
+}
+.canvas-legend__grip:active { cursor: grabbing; }
+.canvas-legend__grip:hover, .canvas-legend__grip:focus-visible { color: var(--text-primary); }
 .canvas-legend__toggle {
-  width: 100%; min-height: 24px; text-align: left; padding: var(--sp-4) var(--sp-8);
+  flex: 1; min-height: 24px; text-align: left; padding: var(--sp-4) var(--sp-8);
   background: transparent; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer;
 }
 .canvas-legend__toggle:hover, .canvas-legend__toggle:focus-visible { color: var(--text-primary); }

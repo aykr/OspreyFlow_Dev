@@ -1792,7 +1792,7 @@ test("the legend folds and opens by keyboard, and names the types in view", asyn
   const list = page.locator('ul[aria-label="Types in view"]');
   await expect(list).toBeVisible();
   await expect(list.locator("li").first()).toContainText(/\d/);
-  const toggle = page.getByRole("button", { name: "Legend" });
+  const toggle = page.getByRole("button", { name: "Legend", exact: true });
   await toggle.focus();
   await page.keyboard.press("Enter");
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -1800,6 +1800,32 @@ test("the legend folds and opens by keyboard, and names the types in view", asyn
   await page.keyboard.press("Enter");
   await expect(list).toBeVisible();
   registerCovered("CANVAS_ACTIONS", "legend-folds-by-keyboard");
+});
+
+// The owner, 14 October 2026: on a narrow canvas the toolbar wraps to a second row, and the legend,
+// placed one row down, covered the controls there. It now docks below the toolbar as drawn, and
+// floats: its grip moves it, by keyboard as by pointer.
+test("the legend docks below a wrapped toolbar and moves by keyboard from its grip", async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 900 });
+  await page.goto("/keyboard/harness.html");
+  const toolbar = page.getByRole("toolbar", { name: "Canvas tools" });
+  const legend = page.locator(".canvas-legend");
+  await expect(legend).toBeVisible();
+  const bar = (await toolbar.boundingBox())!;
+  expect(bar.height).toBeGreaterThan(40); // wrapped: the case that was covered
+  await expect.poll(async () => (await legend.boundingBox())!.y).toBeGreaterThanOrEqual(bar.y + bar.height);
+  const grip = page.getByRole("button", { name: "Move legend" });
+  await grip.focus();
+  await expect(grip).toBeFocused();
+  // Measured after focusing: at this width the page scrolls sideways to show the grip.
+  const docked = (await legend.boundingBox())!;
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect.poll(async () => (await legend.boundingBox())!.x).toBeCloseTo(docked.x - 16, 0);
+  expect((await legend.boundingBox())!.y).toBeCloseTo(docked.y + 64, 0);
+  await page.keyboard.press("Home");
+  await expect.poll(async () => (await legend.boundingBox())!.x).toBeCloseTo(docked.x, 0);
+  registerCovered("CANVAS_ACTIONS", "legend-moves-by-keyboard");
 });
 
 // --- Reduced motion (02_GLASS_FRONTEND.md §3.4, ADR-097 step 3) ----------------------------------

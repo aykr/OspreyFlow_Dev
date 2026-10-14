@@ -17,7 +17,9 @@ describe("the canvas's corner overlays", () => {
     const corner = rule(".canvas-corner");
     expect(corner.position).toBe("absolute");
     expect(corner.right).toBe("var(--sp-8)");
-    expect(corner.top).toBe("calc(var(--h-canvas-toolbar) + var(--sp-8))");
+    // Below the toolbar as it is drawn, not as one row: it wraps on a narrow canvas, and the legend
+    // then covered its second row (the owner, 14 October 2026). The canvas measures it.
+    expect(corner.top).toBe("calc(var(--canvas-toolbar-height, var(--h-canvas-toolbar)) + var(--sp-8))");
     expect(corner["flex-direction"]).toBe("column");
     expect(rule(".canvas-legend").position).toBeUndefined();
     expect(rule(".canvas-zoom").position).toBeUndefined();
