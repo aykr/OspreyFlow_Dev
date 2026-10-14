@@ -318,10 +318,6 @@ jobs:
         env:
           CLICKHOUSE_USER: osprey
           CLICKHOUSE_PASSWORD: throwaway
-      # Azurite's published development account and key (ADR-114 decision 8), not a secret.
-      AZURE_STORAGE_ACCOUNT: devstoreaccount1
-      AZURE_STORAGE_KEY: "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
-      AZURE_BLOB_ENDPOINT: "http://127.0.0.1:10000/devstoreaccount1"
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
         options: >-
           --health-cmd "wget -q -O /dev/null http://localhost:8123/ping"
@@ -358,6 +354,10 @@ jobs:
       CLICKHOUSE_HTTP_PORT: "8123"
       CLICKHOUSE_USER: osprey
       CLICKHOUSE_PASSWORD: throwaway
+      # Azurite's published development account and key (ADR-114 decision 8), not a secret.
+      AZURE_STORAGE_ACCOUNT: devstoreaccount1
+      AZURE_STORAGE_KEY: "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
+      AZURE_BLOB_ENDPOINT: "http://127.0.0.1:10000/devstoreaccount1"
       VALKEY_HOST: localhost
       POSTGRES_HOST: localhost
       # This job's own postgres service (below) still publishes on 5432 —
