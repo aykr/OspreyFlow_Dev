@@ -445,10 +445,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 #: What the full build says when ArcadeDB cannot be reached, in place of a raw connection traceback.
 UNREACHABLE_DATABASE = (
-    "Cannot reach ArcadeDB at {url}, so the place names cannot be loaded. The deployment that "
-    "`ospreyflow start` starts keeps ArcadeDB inside Docker and does not publish it; "
-    "`make dev-up` does, "
-    "on port 2480. To build the map itself without the database, add --tiles-only."
+    "Cannot reach ArcadeDB at {url}, so the place names cannot be loaded. A Lite deployment "
+    "publishes it to this computer only, on 127.0.0.1:2480, while it runs: start it with "
+    "`ospreyflow start`. To build the map itself without the database, add --tiles-only."
 )
 
 

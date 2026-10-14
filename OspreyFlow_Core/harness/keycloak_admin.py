@@ -249,8 +249,8 @@ def ensure_realm_look(*, issuer: str, realm: str, token: str, theme: str, displa
         return f"sign-in page: {display_name} look applied"
     return (
         f"sign-in page: named {display_name}, but Keycloak cannot see the {display_name} look yet. "
-        "Run `python -m harness.apply` again (it writes the look and recreates the stack), then "
-        "`make register-sign-in` once more"
+        "Run `ospreyflow start --build` (it writes the look and recreates the stack), then "
+        "`ospreyflow repair-sign-in` once more"
     )
 
 
@@ -331,7 +331,7 @@ def user_id(*, issuer: str, realm: str, token: str, username: str) -> str:
     )
     if status != 200 or not found:
         raise RealmConfigurationFailed(
-            f"{username!r} is not in the realm; run `make register-sign-in` and try again"
+            f"{username!r} is not in the realm; run `ospreyflow repair-sign-in` and try again"
         )
     return str(found[0]["id"])
 

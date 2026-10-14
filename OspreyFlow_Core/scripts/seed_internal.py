@@ -1,7 +1,7 @@
 """Loads an internal demo dataset into the running deployment, in one command.
 
     PYTHONPATH=.:packages python -m scripts.seed_internal <dataset> [--stop-api]
-    (or: make seed-paysim | seed-hmp | seed-fixture-corp | seed-ledger)
+    (or, for a demo pack: ospreyflow demo add paysim | hmp | fixture-corp | operation-ledger)
 
 A caller may run a dataset of its own (`seed_internal(datasets=…, code_mounts=…)`, `main(…)`): its
 code folder is mounted read-only beside this checkout's, and every check below — the local
@@ -333,7 +333,7 @@ def seed_internal(
     if missing:
         raise SeedRefused(
             f"{', '.join(missing)} not found in the identity provider, so the case could not be "
-            "shared with it. Run `make register-sign-in` and try again"
+            "shared with it. Run `ospreyflow repair-sign-in` and try again"
         )
 
     compose = _compose(directory / "compose.yaml")

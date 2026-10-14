@@ -411,8 +411,8 @@ def refresh(
     if code != 0:
         raise RefreshFailed(
             "The stack is up, but the sign-in accounts could not be registered, so the demo "
-            "administrator may not be able to sign in. Run `make register-sign-in` once Keycloak "
-            "answers."
+            "administrator may not be able to sign in. Run `ospreyflow repair-sign-in` once "
+            "Keycloak answers."
         )
 
 

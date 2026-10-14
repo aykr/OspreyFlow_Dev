@@ -13300,6 +13300,34 @@ Status: accepted 14 October 2026 — the owner: "the user repo should be aykr/os
    The alternative the owner may prefer: the repository private, its packages (images, chart) made
    public on GitHub's registry — then only the source and the update check need a token.
 
+### ADR-114, Amendment 22 (14 October 2026) — an operator runs `ospreyflow`; `make` is the developer's
+
+Status: accepted 14 October 2026 — the owner asked whether any `make` commands were still active and
+to move them to `ospreyflow`; of the line drawn below, "go ahead with all the steps".
+
+1. **The line.** What an operator runs is an `ospreyflow` verb (decision 13; `make refresh` and
+   `make launch` went with Amendment 3). The developer's gates and suites stay `make` — Core's
+   `check`, `lint`, the scans and the browser suites, and all of `OspreyFlow_Build/Makefile` — since
+   the command ships with the product and those check the product while it is built; moving them in
+   would carry the developer repository's tooling out with it.
+2. **Removed:** `make seed-hmp`, `seed-fixture-corp`, `seed-ledger`, `seed-paysim` — exact duplicates
+   of `ospreyflow demo add <pack>`, which runs the same `scripts.seed_internal <pack> --stop-api`.
+   `make register-sign-in` goes too, replaced by point 3's verb. (`make docker-clean` stays: it
+   removes every OspreyFlow container on the machine, test copies included — the developer's
+   clean-up, not an operator's.)
+3. **New verb, `ospreyflow repair-sign-in`:** registers the deployment's sign-in again (the identity
+   provider's clients, roles and the demo accounts — `harness.register_sign_in` for the deployment's
+   own profile), safe to run again; `--no-demo-accounts` for an install made without them. It
+   replaces `make register-sign-in` in every message that named it.
+4. **No message tells an operator to run `make`:** a test reads every string a person sees in the
+   product's Python (comments and docstrings aside) and fails on a backticked `make` command.
+   Messages that named one now name the verb: `repair-sign-in`, `ospreyflow start --build`, and,
+   for ports in use, `ospreyflow stop` for another deployment on the machine. The basemap builder's
+   message also said a running deployment does not publish ArcadeDB — Lite does, on 127.0.0.1:2480
+   — and now says so.
+5. **Left for B9:** `DEMO_GUIDE.md` still walks through `make dev-up`; it needs a rewrite around
+   `ospreyflow install` and `demo add`, which is B9's sweep.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;

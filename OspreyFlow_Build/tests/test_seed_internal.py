@@ -196,7 +196,7 @@ def test_it_says_where_the_data_should_be_when_the_folder_is_missing(repo: Path)
 def test_it_names_a_missing_demo_account_rather_than_seeding_without_grants(repo: Path) -> None:
     """A case nobody can open is what this exists to prevent."""
     runner = Runner()
-    with pytest.raises(seed_internal.SeedRefused, match="register-sign-in"):
+    with pytest.raises(seed_internal.SeedRefused, match="ospreyflow repair-sign-in"):
         _go(repo, runner, subs={ADMIN: "sub-admin-111"})
     assert runner.calls == []
 

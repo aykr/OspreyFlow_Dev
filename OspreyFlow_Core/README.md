@@ -66,8 +66,9 @@ ospreyflow open                        # the Glass in your browser
 
 Every question `install` asks can be answered in a file instead (`--config install.yaml --yes`), so
 a tester or a CI job installs without prompts. The other verbs: `status`, `start` (`--build` to
-rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup`, `restore` and
-`uninstall`.
+rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup`, `restore`,
+`repair-sign-in` (when nobody can sign in) and `uninstall`. Every operator task is an `ospreyflow`
+verb; `make` targets are for developers working on OspreyFlow itself.
 
 **Small** is built from your own machine: `ospreyflow install --mode small --cloud aws` (or
 `azure`) creates the server and the cloud's managed database and storage with OpenTofu, and the

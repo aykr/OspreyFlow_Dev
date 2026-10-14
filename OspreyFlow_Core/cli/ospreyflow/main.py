@@ -50,7 +50,7 @@ from .run import (
 
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
-    "update", "uninstall",
+    "update", "uninstall", "repair-sign-in",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
 
@@ -185,6 +185,14 @@ def _parser() -> argparse.ArgumentParser:
     start = verbs.add_parser("start", help="bring the deployment up")
     start.add_argument("--build", action="store_true", help="rebuild from the checkout first")
     verbs.add_parser("stop", help="stop the deployment")
+    # ADR-114 Amendment 22: what `make register-sign-in` did, as the operator's own verb.
+    repair = verbs.add_parser(
+        "repair-sign-in",
+        help="register the sign-in again (its clients, roles and demo accounts); safe to repeat",
+    )
+    repair.add_argument(
+        "--no-demo-accounts", action="store_true", help="for an install made without them"
+    )
     verbs.add_parser("status", help="say each service's state")
     verbs.add_parser("open", help="open the Glass in the browser")
 
@@ -479,6 +487,16 @@ def _start(args: argparse.Namespace, ctx: _Context) -> int:
     return 0
 
 
+def _repair_sign_in(args: argparse.Namespace, ctx: _Context) -> int:
+    """ADR-114 Amendment 22: the deployment's sign-in registered again, for its own profile."""
+    step = [*ctx.python, "-m", "harness.register_sign_in", "--profile", ctx.deployed().name]
+    if args.no_demo_accounts:
+        step.append("--no-demo-accounts")
+    ctx.step("register the sign-in", step)
+    print("The sign-in is registered. Sign in again in the browser.")
+    return 0
+
+
 def _stop(ctx: _Context) -> int:
     ctx.step("stop the deployment", [*compose(ctx.deployed()), "stop"])
     return 0
@@ -592,6 +610,8 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
         return 0
     if verb == "uninstall":
         return _uninstall(args, ctx)
+    if verb == "repair-sign-in":
+        return _repair_sign_in(args, ctx)
     raise AssertionError(verb)  # pragma: no cover - argparse refuses any other verb
 
 

@@ -151,7 +151,7 @@ def test_sign_in_accounts_are_registered_after_everything_has_been_restarted(rep
 def test_a_failed_registration_is_reported_by_name_and_the_stack_is_left_up(repo: Path) -> None:
     """Catches a silent failure: the stack is up but nobody can sign in as the administrator, and
     the message must say which command repairs it."""
-    with pytest.raises(refresh.RefreshFailed, match="make register-sign-in"):
+    with pytest.raises(refresh.RefreshFailed, match="ospreyflow repair-sign-in"):
         refresh.refresh(repo, run=Recorder(), register=Registrar(ok=False))
 
 

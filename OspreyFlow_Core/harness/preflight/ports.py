@@ -127,8 +127,9 @@ def check(context: PreflightContext) -> CheckResult:
         ),
         what_to_do=(
             "Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the "
-            "process — or change the published ports in osprey.yaml and re-render. A previous "
-            "`make dev-up` stack is the usual culprit; `make dev-down` clears it."
+            "process — or change the published ports in osprey.yaml and re-render. Another "
+            "OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its "
+            "checkout frees them."
         ),
         detail=detail,
     )

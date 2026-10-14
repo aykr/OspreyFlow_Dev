@@ -289,7 +289,7 @@ def test_a_port_from_the_real_rendered_compose_file_bound_by_a_real_socket_fails
     assert result.status is Status.FAIL
     assert str(taken_port) in result.what_is_wrong
     assert "api" in result.what_is_wrong
-    assert "make dev-down" in result.what_to_do
+    assert "ospreyflow stop" in result.what_to_do
 
 
 def test_free_ports_pass(context: PreflightContext, rendered_dir: Path) -> None:
