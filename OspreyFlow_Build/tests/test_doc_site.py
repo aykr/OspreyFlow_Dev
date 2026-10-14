@@ -38,11 +38,29 @@ def test_the_three_landing_pages_exist(site: Path) -> None:
     assert (site / "analyst-guide.html").is_file()
 
 
-def test_the_analyst_guide_is_a_placeholder_not_a_written_guide(site: Path) -> None:
-    """07_BUILD_PLAN.md Stage 3c: the analyst guide is Proposed, post-milestone — this page must
-    say so plainly rather than pretend to be the guide itself."""
+def test_the_analyst_guide_page_leads_to_the_written_user_guide(site: Path) -> None:
+    """ADR-114 Amendment 15: the analyst guide is written (`docs/user-guide.md`); the page that
+    said it was not now leads to it."""
     text = (site / "analyst-guide.html").read_text(encoding="utf-8")
-    assert "not yet written" in text
+    assert "not yet written" not in text and 'href="user-guide.html"' in text
+
+
+def test_the_install_packages_three_guides_are_pages_with_their_images(site: Path) -> None:
+    """ADR-114 Amendment 15: each guide in `docs/` is a page of the site, and every image it shows
+    is beside it at the path it names."""
+    for stem in ("administration-guide", "user-guide", "developer-guide"):
+        page = (site / f"{stem}.html").read_text(encoding="utf-8")
+        sources = re.findall(r'<img src="([^"]+)"', page)
+        assert sources, f"{stem} shows no image"
+        assert all((site / source).is_file() for source in sources), f"{stem} names a missing image"
+
+
+def test_links_to_a_guides_markdown_lead_to_its_page(site: Path) -> None:
+    readme = (site / "README.html").read_text(encoding="utf-8")
+    assert 'href="administration-guide.html"' in readme and "docs/administration-guide.md" not in readme
+    assert "docs/pdf/user-guide.pdf" not in readme
+    user = (site / "user-guide.html").read_text(encoding="utf-8")
+    assert 'href="developer-guide.html"' in user
 
 
 # --- "no file the two gates classify private is rendered — plant one, the build goes red" -------
@@ -95,7 +113,7 @@ def _internal_links(html: str) -> list[str]:
 
 def test_every_internal_link_on_the_real_site_resolves(site: Path) -> None:
     written = {p.name for p in site.iterdir()}
-    for page in site.iterdir():
+    for page in site.glob("*.html"):
         for href in _internal_links(page.read_text(encoding="utf-8")):
             assert href in written, f"{page.name} links to {href!r}, which was never rendered"
 

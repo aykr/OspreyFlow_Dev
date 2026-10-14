@@ -6,6 +6,22 @@ sources, persists them in a property graph, and gives an analyst a single worksp
 network, social-network, pattern, temporal and geospatial analysis are five views of one working
 set rather than five separate tools.
 
+## Start here
+
+New to OspreyFlow? Begin with the guide for what you will do with it. Each is in `docs/`, as
+Markdown and as a PDF with screenshots (`docs/pdf/`):
+
+| If you are… | Read | It covers |
+| --- | --- | --- |
+| **Installing or running it** | [Installation and Administration Guide](docs/administration-guide.md) ([PDF](docs/pdf/administration-guide.pdf)) | How it is built; choosing Lite, Small or Enterprise; what each needs; installing, running, people and accounts, backups, updates; every setting |
+| **An analyst** | [User Guide](docs/user-guide.md) ([PDF](docs/pdf/user-guide.pdf)) | Signing in, cases, the graph, map, timeline and reports, alerts and watches, and how what you see is decided |
+| **A data engineer** | [Developer Guide](docs/developer-guide.md) ([PDF](docs/pdf/developer-guide.pdf)) | The Ingest Studio from a first pipeline to a scheduled one, the domain model, held rows, screening lists, the API |
+
+The rest of this page is the short version: how it is built, what you need, and the commands to
+install it.
+
+## How it is built
+
 Three tiers, separated by four typed ports so any one of them can be swapped without touching the
 others:
 
@@ -19,8 +35,8 @@ A port is a narrow interface (a Python `Protocol`) that everything above it is a
 nothing else. Swapping the engine behind a port — a laptop's in-process DuckDB for ClickHouse shared
 by a cluster's Conduits, say — means writing one adapter and changing one line of configuration;
 nothing above the port changes, and the adapter is only supported once it passes the same
-conformance suite every other adapter behind that port passes. `spec/00_ARCHITECTURE.md` has the
-full definitions.
+conformance suite every other adapter behind that port passes. The guides above describe the
+architecture each reader needs.
 
 ## Before you install
 
@@ -102,6 +118,7 @@ A private repository needs `GITHUB_TOKEN` set to a token that can read it.
   Small's server (`opentofu/small/aws`, `opentofu/small/azure`) and Enterprise's cluster
   (`opentofu/cluster/aws`, `opentofu/cluster/azure`), and the Superset image.
 - **`scripts/`** — the demo packs (`python -m scripts.demo_packs`) and their seeds.
+- **`docs/`** — the three guides, their screenshots, and their PDFs.
 
 The full specification and the build's own record are kept in the developer repository, alongside
 the test suites and the release tooling.

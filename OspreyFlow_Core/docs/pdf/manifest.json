@@ -1,0 +1,59 @@
+{
+  "administration-guide.md": {
+    "images": {
+      "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
+      "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
+      "images/admin/03-dashboards.png": "be3b69f87afbb14a468e7a60d693f786228a83d0cebfd9245ede99b3d355b113",
+      "images/admin/04-schedules.png": "0bf56a12036e07d5e61668e5b14b4a4a704e263db577bf8db5fcca370f800aa1",
+      "images/admin/05-system.png": "f4a1042578fca930c73da963847f4673b81d6a5bcc9b7fd80417f6b0124bb177",
+      "images/admin/06-demo-packs.png": "46ff5e939c137a1e32ff3a4009e57eeda9e8aa1d50b13c36c49ed91aa2f25dc2",
+      "images/admin/07-superset.png": "821b76c53a1481b17f26ee5006a9ef80a452c3d61ab5206330eb4c367f5514fd"
+    },
+    "pdf": "0e18ab01db43dc7d1cfa78833396e9aa11255ea4e8cdc6d1e61528e6707494c8",
+    "source": "99c757241a8e72da4e11e491fffafbb1023167b974341858ecc12ae412e08eea"
+  },
+  "developer-guide.md": {
+    "images": {
+      "images/developer/01-studio-pipelines.png": "37cef8fe2178bcb0b1b53f406aefd85ba13b389a597f8764eb173a655f72c385",
+      "images/developer/02-pipeline-canvas.png": "5b865977a3c4f6eb99c9ab9610b92c8772614501f5be0842cc715590616af793",
+      "images/developer/03-domain-model.png": "7c39411aa8b710afe74506210819178729692cf5767a3f40d0aada35ed415c52",
+      "images/developer/04-source.png": "95e5e8d2afd41471ad810ebc93893c97d718be58a0246db939620088c3b1f70f",
+      "images/developer/05-profile.png": "f385dc925abd623b5df11df3e10852a262d1c7db8c55afbd3147a271c5eee22c",
+      "images/developer/06-mapping.png": "04bbd8a62b3c24476f755090f8e32e22e914242a0bee82ee887e27e23350dc6e",
+      "images/developer/06b-mapping-entity.png": "ca6f829a2b1eb5d088400096e810341d474d2c6449a13cc5ec9fc6ee2b9306b6",
+      "images/developer/07-load.png": "6654700c3965dd98e60c814b416d14376abc5e10e956f9acc73595479e5a418b",
+      "images/developer/08-verify.png": "7463aa0b96db0a91997e418fbe6226e0fbb41f8290de6483ecc757ebeca2e4af",
+      "images/developer/09-files.png": "7c163a139b3c5b5a88a49f35dc766fd1dd7246f4b2518c0766c1220ed8d710dd",
+      "images/developer/10-data-feeds.png": "f4d75e449663b2e98c9438d81846935bde194fcfd6ba0d8fe1aa41e014a966b1",
+      "images/developer/11-held-rows.png": "3f46e1e001d99f6a9f3d8655be47ec594706b2d849bd101862a0e95ea4968f52"
+    },
+    "pdf": "753de4da66fcf5954fdf2e6364120f304a09dfb3e39db1b91be4583cd45a3c05",
+    "source": "bde0467006e4ac672f8c26348bab6c1a171e963f286cf8c8cce1ee70ce6fd1c5"
+  },
+  "user-guide.md": {
+    "images": {
+      "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
+      "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
+      "images/user/03-start.png": "2e652492c61da862ed3ce13e800a9b41da3bc75400afbc6a7b0e8bea3aac8c98",
+      "images/user/04-case-where-to-start.png": "800ee675d30dd4551269650c8e00ed3c4a7527d627f91b345a9d8908387779e2",
+      "images/user/05-canvas.png": "e45c63eb26b21158748b277eb382fec2c78b237d63e6d4ffaccb4e2cc5da28a9",
+      "images/user/06-map.png": "b6ae274fee9848859ba9603a90a22ccf22a33cfe30ddf3a6293c742eeaea0936",
+      "images/user/07-reports-figures.png": "08f2d4337191d0803b43ab67989d4fb68bbf5362b63abc71fad0e75dd1f13b66",
+      "images/user/08-reports-dashboard.png": "7003c438bd3ec3c87dd238b5e7c8be459bdd559e5c47ef9f7df706c9b3ef8d39",
+      "images/user/09-alerts.png": "117adb41ec5b8ae3caa9d8e7fe927d60363c200158531fc4d757da88c278a49c",
+      "images/user/10-ownership-due-diligence.png": "d28baa7b047b18e8a2572635c22c0a8476db7fccdd8c4d445d84a03b02254fe0",
+      "images/user/11-history.png": "d3bf4e146ffc55cbeae6c88bbc9d254b5d467564da53822ddd1cdfd594162c26",
+      "images/user/12-questions.png": "4da2b5f26da67363dd79368a908d3f5b69a5a1049771018d86c03da38e8936a1",
+      "images/user/13-watches.png": "efad696e0f0d80a061185fa48c8e6072d4edecf60ce616c2d82e2a46c7717238",
+      "images/user/14-timeline.png": "daeabfabf41ca7ac92f3be489d2c4e4156dc0ee991e14b6222a4b1040f40c2ee",
+      "images/user/15-timeline-weekly.png": "a1b4e771b840cbf42c7532d17a270c6b6c2d8e65b6a360b445a66b821294186c",
+      "images/user/16-search.png": "301570cd3996899b4d579634104fec087a3bf5edc0e631bd7efbbb8557a0ff22",
+      "images/user/17-inspector.png": "53a39068b9c7f2adb56b299bdd77323fae4144ce01cd8db1c4d2376cc3323f3b",
+      "images/user/18-find-connections.png": "29f42fd0d166becfcc7b7edcea4096f15fb940f22509380ad8b57b7e401023e3",
+      "images/user/19-export.png": "b28c8956e0c450791b4e7a83577c1085c2b5fdfe6af7db4eff20f4491e5abb54",
+      "images/user/20-metrics.png": "bb0659af72c65773c860d4d261299171bc0a4a997318af3fec7ae326ee6bcdbc"
+    },
+    "pdf": "d9ae6586f314b558ab27430230542e7554498e6ddde0ddce8d3738870be74c2c",
+    "source": "ee38408f410e2219abdb726952ce1a906cd5844d17ea578060b42a3748c5a609"
+  }
+}

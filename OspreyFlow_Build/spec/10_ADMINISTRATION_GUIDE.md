@@ -353,7 +353,7 @@ holding its right:
 | Role | For |
 | --- | --- |
 | **Analyst** | Cases: investigate, edit the graph, confirm what models proposed, alerts and rules, exports, watches |
-| **Data Engineer** | Pipelines: build, verify, publish, run and schedule them; screening lists; revert a load |
+| **Data Engineer** | Pipelines: build, verify, publish, run and schedule them; the source files they load; held rows; screening lists. (It also carries the right to revert a load, which no screen or command uses yet) |
 | **Admin** (`osprey-admin`) | The Admin area; the ontology and the map; the audit and export ledgers |
 | **Reports Viewer** | Reports and data feeds; the alert queue, read-only |
 

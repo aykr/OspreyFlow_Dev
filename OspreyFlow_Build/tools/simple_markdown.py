@@ -3,11 +3,12 @@ files actually use — checked directly before writing this, not assumed from Ma
 surface: `#`-`######` headers, paragraphs, `**bold**`/`*italic*`, `` `inline code` ``, fenced
 ``` code blocks (with an optional language tag, kept as a `class` for a future syntax highlighter
 this module does not itself provide), pipe tables, `-`/`*` bullet lists and `1.` ordered lists,
-`>` blockquotes, and `---` horizontal rules. No reference-style or inline `[text](url)` links —
-grepped for across every Apache-scoped file before this was written, and none exist there (they do
-appear in the private-tree `process/SESSION_HANDOVER.md`, which this renderer never sees). Bare URLs
-are left as plain text rather than auto-linked, a deliberate simplification rather than a gap this
-module fails to disclose.
+`>` blockquotes, and `---` horizontal rules. **Added for the install package's guides (ADR-114
+Amendment 15):** inline `[text](url)` links (only relative addresses, `#anchors`, `http(s):` and
+`mailto:` — any other scheme is left as plain text), an image alone on its line,
+`![caption](path)`, rendered as a captioned figure, and an indented line continuing the list item
+above it. Reference-style links are not supported. Bare URLs are left as plain text rather than
+auto-linked, a deliberate simplification rather than a gap this module fails to disclose.
 
 **Why hand-rolled rather than a dependency.** No Markdown library is installed today (checked:
 `import markdown`/`mistune`/`commonmark` all fail in `.venv`) and `pyproject.toml`'s own
@@ -38,6 +39,21 @@ _TABLE_ROW = re.compile(r"^\|(.+)\|\s*$")
 _TABLE_SEPARATOR = re.compile(r"^\|?[\s:|-]+\|?$")
 _HR = re.compile(r"^(-{3,}|\*{3,})$")
 _FENCE = re.compile(r"^```\s*(\S*)\s*$")
+_LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+_IMAGE = re.compile(r"^!\[([^\]]*)\]\(([^)\s]+)\)\s*$")
+_SCHEME = re.compile(r"^([a-zA-Z][a-zA-Z0-9+.-]*):")
+_SAFE_SCHEMES = frozenset({"http", "https", "mailto"})
+
+
+def _cells(row: str) -> list[str]:
+    """A table row's cells: split on `|`, except an escaped `\\|`, which is a pipe in the cell."""
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", row)]
+
+
+def _safe_address(address: str) -> bool:
+    """A relative path or `#anchor`, or one of the few schemes a document may link to."""
+    scheme = _SCHEME.match(address)
+    return scheme is None or scheme.group(1).lower() in _SAFE_SCHEMES
 
 
 def render_inline(text: str) -> str:
@@ -54,7 +70,15 @@ def render_inline(text: str) -> str:
         return f"\x00{len(code_spans) - 1}\x00"
 
     with_code_stashed = _INLINE_CODE.sub(_stash_code, escaped)
-    with_bold = _BOLD.sub(r"<strong>\1</strong>", with_code_stashed)
+
+    def _link(match: re.Match[str]) -> str:
+        label, address = match.group(1), match.group(2)
+        if not _safe_address(html.unescape(address)):
+            return match.group(0)
+        return f'<a href="{address}">{label}</a>'
+
+    with_links = _LINK.sub(_link, with_code_stashed)
+    with_bold = _BOLD.sub(r"<strong>\1</strong>", with_links)
     with_italic = _ITALIC.sub(r"<em>\1</em>", with_bold)
 
     def _restore_code(match: re.Match[str]) -> str:
@@ -110,16 +134,32 @@ def render_markdown(text: str) -> str:
             out.append(f"<pre><code{css_class}>{code_text}</code></pre>")
             continue
 
+        if list_state is not None and line.startswith("  ") and line.strip():
+            list_state.items[-1] += " " + line.strip()
+            i += 1
+            continue
+
+        image_match = _IMAGE.match(line.strip())
+        if image_match and _safe_address(image_match.group(2)):
+            flush_paragraph()
+            flush_list()
+            caption = html.escape(image_match.group(1))
+            source = html.escape(image_match.group(2))
+            out.append(
+                f'<figure><img src="{source}" alt="{caption}"><figcaption>{caption}</figcaption>'
+                "</figure>"
+            )
+            i += 1
+            continue
+
         if _TABLE_ROW.match(line) and i + 1 < len(lines) and _TABLE_SEPARATOR.match(lines[i + 1]):
             flush_paragraph()
             flush_list()
-            header_cells = [c.strip() for c in _TABLE_ROW.match(line).group(1).split("|")]
+            header_cells = _cells(_TABLE_ROW.match(line).group(1))
             i += 2
             body_rows: list[list[str]] = []
             while i < len(lines) and _TABLE_ROW.match(lines[i]):
-                body_rows.append(
-                    [c.strip() for c in _TABLE_ROW.match(lines[i]).group(1).split("|")]
-                )
+                body_rows.append(_cells(_TABLE_ROW.match(lines[i]).group(1)))
                 i += 1
             thead = "".join(f"<th>{render_inline(c)}</th>" for c in header_cells)
             tbody = "".join(

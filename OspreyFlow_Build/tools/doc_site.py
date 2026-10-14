@@ -36,6 +36,8 @@ site owes, proven in `tests/test_doc_site.py`.
 from __future__ import annotations
 
 import ast
+import re
+import shutil
 from pathlib import Path
 
 from tools.decision_log_publication_check import PROCESS_ADR_NUMBERS
@@ -44,6 +46,18 @@ from tools.route_coverage_check import APACHE_DOC_PATHS
 from tools.simple_markdown import render_markdown
 
 PREFLIGHT_DIR = REPO_ROOT / "harness" / "preflight"
+#: The install package's three guides (`06_DECISIONS.md` ADR-114 Amendment 15), each a page of this
+#: site with the images it shows copied beside it. Their own Markdown is the source, as the PDFs'.
+PACKAGE_DOCS = REPO_ROOT / "docs"
+GUIDES: tuple[tuple[str, str], ...] = (
+    ("administration-guide", "Installation and Administration Guide"),
+    ("user-guide", "User Guide"),
+    ("developer-guide", "Developer Guide"),
+)
+_GUIDE_LINK = re.compile(
+    r'href="(?:docs/)?(?:pdf/)?(' + "|".join(g for g, _ in GUIDES) + r')\.(?:md|pdf)"'
+)
+_IMAGE_SOURCE = re.compile(r'<img src="([^"]+)"')
 PROCESS_DIR = REPO_ROOT / "process"
 
 _PAGE_SHELL = """<!doctype html>
@@ -64,7 +78,7 @@ pre code {{ display: block; padding: 0.8rem; overflow-x: auto; }}
 </head>
 <body>
 <nav><a href="index.html">Architecture</a> <a href="operator-guide.html">Operator guide</a>
-<a href="analyst-guide.html">Analyst guide</a></nav>
+<a href="analyst-guide.html">Analyst guide</a> <a href="developer-guide.html">Developer guide</a></nav>
 {body}
 </body>
 </html>
@@ -95,9 +109,12 @@ def _architecture_landing_page() -> str:
         "<h1>OspreyFlow</h1>"
         "<p>Open-source intelligence analysis and network discovery platform. This site is "
         "generated from this deployment's own documentation at bundle time.</p>"
-        "<h2>Start here</h2><ul><li><a href=\"operator-guide.html\">Operator guide</a> — install, "
-        "deploy, back up and upgrade.</li><li><a href=\"analyst-guide.html\">Analyst guide</a> — "
-        "using the workspace day to day.</li></ul>"
+        "<h2>Start here</h2><ul><li><a href=\"administration-guide.html\">Installation and "
+        "Administration Guide</a> — install, run, back up and update it.</li>"
+        "<li><a href=\"user-guide.html\">User Guide</a> — for analysts, using the workspace day to "
+        "day.</li><li><a href=\"developer-guide.html\">Developer Guide</a> — for data engineers, "
+        "bringing data in.</li><li><a href=\"operator-guide.html\">Operator guide</a> — the "
+        "deployment guide, the RUNBOOKs and the Preflight reference.</li></ul>"
         f"<h2>The full specification</h2><ul>{links}</ul>"
     )
     return _page("Architecture", body)
@@ -123,7 +140,10 @@ def _operator_guide_landing_page(
     generated_runbook_present: bool, deploy_runbook_present: bool
 ) -> str:
     deployment_html = next(p.stem for p in APACHE_DOC_PATHS if p.name == "05_DEPLOYMENT.md")
-    links = [f'<li><a href="{deployment_html}.html">Deployment guide</a></li>']
+    links = [
+        '<li><a href="administration-guide.html">Installation and Administration Guide</a></li>',
+        f'<li><a href="{deployment_html}.html">Deployment guide</a></li>',
+    ]
     if generated_runbook_present:
         links.append('<li><a href="runbook-generated.html">This deployment\'s own RUNBOOK</a></li>')
     if deploy_runbook_present:
@@ -145,17 +165,30 @@ def _operator_guide_landing_page(
     return _page("Operator guide", body)
 
 
-def _analyst_guide_placeholder_page() -> str:
+def _analyst_guide_page() -> str:
+    """The analyst's way in: the User Guide (`docs/user-guide.md`), and the demo walkthrough."""
     demo_guide_html = next(p.stem for p in APACHE_DOC_PATHS if p.name == "DEMO_GUIDE.md")
     body = (
         "<h1>Analyst guide</h1>"
-        "<p>This guide is not yet written (07_BUILD_PLAN.md Stage 3c, proposed, post-milestone: "
-        "user-facing material for the analyst working the Glass day to day, not an existing "
-        "document's content gap).</p>"
-        f'<p>Until it exists, the walkthrough in <a href="{demo_guide_html}.html">the demo '
-        "guide</a> is the closest real, followable path.</p>"
+        '<p>The analyst\'s guide is the <a href="user-guide.html">User Guide</a>: signing in, cases, '
+        "the graph, map, timeline and reports, alerts and watches, and how what you see is "
+        "decided.</p>"
+        f'<p>For a followable walkthrough of the demo cases, see <a href="{demo_guide_html}.html">'
+        "the demo guide</a>.</p>"
     )
     return _page("Analyst guide", body)
+
+
+def _guide_pages() -> tuple[dict[str, str], set[str]]:
+    """`{html_filename: rendered_html}` for each of the install package's guides, and the images
+    they show (relative to `docs/`)."""
+    pages: dict[str, str] = {}
+    images: set[str] = set()
+    for stem, title in GUIDES:
+        body = render_markdown((PACKAGE_DOCS / f"{stem}.md").read_text(encoding="utf-8"))
+        images.update(_IMAGE_SOURCE.findall(body))
+        pages[f"{stem}.html"] = _page(title, body)
+    return pages, images
 
 
 def _preflight_reference_page() -> str:
@@ -262,7 +295,12 @@ def render_doc_site(
     pages["operator-guide.html"] = _operator_guide_landing_page(
         generated_runbook_text is not None, deploy_runbook_text is not None
     )
-    pages["analyst-guide.html"] = _analyst_guide_placeholder_page()
+    pages["analyst-guide.html"] = _analyst_guide_page()
+    guides, images = _guide_pages()
+    pages.update(guides)
+    # A link to a guide's Markdown or PDF — the README's, or one guide's to another — is to its
+    # page here.
+    pages = {name: _GUIDE_LINK.sub(r'href="\1.html"', html) for name, html in pages.items()}
     pages["preflight-reference.html"] = _preflight_reference_page()
     if generated_runbook_text is not None:
         pages["runbook-generated.html"] = _page(
@@ -279,7 +317,11 @@ def render_doc_site(
 
     for filename, html in pages.items():
         (output_dir / filename).write_text(html, encoding="utf-8")
-    return sorted(pages)
+    for image in sorted(images):
+        target = output_dir / image
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(PACKAGE_DOCS / image, target)
+    return sorted(pages) + sorted(images)
 
 
 def main() -> int:

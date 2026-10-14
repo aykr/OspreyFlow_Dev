@@ -1,12 +1,14 @@
-"""The administration guide's `osprey.yaml` reference, made from the deployment's own schema
-(`spec/10_ADMINISTRATION_GUIDE.md`, between its `options:begin` and `options:end` markers).
+"""The administration guide's `osprey.yaml` reference, made from the deployment's own schema, in
+both copies of the guide — the specification's (`spec/10_ADMINISTRATION_GUIDE.md`) and the install
+package's (`docs/administration-guide.md`, ADR-114 Amendment 15 point 5) — between each one's
+`options:begin` and `options:end` markers.
 
 Written from the schema, never by hand, so the guide cannot describe an option that does not exist
 or miss one that does: `tests/test_admin_guide.py` fails when the guide's copy differs from what
 this prints.
 
     python -m tools.admin_guide_options          # print the reference
-    python -m tools.admin_guide_options --write  # replace the guide's copy
+    python -m tools.admin_guide_options --write  # replace both guides' copies
 """
 
 from __future__ import annotations
@@ -22,9 +24,11 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
-from tools.layout import BUILD
+from tools.layout import BUILD, CORE
 
 GUIDE = BUILD / "spec" / "10_ADMINISTRATION_GUIDE.md"
+PACKAGE_GUIDE = CORE / "docs" / "administration-guide.md"
+GUIDES = (GUIDE, PACKAGE_GUIDE)
 BEGIN, END = "<!-- options:begin -->", "<!-- options:end -->"
 
 
@@ -146,9 +150,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.write:
         sys.stdout.write(made)
         return 0
-    text = GUIDE.read_text(encoding="utf-8")
-    start, end = text.index(BEGIN) + len(BEGIN), text.index(END)
-    GUIDE.write_text(text[:start] + "\n" + made + text[end:], encoding="utf-8")
+    for guide in GUIDES:
+        text = guide.read_text(encoding="utf-8")
+        start, end = text.index(BEGIN) + len(BEGIN), text.index(END)
+        guide.write_text(text[:start] + "\n" + made + text[end:], encoding="utf-8")
     return 0
 
 

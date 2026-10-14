@@ -13160,6 +13160,63 @@ it can be overruled).
 9. **Tests:** `tests/cli/test_cluster_cloud_install.py` (11), `test_answers.py` (+3),
    `test_doctor.py` (+1); red first; plants red: 18, each failing the case that names its fault.
 
+### ADR-114, Amendment 20 (14 October 2026) — the install package's guides, landed
+
+Status: accepted 14 October 2026 (mine, carrying out Amendment 15; recorded so it can be
+overruled).
+
+1. **The three guides are in `OspreyFlow_Core/docs/`:** `administration-guide.md` (installers and
+   administrators: how it is built, the three modes, every command and setting — section numbers
+   kept equal to `spec/10_ADMINISTRATION_GUIDE.md`'s, with an unnumbered architecture section
+   ahead of them), `user-guide.md` (analysts) and `developer-guide.md` (data engineers), with the
+   39 screenshots of Amendment 15 point 4, every one shown by a guide. Each was written from the
+   code and the specification, read for the purpose by two read-only research passes; nothing a
+   reader is told was assumed.
+2. **The PDFs** are printed by `tools/docs_pdf.py` (`make docs-pdf`): each guide rendered by
+   `tools/simple_markdown.py` into a page styled only from `tokens.css`'s light theme, printed by a
+   headless Chromium (`--chrome`, `OSPREY_CHROME`, or Playwright's cache) to `docs/pdf/`, and
+   recorded in `docs/pdf/manifest.json` with the SHA-256 of its Markdown, of each image and of the
+   PDF. **The check, not a rebuild, is the gate:** `tests/test_docs_pdf.py` fails when a guide or an
+   image changed since its PDF was made, a PDF was replaced or is missing, a guide shows an image
+   that is not there, or a screenshot is shown by no guide. Printing needs a browser and stays a
+   person's step; a PDF's bytes differ per printing (the browser stamps the time), which is why the
+   manifest records the PDF's hash rather than expecting a reproducible one.
+3. **The renderer gained four constructs**, each tested and shown red: an image alone on its line as
+   a captioned figure; inline links (relative, `#`, `http(s):`, `mailto:` only — any other scheme
+   stays text); an indented line continuing a list item; and `\|` as a pipe inside a table cell.
+4. **Both copies of the administration guide are held to the product** (point 5): the settings
+   appendix is written into both by `tools.admin_guide_options --write`, and
+   `tests/test_admin_guide.py` runs every case — the appendix, each command and flag, each answers
+   setting — against each copy.
+5. **The documentation site renders the guides** (`tools/doc_site.py`): each a page with its images
+   beside it; a link to a guide's Markdown or PDF leads to its page; the Analyst guide page, which
+   said the guide was not yet written, now leads to the User Guide.
+6. **Core's README starts with them** (point 6, and the owner's "make sure that the readme is
+   updated to point to these documents for any one starting the journey"): a *Start here* section
+   under the title names the guide for each reader, with its PDF.
+7. **Found writing the guides — recorded, not fixed here** (each is for the owner to schedule):
+   - an expansion past the working set's limit shows the canvas's generic "Expand failed (409)";
+     the three options the server returns (branch, filter, promote to a batch job) are not shown,
+     and Home's tip says they are;
+   - there is no control in the Inspector to confirm an inferred node, though the route exists and
+     `02_GLASS_FRONTEND.md` §3.1f says it is confirmed there; an alert closed as a true positive, a
+     same-as link's *Confirm as the same*, are the confirmations the Glass offers;
+   - the subgraph export takes everything on the canvas, not the selection;
+   - the Studio's Files tab is shown to a Data Engineer, whose role lacks `extract_files`, which
+     adding files there needs;
+   - `revert_loads` is granted to Data Engineers but no screen or command reverts a load —
+     the administration guide said Data Engineers could; corrected in both copies and the deck;
+   - the administration guide's first draft of its architecture named the media store as one of
+     the four ports; `00_ARCHITECTURE.md` names ComputePort, with the media store a narrower port
+     beside them — corrected before it shipped, and in the owner's deck;
+   - the demo screenshots show the Ingest Studio to the demo analyst, which the Analyst role does
+     not grant — the guide does not tell analysts they will see it;
+   - `tests/test_osprey_bundle.py` (8 cases) fails on a developer machine whose rendered
+     deployment carries the home folder's user name — the packaging gate refusing correctly; for B9.
+8. **Tests:** `test_docs_pdf.py` (10), `test_simple_markdown.py` (+7), `test_admin_guide.py` (both
+   copies), `test_doc_site.py` (+2, one replaced); plants red: 12 (renderer and PDF check), 4 (site),
+   1 (a flag missing from the package copy only).
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;

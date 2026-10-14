@@ -92,3 +92,43 @@ def test_renders_the_real_architecture_doc_without_crashing() -> None:
     assert "<pre><code" in html
     assert "<strong>" in html
     assert "<script" not in html.lower()
+
+
+def test_an_image_on_its_own_line_is_a_figure_with_its_caption() -> None:
+    """The install package's guides (ADR-114 Amendment 15) carry their screenshots this way."""
+    html = render_markdown("![The Start page, after sign-in](images/user/03-start.png)")
+    assert html == (
+        '<figure><img src="images/user/03-start.png" alt="The Start page, after sign-in">'
+        "<figcaption>The Start page, after sign-in</figcaption></figure>"
+    )
+
+
+def test_an_images_caption_and_path_are_escaped() -> None:
+    html = render_markdown('![a "quoted" <b>caption</b>](images/x.png)')
+    assert "<b>" not in html and "&quot;quoted&quot;" in html
+
+
+def test_an_inline_link() -> None:
+    html = render_inline("see [the guide](administration-guide.md#6-installing-enterprise) first")
+    assert html == (
+        'see <a href="administration-guide.md#6-installing-enterprise">the guide</a> first'
+    )
+
+
+def test_a_link_inside_inline_code_is_left_as_code() -> None:
+    assert render_inline("`[not](a-link)`") == "<code>[not](a-link)</code>"
+
+
+def test_a_script_address_is_never_a_link() -> None:
+    html = render_inline("[click](javascript:alert(1))")
+    assert "<a" not in html and "href" not in html
+
+
+def test_an_indented_line_continues_the_list_item_above_it() -> None:
+    html = render_markdown("- one item that wraps\n  onto a second line\n- two")
+    assert html == "<ul><li>one item that wraps onto a second line</li><li>two</li></ul>"
+
+
+def test_an_escaped_pipe_stays_inside_its_table_cell() -> None:
+    html = render_markdown("| A | B |\n| --- | --- |\n| `--cloud aws\\|azure` | two |")
+    assert "<td><code>--cloud aws|azure</code></td><td>two</td>" in html
