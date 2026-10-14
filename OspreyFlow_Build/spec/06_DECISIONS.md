@@ -9726,6 +9726,36 @@ Decision. The picker lists each original case once, in its usual order, followed
 
 Tests, shown red first: `nestCases` in `cases.test.ts` (order, a branch of a branch, an unseen original, nothing dropped) and the picker case in `CasePicker.test.tsx` (red: the branch was listed apart from its case).
 
+### ADR-084, Amendment 4 (14 October 2026) — one tree of cases and branches; a branch deleted from the Glass
+
+Status: accepted 14 October 2026 — the owner: "the current display method for the Branch and main case
+is very confusing, i need a method to delete a branch as through the Glass view", and of the options
+put to them, "One tree".
+
+Context. Two displays disagreed. The top bar's case menu listed every case and branch flat, each branch
+named "Branch of <case> (n nodes)"; the Cases drawer showed tabs, open or hidden, and a "Branches (n
+open of m)" list where a branch could be discarded — but never the branch on screen.
+
+Decision.
+
+1. **One tree, in both places.** The case menu and the Cases drawer show the same component
+   (`CaseTree`): each original case once, in `nestCases`' order (Amendment 3), its branches indented
+   beneath it, oldest first. A branch is named for what it holds and when it was made — "2 nodes · 14
+   Oct 16:40" (UTC) — while it keeps the name branching gave it, and by its own name once renamed.
+   The case on screen is marked ("you are here").
+2. **On a branch, the menu's button says where it sits:** the case it came from, then the branch
+   ("Operation Ledger (synthetic demo) › ⑂ 2 nodes · 14 Oct 16:40").
+3. **A branch's ⋯ offers Open, Rename and Delete in place.** Rename is its Author's; Delete is its
+   Author's or an administrator of the unit's, the same soft remove as any case (ADR-052 Amendment 7:
+   it leaves every list for everyone; nothing is deleted from the stores), asked once in the row.
+   **Deleting the branch on screen is allowed** and returns to the case it came from. A refusal is
+   said in the row and the branch stays.
+4. **Tabs go.** Opening, hiding and the open/hidden count leave the Glass; the server's per-account
+   `tab_hidden` flag is left unread.
+5. **Tests**, each shown red first: `CaseTree.test.tsx` (7; plants red: 5), `cases.test.ts` (+3),
+   `CaseSwitcher.test.tsx` (+1); `keyboard/case-tree.spec.ts` with `CASE_TREE_ACTIONS` (open, rename,
+   delete, delete the branch on screen).
+
 ### ADR-092, Amendment 2 (4 October 2026) — correction: no email could be written as a Document; the ontology now declares what it carries
 
 Seen by the owner on the live Enron case: *Show emails* put nothing on the canvas and *Extract entities* answered "'Document' does not declare properties 'event_id, message_id, sent_at' in its `properties` or `identifiers`". Both write an email as a `Document` with those three properties (ADR-089 step 3, ADR-092 step 1), and the ArcadeDB adapter checks every write against the ontology (`ontology/validation.py`), where `Document` declared only `title`; so every such write was refused, and no email ever became a Document on a real store.

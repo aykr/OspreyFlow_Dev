@@ -90,10 +90,24 @@ checking they are signed by this repository's release workflow; any other checko
 source (`install --build` builds on a tag too). Each release's notes are its section of
 `CHANGELOG.md`.
 
+**Is there a newer release?** Nothing checks on its own — the deployment never calls out. Ask:
+
 ```
-ospreyflow update --check              # is there a newer release? Admin → System says so too
-ospreyflow update                      # move to the newest (or --to vX.Y.Z)
+ospreyflow update --check     # asks the repository's releases; Admin → System shows the answer
 ```
+
+Run it whenever you like, or add it to this computer's scheduler (`0 8 * * 1 ospreyflow update
+--check` in cron, each Monday). A private repository needs `GITHUB_TOKEN` set to a token that can
+read it.
+
+**Updating** depends on how you installed:
+
+| Your install | Update it with |
+| --- | --- |
+| Lite, from a release tag | `ospreyflow update` (or `--to vX.Y.Z`) |
+| Lite, built from this checkout | `git pull`, then `ospreyflow start --build` — `update` refuses a built install |
+| Small | not yet by `update`: its backup step refuses a managed database (see the administration guide, section 14) |
+| Enterprise | check out the release's tag and run the install again; the chart upgrades in place |
 
 `update` checks every image's signature first and changes nothing if one fails; then it backs up
 every store, moves to the release and checks it is running. If anything goes wrong, it puts the
@@ -104,8 +118,6 @@ machine that can and carry it across; it is checked again there with no network 
 ospreyflow update --make-bundle ospreyflow-v1.2.0.tar --to v1.2.0     # on the connected machine
 ospreyflow update --from ospreyflow-v1.2.0.tar                         # on the one to update
 ```
-
-A private repository needs `GITHUB_TOKEN` set to a token that can read it.
 
 ## Where things are
 

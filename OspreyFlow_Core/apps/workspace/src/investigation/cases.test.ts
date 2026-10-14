@@ -122,89 +122,6 @@ describe("removing a case", () => {
   });
 });
 
-describe("branch tabs (ADR-084)", () => {
-  const made = (id: string, branchedFrom: string | null, at: string, extra = {}) => ({
-    id,
-    name: id,
-    level: "author" as const,
-    created_at: at,
-    created_by: "a",
-    branched_from: branchedFrom,
-    ...extra,
-  });
-
-  it("puts a case's own branches in one family, root first, oldest branch first", async () => {
-    const { branchFamily } = await import("./cases");
-    const cases = [
-      made("b2", "root", "2026-10-03T00:00:00Z"),
-      made("other", null, "2026-10-01T00:00:00Z"),
-      made("root", null, "2026-10-01T00:00:00Z"),
-      made("b1", "root", "2026-10-02T00:00:00Z"),
-    ];
-    const family = branchFamily(cases, "b2");
-    expect(family?.root.id).toBe("root");
-    expect(family?.branches.map((c) => c.id)).toEqual(["b1", "b2"]);
-  });
-
-  it("follows a branch of a branch up to the original case", async () => {
-    const { branchFamily } = await import("./cases");
-    const cases = [
-      made("root", null, "2026-10-01T00:00:00Z"),
-      made("b1", "root", "2026-10-02T00:00:00Z"),
-      made("b1a", "b1", "2026-10-03T00:00:00Z"),
-    ];
-    const family = branchFamily(cases, "b1a");
-    expect(family?.root.id).toBe("root");
-    expect(family?.branches.map((c) => c.id)).toEqual(["b1", "b1a"]);
-  });
-
-  it("treats the topmost case this account can see as the root when the original is not listed", async () => {
-    const { branchFamily } = await import("./cases");
-    const cases = [made("b1", "gone", "2026-10-02T00:00:00Z")];
-    const family = branchFamily(cases, "b1");
-    expect(family?.root.id).toBe("b1");
-    expect(family?.branches).toEqual([]);
-  });
-
-  it("has no family for a case that is not in the list", async () => {
-    const { branchFamily } = await import("./cases");
-    expect(branchFamily([], "nope")).toBeNull();
-  });
-
-  it("shows the open branches and the current one, and holds the closed ones back", async () => {
-    const { branchFamily, openTabs } = await import("./cases");
-    const cases = [
-      made("root", null, "2026-10-01T00:00:00Z"),
-      made("b1", "root", "2026-10-02T00:00:00Z", { tab_hidden: true }),
-      made("b2", "root", "2026-10-03T00:00:00Z"),
-      made("b3", "root", "2026-10-04T00:00:00Z", { tab_hidden: true }),
-    ];
-    const family = branchFamily(cases, "b3")!;
-    // b3 is hidden but it is the one on screen, so it stays in the strip.
-    expect(openTabs(family, "b3").map((c) => c.id)).toEqual(["b2", "b3"]);
-    expect(openTabs(family, "root").map((c) => c.id)).toEqual(["b2"]);
-  });
-
-  it("asks the tab route for exactly the case and the yes or no", async () => {
-    const { setTabHidden } = await import("./cases");
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 204, json: async () => ({}) });
-    await setTabHidden("http://api", "tok", "b1", true);
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://api/v1/investigations/b1/tab");
-    expect(init.method).toBe("PUT");
-    expect(JSON.parse(init.body as string)).toEqual({ hidden: true });
-  });
-
-  it("says so when the tab could not be closed, and does not pretend", async () => {
-    const { setTabHidden } = await import("./cases");
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) });
-    await expect(setTabHidden("http://api", "tok", "b1", true)).rejects.toThrow(/not found/i);
-  });
-});
-
-// The case picker lists each original case once with its branches indented beneath it (ADR-084
-// Amendment 3). The owner, 4 October 2026: three "Enron corpus · n selected" rows sat in the main
-// list beside the cases they came from, with nothing saying they were branches.
 describe("nestCases", () => {
   function listing(id: string, created: string, branchedFrom: string | null = null, name = id): CaseListing {
     return { id, name, level: "author", created_at: created, created_by: "a", branched_from: branchedFrom };
@@ -265,5 +182,49 @@ describe("caseIsOpenable", () => {
   it("is true when the server cannot be reached", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))));
     expect(await caseIsOpenable("http://test.invalid", "tok", "inv-1")).toBe(true);
+  });
+});
+
+// ADR-084 Amendment 4 (the owner, 14 October 2026: "the current display method for the Branch and main
+// case is very confusing, i need a method to delete a branch as through the Glass view").
+describe("a branch, named and placed in its case's tree", () => {
+  const listing = (over: Partial<CaseListing>): CaseListing => ({
+    id: "x", name: "", level: "author", created_at: "2026-10-14T16:40:00Z", created_by: "a", ...over,
+  });
+
+  it("is called by its size and when it was made, unless someone renamed it", async () => {
+    const { branchLabel } = await import("./cases");
+    expect(branchLabel(listing({ name: "Branch of Operation Ledger (synthetic demo) (2 nodes)" }))).toBe("2 nodes · 14 Oct 16:40");
+    expect(branchLabel(listing({ name: "Branch of Operation Ledger (1 node)" }))).toBe("1 node · 14 Oct 16:40");
+    expect(branchLabel(listing({ name: "Branch of Enron (2)" }))).toBe("Branch · 14 Oct 16:40");
+    expect(branchLabel(listing({ name: "Midland Pallets route" }))).toBe("Midland Pallets route");
+  });
+
+  it("goes back to the case it came from, or the oldest one this account can see", async () => {
+    const { returnFor } = await import("./cases");
+    const root = listing({ id: "r" });
+    const b1 = listing({ id: "b1", branched_from: "r" });
+    const b2 = listing({ id: "b2", branched_from: "b1" });
+    const orphan = listing({ id: "o", branched_from: "gone" });
+    expect(returnFor([root, b1, b2], "b2")?.id).toBe("b1");
+    expect(returnFor([root, b1, b2], "b1")?.id).toBe("r");
+    expect(returnFor([root, b1, b2], "r")).toBeNull();
+    expect(returnFor([orphan], "o")).toBeNull();
+  });
+
+  it("is renamed through the case's own route, refused in words", async () => {
+    const { renameCase } = await import("./cases");
+    const calls: [string, RequestInit][] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+      calls.push([url, init]);
+      return new Response("{}", { status: calls.length === 1 ? 200 : 403 });
+    }));
+    await renameCase("http://test.invalid", "tok", "b1", "  Midland Pallets route ");
+    expect(calls[0]?.[0]).toBe("http://test.invalid/v1/investigations/b1");
+    expect(calls[0]?.[1].method).toBe("PATCH");
+    expect(JSON.parse(String(calls[0]?.[1].body))).toEqual({ name: "Midland Pallets route" });
+    await expect(renameCase("http://test.invalid", "tok", "b1", "x")).rejects.toThrow(
+      "Only the case's Author can rename it.",
+    );
   });
 });

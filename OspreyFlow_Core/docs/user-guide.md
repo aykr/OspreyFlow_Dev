@@ -67,8 +67,14 @@ Everything happens inside a **case**. Your level on a case decides what you may 
 Whoever creates a case is its first Author. **A level never widens what you can see**: a record above
 your clearance stays hidden in a case you author. A case you have no level on does not appear at all.
 
-The case menu at the top left switches case and opens the Cases drawer, where an Author manages
-**Who can open this case**. A link to a case opens it directly. A case reads only its own
+The case menu at the top left lists your cases as a tree: each case with its **branches** beneath
+it (a branch is a case of its own, made from nodes you chose — section 5.2), named for how many nodes it
+was made from and when, until you rename it. On a branch, the menu's button reads *case › ⑂ branch*.
+Each branch's **⋯** offers **Open**, **Rename** and **Delete**; Delete asks once, and the branch leaves
+every list for everyone while the case it came from is untouched. Deleting the branch you are in takes
+you back to its case. Renaming and deleting are for the branch's Author (an administrator may also
+delete). The rail's **Cases** drawer shows the same tree, with **Who can open this case**, which the
+Author manages. A link to a case opens it directly. A case reads only its own
 **datasets**: search, paths, Explore and watches all stay within them.
 
 ## 5. The Glass

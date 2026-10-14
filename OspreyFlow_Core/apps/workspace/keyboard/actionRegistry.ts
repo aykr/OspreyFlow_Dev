@@ -406,6 +406,15 @@ export const CASE_ACCESS_ACTIONS = defineActionRegistry("CASE_ACCESS_ACTIONS", [
   "remove-an-accounts-access-by-keyboard",
 ] as const);
 
+/** One tree of cases and their branches (ADR-084 Amendment 4): a branch opened, renamed and deleted
+ * from its row; deleting the branch on screen returns to its case. `keyboard/case-tree.spec.ts`. */
+export const CASE_TREE_ACTIONS = defineActionRegistry("CASE_TREE_ACTIONS", [
+  "open-a-branch-from-the-tree",
+  "rename-a-branch-from-the-tree",
+  "delete-a-branch-from-the-tree",
+  "delete-the-branch-you-are-in-returns-to-its-case",
+] as const);
+
 /** Where to start in a case's data (ADR-100): a node from the most connected, or from a type's
  * most connected, put on the canvas; a ranking paged. `keyboard/explore.spec.ts`. */
 export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [

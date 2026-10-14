@@ -217,15 +217,6 @@ export function openCase(
   navigate(caseUrl(id, view));
 }
 
-/** A case and the branches made from it, for the strip of tabs (ADR-084). A branch of a branch
- * belongs to the original case's family too, so every tab leads back to the same place. The root is
- * the topmost case this account can see: if the original was removed or never shared, the oldest
- * ancestor that is listed stands in for it. */
-export interface BranchFamily {
-  root: CaseListing;
-  branches: CaseListing[];
-}
-
 function rootOf(byId: Map<string, CaseListing>, start: CaseListing): CaseListing {
   let top = start;
   const seen = new Set<string>([start.id]);
@@ -235,17 +226,6 @@ function rootOf(byId: Map<string, CaseListing>, start: CaseListing): CaseListing
     seen.add(parent.id);
     top = parent;
   }
-}
-
-export function branchFamily(cases: readonly CaseListing[], currentId: string): BranchFamily | null {
-  const byId = new Map(cases.map((entry) => [entry.id, entry]));
-  const current = byId.get(currentId);
-  if (!current) return null;
-  const root = rootOf(byId, current);
-  const branches = cases
-    .filter((entry) => entry.id !== root.id && rootOf(byId, entry).id === root.id)
-    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
-  return { root, branches };
 }
 
 /** The picker's rows (ADR-084 Amendment 3): each original case in `orderCases`' order, followed by
@@ -270,34 +250,58 @@ export function nestCases(
   ]);
 }
 
-/** The branches shown as tabs: those this account has not closed, and always the one on screen. */
-export function openTabs(family: BranchFamily, currentId: string): CaseListing[] {
-  return family.branches.filter((entry) => !entry.tab_hidden || entry.id === currentId);
-}
-
-/** Closes (`hidden`) or reopens a case's tab for this account only. */
-export async function setTabHidden(
-  apiBaseUrl: string,
-  bearerToken: string,
-  id: string,
-  hidden: boolean,
-): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/v1/investigations/${encodeURIComponent(id)}/tab`, {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ hidden }),
-  });
-  if (response.status === 404) {
-    throw new Error("That case was not found. It may have been removed.");
-  }
-  if (!response.ok) {
-    throw new Error(`The tab could not be ${hidden ? "closed" : "shown"} (${response.status}).`);
-  }
-}
 
 /** A dataset as the Glass names it: its name and its id, so two that read alike are told apart
  * (ADR-099 Amendment 6). An id of twelve characters or fewer (the seeds' `enron`) is shown whole;
  * a longer one (a ULID) by its last five. */
 export function datasetLabel(id: string, name: string): string {
   return `${name} · ${id.length <= 12 ? id : `\u2026${id.slice(-5)}`}`;
+}
+
+// --- A branch in its case's tree (ADR-084 Amendment 4) ------------------------------------------
+// The owner, 14 October 2026: "the current display method for the Branch and main case is very
+// confusing, i need a method to delete a branch as through the Glass view". A branch is shown beneath
+// its case, named for what it holds and when it was made rather than by repeating the case's name.
+
+const BRANCH_DEFAULT = /^Branch of .+ \((\d+) (?:node|nodes)\)$/;
+
+function shortStamp(made: Date): string {
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${made.getUTCDate()} ${MONTHS[made.getUTCMonth()]} ${two(made.getUTCHours())}:${two(made.getUTCMinutes())}`;
+}
+
+/** A branch's own name: as renamed by someone, or, while it keeps the name branching gave it, how
+ * many nodes it was made from and when (UTC). */
+export function branchLabel(entry: Pick<CaseListing, "name" | "created_at">): string {
+  const name = entry.name.trim();
+  const made = new Date(entry.created_at);
+  const when = Number.isNaN(made.getTime()) ? "" : ` · ${shortStamp(made)}`;
+  const sized = BRANCH_DEFAULT.exec(name);
+  if (sized) {
+    const count = Number(sized[1]);
+    return `${count} ${count === 1 ? "node" : "nodes"}${when}`;
+  }
+  if (!name || name.startsWith("Branch of ")) return `Branch${when}`;
+  return name;
+}
+
+/** The case a branch came from, when this account can see it: where deleting the branch you are in
+ * takes you. `null` for an original case, or a branch whose original is not listed. */
+export function returnFor(cases: readonly CaseListing[], id: string): CaseListing | null {
+  const entry = cases.find((c) => c.id === id);
+  if (!entry?.branched_from) return null;
+  return cases.find((c) => c.id === entry.branched_from) ?? null;
+}
+
+/** Renames a case (its Author only: the Conduit decides). */
+export async function renameCase(apiBaseUrl: string, bearerToken: string, id: string, name: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/v1/investigations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name.trim() }),
+  });
+  if (response.status === 403) throw new Error("Only the case's Author can rename it.");
+  if (response.status === 404) throw new Error("That case was not found. It may have been removed.");
+  if (response.status === 422) throw new Error("A case needs a name.");
+  if (!response.ok) throw new Error(`The case could not be renamed (${response.status}).`);
 }

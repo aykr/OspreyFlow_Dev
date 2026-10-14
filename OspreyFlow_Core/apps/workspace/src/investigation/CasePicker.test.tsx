@@ -189,7 +189,8 @@ describe("CaseSwitcher (the header, and the Ingest Studio)", () => {
     await openMenu();
 
     const current = within(screen.getByRole("group", { name: "Case menu" })).getByRole("button", { name: "Fixture Corp" });
-    expect(current.getAttribute("aria-current")).toBe("true");
+    // ADR-084 Amendment 4: the menu is the case tree, which marks the case on screen as the page.
+    expect(current.getAttribute("aria-current")).toBe("page");
     fireEvent.click(current);
     expect(onOpen).not.toHaveBeenCalled();
   });

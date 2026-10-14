@@ -4,7 +4,8 @@
 import { useEffect, useState } from "react";
 
 import { DropdownPanel } from "../design/primitives/DropdownPanel";
-import { type CaseListing, caseLabel, listCases, orderCases, scopeBadge } from "./cases";
+import { type CaseListing, branchLabel, caseLabel, listCases, returnFor, scopeBadge } from "./cases";
+import { CaseTree } from "./CaseTree";
 import { NewCaseForm } from "./NewCaseForm";
 
 export interface CaseSwitcherProps {
@@ -14,6 +15,8 @@ export interface CaseSwitcherProps {
   onOpen: (id: string) => void;
   /** Show the full list of cases (the picker) over the workspace. Absent: no such button. */
   onBrowse?: () => void;
+  /** An administrator of the unit may delete any branch in it (ADR-084 Amendment 4). */
+  isAdministrator?: boolean;
 }
 
 export function CaseSwitcher({
@@ -22,6 +25,7 @@ export function CaseSwitcher({
   currentId,
   onOpen,
   onBrowse,
+  isAdministrator = false,
 }: CaseSwitcherProps) {
   const [cases, setCases] = useState<CaseListing[]>([]);
   const [creating, setCreating] = useState(false);
@@ -42,7 +46,13 @@ export function CaseSwitcher({
   }, [apiBaseUrl, bearerToken]);
 
   const current = cases.find((entry) => entry.id === currentId);
-  const currentName = current ? caseLabel(current) : "Current case";
+  // ADR-084 Amendment 4: on a branch, where it sits — the case it came from, then the branch.
+  const parent = current?.branched_from ? returnFor(cases, current.id) : null;
+  const currentName = current
+    ? current.branched_from
+      ? `${parent ? `${caseLabel(parent)} › ` : ""}${branchLabel(current)}`
+      : caseLabel(current)
+    : "Current case";
   const scope = scopeBadge(current?.datasets);
   return (
     <>
@@ -51,7 +61,15 @@ export function CaseSwitcher({
       label={
         <>
           <span className="visually-hidden">Case: </span>
-          <span>{currentName}</span>
+          {current?.branched_from ? (
+            <span>
+              {parent && `${caseLabel(parent)} › `}
+              <span aria-hidden="true">⑂ </span>
+              {branchLabel(current)}
+            </span>
+          ) : (
+            <span>{currentName}</span>
+          )}
         </>
       }
       title={currentName}
@@ -60,22 +78,18 @@ export function CaseSwitcher({
     >
       {(close) => (
         <>
-          <div className="menu-panel__list">
-            {orderCases(cases).map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                className="menu-panel__item"
-                aria-current={entry.id === currentId ? "true" : undefined}
-                onClick={() => {
-                  close();
-                  if (entry.id !== currentId) onOpen(entry.id);
-                }}
-              >
-                {caseLabel(entry)}
-              </button>
-            ))}
-          </div>
+          {/* ADR-084 Amendment 4: the same tree as the Cases drawer — each case, its branches beneath. */}
+          <CaseTree
+            apiBaseUrl={apiBaseUrl}
+            bearerToken={bearerToken}
+            currentId={currentId}
+            cases={cases}
+            isAdministrator={isAdministrator}
+            onOpen={(id) => {
+              close();
+              onOpen(id);
+            }}
+          />
           <hr className="menu-panel__rule" />
           {onBrowse && (
             <button

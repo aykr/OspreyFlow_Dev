@@ -49,3 +49,25 @@ describe("the badge beside the case's name", () => {
     expect(badge.closest("button")).toBeNull();
   });
 });
+
+// ADR-084 Amendment 4: on a branch the menu's button says where it sits — its case, then the branch —
+// and the menu is the same tree as the Cases drawer.
+describe("CaseSwitcher on a branch", () => {
+  it("names the case, then the branch, and lists the tree", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify([
+            { id: "c1", name: "Ledger", level: "author", created_at: "2026-10-01T00:00:00Z", created_by: "a" },
+            { id: "b1", name: "Branch of Ledger (2 nodes)", level: "author", created_at: "2026-10-14T16:40:00Z", created_by: "a", branched_from: "c1" },
+          ]),
+        ),
+      ),
+    );
+    render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="b1" onOpen={() => undefined} />);
+    const button = await screen.findByRole("button", { name: "Case: Ledger › 2 nodes · 14 Oct 16:40" });
+    button.click();
+    expect(await screen.findByRole("list", { name: "Cases and their branches" })).toBeTruthy();
+  });
+});

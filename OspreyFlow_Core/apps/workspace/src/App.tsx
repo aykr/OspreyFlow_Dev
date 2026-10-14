@@ -77,7 +77,7 @@ import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
 import { IngestStudio } from "./ingest/IngestStudio";
 import { CasePicker } from "./investigation/CasePicker";
 import { CaseSwitcher } from "./investigation/CaseSwitcher";
-import { CaseTabs } from "./investigation/CaseTabs";
+import { CaseTree } from "./investigation/CaseTree";
 import { CaseAccessPanel } from "./investigation/CaseAccessPanel";
 import { CaseDatasets } from "./investigation/CaseDatasets";
 import { caseIsOpenable, openCase } from "./investigation/cases";
@@ -1087,6 +1087,7 @@ export function App() {
             bearerToken={bearerToken}
             currentId={investigationId}
             onBrowse={() => setBrowsingCases(true)}
+            isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
             onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
           />
         }
@@ -1797,15 +1798,14 @@ export function App() {
           }}
         />
       </Drawer>
-      {/* ADR-097 Amendment 1: the case's tabs, as a list in a panel from the rail. */}
+      {/* ADR-084 Amendment 4: the cases and their branches, one tree, as the case menu shows them. */}
       <Drawer open={casesOpen} onClose={() => setCasesOpen(false)} title="Cases">
         <div style={{ display: "grid", gap: "var(--sp-8)" }}>
-          <CaseTabs
+          <CaseTree
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
             currentId={investigationId}
             isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
-            layout="list"
             onOpen={(id) => {
               setCasesOpen(false);
               openCase(id);

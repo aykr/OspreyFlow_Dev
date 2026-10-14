@@ -450,22 +450,40 @@ and shares its retention.
 ## 14. Updates
 
 Releases are tagged `vMAJOR.MINOR.PATCH`, with signed images and a signed list of every image by
-digest.
+digest. Each release's notes are its section of `CHANGELOG.md`.
 
-- `ospreyflow update --check` asks the repository's releases (from this computer — the deployment
-  never calls out) and leaves the answer where Admin → System shows it.
-- `ospreyflow update` moves to the newest release (`--to vX.Y.Z` for another): it checks every
-  signature, **backs everything up**, moves the checkout to the tag, starts the release's images
-  and checks each service runs them. If anything fails it **rolls back** — the previous release and
-  its data restored from the backup just taken — and says so.
-- **Without internet**: on a machine with it, `ospreyflow update --make-bundle <file>` writes the
-  release, verified, to one file; carry it over and run `ospreyflow update --from <file>`.
+**Which installs `update` moves, and how the others are updated:**
 
-An update moves forward only; local changes to files the release also changes stop it ("commit or
-undo them first"). A deployment built from a checkout (`--build`, or no release tag) is updated by
-moving the checkout and `ospreyflow start --build`. **Enterprise** is updated by moving the
-checkout to the release's tag and running the install again: the chart is upgraded in place, with
-every password and account kept.
+| Your install | How it is updated |
+| --- | --- |
+| Lite, installed from a release tag | `ospreyflow update` (below) |
+| Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so |
+| Small | **Not yet by `update`**: its first step, the backup, refuses a deployment on a managed database (section 13). The cloud's own backups protect the data |
+| Enterprise | Move the checkout to the release's tag and run the install again: the chart is upgraded in place, every password and account kept |
+
+**Checking for a newer release.** The deployment never calls out to look. Run
+`ospreyflow update --check` on the computer that holds the checkout: it asks the repository's
+releases and leaves the answer where Admin → System shows it, with when it asked: "*vX.Y.Z* is
+available", "Up to date", or "The last update check could not answer" and why; before the first
+check it says "Not checked for updates yet", and an install built from its checkout is told it moves
+with `git pull` and `ospreyflow start --build`. It checks only when you run it — to be told each
+week, add it to that computer's own scheduler, for example a cron line
+`0 8 * * 1 ospreyflow update --check`. If the repository is private, set `GITHUB_TOKEN` to a token
+that can read it first; without one the check cannot answer, and says so.
+
+**Moving to a release.**
+
+- `ospreyflow update` moves to the newest release (`--to vX.Y.Z` for another; `--yes` asks
+  nothing). It checks every image's signature first and changes nothing if one fails; refuses if a
+  local change to a file would be overwritten ("commit or undo them first"); **backs everything up**;
+  moves the checkout to the tag; starts the release's images and checks each service runs them. If
+  anything fails after the backup it **rolls back** — the previous release and its data restored
+  from the backup just taken — and says so.
+- **Without internet**: on a machine with it, `ospreyflow update --make-bundle <file> --to
+  vX.Y.Z` writes the release, verified, to one file; carry it over and run
+  `ospreyflow update --from <file>`, which checks it again with no network.
+
+An update moves forward only.
 
 ## 15. Scheduled and watched pipelines
 

@@ -198,7 +198,7 @@ hairline) it says what the canvas holds, offers the case's three latest history 
 (each restored as the History drawer restores one) and the keys worth knowing (`/`, the arrows, Enter, F,
 Escape, `?`). It is open until the person closes it once (kept per person in this browser); `?` anywhere
 but a text field opens it again (`keyboard/welcome.spec.ts`). *Cases* opens a
-drawer listing the open cases (the strip of tabs of ADR-084, as a list) with *Browse all cases*. The
+drawer with the tree of cases and branches (ADR-084 Amendment 4) and *Browse all cases*. The
 **view toolbar** above the canvas holds what belongs to that view alone: the resolution threshold on
 the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at the foot of the canvas
 appears when anything is selected (ADR-097 step 1; `keyboard/selection.spec.ts`), on the inverse
@@ -786,7 +786,14 @@ The selection is built with the lasso, or by clicking nodes with Shift, Ctrl or 
 
 Each branch is a case saved for the analyst who made it (they are its Author, and it is visible to nobody else until they share it). It starts with the resolution threshold, layout and timeline brush of its own, not shared with the case it came from. The events behind the links it copied (the timeline's counts, *Show emails*, an email to extract from) are read from the case they were loaded into, for the links the branch holds, wherever the analyst can see that case; nothing is copied (ADR-084 Amendment 2).
 
-The open cases and their branches are listed in the **Cases** drawer on the left rail (ADR-097 Amendment 1 decision 2; the strip of tabs that sat under the top bar left its row for it): the case first, each open branch indented beneath it, each with a close button; the one on screen is marked. **Closing one only hides it** from this analyst's list (a flag kept for them alone, which says nothing about anyone else's view). The **Branches** list in the drawer shows every branch, open or hidden, as "Branches (n open of m)", so the analyst always sees the whole set they are working across; from it a branch is opened, brought back into the list, or **discarded**. Discarding asks first and is the same soft remove as for any case: it leaves every list and nothing is deleted. Only an Author of the branch (or an administrator of the unit) is offered it, and never for the branch on screen.
+The cases and their branches are one tree (ADR-084 Amendment 4), shown alike in the top bar's case
+menu and the **Cases** drawer on the left rail: each original case once, its branches indented beneath
+it, a branch named for what it holds and when it was made ("2 nodes · 14 Oct 16:40") until renamed; the
+case on screen is marked "you are here", and on a branch the menu's button reads *case › ⑂ branch*. A
+branch's ⋯ offers **Open**, **Rename** (its Author) and **Delete** (its Author, or an administrator of
+the unit) in place; Delete asks once — "It leaves every list for everyone; the case it came from is
+untouched" — and is the same soft remove as any case. Deleting the branch on screen returns to the case
+it came from (`keyboard/case-tree.spec.ts`).
 
 Opening another case or branch from the drawer reloads the page, as every case switch does (§1): the working set, timeline and delta stream are each built once per case. The expansions and filters of a case are kept on the server, so they are still there; where nodes sit on screen and what was selected are not. Having several canvases live in one page, so that switching is instant and keeps the layout, is a later step (ADR-084).
 
