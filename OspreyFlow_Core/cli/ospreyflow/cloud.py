@@ -10,12 +10,21 @@
 4. **The first administrator's one-time code** is read from the cloud's secret store once the
    server has put it there, shown once, and deleted from the store.
 
+`ospreyflow install --mode enterprise --cloud aws|azure` (ADR-114 Amendment 19) builds the cluster
+the same way (`deploy/opentofu/cluster/<cloud>`, state in `.cloud/enterprise-<cloud>/`), then runs
+the cluster install from what OpenTofu made: the module's answers (the cluster's storage classes and
+every managed service) joined to the operator's, a kubeconfig of the install's own in the state
+folder (the operator's `~/.kube/config` is not touched), and the managed services' passwords and
+keys read from the cloud's secret store into the cluster install's environment — never onto a
+command line, into `osprey.yaml` or onto the screen.
+
 Nothing here holds a cloud credential: OpenTofu and the cloud's own command line use whatever the
 operator is signed in as.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import socket
@@ -24,6 +33,8 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
+
+import yaml
 
 from .home import CommandRefused
 
@@ -172,4 +183,156 @@ def build_small(ctx: _Context, args: argparse.Namespace, answers: Answers) -> in
     print(f"The first administrator signs in as admin with this one-time code: {holder['code']}")
     print("It is shown once and is gone from the secret store; they choose a password at sign-in.")
     print(f"OpenTofu's state is in {state}: keep it, privately — it is how the server is changed.")
+    return 0
+
+
+# ---- Enterprise: the cluster (ADR-114 Amendment 19) --------------------------------------------
+
+
+def cluster_variables(answers: Answers) -> list[str]:
+    cloud = answers.cloud
+    for needed in ("region", "domain"):
+        if not cloud.get(needed):
+            raise CloudRefused(f"the answers give no cloud {needed}; a cluster needs one")
+    if not answers.api_cidrs:
+        raise CloudRefused(
+            "the answers give no cloud api_cidrs: the addresses this machine and the other "
+            "operators work from, the only ones the cluster's API will answer"
+        )
+    values: dict[str, str] = {
+        "region": cloud["region"],
+        "domain": cloud["domain"],
+        "namespace": answers.cluster.get("namespace", "ospreyflow"),
+        "admin_email": cloud.get("admin_email", ""),
+        "api_cidrs": json.dumps(list(answers.api_cidrs)),
+    }
+    if cloud.get("size"):
+        values["size"] = cloud["size"]
+    return [f"-var={key}={value}" for key, value in values.items()]
+
+
+def _check_cluster_answers(provider: str, answers: Answers) -> None:
+    given = answers.cloud.get("provider")
+    if given and given != provider:
+        raise CloudRefused(
+            f"the answers' cloud provider is {given}, but --cloud {provider} was given; "
+            "they must agree"
+        )
+    if answers.external:
+        raise CloudRefused(
+            "with --cloud, OpenTofu makes the managed services and names them itself: take "
+            "external: out of the answers (or leave out --cloud to install onto services of "
+            "your own)"
+        )
+    made = sorted({"storage_class", "shared_storage_class"} & set(answers.cluster))
+    if made:
+        raise CloudRefused(
+            f"with --cloud, OpenTofu makes the storage classes: take {', '.join(made)} out of "
+            "cluster: in the answers"
+        )
+
+
+def _secret_commands(provider: str, outputs: dict[str, Any]) -> dict[str, tuple[str, list[str]]]:
+    """Each environment variable the cluster install reads, with the secret it comes from and the
+    command that reads that secret's value."""
+    if provider == "aws":
+        region = str(outputs["region"])
+
+        def read(secret: str) -> list[str]:
+            return ["aws", "secretsmanager", "get-secret-value", "--secret-id", secret,
+                    "--region", region, "--query", "SecretString", "--output", "text"]  # fmt: skip
+
+        names = {"OSPREY_POSTGRES_PASSWORD": "database_password_secret",
+                 "VALKEY_PASSWORD": "valkey_token_secret"}  # fmt: skip
+    else:
+
+        def read(secret: str) -> list[str]:
+            return ["az", "keyvault", "secret", "show", "--id", secret, "--query", "value",
+                    "--output", "tsv"]  # fmt: skip
+
+        names = {"OSPREY_POSTGRES_PASSWORD": "database_password_secret",
+                 "VALKEY_PASSWORD": "valkey_token_secret",
+                 "AZURE_STORAGE_KEY": "media_key_secret"}  # fmt: skip
+    return {env: (str(outputs[key]), read(str(outputs[key]))) for env, key in names.items()}
+
+
+def _read_secrets(ctx: _Context, provider: str, outputs: dict[str, Any]) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for env, (secret, argv) in _secret_commands(provider, outputs).items():
+        code, said = ctx.capture(argv)
+        value = said.strip() if code == 0 else ""
+        if value and provider == "aws" and env == "OSPREY_POSTGRES_PASSWORD":
+            # RDS keeps its password as JSON: {"username": …, "password": …}.
+            try:
+                held = json.loads(value)
+                value = str(held["password"]) if isinstance(held, dict) else ""
+            except (ValueError, KeyError):
+                value = ""
+        if not value:
+            raise CloudRefused(
+                f"could not read {env}'s value from {secret}: check this machine's signed-in "
+                "identity may read it, and run the install again (OpenTofu will change nothing)"
+            )
+        values[env] = value
+    return values
+
+
+def _kubeconfig_steps(provider: str, outputs: dict[str, Any], path: str) -> list[list[str]]:
+    name = str(outputs["cluster_name"])
+    if provider == "aws":
+        return [["aws", "eks", "update-kubeconfig", "--name", name, "--region",
+                 str(outputs["region"]), "--kubeconfig", path]]  # fmt: skip
+    return [
+        ["az", "aks", "get-credentials", "--name", name, "--resource-group",
+         str(outputs["resource_group"]), "--file", path, "--overwrite-existing"],
+        # AKS here has no local accounts: kubectl signs in as the operator's own Entra ID identity.
+        ["kubelogin", "convert-kubeconfig", "-l", "azurecli", "--kubeconfig", path],
+    ]  # fmt: skip
+
+
+def build_enterprise(ctx: _Context, args: argparse.Namespace, answers: Answers) -> int:
+    provider = str(args.cloud)
+    _check_cluster_answers(provider, answers)
+    variables = cluster_variables(answers)
+    module = ctx.product / "deploy" / "opentofu" / "cluster" / provider
+    if not module.is_dir():
+        raise CloudRefused(f"this checkout has no OpenTofu module for {provider} ({module})")
+    state = ctx.product / ".cloud" / f"enterprise-{provider}"
+    state.mkdir(parents=True, exist_ok=True)
+    os.chmod(state, 0o700)
+    tofu_env = {"TF_DATA_DIR": str(state / ".terraform")}
+    chdir = f"-chdir={module}"
+    state_file = f"-state={state / 'terraform.tfstate'}"
+    plan_file = str(state / "plan.bin")
+
+    def tofu(name: str, *argv: str) -> None:
+        ctx.step(name, ["tofu", chdir, *argv], env=tofu_env)
+
+    tofu("prepare OpenTofu", "init", "-input=false")
+    tofu("plan the cluster", "plan", "-input=false", state_file, f"-out={plan_file}", *variables)
+    if not args.yes and ctx.ask("Build this in your cloud account? (yes/no)", "no") != "yes":
+        print("Nothing was built. The plan is above; run the install again to build it.")
+        return 0
+    tofu("build the cluster", "apply", "-input=false", state_file, plan_file)
+    code, said = ctx.capture(["tofu", chdir, "output", state_file, "-json"], env=tofu_env)
+    if code != 0:
+        raise CloudRefused("OpenTofu built the cluster but would not say what it built")
+    outputs = {key: value["value"] for key, value in json.loads(said).items()}
+
+    made = yaml.safe_load(str(outputs["install_answers"])) or {}
+    answers = dataclasses.replace(
+        answers,
+        cluster={**answers.cluster, **{k: str(v) for k, v in made.get("cluster", {}).items()}},
+        external=made.get("external", {}),
+    )
+    kubeconfig = str(state / "kubeconfig")
+    for argv in _kubeconfig_steps(provider, outputs, kubeconfig):
+        ctx.step("point the install at the cluster", argv)
+    environ = {"KUBECONFIG": kubeconfig, **_read_secrets(ctx, provider, outputs)}
+
+    from .main import _install_on_cluster
+
+    _install_on_cluster(ctx, args, answers, env=environ)
+    print(f"OpenTofu's state is in {state}: keep it, privately — it is how the cluster is changed,")
+    print("and it holds secrets. kubectl reaches the cluster with KUBECONFIG=" + kubeconfig + ".")
     return 0

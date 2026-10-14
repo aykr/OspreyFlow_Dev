@@ -152,3 +152,20 @@ def test_enterprise_checks_kubectl_helm_and_a_cluster_that_answers(tmp_path: Pat
     checks = _by_name(run_doctor("enterprise", probes, product=tmp_path))
     assert {n for n, c in checks.items() if not c.ok} == {"kubectl", "helm", "cluster"}
     assert "kubectl" in checks["cluster"].fix
+
+
+def test_enterprise_building_its_cluster_checks_the_build_tools_not_a_cluster(
+    tmp_path: Path,
+) -> None:
+    """ADR-114 Amendment 19: with `--cloud` the cluster does not exist yet — so no cluster check —
+    and OpenTofu, the cloud's command line, kubectl and Helm are needed; on Azure kubelogin too,
+    since the cluster takes Entra ID sign-ins only."""
+    probes = FakeProbes()
+    probes.kube = None
+    checks = _by_name(run_doctor("enterprise", probes, product=tmp_path, cloud="aws"))
+    assert "cluster" not in checks and all(c.ok for c in checks.values()), checks
+    assert {"kubectl", "helm", "tofu", "cloud-cli"} <= set(checks) and "kubelogin" not in checks
+    probes.missing = {"tofu", "az", "kubelogin"}
+    checks = _by_name(run_doctor("enterprise", probes, product=tmp_path, cloud="azure"))
+    assert {n for n, c in checks.items() if not c.ok} == {"tofu", "cloud-cli", "kubelogin"}
+    assert "Entra ID" in checks["kubelogin"].says

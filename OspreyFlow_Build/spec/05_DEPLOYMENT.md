@@ -893,7 +893,10 @@ OpenSearch, EFS) and `cluster/azure` (AKS, PostgreSQL flexible server, Azure Cac
 Azure Files; search and the S3-protocol stores in the cluster) make the cluster and its managed
 services, with the API open only to the operator's addresses, the stores reached only from inside the
 network, network policy enforced, and both storage classes made. Each writes `install_answers` with no
-secret in it; the passwords and keys are named, in the cloud's secret store.
+secret in it; the passwords and keys are named, in the cloud's secret store. `ospreyflow install
+--mode enterprise --cloud aws|azure` (Amendment 19) builds it on the operator's yes, from answers
+naming `cloud.api_cidrs`, and installs onto it with a kubeconfig of its own and those secrets read
+into the install's environment only.
 
 **The install** (Amendment 16): `ospreyflow install --mode enterprise`, from a machine whose
 `kubectl` and `helm` reach the cluster, with the answers naming the managed services (`external:`)

@@ -13119,6 +13119,47 @@ it can be overruled).
     public subnets) first passed unnoticed, because the mock provider gives `public[i]` and
     `private[i]` the same identifier; the run now pins each set to an identifier of its own.
 
+### ADR-114, Amendment 19 (14 October 2026) — B7: the Enterprise install builds its own cluster
+
+Status: accepted 14 October 2026 (mine, within the owner's "proceed to the next stage"; recorded so
+it can be overruled).
+
+1. **`ospreyflow install --mode enterprise --cloud aws|azure`** does for a cluster what `--cloud`
+   does for Small (Amendment 10 point 1): OpenTofu plans the module of Amendment 18, builds on the
+   operator's yes (or `--yes`), and keeps its state in `.cloud/enterprise-<cloud>/`, readable only by
+   its owner. Without `--cloud`, the install of Amendment 16 is unchanged: onto a cluster kubectl
+   already reaches, with the managed services named by hand.
+2. **`cloud.api_cidrs`** is a new answer: the addresses the cluster's API (and on Azure the Key
+   Vault) answers, given to OpenTofu as `api_cidrs`. It is for Enterprise only, a list of address
+   ranges, at least one, never a `/0`; it goes no further than the build — not into `osprey.yaml`.
+3. **The module's answers join the operator's**: the cluster's storage classes and `external:`
+   come from OpenTofu's `install_answers`; with `--cloud`, answers that give their own `external:`
+   or storage classes are refused, as are answers whose `cloud.provider` disagrees with `--cloud`.
+4. **A kubeconfig of the install's own**, `.cloud/enterprise-<cloud>/kubeconfig`, made by `aws eks
+   update-kubeconfig --kubeconfig` or by `az aks get-credentials --file` and `kubelogin
+   convert-kubeconfig -l azurecli`; the operator's `~/.kube/config` is not touched. The cluster
+   install runs with `KUBECONFIG` set to it.
+5. **The secrets travel by environment only.** Each secret OpenTofu named is read with the
+   operator's own identity (`aws secretsmanager get-secret-value`, the RDS one's JSON taking its
+   `password`; `az keyvault secret show --id`) into `OSPREY_POSTGRES_PASSWORD`, `VALKEY_PASSWORD`
+   and on Azure `AZURE_STORAGE_KEY`, given to the cluster install's environment and to no other
+   step; none is on a command line, in `osprey.yaml` or printed. A secret that cannot be read stops
+   the install, naming the secret and not its value.
+6. **The doctor**, with `--cloud`, checks OpenTofu, the cloud's command line, kubectl and Helm, and
+   on Azure kubelogin — and not that a cluster answers, since none exists yet.
+7. **The administration guide gains its Enterprise chapter** (section 6; the later sections
+   renumbered), and the README its Enterprise build. **Found writing it: nothing backs up the graph
+   store or the analytics database on Enterprise** — `ospreyflow backup` drives a Compose
+   deployment, and both stores run in the cluster. The guide says so and points to the cloud's
+   volume snapshots; a cluster backup is an open gap for the owner to schedule. **Also found:**
+   `--chart-values` (Amendment 16) was never in the guide, so `test_admin_guide.py` had been red
+   since that commit; the Enterprise chapter now names it.
+8. **Not proved:** no real cloud. The commands each step runs are taken from the clouds' own
+   command lines as documented; the fake runner models a refused secret read and an RDS secret
+   without a password.
+9. **Tests:** `tests/cli/test_cluster_cloud_install.py` (11), `test_answers.py` (+3),
+   `test_doctor.py` (+1); red first; plants red: 18, each failing the case that names its fault.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;

@@ -214,8 +214,25 @@ def run_doctor(
             *(_port_check(probes, port) for port in LITE_PORTS),
         ]
     if mode == "enterprise":
-        # ADR-114 Amendment 16: onto a cluster `kubectl` already reaches. OpenTofu and the cloud's
-        # command line arrive with the stage that builds the cluster.
+        kube_tools = [
+            _tool(probes, "kubectl", "kubectl", "kubectl",
+                  "Install kubectl: https://kubernetes.io/docs/tasks/tools/."),
+            _tool(probes, "helm", "helm", "Helm", "Install Helm: https://helm.sh/docs/intro/install/."),
+        ]  # fmt: skip
+        if cloud:
+            # ADR-114 Amendment 19: the cluster is built first, so there is none to reach yet.
+            checks = [git, uv, *kube_tools, *_build_tools(probes, mode, cloud)]
+            if cloud == "azure":
+                checks.append(
+                    _tool(
+                        probes, "kubelogin", "kubelogin", "kubelogin",
+                        "Install it: https://azure.github.io/kubelogin/install.html "
+                        "(or `az aks install-cli`).",
+                        " (the cluster takes Entra ID sign-ins only, through kubelogin)",
+                    )
+                )  # fmt: skip
+            return checks
+        # ADR-114 Amendment 16: onto a cluster `kubectl` already reaches.
         context = probes.kube_context() if probes.which("kubectl") else None
         cluster = Check(
             "cluster",
@@ -225,18 +242,16 @@ def run_doctor(
             "" if context else "Point kubectl at the cluster (kubectl config use-context …) and "
             "check `kubectl get nodes` answers.",
         )  # fmt: skip
-        return [
-            git,
-            uv,
-            _tool(probes, "kubectl", "kubectl", "kubectl",
-                  "Install kubectl: https://kubernetes.io/docs/tasks/tools/."),
-            _tool(probes, "helm", "helm", "Helm", "Install Helm: https://helm.sh/docs/intro/install/."),
-            cluster,
-        ]  # fmt: skip
+        return [git, uv, *kube_tools, cluster]
+    return [git, uv, *_build_tools(probes, mode, cloud)]
+
+
+def _build_tools(probes: Probes, mode: str, cloud: str | None) -> list[Check]:
+    """OpenTofu and the cloud's command line, which build a cloud install from this machine."""
     tofu = _tool(
         probes, "tofu", "tofu", "OpenTofu",
         "Install OpenTofu from https://opentofu.org/docs/intro/install/.",
-        f" (it builds the {mode} install's servers)",
+        f" (it builds the {mode} install in your cloud account)",
     )  # fmt: skip
     tofu = Check(
         tofu.name,
@@ -256,7 +271,7 @@ def run_doctor(
             f"The {label} command line is not installed (the {mode} install needs it).",
             "Install it and sign in to your account.",
         )
-    return [git, uv, tofu, cli]
+    return [tofu, cli]
 
 
 def format_check(check: Check) -> str:

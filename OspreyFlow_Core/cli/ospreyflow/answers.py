@@ -25,6 +25,7 @@ a person at the prompts and CI install the same way.
       domain: osprey.example.org
       dns_zone: example.org        # optional: the Route 53 / Azure DNS zone to add the record to
       admin_email: ops@example.org # optional: the first administrator's email
+      api_cidrs: [203.0.113.0/24]  # enterprise with --cloud: who reaches the cluster's API (05 §3b)
     external:                      # written by OpenTofu for the server's first boot: the managed
       postgres: {host: …}          #   services (`05_DEPLOYMENT.md` §3a), copied into osprey.yaml
     cluster:                       # enterprise only (05 §3b)
@@ -41,6 +42,7 @@ schema checks the result when it is rendered.
 from __future__ import annotations
 
 import copy
+import ipaddress
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -63,7 +65,7 @@ _SECTIONS = {
     "components": {"dashboards"},
     "folders": {"ingest", "tiles"},
     "models": {"local_only"},
-    "cloud": {"provider", "region", "domain", "size", "dns_zone", "admin_email"},
+    "cloud": {"provider", "region", "domain", "size", "dns_zone", "admin_email", "api_cidrs"},
     "mail": {"host", "port", "from", "starttls", "username"},
     "cluster": {"namespace", "storage_class", "shared_storage_class"},
 }
@@ -91,6 +93,9 @@ class Answers:
     external: dict[str, Any] = field(default_factory=dict)
     #: Enterprise's namespace and storage classes (05 §3b).
     cluster: dict[str, str] = field(default_factory=dict)
+    #: The addresses OpenTofu opens the cluster's API to (ADR-114 Amendment 19): an input to the
+    #: build, not a setting of the deployment, so never in `osprey.yaml`.
+    api_cidrs: tuple[str, ...] = ()
 
 
 def _known(where: str, raw: Mapping[str, Any], allowed: set[str]) -> None:
@@ -116,6 +121,27 @@ def _boolean(key: str, value: object) -> bool:
     if not isinstance(value, bool):
         raise AnswersRefused(f"{key} is true or false, not {value!r}")
     return value
+
+
+def _api_cidrs(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise AnswersRefused(f"cloud.api_cidrs is a list of addresses, not {value!r}")
+    if not value:
+        raise AnswersRefused("cloud.api_cidrs names at least one address the operator works from")
+    kept = []
+    for item in value:
+        try:
+            network = ipaddress.ip_network(str(item), strict=False)
+        except ValueError:
+            raise AnswersRefused(
+                f"cloud.api_cidrs: {item!r} is not an address range such as 203.0.113.0/24"
+            ) from None
+        if network.prefixlen == 0:
+            raise AnswersRefused(
+                f"cloud.api_cidrs: {item} is the whole internet; name the operator's own addresses"
+            )
+        kept.append(str(item))
+    return tuple(kept)
 
 
 def load_answers(
@@ -148,7 +174,12 @@ def load_answers(
             "not both"
         )
 
-    cloud = {k: str(v) for k, v in sections["cloud"].items()}
+    cloud = {k: str(v) for k, v in sections["cloud"].items() if k != "api_cidrs"}
+    api_cidrs: tuple[str, ...] = ()
+    if "api_cidrs" in sections["cloud"]:
+        if mode != "enterprise":
+            raise AnswersRefused(f"cloud.api_cidrs is for the enterprise mode, not {mode}")
+        api_cidrs = _api_cidrs(sections["cloud"]["api_cidrs"])
     if mode == "lite" and cloud:
         raise AnswersRefused("cloud settings are for the small and enterprise modes, not lite")
     if cloud and cloud.get("provider") not in CLOUDS:
@@ -204,6 +235,7 @@ def load_answers(
         mail=dict(sections["mail"]),
         external=copy.deepcopy(dict(external)),
         cluster=cluster,
+        api_cidrs=api_cidrs,
     )
 
 

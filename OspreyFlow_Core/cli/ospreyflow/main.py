@@ -27,7 +27,7 @@ import yaml
 
 from . import demo
 from .answers import MODES, Answers, AnswersRefused, load_answers, osprey_config
-from .cloud import build_small
+from .cloud import build_enterprise, build_small
 from .doctor import Check, Probes, SystemProbes, format_check, run_doctor
 from .home import (
     CommandRefused,
@@ -174,7 +174,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     install.add_argument(
         "--cloud", choices=("aws", "azure"),
-        help="small: build the server on this cloud with OpenTofu, from this machine",
+        help="small or enterprise: build the server or cluster on this cloud with OpenTofu, from "
+        "this machine",
     )  # fmt: skip
     install.add_argument(
         "--first-admin-code-file", type=Path,
@@ -348,11 +349,12 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
     # ADR-114 Amendment 10 point 1: Small is built from the operator's machine (`--cloud`), and
     # installed on the server by its first boot, whose answers name the managed services.
     on_server = args.mode == "small" and not args.cloud and bool(answers.external)
-    if args.mode == "enterprise" and not answers.external:
+    if args.mode == "enterprise" and not answers.external and not args.cloud:
         raise CommandRefused(
             "enterprise runs on the cloud's managed services: name them under external: in the "
             "answers file (postgres, valkey, and object_store or media), with the cluster's "
-            "shared_storage_class under cluster:"
+            "shared_storage_class under cluster: — or give --cloud aws or --cloud azure to build "
+            "the cluster and its services with OpenTofu"
         )
     if args.mode == "small" and not args.cloud and not on_server:
         raise CommandRefused(
@@ -370,6 +372,8 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
         return build_small(ctx, args, answers)
     if on_server:
         return _install_on_server(ctx, args, answers)
+    if args.mode == "enterprise" and args.cloud:
+        return build_enterprise(ctx, args, answers)
     if args.mode == "enterprise":
         return _install_on_cluster(ctx, args, answers)
 
@@ -429,9 +433,16 @@ def _install_on_server(ctx: _Context, args: argparse.Namespace, answers: Answers
     return 0
 
 
-def _install_on_cluster(ctx: _Context, args: argparse.Namespace, answers: Answers) -> int:
+def _install_on_cluster(
+    ctx: _Context,
+    args: argparse.Namespace,
+    answers: Answers,
+    env: Mapping[str, str] | None = None,
+) -> int:
     """Enterprise (ADR-114 Amendment 16): onto the cluster `kubectl` reaches, from this machine —
-    the chart, its Secret, the identity provider and the first administrator."""
+    the chart, its Secret, the identity provider and the first administrator. `env` carries what
+    a cluster built here hands on (Amendment 19): its kubeconfig and the managed services'
+    secrets."""
     _write_config(ctx, answers, args.force)
     step = [*ctx.python, "-m", "harness.cluster_install", "--config",
             str(ctx.product / "osprey.yaml")]  # fmt: skip
@@ -439,7 +450,7 @@ def _install_on_cluster(ctx: _Context, args: argparse.Namespace, answers: Answer
         step += ["--email", answers.cloud["admin_email"]]
     for extra in args.chart_values:
         step += ["--values", str(extra)]
-    ctx.step("install onto the cluster", step)
+    ctx.step("install onto the cluster", step, env=dict(env or {}))
     return 0
 
 

@@ -183,3 +183,36 @@ def test_cluster_answers_are_for_an_enterprise_install(tmp_path: Path) -> None:
             load_answers({"mode": mode, "cluster": {"namespace": "x"}}, packs=PACKS, home=tmp_path)
     with pytest.raises(AnswersRefused, match="nodes"):
         load_answers({"mode": "enterprise", "cluster": {"nodes": 3}}, packs=PACKS, home=tmp_path)
+
+
+def _cloud(mode: str, api_cidrs: object) -> dict[str, object]:
+    return {"mode": mode, "cloud": {"provider": "aws", "region": "eu-west-2",
+                                    "domain": "osprey.example.org", "api_cidrs": api_cidrs}}  # fmt: skip
+
+
+def test_the_addresses_the_clusters_api_answers_are_kept_and_go_no_further(tmp_path: Path) -> None:
+    """ADR-114 Amendment 19: `cloud.api_cidrs` is what OpenTofu opens the cluster's API to; it is an
+    input to the build, not a setting of the deployment."""
+    raw = _cloud("enterprise", ["203.0.113.0/24", "2001:db8::/48"])
+    answers = load_answers(raw, packs=PACKS, home=tmp_path)
+    assert answers.api_cidrs == ("203.0.113.0/24", "2001:db8::/48")
+    assert "api_cidrs" not in answers.cloud
+    assert "api_cidrs" not in yaml.safe_dump(osprey_config(answers, _base()))
+
+
+def test_the_whole_internet_or_a_non_address_is_refused_as_an_api_address(tmp_path: Path) -> None:
+    for wrong, said in (
+        (["0.0.0.0/0"], "whole internet"),
+        (["::/0"], "whole internet"),
+        (["198.51.100.7/0"], "whole internet"),
+        (["osprey.example.org"], "not an address"),
+        ("203.0.113.0/24", "a list"),
+        ([], "at least one"),
+    ):
+        with pytest.raises(AnswersRefused, match=said):
+            load_answers(_cloud("enterprise", wrong), packs=PACKS, home=tmp_path)
+
+
+def test_api_addresses_are_for_an_enterprise_install(tmp_path: Path) -> None:
+    with pytest.raises(AnswersRefused, match="api_cidrs is for the enterprise mode"):
+        load_answers(_cloud("small", ["203.0.113.0/24"]), packs=PACKS, home=tmp_path)

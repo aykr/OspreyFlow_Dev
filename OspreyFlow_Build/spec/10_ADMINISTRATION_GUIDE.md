@@ -1,9 +1,8 @@
 # 10 — Installation and Administration Guide
 
 For whoever installs OspreyFlow and looks after it. It describes what is built, and nothing that
-is not: **Lite** (one computer) and **Small** (one cloud server on the cloud's managed services).
-**Enterprise** (a Kubernetes cluster) has its own chapter once it is built (stage B7). The
-decisions behind each part are in `06_DECISIONS.md` (ADR-114 for installing, ADR-112 for accounts,
+is not: **Lite** (one computer), **Small** (one cloud server on the cloud's managed services) and
+**Enterprise** (a Kubernetes cluster on the cloud's managed services). The decisions behind each part are in `06_DECISIONS.md` (ADR-114 for installing, ADR-112 for accounts,
 ADR-110 for schedules, ADR-111 for dashboards); this guide only says how to use them.
 
 **How this guide stays true.** Appendix A, every `osprey.yaml` setting, is written by
@@ -15,17 +14,18 @@ from this guide (`tests/test_admin_guide.py`).
 
 ## 1. Choosing a mode
 
-| | Lite | Small |
-| --- | --- | --- |
-| Where it runs | One computer (a laptop or a workstation) | One cloud server (AWS or Azure) |
-| Who looks after the data | You, with `ospreyflow backup` | The cloud: managed PostgreSQL, S3 or Blob, daily backups |
-| Its address | `http://ospreyflow.localhost` | `https://<your domain>` |
-| First sign-in | Demo accounts, passwords in `deployment.env` | A first administrator, by a one-time code |
-| Built with | `ospreyflow install --mode lite` | `ospreyflow install --mode small --cloud aws\|azure`, from your own computer |
+| | Lite | Small | Enterprise |
+| --- | --- | --- | --- |
+| Where it runs | One computer (a laptop or a workstation) | One cloud server (AWS or Azure) | A Kubernetes cluster (EKS or AKS), three or more nodes |
+| Who looks after the data | You, with `ospreyflow backup` | The cloud: managed PostgreSQL, S3 or Blob, daily backups | The cloud, for its managed services; the graph store in the cluster is not yet backed up (section 13) |
+| Its address | `http://ospreyflow.localhost` | `https://<your domain>` | `https://<your domain>` |
+| First sign-in | Demo accounts, passwords in `deployment.env` | A first administrator, by a one-time code | A first administrator, by a one-time code |
+| Built with | `ospreyflow install --mode lite` | `ospreyflow install --mode small --cloud aws\|azure`, from your own computer | `ospreyflow install --mode enterprise --cloud aws\|azure`, from your own computer, or onto a cluster you already have |
 
-The two run the same product: the same containers, the same Glass, Ingest Studio and Admin area.
+All three run the same product: the same containers, the same Glass, Ingest Studio and Admin area.
 Small swaps the deployment's own PostgreSQL and object store for the cloud's, and gets a real
-domain with HTTPS.
+domain with HTTPS. Enterprise runs the same services as replicas across the cluster's nodes, the
+graph store and the analytics database as clusters of their own.
 
 ## 2. Before you start
 
@@ -53,11 +53,27 @@ On your own computer, from which you build the server:
 
 The server itself needs nothing from you: it installs Docker and OspreyFlow on its first boot.
 
-### 2.3 Checking a machine: `ospreyflow doctor`
+### 2.3 Enterprise
+
+On your own computer:
+
+- what Small needs (an account, OpenTofu, the cloud's command line signed in, Git, uv, a DNS name);
+- **kubectl** and **Helm**;
+- on Azure, **kubelogin** (`az aks install-cli` installs it): the cluster takes Entra ID sign-ins
+  only;
+- the **addresses you work from** (`api_cidrs`): the cluster's API, and on Azure the Key Vault,
+  answer those and nothing else, so this computer must be inside one of them.
+
+Onto a cluster you already have, only kubectl, Helm, Git and uv are needed, with kubectl pointed at
+it.
+
+### 2.4 Checking a machine: `ospreyflow doctor`
 
 `ospreyflow doctor --mode lite` checks, in the order to fix them: Docker installed, Docker running,
 Compose v2, memory, free disk, Git, uv and port 80. `ospreyflow doctor --mode small --cloud aws`
-(or `azure`) checks Git, uv, OpenTofu and the cloud's command line. Each line is a tick, or a cross
+(or `azure`) checks Git, uv, OpenTofu and the cloud's command line. `ospreyflow doctor --mode
+enterprise --cloud aws` adds kubectl and Helm (and on Azure kubelogin); without `--cloud` it checks
+kubectl, Helm and that a cluster answers. Each line is a tick, or a cross
 with what to do about it; the exit code is 1 when anything is missing. `install` runs the same
 checks first and stops, having changed nothing, if one fails.
 
@@ -97,7 +113,7 @@ basemap, which demo packs — then:
 It ends by saying the address and that the sign-in details are in `deployment.env`.
 
 **Without questions**: `ospreyflow install --mode lite --yes` takes every default;
-`--config install.yaml` takes the answers from a file (section 6). **Building anyway**: `--build`
+`--config install.yaml` takes the answers from a file (section 7). **Building anyway**: `--build`
 builds from the checkout even on a release tag.
 
 ### 4.1 The guided page: `ospreyflow install --gui`
@@ -155,7 +171,7 @@ What happens:
    highest clearance, with a **one-time code** instead of a password, and leaves the code in the
    cloud's secret store. The command reads it, **shows it once**, and deletes it from the store. At
    their first sign-in the administrator chooses their own password. Then they invite everyone
-   else from the Admin area (section 8).
+   else from the Admin area (section 9).
 
 ### 5.1 What is made in your account
 
@@ -179,7 +195,74 @@ The server's first boot runs, in effect,
 small` without `--cloud` and without the managed services in its answers is refused, saying which
 of the two you meant.
 
-## 6. The answers file, `install.yaml`
+## 6. Installing Enterprise
+
+From your own computer:
+
+```
+ospreyflow install --mode enterprise --cloud aws --config install.yaml
+```
+
+with at least:
+
+```yaml
+mode: enterprise
+cloud:
+  provider: aws            # or azure
+  region: eu-west-2        # or uksouth, …
+  domain: osprey.example.org
+  api_cidrs: [203.0.113.0/24]    # the addresses you work from; never 0.0.0.0/0
+  admin_email: ops@example.org   # optional
+  size: small              # small (3 nodes of 32 GB), medium (4 of 64 GB) or large (6 of 128 GB)
+cluster:
+  namespace: ospreyflow    # optional
+```
+
+What happens:
+
+1. **Plan, then build on your yes**, as for Small (section 5): OpenTofu shows the cluster and the
+   services it would make, and makes them when you answer `yes` (or pass `--yes`). Its state is
+   kept in `.cloud/enterprise-<cloud>/`, readable only by you. **Keep it, privately**: it is how the
+   cluster is changed later, and it holds secrets.
+2. **What OpenTofu made becomes the answers.** It names the cluster's two storage classes and every
+   managed service; these join your answers in `osprey.yaml`. Do not give `external:` or the storage
+   classes yourself: with `--cloud` they are refused, since OpenTofu makes them.
+3. **A kubeconfig of the install's own**, in the state folder; your `~/.kube/config` is not
+   changed. Use it yourself with `KUBECONFIG=.cloud/enterprise-<cloud>/kubeconfig kubectl get pods
+   -n ospreyflow`.
+4. **The passwords and keys** of the managed services are read from the cloud's secret store with
+   your own identity and handed to the install in its environment only — never on a command line,
+   in `osprey.yaml` or on the screen.
+5. **The install** puts the chart onto the cluster, makes its Secret (keeping every value already
+   there when run again), configures sign-in, makes the first administrator, prints their one-time
+   code once, and says the address to point `osprey.example.org`, `id.…` and `bi.…` at.
+
+Run again, it changes nothing OpenTofu need not change, no password and no account.
+
+**Onto a cluster you already have**: leave out `--cloud`, point kubectl at the cluster, and give
+the managed services yourself under `external:` and the cluster's classes under `cluster:` (section
+7), with their passwords in the environment: `OSPREY_POSTGRES_PASSWORD`, `VALKEY_PASSWORD`, and for
+media on Blob `AZURE_STORAGE_KEY`. A site's own Helm values go in with `--chart-values <file>`
+(repeatable), applied over the rendered ones.
+
+### 6.1 What is made in your account
+
+| | AWS | Azure |
+| --- | --- | --- |
+| Cluster | EKS, its Kubernetes secrets encrypted with their own key; nodes in three private subnets | AKS, no local accounts (Entra ID only); a system pool and the deployment's own pool, three zones |
+| Its API | Answers `api_cidrs` only | Answers `api_cidrs` only |
+| Network policy | The VPC CNI's engine, so the chart's policies are enforced | Azure network policy |
+| Database | RDS for PostgreSQL 16, two zones, password in Secrets Manager, deletion protection | PostgreSQL flexible server 16, zone-redundant, a delete lock, password in Key Vault |
+| Cache | ElastiCache for Valkey, TLS and a token | Azure Cache for Redis, TLS only |
+| Objects | S3 (as Small) | Blob for media; the other stores in the cluster |
+| Search | Amazon OpenSearch Service (the install always asks for it; the module's own `search = false` leaves it to the cluster) | In the cluster |
+| Shared volume | EFS (`ospreyflow-shared`) | Azure Files (`ospreyflow-shared`) |
+| Store volumes | Encrypted gp3 (`ospreyflow-volumes`) | Zone-redundant premium disks (`ospreyflow-volumes`) |
+
+Every managed store is reached only from inside the cluster's network. Neither module has yet been
+built in a real account; the chart and the install have been proved in a local cluster.
+
+## 7. The answers file, `install.yaml`
 
 Every question `install` asks can be answered in this file; unknown settings are refused by name.
 
@@ -190,18 +273,20 @@ Every question `install` asks can be answered in this file; unknown settings are
 | `folders.ingest` | The folder the Ingest Studio lists (absolute, or from `~`); default `~/OspreyFlow/ingest` |
 | `folders.tiles` | Where a built basemap lives; default `~/OspreyFlow/basemap` |
 | `models.local_only` | `true` (default): no case content leaves the deployment |
-| `demo_packs` | A list of pack ids (section 10) |
+| `demo_packs` | A list of pack ids (section 11) |
 | `paysim_file` | The downloaded PaySim file, when `paysim` is chosen |
-| `mail.host`, `mail.port`, `mail.from`, `mail.starttls`, `mail.username` | A mail server for invitations (section 8.3); its password is never here |
-| `cloud.provider`, `cloud.region`, `cloud.domain`, `cloud.size`, `cloud.dns_zone`, `cloud.admin_email` | Small (section 5) |
-| `external` | The managed services a Small server runs on — written by OpenTofu for the server, not by you |
+| `mail.host`, `mail.port`, `mail.from`, `mail.starttls`, `mail.username` | A mail server for invitations (section 9.3); its password is never here |
+| `cloud.provider`, `cloud.region`, `cloud.domain`, `cloud.size`, `cloud.dns_zone`, `cloud.admin_email` | Small (section 5) and Enterprise (section 6) |
+| `cloud.api_cidrs` | Enterprise with `--cloud`: the addresses the cluster's API answers (section 6) |
+| `cluster.namespace`, `cluster.storage_class`, `cluster.shared_storage_class` | Enterprise: the namespace, and onto a cluster you already have its storage classes (section 6) |
+| `external` | The managed services the deployment runs on — written by OpenTofu, or by you for a cluster you already have |
 | `config` | Use this `osprey.yaml` exactly as it is, instead of `components`, `folders` and `models` |
 
 The answers become `osprey.yaml` (appendix A): `mode` sets `profile`, `components.dashboards` sets
 both `reporting.sync` and `reporting.superset`, and the address is `http://ospreyflow.localhost` for
-Lite and `https://<domain>` for Small.
+Lite and `https://<domain>` for Small and Enterprise.
 
-## 7. Running it
+## 8. Running it
 
 | Command | What it does |
 | --- | --- |
@@ -214,7 +299,12 @@ Lite and `https://<domain>` for Small.
 
 Every service restarts itself if it stops; nothing is registered with the operating system.
 
-### 7.1 Addresses
+**Enterprise** is looked after with Kubernetes' own tools, not these verbs (which drive a Compose
+deployment): `kubectl get pods -n ospreyflow`, `kubectl logs`, and `helm uninstall ospreyflow -n
+ospreyflow` to remove it (the stores' volume claims are left in place, and the classes OpenTofu
+makes keep a volume even when its claim is deleted).
+
+### 8.1 Addresses
 
 One front proxy is the deployment's only door. Under the address in `network.public_origin`:
 
@@ -226,7 +316,7 @@ Lite publishes port 80 and, on this computer only, `127.0.0.1:2480` for the grap
 tools. Small publishes 80 (for the certificate) and 443. The Conduit's own port is published only
 with `network.expose_conduit: true`.
 
-### 7.2 Where things are
+### 8.2 Where things are
 
 | Where | What |
 | --- | --- |
@@ -234,18 +324,18 @@ with `network.expose_conduit: true`.
 | `deploy/generated/<profile>/` | The deployment: `compose.yaml`, `deployment.env` (every password and key it made), `Caddyfile`, `glass.json`, `realm.json`, `litellm.yaml`, `versions.lock`, `RUNBOOK.md`, `state/` |
 | `backups/` | Backup sets |
 | `.install/` | The guided page's draft and answers; a release install's verified lock |
-| `.cloud/` | OpenTofu's state for a Small server — keep it private |
+| `.cloud/` | OpenTofu's state for a Small server or an Enterprise cluster, and the cluster's kubeconfig — keep it private |
 | Your ingest and basemap folders | As the answers named them |
 
 `RUNBOOK.md`, written for each deployment, lists what runs, its paths and its addresses.
 
-## 8. People and accounts
+## 9. People and accounts
 
 Everyone signs in through the deployment's identity provider; the password is only ever typed on
 its own sign-in page. What a person may do is their **roles**; what they may see is their
 **clearance**, unit and handling codes, and the cases they are given.
 
-### 8.1 The Admin area
+### 9.1 The Admin area
 
 Signed in with an administration right, choose **Admin** on Start. Each tab shows only to someone
 holding its right:
@@ -258,7 +348,7 @@ holding its right:
 | System | `administer_system` | Each component's health, the models in use, the version and whether an update exists |
 | Demo packs | `administer_system` | Which packs are loaded, and the command that adds one |
 
-### 8.2 Roles
+### 9.2 Roles
 
 | Role | For |
 | --- | --- |
@@ -270,7 +360,7 @@ holding its right:
 A single right can be given on its own. **Nobody can be given more than the person giving it
 holds** — clearance included — which is why the first administrator holds the highest clearance.
 
-### 8.3 Inviting someone
+### 9.3 Inviting someone
 
 **Invite** asks for a sign-in name, their name, optionally an email, a clearance, a unit, handling
 codes and roles. With a mail server configured and an email given, they get an email with a link to
@@ -282,7 +372,7 @@ A mail server is set in `osprey.yaml`'s `mail:` (appendix A); if it signs in, it
 once at install as `OSPREY_SMTP_PASSWORD` and kept only in `deployment.env`. With mail, the sign-in
 page also offers *Reset your password*.
 
-## 9. Models
+## 10. Models
 
 By default every model runs on the deployment itself (extraction, vision, transcription and
 embedding — appendix A, `models.*`) and **no case content leaves it**. A client with its own
@@ -302,7 +392,7 @@ code is in `sendable_handling_codes` only; anything else runs on the local model
 once at install as `OSPREY_MODEL_PROVIDER_KEY` and kept only in `deployment.env`. Admin → System
 shows each role's model, where it runs, and a notice that case content then leaves the deployment.
 
-## 10. Demo packs
+## 11. Demo packs
 
 | Id | What it shows | How it arrives |
 | --- | --- | --- |
@@ -318,7 +408,7 @@ download: get `PS_20174392719_1491204439457_log.csv` from its Kaggle page and pa
 starts. PaySim is CC BY-SA 4.0 (E. A. Lopez-Rojas, A. Elmir and S. Axelsson, 2016); its licence and
 attribution travel with it.
 
-## 11. Dashboards
+## 12. Dashboards
 
 With dashboards on, **report sync** pulls each case's figures into a reporting database every 15
 minutes (`reporting.sync_interval_seconds`), and **Superset** shows them at `bi.`, signing people in
@@ -332,7 +422,7 @@ reads the same figures:
 
 Each pull is made as that account, at its clearance, audited and recorded in the export ledger.
 
-## 12. Backup and restore
+## 13. Backup and restore
 
 **Lite.** `ospreyflow backup` writes a set to `backups/<time>-<profile>-<commit>/`: the graph
 store, every PostgreSQL database (the identity provider's accounts as their own export), the
@@ -349,10 +439,15 @@ restored: the deployment's own are kept.
 server's daily backup. `ospreyflow backup` refuses a deployment on a managed database, saying so;
 restore from the cloud's console.
 
+**Enterprise.** The cloud protects its managed services as for Small. **The graph store and the
+analytics database run in the cluster, and nothing backs them up yet**: `ospreyflow backup` drives
+a Compose deployment and does not reach a cluster. Until it does, take snapshots of their volumes
+with the cloud's own tools.
+
 **Audit.** The audit log is in the same PostgreSQL as everything else, so it is in the same backup
 and shares its retention.
 
-## 13. Updates
+## 14. Updates
 
 Releases are tagged `vMAJOR.MINOR.PATCH`, with signed images and a signed list of every image by
 digest.
@@ -368,9 +463,11 @@ digest.
 
 An update moves forward only; local changes to files the release also changes stop it ("commit or
 undo them first"). A deployment built from a checkout (`--build`, or no release tag) is updated by
-moving the checkout and `ospreyflow start --build`.
+moving the checkout and `ospreyflow start --build`. **Enterprise** is updated by moving the
+checkout to the release's tag and running the install again: the chart is upgraded in place, with
+every password and account kept.
 
-## 14. Scheduled and watched pipelines
+## 15. Scheduled and watched pipelines
 
 A published pipeline can run on a **schedule** (hourly, daily, on weekdays or weekly at a time, in a
 named time zone, or a cron expression; never more often than every 15 minutes) and when a **file
@@ -380,7 +477,7 @@ holding `schedule_pipelines`, and run **as that person**, with every check their
 A run that is refused or fails tells its owner in their alerts; three refusals in a row pause it.
 Admin → Schedules and runs lists every one.
 
-## 15. When something is wrong
+## 16. When something is wrong
 
 | Symptom | Look at |
 | --- | --- |

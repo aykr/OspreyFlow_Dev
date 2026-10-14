@@ -28,7 +28,7 @@ full definitions.
 | --- | --- |
 | **Lite** — one machine | Docker (Docker Desktop on Windows with the WSL 2 back end, and on macOS; Docker Engine with Compose v2 on Linux), set to start when you sign in; 16 GB of memory for Docker (32 GB is comfortable); 60 GB of free disk plus the demo packs you choose; Git; internet for the first install |
 | **Small** — one VM in your cloud | an AWS or Azure account with the permissions the install lists; OpenTofu; that cloud's command line, signed in; a DNS name you control |
-| **Enterprise** — Kubernetes | an EKS or AKS cluster that `kubectl` reaches, Helm, Git and uv; the cloud's managed PostgreSQL, Valkey and object store; a storage class several pods can share (EFS on AWS, Azure Files on Azure); the models run on ordinary nodes for now |
+| **Enterprise** — Kubernetes | to build the cluster: an AWS or Azure account, OpenTofu, that cloud's command line signed in (and `kubelogin` on Azure), kubectl, Helm, Git and uv, the addresses you work from, and a DNS name you control; or an EKS or AKS cluster `kubectl` already reaches, with the cloud's managed PostgreSQL, Valkey and object store and a storage class several pods can share (EFS on AWS, Azure Files on Azure). The models run on ordinary nodes for now |
 
 `ospreyflow doctor` checks these for the mode you choose and says what to fix.
 
@@ -55,10 +55,12 @@ rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup
 
 **Small** is built from your own machine: `ospreyflow install --mode small --cloud aws` (or
 `azure`) creates the server and the cloud's managed database and storage with OpenTofu, and the
-server installs OspreyFlow on its first boot. **Enterprise** installs onto a Kubernetes cluster your
-`kubectl` and `helm` already reach: `ospreyflow install --mode enterprise --config install.yaml`,
-with the answers naming the cloud's managed services and the cluster's namespace and shared storage
-class. It installs the Helm chart in `deploy/helm/ospreyflow`, makes its Secret and the first
+server installs OspreyFlow on its first boot. **Enterprise** is built the same way:
+`ospreyflow install --mode enterprise --cloud aws` (or `azure`) makes an EKS or AKS cluster and the
+cloud's managed services with OpenTofu (`deploy/opentofu/cluster/`), its API open only to the
+addresses you name in `cloud.api_cidrs`, then installs onto it. Onto a cluster your `kubectl` and
+`helm` already reach, leave out `--cloud` and name the managed services and the cluster's storage
+classes in the answers yourself. It installs the Helm chart in `deploy/helm/ospreyflow`, makes its Secret and the first
 administrator (who signs in with a one-time code it prints once), and tells you the address to point
 your names at. Running it again changes no password and replaces no account.
 
@@ -97,7 +99,8 @@ A private repository needs `GITHUB_TOKEN` set to a token that can read it.
 - **`harness/`** — what renders, starts, checks, backs up and restores a deployment; the
   `ospreyflow` command (`cli/`) drives it.
 - **`deploy/`** — the Helm chart for Enterprise (`helm/ospreyflow`), the OpenTofu modules that build
-  Small's server (`opentofu/small/aws`, `opentofu/small/azure`), and the Superset image.
+  Small's server (`opentofu/small/aws`, `opentofu/small/azure`) and Enterprise's cluster
+  (`opentofu/cluster/aws`, `opentofu/cluster/azure`), and the Superset image.
 - **`scripts/`** — the demo packs (`python -m scripts.demo_packs`) and their seeds.
 
 The full specification and the build's own record are kept in the developer repository, alongside
