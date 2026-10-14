@@ -63,25 +63,38 @@ describe("SelectionBar: Show links among these", () => {
 
   // ADR-098 Amendment 4 (the owner: "specify the degrees of separation i am allowed to explore,
   // limit the maximum depth to 6"): a degree from 1 to 6 beside the button.
-  it("asks within the degrees chosen, 1 to 6, 1 unless changed", () => {
+  // The owner, 14 October 2026: "make this a bit more elegant and intuitive" — one control that reads
+  // as a sentence, *Show links* · *− direct +*, in the reference's selection bar.
+  it("steps the degrees from direct to within 6, and asks within the one shown", () => {
     const onLinksAmong = vi.fn();
     render(<SelectionBar count={3} onLinksAmong={onLinksAmong} onRemove={() => {}} onClear={() => {}} />);
-    const group = screen.getByRole("radiogroup", { name: "Degrees of separation" });
-    const radios = Array.from(group.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
-    expect(radios.map((r) => r.value)).toEqual(["1", "2", "3", "4", "5", "6"]);
-    expect(radios[0]?.checked).toBe(true);
+    const reading = screen
+      .getByRole("group", { name: "Degrees of separation" })
+      .querySelector(".selection-bar__reading") as HTMLElement;
+    const fewer = screen.getByRole("button", { name: "Fewer degrees" });
+    const more = screen.getByRole("button", { name: "More degrees" });
+    expect(reading.textContent).toBe("direct");
+    expect(fewer).toHaveProperty("disabled", true);
     fireEvent.click(screen.getByRole("button", { name: "Show links among these" }));
-    fireEvent.click(screen.getByRole("radio", { name: "Within 4 degrees" }));
+    fireEvent.click(more);
+    fireEvent.click(more);
+    fireEvent.click(more);
+    expect(reading.textContent).toBe("within 4");
     fireEvent.click(screen.getByRole("button", { name: "Show links among these" }));
+    for (let i = 0; i < 5; i += 1) fireEvent.click(more);
+    expect(reading.textContent).toBe("within 6");
+    expect(more).toHaveProperty("disabled", true);
+    fireEvent.click(fewer);
+    expect(reading.textContent).toBe("within 5");
     expect(onLinksAmong.mock.calls).toEqual([[1], [4]]);
   });
 
-  it("keeps to one degree above 8 selected, and says why", () => {
+  it("keeps to direct links above 8 selected, and says why", () => {
     const onLinksAmong = vi.fn();
     render(<SelectionBar count={9} onLinksAmong={onLinksAmong} onRemove={() => {}} onClear={() => {}} />);
-    const group = screen.getByRole("radiogroup", { name: "Degrees of separation" });
-    expect(group.getAttribute("title")).toBe("Routes are looked for among at most 8 selected nodes");
-    expect(screen.getByRole("radio", { name: "Within 4 degrees" })).toHaveProperty("disabled", true);
+    const more = screen.getByRole("button", { name: "More degrees" });
+    expect(more).toHaveProperty("disabled", true);
+    expect(more.getAttribute("title")).toBe("Routes are looked for among at most 8 selected nodes");
     fireEvent.click(screen.getByRole("button", { name: "Show links among these" }));
     expect(onLinksAmong).toHaveBeenCalledWith(1);
   });

@@ -2,7 +2,7 @@
 // centre of the canvas while anything is selected, its count the only live count of the selection
 // in the page, with what can be done to all of it. Replaces the corner chip (ADR-093 step 3) and
 // the toolbar's *Remove selected* and *Branch selected*. Escape clears, as on the canvas.
-import { useId, useState } from "react";
+import { useState } from "react";
 
 /** ADR-098 Amendment 4: the furthest the routes are looked for, and how many may be selected to
  * look past one degree — the Conduit's `LINKS_AMONG_MAX_DEGREE` and `LINKS_AMONG_ROUTE_NODES`. */
@@ -39,9 +39,9 @@ export function SelectionBar({
   onClear,
 }: SelectionBarProps) {
   const [degree, setDegree] = useState(1);
-  const degreesName = useId();
   if (count === 0) return null;
   const routesAllowed = count <= ROUTE_NODES;
+  const shown = routesAllowed ? degree : 1;
   return (
     <div
       role="toolbar"
@@ -64,39 +64,53 @@ export function SelectionBar({
         </button>
       )}
       {onLinksAmong && count > 1 && (
+        // ADR-098 Amendment 4, made to read as a sentence (the owner, 14 October 2026): *Show links*,
+        // then how far — "direct", or "within 2" to "within 6" — stepped by − and +.
         <span className="selection-bar__links">
-          <span
-            role="radiogroup"
-            aria-label="Degrees of separation"
-            className="selection-bar__degrees"
-            title={
-              routesAllowed
-                ? "How many links apart to look for routes among these"
-                : `Routes are looked for among at most ${ROUTE_NODES} selected nodes`
-            }
-          >
-            {Array.from({ length: MAX_DEGREE }, (_, i) => i + 1).map((d) => (
-              <label key={d} className="selection-bar__degree">
-                <input
-                  type="radio"
-                  name={degreesName}
-                  value={d}
-                  aria-label={d === 1 ? "Direct links" : `Within ${d} degrees`}
-                  checked={(routesAllowed ? degree : 1) === d}
-                  disabled={!routesAllowed && d > 1}
-                  onChange={() => setDegree(d)}
-                />
-                <span aria-hidden="true">{d}</span>
-              </label>
-            ))}
-          </span>
           <button
             type="button"
             className="btn btn--quiet"
-            onClick={() => onLinksAmong(routesAllowed ? degree : 1)}
+            aria-label="Show links among these"
+            onClick={() => onLinksAmong(shown)}
           >
-            Show links among these
+            Show links
           </button>
+          <span
+            className="selection-bar__stepper"
+            role="group"
+            aria-label="Degrees of separation"
+          >
+            <button
+              type="button"
+              className="selection-bar__step"
+              aria-label="Fewer degrees"
+              disabled={shown <= 1}
+              onClick={() => setDegree(Math.max(1, shown - 1))}
+            >
+              −
+            </button>
+            <span
+              className="selection-bar__reading"
+              aria-live="polite"
+              title="How many links apart to look for routes among these"
+            >
+              {shown === 1 ? "direct" : `within ${shown}`}
+            </span>
+            <button
+              type="button"
+              className="selection-bar__step"
+              aria-label="More degrees"
+              disabled={!routesAllowed || shown >= MAX_DEGREE}
+              title={
+                routesAllowed
+                  ? undefined
+                  : `Routes are looked for among at most ${ROUTE_NODES} selected nodes`
+              }
+              onClick={() => setDegree(Math.min(MAX_DEGREE, shown + 1))}
+            >
+              +
+            </button>
+          </span>
         </span>
       )}
       {onAsk && documentCount > 0 && (
@@ -112,6 +126,7 @@ export function SelectionBar({
       <button type="button" className="btn btn--quiet" onClick={onRemove}>
         Remove from view
       </button>
+      <span className="selection-bar__divider" aria-hidden="true" />
       <button
         type="button"
         className="btn btn--quiet"

@@ -546,11 +546,14 @@ of at most 2,000 also draws the links among its nodes and the rest of the view, 
 who among their correspondents wrote to each other, not only a star; when those links would pass the working
 set's cap none of them is drawn and the canvas says so. For larger views, *Show links among these* on the
 selection bar (two or more selected) and *Show links among all* in the View group draw them on demand, all
-or none, and say how many (`keyboard/selection.spec.ts`, `keyboard/keyboard.spec.ts`). Beside the selection
-bar's button, **Degrees of separation** (ADR-098 Amendment 4): *1* (direct links, the default) to *6*; past 1
+or none, and say how many (`keyboard/selection.spec.ts`, `keyboard/keyboard.spec.ts`). The selection bar's
+control reads as a sentence, *Show links* · *− direct +* (ADR-098 Amendment 4; the owner, 14 October 2026:
+"more elegant and intuitive"): − and + step **Degrees of separation** from *direct* (the default) to
+*within 6*, the reading said as it changes; the bar is one line after the reference — quiet actions with no
+box of their own, *Clear* after a hairline — and never wraps. Past direct
 the routes between each pair of the selected nodes, at the fewest degrees that join them up to the chosen
 one, are drawn with their nodes, and the notice says the links and nodes added, the pairs not connected
-within it, and the pairs with more routes than were drawn. Above 8 selected it keeps to 1 and says why.
+within it, and the pairs with more routes than were drawn. Above 8 selected it keeps to direct, and + says why.
 
 **Hovering a link (ADR-115 E5, review item 11).** With the pointer over a link, a tooltip by the pointer
 names its type and how many links of that type join the same two entities ("3 links of this type between

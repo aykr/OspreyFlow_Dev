@@ -24,4 +24,12 @@ describe("the canvas's corner overlays", () => {
     expect(rule(".canvas-legend").position).toBeUndefined();
     expect(rule(".canvas-zoom").position).toBeUndefined();
   });
+
+  // The owner, 14 October 2026 ("more elegant and intuitive"), after the reference's bar: one line,
+  // each action's words on it — "Show links among these" had wrapped to four lines.
+  it("keep the selection bar on one line, its actions quiet, Clear after a hairline", () => {
+    expect(rule(".selection-bar")["white-space"]).toBe("nowrap");
+    expect(rule(".selection-bar .btn--quiet")["border-color"]).toBe("transparent");
+    expect(rule(".selection-bar__divider").width).toBe("1px");
+  });
 });
