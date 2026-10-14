@@ -18,6 +18,16 @@ execution time), so replaying the exact same recorded commands in a fresh
 transaction reproduces the identical write. This client keeps that replay
 log; callers never see it — `commit_transaction` either succeeds or
 raises, same as before.
+
+**A Raft cluster** (`ha`, `ARCADEDB_HA`; `05_DEPLOYMENT.md` §3b, ADR-101 Amendment 2) is written
+through its leader, every request saying `X-ArcadeDB-Read-Consistency: eventual`. On 26.10.1 with
+the Groovy engine, a Gremlin command is analysed before it runs — on a follower to decide whether to
+forward it, on the leader unless the request says `eventual` — and the analysis evaluates the script
+without its parameters: a command with parameters failed on every node, and a script that iterates
+itself ran twice. The leader is found by asking the configured address (the Service in front of
+every node) for `/api/v1/cluster`, trusted for `_LEADER_TTL_SECONDS`, and asked for again after a
+request that could not reach it. A request that lands on a follower during an election fails in
+words; it is never retried here, since a session lives on the server that opened it.
 """
 
 from __future__ import annotations
@@ -25,6 +35,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
@@ -83,6 +94,8 @@ class ArcadeDBConfig:
     username: str = "root"
     password: str = "playwithdata123"
     database: str = "ospreyflow"
+    #: A Raft cluster: written through its leader (the module's docstring).
+    ha: bool = False
 
     @property
     def base_url(self) -> str:
@@ -98,7 +111,13 @@ class ArcadeDBConfig:
             username=os.environ.get("ARCADEDB_USERNAME", "root"),
             password=os.environ.get("ARCADEDB_ROOT_PASSWORD", "playwithdata123"),
             database=database,
+            ha=os.environ.get("ARCADEDB_HA", "").lower() in {"1", "true", "yes"},
         )
+
+
+#: How long a found leader is trusted before the cluster is asked for it again.
+_LEADER_TTL_SECONDS = 2.0
+_EVENTUAL = {"X-ArcadeDB-Read-Consistency": "eventual"}
 
 
 class ResultTruncatedError(Exception):
@@ -106,13 +125,18 @@ class ResultTruncatedError(Exception):
 
 
 class ArcadeDBClient:
-    def __init__(self, config: ArcadeDBConfig) -> None:
+    def __init__(
+        self, config: ArcadeDBConfig, *, transport: httpx.AsyncBaseTransport | None = None
+    ) -> None:
         self._config = config
-        self._http = httpx.AsyncClient(
-            base_url=config.base_url,
-            auth=(config.username, config.password),
-            timeout=30.0,
-        )
+        self._transport = transport
+        self._http = self._client_for(config.base_url)
+        # A cluster: the configured address (`_service`) answers which node leads, and `_http` is
+        # pointed at that node; earlier leaders' clients are closed with this one.
+        self._service = self._http
+        self._leader: str | None = None
+        self._leader_found_at = 0.0
+        self._earlier: list[httpx.AsyncClient] = []
         # Every command issued against an open transaction, in order, so a
         # failed commit can be retried by replaying them into a fresh
         # transaction rather than re-sending the dead commit. Keyed by
@@ -126,7 +150,46 @@ class ArcadeDBClient:
         return self._config.database
 
     async def aclose(self) -> None:
-        await self._http.aclose()
+        for client in {id(c): c for c in (*self._earlier, self._service, self._http)}.values():
+            await client.aclose()
+
+    def _client_for(self, base_url: str) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            base_url=base_url,
+            auth=(self._config.username, self._config.password),
+            timeout=30.0,
+            headers=_EVENTUAL if self._config.ha else None,
+            transport=self._transport,
+        )
+
+    async def _follow_leader(self) -> None:
+        if self._leader and time.monotonic() - self._leader_found_at < _LEADER_TTL_SECONDS:
+            return
+        resp = await self._service.get("/api/v1/cluster")
+        self._raise_for_error(resp)
+        said = resp.json() if resp.content else {}
+        address = said.get("leaderHttpAddress")
+        if not address:
+            raise ArcadeDBError(
+                "the ArcadeDB cluster has no leader at present (an election may be under way); "
+                "nothing was sent"
+            )
+        if address != self._leader:
+            if self._http is not self._service:
+                self._earlier.append(self._http)
+            self._http = self._client_for(f"http://{address}")
+            self._leader = address
+        self._leader_found_at = time.monotonic()
+
+    async def _post(self, path: str, **kwargs: Any) -> httpx.Response:
+        if self._config.ha:
+            await self._follow_leader()
+        try:
+            return await self._http.post(path, **kwargs)
+        except httpx.TransportError:
+            # Asked for again next time: the leader may have gone.
+            self._leader_found_at = 0.0
+            raise
 
     # --- server / database lifecycle ------------------------------------
 
@@ -150,14 +213,14 @@ class ArcadeDBClient:
             await self._server_command(f"drop database {name}")
 
     async def _server_command(self, command: str) -> Any:
-        resp = await self._http.post("/api/v1/server", json={"command": command})
+        resp = await self._post("/api/v1/server", json={"command": command})
         self._raise_for_error(resp)
         return resp.json().get("result")
 
     # --- transactions ------------------------------------------------------
 
     async def begin_transaction(self) -> str:
-        resp = await self._http.post(f"/api/v1/begin/{self._config.database}")
+        resp = await self._post(f"/api/v1/begin/{self._config.database}")
         self._raise_for_error(resp)
         session_id = resp.headers.get("arcadedb-session-id")
         if not session_id:
@@ -166,7 +229,7 @@ class ArcadeDBClient:
         return str(session_id)
 
     async def _commit_once(self, session_id: str) -> None:
-        resp = await self._http.post(
+        resp = await self._post(
             f"/api/v1/commit/{self._config.database}",
             headers={"arcadedb-session-id": session_id},
         )
@@ -239,7 +302,7 @@ class ArcadeDBClient:
 
     async def rollback_transaction(self, session_id: str) -> None:
         self._tx_log.pop(session_id, None)
-        resp = await self._http.post(
+        resp = await self._post(
             f"/api/v1/rollback/{self._config.database}",
             headers={"arcadedb-session-id": session_id},
         )
@@ -281,7 +344,7 @@ class ArcadeDBClient:
         if params:
             body["params"] = dict(params)
         headers = {"arcadedb-session-id": session_id} if session_id else None
-        resp = await self._http.post(
+        resp = await self._post(
             f"/api/v1/command/{self._config.database}", json=body, headers=headers
         )
         self._raise_for_error(resp)

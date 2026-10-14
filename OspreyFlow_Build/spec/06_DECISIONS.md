@@ -10063,6 +10063,50 @@ Status: accepted 7 October 2026 (mine, within the owner's "Upgrade first, then r
 4. **`REBUILD INDEX *` after the move** repaired the owner's indexes: every type agrees with a scan. 26.10.1 also discarded the record counts 25.5.1 cached, which it says could be wrong.
 5. **A store moved from 25.5.1 is checked before its indexes are rebuilt.** 25.5.1's broken unique indexes let duplicate ids in (on the owner's store, 22 links a replayed commit wrote twice); `REBUILD INDEX *` then drops a unique index it cannot build again, and the Conduit cannot start. The order is: `CHECK DATABASE`; remove duplicates by id (never by record id alone: the two copies can share a stored chunk, and deleting one breaks both, as it did here) or with `CHECK DATABASE FIX`; `CHECK DATABASE` to 0 errors; then `REBUILD INDEX *`.
 
+### ADR-101, Amendment 2 (14 October 2026) — a Raft cluster is written through its leader
+
+Status: accepted 14 October 2026 (mine, within the owner's "carry on with B7": it makes ADR-114
+decision 9's three ArcadeDB replicas work as `05_DEPLOYMENT.md` §3b specifies them, and changes nothing
+for one server; recorded so it can be overruled).
+
+1. **The defect, measured** on three `arcadedata/arcadedb:26.10.1` nodes with this ADR's Groovy engine.
+   Before a Gremlin command runs, the HA layer *analyses* it (`QueryEngine.analyze`, which for Groovy
+   evaluates the script): on a follower, to decide whether to forward it; on the leader, whenever the
+   request's read consistency is not `eventual`. The analysis has no parameters. So:
+   - a command with parameters failed on every node, leader included (`MissingPropertyException`),
+     where the same image without HA bound them — the adapter's edge writes, its bulk loader and three
+     of its reads all bind parameters;
+   - a script that iterates itself (`g.addV(...).iterate(); ...`) **ran twice** — two vertices from one
+     command, against one on a single server. A bare traversal (`g.addV(...)`) wrote once.
+   `/api/v1/query` does not analyse, so reads bound there; SQL and Cypher parameters bound everywhere.
+   Upstream fixed the follower half for the Java engine in 26.8.1 (ArcadeDB issue 5187); nothing covers
+   Groovy, and the Java engine cannot run this adapter's closures (this ADR, point 2).
+2. **The rule:** on a cluster (`ARCADEDB_HA=true`, set by the chart) the client sends every request to
+   the leader, each saying `X-ArcadeDB-Read-Consistency: eventual`. It asks the address it is given
+   (the Service in front of every node) for `/api/v1/cluster`, uses `leaderHttpAddress`, trusts the
+   answer for two seconds, and asks again after a request that could not reach it
+   (`adapters/graph_arcadedb/client.py`). The leader holds every committed write, so `eventual` there
+   costs no read-your-writes. The two followers are standby, not read capacity.
+3. **During an election a request fails in words** and is not retried by the client: a session lives
+   on the server that opened it, and a write that reached a follower is refused before it runs (every
+   command with parameters fails the analysis; the one script that iterates itself has parameters).
+   Measured, one client writing every half second while the leader was stopped: 72 writes
+   acknowledged, 12 refused over about six seconds (404 while the old leader shut down, then connection
+   errors until the election ended), none acknowledged and missing, none stored twice, none refused
+   and stored. A fresh client found the new leader 14 seconds after the stop.
+4. **Tests:** `tests/adapters/graph_arcadedb/test_client_follows_leader.py`, 8 cases against a fake
+   that refuses what the cluster refused (a follower refuses a command with parameters; so does the
+   leader without `eventual`); red first, and each branch shown red by a planted fault — no header, no
+   leader followed, the leader asked for on every request, never asked for again, not asked for again
+   after a transport error, a cluster with no leader not refused, the setting not read, a single server
+   asked for a leader. Live: the graph conformance suite, 138 of 139, on the leader with `eventual`
+   (the one failure, `'Alert' requires property 'rule_id'`, fails on a single server too); the
+   client inside the cluster's network, configured at a follower, before and after a leader stop.
+5. **What ends this:** the adapter's Gremlin rewritten for the grammar parser (this ADR's recorded
+   future work), on which a three-node cluster bound parameters on every node and wrote once; or an
+   ArcadeDB release whose analysis binds parameters and does not evaluate a Groovy script. Reporting
+   the defect upstream is the owner's to do (the text is in the build record's row).
+
 ### ADR-100, Amendment 1 (7 October 2026) — stage 1: the store's two reads
 
 Status: accepted 7 October 2026 (mine, within the owner's "carry on with ADR-100"; recorded so it can be overruled). ADR-100 is unchanged except where this says so.
@@ -12808,6 +12852,32 @@ builds `apps/harness` and ships the built page with each release (an asset unpac
 by `install.sh` and by `update`); a developer checkout builds it with `npm run build`, and
 `install --gui` refuses in words — naming that command — when the page is missing or older than its
 sources.
+
+### ADR-114, Amendment 12 (14 October 2026) — B7: the replicated stores, before the chart
+
+Status: accepted 14 October 2026 (mine, within the owner's "carry on with B7"; recorded so it can be
+overruled). Decision 9 names three ArcadeDB replicas and a replicated ClickHouse; this is what each
+needs of the Conduit, proved in containers before the chart is written.
+
+1. **ArcadeDB:** written through its leader, saying `eventual` — ADR-101 Amendment 2, which has the
+   defect that forces it and the measurements.
+2. **ClickHouse:** one shard, two replicas, three Keepers. With `CLICKHOUSE_CLUSTER` set (the chart
+   sets `osprey`) the Conduit makes its database `ON CLUSTER` with the `Replicated` engine, so every
+   table definition reaches both servers through Keeper, and its two tables `ReplicatedMergeTree` with
+   no arguments (the server's default Keeper path and `{replica}` macro). Not set, nothing changes.
+   Measured on `clickhouse-server:25.8.33.6`: a plain `MergeTree` in a `Replicated` database kept its
+   rows on the server that took them (1 and 0), so the chart's server profile sets
+   `database_replicated_allow_only_replicated_engine`, which refused one; `ReplicatedMergeTree`
+   carried an insert across within 50 ms, and a mutation with `mutations_sync = 2` was on both servers
+   when it returned. Replication of an insert is asynchronous: a read on the other replica in the
+   first milliseconds after a load can miss it. A quorum insert would close that window at the cost of
+   refusing every write while one replica is down; not taken.
+3. **The conformance fixture makes its database the way the Conduit does** (`create_database` and
+   `drop_database` in `adapters/analytics_clickhouse/schema.py`, dropped `ON CLUSTER`), so the suite
+   runs unchanged on a pair: 80 of 80 on the pair, 80 of 80 on one server.
+4. **Tests:** `tests/services/api/test_analytics_store.py`, three cases (the cluster's statements, one
+   server's unchanged, a cluster name that is not a plain name refused); red first, and each branch
+   shown red by a planted fault.
 
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 

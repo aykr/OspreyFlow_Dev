@@ -829,6 +829,24 @@ no managed one (decision 9).
 | `opensearch`, `objectstore` | StatefulSet | 1 | Only where the cloud has none (Azure) |
 | `ollama`, `litellm`, `ner`, `whisper` | Deployment | 1 | Models; `ollama` may name a GPU node pool. vLLM (decision 11) is not built: it needs the models in another format |
 
+**How the Conduit uses the replicated stores** (measured on the images the chart runs, 14 October
+2026):
+
+- **ArcadeDB is written through its leader.** The chart sets `ARCADEDB_HA=true`; the client asks the
+  `arcadedb` Service which node leads and sends every request there, saying `eventual` (ADR-101
+  Amendment 2: on 26.10.1 with the Groovy engine a Gremlin command sent anywhere else, or without
+  `eventual`, either loses its parameters or runs twice). The servers name each other by the headless
+  Service (`arcadedb-N.arcadedb-headless:2434:2480`), which is the address `/api/v1/cluster` hands back.
+  The followers are standby: an election refuses writes for some seconds, in words, and loses none.
+- **ClickHouse is one shard of two replicas.** The chart sets `CLICKHOUSE_CLUSTER=osprey` and gives
+  each server its `{shard}` and `{replica}` macros, the `osprey` cluster and the three Keepers. The
+  Conduit makes its database `ON CLUSTER osprey` with the `Replicated` engine, and the tables
+  `ReplicatedMergeTree` (`adapters/analytics_clickhouse/schema.py`): a plain `MergeTree` in that
+  database had its definition on both servers and its rows on one, so the servers' profile also sets
+  `database_replicated_allow_only_replicated_engine`, which refuses one. An insert reached the other
+  replica within 50 ms; a mutation (`mutations_sync = 2`) is on both when it returns. The analytics
+  conformance suite passes on the pair unchanged.
+
 The ingest folder and the recipes repository are one shared volume (ReadWriteMany) mounted by every
 Conduit replica, as Lite mounts a host folder. **Secrets** are never in `values.yaml`: the chart reads
 one Kubernetes Secret (`secrets.name`, `ospreyflow-secrets` by default) holding what `deployment.env`

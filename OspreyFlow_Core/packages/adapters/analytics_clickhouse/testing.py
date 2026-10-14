@@ -15,7 +15,7 @@ from schemas.analytics import EventRecord
 
 from .adapter import AnalyticsClickHouseAdapter
 from .client import ClickHouseClient, ClickHouseSettings
-from .schema import create_tables
+from .schema import create_database, create_tables, drop_database
 
 
 @asynccontextmanager
@@ -25,12 +25,12 @@ async def clickhouse_adapter(
 ) -> AsyncIterator[AnalyticsClickHouseAdapter]:
     database = f"conformance_{str(ULID()).lower()}"
     client = ClickHouseClient(ClickHouseSettings.from_env(database))
-    await client.command(f"CREATE DATABASE {database}", database=None)
+    await client.command(create_database(database, client.cluster), database=None)
     try:
         await create_tables(client)
         adapter = AnalyticsClickHouseAdapter(client, handling_scheme)
         await adapter.load_events(events)
         yield adapter
     finally:
-        await client.command(f"DROP DATABASE IF EXISTS {database}", database=None)
+        await client.command(drop_database(database, client.cluster), database=None)
         await client.aclose()

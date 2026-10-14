@@ -76,6 +76,9 @@ back into the map the adapter reads, the `id` property winning over the record i
 (`client._gremlin_row`). Every command asks for every row (`"limit": -1`): left out, the HTTP endpoint
 stops at 20,000 rows and says so only in a `truncated` flag, which once let a larger read come back cut
 as if whole; a reply still marked truncated is refused (`ResultTruncatedError`, rule 2).
+On a Raft cluster every request goes to the leader saying `X-ArcadeDB-Read-Consistency: eventual`: on
+26.10.1 the Groovy engine's commands lose their parameters, or run twice, anywhere else (ADR-101
+Amendment 2; `05_DEPLOYMENT.md` §3b).
 
 The mitigation is to keep the surface small. The Conduit builds Gremlin from a bounded set of
 composable builders — expand, path, match, aggregate — not free-form traversal strings. The

@@ -14,6 +14,11 @@ Two differences, both forced by the engine:
 not refuse a repeat, where DuckDB's key does. A gazetteer load writes each version once
 (`GeometryRecord`'s own docstring), so nothing relies on the refusal.
 
+On a cluster (`client.cluster`; `05_DEPLOYMENT.md` §3b) both tables are `ReplicatedMergeTree`, with
+no arguments: the server's default Keeper path and its `{replica}` macro. The database they are made
+in is `Replicated` (`services/api/analytics_store.py`), which carries each definition to every node;
+a plain `MergeTree` there would keep its rows on the node that took them.
+
 `events` is partitioned and ordered as `04_VAULT_BACKEND.md` §2 says: by `(investigation_scope,
 month)`, and by `(edge_id, timestamp)` within a partition.
 """
@@ -66,6 +71,25 @@ CREATE TABLE IF NOT EXISTS geometries (
 """
 
 
+def create_database(database: str, cluster: str | None) -> str:
+    """On a cluster the database is made on every node at once (`ON CLUSTER`) and is `Replicated`,
+    so each table definition reaches every node through Keeper."""
+    if cluster is None:
+        return f"CREATE DATABASE IF NOT EXISTS {database}"
+    return (
+        f"CREATE DATABASE IF NOT EXISTS {database} ON CLUSTER {cluster} ENGINE = "
+        f"Replicated('/clickhouse/databases/{database}', '{{shard}}', '{{replica}}')"
+    )
+
+
+def drop_database(database: str, cluster: str | None) -> str:
+    """From every node, on a cluster: dropped from one, the others would keep it."""
+    on = f" ON CLUSTER {cluster}" if cluster else ""
+    return f"DROP DATABASE IF EXISTS {database}{on}" + (" SYNC" if cluster else "")
+
+
 async def create_tables(client: ClickHouseClient) -> None:
-    await client.command(CREATE_EVENTS_TABLE)
-    await client.command(CREATE_GEOMETRIES_TABLE)
+    for statement in (CREATE_EVENTS_TABLE, CREATE_GEOMETRIES_TABLE):
+        if client.cluster:
+            statement = statement.replace("ENGINE = MergeTree", "ENGINE = ReplicatedMergeTree")
+        await client.command(statement)

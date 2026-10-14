@@ -17,7 +17,7 @@ import duckdb
 
 from adapters.analytics_clickhouse.adapter import AnalyticsClickHouseAdapter
 from adapters.analytics_clickhouse.client import ClickHouseClient, ClickHouseSettings
-from adapters.analytics_clickhouse.schema import create_tables
+from adapters.analytics_clickhouse.schema import create_database, create_tables
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table, create_geometries_table
 from ontology.handling import HandlingScheme
@@ -62,7 +62,13 @@ async def open_analytics(
             # The one name written into a statement rather than sent as a parameter.
             await client.aclose()
             raise ValueError(f"CLICKHOUSE_DATABASE {client.database!r} is not a plain name")
-        await client.command(f"CREATE DATABASE IF NOT EXISTS {client.database}", database=None)
+        if client.cluster is not None and not re.fullmatch(
+            r"[A-Za-z_][A-Za-z0-9_]*", client.cluster
+        ):
+            await client.aclose()
+            raise ValueError(f"CLICKHOUSE_CLUSTER {client.cluster!r} is not a plain name")
+        await client.command(create_database(client.database, client.cluster), database=None)
         await create_tables(client)
         return AnalyticsClickHouseAdapter(client, handling_scheme), client.aclose
     raise UnknownAnalyticsEngine(engine)
+

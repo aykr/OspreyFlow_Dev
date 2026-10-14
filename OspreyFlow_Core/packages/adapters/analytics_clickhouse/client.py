@@ -81,6 +81,9 @@ class ClickHouseSettings:
     user: str
     password: str
     database: str
+    #: A replicated cluster's name (`remote_servers` in the servers' configuration), or none for one
+    #: server; `05_DEPLOYMENT.md` §3b.
+    cluster: str | None = None
 
     @classmethod
     def from_env(cls, database: str = "default") -> ClickHouseSettings:
@@ -91,6 +94,7 @@ class ClickHouseSettings:
             user=os.environ.get("CLICKHOUSE_USER", "default"),
             password=os.environ.get("CLICKHOUSE_PASSWORD", ""),
             database=os.environ.get("CLICKHOUSE_DATABASE", database),
+            cluster=os.environ.get("CLICKHOUSE_CLUSTER") or None,
         )
 
 
@@ -102,6 +106,10 @@ class ClickHouseClient:
     @property
     def database(self) -> str:
         return self._settings.database
+
+    @property
+    def cluster(self) -> str | None:
+        return self._settings.cluster
 
     async def aclose(self) -> None:
         await self._http.aclose()
