@@ -2145,14 +2145,23 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     }
 
     // ADR-098: the links among the given nodes in the view, or among all of it.
-    async function linksAmongOnCanvas(nodeIds: readonly string[] | null): Promise<void> {
+    async function linksAmongOnCanvas(nodeIds: readonly string[] | null, degree = 1): Promise<void> {
       if (!bearerToken || !investigationId) return;
       const box = containerRef.current?.getBoundingClientRect();
       const [x, y] = box ? [box.width / 2, box.height / 2] : [0, 0];
       try {
-        const result = await showLinksAmong(apiBaseUrl, bearerToken, investigationId, nodeIds);
+        const result = await showLinksAmong(apiBaseUrl, bearerToken, investigationId, nodeIds, degree);
         store.getState().applyDelta(result.delta);
-        setActionError({ x, y, message: linksAmongNotice(result.added), tone: "notice" });
+        const routes =
+          result.degree !== undefined && result.degree > 1
+            ? {
+                degree: result.degree,
+                added_nodes: result.added_nodes ?? 0,
+                unconnected_pairs: result.unconnected_pairs ?? 0,
+                more_routes_pairs: result.more_routes_pairs ?? 0,
+              }
+            : undefined;
+        setActionError({ x, y, message: linksAmongNotice(result.added, routes), tone: "notice" });
       } catch (err) {
         setActionError({ x, y, message: err instanceof Error ? err.message : String(err) });
       }
@@ -3256,7 +3265,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           }
           onAsk={onAskAboutDocuments ? () => void askAboutSelected() : undefined}
           documentCount={selectedDocumentCount}
-          onLinksAmong={() => void linksAmongOnCanvas(Array.from(selected))}
+          onLinksAmong={(degree) => void linksAmongOnCanvas(Array.from(selected), degree)}
           onRemove={() => void removeNodeIds(Array.from(selected))}
           onClear={() => {
             setSelected(new Set());

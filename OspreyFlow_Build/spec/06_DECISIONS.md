@@ -9924,6 +9924,34 @@ The owner, on the reader: "the option for Extract Entities vs Ask Model to extra
 2. **A pending finding is shown where it sits in the text, as soon as it is listed.** Each candidate's `char span` locator and `excerpt_hash` (already in the API's candidate record) are read by the Glass; the words at the locator's place are marked only when they hash to the candidate's own excerpt hash — the server's "a locator never points at something else" check, made again where the marking happens. Pending findings draw dashed (the inferred visual language, rule 5), are not clickable (there is no node yet), and an accepted span always wins overlapping words. A finding whose span fails the check, falls beyond the shown text (the reader shows the first 4,000 characters), or overlaps an earlier one keeps its list row and simply is not marked.
 3. **Tests:** `pendingSpans.test.ts` (placed only where the words hash right; beyond-text, accepted and unlocated dropped; overlap keeps the first), `DocumentReader.test.tsx` (both buttons offered as equals with their captions, still offered after findings list, a pending finding marked in place — all three red first), the renamed keyboard cases in `reader.spec.ts` and `link-events.spec.ts`.
 
+### ADR-098, Amendment 4 (14 October 2026) — links among these, within a chosen number of degrees
+
+Status: accepted 14 October 2026 — the owner, after branching an account and a company that were
+connected only through others and finding no link between them: "The find links should allow me to
+specify the degrees of separation i am allowed to explore, limit the maximum depth to 6".
+
+1. **A degree with the selection's *Show links among these*:** 1 (the default, decision 1 as
+   built: the links whose two ends are both selected) up to **6** (`LINKS_AMONG_MAX_DEGREE`). The
+   toolbar's *Show links among all* stays at 1.
+2. **At 2 or more, the routes between them.** For each pair of selected nodes, the routes at the
+   fewest degrees that join them, looked for one degree at a time up to the chosen one — ADR-116's
+   search (`GraphPort.paths_at_length`, access-filtered at every step in the adapter, rule 3) —
+   at most `CONNECTIONS_SHOWN` (10) routes a pair; every node and link on those routes is added
+   with the direct links among the selection, all or none against the working set's cap
+   (`limit_exceeded`, rule 2).
+3. **What it says:** the links and nodes it added; how many pairs no route joins within the chosen
+   degrees; and how many pairs had more routes at their degree than were added — those are not
+   hidden, they are said, and Find connections lists them all.
+4. **At most 8 nodes selected** for a degree above 1 (`LINKS_AMONG_ROUTE_NODES`: 28 pairs, each
+   searched at most six times); more, or fewer than two, is refused in words before anything is
+   asked of the store.
+5. **Tests**, each shown red first: the routes between two selected nodes are added at the degree
+   asked and not beyond; a pair joined only through a hidden node stays unjoined, and the principal
+   is the reader's (the adapter's own filtering is the conformance suite's `paths_at_length`
+   cases); past the cap nothing is added; more than 8 nodes, a degree above 6, and no selection at
+   a degree above 1 are refused; the degree is chosen and used by keyboard
+   (`keyboard/selection.spec.ts`).
+
 ## ADR-099 — A case sees only its own datasets, on every read, as a limit of access
 
 Status: accepted 7 October 2026 (the owner's two choices, put as multiple-choice questions after "the search seems to find data from all dataset / cases when the search should be restricted to the dataset selected": *every read* over search only or the view only, and *a hard limit* over a working filter). ADR-050, ADR-052 and ADR-084 are unchanged except where this says so. Built in four steps; until step 2 is built every read is as before.

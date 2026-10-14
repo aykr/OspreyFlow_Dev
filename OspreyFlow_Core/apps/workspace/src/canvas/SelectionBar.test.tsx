@@ -61,6 +61,31 @@ describe("SelectionBar: Show links among these", () => {
     expect(onLinksAmong).toHaveBeenCalledTimes(1);
   });
 
+  // ADR-098 Amendment 4 (the owner: "specify the degrees of separation i am allowed to explore,
+  // limit the maximum depth to 6"): a degree from 1 to 6 beside the button.
+  it("asks within the degrees chosen, 1 to 6, 1 unless changed", () => {
+    const onLinksAmong = vi.fn();
+    render(<SelectionBar count={3} onLinksAmong={onLinksAmong} onRemove={() => {}} onClear={() => {}} />);
+    const group = screen.getByRole("radiogroup", { name: "Degrees of separation" });
+    const radios = Array.from(group.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
+    expect(radios.map((r) => r.value)).toEqual(["1", "2", "3", "4", "5", "6"]);
+    expect(radios[0]?.checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Show links among these" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Within 4 degrees" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show links among these" }));
+    expect(onLinksAmong.mock.calls).toEqual([[1], [4]]);
+  });
+
+  it("keeps to one degree above 8 selected, and says why", () => {
+    const onLinksAmong = vi.fn();
+    render(<SelectionBar count={9} onLinksAmong={onLinksAmong} onRemove={() => {}} onClear={() => {}} />);
+    const group = screen.getByRole("radiogroup", { name: "Degrees of separation" });
+    expect(group.getAttribute("title")).toBe("Routes are looked for among at most 8 selected nodes");
+    expect(screen.getByRole("radio", { name: "Within 4 degrees" })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: "Show links among these" }));
+    expect(onLinksAmong).toHaveBeenCalledWith(1);
+  });
+
   it("is not offered for one node, which has no links among itself", () => {
     render(<SelectionBar count={1} onLinksAmong={() => {}} onRemove={() => {}} onClear={() => {}} />);
     expect(screen.queryByRole("button", { name: "Show links among these" })).toBeNull();

@@ -47,6 +47,7 @@ from conduit_common.identity import new_edge_id, now_utc
 from ontology.handling import HandlingScheme, principal_may_read
 from ports.graph import GraphPort
 from schemas.domain import (
+    CONNECTIONS_SHOWN,
     NOT_SAME_AS,
     SAME_AS,
     AuditStub,
@@ -627,17 +628,46 @@ class WorkingSetService:
         investigation_id: str,
         principal: Principal,
         node_ids: Sequence[NodeId] | None = None,
+        degree: int = 1,
     ) -> LinksAmongOutcome:
         """`POST .../links-among` (ADR-098): the links among the named nodes that are in the view,
         or among the whole view, added all or none against the cap (rule 2). The graph read is
-        access-filtered for `principal` in the adapter (rule 3)."""
+        access-filtered for `principal` in the adapter (rule 3).
+
+        Past one degree (Amendment 4), also the routes between each pair of them: the fewest
+        degrees that join the pair, up to `degree`, as ADR-116 finds them (`paths_at_length`, the
+        reader's search in the adapter), their nodes and links added with the direct ones."""
         view = await self._store.node_ids(investigation_id)
         ids = view if node_ids is None else view & set(node_ids)
         among = await self._graph.edges_among(sorted(ids), principal)
+        route_nodes: dict[NodeId, Node] = {}
+        route_edges: dict[EdgeId, Edge] = {e.id: e for e in among}
+        unconnected = more = 0
+        if degree > 1:
+            chosen = sorted(ids)
+            for i, source in enumerate(chosen):
+                for target in chosen[i + 1 :]:
+                    for length in range(1, degree + 1):
+                        routes = await self._graph.paths_at_length(
+                            source, target, length, CONNECTIONS_SHOWN, principal
+                        )
+                        if routes.paths:
+                            for path in routes.paths:
+                                route_nodes.update({n.id: n for n in path.nodes})
+                                route_edges.update({e.id: e for e in path.edges})
+                            more += routes.more
+                            break
+                    else:
+                        unconnected += 1
+        existing_nodes = await self._store.node_ids(investigation_id)
         existing_edges = await self._store.edge_ids(investigation_id)
-        new = [e for e in among if e.id not in existing_edges]
-        outcome = await self._add(investigation_id, [], new, filtered_count=0)
-        return LinksAmongOutcome(delta=outcome.delta, added=len(new))
+        new_nodes = [n for n in route_nodes.values() if n.id not in existing_nodes]
+        new = [e for e in route_edges.values() if e.id not in existing_edges]
+        outcome = await self._add(investigation_id, new_nodes, new, filtered_count=0)
+        return LinksAmongOutcome(
+            delta=outcome.delta, added=len(new), added_nodes=len(new_nodes), degree=degree,
+            unconnected_pairs=unconnected, more_routes_pairs=more,
+        )  # fmt: skip
 
     async def expand_preview(
         self, investigation_id: str, req: ExpandRequest, principal: Principal

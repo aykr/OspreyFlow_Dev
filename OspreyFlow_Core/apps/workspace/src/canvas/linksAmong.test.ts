@@ -33,7 +33,50 @@ describe("showLinksAmong", () => {
   });
 });
 
+// ADR-098 Amendment 4: routes between the selected nodes, within a chosen number of degrees.
+describe("showLinksAmong within degrees", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("asks for the routes within the chosen degrees", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response(JSON.stringify({ added: 3, added_nodes: 2, degree: 4, delta: { seq: 4, op: "add", nodes: [], edges: [] } }), { status: 200 });
+    });
+    const result = await showLinksAmong("http://api.test", "tok", "inv-1", ["a", "b"], 4);
+    expect(bodies).toEqual([{ node_ids: ["a", "b"], degree: 4 }]);
+    expect(result.added_nodes).toBe(2);
+  });
+
+  it("says the server's refusal in its words", async () => {
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({ detail: [{ msg: "Value error, routes are looked for among at most 8 selected nodes; 9 are selected" }] }),
+          { status: 422 },
+        ),
+    );
+    await expect(showLinksAmong("http://api.test", "tok", "inv-1", ["a"], 2)).rejects.toThrow(
+      "Routes are looked for among at most 8 selected nodes; 9 are selected.",
+    );
+  });
+});
+
 describe("the notices", () => {
+  it("past one degree, says what the routes added, the pairs not joined, and the routes not drawn", () => {
+    expect(linksAmongNotice(3, { degree: 4, added_nodes: 2, unconnected_pairs: 0, more_routes_pairs: 0 })).toBe(
+      "3 links and 2 nodes added: the routes within 4 degrees among these.",
+    );
+    expect(linksAmongNotice(0, { degree: 2, added_nodes: 0, unconnected_pairs: 1, more_routes_pairs: 0 })).toBe(
+      "No routes within 2 degrees among these. 1 pair is not connected within 2 degrees.",
+    );
+    expect(linksAmongNotice(20, { degree: 3, added_nodes: 10, unconnected_pairs: 2, more_routes_pairs: 1 })).toBe(
+      "20 links and 10 nodes added: the routes within 3 degrees among these. 2 pairs are not connected " +
+        "within 3 degrees. 1 pair has more routes than were drawn: Find connections lists them all.",
+    );
+  });
+
   it("says how many links were added, or that there were none to add", () => {
     expect(linksAmongNotice(0)).toBe("No more links among these.");
     expect(linksAmongNotice(1)).toBe("1 link added among these.");

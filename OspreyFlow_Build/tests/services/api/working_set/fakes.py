@@ -23,9 +23,11 @@ from schemas.domain import (
     Handling,
     Node,
     NodeId,
+    Path,
     Principal,
     Provenance,
     ProvenanceState,
+    RoutesAtLength,
     SourceRef,
     Subgraph,
     TxId,
@@ -174,6 +176,7 @@ class FakeGraphPort:
         #: the set and neither end hidden, as the real adapter refuses an edge to a hidden node.
         self._graph_edges = list(graph_edges)
         self.edges_among_requests: list[tuple[list[NodeId], Principal]] = []
+        self.paths_at_length_requests: list[tuple[NodeId, NodeId, int, Principal]] = []
         self.candidate_count = candidate_count
         self.expand_requests: list[ExpandRequest] = []
         self.candidate_count_requests: list[ExpandRequest] = []
@@ -213,6 +216,40 @@ class FakeGraphPort:
             for e in self._graph_edges
             if e.source in ids and e.target in ids and (not edge_types or e.type in edge_types)
         ]
+
+    async def paths_at_length(
+        self,
+        source: NodeId,
+        target: NodeId,
+        length: int,
+        limit: int,
+        principal: Principal,
+        *,
+        edge_types: list[str] | None = None,
+    ) -> RoutesAtLength:
+        """ADR-116's search over this fake's links: the simple routes of exactly `length` links,
+        either way along each, never through a hidden node — as the real adapter refuses a route
+        through what the reader cannot see (its conformance suite proves that, not this)."""
+        self.paths_at_length_requests.append((source, target, length, principal))
+        found: list[Path] = []
+
+        def walk(at: NodeId, seen: list[NodeId], edges: list[Edge]) -> None:
+            if len(edges) == length:
+                if at == target:
+                    nodes = [_FAKE_VISIBLE_NODE.model_copy(update={"id": n}) for n in seen]
+                    found.append(Path(nodes=nodes, edges=list(edges), length=length))
+                return
+            for e in self._graph_edges:
+                if edge_types and e.type not in edge_types:
+                    continue
+                other = e.target if e.source == at else e.source if e.target == at else None
+                if other is None or other in seen or other in self._hidden_node_ids:
+                    continue
+                walk(other, [*seen, other], [*edges, e])
+
+        if source not in self._hidden_node_ids and target not in self._hidden_node_ids:
+            walk(source, [source], [])
+        return RoutesAtLength(length=length, paths=found[:limit], more=len(found) > limit)
 
     async def expand_candidate_count(
         self, req: ExpandRequest, *, datasets: list[str] | None = None

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from schemas.domain import ClusterId, Edge, EdgeId, Node, NodeId
 
@@ -26,6 +26,12 @@ from schemas.domain import ClusterId, Edge, EdgeId, Node, NodeId
 #: deployment-time setting.
 MAX_NODES = 50_000
 MAX_EDGES = 250_000
+
+#: ADR-098 Amendment 4 (the owner: "limit the maximum depth to 6"): the furthest *Show links among
+#: these* looks for routes between the selected nodes, and how many may be selected to look at all
+#: past one degree (28 pairs, each searched at most six times).
+LINKS_AMONG_MAX_DEGREE = 6
+LINKS_AMONG_ROUTE_NODES = 8
 
 LimitOption = Literal["branch", "filter", "promote_to_batch"]
 _ALL_LIMIT_OPTIONS: tuple[LimitOption, LimitOption, LimitOption] = (
@@ -190,11 +196,40 @@ class ExpansionOutcome(BaseModel):
     links_among: Literal["added", "not_asked", "view_full"] = "not_asked"
 
 
+class LinksAmongRequest(BaseModel):
+    """`POST .../links-among` (ADR-098): the nodes whose links among each other to add — left out,
+    every node in the view — and, from a selection, how many degrees apart to look for routes
+    between them (Amendment 4); refused in words before the store is asked."""
+
+    node_ids: list[NodeId] | None = None
+    degree: int = Field(default=1, ge=1, le=LINKS_AMONG_MAX_DEGREE)
+
+    @model_validator(mode="after")
+    def _routes_need_a_small_selection(self) -> LinksAmongRequest:
+        if self.degree == 1:
+            return self
+        chosen = len(set(self.node_ids or []))
+        if self.node_ids is None or chosen < 2:
+            raise ValueError("routes between nodes need at least two of them selected")
+        if chosen > LINKS_AMONG_ROUTE_NODES:
+            raise ValueError(
+                f"routes are looked for among at most {LINKS_AMONG_ROUTE_NODES} selected nodes; "
+                f"{chosen} are selected"
+            )
+        return self
+
+
 class LinksAmongOutcome(BaseModel):
-    """`POST .../links-among` (ADR-098): the delta that draws the new links, and how many."""
+    """`POST .../links-among` (ADR-098): the delta that draws the new links, and how many — with,
+    past one degree (Amendment 4), the nodes the routes brought, the pairs no route joins within
+    the degree, and the pairs with more routes at their degree than were drawn (said, rule 2)."""
 
     delta: DeltaAdd
     added: int
+    added_nodes: int = 0
+    degree: int = 1
+    unconnected_pairs: int = 0
+    more_routes_pairs: int = 0
 
 
 class NodeNotInWorkingSetError(Exception):

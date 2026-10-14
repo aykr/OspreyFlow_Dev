@@ -385,6 +385,15 @@
   background: transparent; border-color: var(--n8); color: var(--surface-app);
 }
 .selection-bar .btn:hover, .selection-bar .btn:focus-visible { background: var(--n9); }
+/* ADR-098 Amendment 4: the degrees of separation beside Show links among these, in the bar's colours. */
+.selection-bar__links { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.selection-bar__degrees { display: inline-flex; border: 1px solid var(--n8); border-radius: var(--r-control); }
+.selection-bar__degree { position: relative; display: grid; place-items: center; min-width: 22px; min-height: 24px; cursor: pointer; }
+.selection-bar__degree + .selection-bar__degree { border-left: 1px solid var(--n8); }
+.selection-bar__degree input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: inherit; }
+.selection-bar__degree:has(input:checked) { background: var(--n9); font-weight: 600; }
+.selection-bar__degree:has(input:focus-visible) { outline: 2px solid var(--brass); outline-offset: -2px; }
+.selection-bar__degree:has(input:disabled) { opacity: 0.45; cursor: default; }
 
 /* The workspace shell (ADR-097 step 1, design review items 1 and 16). */
 .classification-strip {

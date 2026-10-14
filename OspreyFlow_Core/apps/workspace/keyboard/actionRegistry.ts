@@ -386,6 +386,7 @@ export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
   "remove-a-node-from-the-selection-from-the-list",
   // ADR-098 decision 1.
   "show-links-among-the-selection-from-the-selection-bar",
+  "show-links-within-degrees-from-the-selection-bar",
   // ADR-098 decision 4.
   "ask-the-model-about-the-selected-documents-from-the-selection-bar",
   // ADR-115 E4.

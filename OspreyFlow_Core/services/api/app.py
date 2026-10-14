@@ -617,6 +617,7 @@ from .working_set.models import (
     ExpansionOutcome,
     LimitExceededError,
     LinksAmongOutcome,
+    LinksAmongRequest,
     NodeNotInWorkingSetError,
     NothingToBranchError,
     SameNodeAssertionError,
@@ -2778,19 +2779,13 @@ async def expand(
     return outcome
 
 
-class LinksAmongBody(BaseModel):
-    """ADR-098: the nodes whose links among each other to add; left out, every node in the view."""
-
-    node_ids: list[NodeId] | None = None
-
-
 @app.post(
     "/v1/investigations/{investigation_id}/links-among",
     dependencies=[Depends(require_right(Right.INVESTIGATE))],
 )
 async def links_among_route(
     investigation: InvestigationEditorDep,
-    body: LinksAmongBody,
+    body: LinksAmongRequest,
     principal: PrincipalDep,
     working_set: WorkingSetDep,
     history: HistoryDep,
@@ -2800,14 +2795,21 @@ async def links_among_route(
     """The links among nodes already in the view (ADR-098 decision 1), which an expansion leaves
     out: all of them, or none and `limit_exceeded` past the cap (rule 2). Access-filtered in the
     adapter for this analyst (rule 3); Editor, since it adds to the case's working set."""
-    outcome = await working_set.links_among(investigation.id, principal, node_ids=body.node_ids)
+    outcome = await working_set.links_among(
+        investigation.id, principal, node_ids=body.node_ids, degree=body.degree
+    )
     await publish_delta(valkey, investigation.id, outcome.delta)
     await _record_history_step(
         working_set,
         history,
         investigation.id,
         seq=outcome.delta.seq,
-        label=f"Showed {outcome.added} link(s) among the nodes in view",
+        label=(
+            f"Showed {outcome.added} link(s) among the nodes in view"
+            if outcome.degree == 1
+            else f"Showed the routes within {outcome.degree} degrees among the selected nodes: "
+            f"{outcome.added} link(s), {outcome.added_nodes} node(s)"
+        ),
         principal=principal,
     )
     await audit.record(

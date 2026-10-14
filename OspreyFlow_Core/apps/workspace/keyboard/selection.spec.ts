@@ -100,6 +100,35 @@ test("the selection bar's Show links among these asks for the links among the se
   registerCovered("SELECTION_ACTIONS", "show-links-among-the-selection-from-the-selection-bar");
 });
 
+// ADR-098 Amendment 4: the degrees of separation to look within, chosen and used by keyboard.
+test("the selection bar's degrees ask for the routes within them, by keyboard", async ({ page }) => {
+  let body: { node_ids: string[] | null; degree?: number } | null = null;
+  await page.route("**/*/investigations/*/links-among", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        added: 2, added_nodes: 1, degree: 3, unconnected_pairs: 0, more_routes_pairs: 0,
+        delta: { seq: 8, op: "add", nodes: [], edges: [] },
+      }),
+    });
+  });
+  await selectTwo(page);
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  const direct = bar.getByRole("radio", { name: "Direct links" });
+  await direct.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect(bar.getByRole("radio", { name: "Within 3 degrees" })).toBeChecked();
+  await page.keyboard.press("Tab");
+  await expect(bar.getByRole("button", { name: "Show links among these" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => body?.degree).toBe(3);
+  await expect(page.getByText("2 links and 1 node added: the routes within 3 degrees among these.")).toBeVisible();
+  registerCovered("SELECTION_ACTIONS", "show-links-within-degrees-from-the-selection-bar");
+});
+
 test("the selection bar's Ask the model about these… branches the selection, named for its documents, and opens it (ADR-098)", async ({ page }) => {
   let body: { node_ids: string[]; name?: string } | null = null;
   await page.route("**/*/investigations/*/branch", async (route) => {
