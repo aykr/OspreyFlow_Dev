@@ -884,6 +884,14 @@ carry a `nodeSelector`, which nothing sets); the on-demand loader (`ingest`), wh
 the recipes repository on the shared volume, where one at a time publishes safely and two at once
 are not yet guarded.
 
+**The install** (Amendment 16): `ospreyflow install --mode enterprise`, from a machine whose
+`kubectl` and `helm` reach the cluster, with the answers naming the managed services (`external:`)
+and the cluster's `namespace` and `shared_storage_class` (`cluster:`). It renders the values, makes
+the namespace and the Secret (minting only what is missing, keeping every value already there),
+installs the chart and waits for it, configures the identity provider through a port-forward, makes
+the first administrator with a one-time code, and says where the deployment answers. Run again, it
+changes no password and replaces no account. A site's own Helm values go in with `--chart-values`.
+
 **Proved in a running cluster** (Amendment 14): k3s with the cloud's services stood in for — the
 stores formed their clusters and kept them through a restart, the Conduit was reached by name
 through the one load balancer, the policies refused what they should, and the Conduit's client

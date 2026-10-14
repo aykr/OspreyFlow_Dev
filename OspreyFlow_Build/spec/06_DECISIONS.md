@@ -13007,6 +13007,34 @@ it can be overruled). Built in parts; each part's own point says what it proved.
    registered only beside the demo accounts, so a Small deployment's Superset had no client to sign
    in through**. Not proved on a running Small server (no cloud here): the same function the cluster
    install runs live is what it runs.
+4. **`ospreyflow install --mode enterprise`** (`harness/cluster_install.py`), from the operator's
+   machine with `kubectl` and `helm` pointed at the cluster; the doctor checks those two and that the
+   cluster answers (OpenTofu and the cloud's command line arrive with the stage that builds the
+   cluster). Answers without their managed services are refused in words. In order, each step safe
+   to run again: render; the namespace; **the Secret** — minted where missing, **every value it
+   already holds kept** (Keycloak's administrator and database passwords cannot change under a running
+   deployment), what the configuration decides written each time, a managed service's password from
+   the environment or kept, all of it on `kubectl`'s stdin, never on disk or a command line; `helm
+   upgrade --install … --wait`; **the identity provider through a port-forward** (the names may not
+   point at the cluster yet) — the Conduit's client secrets and roles, then `ensure_identity`; **the
+   first administrator** in Keycloak's pod (`kubectl exec`, the account on stdin), never replaced;
+   the load balancer's address and the names to point at it. `--chart-values` takes a site's own
+   Helm values over the rendered ones.
+5. **Proved in k3s** (capped as in Amendment 14, the cloud's services stood in for, proof-only site
+   values as there): the install ran clean first time; a second run kept all 38 Secret values (same
+   hash), the namespace and the account, minted nothing and printed no code; through the load balancer
+   by name, the first administrator signed in with the code — Keycloak asked them to choose a password
+   and complete their profile (name and email: the realm requires them, and only the email comes from
+   the answers) — invited an analyst through the Conduit (whose service account the install had
+   granted), and the analyst signed in with their own code and opened a case, listed back to them and
+   to no one else. Three throwaway administrators were deleted and remade on the way, each time by
+   the install. **Proof-only, in addition:** the report sync and two workers scaled down once the
+   9 GiB cap was reached.
+6. **Tests:** `test_cluster_install.py` (9, against a fake `kubectl`/`helm` refusing what the real
+   ones refuse), `test_doctor.py`, `test_install.py` (Enterprise installs; refused without its
+   managed services; a Small server configures the sign-in), `test_answers.py`,
+   `test_deployment_schema.py`, `test_register_sign_in.py`, `test_cluster_render.py`; red first,
+   and plants red: 9 in the schema, answers and identity, 8 in the install.
 
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 

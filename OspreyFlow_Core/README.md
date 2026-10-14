@@ -28,7 +28,7 @@ full definitions.
 | --- | --- |
 | **Lite** — one machine | Docker (Docker Desktop on Windows with the WSL 2 back end, and on macOS; Docker Engine with Compose v2 on Linux), set to start when you sign in; 16 GB of memory for Docker (32 GB is comfortable); 60 GB of free disk plus the demo packs you choose; Git; internet for the first install |
 | **Small** — one VM in your cloud | an AWS or Azure account with the permissions the install lists; OpenTofu; that cloud's command line, signed in; a DNS name you control |
-| **Enterprise** — Kubernetes | everything Small needs, plus EKS or AKS quota, a storage class that several pods can share (EFS on AWS, Azure Files on Azure), and Helm; the models run on ordinary nodes for now |
+| **Enterprise** — Kubernetes | an EKS or AKS cluster that `kubectl` reaches, Helm, Git and uv; the cloud's managed PostgreSQL, Valkey and object store; a storage class several pods can share (EFS on AWS, Azure Files on Azure); the models run on ordinary nodes for now |
 
 `ospreyflow doctor` checks these for the mode you choose and says what to fix.
 
@@ -55,11 +55,12 @@ rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup
 
 **Small** is built from your own machine: `ospreyflow install --mode small --cloud aws` (or
 `azure`) creates the server and the cloud's managed database and storage with OpenTofu, and the
-server installs OspreyFlow on its first boot. **Enterprise** runs on Kubernetes from the Helm chart
-in `deploy/helm/ospreyflow`, whose values are rendered from your `osprey.yaml` (`profile: cluster`);
-it has been proven in a running cluster. Until the Enterprise install itself arrives (it creates
-the chart's Secret and the first administrator), `install --mode enterprise` saves your answers and
-installs nothing.
+server installs OspreyFlow on its first boot. **Enterprise** installs onto a Kubernetes cluster your
+`kubectl` and `helm` already reach: `ospreyflow install --mode enterprise --config install.yaml`,
+with the answers naming the cloud's managed services and the cluster's namespace and shared storage
+class. It installs the Helm chart in `deploy/helm/ospreyflow`, makes its Secret and the first
+administrator (who signs in with a one-time code it prints once), and tells you the address to point
+your names at. Running it again changes no password and replaces no account.
 
 The sign-in details of the accounts the install makes are in the deployment's own
 `deploy/generated/<profile>/deployment.env`; the command never prints a password.
