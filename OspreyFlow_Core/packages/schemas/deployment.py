@@ -569,6 +569,25 @@ class ExternalMedia(BaseModel):
     blob_container: str = Field(default="media", description="The container media is kept in")
 
 
+class ExternalValkey(BaseModel):
+    """A cloud's managed Valkey or Redis (`05_DEPLOYMENT.md` §3b: ElastiCache, Azure Cache for
+    Redis); a cluster's replicas share it. Its password, if any, arrives as `VALKEY_PASSWORD`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    host: str = Field(min_length=1, description="The managed cache's address")
+    port: int = Field(default=6379, description="Its port")
+    tls: bool = Field(default=True, description="Whether it is reached over TLS")
+
+
+class ExternalSearch(BaseModel):
+    """A cloud's managed OpenSearch (`05_DEPLOYMENT.md` §3b: Amazon OpenSearch Service)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, description="The domain's HTTPS address")
+
+
 class ExternalConfig(BaseModel):
     """What a cloud runs for the deployment instead of a container (ADR-114 decision 8)."""
 
@@ -577,10 +596,12 @@ class ExternalConfig(BaseModel):
     postgres: ExternalPostgres | None = None
     object_store: ExternalObjectStore | None = None
     media: ExternalMedia | None = None
+    valkey: ExternalValkey | None = None
+    search: ExternalSearch | None = None
 
     @property
     def any(self) -> bool:
-        return any((self.postgres, self.object_store, self.media))
+        return any((self.postgres, self.object_store, self.media, self.valkey, self.search))
 
 
 class OspreyConfig(BaseModel):
@@ -627,8 +648,33 @@ class OspreyConfig(BaseModel):
                 f"cluster.hosts is declared but profile is {self.profile.value!r}; hosts are only "
                 "meaningful at profile: cluster"
             )
-        if self.profile is Profile.CLUSTER and not self.cluster.hosts:
-            raise ValueError("profile: cluster declares no cluster.hosts")
+        return self
+
+    @model_validator(mode="after")
+    def _a_cluster_runs_on_its_managed_services(self) -> OspreyConfig:
+        """05 §3b: on Kubernetes the cloud runs PostgreSQL, Valkey and the object store, and a
+        managed Valkey or search is for a cluster only (Small runs its own on the server)."""
+        external = self.external
+        if self.profile is Profile.CLUSTER:
+            missing = [
+                name
+                for name, present in (
+                    ("postgres", external.postgres),
+                    ("valkey", external.valkey),
+                    ("object_store (or media, on Azure)", external.object_store or external.media),
+                )
+                if present is None
+            ]
+            if missing:
+                raise ValueError(
+                    "a cluster runs on its cloud's managed services; external names no "
+                    + ", ".join(missing)
+                )
+        elif external.valkey is not None or external.search is not None:
+            raise ValueError(
+                "a managed Valkey or search is for profile: cluster; Small runs its own on the "
+                "server"
+            )
         return self
 
 
@@ -640,6 +686,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     ExternalPostgres,
     ExternalObjectStore,
     ExternalMedia,
+    ExternalValkey,
+    ExternalSearch,
     ExternalConfig,
     ComponentsConfig,
     ModelsConfig,

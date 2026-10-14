@@ -198,6 +198,8 @@ export type { StorageRoots } from "./StorageRoots";
 export type { ExternalPostgres } from "./ExternalPostgres";
 export type { ExternalObjectStore } from "./ExternalObjectStore";
 export type { ExternalMedia } from "./ExternalMedia";
+export type { ExternalValkey } from "./ExternalValkey";
+export type { ExternalSearch } from "./ExternalSearch";
 export type { ExternalConfig } from "./ExternalConfig";
 export type { ComponentsConfig } from "./ComponentsConfig";
 export type { ModelsConfig } from "./ModelsConfig";

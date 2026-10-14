@@ -328,6 +328,22 @@ export type BlobAccount = string;
  * The container media is kept in
  */
 export type BlobContainer = string;
+/**
+ * The managed cache's address
+ */
+export type Host2 = string;
+/**
+ * Its port
+ */
+export type Port2 = number;
+/**
+ * Whether it is reached over TLS
+ */
+export type Tls = boolean;
+/**
+ * The domain's HTTPS address
+ */
+export type Url = string;
 
 /**
  * The whole of `osprey.yaml`.
@@ -566,6 +582,8 @@ export interface ExternalConfig {
   postgres?: ExternalPostgres | null;
   object_store?: ExternalObjectStore | null;
   media?: ExternalMedia | null;
+  valkey?: ExternalValkey | null;
+  search?: ExternalSearch | null;
 }
 /**
  * A cloud's managed PostgreSQL (`05_DEPLOYMENT.md` §3a). The password is never here: it arrives
@@ -594,4 +612,19 @@ export interface ExternalObjectStore {
 export interface ExternalMedia {
   blob_account: BlobAccount;
   blob_container?: BlobContainer;
+}
+/**
+ * A cloud's managed Valkey or Redis (`05_DEPLOYMENT.md` §3b: ElastiCache, Azure Cache for
+ * Redis); a cluster's replicas share it. Its password, if any, arrives as `VALKEY_PASSWORD`.
+ */
+export interface ExternalValkey {
+  host: Host2;
+  port?: Port2;
+  tls?: Tls;
+}
+/**
+ * A cloud's managed OpenSearch (`05_DEPLOYMENT.md` §3b: Amazon OpenSearch Service).
+ */
+export interface ExternalSearch {
+  url: Url;
 }

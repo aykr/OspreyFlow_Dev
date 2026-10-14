@@ -15,8 +15,8 @@ someone will improvise one.
 | Profile | Runs on | Graph | OLAP | Models | Orchestration |
 | --- | --- | --- | --- | --- | --- |
 | `local-lite` | One laptop, 16 GB | ArcadeDB | DuckDB | Ollama, CPU or one consumer GPU | Docker Compose |
-| `small` | 3 machines | ArcadeDB with Raft, or JanusGraph on a single Scylla | DuckDB or ClickHouse single node | Ollama or vLLM on one GPU | Docker Compose across hosts, or a small Kubernetes |
-| `cluster` | 10+ machines | JanusGraph + ScyllaDB + OpenSearch | ClickHouse cluster | vLLM on a GPU pool | Kubernetes |
+| `small` | One cloud server on the cloud's managed services (ADR-114 decision 8, §3a) | ArcadeDB | DuckDB | Ollama | Docker Compose |
+| `cluster` | Kubernetes — EKS or AKS (ADR-114 decision 9, §3b) | ArcadeDB, three Raft replicas | ClickHouse, a replicated pair with Keeper | Ollama in the cluster for now — decision 11's vLLM on a GPU pool is not built; a client's provider through LiteLLM | Kubernetes, from the Helm chart |
 
 The same container images run in all three. Only configuration differs. That is the
 transportability requirement, and it is verifiable: the acceptance scenarios in
@@ -801,6 +801,42 @@ external:
 - **`ospreyflow backup` refuses a deployment with an external Postgres**, in words: the cloud's own
   backups (AWS Backup, RDS snapshots, Azure Backup) protect it, and a dump from inside the server
   would be a second, unscheduled copy no one restores from.
+
+## 3b. Enterprise on Kubernetes (ADR-114 decision 9, Amendment 10)
+
+`profile: cluster` renders no compose file. `harness.render` writes `deploy/generated/cluster/`:
+`values.yaml` for the chart `deploy/helm/ospreyflow`, and the same configuration files Lite renders
+(`osprey.yaml`, `Caddyfile`, `realm.json`, `litellm.yaml`, `glass.json`), which the chart carries as
+ConfigMaps — one renderer, so a cluster and a laptop cannot disagree about what a deployment is. The
+Kubernetes service names are the compose service names, so every rendered address works unchanged.
+
+**What the cloud runs** (`external:`, §3a, all required at `cluster`): PostgreSQL, Valkey
+(`external.valkey`: host, port, TLS — ElastiCache or Azure Cache for Redis), and the object store
+(`object_store` on AWS, `media` plus in-cluster SeaweedFS on Azure, as Small). Search is
+`external.search` (Amazon OpenSearch Service) on AWS, and OpenSearch in the cluster on Azure, which has
+no managed one (decision 9).
+
+**What the chart runs:**
+
+| Workload | Kind | Replicas | Notes |
+| --- | --- | --- | --- |
+| `workspace`, `api`, `report-sync`, `superset` | Deployment | 2 | Stateless; the Conduit's state is in Valkey and the stores |
+| `worker` | Deployment | 3 | The job worker; each replica its own consumer name (its pod name) |
+| `proxy` | Deployment + LoadBalancer Service | 2 | Caddy, the same routes; its certificates on a shared volume |
+| `keycloak` | StatefulSet + headless Service | 2 | Clustered: caches over JGroups, found through the headless Service |
+| `arcadedb` | StatefulSet | 3 | Raft (`arcadedb.ha.*`), each on its own volume |
+| `clickhouse`, `clickhouse-keeper` | StatefulSet | 2, 3 | A replicated table set, coordinated by Keeper |
+| `opensearch`, `objectstore` | StatefulSet | 1 | Only where the cloud has none (Azure) |
+| `ollama`, `litellm`, `ner`, `whisper` | Deployment | 1 | Models; `ollama` may name a GPU node pool. vLLM (decision 11) is not built: it needs the models in another format |
+
+The ingest folder and the recipes repository are one shared volume (ReadWriteMany) mounted by every
+Conduit replica, as Lite mounts a host folder. **Secrets** are never in `values.yaml`: the chart reads
+one Kubernetes Secret (`secrets.name`, `ospreyflow-secrets` by default) holding what `deployment.env`
+holds on Lite, which the install creates. Every image is pinned by digest from the release's lock.
+
+**The chart's test** (Amendment 10 point 5): rendered with `helm template` and validated against the
+Kubernetes schemas, with no workload for any store the cloud manages, every stateful workload on its
+own volume, and nothing but the proxy published.
 
 ## 4. Moving up a profile
 

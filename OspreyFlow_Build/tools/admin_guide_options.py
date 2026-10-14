@@ -100,6 +100,8 @@ SECTIONS = {
     "external.postgres": "A cloud's managed PostgreSQL; its password arrives at install.",
     "external.object_store": "A cloud's S3, for every S3-protocol store (AWS).",
     "external.media": "Media on Azure Blob; its key arrives at install.",
+    "external.valkey": "A cloud's managed Valkey or Redis (cluster only).",
+    "external.search": "A cloud's managed OpenSearch (cluster on AWS only).",
 }
 
 

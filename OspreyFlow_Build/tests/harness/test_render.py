@@ -509,7 +509,8 @@ def test_the_cluster_profile_fails_loudly_rather_than_rendering_compose() -> Non
     `cluster`" — a different renderer, not a toggle. Not built in Stage 2 §1, and a silent compose
     render would be the worse failure."""
     config = OspreyConfig.model_validate(
-        {"profile": "cluster", "cluster": {"hosts": [{"name": "a", "address": "10.0.0.1"}]}}
+        {"profile": "cluster", "cluster": {"hosts": [{"name": "a", "address": "10.0.0.1"}]},
+         "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}}}
     )
     with pytest.raises(ClusterRendererNotBuilt, match="not built in Stage 2"):
         render(config, resolver=_fake_resolver)

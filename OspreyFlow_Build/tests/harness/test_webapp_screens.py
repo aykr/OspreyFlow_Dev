@@ -194,6 +194,7 @@ def test_cluster_profile_stub_behaviour_is_asserted_not_skipped(tmp_path: Path) 
         json={
             "profile": "cluster",
             "cluster": {"hosts": [{"name": "node-1", "address": "10.0.0.1"}]},
+            "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}},
             "components": {"graph_store": "janusgraph", "analytics_engine": "clickhouse"},
         },
     )

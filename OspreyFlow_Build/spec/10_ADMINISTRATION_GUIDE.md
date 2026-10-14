@@ -501,4 +501,10 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `external.media` | section or none | none | Media on Azure Blob; its key arrives at install. |
 | `external.media.blob_account` | str | required | The Blob storage account |
 | `external.media.blob_container` | str | `media` | The container media is kept in |
+| `external.valkey` | section or none | none | A cloud's managed Valkey or Redis (cluster only). |
+| `external.valkey.host` | str | required | The managed cache's address |
+| `external.valkey.port` | int | `6379` | Its port |
+| `external.valkey.tls` | bool | true | Whether it is reached over TLS |
+| `external.search` | section or none | none | A cloud's managed OpenSearch (cluster on AWS only). |
+| `external.search.url` | str | required | The domain's HTTPS address |
 <!-- options:end -->

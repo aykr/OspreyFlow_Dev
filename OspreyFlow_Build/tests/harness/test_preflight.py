@@ -340,6 +340,7 @@ def test_an_unreachable_declared_host_fails_and_names_it() -> None:
         {
             "profile": "cluster",
             "cluster": {"hosts": [{"name": "node-a", "address": "192.0.2.1"}]},
+            "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}},
         }
     )
     context = PreflightContext(config=config, out_dir=Path("/nonexistent"))

@@ -106,22 +106,46 @@ def test_handling_codes_cannot_be_sendable_to_nothing() -> None:
         )
 
 
-def test_cluster_hosts_and_the_cluster_profile_must_agree_in_both_directions() -> None:
-    """Both halves, because each is a different mistake: hosts declared at the wrong profile (they
-    would be silently ignored) and a cluster profile with nowhere to deploy (Preflight's own
-    connectivity check would have an empty list to check)."""
+CLUSTER_SERVICES = {
+    "postgres": {"host": "osprey.cluster-x.eu-west-2.rds.amazonaws.com"},
+    "valkey": {"host": "osprey.x.cache.amazonaws.com", "tls": True},
+    "object_store": {"endpoint": "s3.eu-west-2.amazonaws.com", "region": "eu-west-2"},
+}
+
+
+def test_cluster_hosts_belong_to_the_cluster_profile_only() -> None:
+    """Hosts declared at another profile would be silently ignored."""
     with pytest.raises(ValidationError, match="only meaningful at profile: cluster"):
         OspreyConfig.model_validate(
             {"profile": "local-lite", "cluster": {"hosts": [{"name": "a", "address": "10.0.0.1"}]}}
         )
 
-    with pytest.raises(ValidationError, match="declares no cluster.hosts"):
-        OspreyConfig.model_validate({"profile": "cluster"})
 
-    ok = OspreyConfig.model_validate(
-        {"profile": "cluster", "cluster": {"hosts": [{"name": "a", "address": "10.0.0.1"}]}}
-    )
+@pytest.mark.parametrize("missing", ["postgres", "valkey", "object_store"])
+def test_a_cluster_names_the_managed_services_it_runs_on(missing: str) -> None:
+    """05 §3b: on Kubernetes the cloud runs PostgreSQL, Valkey and the object store; a cluster
+    naming none of one would render workloads with nothing to reach (ADR-114 Amendment 10)."""
+    services = {k: v for k, v in CLUSTER_SERVICES.items() if k != missing}
+    with pytest.raises(ValidationError, match=missing):
+        OspreyConfig.model_validate({"profile": "cluster", "external": services})
+
+
+def test_a_cluster_on_its_managed_services_is_valid() -> None:
+    ok = OspreyConfig.model_validate({"profile": "cluster", "external": CLUSTER_SERVICES})
     assert ok.profile is Profile.CLUSTER
+    assert ok.external.valkey is not None and ok.external.valkey.tls is True
+    azure = {**CLUSTER_SERVICES, "object_store": None,
+             "media": {"blob_account": "ospreymedia1a2b"}}  # fmt: skip
+    assert OspreyConfig.model_validate({"profile": "cluster", "external": azure}).external.media
+    with_search = {**CLUSTER_SERVICES, "search": {"url": "https://search-osprey.eu-west-2.es.amazonaws.com"}}
+    assert OspreyConfig.model_validate({"profile": "cluster", "external": with_search}).external.search
+
+
+def test_managed_valkey_and_search_are_for_a_cluster() -> None:
+    with pytest.raises(ValidationError, match="cluster"):
+        OspreyConfig.model_validate(
+            {"profile": "small", "external": {"valkey": {"host": "x"}}}
+        )
 
 
 def test_duplicate_cluster_host_names_are_rejected() -> None:
