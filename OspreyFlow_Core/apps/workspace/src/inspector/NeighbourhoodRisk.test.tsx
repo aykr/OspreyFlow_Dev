@@ -12,7 +12,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const NODE = { id: "a", type: "Person", properties: { family_name: "Lay" } } as unknown as Node;
+const NODE = { id: "a", type: "Person", properties: { family_name: "Ashby" } } as unknown as Node;
 
 function part() {
   render(<NeighbourhoodRisk apiBaseUrl="http://x" bearerToken="t" investigationId="c1" node={NODE} />);
@@ -23,8 +23,8 @@ describe("Neighbourhood risk", () => {
     const fetched = vi.fn(async () =>
       new Response(JSON.stringify({
         node_id: "a", score: 0.75, max_hops: 2, decay: 0.5, window_days: 90, as_of: "2026-10-10",
-        contributions: [{ node_id: "b", name: "Skilling", hops: 1, alert_ids: ["x"], summaries: ["Structuring"], contribution: 0.5 },
-                        { node_id: "c", name: "Fastow", hops: 2, alert_ids: ["y"], summaries: [], contribution: 0.25 }],
+        contributions: [{ node_id: "b", name: "Holloway", hops: 1, alert_ids: ["x"], summaries: ["Structuring"], contribution: 0.5 },
+                        { node_id: "c", name: "Pendry", hops: 2, alert_ids: ["y"], summaries: [], contribution: 0.25 }],
       }), { status: 200 }));  // prettier-ignore
     vi.stubGlobal("fetch", fetched);
     part();
@@ -32,9 +32,9 @@ describe("Neighbourhood risk", () => {
     fireEvent.click(screen.getByRole("button", { name: "Score this neighbourhood" }));
     expect(await screen.findByText(/Neighbourhood risk 0.75/)).toBeTruthy();
     // Each alert on its own line: three alerts' words run together read as one (found live, 11 Oct).
-    expect(screen.getByText("Skilling, one hop away: 1 alert(s), +0.5")).toBeTruthy();
-    expect(screen.getByRole("list", { name: "Alerts on Skilling" }).textContent).toBe("Structuring");
-    expect(screen.getByText("Fastow, 2 hops away: 1 alert(s), +0.25")).toBeTruthy();
+    expect(screen.getByText("Holloway, one hop away: 1 alert(s), +0.5")).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Alerts on Holloway" }).textContent).toBe("Structuring");
+    expect(screen.getByText("Pendry, 2 hops away: 1 alert(s), +0.25")).toBeTruthy();
   });
 
   it("says why a neighbourhood is not scored", async () => {

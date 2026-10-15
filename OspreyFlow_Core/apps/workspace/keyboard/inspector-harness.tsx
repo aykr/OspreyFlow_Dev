@@ -66,7 +66,7 @@ function Harness() {
   if (NODE_VIEW) {
     return (
       <Inspector
-        node={person("a", "Lay")}
+        node={person("a", "Ashby")}
         onExpand={(id) => window.__INSPECTOR__!.expanded.push(id)}
         neighbourhoodRisk={{ apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused", investigationId: "inv-1" }}
         sharedContacts={{
@@ -86,7 +86,7 @@ function Harness() {
       </button>
       <Inspector
         node={null}
-        link={{ edge, source: person("a", "Lay"), target: person("b", "Skilling"), directed: false }}
+        link={{ edge, source: person("a", "Ashby"), target: person("b", "Holloway"), directed: false }}
         assessment={{
           apiBaseUrl: "http://keyboard-test.invalid",
           bearerToken: "unused",

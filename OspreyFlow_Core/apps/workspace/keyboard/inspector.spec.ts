@@ -58,7 +58,7 @@ test("who shares contacts with a node is asked, and a pair put on the canvas, by
     const body = post
       ? { delta: { op: "add", seq: 5, nodes: [], edges: [] }, added_nodes: 3, added_links: 4 }
       : {
-          contacts: [{ node: { id: "b", type: "Person", properties: { family_name: "Skilling" }, provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" }, handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" }, audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" } }, shared: 7 }],
+          contacts: [{ node: { id: "b", type: "Person", properties: { family_name: "Holloway" }, provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" }, handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" }, audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" } }, shared: 7 }],
           total: 1,
         };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -69,7 +69,7 @@ test("who shares contacts with a node is asked, and a pair put on the canvas, by
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Who shares two contacts by “Associate of”?" }).focus();
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "Skilling · shares 7" }).focus();
+  await page.getByRole("button", { name: "Holloway · shares 7" }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__INSPECTOR__?.deltas)).toEqual([5]);
   await expect(page.getByText("3 nodes and 4 links added.")).toBeVisible();
@@ -84,8 +84,8 @@ test("a node's neighbourhood risk is scored by keyboard, each contribution named
       body: JSON.stringify({
         node_id: "a", score: 1.5, max_hops: 2, decay: 0.5, window_days: 90, as_of: "2026-10-10",
         contributions: [
-          { node_id: "b", name: "Skilling", hops: 1, alert_ids: ["x", "y"], summaries: ["Structuring", "Rapid movement"], contribution: 1.0 },
-          { node_id: "c", name: "Fastow", hops: 2, alert_ids: ["z"], summaries: ["Circular flow"], contribution: 0.5 },
+          { node_id: "b", name: "Holloway", hops: 1, alert_ids: ["x", "y"], summaries: ["Structuring", "Rapid movement"], contribution: 1.0 },
+          { node_id: "c", name: "Pendry", hops: 2, alert_ids: ["z"], summaries: ["Circular flow"], contribution: 0.5 },
         ],
       }),
     });
@@ -96,8 +96,8 @@ test("a node's neighbourhood risk is scored by keyboard, each contribution named
   await page.getByRole("button", { name: "Score this neighbourhood" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("status")).toContainText("Neighbourhood risk 1.5");
-  await expect(page.getByText("Skilling, one hop away: 2 alert(s), +1")).toBeVisible();
-  await expect(page.getByRole("list", { name: "Alerts on Skilling" })).toContainText("Rapid movement");
+  await expect(page.getByText("Holloway, one hop away: 2 alert(s), +1")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Alerts on Holloway" })).toContainText("Rapid movement");
   registerCovered(REGISTRY, "score-a-neighbourhoods-risk-by-keyboard");
 });
 

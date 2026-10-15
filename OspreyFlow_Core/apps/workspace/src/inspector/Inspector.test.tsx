@@ -122,7 +122,7 @@ describe("Inspector — a selected link", () => {
 });
 
 describe("Inspector sections (ADR-096)", () => {
-  const person = { id: "a", type: "Person", properties: { family_name: "Lay" }, provenance: { state: "asserted", sources: [{ document_id: "d1", locator: "p.1" }], first_seen: "x" } } as unknown as Node;
+  const person = { id: "a", type: "Person", properties: { family_name: "Ashby" }, provenance: { state: "asserted", sources: [{ document_id: "d1", locator: "p.1" }], first_seen: "x" } } as unknown as Node;
   const editing = { edgeTypes: [], openChangeSignal: 0, openNoteSignal: 0, openEventsSignal: 0, onChanged: () => undefined };
   const header = (name: RegExp | string) => screen.getByRole("button", { name });
 
@@ -191,7 +191,7 @@ describe("Inspector sections (ADR-096)", () => {
     render(<Inspector node={person} assessment={assessment} />);
     expect(screen.queryByRole("tab")).toBeNull();
     expect(header("Properties").getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getAllByText("Lay")).toHaveLength(2); // the header's name and the property
+    expect(screen.getAllByText("Ashby")).toHaveLength(2); // the header's name and the property
     for (const name of ["Relationships", "Provenance", "Source", "Judgements"]) {
       expect(header(name).getAttribute("aria-expanded")).toBe("false");
     }
@@ -209,8 +209,8 @@ describe("Inspector sections (ADR-096)", () => {
 describe("Inspector states (ADR-097 step 1, design review item 4)", () => {
   const node = (id: string, type: string, properties: Record<string, unknown>) =>
     ({ id, type, properties, provenance: { state: "asserted", sources: [], first_seen: "x" } }) as unknown as Node;
-  const lay = node("p1", "Person", { family_name: "Lay", employer: "Enron" });
-  const skilling = node("p2", "Person", { family_name: "Skilling", employer: "Enron" });
+  const ashby = node("p1", "Person", { family_name: "Ashby", employer: "Fixture Corp" });
+  const holloway = node("p2", "Person", { family_name: "Holloway", employer: "Fixture Corp" });
   const phone = node("e1", "Endpoint", { value_normalised: "07911123456" });
 
   function graphOf(nodes: Node[], edges: [string, string, string, string][]) {
@@ -224,13 +224,13 @@ describe("Inspector states (ADR-097 step 1, design review item 4)", () => {
 
   it("one node: its type and name head the panel, and its links in view are counted by type", () => {
     stubNotes();
-    const graph = graphOf([lay, skilling, phone], [
+    const graph = graphOf([ashby, holloway, phone], [
       ["k1", "ASSOCIATE_OF", "p1", "p2"],
       ["k2", "USES", "p1", "e1"],
       ["k3", "ASSOCIATE_OF", "p1", "e1"],
     ]);
-    render(<Inspector node={lay} assessment={{ ...assessment, workingSetGraph: graph }} />);
-    expect(screen.getByRole("heading", { name: /Person.*p1|Lay/ })).toBeTruthy();
+    render(<Inspector node={ashby} assessment={{ ...assessment, workingSetGraph: graph }} />);
+    expect(screen.getByRole("heading", { name: /Person.*p1|Ashby/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Relationships" }));
     const rows = screen.getAllByRole("listitem").map((li) => li.textContent);
     expect(rows).toContain("Associate of2"); // the display name (ADR-091)
@@ -239,14 +239,14 @@ describe("Inspector states (ADR-097 step 1, design review item 4)", () => {
 
   it("several nodes: a summary by type, what they share, and the links between them", () => {
     stubNotes();
-    const graph = graphOf([lay, skilling, phone], [
+    const graph = graphOf([ashby, holloway, phone], [
       ["k1", "ASSOCIATE_OF", "p1", "p2"],
       ["k2", "USES", "p1", "e1"],
     ]);
     render(
       <Inspector
-        node={lay}
-        selection={{ nodes: [lay, skilling], onCentre: vi.fn(), onRemove: vi.fn() }}
+        node={ashby}
+        selection={{ nodes: [ashby, holloway], onCentre: vi.fn(), onRemove: vi.fn() }}
         assessment={{ ...assessment, workingSetGraph: graph }}
       />,
     );
@@ -288,7 +288,7 @@ describe("Inspector states (ADR-097 step 1, design review item 4)", () => {
 
   it("one node without a marking or a way to expand shows neither", () => {
     stubNotes();
-    render(<Inspector node={lay} assessment={assessment} />);
+    render(<Inspector node={ashby} assessment={assessment} />);
     expect(screen.queryByLabelText("Marking")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Relationships" }));
     expect(screen.queryByRole("button", { name: /^Expand/ })).toBeNull();

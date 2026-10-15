@@ -463,7 +463,7 @@ describe("DocumentReader: marking an entity", () => {
   it("says when the words are not in the text, and sends nothing", async () => {
     const fetchMock = serve({ "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL } });
     mount();
-    fireEvent.change(await screen.findByRole("textbox", { name: "Words to mark" }), { target: { value: "Ken Lay" } });
+    fireEvent.change(await screen.findByRole("textbox", { name: "Words to mark" }), { target: { value: "Kit Ashby" } });
     fireEvent.click(screen.getByRole("button", { name: "Mark" }));
     expect(await screen.findByText("Those words are not in this document.")).toBeTruthy();
     expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith("/designations"))).toBe(false);

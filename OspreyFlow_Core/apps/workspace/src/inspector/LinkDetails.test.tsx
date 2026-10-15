@@ -27,25 +27,25 @@ function link(overrides: Partial<Edge> = {}): Edge {
   } as unknown as Edge;
 }
 
-const ends = { source: node("a", "jeff@enron.com"), target: node("b", "ken@enron.com") };
+const ends = { source: node("a", "jeff@enron.com"), target: node("b", "kit@enron.com") };
 
 describe("LinkDetails", () => {
   it("names the type and the two ends, by what they are rather than their ids", () => {
     render(<LinkDetails edge={link()} {...ends} directed />);
     expect(screen.getByText("COMMUNICATED_WITH")).toBeTruthy();
     expect(screen.getByText(/jeff@enron\.com/)).toBeTruthy();
-    expect(screen.getByText(/ken@enron\.com/)).toBeTruthy();
+    expect(screen.getByText(/kit@enron\.com/)).toBeTruthy();
   });
 
   it("shows the direction when the relationship has one", () => {
     render(<LinkDetails edge={link()} {...ends} directed />);
-    expect(screen.getByText(/jeff@enron\.com → ken@enron\.com/)).toBeTruthy();
+    expect(screen.getByText(/jeff@enron\.com → kit@enron\.com/)).toBeTruthy();
   });
 
   it("says plainly when the relationship has no direction", () => {
     render(<LinkDetails edge={link()} {...ends} directed={false} />);
     const text = document.body.textContent ?? "";
-    expect(text).toMatch(/jeff@enron\.com — ken@enron\.com/);
+    expect(text).toMatch(/jeff@enron\.com — kit@enron\.com/);
     expect(text).toMatch(/no direction/i);
     expect(text).not.toContain("→");
   });

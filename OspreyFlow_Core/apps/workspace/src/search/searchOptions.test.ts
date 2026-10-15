@@ -50,8 +50,8 @@ describe("activeFilterCount", () => {
 
 describe("matchOnScreen", () => {
   const nodes = [
-    node("1", "Endpoint", "Jeff.Skilling@enron.com"),
-    node("2", "Endpoint", "jeff.dasovich@enron.com"),
+    node("1", "Endpoint", "Jeff.Holloway@enron.com"),
+    node("2", "Endpoint", "jeff.marsden@enron.com"),
     node("3", "Person", "Jeffrey Archer"),
     node("4", "Endpoint", "xjeffx"),
   ];

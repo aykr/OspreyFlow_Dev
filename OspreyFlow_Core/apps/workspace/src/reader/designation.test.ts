@@ -51,6 +51,6 @@ describe("placeOf", () => {
   it("finds the first place of typed words, and none for words not in the text", () => {
     expect(placeOf(text, "Callum PRICE", null)).toEqual({ start: 21, end: 33 });
     expect(placeOf(text, "  MERCER ", null)).toEqual({ start: 5, end: 11 });
-    expect(placeOf(text, "Ken Lay", null)).toBeNull();
+    expect(placeOf(text, "Kit Ashby", null)).toBeNull();
   });
 });

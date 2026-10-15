@@ -203,8 +203,8 @@ describe("defaultLabel names a thing by its name or title before its identifiers
   });
 
   it("still a person by family and given names, an address by its value, and the id as the last resort", () => {
-    expect(defaultLabel(n("Person", { family_name: "Lay", given_names: "Kenneth", name: "Ken" }))).toBe("Lay, Kenneth");
-    expect(defaultLabel(n("Endpoint", { value_normalised: "richard.ring@enron.com" }))).toBe("richard.ring@enron.com");
+    expect(defaultLabel(n("Person", { family_name: "Ashby", given_names: "Kieran", name: "Kit" }))).toBe("Ashby, Kieran");
+    expect(defaultLabel(n("Endpoint", { value_normalised: "robin.marsh@enron.com" }))).toBe("robin.marsh@enron.com");
     expect(defaultLabel(n("Vehicle", {}))).toBe("01M48S26W58AM0WCX9AE3BG0VQ");
   });
 });
