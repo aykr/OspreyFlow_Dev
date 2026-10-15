@@ -27,6 +27,7 @@ What a mistake would do, and the case that catches it:
 from __future__ import annotations
 
 import csv
+import importlib.util
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,6 +55,13 @@ from services.api.studio_publish import build_recipe, write_and_commit_recipe
 from services.api.studio_recipes import StudioRecipeStore
 
 from tests.ingest.test_studio_run_geometries import RecordingAnalytics
+
+
+#: The extract tests run spaCy itself; where it is not installed (CI, which does not install the
+#: `extraction` extra) they skip, as the recogniser conformance suite does.
+_needs_spacy = pytest.mark.skipif(
+    importlib.util.find_spec("spacy") is None, reason="spaCy is not installed here"
+)
 
 AUTHOR = Principal(
     id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["source_author"]
@@ -296,6 +304,7 @@ async def test_two_source_branches_both_load_each_under_its_own_load_id(
 # --- Extract ----------------------------------------------------------------
 
 
+@_needs_spacy
 async def test_extract_to_review_queue_queues_pending_with_the_documents_handling(
     store: StudioRecipeStore, candidates: ExtractionCandidateStore, tmp_path: Path, git_repo: Path
 ) -> None:
@@ -333,6 +342,7 @@ async def test_extract_to_review_queue_queues_pending_with_the_documents_handlin
         assert person is None
 
 
+@_needs_spacy
 async def test_extract_to_inferred_graph_writes_inferred_never_asserted(
     store: StudioRecipeStore, tmp_path: Path, git_repo: Path
 ) -> None:
@@ -359,6 +369,7 @@ async def test_extract_to_inferred_graph_writes_inferred_never_asserted(
         assert person.provenance.extracted_by.startswith("model:spacy:")
 
 
+@_needs_spacy
 async def test_extract_handling_override_is_loud_in_the_report(
     store: StudioRecipeStore, candidates: ExtractionCandidateStore, tmp_path: Path, git_repo: Path
 ) -> None:

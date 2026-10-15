@@ -19,7 +19,7 @@ from tests.conformance.registry import RECOGNISE_PORT_ADAPTERS, RecogniseAdapter
 
 pytestmark = pytest.mark.parametrize("factory", RECOGNISE_PORT_ADAPTERS, ids=str)
 
-SENTENCE = "Kenneth Lay met Jeffrey Skilling of Enron in Houston on Monday."
+SENTENCE = "Dana Mercer met Thomas Ashby of Fixture Corp in Leeds on Monday."  # synthetic (rule 9)
 
 
 async def test_a_person_an_organisation_and_a_place_are_found_with_their_spans(

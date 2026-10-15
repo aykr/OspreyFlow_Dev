@@ -28,6 +28,7 @@ discipline `GraphPort`/`AnalyticsPort` already established, not a fake.
 
 from __future__ import annotations
 
+import importlib.util
 from collections.abc import Callable, Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -156,15 +157,14 @@ def _recognise_in_process_factories() -> list[RecogniseAdapterFactory]:
     installed — the CI image deliberately carries neither, so their conformance runs on a machine
     that holds the weights (the friction log records where each last ran green)."""
     found: list[RecogniseAdapterFactory] = []
-    try:
+    # The adapters import their libraries lazily, so it is the library that is looked for.
+    if importlib.util.find_spec("spacy") is not None:
         from adapters.recognise_spacy.testing import recognise_spacy_adapter
 
         found.append(
             RecogniseAdapterFactory(label="recognise_spacy", context=recognise_spacy_adapter)
         )
-    except ImportError:
-        pass
-    try:
+    if importlib.util.find_spec("transformers") is not None:
         from adapters.recognise_transformers.testing import recognise_transformers_adapter
 
         found.append(
@@ -172,8 +172,6 @@ def _recognise_in_process_factories() -> list[RecogniseAdapterFactory]:
                 label="recognise_transformers", context=recognise_transformers_adapter
             )
         )
-    except ImportError:
-        pass
     return found
 
 

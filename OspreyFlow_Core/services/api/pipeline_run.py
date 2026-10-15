@@ -32,6 +32,7 @@ not view inside `match_place_mention` itself.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import os
 from collections import deque
 from collections.abc import Awaitable, Callable
@@ -98,6 +99,11 @@ def recogniser_for_deployment(stanza: RecognisePort) -> RecogniserFor:
 
     def get(name: str) -> RecognisePort | None:
         if name not in cache:
+            # The adapters import their libraries lazily, so it is the library that is looked for;
+            # importing the adapter alone succeeded without it and the stage then crashed.
+            if name in ("spacy", "transformers") and importlib.util.find_spec(name) is None:
+                cache[name] = None
+                return None
             try:
                 if name == "spacy":
                     from adapters.recognise_spacy.adapter import RecogniseSpacyAdapter
