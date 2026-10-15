@@ -538,6 +538,8 @@ def test_the_image_renders_local_lite_pull_mode_with_only_an_empty_workspace_mou
             "docker",
             "run",
             "--rm",
+            "--user",  # as the render above: the host's own user, so it can read what it wrote
+            f"{os.getuid()}:{os.getgid()}",
             "-v",
             f"{tmp_path}:/workspace",
             built_image,

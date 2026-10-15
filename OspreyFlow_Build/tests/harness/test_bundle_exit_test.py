@@ -31,12 +31,14 @@ import os
 import subprocess
 import sys
 import tarfile
+import tempfile
 from pathlib import Path
 
 import pytest
 
 from tests.harness.deployment_guard import refuse_to_touch_a_real_deployment
 from tools.layout import BUILD, CORE
+from tools.osprey_bundle import HARNESS_IMAGE
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("OSPREY_TEST_DIST_BUNDLE") != "1",
@@ -64,9 +66,27 @@ def _run(args: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
 _OWNED_IMAGES: tuple[tuple[str, str], ...] = (
     ("osprey/api:local", "services/api/Dockerfile"),
     ("osprey/ingest:local", "services/ingest/Dockerfile"),
+    ("osprey/ner:local", "services/ner/Dockerfile"),
     ("osprey/workspace:local", "apps/workspace/Dockerfile"),
     ("osprey/harness:local", "harness/Dockerfile"),
 )
+
+
+def _owned_by_render() -> set[tuple[str, str]]:
+    """Every owned image `harness.render.service_images` names for `local-lite` built from this
+    checkout, as `(tag, dockerfile)`."""
+    from harness.render import load_config, service_images
+
+    with tempfile.TemporaryDirectory() as scratch:
+        config_path = Path(scratch) / "osprey.yaml"
+        config_path.write_text(
+            f"profile: local-lite\ncomponents:\n  source_path: {CORE}\n", encoding="utf-8"
+        )
+        return {
+            (entry.image, entry.dockerfile)
+            for entry in service_images(load_config(config_path))
+            if entry.dockerfile
+        }
 
 
 def _build_the_owned_images() -> None:
@@ -79,7 +99,14 @@ def _build_the_owned_images() -> None:
     it: the failure was a bare `CalledProcessError` naming a `docker tag` invocation. That command
     now raises `MissingLocalImageError` naming the image and the build command; this test stops
     depending on the precondition at all. Docker's layer cache makes the repeat cost small.
+
+    The list is checked against what a source-built render names first, so an owned image added
+    later fails here, by name, rather than as a missing tag half-way through the bundle (the NER
+    image was missed until CI ran this, 15 October 2026).
     """
+    named = _owned_by_render()
+    listed = {(tag, dockerfile) for tag, dockerfile in _OWNED_IMAGES if tag != HARNESS_IMAGE}
+    assert listed == named, f"_OWNED_IMAGES is out of step with the render: {listed ^ named}"
     for tag, dockerfile in _OWNED_IMAGES:
         built = _run(["docker", "build", "-f", dockerfile, "-t", tag, "."], timeout=1800)
         assert built.returncode == 0, f"could not build {tag}: {built.stdout + built.stderr}"
