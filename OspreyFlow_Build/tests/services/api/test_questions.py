@@ -59,7 +59,7 @@ ANSWER = {
             "quote": "Dabhol plant",
             "confidence": 80,
         },
-        {"type": "Person", "name": "Ken LAY", "document": 1, "quote": "Ken LAY", "confidence": 70},
+        {"type": "Person", "name": "Dan LEE", "document": 1, "quote": "Dan LEE", "confidence": 70},
     ],
 }
 

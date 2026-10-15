@@ -16,7 +16,7 @@ HANDLING = Handling(
     classification="OFFICIAL", handling_code="P", originator="unit-1", owning_unit="unit-1"
 )
 TEXT = (
-    "Kenneth Lay met Enron staff in Houston on Monday; "
+    "Kieran Ashe met Enron staff in Houston on Monday; "
     "write to ken.lay@enron.com or call +44 7911 123456."
 )
 
@@ -35,12 +35,12 @@ def _candidates(result: RecogniseResult):  # type: ignore[no-untyped-def]
 
 def test_labels_become_people_organisations_and_places_and_others_are_left_out() -> None:
     found = _candidates(
-        _result(("PERSON", "Kenneth Lay"), ("ORG", "Enron"), ("GPE", "Houston"), ("DATE", "Monday"))
+        _result(("PERSON", "Kieran Ashe"), ("ORG", "Enron"), ("GPE", "Houston"), ("DATE", "Monday"))
     )
     by_type = {
         (c.entity_type, c.properties.get("name") or c.properties.get("family_name")) for c in found
     }
-    assert ("Person", "Lay") in by_type
+    assert ("Person", "Ashe") in by_type
     assert ("Organisation", "Enron") in by_type
     assert ("Location", "Houston") in by_type
     assert not any("Monday" in str(c.properties) for c in found)
@@ -48,14 +48,14 @@ def test_labels_become_people_organisations_and_places_and_others_are_left_out()
 
 def test_each_finding_has_its_exact_span_hash_and_names_the_recogniser() -> None:
     (person,) = [
-        c for c in _candidates(_result(("PERSON", "Kenneth Lay"))) if c.entity_type == "Person"
+        c for c in _candidates(_result(("PERSON", "Kieran Ashe"))) if c.entity_type == "Person"
     ]
-    start = TEXT.index("Kenneth Lay")
+    start = TEXT.index("Kieran Ashe")
     assert person.locator == f"char span {start}-{start + 11}"
-    assert person.excerpt_hash == hashlib.sha256(b"Kenneth Lay").hexdigest()
+    assert person.excerpt_hash == hashlib.sha256(b"Kieran Ashe").hexdigest()
     assert person.model == "stanza:1.10.1"
     assert person.handling == HANDLING
-    assert person.properties == {"family_name": "Lay", "given_names": "Kenneth"}
+    assert person.properties == {"family_name": "Ashe", "given_names": "Kieran"}
 
 
 def test_emails_and_phone_numbers_are_found_by_pattern_as_endpoints() -> None:
@@ -69,7 +69,7 @@ def test_emails_and_phone_numbers_are_found_by_pattern_as_endpoints() -> None:
 
 
 def test_a_mention_found_twice_is_one_finding() -> None:
-    found = _candidates(_result(("PERSON", "Kenneth Lay"), ("PERSON", "Kenneth Lay")))
+    found = _candidates(_result(("PERSON", "Kieran Ashe"), ("PERSON", "Kieran Ashe")))
     assert len([c for c in found if c.entity_type == "Person"]) == 1
 
 

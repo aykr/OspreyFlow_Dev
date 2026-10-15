@@ -178,9 +178,9 @@ def test_the_excerpt_is_the_whole_body_however_long(tmp_path: Path) -> None:
 
 
 def test_a_quoted_printable_body_is_decoded(tmp_path: Path) -> None:
-    """ADR-095 context 2: the owner's email showed `=20` and `Ken La= y`, because the body was
+    """ADR-095 context 2: the owner's email showed `=20` and `a name split by = and a line break`, because the body was
     never decoded. The header shape is that email's own."""
-    body = "the Board and Ken La=\ny personally reinvest.=20 Portland."
+    body = "the Board and Dan Le=\ne personally reinvest.=20 Portland."
     raw = _mail(message_id="<qp@thyme>", body=body)
     raw = raw.replace(
         "Subject: Hello",
@@ -189,7 +189,7 @@ def test_a_quoted_printable_body_is_decoded(tmp_path: Path) -> None:
     )
     _put(tmp_path, "smith-a", "sent", "qp.", raw)
     (message,) = list(enron.read_messages(tmp_path))
-    assert "Ken Lay personally reinvest. Portland." in message.excerpt
+    assert "Dan Lee personally reinvest. Portland." in message.excerpt
     assert "=20" not in message.excerpt
 
 

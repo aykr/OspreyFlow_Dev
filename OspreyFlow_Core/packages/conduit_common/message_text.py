@@ -3,7 +3,7 @@
 Every source that reads email reads its body here, so a fix to decoding is a fix everywhere and no
 loader keeps its own half-decoded copy (the Enron loader read bodies with
 `get_payload(decode=False)`, leaving quoted-printable encoded and its soft line breaks splitting
-words, `Ken La= y`, that extraction must find verbatim).
+words, a name broken by `=` and a line break, that extraction must find verbatim).
 
 `body_text` gives the text a person reads: the transfer encoding undone (quoted-printable, base64),
 the declared character set applied (an unknown one read as UTF-8, never refused), and for a

@@ -26,7 +26,7 @@ from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
 from tests.adapters.graph_arcadedb.test_suggest_nodes import _element_map
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
-IDS = ["Jeff.Skilling@enron.com", "jeff.dasovich@enron.com", "ajeffries@x.org", "C13"]
+IDS = ["Jeff.Sorensen@enron.com", "jeff.danforth@enron.com", "ajeffries@x.org", "C13"]
 
 
 def _java_pattern(pattern: str) -> str:
@@ -78,25 +78,25 @@ def _ids(prefix: str, **options: Any) -> list[str]:
 
 
 def test_the_default_is_still_starts_with_and_case_sensitive() -> None:
-    assert _ids("jeff") == ["jeff.dasovich@enron.com"]
+    assert _ids("jeff") == ["jeff.danforth@enron.com"]
 
 
 def test_ignore_case_finds_either_case() -> None:
     assert _ids("jeff", ignore_case=True) == [
-        "Jeff.Skilling@enron.com",
-        "jeff.dasovich@enron.com",
+        "Jeff.Sorensen@enron.com",
+        "jeff.danforth@enron.com",
     ]
     assert _ids("c13", ignore_case=True) == ["C13"]
 
 
 def test_contains_finds_the_text_anywhere_and_is_case_sensitive_unless_asked() -> None:
     assert _ids("jeff", mode="contains") == [
-        "jeff.dasovich@enron.com",
+        "jeff.danforth@enron.com",
         "ajeffries@x.org",
     ]
     assert _ids("JEFF", mode="contains", ignore_case=True) == [
-        "Jeff.Skilling@enron.com",
-        "jeff.dasovich@enron.com",
+        "Jeff.Sorensen@enron.com",
+        "jeff.danforth@enron.com",
         "ajeffries@x.org",
     ]
 

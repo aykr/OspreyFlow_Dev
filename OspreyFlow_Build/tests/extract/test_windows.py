@@ -81,8 +81,8 @@ def _span(candidate: Any) -> tuple[int, int]:
 
 
 def test_a_short_text_is_read_in_one_call() -> None:
-    found, reader, store = _run("Ken Lay wrote.", ["Lay"], window_chars=100, overlap_chars=10)
-    assert len(reader.seen) == 1 and len(found) == 1 and store.text == "Ken Lay wrote."
+    found, reader, store = _run("Dan Lee wrote.", ["Lee"], window_chars=100, overlap_chars=10)
+    assert len(reader.seen) == 1 and len(found) == 1 and store.text == "Dan Lee wrote."
 
 
 def test_a_long_text_is_read_in_more_than_one_call() -> None:
@@ -94,20 +94,20 @@ def test_a_long_text_is_read_in_more_than_one_call() -> None:
 
 
 def test_a_finding_in_a_later_window_is_kept_where_it_stands_in_the_whole_text() -> None:
-    text = "x" * 250 + " Skilling met them."
-    (found,), _, _ = _run(text, ["Skilling"], window_chars=100, overlap_chars=10)
+    text = "x" * 250 + " Holloway met them."
+    (found,), _, _ = _run(text, ["Holloway"], window_chars=100, overlap_chars=10)
     start, end = _span(found)
-    assert text[start:end] == "Skilling"
+    assert text[start:end] == "Holloway"
 
 
 def test_a_name_across_a_boundary_is_found_in_the_overlap() -> None:
-    text = "y" * 95 + "Fastow" + "y" * 50
-    found, _, _ = _run(text, ["Fastow"], window_chars=100, overlap_chars=20)
-    assert [text[slice(*_span(f))] for f in found] == ["Fastow"]
+    text = "y" * 95 + "Pendry" + "y" * 50
+    found, _, _ = _run(text, ["Pendry"], window_chars=100, overlap_chars=20)
+    assert [text[slice(*_span(f))] for f in found] == ["Pendry"]
 
 
 def test_a_mention_in_the_overlap_is_kept_once() -> None:
-    text = "z" * 85 + " Lay " + "z" * 100
-    found, reader, _ = _run(text, ["Lay"], window_chars=100, overlap_chars=20)
-    assert sum("Lay" in w for w in reader.seen) == 2
+    text = "z" * 85 + " Lee " + "z" * 100
+    found, reader, _ = _run(text, ["Lee"], window_chars=100, overlap_chars=20)
+    assert sum("Lee" in w for w in reader.seen) == 2
     assert len(found) == 1

@@ -1753,8 +1753,8 @@ async def test_suggest_nodes_ignoring_case_finds_either_case_and_the_default_doe
     factory: GraphAdapterFactory,
 ) -> None:
     async with factory.context() as adapter:
-        upper = await _suggest_account(adapter, "Jeff.Skilling@enron.com")
-        lower = await _suggest_account(adapter, "jeff.dasovich@enron.com")
+        upper = await _suggest_account(adapter, "Jeff.Sorensen@enron.com")
+        lower = await _suggest_account(adapter, "jeff.danforth@enron.com")
         plain = await adapter.suggest_nodes("jeff", CLEARED)
         assert [n.id for n in plain.nodes] == [lower]
         folded = await adapter.suggest_nodes(

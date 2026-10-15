@@ -1,7 +1,7 @@
 """The one reader of a message body (ADR-095 decision 5): every email source decodes through it.
 
 Found on the Enron case: bodies were read with `get_payload(decode=False)`, so quoted-printable
-stayed encoded and its soft line breaks split words (`Ken La= y`), which extraction must find
+stayed encoded and its soft line breaks split words (a name split by `=` and a line break), which extraction must find
 verbatim. What a mistake would do, and the case that catches it, below. The messages are made up
 here (rule 9), in the shapes real mail takes: the first is the Enron message's own header shape.
 """
@@ -23,12 +23,12 @@ def test_quoted_printable_is_decoded_and_its_soft_breaks_joined() -> None:
         "Mime-Version: 1.0\n"
         "Content-Type: text/plain; charset=us-ascii\n"
         "Content-Transfer-Encoding: quoted-printable\n\n"
-        "having the Board of Directors and Ken La=\ny personally reinvest.=20\n"
+        "having the Board of Directors and Dan Le=\ne personally reinvest.=20\n"
         "Come to Portland.=0AThanks\n"
     )
     text = body_text(message)  # type: ignore[arg-type]
-    assert "Ken Lay personally" in text
-    assert "=20" not in text and "La=" not in text
+    assert "Dan Lee personally" in text
+    assert "=20" not in text and "Le=" not in text
     assert "Portland." in text
 
 

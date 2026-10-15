@@ -221,7 +221,7 @@ async def test_words_not_at_that_place_in_the_text_are_refused_and_nothing_writt
         await reader.designate(
             "inv-1",
             doc.id,
-            Designation(entity_type="Person", text="Ken LAY", start=0, end=7),
+            Designation(entity_type="Person", text="Dan LEE", start=0, end=7),
             ANALYST,
         )
     assert graph.nodes == {} and graph.committed_edges == []
