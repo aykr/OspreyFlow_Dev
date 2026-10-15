@@ -6,6 +6,14 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.1.1 — 2026-10-15
+
+- **The Glass stays responsive while a large case's icons load.** When a node icon finished
+  loading, the canvas redrew the whole graph in one go; on a slow machine a 50,000-node case froze
+  for several seconds just after it appeared. It now redraws only the nodes, a share per frame.
+- Includes everything in v0.1.0, among it the fix for a model download that stopped with
+  `rename …-partial …: no such file or directory`.
+
 ## v0.1.0 — 2026-10-15
 
 The first release.
