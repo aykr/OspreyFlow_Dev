@@ -60,3 +60,14 @@ def test_every_action_the_release_shares_with_ci_is_at_the_version_ci_proves() -
     )
     differing = [(action, ref, ci[action]) for action, ref in release if action in ci and ref != ci[action]]
     assert differing == [], f"release.yml uses another version than ci.yml: {differing}"
+
+
+def test_the_release_job_logs_in_before_it_asks_the_registry_for_digests() -> None:
+    """A new package on ghcr.io is private until its owner opens it, so the first release's own
+    images answered an anonymous digest lookup with 401 and the lock was refused (v0.1.0's first
+    run, 15 October 2026). The job that writes the lock logs in first, as the image jobs do."""
+    steps = yaml.safe_load(RELEASE.read_text(encoding="utf-8"))["jobs"]["release"]["steps"]
+    names = [s.get("uses", s.get("name", "")) for s in steps]
+    login = next((i for i, n in enumerate(names) if n.startswith("docker/login-action")), None)
+    lock = next(i for i, n in enumerate(names) if "versions.lock" in n)
+    assert login is not None and login < lock, names

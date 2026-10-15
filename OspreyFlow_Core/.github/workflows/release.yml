@@ -109,6 +109,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: notes
+      # The images just pushed are private until their owner opens them, so the digests are asked
+      # for logged in (v0.1.0's first run was refused the lock without it).
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       # Pull mode (no `source_path`): every image locked by the digest the registry holds — the
       # owned ones just pushed, by this commit's tag — or the render refuses.
       - name: The release's versions.lock
