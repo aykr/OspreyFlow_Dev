@@ -71,7 +71,7 @@ jobs:
         run: |
           docker buildx build --platform linux/amd64 --load -f ${{ matrix.dockerfile }} \
             -t "${{ steps.name.outputs.image }}:scan" "${{ matrix.context || '.' }}"
-      - uses: aquasecurity/trivy-action@0.24.0
+      - uses: aquasecurity/trivy-action@v0.24.0
         with:
           image-ref: ${{ steps.name.outputs.image }}:scan
           scan-type: image

@@ -6,6 +6,10 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.1.0 — 2026-10-15
+
+The first release.
+
 - **Install and look after it with one command**: `ospreyflow install`, `start`, `stop`, `status`,
   `logs`, `backup`, `restore`, `demo` and `update`.
 - **Signed releases and safe updates**: every image of a release, and its list of image digests,
@@ -22,3 +26,16 @@ update. Work not yet in a release is listed under *Unreleased*.
   schedule* in the Admin area.
 - **The Glass to the design review**: the welcome page and sign-in, Home, smaller nodes with their
   icons from closer zoom, the theme in the top bar, and each case's datasets beside its name.
+- **Three ways to install**: Lite on one machine, Small on one AWS or Azure server with managed
+  services, and Enterprise on EKS or AKS from a Helm chart (`ospreyflow install --mode …`).
+- **Demo packs**, added with `ospreyflow demo add`: three synthetic cases, PaySim from its published
+  file, and the Enron email corpus as an optional download — real people's email, which you fetch
+  from its source yourself and accept before anything is loaded; it is never part of a release.
+- **Guides** for administrators, analysts and data engineers in `docs/`, as Markdown and PDF.
+- **Cases and their branches in one tree**, a branch renamed or deleted where it is listed, and
+  *Show links among these* across one to six degrees.
+- **`ospreyflow repair-sign-in`** brings an existing deployment's sign-in up to date.
+- **Fixed: a model download could fail** with `rename …-partial …: no such file or directory` when
+  the model server started while the download was running.
+- **The recogniser's models are checked**: every file is pinned by its SHA-256 when the image is
+  built, and nothing else may be loaded.

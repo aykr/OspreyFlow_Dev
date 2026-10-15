@@ -43,3 +43,20 @@ def test_a_cluster_names_only_images_the_release_builds() -> None:
     named = _owned(values)
     assert {"api", "workspace", "worker", "report-sync", "superset", "ner"} <= named
     assert named <= _built_by_the_release()
+
+
+def test_every_action_the_release_shares_with_ci_is_at_the_version_ci_proves() -> None:
+    """The release has never run; `ci.yml` runs on every push, so an action reference there is
+    known to resolve. `aquasecurity/trivy-action@0.24.0` here had no such tag (only `v0.24.0`),
+    and the first tag would have failed at its first scan (found 15 October 2026)."""
+    import re
+
+    from tools.layout import CORE, ROOT
+
+    uses = re.compile(r"uses:\s*([\w.-]+/[\w.-]+)@(\S+)")
+    ci = dict(uses.findall((ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")))
+    release = uses.findall(
+        (CORE / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    )
+    differing = [(action, ref, ci[action]) for action, ref in release if action in ci and ref != ci[action]]
+    assert differing == [], f"release.yml uses another version than ci.yml: {differing}"
