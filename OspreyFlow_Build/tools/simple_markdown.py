@@ -38,6 +38,7 @@ _BLOCKQUOTE = re.compile(r"^>\s?(.*)$")
 _TABLE_ROW = re.compile(r"^\|(.+)\|\s*$")
 _TABLE_SEPARATOR = re.compile(r"^\|?[\s:|-]+\|?$")
 _HR = re.compile(r"^(-{3,}|\*{3,})$")
+_COMMENT = re.compile(r"^\s*<!--.*-->\s*$")
 _FENCE = re.compile(r"^```\s*(\S*)\s*$")
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
 _IMAGE = re.compile(r"^!\[([^\]]*)\]\(([^)\s]+)\)\s*$")
@@ -117,6 +118,11 @@ def render_markdown(text: str) -> str:
 
     while i < len(lines):
         line = lines[i]
+
+        # A comment on its own line marks a part of the file for a tool; it is never printed.
+        if _COMMENT.match(line):
+            i += 1
+            continue
 
         fence_match = _FENCE.match(line)
         if fence_match:

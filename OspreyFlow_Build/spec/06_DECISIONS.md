@@ -13445,6 +13445,39 @@ administration guide's §16 says how an install made before this recovers: `ospr
 while the deployment is up starts the download again with the server left running. Test:
 `tests/harness/test_deployment_models.py::test_the_model_server_never_prunes_a_download_in_progress`.
 
+### ADR-114, Amendment 26 (15 October 2026) — each guide carries its version, and its PDF a cover, contents and figures
+
+**The owner**, 15 October 2026: "add a cover page and table of contents and table of figures for
+all the guides … make sure that there is version record and version history maintained in these
+guides", then "extend the version history recording to the .md files (all the contents in the
+/docs folder)".
+
+1. **Each guide in `docs/` carries a *Document control* section** (between
+   `<!-- document-control:begin -->` and `<!-- document-control:end -->`): its version, date, the
+   OspreyFlow release it describes and its status, above its version history, newest first. The
+   histories were written from each guide's own commits: the administration guide from its first
+   form as spec 10 (0.1, 13 October) to 1.5; the user guide to 1.2; the developer guide to 1.1.
+2. **Maintained, not merely present:** `docs/pdf/manifest.json` records each guide's version and
+   the hash of everything outside its version record. A guide changed while its version stays the
+   same is out of step (`tests/test_docs_pdf.py`), and `python -m tools.docs_pdf --write` refuses to
+   print it until the change has its own history row. A record whose version is not its newest row,
+   or whose history is not newest first, is named too.
+3. **Each PDF opens with** a cover (product, guide, who it is for, version, date, release,
+   status), the document control, the contents and the list of figures, both with page numbers;
+   every figure is numbered, every page carries the guide, its version and its number, and the PDF
+   has bookmarks. Printing is Playwright's Chromium (`tools/print_pdf.mjs`), since the plain shell
+   cannot number pages; the page each heading and figure lands on is read back from a first
+   printing with `pypdf` (BSD-3-Clause, a development dependency only) and the guide printed again
+   with the numbers, until they hold.
+4. **Found on the way:** the Markdown renderer printed a comment line as visible text, so the
+   administration guide's `<!-- options:begin -->` marker showed in its PDF and on the docs site. A
+   comment on its own line is no longer printed. And the first version of the page search started at
+   the first page containing the words "list of figures", which the version history also contains,
+   so every heading was numbered as the contents page; it now starts after the page the list
+   begins on, with a test in the shape of that mistake.
+5. **Not in scope:** the specification's own copy of the administration guide (`spec/10`), which
+   is the specification's text and versioned by its history in git.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;

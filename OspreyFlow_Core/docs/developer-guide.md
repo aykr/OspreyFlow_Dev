@@ -8,6 +8,18 @@ says plainly where something is not yet.
 The other guides in this folder are the [administration guide](administration-guide.md), for
 whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for analysts.
 
+<!-- document-control:begin -->
+## Document control
+
+**Version 1.1** · 2026-10-15 · For OspreyFlow v0.1.0 · Issued
+
+| Version | Date | What changed |
+| --- | --- | --- |
+| 1.1 | 2026-10-15 | A cover page, contents, a list of figures, and this version history. |
+| 1.0 | 2026-10-14 | First issue, with screenshots. |
+
+<!-- document-control:end -->
+
 ---
 
 ## 1. How OspreyFlow is built, for a data engineer

@@ -132,3 +132,11 @@ def test_an_indented_line_continues_the_list_item_above_it() -> None:
 def test_an_escaped_pipe_stays_inside_its_table_cell() -> None:
     html = render_markdown("| A | B |\n| --- | --- |\n| `--cloud aws\\|azure` | two |")
     assert "<td><code>--cloud aws|azure</code></td><td>two</td>" in html
+
+
+def test_a_comment_on_its_own_line_is_not_printed() -> None:
+    """`<!-- options:begin -->` marks the administration guide's generated appendix; it printed in
+    the PDF and on the docs site as visible text (found 15 October 2026)."""
+    html = render_markdown("Before.\n\n<!-- options:begin -->\n\nAfter.\n")
+    assert "options:begin" not in html
+    assert "Before." in html and "After." in html

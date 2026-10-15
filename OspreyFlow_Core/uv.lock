@@ -1984,6 +1984,7 @@ extraction = [
 dev = [
     { name = "mypy" },
     { name = "pip-licenses" },
+    { name = "pypdf" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -2031,6 +2032,7 @@ requires-dist = [
 dev = [
     { name = "mypy", specifier = ">=1.13" },
     { name = "pip-licenses", specifier = ">=5.0" },
+    { name = "pypdf", specifier = ">=6.20.1" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "ruff", specifier = ">=0.7" },
@@ -2446,6 +2448,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c9/b8/9b4449a337bb558139b96232e60a8a9ef466fc036309e8fff808abd52f4e/pymagnitude-light-0.1.147.tar.gz", hash = "sha256:4343cdfbca500dfdbf814ea81dffb162c52e377cc0b3b451bd73ee349a5be255", size = 31565 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/d9/6ce420e579dc29493eccd5e72bec2b437077e9cd98b91113413b44645f9b/pymagnitude_light-0.1.147-py3-none-any.whl", hash = "sha256:a23dc129fd2df42241dd428ca39cf2c6c0999103ed6e1af7d617de3c712e310b", size = 35092 },
+]
+
+[[package]]
+name = "pypdf"
+version = "6.20.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e2/c1/da25a099164cf4b210d63b957c902ad687139f4b8c12c20aec7953a4a266/pypdf-6.20.1.tar.gz", hash = "sha256:28f5a9d2fdc2749264612d94e6a58de54c11d730d9f0cabf8ad34117c4942b45", size = 7075352 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/f8/4cbd09988b4b158260b7e0df38bf16f19e998bf0e257a18661a8da04280e/pypdf-6.20.1-py3-none-any.whl", hash = "sha256:aa5a55ddcffdc5e5ab291d5decb23f6383f4e56f8e3263dc39af41fff03885ad", size = 402665 },
 ]
 
 [[package]]

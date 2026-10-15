@@ -8,6 +8,19 @@ The other guides in this folder are the [administration guide](administration-gu
 whoever installs and runs OspreyFlow, and the [developer guide](developer-guide.md), for data
 engineers. The screenshots show the synthetic demonstration cases; no real data appears in them.
 
+<!-- document-control:begin -->
+## Document control
+
+**Version 1.2** · 2026-10-15 · For OspreyFlow v0.1.0 · Issued
+
+| Version | Date | What changed |
+| --- | --- | --- |
+| 1.2 | 2026-10-15 | A cover page, contents, a list of figures, and this version history. |
+| 1.1 | 2026-10-14 | Cases and their branches shown as one tree; a branch renamed or deleted where it is listed. |
+| 1.0 | 2026-10-14 | First issue, with screenshots of the synthetic demonstration cases. |
+
+<!-- document-control:end -->
+
 ---
 
 ## 1. What OspreyFlow is

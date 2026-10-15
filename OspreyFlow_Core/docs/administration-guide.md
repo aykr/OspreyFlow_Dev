@@ -8,6 +8,26 @@ The other guides in this folder are the [user guide](user-guide.md), for analyst
 [developer guide](developer-guide.md), for data engineers. Appendix A, every `osprey.yaml` setting,
 is made from the deployment's own schema, and is checked against it on every change.
 
+<!-- document-control:begin -->
+## Document control
+
+**Version 1.5** · 2026-10-15 · For OspreyFlow v0.1.0 · Issued
+
+| Version | Date | What changed |
+| --- | --- | --- |
+| 1.5 | 2026-10-15 | A cover page, contents, a list of figures, and this version history. |
+| 1.4 | 2026-10-15 | §16: a model download that stopped with `rename …-partial …`, and how to finish it. |
+| 1.3 | 2026-10-15 | §11: the Enron email corpus as an optional download, with its safeguards. |
+| 1.2 | 2026-10-14 | `ospreyflow repair-sign-in`; no step sends an operator to `make`. |
+| 1.1 | 2026-10-14 | §14 rewritten: which installs `update` moves, and checking for and moving to a release. |
+| 1.0 | 2026-10-14 | First issue in the install package, with screenshots. |
+| 0.4 | 2026-10-14 | Enterprise built from your own computer: `install --mode enterprise --cloud`. |
+| 0.3 | 2026-10-14 | Enterprise on Kubernetes: the cluster's namespace, storage classes and managed services. |
+| 0.2 | 2026-10-14 | The guided install page ships with each release. |
+| 0.1 | 2026-10-13 | Lite and Small, with every setting taken from the deployment's own schema. |
+
+<!-- document-control:end -->
+
 ---
 
 ## How OspreyFlow is built
