@@ -8472,6 +8472,7 @@ async def list_demo_packs_route(
             loaded_case_id=opened.get(each.case_name), command=command,
             source_page=each.download.source_page if each.download else None,
             size_bytes=each.download.size_bytes if each.download else None,
+            real_data=each.real_data,
         ))  # fmt: skip
     await audit.record(principal=principal, action="list_demo_packs", resolved_query={},
                        result_cardinality=len(listed))  # fmt: skip

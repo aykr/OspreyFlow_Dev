@@ -104,7 +104,7 @@ DATASETS: dict[str, Dataset] = {
     # ADR-114 Amendment 23: real data, an optional download each user makes and accepts.
     "enron": Dataset(
         script="scripts.seed_enron",
-        case_name="Enron corpus (real data)",
+        case_name="Enron corpus (real data, this machine only)",
         data_folder="Enron_Mails",
         real_dataset="enron",
         bulk=True,

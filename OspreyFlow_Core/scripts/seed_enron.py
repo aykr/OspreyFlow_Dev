@@ -53,7 +53,7 @@ from schemas.domain import Handling, Principal
 DATASET = "enron"
 USE = "owner_run_demonstration"
 FOLDER = "Enron_Mails"
-CASE_NAME = "Enron corpus (real data)"
+CASE_NAME = "Enron corpus (real data, this machine only)"
 
 _GRAPH_CHUNK = 40
 _EVENT_CHUNK = 20_000

@@ -107,7 +107,7 @@ _DESCRIPTIONS: dict[str, _Description] = {
         "Enron — a real company's email (REAL personal data, downloaded by you)",
         "About 150 people's real email, 1998–2002: who wrote to whom, when, and what about. "
         "You download it from CMU and accept what it is before it is loaded.",
-        "Enron corpus (real data)",
+        "Enron corpus (real data, this machine only)",
         PackDownload(
             filename="enron_mail_20150507.tar.gz",
             size_bytes=443254787,

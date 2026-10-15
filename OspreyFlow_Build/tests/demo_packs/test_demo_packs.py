@@ -16,11 +16,11 @@ from scripts.demo_registry import REGISTRY, shipped_manifests
 
 from tools.layout import CORE
 
-_EXPECTED_IDS = {"hmp", "fixture-corp", "operation-ledger", "paysim"}
+_EXPECTED_IDS = {"hmp", "fixture-corp", "operation-ledger", "paysim", "enron"}
 _LICENCE_SHA256 = "28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5"
 _REFUSAL = (
     "There is no demo pack called '{}'. "
-    "The packs are: hmp, fixture-corp, operation-ledger, paysim."
+    "The packs are: hmp, fixture-corp, operation-ledger, paysim, enron."
 )
 
 
@@ -31,10 +31,19 @@ def _refusal_for(pack_id: str) -> str:
 
 
 def test_an_unregistered_pack_and_an_internal_demo_are_refused_in_the_same_words() -> None:
-    """An internal demo (`enron`) must not be distinguishable from one that does not exist, or the
-    refusal itself would confirm the internal demo is there."""
+    """An internal demo must not be distinguishable from one that does not exist, or the refusal
+    itself would confirm the internal demo is there. No demo is internal since Enron became a
+    download (ADR-114 Amendment 23), so one is made internal here."""
     assert _refusal_for("nonesuch") == _REFUSAL.format("nonesuch")
-    assert _refusal_for("enron") == _REFUSAL.format("enron")
+    hidden = tuple(
+        dataclasses.replace(m, distribution="internal") if m.id == "paysim" else m for m in REGISTRY
+    )
+    refusals = []
+    for pack_id in ("paysim", "nonesuch"):
+        with pytest.raises(PackRefused) as caught:
+            demo_packs.pack(pack_id, hidden)
+        refusals.append(str(caught.value).replace(pack_id, "<id>"))
+    assert refusals[0] == refusals[1]
 
 
 def test_every_shipped_demo_is_a_pack_and_no_internal_one_is() -> None:
@@ -187,8 +196,8 @@ def test_verify_accepts_the_right_file_and_refuses_each_wrong_one(
     assert "no file" in capsys.readouterr().err.lower()
     assert demo_packs.main(["verify", "hmp", str(file)]) == 1
     assert "nothing to download" in capsys.readouterr().err
-    assert demo_packs.main(["verify", "enron", str(file)]) == 1
-    assert "no demo pack called 'enron'" in capsys.readouterr().err.lower()
+    assert demo_packs.main(["verify", "nonesuch", str(file)]) == 1
+    assert "no demo pack called 'nonesuch'" in capsys.readouterr().err.lower()
 
 
 def test_verify_without_its_arguments_is_a_usage_error() -> None:

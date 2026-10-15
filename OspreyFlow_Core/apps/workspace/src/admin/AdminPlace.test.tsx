@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // ADR-110 Amendment 1, ADR-112: the Admin area. Tabs follow the account's rights; a person's roles are
 // saved whole with their other grants kept; a dashboard's secret is shown once; a refusal is said.
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminPlace, feedFreshness } from "./AdminPlace";
@@ -217,6 +217,10 @@ const PACKS = [
     case_name: "PaySim mobile money (internal)", loaded_case_id: null,
     command: "ospreyflow demo add paysim --file <the downloaded PS_20174392719_1491204439457_log.csv>",
     source_page: "https://www.kaggle.com/datasets/ealaxi/paysim1", size_bytes: 493534783 },
+  { id: "enron", title: "Enron — a real company's email", shows: "About 150 people's real email.",
+    delivery: "download", licence: "None stated", attribution: "CMU", case_name: "Enron corpus (real data, this machine only)",
+    loaded_case_id: null, command: "ospreyflow demo add enron --file <the downloaded enron_mail_20150507.tar.gz>",
+    source_page: "https://www.cs.cmu.edu/~enron/", size_bytes: 443254787, real_data: true },
 ];  // prettier-ignore
 
 describe("the Demo packs tab", () => {
@@ -228,11 +232,21 @@ describe("the Demo packs tab", () => {
     expect(screen.getByText(/CC-BY-SA-4.0/)).toBeTruthy();
     expect(screen.getByText(/Lopez-Rojas, Elmir and Axelsson/)).toBeTruthy();
     expect(screen.getByText("Loaded, in “Operation Ledger (synthetic demo)”.")).toBeTruthy();
-    expect(screen.getByText("Not in any case you can open.")).toBeTruthy();
+    const paysim = screen.getByRole("article", { name: "PaySim — mobile-money fraud (simulated)" });
+    expect(within(paysim).getByText("Not in any case you can open.")).toBeTruthy();
     expect(screen.getByText("ospreyflow demo add operation-ledger")).toBeTruthy();
     expect(screen.getByRole("link", { name: /Download PaySim's file/ }).getAttribute("href")).toBe(
       "https://www.kaggle.com/datasets/ealaxi/paysim1",
     );
+  });
+
+  it("says which pack is real people's data, and only that one (ADR-114 Amendment 23 point 4)", async () => {
+    serve((path) => (path === "demo-packs" ? json(200, PACKS) : null));
+    place(["administer_system"]);
+    fireEvent.click(await screen.findByRole("tab", { name: "Demo packs" }));
+    const enron = await screen.findByRole("article", { name: "Enron — a real company's email" });
+    expect(within(enron).getByRole("note").textContent).toMatch(/^Real personal data\./);
+    expect(screen.getAllByRole("note")).toHaveLength(1);
   });
 
   it("copies a pack's command, and says so", async () => {

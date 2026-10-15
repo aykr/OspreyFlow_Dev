@@ -11,6 +11,7 @@ export type LoadedCaseId = string | null;
 export type Command = string;
 export type SourcePage = string | null;
 export type SizeBytes = number | null;
+export type RealData = boolean;
 
 /**
  * A demo pack as the Admin area shows it (ADR-114 Amendment 5, "Show and explain"): what it
@@ -29,5 +30,6 @@ export interface DemoPackStatus {
   command: Command;
   source_page?: SourcePage;
   size_bytes?: SizeBytes;
+  real_data?: RealData;
   [k: string]: unknown;
 }

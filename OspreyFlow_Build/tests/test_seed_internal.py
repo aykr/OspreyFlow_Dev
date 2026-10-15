@@ -261,7 +261,7 @@ def test_enron_passes_the_hosts_attestations_and_its_own_case_name(repo: Path) -
     call = _seed_call(runner)
     assert call[call.index("-m") + 1] == "scripts.seed_enron"
     assert "--attested-permission" in call and "--attested-checkout" in call
-    assert call[call.index("--case-name") + 1] == "Enron corpus (real data)"
+    assert call[call.index("--case-name") + 1] == "Enron corpus (real data, this machine only)"
     assert f"{SUBS[ADMIN]}=author" in call and f"{SUBS[ANALYST]}=editor" in call
 
 

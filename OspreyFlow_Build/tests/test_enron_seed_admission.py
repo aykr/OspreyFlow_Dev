@@ -68,7 +68,7 @@ def test_the_enron_seed_runs_the_products_code_as_real_data(checkout: Path) -> N
     assert call[call.index("-m") + 1] == "scripts.seed_enron"
     assert not any("internal_demos" in part for part in call)
     assert "--attested-permission" in call and "--attested-checkout" in call
-    assert call[call.index("--case-name") + 1] == "Enron corpus (real data)"
+    assert call[call.index("--case-name") + 1] == "Enron corpus (real data, this machine only)"
 
 
 def test_it_is_refused_without_an_acceptance_or_an_exceptions_entry(checkout: Path) -> None:

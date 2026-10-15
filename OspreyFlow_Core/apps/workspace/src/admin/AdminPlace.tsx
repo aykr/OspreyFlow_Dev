@@ -703,6 +703,12 @@ function DemoPacks({ api }: { api: AdminApi }) {
           style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "grid", gap: "var(--sp-6)" }}
         >
           <h3 className="value" style={{ margin: 0 }}>{pack.title}</h3>
+          {pack.real_data && (
+            <p role="note" style={{ margin: 0 }}>
+              <strong>Real personal data.</strong> Real people&apos;s email, not made up. The command shows
+              what it is and asks you to accept it before anything is loaded.
+            </p>
+          )}
           <p style={{ margin: 0 }}>{pack.shows}</p>
           <p className="label" style={{ margin: 0 }}>
             {`Licence: ${pack.licence}`}

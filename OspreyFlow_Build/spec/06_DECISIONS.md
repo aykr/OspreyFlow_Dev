@@ -13383,7 +13383,7 @@ unpacked size).
    corpus on that machine; the seed refuses without it — or, on the owner's machine, without the
    local real-data exceptions entry, which keeps working as before.
 4. **It is marked as real wherever it appears**: the pack is listed as "real personal data,
-   downloaded by you"; its case is named "Enron corpus (real data)"; it is never chosen by default,
+   downloaded by you"; its case is named "Enron corpus (real data, this machine only)"; it is never chosen by default,
    never in an install's suggested packs, and never shared with the demo engineer or report viewer
    (as today).
 5. **Its code moves into the product** (from `internal_demos/` to Core), since a user now runs it;

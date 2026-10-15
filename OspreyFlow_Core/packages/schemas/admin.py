@@ -186,6 +186,8 @@ class DemoPackStatus(BaseModel):
     command: str
     source_page: str | None = None
     size_bytes: int | None = None
+    #: Real people's data, not generated (ADR-114 Amendment 23 point 4): said wherever it is listed.
+    real_data: bool = False
 
 
 class ScheduleRunView(BaseModel):
