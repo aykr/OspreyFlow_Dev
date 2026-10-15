@@ -53,6 +53,9 @@ COPY packages/schemas ./packages/schemas
 # own docstring for why the dependency was inverted instead of vendoring `services/` in, which
 # would have reversed ADR-049's boundary for this image.
 COPY packages/principal_auth ./packages/principal_auth
+# `harness/render.py` checks the deployment's marking floor against the handling scheme, which
+# `packages/ontology` reads (ADR-115 E1); without it every render failed on import (15 October 2026).
+COPY packages/ontology ./packages/ontology
 COPY scripts ./scripts
 
 # The Docker CLI itself, taken from Docker's own official `cli` image rather than Debian's package
@@ -131,6 +134,9 @@ COPY --from=builder --chown=osprey:osprey /app/.venv ./.venv
 COPY --from=builder --chown=osprey:osprey /app/harness ./harness
 COPY --from=builder --chown=osprey:osprey /app/packages ./packages
 COPY --from=builder --chown=osprey:osprey /app/scripts ./scripts
+# Readable by any user too: on Linux the image runs as the operator's own (`docker run --user`) so
+# it can write their mounted folder, and that user is not `osprey`.
+RUN chmod -R a+rX ./harness ./packages ./scripts
 # `harness/webapp.py`'s own `FRONTEND_DIST` — `apps/harness/dist` relative to this image's own
 # `/app` root, the same path a bare checkout's `npx vite build` produces, so `create_app` needs no
 # image-specific branch to find it.

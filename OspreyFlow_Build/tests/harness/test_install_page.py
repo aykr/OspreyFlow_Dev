@@ -175,7 +175,8 @@ def test_state_names_the_modes_and_the_packs(rig: Rig) -> None:
         "available": False,
         "says": install_page.MODE_SAYS["small"],
     }
-    assert "stage B7" in state["modes"]["enterprise"]["says"]
+    assert state["modes"]["enterprise"]["says"] == install_page.MODE_SAYS["enterprise"]
+    assert "--mode enterprise --cloud aws" in state["modes"]["enterprise"]["says"]
     assert state["modes"]["enterprise"]["available"] is False
 
 
@@ -266,10 +267,12 @@ def test_a_failing_doctor_reports_its_code(rig: Rig) -> None:
 
 
 @pytest.mark.parametrize(
-    "mode,said", [("small", "--mode small --cloud aws"), ("enterprise", "stage B7")]
+    "mode,said",
+    [("small", "--mode small --cloud aws"), ("enterprise", "--mode enterprise --cloud aws")],
 )
 def test_small_and_enterprise_do_not_install(rig: Rig, mode: str, said: str) -> None:
-    """The page never builds in a cloud: Small is built from a terminal (ADR-114 Amendment 10)."""
+    """The page never builds in a cloud: Small and Enterprise are built from a terminal (ADR-114
+    Amendments 10 and 19)."""
     client = rig.signed()
     client.put("/api/install/answers", json={"mode": mode})
     reply = client.post("/api/install/run")

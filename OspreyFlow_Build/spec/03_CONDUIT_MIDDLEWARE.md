@@ -78,6 +78,14 @@ POST   /v1/investigations/{id}/branch          fork the working set (or a chosen
 PUT    /v1/investigations/{id}/tab             open or close this case's tab, for the caller only
 GET    /v1/investigations/{id}/history         addressable step history
 POST   /v1/investigations/{id}/history/{step}  restore to a step
+GET    /v1/investigations                      the cases the caller holds a level on
+PATCH  /v1/investigations/{id}                 rename (Author)
+DELETE /v1/investigations/{id}                 remove, softly (Author, or the unit's osprey-admin)
+GET    /v1/investigations/{id}/access          the caller's level; an Author sees every grant
+PUT    /v1/investigations/{id}/access          the unit-wide level (Author)
+PUT    /v1/investigations/{id}/access/grants/{account}     grant a level to one account (Author)
+DELETE /v1/investigations/{id}/access/grants/{account}     withdraw it (Author)
+GET    /v1/investigations/{id}/access/history  who was granted what, and when (Author)
 ```
 
 **Authorization.** Every route above an investigation id checks the calling
@@ -265,10 +273,16 @@ streams its progress.
 ```
 POST   /v1/ingest/upload                multipart; returns a document id and a job id
 POST   /v1/ingest/schedule-preview      a schedule in words and its next five runs, or refused in words (ADR-110)
-POST   /v1/investigations/{id}/ingest/recipes/{rid}/schedule/pause    and …/resume — schedule_pipelines
+POST   /v1/investigations/{id}/ingest/recipes/{rid}/schedule/pause    pause the schedule — schedule_pipelines
+POST   /v1/investigations/{id}/ingest/recipes/{rid}/schedule/resume   resume it — schedule_pipelines
 GET    /v1/investigations/{id}/ingest/recipes/{rid}/runs   the recipe's run ledger; counts withheld above the reader
 GET    /v1/investigations/{id}/data-feeds   the pipelines feeding the case (Viewer, read_data_feeds)
-GET    /v1/admin/schedules              every schedule (operate_schedules); …/{rid}/runs, …/pause, …/resume
+GET    /v1/admin/schedules              every schedule (operate_schedules)
+GET    /v1/admin/schedules/{rid}/runs   one schedule's run ledger (operate_schedules)
+PUT    /v1/admin/schedules/{rid}        change one schedule (operate_schedules)
+POST   /v1/admin/schedules/{rid}/run    run it now (operate_schedules)
+POST   /v1/admin/schedules/{rid}/pause  pause it (operate_schedules)
+POST   /v1/admin/schedules/{rid}/resume resume it (operate_schedules)
 POST   /v1/ingest/connector/{name}/run  trigger a configured connector
 GET    /v1/handling-scheme              the active deployment's classification/handling-code vocabulary
 GET    /v1/yardstick                    the active deployment's probability yardstick (01_DOMAIN_MODEL.md §5)

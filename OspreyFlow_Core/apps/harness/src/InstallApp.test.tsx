@@ -23,8 +23,8 @@ import { INSTALL_SCREENS, installNav } from "./store";
 
 const MODES = {
   lite: { available: true },
-  small: { available: false, says: "The small install arrives with stage B6. Your answers are saved for it." },
-  enterprise: { available: false, says: "The enterprise install arrives with stage B7. Your answers are saved for it." },
+  small: { available: false, says: "A small server is built from a terminal on this computer, from the answers you save here: ospreyflow install --mode small --cloud aws (or azure) --config .install/install.yaml" },
+  enterprise: { available: false, says: "An enterprise install is built from a terminal on this computer, from the answers you save here: ospreyflow install --mode enterprise --cloud aws (or azure) --config .install/install.yaml" },
 };
 
 function navNames(): string[] {

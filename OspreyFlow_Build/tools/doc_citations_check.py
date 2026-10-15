@@ -47,8 +47,9 @@ already a dependency (of `mypy`, which `make typecheck` requires) and already us
 **Allowlist.** `tests/fixtures/citation_allowlist.txt`, one path per line, for anything else that is
 deliberately absent and not covered by `.gitignore` — a file a record says was deleted, or a path
 named as an example of what *not* to do. Each entry needs a stated reason in a comment above it.
-Empty (and absent) on this repository today: every non-gitignored absence found on 25 September
-2026 was corrected in place rather than allowlisted.
+Every non-gitignored absence found on 25 September 2026 was corrected in place rather than
+allowlisted; the first entries (15 October 2026) are files a record says were removed, and the
+launcher ADR-114 stage B2d took out.
 """
 
 from __future__ import annotations
@@ -87,6 +88,9 @@ MOVED: dict[str, str] = {
         "hmp_reports_recipe.yaml",
     )
 }
+
+#: Renamed and rewritten when the Enron pack became a download (ADR-114 Amendment 23).
+MOVED["tests/test_internal_demos.py"] = "tests/test_enron_seed_admission.py"
 
 #: The tools that moved from `scripts/` to `tools/` (ADR-054 amendment): a record that cites the old
 #: name is history and stays as written.

@@ -36,7 +36,7 @@ from pathlib import Path
 import pytest
 
 from tests.harness.deployment_guard import refuse_to_touch_a_real_deployment
-from tools.layout import CORE
+from tools.layout import BUILD, CORE
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("OSPREY_TEST_DIST_BUNDLE") != "1",
@@ -50,7 +50,8 @@ def _run(args: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         args,
         cwd=CORE,
-        env={**os.environ, "PYTHONPATH": "packages"},
+        # `tools.osprey_bundle` is the Build folder's (ADR-054), run from Core.
+        env={**os.environ, "PYTHONPATH": os.pathsep.join(["packages", str(BUILD)])},
         capture_output=True,
         text=True,
         timeout=timeout,

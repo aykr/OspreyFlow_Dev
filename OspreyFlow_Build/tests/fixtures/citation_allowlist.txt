@@ -1,0 +1,16 @@
+# Each path below is cited by a record and is deliberately absent; the reason is above it.
+
+# Removed by ADR-114 stage B2d (3878438): the launcher, `make launch` and its tests. `ospreyflow
+# start` replaces them; the records that name them are history and stay as written.
+scripts/launch.py
+tests/test_launch.py
+tests/test_launch_sign_in.py
+tests/test_launch_exit.py
+
+# Never committed: ADR-056 Amendment 24's record says it was written to measure the Enron write
+# cost on an idle store and not yet run; it was not kept. The record stays as written.
+scripts/probe_write_cost.py
+
+# Renamed to `describeChange.ts` (a9ea150) because it collided on case with `LinkHistory.tsx`;
+# `tools/case_collision_check.py` names the old file as the reason the check exists.
+apps/workspace/src/inspector/linkHistory.ts

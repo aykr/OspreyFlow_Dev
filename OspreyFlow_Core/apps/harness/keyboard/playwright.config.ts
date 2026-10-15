@@ -1,11 +1,20 @@
+import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "@playwright/test";
 
 // A scratch `osprey.yaml`, not this checkout's real one — `harness.webapp`'s own `Save` actions
 // really write to disk, and this suite must never touch the repository's own committed config.
 const SCRATCH_CONFIG = join(tmpdir(), `osprey-keyboard-spec-${process.pid}.yaml`);
+// It builds from this checkout (`components.source_path`), so Generate renders without a published
+// release's digests: pull mode refuses an image no release has locked, and this commit has none
+// (CI found it, 15 October 2026). Generate's own refusal is `test_render.py`'s to prove.
+writeFileSync(
+  SCRATCH_CONFIG,
+  `profile: local-lite\ncomponents:\n  source_path: ${fileURLToPath(new URL("../../..", import.meta.url))}\n`,
+);
 
 // A scratch real-data-exceptions file — the Governance screen's own exceptions panel really
 // reads/writes disk too, and `--real-data-exceptions`'s own default is

@@ -74,12 +74,13 @@ def test_an_unknown_pack_is_refused_with_the_list(
     assert rig.runner.calls == []
 
 
-def test_paysim_without_a_file_is_refused_naming_b5_and_the_source_page(
+def test_paysim_without_a_file_is_refused_naming_the_source_page(
     rig: Rig, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert rig("demo", "add", "paysim") == 1
     err = capsys.readouterr().err
-    assert "B5" in err and "--file" in err
+    assert "--file" in err
+    assert "stage" not in err, "B5 is built; the message promised a fetch it never brought"
     assert PAYSIM_SOURCE_PAGE in err
     assert rig.runner.calls == []
 

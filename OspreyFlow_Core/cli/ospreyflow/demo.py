@@ -184,9 +184,8 @@ def add_pack(
     if pack == "paysim":
         if file is None:
             raise CommandRefused(
-                "PaySim is a download, not generated: give its file with --file PATH. The release "
-                "asset that ospreyflow fetches for you arrives with stage B5; until then download "
-                f"the file from {PAYSIM_SOURCE_PAGE} and pass it here."
+                "PaySim is a download, not generated: download the file from "
+                f"{PAYSIM_SOURCE_PAGE} and give it with --file PATH."
             )
         file = file.expanduser()
         verify = [*python, "-m", "scripts.demo_packs", "verify", "paysim", str(file)]

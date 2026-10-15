@@ -12,6 +12,7 @@ export default [
       ".venv/**",
       "apps/workspace/dist/**",
       "apps/harness/dist/**",
+      "deploy/generated/**", // a deployment's rendered files, copies of what is linted at its source
       "process/prototypes/**", // the Build folder's, when linted from there (ADR-054)
     ],
   },
@@ -24,10 +25,22 @@ export default [
       "scripts/**/*.mjs",
       "tools/**/*.mjs", // the Build folder's checks, linted from there (ADR-054)
       "apps/workspace/compute-tier1/**/*.mjs",
+      "apps/harness/scripts/**/*.mjs",
     ],
     languageOptions: {
       globals: { process: "readonly", console: "readonly" },
     },
+  },
+  {
+    // The plain ES5 scripts put into pages that are not React as they are (the sign-in page's
+    // form and the light/dark cookie, ADR-072): browser globals, and `catch (e)` kept, since ES5
+    // has no catch without a binding.
+    files: ["harness/**/*.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: { document: "readonly", window: "readonly", location: "readonly" },
+    },
+    rules: { "no-unused-vars": ["error", { caughtErrors: "none" }] },
   },
   // The Glass (`apps/workspace`) and the setup harness (`apps/harness`, `Stage 2 §6`) — both
   // Vite/React/TypeScript, per `spec/02_GLASS_FRONTEND.md` §1 and `05_DEPLOYMENT.md` §2. One

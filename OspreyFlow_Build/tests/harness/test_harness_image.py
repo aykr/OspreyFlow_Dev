@@ -456,6 +456,12 @@ def test_the_image_renders_local_lite_pull_mode_with_only_an_empty_workspace_mou
             "docker",
             "run",
             "--rm",
+            # As the host's own user, the way a Linux operator mounting their own folder must run
+            # it: the image's `osprey` (uid 10001) cannot write a folder only its owner may. Docker
+            # Desktop's file sharing hid this on a Mac; GitHub's Linux runner refused (15 October
+            # 2026).
+            "--user",
+            f"{os.getuid()}:{os.getgid()}",
             "-v",
             f"{tmp_path}:/workspace",
             built_image,
@@ -494,7 +500,7 @@ def test_the_image_renders_local_lite_pull_mode_with_only_an_empty_workspace_mou
     )
 
     # `docker compose config` — static YAML + variable-interpolation validation, no daemon
-    # interaction and no image pull. The four `${VAR:?...}` secrets below are minted by
+    # interaction and no image pull. The five `${VAR:?...}` secrets below are minted by
     # `harness.apply` at apply time (after render), never by `render` alone — this test calls
     # only `render`, so they are supplied here as dummy values, the same way an operator's own
     # apply-time env file would carry real ones by the time this validation matters for real.
@@ -516,6 +522,7 @@ def test_the_image_renders_local_lite_pull_mode_with_only_an_empty_workspace_mou
             **os.environ,
             "OSPREY_ARCADEDB_PASSWORD": "x",
             "OSPREY_KEYCLOAK_ADMIN_PASSWORD": "x",
+            "OSPREY_KEYCLOAK_DB_PASSWORD": "x",  # Keycloak's own database (ADR-114 B4a)
             "OSPREY_MINIO_PASSWORD": "x",
             "OSPREY_POSTGRES_PASSWORD": "x",
         },

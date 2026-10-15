@@ -64,10 +64,15 @@ REFUSED = "This install page opens only from the link ospreyflow printed."
 LOOPBACK = "127.0.0.1"
 MODE_SAYS = {
     "small": (
-        "Your answers are saved. A small server is built from a terminal on this computer: "
-        "ospreyflow install --mode small --cloud aws (or azure) --config .install/install.yaml"
+        "A small server is built from a terminal on this computer, from the answers you save "
+        "here: ospreyflow install --mode small --cloud aws (or azure) "
+        "--config .install/install.yaml"
     ),
-    "enterprise": "The enterprise install arrives with stage B7. Your answers are saved for it.",
+    "enterprise": (
+        "An enterprise install is built from a terminal on this computer, from the answers you "
+        "save here: ospreyflow install --mode enterprise --cloud aws (or azure) "
+        "--config .install/install.yaml"
+    ),
 }
 _ALREADY = "The install is already running."
 _NO_ANSWERS = "Save your answers first: the install runs from them."

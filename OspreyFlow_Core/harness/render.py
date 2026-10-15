@@ -373,7 +373,8 @@ def git_sha(repo_root: Path = REPO_ROOT) -> str:
 #: `05_DEPLOYMENT.md` §3/§5/§7's own reference for where a customer checks for a published
 #: release once the digest resolvers above have failed to find one — named here so
 #: `UnpinnedImagesError`'s own message and those sections stay one string apart, not two to drift.
-RELEASES_URL = "https://github.com/ospreyflow/ospreyflow-dev/releases"
+#: The user repository (ADR-114 Amendment 21).
+RELEASES_URL = "https://github.com/aykr/OspreyFlow/releases"
 
 
 class UnpinnedImagesError(RuntimeError):

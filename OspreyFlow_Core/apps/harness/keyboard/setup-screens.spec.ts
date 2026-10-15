@@ -15,6 +15,8 @@ test("Tab reaches the Profile screen's own options and a real keyboard Enter sav
 
   // Starting focus is the document body — proving Tab actually reaches each control, the same
   // discipline every spec in `apps/workspace/keyboard/` already follows.
+  await page.keyboard.press("Tab"); // the light and dark button comes first
+  await expect(page.getByRole("button", { name: /Switch to the light theme/ })).toBeFocused();
   await page.keyboard.press("Tab"); // Profile nav button
   await expect(page.getByRole("button", { name: "Profile", exact: true })).toBeFocused();
   await page.keyboard.press("Tab"); // Components nav button
@@ -60,6 +62,8 @@ test("a keyboard-activated screen switch reaches Components and a real Enter sav
   await expect(page.getByRole("combobox", { name: "Graph store" })).toBeFocused();
   await page.keyboard.press("Tab"); // analytics engine select
   await expect(page.getByRole("combobox", { name: "Analytics engine" })).toBeFocused();
+  await page.keyboard.press("Tab"); // the ingest folder (folder watch, ADR-110 Amendment 4)
+  await expect(page.getByRole("textbox", { name: "Ingest folder" })).toBeFocused();
   await page.keyboard.press("Tab"); // Save components button
   await expect(page.getByRole("button", { name: "Save components" })).toBeFocused();
 
@@ -622,13 +626,13 @@ test("install page: Small's Domain screen is reached by keyboard and a real Ente
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-domain");
 });
 
-test("install page: Small's Review says when it arrives and a real Enter saves the answers", async ({
+test("install page: Small's Review says how it is built and a real Enter saves the answers", async ({
   page,
 }) => {
   await openInstallPage(page);
   await page.getByRole("button", { name: "Review", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByText(/arrives with stage B6/)).toBeVisible();
+  await expect(page.getByText(/A small server is built from a terminal on this computer/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Install", exact: true })).toHaveCount(0);
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Save answers" })).toBeFocused();

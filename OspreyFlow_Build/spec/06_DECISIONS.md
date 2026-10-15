@@ -10559,7 +10559,8 @@ service"); **not yet built** — the staged plan below is the next work block.
 The welcome screen (Glass, Ingest Studio, Admin console as tiles) is `scripts/launch.py`, a local
 process on `127.0.0.1:7070` that dies with the terminal that started it; the owner found it gone
 and wants it always there as the entry address. The admin console itself stays the harness's
-process at 7100 and never joins the product containers (ADR-049's boundary is not moved by this).
+process at 7100 and never joins the product containers: the harness stays outside the deployment it
+manages, and this does not move that boundary.
 
 ### Decision, staged
 
@@ -12660,7 +12661,7 @@ Amendment 6 point 1 settled the policy; these are the mechanics it leaves open, 
    which step failed, why, and that it was rolled back (or, if the rollback failed too, exactly what
    state the deployment is in and the backup to restore by hand).
 7. **The changelog** is `CHANGELOG.md` in Core, one `## vX.Y.Z — DATE` section per release. A tag
-   with no section is refused by `tools/changelog_check.py`, which `release.yml` runs first; the
+   with no section is refused by `scripts/changelog_check.py`, which `release.yml` runs first; the
    release's notes are that section.
 8. **`release.yml` is the owner's file.** The signing steps (`id-token: write`, cosign-installer,
    `cosign sign --yes` per pushed digest), the changelog check, the notes and the `versions.lock`

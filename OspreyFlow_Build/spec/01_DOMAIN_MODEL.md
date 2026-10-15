@@ -1290,6 +1290,37 @@ dataset; a new version keeps its pattern's. One saved before ADR-099 Amendment 3
 and stays readable in every case of its owner (Amendment 5). §11 covers
 the watch this can be turned into.
 
+### 8.4 Connections between two nodes (ADR-116)
+
+"Find connections" asks how two nodes the reader chose are joined, by degrees of separation
+(`POST /v1/investigations/{investigation_id}/connections`, `03_CONDUIT_MIDDLEWARE.md`).
+
+```python
+class ConnectionsRequest(BaseModel):
+    source: NodeId
+    target: NodeId                    # must differ from source
+    degree: int | None = None         # 1..CONNECTIONS_CEILING (8)
+    edge_types: list[str] | None = None
+
+class RoutesAtLength(BaseModel):      # the simple routes of exactly `length` links
+    length: int
+    paths: list[Path]                 # at most CONNECTIONS_SHOWN (10)
+    more: bool                        # others exist beyond those shown
+
+class Connections(BaseModel):         # the answer
+    degree: int | None                # None: no route up to searched_to
+    paths: list[Path]
+    more: bool
+    searched_to: int
+```
+
+With no `degree`, the answer is the fewest degrees that connect the two, looked for up to
+`CONNECTIONS_DEFAULT_REACH` (6); with one, it is the routes at exactly that degree. A route is
+traversed as the reader (rule 3): no route passes through a node the reader cannot see, and a hidden
+end answers exactly as an unknown one does — "no route found" — so the answer cannot reveal that a
+filtered node exists. Past `CONNECTIONS_SHOWN` routes at one degree, `more` says so (rule 2: never
+cut silently).
+
 ## 9. `AnalyticsPort` request and response shapes
 
 `packages/schemas/analytics.py` is the source of truth. Columnar aggregation over the event table
@@ -1791,3 +1822,41 @@ evaluates as its deployer (ADR-036); its alerts are the case team's (ADR-109 rul
 only to a reader who can see all of it. A true positive confirms the alert's `Alert` node
 (asserted, rule 5); a false positive leaves it `inferred`. `03_CONDUIT_MIDDLEWARE.md` §3.8a has the
 routes and the trigger points; the tests that pin each invariant are named in ADR-109's amendments.
+
+### 11.2 A case's report (ADR-111)
+
+The Reports view and the dashboards' feed (`/v1/investigations/{investigation_id}/reports` and
+`…/reports/feed`) are both one `ReportFigures`, from one computation, so they cannot disagree.
+
+```python
+class ReportCount(BaseModel):         # a fixed label and a count, never free text
+    label: str; value: int
+class WeekCount(BaseModel):           # alerts raised in one Monday-to-Sunday week, by typology
+    week_start: date; typology: str; count: int
+class OutcomeCount(BaseModel):        # where one typology's alerts of the period stand
+    typology: str; open: int; claimed: int; true_positive: int; false_positive: int
+class HeldFigures(BaseModel):         # held rows by what became of them; Editors and above only
+    held: int; released: int; rejected: int
+class KycFigures(BaseModel):          # customers by KYC status and risk band
+    customers: int; verified: int; unverified: int; by_band: list[ReportCount]
+class ReportFigures(BaseModel):
+    period_weeks: int                 # 1..52
+    as_of: date; generated_at: datetime
+    alerts_total: int
+    alerts_by_week: list[WeekCount]; open_by_age: list[ReportCount]
+    outcomes: list[OutcomeCount]
+    held: HeldFigures | None          # None for a reader below Editor
+    kyc: KycFigures
+class ReportLimitExceeded(BaseModel): # the report past its bound
+    error: Literal["limit_exceeded"]
+    cap_kind: Literal["alerts", "customers"]   # bounds: 10,000 alerts, 2,000 customers
+    cap: int; would_be: int
+    options: list[Literal["shorter_period", "fewer_typologies"]]
+```
+
+Figures only: labels, dates and numbers — never a name, an identifier or an alert's words. Every
+figure is counted as its reader (rule 3): an alert the reader cannot see whole is in no total and
+no bucket, and a customer's KYC status is assessed as the reader at the moment of reading (§11.1).
+Past either bound the report answers `ReportLimitExceeded`, never a partial figure presented as
+whole (rule 2); `would_be` counts only what the reader can see, so the refusal itself discloses
+nothing.

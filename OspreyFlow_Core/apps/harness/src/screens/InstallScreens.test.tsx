@@ -26,7 +26,7 @@ import { InstallingScreen } from "./InstallingScreen";
 import { ModeScreen } from "./ModeScreen";
 import { ReviewScreen } from "./ReviewScreen";
 
-const SMALL_SAYS = "The small install arrives with stage B6. Your answers are saved for it.";
+const SMALL_SAYS = "A small server is built from a terminal on this computer, from the answers you save here: ospreyflow install --mode small --cloud aws (or azure) --config .install/install.yaml";
 
 function state(over: Partial<InstallState> = {}): InstallState {
   return {
@@ -39,7 +39,7 @@ function state(over: Partial<InstallState> = {}): InstallState {
     modes: {
       lite: { available: true },
       small: { available: false, says: SMALL_SAYS },
-      enterprise: { available: false, says: "The enterprise install arrives with stage B7. Your answers are saved for it." },
+      enterprise: { available: false, says: "An enterprise install is built from a terminal on this computer, from the answers you save here: ospreyflow install --mode enterprise --cloud aws (or azure) --config .install/install.yaml" },
     },
     home: "/home/ada",
     ...over,
@@ -240,10 +240,10 @@ describe("InstallingScreen", () => {
 
   it("says what went wrong when the stream cannot be read", async () => {
     client.streamInstall.mockImplementation((_l: unknown, _c: unknown, onError: (m: string) => void) => {
-      onError("The small install arrives with stage B6.");
+      onError("The install could not be started.");
       return new AbortController();
     });
     render(<InstallingScreen />);
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("stage B6"));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("could not be started"));
   });
 });
