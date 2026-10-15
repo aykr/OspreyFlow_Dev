@@ -100,7 +100,18 @@ describe("deltaClient against the real Conduit WebSocket", () => {
     return body.id;
   }
 
+  // Since ADR-099 a case reads only its own datasets, and seeding drops a node the case could not
+  // read (CI, 15 October 2026: every snapshot came back empty). A seeded node is in the case's.
+  async function caseDatasets(investigationId: string): Promise<string[]> {
+    const response = await fetch(`${baseUrl}/v1/investigations/${investigationId}/datasets`, {
+      headers: { Authorization: `Bearer ${server.token}` },
+    });
+    expect(response.ok).toBe(true);
+    return ((await response.json()) as { id: string }[]).map((d) => d.id);
+  }
+
   async function seedOneNode(investigationId: string, nodeId: string): Promise<void> {
+    const datasets = await caseDatasets(investigationId);
     const response = await fetch(`${baseUrl}/v1/investigations/${investigationId}/seed`, {
       method: "POST",
       headers: {
@@ -124,6 +135,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
               owning_unit: "unit-1",
             },
             audit: { created_at: "2026-01-01T00:00:00Z", created_by: "loader-1" },
+            datasets,
           },
         ],
         edges: [],

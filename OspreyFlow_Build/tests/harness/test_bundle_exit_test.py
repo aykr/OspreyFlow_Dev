@@ -89,6 +89,24 @@ def _owned_by_render() -> set[tuple[str, str]]:
         }
 
 
+def _third_party_images() -> list[str]:
+    """Every image a pull-mode `local-lite` render names that this checkout does not build."""
+    from harness.render import load_config, service_images
+
+    with tempfile.TemporaryDirectory() as scratch:
+        config_path = Path(scratch) / "osprey.yaml"
+        config_path.write_text("profile: local-lite\n", encoding="utf-8")
+        return [e.image for e in service_images(load_config(config_path)) if not e.owned]
+
+
+def _pull_the_third_party_images() -> None:
+    """`tools/osprey_bundle.py` archives only images already present and leaves fetching them to
+    its caller; a fresh machine had none (`arcadedata/arcadedb`, CI, 15 October 2026)."""
+    for image in _third_party_images():
+        pulled = _run(["docker", "pull", image], timeout=1800)
+        assert pulled.returncode == 0, f"could not pull {image}: {pulled.stdout + pulled.stderr}"
+
+
 def _build_the_owned_images() -> None:
     """**Built here, because nothing else builds all four** — found running this test from a fresh
     clone on 27 September 2026, following `05_DEPLOYMENT.md` §3 exactly. `harness.apply --build`
@@ -115,6 +133,7 @@ def _build_the_owned_images() -> None:
 def test_the_real_bundle_installs_and_deploys_from_itself_alone(tmp_path: Path) -> None:
     refuse_to_touch_a_real_deployment("osprey-local-lite")  # its local-lite render's project
     _build_the_owned_images()
+    _pull_the_third_party_images()
     dist_dir = tmp_path / "dist"
     build = _run(
         [

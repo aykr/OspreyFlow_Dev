@@ -412,6 +412,9 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   // The stream's own last check — its result rendering is what proves every earlier one already
   // arrived and was rendered, not only that the request completed.
   await expect(page.getByText("oidc-audience — pass")).toBeVisible();
+  // Every check passes or skips on the fixed-size host (keyboard/console_fixed_host.py); a failing
+  // one is named here, with its reason, rather than surfacing later as a disabled Launch.
+  expect(await page.getByText(/ — fail/).allTextContents(), "Preflight checks failing on this host").toEqual([]);
   // Still disabled — the artefacts are confirmed and every check passes or skips, but the Docker
   // target is not yet confirmed.
   await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeDisabled();
