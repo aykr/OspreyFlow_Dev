@@ -850,6 +850,8 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/test_seed_links_replace.py
           --ignore=../OspreyFlow_Build/tests/test_stamp_datasets.py
           --ignore=../OspreyFlow_Build/tests/test_stamp_records.py
+          --ignore=../OspreyFlow_Build/tests/conformance/media_store/test_suite.py
+          --ignore=../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py
           ../OspreyFlow_Build/tests
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
@@ -956,6 +958,20 @@ jobs:
       - name: The five token-exchange tests against a real Keycloak
         working-directory: .
         run: make -C OspreyFlow_Build idp-test PY="uv run python" PYTEST="uv run pytest -c ../OspreyFlow_Build/pytest.ini"
+
+  # RecognisePort against a recogniser built from services/ner, as a deployment runs it (ADR-098
+  # decision 2); the build also checks every model file against services/ner/models.sha256 (ADR-098
+  # Amendment 5). spaCy and transformers are not installed here, so their cases do not run.
+  conformance-recognise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: The recogniser conformance suite against a real sidecar
+        working-directory: .
+        run: make -C OspreyFlow_Build conformance-recognise PYTEST="uv run pytest -c ../OspreyFlow_Build/pytest.ini"
 
   six-screen-live-exit-test:
     runs-on: ubuntu-latest
