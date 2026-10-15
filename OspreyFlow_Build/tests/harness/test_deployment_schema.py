@@ -29,10 +29,9 @@ def test_the_committed_osprey_yaml_still_validates() -> None:
     raw = yaml.safe_load(COMMITTED_CONFIG.read_text(encoding="utf-8"))
     config = OspreyConfig.model_validate(raw)
 
-    assert set(raw) == {"map"}, (
-        "the committed osprey.yaml has grown a second top-level key; this test's own premise "
-        "(that a map-only file must validate) needs rechecking, not the assertion below"
-    )
+    # It began as a map-only file; since 39a80d0 it is the described example of every option, so
+    # the premise is now that the whole example validates and names only sections that exist.
+    assert set(raw) <= set(OspreyConfig.model_fields), set(raw) - set(OspreyConfig.model_fields)
     assert config.map is not None
     assert config.map.default == "osm-local"
     assert config.profile is Profile.LOCAL_LITE

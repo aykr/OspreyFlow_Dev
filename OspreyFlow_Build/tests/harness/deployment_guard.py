@@ -44,11 +44,13 @@ class DeploymentPresent(Exception):
 def deployment_resources(
     project: str,
     *,
-    run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
     refuse: bool = False,
 ) -> tuple[list[str], list[str]]:
     """The containers and volumes labelled with `project`; with `refuse`, raises if there are any.
     No Docker on this machine means no deployment there to lose."""
+    # Looked up when called, not bound as a default, so a test's stand-in for it is the one used.
+    run = run or subprocess.run
     label = f"label=com.docker.compose.project={project}"
     found: list[list[str]] = []
     for args in (

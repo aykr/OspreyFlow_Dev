@@ -197,6 +197,28 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("PUT", P + "/access/grants/{account_id}"): A,
     ("DELETE", P + "/access/grants/{account_id}"): A,
     ("GET", P + "/access/history"): A,
+    # Trends, event holders and report packs (spec 03's routes list gives each level; added
+    # 15 October 2026, when CI first ran this table against routes built without a row here).
+    ("GET", P + "/events/holders"): V,
+    ("GET", P + "/trends/options"): V,
+    ("POST", P + "/trends/preview"): V,
+    ("POST", P + "/trends"): E,
+    ("GET", P + "/trends"): V,
+    ("GET", P + "/trends/{trend_id}/figures"): V,
+    ("DELETE", P + "/trends/{trend_id}"): E,
+    ("POST", P + "/packs"): E,
+    ("GET", P + "/packs"): V,
+    ("GET", P + "/packs/{pack_id}"): V,
+    ("POST", P + "/packs/{pack_id}/items"): E,
+    ("DELETE", P + "/packs/{pack_id}/items/{item_id}"): E,
+    ("PUT", P + "/packs/{pack_id}/order"): E,
+    ("POST", P + "/packs/{pack_id}/items/{item_id}/refresh"): E,
+    ("GET", P + "/packs/{pack_id}/history"): V,
+    ("POST", P + "/packs/{pack_id}/publish"): E,
+    ("POST", P + "/packs/{pack_id}/versions/{version}/withdraw"): E,
+    ("POST", P + "/packs/{pack_id}/export"): E,
+    ("GET", P + "/packs/{pack_id}/published"): V,
+    ("GET", P + "/published"): V,
 }
 
 

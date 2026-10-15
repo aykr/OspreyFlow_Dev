@@ -18,6 +18,10 @@ from ontology.loader import load_default_ontology
 ONTOLOGY = load_default_ontology()
 
 
+def _type(name: str):  # type: ignore[no-untyped-def]
+    return next(t for t in ONTOLOGY.entity_types if t.name == name)
+
+
 def test_build_schema_has_one_array_property_per_selected_entity_type() -> None:
     profile = ExtractionProfile(["Person", "Event"])
     schema = build_schema(profile, ONTOLOGY)
@@ -35,13 +39,11 @@ def test_person_item_schema_carries_its_declared_properties_and_confidence() -> 
     item = schema["properties"]["Person"]["items"]
     assert item["type"] == "object"
     assert item["additionalProperties"] is False
-    assert set(item["properties"]) == {
-        "family_name",
-        "given_names",
-        "date_of_birth",
-        "aliases",
-        "confidence",
-    }
+    # Every property the ontology declares on `Person`, whatever it has grown to (v16 added the
+    # screening list's `listing` and `list_name`), and at least the four it began with.
+    declared = {p.name for p in _type("Person").properties}
+    assert {"family_name", "given_names", "date_of_birth", "aliases"} <= declared
+    assert set(item["properties"]) == declared | {"confidence"}
     # `family_name` is `required: true` on the ontology's own `Person` definition; the others
     # are not, so only it plus `confidence` are required here.
     assert set(item["required"]) == {"family_name", "confidence"}
@@ -63,10 +65,9 @@ def test_property_type_mapping_covers_every_kind_person_and_endpoint_use() -> No
     assert person_props["aliases"] == {"type": "array", "items": {"type": "string"}}
 
     endpoint_props = schema["properties"]["Endpoint"]["items"]["properties"]
-    assert endpoint_props["endpoint_kind"] == {
-        "type": "string",
-        "enum": ["msisdn", "imsi", "email", "handle", "iban", "card"],
-    }
+    kinds = next(p for p in _type("Endpoint").properties if p.name == "endpoint_kind").values
+    assert {"msisdn", "imsi", "email", "handle", "iban", "card"} <= set(kinds)
+    assert endpoint_props["endpoint_kind"] == {"type": "string", "enum": kinds}
 
 
 def test_event_has_no_declared_properties_but_still_gets_a_confidence_field() -> None:

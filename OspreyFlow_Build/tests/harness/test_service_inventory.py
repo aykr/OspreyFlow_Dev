@@ -182,7 +182,7 @@ def test_the_worker_finding_is_still_true() -> None:
 def test_the_glass_serves_as_a_single_page_application() -> None:
     """A deep link into an investigation must survive a refresh. Asserted against the nginx config
     the image actually ships rather than against the running container, so it holds in CI."""
-    conf = (REPO_ROOT / "apps" / "workspace" / "nginx.conf").read_text(encoding="utf-8")
+    conf = (REPO_ROOT / "apps" / "workspace" / "nginx.conf.template").read_text(encoding="utf-8")
     assert "try_files $uri $uri/ /index.html" in conf
     assert "listen 8080" in conf, "05 §7 requires non-root, which cannot bind a privileged port"
 
@@ -201,7 +201,7 @@ def test_the_workspace_serves_the_basemap_glyphs_from_their_mount_and_404s_a_mis
     request with index.html, which MapLibre cannot read (9 October 2026)."""
     from harness.render import GLYPHS_CONTAINER_PATH
 
-    conf = (REPO_ROOT / "apps" / "workspace" / "nginx.conf").read_text(encoding="utf-8")
+    conf = (REPO_ROOT / "apps" / "workspace" / "nginx.conf.template").read_text(encoding="utf-8")
     block = conf[conf.index("location /fonts/") :]
     block = block[: block.index("\n    }") + 6]  # the location's own brace, not `types { }`
     assert f"alias {GLYPHS_CONTAINER_PATH}/;" in block

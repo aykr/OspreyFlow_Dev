@@ -450,7 +450,8 @@ def test_a_theme_keycloak_cannot_see_is_never_named_and_the_next_step_is_said(
     assert "loginTheme" not in keycloak.realm
     assert keycloak.realm["displayName"] == DISPLAY_NAME
     (note,) = [line for line in lines if "sign-in page" in line]
-    assert "python -m harness.apply" in note
+    # ADR-114 Amendment 22: an operator is sent to `ospreyflow`, never to a module or `make`.
+    assert "ospreyflow start --build" in note and "ospreyflow repair-sign-in" in note
 
 
 def test_a_demo_admin_that_holds_only_the_admin_role_is_brought_up_to_the_current_set(

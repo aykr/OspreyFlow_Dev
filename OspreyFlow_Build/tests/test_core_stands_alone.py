@@ -85,7 +85,8 @@ def test_the_root_makefile_sends_each_target_where_it_lives() -> None:
         return subprocess.run(["make", "-n", target], cwd=ROOT, capture_output=True, text=True).stdout
 
     assert "tools.route_coverage_check" in dry("route-coverage-check")
-    assert "scripts.seed_internal hmp" in dry("seed-hmp")
+    # A Core target (the seed targets went to `ospreyflow demo add`, ADR-114 Amendment 22).
+    assert "docker compose -f deploy/compose/dev.yaml up" in dry("dev-up")
 
 
 def test_the_harness_no_longer_bundles() -> None:

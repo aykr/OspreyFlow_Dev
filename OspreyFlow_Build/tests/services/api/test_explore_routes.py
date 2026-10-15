@@ -56,6 +56,7 @@ class _FakeGraph:
         edge_type: str | None = None,
         limit: int = 10,
         offset: int = 0,
+        node_id: str | None = None,  # ADR-100 Amendment 8
     ) -> Any:
         from schemas.explore import RankedLinks
 

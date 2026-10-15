@@ -18,11 +18,10 @@ from __future__ import annotations
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from ontology.loader import load_default_ontology
-from schemas.ingest import FieldBinding, RecipeEntity, RowTemplate, StudioRecipeStatus
 from services.api.app import (
     app,
     get_graph,
@@ -32,6 +31,8 @@ from services.api.app import (
     get_recipes_repo_root,
 )
 
+from ontology.loader import load_default_ontology
+from schemas.ingest import FieldBinding, RecipeEntity, RowTemplate, StudioRecipeStatus
 from tests.services.api.any_case import AnyCase
 from tests.services.api.test_app import _FakeInvestigations
 from tests.services.api.test_studio_recipe_routes import (
@@ -286,7 +287,45 @@ def run_client(publish_client: TestClient) -> TestClient:
     fake_investigations = _FakeInvestigations()
     app.dependency_overrides[get_investigations] = lambda: fake_investigations
     app.dependency_overrides[get_graph] = lambda: object()
+    # The stores the run route asks for beyond the load itself (ADR-109's rules, held rows,
+    # screening and KYC; the runner is stubbed here): each holds nothing.
+    for name in _STUB_STATE:
+        if not hasattr(app.state, name):
+            setattr(app.state, name, _Empty())
+    app.state.recipe_runs = _RecipeRuns()
     return publish_client
+
+
+_STUB_STATE = ["typology_rules", "held_rows", "screening_lists", "compute", "kyc_expiries"]
+
+
+class _Empty:
+    """A store that holds nothing: every query answers an empty list."""
+
+    def __getattr__(self, _name: str) -> Any:
+        async def nothing(*_: Any, **__: Any) -> list[Any]:
+            return []
+
+        return nothing
+
+
+class _RecipeRuns:
+    """The run ledger (ADR-110 decision 4) every run is recorded in: what was asked of it."""
+
+    def __init__(self) -> None:
+        self.started: list[dict[str, Any]] = []
+        self.finished: list[str] = []
+        self.failed: list[str] = []
+
+    async def start(self, **row: Any) -> str:
+        self.started.append(row)
+        return f"run-{len(self.started)}"
+
+    async def finish(self, run_id: str, **_: Any) -> None:
+        self.finished.append(run_id)
+
+    async def fail(self, run_id: str, *_: Any, **__: Any) -> None:
+        self.failed.append(run_id)
 
 
 def test_run_without_loader_role_is_forbidden(run_client: TestClient, tmp_path: Path) -> None:

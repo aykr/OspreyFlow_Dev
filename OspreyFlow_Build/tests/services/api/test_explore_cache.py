@@ -192,7 +192,7 @@ async def test_the_busiest_links_are_kept_like_the_rest() -> None:
     service, graph, _ = _service()
     calls: list[Any] = []
 
-    async def busiest_links(principal, *, edge_type=None, limit=10, offset=0):  # type: ignore[no-untyped-def]
+    async def busiest_links(principal, *, edge_type=None, limit=10, offset=0, node_id=None):  # type: ignore[no-untyped-def]
         from schemas.explore import RankedLinks
 
         calls.append((edge_type, limit, offset))

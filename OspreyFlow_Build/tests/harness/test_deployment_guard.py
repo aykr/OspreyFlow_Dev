@@ -69,11 +69,14 @@ def test_no_docker_means_no_deployment_to_lose() -> None:
 
 
 def test_the_refusal_skips_the_test_and_says_why(monkeypatch: pytest.MonkeyPatch) -> None:
-    run, _ = _docker(containers="3f2a9c1e5b7d\n")
+    run, calls = _docker(containers="3f2a9c1e5b7d\n")
     monkeypatch.setattr("tests.harness.deployment_guard.subprocess.run", run)
     with pytest.raises(pytest.skip.Exception) as skipped:
         refuse_to_touch_a_real_deployment("osprey-local-lite")
     assert "would delete it" in str(skipped.value)
+    # It was the fake that answered: with `subprocess.run` bound as a default argument the patch
+    # never reached the guard, so this passed only where a real deployment existed (CI has none).
+    assert calls, "the guard asked the real Docker, not this test's"
 
 
 def test_every_teardown_in_the_tests_asks_first() -> None:
