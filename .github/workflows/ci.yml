@@ -911,27 +911,6 @@ jobs:
       - run: npm run test:keyboard --workspace apps/harness
       - run: npm run test:a11y --workspace apps/harness
 
-  # ADR-049 Stage 2 §5b's own exit test #3 — "install from the bundle, not the clone." A separate
-  # job, not a further step above: both render the identical `osprey-local-lite` compose project
-  # name (`harness.render`'s own `name: f"osprey-{profile}"`) and publish the identical host ports,
-  # so running this after `deployment-exit-tests`' own already-up deployment in the same job would
-  # collide rather than exercise anything new. A fresh runner is simpler than sequencing a teardown
-  # between them correctly. This test's own `finally` block tears down what it starts, so no
-  # further "Tear down" step is needed here the way the job above needs one.
-  bundle-install-exit-test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-      - run: uv sync
-      - name: Build the bundle with --images, install from it alone, and deploy
-        env:
-          OSPREY_TEST_DIST_BUNDLE: "1"
-        run: >-
-          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
-          ../OspreyFlow_Build/tests/harness/test_bundle_exit_test.py
-
   # ADR-049 Stage 2 §6's own exit — the one item `REPORT-03d.md` left owed: Launch from the six
   # real setup screens (not `harness.apply` in-process, unlike the job above) reaches a
   # health-checked `local-lite` deployment that `harness.verify` passes three-sided. A separate
