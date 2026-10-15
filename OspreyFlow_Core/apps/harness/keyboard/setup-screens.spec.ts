@@ -373,6 +373,11 @@ test("a real keyboard walkthrough generates, downloads and confirms the artefact
 test("a real keyboard-triggered preflight run streams every check and enables Launch", async ({
   page,
 }) => {
+  // Its own starting point: `local-lite`. The Profile test above saves `small` to the same scratch
+  // config, and `small` expects GPU-backed serving, so on a host with no GPU (any CI runner) its
+  // Preflight failed the gpu check; on a Mac that check always skips, which hid it (15 October 2026).
+  const reset = await page.request.put("/api/config", { data: { profile: "local-lite" } });
+  expect(reset.ok()).toBe(true);
   await page.goto("/keyboard/setup-harness.html");
   await page.getByRole("button", { name: "Preflight", exact: true }).focus();
   await page.keyboard.press("Enter");
