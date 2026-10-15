@@ -398,11 +398,44 @@ def test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling(
     # alone and no longer told a regression from growth. 26 keeps the purpose: one store back at
     # the unbounded default adds about nine (shown failing, the questions store reverted), and the
     # threshold moves again only on a new measurement, recorded here.
-    assert during - before < 26, (
+    #
+    # 15 October 2026: 30, with 28 stores, every one bounded — growth again, not a regression, and
+    # a fixed ceiling could not tell them apart a second time. The budget is now read from the code:
+    # each pool's declared `min_size` (a pool with none counts as 1 here and opens 10, so it
+    # overshoots by about 9), plus 5 for run-to-run variance.
+    budget, undeclared = _declared_pool_minimums()
+    assert undeclared == [], f"pools with no min_size, so asyncpg's default of 10: {undeclared}"
+    assert during - before <= budget + 5, (
         f"app.py's lifespan opened {during - before} new Postgres connections (before={before}, "
         f"during={during}) — a bounded-pool regression, the same class this stage's own "
         "TooManyConnectionsError finding fixed"
     )
+
+
+def _declared_pool_minimums() -> tuple[int, list[str]]:
+    """The sum of every Conduit Postgres pool's declared `min_size`, and the pools declaring none."""
+    import re
+
+    from tools.layout import CORE
+
+    total, undeclared = 0, []
+    for path in sorted((CORE / "services" / "api").rglob("*.py")):
+        for call in re.finditer(r"create_pool\(([^)]*)\)", path.read_text(encoding="utf-8")):
+            declared = re.search(r"min_size=(\d+)", call.group(1))
+            total += int(declared.group(1)) if declared else 1
+            if not declared:
+                undeclared.append(path.name)
+    return total, undeclared
+
+
+def test_a_pool_with_no_declared_minimum_is_named() -> None:
+    """The budget's own red case, in the shape a store writes it: one pool left at the default."""
+    import re
+
+    line = "pool = await asyncpg.create_pool(dsn=dsn)"
+    assert re.search(r"min_size=(\d+)", re.search(r"create_pool\(([^)]*)\)", line).group(1)) is None  # type: ignore[union-attr]
+    total, undeclared = _declared_pool_minimums()
+    assert total >= 20 and undeclared == []
 
 
 # --- Phase 8 Stage 1 exit criterion (06_DECISIONS.md ADR-043) --------------------------------
@@ -584,7 +617,9 @@ def test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_inge
     from services.api.app import app
 
     app.dependency_overrides[get_recipes_repo_root] = lambda: git_repo
-    token_b = sign_token(private_key, default_claims(sub="analyst-b", roles=["loader"]))
+    # ADR-112: the old `loader` role runs pipelines only; one who opens a case and runs a recipe in
+    # it is a Data Engineer.
+    token_b = sign_token(private_key, default_claims(sub="analyst-b", roles=["data_engineer"]))
     try:
         with TestClient(app) as client:
             inv_response = client.post(

@@ -43,11 +43,13 @@ from schemas.domain import (
     EdgeWrite,
     Handling,
     NodeWrite,
+    Principal,
     Provenance,
     ProvenanceState,
     SourceRef,
 )
 from tests.conftest import default_claims, sign_token
+from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
 
 
 @pytest.fixture
@@ -97,6 +99,12 @@ def _handling(classification: str) -> Handling:
     )
 
 
+#: Since ADR-099 a case reads only its own datasets: the graph below is written into one, and each
+#: case made here is given it (`case_dataset.py` says why). Every principal here is in `unit-1`.
+_UNIT = Principal(id="loader-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+_DATASET = dataset_for(_UNIT)
+
+
 async def _arrange_graph() -> dict[str, Any]:
     """`hub` (OFFICIAL) -- ASSOCIATE_OF --> `visible` (OFFICIAL) and
     `hub` -- ASSOCIATE_OF --> `secret` (SECRET), written directly through
@@ -112,7 +120,7 @@ async def _arrange_graph() -> dict[str, Any]:
     hub_write = NodeWrite(
         id=hub_id, type="Person", properties={"family_name": "Hub"},
         provenance=_provenance(),
-        handling=_handling("OFFICIAL"), created_by="loader-1", created_at=now_utc(),
+        handling=_handling("OFFICIAL"), created_by="loader-1", created_at=now_utc(), datasets=[_DATASET],
     )
     tx = await graph.begin_transaction()
     await graph.upsert_nodes(
@@ -121,12 +129,12 @@ async def _arrange_graph() -> dict[str, Any]:
             NodeWrite(
                 id=visible_id, type="Person", properties={"family_name": "Visible"},
                 provenance=_provenance(),
-                handling=_handling("OFFICIAL"), created_by="loader-1", created_at=now_utc(),
+                handling=_handling("OFFICIAL"), created_by="loader-1", created_at=now_utc(), datasets=[_DATASET],
             ),
             NodeWrite(
                 id=secret_id, type="Person", properties={"family_name": "Secret"},
                 provenance=_provenance(),
-                handling=_handling("SECRET"), created_by="loader-1", created_at=now_utc(),
+                handling=_handling("SECRET"), created_by="loader-1", created_at=now_utc(), datasets=[_DATASET],
             ),
         ],
         tx,
@@ -136,12 +144,12 @@ async def _arrange_graph() -> dict[str, Any]:
             EdgeWrite(
                 id=new_node_id(), type="ASSOCIATE_OF", source=hub_id, target=visible_id,
                 provenance=_provenance(), handling=_handling("OFFICIAL"),
-                created_by="loader-1", created_at=now_utc(),
+                created_by="loader-1", created_at=now_utc(), datasets=[_DATASET],
             ),
             EdgeWrite(
                 id=new_node_id(), type="ASSOCIATE_OF", source=hub_id, target=secret_id,
                 provenance=_provenance(), handling=_handling("SECRET"),
-                created_by="loader-1", created_at=now_utc(),
+                created_by="loader-1", created_at=now_utc(), datasets=[_DATASET],
             ),
         ],
         tx,
@@ -195,6 +203,7 @@ def test_seed_expand_disconnect_reconnect_audit_cap_and_filtered_count(
         created = client.post("/v1/investigations", headers=headers)
         assert created.status_code == 201, created.text
         investigation_id = created.json()["id"]
+        _run(give_case_its_dataset(investigation_id, _UNIT))
 
         seeded = client.post(
             f"/v1/investigations/{investigation_id}/seed",
@@ -263,6 +272,7 @@ def test_seed_expand_disconnect_reconnect_audit_cap_and_filtered_count(
         # A fresh investigation, seeded with only `hub` — clean headroom so
         # the breach is caused by *this* expand, not accumulated state.
         breach_investigation = client.post("/v1/investigations", headers=headers).json()["id"]
+        _run(give_case_its_dataset(breach_investigation, _UNIT))
         client.post(
             f"/v1/investigations/{breach_investigation}/seed",
             headers=headers,
@@ -304,6 +314,7 @@ def test_a_principal_in_a_different_org_unit_is_denied(
         created = client.post("/v1/investigations", headers=creator_headers)
         assert created.status_code == 201, created.text
         investigation_id = created.json()["id"]
+        _run(give_case_its_dataset(investigation_id, _UNIT))
 
         denied = client.get(f"/v1/investigations/{investigation_id}", headers=stranger_headers)
 
@@ -337,7 +348,16 @@ def test_a_lower_clearance_principal_sharing_an_investigation_sees_the_filtered_
     with TestClient(app) as client:
         created = client.post("/v1/investigations", headers=secret_headers)
         investigation_id = created.json()["id"]
+        _run(give_case_its_dataset(investigation_id, _UNIT))
 
+        # Since ADR-052 a new case is its creator's alone until shared: the SECRET analyst shares
+        # it with the OFFICIAL one, which is the sharing this test is about.
+        shared = client.put(
+            f"/v1/investigations/{investigation_id}/access/grants/analyst-official",
+            headers=secret_headers,
+            json={"level": "viewer"},
+        )
+        assert shared.status_code == 204, shared.text
         client.post(
             f"/v1/investigations/{investigation_id}/seed",
             headers=secret_headers,

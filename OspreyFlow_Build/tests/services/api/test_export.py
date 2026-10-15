@@ -562,8 +562,13 @@ async def test_export_ledger_entry_survives_investigation_deletion(
         # The investigation row is deleted directly — InvestigationStore exposes no delete
         # method at all today, deliberately (no route in this build ever deletes one); this is
         # the structural proof the ledger has no foreign-key or ownership dependency on it.
+        # Its own access rows go first (ADR-052's grants, their history and the tab state, which
+        # reference the case); what is left can only refuse the delete if the ledger does.
         conn = await asyncpg.connect(DSN)
         try:
+            for own in ("investigation_grants", "investigation_access_history",
+                        "investigation_tab_state"):  # fmt: skip
+                await conn.execute(f"DELETE FROM {own} WHERE investigation_id = $1", investigation.id)
             await conn.execute("DELETE FROM investigations WHERE id = $1", investigation.id)
         finally:
             await conn.close()

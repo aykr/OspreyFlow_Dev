@@ -94,6 +94,7 @@ def _handling(
 _DEFAULT_PROPERTIES: dict[str, dict[str, object]] = {
     "Person": {"family_name": "Test"},
     "Endpoint": {"value_normalised": "+441234567890"},
+    "Alert": {"rule_id": "rule-1"},  # ADR-109: an alert names the rule that raised it
     # Location has no required properties — geometry_ref is optional
     # (03_CONDUIT_MIDDLEWARE.md §5.1: a jurisdiction or an administrative
     # boundary has no single point and must be able to carry none).
