@@ -12,14 +12,17 @@ is where "missing" actually manifests as an empty string rather than a raised ex
 already holds itself to for a different registry.
 
 **What the registry holds today, checked directly against `DEMO_GUIDE.md` §1's own table and the
-seed scripts' own imports.** Four entries, every one `shipped`. Three
+seed scripts' own imports.** Five entries, every one `shipped`. Three
 entries are synthetic, generated and seeded from code in this repository (`hmp`, `fixture-corp`,
 `operation-ledger`; ADR-035 §C5's "Generated output is owned outright"). `paysim` is shipped as a
 *download*: its data is third-party, CC-BY-SA-4.0, and is fetched by the person who wants it, never
 placed in an artefact (`06_DECISIONS.md` ADR-114 Amendment 1, which supersedes ADR-055 §3's
-`internal`). An `internal` demo — real data admitted only through `scripts/real_data_exceptions.py`
-— is registered outside this repository, beside its own code, and never published with it
-(ADR-114 Amendment 2); the packaging and publishing gates judge an artefact against both lists. The
+`internal`). `enron` is shipped as a *download* too, and is **real data** — real people's email,
+no licence stated — fetched from CMU by each user and loaded only once they accept what it is
+(ADR-114 Amendment 23, amending decision 5 and ADR-053). An `internal` demo — real data admitted
+only through `scripts/real_data_exceptions.py` — is registered outside this repository, beside its
+own code, and never published with it (ADR-114 Amendment 2; there is none today); the packaging and
+publishing gates judge an artefact against both lists. The
 VAST-shaped fixture (§C4) is not built. This module keys off
 the packaging grain, "which files does the build include or refuse"; `tools/demo_guide_check.py`'s
 own `DEMO_REGISTRY` keys off `DEMO_GUIDE.md`'s prose, a feature-level grain (ADR-034 §B10's
@@ -157,6 +160,23 @@ REGISTRY: tuple[DemoManifest, ...] = (
         attribution=(
             'E. A. Lopez-Rojas, A. Elmir and S. Axelsson, "PaySim: A financial mobile money '
             'simulator for fraud detection", EMSS 2016 (Larnaca, Cyprus)'
+        ),
+    ),
+    # ADR-114 Amendment 23 (amending decision 5 and ADR-053): REAL data — real people's email —
+    # offered as an optional download each user makes from CMU and accepts on their own machine.
+    # No licence is stated; it is never placed in an artefact, and the packaging gate refuses its
+    # folder there, as for any download pack.
+    DemoManifest(
+        id="enron",
+        distribution=DISTRIBUTION_SHIPPED,
+        delivery=DELIVERY_DOWNLOAD,
+        seed_module="scripts.seed_enron",
+        paths=("OspreyFlow_Data/Enron_Mails",),
+        data_licence="None stated (CMU: \"a resource for researchers\"); real personal data",
+        attribution=(
+            "Enron Email Dataset (May 7, 2015 version), prepared and distributed by William W. "
+            "Cohen, Carnegie Mellon University; released by the US Federal Energy Regulatory "
+            "Commission"
         ),
     ),
 )

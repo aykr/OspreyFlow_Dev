@@ -19,12 +19,10 @@ import pytest
 from scripts import seed_internal
 
 @pytest.fixture(autouse=True)
-def _enron_from_build(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The runner's real-data handling, exercised with the internal dataset the developer repository
-    adds to it (`internal_demos/seed.py`; ADR-114 Amendment 2) — the product's own table has none."""
-    from internal_demos.seed import ENRON
-
-    monkeypatch.setitem(seed_internal.DATASETS, "enron", ENRON)
+def _enron_from_build() -> None:
+    """The runner's real-data handling is exercised with Enron, the product's own dataset since
+    ADR-114 Amendment 23 (it was the developer repository's, added here, under Amendment 2). Kept,
+    empty, because `test_seed_bulk_method.py` imports it by name."""
 
 
 ADMIN = "osprey-demo-admin"
@@ -234,7 +232,7 @@ def test_enron_is_refused_on_the_host_without_an_exceptions_entry_and_nothing_is
     host is the one place that can, so it must check before starting anything."""
     _with_enron(repo)
     runner = Runner()
-    with pytest.raises(seed_internal.SeedRefused, match="exceptions"):
+    with pytest.raises(seed_internal.SeedRefused, match="ospreyflow demo add enron"):
         _go(repo, runner, dataset="enron", permitted=False)
     assert runner.calls == []
 
@@ -261,9 +259,9 @@ def test_enron_passes_the_hosts_attestations_and_its_own_case_name(repo: Path) -
     runner = Runner()
     _go(repo, runner, dataset="enron")
     call = _seed_call(runner)
-    assert call[call.index("-m") + 1] == "internal_demos.seed_enron"
+    assert call[call.index("-m") + 1] == "scripts.seed_enron"
     assert "--attested-permission" in call and "--attested-checkout" in call
-    assert call[call.index("--case-name") + 1] == "Enron corpus (real data, this machine only)"
+    assert call[call.index("--case-name") + 1] == "Enron corpus (real data)"
     assert f"{SUBS[ADMIN]}=author" in call and f"{SUBS[ANALYST]}=editor" in call
 
 

@@ -5,25 +5,12 @@ demo's data and code are refused wherever they turn up."""
 
 from __future__ import annotations
 
-from scripts.demo_registry import DELIVERY_SEED, DISTRIBUTION_INTERNAL, REGISTRY, DemoManifest
+from scripts.demo_registry import REGISTRY, DemoManifest
 
-#: ADR-053. REAL data, admitted for the owner's own machine only through the local exceptions list,
-#: never committed, never shipped. Its data folder and its code are both refused by the gate.
-ENRON = DemoManifest(
-    id="enron",
-    distribution=DISTRIBUTION_INTERNAL,
-    delivery=DELIVERY_SEED,
-    seed_module="internal_demos.seed_enron",
-    paths=(
-        "OspreyFlow_Data/Enron_Mails",
-        "internal_demos/enron.py",
-        "internal_demos/seed_enron.py",
-        "packages/demo_fixtures/enron.py",
-        "scripts/seed_enron.py",
-    ),
-)
-
-INTERNAL: tuple[DemoManifest, ...] = (ENRON,)
+#: None today. The Enron corpus was the one internal demo until ADR-114 Amendment 23 made it an
+#: optional download in the product (`scripts.demo_registry`); an internal demo registered here again
+#: has its data and code refused by the gates wherever they turn up.
+INTERNAL: tuple[DemoManifest, ...] = ()
 
 #: Every demo the gates know: what may ship, and what never may.
 ALL: tuple[DemoManifest, ...] = (*REGISTRY, *INTERNAL)

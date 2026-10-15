@@ -48,6 +48,9 @@ class DemoPack:
     download: PackDownload | None
     #: The case the pack's seed makes (ADR-114 Amendment 5: how the Admin area tells it is loaded).
     case_name: str
+    #: Real people's data (ADR-114 Amendment 23): offered only as a download the person accepts,
+    #: never by an install, and marked so wherever it is listed.
+    real_data: bool = False
 
 
 class PackRefused(Exception):
@@ -60,7 +63,12 @@ class _Description:
     shows: str
     case_name: str
     download: PackDownload | None = None
+    real_data: bool = False
 
+
+#: CMU publishes no checksum; this is the May 7, 2015 file's own, taken from a copy downloaded from
+#: https://www.cs.cmu.edu/~enron/ on 14 October 2026 (ADR-114 Amendment 23).
+ENRON_SHA256 = "b3da1b3fe0369ec3140bb4fbce94702c33b7da810ec15d718b3fadf5cd748ca7"
 
 _DESCRIPTIONS: dict[str, _Description] = {
     "hmp": _Description(
@@ -94,6 +102,23 @@ _DESCRIPTIONS: dict[str, _Description] = {
             attribution_file="packages/demo_fixtures/licences/paysim/ATTRIBUTION.md",
         ),
     ),
+    # ADR-114 Amendment 23: REAL data, downloaded by the person from CMU and accepted in words.
+    "enron": _Description(
+        "Enron — a real company's email (REAL personal data, downloaded by you)",
+        "About 150 people's real email, 1998–2002: who wrote to whom, when, and what about. "
+        "You download it from CMU and accept what it is before it is loaded.",
+        "Enron corpus (real data)",
+        PackDownload(
+            filename="enron_mail_20150507.tar.gz",
+            size_bytes=443254787,
+            sha256=ENRON_SHA256,
+            source_page="https://www.cs.cmu.edu/~enron/",
+            release_asset=None,
+            licence_file="packages/demo_fixtures/licences/enron/NOTICE.md",
+            attribution_file="packages/demo_fixtures/licences/enron/ATTRIBUTION.md",
+        ),
+        real_data=True,
+    ),
 }
 
 
@@ -115,6 +140,7 @@ def _build(manifest: DemoManifest) -> DemoPack:
         attribution=manifest.attribution,
         download=description.download if manifest.delivery == DELIVERY_DOWNLOAD else None,
         case_name=description.case_name,
+        real_data=description.real_data,
     )
 
 
@@ -198,6 +224,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{item.id}: {item.title}")
         print(f"  shows: {item.shows}")
         print(f"  delivery: {item.delivery}; size: {size}; licence: {item.licence}")
+        if item.real_data:
+            print("  REAL personal data: never added by an install; `ospreyflow demo add "
+                  f"{item.id} --file <file>` shows what it is and asks first")
         if item.attribution:
             print(f"  attribution: {item.attribution}")
     return 0

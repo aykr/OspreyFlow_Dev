@@ -1,10 +1,11 @@
-"""The Enron mail corpus, read for an owner-run demo on the owner's own machine (ADR-053 and its
-Amendment 1).
+"""The Enron mail corpus, read for a demo (ADR-053; ADR-114 Amendment 23: an optional download).
 
-**This is real data.** It is admitted only through `config/real_data_exceptions.yaml`, is never
-committed, and is never read by anything that ships. This module is pure: it reads and shapes
-records, and holds no path to any corpus. Writing them is `internal_demos/seed_enron.py`, which
-refuses first unless the exceptions entry, the provisioned folder and a checkout are all there.
+**This is real data** — real people's email. It is never committed, shipped, packaged or in CI:
+each user downloads it from CMU and adds it with `ospreyflow demo add enron`, which checks the file
+and asks them to accept what it is. This module is pure: it reads and shapes records, and holds no
+path to any corpus. Writing them is `scripts/seed_enron.py`, which refuses first unless the corpus
+was accepted on this machine (or the owner's local exceptions entry permits it), the folder is
+there, and this is a checkout.
 
 **Shape (the owner chose "option A", 30 September 2026).** An email address is an `Endpoint` of kind
 `email`; a person is not invented from an address. Each sender-to-recipient pair is one summarised

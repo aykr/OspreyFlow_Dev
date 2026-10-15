@@ -9,7 +9,6 @@ from scripts.demo_registry import (
     internal_manifests,
     shipped_manifests,
 )
-
 from tools import packaging_gate
 
 _DATA = "OspreyFlow_Data/PaySIM_Dataset/PS_20174392719_1491204439457_log.csv"

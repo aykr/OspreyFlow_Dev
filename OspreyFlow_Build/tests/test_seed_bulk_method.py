@@ -474,7 +474,7 @@ def test_the_lookup_probe_runs_in_the_deployment_and_takes_its_sizes(
     assert seed_internal.main(["paysim", "--probe-lookup-cost", "--probe-sizes"]) == 2
 
 
-@pytest.mark.parametrize("module", ["internal_demos.seed_enron", "scripts.seed_paysim"])
+@pytest.mark.parametrize("module", ["scripts.seed_enron", "scripts.seed_paysim"])
 def test_run_directly_the_enron_and_paysim_seeds_default_to_bulk(module: str) -> None:
     """A direct run of either script defaults as `seed_internal` does, so it is not slower."""
     import importlib

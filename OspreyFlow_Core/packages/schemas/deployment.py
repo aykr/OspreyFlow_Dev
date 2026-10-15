@@ -393,7 +393,9 @@ class ClusterConfig(BaseModel):
     namespace: str = Field(
         default="ospreyflow",
         pattern=r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
-        description="The Kubernetes namespace the deployment is installed in (05_DEPLOYMENT.md §3b)",
+        description=(
+            "The Kubernetes namespace the deployment is installed in (05_DEPLOYMENT.md §3b)"
+        ),
     )
     storage_class: str | None = Field(
         default=None,

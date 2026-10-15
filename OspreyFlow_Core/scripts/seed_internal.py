@@ -44,6 +44,7 @@ from harness.realm import (
     DEMO_ENGINEER_SUBJECT,
     DEMO_REPORT_VIEWER_SUBJECT,
 )
+from scripts import real_data_acknowledgement
 from scripts.refresh import NothingToRefresh, _deployment_dir, _identity_origin
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -99,6 +100,15 @@ DATASETS: dict[str, Dataset] = {
         data_folder="PaySIM_Dataset",
         sampled=True,
         bulk=True,
+    ),
+    # ADR-114 Amendment 23: real data, an optional download each user makes and accepts.
+    "enron": Dataset(
+        script="scripts.seed_enron",
+        case_name="Enron corpus (real data)",
+        data_folder="Enron_Mails",
+        real_dataset="enron",
+        bulk=True,
+        rewrites_links=True,
     ),
 }
 
@@ -280,11 +290,18 @@ def seed_internal(
                 f"{vault!r} is not a vault id: lower-case letters, digits and hyphens, starting "
                 "with a letter, at most 31 characters"
             )
-    if spec.real_dataset and not permitted(spec.real_dataset, REAL_DATA_USE):
+    chosen_data = os.environ.get("OSPREYFLOW_DEMO_DATA")
+    data_root = Path(chosen_data) if chosen_data else repo_root.parent / "OspreyFlow_Data"
+    # ADR-114 Amendment 23: accepted on this machine by the person who added it, or the owner's
+    # local exceptions entry (ADR-035 §C3, ADR-053).
+    if spec.real_dataset and not (
+        real_data_acknowledgement.accepted(data_root / (spec.data_folder or ""), spec.real_dataset)
+        or permitted(spec.real_dataset, REAL_DATA_USE)
+    ):
         raise SeedRefused(
-            f"the local real-data exceptions list has no entry for {spec.real_dataset!r} "
-            f"permitting {REAL_DATA_USE!r}. Add one with `python -m scripts.real_data_exceptions "
-            "add` (ADR-035 §C3, ADR-053); nothing was started"
+            f"{spec.real_dataset!r} is real data and has not been accepted on this machine: add it "
+            f"with `ospreyflow demo add {spec.real_dataset} --file <the downloaded file>`, which "
+            "says what it is and asks first; nothing was started"
         )
     # The developer repository keeps the product one folder below the checkout; the user
     # repository (ADR-114) is the product itself.
@@ -297,8 +314,6 @@ def seed_internal(
         directory = _deployment_dir(repo_root)
     except NothingToRefresh as error:
         raise SeedRefused(str(error)) from error
-    chosen_data = os.environ.get("OSPREYFLOW_DEMO_DATA")
-    data_root = Path(chosen_data) if chosen_data else repo_root.parent / "OspreyFlow_Data"
     if spec.data_folder and not (data_root / spec.data_folder).is_dir():
         raise SeedRefused(
             f"the dataset is not provisioned: {data_root / spec.data_folder} is missing"

@@ -70,6 +70,12 @@ rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup
 `repair-sign-in` (when nobody can sign in) and `uninstall`. Every operator task is an `ospreyflow`
 verb; `make` targets are for developers working on OspreyFlow itself.
 
+**Demo packs** load into cases of their own: three synthetic ones generated here, and two you
+download — PaySim (simulated) and the **Enron email corpus, which is real people's data**: you fetch
+it from Carnegie Mellon University yourself, and `ospreyflow demo add enron --file <file>` checks it,
+says what it is and loads it only once you accept. No install adds it. The administration guide's
+section 11 has the details.
+
 **Small** is built from your own machine: `ospreyflow install --mode small --cloud aws` (or
 `azure`) creates the server and the cloud's managed database and storage with OpenTofu, and the
 server installs OspreyFlow on its first boot. **Enterprise** is built the same way:

@@ -206,7 +206,11 @@ def _parser() -> argparse.ArgumentParser:
     actions.add_parser("list", help="the demo packs")
     add = actions.add_parser("add", help="add a demo pack")
     add.add_argument("pack")
-    add.add_argument("--file", type=Path, help="the PaySim download")
+    add.add_argument("--file", type=Path, help="the downloaded file (PaySim, Enron)")
+    add.add_argument(
+        "--accept-real-data", action="store_true",
+        help="enron: accept, without being asked, that it is real people's email (a scripted run)",
+    )  # fmt: skip
 
     verbs.add_parser("backup", help="back up every store (arguments go to harness.backup)")
     verbs.add_parser("restore", help="restore a backup (arguments go to harness.restore)")
@@ -353,6 +357,15 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
         return _gui(ctx)
     packs = demo.pack_ids(ctx.product, ctx.capture)
     raw = _raw_answers(args, ctx, packs)
+    # ADR-114 Amendment 23: real data is never added by an install, only on its own, after asking.
+    real = sorted(set(demo.REAL_DATA_PACKS) & {str(p) for p in raw.get("demo_packs") or ()})
+    if real:
+        raise CommandRefused(
+            f"{', '.join(real)} is real people's data and is never added by an install. Install "
+            "without it, then add it on its own with "
+            + " / ".join(f"ospreyflow demo add {pack}" for pack in real)
+            + ", which says what it is and asks first."
+        )
     answers = load_answers(raw, packs=packs)
     # ADR-114 Amendment 10 point 1: Small is built from the operator's machine (`--cloud`), and
     # installed on the server by its first boot, whose answers name the managed services.
@@ -606,7 +619,10 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
     if verb == "demo":
         if args.action == "list":
             return demo.list_packs(ctx.product, ctx.run)
-        demo.add_pack(ctx.product, ctx.run, ctx.env, args.pack, args.file)
+        demo.add_pack(
+            ctx.product, ctx.run, ctx.env, args.pack, args.file,
+            ask=ctx.ask, accept_real_data=args.accept_real_data,
+        )  # fmt: skip
         return 0
     if verb == "uninstall":
         return _uninstall(args, ctx)

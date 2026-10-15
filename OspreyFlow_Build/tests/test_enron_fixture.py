@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from internal_demos import enron
+from scripts import enron_mail as enron
 from schemas.domain import Handling
 
 HANDLING = Handling(

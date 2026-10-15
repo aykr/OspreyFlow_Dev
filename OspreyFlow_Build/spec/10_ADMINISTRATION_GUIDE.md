@@ -401,6 +401,7 @@ shows each role's model, where it runs, and a notice that case content then leav
 | `fixture-corp` | Network shapes, and duplicate records matched without being merged (synthetic) | Generated |
 | `operation-ledger` | Preventive AML: a structuring ring, onboarding screened before it commits, ownership through a trust (synthetic) | Generated |
 | `paysim` | Mobile-money fraud: 6.36 million simulated transactions with fraud labels | Downloaded by you |
+| `enron` | **Real data**: about 150 people's real email at Enron, 1998–2002 — who wrote to whom, when, and about what | Downloaded by you; accepted before it loads; never by an install |
 
 Choose them at install (`demo_packs`), or later: `ospreyflow demo list`, `ospreyflow demo add
 <id>`. Each loads into its own case, with the installing administrator as Author. **PaySim** is a
@@ -408,6 +409,25 @@ download: get `PS_20174392719_1491204439457_log.csv` from its Kaggle page and pa
 `ospreyflow demo add paysim --file <path>`; it is checked by size and checksum before anything
 starts. PaySim is CC BY-SA 4.0 (E. A. Lopez-Rojas, A. Elmir and S. Axelsson, 2016); its licence and
 attribution travel with it.
+
+**Enron** is the one pack of **real personal data**: the email of real people, released during the
+US regulator's investigation and distributed by Carnegie Mellon University. OspreyFlow never carries
+it, and an install never adds it. To use it, download `enron_mail_20150507.tar.gz` (423 MB) from
+https://www.cs.cmu.edu/~enron/ yourself, then:
+
+```
+ospreyflow demo add enron --file enron_mail_20150507.tar.gz
+```
+
+It checks the file is exactly the May 7, 2015 version (size and SHA-256), then says what it is — real
+people's names, addresses and private correspondence; **no licence is stated**, CMU distributing it
+"as a resource for researchers" and asking that you "be sensitive to the privacy of the people
+involved"; your organisation needs its **own lawful basis** to process it — and loads it only when you
+type `yes`. (`--accept-real-data` accepts in a scripted run, and says so.) It is unpacked into the
+demo data folder — 150 mailboxes, about 517,000 messages and 2.5 GB, so allow 3 GB free with the
+download — with a record of the acceptance beside it, and loads into its own case, "Enron corpus
+(real data)", shared with no demo account but the administrator and analyst. The terms are in
+`packages/demo_fixtures/licences/enron/NOTICE.md`.
 
 ## 12. Dashboards
 

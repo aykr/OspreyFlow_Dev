@@ -4,7 +4,6 @@ files travel in the artefact and the packaging gate must not refuse them."""
 from __future__ import annotations
 
 from scripts.demo_registry import REGISTRY, seeded_manifests
-
 from tools import packaging_gate
 
 

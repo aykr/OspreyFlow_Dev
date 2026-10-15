@@ -1,17 +1,16 @@
-"""Seeds the Enron mail corpus into a running deployment, on the owner's own machine only
-(ADR-053 and its Amendment 1).
+"""Seeds the Enron mail corpus into a running deployment (ADR-053; ADR-114 Amendment 23).
 
-    python -m scripts.seed_internal enron --stop-api        (or: make seed-enron)
+    ospreyflow demo add enron --file enron_mail_20150507.tar.gz
 
 **Real data.** It refuses, with a sentence naming what is missing, unless all of these hold: the
-local, gitignored exceptions list (`config/real_data_exceptions.yaml`) has an entry for `enron`
-permitting `owner_run_demonstration`; the corpus is provisioned under
-`OspreyFlow_Data/Enron_Mails/`; and this is a checkout, never a bundle. Nothing here downloads or
-copies the corpus.
+corpus was accepted on this machine (`ospreyflow demo add enron` keeps the record beside it) or
+the owner's local exceptions list (`config/real_data_exceptions.yaml`) has an entry for `enron`
+permitting `owner_run_demonstration`; the corpus is unpacked under the demo data folder's
+`Enron_Mails/`; and this is a checkout, never a bundle. Nothing here downloads or copies the corpus.
 
 The graph takes the company's own addresses and the links between them (about one node per address
 and one edge per directed pair); the analytics store takes every distinct message, one event per
-recipient. See `internal_demos/enron.py`.
+recipient. See `scripts/enron_mail.py`.
 """
 
 from __future__ import annotations
@@ -25,6 +24,7 @@ from pathlib import Path
 from typing import cast
 
 import duckdb
+from scripts import enron_mail as enron
 from scripts.seed_support import (
     KNOWN_STRAY_ADVICE,
     EventProgress,
@@ -44,7 +44,6 @@ from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
 from demo_fixtures.datasets import ENRON
-from internal_demos import enron
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
@@ -54,7 +53,7 @@ from schemas.domain import Handling, Principal
 DATASET = "enron"
 USE = "owner_run_demonstration"
 FOLDER = "Enron_Mails"
-CASE_NAME = "Enron corpus (real data, this machine only)"
+CASE_NAME = "Enron corpus (real data)"
 
 _GRAPH_CHUNK = 40
 _EVENT_CHUNK = 20_000
@@ -72,7 +71,9 @@ class NotProvisionedError(RuntimeError):
 
 
 def _is_checkout() -> bool:
-    return (Path(__file__).resolve().parents[2] / ".git").exists()
+    """A user's checkout has the product at its root; the developer repository one folder down."""
+    here = Path(__file__).resolve()
+    return (here.parents[1] / ".git").exists() or (here.parents[2] / ".git").exists()
 
 
 def permitted_here(*, config_path: Path | None = None) -> bool:
@@ -94,9 +95,9 @@ def authorise(
     """The corpus folder, or a refusal naming the first thing that is missing."""
     if not (args.attested_permission or permitted()):
         raise NotProvisionedError(
-            "The real-data exceptions list has no entry for 'enron' permitting "
-            f"'{USE}' on this machine. Add one with `python -m scripts.real_data_exceptions add` "
-            "(ADR-035 §C3, ADR-053); nothing was read."
+            "The Enron corpus has not been accepted on this machine: add it with `ospreyflow demo "
+            "add enron --file <the file from CMU>`, which says what it is and asks first "
+            "(ADR-114 Amendment 23); nothing was read."
         )
     if not (in_checkout or args.attested_checkout):
         raise NotProvisionedError(
@@ -106,15 +107,15 @@ def authorise(
     folder = Path(args.data_dir) / FOLDER
     if not folder.is_dir():
         raise NotProvisionedError(
-            f"dataset not provisioned: {folder} is missing. Place the corpus there yourself; "
-            "nothing downloads it."
+            f"dataset not provisioned: {folder} is missing. `ospreyflow demo add enron --file "
+            "<the file from CMU>` unpacks it there; nothing downloads it."
         )
     return folder
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="python -m internal_demos.seed_enron", description=__doc__
+        prog="python -m scripts.seed_enron", description=__doc__
     )
     parser.add_argument("--case-name", required=True)
     parser.add_argument("--grant", action="append", default=[], metavar="ACCOUNT=LEVEL")

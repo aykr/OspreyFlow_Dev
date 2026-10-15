@@ -56,6 +56,7 @@ def test_each_pack_maps_to_its_seed_key(rig: Rig, tmp_path: Path) -> None:
         "fixture-corp": "fixture-corp",
         "operation-ledger": "ledger",
         "paysim": "paysim",
+        "enron": "enron",
     }
     assert rig("demo", "add", "operation-ledger") == 0
     (argv,) = _seed_calls(rig)
@@ -65,9 +66,9 @@ def test_each_pack_maps_to_its_seed_key(rig: Rig, tmp_path: Path) -> None:
 def test_an_unknown_pack_is_refused_with_the_list(
     rig: Rig, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert rig("demo", "add", "enron") == 1
+    assert rig("demo", "add", "vast") == 1
     err = capsys.readouterr().err
-    assert "enron" in err
+    assert "vast" in err
     for known in PACK_KEYS:
         assert known in err
     assert rig.runner.calls == []

@@ -7069,6 +7069,8 @@ Nothing built. Spec pointers added to `02_GLASS_FRONTEND.md` §2.1 and `03_CONDU
 
 ## ADR-053 — Seeding the real Enron corpus on the owner's own machine only: local, opt-in, never shipped
 
+**Amended 14 October 2026 by ADR-114 Amendment 23:** the corpus may now be added by any user who downloads it from CMU themselves and accepts what it is; it is still never committed, shipped, packaged or in CI.
+
 **Status: Accepted, 29 September 2026, on the owner's explicit ruling. Design only: no loader exists,
 no corpus is provisioned and nothing here is built.**
 
@@ -13275,30 +13277,29 @@ overruled).
    copies), `test_doc_site.py` (+2, one replaced); plants red: 12 (renderer and PDF check), 4 (site),
    1 (a flag missing from the package copy only).
 
-### ADR-114, Amendment 21 (14 October 2026) — the user repository is aykr/ospreyflow, private
+### ADR-114, Amendment 21 (14 October 2026) — the user repository is aykr/OspreyFlow, private
 
 Status: accepted 14 October 2026 — the owner: "the user repo should be aykr/ospreyflow, private".
 
-1. **The user repository** (decision 1; `make publish-user-repo`) is `aykr/ospreyflow` on GitHub,
-   **private**. It does not exist yet; creating it and pushing to it are the owner's (the agent's
-   push authority is `git push origin main` of the development repository only).
+1. **The user repository** (decision 1; `make publish-user-repo`) is `aykr/OspreyFlow` on GitHub,
+   **private** — created by the owner on 14 October 2026, empty. Pushing to it is the owner's (the
+   agent's push authority is `git push origin main` of the development repository only).
 2. **A trial publish refused, as it should, and the causes are fixed:** the guides' PDFs printed each
    link between guides as an absolute `file:///Users/<owner>/…` address (now printed as the guide's
    name, and `tools/docs_pdf.check` refuses a PDF carrying any `file://` address — shown red on the
    real PDFs before they were made again); a harness test's synthetic home was shaped like a real
    one (`/home/ada` → `/u/ada`); a recipe's comment named the developer repository's folder.
-3. **What private means, not yet built — each for the owner to schedule:** its images and chart on
-   GitHub's registry are private too, so every machine that pulls them must be signed in with a token
-   that can read packages:
-   - Lite install and update pull without signing in, and the signature check runs cosign in its
-     own container, which does not see the machine's Docker sign-in;
-   - a Small server's first boot pulls them: a token in the cloud's secret store, read as the
-     database password is;
-   - Enterprise's chart needs an image-pull secret;
-   - `update --check`, and fetching a release's install page or bundle, need `GITHUB_TOKEN`
-     (documented, Amendment 8).
-   The alternative the owner may prefer: the repository private, its packages (images, chart) made
-   public on GitHub's registry — then only the source and the update check need a token.
+3. **The packages are public; the source is private** (the owner, 14 October 2026: "make the images
+   and chart public"). Every machine pulls the seven images (`workspace`, `api`, `ingest`, `ner`,
+   `worker`, `report-sync`, `superset`) and the chart (`charts/ospreyflow`) from GitHub's registry
+   without signing in, so Lite, Small's first boot and Enterprise's chart need no registry token and
+   no image-pull secret, and the signature check (cosign, in its own container) reads them as it does
+   today. Only the source needs a token: cloning the repository, and `update --check` and fetching a
+   release's install page or bundle (`GITHUB_TOKEN`, Amendment 8).
+4. **One step GitHub keeps for a person:** a package published from a private repository starts
+   private, and no workflow can change that. After the first release the owner sets each of the eight
+   packages to *Public* once (the package's settings, *Change visibility*); later versions stay public.
+   Until then an install from that release cannot pull its images and says so.
 
 ### ADR-114, Amendment 22 (14 October 2026) — an operator runs `ospreyflow`; `make` is the developer's
 
@@ -13327,6 +13328,45 @@ to move them to `ospreyflow`; of the line drawn below, "go ahead with all the st
    — and now says so.
 5. **Left for B9:** `DEMO_GUIDE.md` still walks through `make dev-up`; it needs a rewrite around
    `ospreyflow install` and `demo add`, which is B9's sweep.
+
+### ADR-114, Amendment 23 (14 October 2026) — the Enron corpus offered as an optional download, with safeguards
+
+Status: accepted 14 October 2026 — the owner: "while enron dataset does not go into the git repo I
+would like the user to have the option to download the dataset from
+https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz and include it into their demo set"; put to
+them that this conflicts with decision 5 ("Never offered: Enron (real data)"), ADR-053 ("never
+shipped") and rule 9, with the safeguards below, they chose to "offer it as optional download with
+safeguards". **This amends decision 5 and ADR-053; rule 9 in `process/CLAUDE.md` is the owner's to
+amend (its proposed text is in the build plan's row).**
+
+What CMU's page says (read 14 October 2026): **no licence or terms of use are stated**; "I am
+distributing this dataset as a resource for researchers who are interested in improving current
+email tools"; "please be sensitive to the privacy of the people involved"; some messages were deleted
+at affected employees' request, and earlier versions are no longer distributed and should be replaced
+by this one. No checksum is published. The file is 443,254,787 bytes (CMU's "about 1.7Gb" is its
+unpacked size).
+
+1. **OspreyFlow never carries the corpus.** Not in either repository, a release, a bundle, an image
+   or CI. Each user downloads it from CMU themselves and gives the file to
+   `ospreyflow demo add enron --file <path>`, as PaySim. Nothing in the product fetches it.
+2. **The file is checked before anything else**: its size and a SHA-256 pinned from the
+   2015-05-07 file, refused in words otherwise (a different or tampered copy, or an older,
+   unredacted version).
+3. **An explicit acknowledgement, every time it is added**: the command shows that the corpus is
+   real people's email and personal data, quotes CMU's request to be sensitive to their privacy,
+   says that the user's organisation needs its own lawful basis to process it and that no licence is
+   stated, and proceeds only on the typed answer `yes` (or `--accept-real-data`, for a scripted run,
+   which says the same). A record of the acceptance (when, which file) is kept beside the unpacked
+   corpus on that machine; the seed refuses without it — or, on the owner's machine, without the
+   local real-data exceptions entry, which keeps working as before.
+4. **It is marked as real wherever it appears**: the pack is listed as "real personal data,
+   downloaded by you"; its case is named "Enron corpus (real data)"; it is never chosen by default,
+   never in an install's suggested packs, and never shared with the demo engineer or report viewer
+   (as today).
+5. **Its code moves into the product** (from `internal_demos/` to Core), since a user now runs it;
+   its data folder stays refused by every packaging and publish check, and CI never adds it.
+6. **Licence register:** the corpus is recorded as a data source with no stated licence, obtained by
+   each user from its source, for research and demonstration — not redistributed.
 
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 

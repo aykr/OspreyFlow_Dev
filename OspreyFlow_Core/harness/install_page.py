@@ -110,6 +110,8 @@ def _pack_rows() -> list[dict[str, Any]]:
             "licence": p.licence,
         }
         for p in packs()
+        # ADR-114 Amendment 23: real data is never added by an install, so never offered here.
+        if not p.real_data
     ]
 
 

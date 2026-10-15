@@ -30,7 +30,7 @@ from tools import layout
         ("osprey.yaml", "core"),
         ("OspreyFlow_Data/enron/x.csv", ""),
         (".github/workflows/ci.yml", ""),
-        ("internal_demos/seed_enron.py", "OspreyFlow_Build"),  # ADR-114 Am. 2
+        ("internal_demos/registry.py", "OspreyFlow_Build"),  # ADR-114 Am. 2
         ("Makefile", "OspreyFlow_Build"),  # the gates; Core's own Makefile is named by path (ADR-114 Am. 2)
         (".claude/settings.json", ""),
     ],

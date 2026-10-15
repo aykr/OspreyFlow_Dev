@@ -7,7 +7,7 @@ shape it would really take.
 What a mistake would do, and the case that catches it:
 - the Build folder named in a published file — `test_a_mention_of_the_build_folder_is_refused`;
 - an internal demo's data, code or the local exceptions list leaving —
-  `test_an_internal_demos_data_code_or_the_exceptions_list_is_refused`;
+  `test_real_data_and_the_exceptions_list_are_refused_but_the_enron_code_is_not`;
 - a machine path leaving — `test_a_home_folder_path_is_refused_in_each_shape`;
 - the owner's identity leaving — `test_a_personal_authorship_identifier_is_refused`;
 - a refused publish leaving a half-written folder — every refusal asserts nothing was written;
@@ -80,13 +80,17 @@ def test_a_mention_of_the_build_folder_is_refused(repo: Path, tmp_path: Path) ->
     assert finding.startswith("Makefile:2:") and "OspreyFlow_Build" in finding
 
 
-def test_an_internal_demos_data_code_or_the_exceptions_list_is_refused(repo: Path, tmp_path: Path) -> None:
+def test_real_data_and_the_exceptions_list_are_refused_but_the_enron_code_is_not(
+    repo: Path, tmp_path: Path
+) -> None:
+    """ADR-114 Amendment 23: the Enron reader and seed ship (each user downloads and accepts the
+    corpus); the corpus itself and the owner's local exceptions list never leave."""
     commit = _commit(repo, {**CLEAN, "scripts/seed_enron.py": "def main(): ...\n",
                             "config/real_data_exceptions.yaml": "entries: []\n",
                             "OspreyFlow_Data/Enron_Mails/allen-p/1.": "From: someone\n"})  # fmt: skip
     findings = _refused(repo, commit, tmp_path / "out")
     assert {f.split(":")[0] for f in findings} == {
-        "scripts/seed_enron.py", "config/real_data_exceptions.yaml", "OspreyFlow_Data/Enron_Mails/allen-p/1.",
+        "config/real_data_exceptions.yaml", "OspreyFlow_Data/Enron_Mails/allen-p/1.",
     }  # fmt: skip
 
 
