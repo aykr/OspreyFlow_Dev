@@ -46,3 +46,15 @@ CVE-2026-54499 exp:2027-01-15
 CVE-2026-78669 exp:2026-12-14
 CVE-2026-78667 exp:2026-12-14
 CVE-2026-97031 exp:2026-12-14
+
+# Superset 6.1.0 pins these below their fixes (cryptography <47, msgpack <1.1, pyarrow <19, and
+# pyOpenSSL with cryptography): PKCS#7 decryption and DTLS Superset never uses; msgpack and Arrow it
+# reads only from its own cached results; and it is the optional dashboard, behind the proxy, reading
+# the reporting mart read-only. ADR-111 Amendment 5 has the decision: excepted until Superset 7.0 is
+# released (a release candidate since 13 October 2026); then move to it and drop these lines.
+CVE-2026-69247 exp:2026-12-14
+CVE-2026-69249 exp:2026-12-14
+GHSA-537c-gmf6-5ccf exp:2026-12-14
+GHSA-6v7p-g79w-8964 exp:2026-12-14
+CVE-2026-27459 exp:2026-12-14
+CVE-2026-25087 exp:2026-12-14

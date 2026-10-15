@@ -11855,6 +11855,25 @@ remembered label colours forgotten and a chosen one kept (`tests/test_superset_l
 mode and following a switch, with the title and chart menus hidden (`EmbeddedDashboards.test.tsx`);
 and live, the restored board drawn inside the Glass in both modes.
 
+### ADR-111, Amendment 5 (15 October 2026) — Superset's image brought up to date for the first release, six findings excepted until 7.0
+
+**Found preparing v0.1.0:** the release scans every image it publishes, and CI had never scanned
+Superset's; scanned the same way (HIGH and CRITICAL, fixed upstream) it had 130 findings. The image
+now updates its Debian packages at build and takes every Python fix that lies inside the ranges
+Superset 6.1.0 itself declares (Authlib, Mako, PyJWT, Pillow 12.3, urllib3, pyasn1, and setuptools
+in both its Pythons): 130 to 6. Checked live against the throwaway stack: every migration ran, the
+deployment's own set-up completed, the sign-in page and the brand assets serve, an unsigned API call
+is refused, `/health` answers.
+
+**Decided by the owner** (from: an exception until 7.0; forcing the upgrades past Superset's limits;
+leaving Superset out of v0.1.0): the six that Superset pins below their fix — cryptography
+(`<47`: CVE-2026-69247, CVE-2026-69249, GHSA-537c-gmf6-5ccf), msgpack (`<1.1`:
+GHSA-6v7p-g79w-8964), pyOpenSSL (CVE-2026-27459) and pyarrow (`<19`: CVE-2026-25087) — are in
+`OspreyFlow_Core/.trivyignore` until 14 December 2026. Superset never decrypts PKCS#7 or uses DTLS,
+unpacks only its own cached results, and reads Arrow only from them; it is the optional dashboard,
+behind the proxy, reading the mart read-only. Superset 7.0 (a release candidate since 13 October) is
+the way out: move to it when it is released, and drop the entries.
+
 ### ADR-112, Amendment 1 (11 October 2026) — steps 1 and 2 built; who calls the identity provider for the Admin area
 
 **Built (steps 1 and 2, `51e7337`).** `packages/schemas/rights.py` and a right declared on every route
