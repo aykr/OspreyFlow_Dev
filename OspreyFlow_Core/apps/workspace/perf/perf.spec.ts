@@ -20,6 +20,20 @@ test("50k/250k fixture reaches a first interactive frame within the CI software-
     timeout: 60_000,
   });
   const elapsedMs = Date.now() - start;
+  // Where the time went, printed on every run (15 October 2026: CI took ~50 s where it had taken
+  // ~25 s, with the canvas's code unchanged): the page arriving, then the app's own `readyAt`.
+  const timing = await page.evaluate(() => {
+    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
+    const scripts = performance.getEntriesByType("resource").filter((r) => r.name.includes(".ts"));
+    return {
+      responseEnd: Math.round(nav.responseEnd),
+      domContentLoaded: Math.round(nav.domContentLoadedEventEnd),
+      readyAt: Math.round(window.__PERF__!.readyAt!),
+      modules: scripts.length,
+      slowestModule: Math.round(Math.max(0, ...scripts.map((r) => r.duration))),
+    };
+  });
+  console.log(`perf first frame: ${elapsedMs} ms in all; ${JSON.stringify(timing)}`);
 
   // §5: "< 2.5s to first interactive frame" on real hardware. CI's
   // software-rendered proxy budget is deliberately much looser — this
