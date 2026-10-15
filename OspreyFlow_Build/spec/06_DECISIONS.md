@@ -13497,6 +13497,24 @@ guides", then "extend the version history recording to the .md files (all the co
 5. **Not in scope:** the specification's own copy of the administration guide (`spec/10`), which
    is the specification's text and versioned by its history in git.
 
+### ADR-114, Amendment 27 (15 October 2026) — the user repository is public
+
+**The owner**, 15 October 2026, after the second run of the v0.1.0 release was not started by
+GitHub ("recent account payments have failed or your spending limit needs to be increased" — a
+private repository's Actions minutes are paid, and the first release's seven images for two
+platforms used many): asked whether making the repository public would help, was told it would (the
+standard hosted runners are free for a public repository) and what it means, and made
+`aykr/OspreyFlow` public. This replaces Amendment 21's "source private"; its images and chart were to
+be public already.
+
+What makes publishing the source safe is unchanged: every publication is an export checked for local
+paths, real names and data files (`tools/publish_user_repo.py` and the owner's publish scripts), and
+it carries the Apache-2.0 `LICENSE` and `NOTICE`; the Enron pack's code ships and its data never
+does (Amendment 23). `ospreyflow update --check` no longer needs `GITHUB_TOKEN` for it — the token
+remains for a private fork, which the guides already describe as conditional. The development
+repository (`aykr/OspreyFlow_Dev`) stays private: it holds the build record and the history, which
+are not exported, and its CI minutes stay paid.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;
