@@ -139,6 +139,7 @@ import { AddFiles } from "../content/AddFiles";
 import { linkMenuItems, linkMenuTitle } from "./linkMenu";
 import { sameAsGroup } from "./linkCollapse";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { withChunkedTextureRefresh } from "./chunkedTextureRefresh";
 import {
   expandOnDoubleClick,
   menuRequestForRightClick,
@@ -158,11 +159,15 @@ const NODE_PROGRAM = createNodeCompoundProgram<
   WorkingSetNodeAttributes,
   WorkingSetEdgeAttributes
 >([
-  createNodeImageProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>({
-    keepWithinCircle: false,
-    drawingMode: "background",
-    padding: 0,
-  }),
+  // A finished texture refreshes the nodes a share per frame, not the whole graph in one task
+  // (`chunkedTextureRefresh.ts` has the measured reason).
+  withChunkedTextureRefresh(
+    createNodeImageProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>({
+      keepWithinCircle: false,
+      drawingMode: "background",
+      padding: 0,
+    }),
+  ),
   createNodeBorderProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>({
     borders: [
       // Resolution-cluster ring (Phase 6a Stage 2) drawn first/innermost, so the interaction-state
