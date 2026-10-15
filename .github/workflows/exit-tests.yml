@@ -1,0 +1,148 @@
+name: exit-tests
+
+# ADR-114 Amendment 9 point 2 (the owner's ruling: "Run them on demand"): the whole-deployment exit
+# tests need a 16 GiB container runtime and a hosted runner for a private repository has 7.8 GiB, so
+# in `ci.yml` they could never pass. Started by hand; `runner` takes a larger runner's label if one
+# is ever added. `OspreyFlow_Build/tools/test_file_coverage_check.py` reads this file as well as
+# `ci.yml`.
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner label
+        required: false
+        default: ubuntu-latest
+
+defaults:
+  run:
+    working-directory: OspreyFlow_Core
+
+jobs:
+  # Phase 8's two deployment-level exit tests. Neither can run in any job above: they do not need a
+  # store, they need a **whole rendered deployment** — ten containers, images built from this
+  # checkout, a realm imported, both fixtures seeded — which is the thing they exist to test.
+  #
+  # `OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py` had been reachable by no job at all
+  # since it was written; `test-file-coverage-check` had been red on it. The restore exit test was
+  # invisible to that gate entirely until 24 September 2026, because every marker the gate knew was
+  # a Python import and this test reaches its services by shelling out to `docker compose`.
+  #
+  # **This job has never been observed running here.** It was built and run locally, repeatedly and
+  # green; GitHub Actions cannot be executed from where it was written. Its first run in CI is the
+  # untested state `CLAUDE.md` rule 15 names, and it should be treated as such until a run is on
+  # record — in particular `--no-build` is NOT passed, so this is also the first CI-side build of
+  # every owned image in one job.
+  deployment-exit-tests:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Render, build, launch and seed a local-lite deployment
+        run: |
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run python -m harness.apply \
+            --profile local-lite --build --seed hmp,fixture-corp
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - name: The built Glass bundle carries no Conduit address
+        env:
+          OSPREY_TEST_BUNDLE: "1"
+        run: >-
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/harness/test_workspace_bundle.py
+      - name: Exit test #1 — backup, destroy, restore, deep comparison
+        env:
+          OSPREY_TEST_COMPOSE_FILE: deploy/generated/local-lite/compose.yaml
+        run: >-
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/harness/test_restore_exit_test.py
+          ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py
+      - name: Tear down
+        if: always()
+        run: >-
+          docker compose --env-file deploy/generated/local-lite/deployment.env
+          -f deploy/generated/local-lite/compose.yaml down -v --remove-orphans
+
+  # `05_DEPLOYMENT.md` §8 / `07_BUILD_PLAN.md` Stage 2a addendum's own named-not-built test, built.
+  # A separate job for the same reason `bundle-install-exit-test` above is one: this renders the
+  # identical `osprey-local-lite` compose project name and host ports, so sharing a job with
+  # `deployment-exit-tests` would collide rather than exercise anything new. Six real seed-and-query
+  # cycles against one accumulating database — `OspreyFlow_Build/tests/harness/test_sustained_load.py`'s own module
+  # docstring has the runtime budget (up to ~40 minutes) this job's own timeout is sized against.
+  # This test's own `finally` block tears down what it starts, so no further "Tear down" step here.
+  sustained-load-exit-test:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Six seed-and-query cycles against one accumulating local-lite database
+        env:
+          OSPREY_TEST_SUSTAINED_LOAD: "1"
+        run: >-
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/harness/test_sustained_load.py
+
+  # ADR-114 Amendment 9: `harness/apply.py`'s environment file, written by the real `main()` against
+  # a real `osprey-local-lite` project that each case tears down with `down -v` — kept out of
+  # `make test` and `ci.yml`'s `test` job, where it would delete a real deployment.
+  apply-env-exit-test:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: >-
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/harness/test_apply_env.py
+
+  # Moved here 15 October 2026 for the same reason: its apply stops at preflight on a hosted runner
+  # (7.8 GiB against a 16 GiB floor), and without pipefail the `tee` hid that until the test step.
+  # Owner ruling R5, 27 September 2026 — the closing-pass proof of "both acceptance scenarios pass
+  # on local-lite", taken **through the analyst's own door**: real Keycloak sign-in (authorization
+  # code with PKCE, as the `--demo-analyst` subject), every call through the workspace's nginx, no
+  # store port and no in-process app. `OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py`'s own
+  # module docstring has the row-by-row coverage and the two findings it exists to surface.
+  #
+  # **A separate job from `deployment-exit-tests` above, for the same reason every other exit test
+  # here has one** — the identical `osprey-local-lite` project name and host ports collide — and
+  # for one more: this deployment must be applied `--demo-analyst`, which the job above
+  # deliberately does not, since a headless exit test needs no sign-in-able subject and a
+  # deployment should not provision one it does not need.
+  #
+  # **Run once against a freshly seeded deployment**, never twice against the same one: two rows
+  # make assertions the platform deliberately does not let a caller take back (the test's own
+  # docstring says which, and why that is correct behaviour). A fresh runner is exactly that.
+  over-the-wire-exit-test:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: Render, build, launch and seed a local-lite deployment with a demo analyst
+        run: |
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run python -m harness.apply \
+            --profile local-lite --build --demo-analyst --seed hmp,fixture-corp,scenarios \
+            | tee apply.log
+          # The seeded investigation id has no discoverable route (the Conduit has no "list
+          # investigations", by design), so it is taken from the URL `apply` prints — the same
+          # line an operator reads it off.
+          echo "OSPREY_LIVE_INVESTIGATION_ID=$(
+            grep -o 'investigation=[0-9A-Z]*' apply.log | head -1 | cut -d= -f2
+          )" >> "$GITHUB_ENV"
+      - name: Both acceptance scenarios, over the wire, as the signed-in demo analyst
+        env:
+          OSPREY_TEST_OVER_THE_WIRE: "1"
+        run: >-
+          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
+          ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py
+      - name: Tear down
+        if: always()
+        run: >-
+          docker compose --env-file deploy/generated/local-lite/deployment.env
+          -f deploy/generated/local-lite/compose.yaml down -v --remove-orphans

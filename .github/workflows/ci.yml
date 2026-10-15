@@ -48,7 +48,7 @@ jobs:
       - run: uv sync
       - run: npm ci
       - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.licence_check
-      - run: npm run licence-check
+      - run: node ../OspreyFlow_Build/tools/licence_check.mjs
       # Deterministic proof that a GPL dependency fails the build
       # (Phase 0 exit criterion, process/07_BUILD_PLAN.md) — see
       # OspreyFlow_Build/tests/licence_check/test_gpl_rejection.py.
@@ -172,6 +172,7 @@ jobs:
       - run: npm ci
       - uses: aquasecurity/trivy-action@v0.24.0
         with:
+          trivyignores: OspreyFlow_Core/.trivyignore
           scan-type: fs
           scan-ref: OspreyFlow_Core
           scanners: vuln,secret
@@ -192,6 +193,7 @@ jobs:
       - run: docker build -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
       - uses: aquasecurity/trivy-action@v0.24.0
         with:
+          trivyignores: OspreyFlow_Core/.trivyignore
           image-ref: ospreyflow/ingest:ci
           scan-type: image
           scanners: vuln
@@ -210,6 +212,7 @@ jobs:
       - run: docker build -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
       - uses: aquasecurity/trivy-action@v0.24.0
         with:
+          trivyignores: OspreyFlow_Core/.trivyignore
           image-ref: ospreyflow/workspace:ci
           scan-type: image
           scanners: vuln
@@ -226,6 +229,7 @@ jobs:
       - run: docker build -f harness/Dockerfile -t ospreyflow/harness:ci .
       - uses: aquasecurity/trivy-action@v0.24.0
         with:
+          trivyignores: OspreyFlow_Core/.trivyignore
           image-ref: ospreyflow/harness:ci
           scan-type: image
           scanners: vuln
@@ -242,6 +246,7 @@ jobs:
       - run: docker build -f services/api/Dockerfile -t ospreyflow/api:ci .
       - uses: aquasecurity/trivy-action@v0.24.0
         with:
+          trivyignores: OspreyFlow_Core/.trivyignore
           image-ref: ospreyflow/api:ci
           scan-type: image
           scanners: vuln
@@ -370,9 +375,9 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
-      # MinIO's image needs `server /data --console-address :9001` as its
-      # command, which GitHub Actions' `services:` block cannot override
-      # (no `command:` key) — run it directly instead.
+      # The object store needs its own command line, which GitHub Actions' `services:` block cannot
+      # give it (no `command:` key) — run it directly instead. ADR-114 Amendment 9 point 3: MinIO's
+      # public images were withdrawn; SeaweedFS with `deploy/compose/dev.yaml`'s own settings.
       # Azurite needs its own command line, which `services:` cannot give it.
       - name: Start Azurite
         run: |
@@ -380,16 +385,19 @@ jobs:
             mcr.microsoft.com/azure-storage/azurite:3.35.0 \
             azurite-blob --blobHost 0.0.0.0 --loose=false
           for _ in $(seq 1 20); do curl -s http://localhost:10000/ >/dev/null && break; sleep 2; done
-      - name: Start MinIO
+      - name: Start the object store (SeaweedFS)
         run: |
-          docker run -d --name minio -p 9000:9000 -p 9001:9001 \
-            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z \
-            server /data --console-address :9001
-          for _ in $(seq 1 20); do
-            curl -sf http://localhost:9000/minio/health/live && break
+          docker run -d --name objectstore -p 9000:8333 \
+            -e AWS_ACCESS_KEY_ID=minioadmin -e AWS_SECRET_ACCESS_KEY=minioadmin \
+            -e WEED_MASTER_VOLUME_GROWTH_COPY_1=1 \
+            chrislusf/seaweedfs:4.48 \
+            server -s3 -dir=/data -s3.port=8333 -volume.max=1000 \
+            -master.volumeSizeLimitMB=1024 -master.volumePreallocate=false
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:9000/healthz >/dev/null && break
             sleep 3
           done
+          curl -sf http://localhost:9000/healthz >/dev/null || { docker logs objectstore; exit 1; }
       - run: uv sync
       # `test_sites_store.py`/`test_hmp_graph.py` added here (not their own job) since this job
       # already has the one live service each needs — Postgres for the former, ArcadeDB for the
@@ -513,6 +521,31 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_export_routes.py
           ../OspreyFlow_Build/tests/scenarios/test_fixture_corp_shape.py
           ../OspreyFlow_Build/tests/services/api/test_worker.py ../OspreyFlow_Build/tests/services/api/test_worker_replicas.py ../OspreyFlow_Build/tests/services/api/test_revoked_principal_precheck.py
+          ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_row_limit.py
+          ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py
+          ../OspreyFlow_Build/tests/harness/test_identity.py
+          ../OspreyFlow_Build/tests/harness/test_first_admin.py
+          ../OspreyFlow_Build/tests/scenarios/test_ledger_graph.py
+          ../OspreyFlow_Build/tests/services/api/test_dataset_names_store.py
+          ../OspreyFlow_Build/tests/services/api/test_datasets_store.py
+          ../OspreyFlow_Build/tests/services/api/test_explore_whats_new.py
+          ../OspreyFlow_Build/tests/services/api/test_object_transfer.py
+          ../OspreyFlow_Build/tests/services/api/test_pack_export.py
+          ../OspreyFlow_Build/tests/services/api/test_pack_store.py
+          ../OspreyFlow_Build/tests/services/api/test_packs.py
+          ../OspreyFlow_Build/tests/services/api/test_postgres_dsn.py
+          ../OspreyFlow_Build/tests/services/api/test_questions_store.py
+          ../OspreyFlow_Build/tests/services/api/test_report_freshness.py
+          ../OspreyFlow_Build/tests/services/api/test_reports.py
+          ../OspreyFlow_Build/tests/services/api/test_route_rights.py
+          ../OspreyFlow_Build/tests/services/api/test_starter_run.py
+          ../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py
+          ../OspreyFlow_Build/tests/services/api/test_trend_store.py
+          ../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py
+          ../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py
+          ../OspreyFlow_Build/tests/test_seed_links_replace.py
+          ../OspreyFlow_Build/tests/test_stamp_datasets.py
+          ../OspreyFlow_Build/tests/test_stamp_records.py
       - run: npm ci
       # `deltaClient.integration.test.ts` (Phase 4) spawns the real
       # `services.api.app` (`apps/workspace/test/glass_test_server.py`)
@@ -639,7 +672,7 @@ jobs:
       - name: Start LiteLLM
         run: |
           docker run -d --name litellm --network model-port-ci -p 4000:4000 \
-            -v "${{ github.workspace }}/deploy/compose/litellm_config.yaml:/app/config.yaml:ro" \
+            -v "${{ github.workspace }}/OspreyFlow_Core/deploy/compose/litellm_config.yaml:/app/config.yaml:ro" \
             -e LITELLM_MASTER_KEY=sk-ospreyflow-dev \
             ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b \
             --config /app/config.yaml --port 4000
@@ -647,6 +680,7 @@ jobs:
             curl -sf http://localhost:4000/health/liveliness && break
             sleep 2
           done
+          curl -sf http://localhost:4000/health/liveliness || { docker logs litellm; exit 1; }
       # `moondream` (describe_image()'s model) is not pulled in this job, so LiteLLM logs a
       # warning for that one unreachable model entry — harmless; test_suite_vision.py is excluded
       # below and no other test in this job calls it.
@@ -690,7 +724,7 @@ jobs:
       - name: Start LiteLLM
         run: |
           docker run -d --name litellm --network model-port-ci -p 4000:4000 \
-            -v "${{ github.workspace }}/deploy/compose/litellm_config.yaml:/app/config.yaml:ro" \
+            -v "${{ github.workspace }}/OspreyFlow_Core/deploy/compose/litellm_config.yaml:/app/config.yaml:ro" \
             -e LITELLM_MASTER_KEY=sk-ospreyflow-dev \
             ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b \
             --config /app/config.yaml --port 4000
@@ -698,6 +732,7 @@ jobs:
             curl -sf http://localhost:4000/health/liveliness && break
             sleep 2
           done
+          curl -sf http://localhost:4000/health/liveliness || { docker logs litellm; exit 1; }
       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance/model_port/test_suite_vision.py
 
   test:
@@ -789,6 +824,33 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py
           --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py
           --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py
+          --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_row_limit.py
+          --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py
+          --ignore=../OspreyFlow_Build/tests/harness/test_apply_env.py
+          --ignore=../OspreyFlow_Build/tests/harness/test_identity.py
+          --ignore=../OspreyFlow_Build/tests/harness/test_first_admin.py
+          --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_graph.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_names_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_datasets_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_explore_whats_new.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_object_transfer.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_pack_export.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_pack_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_packs.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_postgres_dsn.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_questions_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_report_freshness.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_reports.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_route_rights.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_starter_run.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_trend_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py
+          --ignore=../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py
+          --ignore=../OspreyFlow_Build/tests/test_seed_links_replace.py
+          --ignore=../OspreyFlow_Build/tests/test_stamp_datasets.py
+          --ignore=../OspreyFlow_Build/tests/test_stamp_records.py
+          ../OspreyFlow_Build/tests
       # The Glass's fast, no-live-infra unit tests (`store.test.ts`,
       # `zoomBands.test.ts`) — `*.integration.test.ts` is excluded by
       # `vitest.config.ts` and runs in the `conformance` job instead.
@@ -836,102 +898,16 @@ jobs:
         with: { node-version: "22" }
       - run: uv sync
       - run: npm ci
+      # The setup screens' Preflight `disk` check needs 20 GiB free in Docker's root filesystem;
+      # a hosted runner starts with about 12-14 GiB.
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
       - run: npx playwright install --with-deps chromium
         working-directory: OspreyFlow_Core/apps/harness
       - run: npm run test:keyboard --workspace apps/harness
       - run: npm run test:a11y --workspace apps/harness
-
-  # Phase 8's two deployment-level exit tests. Neither can run in any job above: they do not need a
-  # store, they need a **whole rendered deployment** — ten containers, images built from this
-  # checkout, a realm imported, both fixtures seeded — which is the thing they exist to test.
-  #
-  # `OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py` had been reachable by no job at all
-  # since it was written; `test-file-coverage-check` had been red on it. The restore exit test was
-  # invisible to that gate entirely until 24 September 2026, because every marker the gate knew was
-  # a Python import and this test reaches its services by shelling out to `docker compose`.
-  #
-  # **This job has never been observed running here.** It was built and run locally, repeatedly and
-  # green; GitHub Actions cannot be executed from where it was written. Its first run in CI is the
-  # untested state `CLAUDE.md` rule 15 names, and it should be treated as such until a run is on
-  # record — in particular `--no-build` is NOT passed, so this is also the first CI-side build of
-  # every owned image in one job.
-  deployment-exit-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-      - run: uv sync
-      - name: Render, build, launch and seed a local-lite deployment
-        run: |
-          PYTHONPATH=.:packages:../OspreyFlow_Build uv run python -m harness.apply \
-            --profile local-lite --build --seed hmp,fixture-corp
-      - uses: actions/setup-node@v4
-        with: { node-version: "22" }
-      - run: npm ci
-      - name: The built Glass bundle carries no Conduit address
-        env:
-          OSPREY_TEST_BUNDLE: "1"
-        run: >-
-          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
-          ../OspreyFlow_Build/tests/harness/test_workspace_bundle.py
-      - name: Exit test #1 — backup, destroy, restore, deep comparison
-        env:
-          OSPREY_TEST_COMPOSE_FILE: deploy/generated/local-lite/compose.yaml
-        run: >-
-          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
-          ../OspreyFlow_Build/tests/harness/test_restore_exit_test.py
-          ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py
-      - name: Tear down
-        if: always()
-        run: >-
-          docker compose --env-file deploy/generated/local-lite/deployment.env
-          -f deploy/generated/local-lite/compose.yaml down -v --remove-orphans
-
-  # Owner ruling R5, 27 September 2026 — the closing-pass proof of "both acceptance scenarios pass
-  # on local-lite", taken **through the analyst's own door**: real Keycloak sign-in (authorization
-  # code with PKCE, as the `--demo-analyst` subject), every call through the workspace's nginx, no
-  # store port and no in-process app. `OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py`'s own
-  # module docstring has the row-by-row coverage and the two findings it exists to surface.
-  #
-  # **A separate job from `deployment-exit-tests` above, for the same reason every other exit test
-  # here has one** — the identical `osprey-local-lite` project name and host ports collide — and
-  # for one more: this deployment must be applied `--demo-analyst`, which the job above
-  # deliberately does not, since a headless exit test needs no sign-in-able subject and a
-  # deployment should not provision one it does not need.
-  #
-  # **Run once against a freshly seeded deployment**, never twice against the same one: two rows
-  # make assertions the platform deliberately does not let a caller take back (the test's own
-  # docstring says which, and why that is correct behaviour). A fresh runner is exactly that.
-  over-the-wire-exit-test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-      - run: uv sync
-      - name: Render, build, launch and seed a local-lite deployment with a demo analyst
-        run: |
-          PYTHONPATH=.:packages:../OspreyFlow_Build uv run python -m harness.apply \
-            --profile local-lite --build --demo-analyst --seed hmp,fixture-corp,scenarios \
-            | tee apply.log
-          # The seeded investigation id has no discoverable route (the Conduit has no "list
-          # investigations", by design), so it is taken from the URL `apply` prints — the same
-          # line an operator reads it off.
-          echo "OSPREY_LIVE_INVESTIGATION_ID=$(
-            grep -o 'investigation=[0-9A-Z]*' apply.log | head -1 | cut -d= -f2
-          )" >> "$GITHUB_ENV"
-      - name: Both acceptance scenarios, over the wire, as the signed-in demo analyst
-        env:
-          OSPREY_TEST_OVER_THE_WIRE: "1"
-        run: >-
-          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
-          ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py
-      - name: Tear down
-        if: always()
-        run: >-
-          docker compose --env-file deploy/generated/local-lite/deployment.env
-          -f deploy/generated/local-lite/compose.yaml down -v --remove-orphans
 
   # ADR-049 Stage 2 §5b's own exit test #3 — "install from the bundle, not the clone." A separate
   # job, not a further step above: both render the identical `osprey-local-lite` compose project
@@ -953,27 +929,6 @@ jobs:
         run: >-
           PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
           ../OspreyFlow_Build/tests/harness/test_bundle_exit_test.py
-
-  # `05_DEPLOYMENT.md` §8 / `07_BUILD_PLAN.md` Stage 2a addendum's own named-not-built test, built.
-  # A separate job for the same reason `bundle-install-exit-test` above is one: this renders the
-  # identical `osprey-local-lite` compose project name and host ports, so sharing a job with
-  # `deployment-exit-tests` would collide rather than exercise anything new. Six real seed-and-query
-  # cycles against one accumulating database — `OspreyFlow_Build/tests/harness/test_sustained_load.py`'s own module
-  # docstring has the runtime budget (up to ~40 minutes) this job's own timeout is sized against.
-  # This test's own `finally` block tears down what it starts, so no further "Tear down" step here.
-  sustained-load-exit-test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 50
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-      - run: uv sync
-      - name: Six seed-and-query cycles against one accumulating local-lite database
-        env:
-          OSPREY_TEST_SUSTAINED_LOAD: "1"
-        run: >-
-          PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest -c ../OspreyFlow_Build/pytest.ini -p no:randomly
-          ../OspreyFlow_Build/tests/harness/test_sustained_load.py
 
   # ADR-049 Stage 2 §6's own exit — the one item `REPORT-03d.md` left owed: Launch from the six
   # real setup screens (not `harness.apply` in-process, unlike the job above) reaches a
@@ -999,7 +954,8 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync
       - name: The five token-exchange tests against a real Keycloak
-        run: make idp-test PY="uv run python" PYTEST="uv run pytest -c ../OspreyFlow_Build/pytest.ini"
+        working-directory: .
+        run: make -C OspreyFlow_Build idp-test PY="uv run python" PYTEST="uv run pytest -c ../OspreyFlow_Build/pytest.ini"
 
   six-screen-live-exit-test:
     runs-on: ubuntu-latest
