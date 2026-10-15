@@ -59,6 +59,13 @@ ALLOWED_MARKERS = (
 #: whose data is downloaded, never bundled, so the obligation never attaches to an artefact.
 DOWNLOAD_ONLY_DATA_LICENCES = ("CC-BY-SA-4.0",)
 
+#: ADR-114 Amendment 23 point 7: data with no stated licence that each user downloads from its
+#: source and accepts on their own machine. One entry, by its id and its declared licence exactly,
+#: so a change to either fails the gate again; not a rule for unlicensed data in general.
+USER_OBTAINED_UNLICENSED = {
+    "enron": 'None stated (CMU: "a resource for researchers"); real personal data',
+}
+
 
 def is_allowed(license_text: str) -> bool:
     text = license_text.lower()
@@ -119,7 +126,8 @@ def find_data_licence_offenders(
 
     `None` (the generated demos — ADR-035 §C3/§C5) means no third-party data licence is declared
     and there is nothing to check. ADR-114 Amendment 1 decision 5 adds one exception: a licence in
-    `DOWNLOAD_ONLY_DATA_LICENCES` is fine when the manifest's `delivery` is exactly `"download"`.
+    `DOWNLOAD_ONLY_DATA_LICENCES` is fine when the manifest's `delivery` is exactly `"download"`;
+    Amendment 23 point 7 adds the one entry in `USER_OBTAINED_UNLICENSED`, on the same condition.
     This function returns `(demo_id, licence)` for an entry that declares a licence which is
     neither allowed nor a download-only licence on a download pack.
     """
@@ -130,6 +138,10 @@ def find_data_licence_offenders(
         and not is_allowed(manifest.data_licence)
         and not (
             manifest.data_licence in DOWNLOAD_ONLY_DATA_LICENCES
+            and manifest.delivery == "download"
+        )
+        and not (
+            USER_OBTAINED_UNLICENSED.get(manifest.id) == manifest.data_licence
             and manifest.delivery == "download"
         )
     ]

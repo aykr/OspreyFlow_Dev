@@ -87,3 +87,38 @@ def test_the_real_registry_has_no_data_licence_offender() -> None:
     from scripts.demo_registry import REGISTRY
 
     assert find_data_licence_offenders(REGISTRY) == []
+
+
+ENRON_LICENCE = 'None stated (CMU: "a resource for researchers"); real personal data'
+
+
+def _enron(**changes: str) -> DemoManifest:
+    fields = {
+        "id": "enron",
+        "distribution": "shipped",
+        "delivery": "download",
+        "seed_module": "scripts.seed_enron",
+        "data_licence": ENRON_LICENCE,
+    }
+    return DemoManifest(**{**fields, **changes})  # type: ignore[arg-type]
+
+
+def test_the_enron_download_as_recorded_is_not_flagged() -> None:
+    """ADR-114 Amendment 23 point 7: each user downloads it; OspreyFlow never carries it."""
+    assert find_data_licence_offenders((_enron(),)) == []
+
+
+def test_enron_carried_rather_than_downloaded_is_flagged() -> None:
+    assert find_data_licence_offenders((_enron(delivery="seed"),)) == [("enron", ENRON_LICENCE)]
+
+
+def test_enron_with_its_licence_reworded_is_flagged() -> None:
+    """A change to what is declared asks for a decision again, rather than passing on the name."""
+    changed = "None stated"
+    assert find_data_licence_offenders((_enron(data_licence=changed),)) == [("enron", changed)]
+
+
+def test_another_download_with_no_stated_licence_is_flagged() -> None:
+    """The exception is the one entry, not a rule for unlicensed data."""
+    other = _enron(id="other-mail")
+    assert find_data_licence_offenders((other,)) == [("other-mail", ENRON_LICENCE)]

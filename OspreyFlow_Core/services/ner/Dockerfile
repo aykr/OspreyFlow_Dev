@@ -18,6 +18,14 @@ RUN pip install pip-licenses==5.5.5 \
  && pip uninstall -y pip-licenses prettytable wcwidth \
  && rm licence_gate.py
 RUN python -c "import stanza; stanza.download('en', processors='tokenize,ner', model_dir='/models')"
+# The models are loaded with pickle, so a poisoned one runs code (CVE-2026-54499, which Stanza 1.12.2
+# fixes but which needs the GPL udtools; ADR-098 Amendment 5): every file downloaded must be the one
+# pinned here, and nothing else may be there. Re-pin only from a build whose files were checked.
+COPY services/ner/models.sha256 /tmp/models.sha256
+RUN cd /models \
+ && sha256sum -c --strict /tmp/models.sha256 \
+ && test "$(find . -type f | wc -l)" -eq "$(wc -l < /tmp/models.sha256)" \
+ && rm /tmp/models.sha256
 
 COPY services/ner/app.py ./app.py
 RUN useradd --create-home --uid 10001 ner && chown -R ner /models /srv

@@ -547,7 +547,7 @@ platform's handling model treats as untrusted at the point it reaches the browse
 text node. The broken sanitizer is never in the code path for that string at all — "sanitize the
 input first" is not the claim here, since the sanitizer itself is what is broken.
 
-**Recorded in `.trivyignore`** (repo root) with the same reasoning, so `make trivy` passes with
+**Recorded in `.trivyignore`** (`OspreyFlow_Core/`, since ADR-114 Amendment 24) with the same reasoning, so `make trivy` passes with
 the risk named rather than silently suppressed.
 
 **Revisit if.** Either holds: `@sigma/layer-maplibre` ships a release compatible with
@@ -9984,6 +9984,28 @@ specify the degrees of separation i am allowed to explore, limit the maximum dep
    a degree above 1 are refused; the degree is chosen and used by keyboard
    (`keyboard/selection.spec.ts`).
 
+### ADR-098, Amendment 5 (15 October 2026) — the fast recogniser's models are pinned, and Stanza stays at 1.10.1
+
+**Found.** CI's filesystem scan reported CVE-2026-54499 (HIGH) in Stanza 1.10.1: its model loaders
+fall back from a weights-only load to a full pickle load, so a poisoned model file runs code. The
+fix, Stanza 1.12.2, imports `udtools` (GPL-2.0-or-later) unconditionally in a core module — the
+licence the NER image's own licence gate was built to refuse, and the reason Amendment 1 held
+Stanza at 1.10.1.
+
+**Decided by the owner** (from three options: pin the models; accept the GPL package; replace
+Stanza): stay at 1.10.1 and close the route the vulnerability needs. The models are downloaded only
+at image build; `services/ner/models.sha256` pins every file (`sha256sum -c --strict`), and no other
+file may be in the model folder, so the image can only ever load the files pinned. Nothing a user
+supplies is loaded as a model. The finding is recorded in `OspreyFlow_Core/.trivyignore` with an
+expiry (15 January 2027), so the scan fails again for review.
+
+**Shown red, against the real image's models:** the check passes with the pinned hashes and fails
+with one altered hash and with one extra file. Two independent builds two days apart downloaded
+byte-identical models, which is what makes pinning them sound.
+
+**Revisit** by the expiry, or sooner if a Stanza release drops `udtools` or `udtools` is relicensed
+under a licence the register allows.
+
 ## ADR-099 — A case sees only its own datasets, on every read, as a limit of access
 
 Status: accepted 7 October 2026 (the owner's two choices, put as multiple-choice questions after "the search seems to find data from all dataset / cases when the search should be restricted to the dataset selected": *every read* over search only or the view only, and *a hard limit* over a working filter). ADR-050, ADR-052 and ADR-084 are unchanged except where this says so. Built in four steps; until step 2 is built every read is as before.
@@ -13368,6 +13390,43 @@ unpacked size).
    its data folder stays refused by every packaging and publish check, and CI never adds it.
 6. **Licence register:** the corpus is recorded as a data source with no stated licence, obtained by
    each user from its source, for research and demonstration — not redistributed.
+7. **The licence gate (added 15 October 2026, found when CI first ran it):** `make licence-check`'s
+   data leg refused the pack, since "none stated" is not a licence on the allowlist and the only
+   exception (decision 5's share-alike download) did not reach it. The gate now names this one
+   entry: the `enron` manifest passes only while it is a download and its declared licence reads
+   exactly as recorded, so a change to either fails the gate again and asks for a decision. It is
+   not a rule for unlicensed data in general — any other entry with no stated licence still fails.
+   Tests: `tests/licence_check/test_data_licence_offenders.py`.
+
+### ADR-114, Amendment 24 (15 October 2026) — CI green: the exit tests on demand, the scans' exceptions in Core
+
+**Owner rulings**, 15 October 2026: "CI green" is the next stage; the deployment-level exit tests
+run **on demand only** (Amendment 9 point 2, which this builds); the harness image's Compose
+findings take an exception until fixed.
+
+1. **On demand.** `deployment-exit-tests`, `sustained-load-exit-test` and `over-the-wire-exit-test`
+   move from `ci.yml` to `.github/workflows/exit-tests.yml` (`workflow_dispatch`, a runner label
+   as input), with a new `apply-env-exit-test`. Each needs a whole deployment: a 16 GiB container
+   runtime and 20 GiB of disk, where a hosted runner has 7.8 GiB and about 12. Over-the-wire is
+   moved for the same reason, though the ruling named two: its apply stops at Preflight on a hosted
+   runner, and with no `pipefail` the `tee` hid that until the test step.
+2. **The scans' exceptions live in `OspreyFlow_Core/.trivyignore`** (ADR-054's place for it; it had
+   stayed at the root), so the user repository's release scan reads the same file; each scan in
+   `ci.yml` names it. Every entry carries its reasoning and, from now on, an expiry.
+3. **The harness image's Go CVEs** (CVE-2026-78669, CVE-2026-78667, CVE-2026-97031): denial of
+   service against a server, in the `docker` CLI and Compose plugin the image copies from
+   `docker:29-cli`, which it runs only as clients of the local socket. No Compose release carries
+   the fixed libraries (v5.6.0 has x/net 0.58.0). Excepted until 14 December 2026; then rebuild on
+   a newer `docker:*-cli`.
+4. **What CI found that was wrong, not merely red:** the harness image never copied
+   `packages/ontology`, so every render failed on import since E1; the install page said
+   Enterprise "arrives with stage B7" after B7 was built, and told a Small or Enterprise user their
+   answers were saved before they had saved them; PaySim's refusal promised a release-asset fetch
+   "with stage B5" that B5 did not build; the render's refusal sent a reader to a repository that
+   does not exist. Each corrected; the tests that pinned the old words now pin the new.
+5. **The `test` job collected nothing** since the gates moved to the Build folder: its command named
+   no test path, and pytest only falls back to `testpaths` from the ini file's own folder. It now
+   names `../OspreyFlow_Build/tests`, as `make test` does.
 
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 

@@ -25,3 +25,24 @@
 # Check both at the start of any later phase that touches apps/workspace's
 # map dependencies, not only when this file is next edited by hand.
 CVE-2026-85061
+
+# CVE-2026-54499 — Stanza: code execution through a poisoned model file (pickle), in the NER image
+# (services/ner). Fixed in Stanza 1.12.2, which imports udtools (GPL-2.0-or-later) unconditionally,
+# so the fix is not adoptable under the licence register (00_ARCHITECTURE.md §7). ADR-098
+# Amendment 5 has the decision. Mitigated: the models are downloaded only at image build and every
+# file is checked against services/ner/models.sha256 (and no other file may be there), so the image
+# loads only the files pinned; nothing a user supplies is ever loaded as a model.
+# Revisit by the date below, or sooner if either holds: a Stanza release without udtools, or
+# udtools under a licence the register allows.
+CVE-2026-54499 exp:2027-01-15
+
+# CVE-2026-78669, CVE-2026-78667, CVE-2026-97031 — Go's net/http, x/net/http2 and crypto/tls:
+# denial of service against a SERVER (HTTP/2 SETTINGS floods, Range headers, TLS ECH), found in the
+# docker CLI and its compose plugin, which the harness image copies from docker:29-cli. The harness
+# runs both only as clients of the local Docker socket; nothing serves through them. No Compose release carries
+# the fixed libraries yet (v5.6.0, 2 October 2026, has x/net 0.58.0 and Go 1.26.8). ADR-114
+# Amendment 24 has the decision. These expire on the date below so the scan fails again if Compose
+# has not caught up: rebuild on a newer docker:*-cli then, and drop these lines.
+CVE-2026-78669 exp:2026-12-14
+CVE-2026-78667 exp:2026-12-14
+CVE-2026-97031 exp:2026-12-14
