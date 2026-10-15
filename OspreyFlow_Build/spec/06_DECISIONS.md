@@ -13428,6 +13428,23 @@ findings take an exception until fixed.
    no test path, and pytest only falls back to `testpaths` from the ini file's own folder. It now
    names `../OspreyFlow_Build/tests`, as `make test` does.
 
+### ADR-114, Amendment 25 (15 October 2026) — the model server never prunes a download in progress
+
+**Found by a user's install**, which stopped with `Error: rename /root/.ollama/models/blobs/sha256-
+c5396e06…-partial …: no such file or directory`. Amendment 7 split model serving in two: `ollama`
+serves with no route out, and `ollama-models` (a Job on a cluster) runs its own Ollama server to
+pull the weights into the same volume. An Ollama server prunes blobs no manifest names when it
+starts, and a download's `-partial` file is one; so `ollama` starting or restarting while
+`ollama-models` was pulling took the file from under the pull. **Reproduced** with the pinned
+image on a throwaway volume: a second server started mid-pull gives that exact error, on the same
+blob (`qwen2.5:0.5b-instruct`'s); with `OLLAMA_NOPRUNE=1` on the second server the pull completes.
+
+**Decided:** the serving `ollama` carries `OLLAMA_NOPRUNE=1`, in compose and in the chart's values
+alike; it never pulls, so it never needs to prune. The download step keeps the default. The
+administration guide's §16 says how an install made before this recovers: `ospreyflow start`
+while the deployment is up starts the download again with the server left running. Test:
+`tests/harness/test_deployment_models.py::test_the_model_server_never_prunes_a_download_in_progress`.
+
 ## ADR-116 — Find connections: two people by search, explored by degrees of separation — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 13 October 2026**, from options: "search or canvas" for the two ends;

@@ -116,3 +116,18 @@ def test_the_choices_and_their_pins_are_one_list() -> None:
     assert set(get_args(VisionModel)) == set(VISION_MODELS)
     assert set(get_args(TranscriptionModel)) == set(TRANSCRIPTION_MODELS)
     assert set(get_args(EmbeddingModel)) == set(EMBEDDING_MODELS)
+
+
+def test_the_model_server_never_prunes_a_download_in_progress() -> None:
+    """A user's install failed with `Error: rename .../blobs/sha256-c5396e06...-partial ...: no such
+    file or directory` (15 October 2026). `ollama` and `ollama-models` (ADR-114 Amendment 7) run
+    two Ollama servers on one model volume, and a server prunes blobs no manifest names when it
+    starts — a download's `-partial` file among them. So when `ollama` started, or restarted, while
+    `ollama-models` was still pulling, the pull lost its file. Reproduced with the pinned image: a
+    second server started mid-pull gives exactly that error; with `OLLAMA_NOPRUNE=1` the pull
+    completes. The serving instance never pulls, so it never needs to prune."""
+    compose = yaml.safe_load(render(OspreyConfig(), allow_unpinned=True).artefacts["compose.yaml"])
+    services = compose["services"]
+    assert "ollama-models" in services, "the premise: a separate step downloads the models"
+    assert services["ollama-models"]["volumes"] == services["ollama"]["volumes"]
+    assert services["ollama"].get("environment", {}).get("OLLAMA_NOPRUNE") == "1"

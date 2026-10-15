@@ -961,6 +961,12 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # weights are fetched by `ollama-models` below, into the volume it reads.
             service["entrypoint"] = ["/bin/ollama"]
             service["command"] = ["serve"]
+            # Two servers share the model volume: this one, and `ollama-models`' while it pulls. A
+            # server prunes unreferenced blobs when it starts, a download's `-partial` file among
+            # them, so this one starting or restarting mid-pull failed the pull ("rename
+            # ...-partial ...: no such file or directory", a user's install, 15 October 2026). It
+            # never pulls, so it never needs to prune.
+            service["environment"] = {"OLLAMA_NOPRUNE": "1"}
             services["ollama-models"] = _model_download_step(
                 str(service["image"]),
                 volume="ollama-models:/root/.ollama",
