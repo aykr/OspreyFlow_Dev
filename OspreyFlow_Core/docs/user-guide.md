@@ -11,10 +11,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.3** · 2026-10-18 · For OspreyFlow v0.2.0 · Issued
+**Version 1.4** · 2026-10-18 · For OspreyFlow v0.2.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.4 | 2026-10-18 | §5.3: accounts where they are held, and payments as lines, on the map. |
 | 1.3 | 2026-10-18 | §5.2: link types in the legend, left out of the view or brought back, and the custody links of a prison case. |
 | 1.2 | 2026-10-15 | A cover page, contents, a list of figures, and this version history. |
 | 1.1 | 2026-10-14 | Cases and their branches shown as one tree; a branch renamed or deleted where it is listed. |
@@ -160,7 +161,9 @@ Author; the case you were in is unchanged.
 
 ![The map, with sites, boundaries and hotspot cells](images/user/06-map.png)
 
-The map shows the same working set and selection as the graph. **Add site** places a building's plan
+The map shows the same working set and selection as the graph. A location is drawn at its point,
+and so is an account, where it is held; a link between two things on the map is drawn as a line —
+a payment from an outside account into a prisoner's private cash, for instance. **Add site** places a building's plan
 on the map from four matched points and draws a grid whose cells become locations. **Draw boundary**
 filters to what falls inside it. **Hotspot cells** counts what is in each cell, and filters as you
 choose. If the deployment's basemap is not built, the map says so.

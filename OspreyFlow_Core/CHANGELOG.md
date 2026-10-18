@@ -20,8 +20,12 @@ update. Work not yet in a release is listed under *Unreleased*.
   relay group: cell histories, co-defendants, conflicts (one known only from intelligence, and so
   SECRET), incidents with who was involved, visitors in person and by video, prison-phone and outside
   numbers with their calls, and accounts with their payments — on the graph, the timeline and the
-  map. Everything in it is invented. A deployment that added HMP before this release gains the
+  map, where the prison, its yards and the outside towns are places. Everything in it is invented.
+  A deployment that added HMP before this release gains the
   network with `ospreyflow demo add hmp`; the people and incidents it has are not added twice.
+- **Fixed: an account is on the map where it is held, and a payment draws as a line.** The map
+  placed only locations, so an account's branch point was never shown.
+- **Fixed: the legend no longer runs over the open timeline;** it scrolls inside the canvas.
 - **Fixed: Explore's *Add… → Just this entity* adds just that entity.** It drew the entity three
   links out, as choosing a search result does, and *with all n links* did the same before its own
   one-link step; on a busy case that put hundreds of nodes on the canvas. What Explore adds now
