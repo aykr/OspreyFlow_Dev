@@ -263,7 +263,9 @@ function BudgetRow({
             className="btn btn--quiet"
             disabled={busy}
             onClick={() => {
-              onPick(node);
+              // The budget with no links: the node alone (ADR-100 Amendment 9) — not `onPick`, which
+              // draws as choosing a search result does, three links out (ADR-070).
+              onAddLinks(node, []);
               setOpen(false);
             }}
           >

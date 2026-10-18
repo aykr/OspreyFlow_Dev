@@ -58,6 +58,7 @@ import {
 import { computeCommunityHulls } from "./metrics/hulls";
 import { MetricsPanel } from "./metrics/MetricsPanel";
 import { QueryBuilderPanel } from "./patterns/QueryBuilderPanel";
+import { seedElements } from "./connections/connectionsApi";
 import { FindConnectionsPanel } from "./connections/FindConnectionsPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
 import { resolveNodeCoordinates } from "./map/geometries";
@@ -448,33 +449,45 @@ export function App() {
     drawSearchResult(workingSetRef.current.store, node, glassCanvasRef.current);
     setSelectedNode(node);
   };
+  /** What Explore adds goes to the case's working set through `/seed`, as a found route does, and is
+   * drawn from the change the Conduit answers — so the working set holds it and the canvas's
+   * counters and legend see it. A local add did neither (the Glass review, 18 October 2026). */
+  const seedToCanvas = async (nodes: readonly Node[], edges: readonly Edge[]): Promise<boolean> => {
+    if (!investigationId) return false;
+    const { graph, store } = workingSetRef.current;
+    try {
+      const delta = await seedElements(
+        { apiBaseUrl: API_BASE_URL, bearerToken, investigationId },
+        nodes,
+        edges,
+        { hasNode: (id) => graph.hasNode(id), hasEdge: (id) => graph.hasEdge(id) },
+      );
+      if (delta) store.getState().applyDelta(delta);
+      return true;
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  };
   /** ADR-100 decision 5: a busiest link puts the pair and their link on the canvas. */
   const pickLinkToStart = (link: RankedLink) => {
-    const store = workingSetRef.current.store;
-    store.getState().applyDelta({
-      seq: store.getState().seq,
-      op: "add",
-      nodes: [link.source, link.target],
-      edges: [link.edge],
-    });
+    void seedToCanvas([link.source, link.target], [link.edge]);
     setSelectedNode(link.source);
   };
-  /** ADR-100 Amendment 9: a node with its chosen busiest links, each with both ends, drawn. */
+  /** ADR-100 Amendment 9: a node with its chosen busiest links, each with both ends, drawn; with no
+   * links, *Just this entity* — the node alone. */
   const addWithBusiest = (node: Node, links: RankedLink[]) => {
-    const store = workingSetRef.current.store;
-    store.getState().applyDelta({
-      seq: store.getState().seq,
-      op: "add",
-      nodes: [node, ...links.flatMap((l) => [l.source, l.target])],
-      edges: links.map((l) => l.edge),
-    });
+    void seedToCanvas(
+      [node, ...links.flatMap((l) => [l.source, l.target])],
+      links.map((l) => l.edge),
+    );
     setSelectedNode(node);
   };
-  /** ADR-100 Amendment 9: "with all n links…" — the canvas's own expand, whose large-expansion
-   * question already guards the all case. */
-  const expandAllOf = (node: Node) => {
-    pickToStart(node);
-    glassCanvasRef.current?.expandFrom(node.id, 1);
+  /** ADR-100 Amendment 9: "with all n links…" — the node, then the canvas's own one-link expand,
+   * whose large-expansion question already guards the all case. Not a search's three-link draw. */
+  const expandAllOf = async (node: Node) => {
+    setSelectedNode(node);
+    if (await seedToCanvas([node], [])) glassCanvasRef.current?.expandFrom(node.id, 1);
   };
   /** ADR-100 Amendment 7: what a starter question put in the case's working set, drawn. */
   const applyStarterDelta = (delta: WorkingSetDelta) => {

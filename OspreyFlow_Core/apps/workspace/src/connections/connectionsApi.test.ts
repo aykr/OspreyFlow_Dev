@@ -7,6 +7,7 @@ import {
   findConnections,
   routeCountWords,
   routeOnCanvas,
+  seedElements,
   seedRoute,
 } from "./connectionsApi";
 
@@ -87,5 +88,28 @@ describe("findConnections", () => {
   it("refuses in words when the search does not complete", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 503 })));
     await expect(findConnections(CONTEXT, "a", "b")).rejects.toThrow("The search for connections failed (503). Try again.");
+  });
+});
+
+// Explore's adds (ADR-100 Amendment 9) go through the same seed: a node with its busiest links names
+// each shared end once, and an answer the Conduit refuses is said, not drawn.
+describe("seedElements", () => {
+  it("sends each node and link once, and only what the canvas lacks", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ delta: { op: "add" } })));
+    vi.stubGlobal("fetch", fetchMock);
+    const has = new Set(["c"]);
+    const graph = { hasNode: (id: string) => has.has(id), hasEdge: (id: string) => has.has(id) };
+    await seedElements(CONTEXT, [node("a"), node("b"), node("a"), node("c")], [edge("a", "b"), edge("a", "b")], graph);
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.nodes.map((n: Node) => n.id)).toEqual(["a", "b"]);
+    expect(body.edges.map((e: Edge) => e.id)).toEqual(["a-b"]);
+  });
+
+  it("says when the Conduit refuses, rather than drawing anything", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 409 })));
+    const graph = { hasNode: () => false, hasEdge: () => false };
+    await expect(seedElements(CONTEXT, [node("a")], [], graph)).rejects.toThrow(
+      "It could not be added to the canvas (409). Try again.",
+    );
   });
 });

@@ -76,15 +76,29 @@ export async function seedRoute(
   route: Path,
   canvas: CanvasContents,
 ): Promise<WorkingSetDelta | null> {
-  const nodes: Node[] = route.nodes.filter((n) => !canvas.hasNode(n.id));
-  const edges: Edge[] = route.edges.filter((e) => !canvas.hasEdge(e.id));
-  if (nodes.length === 0 && edges.length === 0) return null;
+  return seedElements(context, route.nodes, route.edges, canvas, "The route");
+}
+
+/** Sends what the canvas lacks of `nodes` and `edges` to the case's working set — each once — and
+ * gives back the change to draw; `null` when all of it is there already. Also how Explore adds what
+ * an analyst chose (ADR-100 Amendment 9), so the server's working set and the canvas's own counters
+ * see it, rather than a local add neither does. */
+export async function seedElements(
+  context: ConnectionsContext,
+  nodes: readonly Node[],
+  edges: readonly Edge[],
+  canvas: CanvasContents,
+  what = "It",
+): Promise<WorkingSetDelta | null> {
+  const lackingNodes = [...new Map(nodes.filter((n) => !canvas.hasNode(n.id)).map((n) => [n.id, n])).values()];
+  const lackingEdges = [...new Map(edges.filter((e) => !canvas.hasEdge(e.id)).map((e) => [e.id, e])).values()];
+  if (lackingNodes.length === 0 && lackingEdges.length === 0) return null;
   const response = await fetch(caseUrl(context, "seed"), {
     method: "POST",
     headers: headers(context),
-    body: JSON.stringify({ nodes, edges }),
+    body: JSON.stringify({ nodes: lackingNodes, edges: lackingEdges }),
   });
-  if (!response.ok) throw new Error(`The route could not be added to the canvas (${response.status}). Try again.`);
+  if (!response.ok) throw new Error(`${what} could not be added to the canvas (${response.status}). Try again.`);
   const outcome = (await response.json()) as { delta: WorkingSetDelta };
   return outcome.delta;
 }

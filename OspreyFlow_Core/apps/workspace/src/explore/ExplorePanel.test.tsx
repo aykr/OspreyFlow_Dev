@@ -125,7 +125,12 @@ function standard() {
   });
 }
 
+/** The last `mount`'s `onAddLinks`: *Just this entity* is the budget with no links (ADR-100
+ * Amendment 9). */
+let lastAddLinks = vi.fn();
+
 function mount(onPick = vi.fn(), onPickLink = vi.fn(), onPickDay = vi.fn(), onApplyDelta = vi.fn()) {
+  lastAddLinks = vi.fn();
   render(
     <ExplorePanel
       onApplyDelta={onApplyDelta}
@@ -136,7 +141,7 @@ function mount(onPick = vi.fn(), onPickLink = vi.fn(), onPickDay = vi.fn(), onAp
       onPick={onPick}
       onPickLink={onPickLink}
       onPickDay={onPickDay}
-      onAddLinks={vi.fn()}
+      onAddLinks={lastAddLinks}
       onExpandAll={vi.fn()}
     />,
   );
@@ -193,8 +198,10 @@ describe("ExplorePanel", () => {
     const top = await screen.findByRole("region", { name: "Most connected" });
     fireEvent.click(await within(top).findByRole("button", { name: "Add Hub 3 to the graph" }));
     fireEvent.click(within(top).getByRole("button", { name: "Just this entity" }));
-    expect(onPick).toHaveBeenCalledTimes(1);
-    expect(onPick.mock.calls[0]?.[0].id).toBe("Hub3");
+    expect(lastAddLinks).toHaveBeenCalledTimes(1);
+    expect(lastAddLinks.mock.calls[0]?.[0].id).toBe("Hub3");
+    expect(lastAddLinks.mock.calls[0]?.[1]).toEqual([]);
+    expect(onPick).not.toHaveBeenCalled();
   });
 
   it("opens a type to its five most connected, then pages it", async () => {
@@ -212,7 +219,8 @@ describe("ExplorePanel", () => {
     expect(await within(byType).findByText("All 12 shown.")).toBeTruthy();
     fireEvent.click(within(byType).getByRole("button", { name: "Add Person 11 to the graph" }));
     fireEvent.click(within(byType).getByRole("button", { name: "Just this entity" }));
-    expect(onPick.mock.calls[0]?.[0].id).toBe("Person11");
+    expect(lastAddLinks.mock.calls[0]?.[0].id).toBe("Person11");
+    expect(onPick).not.toHaveBeenCalled();
     // A type with none is not offered.
     expect(within(byType).queryByRole("button", { name: /^Location/ })).toBeNull();
   });
@@ -410,8 +418,10 @@ describe("ExplorePanel: folds and the link budget (ADR-100 Amendment 9)", () => 
     const top = await screen.findByRole("region", { name: "Most connected" });
     fireEvent.click((await within(top).findAllByRole("button", { name: "Add Hub 0 to the graph" }))[0]!);
     fireEvent.click(within(top).getByRole("button", { name: "Just this entity" }));
-    expect(onPick).toHaveBeenCalledTimes(1);
-    expect(onAddLinks).not.toHaveBeenCalled();
+    // Alone: the budget with no links. `onPick` draws three links out, as a search result does.
+    expect(onAddLinks).toHaveBeenCalledTimes(1);
+    expect(onAddLinks.mock.calls[0]![1]).toEqual([]);
+    expect(onPick).not.toHaveBeenCalled();
   });
 
   it("a budget asks for that node's own busiest links and hands them over", async () => {

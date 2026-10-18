@@ -22,6 +22,10 @@ update. Work not yet in a release is listed under *Unreleased*.
   numbers with their calls, and accounts with their payments — on the graph, the timeline and the
   map. Everything in it is invented. A deployment that added HMP before this release gains the
   network with `ospreyflow demo add hmp`; the people and incidents it has are not added twice.
+- **Fixed: Explore's *Add… → Just this entity* adds just that entity.** It drew the entity three
+  links out, as choosing a search result does, and *with all n links* did the same before its own
+  one-link step; on a busy case that put hundreds of nodes on the canvas. What Explore adds now
+  also reaches the case's working set, so the counts and legend see it straight away.
 - **Fixed: a resolution run no longer undoes an analyst's link.** A model's later match of a pair an
   analyst had linked by hand (or confirmed) replaced the link's confirmation and score with the
   model's, so the pair could stop showing as one. An analyst's decision now stands until an analyst

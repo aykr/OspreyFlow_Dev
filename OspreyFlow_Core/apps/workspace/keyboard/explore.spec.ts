@@ -90,7 +90,9 @@ test("a node from the most connected goes on the canvas by keyboard", async ({ p
   await page.keyboard.press("Enter");
   await top.getByRole("button", { name: "Just this entity" }).focus();
   await page.keyboard.press("Enter");
-  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["hub0"]);
+  // Alone: the budget with no links (ADR-100 Amendment 9), not a search's three-link draw.
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.budget)).toEqual([["hub0", 0]]);
+  expect(await page.evaluate(() => window.__EXPLORE__?.picked)).toEqual([]);
   registerCovered(REGISTRY, "put-a-most-connected-node-on-the-canvas-by-keyboard");
 });
 
@@ -110,7 +112,8 @@ test("an entity type opens by keyboard, and one of its own goes on the canvas", 
   // ADR-100 Amendment 9: Add… offers how much to bring; the smallest choice picks it alone.
   await byType.getByRole("button", { name: "Just this entity" }).focus();
   await page.keyboard.press("Enter");
-  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.picked)).toEqual(["Acme"]);
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.budget)).toEqual([["Acme", 0]]);
+  expect(await page.evaluate(() => window.__EXPLORE__?.picked)).toEqual([]);
   registerCovered(REGISTRY, "open-an-entity-type-and-put-one-on-the-canvas-by-keyboard");
 });
 
