@@ -17,8 +17,8 @@ visits, calls and payments, so the network is not only the story.
 **Everything is invented** (rule 9). Prison numbers are this fixture's own `HMP-nnnn`; visitors'
 National Insurance numbers use the `QQ` prefix, which is never issued; phone numbers are in
 Ofcom's range reserved for drama (07700 900000 to 900999); accounts are at a fictional bank. HMP
-Hollywood's point is open country near Warwick, where there is no prison; the outside places are
-town centres, offset a little at random.
+Hollywood's point is the middle of the fixture's own ten yards (`hmp.py`, in Berkshire), so the
+map shows one prison; the outside places are town centres, offset a little at random.
 
 Deterministic: `plan_network()` builds the same plan on every call (one seeded generator), and
 the plan is pure — keys, not ids — so its shape is tested without a store
@@ -57,19 +57,19 @@ from .hmp_population import (
     prison_number_for_index,
 )
 
-#: HMP Hollywood, a fictional prison: open country between Warwick and Southam, where there is none.
-PRISON_POINT: tuple[float, float] = (52.2600, -1.4900)
+#: HMP Hollywood, a fictional prison: the middle of `hmp.py`'s ten yard points.
+PRISON_POINT: tuple[float, float] = (51.5032, -0.5960)
 
 #: Town centres the outside network lives in (offset a little per person at random).
 TOWNS: dict[str, tuple[float, float]] = {
     "Birmingham": (52.4862, -1.8904),
-    "Coventry": (52.4068, -1.5197),
-    "Leicester": (52.6369, -1.1398),
-    "Wolverhampton": (52.5870, -2.1288),
-    "Northampton": (52.2405, -0.9027),
-    "Oxford": (51.7520, -1.2577),
     "London": (51.5072, -0.1276),
-    "Nottingham": (52.9548, -1.1581),
+    "Luton": (51.8787, -0.4200),
+    "Reading": (51.4543, -0.9781),
+    "Slough": (51.5105, -0.5950),
+    "High Wycombe": (51.6286, -0.7482),
+    "Oxford": (51.7520, -1.2577),
+    "Bracknell": (51.4154, -0.7536),
 }
 
 #: The network's own span; the finds fall in the fixture's incident window (`hmp.py`).
@@ -170,7 +170,7 @@ def plan_network(seed: int = 117) -> NetworkPlan:
     for n in range(24):
         key = f"visitor:{n}"
         town = (
-            "Birmingham" if n == 0 else "Leicester" if n == 1 else rng.choice(sorted(TOWNS))
+            "Birmingham" if n == 0 else "Luton" if n == 1 else rng.choice(sorted(TOWNS))
         )
         visitor_towns[key] = town
         plan.nodes.append(
@@ -355,9 +355,9 @@ def plan_network(seed: int = 117) -> NetworkPlan:
     )
     cash = {i: private_cash(i) for i in (P, R[0], R[2], R[4])}
     # The shared payer: one outside account funds the principal and two relay members.
-    payments(shared, cash[P], "Leicester", 9)
-    payments(shared, cash[R[2]], "Leicester", 6)
-    payments(shared, cash[R[4]], "Leicester", 5)
+    payments(shared, cash[P], "Luton", 9)
+    payments(shared, cash[R[2]], "Luton", 6)
+    payments(shared, cash[R[4]], "Luton", 5)
     payments(coordinator_account, cash[R[0]], "Birmingham", 4)
     for n, index in enumerate(general[:12]):
         family_key = f"visitor:{4 + n}"

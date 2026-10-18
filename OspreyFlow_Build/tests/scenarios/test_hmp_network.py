@@ -179,3 +179,15 @@ def test_the_seed_s_marker_incident_is_one_the_plan_writes() -> None:
 
     refs = [n.properties["incident_ref"] for n in plan_network().nodes if n.type == "Incident"]
     assert refs[0] == FIRST_INCIDENT_REF
+
+
+def test_the_prison_is_where_its_yards_are() -> None:
+    """Catches the network's visits and incidents drawn at a different place from the fixture's own
+    yard incidents (`hmp.py`): the map would show one prison in two places."""
+    from demo_fixtures.hmp import _YARD_COORDINATES
+    from demo_fixtures.hmp_network import PRISON_POINT
+
+    lats = [lat for lat, _ in _YARD_COORDINATES.values()]
+    lons = [lon for _, lon in _YARD_COORDINATES.values()]
+    assert min(lats) <= PRISON_POINT[0] <= max(lats)
+    assert min(lons) <= PRISON_POINT[1] <= max(lons)
