@@ -47,6 +47,8 @@ declare global {
       expandNode: (nodeId: string) => void;
       /** The name the canvas draws beside a node now; empty when it draws none. */
       labelOf: (nodeId: string) => string | null;
+      /** Whether the canvas draws a link now (ADR-117: a type left out from the legend is not). */
+      linkDrawn: (edgeId: string) => boolean | null;
       /** The fill colour stored on a node now, which is what the canvas paints it with. */
       nodeColour: (nodeId: string) => string | null;
       setTheme: (theme: "dark" | "light") => void;
@@ -142,6 +144,7 @@ window.__CANVAS__ = {
   expandFrom: (id, depth) => canvasHandle.current?.expandFrom(id, depth),
   expandNode: (id) => canvasHandle.current?.expandNode(id),
   labelOf: (id) => canvasHandle.current?.labelOf(id) ?? null,
+  linkDrawn: (id) => canvasHandle.current?.linkDrawn(id) ?? null,
   nodeColour: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "color") as string) : null),
   setTheme: (theme) => applyTheme(theme),
   nodeImage: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "image") as string) : null),

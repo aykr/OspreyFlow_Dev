@@ -91,3 +91,46 @@ describe("CanvasLegend", () => {
     expect(container.textContent).toBe("");
   });
 });
+
+// ADR-117: the links in view, each in its colour, each one left out of the view or brought back.
+describe("CanvasLegend's links", () => {
+  const types = [{ type: "Person", count: 4, visual: { channel: "indigo", shape: "circle", icon: null } as const }];
+  const links = [
+    { type: "VISITED", label: "Visited", count: 2, colour: "violet", shown: true },
+    { type: "SHARED_CELL_WITH", label: "Shared a cell with", count: 9, colour: "ochre", shown: false },
+    { type: "KNOWS", label: "Knows", count: 1, colour: "not-a-channel", shown: true },
+  ];
+
+  it("lists each link type with its count, most first, and whether it is shown", () => {
+    const { getByRole } = render(<CanvasLegend types={types} links={links} onToggleLink={() => {}} />);
+    const list = getByRole("list", { name: "Links in view" });
+    const rows = Array.from(list.querySelectorAll("li")).map((li) => li.textContent);
+    expect(rows).toEqual(["Shared a cell with9", "Visited2", "Knows1"]);
+    expect((getByRole("checkbox", { name: "Shared a cell with" }) as HTMLInputElement).checked).toBe(false);
+    expect((getByRole("checkbox", { name: "Visited" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("asks for a type to be left out or brought back when its box is changed", () => {
+    const asked: string[] = [];
+    const { getByRole } = render(
+      <CanvasLegend types={types} links={links} onToggleLink={(type) => asked.push(type)} />,
+    );
+    fireEvent.click(getByRole("checkbox", { name: "Visited" }));
+    fireEvent.click(getByRole("checkbox", { name: "Shared a cell with" }));
+    expect(asked).toEqual(["VISITED", "SHARED_CELL_WITH"]);
+  });
+
+  it("draws a type's colour from the tokens only, and the ordinary line for any other name", () => {
+    const { getByRole } = render(<CanvasLegend types={types} links={links} onToggleLink={() => {}} />);
+    const swatchOf = (name: string) =>
+      (getByRole("checkbox", { name }).parentElement?.querySelector(".canvas-legend__swatch") as HTMLElement)
+        .style.background;
+    expect(swatchOf("Visited")).toBe("var(--ch-violet)");
+    expect(swatchOf("Knows")).toBe("var(--border-strong)");
+  });
+
+  it("shows no links list when there are no links in view", () => {
+    const { queryByRole } = render(<CanvasLegend types={types} links={[]} />);
+    expect(queryByRole("list", { name: "Links in view" })).toBeNull();
+  });
+});

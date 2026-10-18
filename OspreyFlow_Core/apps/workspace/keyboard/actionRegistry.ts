@@ -92,6 +92,7 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "zoom-in-and-out-by-keyboard",
   "fit-to-view-by-keyboard",
   "legend-folds-by-keyboard",
+  "legend-leaves-out-a-link-type-by-keyboard",
   "legend-moves-by-keyboard",
   "show-previous-positions-by-keyboard",
   "grid-toggles-by-keyboard",

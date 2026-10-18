@@ -507,6 +507,13 @@ framed, as an arrangement frames it, inside an 80px margin so the outermost node
 above the canvas and the selection bar below it — Sigma's 30px framed them under both, found live 11
 October 2026 and checked by eye, since jsdom draws no WebGL). The legend (at the top right, above the zoom group) lists each type in view as the canvas
 draws it (shape in its channel's colour), with how many, most first; *Legend* folds it to its title.
+**Under the types, the links in view (ADR-117):** each link type with a line in its declared colour
+(one of the nine channels, else the ordinary line), its name and how many, most first, and a checkbox
+that leaves the type out of the view or brings it back — the "links to include" a prison analyst
+filters a network by. Leaving a type out hides its links in this tab only, as hiding one link does:
+nothing is recorded, nothing is removed from the working set, and every count stays what it was
+(`CanvasLegend.test.tsx`; the walkthrough "the legend leaves a link type out of the view and brings it
+back, by keyboard", `legend-leaves-out-a-link-type-by-keyboard`).
 **The legend floats** (the owner, 14 October 2026: "the legend is hiding the button behind, can the
 legend panel be a floating panel"): its grip, *Move legend*, drags it, or with the grip focused the
 arrows move it 16px (64px with Shift) and Home puts it back; it never rises above its dock, so it

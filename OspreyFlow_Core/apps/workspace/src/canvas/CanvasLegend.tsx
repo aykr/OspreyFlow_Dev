@@ -7,6 +7,10 @@
 // grip moves it — dragged, or with the grip focused, the arrows by 16px, Shift with them by 64px,
 // Home back to its dock (as a panel's sash moves). It never rises above its dock, so it cannot cover
 // the toolbar, and stays inside the canvas. Where it was put is this browser's, like the grid.
+//
+// Under the types, the links in view (ADR-117): each link type in its colour with how many, and a
+// box to leave it out of the view or bring it back — the "links to include" a prison analyst filters
+// a network by. Leaving a type out hides its links in this view only, like hiding one link.
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import { TypeChip } from "../inspector/TypeChip";
@@ -16,6 +20,25 @@ export interface LegendType {
   type: string;
   count: number;
   visual?: EntityVisual;
+}
+
+export interface LegendLink {
+  type: string;
+  label: string;
+  count: number;
+  /** The type's declared colour, one of the nine data channels, or null for the ordinary line. */
+  colour: string | null;
+  shown: boolean;
+}
+
+// The nine data channels (`design/tokens.css`); any other name draws the ordinary line colour, so
+// no colour outside the tokens reaches the legend.
+const CHANNELS: ReadonlySet<string> = new Set([
+  "ochre", "rose", "plum", "violet", "indigo", "azure", "cyan", "jade", "moss",
+]);
+
+function swatch(colour: string | null): string {
+  return colour !== null && CHANNELS.has(colour) ? `var(--ch-${colour})` : "var(--border-strong)";
 }
 
 interface Offset {
@@ -47,7 +70,15 @@ function remember(offset: Offset) {
   }
 }
 
-export function CanvasLegend({ types }: { types: readonly LegendType[] }) {
+export function CanvasLegend({
+  types,
+  links = [],
+  onToggleLink,
+}: {
+  types: readonly LegendType[];
+  links?: readonly LegendLink[];
+  onToggleLink?: (type: string) => void;
+}) {
   const [open, setOpen] = useState(true);
   const [offset, setOffset] = useState<Offset>(remembered);
   const legendRef = useRef<HTMLDivElement | null>(null);
@@ -146,6 +177,27 @@ export function CanvasLegend({ types }: { types: readonly LegendType[] }) {
           </li>
         ))}
       </ul>
+      {links.length > 0 && (
+        <ul aria-label="Links in view" className="canvas-legend__list canvas-legend__links" hidden={!open}>
+          {[...links]
+            .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+            .map((l) => (
+              <li key={l.type}>
+                <label className="canvas-legend__link">
+                  <input
+                    type="checkbox"
+                    checked={l.shown}
+                    disabled={onToggleLink === undefined}
+                    onChange={() => onToggleLink?.(l.type)}
+                  />
+                  <span className="canvas-legend__swatch" style={{ background: swatch(l.colour) }} aria-hidden="true" />
+                  {l.label}
+                </label>
+                <span className="value">{l.count.toLocaleString("en-GB")}</span>
+              </li>
+            ))}
+        </ul>
+      )}
     </div>
   );
 }

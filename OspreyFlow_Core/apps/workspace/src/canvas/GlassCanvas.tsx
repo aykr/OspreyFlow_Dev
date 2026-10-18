@@ -329,6 +329,10 @@ export interface GlassCanvasHandle {
    * the node is not in `graph` or nothing is mounted. Labels are painted to a canvas, so a browser
    * test cannot read them from the page; this asks the renderer what it was given. */
   labelOf: (nodeId: string) => string | null;
+  /** Whether the canvas draws link `edgeId` right now — `false` when it is hidden, by itself or by
+   * its type being left out from the legend (ADR-117) — or `null` if it is not in `graph` or nothing
+   * is mounted. Asked of the renderer, as `labelOf` is. */
+  linkDrawn: (edgeId: string) => boolean | null;
   /** Draws `nodeId` and everything within `depth` links of it, counted first and asked about when
    * large, exactly as a double-click expansion is (ADR-070: choosing a search result draws three
    * steps out). A no-op if `nodeId` is not in the view. */
@@ -525,6 +529,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const [hiddenEdges, setHiddenEdges] = useState<ReadonlySet<string>>(new Set());
     const hiddenEdgesRef = useRef<ReadonlySet<string>>(new Set());
     hiddenEdgesRef.current = hiddenEdges;
+    // Link types left out of this view from the legend (ADR-117: the "links to include" a prison
+    // analyst filters by), in this browser tab only, like a hidden link.
+    const [hiddenLinkTypes, setHiddenLinkTypes] = useState<ReadonlySet<string>>(new Set());
+    const hiddenLinkTypesRef = useRef<ReadonlySet<string>>(new Set());
+    hiddenLinkTypesRef.current = hiddenLinkTypes;
     // The right-click menu on a link, and the box that asks why before a write from it (ADR-080).
     const [linkMenu, setLinkMenu] = useState<PendingLinkMenu | null>(null);
     const [reasonPrompt, setReasonPrompt] = useState<{
@@ -873,6 +882,25 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // `workingSetSeq` changes whenever nodes or links are added or removed.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [graph, ontology, workingSetSeq]);
+    // The legend's links: each link type in view, its colour and how many, and whether it is shown.
+    const legendLinks = useMemo(() => {
+      const counts = new Map<string, number>();
+      graph.forEachEdge((_id, attrs) => counts.set(attrs.data.type, (counts.get(attrs.data.type) ?? 0) + 1));
+      return [...counts].map(([type, count]) => ({
+        type,
+        count,
+        label: linkTypeName(type, edgeTypes),
+        colour: declaredFor(type, edgeTypes).colour ?? null,
+        shown: !hiddenLinkTypes.has(type),
+      }));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [graph, edgeTypes, workingSetSeq, hiddenLinkTypes]);
+    const toggleLinkType = (type: string) =>
+      setHiddenLinkTypes((prev) => {
+        const next = new Set(prev);
+        if (!next.delete(type)) next.add(type);
+        return next;
+      });
     const typesInView = (): string[] => {
       const types = new Set<string>();
       graph.forEachNode((_id, attrs) => types.add(attrs.data.type));
@@ -1240,7 +1268,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     dimmedEdgeIdsRef.current = dimmedEdgeIds;
     useEffect(() => {
       sigmaRef.current?.scheduleRefresh();
-    }, [selectedEdge, hiddenEdges, dimmedEdgeIds]);
+    }, [selectedEdge, hiddenEdges, hiddenLinkTypes, dimmedEdgeIds]);
 
     // Re-derive graph-level visual attributes only for the node(s) whose
     // hover/selection actually changed — not the whole working set.
@@ -1410,6 +1438,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             hidden:
               attrs.hidden ||
               hiddenEdgesRef.current.has(edgeId) ||
+              hiddenLinkTypesRef.current.has(data.data.type) ||
               (foldedViewRef.current?.hidesLink(graph.source(edgeId), graph.target(edgeId)) ??
                 false),
             ...(isSelected
@@ -1766,6 +1795,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const sigma = sigmaRef.current;
           if (!sigma || !graph.hasNode(nodeId)) return null;
           return sigma.getNodeDisplayData(nodeId)?.label ?? "";
+        },
+        linkDrawn: (edgeId: string) => {
+          const sigma = sigmaRef.current;
+          if (!sigma || !graph.hasEdge(edgeId)) return null;
+          return !(sigma.getEdgeDisplayData(edgeId)?.hidden ?? false);
         },
         cameraState: () => {
           const sigma = sigmaRef.current;
@@ -3292,7 +3326,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           className="canvas-corner"
           style={toolbarHeight ? ({ "--canvas-toolbar-height": `${toolbarHeight}px` } as CSSProperties) : undefined}
         >
-          <CanvasLegend types={legendTypes} />
+          <CanvasLegend types={legendTypes} links={legendLinks} onToggleLink={toggleLinkType} />
           <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} percent={zoomPercent} />
         </div>
         {addingFiles && bearerToken && investigationId && (

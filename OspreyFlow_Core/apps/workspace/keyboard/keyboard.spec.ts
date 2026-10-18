@@ -1811,6 +1811,29 @@ test("the legend folds and opens by keyboard, and names the types in view", asyn
   registerCovered("CANVAS_ACTIONS", "legend-folds-by-keyboard");
 });
 
+// ADR-117: the legend's links — a type left out of the view and brought back, by keyboard alone,
+// and the canvas stops drawing that type's links and draws them again.
+test("the legend leaves a link type out of the view and brings it back, by keyboard", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const links = page.locator('ul[aria-label="Links in view"]');
+  await expect(links).toBeVisible();
+  const drawn = (id: string) => page.evaluate((edgeId) => window.__CANVAS__?.linkDrawn(edgeId), id);
+  await expect.poll(() => drawn("e0")).toBe(true);
+  // The fixture's chain is three "Associate of" links (e0 to e2) and one "Uses" link (e3).
+  const box = links.getByRole("checkbox", { name: "Associate of" });
+  await expect(box).toBeChecked();
+  await box.focus();
+  await page.keyboard.press("Space");
+  await expect(box).not.toBeChecked();
+  await expect.poll(() => drawn("e0")).toBe(false);
+  await expect.poll(() => drawn("e2")).toBe(false);
+  expect(await drawn("e3")).toBe(true); // only the type left out is hidden
+  await page.keyboard.press("Space");
+  await expect(box).toBeChecked();
+  await expect.poll(() => drawn("e0")).toBe(true);
+  registerCovered("CANVAS_ACTIONS", "legend-leaves-out-a-link-type-by-keyboard");
+});
+
 // The owner, 14 October 2026: on a narrow canvas the toolbar wraps to a second row, and the legend,
 // placed one row down, covered the controls there. It now docks below the toolbar as drawn, and
 // floats: its grip moves it, by keyboard as by pointer.
