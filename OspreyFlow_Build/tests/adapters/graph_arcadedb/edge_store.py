@@ -41,8 +41,8 @@ class CountingStore:
         if query.startswith("g.V().outE("):  # the corpus total, one whole-corpus traversal
             return [{"result": sum(e["occurrences"] for e in self.edges.values())}]
         if ".elementMap()" in query:  # an existing edge for this pair
-            quoted = literals(query)  # id, source, label, reverted, id, target
-            src, tgt = quoted[1], quoted[5]
+            quoted = literals(query)  # id, source, label, reverted, superseded_by, id, target
+            src, tgt = quoted[1], quoted[-1]
             found = self.edges.get((src, tgt))
             return [found] if found else []
         if ".values(" in query and ".sum()" in query:  # one vertex's own weighted degree

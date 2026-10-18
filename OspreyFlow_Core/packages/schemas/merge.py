@@ -3,29 +3,50 @@
 `01_DOMAIN_MODEL.md` §3: one summarised edge per (type, source, target). A second write for the
 same pair merges into the stored edge instead of adding another: the occurrences add, every
 provenance source is kept (de-duplicated by document and locator, §7), the interval widens, the
-latest write's own properties win, the handling is never lowered (ADR-102: the most restrictive
-of each part, `ontology.handling.merge_handling`), and the revision counts the writes.
+latest write's own properties win (unless that write would lower an asserted element: below), the
+handling is never lowered (ADR-102: the most restrictive of each part,
+`ontology.handling.merge_handling`), and the revision counts the writes.
 `GraphArcadeDBAdapter.upsert_edges` applies the rule one write at a time against the store; a bulk
 load receives all of a pair's writes together and applies it here before anything is written.
 Keeping the rule in one place is the point: two copies would drift, and the test that compares the
 two paths (`tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py`) would be the
 only thing to notice.
 
+**A merge never lowers an asserted element** (`01_DOMAIN_MODEL.md` §2.1). A write that is not
+`asserted`, arriving for an element already `asserted` — a resolution run over an analyst's manual
+link, a model over a confirmed link — adds its sources (and, for an edge, its occurrences and
+interval), but the stored provenance state, its confirmation and its properties stay as they were,
+with no property added either: a manual link's `model_version` stays absent, which is how
+`explain` reports a human decision (`PairwiseExplanation`). Only an analyst's own action
+changes what an analyst decided, as only an analyst's confirmation promotes (`keeps_asserted`).
+
 Pure functions over the domain models; nothing here touches a store.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
-from schemas.domain import EdgeWrite, Handling, Interval, Provenance
+from schemas.domain import EdgeWrite, Handling, Interval, Provenance, ProvenanceState
+
+
+def keeps_asserted(existing: Provenance | None, incoming: Provenance) -> bool:
+    """True when `incoming` would lower an asserted element to inferred or unresolved, so the
+    stored provenance and properties are kept (the module docstring's rule)."""
+    return (
+        existing is not None
+        and existing.state is ProvenanceState.ASSERTED
+        and incoming.state is not ProvenanceState.ASSERTED
+    )
 
 
 def merge_provenance(existing: Provenance | None, incoming: Provenance) -> Provenance:
     """Every source row reference is retained (`01_DOMAIN_MODEL.md` §7), de-duplicated by
     `(document_id, locator)` so writing the same row twice does not grow the list. The other
-    provenance fields are the incoming write's own."""
+    provenance fields are the incoming write's own, unless it would lower an asserted element
+    (`keeps_asserted`): then they are the stored ones."""
     if existing is None:
         return incoming
     seen = {(s.document_id, s.locator) for s in existing.sources}
@@ -34,7 +55,22 @@ def merge_provenance(existing: Provenance | None, incoming: Provenance) -> Prove
         if (source.document_id, source.locator) not in seen:
             merged_sources.append(source)
             seen.add((source.document_id, source.locator))
-    return incoming.model_copy(update={"sources": merged_sources})
+    base = existing if keeps_asserted(existing, incoming) else incoming
+    return base.model_copy(update={"sources": merged_sources})
+
+
+def merge_properties(
+    existing: Mapping[str, Any] | None,
+    incoming: Mapping[str, Any],
+    *,
+    existing_provenance: Provenance | None,
+    incoming_provenance: Provenance,
+) -> dict[str, Any]:
+    """The latest write's properties, unless it would lower an asserted element
+    (`keeps_asserted`): then the stored ones, unchanged."""
+    if keeps_asserted(existing_provenance, incoming_provenance):
+        return dict(existing or {})
+    return dict(incoming)
 
 
 def merge_datasets(existing: Sequence[str] | None, incoming: Sequence[str]) -> list[str]:
@@ -82,7 +118,8 @@ def aggregate_edge_writes(
 
     What the aggregate keeps of which write mirrors what `upsert_edges` leaves in the store: the
     first write's id, endpoints (and so orientation), `created_at` and `created_by`, because the
-    stored edge keeps them; every write's datasets (ADR-099); the latest write's properties,
+    stored edge keeps them; every write's datasets (ADR-099); the latest write's properties (kept
+    from the accumulated write where the latest would lower it, `merge_properties`),
     `load_id` and recipe, because a merge takes those from the incoming write; the handling merged
     by `handling(existing, incoming)` (ADR-102, never lowered); occurrences summed; provenance and
     interval merged. `directed(type_name)` says whether a type is directed. `handling` is required,
@@ -105,6 +142,12 @@ def aggregate_edge_writes(
                     "target": accumulated.target,
                     "created_at": accumulated.created_at,
                     "created_by": accumulated.created_by,
+                    "properties": merge_properties(
+                        accumulated.properties,
+                        write.properties,
+                        existing_provenance=accumulated.provenance,
+                        incoming_provenance=write.provenance,
+                    ),
                     "occurrences": accumulated.occurrences + write.occurrences,
                     "interval": merge_interval(accumulated.interval, write.interval),
                     "provenance": merge_provenance(accumulated.provenance, write.provenance),

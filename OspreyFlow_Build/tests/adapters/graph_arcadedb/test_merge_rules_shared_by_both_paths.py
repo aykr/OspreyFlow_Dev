@@ -161,3 +161,63 @@ def test_both_paths_keep_the_higher_handling_of_a_repeated_pair() -> None:
         assert only.write.handling.classification == "SECRET"
         assert store.edges[("a", "b")]["handling"]["classification"] == "SECRET"
         assert store.edges[("a", "b")]["handling_classification"] == "SECRET"
+
+
+def _inferred(write: EdgeWrite, amount: float) -> EdgeWrite:
+    """`write` as a model would make it: inferred, with a confidence and its own properties."""
+    provenance = Provenance(
+        state=ProvenanceState.INFERRED,
+        sources=[SourceRef(document_id="model", locator="run-2", excerpt_hash="")],
+        first_seen=T0,
+        extraction_confidence=0.4,
+    )
+    return write.model_copy(update={"provenance": provenance, "properties": {"amount": amount}})
+
+
+def _confirmed(write: EdgeWrite) -> EdgeWrite:
+    provenance = write.provenance.model_copy(
+        update={"confirmed_by": "analyst-1", "last_confirmed": T0}
+    )
+    return write.model_copy(update={"provenance": provenance, "properties": {"amount": 1.0}})
+
+
+def test_an_inferred_write_never_lowers_an_asserted_pair_on_either_path() -> None:
+    """`01_DOMAIN_MODEL.md` §2.1: only an analyst changes provenance state. Catches a model's write
+    to an analyst-confirmed pair (a resolution run over a manual link) replacing the stored state,
+    confirmation or properties — the latest-write-wins rule turning `asserted` back into `inferred`
+    and the analyst's score into the model's. Its sources and occurrences are still kept."""
+    confirmed = _confirmed(make_edge("a", "b", 1))
+    model = _inferred(make_edge("a", "b", 2), 0.4)
+
+    store = CountingStore()
+    graph = make_adapter(store)
+    for write in (confirmed, model):
+        asyncio.run(graph.upsert_edges([write], "tx"))
+    stored = store.edges[("a", "b")]
+    assert stored["provenance"]["state"] == "asserted"
+    assert stored["provenance"]["confirmed_by"] == "analyst-1"
+    assert stored["provenance"]["extraction_confidence"] is None
+    assert stored["properties"] == {"amount": 1.0}
+    assert stored["occurrences"] == 2
+    assert [s["locator"] for s in stored["provenance"]["sources"]] == ["row-1", "run-2"]
+
+    (only,) = aggregate_edge_writes([confirmed, model], directed=_directed, handling=_HANDLING)
+    assert only.write.provenance.state is ProvenanceState.ASSERTED
+    assert only.write.provenance.confirmed_by == "analyst-1"
+    assert only.write.properties == {"amount": 1.0}
+    assert _sources(only.write.provenance) == [("fixture", "row-1"), ("model", "run-2")]
+
+
+def test_a_later_inferred_write_over_an_inferred_pair_still_wins() -> None:
+    """Catches the guard above reaching further than it should: between two model writes (a
+    resolution run re-scoring its own earlier link) the latest still wins, so a pair the model now
+    scores lower is stored at the lower score."""
+    first = _inferred(make_edge("a", "b", 1), 0.9)
+    later = _inferred(make_edge("a", "b", 2), 0.4)
+    store = CountingStore()
+    graph = make_adapter(store)
+    for write in (first, later):
+        asyncio.run(graph.upsert_edges([write], "tx"))
+    assert store.edges[("a", "b")]["properties"] == {"amount": 0.4}
+    (only,) = aggregate_edge_writes([first, later], directed=_directed, handling=_HANDLING)
+    assert only.write.properties == {"amount": 0.4}

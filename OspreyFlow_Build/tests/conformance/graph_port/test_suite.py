@@ -2608,6 +2608,102 @@ async def test_supersede_edge_replaces_it_in_default_reads(
         assert edge.audit.superseded_by is None
 
 
+async def test_a_write_after_supersede_merges_into_the_replacement_edge(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`01_DOMAIN_MODEL.md` §3: one summarised edge per pair — after `supersede_edge` (a
+    confirmation, a recorded conflict) the pair's edge is the replacement. Catches a later write
+    for the same pair being merged into the superseded edge instead, which every default read
+    excludes, so the new evidence would vanish.
+
+    The replacement is stored the other way round (an undirected type, so the same pair): ArcadeDB
+    returns a vertex's out-edges before its in-edges, so the superseded `a`-to-`b` edge comes first
+    from `a` and a lookup that does not exclude it finds it. Written the same way round, the newer
+    replacement happens to come first and the defect does not show."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="A"),
+                _node("Person", classification="OFFICIAL", family_name="B"),
+            ],
+            [],
+        )
+        _, (old_edge_id,) = await _write(
+            adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")]
+        )
+        tx = await adapter.begin_transaction()
+        replacement_edge_id = await adapter.supersede_edge(
+            old_edge_id, _edge("ASSOCIATE_OF", b, a, classification="OFFICIAL"), tx
+        )
+        await adapter.commit_transaction(tx)
+
+        later = _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", occurrences=2)
+        later.provenance.sources[0].locator = "row 9"
+        _, (merged_id,) = await _write(adapter, [], [later])
+
+        assert merged_id == replacement_edge_id
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)
+        (edge,) = subgraph.edges
+        assert edge.id == replacement_edge_id
+        assert edge.occurrences == 3
+        assert "row 9" in {s.locator for s in edge.provenance.sources}
+
+
+async def test_an_inferred_write_never_lowers_an_asserted_same_as_link(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`01_DOMAIN_MODEL.md` §2.1 and §4: a manual link is a `SAME_AS` with score 1.0, `asserted`,
+    and only an analyst changes it. Catches a later resolution run's inferred write for the same
+    pair turning it back into `inferred` at the model's lower score — the link would quietly stop
+    collapsing the pair at any τ above that score."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="A"),
+                _node("Person", classification="OFFICIAL", family_name="B"),
+            ],
+            [],
+        )
+
+        def same_as(score: float, provenance: Provenance, **extra: str) -> EdgeWrite:
+            return EdgeWrite(
+                id=new_edge_id(),
+                type="SAME_AS",
+                source=a,
+                target=b,
+                properties={"score": score, **extra},
+                provenance=provenance,
+                handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
+                created_by="writer-1",
+                created_at=now_utc(),
+            )
+
+        manual = _provenance().model_copy(
+            update={"confirmed_by": "analyst-1", "last_confirmed": now_utc()}
+        )
+        _, (link_id,) = await _write(adapter, [], [same_as(1.0, manual)])
+        model_run = Provenance(
+            state=ProvenanceState.INFERRED,
+            sources=[SourceRef(document_id="splink:a:b", locator="model-2", excerpt_hash="")],
+            first_seen=now_utc(),
+            extraction_confidence=0.4,
+        )
+        await _write(adapter, [], [same_as(0.4, model_run, model_version="model-2")])
+
+        subgraph = await adapter.expand(
+            ExpandRequest(node_ids=[a], depth=1, edge_types=["SAME_AS"]), CLEARED
+        )
+        (edge,) = subgraph.edges
+        assert edge.id == link_id
+        assert edge.provenance.state is ProvenanceState.ASSERTED
+        assert edge.provenance.confirmed_by == "analyst-1"
+        assert edge.provenance.extraction_confidence is None
+        assert edge.properties == {"score": 1.0}
+        assert {s.locator for s in edge.provenance.sources} == {"p.1", "model-2"}
+
+
 # --- existence-leak assertions ------------------------------------------------
 
 

@@ -69,7 +69,7 @@ from schemas.explore import (
     SharedContacts,
     TypeCounts,
 )
-from schemas.merge import merge_datasets, merge_interval, merge_provenance
+from schemas.merge import merge_datasets, merge_interval, merge_properties, merge_provenance
 
 from .access_filter import AccessFilter
 from .builders import (
@@ -189,7 +189,8 @@ class GraphArcadeDBAdapter:
         states for edges.** `provenance` merges (`01_DOMAIN_MODEL.md` §7: every source row
         reference is retained; de-duplicated by `(document_id, locator)`), and `audit.revision`
         increments rather than resetting. The write's own `properties`/`handling`/`resolution`
-        are the latest write's values, not deep-merged field by field — the same "latest write
+        are the latest write's values (except that a write never lowers an asserted node:
+        `schemas.merge`), not deep-merged field by field — the same "latest write
         wins" `upsert_edges` already applies to everything it does not name as cumulative, since
         there is no way to resolve two *conflicting* values for one ontology property without
         inventing a merge rule the ontology itself does not declare. Nothing is silently dropped
@@ -219,6 +220,7 @@ class GraphArcadeDBAdapter:
                 merged_provenance = self._merge_provenance(
                     existing.get("provenance"), write.provenance
                 )
+                merged_properties = self._merge_properties(existing, write)
                 merged_datasets = merge_datasets(existing.get("datasets"), write.datasets)
                 merged_handling = self._merge_handling(existing, write.handling)
             else:
@@ -230,11 +232,13 @@ class GraphArcadeDBAdapter:
                     recipe_version=write.recipe_version,
                 )
                 merged_provenance = write.provenance
+                merged_properties = write.properties
                 merged_datasets = merge_datasets(None, write.datasets)
                 merged_handling = write.handling
 
             merged_write = write.model_copy(
                 update={
+                    "properties": merged_properties,
                     "provenance": merged_provenance,
                     "datasets": merged_datasets,
                     "handling": merged_handling,
@@ -276,7 +280,10 @@ class GraphArcadeDBAdapter:
         merge into this edge, never add a second one. A *reverted* edge is
         excluded: a later load touching the same pair starts a fresh edge
         rather than silently resurrecting retracted data by piling more
-        occurrences onto it."""
+        occurrences onto it. A *superseded* edge is excluded too: its
+        replacement is the pair's edge now (`supersede_edge` leaves the old
+        one in place for citations), and a write merged into the old one
+        would vanish from every ordinary read."""
         src_lit = groovy_string_literal(source)
         tgt_lit = groovy_string_literal(target)
         label_lit = groovy_string_literal(type_name)
@@ -284,7 +291,7 @@ class GraphArcadeDBAdapter:
         other = "inV" if directed else "otherV"
         query = (
             f'g.V().has("id",{src_lit}).{step}({label_lit}).has("reverted",false)'
-            f'.where({other}().has("id",{tgt_lit})).elementMap()'
+            f'.hasNot("superseded_by").where({other}().has("id",{tgt_lit})).elementMap()'
         )
         results = await self._client.gremlin(query, session_id=session_id)
         return results[0] if results else None
@@ -347,6 +354,18 @@ class GraphArcadeDBAdapter:
         return merge_provenance(Provenance.model_validate(existing) if existing else None, incoming)
 
     @staticmethod
+    def _merge_properties(existing: dict[str, Any], write: NodeWrite | EdgeWrite) -> dict[str, Any]:
+        """The shared rule (`schemas.merge.merge_properties`): the latest write's properties, unless
+        it would lower an asserted element."""
+        stored = existing.get("provenance")
+        return merge_properties(
+            existing.get("properties"),
+            write.properties,
+            existing_provenance=Provenance.model_validate(stored) if stored else None,
+            incoming_provenance=write.provenance,
+        )
+
+    @staticmethod
     def _merge_interval(existing: object, incoming: Interval | None) -> Interval | None:
         return merge_interval(Interval.model_validate(existing) if existing else None, incoming)
 
@@ -384,6 +403,7 @@ class GraphArcadeDBAdapter:
                 merged_provenance = self._merge_provenance(
                     existing.get("provenance"), write.provenance
                 )
+                merged_properties = self._merge_properties(existing, write)
                 merged_datasets = merge_datasets(existing.get("datasets"), write.datasets)
                 merged_handling = self._merge_handling(existing, write.handling)
                 existing_audit = AuditStub.model_validate(existing["audit"])
@@ -400,6 +420,7 @@ class GraphArcadeDBAdapter:
                 merged_occurrences = write.occurrences
                 merged_interval = write.interval
                 merged_provenance = write.provenance
+                merged_properties = write.properties
                 merged_datasets = merge_datasets(None, write.datasets)
                 merged_handling = write.handling
                 audit = AuditStub(
@@ -424,6 +445,7 @@ class GraphArcadeDBAdapter:
             corpus_totals[type_name] = components.corpus_total_occurrences
             merged_write = write.model_copy(
                 update={
+                    "properties": merged_properties,
                     "occurrences": merged_occurrences,
                     "interval": merged_interval,
                     "provenance": merged_provenance,

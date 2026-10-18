@@ -356,6 +356,17 @@ to `asserted`. There is no automatic promotion, no confidence threshold above wh
 decides on the analyst's behalf. An intelligence product that cannot distinguish what a machine
 guessed from what a document says is not usable as evidence.
 
+**Nor is there automatic demotion.** A write that is not `asserted`, arriving for an element already
+stored as `asserted` — a resolution run re-scoring a pair an analyst linked by hand, a model
+re-extracting a link an analyst confirmed — merges its sources (and, for an edge, its occurrences
+and interval), but the stored state, `confirmed_by`, `last_confirmed` and properties stay exactly as
+they were; the model's write adds no property either, so a manual link's `model_version` stays
+absent. Only an analyst's own action changes what an analyst decided. Between two writes of the
+same state the latest write's properties still win (`schemas.merge.keeps_asserted`; failing tests:
+`test_an_inferred_write_never_lowers_an_asserted_same_as_link` in the graph conformance suite, and
+`test_an_inferred_write_never_lowers_an_asserted_pair_on_either_path` for the upsert and bulk paths
+together).
+
 ### 2.2 Handling
 
 ```python
@@ -598,7 +609,10 @@ Storing every call as its own edge makes the graph unusable; storing only a summ
 temporal analysis impossible. Do both:
 
 - The **graph store** holds one summarised edge per pair per type, with `occurrences`, an
-  `interval` spanning first to last, and a `weight`.
+  `interval` spanning first to last, and a `weight`. A superseded edge is no longer the pair's
+  edge: a later write for the pair merges into its replacement, never into the superseded one,
+  which every default read excludes
+  (`test_a_write_after_supersede_merges_into_the_replacement_edge`).
 - The **analytics store** holds the event rows: `(event_id, edge_id, source_id, target_id, ts,
   duration, cell_site, lat, lon, direction, properties)`, one row per call, message, transaction
   or sighting.
