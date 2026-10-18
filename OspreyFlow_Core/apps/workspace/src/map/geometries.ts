@@ -7,6 +7,7 @@
 import type {
   GeometryRecord,
   Node,
+  OntologySchema,
 } from "../../../../packages/schemas/generated";
 import { fetchGeometries } from "../analytics/api";
 import type { WorkingSetGraph } from "../workingset/store";
@@ -19,17 +20,33 @@ function geometryRefOf(node: Node): string | null {
   return typeof ref === "string" ? ref : null;
 }
 
-/** Every working-set `Location` node with a `geometry_ref`, keyed by node
+/** The entity types the map places: `Location`, and every type the ontology declares a
+ * `geometry_ref` on — a FIBO `Account`, whose branch point was given it "so the money flow itself
+ * draws on the map" (ADR-108 Amendment 4), which the map never read until ADR-117's
+ * demonstration found it plotting no account at all. A type that declares no `geometry_ref` (a
+ * `Person`) is never placed, whatever a node of it happens to carry. */
+export function placeableTypes(schema: OntologySchema | null): ReadonlySet<string> {
+  const types = new Set(["Location"]);
+  for (const entity of schema?.entity_types ?? []) {
+    if (entity.properties?.some((p) => p.name === "geometry_ref")) types.add(entity.name);
+  }
+  return types;
+}
+
+const ONLY_LOCATIONS: ReadonlySet<string> = new Set(["Location"]);
+
+/** Every working-set node of a placeable type with a `geometry_ref`, keyed by node
  * id — a `Location` with none (a jurisdiction/boundary with no single
  * point, per `packages/ontology/default.yaml`'s own comment) is simply
  * absent from the result, same as one this partition has no row for. */
 export function locationGeometryRefs(
   graph: WorkingSetGraph,
+  placeable: ReadonlySet<string> = ONLY_LOCATIONS,
 ): Map<string, string> {
   const refs = new Map<string, string>();
   graph.forEachNode((nodeId, attrs) => {
     const node = attrs.data;
-    if (node.type !== "Location") return;
+    if (!placeable.has(node.type)) return;
     const ref = geometryRefOf(node);
     if (ref) refs.set(nodeId, ref);
   });
@@ -45,8 +62,9 @@ export async function resolveNodeCoordinates(
   apiBaseUrl: string,
   bearerToken: string,
   graph: WorkingSetGraph,
+  placeable: ReadonlySet<string> = ONLY_LOCATIONS,
 ): Promise<Map<string, { lat: number; lng: number }>> {
-  const refsByNode = locationGeometryRefs(graph);
+  const refsByNode = locationGeometryRefs(graph, placeable);
   const coordinates = new Map<string, { lat: number; lng: number }>();
   if (refsByNode.size === 0) return coordinates;
 

@@ -61,7 +61,7 @@ import { QueryBuilderPanel } from "./patterns/QueryBuilderPanel";
 import { seedElements } from "./connections/connectionsApi";
 import { FindConnectionsPanel } from "./connections/FindConnectionsPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
-import { resolveNodeCoordinates } from "./map/geometries";
+import { placeableTypes, resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
 import { defaultProvider, fetchMapConfig } from "./map/providers";
@@ -444,6 +444,10 @@ export function App() {
     null,
   );
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  // The types the map places (`placeableTypes`): read by the working-set subscription, which is
+  // registered once, so a ref rather than the schema state it is worked out from.
+  const placeableRef = useRef<ReadonlySet<string>>(placeableTypes(null));
+  placeableRef.current = placeableTypes(ontologySchema);
   /** ADR-100: an Explore item does what choosing a search result does: draws it and selects it. */
   const pickToStart = (node: Node) => {
     drawSearchResult(workingSetRef.current.store, node, glassCanvasRef.current);
@@ -805,6 +809,7 @@ export function App() {
         API_BASE_URL,
         bearerToken,
         workingSet.graph,
+        placeableRef.current,
       ).then(setNodeCoordinates);
     });
 

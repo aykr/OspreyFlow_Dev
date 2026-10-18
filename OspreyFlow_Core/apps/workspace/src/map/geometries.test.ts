@@ -9,6 +9,7 @@ import type {
 } from "../workingset/store";
 import {
   locationGeometryRefs,
+  placeableTypes,
   polygonCentroid,
   resolveNodeCoordinates,
 } from "./geometries";
@@ -50,6 +51,32 @@ describe("locationGeometryRefs", () => {
     ]);
     expect(locationGeometryRefs(graph)).toEqual(
       new Map([["loc-1", "geo-abc"]]),
+    );
+  });
+});
+
+describe("placeableTypes", () => {
+  it("places Location and every type that declares a geometry_ref, and no other", () => {
+    const schema = {
+      version: 16,
+      entity_types: [
+        { name: "Location", properties: [{ name: "geometry_ref", type: "string" }] },
+        { name: "Account", properties: [{ name: "geometry_ref", type: "string" }] },
+        { name: "Person", properties: [{ name: "family_name", type: "string" }] },
+      ],
+      edge_types: [],
+    } as unknown as Parameters<typeof placeableTypes>[0];
+    expect([...placeableTypes(schema)].sort()).toEqual(["Account", "Location"]);
+    expect([...placeableTypes(null)]).toEqual(["Location"]);
+  });
+
+  it("puts an account on the map when its type declares a place, never a person", () => {
+    const graph = buildGraph([
+      ["acct-1", { data: node("Account", { geometry_ref: "geo-branch" }) }],
+      ["person-1", { data: node("Person", { geometry_ref: "geo-xyz" }) }],
+    ]);
+    expect(locationGeometryRefs(graph, new Set(["Location", "Account"]))).toEqual(
+      new Map([["acct-1", "geo-branch"]]),
     );
   });
 });
