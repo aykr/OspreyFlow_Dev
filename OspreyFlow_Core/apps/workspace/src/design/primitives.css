@@ -518,7 +518,9 @@
 .canvas-legend__list li { display: flex; justify-content: space-between; gap: var(--sp-8); color: var(--text-primary); }
 .canvas-legend__links { border-top: 1px solid var(--border-subtle); padding-top: var(--sp-6); }
 .canvas-legend__link { display: flex; align-items: center; gap: var(--sp-6); cursor: pointer; }
-.canvas-legend__link input { margin: 0; accent-color: var(--brass); }
+/* 24 by 24, the Glass's minimum target (ADR-097 step 3); not brass, which is for the primary action
+   and focus only (DESIGN.md §3.2). */
+.canvas-legend__link input { margin: 0; width: 24px; height: 24px; flex: none; accent-color: var(--text-secondary); }
 .canvas-legend__swatch { flex: none; width: 14px; height: 3px; border-radius: 2px; }
 /* The canvas toolbar (ADR-097 step 2, design review item 12): one docked row along the canvas's top
    edge, a hairline below and no shadow (DESIGN.md §6); labelled groups, the Show group one segmented
