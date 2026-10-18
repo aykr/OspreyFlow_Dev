@@ -16,6 +16,7 @@ own `StudioRecipeNotFoundError`/`StudioRecipeNotADraftError` discipline.
 from __future__ import annotations
 
 import csv
+from pathlib import Path
 
 from pydantic import ValidationError
 from services.ingest.connectors.csv_connector import read_csv
@@ -26,6 +27,8 @@ from schemas.connectors import ConnectorProfile, load_connector_profiles
 from schemas.domain import Handling, Principal
 from schemas.ingest import CONNECTORS_DIR, RecipeConnector, StudioRecipeDraft
 from schemas.profile import SourceProfile
+
+from .ingest_sources import ingest_root, is_inside
 
 
 #: **Derived from the profile files, not a literal** (round 13bf). This used to be a second,
@@ -52,6 +55,23 @@ class ConnectorNotAvailableError(Exception):
 class SourceUnreadableError(Exception):
     """Raised when `source_location` cannot be opened as the declared
     connector expects — missing file, permissions, or a decoding failure."""
+
+
+def _confined(location: str) -> str:
+    """The source file, only if it is inside the ingest folder (`ingest_sources.ingest_root`) —
+    the one place the picker, an upload and the folder watch put a file. Resolved first, so a `..`
+    walk or a link inside the folder to a file outside it is judged by where it really leads.
+    Refused before anything is opened or stat'd, in words that do not depend on whether the path
+    exists or name it, so the refusal cannot be used to learn which files are on the server (the
+    security review, 18 October 2026). Every read of a recipe's source passes through here:
+    Profile, Map, Verify, a run and a publish all read with `_read_rows`."""
+    root = ingest_root()
+    if not is_inside(root, Path(location).resolve()):
+        raise SourceUnreadableError(
+            "That file is not in the ingest folder. "
+            "Choose it from the folder's files, or upload it."
+        )
+    return location
 
 
 class SourceHandlingIncompleteError(Exception):
@@ -120,12 +140,13 @@ def _read_rows(recipe: StudioRecipeDraft) -> list[dict[str, str]]:
     # `source_location` is set — `schemas.ingest.
     # StudioRecipeDraft._compute_ready_for_profile`.
     assert recipe.source_location is not None
+    source = _confined(recipe.source_location)
     try:
         # The profile's own delimiter/encoding, not the reader's defaults: a layout that declares
         # a semicolon separator was being read as one column before this, and profiled as such.
         return list(
             read_csv(
-                recipe.source_location,
+                source,
                 delimiter=profile.delimiter,
                 encoding=profile.encoding,
             )

@@ -251,3 +251,13 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         # test — so it is printed and the exit status is set, rather than thrown into the void.
         print(f"\nERROR: {leaked}")
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
+@pytest.fixture(autouse=True)
+def _ingest_root_for_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A recipe's source is read only from inside `OSPREY_INGEST_ROOT` (`studio_profile._confined`,
+    the security review of 18 October 2026). Most tests read a temporary file or an in-repo
+    fixture and are not about where a source may live, so the root is the whole filesystem for
+    them unless a test sets its own — `tests/services/api/test_source_confinement.py` does, and
+    proves the refusals with a real root."""
+    monkeypatch.setenv("OSPREY_INGEST_ROOT", "/")

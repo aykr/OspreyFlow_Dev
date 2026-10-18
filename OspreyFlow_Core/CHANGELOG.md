@@ -23,6 +23,9 @@ update. Work not yet in a release is listed under *Unreleased*.
   map, where the prison, its yards and the outside towns are places. Everything in it is invented.
   A deployment that added HMP before this release gains the
   network with `ospreyflow demo add hmp`; the people and incidents it has are not added twice.
+- **Security: a pipeline reads its source only from the ingest folder.** A pipeline author could
+  give a draft any server path and read the file back as sample rows; a path outside the ingest
+  folder is now refused, whether or not it exists. Every deployment on v0.1.x should update.
 - **Fixed: an account is on the map where it is held, and a payment draws as a line.** The map
   placed only locations, so an account's branch point was never shown.
 - **Fixed: the legend no longer runs over the open timeline;** it scrolls inside the canvas.

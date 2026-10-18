@@ -115,6 +115,13 @@ the custody links: shared cell, co-defendant, conflict and visit), or cyber thre
 Connectors are **profiles**, following the same pattern as map providers (ADR-016): a validated
 YAML file in `connectors/`, so adding a new carrier's CDR layout is a file rather than a release.
 
+**A source file is read only from inside the ingest folder** (`OSPREY_INGEST_ROOT`), wherever its
+location came from — the picker, an upload, the folder watch, or a location a client sends on a
+draft or a run. The location is resolved (a `..` walk, a link to elsewhere) before it is judged,
+and one outside the folder is refused before anything is opened, in words that neither name the
+path nor depend on whether it exists (the security review, 18 October 2026: a pipeline author could
+read any file the server could; `tests/services/api/test_source_confinement.py`).
+
 ### Structured connector catalogue
 
 | Group | Sources | Notes |
