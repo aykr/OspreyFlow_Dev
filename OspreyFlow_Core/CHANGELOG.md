@@ -6,6 +6,30 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.2.0 — 2026-10-18
+
+- **Prison and custody cases.** The crime case analysis pack (NIEM) gains an **incident** — an
+  assault, a disorder or a find, with what was found and when — and the links a prison intelligence
+  analyst works with: **shared a cell with** (the cell and the dates), **co-defendant of**, **in
+  conflict with** (the reason), **visited** (in person or by video), and a person's **role in** an
+  incident. Each link type has its own colour. The core model is unchanged, so no pipeline needs
+  republishing.
+- **The legend lists the links in view and filters them.** Under the types, each link type in its
+  colour with how many, and a box to leave the type out of the view or bring it back.
+- **The HMP demonstration case is a prison intelligence network.** Around its principal subject and
+  relay group: cell histories, co-defendants, conflicts (one known only from intelligence, and so
+  SECRET), incidents with who was involved, visitors in person and by video, prison-phone and outside
+  numbers with their calls, and accounts with their payments — on the graph, the timeline and the
+  map. Everything in it is invented. A deployment that added HMP before this release gains the
+  network with `ospreyflow demo add hmp`; the people and incidents it has are not added twice.
+- **Fixed: a resolution run no longer undoes an analyst's link.** A model's later match of a pair an
+  analyst had linked by hand (or confirmed) replaced the link's confirmation and score with the
+  model's, so the pair could stop showing as one. An analyst's decision now stands until an analyst
+  changes it.
+- **Fixed: new evidence for a corrected link is kept.** Once a link had been corrected or confirmed,
+  a later load touching the same pair could add its evidence to the old version, which no view
+  shows. It now goes to the current link.
+
 ## v0.1.1 — 2026-10-15
 
 - **The Glass stays responsive while a large case's icons load.** When a node icon finished

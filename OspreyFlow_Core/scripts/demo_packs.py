@@ -72,8 +72,9 @@ ENRON_SHA256 = "b3da1b3fe0369ec3140bb4fbce94702c33b7da810ec15d718b3fadf5cd748ca7
 
 _DESCRIPTIONS: dict[str, _Description] = {
     "hmp": _Description(
-        "HMP — organised crime (synthetic)",
-        "A prison's people, phones, calls, visits and places.",
+        "HMP — prison intelligence (synthetic)",
+        "A prison's people and places, cell shares, co-defendants, conflicts, incidents, visits, "
+        "phones, calls and payments.",
         "HMP fixture (synthetic demo)",
     ),
     "fixture-corp": _Description(

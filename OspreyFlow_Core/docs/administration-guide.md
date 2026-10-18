@@ -11,10 +11,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.5** · 2026-10-15 · For OspreyFlow v0.1.0 · Issued
+**Version 1.6** · 2026-10-18 · For OspreyFlow v0.2.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.6 | 2026-10-18 | §11: the HMP pack as a prison intelligence network, and adding it again after an update. |
 | 1.5 | 2026-10-15 | A cover page, contents, a list of figures, and this version history. |
 | 1.4 | 2026-10-15 | §16: a model download that stopped with `rename …-partial …`, and how to finish it. |
 | 1.3 | 2026-10-15 | §11: the Enron email corpus as an optional download, with its safeguards. |
@@ -454,14 +455,16 @@ shows each role's model, where it runs, and a notice that case content then leav
 
 | Id | What it shows | How it arrives |
 | --- | --- | --- |
-| `hmp` | Organised crime: a prison's people, phones, calls, visits and places (synthetic) | Generated |
+| `hmp` | Prison intelligence: a prison's people and places, cell shares, co-defendants, conflicts, incidents, visits in person and by video, phones, calls and payments (synthetic) | Generated |
 | `fixture-corp` | Network shapes, and duplicate records matched without being merged (synthetic) | Generated |
 | `operation-ledger` | Preventive AML: a structuring ring, onboarding screened before it commits, ownership through a trust (synthetic) | Generated |
 | `paysim` | Mobile-money fraud: 6.36 million simulated transactions with fraud labels | Downloaded by you |
 | `enron` | **Real data**: about 150 people's real email at Enron, 1998–2002 — who wrote to whom, when, and about what | Downloaded by you; accepted before it loads; never by an install |
 
 Choose them at install (`demo_packs`), or later: `ospreyflow demo list`, `ospreyflow demo add
-<id>`. Each loads into its own case, with the installing administrator as Author. **PaySim** is a
+<id>`. Each loads into its own case, with the installing administrator as Author. Adding **HMP**
+again is safe: a deployment that loaded it before v0.2.0 gains only its prison network, in the same
+case, and one that already has the network is left as it is. **PaySim** is a
 download: get `PS_20174392719_1491204439457_log.csv` from its Kaggle page and pass it with
 `ospreyflow demo add paysim --file <path>`; it is checked by size and checksum before anything
 starts. PaySim is CC BY-SA 4.0 (E. A. Lopez-Rojas, A. Elmir and S. Axelsson, 2016); its licence and

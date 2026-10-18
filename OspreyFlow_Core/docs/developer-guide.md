@@ -11,10 +11,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.1** · 2026-10-15 · For OspreyFlow v0.1.0 · Issued
+**Version 1.2** · 2026-10-18 · For OspreyFlow v0.2.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.2 | 2026-10-18 | §3.3: the NIEM pack's incidents and custody links. |
 | 1.1 | 2026-10-15 | A cover page, contents, a list of figures, and this version history. |
 | 1.0 | 2026-10-14 | First issue, with screenshots. |
 
@@ -116,7 +117,7 @@ and may add one pack over it:
 | --- | --- |
 | Bespoke POLE | The core only |
 | Financial fraud and AML (FIBO) | Account; registered at, beneficial owner of (with a percentage and nature), controls, holds account |
-| Crime case analysis (NIEM) | Used as, role in — each with a required role |
+| Crime case analysis (NIEM) | Incident (name, category: assault, disorder, find or other; item; when); used as, role in — each with a required role; shared a cell with (cell, dates), co-defendant of (case reference), in conflict with (reason, dates), visited (in person or video, dates) |
 | Cyber threat analytics (STIX 2.1) | ThreatActor, Campaign, Malware, Vulnerability, Infrastructure; attributed to, targets, indicates, compromises |
 
 A pack only adds types, or widens which types a link may join; it cannot change the core.
