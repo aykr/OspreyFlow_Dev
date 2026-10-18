@@ -348,7 +348,7 @@ def plan_network(seed: int = 117) -> NetworkPlan:
             )
         )
 
-    shared = account(PAYER, "SYN-40001", institution="Fictional Bank", name="L. Dunmore current")
+    shared = account(PAYER, "SYN-40001", institution="Fictional Bank", name="K. Brannigan current")
     assert shared == SHARED_ACCOUNT
     coordinator_account = account(
         COORDINATOR, "SYN-40002", institution="Fictional Bank", name="D. Ashworth current"

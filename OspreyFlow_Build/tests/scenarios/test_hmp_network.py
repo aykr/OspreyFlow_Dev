@@ -191,3 +191,15 @@ def test_the_prison_is_where_its_yards_are() -> None:
     lons = [lon for _, lon in _YARD_COORDINATES.values()]
     assert min(lats) <= PRISON_POINT[0] <= max(lats)
     assert min(lons) <= PRISON_POINT[1] <= max(lons)
+
+
+def test_an_account_is_named_after_the_person_who_holds_it() -> None:
+    """Catches an account's display name naming someone other than its holder — the demonstration
+    reads the name aloud while pointing at the holder."""
+    plan = plan_network()
+    people = {n.key: n.properties for n in plan.nodes if n.type == "Person"}
+    names = {n.key: n.properties["name"] for n in plan.nodes if n.type == "Account"}
+    for edge in plan.edges:
+        if edge.type == "HOLDS_ACCOUNT" and edge.source in people:
+            holder = people[edge.source]
+            assert holder["family_name"].title() in names[edge.target], (edge.target, holder)
