@@ -104,7 +104,8 @@ what was published. The run of a pipeline answers a `PipelineRunReport`: every b
 
 The domain-model node names the ontology overlay the pipeline is built against: the POLE core
 (`pole`), or the core plus one pack — financial fraud and AML (`fibo`), justice and public safety
-roles (`niem`, role-edges with validity intervals per ruling Q4), or cyber threat analytics
+roles (`niem`, role-edges with validity intervals per ruling Q4, and since ADR-117 incidents and
+the custody links: shared cell, co-defendant, conflict and visit), or cyber threat analytics
 (`stix`). A pack only ever *adds* entity and edge types or widens an existing edge's ends
 (`extends: true`); a collision with the core is refused at load. The catalogue is served by
 `GET /v1/ingest/packs` and offered in the Studio's domain panel.

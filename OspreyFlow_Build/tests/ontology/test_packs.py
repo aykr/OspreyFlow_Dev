@@ -11,6 +11,7 @@ channel-and-shape rule fails `test_every_pack_composes_cleanly_over_the_core`.
 from __future__ import annotations
 
 import pytest
+
 from ontology.errors import OntologyError
 from ontology.loader import load_default_ontology
 from ontology.packs import PACK_NAMES, compose_with_packs
@@ -78,10 +79,16 @@ def test_an_entity_name_collision_is_refused() -> None:
         compose_with_packs(doubled, ["fibo"])
 
 
-def test_an_edge_collision_without_extends_is_refused() -> None:
+def test_an_edge_collision_without_extends_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     core = load_default_ontology()
     once = compose_with_packs(core, ["niem"])
-    # NIEM's USED_AS is a definition, not an extension; composing it twice redefines it.
+    # NIEM's USED_AS is a definition, not an extension; composing it twice redefines it. NIEM's
+    # second pass is given without its entity types (ADR-117's `Incident` would collide first, by
+    # the other rule), so it is the edge that is refused here.
+    import ontology.packs as packs
+
+    real_load = packs.load_pack
+    monkeypatch.setattr(packs, "load_pack", lambda name: {**real_load(name), "entity_types": []})
     with pytest.raises(OntologyError, match="USED_AS"):
         compose_with_packs(once, ["niem"])
 
@@ -110,3 +117,32 @@ def test_the_deployment_ontology_is_the_core_composed_with_every_pack() -> None:
     transacted = next(edge for edge in deployed.edge_types if edge.name == "TRANSACTED")
     assert "Account" in transacted.from_types and "Account" in transacted.to_types
     assert len(PACK_NAMES) == 3
+
+
+def test_niem_brings_the_custody_links_and_incidents() -> None:
+    """ADR-117: a prison network's links are told apart by type — shared cell, co-defendant,
+    conflict, visit — and an incident is a node with a name, category and date. Catches one of them
+    going missing, losing the property the demo and the analyst's filter rely on, or landing in the
+    core (which would move the core's version and flag every published recipe)."""
+    core = load_default_ontology()
+    composed = compose_with_packs(core, ["niem"])
+    edges = {e.name: e for e in composed.edge_types}
+    entities = {e.name: e for e in composed.entity_types}
+
+    for name in ("SHARED_CELL_WITH", "CO_DEFENDANT_OF", "IN_CONFLICT_WITH", "VISITED"):
+        assert name not in {e.name for e in core.edge_types}, f"{name} belongs in the pack"
+        assert edges[name].from_types == ["Person"] and edges[name].to_types == ["Person"]
+        assert edges[name].colour is not None, f"{name} needs a colour to be told apart"
+    assert not edges["SHARED_CELL_WITH"].directed and edges["SHARED_CELL_WITH"].temporal
+    assert not edges["CO_DEFENDANT_OF"].directed
+    assert not edges["IN_CONFLICT_WITH"].directed
+    assert edges["VISITED"].directed and edges["VISITED"].temporal
+    channel = next(p for p in edges["VISITED"].properties if p.name == "channel")
+    assert channel.values == ["in_person", "video"]
+
+    incident = entities["Incident"]
+    assert incident.pole_class == "event" and "incident_ref" in incident.identifiers
+    category = next(p for p in incident.properties if p.name == "category")
+    assert category.values == ["assault", "disorder", "find", "other"]
+    assert {"name", "item", "occurred_at"} <= {p.name for p in incident.properties}
+    assert "Incident" in edges["ROLE_IN"].to_types and "Event" in edges["ROLE_IN"].to_types

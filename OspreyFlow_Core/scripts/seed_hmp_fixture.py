@@ -55,8 +55,9 @@ from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
 from demo_fixtures.datasets import HMP
 from demo_fixtures.hmp_graph import build_hmp_graph
+from demo_fixtures.hmp_network import write_hmp_network
 from ontology.handling import load_uk_le_scheme
-from ontology.loader import load_default_ontology
+from ontology.packs import load_deployment_ontology
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.domain import Principal
@@ -90,7 +91,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 async def _run(args: argparse.Namespace) -> int:
-    ontology = load_default_ontology()
+    # ADR-117: the network's incidents and custody links are the NIEM pack's, and its accounts
+    # FIBO's, so the store gets the core and every pack, as the Ledger seed applies it.
+    ontology = load_deployment_ontology()
     scheme = load_uk_le_scheme()
 
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
@@ -111,6 +114,12 @@ async def _run(args: argparse.Namespace) -> int:
             principal=principal,
             investigation_scope=scope,
         )
+        network_events = await write_hmp_network(
+            graph=graph,
+            person_ids=result.person_node_ids,
+            principal=principal,
+            investigation_scope=scope,
+        )
         await report_ids_stored_twice(
             client,
             edge_types=[groovy_identifier(physical_type_name(e.name)) for e in ontology.edge_types],
@@ -128,6 +137,7 @@ async def _run(args: argparse.Namespace) -> int:
         analytics: AnalyticsPort = AnalyticsDuckDBAdapter(analytics_con, scheme)
         await analytics.load_events(result.current_window_events)
         await analytics.load_events(result.prior_period_events)
+        await analytics.load_events(network_events)
     finally:
         analytics_con.close()
 
@@ -136,6 +146,10 @@ async def _run(args: argparse.Namespace) -> int:
         f"Loaded {len(result.current_window_events)} current-window events and "
         f"{len(result.prior_period_events)} prior-period events under "
         f"investigation_scope={scope!r}."
+    )
+    print(
+        f"Loaded {len(network_events)} network events "
+        "(calls, visits, payments, custody, incidents)."
     )
     return 0
 

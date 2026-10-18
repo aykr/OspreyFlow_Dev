@@ -13587,3 +13587,49 @@ link_and_the_fewest_degrees_do_not_move`, `…_honour_the_limit_and_say_when_mor
 and the canvas walkthrough "a route's nodes are marked on the canvas with their degree from From".
 **Unmeasured:** a search that finds nothing walks every simple route up to six links; on a dense
 store (Enron's hubs) that may be slow, as the Pathfinder's six-hop search already may be.
+
+## ADR-117 — Custody links in the NIEM pack, and the HMP pack drawn as a prison intelligence network — ACCEPTED (design)
+
+Status: **ACCEPTED by the owner, 18 October 2026** ("yes, go ahead with the new link types"), for
+a demonstration to analysts who work a prison network in i2 and in a purpose-built network viewer.
+
+**Context.** A prison intelligence analyst's network is drawn from custody records as much as from
+communications: who shared a cell, who stood trial together, who is kept apart, who was involved in
+an incident, who visits whom (in person or by video call), whose phone numbers and bank accounts
+overlap. The core ontology has `ASSOCIATE_OF` but no way to say *which* of these a link is, so the
+"links to include" filter such an analyst works with could not be offered. The HMP demo pack
+(Scenario A) carried yards, incidents, families, groups, associates and reports, but none of the
+phones, calls, visits or payments its own pack description names.
+
+**Decisions.**
+
+1. **The NIEM pack gains them (pack version 2), not the core.** NIEM is the pack already named
+   "Crime case analysis", and its corrections and justice domains own these ideas; ADR-108's packs
+   only add, so the core stays at version 16 and no published recipe is flagged. Added:
+   - `Incident` — an entity of `pole_class: event` (plum hexagon, shield icon) with `name`,
+     `category` (assault, disorder, find, other), `item`, `occurred_at` and the identifier
+     `incident_ref`. The core `Event` declares no properties, so an incident written as one would
+     have no name, kind or date to show; a pack may add an entity type but not a core property.
+   - `ROLE_IN` reaches `Incident` as well as `Event`; the person's part is its required `role`.
+   - `SHARED_CELL_WITH` (undirected, temporal, `cell`), `CO_DEFENDANT_OF` (undirected,
+     `case_ref`), `IN_CONFLICT_WITH` (undirected, temporal, `reason`), and `VISITED` (person to
+     person, directed visitor to visited, temporal, `channel`: in person or video).
+   Each new link type carries a channel colour (ADR-081), so the network reads by link type as the
+   analyst's own tools do. Phones and bank links need nothing new: `USES` and `COMMUNICATED_WITH`
+   (core), `HOLDS_ACCOUNT` and `TRANSACTED` (FIBO).
+2. **The HMP pack is seeded against the deployment ontology** (core and every pack,
+   ADR-108 Amendment 4), as the Ledger pack already is, and gains a synthetic custody network
+   around its principal subject and relay group: cell histories, co-defendants, conflicts, incident
+   involvement, visitors in person and by video, prison-phone and outside numbers with calls, and
+   accounts with payments. The calls, visits and payments are also analytics events, dated and
+   with a place, so the timeline, the map and the dashboards show them. Every name, number, account
+   and place is invented (rule 9); the prison is the fixture's own HMP Hollywood.
+
+**Cost.** Five more link types and one entity type in the pack. `pack_version` is recorded but no
+code reads it yet — ADR-108's "a pack bump flags recipes exactly as a core bump does" is not
+enforced by anything (logged in `07_BUILD_PLAN.md`'s gaps, rule 12); with only additions here,
+nothing a recipe wrote before can be refused after.
+
+**Tests that fail if this is violated.** `tests/ontology/test_packs.py`
+(`test_niem_brings_the_custody_links_and_incidents`), and the HMP network's shape tests
+(`tests/scenarios/test_hmp_network.py`).
