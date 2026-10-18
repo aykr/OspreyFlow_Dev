@@ -54,12 +54,14 @@ from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
 from demo_fixtures.datasets import HMP
-from demo_fixtures.hmp_graph import build_hmp_graph
-from demo_fixtures.hmp_network import write_hmp_network
+from demo_fixtures.hmp_graph import build_hmp_graph, lookup_person_ids
+from demo_fixtures.hmp_network import FIRST_INCIDENT_REF, write_hmp_network
+from demo_fixtures.hmp_population import PRINCIPAL_SUBJECT_PRISON_NUMBER
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
+from schemas.analytics import EventRecord
 from schemas.domain import Principal
 
 
@@ -107,19 +109,43 @@ async def _run(args: argparse.Namespace) -> int:
     principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
     scope = await scope_for(args, seeder=principal, dataset=HMP)
 
+    # ADR-117: safe to run again. A deployment seeded before the network existed (v0.1.x) has the
+    # population already; writing it again would add every incident a second time, so then only
+    # the network is written. One that has the network too is left as it is.
+    events: list[EventRecord] = []
     try:
-        result = await build_hmp_graph(
-            graph=graph,
-            ontology=ontology,
-            principal=principal,
-            investigation_scope=scope,
-        )
+        if await graph.find_node("Incident", "incident_ref", FIRST_INCIDENT_REF, principal):
+            print("The HMP pack and its network are already here; nothing to add.")
+            return 0
+        if await graph.find_node(
+            "Person", "prison_number", PRINCIPAL_SUBJECT_PRISON_NUMBER, principal
+        ):
+            person_ids = await lookup_person_ids(graph, principal)
+            print(
+                f"The HMP population is already here ({len(person_ids)} people); "
+                "adding its network."
+            )
+        else:
+            result = await build_hmp_graph(
+                graph=graph,
+                ontology=ontology,
+                principal=principal,
+                investigation_scope=scope,
+            )
+            person_ids = result.person_node_ids
+            events += result.current_window_events + result.prior_period_events
+            print(
+                f"Seeded {len(person_ids)} Person nodes, {len(result.yard_node_ids)} yards, "
+                f"{len(result.current_window_events)} current-window and "
+                f"{len(result.prior_period_events)} prior-period incident events."
+            )
         network_events = await write_hmp_network(
             graph=graph,
-            person_ids=result.person_node_ids,
+            person_ids=person_ids,
             principal=principal,
             investigation_scope=scope,
         )
+        events += network_events
         await report_ids_stored_twice(
             client,
             edge_types=[groovy_identifier(physical_type_name(e.name)) for e in ontology.edge_types],
@@ -135,21 +161,13 @@ async def _run(args: argparse.Namespace) -> int:
         create_events_table(analytics_con)
         create_geometries_table(analytics_con)
         analytics: AnalyticsPort = AnalyticsDuckDBAdapter(analytics_con, scheme)
-        await analytics.load_events(result.current_window_events)
-        await analytics.load_events(result.prior_period_events)
-        await analytics.load_events(network_events)
+        await analytics.load_events(events)
     finally:
         analytics_con.close()
 
-    print(f"Seeded {len(result.person_node_ids)} Person nodes, {len(result.yard_node_ids)} yards.")
     print(
-        f"Loaded {len(result.current_window_events)} current-window events and "
-        f"{len(result.prior_period_events)} prior-period events under "
-        f"investigation_scope={scope!r}."
-    )
-    print(
-        f"Loaded {len(network_events)} network events "
-        "(calls, visits, payments, custody, incidents)."
+        f"Loaded {len(network_events)} network events (calls, visits, payments, custody, "
+        f"incidents); {len(events)} events in all under investigation_scope={scope!r}."
     )
     return 0
 

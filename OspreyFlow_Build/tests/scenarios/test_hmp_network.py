@@ -169,3 +169,13 @@ def test_no_identifier_could_be_a_real_one() -> None:
         re.fullmatch(r"prisoner:\d+", e.source) or not e.source.startswith("prisoner")
         for e in plan.edges
     )
+
+
+def test_the_seed_s_marker_incident_is_one_the_plan_writes() -> None:
+    """`seed_hmp_fixture` takes `FIRST_INCIDENT_REF` in a store to mean the network is there, and
+    writes nothing. Catches the marker naming an incident the plan never writes: a second run would
+    then write the whole network again."""
+    from demo_fixtures.hmp_network import FIRST_INCIDENT_REF
+
+    refs = [n.properties["incident_ref"] for n in plan_network().nodes if n.type == "Incident"]
+    assert refs[0] == FIRST_INCIDENT_REF

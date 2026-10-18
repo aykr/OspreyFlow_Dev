@@ -78,6 +78,8 @@ SURGE_START = date(2025, 12, 1)
 NETWORK_END = date(2026, 3, 6)
 
 _SOURCE = "hmp-network"
+#: The first incident the plan writes; its presence says the network is already in a store.
+FIRST_INCIDENT_REF = "IR-2026-0001"
 
 
 @dataclass(frozen=True)

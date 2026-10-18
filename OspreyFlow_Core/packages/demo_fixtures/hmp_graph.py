@@ -213,7 +213,9 @@ async def _lookup_yard_ids(graph: GraphPort, principal: Principal) -> dict[str, 
     return dict(pairs)
 
 
-async def _lookup_person_ids(graph: GraphPort, principal: Principal) -> dict[str, NodeId]:
+async def lookup_person_ids(graph: GraphPort, principal: Principal) -> dict[str, NodeId]:
+    """Prison number to node id for the whole population; public, since a seed run against a
+    store that already has the population finds it again rather than writing it twice."""
     async def _one(prison_number: str) -> tuple[str, NodeId]:
         node = await graph.find_node("Person", "prison_number", prison_number, principal)
         assert node is not None, f"{prison_number} was not created by hmp_persons_recipe.yaml"
@@ -316,7 +318,7 @@ async def build_hmp_graph(
         investigation_scope=investigation_scope,
     )
     yard_ids = await _lookup_yard_ids(graph, principal)
-    person_ids = await _lookup_person_ids(graph, principal)
+    person_ids = await lookup_person_ids(graph, principal)
 
     current_events = generate_hmp_events(investigation_scope=investigation_scope)
     assignment = _assign_incident_persons(current_events)
