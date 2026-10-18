@@ -55,7 +55,12 @@ from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
 from demo_fixtures.datasets import HMP
 from demo_fixtures.hmp_graph import build_hmp_graph, lookup_person_ids
-from demo_fixtures.hmp_network import FIRST_INCIDENT_REF, write_hmp_network
+from demo_fixtures.hmp_network import (
+    FIRST_INCIDENT_REF,
+    geometry_records,
+    write_hmp_network,
+    write_hmp_places,
+)
 from demo_fixtures.hmp_population import PRINCIPAL_SUBJECT_PRISON_NUMBER
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
@@ -111,19 +116,22 @@ async def _run(args: argparse.Namespace) -> int:
 
     # ADR-117: safe to run again. A deployment seeded before the network existed (v0.1.x) has the
     # population already; writing it again would add every incident a second time, so then only
-    # the network is written. One that has the network too is left as it is.
+    # the network is written. One that has the network too gains only what it lacks (its places).
     events: list[EventRecord] = []
+    network_events: list[EventRecord] = []
     try:
         if await graph.find_node("Incident", "incident_ref", FIRST_INCIDENT_REF, principal):
-            print("The HMP pack and its network are already here; nothing to add.")
-            return 0
-        if await graph.find_node(
+            print("The HMP pack and its network are already here.")
+        elif await graph.find_node(
             "Person", "prison_number", PRINCIPAL_SUBJECT_PRISON_NUMBER, principal
         ):
             person_ids = await lookup_person_ids(graph, principal)
             print(
                 f"The HMP population is already here ({len(person_ids)} people); "
                 "adding its network."
+            )
+            network_events = await write_hmp_network(
+                graph=graph, person_ids=person_ids, principal=principal, investigation_scope=scope
             )
         else:
             result = await build_hmp_graph(
@@ -139,13 +147,12 @@ async def _run(args: argparse.Namespace) -> int:
                 f"{len(result.current_window_events)} current-window and "
                 f"{len(result.prior_period_events)} prior-period incident events."
             )
-        network_events = await write_hmp_network(
-            graph=graph,
-            person_ids=person_ids,
-            principal=principal,
-            investigation_scope=scope,
-        )
+            network_events = await write_hmp_network(
+                graph=graph, person_ids=person_ids, principal=principal, investigation_scope=scope
+            )
         events += network_events
+        if await write_hmp_places(graph=graph, principal=principal):
+            print("Put the prison, its yards, the towns and the accounts on the map.")
         await report_ids_stored_twice(
             client,
             edge_types=[groovy_identifier(physical_type_name(e.name)) for e in ontology.edge_types],
@@ -162,6 +169,15 @@ async def _run(args: argparse.Namespace) -> int:
         create_geometries_table(analytics_con)
         analytics: AnalyticsPort = AnalyticsDuckDBAdapter(analytics_con, scheme)
         await analytics.load_events(events)
+        # Insert-only, keyed by ref: a point already in the partition is not loaded twice.
+        wanted = geometry_records()
+        held = {
+            record.geometry_ref
+            for record in await analytics.get_geometries(
+                [record.geometry_ref for record in wanted], principal, version=1
+            )
+        }
+        await analytics.load_geometries([r for r in wanted if r.geometry_ref not in held])
     finally:
         analytics_con.close()
 

@@ -203,3 +203,39 @@ def test_an_account_is_named_after_the_person_who_holds_it() -> None:
         if edge.type == "HOLDS_ACCOUNT" and edge.source in people:
             holder = people[edge.source]
             assert holder["family_name"].title() in names[edge.target], (edge.target, holder)
+
+
+def test_every_account_is_placed_and_money_flows_into_the_prison() -> None:
+    """The map step: a prisoner's private cash is held at the prison and an outside account in its
+    holder's home town, so a payment draws as a line into the prison. Catches an account left with
+    no place (it would not be on the map at all) or a payer drawn at the prison."""
+    from demo_fixtures.hmp_network import PRISON_REF, account_places, town_ref
+
+    plan = plan_network()
+    places = account_places(plan)
+    numbers = [n.properties["account_number"] for n in plan.nodes if n.type == "Account"]
+    assert sorted(places) == sorted(numbers)
+    assert all(places[n] == PRISON_REF for n in numbers if n.startswith("PC-"))
+    assert places["SYN-40001"] == town_ref("Luton")  # the shared payer
+    assert places["SYN-40002"] == town_ref("Birmingham")  # the coordinator
+
+
+def test_every_place_the_network_names_has_a_point() -> None:
+    """Catches a `geometry_ref` written on a node with no row in the geometry partition behind it:
+    the node would carry a place the map cannot find."""
+    from demo_fixtures.hmp_network import (
+        PRISON_REF,
+        TOWNS,
+        account_places,
+        geometry_records,
+        town_ref,
+        yard_ref,
+    )
+
+    points = {r.geometry_ref for r in geometry_records()}
+    plan = plan_network()
+    assert set(account_places(plan).values()) <= points
+    assert {town_ref(t) for t in TOWNS} | {PRISON_REF} <= points
+    assert {yard_ref(letter) for letter in "ABCDEFGHIJ"} <= points
+    assert set(plan.homes.values()) <= set(TOWNS)
+    assert len(plan.homes) == 24

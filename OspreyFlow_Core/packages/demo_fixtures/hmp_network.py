@@ -35,7 +35,7 @@ from typing import Any
 
 from conduit_common.identity import new_edge_id, new_node_id
 from ports.graph import GraphPort
-from schemas.analytics import EventRecord
+from schemas.analytics import EventRecord, GeometryKind, GeometryRecord
 from schemas.domain import (
     EdgeId,
     EdgeWrite,
@@ -119,6 +119,8 @@ class NetworkPlan:
 
     nodes: list[NodeSpec] = field(default_factory=list)
     edges: list[EdgeSpec] = field(default_factory=list)
+    #: Each visitor's home town (a `TOWNS` key), which `write_hmp_places` puts them in on the map.
+    homes: dict[str, str] = field(default_factory=dict)
 
 
 def prisoner(index: int) -> str:
@@ -173,6 +175,7 @@ def plan_network(seed: int = 117) -> NetworkPlan:
             "Birmingham" if n == 0 else "Luton" if n == 1 else rng.choice(sorted(TOWNS))
         )
         visitor_towns[key] = town
+        plan.homes[key] = town
         plan.nodes.append(
             NodeSpec(
                 key,
@@ -602,3 +605,156 @@ async def write_hmp_network(
                 )
             )
     return events
+
+
+# --- places on the map (ADR-117) ------------------------------------------------------------------
+
+#: The prison's own point and each town's, in the analytics store's geometry partition.
+PRISON_REF = "hmp:hollywood"
+PRISON_SITE = "hmp-hollywood"
+
+
+def town_ref(town: str) -> str:
+    return "hmp:town:" + town.lower().replace(" ", "-")
+
+
+def town_site(town: str) -> str:
+    return "hmp-town-" + town.lower().replace(" ", "-")
+
+
+def yard_ref(letter: str) -> str:
+    return f"hmp:yard-{letter.lower()}"
+
+
+def geometry_records() -> list[GeometryRecord]:
+    """The prison, its ten yards (at `hmp.py`'s own yard points, where their incidents are) and the
+    outside network's towns."""
+    from .hmp import _YARD_COORDINATES
+
+    points = {PRISON_REF: PRISON_POINT}
+    points.update({yard_ref(letter): point for letter, point in _YARD_COORDINATES.items()})
+    points.update({town_ref(town): point for town, point in TOWNS.items()})
+    return [
+        GeometryRecord(
+            geometry_ref=ref, version=1, kind=GeometryKind.POINT, lat=lat, lon=lon,
+            source_crs="EPSG:4326", source_x=lon, source_y=lat, handling=_handling(),
+        )
+        for ref, (lat, lon) in points.items()
+    ]
+
+
+def account_places(plan: NetworkPlan) -> dict[str, str]:
+    """Account number to the geometry ref of where it is held: a prisoner's private cash at the
+    prison, an outside account in its holder's home town — so a payment draws on the map as money
+    flowing into the prison."""
+    numbers = {n.key: n.properties["account_number"] for n in plan.nodes if n.type == "Account"}
+    places: dict[str, str] = {}
+    for edge in plan.edges:
+        if edge.type == "HOLDS_ACCOUNT" and edge.target in numbers:
+            holder = edge.source
+            places[numbers[edge.target]] = (
+                PRISON_REF if holder.startswith("prisoner:") else town_ref(plan.homes[holder])
+            )
+    return places
+
+
+async def write_hmp_places(
+    *,
+    graph: GraphPort,
+    principal: Principal,
+    plan: NetworkPlan | None = None,
+) -> bool:
+    """Puts the network on the map, on a store that already holds it: HMP Hollywood and the towns
+    as `Location`s, each visitor present at their home town (a residency, `01_DOMAIN_MODEL.md`
+    §3), and a `geometry_ref` on the yards and the accounts. Additive and run once: `False`, with
+    nothing written, when HMP Hollywood is already a place. The caller loads
+    `geometry_records()`."""
+    plan = plan if plan is not None else plan_network()
+    if await graph.find_node("Location", "site_ref", PRISON_SITE, principal):
+        return False
+    now = datetime.now(UTC)
+
+    def location(site: str, name: str, ref: str) -> NodeWrite:
+        return NodeWrite(
+            id=new_node_id(), type="Location",
+            properties={"site_ref": site, "name": name, "geometry_ref": ref},
+            provenance=_provenance(f"place:{site}"), handling=_handling(),
+            created_by=principal.id, created_at=now, load_id="load-hmp-places",
+        )
+
+    places = [location(PRISON_SITE, "HMP Hollywood", PRISON_REF)] + [
+        location(town_site(town), town, town_ref(town)) for town in TOWNS
+    ]
+    town_ids = {town: places[i + 1].id for i, town in enumerate(TOWNS)}
+
+    # The yards and accounts already stored gain their point; their other properties are kept.
+    updates: list[NodeWrite] = []
+    for letter in "ABCDEFGHIJ":
+        yard = await graph.find_node("Location", "site_ref", f"yard-{letter.lower()}", principal)
+        if yard is not None:
+            updates.append(_with_place(yard, yard_ref(letter), now, principal))
+    held_at = account_places(plan)
+    cursor: str | None = None
+    while True:
+        page = await graph.list_nodes("Account", principal, cursor=cursor)
+        for account in page.nodes:
+            ref = held_at.get(account.properties.get("account_number", ""))
+            if ref is not None:
+                updates.append(_with_place(account, ref, now, principal))
+        if page.next_cursor is None:
+            break
+        cursor = page.next_cursor
+
+    residencies: list[EdgeWrite] = []
+    start = datetime.combine(NETWORK_START, time(9), tzinfo=UTC)
+    end = datetime.combine(NETWORK_END, time(9), tzinfo=UTC)
+    for node in plan.nodes:
+        if node.key not in plan.homes:
+            continue
+        visitor = await graph.find_node("Person", "nino", node.properties["nino"], principal)
+        if visitor is None:
+            continue
+        residencies.append(
+            EdgeWrite(
+                id=new_edge_id(), type="PRESENT_AT", source=visitor.id,
+                target=town_ids[plan.homes[node.key]],
+                interval=Interval(valid_from=start, valid_to=end),
+                provenance=_provenance(f"home:{node.key}"), handling=_handling(),
+                created_by=principal.id, created_at=now, load_id="load-hmp-places",
+            )
+        )
+
+    tx = await graph.begin_transaction()
+    try:
+        await graph.upsert_nodes(places, tx)
+    except Exception:
+        await graph.rollback_transaction(tx)
+        raise
+    await graph.commit_transaction(tx)
+    for i in range(0, len(updates), _CHUNK):
+        tx = await graph.begin_transaction()
+        try:
+            await graph.upsert_nodes(updates[i : i + _CHUNK], tx)
+        except Exception:
+            await graph.rollback_transaction(tx)
+            raise
+        await graph.commit_transaction(tx)
+    for i in range(0, len(residencies), _CHUNK):
+        tx = await graph.begin_transaction()
+        try:
+            await graph.upsert_edges(residencies[i : i + _CHUNK], tx)
+        except Exception:
+            await graph.rollback_transaction(tx)
+            raise
+        await graph.commit_transaction(tx)
+    return True
+
+
+def _with_place(node: Any, ref: str, now: datetime, principal: Principal) -> NodeWrite:
+    """The stored node again, with its point: the same id, every property it had, its own
+    provenance (so the write is no lower than what is stored), handling and datasets."""
+    return NodeWrite(
+        id=node.id, type=node.type, properties={**node.properties, "geometry_ref": ref},
+        provenance=node.provenance, handling=node.handling, created_by=principal.id,
+        created_at=now, load_id="load-hmp-places", datasets=list(node.datasets),
+    )
