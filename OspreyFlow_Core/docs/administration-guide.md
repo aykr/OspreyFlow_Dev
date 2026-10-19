@@ -11,10 +11,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.6** · 2026-10-18 · For OspreyFlow v0.2.0 · Issued
+**Version 1.7** · 2026-10-19 · For OspreyFlow v0.4.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.7 | 2026-10-19 | §2.4: the analysts' browsers need WebGL 2 (the graph renderer's version 4). |
 | 1.6 | 2026-10-18 | §11: the HMP pack as a prison intelligence network, and adding it again after an update. |
 | 1.5 | 2026-10-15 | A cover page, contents, a list of figures, and this version history. |
 | 1.4 | 2026-10-15 | §16: a model download that stopped with `rename …-partial …`, and how to finish it. |
@@ -130,6 +131,12 @@ enterprise --cloud aws` adds kubectl and Helm (and on Azure kubelogin); without 
 kubectl, Helm and that a cluster answers. Each line is a tick, or a cross
 with what to do about it; the exit code is 1 when anything is missing. `install` runs the same
 checks first and stops, having changed nothing, if one fails.
+
+### 2.4 The analysts' browsers
+
+The graph and the map are drawn with **WebGL 2**, which every current Chrome, Edge, Firefox and
+Safari has (Safari from version 15, the others for longer). A browser from before about 2021, or one
+with hardware drawing turned off by policy, shows the rest of OspreyFlow but an empty canvas and map.
 
 ## 3. Getting the `ospreyflow` command
 

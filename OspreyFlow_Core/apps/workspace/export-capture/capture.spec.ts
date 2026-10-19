@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { readPng } from "../keyboard/pngPixels";
+
 declare global {
   interface Window {
     __captureChartExport__?: (mark: {
@@ -106,4 +108,47 @@ test("chart export captures a real, non-blank rendering of the populated canvas,
   // whatever the very first pixel happens to be (the background, on any real render).
   expect(result.distinctColourCount).toBeGreaterThan(5);
   expect(result.nonBackgroundPixelCount).toBeGreaterThan(500);
+});
+
+// ADR-118: under Sigma 4 the Glass's look — pictures, rings, line patterns, label colours — is its
+// reducers', and a second renderer built from the first's primitives, styles and settings alone
+// (`@sigma/export-image`'s way) draws none of it. So what is exported must be what is on screen:
+// every fully drawn pixel of the export is the colour of the same pixel of the canvas.
+test("chart export is the canvas as it is drawn", async ({ page }) => {
+  await page.goto("/export-capture/harness.html");
+  await page.waitForFunction(() => typeof window.__captureChartExport__ === "function");
+  await page.waitForTimeout(1500);
+  const exported = await page.evaluate(async (mark) => {
+    const { bytes } = await window.__captureChartExport__!(mark);
+    const bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: "image/png" }));
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(bitmap, 0, 0);
+    const stage = [...document.querySelectorAll("canvas")].sort((a, b) => b.width * b.height - a.width * a.height)[0]!;
+    const rect = stage.getBoundingClientRect();
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      data: Array.from(ctx.getImageData(0, 0, bitmap.width, bitmap.height).data),
+      at: { x: rect.x, y: rect.y, width: rect.width },
+    };
+  }, MARK);
+  const screen = readPng(await page.screenshot());
+  const scale = exported.width / exported.at.width;
+  let compared = 0;
+  let alike = 0;
+  // The watermark is drawn on the export only: its bottom 30 pixels are left out.
+  for (let y = 0; y < exported.height - 30 * scale; y++) {
+    for (let x = 0; x < exported.width; x++) {
+      const i = (y * exported.width + x) * 4;
+      if (exported.data[i + 3]! < 250) continue; // only what the canvas fully drew
+      const p = screen.at(Math.round(exported.at.x + x / scale), Math.round(exported.at.y + y / scale));
+      compared += 1;
+      const d =
+        Math.abs(p[0]! - exported.data[i]!) + Math.abs(p[1]! - exported.data[i + 1]!) + Math.abs(p[2]! - exported.data[i + 2]!);
+      if (d < 40) alike += 1;
+    }
+  }
+  expect(compared, "the export draws something").toBeGreaterThan(200);
+  expect(alike / compared, "and it is what the canvas shows").toBeGreaterThan(0.9);
 });

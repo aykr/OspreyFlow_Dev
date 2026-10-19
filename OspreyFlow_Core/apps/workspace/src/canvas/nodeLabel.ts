@@ -1,7 +1,7 @@
 // How a node's label is drawn (ADR-097 step 2, design review item 9; DESIGN.md v0.3 §5a, ADR-115
 // decision 9): at 11px, in mono when it is a literal value (an identifier, a normalised value, an id:
 // DESIGN.md §9 exception 3), and over 28 characters cut to its first 19 and last 4 so both ends of an
-// address or account stay readable; placed so it never runs past the canvas's edge. The full text stays in the Inspector and the hover box's title.
+// address or account stay readable; placed so it never runs past the canvas's edge (`labelStyle.ts`). The full text stays in the Inspector and the hover box's title.
 import type { Node } from "../../../../packages/schemas/generated";
 import type { LabelChoices } from "./labelChoices";
 
@@ -37,13 +37,4 @@ export function labelIsLiteral(
   const has = (key: string) => typeof properties[key] === "string" && properties[key] !== "";
   // A person's names, a thing's name or a document's title are words, not literal values.
   return !(has("family_name") || has("name") || has("title"));
-}
-
-/** Where a label starts: right of the node when it fits inside the canvas, else left of it, and
- * never before the left edge. */
-export function labelStartX(at: { x: number; size: number; textWidth: number; canvasWidth: number }): number {
-  const GAP = 3;
-  const right = at.x + at.size + GAP;
-  if (right + at.textWidth <= at.canvasWidth) return right;
-  return Math.max(0, at.x - at.size - GAP - at.textWidth);
 }

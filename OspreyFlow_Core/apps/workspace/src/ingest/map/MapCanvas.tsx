@@ -68,12 +68,29 @@ export function MapCanvas({
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const colours = mapCanvasColours(activePalette());
+    // The theme's colours, read on every refresh (a theme change refreshes, below): a label in the
+    // theme's text, and a node or link with no colour of its own in the link colour.
     const sigma = new Sigma(graphRef.current, containerRef.current, {
-      renderLabels: true,
-      labelColor: { color: colours.label },
-      defaultNodeColor: colours.edge,
-      defaultEdgeColor: colours.edge,
+      nodeReducer: (_node, _shown, attrs) => {
+        const colours = mapCanvasColours(activePalette());
+        return { color: (attrs.color as string | undefined) ?? colours.edge, labelColor: colours.label };
+      },
+      edgeReducer: (_edge, _shown, attrs) => {
+        const colours = mapCanvasColours(activePalette());
+        return {
+          color: (attrs.color as string | undefined) ?? colours.edge,
+          labelColor: colours.label,
+          // Sigma 3 drew a link twice its size wide; Sigma 4 draws the size as the whole width.
+          size: 2 * ((attrs.size as number | undefined) ?? 1),
+        };
+      },
+      settings: {
+        renderLabels: true,
+        // Sizes in pixels, as under Sigma 3; and no turning the canvas with a right-drag.
+        itemSizesReference: "screen",
+        enableCameraRotation: false,
+        enableCameraMouseRotation: false,
+      },
     });
     sigmaRef.current = sigma;
     onReady?.(sigma);
@@ -97,7 +114,6 @@ export function MapCanvas({
 
   useEffect(() => {
     const palette = activePalette();
-    sigmaRef.current?.setSetting("labelColor", { color: mapCanvasColours(palette).label });
     syncTemplateGraph(graphRef.current, template, ontology, selection, linkFromRef, palette);
     sigmaRef.current?.refresh();
   }, [template, ontology, selection, linkFromRef, themeVersion]);
