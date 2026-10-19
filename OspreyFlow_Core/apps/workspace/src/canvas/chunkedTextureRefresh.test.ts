@@ -1,7 +1,8 @@
 // The perf gate's profile (15 October 2026): a texture's full refresh held the page 8 s on CI.
-import { describe, expect, it } from "vitest";
+import type { FragmentLayer, LayerLifecycleContext } from "sigma/rendering";
+import { describe, expect, it, vi } from "vitest";
 
-import { chunkedRefresher, type Refreshable } from "./chunkedTextureRefresh";
+import { chunkedRefresher, withChunkedTextureRefresh, type Refreshable } from "./chunkedTextureRefresh";
 
 function fakeRenderer(count: number) {
   const nodes = Array.from({ length: count }, (_, i) => `n${i}`);
@@ -70,5 +71,53 @@ describe("chunkedRefresher", () => {
   it("leaves everything else on the renderer as it was", () => {
     const { renderer } = fakeRenderer(1);
     expect(chunkedRefresher(renderer, () => undefined).zoomRatio).toBe(3);
+  });
+});
+
+describe("withChunkedTextureRefresh", () => {
+  /** A layer that asks for a refresh the way `@sigma/node-image`'s does when a texture is ready:
+   * through the lifecycle context Sigma hands it. */
+  function askingLayer() {
+    const asked: { ask?: () => void } = {};
+    const layer = {
+      name: "image",
+      uniforms: [],
+      attributes: [],
+      glsl: "",
+      lifecycle: (context: LayerLifecycleContext) => {
+        asked.ask = () => context.requestRefresh();
+        return {};
+      },
+    } as FragmentLayer;
+    return { layer, asked };
+  }
+  // One animation frame is the next turn of the loop here, so the test does not wait on a display.
+  vi.stubGlobal("requestAnimationFrame", (step: () => void) => setTimeout(step, 0));
+  const nextFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+  it("spreads the refresh a finished texture asks for, instead of one full refresh", async () => {
+    const { renderer, calls } = fakeRenderer(3);
+    const { layer, asked } = askingLayer();
+    let sigmaFull = 0;
+    withChunkedTextureRefresh(layer, () => renderer).lifecycle!({
+      requestRefresh: () => sigmaFull++,
+      renderer: { refresh: () => sigmaFull++ },
+    } as unknown as LayerLifecycleContext);
+    asked.ask!();
+    expect(sigmaFull).toBe(0);
+    expect(calls).toEqual([]);
+    await nextFrame();
+    expect(calls).toEqual([{ partialGraph: { nodes: ["n0", "n1", "n2"] }, skipIndexation: true, schedule: true }]);
+  });
+
+  it("falls back to Sigma's own refresh while there is no renderer yet", () => {
+    const { layer, asked } = askingLayer();
+    let sigmaFull = 0;
+    withChunkedTextureRefresh(layer, () => null).lifecycle!({
+      requestRefresh: () => sigmaFull++,
+      renderer: { refresh: () => sigmaFull++ },
+    } as unknown as LayerLifecycleContext);
+    asked.ask!();
+    expect(sigmaFull).toBe(1);
   });
 });

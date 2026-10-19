@@ -101,7 +101,7 @@ test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", asy
     .toBeLessThan(100);
   await page.waitForTimeout(3000);
 
-  const canvas = page.locator("canvas.sigma-nodes");
+  const canvas = page.locator("canvas.sigma-stage");
   const box = await canvas.boundingBox();
   if (!box) throw new Error("canvas not found");
   const cx = box.x + box.width / 2;

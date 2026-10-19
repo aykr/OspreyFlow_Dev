@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Node } from "../../../../packages/schemas/generated";
-import { labelIsLiteral, labelStartX, middleTruncate, NODE_LABEL_MAX_CHARS } from "./nodeLabel";
+import { labelIsLiteral, middleTruncate, NODE_LABEL_MAX_CHARS } from "./nodeLabel";
 
 // ADR-097 step 2, design review item 9: labels at `--fs-12`, an identifier in mono (DESIGN.md §9
 // exception 3: mono means a literal value, safe to copy), cut in the middle at 24 characters, and
@@ -46,19 +46,5 @@ describe("labelIsLiteral", () => {
     const n = node("Phone", { msisdn: "441632960001", nickname: "work" });
     expect(labelIsLiteral(n, identifiersOf, { Phone: "msisdn" })).toBe(true);
     expect(labelIsLiteral(n, identifiersOf, { Phone: "nickname" })).toBe(false);
-  });
-});
-
-describe("labelStartX", () => {
-  it("puts the label to the right of the node when it fits", () => {
-    expect(labelStartX({ x: 100, size: 10, textWidth: 60, canvasWidth: 400 })).toBe(113);
-  });
-
-  it("puts it to the left when the right would run past the canvas edge", () => {
-    expect(labelStartX({ x: 380, size: 10, textWidth: 60, canvasWidth: 400 })).toBe(380 - 10 - 3 - 60);
-  });
-
-  it("never starts before the left edge either", () => {
-    expect(labelStartX({ x: 20, size: 10, textWidth: 300, canvasWidth: 310 })).toBeGreaterThanOrEqual(0);
   });
 });

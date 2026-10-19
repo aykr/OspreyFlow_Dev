@@ -131,27 +131,36 @@ test("the links are drawn once the layout has settled, without a click on the ca
 });
 
 // Seen 3 October 2026 (owner, screenshot): in the dark theme the node labels were unreadable. Sigma
-// paints a label in black unless told otherwise, and the graph never told it. The labels are drawn
-// on their own 2D canvas, so their pixels can be read: the text drawn there must be light on the
-// dark theme, not black.
+// paints a label in black unless told otherwise, and the graph never told it. Sigma 4 draws the
+// labels with the graph, in WebGL, so they are read off the screen: beside a node, where its label
+// is drawn, with the grid hidden, the letters' ink must be light on the dark theme, not black.
 test("node labels are drawn in a light colour on the dark theme", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
-  await settledPositions(page, "n0", "n1");
+  const at = await settledPositions(page, "n0", "n1");
   await page.waitForTimeout(500);
-  const ink = await page.evaluate(() => {
-    const canvas = document.querySelector<HTMLCanvasElement>("canvas.sigma-labels");
-    if (!canvas) return null;
-    const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
-    let drawn = 0;
-    let brightness = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3]! < 200) continue; // only the solid middle of a letter, not its soft edge
-      drawn += 1;
-      brightness += (data[i]! + data[i + 1]! + data[i + 2]!) / 3;
-    }
-    return { drawn, mean: drawn ? brightness / drawn : 0 };
+  await page.addStyleTag({
+    content:
+      "button, select, label, .canvas-toolbar, .canvas-legend, .canvas-zoom { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
   });
-  expect(ink, "the label canvas exists").not.toBeNull();
-  expect(ink!.drawn, "some label text is drawn").toBeGreaterThan(20);
-  expect(ink!.mean, "and it is light, not black").toBeGreaterThan(180);
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  const box = (await canvas.boundingBox())!;
+  const pixels = readPng(await page.screenshot());
+  const scale = pixels.width / page.viewportSize()!.width;
+  const background = pixels.at(Math.round((box.x + 4) * scale), Math.round((box.y + 40) * scale));
+  // The label "n0" starts a few pixels right of its node and is about 11 pixels tall.
+  const n0 = at.a;
+  // GPU text at 11px has strokes a pixel wide, so most of a letter is its soft edge: the brightest
+  // of its pixels is the colour it was drawn in.
+  let drawn = 0;
+  let brightest = 0;
+  for (let x = Math.round((box.x + n0.x + 9) * scale); x < (box.x + n0.x + 30) * scale; x++) {
+    for (let y = Math.round((box.y + n0.y - 7) * scale); y < (box.y + n0.y + 7) * scale; y++) {
+      const p = pixels.at(x, y);
+      if (Math.abs(p[0]! - background[0]!) + Math.abs(p[1]! - background[1]!) + Math.abs(p[2]! - background[2]!) < 60) continue;
+      drawn += 1;
+      brightest = Math.max(brightest, (p[0]! + p[1]! + p[2]!) / 3);
+    }
+  }
+  expect(drawn, "some label text is drawn").toBeGreaterThan(5);
+  expect(brightest, "and it is light, not black").toBeGreaterThan(200);
 });

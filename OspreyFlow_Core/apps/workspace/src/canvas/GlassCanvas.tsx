@@ -5,18 +5,17 @@
 //
 // Node shape/fill/provenance is `@sigma/node-image` (a generated SVG per
 // distinct combination, `color/nodeVisual.ts`); the interaction-state ring
-// is a composed `@sigma/node-border` layer. Both plugins read their own
-// attributes directly off the graphology node (`workingset/store.ts`'s
-// `WorkingSetNodeAttributes`) — `canvas/nodeAttributes.ts`'s module
-// docstring explains why that is not the `nodeReducer`'s job.
+// is a `@sigma/node-border` layer over it. Both layers read their own
+// attributes off the graphology node (`workingset/store.ts`'s
+// `WorkingSetNodeAttributes`), handed on by the `nodeReducer` —
+// `canvas/nodeAttributes.ts`'s module docstring explains why they are
+// stored there rather than worked out by it.
 //
 // **Known simplifications, disclosed rather than silent:**
-// - Edges render as straight lines (`EdgeLineProgram` at a pixel, `EdgeRectangleProgram` wider), with an arrowhead
-//   (`dottedEdgePrograms.ts`) only for an edge type the ontology declares directed.
-//   `@sigma/edge-curve`'s curved-parallel-edges at the Neighbourhood/
-//   Link-detail bands (§1.1's table) is installed but not yet wired — a
-//   visual refinement, not a correctness requirement this phase's exit
-//   criterion tests.
+// - Edges render as straight lines, solid, dashed or dotted (`linkLook.ts`), with an arrowhead
+//   only for an edge type the ontology declares directed. Sigma 4's own curved paths for
+//   parallel links at the Neighbourhood/Link-detail bands (§1.1's table) are not wired — a
+//   visual refinement, not a correctness requirement this phase's exit criterion tests.
 // - A node is first placed by a deterministic pseudo-random scatter; a
 //   force layout (`forceLayout.ts`, repulsion plus edge attraction) then
 //   settles the working set whenever nodes or edges are added, for up to
@@ -26,12 +25,12 @@
 import { DetailsToggle } from "../layout/PanelFrames";
 import { linkHoverText } from "./linkHover";
 import { nodeWithinReach } from "./nodeHitArea";
-import { createNodeBorderProgram } from "@sigma/node-border";
-import { createNodeImageProgram } from "@sigma/node-image";
+import { layerBorder } from "@sigma/node-border";
+import { layerImage } from "@sigma/node-image";
 import type { StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand/react";
-import { EdgeLineProgram, EdgeRectangleProgram, NodeCircleProgram, createNodeCompoundProgram } from "sigma/rendering";
-import { animateNodes, graphExtent } from "sigma/utils";
+import { extremityArrow, layerDashed, layerPlain, pathLine, sdfCircle } from "sigma/rendering";
+import { animateNodes } from "sigma/utils";
 import Sigma from "sigma";
 import {
   useId,
@@ -76,20 +75,15 @@ import {
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
 import { redrawOnBandChange, redrawWhenCameraStops } from "./cameraMoves";
-import { COMMUNITY_LINKS_ABOVE, communityGroupOf, communityLinks, drawsCommunityLinks, drawsNodeDots } from "./communityLinks";
+import { COMMUNITY_LINKS_ABOVE, communityGroupOf, communityLinks, dotImage, drawsCommunityLinks, drawsNodeDots } from "./communityLinks";
 import { attachCommunityLinkLayer, type CommunityLinkState } from "./communityLinkLayer";
 import { latestOnly, workerAssign } from "./communityAssigner";
 import { zoomBandForRatio } from "./zoomBands";
 import { emailsOutcomeText, showEmailsAsDocuments } from "../inspector/emailDocuments";
 import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEventsApi";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
-import {
-  DashedArrowProgram,
-  DashedEdgeProgram,
-  DottedArrowProgram,
-  DottedEdgeProgram,
-  SolidArrowProgram,
-} from "./dottedEdgePrograms";
+import { ARROW_HEAD, linkLookFor } from "./linkLook";
+import { graphExtent } from "./graphExtent";
 import { settledAnchors } from "./settledAnchor";
 import { dragTargets, keepPinned, nudgeFor } from "./nodeDrag";
 import { expansionLinksNotice, linksAmongNotice, showLinksAmong } from "./linksAmong";
@@ -118,10 +112,11 @@ import { CommunitiesStatus, CommunitiesToggle } from "./CommunitiesControls";
 import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
 import { DegreeMarkOverlay } from "./DegreeMarkOverlay";
 import { JudgementBadgeOverlay } from "./JudgementBadgeOverlay";
+import { LinkLabelOverlay } from "./LinkLabelOverlay";
 import { activePalette } from "../color/palette";
 import { onThemeChange } from "../theme/theme";
-import { drawHoveredNode, drawNodeLabel, labelColoursFor } from "./labelStyle";
-import { labelIsLiteral, NODE_LABEL_FONT, NODE_LABEL_SIZE } from "./nodeLabel";
+import { fitToLength, hoverBoxFor, LINK_LABEL_FONT, LINK_LABEL_SIZE, nodeLabelLook, textWidth } from "./labelStyle";
+import { labelIsLiteral } from "./nodeLabel";
 import { getLabelChoices, onLabelChoicesChange } from "./labelChoices";
 import { LabelsMenu } from "./LabelsMenu";
 import { IconsMenu } from "./IconsMenu";
@@ -143,7 +138,7 @@ import { AddFiles } from "../content/AddFiles";
 import { linkMenuItems, linkMenuTitle } from "./linkMenu";
 import { sameAsGroup } from "./linkCollapse";
 import { ReasonPrompt } from "./ReasonPrompt";
-import { withChunkedTextureRefresh } from "./chunkedTextureRefresh";
+import { withChunkedTextureRefresh, type Refreshable } from "./chunkedTextureRefresh";
 import {
   expandOnDoubleClick,
   menuRequestForRightClick,
@@ -159,49 +154,89 @@ import { ActionErrorOverlay } from "./ActionErrorOverlay";
 import { describeEmptyExpansion } from "./expansionOutcome";
 import type { ClusterExplanation, WorkingSetDelta } from "../workingset/models";
 
-const NODE_PROGRAM = createNodeCompoundProgram<
-  WorkingSetNodeAttributes,
-  WorkingSetEdgeAttributes
->([
-  // A finished texture refreshes the nodes a share per frame, not the whole graph in one task
-  // (`chunkedTextureRefresh.ts` has the measured reason).
-  withChunkedTextureRefresh(
-    createNodeImageProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>({
-      keepWithinCircle: false,
-      drawingMode: "background",
-      padding: 0,
-    }),
-  ),
-  createNodeBorderProgram<WorkingSetNodeAttributes, WorkingSetEdgeAttributes>({
-    borders: [
-      // Resolution-cluster ring (Phase 6a Stage 2) drawn first/innermost, so the interaction-state
-      // ring below it — on-path/selected/hover, which changes far more often — stays the outer,
-      // more prominent one. Independent attribute channel: a clustered node can be selected too.
-      {
-        color: { attribute: "clusterBorderColor" },
-        size: {
-          attribute: "clusterBorderSize",
-          defaultValue: 0,
-          mode: "pixels",
-        },
-      },
-      {
-        color: { attribute: "borderColor" },
-        size: { attribute: "borderSize", defaultValue: 0, mode: "pixels" },
-      },
-      // A selected node's own rings (owner, 4 October 2026: selection was not seen): a brass ring
-      // and a dark gap, shares of the node's radius, on a node the reducer draws larger.
-      {
-        color: { attribute: "selectionRingColor" },
-        size: { attribute: "selectionRingSize", defaultValue: 0, mode: "relative" },
-      },
-      {
-        color: { attribute: "selectionGapColor" },
-        size: { attribute: "selectionGapSize", defaultValue: 0, mode: "relative" },
-      },
-    ],
-  }),
-]);
+/** The canvas's drawing: every node a circle carrying its picture, with its rings over it, and
+ * every link drawn as `linkLook.ts` says. Built per renderer, since the picture layer keeps its own textures;
+ * `renderer` is read when a texture is ready (`chunkedTextureRefresh.ts`). */
+function glassPrimitives(renderer: () => Refreshable | null) {
+  return {
+    nodes: {
+      shapes: [sdfCircle()],
+      layers: [
+        // A finished texture refreshes the nodes a share per frame, not the whole graph in one task
+        // (`chunkedTextureRefresh.ts` has the measured reason).
+        withChunkedTextureRefresh(layerImage({ drawingMode: "image", padding: 0 }), renderer),
+        layerBorder({
+          borders: [
+            // `@sigma/node-border` draws nothing at all when its first ring's size is read from the
+            // node and is 0, which the cluster ring's is on almost every node: a constant ring of no
+            // width goes first, so the rings after it are always drawn.
+            { size: 0, color: "transparent" },
+            // Resolution-cluster ring (Phase 6a Stage 2) drawn first/innermost, so the interaction-state
+            // ring below it — on-path/selected/hover, which changes far more often — stays the outer,
+            // more prominent one. Independent attribute channel: a clustered node can be selected too.
+            {
+              color: { attribute: "clusterBorderColor" },
+              size: { attribute: "clusterRing", default: 0 },
+              mode: "relative" as const,
+            },
+            {
+              color: { attribute: "borderColor" },
+              size: { attribute: "stateRing", default: 0 },
+              mode: "relative" as const,
+            },
+            // A selected node's own rings (owner, 4 October 2026: selection was not seen): a brass ring
+            // and a dark gap, shares of the node's radius, on a node the reducer draws larger.
+            {
+              color: { attribute: "selectionRingColor" },
+              size: { attribute: "selectionRing", default: 0 },
+              mode: "relative" as const,
+            },
+            {
+              color: { attribute: "selectionGapColor" },
+              size: { attribute: "selectionGap", default: 0 },
+              mode: "relative" as const,
+            },
+            // Inside the last ring the layer paints that ring's colour: a transparent fill keeps the
+            // node's picture showing through the middle.
+            { size: 0, color: "transparent", fill: true },
+          ],
+        }),
+      ],
+    },
+    // The one link program: straight lines, the arrowhead, a solid layer and the pattern over it,
+    // each read from the values `linkLookFor` gives a link.
+    edges: {
+      paths: [pathLine()],
+      extremities: [extremityArrow(ARROW_HEAD)],
+      layers: [
+        layerPlain({ color: { attribute: "plainColor" } }),
+        layerDashed({
+          dashSize: { attribute: "dashLength", default: 0, mode: "relative" },
+          gapSize: { attribute: "dashGap", default: 0, mode: "relative" },
+          solidExtremities: true,
+        }),
+      ],
+    },
+  };
+}
+
+/** The rings' widths as `@sigma/node-border` reads them: shares of half the shape's size, in its
+ * own units (`relative`). The stored attributes keep their Sigma 3 meaning — the cluster and the
+ * state ring in screen pixels, the selection's two as shares of the node's radius — and are turned
+ * into those shares here, from the radius the node is drawn at. Sigma 4's own pixel mode drew a
+ * 1.5px ring as nothing at this size (measured on the canvas, 19 October 2026). */
+export function ringsFor(
+  stored: { clusterBorderSize?: number; borderSize?: number; selectionRingSize?: number; selectionGapSize?: number },
+  radiusPx: number,
+) {
+  const radius = Math.max(radiusPx, 0.1);
+  return {
+    clusterRing: (2 * (stored.clusterBorderSize ?? 0)) / radius,
+    stateRing: (2 * (stored.borderSize ?? 0)) / radius,
+    selectionRing: 2 * (stored.selectionRingSize ?? 0),
+    selectionGap: 2 * (stored.selectionGapSize ?? 0),
+  };
+}
 
 function seededScatter(nodeId: string): { x: number; y: number } {
   // A cheap, deterministic hash — the same id always lands at the same
@@ -346,8 +381,8 @@ export interface GlassCanvasHandle {
   expandFrom: (nodeId: string, depth: number) => void;
   /** Phase 8 Stage 4h: the chart artefact's own real capture path
    * (`02_GLASS_FRONTEND.md` §10.1/§10.3) — delegates to `captureChartImage`
-   * (`export/chartExport.ts`), which renders the live Sigma instance to a PNG via
-   * `@sigma/export-image`, composites the visible watermark, and embeds the mark's own fields
+   * (`export/chartExport.ts`), which reads the live Sigma instance's canvas as drawn to a PNG,
+   * composites the visible watermark, and embeds the mark's own fields
    * as machine-readable `tEXt` chunks. Rejects if no Sigma instance is mounted yet (the same
    * "no-op/rejects on an unready renderer" shape `focusOnNode`'s own `graph.hasNode` guard
    * already establishes, made a rejection rather than a silent no-op here because a caller
@@ -419,6 +454,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const modifierListenersRef = useRef<(() => void) | null>(null);
     const resizeObserverRef = useRef<ResizeObserver | null>(null);
     const dimmedEdgeIdsRef = useRef<ReadonlySet<string>>(EMPTY_DIMMED_SET);
+    // The links with a label to show now, kept by the edge reducer for `LinkLabelOverlay`.
+    const labelledLinksRef = useRef<Set<string>>(new Set());
     const sigmaRef = useRef<Sigma<
       WorkingSetNodeAttributes,
       WorkingSetEdgeAttributes
@@ -911,7 +948,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       if (!sigma || graph.order === 0) return;
       sigma.setCustomBBox(graphExtent(graph));
       sigma.refresh();
-      redrawWhenCameraStops(sigma, sigma.getCamera().animatedReset({ duration: prefersReducedMotion() ? 0 : 300 }));
+      redrawWhenCameraStops(sigma, sigma.getCamera().reset({ duration: prefersReducedMotion() ? 0 : 300 }));
     };
     const zoomBy = (direction: "in" | "out") => {
       const sigma = sigmaRef.current;
@@ -920,8 +957,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       redrawWhenCameraStops(
         sigma,
         direction === "in"
-          ? camera.animatedZoom({ duration: prefersReducedMotion() ? 0 : 200 })
-          : camera.animatedUnzoom({ duration: prefersReducedMotion() ? 0 : 200 }),
+          ? camera.zoomIn({ duration: prefersReducedMotion() ? 0 : 200 })
+          : camera.zoomOut({ duration: prefersReducedMotion() ? 0 : 200 }),
       );
     };
     // The legend's rows: each type in view and how many. Worked out again when the working set changes.
@@ -1063,11 +1100,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           graph.mergeNodeAttributes(nodeId, { clusterBorderColor: palette.borderSubtle });
         }
       });
-      sigmaRef.current?.setSettings({
-        ...labelColoursFor(palette),
-        defaultDrawNodeHover: drawHoveredNode(palette),
-        defaultDrawNodeLabel: drawNodeLabel(palette),
-      });
+      // The labels' and the hover box's colours are read by the reducers, from the palette now.
       sigmaRef.current?.refresh();
     };
     useEffect(() => onThemeChange(() => redrawForThemeRef.current()), []);
@@ -1283,7 +1316,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           if (fitView) {
             sigma.setCustomBBox(graphExtent(graph));
             sigma.refresh();
-            redrawWhenCameraStops(sigma, sigma.getCamera().animatedReset({ duration: prefersReducedMotion() ? 0 : 420 }));
+            redrawWhenCameraStops(sigma, sigma.getCamera().reset({ duration: prefersReducedMotion() ? 0 : 420 }));
           } else if (sigma.getCustomBBox() === null) {
             sigma.setCustomBBox(graphExtent(graph));
             sigma.refresh();
@@ -1392,43 +1425,33 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // eslint-disable-next-line prefer-const -- must exist (as `undefined`) before `new Sigma(...)` runs; a `const` at the single later assignment would reintroduce the TDZ bug above.
       let currentSigma:
         Sigma<WorkingSetNodeAttributes, WorkingSetEdgeAttributes> | undefined;
+      // A link's label cut to the length of the link on screen between its two nodes, as Sigma 3
+      // cut it, less the arrowhead (about twice the line's width long).
+      const fittedLinkLabel = (edgeId: string, text: string, headed: boolean, width: number): string => {
+        if (!currentSigma) return text;
+        const end = (node: string) => ({
+          at: currentSigma!.graphToViewport({
+            x: graph.getNodeAttribute(node, "x") ?? 0,
+            y: graph.getNodeAttribute(node, "y") ?? 0,
+          }),
+          radius: currentSigma!.getNodeDisplayData(node)?.size ?? 0,
+        });
+        const a = end(graph.source(edgeId));
+        const b = end(graph.target(edgeId));
+        const room =
+          Math.hypot(b.at.x - a.at.x, b.at.y - a.at.y) - a.radius - b.radius - (headed ? 2 * width : 0);
+        return fitToLength(text, room, (t) => textWidth(t, LINK_LABEL_FONT, LINK_LABEL_SIZE));
+      };
       const sigma = new Sigma<
         WorkingSetNodeAttributes,
         WorkingSetEdgeAttributes
       >(graph, containerRef.current, {
-        // The toolbar above and the selection bar below sit over the canvas: fitting with Sigma's
-        // 30px framed the outermost nodes under them (found live, 11 October 2026).
-        stagePadding: 80,
-        defaultNodeType: "glass-node",
-        // ADR-119: on a large working set zoomed out, an ordinary node is a plain dot in its type's
-        // colour (Sigma's circle program); one that needs its full drawing keeps the picture program.
-        nodeProgramClasses: { "glass-node": NODE_PROGRAM, "glass-dot": NodeCircleProgram },
-        defaultEdgeType: "glass-edge",
-        edgeProgramClasses: {
-          // ADR-097 step 2: a plain link wider than a pixel is drawn by the program that honours width
-          // (`edgeProgramFor`), so its weight shows; arrowheads are larger.
-          "glass-edge": EdgeLineProgram,
-          "glass-arrow": SolidArrowProgram,
-          // ADR-081: a solid type that declares a thickness (the line program is one pixel wide
-          // whatever the size), and the two dotted lines a probabilistic type is always drawn with.
-          "glass-edge-thick": EdgeRectangleProgram,
-          "glass-edge-dotted": DottedEdgeProgram,
-          "glass-arrow-dotted": DottedArrowProgram,
-          "glass-edge-dashed": DashedEdgeProgram,
-          "glass-arrow-dashed": DashedArrowProgram,
-        },
-        // Sigma's own `addNode`/`updateNode`: "this function must return a
-        // total object and won't be merged" with the raw graph attributes —
-        // a reducer's return *replaces* them entirely for every downstream
-        // consumer, including `@sigma/node-image`/`@sigma/node-border`'s own
-        // `data[imageAttribute]`/`data["borderColor"]` reads. So `...data`
-        // (the raw attributes, shallow-copied by Sigma before calling this)
-        // must be spread through first — only the frame-computed fields
-        // actually need to *override* anything. Discovered by an empty
-        // canvas: omitting this leaves every custom-program attribute
-        // `undefined`, silently, not by reasoning about the library's
-        // source ahead of time.
-        nodeReducer: (nodeId, data) => {
+        primitives: glassPrimitives(() => currentSigma ?? null),
+        // Sigma's reducers come after its own styles: what they return is what is drawn, and the
+        // node's picture and rings (and a link's line) are read from it, so the stored attributes
+        // (`attrs`, which the picture and ring layers read) are handed on first and only the
+        // frame-computed fields override them.
+        nodeReducer: (nodeId, _shown, data, state) => {
           const ratio = currentSigma?.getCamera().ratio ?? 1;
           const frame = computeNodeFrameAttributes(data.data, {
             cameraRatio: ratio,
@@ -1436,25 +1459,37 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             viewNodeCount: graph.order,
             emphasised: data.emphasised === true,
           });
+          const palette = activePalette();
+          const size = data.selected === true ? frame.size * SELECTED_SCALE : frame.size;
+          const literal =
+            frame.label !== "" &&
+            labelIsLiteral(data.data, (type) => ontology.identifiersFor(type), getLabelChoices());
+          // Where the node is on screen, to keep its label on the canvas (`labelStyle.ts`).
+          const at = currentSigma
+            ? { ...currentSigma.graphToViewport({ x: data.x ?? 0, y: data.y ?? 0 }), size, canvasWidth: currentSigma.getDimensions().width }
+            : undefined;
           const drawn = {
             ...data,
+            x: data.x ?? 0,
+            y: data.y ?? 0,
             ...frame,
+            size,
             // ADR-115 Amendment 1: no icon or picture until the node is drawn large enough to read it.
             ...(frame.iconsShown ? {} : { image: data.imagePlain }),
-            ...(data.emphasised === true ? { forceLabel: true } : {}),
-            ...(data.selected === true ? { size: frame.size * SELECTED_SCALE } : {}),
-            labelLiteral:
-              frame.label !== "" &&
-              labelIsLiteral(data.data, (type) => ontology.identifiersFor(type), getLabelChoices()),
-            // ADR-119: a dot, unless the node is selected, under the pointer or on a found path
-            // (`emphasised`), or carries a resolution-cluster ring — the rings are the picture
-            // program's, and those are the nodes an analyst is looking at.
-            type:
-              drawsNodeDots(zoomBandForRatio(ratio), graph.order) &&
-              data.emphasised !== true &&
-              !((data.clusterBorderSize ?? 0) > 0)
-                ? "glass-dot"
-                : "glass-node",
+            ...nodeLabelLook(palette, frame.label, literal, at),
+            labelVisibility: data.emphasised === true || state.isHovered ? ("visible" as const) : ("auto" as const),
+            ...hoverBoxFor(palette),
+            visibility: "visible" as const,
+            ...ringsFor(data, size),
+            // ADR-119: on a large working set zoomed out, an ordinary node is a plain dot in its type's
+            // colour — no shape, icon, provenance outline or ring. Not a node that is selected, under
+            // the pointer or on a found path (`emphasised`), or carries a resolution-cluster ring:
+            // those are the nodes an analyst is looking at.
+            ...(drawsNodeDots(zoomBandForRatio(ratio), graph.order) &&
+            data.emphasised !== true &&
+            !((data.clusterBorderSize ?? 0) > 0)
+              ? { image: dotImage(data.color ?? palette.borderStrong), ...ringsFor({}, size), drawnAsDot: true }
+              : { drawnAsDot: false }),
           };
           const folded = foldedViewRef.current;
           if (!folded) return drawn;
@@ -1465,11 +1500,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             return {
               ...drawn,
               size: Math.min(40, (frame.size || 6) * (1 + Math.log2(group.count) / 1.5)),
-              label: group.label,
-              forceLabel: true,
-              borderColor: activePalette().borderStrong,
-              borderSize: 0.3,
-              type: "glass-node",
+              ...nodeLabelLook(palette, group.label, false, at),
+              labelVisibility: "visible" as const,
+              borderColor: palette.borderStrong,
+              // A group is never a dot: its own picture, as the node is drawn without ADR-119.
+              image: frame.iconsShown ? data.image : data.imagePlain,
+              drawnAsDot: false,
+              ...ringsFor({ ...data, borderSize: 0.3 }, Math.min(40, (frame.size || 6) * (1 + Math.log2(group.count) / 1.5))),
             };
           }
           // The other members sit at the group's centre (their stored position was moved there), too
@@ -1477,11 +1514,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           if (folded.hidden.has(nodeId)) return { ...drawn, size: 0.1, label: "" };
           return drawn;
         },
-        edgeReducer: (edgeId, data) => {
+        edgeReducer: (edgeId, _shown, data) => {
           const ratio = currentSigma?.getCamera().ratio ?? 1;
           // ADR-119: a link standing in a link between communities is not drawn, and nothing else
           // about how it looks is worked out (a large working set has a quarter of a million).
-          if (!drawnByItselfRef.current(edgeId, ratio)) return { ...data, hidden: true };
+          if (!drawnByItselfRef.current(edgeId, ratio)) return { ...data, visibility: "hidden" as const };
           const hoveredNode = hoveredRef.current;
           const caption = () => {
             const source = graph.source(edgeId);
@@ -1517,50 +1554,61 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             const b = anchor(graph.target(edgeId));
             faint = a !== b && !treeLinks.has(linkKey(a, b));
           }
+          const palette = activePalette();
+          const look = {
+            ...attrs,
+            ...(faint && !isSelected ? { color: palette.borderSubtle, size: Math.min(attrs.size, 0.5) } : {}),
+            // The selected link is thicker, brass, and always labelled.
+            ...(isSelected ? { size: Math.max(attrs.size * 2, 4), color: palette.brass, label: caption() } : {}),
+          };
+          // A hidden link is not drawn.
+          const hidden =
+            attrs.hidden ||
+            hiddenEdgesRef.current.has(edgeId) ||
+            hiddenLinkTypesRef.current.has(data.data.type) ||
+            (foldedViewRef.current?.hidesLink(graph.source(edgeId), graph.target(edgeId)) ?? false);
+          const style = linkLookFor(
+            edgeProgramFor(data.data.type, edgeTypesRef.current, data.data.basis, data.data.provenance?.state, look.size),
+            look.color,
+            look.size,
+          );
+          // `computeEdgeAttributes` gives a link a label only where it is to be read (the closest
+          // zoom, or beside the node under the pointer); `LinkLabelOverlay` draws it.
+          const label = look.label && !hidden ? fittedLinkLabel(edgeId, look.label, style.head !== undefined, style.size) : "";
+          if (label) labelledLinksRef.current.add(edgeId);
+          else labelledLinksRef.current.delete(edgeId);
           return {
             ...data,
-            ...attrs,
-            ...(faint && !isSelected
-              ? { color: activePalette().borderSubtle, size: Math.min(attrs.size, 0.5) }
-              : {}),
-            // A hidden link is not drawn; the selected one is thicker, brass, and always labelled.
-            hidden:
-              attrs.hidden ||
-              hiddenEdgesRef.current.has(edgeId) ||
-              hiddenLinkTypesRef.current.has(data.data.type) ||
-              (foldedViewRef.current?.hidesLink(graph.source(edgeId), graph.target(edgeId)) ??
-                false),
-            ...(isSelected
-              ? {
-                  size: Math.max(attrs.size * 2, 4),
-                  color: activePalette().brass,
-                  label: caption(),
-                }
-              : {}),
-            type: edgeProgramFor(
-              data.data.type,
-              edgeTypesRef.current,
-              data.data.basis,
-              data.data.provenance?.state,
-              isSelected ? Math.max(attrs.size * 2, 4) : attrs.size,
-            ),
+            ...look,
+            label: label || null,
+            visibility: hidden ? ("hidden" as const) : ("visible" as const),
+            ...style,
           };
         },
-        hideEdgesOnMove: true, // §1.1: "buys the frame budget at 250,000 edges"
-        renderLabels: true,
-        // Sigma's own label colour is black and its hover box white: unreadable on the dark canvas.
-        // `redrawForThemeRef` sets these again when the theme changes.
-        ...labelColoursFor(activePalette()),
-        defaultDrawNodeHover: drawHoveredNode(activePalette()),
-        // ADR-097 step 2: `--fs-12`, mono for a literal value, cut in the middle, kept on the canvas.
-        defaultDrawNodeLabel: drawNodeLabel(activePalette()),
-        labelSize: NODE_LABEL_SIZE,
-        labelFont: NODE_LABEL_FONT,
-        // Edge labels were worked out (`computeEdgeAttributes`) but never drawn until this was
-        // switched on. They appear only at the closest zoom, or beside the node under the pointer.
-        renderEdgeLabels: true,
-        labelRenderedSizeThreshold: 0,
-        enableEdgeEvents: true, // needed for edge inspection (hover/click)
+        settings: {
+          // The toolbar above and the selection bar below sit over the canvas: fitting with Sigma's
+          // 30px framed the outermost nodes under them (found live, 11 October 2026).
+          stagePadding: 80,
+          // Sizes are pixels at the starting zoom, as they were under Sigma 3 (`nodeAttributes.ts`'s
+          // bands are pixel sizes); Sigma 4's default reads them in the layout's units.
+          itemSizesReference: "screen",
+          // A link is drawn a pixel wide at its thinnest, as Sigma 3's line program drew it.
+          minEdgeThickness: 1,
+          // A right-drag would turn the graph: the right button opens the node and link menus.
+          enableCameraRotation: false,
+          enableCameraMouseRotation: false,
+          hideEdgesOnMove: true, // §1.1: "buys the frame budget at 250,000 edges"
+          renderLabels: true,
+          // A link's label is drawn by `LinkLabelOverlay`, upright: Sigma 4 draws it from source to
+          // target, upside down on a link pointing left.
+          renderEdgeLabels: false,
+          labelRenderedSizeThreshold: 0,
+          // Off: the canvas finds the link under the pointer itself (`edgeAtViewport`, with a wider
+          // reach than the drawn line), for hover, click and right-click, as it had to under Sigma 3,
+          // whose edge events never fired for the Glass's own link programs. Sigma 4's own link
+          // picking added 5.7 s to the 50k/250k fixture's first frame (measured, 19 October 2026).
+          enableEdgeEvents: false,
+        },
       });
       currentSigma = sigma;
       sigmaRef.current = sigma;
@@ -1722,7 +1770,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         const near = nodeWithinReach(
           graph.reduceNodes<{ id: string; x: number; y: number; size: number }[]>((reach, id, attrs) => {
             const shown = sigma.getNodeDisplayData(id);
-            if (shown?.hidden) return reach;
+            if (shown?.visibility === "hidden") return reach;
             const at = sigma.graphToViewport({ x: attrs.x ?? 0, y: attrs.y ?? 0 });
             reach.push({ id, x: at.x, y: at.y, size: sigma.scaleSize(shown?.size ?? 0) });
             return reach;
@@ -1734,9 +1782,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           clickOnNode(near, event);
           return;
         }
-        // The renderer picks a link only where its thin line is drawn, which is hard to hit. A
-        // click that found neither node nor link is checked against every visible link with a
-        // wider reach before it counts as a click on empty space.
+        // A click that found no node is checked against every visible link with a wider reach than
+        // the drawn line before it counts as a click on empty space.
         const hit = edgeAtViewport(event.x, event.y);
         if (hit !== null) {
           selectLinkRef.current(hit);
@@ -1785,25 +1832,19 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           void requestExpansionRef.current?.(id, null, x, y);
         });
       });
-      sigma.on("clickEdge", ({ edge }) => selectLinkRef.current(edge));
       // ADR-115 E5 (review item 11): hovering a link says its type and count, in a tooltip by the
       // pointer; it goes when the pointer leaves the link.
-      // Sigma's own edge events do not fire for these programs, so the pointer is tested with the
-      // canvas's own `edgeAtViewport`; state changes only when the link under it changes.
+      // The renderer's own edge events are off (its settings, below), so the pointer is tested with
+      // the canvas's own `edgeAtViewport`; state changes only when the link under it changes.
       sigma.on("moveBody", ({ event }) => {
         const id = edgeAtViewport(event.x, event.y);
         setHoverLink((shown) => (id === null ? null : shown?.key === id ? shown : { key: id, x: event.x, y: event.y }));
       });
       sigma.on("enterNode", () => setHoverLink(null));
       sigma.on("leaveStage", () => setHoverLink(null));
-      sigma.on("rightClickEdge", ({ edge, event }) => {
-        event.preventSigmaDefault();
-        openLinkMenuFor(edge, event.original as MouseEvent);
-      });
       sigma.on("rightClickStage", ({ event }) => {
-        // The renderer picks a link only where its thin line is drawn; a right-click that found
-        // neither a node nor a link is checked against every drawn link with the wider reach a
-        // click has. Anywhere else the browser's own menu is left alone.
+        // A right-click that found no node is checked against every drawn link with the wider reach
+        // a click has. Anywhere else the browser's own menu is left alone.
         const hit = edgeAtViewport(event.x, event.y);
         if (hit === null) return;
         event.preventSigmaDefault();
@@ -1895,12 +1936,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         linkDrawn: (edgeId: string) => {
           const sigma = sigmaRef.current;
           if (!sigma || !graph.hasEdge(edgeId)) return null;
-          return !(sigma.getEdgeDisplayData(edgeId)?.hidden ?? false);
+          return sigma.getEdgeDisplayData(edgeId)?.visibility !== "hidden";
         },
         nodeDrawnAs: (nodeId: string) => {
           const sigma = sigmaRef.current;
           if (!sigma || !graph.hasNode(nodeId)) return null;
-          return sigma.getNodeDisplayData(nodeId)?.type === "glass-dot" ? "dot" : "full";
+          return (sigma.getNodeDisplayData(nodeId) as { drawnAsDot?: boolean } | undefined)?.drawnAsDot === true ? "dot" : "full";
         },
         cameraState: () => {
           const sigma = sigmaRef.current;
@@ -3347,6 +3388,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             }}
           />
         )}
+        <LinkLabelOverlay sigmaRef={sigmaRef} labelledRef={labelledLinksRef} />
         {judgementCounts && judgementCounts.size > 0 && (
           <JudgementBadgeOverlay
             sigmaRef={sigmaRef}

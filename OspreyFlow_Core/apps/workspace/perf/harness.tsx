@@ -73,7 +73,7 @@ createRoot(container).render(
 // events would otherwise mark readiness from.
 requestAnimationFrame(() => {
   const observer = new MutationObserver(() => {
-    const canvas = container.querySelector("canvas.sigma-nodes");
+    const canvas = container.querySelector("canvas.sigma-stage");
     if (canvas) {
       window.__PERF__!.readyAt = performance.now();
       observer.disconnect();
@@ -81,7 +81,7 @@ requestAnimationFrame(() => {
   });
   observer.observe(container, { childList: true, subtree: true });
   // In case the canvas already exists by the time this runs:
-  if (container.querySelector("canvas.sigma-nodes")) {
+  if (container.querySelector("canvas.sigma-stage")) {
     window.__PERF__!.readyAt = performance.now();
     observer.disconnect();
   }

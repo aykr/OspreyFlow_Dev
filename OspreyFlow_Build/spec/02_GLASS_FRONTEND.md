@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | Framework | React 19 + TypeScript, Vite (React 18 until the owner's dependency upgrade of 19 October 2026) | MIT | Largest pool of maintainers; the requirement is a long-lived platform, not a clever one |
 | Graph data model | graphology | MIT | Typed graph structure, and its algorithm packages give the browser compute tier for free |
-| Graph rendering | **Sigma.js v3** (WebGL) | MIT | See ADR-002. Scale ceiling is the binding constraint |
+| Graph rendering | **Sigma.js v4** (WebGL 2) | MIT | See ADR-002 and ADR-118. Scale ceiling is the binding constraint |
 | Map | **MapLibre GL JS** | BSD-3 | Vector tiles, offline tile support, and `@sigma/layer-maplibre` projects the graph onto it |
 | Charts | Apache ECharts | Apache-2.0 | Histograms and timeline density; canvas-rendered, handles the row counts |
 | Tables | TanStack Table (headless) | MIT | Virtualised; styling stays ours |
@@ -28,7 +28,7 @@ implementations that must agree pixel-for-pixel, or analysts will see the pictur
 they cross a threshold they cannot see. That is a permanent maintenance tax paid against the
 maintainability constraint, and the failure mode is subtle rather than loud.
 
-Pick one, and pick the one whose ceiling is higher. Sigma.js v3 renders via WebGL with
+Pick one, and pick the one whose ceiling is higher. Sigma.js (v4 since ADR-118) renders via WebGL with
 graphology as the data layer; the practical ceiling is in the hundreds of thousands of nodes
 where Cytoscape's canvas renderer degrades around ten thousand. The 50k working-set cap sits
 inside Sigma's comfortable range and outside Cytoscape's.
@@ -40,8 +40,9 @@ things make that cost affordable here:
 - The design system's node vocabulary is deliberately small — a fill from nine channels, one of
   a handful of shapes, and a stroke that varies in width and dash pattern. That is one
   parameterised program, not nine.
-- Sigma v3 ships the plugins this design needs: `@sigma/node-border`, `@sigma/edge-curve`,
-  `@sigma/node-image`, `@sigma/export-image`, `@sigma/layer-maplibre`.
+- Sigma ships the parts this design needs: under v4 (ADR-118), shapes, line patterns, arrowheads
+  and curved paths are built in, and `@sigma/node-border`, `@sigma/node-image` and
+  `@sigma/layer-maplibre` add the rings, the pictures and the map. WebGL 2 is required.
 - Labels, hover cards and context menus are DOM overlays positioned from Sigma's camera, not
   WebGL. The rich parts stay in HTML where they are easy.
 
@@ -69,7 +70,7 @@ Four zoom bands, all driven from the reducers:
 | --- | --- | --- | --- | --- |
 | **Overview** | zoomed out | Community hulls drawn; nodes at minimum radius (above 10,000 nodes: dots, ADR-119) | Only above the strength filter; aggregated between hulls (above 10,000 links: one link per pair of communities, ADR-119) | None |
 | **Structure** | mid | Full channel fill and shape (above 10,000 nodes: a dot in the channel colour, ADR-119) | All edges, width by weight (above 10,000 links: one link per pair of communities, ADR-119) | Top-degree nodes only |
-| **Neighbourhood** | in | Full node vocabulary, all six states | Directional arrows, curved parallel edges via `@sigma/edge-curve` | All node labels |
+| **Neighbourhood** | in | Full node vocabulary, all six states | Directional arrows, curved parallel edges (Sigma 4's own curved paths; not yet wired) | All node labels |
 | **Link detail** | closest | Node labels plus key properties | Per-edge label: type, occurrence count, interval | Edge labels on |
 
 A large case (more than 10,000 links) opens grouped by community, as Clustered bubbles, so the links
@@ -1233,10 +1234,10 @@ the tokens) and a `thickness` from 1 to 5: the thickness is the width at the def
 link's weight scales it between half and one and a half times, so a heavy link reads thicker than a
 light one of the same type. A type that declares nothing keeps the ordinary colour and the
 weight-only width. A found path and the selected link keep their own treatment over any declaration.
-Sigma's stock plain line is one pixel wide whatever its size, so a solid undirected type that declares
-a thickness, and both dotted lines, are drawn by programs of the Glass's own
-(`canvas/dottedEdgePrograms.ts`); picking still treats a dotted link as one continuous line, so a
-gap can be pointed at. Tests: `src/canvas/nodeAttributes.test.ts` (which program, what colour and
+Since ADR-118 every link is drawn by Sigma 4's one link program, a solid layer with its own dash
+pattern over it; `canvas/linkLook.ts` gives each link its width, its pattern (as multiples of its
+width, so the pattern keeps its shape at every zoom) and its arrowhead. A click near a dotted link
+still finds it in a gap (`edgeSelection.ts` tests the line, not the ink). Tests: `src/canvas/nodeAttributes.test.ts` (which program, what colour and
 width) and `keyboard/link-style.spec.ts`, which reads the painted pixels along a link and fails if a
 probabilistic link is not dotted or a direct one is.
 
@@ -1526,7 +1527,7 @@ it its own surface. Three artefact shapes share one handling gate — there is o
 
 | Shape | Source | Format |
 | --- | --- | --- |
-| Chart | The current canvas (`@sigma/export-image`, §1) or a saved metric/histogram/timeline view (ECharts' own export) | PNG |
+| Chart | The current canvas as drawn (its own WebGL canvas, ADR-118) or a saved metric/histogram/timeline view (ECharts' own export) | PNG |
 | Subgraph | The current working set, or a lassoed selection via the same "Branch to new tab" mechanism §3.1 already defines | JSON |
 | Report | The investigation's assessment objects (§9), assembled with their own cited evidence — the artefact A15 itself names ("Export the chart and the assessment") | Self-contained HTML |
 
@@ -1534,7 +1535,8 @@ it its own surface. Three artefact shapes share one handling gate — there is o
 shape's content comes from without ever stating what file it becomes — a real spec gap, closed
 here rather than left a placeholder. Decided, not merely disclosed as open:
 
-- **Chart — PNG**, `@sigma/export-image`'s own native output for the canvas case; ECharts' own
+- **Chart — PNG**, the canvas's own drawing for the canvas case (ADR-118: link labels, a DOM
+  overlay, are not in it); ECharts' own
   export for a histogram/timeline/metric view produces the same.
 - **Subgraph — JSON**, the working set's own `Node`/`Edge` wire shape
   (`03_CONDUIT_MIDDLEWARE.md` §3.2's delta protocol already defines it, `model_dump(mode="json")`)

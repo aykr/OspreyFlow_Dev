@@ -6,6 +6,20 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **The graph is drawn by Sigma 4** (ADR-118). The canvas, the map and the Studio's row-template
+  map move to version 4 of the graph renderer, which needs **WebGL 2**: every current browser has
+  it, and a browser from before about 2021 shows an empty canvas. What you see stays as it was,
+  with three changes:
+  - nodes are drawn in their own shape — a person round, a phone a hexagon — where they had looked
+    like squares;
+  - the dots and dashes of an unresolved or inferred link grow and shrink with the line when you
+    zoom, keeping their shape;
+  - a link's label is always upright.
+  An exported chart is now exactly the canvas as drawn, though without link labels.
+- **MapLibre stays on 4.x for now.** Sigma 4's map layer still accepts no newer MapLibre, so the
+  move past advisory GHSA-jrc7-96c5-q579 waits for it. As the v0.3.0 notes say, the flaw is not
+  reachable from the Glass.
+
 ## v0.3.0 — 2026-10-19
 
 - **Dependencies brought up to date.** Python: every package to its newest release (among them
