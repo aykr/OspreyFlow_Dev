@@ -4,7 +4,7 @@
 
 | Concern | Choice | Licence | Why |
 | --- | --- | --- | --- |
-| Framework | React 18 + TypeScript, Vite | MIT | Largest pool of maintainers; the requirement is a long-lived platform, not a clever one |
+| Framework | React 19 + TypeScript, Vite (React 18 until the owner's dependency upgrade of 19 October 2026) | MIT | Largest pool of maintainers; the requirement is a long-lived platform, not a clever one |
 | Graph data model | graphology | MIT | Typed graph structure, and its algorithm packages give the browser compute tier for free |
 | Graph rendering | **Sigma.js v3** (WebGL) | MIT | See ADR-002. Scale ceiling is the binding constraint |
 | Map | **MapLibre GL JS** | BSD-3 | Vector tiles, offline tile support, and `@sigma/layer-maplibre` projects the graph onto it |

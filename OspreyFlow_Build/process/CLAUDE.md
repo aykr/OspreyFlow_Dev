@@ -158,7 +158,7 @@ outside the stated scope of the change — a correction to one section must not 
 
 - Python 3.12, FastAPI, async throughout. Pydantic models in `packages/schemas` are the source
   of truth; TypeScript types are generated from them and drift is a build failure.
-- TypeScript strict. React 18 + Vite. Zustand for the working set.
+- TypeScript strict. React 19 + Vite. Zustand for the working set.
 - Ports are `Protocol` classes in `packages/ports`. Adapters live in `packages/adapters/<name>`.
 - British English in code comments, documentation and all user-facing copy.
 - Conventional Commits.
