@@ -9,7 +9,7 @@ WORKDIR /srv
 # 2.6.0, not 2.5.1: CVE-2025-32434, a weights-only load that was not (the release scan, 15 October
 # 2026). setuptools brought up to date for the same scan (it and the jaraco.context it bundles).
 RUN pip install --upgrade setuptools==84.0.0 \
- && pip install --index-url https://download.pytorch.org/whl/cpu torch==2.6.0
+ && pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
 COPY services/ner/requirements.txt ./requirements.txt
 RUN pip install -r requirements.txt
 # The licence register (`00_ARCHITECTURE.md` §7) for this image's own packages, which

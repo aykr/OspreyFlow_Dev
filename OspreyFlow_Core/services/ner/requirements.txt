@@ -2,6 +2,6 @@
 # every installed package at image build. Stanza is held at 1.10.1, the last release that does not
 # require udtools (GPL-2.0-or-later) and with it udapi (GPL-3.0-or-later): 1.11.0 to 1.15.0 all do.
 stanza==1.10.1
-fastapi==0.143.1
-starlette==1.8.0
-uvicorn==0.34.0
+fastapi==0.146.0
+starlette==1.9.0
+uvicorn==0.54.0

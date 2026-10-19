@@ -60,7 +60,9 @@ export function CaseSwitcher({
     <DropdownPanel
       label={
         <>
-          <span className="visually-hidden">Case: </span>
+          {/* The space is its own text node, not inside the hidden span: a name computation may
+              trim an element's trailing space (jsdom 29 does), which would read "Case:Name". */}
+          <span className="visually-hidden">Case:</span>{" "}
           {current?.branched_from ? (
             <span>
               {parent && `${caseLabel(parent)} › `}

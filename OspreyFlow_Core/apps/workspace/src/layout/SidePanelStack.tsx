@@ -115,7 +115,8 @@ export function SidePanelStack({ panels }: { panels: SidePanelSlot[] }) {
               display: "flex",
               flexDirection: "column",
               height: !isFolded && sized ? own : undefined,
-              flex: isFolded || sized ? "0 0 auto" : "1 1 0",
+              // `0px`, not a unitless 0: the same in every browser, and jsdom 29 drops the unitless form.
+              flex: isFolded || sized ? "0 0 auto" : "1 1 0px",
               minHeight: isFolded ? undefined : MIN_PANEL_HEIGHT,
               overflow: isFolded ? "hidden" : "auto",
             }}
