@@ -6,6 +6,20 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.3.0 — 2026-10-19
+
+- **Dependencies brought up to date.** Python: every package to its newest release (among them
+  FastAPI 0.146, Starlette 1.9, pydantic 2.14, pyarrow 26, torch 2.14, transformers 5.20), and the
+  name-recognition image's FastAPI, Starlette, uvicorn and torch with them. The Glass: React 19,
+  Vite 8, Playwright 1.64, jsdom 29, immer 11, and every minor release. Held back, each for a
+  reason: the graph renderer Sigma stays on 3.x (version 4 changes the APIs the canvas is drawn
+  with; it is its own piece of work), MapLibre on 4.x (Sigma's map layer accepts no newer), splink
+  on 3.9.9 and Stanza on 1.10.1 (their next releases bring GPL dependencies), and the Superset
+  image as pinned.
+- **About MapLibre's advisory GHSA-jrc7-96c5-q579** (an XSS bypass in its HTML sanitiser, fixed only
+  in MapLibre 6.4.1): the Glass never passes HTML through that sanitiser — it shows no MapLibre
+  popups, and draws the map's attribution itself as plain text — so the flaw is not reachable.
+  MapLibre moves past it with the Sigma 4 work.
 - **A clone keeps your deployment's secrets out of its commits.** The product's `.gitignore` now
   covers what `ospreyflow` writes into the folder — the rendered deployment (its `deployment.env`
   holds the generated passwords), backup sets, local data, the real-data exceptions list, and
