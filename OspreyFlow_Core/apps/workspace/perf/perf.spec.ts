@@ -129,6 +129,9 @@ test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", asy
   // this is a regression gate (catch a change that makes it far worse),
   // not a tight budget that would make this test flaky on ordinary CI
   // variance.
+  console.log(
+    `perf sweep: ${averageFrameMs.toFixed(1)} ms per frame over ${meaningfulSamples.length} frames`,
+  );
   expect(averageFrameMs).toBeLessThan(3000);
 });
 

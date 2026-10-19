@@ -7,6 +7,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
 from tools import licence_check
 from tools.layout import CORE
 
@@ -51,3 +52,31 @@ def test_the_path_is_the_one_the_dockerfile_copies() -> None:
     assert "COPY services/ner/licence_gate.py" in dockerfile
     assert "python licence_gate.py" in dockerfile
     assert Path(CORE / "services/ner/licence_gate.py").is_file()
+
+
+def test_the_gates_recorded_lgpl_exceptions_are_the_repositorys() -> None:
+    assert gate.RECORDED_LGPL_EXCEPTIONS == licence_check.RECORDED_LGPL_EXCEPTIONS
+
+
+@pytest.mark.parametrize(
+    ("text", "package"),
+    [
+        ("AGPL-3.0 AND LGPL-2.1", None),
+        ("GNU Lesser General Public License v3 (LGPLv3)", None),
+        ("GNU Lesser General Public License v3 (LGPLv3)", "deepparse"),
+        ("Apache-2.0 OR GPL-3.0", None),
+        ("(MIT OR Apache-2.0) AND GPL-3.0", None),
+        ("MIT License; Apache Software License", None),
+        ("Limited Use Licence", None),
+        ("CC-BY-SA-4.0", None),
+        ("BSD-3-Clause AND 0BSD AND Zlib", None),
+        ("UNKNOWN", None),
+    ],
+)
+def test_the_image_gate_answers_every_licence_as_the_repositorys_gate(
+    text: str, package: str | None
+) -> None:
+    """The copy cannot import the original, so it is held to it by behaviour: the review of 18
+    October 2026 found the copy still passing `AGPL-3.0 AND LGPL-2.1` after the original was
+    fixed."""
+    assert gate.is_allowed(text, package=package) == licence_check.is_allowed(text, package=package)
