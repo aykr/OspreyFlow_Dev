@@ -892,9 +892,19 @@ between the API contract and the client types must be a build failure.
 The build fails if a dependency's licence is not on the allowlist.
 
 **Allowed outright:** Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0, SIL-OFL-1.1,
-PSF-2.0, Python-2.0, Unlicense, CC0-1.0, CC-BY-3.0, CC-BY-4.0. The last five arrive almost
-exclusively through transitive dependencies — documentation, data files, small utility packages —
-and excluding them would fail the build on packages nobody chose and nobody can avoid.
+PSF-2.0, Python-2.0, Unlicense, CC0-1.0, CC-BY-3.0, CC-BY-4.0, and (the owner, 19 October 2026)
+0BSD, Zlib, CNRI-Python and BSL-1.0. All but the first seven arrive almost exclusively through
+transitive dependencies — documentation, data files, small utility packages; numpy, regex, torch
+and tslib for the last four — and excluding them would fail the build on packages nobody chose and
+nobody can avoid.
+
+**How the gate reads a licence (the review of 18 October 2026).** A package's licences are one
+expression — "; "-joined by pip-licenses, `AND`/`OR`/parentheses in SPDX — and pass only as a whole:
+under OR one allowed alternative is enough, under AND every term must be allowed. Terms match by
+whole words; GPL and AGPL never pass; an LGPL term passes only for a package with a recorded
+exception below. Before this the gate passed any text containing "lgpl" — `AGPL-3.0 AND LGPL-2.1`
+with it — and every LGPL package (`tests/licence_check/test_licence_expressions.py`,
+`test_licence_check_mjs.test.mjs`).
 
 **Requires review:** LGPL-3.0, LGPL-2.1. Not on the allowlist, because the condition that makes
 them acceptable here — dynamic linking only — is not something `pip-licenses` or
@@ -917,6 +927,8 @@ geocoders are governed by ADR-108 ruling Q5, local gazetteers first and any onli
 per run). **Recorded LGPL exception:** `deepparse` (LGPL-3.0) — imported unmodified as a separate,
 user-replaceable installed package, never vendored, statically bundled or modified; assessed
 10 October 2026 under ADR-108 (the owner's authorisation of the dependency set is in the ADR).
+Its own LGPL dependencies `gensim` (LGPL-2.1) and `poutyne` (LGPL-3.0) are under the same exception,
+on the same terms — found when the gate was made to read expressions; the owner, 19 October 2026.
 Jube (AGPL) and AMLTRIX (commercial, unverifiable as open source) are rejected with CoreNLP below;
 the AML typologies are our own rules (`services/ingest/typologies.py`).
 

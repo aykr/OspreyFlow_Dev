@@ -23,8 +23,34 @@ test("an Apache-2.0 licence is allowed", () => {
   assert.equal(isAllowed("Apache-2.0"), true);
 });
 
-test("LGPL-3.0 is allowed -- the file's own disclosed gap: linkage mode is not checked", () => {
-  assert.equal(isAllowed("LGPL-3.0"), true);
+// Spec 00 §7: LGPL is not on the allowlist; it passes only for a package with a recorded exception
+// (none among npm packages). This test used to assert the opposite.
+test("LGPL-3.0 is refused for a package with no recorded exception", () => {
+  assert.equal(isAllowed("LGPL-3.0", "some-package"), false);
+  assert.equal(isAllowed("LGPL-3.0"), false);
+});
+
+// The review of 18 October 2026: the shape main() builds for a package naming two licences.
+test("an LGPL term never carries an AGPL one through", () => {
+  assert.equal(isAllowed("AGPL-3.0 AND LGPL-2.1"), false);
+});
+
+test("an OR is a choice, so one allowed alternative is enough, but AND needs every term", () => {
+  assert.equal(isAllowed("Apache-2.0 OR GPL-3.0"), true);
+  assert.equal(isAllowed("(MIT OR Apache-2.0) AND GPL-3.0"), false);
+  assert.equal(isAllowed("GPL-3.0 OR AGPL-3.0"), false);
+});
+
+test("terms match by whole words, and CC-BY-SA is not CC-BY", () => {
+  assert.equal(isAllowed("Limited Use"), false);
+  assert.equal(isAllowed("CC-BY-SA-4.0"), false);
+  assert.equal(isAllowed("CC-BY-4.0"), true);
+});
+
+test("the four licences added on 19 October 2026 pass", () => {
+  for (const licence of ["0BSD", "Zlib", "CNRI-Python", "BSL-1.0"]) {
+    assert.equal(isAllowed(licence), true, licence);
+  }
 });
 
 test("a dual-licensed package naming both an allowed licence and GPL is rejected -- the real " +

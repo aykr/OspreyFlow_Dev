@@ -4,12 +4,14 @@ Runs `pip-licenses` against a Python environment and fails, naming every
 offending package, if any reported licence is not on the allowlist. Exit 1 on
 any offender, 0 otherwise.
 
-Known gap, accepted and flagged rather than fixed here (Phase 0 plan §2.D):
-`pip-licenses` reports declared licence metadata only, so the "(dynamic
-linking only)" condition on LGPL-3.0 in the allowlist is not checked — an
-LGPL-3.0 package passes here regardless of linkage mode. That is a
-specification defect to correct in the docs, not something this script can
-enforce.
+**A licence is read as an expression** (the review of 18 October 2026). A package's licences are
+one expression — pip-licenses joins them with "; ", SPDX writes `AND`, `OR` and parentheses — and
+the expression passes only as a whole: under OR one allowed alternative is enough, under AND (and
+`;` and `,`) every term must be allowed. Each term is matched by whole words. GPL and AGPL are
+never allowed. LGPL is not on the allowlist (`00_ARCHITECTURE.md` §7: linkage cannot be seen in
+metadata), so an LGPL term passes only for a package named in `RECORDED_LGPL_EXCEPTIONS`, each one
+assessed in §7. Before this, any text containing "lgpl" passed — `"AGPL-3.0 AND LGPL-2.1"` with
+it — every LGPL package passed, and "limited" counted as MIT.
 
 Also allows PSF-2.0 (Python Software Foundation Licence 2.0), which is not
 itemised in `00_ARCHITECTURE.md` §7 but is OSI-approved and permissive, and is
@@ -22,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -52,7 +55,27 @@ ALLOWED_MARKERS = (
     "open font license",
     "psf-2.0",
     "python software foundation",
+    "unlicense",
+    "cc0",
+    "cc-by-3.0",
+    "cc-by-4.0",
+    # Added 19 October 2026, the owner's choice (§7): permissive, transitive only.
+    "0bsd",
+    "zlib",
+    "cnri-python",
+    "bsl-1.0",
+    "boost software license",
 )
+
+#: `00_ARCHITECTURE.md` §7's recorded LGPL exceptions: package name -> where it was assessed. An
+#: exception admits the package's LGPL and nothing else it declares.
+RECORDED_LGPL_EXCEPTIONS: dict[str, str] = {
+    "deepparse": "ADR-108, 10 October 2026: imported unmodified as a separate installed package",
+    "psycopg2-binary": "ADR-111 Amendment 2, 11 October 2026: Superset's driver, its image only",
+    # deepparse's own dependencies, under its exception on the same terms (the owner, 19 October).
+    "gensim": "deepparse's dependency, under its exception (19 October 2026)",
+    "poutyne": "deepparse's dependency, under its exception (19 October 2026)",
+}
 
 
 #: ADR-114 Amendment 1 decision 5: a share-alike data licence is acceptable only for a pack
@@ -67,13 +90,84 @@ USER_OBTAINED_UNLICENSED = {
 }
 
 
-def is_allowed(license_text: str) -> bool:
-    text = license_text.lower()
-    if "lesser general public license" in text or "lgpl" in text:
-        return True  # LGPL-3.0, dynamic linking only — linkage not checked, see module docstring.
-    if "general public license" in text or "gpl" in text:
+_OPERATOR = re.compile(r"(\(|\)|;|,|\band\b|\bor\b)")
+_LGPL = re.compile(r"(?<![a-z])lgpl|lesser general public|library general public")
+_GPL = re.compile(r"(?<![a-z])a?gpl|general public licen[cs]e|affero")
+
+
+def _word(marker: str) -> re.Pattern[str]:
+    return re.compile(r"(?<![a-z0-9])" + re.escape(marker) + r"(?![a-z0-9])")
+
+
+_MARKERS = tuple(_word(m) for m in ALLOWED_MARKERS)
+
+
+def _term_allowed(term: str, package: str | None) -> bool:
+    if _LGPL.search(term):
+        return package is not None and package.lower() in RECORDED_LGPL_EXCEPTIONS
+    if _GPL.search(term):
         return False
-    return any(marker in text for marker in ALLOWED_MARKERS)
+    return any(marker.search(term) for marker in _MARKERS)
+
+
+def _tokens(text: str) -> list[str]:
+    text = text.lower().replace("library or lesser", "lesser")
+    # A parenthesised aside with no operator in it ("(LGPLv3)", "(MPL 2.0)") is part of the
+    # licence's name, not a group.
+    text = re.sub(
+        r"\(([^()]*)\)",
+        lambda m: m.group(0) if _OPERATOR.search(m.group(1)) else f" {m.group(1)} ",
+        text,
+    )
+    return [t.strip() for t in _OPERATOR.split(text) if t.strip()]
+
+
+def is_allowed(license_text: str, package: str | None = None) -> bool:
+    """The whole expression allowed (module docstring); `package` names the LGPL exception, if
+    any. Anything that does not parse is refused."""
+    tokens = _tokens(license_text)
+    position = 0
+
+    def peek() -> str | None:
+        return tokens[position] if position < len(tokens) else None
+
+    def take() -> str:
+        nonlocal position
+        position += 1
+        return tokens[position - 1]
+
+    def either() -> bool:
+        result = both()
+        while peek() == "or":
+            take()
+            result = both() or result
+        return result
+
+    def both() -> bool:
+        result = atom()
+        while peek() in ("and", ";", ","):
+            take()
+            result = atom() and result
+        return result
+
+    def atom() -> bool:
+        token = peek()
+        if token is None or token in ("and", "or", ";", ",", ")"):
+            raise ValueError("expected a licence")
+        take()
+        if token == "(":
+            result = either()
+            if peek() != ")":
+                raise ValueError("unbalanced parenthesis")
+            take()
+            return result
+        return _term_allowed(token, package)
+
+    try:
+        result = either()
+    except ValueError:
+        return False
+    return result and position == len(tokens)
 
 
 def run_pip_licenses(extra_pythonpath: str | None) -> list[dict[str, str]]:
@@ -91,7 +185,7 @@ def run_pip_licenses(extra_pythonpath: str | None) -> list[dict[str, str]]:
 
 
 def find_offenders(packages: list[dict[str, str]]) -> list[dict[str, str]]:
-    return [p for p in packages if not is_allowed(p["License"])]
+    return [p for p in packages if not is_allowed(p["License"], package=p.get("Name"))]
 
 
 def find_own_licence_violations(repo_root: Path = REPO_ROOT) -> list[str]:
