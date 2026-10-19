@@ -6,6 +6,12 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **A clone keeps your deployment's secrets out of its commits.** The product's `.gitignore` now
+  covers what `ospreyflow` writes into the folder — the rendered deployment (its `deployment.env`
+  holds the generated passwords), backup sets, local data, the real-data exceptions list, and
+  build output — so `git add -A` in a clone or fork no longer picks them up. If you have committed
+  any of these already, remove them from your history.
+
 ## v0.2.0 — 2026-10-18
 
 - **Prison and custody cases.** The crime case analysis pack (NIEM) gains an **incident** — an

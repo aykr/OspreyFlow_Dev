@@ -4,3 +4,36 @@
 
 # OpenTofu state for a cloud install (ospreyflow install --cloud): it holds secrets.
 .cloud/
+
+# What a deployment writes into this folder — never committed (`tests/test_core_gitignore.py`).
+# The rendered deployment: `deployment.env` holds its generated passwords.
+/deploy/generated/
+# Backup sets (`ospreyflow backup`): every store and the identity file.
+/backups/
+# Local data.
+/data/
+# The real-data exceptions list (`config/real_data_exceptions.example.yaml` has its shape) and a
+# machine's own settings.
+/config/real_data_exceptions.yaml
+/osprey.local.yaml
+
+# Python and Node.
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+node_modules/
+
+# Builds and browser-test output.
+/apps/workspace/dist/
+/apps/workspace/test-results/
+/apps/workspace/playwright-report/
+/apps/workspace/.env.local
+/apps/harness/dist/
+/apps/harness/test-results/
+/apps/harness/playwright-report/
+
+# macOS.
+.DS_Store
