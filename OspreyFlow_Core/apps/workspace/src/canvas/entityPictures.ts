@@ -61,8 +61,10 @@ async function thumbnailOf(api: PictureApi, nodeId: string): Promise<string> {
     headers: { Authorization: `Bearer ${api.bearerToken}` },
   });
   if (!response.ok) throw new Error(`picture ${response.status}`);
-  const blob = await response.blob();
-  return thumbnailFromFile(new File([blob], "picture", { type: blob.type }));
+  // The blob itself, not wrapped in a `File`: nothing reads a name, and a `File` built from a blob
+  // of another realm is refused by some environments (jsdom 29 on Node 22), which left a fetched
+  // picture undrawn.
+  return thumbnailFromFile(await response.blob());
 }
 
 /** Asks which of `nodeIds` have a picture of their own and fetches any not already held; a node the

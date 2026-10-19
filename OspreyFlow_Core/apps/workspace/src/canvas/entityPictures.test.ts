@@ -65,7 +65,9 @@ function server(answer: { node_id: string; document_id: string }[]) {
       calls.push({ url, method: init?.method ?? "GET" });
       if (url.endsWith("/pictures")) return new Response(JSON.stringify(answer), { status: 200 });
       if (init?.method === "DELETE") return new Response("{}", { status: 200 });
-      return new Response(new Blob(["png"], { type: "image/png" }), { status: 200 });
+      // A plain body with its type, not `new Blob(...)`: under jsdom that is jsdom's Blob, which
+      // Node 22's own `Response` cannot read (it calls `blob.stream()`), so the picture was lost.
+      return new Response("png", { status: 200, headers: { "Content-Type": "image/png" } });
     }),
   );
   return calls;

@@ -39,8 +39,9 @@ function load(file: Blob): Promise<HTMLImageElement> {
 }
 
 /** The middle square of the file, drawn at 64 units (smaller if it would still be too big to keep) as
- * a PNG data address. Rejects with a sentence for the analyst when the file cannot be used. */
-export async function thumbnailFromFile(file: File): Promise<string> {
+ * a PNG data address. Rejects with a sentence for the analyst when the file cannot be used. Any
+ * `Blob` will do — a `File` is one — since only its type, size and bytes are read. */
+export async function thumbnailFromFile(file: Blob): Promise<string> {
   const refusal = checkPictureFile(file);
   if (refusal !== null) throw new Error(refusal);
   const image = await load(file);
