@@ -107,9 +107,10 @@ test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", asy
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
 
-  const frameTimesMs = await page.evaluate(async ({ cx, cy }) => {
+  const sweep = await page.evaluate(async ({ cx, cy }) => {
     const samples: number[] = [];
-    let last = performance.now();
+    const started = performance.now();
+    let last = started;
     const onFrame = () => {
       const now = performance.now();
       samples.push(now - last);
@@ -140,16 +141,15 @@ test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", asy
       await new Promise((resolve) => setTimeout(resolve, 16));
     }
     cancelAnimationFrame(raf);
-    // The frame still being drawn when the sweep ends counts too: averaging only the frames that
-    // finished let a page stalled for most of the sweep report a fast average from its last two
-    // (20 October 2026, two 15 ms frames in a two-second sweep).
-    samples.push(performance.now() - last);
-    return samples;
+    return { frames: samples.length, elapsedMs: performance.now() - started };
   }, { cx, cy });
 
-  const meaningfulSamples = frameTimesMs.filter((t) => t > 0);
-  const averageFrameMs =
-    meaningfulSamples.reduce((sum, t) => sum + t, 0) / Math.max(1, meaningfulSamples.length);
+  // The time the sweep took, over the frames it finished. The frame still being drawn when it ends
+  // counts as time but not as a frame: averaging only finished frames let a page stalled for most
+  // of the sweep report a fast average from its last two (two 15 ms frames in a two-second sweep),
+  // and counting the unfinished one as a frame halved a stall (a planted three-second stall on
+  // every camera move passed at 1,514 ms "per frame"; 20 October 2026).
+  const averageFrameMs = sweep.elapsedMs / Math.max(1, sweep.frames);
 
   // 60fps real-hardware target = 16.67ms/frame. CI's software-rendered
   // proxy is calibrated against an observed baseline on this fixture
@@ -159,7 +159,7 @@ test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", asy
   // not a tight budget that would make this test flaky on ordinary CI
   // variance.
   console.log(
-    `perf sweep: ${averageFrameMs.toFixed(1)} ms per frame over ${meaningfulSamples.length} frames`,
+    `perf sweep: ${averageFrameMs.toFixed(1)} ms per frame over ${sweep.frames} frames in ${sweep.elapsedMs.toFixed(0)} ms`,
   );
   expect(averageFrameMs).toBeLessThan(3000);
 });
