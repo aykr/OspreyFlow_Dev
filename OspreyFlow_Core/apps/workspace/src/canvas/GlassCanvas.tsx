@@ -80,6 +80,7 @@ import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEve
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import { ARROW_HEAD, linkLookFor } from "./linkLook";
 import { graphExtent } from "./graphExtent";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- experiment
 import { declareReducersReadItemStateOnly } from "./reducerDependency";
 import { settledAnchors } from "./settledAnchor";
 import { dragTargets, keepPinned, nudgeFor } from "./nodeDrag";
@@ -1522,7 +1523,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         },
       });
       // The reducers read each item's own state, never the graph-wide state (`reducerDependency.ts`).
-      declareReducersReadItemStateOnly(sigma);
+      // experiment: declaration removed (bisecting the CI first-frame cost)
       currentSigma = sigma;
       sigmaRef.current = sigma;
       // ADR-115 E4: the zoom group's readout follows the camera (100% at its starting scale).
