@@ -24,6 +24,7 @@
     "@sigma/node-border": "^3.0.0",
     "@sigma/node-image": "^3.0.0",
     "@superset-ui/embedded-sdk": "0.4.0",
+    "comlink": "^4.4.2",
     "d3-polygon": "^3.0.1",
     "echarts": "^6.1.0",
     "graphology": "^0.26.0",
