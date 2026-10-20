@@ -27,7 +27,7 @@ import { DASH_LENGTH_PX, DASH_PERIOD_PX, DOT_LENGTH_PX, DOT_PERIOD_PX } from "./
  * line's width long and five times as wide, as it was under Sigma 3. */
 export const ARROW_HEAD = { lengthRatio: 6, widthRatio: 5 } as const;
 
-const TRANSPARENT = "rgba(0, 0, 0, 0)";
+const TRANSPARENT = "transparent";
 
 /** The narrowest size a link other than a plain line is drawn at: Sigma 3's `minEdgeThickness`. */
 export const MIN_PATTERNED_SIZE = 1.7;
