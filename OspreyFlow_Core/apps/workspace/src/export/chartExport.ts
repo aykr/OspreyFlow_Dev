@@ -1,12 +1,12 @@
-// Chart export — Phase 8 Stage 4h, `02_GLASS_FRONTEND.md` §10.1 ("Chart — PNG,
-// `@sigma/export-image`'s own native output for the canvas case") and §10.3 ("a chart gets a
+// Chart export — Phase 8 Stage 4h, `02_GLASS_FRONTEND.md` §10.1 ("Chart — PNG", the canvas as
+// drawn: `stageImage` below, ADR-118) and §10.3 ("a chart gets a
 // visible footer/watermark plus embedded machine-readable image metadata carrying the same
 // fields").
 //
 // **Split into two functions on purpose, not merged into one.** `embedChartMark` is pure —
 // PNG bytes in, marked PNG bytes out — and is what `chartExport.test.ts` proves against a real,
 // fixed PNG fixture (the same one `pngMark.test.ts` already uses). `captureChartImage` is the real
-// browser integration: a live `Sigma` instance, `@sigma/export-image`'s own `toBlob`, and
+// browser integration: a live `Sigma` instance, its own stage canvas (`stageImage`), and
 // `OffscreenCanvas`/`createImageBitmap` to composite the visible watermark onto the captured
 // pixels before the machine-readable mark is embedded. **`captureChartImage` cannot be exercised
 // in this project's own vitest environment** — `vitest.config.ts`'s own default `node` environment
@@ -15,15 +15,12 @@
 // data-transform tests, never a render); `OffscreenCanvas`/`createImageBitmap` are real browser
 // APIs `jsdom` does not implement either. This is the same class of disclosed gap `GlassCanvas.tsx`
 // already carries for `highlightNodes` (real-renderer-dependent, proven by contract not by a
-// vitest render) — trusted to the real, already-tested `@sigma/export-image` library and to a
-// human/Playwright check against the real app, not asserted here as if it were unit-tested.
-// `@sigma/export-image`/`sigma` are imported dynamically inside `captureChartImage`, not at
-// module top level — `sigma`'s own module body references `WebGL2RenderingContext` at import
-// time (confirmed directly: a static import here throws `ReferenceError:
-// WebGL2RenderingContext is not defined` in vitest's `node` environment, before any test in
-// this file runs), which would make `embedChartMark`/`chartMarkFields` — the pure, tested half
-// of this module — untestable too. A dynamic import confines that requirement to the one
-// function that is genuinely real-browser-only.
+// vitest render) — proven instead by `export-capture/capture.spec.ts` against the real canvas in a
+// browser, not asserted here as if it were unit-tested. Nothing from `sigma` is imported here but
+// its type: `sigma`'s own module body references `WebGL2RenderingContext` at import time (a
+// static import throws `ReferenceError: WebGL2RenderingContext is not defined` in vitest's `node`
+// environment), which would make `embedChartMark`/`chartMarkFields` — the pure, tested half of this
+// module — untestable too.
 import type { Attributes } from "graphology-types";
 import type Sigma from "sigma";
 
@@ -58,19 +55,39 @@ export function chartWatermarkText(mark: ExportMark): string {
   return `${mark.osprey_mark} · ${mark.investigation_id} · ${mark.handling_level} · ${mark.exported_at}`;
 }
 
-/** The real capture path: `toBlob` (a live `Sigma` renderer → PNG bytes, `@sigma/export-image`'s
- * own job, not reimplemented here) → a visible watermark composited via `OffscreenCanvas` →
- * `embedChartMark`'s own machine-readable metadata. Returns a `Blob` ready to download. */
+/** The canvas as it is drawn now, as PNG bytes: the renderer's own stage, read straight after it
+ * draws (WebGL keeps its picture only until the frame is shown, and `toBlob` copies it at the
+ * call). Sigma 4 draws nodes, links and labels on that one canvas. `@sigma/export-image` was not
+ * used for this under Sigma 4: it draws a second renderer from the first's primitives, styles and
+ * settings, without its reducers, and the Glass's whole look — pictures, rings, line patterns,
+ * label colours — is the reducers' (`GlassCanvas.tsx`). */
+export function stageImage(sigma: {
+  getStageCanvas(): HTMLCanvasElement;
+  on(event: "afterRender", listener: () => void): unknown;
+  off(event: "afterRender", listener: () => void): unknown;
+  scheduleRender(): unknown;
+}): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const grab = () => {
+      sigma.off("afterRender", grab);
+      sigma
+        .getStageCanvas()
+        .toBlob((blob) => (blob ? resolve(blob) : reject(new Error("stageImage: the canvas gave no image"))), "image/png");
+    };
+    sigma.on("afterRender", grab);
+    sigma.scheduleRender();
+  });
+}
+
+/** The real capture path: the canvas as drawn (`stageImage`) → PNG bytes → a visible watermark
+ * composited via `OffscreenCanvas` → `embedChartMark`'s own machine-readable metadata. Returns a
+ * `Blob` ready to download. */
 export async function captureChartImage<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(sigma: Sigma<N, E, G>, mark: ExportMark): Promise<Blob> {
-  const { toBlob } = await import("@sigma/export-image");
-  // `toBlob`'s own signature only cares about the generic `Sigma` (default `Attributes` type
-  // params) — it never reads a caller's own node/edge attribute shape, so this cast is safe: it
-  // widens, it does not lie about what the renderer actually holds.
-  const rawBlob = await toBlob(sigma as unknown as Sigma, { format: "png" });
+  const rawBlob = await stageImage(sigma);
   const bitmap = await createImageBitmap(rawBlob);
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext("2d");

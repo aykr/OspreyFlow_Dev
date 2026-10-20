@@ -4,6 +4,7 @@
 // individual links appear from the neighbourhood band in. Zoom never changes what exists: the links
 // not drawn are still in the working set, counted, searchable and selectable.
 
+import { cachedNodeSvgDataUri } from "../color/nodeVisual";
 import type { ZoomBand } from "./zoomBands";
 
 /** Above this many links in the working set, zoomed-out bands draw links between communities. The
@@ -18,6 +19,13 @@ export const NODE_DOTS_ABOVE = 10_000;
 /** Whether ordinary nodes are drawn as dots at this band and size. */
 export function drawsNodeDots(band: ZoomBand, nodeCount: number): boolean {
   return nodeCount > NODE_DOTS_ABOVE && (band === "overview" || band === "structure");
+}
+
+/** A node's picture when drawn as a dot (Sigma 4: one program draws every node, so a dot is a
+ * picture rather than a program of its own): a plain circle in the node's colour, no outline, no
+ * icon. One picture per colour, cached. */
+export function dotImage(colorHex: string): string {
+  return cachedNodeSvgDataUri({ shape: "circle", fillHex: colorHex, strokeHex: colorHex, strokeStyle: "solid", icon: null });
 }
 
 /** Whether individual links give way to links between communities at this band and size. */

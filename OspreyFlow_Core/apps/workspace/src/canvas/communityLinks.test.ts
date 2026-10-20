@@ -7,6 +7,7 @@ import {
   communityLinks,
   communityLinkWidth,
   drawsCommunityLinks,
+  dotImage,
   drawsNodeDots,
 } from "./communityLinks";
 import { packBubbles } from "./layoutModes";
@@ -111,5 +112,17 @@ describe("drawsNodeDots", () => {
     for (const band of ["overview", "structure", "neighbourhood", "link-detail"] as const) {
       expect(drawsNodeDots(band, NODE_DOTS_ABOVE)).toBe(false);
     }
+  });
+});
+
+// Under Sigma 4 a dot is a picture, not a program (ADR-119 Amendment 1): a plain circle in the
+// node's colour, one per colour, with no icon and no outline in another colour.
+describe("dotImage", () => {
+  it("is one plain circle per colour", () => {
+    expect(dotImage("#336699")).toBe(dotImage("#336699"));
+    expect(dotImage("#336699")).not.toBe(dotImage("#993366"));
+    const svg = decodeURIComponent(dotImage("#336699"));
+    expect(svg).toContain("<circle");
+    expect(svg.toLowerCase()).not.toContain("#993366");
   });
 });

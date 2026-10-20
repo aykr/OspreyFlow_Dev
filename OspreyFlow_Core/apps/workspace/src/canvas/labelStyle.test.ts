@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { paletteFor } from "../color/palette";
-import { drawHoveredNode, drawNodeLabel, labelColoursFor } from "./labelStyle";
+import { fitToLength, hoverBoxFor, labelColoursFor, labelSide, nodeLabelLook } from "./labelStyle";
 
 // Sigma paints a label in black unless it is told otherwise, which is invisible on the dark canvas.
 // These tests pin that the label colours come from the theme's palette and that the box drawn
@@ -24,113 +24,66 @@ describe("label colours", () => {
   it("are the theme's primary text colour, for node labels and link labels", () => {
     for (const theme of ["dark", "light"] as const) {
       const palette = paletteFor(theme);
-      const colours = labelColoursFor(palette);
-      expect(colours.labelColor).toEqual({ color: palette.textPrimary });
-      expect(colours.edgeLabelColor).toEqual({ color: palette.textPrimary });
+      expect(labelColoursFor(palette)).toEqual({ labelColor: palette.textPrimary, edgeLabelColor: palette.textPrimary });
+      expect(nodeLabelLook(palette, "Petrenko", false).labelColor).toBe(palette.textPrimary);
     }
   });
 
   it("can be read against the canvas of each theme (WCAG AA, 4.5:1)", () => {
     for (const theme of ["dark", "light"] as const) {
       const palette = paletteFor(theme);
-      const colours = labelColoursFor(palette);
-      expect(contrast(colours.labelColor.color, palette.surfaceSunken)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(labelColoursFor(palette).labelColor, palette.surfaceSunken)).toBeGreaterThanOrEqual(4.5);
     }
   });
 });
 
-/** A canvas context that records the colour in force at each fill and each piece of text. */
-function recordingContext() {
-  const fills: string[] = [];
-  const texts: { text: string; colour: string }[] = [];
-  const context = {
-    fillStyle: "",
-    font: "",
-    shadowOffsetX: 0,
-    shadowOffsetY: 0,
-    shadowBlur: 0,
-    shadowColor: "",
-    measureText: (text: string) => ({ width: text.length * 6 }),
-    beginPath: () => undefined,
-    moveTo: () => undefined,
-    lineTo: () => undefined,
-    arc: () => undefined,
-    closePath: () => undefined,
-    fill() {
-      fills.push(this.fillStyle);
-    },
-    fillText(text: string) {
-      texts.push({ text, colour: this.fillStyle });
-    },
-  };
-  return { context, fills, texts };
-}
-
-const SETTINGS = {
-  labelSize: 12,
-  labelFont: "sans-serif",
-  labelWeight: "normal",
-} as never;
-
 describe("the box behind a hovered node's label", () => {
   for (const theme of ["dark", "light"] as const) {
-    it(`is a ${theme} surface with the theme's text on it, readable`, () => {
+    it(`is a ${theme} surface the theme's text can be read on`, () => {
       const palette = paletteFor(theme);
-      const { context, fills, texts } = recordingContext();
-      drawHoveredNode(palette)(
-        context as unknown as CanvasRenderingContext2D,
-        { x: 50, y: 50, size: 6, label: "Petrenko", color: "#5367cb" } as never,
-        SETTINGS,
-      );
-      expect(fills).toEqual([palette.surfaceRaised]);
-      expect(texts).toEqual([{ text: "Petrenko", colour: palette.textPrimary }]);
-      expect(contrast(palette.textPrimary, palette.surfaceRaised)).toBeGreaterThanOrEqual(4.5);
+      const box = hoverBoxFor(palette);
+      expect(box.backdropColor).toBe(palette.surfaceRaised);
+      expect(contrast(palette.textPrimary, box.backdropColor)).toBeGreaterThanOrEqual(4.5);
     });
   }
+});
 
-  it("is still drawn, as a plain disc, when the node has no label", () => {
-    const palette = paletteFor("dark");
-    const { context, fills, texts } = recordingContext();
-    drawHoveredNode(palette)(
-      context as unknown as CanvasRenderingContext2D,
-      { x: 50, y: 50, size: 6, label: null, color: "#5367cb" } as never,
-      SETTINGS,
+describe("a node's label (ADR-097 step 2)", () => {
+  it("is cut in the middle over 28 characters, in mono for a literal value, at 11px (DESIGN.md v0.3 §5a)", () => {
+    const look = nodeLabelLook(paletteFor("dark"), "jeffrey.holloway@enron.example.com", true);
+    expect(Array.from(look.label)).toHaveLength(24);
+    expect(look.labelSize).toBe(11);
+    expect(look.labelFont).toContain("IBM Plex Mono");
+  });
+
+  it("is a name in the UI face", () => {
+    expect(nodeLabelLook(paletteFor("dark"), "Volkov, Anna", false).labelFont).toContain("Atkinson");
+  });
+
+  it("goes on the left of a node by the right-hand edge, and on the right elsewhere", () => {
+    expect(labelSide({ x: 390, size: 10, textWidth: 84, canvasWidth: 400 })).toBe("left");
+    expect(labelSide({ x: 100, size: 10, textWidth: 84, canvasWidth: 400 })).toBe("right");
+    expect(nodeLabelLook(paletteFor("dark"), "Volkov, Anna", false, { x: 390, size: 10, canvasWidth: 400 }).labelPosition).toBe(
+      "left",
     );
-    expect(fills).toEqual([palette.surfaceRaised]);
-    expect(texts).toEqual([]);
+  });
+
+  it("is empty when the node has none", () => {
+    expect(nodeLabelLook(paletteFor("dark"), null, false).label).toBe("");
   });
 });
 
-describe("drawNodeLabel (ADR-097 step 2)", () => {
-  function fakeContext(width: number) {
-    const drawn: { text: string; x: number; font: string }[] = [];
-    const context = {
-      canvas: { clientWidth: width, width },
-      font: "",
-      fillStyle: "",
-      measureText: (text: string) => ({ width: text.length * 7 }),
-      fillText(text: string, x: number) {
-        drawn.push({ text, x, font: this.font });
-      },
-    };
-    return { context: context as unknown as CanvasRenderingContext2D, drawn };
-  }
-  const settings = { labelWeight: "normal" } as never;
-
-  it("draws a long literal label cut in the middle, in mono, at 11px (DESIGN.md v0.3 §5a)", () => {
-    const { context, drawn } = fakeContext(800);
-    const draw = drawNodeLabel(paletteFor("dark"));
-    draw(context, { x: 100, y: 100, size: 10, label: "jeffrey.holloway@enron.example.com", labelLiteral: true } as never, settings);
-    expect(drawn).toHaveLength(1);
-    expect(drawn[0]!.text).toHaveLength(24);
-    expect(drawn[0]!.font).toContain("11px");
-    expect(drawn[0]!.font).toContain("IBM Plex Mono");
+describe("a link's label, cut to its link (as Sigma 3 drew it)", () => {
+  const measure = (text: string) => Array.from(text).length * 7;
+  it("is whole when it fits", () => {
+    expect(fitToLength("Uses · 1 record", 200, measure)).toBe("Uses · 1 record");
   });
-
-  it("draws a name in the UI face, and on the left of a node by the right-hand edge", () => {
-    const { context, drawn } = fakeContext(400);
-    drawNodeLabel(paletteFor("dark"))(context, { x: 390, y: 50, size: 10, label: "Volkov, Anna" } as never, settings);
-    expect(drawn[0]!.font).toContain("Atkinson");
-    expect(drawn[0]!.x + "Volkov, Anna".length * 7).toBeLessThanOrEqual(400);
+  it("is cut with an ellipsis to the room there is", () => {
+    const cut = fitToLength("Uses · 1 record", 30, measure);
+    expect(cut).toBe("Use…");
+    expect(measure(cut)).toBeLessThanOrEqual(30);
+  });
+  it("is nothing, not a lone ellipsis, where not even a letter and the ellipsis fit", () => {
+    expect(fitToLength("Uses · 1 record", 10, measure)).toBe("");
   });
 });

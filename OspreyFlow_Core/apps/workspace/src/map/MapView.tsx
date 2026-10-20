@@ -299,12 +299,26 @@ export function MapView({
       const sigma =
         start.kind === "fit"
           ? new Sigma<MapNodeAttributes, MapEdgeAttributes>(mapGraph, containerRef.current, {
-              defaultNodeColor: overlayPalette.brass,
-              defaultEdgeColor: overlayPalette.textSecondary,
-              labelColor: { color: overlayPalette.textPrimary },
-              // The markers are drawn at the fixed size 6 above, which sits under sigma's own
-              // label threshold — every plotted place deserves its name.
-              labelRenderedSizeThreshold: 5,
+              // A marker or link with no colour of its own takes the palette's.
+              nodeReducer: (_node, _shown, attrs) => ({
+                color: (attrs as { color?: string }).color ?? overlayPalette.brass,
+                labelColor: overlayPalette.textPrimary,
+              }),
+              edgeReducer: (_edge, _shown, attrs) => ({
+                color: (attrs as { color?: string }).color ?? overlayPalette.textSecondary,
+                // Sigma 3 drew a link twice its size wide; Sigma 4 draws the size as the whole width.
+                size: 2 * ((attrs as { size?: number }).size ?? 1),
+              }),
+              settings: {
+                // The markers are drawn at the fixed size 6 above, which sits under sigma's own
+                // label threshold — every plotted place deserves its name.
+                labelRenderedSizeThreshold: 5,
+                // Markers and links a fixed number of pixels at every zoom, as under Sigma 3: the map
+                // layer frames the whole world (`@sigma/layer-maplibre`'s own bounding box), so any
+                // zoom-scaled size became enormous at a town's scale.
+                itemSizesReference: "screen",
+                zoomToSizeRatioFunction: () => 1,
+              },
             })
           : null;
       sigma?.on("clickNode", ({ node }) => onNodeClickRef.current?.(node));
@@ -355,6 +369,14 @@ export function MapView({
       // the fitted view's edge). One small ease outward gives every boundary marker its label.
       if (sigma !== null) {
         const camera = sigma.getCamera();
+        // Sigma 4's map layer frames the whole world, so the camera's ratio at a fitted view is
+        // tiny. The label grid's cells are a fixed size in that frame (one of them covered the
+        // whole country) and it lets 1/ratio² labels into each: every label was drawn over its
+        // neighbours. Sigma 3's layer framed the plotted nodes, so at the fitted view a cell was
+        // 100 pixels across and held one label. Cells and density scaled by the fitted ratio give
+        // the same, at the fitted view and at every zoom from it.
+        const fitted = camera.ratio;
+        sigma.setSettings({ labelGridCellSize: 100 * fitted, labelDensity: fitted * fitted });
         camera.setState({ ratio: camera.ratio * 1.25 });
       }
       onMapReady?.(layer.map);

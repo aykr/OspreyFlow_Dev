@@ -5,8 +5,8 @@ import { chartMarkFields, embedChartMark } from "./chartExport";
 import type { ExportMark } from "./api";
 
 // The same real, valid 1x1 PNG fixture `pngMark.test.ts` already uses — stands in for whatever
-// bytes `@sigma/export-image`'s own `toBlob` (untestable in this environment, see
-// `chartExport.ts`'s own module docstring) would have produced from a live canvas.
+// bytes `stageImage` (untestable in this environment, see `chartExport.ts`'s own module
+// docstring) would have produced from a live canvas.
 const MINIMAL_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 

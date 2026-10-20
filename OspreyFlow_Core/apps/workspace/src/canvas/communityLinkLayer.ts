@@ -1,6 +1,7 @@
-// The links between communities, drawn on a canvas of their own over Sigma's nodes and under its
-// labels (ADR-119): a community packed as a bubble is solid with nodes, so a link drawn under them
-// showed only in the gaps between bubbles. Each runs between the centres of its two
+// The links between communities, drawn on a canvas of their own over Sigma's nodes (ADR-119): a
+// community packed as a bubble is solid with nodes, so a link drawn under them showed only in the
+// gaps between bubbles. Sigma 4 draws nodes and their labels on one stage, so the links are over the
+// few labels the zoomed-out bands draw as well (ADR-118, ADR-119 Amendment 1). Each runs between the centres of its two
 // communities, as wide as the number of links it stands for. Redrawn after every render; a
 // community's centre is worked out again only when a node has moved or the communities changed.
 import type Sigma from "sigma";
@@ -29,7 +30,7 @@ export function attachCommunityLinkLayer(sigma: Sigma, state: () => CommunityLin
   // Sigma gives a canvas it makes only `position: absolute`; this one covers the stage and lets the
   // pointer through to the nodes and the stage beneath.
   const canvas = sigma.createCanvas(LAYER, {
-    beforeLayer: "labels",
+    afterLayer: "stage",
     style: { top: "0", left: "0", width: "100%", height: "100%", pointerEvents: "none" },
   });
   const graph = sigma.getGraph() as unknown as Graphish;

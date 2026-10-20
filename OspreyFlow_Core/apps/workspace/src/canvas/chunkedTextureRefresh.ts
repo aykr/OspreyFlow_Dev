@@ -1,4 +1,6 @@
-// When `@sigma/node-image` finishes a texture (an icon loaded), it calls `renderer.refresh()` with
+import type { FragmentLayer, LayerLifecycleContext } from "sigma/rendering";
+
+// When `@sigma/node-image` finishes a texture (an icon loaded), it asks for `renderer.refresh()` with
 // no arguments: Sigma then re-processes every node and every edge in one task. On the 50k/250k
 // fixture that one task held the page for 8 s on a CI runner after it had reported ready (the perf
 // gate's profile, 15 October 2026). A texture changes what nodes draw, never where they are, and no
@@ -63,16 +65,30 @@ export function chunkedRefresher<R extends Refreshable>(
   });
 }
 
-/** `@sigma/node-image`'s program class, with its renderer replaced by the chunked stand-in. Sigma
- * keeps `renderer` off the program's public type, though every program holds it. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sigma's program constructors are typed per program
-export function withChunkedTextureRefresh<P extends new (...args: any[]) => object>(Program: P): P {
-  return class extends Program {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    constructor(...args: any[]) {
-      super(...args);
-      const held = this as unknown as { renderer: Refreshable };
-      held.renderer = chunkedRefresher(held.renderer);
+/** `@sigma/node-image`'s layer, with the refresh it asks for when a texture is ready spread as
+ * above. Sigma 4 hands a layer its own refresh in the layer's lifecycle; `renderer` is read when a
+ * texture is ready, not before, since the layer is built before its renderer exists. */
+export function withChunkedTextureRefresh(layer: FragmentLayer, renderer: () => Refreshable | null): FragmentLayer {
+  const lifecycle = layer.lifecycle;
+  if (!lifecycle) return layer;
+  let spreadFor: Refreshable | null = null;
+  let spreading: Refreshable | null = null;
+  const refresh = (fallback: () => void) => () => {
+    const live = renderer();
+    if (!live) return fallback();
+    if (spreadFor !== live) {
+      spreadFor = live;
+      spreading = chunkedRefresher(live);
     }
+    spreading!.refresh();
+  };
+  return {
+    ...layer,
+    lifecycle: (context: LayerLifecycleContext) =>
+      lifecycle({
+        ...context,
+        renderer: { refresh: refresh(() => context.renderer.refresh()) },
+        requestRefresh: refresh(() => context.requestRefresh()),
+      }),
   };
 }

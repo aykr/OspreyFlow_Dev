@@ -141,6 +141,7 @@ one range and outside the other.
 a deliberately small node vocabulary, the v3 plugin set (`node-border`, `edge-curve`,
 `node-image`, `export-image`, `layer-maplibre`), and DOM overlays for labels and menus. Sigma v4
 is in alpha and closes much of the customisation gap; track it, do not depend on it.
+(19 October 2026: the Glass moved to Sigma v4 once it was released — ADR-118.)
 
 **On zoom, which was the condition of acceptance.** Moving between cluster overview and
 individual link is not compromised, and on the axis that matters it improves. Zoom and pan is
@@ -13636,6 +13637,139 @@ nothing a recipe wrote before can be refused after.
 
 ---
 
+## ADR-118 — Sigma 4, and WebGL 2 as the browser floor — ACCEPTED
+
+Status: **ACCEPTED by the owner, 19 October 2026** ("Go ahead, I am happy to accept the risk of
+browsers prior to 2021 not being supported with this upgrade"), after being told what the upgrade
+changes for an analyst. Held back from v0.3.0 ("Release now, Sigma 4 next").
+
+**Context.** ADR-002 chose Sigma.js v3 and said of v4: "track it, do not depend on it". Sigma 4.0
+is now released (4.0.3). It rewrites how everything is drawn: one compiled program for every node
+and one for every link, built from *primitives* (shapes, layers, paths, extremities) and
+*styles*, with labels drawn on the GPU as signed-distance-field text. Sigma's own plugins moved
+with it (`@sigma/node-image`, `@sigma/node-border` and `@sigma/layer-maplibre` 4.0) and
+`@sigma/edge-curve` was folded into Sigma itself. Staying on v3 would leave the canvas on a
+library its authors have moved past, and the map layer on MapLibre 4 for good.
+
+**Decisions.**
+
+1. **Sigma 4 replaces Sigma 3 everywhere** — the canvas (`canvas/GlassCanvas.tsx`), the map view
+   (`map/MapView.tsx`) and the Studio's row-template map (`ingest/map/MapCanvas.tsx`). The
+   reducers stay: Sigma 4 keeps `nodeReducer` and `edgeReducer`, after its own styles, and the
+   Glass's semantic zoom (`02_GLASS_FRONTEND.md` §1.1) is still worked out in them.
+2. **WebGL 2 is required.** Sigma 4 dropped WebGL 1. Every current browser has WebGL 2; a browser
+   from before about 2021 without it draws no canvas. The owner accepted this.
+3. **Nothing an analyst sees is meant to change, except as listed in 4–6.** Where Sigma 4 means
+   something different by a number, the Glass converts rather than lets the picture move:
+   - sizes are read as pixels at the starting zoom, as before (`itemSizesReference: "screen"`);
+   - Sigma 3 drew a link (other than its one-pixel plain line) twice its size wide, Sigma 4 draws
+     the size as the whole width, so the widths are doubled (`canvas/linkLook.ts`);
+   - the selection's and hover's rings are given as shares of the node's drawn radius, since
+     Sigma 4's own pixel-mode rings drew a 1.5px ring as nothing at a 14px node;
+   - the right-drag that turns the camera in Sigma 4 is off: the right button opens the menus;
+   - on the map, markers keep a fixed size at every zoom and the label grid is scaled to the
+     fitted view, since Sigma 4's map layer frames the whole world (one label cell covered the
+     country and every label was drawn over its neighbours).
+4. **Nodes are drawn in their own shape.** Under Sigma 3, `@sigma/node-image`'s background mode
+   filled the whole square behind each node's picture, so every node — person, phone, hexagon —
+   looked like a square with its shape outlined inside, against §4 ("shape is entity type") and
+   the legend. Sigma 4 clips the picture to the node, so the shape shows. A defect of the old
+   drawing, found by this port; not reproduced.
+5. **Dotted and dashed links keep their pattern's shape at every zoom, not its size.** Sigma 3's
+   shaders (`canvas/dottedEdgePrograms.ts`, retired) kept the dots a fixed number of screen pixels.
+   Sigma 4's `layerDashed` sizes them with the line, so the pattern is given as multiples of the
+   line's width, set so the narrowest link looks exactly as before; DESIGN.md §3.8's 1 3 and 4 3
+   hold at every zoom, and the dots grow and shrink with the line as the line itself does. Drawing
+   a fixed-size pattern instead would mean re-running the reducers over every link on every zoom
+   step, which the 250,000-link budget (§5) does not allow.
+6. **A link's label is a DOM overlay** (`canvas/LinkLabelOverlay.tsx`), as §1 already said labels
+   are. Sigma 4 draws a link's label from its source to its target, upside down on a link pointing
+   left, and has no setting to turn it. The overlay draws it upright, above the line, cut with an
+   ellipsis to the link as Sigma 3 cut it, and only for the few links that carry one (the closest
+   zoom, the node under the pointer, the selected link). Node labels stay Sigma's: they are drawn
+   on the GPU, in the same face, size and colours, and on the left of a node by the canvas's right
+   edge (`canvas/labelStyle.ts`). One thing is lost: a label on the left is no longer kept from
+   running past the canvas's left edge.
+7. **A chart export is the canvas as drawn.** `@sigma/export-image` draws a second renderer from
+   the first's primitives, styles and settings but not its reducers — and the Glass's look is its
+   reducers'. The export reads the live renderer's own canvas instead (`export/chartExport.ts`'s
+   `stageImage`), and `@sigma/export-image` is no longer a dependency. Link labels, being a DOM
+   overlay now, are not in the exported image.
+8. **A finished texture still refreshes the nodes a share per frame** (`canvas/chunkedTextureRefresh.ts`),
+   now by wrapping the picture layer's own lifecycle rather than its program class.
+9. **MapLibre stays at 4** for now: `@sigma/layer-maplibre` 4.0 still accepts `^4.5.0` only.
+10. **Sigma's own link picking is off** (`enableEdgeEvents: false`). The canvas already finds the
+    link under the pointer itself, with a wider reach than the drawn line, for hover, click and
+    right-click — it had to under Sigma 3, whose edge events never fired for the Glass's own link
+    programs. Under Sigma 4 the picking pass drew every link a second time and added 5.7 s to the
+    50k/250k fixture's first frame.
+11. **The reducers are declared to read each item's own state only** (`canvas/reducerDependency.ts`).
+    Sigma 4 assumes any reducer reads its graph-wide state, which changes when a zoom or pan starts
+    and stops and when the pointer meets a node, and re-runs both reducers over every node and link
+    on each change: 1.65 s on the 50k/250k fixture even on a real GPU, where a pan/zoom sweep drew
+    2 frames in 4 seconds against Sigma 3's 150. The Glass's reducers never read that state, and
+    every change to the state they do read is followed by a refresh the canvas asks for. Sigma 4
+    has no setting for this, so its analysis is corrected in place, and the canvas refuses to start
+    if the analysis is not where Sigma 4.0 keeps it.
+12. **A zoom-band change works out only what it changes** (`canvas/cameraMoves.ts`): the nodes,
+    and the links only into or out of the overview and link-detail bands (where a link looks
+    different), with nothing indexed again, since a band moves nothing. Sigma 4's whole refresh
+    held the fixture for 2 s at a band; this holds it for 1.4 s where links change and under half
+    a second where they do not.
+
+**Performance (§5, measured 19–20 October 2026 on the owner's machine, same fixture, same harness).**
+First frame: Sigma 3 8.5 s, Sigma 4 18.5 s as first built, 13.2 s with decision 10. The rest of
+the difference is Sigma 4's own drawing of 250,000 links (native time 7.6 s against 5.0 s), not
+the Glass's layers: removing every node and link layer changed it by under half a second. On CI
+the first frame was 26.5 s against the gate's 30 s (Sigma 3: 16.4 s) — inside it, with less room.
+
+Panning was measured two ways, and the difference between them is a finding of its own. The CI
+gate renders in software (no GPU on a hosted runner), where a single render of this graph costs
+2.5–3.5 s of emulated GPU work; on this machine's real GPU the same render takes 25–57 ms. So the
+software numbers say whether a change made things worse, not how fast an analyst's canvas is.
+
+| A 4-second wheel sweep, once the page has settled | Frames | p95 frame | Longest |
+| --- | --- | --- | --- |
+| Real GPU, Sigma 3 | 175–178 | 22.7 ms | 1.09 s |
+| Real GPU, Sigma 4 before decisions 11 and 12 | 2 | — | 3.6 s |
+| Real GPU, Sigma 4 | 161–163 | 17.4 ms | 1.35 s |
+
+The longest frame on both is the zoom crossing into the overview band. In the gate's own measure
+(below), software rendering: Sigma 3 2.7 s per frame, Sigma 4 0.6 s.
+
+**The gate measured loading, not panning, and now measures panning** (`perf/perf.spec.ts`). Its
+sweep started when the canvas existed, while the first frame was still being drawn for seconds
+after, so it caught two or three frames of loading and passed or failed with the first frame:
+Sigma 3 passed it by finishing its first frame sooner, though settled it pans at 2.7 s per frame
+in software. The sweep now starts once the page answers within 50 ms, with the same statistic and
+the same 3,000 ms limit. **Shown red** with decision 11 removed, the page slowed to about a CI
+runner's speed (`PERF_CPU_THROTTLE=2`): 4,113 and 4,255 ms; green with it: 2,593 and 2,811 ms
+throttled, 587 and 619 ms unthrottled. Sigma 3 measured this way (2.7 s here, about 5.2 s at CI
+speed) would fail it.
+
+**Cost.** The Glass now depends on how Sigma 4 means its numbers (sizes, ring modes, dash modes,
+the map layer's framing); each conversion is stated where it is made, and a later Sigma release
+that changes one of them moves the picture. Two upstream behaviours are worked around rather than
+fixed: pixel-mode rings drawn at about half their size, and link labels with no upright option.
+
+**Tests that fail if this is violated.**
+- `keyboard/link-style.spec.ts`, `canvas-look.spec.ts` and `selection-look.spec.ts` read the
+  painted pixels: link patterns, widths and arrowheads, a node 14px across, the selection's rings.
+- `keyboard/link-selection.spec.ts` ("node labels are drawn in a light colour on the dark theme")
+  reads label ink off the screen; it was rewritten for GPU labels and shown red with black labels.
+- `export-capture/capture.spec.ts` ("chart export is the canvas as it is drawn") compares the
+  export's drawn pixels with the screen; shown red with a mirrored export.
+- `canvas/linkLook.test.ts`, `labelStyle.test.ts`, `LinkLabelOverlay.test.ts`, `graphExtent.test.ts`,
+  and `chunkedTextureRefresh.test.ts` (the layer wrapper, shown red with the wrapper planted as a
+  no-op).
+- The keyboard walkthroughs (359), accessibility and the performance gate (its readiness signal
+  now waits for Sigma 4's one `sigma-stage` canvas: the `sigma-nodes` canvas it waited for is gone,
+  and the gate timed out rather than measured; its sweep starts once the page has settled, shown red
+  as above).
+- `canvas/reducerDependency.test.ts` (the declaration, and refusing a Sigma that moved the analysis)
+  and `canvas/cameraMoves.test.ts` (a band change refreshes the nodes always, the links only where
+  they look different, and indexes nothing; red with the links refreshed every time).
+
 ## ADR-119 — Large working sets zoomed out: grouped by community, links between communities, nodes as dots — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 20 October 2026**, from options put in chat: "Links between
@@ -13687,3 +13821,22 @@ case opens grouped; community links drawn and individual links not; a node is a 
 one is not; a selected link is drawn; zoomed in, every link and node is drawn in full) — red with
 community links never drawn, with the selected link not excepted, and with a selected node drawn as
 a dot. `canvas/communityLinks.test.ts`, `communityAssigner.test.ts`.
+
+**Amendment 1 (20 October 2026, Sigma 4 rebased onto this; branch `sigma-4`, not on `main`).** Under
+Sigma 4 (ADR-118) the decisions hold, drawn differently:
+- *Decision 2:* Sigma 4 draws every node with one program, so a dot is a picture, not a program:
+  a plain circle in the node's colour, one cached picture per colour (`communityLinks.dotImage`),
+  with no rings.
+- *Decision 1:* Sigma 4 draws nodes and their labels on one stage, so the community-link canvas sits
+  over the stage, over the few labels the zoomed-out bands draw as well as the nodes.
+- A change of band refreshes every link where links between communities give way to every link
+  (`cameraMoves.bandChangeTouchesLinks`, given the link count); Sigma 4's band redraw refreshed only
+  the nodes between structure and neighbourhood, which left every link hidden once zoomed in.
+- **Finding: hiding links does not lighten Sigma 4's first frame.** Sigma 4 hands every link to its
+  program whatever its visibility (`processEdges`; visibility is read for labels and picking only),
+  where Sigma 3 skipped hidden links. Measured on the owner's machine: first frame 10.9–12.4 s with
+  this, against 13.2 s for Sigma 4 without it and 5.8 s for Sigma 3 with it; 6 of 10.8 s sampled is
+  native drawing. So ADR-119 does not give Sigma 4 the first-frame room the park record expected.
+- Tests: `cameraMoves.test.ts` (the band change on a large working set, red with the community-link
+  term planted out), `communityLinks.test.ts` (`dotImage`); `perf/community-links.spec.ts` green
+  under Sigma 4.
