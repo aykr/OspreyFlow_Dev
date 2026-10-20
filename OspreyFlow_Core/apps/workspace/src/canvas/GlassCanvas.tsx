@@ -80,6 +80,7 @@ import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEve
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import { ARROW_HEAD, linkLookFor } from "./linkLook";
 import { graphExtent } from "./graphExtent";
+import { declareReducersReadItemStateOnly } from "./reducerDependency";
 import { settledAnchors } from "./settledAnchor";
 import { dragTargets, keepPinned, nudgeFor } from "./nodeDrag";
 import { expansionLinksNotice, linksAmongNotice, showLinksAmong } from "./linksAmong";
@@ -1520,6 +1521,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           enableEdgeEvents: false,
         },
       });
+      // The reducers read each item's own state, never the graph-wide state (`reducerDependency.ts`).
+      declareReducersReadItemStateOnly(sigma);
       currentSigma = sigma;
       sigmaRef.current = sigma;
       // ADR-115 E4: the zoom group's readout follows the camera (100% at its starting scale).

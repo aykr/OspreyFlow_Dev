@@ -71,10 +71,34 @@ test("50k/250k fixture reaches a first interactive frame within the CI software-
 });
 
 test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", async ({ page }) => {
+  // `PERF_CPU_THROTTLE=2` runs the page at about the speed of a CI runner (CI measured 1.9 times
+  // slower than the owner's machine, 20 October 2026), so a regression CI would catch can be shown
+  // red locally before the gate is trusted (CLAUDE.md rule 15). Unset in CI.
+  const throttle = Number(process.env.PERF_CPU_THROTTLE ?? "1");
+  if (throttle > 1) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
+  }
   await page.goto("/perf/harness.html");
   await page.waitForFunction(() => window.__PERF__?.readyAt != null, undefined, {
     timeout: 60_000,
   });
+  // Panning is measured once the first frame has been drawn: `readyAt` marks the canvas existing,
+  // and the first frame's drawing runs for seconds after it, so a sweep started there measured the
+  // tail of loading (two or three frames in its two seconds) rather than panning, and passed or
+  // failed with the first frame (ADR-118, 20 October 2026). Settled means the page answers within
+  // 50 ms, then a moment more for the last of it.
+  await expect
+    .poll(
+      async () => {
+        const asked = Date.now();
+        await page.evaluate(() => 1);
+        return Date.now() - asked;
+      },
+      { timeout: 90_000, intervals: [0] },
+    )
+    .toBeLessThan(50);
+  await page.waitForTimeout(3000);
 
   const canvas = page.locator("canvas.sigma-stage");
   const box = await canvas.boundingBox();
