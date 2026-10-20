@@ -23,19 +23,25 @@ export interface PopoverProps {
  * rich parts stay in HTML where they are easy." */
 export function Popover({ x, y, onClose, children }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
+  // The latest `onClose`, read when Escape is pressed. A parent passes a new one on every render;
+  // keyed on it, the effect below re-ran on each render and took focus to the popover's first
+  // button, so a notice left on the canvas closed the Layout menu the moment it was pressed
+  // (20 October 2026; `Drawer` had the same fault, fixed 9 October).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
-    // The same shape as `RadialMenu`'s own mount effect: focus something inside immediately,
-    // rather than leaving focus to fall through to `<body>` (and independent of it — closing on
-    // Escape does not depend on that focus still being here, since a `document`-level listener
+    // The same shape as `RadialMenu`'s own mount effect: focus something inside once, when it
+    // opens, rather than leaving focus to fall through to `<body>` (and independent of it — closing
+    // on Escape does not depend on that focus still being here, since a `document`-level listener
     // hears the keypress regardless of what currently has focus inside this popover).
     ref.current?.querySelector<HTMLElement>("button, [tabindex]")?.focus();
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, []);
 
   const style: CSSProperties = { position: "fixed", left: x, top: y, zIndex: 30 };
   return (
