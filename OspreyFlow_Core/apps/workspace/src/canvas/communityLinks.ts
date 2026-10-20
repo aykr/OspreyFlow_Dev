@@ -49,3 +49,16 @@ export function communityLinkWidth(count: number): number {
   if (count <= 1) return 1;
   return Math.min(6, 1 + (5 * Math.log10(count)) / 3);
 }
+
+/** The group a node's bubble is, from the worker's assignment: its community, or "none" for a node
+ * in a community of its own (a node with no links), so all such nodes share one bubble rather than
+ * each being a bubble, which would make packing the bubbles slow (it compares every pair). */
+export function communityGroupOf(assignment: ReadonlyMap<string, number>): (id: string) => string {
+  const sizes = new Map<number, number>();
+  for (const community of assignment.values()) sizes.set(community, (sizes.get(community) ?? 0) + 1);
+  return (id) => {
+    const community = assignment.get(id);
+    if (community === undefined || (sizes.get(community) ?? 0) < 2) return "none";
+    return `community:${community}`;
+  };
+}

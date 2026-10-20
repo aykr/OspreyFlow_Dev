@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { COMMUNITY_LINKS_ABOVE, communityLinks, communityLinkWidth, drawsCommunityLinks } from "./communityLinks";
+import { COMMUNITY_LINKS_ABOVE, communityGroupOf, communityLinks, communityLinkWidth, drawsCommunityLinks } from "./communityLinks";
+import { packBubbles } from "./layoutModes";
 
 // ADR-119: on a large working set the zoomed-out bands draw links between communities, and the
 // individual links from the neighbourhood band in.
@@ -60,5 +61,34 @@ describe("communityLinkWidth", () => {
     expect(communityLinkWidth(100)).toBeGreaterThan(communityLinkWidth(10));
     expect(communityLinkWidth(1_000)).toBe(6);
     expect(communityLinkWidth(1_000_000)).toBe(6);
+  });
+});
+
+describe("communityGroupOf", () => {
+  it("names a node's community, and puts every node alone in its community in one group", () => {
+    const groupOf = communityGroupOf(
+      new Map([
+        ["a1", 0],
+        ["a2", 0],
+        ["loner1", 1],
+        ["loner2", 2],
+      ]),
+    );
+    expect(groupOf("a1")).toBe("community:0");
+    expect(groupOf("a2")).toBe("community:0");
+    expect(groupOf("loner1")).toBe("none");
+    expect(groupOf("loner2")).toBe("none");
+    expect(groupOf("unknown")).toBe("none");
+  });
+});
+
+describe("packBubbles at the size of a large working set (ADR-119)", () => {
+  it("places 50,000 nodes in 40 communities, each node once, quickly", () => {
+    const nodes = Array.from({ length: 50_000 }, (_, i) => ({ id: `n${i}`, x: 0, y: 0, type: "Person" }));
+    const assignment = new Map(nodes.map((node, i) => [node.id, i % 40]));
+    const started = performance.now();
+    const placed = packBubbles({ nodes, edges: [] }, communityGroupOf(assignment));
+    expect(placed.size).toBe(50_000);
+    expect(performance.now() - started).toBeLessThan(2000);
   });
 });
