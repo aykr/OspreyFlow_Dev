@@ -1,6 +1,7 @@
 // ADR-119 on the 50k-node / 250k-link fixture: a working set of more than 10,000 links opens
 // grouped by community, and zoomed out it draws one link between each pair of communities instead
-// of every link; from the neighbourhood band in, every link is drawn again. Zoom never changes what
+// of every link, and each ordinary node as a dot; from the neighbourhood band in, every link and
+// every node is drawn in full again. Zoom never changes what
 // exists: a link selected while zoomed out is drawn.
 import { expect, test, type Page } from "@playwright/test";
 
@@ -29,6 +30,12 @@ test("a large working set opens grouped by community, its links between communit
   // At the fitted view (the structure band) no individual link is drawn.
   await expect.poll(() => page.evaluate(() => window.__CANVAS__?.linkDrawn("e0")), { timeout: 30_000 }).toBe(false);
 
+  // Zoomed out, an ordinary node is a dot; a selected one is drawn in full.
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.nodeDrawnAs("n0")), { timeout: 30_000 }).toBe("dot");
+  await page.evaluate(() => window.__CANVAS__?.highlightNodes(["n0"]));
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.nodeDrawnAs("n0")), { timeout: 30_000 }).toBe("full");
+  await page.evaluate(() => window.__CANVAS__?.highlightNodes([]));
+
   // A link selected while zoomed out is drawn.
   await page.evaluate(() => window.__CANVAS__?.selectLink("e0"));
   // A refresh of 250,000 links' looks takes seconds under software rendering.
@@ -39,4 +46,5 @@ test("a large working set opens grouped by community, its links between communit
   await page.evaluate(() => window.__CANVAS__?.zoomTo(0.3));
   await expect.poll(() => page.evaluate(() => window.__CANVAS__?.linkDrawn("e1")), { timeout: 30_000 }).toBe(true);
   await expect.poll(() => communityInk(page), { timeout: 30_000 }).toBe(0);
+  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.nodeDrawnAs("n1")), { timeout: 30_000 }).toBe("full");
 });

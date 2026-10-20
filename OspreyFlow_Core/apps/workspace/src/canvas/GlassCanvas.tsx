@@ -30,7 +30,7 @@ import { createNodeBorderProgram } from "@sigma/node-border";
 import { createNodeImageProgram } from "@sigma/node-image";
 import type { StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand/react";
-import { EdgeLineProgram, EdgeRectangleProgram, createNodeCompoundProgram } from "sigma/rendering";
+import { EdgeLineProgram, EdgeRectangleProgram, NodeCircleProgram, createNodeCompoundProgram } from "sigma/rendering";
 import { animateNodes, graphExtent } from "sigma/utils";
 import Sigma from "sigma";
 import {
@@ -76,7 +76,7 @@ import {
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
 import { redrawOnBandChange, redrawWhenCameraStops } from "./cameraMoves";
-import { COMMUNITY_LINKS_ABOVE, communityGroupOf, communityLinks, drawsCommunityLinks } from "./communityLinks";
+import { COMMUNITY_LINKS_ABOVE, communityGroupOf, communityLinks, drawsCommunityLinks, drawsNodeDots } from "./communityLinks";
 import { attachCommunityLinkLayer, type CommunityLinkState } from "./communityLinkLayer";
 import { latestOnly, workerAssign } from "./communityAssigner";
 import { zoomBandForRatio } from "./zoomBands";
@@ -337,6 +337,9 @@ export interface GlassCanvasHandle {
    * its type being left out from the legend (ADR-117) — or `null` if it is not in `graph` or nothing
    * is mounted. Asked of the renderer, as `labelOf` is. */
   linkDrawn: (edgeId: string) => boolean | null;
+  /** Which program draws a node now: `"dot"` on a large working set zoomed out, `"full"` otherwise
+   * (ADR-119); null for a node not in the view. */
+  nodeDrawnAs: (nodeId: string) => "dot" | "full" | null;
   /** Draws `nodeId` and everything within `depth` links of it, counted first and asked about when
    * large, exactly as a double-click expansion is (ADR-070: choosing a search result draws three
    * steps out). A no-op if `nodeId` is not in the view. */
@@ -1397,7 +1400,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         // 30px framed the outermost nodes under them (found live, 11 October 2026).
         stagePadding: 80,
         defaultNodeType: "glass-node",
-        nodeProgramClasses: { "glass-node": NODE_PROGRAM },
+        // ADR-119: on a large working set zoomed out, an ordinary node is a plain dot in its type's
+        // colour (Sigma's circle program); one that needs its full drawing keeps the picture program.
+        nodeProgramClasses: { "glass-node": NODE_PROGRAM, "glass-dot": NodeCircleProgram },
         defaultEdgeType: "glass-edge",
         edgeProgramClasses: {
           // ADR-097 step 2: a plain link wider than a pixel is drawn by the program that honours width
@@ -1441,7 +1446,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             labelLiteral:
               frame.label !== "" &&
               labelIsLiteral(data.data, (type) => ontology.identifiersFor(type), getLabelChoices()),
-            type: "glass-node",
+            // ADR-119: a dot, unless the node is selected, under the pointer or on a found path
+            // (`emphasised`), or carries a resolution-cluster ring — the rings are the picture
+            // program's, and those are the nodes an analyst is looking at.
+            type:
+              drawsNodeDots(zoomBandForRatio(ratio), graph.order) &&
+              data.emphasised !== true &&
+              !((data.clusterBorderSize ?? 0) > 0)
+                ? "glass-dot"
+                : "glass-node",
           };
           const folded = foldedViewRef.current;
           if (!folded) return drawn;
@@ -1456,6 +1469,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               forceLabel: true,
               borderColor: activePalette().borderStrong,
               borderSize: 0.3,
+              type: "glass-node",
             };
           }
           // The other members sit at the group's centre (their stored position was moved there), too
@@ -1882,6 +1896,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const sigma = sigmaRef.current;
           if (!sigma || !graph.hasEdge(edgeId)) return null;
           return !(sigma.getEdgeDisplayData(edgeId)?.hidden ?? false);
+        },
+        nodeDrawnAs: (nodeId: string) => {
+          const sigma = sigmaRef.current;
+          if (!sigma || !graph.hasNode(nodeId)) return null;
+          return sigma.getNodeDisplayData(nodeId)?.type === "glass-dot" ? "dot" : "full";
         },
         cameraState: () => {
           const sigma = sigmaRef.current;

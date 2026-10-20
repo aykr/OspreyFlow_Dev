@@ -13633,3 +13633,57 @@ nothing a recipe wrote before can be refused after.
 **Tests that fail if this is violated.** `tests/ontology/test_packs.py`
 (`test_niem_brings_the_custody_links_and_incidents`), and the HMP network's shape tests
 (`tests/scenarios/test_hmp_network.py`).
+
+---
+
+## ADR-119 — Large working sets zoomed out: grouped by community, links between communities, nodes as dots — ACCEPTED (design)
+
+Status: **ACCEPTED by the owner, 20 October 2026**, from options put in chat: "Links between
+communities" with "10,000", then "Overview and structure", then "Group large cases by community",
+then node dots "Yes, overview and structure". (ADR-118 is the parked Sigma 4 record, on its branch.)
+
+**Context.** Spec 02 §5 requires level-of-detail drawing for large working sets, and §1.1's
+overview row draws "only above the strength filter; aggregated between hulls". Neither was built:
+the strength filter (ADR-088) is the analyst's own slider, off by default, and the perf fixture's
+links all weigh 1, so a weight floor thins nothing. A large case also opens at the fitted view,
+which is the structure band, so the overview row alone never touched what an analyst sees first.
+Measured on the 50k-node / 250k-link fixture (software rendering, as CI draws): drawing the
+50,000 nodes with their pictures was most of the first frame; the links were a small part.
+
+**Decisions.**
+
+1. **More than 10,000 links: links between communities, zoomed out.** In the overview and structure
+   bands one link is drawn between each pair of communities, its width growing with the number of
+   links it stands for (`canvas/communityLinks.ts`), on a canvas over the nodes and under the labels
+   (`communityLinkLayer.ts`); individual links are not drawn, and from the neighbourhood band in
+   every link is. A selected link, and a link on a found path, are always drawn.
+2. **More than 10,000 nodes: ordinary nodes as dots, zoomed out.** In the same bands a node is drawn
+   by Sigma's plain circle program, in its type's channel colour (dimming kept), without its shape,
+   icon or provenance outline; a node that is selected, under the pointer, on a found path, carries
+   a resolution-cluster ring, or is a folded group keeps its full drawing. From the neighbourhood
+   band in, every node is drawn in full.
+3. **A large case opens grouped by community.** Once communities are known, a working set of more
+   than 10,000 links is arranged as Clustered bubbles by community (`layoutModes.packBubbles`,
+   without the 6,000-node limit of the other arrangements; nodes in no community share one bubble),
+   unless the analyst has chosen a layout; links between communities mean little on a scattered
+   layout, which is what the force layout leaves above 1,000 nodes.
+4. **Communities come from a Web Worker** (Louvain, seeded, via Comlink; `communityWorker.ts`), as
+   §5 requires of metrics: the first frame draws nodes at once and the community links follow when
+   the worker answers; a newer question supersedes an older answer (`communityAssigner.ts`).
+5. **Zoom still never changes what exists** (§1.1): the links and nodes drawn less are still in the
+   working set, counted, searchable and selectable; the pointer's own hit test skips only links
+   not drawn.
+
+**Cost.** A change of band on a large case changes what is drawn at once rather than fading (§1.1's
+"nothing appears abruptly" is not met at these two thresholds). Shapes and provenance outlines are
+not seen zoomed out on a large case. The opening view of a large case is rearranged a second or
+two after it first appears, when the worker answers.
+
+**Measured (owner's machine, the perf gate's first frame).** `main` 8.2–8.7 s; with decisions 1 and 4
+alone 7.6 s; with decision 2 as well 5.3–5.6 s. Not yet measured on CI.
+
+**Tests that fail if this is violated.** `perf/community-links.spec.ts` on the 50k/250k fixture (the
+case opens grouped; community links drawn and individual links not; a node is a dot and a selected
+one is not; a selected link is drawn; zoomed in, every link and node is drawn in full) — red with
+community links never drawn, with the selected link not excepted, and with a selected node drawn as
+a dot. `canvas/communityLinks.test.ts`, `communityAssigner.test.ts`.
