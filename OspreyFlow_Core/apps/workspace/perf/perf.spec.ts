@@ -71,10 +71,35 @@ test("50k/250k fixture reaches a first interactive frame within the CI software-
 });
 
 test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", async ({ page }) => {
+  // `PERF_CPU_THROTTLE=2` runs the page at about the speed of a CI runner (CI measured 1.9 times
+  // slower than the owner's machine, 20 October 2026), so a regression CI would catch can be shown
+  // red locally before the gate is trusted (CLAUDE.md rule 15). Unset in CI.
+  const throttle = Number(process.env.PERF_CPU_THROTTLE ?? "1");
+  if (throttle > 1) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
+  }
   await page.goto("/perf/harness.html");
   await page.waitForFunction(() => window.__PERF__?.readyAt != null, undefined, {
     timeout: 60_000,
   });
+  // Panning is measured once the first frame has been drawn: `readyAt` marks the canvas existing,
+  // and the first frame's drawing runs for seconds after it, so a sweep started there measured the
+  // tail of loading (two or three frames in its two seconds) rather than panning, and passed or
+  // failed with the first frame (20 October 2026; on main, Sigma 3 passed by loading sooner though
+  // settled it pans at 2.7 s a frame in software). Settled means the page answers within 100 ms,
+  // then three seconds more for what follows the first frame (ADR-119's grouping by community).
+  await expect
+    .poll(
+      async () => {
+        const asked = Date.now();
+        await page.evaluate(() => 1);
+        return Date.now() - asked;
+      },
+      { timeout: 90_000, intervals: [0] },
+    )
+    .toBeLessThan(100);
+  await page.waitForTimeout(3000);
 
   const canvas = page.locator("canvas.sigma-nodes");
   const box = await canvas.boundingBox();
@@ -115,6 +140,10 @@ test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", asy
       await new Promise((resolve) => setTimeout(resolve, 16));
     }
     cancelAnimationFrame(raf);
+    // The frame still being drawn when the sweep ends counts too: averaging only the frames that
+    // finished let a page stalled for most of the sweep report a fast average from its last two
+    // (20 October 2026, two 15 ms frames in a two-second sweep).
+    samples.push(performance.now() - last);
     return samples;
   }, { cx, cy });
 
