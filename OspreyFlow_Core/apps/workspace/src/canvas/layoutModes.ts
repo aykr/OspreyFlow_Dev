@@ -398,6 +398,13 @@ function forceTree(input: ArrangeInput, edges: [string, string][], centreId: str
 const BUBBLE_PAD = 24;
 const BUBBLE_GAP = 24;
 
+/** Clustered bubbles with no size limit: linear in the nodes, and in the groups squared, so a
+ * caller with many nodes must keep the groups few (ADR-119 puts every node in no community into one
+ * group). Used for a large working set grouped by community from the worker (`communityLinks.ts`). */
+export function packBubbles(input: ArrangeInput, groupOf: (id: string) => string): Map<string, { x: number; y: number }> {
+  return bubbles(input, groupOf);
+}
+
 function bubbles(input: ArrangeInput, groupOf: ((id: string) => string) | undefined): Placed {
   const byGroup = new Map<string, string[]>();
   for (const node of input.nodes) {

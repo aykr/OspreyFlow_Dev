@@ -76,7 +76,7 @@ import {
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
 import { redrawOnBandChange, redrawWhenCameraStops } from "./cameraMoves";
-import { COMMUNITY_LINKS_ABOVE, communityLinks, drawsCommunityLinks } from "./communityLinks";
+import { COMMUNITY_LINKS_ABOVE, communityGroupOf, communityLinks, drawsCommunityLinks } from "./communityLinks";
 import { attachCommunityLinkLayer, type CommunityLinkState } from "./communityLinkLayer";
 import { latestOnly, workerAssign } from "./communityAssigner";
 import { zoomBandForRatio } from "./zoomBands";
@@ -112,7 +112,7 @@ import { removeFromWorkingSet } from "./removeNodes";
 import { ViewActions } from "./ViewActions";
 import { settleLayout, type LayoutNode } from "./forceLayout";
 import { BubbleOverlay, type Bubble } from "./BubbleOverlay";
-import { arrange, enclosingCircle, linkKey, treeLinkKeys, type LayoutMode } from "./layoutModes";
+import { ARRANGE_MAX_NODES, arrange, enclosingCircle, linkKey, packBubbles, treeLinkKeys, type LayoutMode } from "./layoutModes";
 import { LayoutMenu, type BubbleKey } from "./LayoutMenu";
 import { CommunitiesStatus, CommunitiesToggle } from "./CommunitiesControls";
 import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
@@ -645,6 +645,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // (`communityLinks.ts`); every node's community comes from a Web Worker.
     const communityLinksRef = useRef<Omit<CommunityLinkState, "active">>({ assignment: null, links: [] });
     const askCommunitiesRef = useRef<ReturnType<typeof latestOnly> | null>(null);
+    /** Whether the analyst has chosen a layout: until then a large case is grouped by community. */
+    const layoutChosenRef = useRef(false);
     /** Whether a link is drawn by itself now, or stands in a link between communities: it is drawn
      * when the view is not one of community links, or when it is the selected link or on a found path. */
     const drawnByItself = (edgeId: string, ratio: number): boolean =>
@@ -665,6 +667,17 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         void askCommunitiesRef.current(graph.nodes(), pairs).then((assignment) => {
           if (!assignment) return;
           communityLinksRef.current = { assignment, links: communityLinks(assignment, pairs) };
+          // ADR-119: a large case is grouped by community, so the links between communities run
+          // between real groups, unless the analyst has chosen a layout of their own.
+          if (!layoutChosenRef.current) {
+            layoutModeRef.current = "bubbles";
+            bubbleKeyRef.current = "community";
+            setLayoutMode("bubbles");
+            setBubbleKey("community");
+            arrangeNowRef.current();
+          } else if (layoutModeRef.current === "bubbles" && bubbleKeyRef.current === "community") {
+            arrangeNowRef.current();
+          }
           sigmaRef.current?.scheduleRender();
         });
       }, 400);
@@ -1181,7 +1194,22 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         // Clustered bubbles: which bubble each node is in, by entity type or by community.
         let groupOf: ((id: string) => string) | undefined;
         let groupLabels = new Map<string, string>();
-        if (mode === "bubbles") {
+        // ADR-119: past the arrangement's size limit, communities come from the worker, and the
+        // bubbles are packed without the limit (`packBubbles`); until the worker has answered, the
+        // positions stay and the answer arranges them (`communityLinksRef`).
+        const large = arrangeInput.nodes.length > ARRANGE_MAX_NODES;
+        const workerAssignment = communityLinksRef.current.assignment;
+        if (mode === "bubbles" && bubbleKeyRef.current === "community" && large) {
+          if (!workerAssignment) return;
+          const ofNode = communityGroupOf(workerAssignment);
+          const names = new Map<string, string>();
+          groupOf = (id) => {
+            const key = ofNode(id);
+            if (!names.has(key)) names.set(key, key === "none" ? "Not in a community" : `Community ${names.size + 1}`);
+            return key;
+          };
+          groupLabels = names;
+        } else if (mode === "bubbles") {
           if (bubbleKeyRef.current === "community") {
             const found = findCommunities(arrangeInput.nodes.map((n) => n.id), edges);
             const ofNode = new Map<string, string>();
@@ -1201,7 +1229,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         const laidOut =
           mode === "organic"
             ? settleLayout(nodes, edges)
-            : arrange(mode, arrangeInput, { centre, groupOf });
+            : mode === "bubbles" && large && groupOf
+              ? packBubbles(arrangeInput, groupOf)
+              : arrange(mode, arrangeInput, { centre, groupOf });
         const settled =
           laidOut && pinnedRef.current.size > 0
             ? keepPinned(laidOut, pinnedRef.current, realPositionOf)
@@ -1257,7 +1287,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           }
         };
         if (Object.keys(targets).length === 0) finish();
-        else if (prefersReducedMotion()) {
+        else if (Object.keys(targets).length > ARRANGE_MAX_NODES) {
+          // Tens of thousands of nodes are moved in one step, not animated: an animation of them
+          // redraws the whole graph every frame for nothing anyone can follow (ADR-119).
+          graph.updateEachNodeAttributes((id, attributes) => {
+            const at = targets[id];
+            return at ? { ...attributes, x: at.x, y: at.y } : attributes;
+          });
+          finish();
+        } else if (prefersReducedMotion()) {
           // `02_GLASS_FRONTEND.md` §3.4: an instant move, and where each node was is kept so the
           // toolbar's Show previous positions can mark it (the animation was the only cue).
           const was: PreviousPosition[] = [];
@@ -1427,6 +1465,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         },
         edgeReducer: (edgeId, data) => {
           const ratio = currentSigma?.getCamera().ratio ?? 1;
+          // ADR-119: a link standing in a link between communities is not drawn, and nothing else
+          // about how it looks is worked out (a large working set has a quarter of a million).
+          if (!drawnByItselfRef.current(edgeId, ratio)) return { ...data, hidden: true };
           const hoveredNode = hoveredRef.current;
           const caption = () => {
             const source = graph.source(edgeId);
@@ -1471,7 +1512,6 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             // A hidden link is not drawn; the selected one is thicker, brass, and always labelled.
             hidden:
               attrs.hidden ||
-              !drawnByItselfRef.current(edgeId, ratio) ||
               hiddenEdgesRef.current.has(edgeId) ||
               hiddenLinkTypesRef.current.has(data.data.type) ||
               (foldedViewRef.current?.hidesLink(graph.source(edgeId), graph.target(edgeId)) ??
@@ -3090,12 +3130,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             <LayoutMenu
               mode={layoutMode}
               onChange={(mode) => {
+                layoutChosenRef.current = true;
                 layoutModeRef.current = mode;
                 setLayoutMode(mode);
                 arrangeNowRef.current();
               }}
               bubbleKey={bubbleKey}
               onBubbleKeyChange={(key) => {
+                layoutChosenRef.current = true;
                 bubbleKeyRef.current = key;
                 setBubbleKey(key);
                 arrangeNowRef.current();
