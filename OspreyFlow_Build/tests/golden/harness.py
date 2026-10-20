@@ -26,18 +26,28 @@ and Stage 3 inherits that same shape rather than inventing POLE awareness ahead 
 Stage 6 lands, narrower than the spec's literal wording and disclosed as such in
 a disclosed gap rather than silently assumed to be the same thing.
 
-**Why every case runs `N_RUNS` times, not once.** Stage 1's witness-statement smoke test and
-Stage 2's own repeated-run checks both found genuine run-to-run recall variance from the pinned
-small model — not test flakiness, real sampling variance (`spec/06_DECISIONS.md` ADR-020).
-A golden-set number that means anything for gating a build has to be measured the same way: each
-case's extraction runs `N_RUNS` times and every reported precision/recall is a mean across runs,
-not a single sample that could land on either side of a real regression by chance. `N_RUNS = 12`
-is not a guess: an early single run's recall for `persons_mentioned` ranged as low as 0.0 across
-manual trials, and even the *mean* of five runs still varied batch-to-batch by roughly ±0.17.
-Twelve runs tightened that considerably. Two of those apparent zero-recall extremes turned out,
-on inspection, to be a matcher bug rather than model failure — see "Matching" below; after fixing
-it, a 20-run manual trial's *per-run* (not per-batch-mean) recall never went below 0.67, which is
-the real floor `test_golden_set.py`'s tolerance is set against, not the noisier pre-fix numbers.
+**Why every case runs `N_RUNS` times, not once.** Stage 1's witness-statement smoke test and Stage
+2's own repeated-run checks both found genuine run-to-run recall variance from the pinned small
+model — not test flakiness, real sampling variance (`spec/06_DECISIONS.md` ADR-020). A golden-set
+number that means anything for gating a build has to be measured the same way: each case's
+extraction runs `N_RUNS` times and every reported precision/recall is a mean across runs, not a
+single sample that could land on either side of a real regression by chance. `N_RUNS` was first 12,
+and that was not a guess: an early single run's recall for `persons_mentioned` ranged as low as 0.0
+across manual trials, and even the *mean* of five runs still varied batch-to-batch by roughly ±0.17.
+Twelve runs tightened that considerably. Two of those apparent zero-recall extremes turned out, on
+inspection, to be a matcher bug rather than model failure — see "Matching" below; after fixing it, a
+20-run manual trial's *per-run* (not per-batch-mean) recall never went below 0.67, which is the real
+floor `test_golden_set.py`'s tolerance is set against, not the noisier pre-fix numbers.
+
+**Twelve became 48 (owner, 20 October 2026).** Twelve was too few: the gate failed CI on noise about
+one run in 35–40 (`witness-statement-1/persons_mentioned` at 0.58 against the 0.60 floor, 19 and 20
+October, nothing changed). Sixty batches of twelve against CI's pinned Ollama and LiteLLM measured
+the batch mean at 0.719 with a spread of 0.062, one batch of 60 below the floor; one run's recall
+varies by about 0.21 (three expected people: 0, 1/3, 2/3 or 1). Forty-eight runs bring the spread to
+about 0.031, the floor almost four spreads under the mean, and a real drop of 0.15 is still caught —
+shown red with one of the three people planted out of the model's answer
+(`process/HANDOVER_2026-10-20.md` §3 has the measurement). The baseline (0.75) is one batch's mean,
+above the measured one, and is left as it was.
 
 **Matching.** An expected string and an extracted string match after normalising whitespace,
 underscores and hyphens to a single space, sorting the resulting words, and casefolding —
@@ -76,7 +86,7 @@ from typing import Any
 from adapters.model_litellm.testing import model_litellm_adapter
 from schemas.model import ExtractionRequest
 
-N_RUNS = 12
+N_RUNS = 48
 
 
 @dataclass(frozen=True)
