@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 export interface ContextMenuItem {
   id: string;
@@ -20,7 +20,8 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  useEffect(() => {
+  // A layout effect, so Escape is heard from the moment it can be seen (as `Popover`).
+  useLayoutEffect(() => {
     ref.current?.querySelector<HTMLElement>("[role='menuitem']")?.focus();
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCloseRef.current();

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { pressEscapeOnAppear } from "../../testing/actOnAppear";
 import { RadialMenu, type RadialMenuItem } from "./RadialMenu";
 
 /**
@@ -163,4 +164,15 @@ describe("the tidy list", () => {
     render(<RadialMenu x={0} y={0} layout="list" onClose={() => {}} items={[item("USES", 3)]} />);
     expect(screen.queryAllByRole("group")).toHaveLength(0);
   });
+});
+
+// Escape is heard from the moment it can be seen: a listener added in a passive effect missed an
+// Escape pressed as it appeared on a slow machine (`Popover`, CI keyboard walkthroughs, 20 October 2026).
+it("closes on an Escape pressed as soon as it is in the page", async () => {
+  let closed = 0;
+  await pressEscapeOnAppear(
+    <RadialMenu x={0} y={0} layout="list" onClose={() => (closed += 1)} items={[item("expand", 3)]} />,
+    "[role='menu']",
+  );
+  expect(closed).toBe(1);
 });

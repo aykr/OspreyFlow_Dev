@@ -9,6 +9,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, expect, it } from "vitest";
 
+import { pressEscapeOnAppear } from "../../testing/actOnAppear";
 import { Popover } from "./Popover";
 
 afterEach(cleanup);
@@ -45,4 +46,19 @@ it("leaves focus where it is when its parent re-renders, as a control elsewhere 
 it("still takes focus once, to its first button, when it opens", () => {
   render(<CanvasWithNotice />);
   expect(document.activeElement).toBe(screen.getByLabelText("Close"));
+});
+
+// Escape is heard from the moment the popover can be seen. Seen 20 October 2026 on CI: walkthroughs
+// that wait for an overlay and press Escape failed now and then, a different one each run, the
+// overlay still open. The listener was added in a passive effect, which React runs after the page
+// is painted, so on a slow machine an Escape pressed as the overlay appeared was lost.
+it("closes on an Escape pressed as soon as it is in the page", async () => {
+  let closed = 0;
+  await pressEscapeOnAppear(
+    <Popover x={10} y={10} onClose={() => (closed += 1)}>
+      <button type="button">×</button>
+    </Popover>,
+    "[role='dialog']",
+  );
+  expect(closed).toBe(1);
 });

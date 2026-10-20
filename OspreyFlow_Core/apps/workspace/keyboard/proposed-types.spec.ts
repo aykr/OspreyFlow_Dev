@@ -59,8 +59,12 @@ async function serve(page: Page, opts: { taken?: string } = {}) {
 
 async function openByKeyboard(page: Page) {
   await page.goto("/keyboard/proposed-types-harness.html");
+  // Tab once the page is drawn, as a person would: pressed as soon as the page had loaded, before
+  // React had drawn the button, it went nowhere (CI, 20 October 2026).
+  const button = page.getByRole("button", { name: "Proposed types" });
+  await expect(button).toBeVisible();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Proposed types" })).toBeFocused();
+  await expect(button).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Proposed types" })).toBeFocused();
   await expect(page.getByText("Known to", { exact: true })).toBeVisible();

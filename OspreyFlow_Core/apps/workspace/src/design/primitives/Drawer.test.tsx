@@ -8,6 +8,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react";
 import { afterEach, expect, it } from "vitest";
 
+import { pressEscapeOnAppear } from "../../testing/actOnAppear";
 import { Drawer } from "./Drawer";
 
 afterEach(cleanup);
@@ -47,5 +48,18 @@ it("offers a visible Close button that closes it", () => {
     </Drawer>,
   );
   fireEvent.click(screen.getByRole("button", { name: "Close Questions" }));
+  expect(closed).toBe(1);
+});
+
+// Escape is heard from the moment it can be seen: a listener added in a passive effect missed an
+// Escape pressed as it appeared on a slow machine (`Popover`, CI keyboard walkthroughs, 20 October 2026).
+it("closes on an Escape pressed as soon as it is in the page", async () => {
+  let closed = 0;
+  await pressEscapeOnAppear(
+    <Drawer open onClose={() => (closed += 1)} title="Record an assessment">
+      <input aria-label="Statement" />
+    </Drawer>,
+    "[role='dialog']",
+  );
   expect(closed).toBe(1);
 });

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 export interface DrawerProps {
   open: boolean;
@@ -18,7 +18,8 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  useEffect(() => {
+  // A layout effect, so Escape is heard from the moment it can be seen (as `Popover`).
+  useLayoutEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCloseRef.current();

@@ -3,7 +3,7 @@
 // with the entities already accepted marked in place. *Quick scan* and *Deep read (model)* for an
 // email (ADR-098 Amendment 3); Close or
 // Escape returns to the view exactly as it was, since nothing behind the overlay is touched.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { HighlightLegend, HighlightedMessage } from "../dossier/HighlightedMessage";
 import { pendingSpansIn, type PendingSpan } from "./pendingSpans";
@@ -129,7 +129,10 @@ export function DocumentReader({
     void read();
   }, [read]);
 
-  useEffect(() => {
+  // A layout effect, so focus moves before the loaded document is drawn: a passive effect ran after
+  // it was painted and took focus back from an analyst who had already tabbed into the mark form
+  // (20 October 2026).
+  useLayoutEffect(() => {
     closeRef.current?.focus();
   }, [load.state]);
 

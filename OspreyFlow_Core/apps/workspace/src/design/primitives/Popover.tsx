@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
 export interface PopoverProps {
   x: number;
@@ -30,7 +30,10 @@ export function Popover({ x, y, onClose, children }: PopoverProps) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  useEffect(() => {
+  // A layout effect, so Escape is heard from the moment the popover can be seen: a passive effect
+  // runs after the page is painted, and on a slow machine an Escape pressed as the popover appeared
+  // was lost (keyboard walkthroughs on CI, a different one each run; 20 October 2026).
+  useLayoutEffect(() => {
     // The same shape as `RadialMenu`'s own mount effect: focus something inside once, when it
     // opens, rather than leaving focus to fall through to `<body>` (and independent of it — closing
     // on Escape does not depend on that focus still being here, since a `document`-level listener

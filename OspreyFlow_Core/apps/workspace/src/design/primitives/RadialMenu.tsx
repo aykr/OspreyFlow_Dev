@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 export interface RadialMenuItem {
   id: string;
@@ -72,11 +72,13 @@ export function RadialMenu({ x, y, items, onClose, layout, title }: RadialMenuPr
   //
   // The empty dependency array is the point: "on mount" is the real intent, and expressing it as
   // `[onClose]` only ever worked because the menu never re-rendered.
-  useEffect(() => {
+  // A layout effect, so Escape is heard from the moment it can be seen (as `Popover`).
+  useLayoutEffect(() => {
     ref.current?.querySelector<HTMLElement>("[role='menuitem']")?.focus();
   }, []);
 
-  useEffect(() => {
+  // A layout effect, so Escape is heard from the moment it can be seen (as `Popover`).
+  useLayoutEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };

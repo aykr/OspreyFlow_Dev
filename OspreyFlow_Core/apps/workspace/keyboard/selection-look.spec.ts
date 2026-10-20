@@ -41,10 +41,11 @@ test("a selected node shows a brass ring that can be seen, and loses it when des
   await page.goto("/keyboard/harness.html");
   await page.getByRole("application", { name: "Network canvas" }).focus();
   await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
-  const selected = await brassAround(page, "n0");
-  expect(selected).toBeGreaterThan(40);
+  // The ring is drawn on the frame after the selection changes, which on a slow machine is later
+  // than the selection itself (CI, 20 October 2026: the selection was ["n0"], no ring yet).
+  await expect.poll(() => brassAround(page, "n0")).toBeGreaterThan(40);
 
   await page.keyboard.press(" "); // Space takes the focused node out of the selection
   await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual([]);
-  expect(await brassAround(page, "n0")).toBeLessThan(5);
+  await expect.poll(() => brassAround(page, "n0")).toBeLessThan(5);
 });

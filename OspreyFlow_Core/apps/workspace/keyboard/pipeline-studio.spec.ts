@@ -142,7 +142,11 @@ test("extract settings are declared by keyboard", async ({ page }) => {
   const library = page.getByLabel("Extraction library");
   await library.focus();
   await library.selectOption("spacy");
-  await page.getByRole("button", { name: "Apply extract settings" }).focus();
+  // Apply is disabled until the first save has been answered, which `puts` (counting requests
+  // sent) does not wait for: pressed while disabled it did nothing (20 October 2026).
+  const apply = page.getByRole("button", { name: "Apply extract settings" });
+  await expect(apply).toBeEnabled();
+  await apply.focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => puts.length).toBe(2);
   const nodes = (puts[1] as { nodes: { kind: string; config: { library?: string } }[] }).nodes;

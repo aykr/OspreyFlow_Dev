@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { OntologyRegistry } from "../ontology/schema";
+import { actOnAppear } from "../testing/actOnAppear";
 import { DocumentReader } from "./DocumentReader";
 import type { DocumentReaderView } from "./readerApi";
 
@@ -520,4 +521,28 @@ describe("DocumentReader: Stanza first, the model on request", () => {
     const bodies = fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/extract")).map(([, i]) => JSON.parse(String(i?.body)));
     expect(bodies).toEqual([{ using: "recogniser" }, { using: "model" }]);
   });
+});
+
+// Focus stays where the analyst put it once the document is drawn. Seen 20 October 2026 on CI and
+// here (one run in ten): the reader moved focus to Close after loading in a passive effect, which
+// React runs after the page is painted, so a keyboard user who had already tabbed into *Words to
+// mark* had focus taken back mid-word.
+it("leaves focus in the mark form when the analyst reaches it as soon as it is drawn", async () => {
+  serve({ "/documents/email%3Aev-1/reader": { status: 200, body: EMAIL } });
+  const words = () => document.querySelector<HTMLInputElement>("input[aria-label='Words to mark']");
+  await actOnAppear(
+    <DocumentReader
+      apiBaseUrl="http://api.test"
+      bearerToken="tok"
+      investigationId="inv-1"
+      documentId="email:ev-1"
+      ontology={ONTOLOGY}
+      labelOf={(id) => id}
+      onClose={vi.fn()}
+      onDelta={vi.fn()}
+    />,
+    "input[aria-label='Words to mark']",
+    () => words()!.focus(),
+    () => expect(document.activeElement).toBe(words()),
+  );
 });

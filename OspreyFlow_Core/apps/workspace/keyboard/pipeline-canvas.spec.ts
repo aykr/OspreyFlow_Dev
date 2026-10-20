@@ -7,8 +7,11 @@ import { PIPELINE_CANVAS_ACTIONS, assertAllCovered, registerCovered } from "./ac
 
 const REGISTRY = "PIPELINE_CANVAS_ACTIONS";
 
+// Each case tabs once the pipeline is drawn: pressed as soon as the page had loaded, before React
+// had drawn it, Tab went nowhere (`proposed-types.spec.ts`, CI, 20 October 2026).
 test("every pipeline node is reached by Tab, in flow order", async ({ page }) => {
   await page.goto("/keyboard/pipeline-canvas-harness.html");
+  await expect(page.getByLabel("Load: Load")).toBeVisible(); // drawn, so Tab has somewhere to go
   const names: string[] = [];
   for (let i = 0; i < 5; i++) {
     await page.keyboard.press("Tab");
@@ -28,6 +31,7 @@ test("every pipeline node is reached by Tab, in flow order", async ({ page }) =>
 
 test("a node's settings are read by keyboard, and nothing in them is editable", async ({ page }) => {
   await page.goto("/keyboard/pipeline-canvas-harness.html");
+  await expect(page.getByLabel("Load: Load")).toBeVisible(); // drawn, so Tab has somewhere to go
   await page.keyboard.press("Tab");
   await page.keyboard.press("Tab"); // the source node
   await page.keyboard.press("Enter");
