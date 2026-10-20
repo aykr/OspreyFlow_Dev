@@ -43,14 +43,16 @@ function seededRandom(seed: number): () => number {
 const LOUVAIN_SEED = 20260929;
 
 /**
- * Louvain over the nodes given and the links between them. A link to a node not in `nodeIds`, a
- * link to self, and repeated links are tolerated (repeats add weight). A node with no neighbour is
- * never reported as a community of its own. Largest community first; members sorted.
+ * Every node's community, as a number: Louvain over the nodes given and the links between them,
+ * with the same seed every time, so the same nodes always fall into the same groups. A link to a
+ * node not in `nodeIds`, a link to self, and repeated links are tolerated (repeats add weight). A
+ * node with no neighbour has a number of its own. Used by `findCommunities` here and, in a Web
+ * Worker, for the links between communities on a large working set (`communityLinks.ts`, ADR-119).
  */
-export function findCommunities(
+export function assignCommunities(
   nodeIds: readonly string[],
-  edges: readonly (readonly [string, string])[],
-): Community[] {
+  edges: Iterable<readonly [string, string]>,
+): Record<string, number> {
   const present = new Set(nodeIds);
   const graph = new Graph({ type: "undirected", multi: false });
   for (const id of nodeIds) graph.mergeNode(id);
@@ -62,9 +64,23 @@ export function findCommunities(
       graph.addEdge(a, b, { weight: 1 });
     }
   }
-  if (graph.size === 0) return [];
+  if (graph.size === 0) {
+    return Object.fromEntries(nodeIds.map((id, index) => [id, index]));
+  }
+  return louvain(graph, { getEdgeWeight: "weight", rng: seededRandom(LOUVAIN_SEED) });
+}
 
-  const assignment = louvain(graph, { getEdgeWeight: "weight", rng: seededRandom(LOUVAIN_SEED) });
+/**
+ * The communities of two or more among the nodes given (`assignCommunities`). A node with no
+ * neighbour is never reported as a community of its own. Largest community first; members sorted.
+ */
+export function findCommunities(
+  nodeIds: readonly string[],
+  edges: readonly (readonly [string, string])[],
+): Community[] {
+  const present = new Set(nodeIds);
+  if (!edges.some(([a, b]) => a !== b && present.has(a) && present.has(b))) return [];
+  const assignment = assignCommunities(nodeIds, edges);
   const byIndex = new Map<number, string[]>();
   for (const [id, index] of Object.entries(assignment)) {
     const list = byIndex.get(index);

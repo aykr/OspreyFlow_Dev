@@ -76,6 +76,10 @@ import {
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
 import { redrawOnBandChange, redrawWhenCameraStops } from "./cameraMoves";
+import { COMMUNITY_LINKS_ABOVE, communityLinks, drawsCommunityLinks } from "./communityLinks";
+import { attachCommunityLinkLayer, type CommunityLinkState } from "./communityLinkLayer";
+import { latestOnly, workerAssign } from "./communityAssigner";
+import { zoomBandForRatio } from "./zoomBands";
 import { emailsOutcomeText, showEmailsAsDocuments } from "../inspector/emailDocuments";
 import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEventsApi";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
@@ -637,6 +641,36 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       });
     // Re-render when the working set changes, so the view's node count stays current.
     const workingSetSeq = useStore(store, (s) => s.seq);
+    // ADR-119: on a large working set the zoomed-out bands draw links between communities
+    // (`communityLinks.ts`); every node's community comes from a Web Worker.
+    const communityLinksRef = useRef<Omit<CommunityLinkState, "active">>({ assignment: null, links: [] });
+    const askCommunitiesRef = useRef<ReturnType<typeof latestOnly> | null>(null);
+    /** Whether a link is drawn by itself now, or stands in a link between communities: it is drawn
+     * when the view is not one of community links, or when it is the selected link or on a found path. */
+    const drawnByItself = (edgeId: string, ratio: number): boolean =>
+      !drawsCommunityLinks(zoomBandForRatio(ratio), graph.size) ||
+      edgeId === selectedEdgeRef.current ||
+      graph.getEdgeAttribute(edgeId, "onPath") === true;
+    const drawnByItselfRef = useRef(drawnByItself);
+    drawnByItselfRef.current = drawnByItself;
+    useEffect(() => {
+      if (graph.size <= COMMUNITY_LINKS_ABOVE) {
+        communityLinksRef.current = { assignment: null, links: [] };
+        return;
+      }
+      // Asked again once the working set has stopped changing for a moment, not at every delta.
+      const timer = setTimeout(() => {
+        askCommunitiesRef.current ??= latestOnly(workerAssign());
+        const pairs = graph.mapEdges((_edge, _attrs, source, target) => [source, target] as [string, string]);
+        void askCommunitiesRef.current(graph.nodes(), pairs).then((assignment) => {
+          if (!assignment) return;
+          communityLinksRef.current = { assignment, links: communityLinks(assignment, pairs) };
+          sigmaRef.current?.scheduleRender();
+        });
+      }, 400);
+      return () => clearTimeout(timer);
+      // `workingSetSeq` changes whenever nodes or links are added or removed.
+    }, [workingSetSeq, graph]);
 
     // **Communities (ADR-066).** A way of looking at the nodes now in view: groups of closely linked
     // nodes get a box, and a group can be folded into one Group Node and opened again. Nothing here
@@ -1437,6 +1471,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             // A hidden link is not drawn; the selected one is thicker, brass, and always labelled.
             hidden:
               attrs.hidden ||
+              !drawnByItselfRef.current(edgeId, ratio) ||
               hiddenEdgesRef.current.has(edgeId) ||
               hiddenLinkTypesRef.current.has(data.data.type) ||
               (foldedViewRef.current?.hidesLink(graph.source(edgeId), graph.target(edgeId)) ??
@@ -1475,6 +1510,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       });
       currentSigma = sigma;
       sigmaRef.current = sigma;
+      const detachCommunityLinks = attachCommunityLinkLayer(sigma as never, () => ({
+        active: drawsCommunityLinks(zoomBandForRatio(sigma.getCamera().ratio), graph.size),
+        ...communityLinksRef.current,
+      }));
       // ADR-115 E4: the zoom group's readout follows the camera (100% at its starting scale).
       const camera = sigma.getCamera();
       setZoomPercent(Math.round(100 / camera.getState().ratio));
@@ -1482,12 +1521,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       camera.on("updated", redrawOnBandChange(sigma, camera.getState().ratio));
 
       // The link under a point, within a few pixels of its line: a link that is not drawn (hidden by
-      // the analyst, or inside a folded group) is not under it.
+      // the analyst, inside a folded group, or standing in a link between communities) is not under it.
       const edgeAtViewport = (px: number, py: number): string | null => {
         const segments: ScreenSegment[] = [];
+        const ratio = sigma.getCamera().ratio;
         graph.forEachEdge((edgeId, _attrs, source, target) => {
           if (hiddenEdgesRef.current.has(edgeId)) return;
           if (foldedViewRef.current?.hidesLink(source, target)) return;
+          if (!drawnByItselfRef.current(edgeId, ratio)) return;
           const a = sigma.graphToViewport({
             x: graph.getNodeAttribute(source, "x") ?? 0,
             y: graph.getNodeAttribute(source, "y") ?? 0,
@@ -1720,6 +1761,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         modifierListenersRef.current = null;
         resizeObserverRef.current?.disconnect();
         resizeObserverRef.current = null;
+        detachCommunityLinks();
         sigma.kill();
         sigmaRef.current = null;
       };
