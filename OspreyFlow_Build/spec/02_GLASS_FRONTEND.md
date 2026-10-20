@@ -1343,6 +1343,10 @@ set. These are pass/fail gates in CI, not aspirations.
 | Layout run (ForceAtlas2, 50k) | Off main thread; main thread never blocked > 16 ms |
 | Metric recompute on filter change | < 500 ms for ≤ 20k, otherwise progressive with a visible indicator |
 
+How CI checks these (ADR-118): hosted runners have no GPU, so the gate renders in software and
+holds regression thresholds rather than the table's figures (`perf/perf.spec.ts`). Its pan/zoom
+sweep starts once the first frame has finished drawing; started earlier, it measured loading.
+
 Techniques that are required rather than optional: layout and metrics in Web Workers via
 Comlink; label rendering only above a zoom threshold and only for nodes above a degree
 threshold; edge rendering with level-of-detail so that below a zoom threshold only edges above

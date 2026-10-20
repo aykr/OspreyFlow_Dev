@@ -13703,16 +13703,49 @@ library its authors have moved past, and the map layer on MapLibre 4 for good.
     right-click — it had to under Sigma 3, whose edge events never fired for the Glass's own link
     programs. Under Sigma 4 the picking pass drew every link a second time and added 5.7 s to the
     50k/250k fixture's first frame.
+11. **The reducers are declared to read each item's own state only** (`canvas/reducerDependency.ts`).
+    Sigma 4 assumes any reducer reads its graph-wide state, which changes when a zoom or pan starts
+    and stops and when the pointer meets a node, and re-runs both reducers over every node and link
+    on each change: 1.65 s on the 50k/250k fixture even on a real GPU, where a pan/zoom sweep drew
+    2 frames in 4 seconds against Sigma 3's 150. The Glass's reducers never read that state, and
+    every change to the state they do read is followed by a refresh the canvas asks for. Sigma 4
+    has no setting for this, so its analysis is corrected in place, and the canvas refuses to start
+    if the analysis is not where Sigma 4.0 keeps it.
+12. **A zoom-band change works out only what it changes** (`canvas/cameraMoves.ts`): the nodes,
+    and the links only into or out of the overview and link-detail bands (where a link looks
+    different), with nothing indexed again, since a band moves nothing. Sigma 4's whole refresh
+    held the fixture for 2 s at a band; this holds it for 1.4 s where links change and under half
+    a second where they do not.
 
-**Performance (§5, measured 19 October 2026 on the owner's machine, same fixture, same harness).**
+**Performance (§5, measured 19–20 October 2026 on the owner's machine, same fixture, same harness).**
 First frame: Sigma 3 8.5 s, Sigma 4 18.5 s as first built, 13.2 s with decision 10. The rest of
 the difference is Sigma 4's own drawing of 250,000 links (native time 7.6 s against 5.0 s), not
-the Glass's layers: removing every node and link layer changed it by under half a second. CI's
-software renderer ran Sigma 3's first frame at 16.4 s, about 1.9 times this machine, which puts
-Sigma 4 near 25 s against the gate's 30 s — inside it, with less room than before. The gate's
-sweep starts while the first frame is still being drawn, so it moves with it; measured after the
-page has settled, a wheel sweep is no slower under Sigma 4 (longest frame 4.2 s against 5.6 s, both
-re-running the reducers where the zoom crosses a band).
+the Glass's layers: removing every node and link layer changed it by under half a second. On CI
+the first frame was 26.5 s against the gate's 30 s (Sigma 3: 16.4 s) — inside it, with less room.
+
+Panning was measured two ways, and the difference between them is a finding of its own. The CI
+gate renders in software (no GPU on a hosted runner), where a single render of this graph costs
+2.5–3.5 s of emulated GPU work; on this machine's real GPU the same render takes 25–57 ms. So the
+software numbers say whether a change made things worse, not how fast an analyst's canvas is.
+
+| A 4-second wheel sweep, once the page has settled | Frames | p95 frame | Longest |
+| --- | --- | --- | --- |
+| Real GPU, Sigma 3 | 175–178 | 22.7 ms | 1.09 s |
+| Real GPU, Sigma 4 before decisions 11 and 12 | 2 | — | 3.6 s |
+| Real GPU, Sigma 4 | 161–163 | 17.4 ms | 1.35 s |
+
+The longest frame on both is the zoom crossing into the overview band. In the gate's own measure
+(below), software rendering: Sigma 3 2.7 s per frame, Sigma 4 0.6 s.
+
+**The gate measured loading, not panning, and now measures panning** (`perf/perf.spec.ts`). Its
+sweep started when the canvas existed, while the first frame was still being drawn for seconds
+after, so it caught two or three frames of loading and passed or failed with the first frame:
+Sigma 3 passed it by finishing its first frame sooner, though settled it pans at 2.7 s per frame
+in software. The sweep now starts once the page answers within 50 ms, with the same statistic and
+the same 3,000 ms limit. **Shown red** with decision 11 removed, the page slowed to about a CI
+runner's speed (`PERF_CPU_THROTTLE=2`): 4,113 and 4,255 ms; green with it: 2,593 and 2,811 ms
+throttled, 587 and 619 ms unthrottled. Sigma 3 measured this way (2.7 s here, about 5.2 s at CI
+speed) would fail it.
 
 **Cost.** The Glass now depends on how Sigma 4 means its numbers (sizes, ring modes, dash modes,
 the map layer's framing); each conversion is stated where it is made, and a later Sigma release
@@ -13731,7 +13764,11 @@ fixed: pixel-mode rings drawn at about half their size, and link labels with no 
   no-op).
 - The keyboard walkthroughs (359), accessibility and the performance gate (its readiness signal
   now waits for Sigma 4's one `sigma-stage` canvas: the `sigma-nodes` canvas it waited for is gone,
-  and the gate timed out rather than measured).
+  and the gate timed out rather than measured; its sweep starts once the page has settled, shown red
+  as above).
+- `canvas/reducerDependency.test.ts` (the declaration, and refusing a Sigma that moved the analysis)
+  and `canvas/cameraMoves.test.ts` (a band change refreshes the nodes always, the links only where
+  they look different, and indexes nothing; red with the links refreshed every time).
 
 ## ADR-119 — Large working sets zoomed out: grouped by community, links between communities, nodes as dots — ACCEPTED (design)
 
