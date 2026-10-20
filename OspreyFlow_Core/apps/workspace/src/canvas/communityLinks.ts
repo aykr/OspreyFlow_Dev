@@ -10,6 +10,16 @@ import type { ZoomBand } from "./zoomBands";
  * same number above which a link's weight stops being drawn as width (ADR-097 Amendment 2). */
 export const COMMUNITY_LINKS_ABOVE = 10_000;
 
+/** Above this many nodes in the working set, zoomed-out bands draw an ordinary node as a plain dot
+ * in its type's colour (ADR-119): drawing 50,000 nodes with their pictures was most of the 50k/250k
+ * fixture's first frame. A node that needs its full drawing keeps it (`GlassCanvas.tsx`). */
+export const NODE_DOTS_ABOVE = 10_000;
+
+/** Whether ordinary nodes are drawn as dots at this band and size. */
+export function drawsNodeDots(band: ZoomBand, nodeCount: number): boolean {
+  return nodeCount > NODE_DOTS_ABOVE && (band === "overview" || band === "structure");
+}
+
 /** Whether individual links give way to links between communities at this band and size. */
 export function drawsCommunityLinks(band: ZoomBand, linkCount: number): boolean {
   return linkCount > COMMUNITY_LINKS_ABOVE && (band === "overview" || band === "structure");

@@ -18,7 +18,7 @@ declare global {
   interface Window {
     __PERF__?: { readyAt: number | null };
     /** What `perf/community-links.spec.ts` asks the canvas (ADR-119). */
-    __CANVAS__?: Pick<GlassCanvasHandle, "linkDrawn" | "zoomTo" | "cameraState" | "selectLink">;
+    __CANVAS__?: Pick<GlassCanvasHandle, "linkDrawn" | "nodeDrawnAs" | "zoomTo" | "cameraState" | "selectLink" | "highlightNodes">;
   }
 }
 

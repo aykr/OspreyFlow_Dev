@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { COMMUNITY_LINKS_ABOVE, communityGroupOf, communityLinks, communityLinkWidth, drawsCommunityLinks } from "./communityLinks";
+import {
+  COMMUNITY_LINKS_ABOVE,
+  NODE_DOTS_ABOVE,
+  communityGroupOf,
+  communityLinks,
+  communityLinkWidth,
+  drawsCommunityLinks,
+  drawsNodeDots,
+} from "./communityLinks";
 import { packBubbles } from "./layoutModes";
 
 // ADR-119: on a large working set the zoomed-out bands draw links between communities, and the
@@ -90,5 +98,18 @@ describe("packBubbles at the size of a large working set (ADR-119)", () => {
     const placed = packBubbles({ nodes, edges: [] }, communityGroupOf(assignment));
     expect(placed.size).toBe(50_000);
     expect(performance.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe("drawsNodeDots", () => {
+  it("is true only above the node count, and only zoomed out (overview and structure)", () => {
+    const many = NODE_DOTS_ABOVE + 1;
+    expect(drawsNodeDots("overview", many)).toBe(true);
+    expect(drawsNodeDots("structure", many)).toBe(true);
+    expect(drawsNodeDots("neighbourhood", many)).toBe(false);
+    expect(drawsNodeDots("link-detail", many)).toBe(false);
+    for (const band of ["overview", "structure", "neighbourhood", "link-detail"] as const) {
+      expect(drawsNodeDots(band, NODE_DOTS_ABOVE)).toBe(false);
+    }
   });
 });

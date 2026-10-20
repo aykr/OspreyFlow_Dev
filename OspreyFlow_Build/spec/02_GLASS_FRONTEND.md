@@ -67,10 +67,14 @@ Four zoom bands, all driven from the reducers:
 
 | Band | Camera | Nodes | Edges | Labels |
 | --- | --- | --- | --- | --- |
-| **Overview** | zoomed out | Community hulls drawn; nodes at minimum radius | Only above the strength filter; aggregated between hulls | None |
-| **Structure** | mid | Full channel fill and shape | All edges, width by weight | Top-degree nodes only |
+| **Overview** | zoomed out | Community hulls drawn; nodes at minimum radius (above 10,000 nodes: dots, ADR-119) | Only above the strength filter; aggregated between hulls (above 10,000 links: one link per pair of communities, ADR-119) | None |
+| **Structure** | mid | Full channel fill and shape (above 10,000 nodes: a dot in the channel colour, ADR-119) | All edges, width by weight (above 10,000 links: one link per pair of communities, ADR-119) | Top-degree nodes only |
 | **Neighbourhood** | in | Full node vocabulary, all six states | Directional arrows, curved parallel edges via `@sigma/edge-curve` | All node labels |
 | **Link detail** | closest | Node labels plus key properties | Per-edge label: type, occurrence count, interval | Edge labels on |
+
+A large case (more than 10,000 links) opens grouped by community, as Clustered bubbles, so the links
+between communities run between real groups; a selected or emphasised node, and a selected or
+on-path link, are always drawn in full (ADR-119).
 
 Two exceptions to the Labels column, so that nodes can be told apart (ADR-071): a view of 40 nodes or
 fewer names every node at any zoom, and a node that is selected, under the pointer or on a found
