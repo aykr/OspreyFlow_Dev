@@ -22,9 +22,9 @@ describe("redrawWhenCameraStops", () => {
 });
 
 describe("redrawOnBandChange", () => {
-  function renderer() {
+  function renderer(size = 1) {
     const refresh = vi.fn();
-    return { refresh, getGraph: () => ({ nodes: () => ["a", "b"], edges: () => ["e"] }) };
+    return { refresh, getGraph: () => ({ nodes: () => ["a", "b"], edges: () => ["e"], size }) };
   }
 
   // ADR-115 Amendment 1: a node's icon appears from the neighbourhood band in. The renderer reruns
@@ -60,6 +60,16 @@ describe("redrawOnBandChange", () => {
     expect(overview).toEqual({ partialGraph: { nodes: ["a", "b"], edges: ["e"] }, skipIndexation: true });
     const close = at(0.1);
     expect(close).toEqual({ partialGraph: { nodes: ["a", "b"], edges: ["e"] }, skipIndexation: true });
+  });
+
+  // ADR-119 under Sigma 4: on a large working set the links between communities give way to every
+  // link from the neighbourhood band in, so that change touches every link too; refreshing only the
+  // nodes there left every individual link hidden once zoomed in (20 October 2026, the rebase).
+  it("works out the links again where a large working set's links between communities give way to every link", () => {
+    const sigma = renderer(20_000);
+    const onBand = redrawOnBandChange(sigma, 1);
+    onBand({ ratio: 0.3 });
+    expect(sigma.refresh).toHaveBeenCalledWith({ partialGraph: { nodes: ["a", "b"], edges: ["e"] }, skipIndexation: true });
   });
 });
 

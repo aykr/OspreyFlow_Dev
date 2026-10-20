@@ -1,3 +1,4 @@
+import { drawsCommunityLinks } from "./communityLinks";
 import { zoomBandForRatio, type ZoomBand } from "./zoomBands";
 
 /** Draws the canvas again once a camera move has finished. The renderer leaves links out while the
@@ -13,10 +14,16 @@ export function redrawWhenCameraStops(sigma: { refresh: () => void }, move: Prom
 
 /** Whether a change of band changes how a link is drawn: in the overview band links take its size
  * clamp and the strength filter, and in the link-detail band their captions; between the two middle
- * bands a link looks the same and only the nodes change (`nodeAttributes.ts`). */
-export function bandChangeTouchesLinks(from: ZoomBand, to: ZoomBand): boolean {
+ * bands a link looks the same and only the nodes change (`nodeAttributes.ts`) — except on a working
+ * set of `linkCount` large enough for links between communities (ADR-119), which give way to every
+ * link from the neighbourhood band in. */
+export function bandChangeTouchesLinks(from: ZoomBand, to: ZoomBand, linkCount = 0): boolean {
   const drawnDifferently = (band: ZoomBand) => band === "overview" || band === "link-detail";
-  return drawnDifferently(from) || drawnDifferently(to);
+  return (
+    drawnDifferently(from) ||
+    drawnDifferently(to) ||
+    drawsCommunityLinks(from, linkCount) !== drawsCommunityLinks(to, linkCount)
+  );
 }
 
 /** The part of the renderer a band change needs; a test passes a fake. */
@@ -25,7 +32,7 @@ export interface BandRedrawable {
     partialGraph: { nodes: string[]; edges?: string[] };
     skipIndexation: boolean;
   }): unknown;
-  getGraph(): { nodes(): string[]; edges(): string[] };
+  getGraph(): { nodes(): string[]; edges(): string[]; size: number };
 }
 
 /** A camera listener that draws the canvas again when the zoom crosses into another band. The
@@ -40,9 +47,9 @@ export function redrawOnBandChange(sigma: BandRedrawable, startRatio: number): (
   return ({ ratio }) => {
     const now = zoomBandForRatio(ratio);
     if (now === band) return;
-    const links = bandChangeTouchesLinks(band, now);
-    band = now;
     const graph = sigma.getGraph();
+    const links = bandChangeTouchesLinks(band, now, graph.size);
+    band = now;
     sigma.refresh({
       partialGraph: links ? { nodes: graph.nodes(), edges: graph.edges() } : { nodes: graph.nodes() },
       skipIndexation: true,

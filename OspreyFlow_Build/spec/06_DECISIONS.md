@@ -13821,3 +13821,22 @@ case opens grouped; community links drawn and individual links not; a node is a 
 one is not; a selected link is drawn; zoomed in, every link and node is drawn in full) — red with
 community links never drawn, with the selected link not excepted, and with a selected node drawn as
 a dot. `canvas/communityLinks.test.ts`, `communityAssigner.test.ts`.
+
+**Amendment 1 (20 October 2026, Sigma 4 rebased onto this; branch `sigma-4`, not on `main`).** Under
+Sigma 4 (ADR-118) the decisions hold, drawn differently:
+- *Decision 2:* Sigma 4 draws every node with one program, so a dot is a picture, not a program:
+  a plain circle in the node's colour, one cached picture per colour (`communityLinks.dotImage`),
+  with no rings.
+- *Decision 1:* Sigma 4 draws nodes and their labels on one stage, so the community-link canvas sits
+  over the stage, over the few labels the zoomed-out bands draw as well as the nodes.
+- A change of band refreshes every link where links between communities give way to every link
+  (`cameraMoves.bandChangeTouchesLinks`, given the link count); Sigma 4's band redraw refreshed only
+  the nodes between structure and neighbourhood, which left every link hidden once zoomed in.
+- **Finding: hiding links does not lighten Sigma 4's first frame.** Sigma 4 hands every link to its
+  program whatever its visibility (`processEdges`; visibility is read for labels and picking only),
+  where Sigma 3 skipped hidden links. Measured on the owner's machine: first frame 10.9–12.4 s with
+  this, against 13.2 s for Sigma 4 without it and 5.8 s for Sigma 3 with it; 6 of 10.8 s sampled is
+  native drawing. So ADR-119 does not give Sigma 4 the first-frame room the park record expected.
+- Tests: `cameraMoves.test.ts` (the band change on a large working set, red with the community-link
+  term planted out), `communityLinks.test.ts` (`dotImage`); `perf/community-links.spec.ts` green
+  under Sigma 4.
