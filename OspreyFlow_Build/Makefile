@@ -4,7 +4,7 @@
 # with this folder on `PYTHONPATH` — so every command and every relative path in it is unchanged.
 # The reasoning each target used to carry in Core's Makefile is in git history (`git log -p
 # OspreyFlow_Core/Makefile`) and in each tool's own docstring.
-.PHONY: publish-user-repo ci core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status bundle
+.PHONY: publish-user-repo ci core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle
 
 CORE := ../OspreyFlow_Core
 BUILD := $(CURDIR)
@@ -213,6 +213,21 @@ exit-over-the-wire:
 # Is CI green on the pushed commit — needs network access and an Actions-read token.
 ci-status:
 	$(IN_CORE) PYTHONPATH=.:packages:$(BUILD) $(PY) -m tools.ci_status_check
+
+# CI's own jobs on this computer, with act (nektos/act, `brew install act`), as GitHub would run
+# them for a pull request: the working tree as it is, in act's Ubuntu image, natively (arm64 on
+# an Apple-silicon Mac). JOBS names them; `act -l` lists them. Example: make ci-local JOBS="lint
+# typecheck test". What it does not reproduce: GitHub's hardware. The performance gate's thresholds
+# are calibrated against GitHub's runners, and a first-frame cost seen only there (Sigma 4, 20 October
+# 2026: 15 s on GitHub, nothing here, in Linux or in x86 emulation) shows only there.
+JOBS ?= lint typecheck
+ACT_IMAGE ?= catthehacker/ubuntu:act-latest
+ci-local:
+	@command -v act >/dev/null || { echo "ci-local: act is not installed (brew install act)"; exit 1; }
+	@cd .. && for job in $(JOBS); do \
+	  echo "== $$job"; \
+	  act pull_request -W .github/workflows/ci.yml -j $$job -P ubuntu-latest=$(ACT_IMAGE) --pull=false || exit 1; \
+	done
 
 # The user repository (ADR-114 Amendment 2): Core exactly as committed at COMMIT, into the empty
 # folder OUT outside this repository — or nothing, naming each file that must not leave. Pushing is
