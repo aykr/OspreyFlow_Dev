@@ -37,13 +37,13 @@ describe("linkLookFor", () => {
         DOT_LENGTH_PX,
         DOT_PERIOD_PX - DOT_LENGTH_PX,
       ]);
-      expect(look.plainColor).toBe("rgba(0, 0, 0, 0)");
+      expect(look.plainColor).toBe("transparent");
     }
     for (const program of ["glass-edge-dashed", "glass-arrow-dashed"] as const) {
       const look = linkLookFor(program, "#888888", 1);
       expect(look.dashLength * PATTERN_BASE_WIDTH).toBeCloseTo(DASH_LENGTH_PX);
       expect(look.dashGap * PATTERN_BASE_WIDTH).toBeCloseTo(DASH_PERIOD_PX - DASH_LENGTH_PX);
-      expect(look.plainColor).toBe("rgba(0, 0, 0, 0)");
+      expect(look.plainColor).toBe("transparent");
     }
     expect(linkLookFor("glass-arrow-dotted", "#888888", 1).head).toBe("arrow");
     expect(linkLookFor("glass-edge-dashed", "#888888", 1).head).toBeUndefined();
