@@ -14135,6 +14135,45 @@ root); `tests/services/api/test_studio_publish_routes.py` and
 and re-committed without pins; one on a pinned row carries them; on the Publish screen's route, a
 mapped row with no `ontology_version` is saved and not re-committed, with a 200).
 
+### ADR-120, Amendment 3 (23 October 2026) — a malformed pin value is no pin, and one erratum
+
+Status: **ACCEPTED by the owner, 23 October 2026** ("I accept Amendment 3"). Both are the
+coordinator's, from the adversarial review of stage 2's tests, put to the owner at the stage gate.
+
+1. **A `pack_versions` value that is not a JSON object is treated exactly as no pins; an object
+   whose values are not all whole numbers is flagged.** A row's column can hold a JSON `null`, a
+   scalar or an array (written by hand, or by a bug), which neither decision of Amendment 1 gives a
+   meaning. It is read as `None`, `flag_stale` never flags on it, and the backfill stamps it as a
+   legacy row (it selects `pack_versions IS NULL OR jsonb_typeof(pack_versions) <> 'object'`), so it
+   is pinned at the next start like any other row published before ADR-120. An object with a value
+   that is not a JSON whole number (`{"fibo": "x"}`, `{"fibo": "1"}` or `{"fibo": 1.0}`, which only
+   look like the loaded version) is read as `None` too, but it is not re-stamped: `flag_stale` flags
+   a row any of whose pinned values is not a JSON whole number as well as one whose value differs,
+   so the start-up flagging flags it, and it cannot run until it is republished. Nothing that reads
+   the column can be stopped by such a value: neither a read of the row nor the start-up flagging.
+2. **Erratum to Amendment 2's Tests line.** The held-rows test ("the held rows of a recipe flagged
+   by a pack bump are refused at release by the engine's pin check") is in
+   `tests/ingest/test_typology_rules.py`, as
+   `test_held_rows_are_refused_at_release_when_their_pack_pin_is_stale`, beside the other held-row
+   release tests, not in `tests/ingest/test_studio_publish_pipeline.py`; it holds rows and releases
+   them with a pin behind the loaded pack, so nothing is flagged in it and the engine is the guard,
+   which is all Amendment 2's decision 2 claims. The source check of
+   `tests/services/api/test_load_published_recipe_sites.py` is an allow-list: within `services/api`,
+   `load_recipe` (under any import name), `Recipe.model_validate`, `Recipe.model_validate_json` and
+   `Recipe.model_construct` may be called only in `load_published_recipe`
+   (`services/api/studio_publish.py`), in `set_site_grid` (`services/api/app.py`, which loads the
+   committed site-grid recipe by fixed path), and in `recipe_reader`
+   (`services/api/studio_recipes.py`), the start-up backfill's reader, which reads a published row's
+   committed file only to learn which packs the recipe names or writes, for a row that has no pins
+   to fall back on. Building a `Recipe(...)` directly (how publish and Verify build one in memory)
+   and dynamic `getattr` access are outside the check, which says so.
+
+Tests: `tests/services/api/test_studio_recipes_store.py` (a JSON `null` and an array read as `None`,
+do not break flagging, and are stamped by the start-up reconcile; an object with a non-integer
+value, one with a numeric string and one with a decimal `1.0`, read as `None`, are not re-stamped,
+and are flagged at start-up); `tests/services/api/test_load_published_recipe_sites.py` (one planted
+violation per shape the allow-list catches).
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
