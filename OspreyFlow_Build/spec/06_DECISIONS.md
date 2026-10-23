@@ -14007,10 +14007,11 @@ the shape the code really emits before it is trusted (rule 15).
 
 ---
 
-## ADR-121 — An equality condition on a pattern node's property — PROPOSED
+## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
 
-Status: **PROPOSED, 23 October 2026**, for the owner to rule on (ADR-120 D7). Nothing is built
-until he does.
+Status: **ACCEPTED by the owner, 23 October 2026** ("I accept ADR121"), put to him by ADR-120 D7.
+Not yet built: it is built with the Questions module's ask-to-search (the prison demonstration's
+Brief 3, item B8).
 
 **Context.** The prison demonstration's journey J4 scopes a network by establishment, NIU area and
 SOCT region, which the case holds as properties of an `Establishment` linked by `HELD_AT`
