@@ -2421,6 +2421,89 @@ async def test_a_superseded_link_stores_the_current_parameter_set_and_the_rules_
         assert by_type["COMMUNICATED_WITH"].weight_components.occurrences == 9
 
 
+async def test_a_superseded_link_does_not_count_in_the_corpus(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-120 Amendment 5 decision 1: a superseded link's occurrences live on in its successor, so
+    the corpus counts leave the superseded link out, as every read does. Violated by a degree or
+    total query that filters only `reverted`: the link written after the supersede then stores a
+    degree and a type total that count the old link's 5 occurrences as well as the successor's 2
+    (11 and 11 instead of 6 and 6), and the successor itself is weighed against counts that include
+    the link it replaced (its degree 7, not 2).
+
+    a -> b is written at 5, superseded by a link at 2, then a -> c is written at 4. The new link's
+    degree at `a` is the successor's 2 plus its own 4, its type's total 2 + 4, and neither counts
+    the superseded 5."""
+    async with factory.context() as adapter:
+        (a, b, c), _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"),
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+442222222222"),
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+443333333333"),
+            ],
+            [],
+        )
+        _, (old_link,) = await _write(
+            adapter,
+            [],
+            [
+                _edge(
+                    "COMMUNICATED_WITH",
+                    a,
+                    b,
+                    classification="OFFICIAL",
+                    occurrences=5,
+                    interval=_past_interval(),
+                )
+            ],
+        )
+        tx = await adapter.begin_transaction()
+        successor = await adapter.supersede_edge(
+            old_link,
+            _edge(
+                "COMMUNICATED_WITH",
+                a,
+                b,
+                classification="OFFICIAL",
+                occurrences=2,
+                interval=_past_interval(),
+            ),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+        _, (later_link,) = await _write(
+            adapter,
+            [],
+            [
+                _edge(
+                    "COMMUNICATED_WITH",
+                    a,
+                    c,
+                    classification="OFFICIAL",
+                    occurrences=4,
+                    interval=_past_interval(),
+                )
+            ],
+        )
+
+        by_id = {e.id: e for e in await _links_among(adapter, [a, b, c])}
+        assert set(by_id) == {successor, later_link}, "the superseded link must not be read"
+
+        replaced = by_id[successor].weight_components
+        assert replaced is not None
+        assert replaced.occurrences == replaced.corpus_pair_count == 2
+        assert replaced.corpus_source_degree == 2, "the successor is weighed against its own 2 only"
+        assert replaced.corpus_total_occurrences == 2
+
+        later = by_id[later_link].weight_components
+        assert later is not None
+        assert later.corpus_pair_count == 4
+        assert later.corpus_source_degree == 2 + 4
+        assert later.corpus_target_degree == 4
+        assert later.corpus_total_occurrences == 2 + 4
+
+
 async def test_load_ledger_stamp_is_recorded_on_every_written_element(
     factory: GraphAdapterFactory,
 ) -> None:

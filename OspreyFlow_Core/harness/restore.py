@@ -543,7 +543,7 @@ def check_schema_compatibility(manifest: dict[str, Any]) -> None:
     build is the normal case. The ontology version is enforced, because it changes what the data
     *means*."""
     recorded = manifest["schema_versions"]
-    current = schema_versions()
+    current = schema_versions(include_weights=False)
     if recorded["ontology"] != current["ontology"]:
         raise RestoreRefused(
             f"this set was taken under ontology version {recorded['ontology']!r} and this "

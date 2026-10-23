@@ -318,9 +318,10 @@ class GraphArcadeDBAdapter:
         corpus-wide total for this edge type, *before* this write's own
         delta is added — `upsert_edges` adds that delta itself, since it is
         the one write not yet reflected in the store at the moment this
-        query runs. Reverted edges are excluded throughout: retracted data
-        must not still weigh on the corpus statistics live edges are
-        scored against.
+        query runs. Reverted and superseded edges are excluded
+        throughout: retracted data must not still weigh on the corpus statistics live edges are
+        scored against, and a superseded link's occurrences live on in its successor (ADR-120
+        Amendment 5), so counting both would count them twice.
 
         `corpus_total`, when the caller already holds it, is used as it stands and the store is not
         asked: the total is a whole-corpus traversal, and `upsert_edges` reads it once per call and
@@ -330,12 +331,12 @@ class GraphArcadeDBAdapter:
         tgt_lit = groovy_string_literal(target)
         source_degree = await self._sum_occurrences(
             f'g.V().has("id",{src_lit}).bothE({label_lit}).has("reverted",false)'
-            '.values("occurrences").sum()',
+            '.hasNot("superseded_by").values("occurrences").sum()',
             session_id,
         )
         target_degree = await self._sum_occurrences(
             f'g.V().has("id",{tgt_lit}).bothE({label_lit}).has("reverted",false)'
-            '.values("occurrences").sum()',
+            '.hasNot("superseded_by").values("occurrences").sum()',
             session_id,
         )
         if corpus_total is not None:
@@ -344,8 +345,10 @@ class GraphArcadeDBAdapter:
             # Reached from the vertices, each edge once through its source's out-list: a scan of the
             # type (`g.E()`) also counts the stray second records ArcadeDB sometimes stores, which
             # no traversal reaches (ADR-056 Amendment 19). It visits every vertex, so it costs a
-            # vertex scan more than the edge scan did.
-            f'g.V().outE({label_lit}).has("reverted",false).values("occurrences").sum()',
+            # vertex scan more than the edge scan did. A link that is reverted or superseded is not
+            # counted, as no read returns it (ADR-120 Amendment 5).
+            f'g.V().outE({label_lit}).has("reverted",false).hasNot("superseded_by")'
+            '.values("occurrences").sum()',
             session_id,
         )
         return source_degree, target_degree, corpus_total
@@ -1264,6 +1267,13 @@ class GraphArcadeDBAdapter:
             recipe_id=replacement.recipe_id,
             recipe_version=replacement.recipe_version,
         )
+        # The old link is marked first, so the replacement is weighed against counts that leave it
+        # out: its occurrences live on in the replacement (ADR-120 Amendment 5).
+        new_id_lit = groovy_string_literal(replacement_edge_id)
+        await self._client.gremlin(
+            f'g.E().has("id",{edge_lit}).property("superseded_by", {new_id_lit})',
+            session_id=tx,
+        )
         type_name = groovy_identifier(physical_type_name(replacement.type))
         weight, components = await self._weigh_edge(
             type_name,
@@ -1300,11 +1310,6 @@ class GraphArcadeDBAdapter:
             session_id=tx,
         )
 
-        new_id_lit = groovy_string_literal(replacement_edge_id)
-        await self._client.gremlin(
-            f'g.E().has("id",{edge_lit}).property("superseded_by", {new_id_lit})',
-            session_id=tx,
-        )
         return replacement_edge_id
 
 

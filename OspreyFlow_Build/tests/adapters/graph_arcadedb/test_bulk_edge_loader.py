@@ -34,7 +34,8 @@ KNOWN_LABELS = {LABEL, physical_type_name("ASSOCIATE_OF"), physical_type_name("U
 class MemoryTransport:
     def __init__(self, vertices: Mapping[str, str]) -> None:
         self.vertices = dict(vertices)
-        self.stored: list[dict[str, Any]] = []  # {label, s, t, occurrences, reverted}
+        # {label, s, t, occurrences, reverted}, and `superseded_by` where a link was replaced
+        self.stored: list[dict[str, Any]] = []
         self.calls: list[str] = []
         self.written: list[dict[str, Any]] = []  # the rows, as sent
         self.committed: list[str] = []
@@ -65,16 +66,20 @@ class MemoryTransport:
         wanted = set(pairs) if directed else set(pairs) | {(t, s) for s, t in pairs}
         return live & wanted
 
+    @staticmethod
+    def _counts(e: Mapping[str, Any], label: str) -> bool:
+        """Whether a stored link is in the corpus counts: of this type, not reverted, not
+        superseded (ADR-120 Amendment 5, decision 1; every read leaves out both)."""
+        return e["label"] == label and not e["reverted"] and not e.get("superseded_by")
+
     async def corpus_total(self, label: str) -> int:
         self.calls.append("corpus_total")
-        return sum(
-            e["occurrences"] for e in self.stored if e["label"] == label and not e["reverted"]
-        )
+        return sum(e["occurrences"] for e in self.stored if self._counts(e, label))
 
     async def degrees(self, label: str, ids: Sequence[str]) -> dict[str, int]:
         self.calls.append("degrees")
         self._bounded(ids)
-        live = [e for e in self.stored if e["label"] == label and not e["reverted"]]
+        live = [e for e in self.stored if self._counts(e, label)]
         # `bothE()` reads a link from a node to itself back twice, so it counts twice here.
         return {
             i: sum(e["occurrences"] * ((e["s"] == i) + (e["t"] == i)) for e in live) for i in ids
@@ -379,6 +384,122 @@ def test_a_second_write_of_the_same_self_loop_counts_both_writes_twice() -> None
     assert components["occurrences"] == components["corpus_pair_count"] == 5
     assert components["corpus_source_degree"] == components["corpus_target_degree"] == 17
     assert components["corpus_total_occurrences"] == 12
+
+
+def test_the_memory_transport_leaves_a_superseded_link_out_of_the_counts() -> None:
+    """ADR-120 Amendment 5, decision 1: the real degree and total queries leave out a link with
+    `superseded_by`, as every read does. Catches this stand-in filtering only `reverted`, which
+    would let a loader that counted a superseded link pass every test that uses it (rule 15: the
+    fake refuses what the store refuses). Reverted and superseded are left out alike."""
+    transport = _store("a", "b")
+    transport.stored += [
+        {"label": LABEL, "s": "a", "t": "b", "occurrences": 2, "reverted": False},
+        {
+            "label": LABEL,
+            "s": "a",
+            "t": "b",
+            "occurrences": 5,
+            "reverted": False,
+            "superseded_by": "edge-2",
+        },
+        {"label": LABEL, "s": "a", "t": "b", "occurrences": 50, "reverted": True},
+    ]
+    assert asyncio.run(transport.degrees(LABEL, ["a", "b"])) == {"a": 2, "b": 2}
+    assert asyncio.run(transport.corpus_total(LABEL)) == 2
+
+
+def test_a_superseded_link_is_not_in_the_corpus_a_bulk_load_weighs_against() -> None:
+    """ADR-120 Amendment 5, decision 1. Catches the bulk path weighing a new link against counts
+    that include a link already replaced: a link a -> b stored at 5 and superseded by one at 2,
+    then a -> c loaded at 4. The loaded link's degree at `a` is the successor's 2 plus its own 4,
+    and the type's total is 2 + 4, not 5 + 2 + 4."""
+    transport = _store("a", "b", "c")
+    transport.stored += [
+        {
+            "label": LABEL,
+            "s": "a",
+            "t": "b",
+            "occurrences": 5,
+            "reverted": False,
+            "superseded_by": "edge-2",
+        },
+        {"label": LABEL, "s": "a", "t": "b", "occurrences": 2, "reverted": False},
+    ]
+    _load(transport, [_edge("a", "c", 1, 4)])
+    assert _components(transport) == {("a", "c"): (6, 4, 6)}
+
+
+class _RecordingClient:
+    """Stands in for `ArcadeDBClient` and records the Gremlin it is sent."""
+
+    def __init__(self) -> None:
+        self.scripts: list[str] = []
+
+    async def gremlin(
+        self, script: str, *, params: Mapping[str, Any] | None = None, **_: Any
+    ) -> list[Any]:
+        self.scripts.append(script)
+        return []
+
+
+def test_the_gremlin_the_bulk_transport_sends_leaves_out_superseded_links() -> None:
+    """ADR-120 Amendment 5, decision 1. Catches `GremlinBulkTransport.degrees` or `corpus_total`
+    filtering only `reverted`: each script the transport sends for a count must exclude a link
+    with `superseded_by` too, as the adapter's own reads do (`hasNot("superseded_by")`). The
+    in-memory transport above cannot show this; it models the store, not the script."""
+    from adapters.graph_arcadedb.bulk import GremlinBulkTransport
+
+    client = _RecordingClient()
+    transport = GremlinBulkTransport(client)  # type: ignore[arg-type]
+    asyncio.run(transport.degrees(LABEL, ["a"]))
+    asyncio.run(transport.corpus_total(LABEL))
+
+    assert len(client.scripts) == 2
+    for script in client.scripts:
+        assert '.has("reverted", false)' in script, script
+        assert 'hasNot("superseded_by")' in script, script
+
+
+def test_the_gremlin_the_upsert_path_sends_for_counts_leaves_out_superseded_links() -> None:
+    """ADR-120 Amendment 5, decision 1. Catches `upsert_edges` weighing a link against a degree
+    or total query that filters only `reverted`: every query the write sends that sums occurrences
+    must also exclude `superseded_by`. This tests `upsert_edges` only; `supersede_edge`'s own
+    weighing (it marks the old link before weighing the replacement) is proven by the conformance
+    case `test_a_superseded_link_does_not_count_in_the_corpus`, which needs a live store."""
+    from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
+
+    store = CountingStore()
+    graph = make_adapter(store)
+    asyncio.run(graph.upsert_edges([_edge("a", "b", 1, 3)], "tx"))
+
+    sums = [q for q in store.queries if ".sum()" in q]
+    assert len(sums) >= 3, "expected a degree at each end and the type's total"
+    for query in sums:
+        assert 'hasNot("superseded_by")' in query, query
+
+
+def test_the_counting_store_leaves_a_superseded_link_out_only_when_the_query_asks() -> None:
+    """ADR-120 Amendment 5, decision 1. Catches the in-memory store behind the upsert-path tests
+    counting a link with `superseded_by` whatever the query says: a query with
+    `hasNot("superseded_by")` must not see it, one without must (so a production query that forgot
+    the step still shows the superseded link's occurrences, as the real store would)."""
+    from tests.adapters.graph_arcadedb.edge_store import CountingStore
+
+    store = CountingStore()
+    store.edges[("a", "b")] = {"id": "e1", "occurrences": 5, "superseded_by": "e2"}
+    store.edges[("a", "c")] = {"id": "e3", "occurrences": 2}
+    base_degree = "g.V().has(\"id\",'a').bothE('x').has(\"reverted\",false)"
+    base_total = "g.V().outE('x').has(\"reverted\",false)"
+    tail = '.values("occurrences").sum()'
+    excluded = '.hasNot("superseded_by")'
+
+    async def ask(query: str) -> int:
+        return int((await store.gremlin(query))[0]["result"])
+
+    assert asyncio.run(ask(base_degree + excluded + tail)) == 2
+    assert asyncio.run(ask(base_degree + tail)) == 7
+    assert asyncio.run(ask(base_total + excluded + tail)) == 2
+    assert asyncio.run(ask(base_total + tail)) == 7
 
 
 # --- the adapter declares the capability and keeps its own refusals ----------

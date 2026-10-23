@@ -105,6 +105,8 @@ CONFIGURATION_SOURCES: tuple[tuple[str, Path], ...] = (
         "config/handling-uk-le.yaml",
         REPO_ROOT / "packages" / "ontology" / "handling" / "uk-le.yaml",
     ),
+    # ADR-120 Amendment 5: stored weights name a version of this file (`parameter_set`).
+    ("config/weights.yaml", REPO_ROOT / "packages" / "ontology" / "weights" / "default.yaml"),
 )
 
 
@@ -453,23 +455,39 @@ def backup_recipes(
     return destination
 
 
-def schema_versions() -> dict[str, str]:
+def schema_versions(*, include_weights: bool = True) -> dict[str, str]:
     """What the restored data must be read back under.
 
     `harness/restore.py` refuses a restore whose ontology version does not match the target
     deployment's. A graph restored under a different ontology is not the same graph: the handling
     markings the adapter filters on are defined by the scheme, and the edge types a traversal walks
     are defined by the ontology.
+
+    A backup records the weights file's latest version too (`weights`, ADR-120 Amendment 6) and
+    fails loudly, `BackupFailed` naming the file, if it is missing or malformed. A restore does not
+    read the weights file (`include_weights=False`): it compares the ontology only, and a restore
+    that refuses on the weights is its own record.
     """
+    from ontology.errors import OntologyError
     from ontology.handling import load_uk_le_scheme
     from ontology.loader import load_default_ontology
 
     scheme = load_uk_le_scheme()
-    return {
+    versions = {
         "ontology": str(load_default_ontology().version),
         "handling_scheme": getattr(scheme, "name", "uk-le"),
         "git_sha": git_sha(),
     }
+    if include_weights:
+        from ontology import weights as weights_module
+
+        try:
+            versions["weights"] = str(weights_module.load_weight_rules().version)
+        except (OSError, OntologyError) as error:
+            raise BackupFailed(
+                "weights", f"{weights_module._DEFAULT_PATH} cannot be read: {error}"
+            ) from error
+    return versions
 
 
 #: §6's audit exception, stated as data so the manifest carries it and `harness/restore.py` can

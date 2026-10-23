@@ -338,3 +338,134 @@ def test_a_deployment_on_a_managed_database_is_refused_in_words_before_anything_
     assert "osprey-db.abc.eu-west-2.rds.amazonaws.com" in refused.value.detail
     assert "cloud's own backups" in refused.value.detail
     assert not out_root.exists()
+
+
+# --- the weights file is part of the set (ADR-120 Amendment 5, decision 2) ---------------------
+
+WEIGHTS_RELATIVE = "config/weights.yaml"
+SHIPPED_WEIGHTS = backup.REPO_ROOT / "packages" / "ontology" / "weights" / "default.yaml"
+
+
+def test_the_weights_file_is_among_the_configuration_sources() -> None:
+    """ADR-120 Amendment 5, decision 2. Violated by a backup that copies the ontology and the
+    handling scheme but not `packages/ontology/weights/default.yaml`: a restore into a checkout
+    whose weights file differs then has nothing in the set to compare it against, and stored
+    weights name a version (`parameter_set`) the set cannot show. The source is the shipped file,
+    under `config/weights.yaml` beside `config/ontology.yaml`."""
+    sources = dict(backup.CONFIGURATION_SOURCES)
+
+    assert WEIGHTS_RELATIVE in sources
+    assert sources[WEIGHTS_RELATIVE] == SHIPPED_WEIGHTS
+    assert sources[WEIGHTS_RELATIVE].is_file()
+
+
+def test_a_backup_set_holds_the_weights_file_and_its_checksum(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """ADR-120 Amendment 5, decision 2. Violated by a set whose manifest or directory lacks the
+    weights file, or holds one that is not the byte-for-byte copy the checksum names. Runs the
+    real `run_backup` with every store faked and the real configuration sources, less
+    `osprey.yaml` (the owner's own, which a unit test has no business reading)."""
+
+    def touch(path: Path) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x")
+        return path
+
+    kept = tuple(item for item in backup.CONFIGURATION_SOURCES if item[0] != "config/osprey.yaml")
+    monkeypatch.setattr(backup, "CONFIGURATION_SOURCES", kept)
+    monkeypatch.setattr(backup, "_conduit_is_running", lambda compose_file: False)
+    monkeypatch.setattr(backup, "git_sha", lambda: "abc")
+    monkeypatch.setattr(backup, "backup_graph_store", lambda c, d, **kw: touch(d))
+    monkeypatch.setattr(
+        backup, "backup_postgres_all", lambda c, f: [("postgres", touch(f / "dump.sql"))]
+    )
+    monkeypatch.setattr(backup, "backup_identity", lambda c, d: touch(d))
+    monkeypatch.setattr(backup, "backup_object_store", lambda c, d, **kw: touch(d))
+    monkeypatch.setattr(backup, "backup_analytics", lambda c, d, **kw: touch(d))
+    monkeypatch.setattr(backup, "backup_recipes", lambda c, d, **kw: touch(d))
+
+    target = backup.run_backup(
+        compose_file=deployment,
+        out_root=tmp_path / "sets",
+        profile="local-lite",
+        database="ospreyflow",
+        analytics_container_path="/var/lib/osprey/data/analytics.duckdb",
+        require_quiesced=False,
+    )
+
+    manifest = json.loads((target / "manifest.json").read_text(encoding="utf-8"))
+    entries = {entry["path"]: entry for entry in manifest["files"]}
+    assert WEIGHTS_RELATIVE in entries
+    assert entries[WEIGHTS_RELATIVE]["item"] == "configuration"
+    assert (target / WEIGHTS_RELATIVE).read_bytes() == SHIPPED_WEIGHTS.read_bytes()
+    assert entries[WEIGHTS_RELATIVE]["sha256"] == backup._digest(target / WEIGHTS_RELATIVE)[1]
+
+
+def test_schema_versions_record_the_weights_files_latest_version(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """ADR-120 Amendment 5, decision 2. Violated by a manifest whose `schema_versions` has no
+    `weights` key, or one that records the first version, a fixed number or the file's length
+    rather than its latest: the key is `weights`, a string like the other entries. Shown against
+    the shipped file and against a planted two-version history, so a constant cannot pass."""
+    import ontology.weights as weights_module
+    from ontology.weights import load_weight_rules
+    from tests.test_compare_vaults import _two_version_history
+
+    monkeypatch.setattr(backup, "git_sha", lambda: "abc")
+
+    shipped = backup.schema_versions()
+    assert shipped["weights"] == str(load_weight_rules().version)
+
+    monkeypatch.setattr(weights_module, "_DEFAULT_PATH", _two_version_history(tmp_path))
+    planted = backup.schema_versions()
+    assert planted["weights"] == "2"
+    assert {"ontology", "handling_scheme", "git_sha"} <= set(planted), "the others are kept"
+
+
+def test_a_backup_refuses_loudly_when_the_weights_file_is_missing_or_malformed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """ADR-120 Amendment 6. Violated by a backup that records no weights version, or a made-up
+    one, when the file it names cannot be read: a set that silently lacks it cannot be compared
+    against later. `BackupFailed` names the weights file for a missing file and for a malformed
+    one."""
+    import ontology.weights as weights_module
+
+    monkeypatch.setattr(backup, "git_sha", lambda: "abc")
+
+    monkeypatch.setattr(weights_module, "_DEFAULT_PATH", tmp_path / "absent.yaml")
+    with pytest.raises(backup.BackupFailed) as missing:
+        backup.schema_versions()
+    assert missing.value.item == "weights"
+    assert "absent.yaml" in missing.value.detail
+
+    broken = tmp_path / "broken.yaml"
+    broken.write_text("versions: [not, a, version]\n", encoding="utf-8")
+    monkeypatch.setattr(weights_module, "_DEFAULT_PATH", broken)
+    with pytest.raises(backup.BackupFailed) as malformed:
+        backup.schema_versions()
+    assert malformed.value.item == "weights"
+    assert "broken.yaml" in malformed.value.detail
+
+
+def test_the_restore_check_does_not_read_the_weights_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """ADR-120 Amendment 6: a restore does not refuse, or crash, on the weights file. Violated by
+    `check_schema_compatibility` going through a `schema_versions` that loads the weights file: a
+    checkout whose file is missing or malformed would then fail the restore with an unrelated
+    error before the ontology comparison. Compatible ontology completes; an incompatible one is
+    still refused (the check still compares something)."""
+    import ontology.weights as weights_module
+    from ontology.loader import load_default_ontology
+
+    monkeypatch.setattr(backup, "git_sha", lambda: "abc")
+    monkeypatch.setattr(weights_module, "_DEFAULT_PATH", tmp_path / "absent.yaml")
+    ontology = str(load_default_ontology().version)
+
+    restore.check_schema_compatibility({"schema_versions": {"ontology": ontology}})
+
+    with pytest.raises(restore.RestoreRefused):
+        restore.check_schema_compatibility({"schema_versions": {"ontology": "0-not-this"}})

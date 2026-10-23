@@ -133,6 +133,21 @@ def test_a_reverted_edge_is_not_part_of_the_vaults_corpus() -> None:
     assert compare_vaults.component_mismatches(records) == []
 
 
+def test_a_superseded_edge_is_not_part_of_the_vaults_corpus() -> None:
+    """ADR-120 Amendment 5, decision 1. Catches a recompute that leaves out only `reverted` edges:
+    a superseded edge's occurrences live on in its successor, so counting it too puts 50 extra
+    occurrences into the degrees of a and b and the type's total, and every stored component of
+    the loader's own records then reads as a mismatch. Planted with the key a read of the store
+    returns (`superseded_by`), on a copy of an edge that is otherwise live."""
+    records = _records()
+    superseded = {**records[0], "id": "replaced", "superseded_by": "edge-1", "occurrences": 50}
+    records.append(superseded)
+
+    assert "replaced" not in compare_vaults.recomputed_components(records)
+    assert compare_vaults.component_mismatches(records) == []
+    assert "replaced" not in compare_vaults.legacy_components(records)
+
+
 def test_ids_stored_twice_are_counted_on_each_side_and_do_not_fail_the_comparison() -> (
     None
 ):

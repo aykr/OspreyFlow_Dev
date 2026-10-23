@@ -300,6 +300,30 @@ async def test_what_is_already_stored_is_part_of_the_end_of_load_corpus(
         assert new.weight_components.corpus_target_degree == 2
 
 
+async def test_a_superseded_link_is_not_in_the_end_of_load_corpus(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-120 Amendment 5, decision 1, on the bulk path. Violated by a bulk transport whose degree
+    and total queries filter only `reverted`: a link a -> b stored at 5 and superseded by one at 2,
+    then a -> c bulk-loaded at 4, leaves the loaded link a degree at `a` of 5 + 2 + 4 = 11 and a
+    type total of 11, where reads (and the upsert path) give 2 + 4 = 6 for both."""
+    async with factory.context() as adapter:
+        loader = _loader(adapter)
+        a, b, c = await _endpoints(adapter, 3)
+        _, (old,) = await _write(adapter, [], [_comm(a, b, occurrences=5, row="old")])
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_edge(old, _comm(a, b, occurrences=2, row="new"), tx)
+        await adapter.commit_transaction(tx)
+
+        await loader.bulk_load_edges([_comm(a, c, occurrences=4, row="bulk")])
+
+        (loaded,) = await _edges_of(adapter, c)
+        assert loaded.weight_components is not None
+        assert loaded.weight_components.corpus_source_degree == 2 + 4
+        assert loaded.weight_components.corpus_target_degree == 4
+        assert loaded.weight_components.corpus_total_occurrences == 2 + 4
+
+
 async def test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert(
     factory: GraphAdapterFactory,
 ) -> None:

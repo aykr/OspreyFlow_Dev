@@ -109,12 +109,18 @@ def compare_records(
     return lines
 
 
+def _counts(edge: Mapping[str, Any]) -> bool:
+    """Whether an edge is in the corpus counts: not reverted and not superseded."""
+    return not edge.get("reverted") and not edge.get("superseded_by")
+
+
 def recomputed_components(edges: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, int]]:
     """Per edge id, the counts the weight formula takes, worked out from the edges the vault holds
-    (those not reverted): the pair's occurrences, each endpoint's total occurrences, and the total
+    (those neither reverted nor superseded, as every read leaves them out; ADR-120 Amendment 5):
+    the pair's occurrences, each endpoint's total occurrences, and the total
     over the edge type. A self-loop counts twice in its node's degree, as the store reads it back
     (`bothE`) and as the adapter and the bulk loader count it (ADR-120 Amendment 4)."""
-    live = [e for e in edges if not e.get("reverted")]
+    live = [e for e in edges if _counts(e)]
     degree: Counter[str] = Counter()
     for e in live:
         degree[str(e["source"])] += int(e["occurrences"])
@@ -143,7 +149,7 @@ def legacy_components(edges: Sequence[Mapping[str, Any]]) -> list[str]:
     """The ids of live edges whose components carry no `parameter_set`: written before ADR-120, so
     computed under the curve that preceded it. They are listed, not recomputed (ADR-120 Amendment
     4): their weights are not the weights file's and are not mismatches."""
-    unique = {str(e["id"]): e for e in edges if not e.get("reverted")}
+    unique = {str(e["id"]): e for e in edges if _counts(e)}
     return sorted(
         i
         for i, e in unique.items()

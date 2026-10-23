@@ -375,7 +375,9 @@ class Edge(BaseModel):
     interval: Interval | None = None
     occurrences: int = 1
     weight: float = 0.0
-    weight_components: WeightComponents | None = None
+    #: ADR-122 (Amendment 1): corpus-wide counts, never serialised. Readable in Python, where the
+    #: weight is computed and recomputed; excluded from every dump, so no response can carry them.
+    weight_components: WeightComponents | None = Field(default=None, exclude=True)
     #: ADR-081 step B. The link's own basis, where one was written: `probabilistic` on a link of a
     #: Direct type that is statistically derived or that an analyst declared so (with a reason,
     #: kept in the link's change history). `None` means the link takes its type's basis, which is

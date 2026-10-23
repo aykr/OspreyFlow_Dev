@@ -63,11 +63,13 @@ class BulkTransport(Protocol):
         ...
 
     async def corpus_total(self, label: str) -> int:
-        """Total occurrences over every live edge of `label`, reached as a traversal."""
+        """Total occurrences over every live edge of `label` (neither reverted nor superseded, as
+        every read leaves them out; ADR-120 Amendment 5), reached as a traversal."""
         ...
 
     async def degrees(self, label: str, ids: Sequence[str]) -> dict[str, int]:
-        """Weighted degree (occurrences over live edges of `label`, either end) of each id."""
+        """Weighted degree (occurrences over live edges of `label`, either end, neither reverted nor
+        superseded; ADR-120 Amendment 5) of each id."""
         ...
 
     async def begin(self) -> str: ...
@@ -348,7 +350,8 @@ class GremlinBulkTransport:
 
     async def corpus_total(self, label: str) -> int:
         rows = await self._client.gremlin(
-            f'g.V().outE("{label}").has("reverted", false).values("occurrences").sum()'
+            f'g.V().outE("{label}").has("reverted", false).hasNot("superseded_by")'
+            '.values("occurrences").sum()'
         )
         return int(rows[0].get("result") or 0) if rows else 0
 
@@ -356,7 +359,7 @@ class GremlinBulkTransport:
         rows = await self._client.gremlin(
             'g.V().has("id", within(ids)).project("id","d").by(values("id"))'
             '.by(coalesce(bothE("' + label + '").has("reverted", false)'
-            '.values("occurrences").sum(), constant(0)))',
+            '.hasNot("superseded_by").values("occurrences").sum(), constant(0)))',
             params={"ids": list(ids)},
         )
         return {str(r["id"]): int(r["d"]) for r in rows}

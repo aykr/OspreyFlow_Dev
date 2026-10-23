@@ -29,6 +29,13 @@ class CountingStore:
         self.queries: list[str] = []
         self.edges: dict[tuple[str, str], dict[str, Any]] = {}
 
+    @staticmethod
+    def _counts(edge: dict[str, Any], query: str) -> bool:
+        """Whether a count query sees this edge, as the real store answers it: a link with
+        `superseded_by` is left out only if the query says `hasNot("superseded_by")`, so a query
+        that forgot the step still counts it (ADR-120 Amendment 5)."""
+        return not ('hasNot("superseded_by")' in query and edge.get("superseded_by"))
+
     def corpus_total_queries(self) -> int:
         return sum(1 for q in self.queries if q.startswith("g.V().outE("))
 
@@ -39,7 +46,8 @@ class CountingStore:
         if query.endswith(".label()"):
             return [{"result": physical_type_name(NODE_TYPE)}]
         if query.startswith("g.V().outE("):  # the corpus total, one whole-corpus traversal
-            return [{"result": sum(e["occurrences"] for e in self.edges.values())}]
+            seen = [e for e in self.edges.values() if self._counts(e, query)]
+            return [{"result": sum(e["occurrences"] for e in seen)}]
         if ".elementMap()" in query:  # an existing edge for this pair
             quoted = literals(query)  # id, source, label, reverted, superseded_by, id, target
             src, tgt = quoted[1], quoted[-1]
@@ -53,6 +61,7 @@ class CountingStore:
                     "result": sum(
                         e["occurrences"] * ((s == vertex) + (t == vertex))
                         for (s, t), e in self.edges.items()
+                        if self._counts(e, query)
                     )
                 }
             ]
