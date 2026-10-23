@@ -47,10 +47,12 @@ class CountingStore:
             return [found] if found else []
         if ".values(" in query and ".sum()" in query:  # one vertex's own weighted degree
             vertex = literals(query)[1]
+            # `bothE()` reads a link from a node to itself back twice, so it counts twice here.
             return [
                 {
                     "result": sum(
-                        e["occurrences"] for (s, t), e in self.edges.items() if vertex in (s, t)
+                        e["occurrences"] * ((s == vertex) + (t == vertex))
+                        for (s, t), e in self.edges.items()
                     )
                 }
             ]

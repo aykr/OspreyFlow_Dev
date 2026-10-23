@@ -29,6 +29,7 @@ from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
+from ontology.weights import WeightRules, load_weight_rules
 from ports.graph import BulkEdgeResult, NodeSuggestions, SubgraphTooLarge, SuggestOptions
 from schemas.compute import LinkStructure, StructureEdge, StructureNode
 from schemas.domain import (
@@ -110,7 +111,7 @@ from .serialization import (
     node_from_element_map,
     node_write_to_properties,
 )
-from .weight import WeightConfig, compute_weight
+from .weight import compute_weight
 
 
 class GraphArcadeDBAdapter:
@@ -125,18 +126,20 @@ class GraphArcadeDBAdapter:
         client: ArcadeDBClient,
         handling_scheme: HandlingScheme,
         *,
-        weight_config: WeightConfig = WeightConfig(),
+        weight_rules: WeightRules | None = None,
         bulk_transport: BulkTransport | None = None,
     ) -> None:
         self._client = client
         self._access = AccessFilter(handling_scheme)
         self._scheme = handling_scheme
-        self._weight_config = weight_config
+        # The weights file is read once, here: every weight this adapter stores is computed under
+        # this version's rules and records it (ADR-120 D3).
+        self._weight_rules = weight_rules or load_weight_rules()
         # The bulk-load capability (`ports.graph.BulkGraphLoader`, ADR-058). The transport is
         # swappable so the loader's logic is testable without a store.
         self._bulk = BulkEdgeLoader(
             bulk_transport or GremlinBulkTransport(client),
-            weight_config,
+            self._weight_rules,
             handling_scheme=handling_scheme,
         )
         self._schema: OntologySchema | None = None
@@ -523,19 +526,28 @@ class GraphArcadeDBAdapter:
             type_name, write.source, write.target, session_id=session_id, corpus_total=corpus_total
         )
         delta = write.occurrences
+        # A link from a node to itself is read back twice from that node (`bothE`), so the stored
+        # degree already counts a stored loop's occurrences twice and this write's must be added
+        # twice too, as the bulk loader counts it (ADR-120 Amendment 4). The type's total counts
+        # each edge once.
+        self_loop = write.source == write.target
+        degree_delta = 2 * delta if self_loop else delta
         components = WeightComponents(
             occurrences=merged_occurrences,
             corpus_pair_count=merged_occurrences,
-            corpus_source_degree=source_degree + delta,
-            corpus_target_degree=target_degree + delta,
+            corpus_source_degree=source_degree + degree_delta,
+            corpus_target_degree=target_degree + degree_delta,
             corpus_total_occurrences=corpus_total + delta,
             computed_at=now,
+            parameter_set=self._weight_rules.parameter_set(write.type),
         )
         weight = compute_weight(
             components,
+            edge_type=write.type,
             valid_to=merged_interval.valid_to if merged_interval else None,
             now=now,
-            config=self._weight_config,
+            rules=self._weight_rules,
+            self_loop=self_loop,
         )
         return weight, components
 

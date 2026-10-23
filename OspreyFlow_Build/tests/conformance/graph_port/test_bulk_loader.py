@@ -16,6 +16,7 @@ import pytest
 from ontology.errors import OntologyError
 from ports.graph import BulkGraphLoader, GraphPort
 from schemas.domain import (
+    Edge,
     EdgeWrite,
     ExpandRequest,
     Interval,
@@ -24,7 +25,17 @@ from schemas.domain import (
     SourceRef,
 )
 
-from tests.conformance.graph_port.test_suite import CLEARED, _edge, _node, _write
+from tests.adapters.graph_arcadedb.edge_store import without_clock
+from tests.conformance.graph_port.test_suite import (
+    CLEARED,
+    LOOP_OCCURRENCES,
+    OTHER_OCCURRENCES,
+    _edge,
+    _node,
+    _links_among,
+    _past_interval,
+    _write,
+)
 from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
 
 pytestmark = [
@@ -287,6 +298,122 @@ async def test_what_is_already_stored_is_part_of_the_end_of_load_corpus(
         assert new.weight_components.corpus_total_occurrences == 12
         assert new.weight_components.corpus_source_degree == 12  # a: 10 stored + 2 loaded
         assert new.weight_components.corpus_target_degree == 2
+
+
+async def test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-120 D3 and Amendment 4: the bulk path and `upsert_edges` weigh with the same rules, so
+    a stored link has the same parameter set, components and weight whichever wrote it. Catches the
+    bulk loader storing no parameter set, the default rule's name for a type that has its own, a
+    structural type's weight that is not its strength, an unlisted type that does not take the
+    default rule, a self-loop counted once in its node's degree or given a mutual-information term,
+    and a weight taken at a recency of 1 for a link that ended in the past. A counted type, a
+    self-loop of it (at a node with other occurrences), a structural type and an unlisted type,
+    each written once by each path."""
+    from ontology.weights import load_weight_rules
+
+    from adapters.graph_arcadedb.weight import compute_weight
+
+    rules = load_weight_rules()
+    interval = _past_interval()
+
+    async def write(adapter: GraphPort, *, bulk: bool) -> dict[str, Edge]:
+        """The same links written into a fresh database by one path, read back by label (the
+        self-loop through `edges_among`: `expand` cannot return one)."""
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"),
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+442222222222"),
+            ],
+            [],
+        )
+        (p, q), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL") for _ in range(2)], []
+        )
+        links = [
+            _edge(
+                "COMMUNICATED_WITH",
+                a,
+                b,
+                classification="OFFICIAL",
+                occurrences=OTHER_OCCURRENCES,
+                interval=interval,
+            ),
+            _edge("FAMILY_OF", p, q, classification="OFFICIAL", occurrences=2, interval=interval),
+            _edge("USES", p, a, classification="OFFICIAL", occurrences=3, interval=interval),
+        ]
+        loop = _edge(
+            "COMMUNICATED_WITH",
+            a,
+            a,
+            classification="OFFICIAL",
+            occurrences=LOOP_OCCURRENCES,
+            interval=interval,
+        )
+        if bulk:
+            await _loader(adapter).bulk_load_edges([*links, loop])
+        else:
+            await _write(adapter, [], links)
+            await _write(adapter, [], [loop])
+        found: dict[str, Edge] = {}
+        for edge in await _links_among(adapter, [a, b, p, q]):
+            found["SELF_LOOP" if edge.source == edge.target else edge.type] = edge
+        return found
+
+    found: dict[str, dict[str, Edge]] = {}
+    for path in ("bulk", "upsert"):
+        async with factory.context() as adapter:  # a fresh database for each path
+            found[path] = await write(adapter, bulk=path == "bulk")
+    labels = {"COMMUNICATED_WITH", "SELF_LOOP", "FAMILY_OF", "USES"}
+    assert set(found["bulk"]) == labels and set(found["upsert"]) == labels
+
+    for path, edges in found.items():
+        for label, edge in edges.items():
+            components = edge.weight_components
+            assert components is not None, (path, label)
+            assert components.parameter_set == rules.parameter_set(edge.type), (path, label)
+            assert edge.interval is not None
+            recomputed = compute_weight(
+                components,
+                edge_type=edge.type,
+                valid_to=edge.interval.valid_to,
+                now=components.computed_at,
+                rules=rules,
+                self_loop=edge.source == edge.target,
+            )
+            assert edge.weight == pytest.approx(recomputed, abs=1e-9), (path, label)
+        # The structural type weighs its strength; the unlisted one takes the default rule.
+        assert edges["FAMILY_OF"].weight == 0.75, path
+        uses = edges["USES"]
+        assert uses.weight_components is not None and uses.interval is not None
+        assert uses.weight_components.parameter_set == f"{rules.version}/default", path
+        as_communicated = compute_weight(
+            uses.weight_components,
+            edge_type="COMMUNICATED_WITH",
+            valid_to=uses.interval.valid_to,
+            now=uses.weight_components.computed_at,
+            rules=rules,
+            self_loop=False,
+        )
+        assert abs(uses.weight - as_communicated) > 1e-3, path
+        loop = edges["SELF_LOOP"].weight_components
+        assert loop is not None
+        assert loop.corpus_source_degree == OTHER_OCCURRENCES + 2 * LOOP_OCCURRENCES, path
+
+    # The same link stored by either path, in databases that hold the same things: exactly the same
+    # components, and the same weight to the clock's difference between the two calls. (The
+    # ordinary COMMUNICATED_WITH link is left out: an upsert weighs it before the self-loop is
+    # written, a bulk load after.)
+    for label in ("SELF_LOOP", "FAMILY_OF", "USES"):
+        from_bulk, from_upsert = found["bulk"][label], found["upsert"][label]
+        assert from_bulk.weight_components is not None
+        assert from_upsert.weight_components is not None
+        assert without_clock(from_bulk.weight_components) == without_clock(
+            from_upsert.weight_components
+        ), label
+        assert from_bulk.weight == pytest.approx(from_upsert.weight, abs=1e-6), label
 
 
 # --- chunking, progress, and revert ------------------------------------------

@@ -28,6 +28,7 @@ from conduit_common.identity import now_utc
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
+from ontology.weights import WeightRules, load_weight_rules
 from ports.graph import BulkEdgeResult
 from schemas.domain import AuditStub, EdgeWrite, OntologySchema, WeightComponents
 from schemas.merge import AggregatedEdge, aggregate_edge_writes
@@ -36,7 +37,7 @@ from .client import ArcadeDBClient
 from .gremlin_literals import groovy_identifier
 from .naming import logical_type_name, physical_type_name
 from .serialization import edge_write_to_properties
-from .weight import WeightConfig, compute_weight
+from .weight import compute_weight
 
 #: How many ids go into one batched lookup. Bounded so a script's parameter list stays small.
 LOOKUP_BATCH = 500
@@ -91,12 +92,12 @@ class BulkEdgeLoader:
     def __init__(
         self,
         transport: BulkTransport,
-        weight_config: WeightConfig = WeightConfig(),
+        weight_rules: WeightRules | None = None,
         *,
         handling_scheme: HandlingScheme,
     ) -> None:
         self._transport = transport
-        self._weight_config = weight_config
+        self._weight_rules = weight_rules or load_weight_rules()
         # ADR-102: a pair written twice in one load keeps the higher handling of the two.
         self._scheme = handling_scheme
 
@@ -271,12 +272,15 @@ class BulkEdgeLoader:
                 + load_degree[write.target],
                 corpus_total_occurrences=baseline_total + load_total,
                 computed_at=now,
+                parameter_set=self._weight_rules.parameter_set(write.type),
             )
             weight = compute_weight(
                 components,
+                edge_type=write.type,
                 valid_to=write.interval.valid_to if write.interval else None,
                 now=now,
-                config=self._weight_config,
+                rules=self._weight_rules,
+                self_loop=write.source == write.target,
             )
             audit = AuditStub(
                 created_at=write.created_at,

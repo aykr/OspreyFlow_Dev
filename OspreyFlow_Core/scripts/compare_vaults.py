@@ -29,6 +29,7 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from scripts.seed_support import ids_stored_twice, vault_locations
@@ -37,9 +38,13 @@ from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
 from adapters.graph_arcadedb.naming import physical_type_name
 from adapters.graph_arcadedb.weight import compute_weight
+from ontology.weights import load_weight_history
 from schemas.domain import WeightComponents
 
 PAGE = 2000
+#: The one link type the comparison reads (see `scan_with`), so the type its weights are
+#: recomputed under.
+EDGE_TYPE = "TRANSACTED"
 WEIGHT_TOLERANCE = 1e-9
 #: Written by the store or the load clock, so they differ between two loads of the same data.
 _NOT_COMPARED = {"@rid", "@in", "@out", "@type", "@cat", "weight", "weight_components"}
@@ -107,13 +112,13 @@ def compare_records(
 def recomputed_components(edges: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, int]]:
     """Per edge id, the counts the weight formula takes, worked out from the edges the vault holds
     (those not reverted): the pair's occurrences, each endpoint's total occurrences, and the total
-    over the edge type. A self-loop counts once for its node."""
+    over the edge type. A self-loop counts twice in its node's degree, as the store reads it back
+    (`bothE`) and as the adapter and the bulk loader count it (ADR-120 Amendment 4)."""
     live = [e for e in edges if not e.get("reverted")]
     degree: Counter[str] = Counter()
     for e in live:
         degree[str(e["source"])] += int(e["occurrences"])
-        if e["target"] != e["source"]:
-            degree[str(e["target"])] += int(e["occurrences"])
+        degree[str(e["target"])] += int(e["occurrences"])
     total = sum(int(e["occurrences"]) for e in live)
     return {
         str(e["id"]): {
@@ -126,13 +131,40 @@ def recomputed_components(edges: Sequence[Mapping[str, Any]]) -> dict[str, dict[
     }
 
 
-def component_mismatches(edges: Sequence[Mapping[str, Any]]) -> list[str]:
+def _stored_parameter_set(edge: Mapping[str, Any]) -> str | None:
+    stored = edge.get("weight_components")
+    if not isinstance(stored, Mapping):
+        return None
+    value = stored.get("parameter_set")
+    return str(value) if value else None
+
+
+def legacy_components(edges: Sequence[Mapping[str, Any]]) -> list[str]:
+    """The ids of live edges whose components carry no `parameter_set`: written before ADR-120, so
+    computed under the curve that preceded it. They are listed, not recomputed (ADR-120 Amendment
+    4): their weights are not the weights file's and are not mismatches."""
+    unique = {str(e["id"]): e for e in edges if not e.get("reverted")}
+    return sorted(
+        i
+        for i, e in unique.items()
+        if isinstance(e.get("weight_components"), Mapping) and _stored_parameter_set(e) is None
+    )
+
+
+def component_mismatches(
+    edges: Sequence[Mapping[str, Any]], *, weights_path: Path | None = None
+) -> list[str]:
     """Edges whose stored weight components, or stored weight from them, are not what the vault's
-    own contents give."""
+    own contents give. Each weight is recomputed under the weights-file version its own
+    `parameter_set` names (`weights_path` is the file's history; the shipped one by default); a
+    component with no `parameter_set` is legacy (see `legacy_components`) and is skipped
+    entirely, counts and weight; one that does not name `TRANSACTED`'s rule, or a version the file
+    lacks, is a mismatch."""
     # One record per id: a stray copy is seen by a scan and not by a traversal, which is how the
     # product reads the corpus (ADR-056 Amendment 19), so it must not count twice here.
     edges = list({str(e["id"]): e for e in edges}.values())
     expected = recomputed_components(edges)
+    history = {rules.version: rules for rules in load_weight_history(weights_path)}
     lines: list[str] = []
     for e in edges:
         wanted = expected.get(str(e["id"]))
@@ -142,19 +174,46 @@ def component_mismatches(edges: Sequence[Mapping[str, Any]]) -> list[str]:
         if not isinstance(stored, dict):
             lines.append(f"edge {e['id']}: no stored weight components")
             continue
+        if _stored_parameter_set(e) is None:
+            # Legacy (written before ADR-120): nothing about it is compared or recomputed. Its
+            # counts were taken under the old rules (an upsert counted a self-loop once), and it
+            # is listed apart by `legacy_components`.
+            continue
         for key, value in wanted.items():
             if stored.get(key) != value:
                 lines.append(
                     f"edge {e['id']}: {key} stored {stored.get(key)!r}, vault holds {value}"
                 )
+        parameter_set = _stored_parameter_set(e)
+        assert parameter_set is not None  # a legacy component was skipped above
+        version_text, _, _rule = parameter_set.partition("/")
+        rules = history.get(int(version_text)) if version_text.isdigit() else None
+        if rules is None:
+            lines.append(
+                f"edge {e['id']}: parameter_set {parameter_set!r} names a version the weights "
+                "file does not hold"
+            )
+            continue
+        if parameter_set != rules.parameter_set(EDGE_TYPE):
+            lines.append(
+                f"edge {e['id']}: parameter_set {parameter_set!r}, but a {EDGE_TYPE} link is "
+                f"weighed under {rules.parameter_set(EDGE_TYPE)!r}"
+            )
+            continue
         valid_to = e.get("valid_to")
         components = WeightComponents(
             occurrences=int(e["occurrences"]),
             computed_at=_when(stored.get("computed_at")),
-            **wanted,
+            corpus_pair_count=wanted["corpus_pair_count"],
+            corpus_source_degree=wanted["corpus_source_degree"],
+            corpus_target_degree=wanted["corpus_target_degree"],
+            corpus_total_occurrences=wanted["corpus_total_occurrences"],
         )
         weight = compute_weight(
             components,
+            edge_type=EDGE_TYPE,
+            self_loop=e["source"] == e["target"],
+            rules=rules,
             valid_to=None
             if valid_to is None
             else datetime.fromtimestamp(int(valid_to) / 1000, UTC),
@@ -226,6 +285,18 @@ def report(left: Graph, right: Graph, *, say: Callable[[str], None] = print, sho
         "right vault: weight components or weight not matching its own contents",
         component_mismatches(right.edges),
     )
+    for name, graph in (("right", right), ("left", left)):
+        legacy = legacy_components(graph.edges)
+        if legacy:
+            say(
+                f"{name} vault: {len(legacy)} component(s) stored before ADR-120 (legacy, no "
+                "parameter_set): listed, not compared or recomputed, and not counted as a "
+                "difference"
+            )
+            for edge_id in legacy[:show]:
+                say(f"    {edge_id}")
+            if len(legacy) > show:
+                say(f"    ... and {len(legacy) - show} more")
     informational = component_mismatches(left.edges)
     say(
         f"left vault (information only, it is weighed edge by edge): {len(informational):,} "
@@ -242,7 +313,7 @@ async def scan_with(client: Any) -> Graph:
     read, 13,074 counted). Without it the read walks the records, in the store's own order."""
     found: dict[str, list[dict[str, Any]]] = {}
     labels: dict[str, str] = {}
-    for kind, type_name in (("nodes", "Endpoint"), ("edges", "TRANSACTED")):
+    for kind, type_name in (("nodes", "Endpoint"), ("edges", EDGE_TYPE)):
         label = labels[kind] = groovy_identifier(physical_type_name(type_name))
         rows: list[dict[str, Any]] = []
         while True:

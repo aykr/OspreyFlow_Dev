@@ -1,0 +1,39 @@
+# The link-weight rules (ADR-120 D3 and Amendment 4; `01_DOMAIN_MODEL.md` §6.1).
+#
+# This file is the calibration of the edge-weight formula, not the ontology: it sits beside the
+# handling scheme, and the ontology and its packs do not hold it. It is an APPEND-ONLY list of
+# versions. A version already here is never edited, as an ADR is not; a recalibration is a new
+# version at the end, and `tests/adapters/graph_arcadedb/test_weight_rules.py` compares this file
+# with a frozen copy of version 1 to enforce it. Each stored weight records the version and rule
+# it was computed under (`WeightComponents.parameter_set`, "<version>/<rule>").
+#
+# `midpoint` and `scale` are derived, never hand-tuned: scale = alpha / 3 and
+# midpoint = beta + alpha / 3, so that at recency 1 and a mutual-information term of 0 a count term
+# of 0 normalises to the logistic of -1 and a count term of 1 (a type's heavy count) to the
+# logistic of 2. The loader refuses a version whose values are not those.
+#
+# A rule is `{unit, heavy}` (what one occurrence is, and the count that is heavy for the type) or
+# `{fixed}` (a structural type's weight, whatever its occurrences, recency or mutual information).
+# A type with no rule takes `default`.
+versions:
+  - version: 1
+    alpha: 0.5
+    beta: 0.2
+    gamma: 0.3
+    half_life_days: 90
+    midpoint: 0.3666666666666667
+    scale: 0.16666666666666666
+    default: {unit: one occurrence, heavy: 10}
+    rules:
+      SHARED_CELL_WITH: {unit: one week shared, heavy: 12}
+      VISITED: {unit: one visit, heavy: 8}
+      COMMUNICATED_WITH: {unit: one call, heavy: 40}
+      TRANSACTED: {unit: one transfer, heavy: 6}
+      MENTIONED_IN: {unit: one report, heavy: 3}
+      ROLE_IN: {unit: one incident, heavy: 3}
+      IN_CONFLICT_WITH: {unit: one episode, heavy: 2}
+      CO_DEFENDANT_OF: {fixed: 0.75}
+      FAMILY_OF: {fixed: 0.75}
+      MEMBER_OF: {fixed: 0.75}
+      HELD_AT: {fixed: 0.75}
+      DEPICTS: {fixed: 0.2}

@@ -268,3 +268,176 @@ def test_a_group_by_that_finds_ids_the_scan_does_not_is_a_disagreement_on_its_ow
     )
     _, lines = _report(left, right)
     assert "the readings disagree" in "\n".join(lines)
+
+
+def test_the_recompute_uses_the_store_s_rules_and_counts_a_self_loop_twice() -> None:
+    """ADR-120 Amendment 4. Catches a recomputation that (a) weighs with another type's rule than
+    the one the vault's edges carry (the scan reads TRANSACTED, heavy at 6; the default rule is
+    heavy at 10, so a weight under it is not the stored one), and (b) counts a self-loop once in
+    its node's degree, as it did, where the adapter and the bulk loader count it twice and weigh it
+    with no mutual-information term."""
+    from adapters.graph_arcadedb.weight import compute_weight
+    from ontology.weights import load_weight_rules
+    from schemas.domain import WeightComponents
+
+    transport = _store("a", "b")
+    edges = [make_edge("a", "a", 1).model_copy(update={"occurrences": 3}), make_edge("a", "b", 2)]
+    asyncio.run(BulkEdgeLoader(transport, handling_scheme=load_uk_le_scheme()).load(SCHEMA, edges))
+    records = [dict(row["p"]) for row in transport.written]
+    by_id = {str(r["id"]): r for r in records}
+    loop, pair = by_id["edge-1"], by_id["edge-2"]
+
+    # (b) the self-loop's 3 occurrences are counted twice at `a`, plus the other link's 1.
+    assert loop["weight_components"]["corpus_source_degree"] == 7
+    recomputed = compare_vaults.recomputed_components(records)
+    assert recomputed["edge-1"]["corpus_source_degree"] == 7
+    assert recomputed["edge-1"]["corpus_target_degree"] == 7
+    assert recomputed["edge-2"]["corpus_source_degree"] == 7
+    assert recomputed["edge-2"]["corpus_target_degree"] == 1
+    assert compare_vaults.component_mismatches(records) == []
+
+    # (a) the stored weight of `pair` is the TRANSACTED rule's for its own components; the same
+    # components under the default rule (heavy 10, not 6) give another weight, and planting that
+    # on the very record whose components produced it is a mismatch only because of the rule.
+    rules = load_weight_rules()
+    assert rules.rule_for("TRANSACTED")[0] == "TRANSACTED"
+    components = WeightComponents.model_validate(pair["weight_components"])
+    assert components.parameter_set == f"{rules.version}/TRANSACTED"
+    under_default = compute_weight(
+        components,
+        edge_type="USES",
+        valid_to=None,
+        now=components.computed_at,
+        rules=rules,
+        self_loop=False,
+    )
+    assert abs(under_default - float(pair["weight"])) > 1e-6
+    planted = copy.deepcopy(records)
+    (target,) = (r for r in planted if r["id"] == pair["id"])
+    target["weight"] = under_default
+    assert target["weight_components"] == pair["weight_components"]
+    lines = compare_vaults.component_mismatches(planted)
+    assert len(lines) == 1 and pair["id"] in lines[0] and "components give" in lines[0]
+
+
+# --- each weight is recomputed under the version its parameter set names (ADR-120 Amendment 4) ---
+
+
+def _two_version_history(tmp_path: Any) -> Any:
+    """The shipped version 1, and a version 2 with another beta and alpha (midpoint and scale
+    re-derived): a weight computed under version 1 is not the one version 2 gives. (Beta alone
+    would not do: at recency 1 a beta change cancels against the midpoint it moves.)"""
+    import yaml
+
+    from tests.adapters.graph_arcadedb.test_weight_rules import FROZEN, _raw_versions
+
+    first = _raw_versions(FROZEN)[0]
+    second = copy.deepcopy(first)
+    second.update(version=2, alpha=0.6, beta=0.3, midpoint=0.3 + 0.6 / 3, scale=0.6 / 3)
+    path = tmp_path / "weights.yaml"
+    path.write_text(yaml.safe_dump({"versions": [first, second]}), encoding="utf-8")
+    return path
+
+
+def test_a_weight_is_recomputed_under_the_version_its_parameter_set_names(tmp_path: Any) -> None:
+    """Catches a recomputation that always uses the latest version: weights stored under version 1
+    are not mismatches once a version 2 exists, and a stored weight that is version 1's under a
+    parameter set naming version 2 is one. A version the file does not hold is a mismatch too."""
+    path = _two_version_history(tmp_path)
+    records = _records()
+    assert all(r["weight_components"]["parameter_set"] == "1/TRANSACTED" for r in records)
+    assert compare_vaults.component_mismatches(records, weights_path=path) == []
+
+    relabelled = copy.deepcopy(records)
+    relabelled[0]["weight_components"]["parameter_set"] = "2/TRANSACTED"
+    lines = compare_vaults.component_mismatches(relabelled, weights_path=path)
+    assert len(lines) == 1 and relabelled[0]["id"] in lines[0] and "components give" in lines[0]
+
+    unknown = copy.deepcopy(records)
+    unknown[0]["weight_components"]["parameter_set"] = "3/TRANSACTED"
+    lines = compare_vaults.component_mismatches(unknown, weights_path=path)
+    assert len(lines) == 1 and "3/TRANSACTED" in lines[0] and "parameter_set" in lines[0]
+
+
+def test_a_component_with_no_parameter_set_is_legacy_and_not_a_mismatch() -> None:
+    """Catches a legacy component (written before ADR-120) being recomputed under today's rules and
+    reported as a weight mismatch, or counted against the run: it is listed apart, with its
+    weight left alone, and the run's status reflects only real mismatches."""
+    records = _records()
+    legacy = copy.deepcopy(records)
+    for r in legacy:
+        r["weight_components"].pop("parameter_set")
+        r["weight"] = 0.123  # not what any rule gives, and not to be recomputed
+    assert compare_vaults.component_mismatches(legacy) == []
+    assert compare_vaults.legacy_components(legacy) == sorted(str(r["id"]) for r in legacy)
+    assert compare_vaults.legacy_components(records) == []
+
+    code, lines = _report(_graph(_records()), _graph(legacy))
+    text = "\n".join(lines)
+    assert code == 0, text
+    assert f"{len(legacy)} component(s) stored before ADR-120" in text and "legacy" in text
+
+    # A real mismatch beside the legacy ones still fails the run.
+    mixed = copy.deepcopy(legacy)
+    mixed[0]["weight_components"]["parameter_set"] = "1/TRANSACTED"
+    mixed[0]["weight"] += 0.25
+    code, lines = _report(_graph(_records()), _graph(mixed))
+    assert code == 1 and "components give" in "\n".join(lines)
+
+
+def test_a_parameter_set_naming_another_rule_is_a_mismatch() -> None:
+    """Catches a vault of TRANSACTED links whose components say another rule computed them: the
+    weight would be right for that rule and the label wrong, so it is reported as a mismatch."""
+    records = _records()
+    planted = copy.deepcopy(records)
+    planted[0]["weight_components"]["parameter_set"] = "1/default"
+    lines = compare_vaults.component_mismatches(planted)
+    assert len(lines) == 1
+    assert planted[0]["id"] in lines[0] and "parameter_set" in lines[0]
+    assert "1/default" in lines[0] and "1/TRANSACTED" in lines[0]
+    code, _ = _report(_graph(_records()), _graph(planted))
+    assert code == 1
+
+
+def test_a_legacy_component_is_skipped_entirely() -> None:
+    """Catches a legacy component (no parameter_set, written before ADR-120) being held to today's
+    counts: a self-loop stored when an upsert counted it once has a smaller stored degree than the
+    store gives now, and that is not a mismatch. Nothing about it is compared or recomputed; it is
+    reported as legacy only."""
+    transport = _store("a", "b")
+    edges = [make_edge("a", "a", 1).model_copy(update={"occurrences": 3}), make_edge("a", "b", 2)]
+    asyncio.run(BulkEdgeLoader(transport, handling_scheme=load_uk_le_scheme()).load(SCHEMA, edges))
+    records = [dict(row["p"]) for row in transport.written]
+    loop = next(r for r in records if r["id"] == "edge-1")
+    assert loop["weight_components"]["corpus_source_degree"] == 7
+    for r in records:
+        r["weight_components"].pop("parameter_set")
+    # What an upsert stored before it counted a loop twice: 3 once, plus the other link's 1.
+    loop["weight_components"]["corpus_source_degree"] = 4
+    loop["weight_components"]["corpus_target_degree"] = 4
+    loop["weight"] = 0.123
+
+    assert compare_vaults.component_mismatches(records) == []
+    assert compare_vaults.legacy_components(records) == ["edge-1", "edge-2"]
+    code, lines = _report(_graph(copy.deepcopy(records)), _graph(records))
+    assert code == 0, "\n".join(lines)
+
+
+def test_the_legacy_line_lists_the_first_ids_like_the_mismatch_lines() -> None:
+    """Catches a legacy count with no ids to look at: the report prints the first `show` legacy ids
+    and how many more, as it does for mismatches."""
+    legacy = _records()
+    for r in legacy:
+        r["weight_components"].pop("parameter_set")
+    ids = sorted(str(r["id"]) for r in legacy)
+    assert len(ids) == 3
+    lines: list[str] = []
+    compare_vaults.report(_graph(_records()), _graph(legacy), say=lines.append, show=2)
+    start = next(
+        i for i, line in enumerate(lines) if "3 component(s) stored before ADR-120" in line
+    )
+    assert [line.strip() for line in lines[start + 1 : start + 4]] == [
+        ids[0],
+        ids[1],
+        "... and 1 more",
+    ]

@@ -14177,8 +14177,9 @@ violation per shape the allow-list catches).
 ### ADR-120, Amendment 4 (23 October 2026) — a self-loop's mutual-information term is 0
 
 Status: **decision 1 ACCEPTED by the owner, 23 October 2026**, from options put to him ("Self-loop's
-PMI term is 0"); decisions 2 to 4 are the coordinator's, **PROPOSED**, put to the owner at stage
-3's gate. Found by stage 3's property test before any of D3's code was written.
+PMI term is 0"); decisions 2 to 4 are the coordinator's, **PROPOSED**, put to the owner at stage 3's
+gate, and were revised in place after the adversarial reviews of stage 3's tests and code (before
+any ruling on them). Found by stage 3's property test before any of D3's code was written.
 
 1. **A self-loop's mutual-information term is 0.** A link from a node to itself is counted twice in
    that node's degree, so in a small corpus its normalised PMI falls as its occurrences rise, and
@@ -14194,13 +14195,23 @@ PMI term is 0"); decisions 2 to 4 are the coordinator's, **PROPOSED**, put to th
    and the store's `bothE()` reads it back twice, but an upsert added the write's occurrences to the
    degree once, so the same self-loop stored different corpus counts by path. The upsert now counts
    it twice, as the bulk loader does. `compare_vaults` passes the link's type (it compares
-   `TRANSACTED` links), the weights file's rules and `self_loop`, and counts a self-loop twice, as
-   the store does (it counted it once).
-3. **The weights loader refuses a malformed file by name.** A file whose versions are not 1, 2, ...
-   in order, a version whose `midpoint` or `scale` is not the one derived from its α and β, or a
-   rule that sets both or neither of `heavy` and `fixed`, sets `heavy` below 1, or sets `fixed`
-   outside (0, 1], is refused with `OntologyError` naming the version and the field. A rule naming a
-   link type no ontology composes is not refused (the weights file is read before and apart from the
+   `TRANSACTED` links) and `self_loop`, counts a self-loop twice as the store does (it counted it
+   once), and recomputes each weight under the version its stored `parameter_set` names (from the
+   weights file's history); a `parameter_set` naming a version the file lacks, or a rule other than
+   `TRANSACTED`'s, is a mismatch. A component with no `parameter_set` (written before ADR-120,
+   perhaps by an upsert that counted a self-loop once) is skipped entirely, neither its counts nor
+   its weight compared, and is listed as legacy.
+3. **The weights loader refuses a malformed file by name.** It refuses, with `OntologyError` naming
+   the version and the field: YAML that does not parse or cannot be constructed; a missing or empty
+   `versions`, or a version, `default`, `rules` or rule that is not a mapping; versions that are not
+   the integers 1, 2, ... in order (a `true`, `1.0` or `1.5` is not); a missing, non-numeric or
+   non-finite parameter (NaN or infinity); α at or below 0, or β or γ below 0 (a non-positive α
+   inverts the curve and would silently break the same-pair invariant); a `half_life_days` at or
+   below 0; a `midpoint` or `scale` that is not the one derived from α and β; a rule that sets both
+   or neither of `heavy` and `fixed`, sets `heavy` below 1 or not a whole number (a YAML `12.0` is a
+   whole number), or sets `fixed` outside (0, 1]; and a key it does not know, or a key repeated
+   within a mapping. A fixed default rule is allowed (the formula handles it). A rule naming a link
+   type no ontology composes is not refused (the weights file is read before and apart from the
    ontology); such a type simply never occurs.
 4. **Two things this amendment records rather than changes.** The Verify dry run shows an indicative
    weight (`min(1, occurrences / 5)`) for links it has not stored; it is a preview, never stored or
@@ -14211,9 +14222,19 @@ PMI term is 0"); decisions 2 to 4 are the coordinator's, **PROPOSED**, put to th
    ordering on a synthetic star.
 
 Tests: `tests/adapters/graph_arcadedb/test_weight_rules.py` (the same-pair invariant over the grid,
-self-loop series included, with a self-loop's term 0; `npmi`'s edge cases; the loader's two
-refusals); `tests/test_compare_vaults.py` (the recompute uses the store's rules and counts a
-self-loop twice).
+self-loop series included, with a self-loop's term 0, and shown able to fail with the term left in;
+`npmi`'s edge cases; calibration for every rule; every refusal of decision 3, each naming its
+version and field, and a fixed default and a YAML `12.0` accepted);
+`tests/adapters/graph_arcadedb/test_counting_store_self_loop.py` and `test_bulk_edge_loader.py` (the
+test stores count a self-loop twice as `bothE` does; a self-loop stored alike by both paths; a
+second write of it counted twice); `tests/adapters/graph_arcadedb/test_legacy_weight_components.py`
+(a component without `parameter_set` reads as `None`); `tests/conformance/graph_port/test_suite.py`
+and `test_bulk_loader.py` (a self-loop counted twice on every path, its weight the rules' with
+`self_loop` set; a superseded link's component; bulk and upsert alike);
+`tests/services/api/working_set/test_link_weight_on_the_wire.py` (the weight the Conduit serialises
+is the stored weight); `tests/test_compare_vaults.py` (the recompute uses the store's rules and
+counts a self-loop twice; each weight recomputed under the version its `parameter_set` names; an
+unknown version and another rule are mismatches; a legacy component is skipped and listed).
 
 ---
 

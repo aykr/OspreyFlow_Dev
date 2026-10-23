@@ -358,6 +358,11 @@ class WeightComponents(BaseModel):
     corpus_source_degree: int = Field(ge=0)  # source's occurrences of this edge type, corpus-wide
     corpus_target_degree: int = Field(ge=0)
     corpus_total_occurrences: int = Field(ge=0)  # every edge of this type, corpus-wide
+    #: ADR-120 D3: the weights-file version and rule this weight was computed under,
+    #: `"<version>/<rule name>"`. `None` on a component stored before then (computed under the
+    #: uncalibrated curve that preceded it); ADR-120 does not recompute those weights (`GraphPort`
+    #: has no in-place edge update, and a recompute is its own record).
+    parameter_set: str | None = None
     computed_at: datetime  # when the corpus-wide counts above were taken
 
 

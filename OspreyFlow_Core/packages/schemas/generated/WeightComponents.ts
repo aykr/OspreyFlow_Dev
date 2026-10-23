@@ -5,6 +5,7 @@ export type CorpusPairCount = number;
 export type CorpusSourceDegree = number;
 export type CorpusTargetDegree = number;
 export type CorpusTotalOccurrences = number;
+export type ParameterSet = string | null;
 export type ComputedAt = string;
 
 /**
@@ -21,6 +22,7 @@ export interface WeightComponents {
   corpus_source_degree: CorpusSourceDegree;
   corpus_target_degree: CorpusTargetDegree;
   corpus_total_occurrences: CorpusTotalOccurrences;
+  parameter_set?: ParameterSet;
   computed_at: ComputedAt;
   [k: string]: unknown;
 }

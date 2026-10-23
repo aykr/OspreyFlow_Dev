@@ -19,6 +19,7 @@ is exactly what must never be observable.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 
@@ -26,6 +27,7 @@ from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.errors import OntologyError
 from ports.graph import GraphPort, SubgraphTooLarge, SuggestOptions
 from schemas.domain import (
+    Edge,
     EdgeWrite,
     ExpandRequest,
     Interval,
@@ -2147,6 +2149,276 @@ async def test_edge_weight_is_derived_not_hardcoded_and_persists_its_components(
         assert edge.weight_components.occurrences == 10
         assert edge.weight_components.corpus_pair_count == 10
         assert edge.weight_components.corpus_total_occurrences >= 10
+
+
+async def _links_among(adapter: GraphPort, node_ids: list[str]) -> list[Edge]:
+    """Every link among `node_ids`, a self-loop included. `expand` cannot return a link from a
+    node to itself, by design: its walk is `repeat(...otherV().simplePath())`
+    (`builders.py`, `ExpandBuilder._repeat_clause`), and the node a self-loop leads back to is
+    already on the path. `edges_among` has no such step (an edge whose two ends are both in the
+    set, which a self-loop's are), so the self-loop is read through it, and the links `expand`
+    returns are added by id."""
+    reached = await adapter.expand(ExpandRequest(node_ids=node_ids, depth=1), CLEARED)
+    among = await adapter.edges_among(node_ids, CLEARED)
+    return list({e.id: e for e in [*reached.edges, *among]}.values())
+
+
+def _past_interval() -> Interval:
+    """An interval that ended 120 days ago, so a link's recency is below 1 (about 0.4)."""
+    now = now_utc()
+    return Interval(valid_from=now - timedelta(days=200), valid_to=now - timedelta(days=120))
+
+
+#: The occurrences the weight fixture's links carry: an ordinary link at `a`, and a self-loop at `a`
+#: whose own degree is therefore the other link's plus its own, counted twice.
+OTHER_OCCURRENCES = 7
+LOOP_OCCURRENCES = 3
+
+
+async def _weighted_edges_by_label(adapter: GraphPort) -> dict[str, Edge]:
+    """Links of four kinds, written through `upsert_edges` with an interval that ended in the past
+    and read back: a counted type (`COMMUNICATED_WITH`), a self-loop of that type at a node that
+    has other occurrences (so its normalised PMI would not be 0), a structural (fixed-weight) type
+    and a type the weights file does not name. Keyed by label: the type's name, and `SELF_LOOP`."""
+    (a, b, p, q), _ = await _write(
+        adapter,
+        [
+            _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"),
+            _node("Endpoint", classification="OFFICIAL", value_normalised="+442222222222"),
+            _node("Person", classification="OFFICIAL"),
+            _node("Person", classification="OFFICIAL"),
+        ],
+        [],
+    )
+    interval = _past_interval()
+    await _write(
+        adapter,
+        [],
+        [
+            _edge(
+                "COMMUNICATED_WITH",
+                a,
+                b,
+                classification="OFFICIAL",
+                occurrences=OTHER_OCCURRENCES,
+                interval=interval,
+            ),
+            _edge("FAMILY_OF", p, q, classification="OFFICIAL", occurrences=2, interval=interval),
+            _edge("USES", p, a, classification="OFFICIAL", occurrences=3, interval=interval),
+        ],
+    )
+    # Written after the other link at `a`, so the store already holds its occurrences.
+    await _write(
+        adapter,
+        [],
+        [
+            _edge(
+                "COMMUNICATED_WITH",
+                a,
+                a,
+                classification="OFFICIAL",
+                occurrences=LOOP_OCCURRENCES,
+                interval=interval,
+            )
+        ],
+    )
+    edges = await _links_among(adapter, [a, b, p, q])
+    labelled: dict[str, Edge] = {}
+    for edge in edges:
+        label = "SELF_LOOP" if edge.source == edge.target else edge.type
+        assert label not in labelled, f"{label} read back twice"
+        labelled[label] = edge
+    return labelled
+
+
+def _recomputed(edge: Edge, rules: Any, self_loop: bool) -> float:
+    """The weight the rules give a stored link's own components, at the `now` the adapter took
+    (stored as `computed_at`) and the interval it was written with."""
+    from adapters.graph_arcadedb.weight import compute_weight
+
+    components = edge.weight_components
+    assert components is not None
+    return compute_weight(
+        components,
+        edge_type=edge.type,
+        valid_to=edge.interval.valid_to if edge.interval else None,
+        now=components.computed_at,
+        rules=rules,
+        self_loop=self_loop,
+    )
+
+
+async def test_every_stored_weight_carries_the_current_parameter_set(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-120 D3: a weight computed under one calibration is not comparable with another, so every
+    stored component names the version and rule it was computed under. Catches a write path that
+    stores components with no parameter set, or one naming the wrong rule: a counted type, a
+    self-loop of it, a structural type and a type with no rule of its own (which takes
+    `default`)."""
+    from ontology.weights import load_weight_rules
+
+    rules = load_weight_rules()
+    async with factory.context() as adapter:
+        by_label = await _weighted_edges_by_label(adapter)
+        assert set(by_label) == {"COMMUNICATED_WITH", "SELF_LOOP", "FAMILY_OF", "USES"}
+        for edge in by_label.values():
+            assert edge.weight_components is not None, edge.type
+            assert edge.weight_components.parameter_set == rules.parameter_set(edge.type)
+        assert by_label["USES"].weight_components is not None
+        assert by_label["USES"].weight_components.parameter_set == f"{rules.version}/default"
+        assert by_label["SELF_LOOP"].weight_components is not None
+        assert (
+            by_label["SELF_LOOP"].weight_components.parameter_set
+            == f"{rules.version}/COMMUNICATED_WITH"
+        )
+
+
+async def test_the_stored_weight_is_what_the_rules_compute(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-120 D3, the weight on the wire equal to the weight computed, at the `now` the adapter
+    took (stored as the components' `computed_at`) and with an interval in the past, so a recency
+    that was ignored or taken as 1 shows. Catches a stored weight that does not follow from the
+    components stored beside it under the current rules, for a counted, a structural and a
+    default-rule type and a self-loop."""
+    from ontology.weights import load_weight_rules
+
+    rules = load_weight_rules()
+    async with factory.context() as adapter:
+        for label, edge in (await _weighted_edges_by_label(adapter)).items():
+            components = edge.weight_components
+            assert components is not None, label
+            assert edge.interval is not None and edge.interval.valid_to is not None, label
+            assert components.computed_at > edge.interval.valid_to + timedelta(days=100), label
+
+            is_loop = edge.source == edge.target
+            assert edge.weight == pytest.approx(_recomputed(edge, rules, is_loop), abs=1e-9), label
+            if label in ("COMMUNICATED_WITH", "SELF_LOOP", "USES"):
+                # A caller that passed the wrong flag would store another weight: the counts here
+                # give a non-zero mutual-information term.
+                assert abs(edge.weight - _recomputed(edge, rules, not is_loop)) > 1e-3, label
+
+
+async def test_a_self_loop_counts_its_occurrences_twice_in_its_nodes_degree(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-120 Amendment 4: the store reads a self-loop back twice from its node, so the stored
+    degree counts its occurrences twice on the upsert path as on the bulk path. Catches an upsert
+    that adds them once."""
+    async with factory.context() as adapter:
+        loop = (await _weighted_edges_by_label(adapter))["SELF_LOOP"]
+        components = loop.weight_components
+        assert components is not None
+        assert components.occurrences == LOOP_OCCURRENCES
+        expected_degree = OTHER_OCCURRENCES + 2 * LOOP_OCCURRENCES
+        assert components.corpus_source_degree == expected_degree
+        assert components.corpus_target_degree == expected_degree
+        assert components.corpus_total_occurrences >= OTHER_OCCURRENCES + LOOP_OCCURRENCES
+
+
+async def test_a_second_write_of_the_same_self_loop_counts_both_writes_twice(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-120 Amendment 4: a self-loop is in its node's degree twice per occurrence, whether it is
+    already stored or being written. Catches an upsert that counts the stored loop twice but the
+    new write once: 7 at the node from another link, a loop written at 3 and again at 2, leaves
+    7 + 2 x 3 + 2 x 2 = 17 in the degree, 5 in the pair, 12 in the type's total."""
+    async with factory.context() as adapter:
+        labelled = await _weighted_edges_by_label(adapter)
+        loop = labelled["SELF_LOOP"]
+        await _write(
+            adapter,
+            [],
+            [
+                _edge(
+                    "COMMUNICATED_WITH",
+                    loop.source,
+                    loop.source,
+                    classification="OFFICIAL",
+                    occurrences=2,
+                    interval=_past_interval(),
+                )
+            ],
+        )
+        again = [
+            e
+            for e in await _links_among(
+                adapter, [loop.source, labelled["COMMUNICATED_WITH"].target]
+            )
+            if e.source == e.target
+        ]
+        assert len(again) == 1, "the second write must merge into the stored self-loop"
+        components = again[0].weight_components
+        assert components is not None
+        expected_degree = OTHER_OCCURRENCES + 2 * LOOP_OCCURRENCES + 2 * 2
+        assert expected_degree == 17
+        assert components.occurrences == components.corpus_pair_count == LOOP_OCCURRENCES + 2
+        assert components.corpus_source_degree == components.corpus_target_degree == 17
+        assert components.corpus_total_occurrences == OTHER_OCCURRENCES + LOOP_OCCURRENCES + 2
+
+
+async def test_a_superseded_link_stores_the_current_parameter_set_and_the_rules_weight(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`supersede_edge` weighs its replacement like any write. Catches the replacement storing no
+    parameter set, the default rule's, or a weight that is not the rules' for its own components:
+    a counted type and a structural one."""
+    from ontology.weights import load_weight_rules
+
+    rules = load_weight_rules()
+    async with factory.context() as adapter:
+        (a, b, p, q), _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"),
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+442222222222"),
+                _node("Person", classification="OFFICIAL"),
+                _node("Person", classification="OFFICIAL"),
+            ],
+            [],
+        )
+        _, (old_comm, old_family) = await _write(
+            adapter,
+            [],
+            [
+                _edge("COMMUNICATED_WITH", a, b, classification="OFFICIAL", occurrences=2),
+                _edge("FAMILY_OF", p, q, classification="OFFICIAL", occurrences=2),
+            ],
+        )
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_edge(
+            old_comm,
+            _edge(
+                "COMMUNICATED_WITH",
+                a,
+                b,
+                classification="OFFICIAL",
+                occurrences=9,
+                interval=_past_interval(),
+            ),
+            tx,
+        )
+        await adapter.supersede_edge(
+            old_family,
+            _edge("FAMILY_OF", p, q, classification="OFFICIAL", interval=_past_interval()),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+
+        subgraph = await adapter.expand(ExpandRequest(node_ids=[a, b, p, q], depth=1), CLEARED)
+        by_type = {edge.type: edge for edge in subgraph.edges}
+        assert set(by_type) == {"COMMUNICATED_WITH", "FAMILY_OF"}
+        for edge_type, edge in by_type.items():
+            components = edge.weight_components
+            assert components is not None and edge.interval is not None, edge_type
+            assert components.parameter_set == rules.parameter_set(edge_type), edge_type
+            assert edge.weight == pytest.approx(_recomputed(edge, rules, False), abs=1e-9), (
+                edge_type
+            )
+        assert by_type["FAMILY_OF"].weight == 0.75
+        assert by_type["COMMUNICATED_WITH"].weight_components is not None
+        assert by_type["COMMUNICATED_WITH"].weight_components.occurrences == 9
 
 
 async def test_load_ledger_stamp_is_recorded_on_every_written_element(

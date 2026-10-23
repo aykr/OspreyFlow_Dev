@@ -75,7 +75,10 @@ class MemoryTransport:
         self.calls.append("degrees")
         self._bounded(ids)
         live = [e for e in self.stored if e["label"] == label and not e["reverted"]]
-        return {i: sum(e["occurrences"] for e in live if i in (e["s"], e["t"])) for i in ids}
+        # `bothE()` reads a link from a node to itself back twice, so it counts twice here.
+        return {
+            i: sum(e["occurrences"] * ((e["s"] == i) + (e["t"] == i)) for e in live) for i in ids
+        }
 
     async def begin(self) -> str:
         self.calls.append("begin")
@@ -314,6 +317,68 @@ def test_the_row_carries_what_upsert_would_store_for_a_single_edge() -> None:
     }
     assert bulk_components == upsert_components
     assert row["p"]["audit"]["revision"] == upserted["audit"]["revision"] == 1
+
+
+def test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert() -> None:
+    """ADR-120 Amendment 4. Catches a path that counts a self-loop's occurrences once in its
+    node's degree (the store reads it back twice through `bothE`), or weighs it with a
+    mutual-information term: the same loop, at a node with other occurrences, must store the same
+    components and the same weight by either path. Both counts are 7 + 2 x 3 = 13 at the node."""
+    from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
+
+    other, loop = _edge("a", "b", 1, 7), _edge("a", "a", 2, 3)
+    transport = _store("a", "b")
+    _load(transport, [other, loop])
+    bulk = {row["p"]["id"]: row["p"] for row in transport.written}["edge-2"]
+
+    store = CountingStore()
+    graph = make_adapter(store)
+    asyncio.run(graph.upsert_edges([other], "tx"))
+    asyncio.run(graph.upsert_edges([loop], "tx"))
+    upserted = store.edges[("a", "a")]
+
+    for stored in (bulk, upserted):
+        assert stored["weight_components"]["corpus_source_degree"] == 13
+        assert stored["weight_components"]["corpus_target_degree"] == 13
+        assert stored["weight_components"]["corpus_total_occurrences"] == 10
+    bulk_components = {k: v for k, v in bulk["weight_components"].items() if k != "computed_at"}
+    upsert_components = {
+        k: v for k, v in upserted["weight_components"].items() if k != "computed_at"
+    }
+    assert bulk_components == upsert_components
+    assert bulk["weight"] == pytest.approx(upserted["weight"], abs=1e-9)
+
+
+def test_the_memory_transport_counts_a_self_loop_twice_like_bothE() -> None:
+    """The real `GremlinBulkTransport.degrees` reads a node's links with `bothE`, which returns a
+    link from a node to itself twice. Catches this stand-in counting it once, which would let a
+    loader that adds a self-loop's occurrences once pass every test that uses it."""
+    transport = _store("a", "b")
+    transport.stored += [
+        {"label": LABEL, "s": "a", "t": "b", "occurrences": 7, "reverted": False},
+        {"label": LABEL, "s": "a", "t": "a", "occurrences": 3, "reverted": False},
+        {"label": LABEL, "s": "a", "t": "a", "occurrences": 50, "reverted": True},
+    ]
+    assert asyncio.run(transport.degrees(LABEL, ["a", "b"])) == {"a": 13, "b": 7}
+
+
+def test_a_second_write_of_the_same_self_loop_counts_both_writes_twice() -> None:
+    """ADR-120 Amendment 4. Catches an upsert that counts a stored self-loop twice but a new write
+    of it once (or the reverse): with 7 at the node from another link, a self-loop written at 3
+    and again at 2 leaves 7 + 2 x 3 + 2 x 2 = 17 in its node's degree, the pair at 5, and the
+    type's total at 12."""
+    from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
+
+    store = CountingStore()
+    graph = make_adapter(store)
+    asyncio.run(graph.upsert_edges([_edge("a", "b", 1, 7)], "tx"))
+    asyncio.run(graph.upsert_edges([_edge("a", "a", 2, 3)], "tx"))
+    asyncio.run(graph.upsert_edges([_edge("a", "a", 3, 2)], "tx"))
+
+    components = store.edges[("a", "a")]["weight_components"]
+    assert components["occurrences"] == components["corpus_pair_count"] == 5
+    assert components["corpus_source_degree"] == components["corpus_target_degree"] == 17
+    assert components["corpus_total_occurrences"] == 12
 
 
 # --- the adapter declares the capability and keeps its own refusals ----------
