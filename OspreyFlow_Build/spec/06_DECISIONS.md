@@ -14432,6 +14432,193 @@ Tests:
 - `tests/scenarios/test_pid_files.py` (stage 5): decision 2's thresholds at the three points, from a
   real load. It is shown red with each of the three plants above.
 
+### ADR-120, Amendment 8 (23 October 2026) — what the generated case holds, who loads it, and when the script's figures are true
+
+Status: **ACCEPTED by the owner, 23 October 2026** ("I accept Amendment 8"); adversarially reviewed
+three times before he saw it. Decisions 1 to 4 are the owner's rulings of 23 October, from options
+put to him. Decisions 5 to 11 are the coordinator's design of stage 4's plan within the brief. They are
+recorded here because stage 4's review found them held only in working notes (rule 11).
+
+1. **The script's Act 1 figures are those of the seeded case; the brief's hold once chapter 4 has
+   loaded the reports** (the owner: "Keep plan, fix script"). Brief 2 loads every intelligence
+   report live in chapter 4 (R9), so in Act 1 no report exists. The plan gives every link the
+   moment it is loaded. The seed loads most links. Chapter 4 loads every report and every link that
+   touches one. Chapter 9 loads the second seized-handset batch. The plan test proves each figure
+   at both the seed and chapter 4 moments:
+   - J1, the principal's links as the analyst sees them, is 45 in Act 1 and 49 after chapter 4
+     (46 and 50 cleared to SECRET). The four reports that name him add the other four.
+   - J5's principal and relay_4 are 2 degrees apart in both, by 5 routes in Act 1 and 6 after
+     chapter 4. One route runs through a report.
+   - J7 ranks the principal first at about 0.87 in both, at least twice the second, then the three
+     relays who call the coordinator.
+
+   The figures hold until chapter 5's reviewer accepts a duplicate person (`SAME_AS`, collapsed at
+   query time, rule 6), which can add links to his star. The script's Act 1 lines change to 45 and
+   5; `PID_ACTUALS.md` records both moments.
+
+2. **Outsiders, as Brief 2's identity rules have them** (the owner: "Reshape the story").
+   - **Identifiers.** Every person who is not a prisoner carries a `QQ` National Insurance number.
+     Prisoners carry a prison number. A report names a prisoner by prison number and anyone else by
+     National Insurance number, which needs a Brief 2 addition (decision 3).
+   - **Associations.** An association or family link joins two prisoners only. The principal's six
+     outside associates become visitors, two visits each.
+   - **Removed.** No seized-media extract `Document` and no `HOLDS` exist.
+   - **Seized handsets.** A seized handset is paired with its SIM. The SIM's calls are recorded,
+     and the handset is used by the prisoner it was found with, or by nobody.
+   - **The arrested person.** His handset is found with nobody, and its SIM calls the number
+     nobody owns. He joins the principal through a chapter 4 report that names them both, no longer
+     through his phone (brief §5.4). The report's text records the handset, the contact "Cally V",
+     the bank account found on it and the calls.
+   - **The found account.** It is on no entity, only in that report's text, so it has no holder by
+     construction (the third gap).
+
+3. **Brief 1's plan defines what the case holds; Brief 2 gains whatever it cannot yet load** (the
+   owner: "Plan defines; Brief 2 adds").
+   - **The contract.** The plan exports `LOAD_SHAPES` and `ENTITY_SHAPES`. A link shape is its
+     type, its two ends and its properties. An end is an entity type, narrowed where several recipes
+     write one type: an endpoint by its kind, an incident as a throw-over or not, a place by its
+     kind. An entity shape is a discriminated type and its properties. Each row also gives the file and columns stage 5 writes for it,
+     the recipe that loads it, and whether its handling is the recipe's or comes from columns of
+     the row. Where Brief 2 as written cannot load it, the row also gives one sentence naming what
+     Brief 2 must add.
+   - **Exceptions.** The two ways ADR-120 already writes outside a recipe are rows of their own:
+     D8's `PASSES_ITEMS_TO` through the graph port, and D9's pictures through the picture route.
+   - **The additions found so far:**
+     - the conflict links, including the `SECRET` one, which carry the access demonstration;
+     - a person's use of a phone number;
+     - a throw-over's mention in its day's reports;
+     - reports with more than one area, and with their own owning unit;
+     - places beyond the five kinds R11 has, and a second parent (the zone);
+     - custody and cell stays with separate intervals, and no `PART_OF` beyond the plan's;
+     - report subjects named by National Insurance number as well as prison number;
+     - handling from the row, wherever one file holds rows of both units;
+     - an optional "found with" on a seized handset;
+     - a cell share's last day, not its last week's Monday;
+     - entity properties no column carries yet: a visitor's date of birth, a person's aliases and
+       a throw-over's name;
+     - a background visitor's ownership of the number their prisoner calls.
+   - **The test.** Every link and every entity the plan holds must match exactly one shape, so a
+     shape nobody can load fails the plan test before stage 5 writes a file. Every file whose rows
+     carry more than one handling must take it from columns. The list of additions in the test is a
+     record for Brief 2, not a proof. Amendment 7 had already widened Brief 2's throw-over file in the same way.
+
+4. **J8's limit is not shown on the Prison Intelligence Dataset** (the owner: "Keep 3,000/30,000").
+   - **Why.** The working-set cap is 50,000 nodes and 250,000 links (ADR-007). The scale case holds
+     about 9,500 nodes and 30,000 links, so no expand in it can breach the cap.
+   - **What the scale cohort proves.** The grouped opening only. The plan test asserts it holds
+     fewer than 50,000 nodes.
+   - **What follows.** The limit scene is the script's to move or drop.
+
+5. **J7's working set is the principal with all links, then the coordinator's number with all
+   links** (the script's J2 move).
+   - **Why the star alone fails.** Every node is next to the principal, so a relay bridges almost nothing.
+     Measured on the cast's star alone (the coordinator's scratch `cast_reshaped_star.py`, after
+     chapter 4), the principal scores 0.89. The establishment, which holds every prisoner, is second
+     at 0.03, and relay_1 scores under 0.01.
+   - **The figure.** The principal's betweenness on the defined set is about 0.87, not the
+     script's 0.55. `PID_ACTUALS.md` reports the plan's figure.
+   - **The named relay.** J5's relay is relay_4.
+
+6. **The cast's working names change where they collide, and the Calder Street Group has seven
+   members.**
+   - **The renames.**
+     - The brief's names are placeholders. Two of them are surnames in the older synthetic prison
+       fixture (OKAFOR; DUNMORE, which the brief used as a group name).
+     - "Kestrel" names a company in the Ledger fixture and an entry in the synthetic screening
+       list.
+     - They become Darren Ashcombe, the Calder Street Group and the Larkhill Lane Group.
+   - **Why seven.** The brief puts 13 group members among the 28 prisoners the illicit-item reports
+     name, but its groups hold 13 people including the third member, whom no report names. So one
+     group must hold one more.
+   - **Names stay unique.** Every name the plan gives (family names, staff, groups, establishments,
+     the zone) is absent from every other demo fixture.
+
+7. **The 229 reports are one query-builder pattern through a zone place.**
+   - **The zone.** A `Location` "Wing F and its yards" has Wing F and the four hotspot yards
+     `PART_OF` it.
+   - **How a report is tied to a day.** A throw-over is `MENTIONED_IN` every report of its day whose
+     area its yard serves.
+   - **The pattern.** It runs: area `PART_OF` zone, area `MENTIONED_IN` report, throw-over
+     `MENTIONED_IN` report, throw-over `OCCURRED_AT` yard, and yard `PART_OF` zone (a join).
+   - **Why yard reports name Wing F too.** The pattern binds distinct nodes to its three `Location`
+     variables (zone, area, yard), so a yard report also names Wing F, the wing its yard serves.
+     Without that, a yard report whose day's only hotspot throw-over was in its own yard would be
+     missed.
+   - **The test.** The plan test compiles the pattern with the real builder and proves it selects
+     the same 229 as the brief's rule.
+
+8. **The picture tests are stage 5's.** D9's Tests line puts the picture byte, size and
+   reproducibility tests in `tests/scenarios/test_pid_plan.py`. The plan names the picture subjects
+   and their `DEPICTS` links (its test checks that each has exactly one). The bytes are drawn in
+   stage 5, so those tests are `tests/scenarios/test_pid_files.py`'s.
+
+9. **Erratum to Amendment 7 decision 2, and the moment its check is made at.**
+   - **The margin.** "At least 40 calls more than each relay over the window (9 a week against 7
+     from December 2025)" means over the call period, 1 September 2025 to 30 April 2026, as its
+     own parenthesis says. Over March and April alone the margin is about 17. The plan gives the
+     principal 201 calls to the coordinator's number and each relay 158.
+   - **The moment.** The circle is weighed at both the seed and chapter 4 moments, and the
+     thresholds must hold at both. Stage 5 checks Amendment 7's three points (as stored, at the
+     cut-off, and with every end far in the past) at each moment. The circle holds about 58 links at the seed and about 62 after
+     chapter 4. The arithmetic is re-run on the reshaped plan by its test.
+
+10. **Synthetic by construction, extended** (D4 and D5).
+    - **Bank accounts.** The background's are drawn from `SYN-70000` to `SYN-79999`, clear of the
+      older fixture's. The cast's two (the payer's `SYN-00417` and the found `SYN-00988`) are
+      fixed.
+    - **SIM identities.** They use the test network `00101`.
+    - **Disjoint from other fixtures.** Every bank account, private-cash and PIN reference,
+      National Insurance number (`[A-Z]{2}\d{6}[A-D]`) and prison number (`[A-Z]\d{4}[A-Z]{2}`)
+      the plan gives is absent from what every other fixture's and seed's own generator produces.
+      The plan test runs those generators, as it does for phones.
+    - **The ownerless number.** It moves out of `07700 900777`, which three test files use, into the
+      PID's 900600–900899 block. A test searches the repository's tests, apps, packages and scripts
+      (the PID's own files aside) and finds it in none, nor the coordinator's number.
+    - **Brief 2's bad-number teaching row.** It uses `07700 900 6O3`, which corrects to
+      +447700900603, one of the background numbers: a mistyped background number, as an analyst would
+      meet one.
+
+11. **Smaller rules of the plan.**
+    - **Finds.** A find's `ROLE_IN` gives role "occupant" to every person in the cell on the
+      find's date: the principal and relay_1 for the two finds in their cell.
+    - **Handling.** A link's handling is the regional unit's when either end belongs to the regional
+      unit, and Fenwick Moor's own otherwise. The one `SECRET` link is the exception, set by hand.
+    - **Cast and background.** The background touches the cast only in these ways:
+      - the group members and the four former cell-mates may share cells with background
+        prisoners (never in a cast cell; the principal, the relays, the brother and the third
+        member share with nobody but as the cast table says);
+      - sixteen cast PIN accounts and the seized SIMs call background numbers;
+      - structural links, report mentions and pictures.
+    - **Custody and places.** Every prisoner has exactly one open custody and one open cell at the
+      cut-off, and a closed stay carries its end date; counts "at the cut-off" use the open ones. Apart
+      from the cast table's own F2 cells (the principal, the relays), no cast prisoner is on landing
+      F2, so the bulk list is exactly F2's 40. Every incident of the
+      demo case has exactly one place. A unit follows the establishment in both profiles: Fenwick
+      Moor's data is local, and every other establishment's, with its visitors, incidents and
+      accounts, is regional.
+    - **Report numbers and dates.** The plan holds 350 reports: 229 selected, and 121 not (40 in
+      the zone before the throw-over window, 81 elsewhere). A report's date is its `sent_at`, which
+      Brief 2's `submitted_at` column carries.
+    - **The bulk list.** It is `bulk_list(plan)`, not a constant.
+
+Tests: `tests/scenarios/test_pid_plan.py`:
+- each figure of decision 1 at both moments, with the real compute adapter for J7, and the moment
+  of every link checked both ways (no report link at the seed, every other link at the seed save
+  the chapter 9 batch);
+- decision 2's shapes (the found account in one text and on no entity, a seized handset used only
+  by the prisoner it was found with);
+- decision 3's every link matching exactly one load shape, shown red by removing a shape; every
+  entity matching exactly one entity shape; every file whose rows carry more than one handling
+  taking it from columns; and the additions listed, as a record;
+- decision 4's node count;
+- decision 6's names absent from every other fixture;
+- decision 7's pattern, compiled with `MatchBuilder` and equal to the rule's 229;
+- decision 9's circle at both moments;
+- decision 10's values disjoint from every other generator's;
+- decision 11's occupants and allowed cast links.
+
+`tests/scenarios/test_pid_files.py` (decision 8, and decision 9's binding check, in stage 5).
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
