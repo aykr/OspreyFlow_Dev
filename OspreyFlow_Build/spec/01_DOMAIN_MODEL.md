@@ -241,6 +241,7 @@ class OntologySchema(BaseModel):
     edge_types: list[EdgeTypeDef]
     storage_aliases: dict[str, str] = {}   # ADR-090: a proposal's storage label -> the name its links read as
     overlay_revision: int = 0              # ADR-090: rises at each promotion and retirement; `version` does not
+    packs: dict[str, int] = {}             # ADR-120 D10: each composed pack's name and pack_version; empty for the core
 ```
 
 `PropertyDef` is one property line from the YAML above (`{name: family_name, type: string,

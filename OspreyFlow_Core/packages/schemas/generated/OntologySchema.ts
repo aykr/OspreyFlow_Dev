@@ -50,6 +50,7 @@ export interface OntologySchema {
   edge_types: EdgeTypes;
   storage_aliases?: StorageAliases;
   overlay_revision?: OverlayRevision;
+  packs?: Packs;
   [k: string]: unknown;
 }
 export interface EntityTypeDef {
@@ -102,4 +103,7 @@ export interface EdgeTypeDef {
 }
 export interface StorageAliases {
   [k: string]: string;
+}
+export interface Packs {
+  [k: string]: number;
 }

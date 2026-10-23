@@ -184,6 +184,9 @@ class OntologySchema(BaseModel):
     storage_aliases: dict[str, str] = Field(default_factory=dict)
     #: ADR-090 decision 2: rises by one at every promotion and retirement; the version does not.
     overlay_revision: int = 0
+    #: Each composed domain pack's name and `pack_version` (ADR-120 D10), so a recipe can pin the
+    #: pack versions it was published against; empty for the core alone.
+    packs: dict[str, int] = Field(default_factory=dict)
 
     def entity_type(self, name: str) -> EntityTypeDef | None:
         return next((e for e in self.entity_types if e.name == name), None)

@@ -46,7 +46,8 @@ class _World:
     def __init__(self) -> None:
         self.cases = _Cases()
         self.cases.grants["bob"] = AccessLevel.VIEWER
-        self.ontology = load_default_ontology()
+        # The core, carrying a pack version without composing any pack's types in.
+        self.ontology = load_default_ontology().model_copy(update={"packs": {"niem": 3}})
         self.store = MemoryStore()
         self.service = LinkTypeService(
             self.store,
@@ -146,6 +147,8 @@ def test_the_ontology_route_shows_a_promoted_type_and_never_a_proposals_label(
     after = world.client(BOB).get("/v1/ontology").json()
     assert "KNOWN_TO" in [t["name"] for t in after["edge_types"]]
     assert after["overlay_revision"] == 1 and after["version"] == before["version"]
+    # The world carries {"niem": 3}, so a route or overlay refresh that empties packs fails.
+    assert "packs" in after and after["packs"] == world.ontology.packs
 
 
 def test_the_proposer_withdraws_but_another_viewer_cannot(world: _World) -> None:

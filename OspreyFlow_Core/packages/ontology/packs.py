@@ -8,8 +8,10 @@ existing edge type's ends — the one mechanism by which a pack touches the core
 Accounts to `TRANSACTED`'s ends; STIX adds SDOs to `USES`'); everything else about the extended
 type stays the core's. The composed schema then passes the loader's own checks (channel-and-shape
 uniqueness, endpoint names), so a pack cannot smuggle in what `default.yaml` could not declare.
-The composed version stays the core's: a pack set is pinned alongside `ontology_version` on the
-pipeline that chose it, and a pack bump flags recipes exactly as a core bump does.
+The composed version stays the core's; the composed schema also carries each pack's
+`pack_version` (`OntologySchema.packs`), which a published recipe is to pin beside
+`ontology_version`, so that a pack bump is to flag the recipes naming that pack as a core bump
+flags every recipe (ADR-120 D10; the pinning and flagging are a later unit).
 """
 
 from __future__ import annotations
@@ -44,8 +46,13 @@ def compose_with_packs(base: OntologySchema, packs: list[str]) -> OntologySchema
     """The core plus each named pack, in order; the result passes the loader's own checks."""
     entity_types = list(base.entity_types)
     edge_types = list(base.edge_types)
+    versions = {**base.packs}
     for name in packs:
         raw = load_pack(name)
+        declared = raw.get("pack_version")
+        if not isinstance(declared, int) or isinstance(declared, bool) or declared < 1:
+            raise OntologyError(f"pack '{name}' has no integer pack_version ≥ 1 (ADR-120 D10)")
+        versions[name] = declared
         known_entities = {e.name for e in entity_types}
         for entry in raw.get("entity_types") or []:
             if entry["name"] in known_entities:
@@ -88,7 +95,9 @@ def compose_with_packs(base: OntologySchema, packs: list[str]) -> OntologySchema
 
     _check_entity_types(entity_types)
     _check_edge_endpoints(entity_types, edge_types)
-    return OntologySchema(version=base.version, entity_types=entity_types, edge_types=edge_types)
+    return OntologySchema(
+        version=base.version, entity_types=entity_types, edge_types=edge_types, packs=versions
+    )
 
 
 _PACK_LABELS = {
