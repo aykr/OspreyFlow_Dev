@@ -8,8 +8,13 @@
 # from — an incident with a name, category and date, a person's role in one, and the custody links
 # an analyst filters by: a shared cell, a co-defendant, a conflict (kept apart), a visit in person
 # or by video. Additions only, so nothing a recipe wrote before is refused after.
+#
+# Version 3 (ADR-120): prison intelligence — an establishment with its NIU area and SOCT region,
+# the place links (held at, part of, adjoins, used by, occurred at), the throw-over incident, and
+# passes-items-to, the pack's only Probabilistic link, which a recipe can never write. Additions
+# only.
 pack: niem
-pack_version: 2
+pack_version: 3
 entity_types:
   - name: Incident
     pole_class: event
@@ -19,10 +24,22 @@ entity_types:
     identifiers: [incident_ref]
     properties:
       - {name: name, type: string, indexed: true}
-      - {name: category, type: enum, values: [assault, disorder, find, other]}
+      - {name: category, type: enum, values: [assault, disorder, find, other, throw_over]}
       # What was found (a mobile phone, a substance), for a find.
       - {name: item, type: string}
       - {name: occurred_at, type: datetime}
+  - name: Establishment
+    pole_class: organisation
+    channel: azure
+    shape: diamond
+    icon: building
+    identifiers: [establishment_ref]
+    properties:
+      - {name: name, type: string, required: true, indexed: true}
+      - {name: establishment_ref, type: string, required: true, indexed: true}
+      - {name: niu_area, type: string, indexed: true}
+      - {name: soct_region, type: string, indexed: true}
+      - {name: security_category, type: string}
 edge_types:
   - name: USED_AS
     from: [Vehicle, Device, Asset, Endpoint]
@@ -82,3 +99,61 @@ edge_types:
     colour: violet
     properties:
       - {name: channel, type: enum, values: [in_person, video]}
+  # Where a person is held (ADR-120 D1).
+  - name: HELD_AT
+    from: [Person]
+    to: [Establishment]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Held at
+    colour: azure
+  # A place within a larger place: a landing in a wing, a wing in an establishment.
+  - name: PART_OF
+    from: [Location]
+    to: [Location, Establishment]
+    directed: true
+    basis: direct
+    label: Part of
+    colour: moss
+  # Two places that share a boundary.
+  - name: ADJOINS
+    from: [Location]
+    to: [Location]
+    directed: false
+    basis: direct
+    label: Adjoins
+    colour: cyan
+  # A place put to the use of another: a yard used by a wing.
+  - name: USED_BY
+    from: [Location]
+    to: [Location]
+    directed: true
+    basis: direct
+    label: Used by
+    colour: moss
+  # Where an incident happened.
+  - name: OCCURRED_AT
+    from: [Incident]
+    to: [Location]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Occurred at
+    colour: jade
+  # Items passed from one person to another; inferred, so Probabilistic, never written by a recipe.
+  - name: PASSES_ITEMS_TO
+    from: [Person]
+    to: [Person]
+    directed: true
+    basis: probabilistic
+    temporal: true
+    label: Passes items to
+    colour: indigo
+    properties:
+      - {name: channel, type: string}
+  # The core's DEPICTS gains Establishment as an end (ADR-120 D1, for the picture of D9), so an
+  # establishment carries its own picture.
+  - name: DEPICTS
+    extends: true
+    to: [Establishment]

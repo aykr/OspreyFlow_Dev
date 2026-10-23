@@ -143,6 +143,7 @@ def test_niem_brings_the_custody_links_and_incidents() -> None:
     incident = entities["Incident"]
     assert incident.pole_class == "event" and "incident_ref" in incident.identifiers
     category = next(p for p in incident.properties if p.name == "category")
-    assert category.values == ["assault", "disorder", "find", "other"]
+    # (ADR-120 adds throw_over; test_niem_pack_v3.py's superset test pins the rest)
+    assert {"assault", "disorder", "find", "other"} <= set(category.values)
     assert {"name", "item", "occurred_at"} <= {p.name for p in incident.properties}
     assert "Incident" in edges["ROLE_IN"].to_types and "Event" in edges["ROLE_IN"].to_types

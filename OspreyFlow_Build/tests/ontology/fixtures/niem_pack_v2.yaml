@@ -1,0 +1,84 @@
+# NIEM domain pack (ADR-108 phase D) — the National Information Exchange Model's justice-domain
+# shape over the POLE core, which POLE already mirrors. NIEM is published by the US Government as
+# a public-domain national standard (https://www.niem.gov/). NIEM Roles — a base entity assuming
+# a temporary function (a vehicle as a weapon) — land as role-edges with a validity interval
+# (ADR-108 ruling Q4): one hop, the base entity never duplicated.
+#
+# Version 2 (ADR-117): NIEM's corrections and justice ideas a prison intelligence network is drawn
+# from — an incident with a name, category and date, a person's role in one, and the custody links
+# an analyst filters by: a shared cell, a co-defendant, a conflict (kept apart), a visit in person
+# or by video. Additions only, so nothing a recipe wrote before is refused after.
+pack: niem
+pack_version: 2
+entity_types:
+  - name: Incident
+    pole_class: event
+    channel: plum
+    shape: hexagon
+    icon: shield
+    identifiers: [incident_ref]
+    properties:
+      - {name: name, type: string, indexed: true}
+      - {name: category, type: enum, values: [assault, disorder, find, other]}
+      # What was found (a mobile phone, a substance), for a find.
+      - {name: item, type: string}
+      - {name: occurred_at, type: datetime}
+edge_types:
+  - name: USED_AS
+    from: [Vehicle, Device, Asset, Endpoint]
+    to: [Event]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Used as
+    properties:
+      - {name: role, type: string, required: true}
+  - name: ROLE_IN
+    from: [Person, Organisation]
+    to: [Event, Incident]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Role in
+    properties:
+      - {name: role, type: string, required: true}
+  # The custody links (ADR-117). Each has its own colour, so a network reads by link type.
+  - name: SHARED_CELL_WITH
+    from: [Person]
+    to: [Person]
+    directed: false
+    basis: direct
+    temporal: true
+    label: Shared a cell with
+    colour: ochre
+    properties:
+      - {name: cell, type: string}
+  - name: CO_DEFENDANT_OF
+    from: [Person]
+    to: [Person]
+    directed: false
+    basis: direct
+    label: Co-defendant of
+    colour: plum
+    properties:
+      - {name: case_ref, type: string}
+  - name: IN_CONFLICT_WITH
+    from: [Person]
+    to: [Person]
+    directed: false
+    basis: direct
+    temporal: true
+    label: In conflict with
+    colour: rose
+    properties:
+      - {name: reason, type: string}
+  - name: VISITED
+    from: [Person]
+    to: [Person]
+    directed: true
+    basis: direct
+    temporal: true
+    label: Visited
+    colour: violet
+    properties:
+      - {name: channel, type: enum, values: [in_person, video]}
