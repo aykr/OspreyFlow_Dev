@@ -859,8 +859,9 @@ heavier than an old, busy one. `tests/adapters/graph_arcadedb/test_weight_rules.
 a wide grid.
 
 **A structural link type has a fixed weight** (ADR-120 D3): co-defendant, family, membership and
-custody links weigh their declared strength, whatever their occurrences, recency or mutual
-information. This is the one exception to the formula.
+custody links weigh 0.75 and a picture link (`DEPICTS`) 0.2, whatever their occurrences, recency or
+mutual information. The formula's other exception is a self-loop, whose mutual-information term is
+0 (ADR-120 Amendment 4).
 
 The two functions the formula leans on, which earlier drafts left undefined:
 
@@ -884,8 +885,9 @@ one row per pair per week shared.
 Record the parameter set alongside any stored weight components — a weight computed under one
 calibration is not comparable with one computed under another, and a silent recalibration would
 reorder every edge-strength filter in every saved investigation. The weights file is an
-append-only list of versions, and `WeightComponents.parameter_set` names the version and link type
-a weight was computed under (`"<version>/<type>"`), so every value it used is recoverable; a
+append-only list of versions, and `WeightComponents.parameter_set` names the version and the rule
+a weight was computed under (`"<version>/<rule>"`: the link type's own rule, or `default` for a
+type with none), so every value it used is recoverable; a
 component with none was computed under the uncalibrated curve that preceded ADR-120. Weights stored
 before then are not recomputed (`GraphPort` has no in-place edge update; a recompute is its own
 record). The Glass draws the stored weight it is sent and recomputes none; it exposes the

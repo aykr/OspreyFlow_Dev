@@ -14177,7 +14177,7 @@ violation per shape the allow-list catches).
 ### ADR-120, Amendment 4 (23 October 2026) — a self-loop's mutual-information term is 0
 
 Status: **decision 1 ACCEPTED by the owner, 23 October 2026**, from options put to him ("Self-loop's
-PMI term is 0"); decisions 2 and 3 are the coordinator's, **PROPOSED**, put to the owner at stage
+PMI term is 0"); decisions 2 to 4 are the coordinator's, **PROPOSED**, put to the owner at stage
 3's gate. Found by stage 3's property test before any of D3's code was written.
 
 1. **A self-loop's mutual-information term is 0.** A link from a node to itself is counted twice in
@@ -14189,12 +14189,26 @@ PMI term is 0"); decisions 2 and 3 are the coordinator's, **PROPOSED**, put to t
    the invariant hold for every link. The weight's stored inputs do not say whether a link is a
    self-loop, so `compute_weight` takes a required `self_loop` argument that every caller (the
    adapter, the bulk loader, `scripts/compare_vaults.py`) passes.
-2. **`scripts/compare_vaults.py` recomputes with the store's own rules.** It passes the link's type,
-   the weights file's rules and `self_loop`, and counts a self-loop twice in a node's degree, as the
-   adapter and the bulk loader do (it counted it once).
+2. **A self-loop counts twice in its node's degree on every path, and `scripts/compare_vaults.py`
+   recomputes with the store's own rules.** The bulk loader counted a self-loop's occurrences twice
+   and the store's `bothE()` reads it back twice, but an upsert added the write's occurrences to the
+   degree once, so the same self-loop stored different corpus counts by path. The upsert now counts
+   it twice, as the bulk loader does. `compare_vaults` passes the link's type (it compares
+   `TRANSACTED` links), the weights file's rules and `self_loop`, and counts a self-loop twice, as
+   the store does (it counted it once).
 3. **The weights loader refuses a malformed file by name.** A file whose versions are not 1, 2, ...
-   in order, or a version whose `midpoint` or `scale` is not the one derived from its α and β, is
-   refused with `OntologyError` naming the version and the field.
+   in order, a version whose `midpoint` or `scale` is not the one derived from its α and β, or a
+   rule that sets both or neither of `heavy` and `fixed`, sets `heavy` below 1, or sets `fixed`
+   outside (0, 1], is refused with `OntologyError` naming the version and the field. A rule naming a
+   link type no ontology composes is not refused (the weights file is read before and apart from the
+   ontology); such a type simply never occurs.
+4. **Two things this amendment records rather than changes.** The Verify dry run shows an indicative
+   weight (`min(1, occurrences / 5)`) for links it has not stored; it is a preview, never stored or
+   compared, and the Glass draws the rules' weight once a link is written. The brief's check that,
+   on the PID's own principal star, the coordinator's calls and the shared payer's transfers rank
+   among the heaviest and a one-off cell share and the picture among the lightest is made in stage 5
+   against the generated case (`tests/scenarios/test_pid_files.py`); stage 3 proves the same
+   ordering on a synthetic star.
 
 Tests: `tests/adapters/graph_arcadedb/test_weight_rules.py` (the same-pair invariant over the grid,
 self-loop series included, with a self-loop's term 0; `npmi`'s edge cases; the loader's two
