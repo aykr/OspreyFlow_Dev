@@ -14261,6 +14261,22 @@ its ends' degrees or the type's total, on every path); `tests/test_compare_vault
 leaves out superseded links); the harness backup tests (the weights file is in the configuration
 sources and its version is recorded).
 
+### ADR-120, Amendment 6 (23 October 2026) — a backup records the weights version; it does not refuse a restore
+
+Status: **ACCEPTED** under the owner's ruling of 23 October 2026 on Amendment 5 ("go ahead with the
+best course of action that you decide"); a correction of that amendment's text, made before any of
+its code.
+
+Amendment 5 decision 2 said a backup records the weights file's version "so a restore into a
+checkout whose weights file lacks a version that stored weights name can be detected". Nothing
+detects it: `harness/restore.py`'s compatibility check reads the ontology version only, and a
+refusal there is restore behaviour that this project proves live, not by fakes. So the version is
+recorded in the backup's schema versions (key `weights`) and the weights file is carried
+(`config/weights.yaml`) for an operator to compare; a restore that refuses on it is its own record.
+
+Tests: the harness backup tests (the key `weights` holds the file's latest version; the file is
+copied and checksummed).
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
@@ -14331,3 +14347,19 @@ computing weights per clearance level, which this record does not do.
 working set, expand, links among, paths, subgraphs) asserting no `weight_components` in the
 serialised response, shown red first; and an access-control case: an OFFICIAL analyst's serialised
 expansion around a node with a SECRET link carries no count from which the link could be inferred.
+
+### ADR-122, Amendment 1 (23 October 2026) — enforced on the link model
+
+Status: **ACCEPTED** under the owner's ruling on ADR-122 ("Go ahead with your recommendation"); it
+names where the decision is enforced, which ADR-122 left open.
+
+`Edge.weight_components` is excluded from every serialisation of a link (the field is declared
+excluded on the model), so no response, whatever route or response class builds it, can carry it.
+One consequence: the working-set store, which keeps links as serialised JSON, no longer keeps their
+components either; nothing reads them from there (the weight itself is kept). A route that returns a
+raw mapping is covered by the same exclusion, since it serialises the model; the response-model walk
+in the test cannot see such a route, and says so.
+
+Tests: `tests/services/api/test_no_corpus_counts_on_the_wire.py` (every route whose response model
+reaches a link, found by walking the app's routes);
+`tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py` (live).
