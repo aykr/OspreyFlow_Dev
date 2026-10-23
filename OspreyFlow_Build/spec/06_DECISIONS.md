@@ -14005,6 +14005,84 @@ the shape the code really emits before it is trusted (rule 15).
   analyst sees it, the count "With all links" shows, equal to 49 with his picture link among them
   (J1).
 
+### ADR-120, Amendment 1 (23 October 2026) — a recipe pins the packs it names and the packs whose types it writes
+
+Status: **ACCEPTED by the owner, 23 October 2026** ("I accept ADR-120 Amendment 1"). Decision 1 is
+his ruling in chat ("Named packs + types written"); decisions 2 to 6 are the coordinator's, accepted
+with it. Found by the
+adversarial review of stage 2's tests before any of D10's recipe code was written.
+
+1. **A recipe pins every pack it names and every pack whose types it writes.** D10 pinned only the
+   packs a pipeline's domain-model nodes name, but a recipe can write a pack's types without naming
+   it: `tests/ingest/test_pipeline_run.py` publishes one writing FIBO `Account` and `TRANSACTED`
+   under `pole`, and the Ledger demo's five committed recipes (`packages/demo_fixtures/ledger_*`)
+   write FIBO types with no pipeline at all; all load, since the deployment applies the core
+   composed with every pack (ADR-108 Amendment 4). So the packs a recipe pins are the union of the
+   packs its domain-model nodes name (the core excluded) and the packs that **define** an entity or
+   link type its row template writes, `on_match: reference` and conditional entities included.
+   Widening (`extends: true`) does not count: it only adds link ends, and a pack-typed end is an
+   entity the row template writes, which pins its pack already, so a `TRANSACTED` between two core
+   `Endpoint`s rightly pins nothing. Today everything a recipe writes outside its row template is a
+   core type (an entity's content `Document` and `HOLDS`; extract's people, organisations, places,
+   endpoints and `MENTIONED_IN`; enrich's `SAME_AS`); a future stage that writes a pack type joins
+   the union. Publish and the backfill stamp exactly that union, never an extra pin; the engine
+   checks that same union and ignores any other pin a hand-written recipe carries, even on a pack
+   the ontology it is handed does not compose.
+2. **The composed ontology records which pack defines each type.** `OntologySchema` gains
+   `type_packs`, a map from every entity and link type a pack defines (not widens) to that pack's
+   name, filled by `compose_with_packs` and served with the rest of the schema; the engine, publish
+   and the backfill read the union from the ontology they are handed, never from the pack files, so
+   the check cannot disagree with the schema in force.
+3. **The committed recipes that write pack types are pinned in the same change.** The five Ledger
+   recipes gain `pack_versions: {fibo: 1}`. No other committed recipe writes or names a pack (the
+   six of the older prison fixture write only core types and are not touched), so D10's "no
+   committed recipe names NIEM, so the bump flags no file in the tree" still holds under "names or
+   writes". The engine's pin check is its own function, `check_recipe_pins(recipe, ontology)`
+   (`services/ingest/engine.py`), which `run_recipe` calls and only `run_recipe`: the dry run,
+   Verify and Map previews of a draft are never pin-checked, since a draft is not yet pinned. A test
+   finds every committed recipe in the repository by content (a top-level `row_template`), in
+   `OspreyFlow_Core` and in `OspreyFlow_Build`'s test fixtures alike, asserts that the set found
+   includes the five Ledger recipes, and runs each through `check_recipe_pins` against the
+   deployment ontology, so the claim that no recipe that loads today is refused is checked, not
+   asserted.
+4. **A legacy recipe that pins nothing is stamped with an empty map.** The backfill stamps every
+   published row with no `pack_versions`, including one whose recipe names and writes no pack (it is
+   stamped `{}`), so it is not read again at every start. Only published rows are read; a row that
+   already carries pins, or is a draft, flagged or superseded, is never read or changed.
+5. **`pack_versions` is required at publish.** `build_recipe` and the store's `publish` take it with
+   no default, so a fresh publish can never store "not pinned" and be mistaken for a legacy row by
+   the next start's backfill. A recipe that names or writes a pack and pins an empty map, or a map
+   without that pack, is refused by the engine as one pinned at a differing version.
+6. **Start-up is one named, tested step.** `reconcile_recipe_pins(store, ontology, read_recipe)`
+   (`services/api/studio_recipes.py`) runs the backfill and then `flag_stale(ontology.version,
+   ontology.packs)`, and the application's start-up calls it in place of the bare `flag_stale`; the
+   start-up reader joins the recipe repository root to a row's `git_path` and turns a missing or
+   malformed file into "unreadable", so that row is flagged. The publish route computes the pins
+   from the live ontology. A real start-up is tested too, so a start-up that skipped the backfill or
+   passed no pack versions would fail.
+
+Tests: `tests/ingest/test_named_packs.py` (a pipeline's one domain node, with a pack and with an
+empty config; the types a row template writes mapped through `type_packs`, a core type and a type a
+pack only widens mapping to none); `tests/ontology/test_pack_versions.py` (`type_packs` holds every
+type each pack defines and no widened type); `tests/services/api/test_pack_versions_for.py`;
+`tests/services/api/test_studio_recipes_store.py` (the backfill leaves pinned, draft and
+non-published rows untouched and reads no git path of theirs; legacy NIEM, FIBO, STIX, FIBO-written-
+under-`pole` and no-pack rows stamped 2, 1, 1, 1 and `{}`; a NULL-pinned row at the current core
+version is never flagged; `publish` without `pack_versions` refused; `reconcile_recipe_pins` against
+real files in a recipe repository: the legacy NIEM row stamped 2 and then flagged, a `{"niem": 3}`
+row still published, a missing and a malformed file each flagged);
+`tests/ingest/test_studio_publish_pipeline.py` (`build_recipe` without `pack_versions` refused);
+`tests/ingest/test_recipe_engine_end_to_end.py` (a recipe writing FIBO types under `pole` refused
+when it pins `{}` and when it pins `{"niem": 3}`, and run when it pins `{"fibo": 1}`; one naming no
+pack and pinning `{}` runs on the deployment ontology);
+`tests/services/api/test_studio_publish_routes.py` (the route hands `build_recipe` and the store the
+pins of the recipe's named and written packs, FIBO under `pole` stamped `{"fibo": 1}`);
+`tests/ingest/test_committed_recipes_pin.py` (every committed recipe, found by content in both trees
+and including the five Ledger recipes, passes `check_recipe_pins` against the deployment ontology);
+`tests/services/api/test_recipe_pins_lifespan.py`, a real Conduit start-up in the shape of
+`test_scheduler_lifespan.py` (a legacy NIEM row whose file is under the recipe repository root is
+stamped 2 and flagged once the Conduit has started).
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)

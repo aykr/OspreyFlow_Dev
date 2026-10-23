@@ -112,11 +112,13 @@ recipe), or cyber threat analytics (`stix`). A pack only ever *adds* entity and 
 widens an existing edge's ends (`extends: true`); a collision with the core is refused at load. The
 catalogue is served by `GET /v1/ingest/packs` and offered in the Studio's domain panel.
 
-A published recipe pins the version of every pack its pipeline names (`pack_versions`, ADR-120
-D10), beside `ontology_version`. A pack bump flags every published recipe naming that pack, as a
-core bump flags every recipe; a recipe naming no pack is unaffected. A recipe published before
-ADR-120 is not flagged blind: it is stamped once with each pack's last version before that record
-(NIEM 2, FIBO 1, STIX 1), so the NIEM bump to version 3 flags exactly the recipes naming NIEM.
+A published recipe pins the version of every pack its pipeline names or that defines (not merely
+widens) a type its row template writes (`pack_versions`, ADR-120 D10 and Amendment 1), beside
+`ontology_version`. A pack bump flags every published recipe pinning that pack, as a core bump
+flags every recipe; a recipe that names and writes no pack is unaffected. A recipe published
+before ADR-120 is not flagged blind: it is stamped once with each pack's last version before that
+record (NIEM 2, FIBO 1, STIX 1), so the NIEM bump to version 3 flags exactly the recipes naming
+NIEM or writing its types.
 
 ## 2. Stage 1 — Connect
 
@@ -708,17 +710,20 @@ before, which stays readable in every case of its owner, Amendment 5).
   ontology_version != :current` (until ADR-120, the whole routine; the pack condition below now
   joins it in the same statement). This is what makes the flagging proactive (at the moment the
   ontology changes) rather than scanning every recipe file in the repository on every reload.
-  Since ADR-120 D10 the row also holds `pack_versions` (`JSONB`: the version of every pack the
-  recipe's pipeline names, stamped at publish; an empty map for a recipe naming none), and the
-  same routine also flags a published recipe any of whose pinned pack versions differs from the
-  loaded pack's. A row published before ADR-120 is stamped once at bootstrap with each named pack's
-  last version before that record.
-- **`StaleRecipeError`** (`services/ingest/engine.py`) is the separate, reactive last-line guard
-  at actual run time — the registry is what surfaces the problem before someone tries to run a
-  flagged recipe, not a replacement for the run-time check. A flagged Studio recipe is refused
-  before it reaches the engine by `RecipeNotRunnableError`. Since ADR-120 D10 `StaleRecipeError`
-  also refuses a recipe whose pinned pack version differs from the loaded pack's, or whose pinned
-  pack the ontology it is handed does not carry.
+  Since ADR-120 D10 and its Amendment 1 the row also holds `pack_versions` (`JSONB`: the version of
+  every pack the recipe names or that defines (not merely widens) a type it writes, stamped at
+  publish, never an extra pin; an empty map for a recipe that names and writes none), and the same
+  routine also flags a published recipe any of whose pinned pack versions differs from the loaded
+  pack's. A row published before ADR-120 is stamped once at start-up (`reconcile_recipe_pins`,
+  before the flagging) with the last version before that record of each pack it names or writes.
+- **`StaleRecipeError`** (`services/ingest/engine.py`) is the separate, reactive last-line guard at
+  actual run time — the registry is what surfaces the problem before someone tries to run a flagged
+  recipe, not a replacement for the run-time check. A flagged Studio recipe is refused before it
+  reaches the engine by `RecipeNotRunnableError`. Since ADR-120 D10 `StaleRecipeError` also refuses
+  a recipe that names or writes a pack and is not pinned, pins it at a version other than the loaded
+  pack's (an empty map, or a map without that pack, included), or names or writes a pack the
+  ontology it is handed does not carry; any other pin is ignored. Only a real run is checked
+  (`check_recipe_pins`): the dry run and the Verify and Map previews of an unpinned draft are not.
 
 ### Scheduled runs (ADR-110, as built 13 October 2026)
 

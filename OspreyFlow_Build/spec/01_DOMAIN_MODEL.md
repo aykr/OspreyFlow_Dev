@@ -172,8 +172,9 @@ FIBO, NIEM and STIX 2.1. A pack only adds entity and edge types, or widens a cor
 a name that collides with the core is refused at load, and the loader's channel-and-shape rule
 above runs over the core and every pack together. Each pack carries its own integer
 `pack_version`, kept on the composed ontology, and a recipe pins the version of every pack its
-pipeline names, so a pack bump flags those recipes as a core bump flags every recipe
-(`09_INGEST_STUDIO.md` §1.1; ADR-120 D10).
+pipeline names or that defines (not merely widens) a type its row template writes, so a pack bump
+flags those recipes as a core bump flags every recipe (`09_INGEST_STUDIO.md` §1.1; ADR-120 D10 and
+Amendment 1).
 
 **NIEM, version 3 (ADR-120).** Version 2 (ADR-117) gave `Incident` and the custody links
 (`SHARED_CELL_WITH`, `CO_DEFENDANT_OF`, `IN_CONFLICT_WITH`, `VISITED`) beside the role edges.
