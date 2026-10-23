@@ -104,11 +104,19 @@ what was published. The run of a pipeline answers a `PipelineRunReport`: every b
 
 The domain-model node names the ontology overlay the pipeline is built against: the POLE core
 (`pole`), or the core plus one pack — financial fraud and AML (`fibo`), justice and public safety
-roles (`niem`, role-edges with validity intervals per ruling Q4, and since ADR-117 incidents and
-the custody links: shared cell, co-defendant, conflict and visit), or cyber threat analytics
-(`stix`). A pack only ever *adds* entity and edge types or widens an existing edge's ends
-(`extends: true`); a collision with the core is refused at load. The catalogue is served by
-`GET /v1/ingest/packs` and offered in the Studio's domain panel.
+roles (`niem`, role-edges with validity intervals per ruling Q4, since ADR-117 incidents and
+the custody links: shared cell, co-defendant, conflict and visit, and since ADR-120, pack version
+3, establishments, the place links held at, part of, adjoins, used by and occurred at, the
+throw-over incident category, and passes items to, which is Probabilistic and so never written by a
+recipe), or cyber threat analytics (`stix`). A pack only ever *adds* entity and edge types or
+widens an existing edge's ends (`extends: true`); a collision with the core is refused at load. The
+catalogue is served by `GET /v1/ingest/packs` and offered in the Studio's domain panel.
+
+A published recipe pins the version of every pack its pipeline names (`pack_versions`, ADR-120
+D10), beside `ontology_version`. A pack bump flags every published recipe naming that pack, as a
+core bump flags every recipe; a recipe naming no pack is unaffected. A recipe published before
+ADR-120 is not flagged blind: it is stamped once with each pack's last version before that record
+(NIEM 2, FIBO 1, STIX 1), so the NIEM bump to version 3 flags exactly the recipes naming NIEM.
 
 ## 2. Stage 1 — Connect
 
@@ -682,7 +690,7 @@ editor; the repository is the record.
 "Publishing writes the recipe to version control, not only to the database" already implies a
 database record; this section gives it a shape. A Postgres-backed `studio_recipes` table (the
 same Postgres instance the Conduit's audit stream already uses) tracks one row per recipe
-version: `recipe_id`, `version`, `ontology_version`, `label`, `status`
+version: `recipe_id`, `version`, `ontology_version`, `pack_versions` (ADR-120 D10), `label`, `status`
 (`draft`/`published`/`flagged`/`superseded`), `content` (the in-progress recipe as JSON, populated
 while `draft`), `git_path` (set once published), `owning_unit`, `created_by`, `published_by`,
 `schedule_cron`/`schedule_watch`, `created_at`/`published_at`, and `dataset_id` (ADR-099 Amendment 3:
@@ -697,11 +705,20 @@ before, which stays readable in every case of its owner, Amendment 5).
 - **The reverse index this section's opening paragraph promises** — an ontology edit "flags the
   affected recipes and blocks their scheduled runs" — is a routine that runs whenever the ontology
   is reloaded: `UPDATE studio_recipes SET status='flagged' WHERE status='published' AND
-  ontology_version != :current`. This is what makes the flagging proactive (at the moment the
+  ontology_version != :current` (until ADR-120, the whole routine; the pack condition below now
+  joins it in the same statement). This is what makes the flagging proactive (at the moment the
   ontology changes) rather than scanning every recipe file in the repository on every reload.
+  Since ADR-120 D10 the row also holds `pack_versions` (`JSONB`: the version of every pack the
+  recipe's pipeline names, stamped at publish; an empty map for a recipe naming none), and the
+  same routine also flags a published recipe any of whose pinned pack versions differs from the
+  loaded pack's. A row published before ADR-120 is stamped once at bootstrap with each named pack's
+  last version before that record.
 - **`StaleRecipeError`** (`services/ingest/engine.py`) is the separate, reactive last-line guard
-  at actual run time and is unchanged by this — the registry is what surfaces the problem before
-  someone tries to run a flagged recipe, not a replacement for the run-time check.
+  at actual run time — the registry is what surfaces the problem before someone tries to run a
+  flagged recipe, not a replacement for the run-time check. A flagged Studio recipe is refused
+  before it reaches the engine by `RecipeNotRunnableError`. Since ADR-120 D10 `StaleRecipeError`
+  also refuses a recipe whose pinned pack version differs from the loaded pack's, or whose pinned
+  pack the ontology it is handed does not carry.
 
 ### Scheduled runs (ADR-110, as built 13 October 2026)
 

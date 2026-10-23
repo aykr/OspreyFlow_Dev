@@ -13687,3 +13687,354 @@ case opens grouped; community links drawn and individual links not; a node is a 
 one is not; a selected link is drawn; zoomed in, every link and node is drawn in full) — red with
 community links never drawn, with the selected link not excepted, and with a selected node drawn as
 a dot. `canvas/communityLinks.test.ts`, `communityAssigner.test.ts`.
+
+---
+
+## ADR-120 — The Prison Intelligence Dataset: NIEM pack version 3, per-type link weights, pack-version pinning, and the synthetic case — ACCEPTED (design)
+
+Status: **ACCEPTED by the owner, 23 October 2026** ("Accept ADR-120? Yes"). Rulings taken from the
+owner in chat the same day, from options put to him, are quoted at each decision.
+Decisions D1 to D9 carry the build brief's own numbers (`01_DOMAIN_MODEL_AND_GENERATOR_BRIEF.md`
+§4); D10 is added by the owner's ruling.
+
+**Context.** A demonstration to prison intelligence analysts needs one synthetic case that carries
+a prison network and a throw-over investigation end to end (the approved script "Prison
+Intelligence Demo: Script v1"). The repository's existing synthetic prison fixture is left exactly
+as it is; this is a separate case, the **Prison Intelligence Dataset (PID)**, and no name,
+identifier, reference or text of the older fixture is reused. Reading the tree for this record
+found six places where the code does not do what the spec or an earlier record says, and they shape
+the decisions below:
+
+- A pack bump flags no recipe. `pack_version` is read by no code; `flag_stale`
+  (`services/api/studio_recipes.py`) and `StaleRecipeError` (`services/ingest/engine.py`) compare
+  only the core `ontology_version`, and the composed ontology discards each pack's name and version
+  (`packages/ontology/packs.py`, `compose_with_packs`). ADR-117's Cost recorded this; ADR-108 and
+  `packs.py`'s docstring still promise otherwise.
+- "A pack only ever adds" is checked by nothing: no code compares pack version N with N+1, and a
+  pack's entries skip the JSON Schema the core file is validated against, so a pack edge without
+  `basis` loads with `None` and a pack icon is not checked against ADR-079's list.
+- The §6.1 weight formula is not monotone in occurrences, and its calibration is a placeholder.
+  Measured with `weight.py`'s own arithmetic: a pair whose two ends contact only each other weighs
+  2.6192 (raw) at one occurrence and 2.6143 at two in a corpus of 1,000 other occurrences, and the
+  same step falls for every such pair once the rest of the corpus holds 57 or more occurrences; its
+  raw PMI also swamps the occurrence term (about 4.7 raw for an exclusive pair against 1.2 for a
+  hub-to-leaf link). `midpoint` and `scale` are uncalibrated (`weight.py`'s docstring), and the
+  parameter set §6.1 requires to be recorded with stored components is not recorded.
+- No extraction or Questions path can create a link of a pack type: model extraction proposes
+  entities only (`services/extract/profile.py`), edge candidates are deferred
+  (`services/extract/writer.py`), and both accept paths write only `MENTIONED_IN`.
+- Nothing in the Glass or the Conduit filters by a property of a linked node, and `PatternQuery`
+  has no property predicate and, deliberately, no negation (§8.1).
+- An entity's picture (ADR-105) is returned by a generic expand: "With all links" draws the
+  `DEPICTS` link and the picture `Document` and counts them in its "N links"
+  (`explore/ExplorePanel.tsx`; no filter in `graph_arcadedb/access_filter.py`). A *removed* picture
+  (`DEPICTS` with `shown: false`) is returned and counted too, because only
+  `services/api/entity_pictures.py` reads `shown`. That second point is a defect of ADR-105's build,
+  recorded here and not fixed by this record.
+
+**Decisions.**
+
+1. **D1 — The new types go into NIEM pack version 3, additions only** (the owner: "NIEM pack
+   version 3"). The precedent is ADR-117; a Studio pipeline chooses the core plus one pack
+   (`09_INGEST_STUDIO.md` §1.1) and the custody links already live in NIEM. The core stays at
+   version 16. Added:
+   - Entity `Establishment`: `pole_class: organisation`, channel `azure`, shape `diamond` (azure
+     already carries Organisation's square and FIBO `Account`'s hexagon; no type in the core or any
+     pack uses azure with a diamond), icon `building`, identifier `establishment_ref`; properties
+     `name` (string, required, indexed), `establishment_ref` (string, required, indexed), `niu_area`
+     (string, indexed), `soct_region` (string, indexed), `security_category` (string).
+   - Links, each with a label, all `basis: direct` except the last: `HELD_AT` Person →
+     Establishment ("held at"; directed, temporal, colour azure); `PART_OF` Location → Location or
+     Establishment ("part of"; directed, colour moss); `ADJOINS` Location — Location ("adjoins";
+     undirected, colour cyan); `USED_BY` Location → Location ("used by"; directed, colour moss);
+     `OCCURRED_AT` Incident → Location ("occurred at"; directed, temporal, colour jade);
+     `PASSES_ITEMS_TO` Person → Person ("passes items to"; directed, temporal,
+     **`basis: probabilistic`**, colour indigo, property `channel`: string). `PART_OF` and
+     `USED_BY` share moss as the two quiet structural place links; their labels tell them apart.
+   - Core `DEPICTS` is widened (`extends: true`) to end at `Establishment`, so an establishment can
+     carry its own picture (D9); today `entity_pictures.py` refuses one.
+   Everything else the case uses is already in the core or in NIEM version 2. Wings, landings,
+   cells, yards, visits halls and outside places are core `Location`s; the prison itself is an
+   `Establishment`. A person holds an account or a phone through core `USES` (Person → Endpoint);
+   core `HOLDS` ends only at `Document`.
+
+2. **D2 — The throw-over event, and "additions only" as a tested property.** `Incident.category`
+   gains `throw_over`, and `OCCURRED_AT` (D1) places an incident. The loader accepts a changed enum
+   list because it compares nothing between versions; so the guarantee that version 3 is a strict
+   superset of version 2 (every version-2 entity type, property, enum value, edge type and edge end
+   present and unchanged) is a test that freezes version 2's content and compares, shown red first
+   against a planted removal of the kind a real edit makes (dropping an enum value; dropping an
+   edge end). A general version-compatibility check in the loader would be its own decision.
+
+3. **D3 — Link weights: one formula, the count normalised per link type, recorded with every
+   weight** (the owner: "Amend to normalised PMI"; "Normalise the count per type", which replaces
+   his earlier "per-type midpoint/scale"; "Truly fixed weight"; "Same pair, rest held fixed").
+   - **The formula** (`01_DOMAIN_MODEL.md` §6.1, amended):
+     `weight(e) = normalise( α·log1p(occurrences)/log1p(heavy_type) + β·recency(interval.to) +
+     γ·npmi(u,v) )`, with one deployment-wide `midpoint` and `scale`. Dividing the count term by
+     the type's own heavy count gives every type the same count term at its heavy count, while
+     recency and the mutual-information term weigh the same for every type; the earlier per-type
+     midpoint and scale divided those two terms by a different amount per type and did not.
+   - **The mutual-information term is normalised PMI**: `npmi(u,v) = pmi(u,v) / −ln p(u,v)`,
+     clamped to [−1, 1] (a self-loop is counted twice in a degree, so `p(u)·p(v)` can exceed one);
+     1 when `p(u,v) = 1`; 0 wherever `weight.py` returns 0 today (corpus total, pair count or either
+     degree zero). α, β, γ and the half-life are unchanged.
+   - **Calibration is derived, never hand-tuned.** `midpoint` and `scale` are solved so that, at
+     recency 1 and npmi 0, a count term of 0 normalises to the logistic of −1 (≈ 0.27) and a count
+     term of 1, the type's heavy count, to the logistic of 2 (≈ 0.88): with the stated α and β,
+     `scale` = 1/6 and `midpoint` = 0.2 + 1/6. At npmi 0, one occurrence then draws at about 0.39
+     for a type heavy at 40 and about 0.71 for one heavy at 2. npmi 0 flatters those figures: the
+     mutual-information term spans 0.6 raw, more than the count term's 0.5, and moves every link's
+     logit by up to ±1.8, and in a sparse corpus most pairs score high (one report mention in a
+     corpus of 500 with both degrees 3 has npmi of about 0.65). So one-off links in a case like the
+     PID draw at about 0.65 to 0.85, the upper half of the six widths; within a type the count still
+     orders a pair, and the principal-star test below is checked by arithmetic before it is built.
+   - **A structural rule is a fixed weight**: the type's weight is its declared strength, whatever
+     its occurrences, recency or mutual information, an exception to the formula that this record
+     makes and §6.1 states. The components are still stored.
+   - **The invariant, stated exactly:** adding occurrences to one pair, with the rest of the corpus
+     and the pair's recency unchanged, never lowers its weight. It does not hold across different
+     pairs (a fresh, exclusive link can rightly draw heavier than an old, busy one). On a grid of
+     967 series of 300 occurrence counts per heavy count (289,133 steps; each end's other
+     occurrences 0 to 10,000, the rest of the corpus 1 to 10 million, heavy 2 to 200), the ruled
+     formula gave no decreasing step and raw PMI with the old count term gave 5. The grid never
+     reaches `p(u,v) = 1` or a self-loop, so the clamp and the `p(u,v) = 1` rule rest on the
+     property test, which covers both; the grid is evidence and the test is the guard.
+   - **The rules live in a weights file, `packages/ontology/weights/default.yaml`, beside the
+     handling scheme, not in the ontology.** The weights are calibration, not schema: declaring them
+     on edge types in `default.yaml` would bump the core and flag every recipe for a change no recipe
+     can observe, and a pack's unknown keys are silently dropped today. The shipped file is the one
+     every deployment reads; a deployment's own replacement file is not built. It holds an
+     append-only list of versions (an old version is never edited, as an ADR is not, which a
+     frozen-history test enforces); each version holds α, β, γ, `half_life_days`, `midpoint`,
+     `scale`, a `default` rule, and one rule per type.
+   - **A rule declares what one occurrence is and what heavy is.** `unit` names the occurrence in
+     words and `heavy` the count that is heavy for the type, counted over the data loaded (time is
+     carried by the recency term, so the brief's "in 90 days" and "in the window" are not separate
+     windows). `occurrences` is set by whoever writes the link (`EdgeWrite.occurrences`, summed on a
+     same-pair upsert), so the writer honours the unit: a cell-share source emits one row per pair
+     per week shared, which the PID's plan test asserts.
+   - **The PID's rules** (the brief's table): `SHARED_CELL_WITH` one week shared, heavy 12; `VISITED`
+     one visit (a video visit counts as one), heavy 8; `COMMUNICATED_WITH` one call, heavy 40;
+     `TRANSACTED` one transfer (the amount is not in the weight), heavy 6; `MENTIONED_IN` one report,
+     heavy 3; `ROLE_IN` one incident, heavy 3; `IN_CONFLICT_WITH` one episode, heavy 2;
+     `CO_DEFENDANT_OF`, `FAMILY_OF`, `MEMBER_OF` and `HELD_AT` structural at 0.75, so a standing
+     relationship draws in the upper widths beside heavy counted links rather than below a single
+     mention; `DEPICTS` structural at 0.2, so a picture link draws thin (under the default rule it
+     is exclusive at both ends, npmi 1, and would draw at 0.84, as heavy as the principal's calls to
+     the coordinator). Every other type takes the `default` rule: one occurrence, heavy 10.
+   - **The parameter set is recorded with every stored weight.** `WeightComponents` gains
+     `parameter_set: str | None`, `"<weights version>/<rule>"`, where the rule is the link type's
+     own or `default` for a type with none, naming the exact version and rule in the append-only
+     file, so every value is recoverable. `None` means the uncalibrated curve that preceded this
+     record. A recalibration is a new version, so two weights computed
+     under different calibrations are never compared unknowingly.
+   - **Existing stored weights are not recomputed by this record.** Edges written before it keep
+     their old weight and carry no `parameter_set`, which makes the mix visible. A recompute is
+     arithmetic over the stored components, but `GraphPort` has no in-place edge update (a same-pair
+     upsert adds occurrences; `supersede_edge` mints a new id), so it is its own record. A deployment
+     installed or reseeded after this lands has only current weights.
+   - **There is no browser weight function to keep equal.** The Glass draws the stored `weight` it
+     is sent (`canvas/nodeAttributes.ts`) and recomputes none; the brief's "browser and server produce
+     the same weights" is met as "the weight on the wire is the weight the server computed". This
+     reading was set out in the stage 0 plan the owner read; it was not separately ruled. §6.2's
+     parity requirement remains the Clique Metric's.
+
+4. **D4 — Prisoner numbers are `Z####ZZ`, synthetic by construction** (the owner: "Z####ZZ";
+   "By construction plus test"). A letter, four digits, two letters, as a real prison number is
+   shaped, fixed to a leading `Z` and a trailing `ZZ`. The project's sources hold no reserved
+   prisoner-number range, so that this sits outside issued ranges rests on this ruling, not on a
+   source. `Provenance` has no `synthetic` field and gains none; synthetic identity is proved by
+   construction, as the existing fixtures do: prisoner numbers `Z####ZZ`; visitors' National
+   Insurance numbers prefixed `QQ`, which is never issued; phones in Ofcom's drama ranges (D5); bank
+   accounts `SYN-nnnnn` at "Fictional Bank"; private-cash accounts `PC-<prison number>`; prisoner PIN
+   accounts as `Endpoint` `handle` `PIN-<prison number>`; IMEIs with a valid Luhn check digit and
+   the test-device TAC prefix `00` (the `imei` adapter checks the Luhn digit only, so the plan test
+   checks the prefix).
+
+5. **D5 — Phones use only the drama ranges ADR-103 accepts, and collide with no other fixture.**
+   The `msisdn` adapter accepts mobile 07700 900; geographic 0113–0118, 0121, 0131, 0141, 0151 and
+   0161 496 0; 020 7946 0; 0191 498 0; 028 9649 6; 029 2018 0; 01632 960; freephone 0808 157 0;
+   premium 0909 879 0; UK-wide 0306 999 0; each a block of 1,000. The mobile block is already used
+   by other fixtures seeded into the same standard demo, so the PID's outside mobiles come only from
+   07700 900600 to 900899 and its other outside numbers from the geographic blocks, about 1,500 in
+   all; no real range is used. Some fixtures compute their numbers rather than writing them out
+   (the scenario cohorts offset theirs by a checksum of the run name), so the collision test runs
+   every other fixture's and seed's own generator, not a text search, and the sub-range moves if it
+   collides. National and `+44` forms normalise to the same E.164 value, so the
+   script's national-form search problem (J2) is in search, not in the adapter.
+
+6. **D6 — Two datasets, one generator with two size profiles.** `prison-intelligence`
+   ("Prison Intelligence Dataset (synthetic)"; source `pid-generator`; case "Prison Intelligence
+   Dataset (synthetic demo)"): three establishments, about 1,000 prisoners, 10,000 to 15,000
+   links, about 1,000,000 PIN call rows over about 1,500 distinct outside numbers.
+   `prison-intelligence-scale` ("Prison Intelligence Dataset: scale cohort (synthetic)"; source
+   `pid-scale-generator`; case "Prison Intelligence Dataset: scale cohort (synthetic demo)"): six
+   establishments, 3,000 prisoners, 30,000 links (the owner: "3,000 / 30,000"), no call file of its
+   own and no pictures. Both are registered in `packages/demo_fixtures/datasets.py` (ADR-099
+   Amendment 6 refuses a write naming an unregistered dataset); `SeedDataset` holds id, name, source
+   and case name only, so distribution class and delivery belong to the demo-pack manifest (Brief 2).
+   **Both, the full call file included, are part of the standard product demo** (the owner: "I
+   would include the optional parts into the Standard demo as well"). The establishment is **Fenwick
+   Moor Prison** (the owner's choice over the brief's working name), held in one constant; its local
+   originator and owning unit are `fenwick-moor-security`, the regional ones `regional-intel-unit`.
+   The generated files are produced on demand and never committed (rule 9: the generator and its
+   tests are in the repository, its output is not).
+
+7. **D7 — The area scope (J4) does not exist, and this record builds none.** Search takes no
+   property filter (`services/api/search.py`), the legend toggles link types only, `PatternQuery`
+   has no property predicate, and the map boundary filters working-set nodes by position. Search
+   does match every indexed string property of a node (`graph_arcadedb/builders.py`), so typing an
+   NIU area finds an `Establishment` carrying it; that is matching, not a filter. The smallest
+   change is put to the owner as **ADR-121**. The script's absence query (chapter 11) stays
+   unsupported: §8.1 declines negation on purpose.
+
+8. **D8 — `PASSES_ITEMS_TO` is seeded as inferred, the PID's one inferred item at load** (the owner:
+   "Seed it as inferred"). No extraction path can propose a link today, so the chapter-6 relay links
+   are written by the PID's seed through `GraphPort` with provenance state `inferred`, `extracted_by`
+   `"synthetic:pid-extraction-run"` and an `extraction_confidence`, never `asserted`. Rule 5 holds:
+   they stay inferred until a person confirms them. The smallest fix that would let a model propose
+   them, not built here: model extraction's output schema gains a list of links restricted to the
+   ontology's Probabilistic types whose two ends are among the entities proposed or already in the
+   document's case, each accepted through the existing review queue and written `inferred`; it is its
+   own record. The Glass draws an inferred link dashed whatever its basis (`edgeProgramFor`);
+   ADR-081 decision 4's "probabilistic is always dotted" is not what the code does for an inferred
+   link, recorded here and not changed. There is no general route to confirm a link (only alert
+   triage reaches `confirm_edge`), so the demo points at these links and confirms none. A recipe
+   cannot write the type: `recipe_rules.py` refuses a Probabilistic type at save and at run.
+
+9. **D9 — Pictures through the existing `DEPICTS` path** (the owner: "Split B1 data / B3 Glass";
+   "Illustrated avatars"). In the demo case each person, establishment, wing, yard, seized handset and
+   organised-crime group gets its own picture as an image `Document` linked by `DEPICTS` (ADR-105;
+   for an establishment, through D1's widening). People get flat, illustrated avatars built from
+   shapes and colours, never photographic and never from an image model; places, handsets and
+   groups get drawings or emblems; hotspot yards look like the other yards. Every picture is a PNG
+   (one of the four formats `entity_pictures.py` accepts; SVG is refused) of 256 by 256 pixels and
+   under 50 KB, drawn by the generator itself, deterministic from the one seed, written with the
+   standard library only (no dependency, no licence). **The principal's 49 links include his picture
+   link**, because "With all links" returns and counts it; the plan's link constant is set to match.
+   An icon chosen by a property value is a Glass change and its own record (Brief 3).
+
+10. **D10 — A recipe pins the version of every pack it names, and a pack bump flags it** (the
+    owner: "Build pack-version pinning"; this makes ADR-108's promise true).
+    - The composed ontology keeps each pack's name and `pack_version` (`OntologySchema.packs`, a
+      map from name to version); a pack file without an integer `pack_version` is refused at load.
+    - `Recipe` (and so the committed YAML) and the `studio_recipes` row gain `pack_versions`: a map
+      from every pack the recipe's pipeline names in a domain-model node to the version it was
+      published against, stamped at publish beside `ontology_version`. The column is `JSONB`, added
+      with `ADD COLUMN IF NOT EXISTS`, the table's own precedent. On `Recipe` the field defaults to
+      `None`, meaning "not pinned", which is distinct from an empty map, meaning "pinned, names no
+      pack".
+    - **A recipe published before this record is backfilled, not flagged blind.** At bootstrap,
+      every published row with no `pack_versions` whose recipe (read from its committed YAML) names a
+      pack is stamped with that pack's last version before this record: NIEM 2, FIBO 1, STIX 1. No
+      pack version had ever changed except NIEM's (1 to 2, ADR-117), so this is exact for FIBO and
+      STIX, and for NIEM it is never lower than the true one, so it never hides a bump. The backfill
+      runs in the same bootstrap, before `flag_stale`; a row whose committed YAML cannot be read is
+      flagged, since what it names cannot be known. The NIEM bump to 3 then flags exactly the
+      recipes naming NIEM, and no FIBO or STIX recipe; the core's own legacy rule (a null
+      `ontology_version` is never flagged) is unchanged.
+    - `flag_stale(current_ontology_version, current_pack_versions)` flags a published recipe whose
+      core version differs (as today) or any of whose pinned pack versions differs from the loaded
+      pack's, in one statement over the `JSONB` column.
+    - At run time a flagged Studio recipe is refused first by `RecipeNotRunnableError`
+      (`services/api/studio_publish.py`), as today; the engine's `StaleRecipeError` additionally
+      refuses a recipe whose pinned pack version differs from the loaded one, whose pinned pack the
+      ontology it is handed does not carry, or which names a pack and is not pinned
+      (`pack_versions` `None`): a committed recipe, Brief 2's included, never reaches the store
+      without saying which pack version it was written for.
+    - In this repository no committed recipe names NIEM, so the bump flags no file in the tree; in a
+      deployment it flags every published Studio recipe naming NIEM, and its author republishes it.
+
+**Cost.** A pack bump now forces a republish of every recipe naming that pack, as a core bump
+already does. The weights file governs every dataset in a deployment, not only the PID: Enron's
+mail, PaySim's and the Ledger's transfers and the call fixtures are weighed by the PID's rules for
+`COMMUNICATED_WITH` (heavy 40), `TRANSACTED` (heavy 6) and `MENTIONED_IN` (heavy 3), which count
+different units at different volumes there; weighted degree and the strength filter follow. Weights
+stored before this record keep the old curve until a recompute exists; the `parameter_set` shows
+the mix. Normalised PMI pulls down a "number everyone calls" less than raw PMI did, because the term
+is bounded. A structural link's thickness says nothing about recency or exclusivity. The area scope and the absence
+query the script asks for are not delivered. The relay links are inferred by a seed, not by a model
+run, and say so in their provenance. The principal's picture is a node in his star.
+
+**Revisit if.** A deployment needs a type's weight to depend on a property (a transfer's amount) or
+on a window rather than on counts; one dataset's calibration visibly distorts another's in one
+deployment (then rules per dataset); the property test finds a decreasing step; a pack needs
+pinning at a finer grain than the whole pack.
+
+**Tests that fail if this is violated.** Each new check is shown red against a planted violation of
+the shape the code really emits before it is trusted (rule 15).
+- **D1, D2:** `tests/ontology/test_niem_pack_v3.py`: every new type with its declared ends, basis,
+  temporality and label; channel and shape unique over the core and every pack composed together;
+  `Establishment`'s icon in ADR-079's list and every new link's colour one of the nine channels
+  (a pack's colours, like its icons, skip the JSON Schema); `DEPICTS` reaching `Establishment`; `throw_over`
+  accepted and an unknown category refused; version 3 a superset of a frozen version 2.
+- **D10:** `tests/ontology/test_pack_versions.py` (the composed ontology carries each pack's
+  version; a pack without one refused); `tests/services/api/test_studio_recipes_store.py` (a pack
+  bump flags only recipes pinning that pack; a recipe naming no pack is not flagged; the backfill
+  stamps a legacy NIEM recipe at 2 and a legacy FIBO one at 1); `tests/ingest/test_studio_publish_pipeline.py`
+  (publish stamps `pack_versions`; a flagged pack recipe is refused by `RecipeNotRunnableError`);
+  `tests/ingest/test_recipe_engine_end_to_end.py` (a stale pack pin, a pinned pack the ontology
+  lacks, and a recipe naming a pack with no pin are each refused by `StaleRecipeError`; a recipe
+  pinning an empty map runs). The backfill: an unreadable committed YAML flags its row.
+- **D3:** `tests/adapters/graph_arcadedb/test_weight_rules.py`: the same-pair invariant over a wide
+  property-test grid for every rule, including `p(u,v) = 1` and a self-loop; the calibration
+  reproduced on a small fixture (at recency 1 and npmi 0, each counted type's heavy count at 0.88
+  and one occurrence at the value the formula gives for that type, 0.39 at heavy 40); a structural
+  type's weight equal to its strength whatever its occurrences; every stored component carrying the
+  current `parameter_set`, which resolves in the weights file (a type with no rule to `default`); no
+  earlier version of the weights file edited (a frozen copy compared); the weight on the wire equal
+  to the weight computed; on the PID's principal star, the coordinator's call link and the
+  shared-payer transfer links among its heaviest and a one-off cell share and the picture link among
+  its lightest.
+- **D4 to D9:** `tests/scenarios/test_pid_plan.py`, the plan without a store: every constant and
+  exact multiset, both profiles, the four gaps absent by construction, no identifier that could be
+  real (D4), every number passing `msisdn()` and none used by any other fixture or seed (D5),
+  cell-share occurrences equal to weeks shared (D3), `PASSES_ITEMS_TO` written `inferred` and never
+  `asserted` (D8), every picture reproducible from the seed, a PNG within the limits above,
+  depicting exactly one entity and drawn by the generator with no file read from anywhere else (D9).
+  `tests/scenarios/test_pid_files.py` for the files' row counts, and each picture accepted by the
+  real picture route's own validation.
+  `tests/demo_fixtures/test_datasets.py`: both datasets registered and a write naming either
+  accepted (D6). `tests/ingest/test_recipe_rules.py`: a recipe naming `PASSES_ITEMS_TO` refused at
+  save and at run (D8). `tests/services/api/test_pid_access_control.py`, against ArcadeDB through
+  `GRAPH_PORT_ADAPTERS` as the existing access-control tests are, ignored by `make test` and run by
+  the live `conformance` job (the `Makefile` and `ci.yml` entries handed to the owner as a diff,
+  since both are protected, and kept in step by `test-file-coverage-check`): the SECRET link invisible to the OFFICIAL analyst in canvas, counts, paths and degrees, and
+  the analyst's answer equal to the answer over the case without it; the principal's degree as the
+  analyst sees it, the count "With all links" shows, equal to 49 with his picture link among them
+  (J1).
+
+---
+
+## ADR-121 — An equality condition on a pattern node's property — PROPOSED
+
+Status: **PROPOSED, 23 October 2026**, for the owner to rule on (ADR-120 D7). Nothing is built
+until he does.
+
+**Context.** The prison demonstration's journey J4 scopes a network by establishment, NIU area and
+SOCT region, which the case holds as properties of an `Establishment` linked by `HELD_AT`
+(ADR-120). Nothing can filter by a property of a linked node: search takes no property filter, the
+legend toggles link types, and `PatternQuery` (§8.1) constrains a node by type or by a pinned id
+only.
+
+**Decision proposed.** A `PatternNode` may carry `where`: a map from one of its type's **indexed**
+properties to one value, equality only, at most three entries. The adapter compiles each entry into
+the traversal as a `has(property, value)` step on that node, beside the access steps (rule 3), so
+"people `HELD_AT` an establishment whose `niu_area` is X" is one pattern of two nodes and one link,
+counted first and run through the existing pattern preview and run routes. No negation, no range,
+no pattern over a non-indexed property, and no property the ontology marks `sensitivity: high`
+(refused by name, not silently ignored). The query builder offers it as a value field on a node.
+Everything that stores a pattern carries the field: saved patterns (§8.3), ADR-109's typology
+rules and the generated TypeScript types.
+
+**Cost.** One more thing a pattern can say, which the Questions module's ask-to-search (Brief 3 E3)
+can then propose; a pattern's compiled traversal gains a step per condition.
+
+**Revisit if.** Analysts need ranges, more than one value, or negation (§8.1's change-stream
+argument then applies).
+
+**Tests that fail if this is violated.** A conformance case per adapter: the condition
+narrows the match exactly; a condition on a node the principal cannot see leaves no trace in the
+count; a condition on a non-indexed or sensitive property is refused by name; a keyboard case for
+the value field (rule 13).

@@ -165,6 +165,30 @@ any other. The Glass draws it inside the type's shape. It adds to shape and hue 
 them, so the rule above is unchanged. The default ontology gives every type one. Adding the field did
 not move the ontology version: nothing a recipe writes, an index or an adapter reads changed.
 
+### 1.1a Domain packs (ADR-108, ADR-117, ADR-120)
+
+A deployment's ontology is the core composed with its domain packs (`packages/ontology/packs/`):
+FIBO, NIEM and STIX 2.1. A pack only adds entity and edge types, or widens a core edge's ends;
+a name that collides with the core is refused at load, and the loader's channel-and-shape rule
+above runs over the core and every pack together. Each pack carries its own integer
+`pack_version`, kept on the composed ontology, and a recipe pins the version of every pack its
+pipeline names, so a pack bump flags those recipes as a core bump flags every recipe
+(`09_INGEST_STUDIO.md` §1.1; ADR-120 D10).
+
+**NIEM, version 3 (ADR-120).** Version 2 (ADR-117) gave `Incident` and the custody links
+(`SHARED_CELL_WITH`, `CO_DEFENDANT_OF`, `IN_CONFLICT_WITH`, `VISITED`) beside the role edges.
+Version 3 adds, for prison intelligence: the entity `Establishment` (`pole_class: organisation`;
+`establishment_ref`, `name`, `niu_area`, `soct_region`, `security_category`); the place links
+`HELD_AT` (Person → Establishment, temporal), `PART_OF` (Location → Location or Establishment),
+`ADJOINS` (Location — Location, undirected), `USED_BY` (Location → Location) and `OCCURRED_AT`
+(Incident → Location, temporal); `PASSES_ITEMS_TO` (Person → Person, temporal), the pack's only
+Probabilistic type, which a recipe can therefore never write; `throw_over` among
+`Incident.category`'s values; and core `DEPICTS` widened to end at `Establishment`, so an
+establishment can carry its own picture. The prison itself is an `Establishment`; its wings,
+landings, cells, yards and visits halls are core `Location`s, so the map, hotspot cells and
+boundary filter need nothing new. Version 3 is a strict superset of version 2,
+which a test, not the loader, guarantees.
+
 ### 1.2 The loaded schema's own shape
 
 The YAML above validates into a typed Python object, `OntologySchema` — what `GraphPort.
@@ -810,12 +834,31 @@ Only a note's author edits or removes it.
 `weight` is derived at load time and recomputed on the working set, never hand-set:
 
 ```
-weight(e) = normalise( α·log1p(occurrences) + β·recency(interval.to) + γ·mutual_information(u,v) )
+weight(e) = normalise( α·log1p(occurrences)/log1p(heavy(type)) + β·recency(interval.to) + γ·mutual_information(u,v) )
 ```
 
-`mutual_information` is the pointwise mutual information of the pair against the corpus, which
-is what suppresses high-volume, low-information relationships — the broadcast sender, the
-service number that everyone calls.
+`heavy(type)` is the count that is heavy for the link's type (its weight rule, below), so every
+type's count term is 1 at its own heavy count (ADR-120 D3). `mutual_information` is the
+**normalised** pointwise mutual information of the pair against the corpus, which is what
+suppresses high-volume, low-information relationships — the broadcast sender, the service number
+that everyone calls:
+
+```
+mutual_information(u,v) = clamp( pmi(u,v) / −ln p(u,v), −1, 1 )   # 1 when p(u,v) = 1; 0 where pmi is undefined
+pmi(u,v)                = ln( p(u,v) / (p(u)·p(v)) )
+```
+
+Until ADR-120 the count term was `log1p(occurrences)` and the last term raw PMI, which is not
+monotone in occurrences: a pair whose ends contact only each other weighed less at two occurrences
+than at one, and its PMI swamped the count. The invariant now, exactly: **adding occurrences to one
+pair, with the rest of the corpus and the pair's recency unchanged, never lowers its weight.** It
+does not hold across different pairs, and is not meant to: a fresh, exclusive link can rightly draw
+heavier than an old, busy one. `tests/adapters/graph_arcadedb/test_weight_rules.py` asserts it over
+a wide grid.
+
+**A structural link type has a fixed weight** (ADR-120 D3): co-defendant, family, membership and
+custody links weigh their declared strength, whatever their occurrences, recency or mutual
+information. This is the one exception to the formula.
 
 The two functions the formula leans on, which earlier drafts left undefined:
 
@@ -824,11 +867,27 @@ recency(t)   = 0.5 ^ ((now - t) / half_life)          # exponential decay
 normalise(x) = 1 / (1 + e^(-(x - midpoint) / scale))  # logistic
 ```
 
-Five parameters, all per-deployment configuration: α = 0.5, β = 0.2, γ = 0.3,
-`half_life` = 90 days, and the logistic's `midpoint` and `scale` calibrated per corpus. Record
-the parameter set alongside any stored weight components — a weight computed under one
+The parameters live in a weights file, `packages/ontology/weights/default.yaml`, beside the
+handling scheme and not in the ontology (ADR-120 D3): α = 0.5, β = 0.2, γ = 0.3, `half_life` =
+90 days, one `midpoint` and `scale` for every type, and one rule per link type naming what one
+occurrence is and what count is heavy, with a default rule (heavy 10) for a type with none.
+`midpoint` and `scale` are derived, never hand-tuned: at recency 1 and a mutual-information term of
+0, a count term of 0 normalises to the logistic of −1 (≈ 0.27) and a count term of 1, the type's
+heavy count, to the logistic of 2 (≈ 0.88), which with these α and β gives `scale` = 1/6 and
+`midpoint` = 0.2 + 1/6. So a link that is heavy for its type draws about as thick as one heavy for
+another type, and recency and exclusivity weigh the same for every type. What one occurrence is,
+the writer decides: `occurrences` is set by whoever writes the link, so a cell-share source emits
+one row per pair per week shared.
+
+Record the parameter set alongside any stored weight components — a weight computed under one
 calibration is not comparable with one computed under another, and a silent recalibration would
-reorder every edge-strength filter in every saved investigation. The Glass exposes the normalised result as the edge-strength filter slider.
+reorder every edge-strength filter in every saved investigation. The weights file is an
+append-only list of versions, and `WeightComponents.parameter_set` names the version and link type
+a weight was computed under (`"<version>/<type>"`), so every value it used is recoverable; a
+component with none was computed under the uncalibrated curve that preceded ADR-120. Weights stored
+before then are not recomputed (`GraphPort` has no in-place edge update; a recompute is its own
+record). The Glass draws the stored weight it is sent and recomputes none; it exposes the
+normalised result as the edge-strength filter slider.
 
 **`WeightComponents` stores the raw counts, not just the derived float.** `mutual_information` is
 corpus-wide — it depends on how the *whole* corpus looks, which changes as more data loads and
@@ -836,7 +895,8 @@ again when a caller scopes the formula to a working set rather than the full cor
 `Edge` is a load-time snapshot using the corpus as it stood then, never frozen ground truth:
 freezing a single number and calling it the weight would silently go stale as the corpus grows.
 `WeightComponents` (`occurrences`, `corpus_pair_count`, `corpus_source_degree`,
-`corpus_target_degree`, `corpus_total_occurrences`, `computed_at`) persists exactly what the
+`corpus_target_degree`, `corpus_total_occurrences`, `computed_at`, and since ADR-120
+`parameter_set`) persists exactly what the
 formula needs, so a later, more scoped recompute — the working-set service — is arithmetic over
 stored numbers, never a full corpus rescan.
 
