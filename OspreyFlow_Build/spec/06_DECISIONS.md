@@ -14363,3 +14363,24 @@ in the test cannot see such a route, and says so.
 Tests: `tests/services/api/test_no_corpus_counts_on_the_wire.py` (every route whose response model
 reaches a link, found by walking the app's routes);
 `tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py` (live).
+
+### ADR-122, Amendment 2 (23 October 2026) — three corrections of fact
+
+Status: **ACCEPTED** under the owner's ruling on ADR-122; corrections found by the adversarial
+review of its build, changing no decision.
+
+1. **The generated TypeScript keeps the field.** ADR-122's Cost said the generated TypeScript loses
+`weight_components`; it does not: the generator reads the model's validation schema, which an
+exclusion from serialisation does not change, so `Edge.ts` still declares the optional field. It is
+never populated, since no response carries it, and the Glass reads it nowhere.
+2. **The working-set stream is covered.** The full working set reaches the Glass over the WebSocket
+as delta models (`DeltaSnapshot`, `DeltaReplaceEdge` and the others the working-set routes send),
+serialised from the same link model, so the exclusion covers them; a test serialises each delta
+model and asserts no corpus-wide count, since a walk of the app's HTTP response models cannot see a
+WebSocket route.
+3. **The working-set store keeps links as msgpack of the JSON-mode dump**, not as JSON, as Amendment
+1 put it; the consequence it drew (the store keeps no components, and nothing reads them from there)
+stands.
+
+Tests: `tests/services/api/test_no_corpus_counts_on_the_wire.py` (the HTTP routes and the WebSocket
+delta models).
