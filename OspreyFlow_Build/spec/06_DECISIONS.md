@@ -14083,6 +14083,58 @@ and including the five Ledger recipes, passes `check_recipe_pins` against the de
 `test_scheduler_lifespan.py` (a legacy NIEM row whose file is under the recipe repository root is
 stamped 2 and flagged once the Conduit has started).
 
+### ADR-120, Amendment 2 (23 October 2026) — a run takes the registry row's pins when the committed file has none
+
+Status: **ACCEPTED by the owner, 23 October 2026** ("Yes go ahead"). Decision 1 is his ruling in
+chat ("Run takes the row's pins"); decisions 2 and 3 are the coordinator's, accepted with it; decision 2 withdraws a
+coordinator ruling that the adversarial review of stage 2's code showed to be wrong.
+
+1. **A run of a published Studio recipe takes the registry row's pins when the committed file has
+   none.** The backfill (Amendment 1, decision 4) stamps the `studio_recipes` row, but a run loads
+   the committed YAML, and a file committed before ADR-120 carries no `pack_versions`, so
+   `check_recipe_pins` would refuse every legacy recipe that writes a pack's types (the AML recipes
+   of a deployment that published FIBO pipelines before this record) while its row read as
+   published. So every load of a published Studio recipe goes through one function,
+   `load_published_recipe(row, repo_root)` in `services/api/studio_publish.py`: it loads the
+   committed file and, when that file's `pack_versions` is `None` and the row's is not, takes the
+   row's; pins written in the file always win. It is used at all three sites that load a published
+   recipe: `run_published_recipe` (which every run reaches: Run now, a scheduled or folder-watch
+   run, the administrator's Run now, and each branch of a pipeline run), the pipeline run's own read
+   of its shape, and the release of held rows. The file gains its pins the next time the recipe is
+   republished. Nothing at start-up writes to the recipe repository. The same fallback also makes a
+   Conduit of the old code running beside one of the new safe: a file it re-commits without pins
+   still runs on the row's.
+2. **A re-commit carries the row's pins as they are, including none; a mapped row with no core
+   version is saved without a re-commit.** A schedule change re-commits a published recipe's YAML
+   with the row's stored `pack_versions`, never recomputed; a row that has none (for example one
+   flagged before ADR-120, which the backfill never reads, or one published by an old-code Conduit
+   after the new code's start-up) is re-committed without pins, as before, rather than refused. The
+   coordinator's earlier refusal (422 `recipe_not_pinned`, recorded only in `09_INGEST_STUDIO.md`
+   and tests) is withdrawn: it stopped an analyst pausing such a recipe. Separately, the Publish
+   screen's schedule route saved the schedule and then failed on a row with a mapping and no
+   `ontology_version`; it now does what the administrator's route already does, saving the schedule
+   and skipping the re-commit. Nothing unpinned that names or writes a pack can run:
+   `check_recipe_pins` refuses it in the engine, whatever route reaches it, held-row release
+   included (which checks clearance, not status).
+3. **Only `build_recipe` widens.** Its `pack_versions` becomes `dict[str, int] | None`, still with
+   no default, so a re-commit can pass a row's `None`; the store's `publish` keeps `dict[str, int]`
+   and refuses `None`, so Amendment 1's decision 5 holds: a fresh publish never stores "not pinned".
+
+Tests: `tests/ingest/test_studio_publish_pipeline.py` (a backfilled row whose committed file has no
+pins runs on the deployment ontology; a file with its own pins wins over the row's; a row and file
+both unpinned whose recipe writes FIBO is refused by `StaleRecipeError`; the held rows of a recipe
+flagged by a pack bump are refused at release by the engine's pin check);
+`tests/services/api/test_load_published_recipe_sites.py` (nothing in `services/api` loads a
+published Studio recipe's committed file except through `load_published_recipe`, checked over the
+source, and shown red first against two planted loads in the shapes the code uses:
+`load_recipe(repo_root / recipe.git_path)` passed straight into another call, and the
+conditional-expression form); `tests/services/api/test_studio_recipes_store.py` (`publish` with
+`pack_versions=None` refused; `reconcile_recipe_pins` writes nothing under the recipe repository
+root); `tests/services/api/test_studio_publish_routes.py` and
+`tests/services/api/test_schedule_admin_routes.py` (a schedule change on a row with no pins is saved
+and re-committed without pins; one on a pinned row carries them; on the Publish screen's route, a
+mapped row with no `ontology_version` is saved and not re-committed, with a 200).
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)

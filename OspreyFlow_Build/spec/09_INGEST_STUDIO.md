@@ -719,11 +719,20 @@ before, which stays readable in every case of its owner, Amendment 5).
 - **`StaleRecipeError`** (`services/ingest/engine.py`) is the separate, reactive last-line guard at
   actual run time — the registry is what surfaces the problem before someone tries to run a flagged
   recipe, not a replacement for the run-time check. A flagged Studio recipe is refused before it
-  reaches the engine by `RecipeNotRunnableError`. Since ADR-120 D10 `StaleRecipeError` also refuses
-  a recipe that names or writes a pack and is not pinned, pins it at a version other than the loaded
-  pack's (an empty map, or a map without that pack, included), or names or writes a pack the
-  ontology it is handed does not carry; any other pin is ignored. Only a real run is checked
-  (`check_recipe_pins`): the dry run and the Verify and Map previews of an unpinned draft are not.
+  reaches the engine by `RecipeNotRunnableError` on every run path; the release of held rows checks
+  clearance, not status, so there the engine's own checks are the guard (ADR-120 Amendment 2). Since
+  ADR-120 D10 `StaleRecipeError` also refuses a recipe that names or writes a pack and is not
+  pinned, pins it at a version other than the loaded pack's (an empty map, or a map without that
+  pack, included), or names or writes a pack the ontology it is handed does not carry; any other pin
+  is ignored. Only a real run is checked (`check_recipe_pins`): the dry run and the Verify and Map
+  previews of an unpinned draft are not.
+- **A re-commit carries the pins it was published with, and a run falls back to the row's.** A
+  schedule change (the Publish screen's or the administrator's) re-commits a published recipe's YAML
+  with the row's stored `pack_versions`, never recomputed against a newer pack, and with none if the
+  row has none (for example one flagged before ADR-120); on a row with a mapping and no
+  `ontology_version` it saves the schedule and does not re-commit. A run of a published recipe loads
+  its committed file through `load_published_recipe`, which takes the row's pins when the file
+  carries none (a file committed before ADR-120); pins in the file always win (ADR-120 Amendment 2).
 
 ### Scheduled runs (ADR-110, as built 13 October 2026)
 
