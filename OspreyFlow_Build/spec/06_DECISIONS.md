@@ -14176,9 +14176,9 @@ violation per shape the allow-list catches).
 
 ### ADR-120, Amendment 4 (23 October 2026) — a self-loop's mutual-information term is 0
 
-Status: **ACCEPTED by the owner, 23 October 2026** (decision 1, from options put to him:
-"Self-loop's PMI term is 0"); decisions 2 and 3 are the coordinator's, recorded with it. Found by
-stage 3's property test before any of D3's code was written.
+Status: **decision 1 ACCEPTED by the owner, 23 October 2026**, from options put to him ("Self-loop's
+PMI term is 0"); decisions 2 and 3 are the coordinator's, **PROPOSED**, put to the owner at stage
+3's gate. Found by stage 3's property test before any of D3's code was written.
 
 1. **A self-loop's mutual-information term is 0.** A link from a node to itself is counted twice in
    that node's degree, so in a small corpus its normalised PMI falls as its occurrences rise, and
