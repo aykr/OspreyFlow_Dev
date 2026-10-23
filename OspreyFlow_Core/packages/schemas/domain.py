@@ -187,6 +187,9 @@ class OntologySchema(BaseModel):
     #: Each composed domain pack's name and `pack_version` (ADR-120 D10), so a recipe can pin the
     #: pack versions it was published against; empty for the core alone.
     packs: dict[str, int] = Field(default_factory=dict)
+    #: Each entity and link type a composed pack defines (not widens) → that pack's name
+    #: (ADR-120 Amendment 1), so a recipe pins the packs whose types it writes.
+    type_packs: dict[str, str] = Field(default_factory=dict)
 
     def entity_type(self, name: str) -> EntityTypeDef | None:
         return next((e for e in self.entity_types if e.name == name), None)

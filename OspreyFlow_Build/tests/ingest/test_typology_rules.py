@@ -296,6 +296,36 @@ async def test_a_released_row_loads_with_its_original_row_number(
         assert [e.properties["source_rows"] for e in events.events] == [[2]]
 
 
+async def test_held_rows_are_refused_at_release_when_their_pack_pin_is_stale(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """ADR-120 Amendment 2, decision 2: held-row release checks clearance, not the recipe's status,
+    so the engine's own pin check is the guard. The recipe handed to the release pins FIBO at
+    a version other than the loaded pack's, standing for a pin left behind by a pack bump. Red if
+    the release loads the held rows anyway, or refuses but first releases some of them."""
+    from services.ingest.engine import StaleRecipeError
+
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(ANALYST, case, _structuring("pre_commit"))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        gate = _gate(stores, graph, _Outage(), [rule], case)
+        await _load(graph, _Outage(), gate, _deposits("G"))  # type: ignore[arg-type]
+        held = await stores["held"].list_authorized(case, ANALYST)
+        assert held, "nothing was held, so the release below would prove nothing"
+        bumped = RECIPE.model_copy(update={"pack_versions": {"fibo": ONTOLOGY.packs["fibo"] + 1}})
+
+        with pytest.raises(StaleRecipeError, match="fibo"):
+            await release_held_rows(
+                held, bumped, ANALYST, graph=graph, ontology=ONTOLOGY, analytics=analytics,
+                media=None, rules=_gate(stores, graph, analytics, [rule], case, fail_closed=False),
+                load_id=new_id(),
+            )  # fmt: skip
+
+        for row in held:
+            assert (await stores["held"].get_authorized(row.id, case, ANALYST)).status == "held"
+        assert await graph.find_node("Account", "account_number", "GBGMULE", ANALYST) is None
+
+
 async def test_a_rule_never_fires_on_events_its_deployer_cannot_read(
     stores: dict[str, Any], analytics: AnalyticsPort
 ) -> None:

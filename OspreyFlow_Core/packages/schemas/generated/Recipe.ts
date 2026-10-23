@@ -10,6 +10,9 @@ export type HeaderRows = number;
 export type DateOrder = ("dmy" | "mdy") | null;
 export type SourceCrs = string | null;
 export type OntologyVersion = number;
+export type PackVersions = {
+  [k: string]: number;
+} | null;
 export type LegalBasis = string | null;
 export type Field = string | null;
 export type Fields = string[] | null;
@@ -69,6 +72,7 @@ export interface Recipe {
   label: Label;
   connector: RecipeConnector;
   ontology_version: OntologyVersion;
+  pack_versions?: PackVersions;
   defaults?: RecipeDefaults;
   deduplicate?: DeduplicateConfig | null;
   row_template: RowTemplate;

@@ -48,7 +48,7 @@ from services.api.review import (
     text_windows,
 )
 from services.api.rule_evaluation import RuleGate
-from services.api.studio_publish import run_published_recipe
+from services.api.studio_publish import load_published_recipe, run_published_recipe
 from services.extract.candidates import ExtractionCandidate
 from services.extract.recognised import recognised_candidates
 from services.extract.writer import write_candidate
@@ -60,7 +60,6 @@ from services.ingest.pipeline import (
     SUPPORTED_GEOCODERS,
     pipeline_from_recipe,
 )
-from services.ingest.recipe_loader import load_recipe
 
 from conduit_common.identity import new_node_id
 from knowledge_adapters import REGISTRY
@@ -497,7 +496,7 @@ async def run_published_pipeline(
     carry its own — the same "today's fresh export" override `run_published_recipe` has, applied
     to the sources that read the draft's own recorded location. A source node carrying its own
     `source_location` in its config keeps it."""
-    recipe = load_recipe(repo_root / str(draft.git_path)) if draft.git_path else None
+    recipe = load_published_recipe(draft, repo_root) if draft.git_path else None
     pipeline = (
         recipe.pipeline
         if recipe is not None and recipe.pipeline is not None

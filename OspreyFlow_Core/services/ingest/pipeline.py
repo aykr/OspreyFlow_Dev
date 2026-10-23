@@ -18,7 +18,14 @@ from __future__ import annotations
 from collections import deque
 
 from ontology.packs import PACK_NAMES
-from schemas.ingest import PipelineGraph, PipelineNode, PipelineNodeKind, StudioRecipeDraft
+from schemas.domain import OntologySchema
+from schemas.ingest import (
+    PipelineGraph,
+    PipelineNode,
+    PipelineNodeKind,
+    RowTemplate,
+    StudioRecipeDraft,
+)
 
 #: The domain pack a v1 recipe reads as: the POLE core itself (phase D's packs overlay it).
 CORE_PACK = "pole"
@@ -193,3 +200,35 @@ def pipeline_run_violations(graph: PipelineGraph) -> list[str]:
                     f"{', '.join(SUPPORTED_GEOCODERS)}"
                 )
     return problems
+
+
+def named_packs(pipeline: PipelineGraph | None) -> list[str]:
+    """The packs a pipeline's domain-model nodes name, the core excluded; sorted, once each
+    (`06_DECISIONS.md` ADR-120 D10). A recipe with no pipeline names none."""
+    if pipeline is None:
+        return []
+    named = {
+        pack
+        for node in pipeline.nodes
+        if node.kind is PipelineNodeKind.DOMAIN_MODEL
+        and isinstance(pack := node.config.get("pack"), str)
+        and pack != CORE_PACK
+    }
+    return sorted(named)
+
+
+def written_packs(row_template: RowTemplate, ontology: OntologySchema) -> list[str]:
+    """The packs that define an entity or link type the row template writes, read from the
+    ontology's `type_packs` (ADR-120 Amendment 1, decision 1). A `reference` or `when` entity
+    counts, since a row may write it; a core type, or one a pack only widens, maps to no pack."""
+    types = [entity.type for entity in row_template.entities]
+    types.extend(edge.type for edge in row_template.edges)
+    return sorted({ontology.type_packs[t] for t in types if t in ontology.type_packs})
+
+
+def recipe_packs(
+    pipeline: PipelineGraph | None, row_template: RowTemplate, ontology: OntologySchema
+) -> list[str]:
+    """The packs a recipe pins: those its pipeline names and those whose types its row template
+    writes (ADR-120 Amendment 1, decision 1); sorted, once each."""
+    return sorted({*named_packs(pipeline), *written_packs(row_template, ontology)})

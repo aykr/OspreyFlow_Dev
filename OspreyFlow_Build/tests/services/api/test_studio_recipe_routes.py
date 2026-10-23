@@ -140,6 +140,13 @@ class _FakeStudioRecipes:
     async def publish(
         self, recipe_id: str, principal: Principal, **kwargs: object
     ) -> StudioRecipeDraft:
+        # Refuses what the real store refuses: `pack_versions` is a required keyword (ADR-120
+        # Amendment 1, decision 5) and never `None` (Amendment 2, decision 3), so a route test
+        # cannot pass on a call the real `publish` would reject.
+        if "pack_versions" not in kwargs:
+            raise TypeError("publish() missing 1 required keyword-only argument: 'pack_versions'")
+        if kwargs["pack_versions"] is None:
+            raise ValueError("publish() needs pack_versions as a map, not None")
         assert self.draft is not None
         if self.draft.status is not StudioRecipeStatus.DRAFT:
             raise StudioRecipeNotADraftError(recipe_id)

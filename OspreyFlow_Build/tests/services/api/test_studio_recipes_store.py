@@ -7,6 +7,7 @@ route-level fakes. `spec/09_INGEST_STUDIO.md` §2, §6."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from schemas.domain import Principal
@@ -15,6 +16,7 @@ from schemas.ingest import (
     PipelineGraph,
     PipelineNode,
     PipelineNodeKind,
+    Recipe,
     RecipeEntity,
     RowTemplate,
     StudioRecipeDraft,
@@ -29,6 +31,8 @@ from services.api.studio_recipes import (
     StudioRecipeNotVerifiedError,
     StudioRecipeStore,
 )
+
+from ontology.loader import load_default_ontology
 
 AUTHOR = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["source_author"])
 OTHER_UNIT_AUTHOR = Principal(
@@ -287,6 +291,7 @@ async def test_publish_rejects_a_draft_that_has_never_been_verified(
             draft.recipe_id,
             AUTHOR,
             ontology_version=3,
+            pack_versions={},
             git_path="recipes/x.yaml",
             schedule_cron=None,
             schedule_watch=None,
@@ -308,6 +313,7 @@ async def test_editing_a_verified_draft_clears_verified_at_and_blocks_publish(
             draft.recipe_id,
             AUTHOR,
             ontology_version=3,
+            pack_versions={},
             git_path="recipes/x.yaml",
             schedule_cron=None,
             schedule_watch=None,
@@ -321,6 +327,7 @@ async def test_publish_flips_status_and_stamps_attribution(store: StudioRecipeSt
         draft.recipe_id,
         AUTHOR,
         ontology_version=3,
+        pack_versions={},
         git_path="recipes/some-id.yaml",
         schedule_cron="0 6 * * *",
         schedule_watch="s3://ingest/carrier-a/*.csv",
@@ -341,6 +348,7 @@ async def test_publish_flips_status_and_stamps_attribution(store: StudioRecipeSt
             published.recipe_id,
             AUTHOR,
             ontology_version=3,
+            pack_versions={},
             git_path="recipes/some-id.yaml",
             schedule_cron=None,
             schedule_watch=None,
@@ -369,6 +377,7 @@ async def test_update_schedule_changes_only_the_schedule(store: StudioRecipeStor
         draft.recipe_id,
         AUTHOR,
         ontology_version=3,
+        pack_versions={},
         git_path="recipes/some-id.yaml",
         schedule_cron=None,
         schedule_watch=None,
@@ -388,7 +397,7 @@ async def test_setting_a_schedule_makes_its_setter_the_owner_and_resumes_it(
     """ADR-110 decision 3: a scheduled run acts as whoever last set the schedule."""
     draft = await _verified_draft(store)
     published = await store.publish(
-        draft.recipe_id, AUTHOR, ontology_version=3, git_path="recipes/x.yaml",
+        draft.recipe_id, AUTHOR, ontology_version=3, pack_versions={}, git_path="recipes/x.yaml",
         schedule_cron=None, schedule_watch=None, now=datetime(2026, 1, 2, tzinfo=UTC),
     )  # fmt: skip
     assert published.schedule_owner is None
@@ -408,7 +417,7 @@ async def test_the_scheduler_lists_scheduled_recipes_and_a_pause_keeps_its_reaso
 ) -> None:
     draft = await _verified_draft(store)
     await store.publish(
-        draft.recipe_id, AUTHOR, ontology_version=3, git_path="recipes/y.yaml",
+        draft.recipe_id, AUTHOR, ontology_version=3, pack_versions={}, git_path="recipes/y.yaml",
         schedule_cron="0 6 * * *", schedule_watch=None, now=datetime(2026, 1, 2, tzinfo=UTC),
     )  # fmt: skip
     listed = {r.recipe_id: r for r in await store.scheduled()}
@@ -447,8 +456,9 @@ async def test_the_feeds_of_a_case_are_its_datasets_published_recipes_only(
             draft.recipe_id, draft.version, now=datetime(2026, 1, 1, tzinfo=UTC)
         )
         published.append(await store.publish(
-            draft.recipe_id, AUTHOR, ontology_version=3, git_path="recipes/f.yaml",
-            schedule_cron=None, schedule_watch=None, now=datetime(2026, 1, 2, tzinfo=UTC),
+            draft.recipe_id, AUTHOR, ontology_version=3, pack_versions={},
+            git_path="recipes/f.yaml", schedule_cron=None, schedule_watch=None,
+            now=datetime(2026, 1, 2, tzinfo=UTC),
         ))  # fmt: skip
     still_a_draft = await store.create_draft(
         AUTHOR.model_copy(update={"datasets": [mine]}), label="Unpublished", **_CONNECT
@@ -465,7 +475,7 @@ async def test_retime_keeps_the_owner_case_and_pause_and_moves_the_set_time(
     """ADR-110 Amendment 3, point 2: the Admin area's *Change schedule* keeps the owner."""
     draft = await _verified_draft(store)
     await store.publish(
-        draft.recipe_id, AUTHOR, ontology_version=3, git_path="recipes/r.yaml",
+        draft.recipe_id, AUTHOR, ontology_version=3, pack_versions={}, git_path="recipes/r.yaml",
         schedule_cron="0 6 * * *", schedule_watch=None, now=datetime(2026, 1, 2, tzinfo=UTC),
         schedule_case="case-9",
     )  # fmt: skip
@@ -489,6 +499,7 @@ async def test_create_new_version_supersedes_the_published_row_and_opens_a_draft
         draft.recipe_id,
         AUTHOR,
         ontology_version=3,
+        pack_versions={},
         git_path="recipes/some-id.yaml",
         schedule_cron=None,
         schedule_watch=None,
@@ -543,6 +554,7 @@ async def test_flag_stale_flags_only_published_recipes_targeting_a_different_ont
         stale_draft.recipe_id,
         AUTHOR,
         ontology_version=3,
+        pack_versions={},
         git_path="recipes/stale.yaml",
         schedule_cron=None,
         schedule_watch=None,
@@ -553,13 +565,14 @@ async def test_flag_stale_flags_only_published_recipes_targeting_a_different_ont
         current_draft.recipe_id,
         AUTHOR,
         ontology_version=4,
+        pack_versions={},
         git_path="recipes/current.yaml",
         schedule_cron=None,
         schedule_watch=None,
         now=datetime(2026, 1, 2, tzinfo=UTC),
     )
 
-    flagged_ids = await store.flag_stale(current_ontology_version=4)
+    flagged_ids = await store.flag_stale(current_ontology_version=4, current_pack_versions={})
     assert stale_published.recipe_id in flagged_ids
     assert current_published.recipe_id not in flagged_ids
 
@@ -614,6 +627,7 @@ async def test_update_pipeline_rejects_once_the_recipe_is_no_longer_a_draft(
         made.recipe_id,
         AUTHOR,
         ontology_version=16,
+        pack_versions={},
         git_path="recipes/p.yaml",
         schedule_cron=None,
         schedule_watch=None,
@@ -621,3 +635,585 @@ async def test_update_pipeline_rejects_once_the_recipe_is_no_longer_a_draft(
     )
     with pytest.raises(StudioRecipeNotADraftError):
         await store.update_pipeline(made.recipe_id, AUTHOR, pipeline=_chain_pipeline())
+
+
+# --- Pack pins (ADR-120 D10, Amendment 1) -------------------------------------
+#
+# What each test checks, and the violation that fails it:
+# - `test_publish_records_the_pack_versions`: `publish` not storing the map, or `get` not mapping
+#   the column back onto the draft.
+# - `test_a_pack_bump_flags_only_recipes_pinning_that_pack`: a bump flagging a recipe that pins a
+#   different pack, or one that pins none (`{}`), or failing to flag the one that pins the bumped
+#   pack.
+# - `test_a_pinned_pack_that_is_no_longer_loaded_flags_its_recipe`: a pin on a pack missing from
+#   the current ontology being read as "no change".
+# - `test_the_backfill_stamps_legacy_recipes_at_the_last_version_before_pinning`: the backfill
+#   stamping the current versions (which would hide the bump), skipping a row, reading or changing
+#   a row that is pinned, a draft, flagged or superseded, stamping a row it could not read, or
+#   missing a pack written under the core (`fibo-under-pole`).
+# - `test_a_null_pinned_row_at_the_current_core_version_is_never_flagged`: an unstamped row being
+#   flagged by `flag_stale` before the backfill has judged it.
+# - `test_publish_without_pack_versions_is_refused`: `publish` growing a default, so a fresh publish
+#   could store "not pinned" and be mistaken for a legacy row at the next start.
+# - `test_publish_with_pack_versions_none_is_refused`: a fresh publish storing "not pinned", which
+#   the next start's backfill would mistake for a legacy row and stamp at the last pre-pinning
+#   versions (ADR-120 Amendment 2, decision 3).
+# - `test_reconcile_recipe_pins_writes_nothing_under_the_recipe_root`: a start-up that stamps a
+#   file as well as a row (Amendment 2: nothing at start-up writes to the recipe repository).
+# - `test_a_non_object_pack_versions_value_reads_as_unpinned_and_does_not_break_flagging`: a JSON
+#   `null` or array in the column crashing the read or `flag_stale`, so the Conduit would not start,
+#   or the backfill not stamping such a row as legacy.
+# - `test_the_backfill_leaves_a_row_superseded_while_it_was_being_read_unchanged`: the stamp being
+#   written on the strength of an earlier read, so a row superseded in the gap gets pins.
+# - `test_a_pin_object_with_a_non_integer_value_reads_as_unpinned_and_is_flagged_at_start_up`: a
+#   pin object holding a non-integer being read as a pin, stamped over, or left published.
+# - `test_a_pin_stored_as_a_numeric_string_is_flagged_at_start_up`: a text comparison reading the
+#   string "1" as FIBO's loaded version 1, so a corrupted pin passes as a current one.
+# - `test_a_pin_stored_as_a_decimal_one_is_flagged_at_start_up`: a pin of 1.0 being read as the
+#   integer 1 (Postgres compares jsonb numbers by value), so a non-integer pin passes as current.
+# - `test_reconcile_recipe_pins_stamps_then_flags_against_real_files`: start-up flagging before it
+#   stamps (the legacy NIEM row has no pins, so it would stay published), reading a file the
+#   wrong way, or treating a missing, malformed or invalid file as readable.
+
+_CORE_VERSION = load_default_ontology().version
+_ALL_PACKS = {"niem": 3, "fibo": 1, "stix": 1}
+
+
+async def _published_with_pins(
+    store: StudioRecipeStore,
+    label: str,
+    pins: dict[str, int],
+    git_path: str = "recipes/pins.yaml",
+) -> StudioRecipeDraft:
+    draft = await _verified_draft(store, label=label)
+    return await store.publish(
+        draft.recipe_id,
+        AUTHOR,
+        ontology_version=_CORE_VERSION,
+        pack_versions=pins,
+        git_path=git_path,
+        schedule_cron=None,
+        schedule_watch=None,
+        now=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+
+
+async def _unpin(store: StudioRecipeStore, *recipe_ids: str) -> None:
+    """A recipe published before pinning existed: no map at all, not an empty one."""
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        await conn.execute(
+            "UPDATE studio_recipes SET pack_versions = NULL WHERE recipe_id = ANY($1::text[])",
+            list(recipe_ids),
+        )
+
+
+def _write_legacy_recipe(
+    directory: Path, name: str, *, pack: str | None, writes: str | None = None
+) -> Recipe:
+    """A recipe on disk, round-tripped through the real loader: its pipeline names `pack` (or has
+    none), and its row template writes one `writes` entity (or an `Endpoint`)."""
+    import yaml
+    from services.ingest.recipe_loader import load_recipe
+
+    document = yaml.safe_load(
+        (
+            Path(__file__).resolve().parents[2] / "scenarios" / "fixtures" / "cdr_recipe.yaml"
+        ).read_text()
+    )
+    document.pop("deduplicate", None)
+    document["id"] = name
+    document["row_template"] = {
+        "entities": [{"ref": "e", "pole_class": "object", "type": writes or "Endpoint"}]
+    }
+    if pack is not None:
+        document["pipeline"] = {
+            "nodes": [
+                {"id": "domain", "kind": "domain_model", "label": "D", "config": {"pack": pack}}
+            ],
+            "edges": [],
+        }
+    path = directory / f"{name}.yaml"
+    path.write_text(yaml.safe_dump(document))
+    return load_recipe(path)
+
+
+async def test_publish_records_the_pack_versions(store: StudioRecipeStore) -> None:
+    published = await _published_with_pins(store, "Pinned", {"niem": 3})
+    assert published.pack_versions == {"niem": 3}
+    assert (await store.get(published.recipe_id)).pack_versions == {"niem": 3}
+
+
+async def test_a_pack_bump_flags_only_recipes_pinning_that_pack(
+    store: StudioRecipeStore,
+) -> None:
+    pins_niem = await _published_with_pins(store, "Pins niem", {"niem": 2})
+    pins_fibo = await _published_with_pins(store, "Pins fibo", {"fibo": 1})
+    pins_none = await _published_with_pins(store, "Pins nothing", {})
+
+    flagged = await store.flag_stale(_CORE_VERSION, _ALL_PACKS)
+
+    assert pins_niem.recipe_id in flagged
+    assert pins_fibo.recipe_id not in flagged
+    assert pins_none.recipe_id not in flagged
+    assert (await store.get(pins_niem.recipe_id)).status is StudioRecipeStatus.FLAGGED
+    assert (await store.get(pins_fibo.recipe_id)).status is StudioRecipeStatus.PUBLISHED
+    assert (await store.get(pins_none.recipe_id)).status is StudioRecipeStatus.PUBLISHED
+
+
+async def test_a_pinned_pack_that_is_no_longer_loaded_flags_its_recipe(
+    store: StudioRecipeStore,
+) -> None:
+    pins_stix = await _published_with_pins(store, "Pins stix", {"stix": 1})
+
+    flagged = await store.flag_stale(_CORE_VERSION, {"niem": 3})
+
+    assert pins_stix.recipe_id in flagged
+    assert (await store.get(pins_stix.recipe_id)).status is StudioRecipeStatus.FLAGGED
+
+
+async def test_the_backfill_stamps_legacy_recipes_at_the_last_version_before_pinning(
+    store: StudioRecipeStore, tmp_path: Path
+) -> None:
+    from uuid import uuid4
+
+    paths = {
+        "niem": "legacy/niem.yaml",
+        "fibo": "legacy/fibo.yaml",
+        "none": "legacy/none.yaml",
+        "missing": "legacy/missing.yaml",
+        "stix": "legacy/stix.yaml",
+        "fibo-under-pole": "legacy/fibo-under-pole.yaml",
+    }
+    rows = {
+        key: await _published_with_pins(store, f"Legacy {key}", {}, git_path=path)
+        for key, path in paths.items()
+    }
+    # Rows the backfill must neither read nor change: already pinned, and a draft with no pins.
+    pinned_path = f"legacy/pinned-{uuid4().hex[:8]}.yaml"
+    draft_path = f"legacy/draft-{uuid4().hex[:8]}.yaml"
+    pinned = await _published_with_pins(store, "Pinned", {"niem": 3}, git_path=pinned_path)
+    draft = await _verified_draft(store, label="Draft with no pins")
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        await conn.execute(
+            "UPDATE studio_recipes SET git_path = $1 WHERE recipe_id = $2",
+            draft_path,
+            draft.recipe_id,
+        )
+    # Legacy rows that are no longer published: flagged and superseded rows are never read either.
+    flagged_path = f"legacy/flagged-{uuid4().hex[:8]}.yaml"
+    superseded_path = f"legacy/superseded-{uuid4().hex[:8]}.yaml"
+    already_flagged = await _published_with_pins(store, "Flagged", {}, git_path=flagged_path)
+    superseded = await _published_with_pins(store, "Superseded", {}, git_path=superseded_path)
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        await conn.execute(
+            "UPDATE studio_recipes SET status = $1 WHERE recipe_id = $2",
+            StudioRecipeStatus.FLAGGED.value,
+            already_flagged.recipe_id,
+        )
+        await conn.execute(
+            "UPDATE studio_recipes SET status = $1 WHERE recipe_id = $2",
+            StudioRecipeStatus.SUPERSEDED.value,
+            superseded.recipe_id,
+        )
+    await _unpin(
+        store,
+        *(row.recipe_id for row in rows.values()),
+        draft.recipe_id,
+        already_flagged.recipe_id,
+        superseded.recipe_id,
+    )
+
+    legacy = {
+        paths["niem"]: _write_legacy_recipe(tmp_path, "niem", pack="niem"),
+        paths["fibo"]: _write_legacy_recipe(tmp_path, "fibo", pack="fibo"),
+        paths["none"]: _write_legacy_recipe(tmp_path, "none", pack=None),
+        paths["stix"]: _write_legacy_recipe(tmp_path, "stix", pack="stix"),
+        paths["fibo-under-pole"]: _write_legacy_recipe(
+            tmp_path, "fibo-under-pole", pack="pole", writes="Account"
+        ),
+    }
+    requested: list[object] = []
+
+    def read_recipe(git_path: str) -> Recipe | None:
+        requested.append(git_path)
+        if git_path == paths["missing"]:
+            return None
+        # Rows other tests left behind with no pin are stamped too; they name and write no pack.
+        return legacy.get(git_path) or _write_legacy_recipe(tmp_path, "other", pack=None)
+
+    from ontology.packs import load_deployment_ontology
+
+    flagged_by_backfill = await store.backfill_pack_versions(
+        read_recipe, load_deployment_ontology()
+    )
+
+    assert all(isinstance(path, str) for path in requested)
+    assert pinned_path not in requested
+    assert draft_path not in requested
+    assert flagged_path not in requested
+    assert superseded_path not in requested
+    assert (await store.get(rows["niem"].recipe_id)).pack_versions == {"niem": 2}
+    assert (await store.get(rows["fibo"].recipe_id)).pack_versions == {"fibo": 1}
+    assert (await store.get(rows["none"].recipe_id)).pack_versions == {}
+    assert (await store.get(rows["stix"].recipe_id)).pack_versions == {"stix": 1}
+    assert (await store.get(rows["fibo-under-pole"].recipe_id)).pack_versions == {"fibo": 1}
+    missing = await store.get(rows["missing"].recipe_id)
+    assert missing.pack_versions is None, "an unreadable recipe was stamped with a guess"
+    assert missing.status is StudioRecipeStatus.FLAGGED
+    assert rows["missing"].recipe_id in flagged_by_backfill
+    assert (await store.get(pinned.recipe_id)).pack_versions == {"niem": 3}
+    assert (await store.get(pinned.recipe_id)).status is StudioRecipeStatus.PUBLISHED
+    still_draft = await store.get(draft.recipe_id)
+    assert still_draft.pack_versions is None
+    assert still_draft.status is StudioRecipeStatus.DRAFT
+    untouched_flagged = await store.get(already_flagged.recipe_id)
+    assert untouched_flagged.pack_versions is None
+    assert untouched_flagged.status is StudioRecipeStatus.FLAGGED
+    untouched_superseded = await store.get(superseded.recipe_id)
+    assert untouched_superseded.pack_versions is None
+    assert untouched_superseded.status is StudioRecipeStatus.SUPERSEDED
+
+    flagged = await store.flag_stale(_CORE_VERSION, _ALL_PACKS)
+
+    assert rows["niem"].recipe_id in flagged
+    for key in ("fibo", "stix", "fibo-under-pole", "none"):
+        assert rows[key].recipe_id not in flagged
+        assert (await store.get(rows[key].recipe_id)).status is StudioRecipeStatus.PUBLISHED
+
+
+async def test_a_null_pinned_row_at_the_current_core_version_is_never_flagged(
+    store: StudioRecipeStore,
+) -> None:
+    row = await _published_with_pins(store, "Unstamped", {})
+    await _unpin(store, row.recipe_id)
+
+    flagged = await store.flag_stale(_CORE_VERSION, _ALL_PACKS)
+
+    assert row.recipe_id not in flagged
+    assert (await store.get(row.recipe_id)).status is StudioRecipeStatus.PUBLISHED
+
+
+async def test_publish_without_pack_versions_is_refused(store: StudioRecipeStore) -> None:
+    draft = await _verified_draft(store, label="No pins given")
+    with pytest.raises(TypeError, match="pack_versions"):
+        await store.publish(  # type: ignore[call-arg]
+            draft.recipe_id,
+            AUTHOR,
+            ontology_version=_CORE_VERSION,
+            git_path="recipes/x.yaml",
+            schedule_cron=None,
+            schedule_watch=None,
+            now=datetime(2026, 1, 2, tzinfo=UTC),
+        )
+    assert (await store.get(draft.recipe_id)).status is StudioRecipeStatus.DRAFT
+
+
+async def test_reconcile_recipe_pins_stamps_then_flags_against_real_files(
+    store: StudioRecipeStore, tmp_path: Path
+) -> None:
+    from services.api.studio_recipes import recipe_reader, reconcile_recipe_pins
+
+    from ontology.packs import load_deployment_ontology
+
+    root = tmp_path / "recipes-repo"
+    (root / "recipes").mkdir(parents=True)
+    _write_legacy_recipe(root / "recipes", "legacy-niem", pack="niem")
+    (root / "recipes" / "malformed.yaml").write_text("id: [unclosed\nrow_template: : :\n")
+    # Not text at all, and a recipe whose pipeline names a pack that does not exist.
+    (root / "recipes" / "binary.yaml").write_bytes(b"\xff\xfe\x00")
+    _write_legacy_recipe(root / "recipes", "unknown-pack", pack="nosuchpack")
+    # Parses as YAML but is no recipe: it has no `row_template`.
+    (root / "recipes" / "invalid.yaml").write_text("id: invalid\nlabel: Not a recipe\n")
+
+    legacy_niem = await _published_with_pins(
+        store, "Legacy NIEM", {}, git_path="recipes/legacy-niem.yaml"
+    )
+    pinned = await _published_with_pins(store, "Pinned", {"niem": 3}, git_path="recipes/none.yaml")
+    missing = await _published_with_pins(store, "Missing", {}, git_path="recipes/gone.yaml")
+    malformed = await _published_with_pins(
+        store, "Malformed", {}, git_path="recipes/malformed.yaml"
+    )
+    invalid = await _published_with_pins(store, "Invalid", {}, git_path="recipes/invalid.yaml")
+    binary = await _published_with_pins(store, "Binary", {}, git_path="recipes/binary.yaml")
+    unknown_pack = await _published_with_pins(
+        store, "Unknown pack", {}, git_path="recipes/unknown-pack.yaml"
+    )
+    await _unpin(
+        store,
+        legacy_niem.recipe_id,
+        missing.recipe_id,
+        malformed.recipe_id,
+        invalid.recipe_id,
+        binary.recipe_id,
+        unknown_pack.recipe_id,
+    )
+
+    flagged = await reconcile_recipe_pins(store, load_deployment_ontology(), recipe_reader(root))
+
+    assert (await store.get(legacy_niem.recipe_id)).pack_versions == {"niem": 2}
+    assert (await store.get(legacy_niem.recipe_id)).status is StudioRecipeStatus.FLAGGED
+    assert (await store.get(pinned.recipe_id)).status is StudioRecipeStatus.PUBLISHED
+    assert (await store.get(missing.recipe_id)).status is StudioRecipeStatus.FLAGGED
+    assert (await store.get(malformed.recipe_id)).status is StudioRecipeStatus.FLAGGED
+    assert (await store.get(invalid.recipe_id)).status is StudioRecipeStatus.FLAGGED
+    assert (await store.get(binary.recipe_id)).status is StudioRecipeStatus.FLAGGED
+    assert (await store.get(unknown_pack.recipe_id)).status is StudioRecipeStatus.FLAGGED
+    assert {
+        legacy_niem.recipe_id,
+        missing.recipe_id,
+        malformed.recipe_id,
+        invalid.recipe_id,
+        binary.recipe_id,
+        unknown_pack.recipe_id,
+    } <= set(flagged)
+    assert pinned.recipe_id not in flagged
+
+
+async def test_publish_with_pack_versions_none_is_refused(store: StudioRecipeStore) -> None:
+    draft = await _verified_draft(store, label="Not pinned")
+    with pytest.raises(ValueError, match="pack_versions"):
+        await store.publish(
+            draft.recipe_id,
+            AUTHOR,
+            ontology_version=_CORE_VERSION,
+            pack_versions=None,  # type: ignore[arg-type]
+            git_path="recipes/x.yaml",
+            schedule_cron=None,
+            schedule_watch=None,
+            now=datetime(2026, 1, 2, tzinfo=UTC),
+        )
+    assert (await store.get(draft.recipe_id)).status is StudioRecipeStatus.DRAFT
+
+
+async def test_reconcile_recipe_pins_writes_nothing_under_the_recipe_root(
+    store: StudioRecipeStore, tmp_path: Path
+) -> None:
+    from services.api.studio_recipes import recipe_reader, reconcile_recipe_pins
+
+    from ontology.packs import load_deployment_ontology
+
+    root = tmp_path / "recipes-repo"
+    (root / "recipes").mkdir(parents=True)
+    _write_legacy_recipe(root / "recipes", "legacy-niem", pack="niem")
+    row = await _published_with_pins(store, "Legacy", {}, git_path="recipes/legacy-niem.yaml")
+    await _unpin(store, row.recipe_id)
+
+    def snapshot() -> dict[str, tuple[bytes, int]]:
+        return {
+            str(path.relative_to(root)): (path.read_bytes(), path.stat().st_mtime_ns)
+            for path in sorted(root.rglob("*"))
+            if path.is_file()
+        }
+
+    before = snapshot()
+    await reconcile_recipe_pins(store, load_deployment_ontology(), recipe_reader(root))
+
+    assert (await store.get(row.recipe_id)).pack_versions == {"niem": 2}, "the row was not stamped"
+    assert snapshot() == before
+
+
+async def test_a_non_object_pack_versions_value_reads_as_unpinned_and_does_not_break_flagging(
+    store: StudioRecipeStore, tmp_path: Path
+) -> None:
+    """A JSON `null` or array in the column is treated exactly as SQL NULL (ADR-120 Amendment 3):
+    read as `None`, and stamped by the backfill as a legacy row. Red if the read or `flag_stale`
+    crashes on it (the Conduit would not start), if it is read as a pin, or if the backfill leaves
+    it unstamped so it is never judged."""
+    from uuid import uuid4
+
+    from services.api.studio_recipes import reconcile_recipe_pins
+
+    from ontology.packs import load_deployment_ontology
+
+    null_row = await _published_with_pins(
+        store, "JSON null", {}, git_path=f"legacy/json-null-{uuid4().hex[:8]}.yaml"
+    )
+    array_row = await _published_with_pins(
+        store, "JSON array", {}, git_path=f"legacy/json-array-{uuid4().hex[:8]}.yaml"
+    )
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        await conn.execute(
+            "UPDATE studio_recipes SET pack_versions = 'null'::jsonb WHERE recipe_id = $1",
+            null_row.recipe_id,
+        )
+        await conn.execute(
+            "UPDATE studio_recipes SET pack_versions = '[1]'::jsonb WHERE recipe_id = $1",
+            array_row.recipe_id,
+        )
+
+    assert (await store.get(null_row.recipe_id)).pack_versions is None
+    assert (await store.get(array_row.recipe_id)).pack_versions is None
+    await store.flag_stale(_CORE_VERSION, _ALL_PACKS)  # does not raise
+    for row in (null_row, array_row):
+        assert (await store.get(row.recipe_id)).status is StudioRecipeStatus.PUBLISHED
+
+    def read_recipe(git_path: str) -> Recipe | None:
+        return _write_legacy_recipe(tmp_path, "no-pack", pack=None)
+
+    await reconcile_recipe_pins(store, load_deployment_ontology(), read_recipe)
+
+    for row in (null_row, array_row):
+        stamped = await store.get(row.recipe_id)
+        assert stamped.pack_versions == {}
+        assert stamped.status is StudioRecipeStatus.PUBLISHED
+
+
+async def test_the_backfill_leaves_a_row_superseded_while_it_was_being_read_unchanged(
+    store: StudioRecipeStore, tmp_path: Path
+) -> None:
+    """The backfill reads a recipe's file between choosing the row and stamping it, and a row can
+    be superseded in that gap (a new version opened). Red if the stamp is written on the strength
+    of the earlier read, giving a superseded row pins, or flags or reopens it."""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    from uuid import uuid4
+
+    import asyncpg
+    from services.api.config import PostgresConfig
+
+    from ontology.packs import load_deployment_ontology
+
+    path = f"legacy/superseded-mid-read-{uuid4().hex[:8]}.yaml"
+    row = await _published_with_pins(store, "Superseded mid-read", {}, git_path=path)
+    await _unpin(store, row.recipe_id)
+
+    async def supersede() -> None:
+        conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+        try:
+            await conn.execute(
+                "UPDATE studio_recipes SET status = $1 WHERE recipe_id = $2",
+                StudioRecipeStatus.SUPERSEDED.value,
+                row.recipe_id,
+            )
+        finally:
+            await conn.close()
+
+    def read_recipe(git_path: str) -> Recipe | None:
+        if git_path == path:
+            # The callback is synchronous, so the other writer runs on its own loop and thread.
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(lambda: asyncio.run(supersede())).result(timeout=20)
+        return _write_legacy_recipe(tmp_path, "no-pack", pack=None)
+
+    await store.backfill_pack_versions(read_recipe, load_deployment_ontology())
+
+    after = await store.get(row.recipe_id)
+    assert after.status is StudioRecipeStatus.SUPERSEDED
+    assert after.pack_versions is None
+
+
+async def test_a_pin_object_with_a_non_integer_value_reads_as_unpinned_and_is_flagged_at_start_up(
+    store: StudioRecipeStore, tmp_path: Path
+) -> None:
+    """ADR-120 Amendment 3, decision 1: a pin object holding a value that is not an integer is not
+    a pin and not a legacy row either; it is read as `None` and start-up flags the row, leaving
+    the stored value as found. Red if `get` raises or reads it as a pin, if the backfill stamps
+    over it (hiding that something wrote it), or if the row is left published."""
+    import json
+    from uuid import uuid4
+
+    from services.api.studio_recipes import reconcile_recipe_pins
+
+    from ontology.packs import load_deployment_ontology
+
+    row = await _published_with_pins(
+        store, "Pin value not an integer", {}, git_path=f"legacy/bad-pin-{uuid4().hex[:8]}.yaml"
+    )
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        await conn.execute(
+            "UPDATE studio_recipes SET pack_versions = $1::jsonb WHERE recipe_id = $2",
+            json.dumps({"fibo": "x"}),
+            row.recipe_id,
+        )
+    assert (await store.get(row.recipe_id)).pack_versions is None
+
+    def read_recipe(git_path: str) -> Recipe | None:
+        return _write_legacy_recipe(tmp_path, "no-pack", pack=None)
+
+    flagged = await reconcile_recipe_pins(store, load_deployment_ontology(), read_recipe)
+
+    assert row.recipe_id in flagged
+    assert (await store.get(row.recipe_id)).status is StudioRecipeStatus.FLAGGED
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        stored = await conn.fetchval(
+            "SELECT pack_versions FROM studio_recipes WHERE recipe_id = $1", row.recipe_id
+        )
+    assert (json.loads(stored) if isinstance(stored, str) else stored) == {"fibo": "x"}
+
+
+async def test_a_pin_stored_as_a_numeric_string_is_flagged_at_start_up(
+    store: StudioRecipeStore, tmp_path: Path
+) -> None:
+    """ADR-120 Amendment 3, decision 1: a pin that is the string "1" is not the integer 1, though
+    FIBO's loaded version is 1 and a text comparison would match. Red if `get` reads it as a pin
+    (the row would then look current and never be flagged), or the backfill stamps over it."""
+    import json
+    from uuid import uuid4
+
+    from services.api.studio_recipes import reconcile_recipe_pins
+
+    from ontology.packs import load_deployment_ontology
+
+    row = await _published_with_pins(
+        store, "Pin is a numeric string", {}, git_path=f"legacy/string-pin-{uuid4().hex[:8]}.yaml"
+    )
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        await conn.execute(
+            "UPDATE studio_recipes SET pack_versions = $1::jsonb WHERE recipe_id = $2",
+            json.dumps({"fibo": "1"}),
+            row.recipe_id,
+        )
+    assert load_deployment_ontology().packs["fibo"] == 1, "the premise: the string matches as text"
+    assert (await store.get(row.recipe_id)).pack_versions is None
+
+    def read_recipe(git_path: str) -> Recipe | None:
+        return _write_legacy_recipe(tmp_path, "no-pack", pack=None)
+
+    flagged = await reconcile_recipe_pins(store, load_deployment_ontology(), read_recipe)
+
+    assert row.recipe_id in flagged
+    assert (await store.get(row.recipe_id)).status is StudioRecipeStatus.FLAGGED
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        stored = await conn.fetchval(
+            "SELECT pack_versions FROM studio_recipes WHERE recipe_id = $1", row.recipe_id
+        )
+    assert (json.loads(stored) if isinstance(stored, str) else stored) == {"fibo": "1"}
+
+
+async def test_a_pin_stored_as_a_decimal_one_is_flagged_at_start_up(
+    store: StudioRecipeStore, tmp_path: Path
+) -> None:
+    """ADR-120 Amendment 3, decision 1: a pin of 1.0 is not the integer 1. Postgres compares jsonb
+    numbers by value, so 1.0 equals FIBO's loaded 1 there and only the whole-number check on read
+    catches it. Red if `get` reads it as a pin (the row would look current), or the backfill
+    stamps over it. The stored text is compared, since Python reads 1.0 and 1 as equal."""
+    from uuid import uuid4
+
+    from services.api.studio_recipes import reconcile_recipe_pins
+
+    from ontology.packs import load_deployment_ontology
+
+    row = await _published_with_pins(
+        store, "Pin is a decimal one", {}, git_path=f"legacy/decimal-pin-{uuid4().hex[:8]}.yaml"
+    )
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        await conn.execute(
+            "UPDATE studio_recipes SET pack_versions = '{\"fibo\": 1.0}'::jsonb "
+            "WHERE recipe_id = $1",
+            row.recipe_id,
+        )
+    assert load_deployment_ontology().packs["fibo"] == 1, "the premise: 1.0 equals it by value"
+    assert (await store.get(row.recipe_id)).pack_versions is None
+
+    def read_recipe(git_path: str) -> Recipe | None:
+        return _write_legacy_recipe(tmp_path, "no-pack", pack=None)
+
+    flagged = await reconcile_recipe_pins(store, load_deployment_ontology(), read_recipe)
+
+    assert row.recipe_id in flagged
+    assert (await store.get(row.recipe_id)).status is StudioRecipeStatus.FLAGGED
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        stored = await conn.fetchval(
+            "SELECT pack_versions::text FROM studio_recipes WHERE recipe_id = $1", row.recipe_id
+        )
+    assert stored == '{"fibo": 1.0}'

@@ -79,6 +79,7 @@ from schemas.ingest import (
     RejectionRecord,
 )
 
+from .pipeline import recipe_packs
 from .recipe_rules import RecipeRuleError, check_recipe_rules, holds_content
 from .staging import ObjectStorageConfig, StagedEdge, StagedEntity, StagedRow
 from .staging import read_staged_rows as _read_staged_rows
@@ -103,12 +104,41 @@ class RowRejected(Exception):
 
 class StaleRecipeError(Exception):
     """Raised when a recipe's `ontology_version` no longer matches the
-    active ontology — `09_INGEST_STUDIO.md`: "An ontology change that
+    active ontology, or when a pack it names or writes is unpinned, absent from the ontology or
+    pinned at another version than the one the ontology carries (`check_recipe_pins`, ADR-120 D10
+    and Amendment 1) — `09_INGEST_STUDIO.md`: "An ontology change that
     invalidates a recipe flags it and blocks scheduled runs until someone
     opens it. Recipes never silently adapt." Whether *this particular*
     change actually invalidates the recipe is not evaluated — any version
     mismatch blocks, which is what makes the guard trustworthy rather than
     a judgement call re-litigated on every run."""
+
+
+def check_recipe_pins(recipe: Recipe, ontology: OntologySchema) -> None:
+    """Refuse a recipe whose pinned pack versions are not the ones the ontology carries
+    (`06_DECISIONS.md` ADR-120 D10, Amendment 1). The packs checked are those the recipe names and
+    those whose types its row template writes, read from the ontology it is handed; any other pin
+    a hand-written recipe carries is ignored. Called by `run_recipe` only: a draft's dry run,
+    Verify and Map are never pin-checked, since a draft is not yet pinned."""
+    packs = recipe_packs(recipe.pipeline, recipe.row_template, ontology)
+    if packs and recipe.pack_versions is None:
+        raise StaleRecipeError(
+            f"recipe {recipe.id!r} names or writes the pack(s) {', '.join(packs)} but is not "
+            "pinned to any pack version — open and republish the recipe before running it again"
+        )
+    pins = recipe.pack_versions or {}
+    for pack in packs:
+        if pack not in ontology.packs:
+            raise StaleRecipeError(
+                f"recipe {recipe.id!r} needs the pack {pack!r}, which the active ontology does "
+                "not carry — open and republish the recipe before running it again"
+            )
+        if pins.get(pack) != ontology.packs[pack]:
+            raise StaleRecipeError(
+                f"recipe {recipe.id!r} pins pack {pack!r} at version {pins.get(pack)}, but the "
+                f"active ontology carries version {ontology.packs[pack]} — open and republish "
+                "the recipe before running it again"
+            )
 
 
 def dedup_key(
@@ -1220,6 +1250,8 @@ async def run_recipe(
             f"active ontology is version {ontology.version} — open and re-publish the recipe "
             "before running it again"
         )
+    # ADR-120 D10, Amendment 1: the packs it names or writes, at the versions it was published at.
+    check_recipe_pins(recipe, ontology)
 
     # ADR-081 step D: refused again at run, before anything is written (Amendment 1 item 7).
     check_recipe_rules(recipe.row_template, ontology)

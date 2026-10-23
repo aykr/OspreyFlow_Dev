@@ -51,6 +51,7 @@ export interface OntologySchema {
   storage_aliases?: StorageAliases;
   overlay_revision?: OverlayRevision;
   packs?: Packs;
+  type_packs?: TypePacks;
   [k: string]: unknown;
 }
 export interface EntityTypeDef {
@@ -106,4 +107,7 @@ export interface StorageAliases {
 }
 export interface Packs {
   [k: string]: number;
+}
+export interface TypePacks {
+  [k: string]: string;
 }

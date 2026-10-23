@@ -55,6 +55,19 @@ def test_a_probabilistic_type_is_refused_by_name_with_the_reason() -> None:
     assert "LIKELY_KNOWS" in problem and "Probabilistic" in problem
 
 
+def test_a_recipe_naming_passes_items_to_is_refused() -> None:
+    """ADR-120 D8: `PASSES_ITEMS_TO` is a Probabilistic link of the NIEM pack, an inference from
+    the case and never a record a source makes. Red if a recipe can write it, so a loader would
+    assert as sourced fact what only an analyst or a model can infer."""
+    from services.ingest.recipe_rules import check_recipe_rules
+
+    from ontology.packs import load_deployment_ontology
+
+    with pytest.raises(RecipeRuleError, match="PASSES_ITEMS_TO") as refused:
+        check_recipe_rules(_template("PASSES_ITEMS_TO"), load_deployment_ontology())
+    assert "Probabilistic" in str(refused.value)
+
+
 def test_same_as_is_refused_since_a_source_never_records_a_resolution_match() -> None:
     (problem,) = recipe_rule_violations(_template("SAME_AS"), ONTOLOGY)
     assert "SAME_AS" in problem

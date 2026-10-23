@@ -258,6 +258,98 @@ def test_change_schedule_re_commits_the_recipe_with_its_new_time(
     assert committed == ["30 7 * * 1-5"]
 
 
+def test_an_admin_schedule_change_on_an_unpinned_row_is_saved_and_re_committed_without_pins(
+    client: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-120 Amendment 2, decision 2: the administrator's change of a schedule re-commits the
+    recipe with the pins the row holds, which for a row flagged before pinning are none. Red if the
+    route refuses it, or invents pins (`{}` or the current versions) that hide a pack bump."""
+    import subprocess
+
+    import services.api.app as app_module
+    from services.ingest.recipe_loader import load_recipe
+
+    from schemas.ingest import RecipeEntity, RowTemplate
+
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    built_with: list[object] = []
+    real_build = app_module.build_recipe
+
+    def recording_build(*args: Any, **kwargs: Any) -> Any:
+        built_with.append(kwargs.get("pack_versions", "not passed"))
+        return real_build(*args, **kwargs)
+
+    monkeypatch.setattr(app_module, "build_recipe", recording_build)
+    client.recipes.held[0] = client.recipes.held[0].model_copy(
+        update={
+            "row_template": RowTemplate(
+                entities=[RecipeEntity(ref="a", pole_class="object", type="Endpoint")]
+            ),
+            "connector_profile": "generic-csv",
+            "ontology_version": 1,
+            "git_path": "recipes/open.yaml",
+            "pack_versions": None,
+        }
+    )
+
+    response = client.put("/v1/admin/schedules/open", json={"cron": "30 7 * * 1-5"})
+
+    assert response.status_code == 200, response.text
+    assert client.recipes.held[0].schedule_cron == "30 7 * * 1-5"
+    assert built_with == [None]
+    committed = tmp_path / "recipes" / "open.yaml"
+    assert load_recipe(committed).pack_versions is None
+    assert "pack_versions" not in committed.read_text()
+
+
+def test_an_admin_schedule_change_through_the_route_carries_a_pinned_row_s_pins(
+    client: Any, tmp_path: Any
+) -> None:
+    """ADR-120 Amendment 2, decision 2, through the administrator's route rather than
+    `_commit_schedule` alone. The row pins `{"niem": 2}` on a recipe whose own mapping names no
+    pack, so recomputing would give `{}`. Red if the route recomputes the pins or drops them."""
+    import subprocess
+
+    from services.ingest.recipe_loader import load_recipe
+
+    from schemas.ingest import RecipeEntity, RowTemplate
+
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    client.recipes.held[0] = client.recipes.held[0].model_copy(
+        update={
+            "row_template": RowTemplate(
+                entities=[RecipeEntity(ref="a", pole_class="object", type="Endpoint")]
+            ),
+            "connector_profile": "generic-csv",
+            "ontology_version": 1,
+            "git_path": "recipes/open.yaml",
+            "pack_versions": {"niem": 2},
+        }
+    )
+
+    response = client.put("/v1/admin/schedules/open", json={"cron": "30 7 * * 1-5"})
+
+    assert response.status_code == 200, response.text
+    assert load_recipe(tmp_path / "recipes" / "open.yaml").pack_versions == {"niem": 2}
+
+
+def test_an_admin_schedule_change_on_a_row_with_no_mapping_is_saved(client: Any) -> None:
+    """A row with no `row_template` has nothing to re-commit, so it is retimed and nothing is
+    written. Red if the route tries to commit a recipe it has no mapping for, which would fail the
+    schedule change of a row that holds no mapping."""
+    assert client.recipes.held[0].row_template is None
+    assert client.recipes.held[0].pack_versions is None
+
+    response = client.put("/v1/admin/schedules/open", json={"cron": "30 7 * * 1-5"})
+
+    assert response.status_code == 200, response.text
+    assert client.recipes.held[0].schedule_cron == "30 7 * * 1-5"
+
+
 def test_a_watched_recipe_is_listed_with_its_watch_in_words(client: Any) -> None:
     """ADR-110 Amendment 4: a recipe run by its folder watch alone is a schedule too."""
     watched = client.recipes.held[0].model_copy(

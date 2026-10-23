@@ -651,13 +651,18 @@ async def _publish_recipe(
 
         ontology = load_default_ontology()
         built = build_recipe(
-            draft, ontology_version=ontology.version, schedule_cron=None, schedule_watch=None
+            draft,
+            ontology_version=ontology.version,
+            pack_versions={},
+            schedule_cron=None,
+            schedule_watch=None,
         )
         git_path = await write_and_commit_recipe(built, repo_root=git_repo)
         published = await store.publish(
             draft.recipe_id,
             PRINCIPAL,
             ontology_version=ontology.version,
+            pack_versions={},
             git_path=git_path,
             schedule_cron=None,
             schedule_watch=None,

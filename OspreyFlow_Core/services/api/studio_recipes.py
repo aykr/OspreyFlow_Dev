@@ -18,9 +18,10 @@ a published recipe for a further edit — the previous version is flipped to
 attribution on already-loaded elements keeps meaning what it said), and
 `flag_stale` — the reverse index `§6`'s opening paragraph promises: "an
 ontology edit flags every recipe that depends on the changed version." It is
-deliberately not a separate index structure; `status='published' AND
-ontology_version != :current` over this same table already answers "which
-recipes does this ontology version affect" in one statement, and
+deliberately not a separate index structure; `status='published'` with an
+`ontology_version` other than the current one, or a pinned pack (`pack_versions`,
+ADR-120 D10) at another version than the one loaded, over this same table already
+answers "which recipes does this ontology version affect" in one statement, and
 `create_new_version`'s own supersede step is what keeps that `WHERE
 status='published'` scan meaning "the one live version of this recipe", not
 every version that was ever published.
@@ -29,15 +30,21 @@ every version that was ever published.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import Protocol
 
 import asyncpg
+import yaml
+from services.ingest.pipeline import recipe_packs
+from services.ingest.recipe_loader import load_recipe
 
 from conduit_common.identity import new_id
-from schemas.domain import Principal
+from schemas.domain import OntologySchema, Principal
 from schemas.ingest import (
     PipelineGraph,
+    Recipe,
     RowTemplate,
     StudioRecipeDraft,
     StudioRecipeStatus,
@@ -74,7 +81,15 @@ ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_set_at TIMESTAMPTZ;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_case TEXT;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_paused BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_paused_reason TEXT;
+-- ADR-120 D10, Amendment 1: the pack versions it was published against; NULL until published
+-- (and for one published before pinning, until the start-up backfill stamps it).
+ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS pack_versions JSONB;
 """
+
+#: ADR-120 Amendment 1, decision 4: the versions the packs stood at when pinning began, which is
+#: what a recipe published before it was written against. Stamped by `backfill_pack_versions` and
+#: never changed, so a later bump reads as a bump.
+LEGACY_PACK_VERSIONS: dict[str, int] = {"niem": 2, "fibo": 1, "stix": 1}
 
 
 class StudioRecipeNotFoundError(Exception):
@@ -128,6 +143,28 @@ def _content_json(draft: StudioRecipeDraft, **overrides: object) -> str:
     return json.dumps(whole)
 
 
+def _pins_from_column(raw: object) -> dict[str, int] | None:
+    """The `pack_versions` column as a map: asyncpg hands JSONB back as text unless a codec is
+    set, and this pool sets none, as `content` above is read the same way. A value that is not a
+    JSON object (a `null`, a scalar, an array), or whose versions are not integers, is no pins at
+    all, exactly as SQL NULL (ADR-120 Amendment 3, decision 1; an object of that kind is flagged
+    by `flag_stale`, not re-stamped): nothing that reads the column can
+    be stopped by it."""
+    if raw is None:
+        return None
+    decoded = json.loads(raw) if isinstance(raw, str) else raw
+    if not isinstance(decoded, dict):
+        return None
+    pins: dict[str, int] = {}
+    for pack, version in decoded.items():
+        # A whole number only, as `flag_stale`'s `p.v::text ~ '^[0-9]+$'` reads it: not a bool, a
+        # float (a JSON `1.0`), a string or a negative.
+        if not isinstance(version, int) or isinstance(version, bool) or version < 0:
+            return None
+        pins[str(pack)] = version
+    return pins
+
+
 def _row_to_draft(row: asyncpg.Record) -> StudioRecipeDraft:
     data = dict(row)
     content = json.loads(data.pop("content"))
@@ -160,6 +197,7 @@ def _row_to_draft(row: asyncpg.Record) -> StudioRecipeDraft:
         else None,
         verified_at=data["verified_at"],
         ontology_version=data["ontology_version"],
+        pack_versions=_pins_from_column(data.get("pack_versions")),
         git_path=data["git_path"],
         published_by=data["published_by"],
         published_at=data["published_at"],
@@ -408,6 +446,7 @@ class StudioRecipeStore:
         principal: Principal,
         *,
         ontology_version: int,
+        pack_versions: dict[str, int],
         git_path: str,
         schedule_cron: str | None,
         schedule_watch: str | None,
@@ -420,7 +459,12 @@ class StudioRecipeStore:
         committed it at `git_path` by the time this is called — this
         method only flips the registry row, and is the single place that
         enforces "Verify must pass before publish" (§5) mechanically,
-        against `verified_at` rather than by re-running a dry run here."""
+        against `verified_at` rather than by re-running a dry run here. `pack_versions` has no
+        default and refuses `None` (ADR-120 Amendment 1, decision 5; Amendment 2, decision 3): a
+        fresh publish can never store "not pinned" and be mistaken for a legacy row by the next
+        start's backfill."""
+        if pack_versions is None:
+            raise ValueError("pack_versions is required to publish; pass {} for a recipe with none")
         draft = await self.get_authorized(recipe_id, principal)
         if draft.status is not StudioRecipeStatus.DRAFT:
             raise StudioRecipeNotADraftError(recipe_id)
@@ -431,7 +475,8 @@ class StudioRecipeStore:
                 "UPDATE studio_recipes SET status = $1, ontology_version = $2, git_path = $3, "
                 "published_by = $4, published_at = $5, schedule_cron = $6, schedule_watch = $7, "
                 "schedule_timezone = $10, schedule_owner = $11, schedule_set_at = $12, "
-                "schedule_case = $13, schedule_paused = FALSE, schedule_paused_reason = NULL "
+                "schedule_case = $13, schedule_paused = FALSE, schedule_paused_reason = NULL, "
+                "pack_versions = $14::jsonb "
                 "WHERE recipe_id = $8 AND version = $9",
                 StudioRecipeStatus.PUBLISHED.value,
                 ontology_version,
@@ -446,6 +491,7 @@ class StudioRecipeStore:
                 principal.id if (schedule_cron or schedule_watch) else None,
                 now if (schedule_cron or schedule_watch) else None,
                 schedule_case if (schedule_cron or schedule_watch) else None,
+                json.dumps(pack_versions),
             )
         return await self.get(recipe_id)
 
@@ -591,7 +637,9 @@ class StudioRecipeStore:
                 )
         return await self.get(recipe_id)
 
-    async def flag_stale(self, current_ontology_version: int) -> list[str]:
+    async def flag_stale(
+        self, current_ontology_version: int, current_pack_versions: dict[str, int]
+    ) -> list[str]:
         """The reverse index `09_INGEST_STUDIO.md` §6 promises: run once
         whenever the ontology reloads (`services/api/app.py`'s `lifespan`
         — this deployment's only "reload" trigger today is a process
@@ -602,14 +650,126 @@ class StudioRecipeStore:
         guarantees at most one version of a given `recipe_id` is ever
         `published` at a time — an older version is `superseded` the
         moment a newer one is opened, never left `published` alongside it.
-        Returns the flagged `recipe_id`s, for the caller to log/audit."""
+        A recipe is also flagged when any pack it pins is at another version, or no longer
+        loaded, than `current_pack_versions` (ADR-120 D10); a row with no pins is never flagged on
+        packs, only on the core version. One statement, so the two tests cannot disagree about
+        which rows they saw. An object with a pinned value that is not a JSON whole number
+        (`"1"`, `1.5`, `true`) is flagged too, however it reads against the loaded version
+        (ADR-120 Amendment 3, decision 1). Returns the flagged `recipe_id`s, for the caller to
+        log/audit."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "UPDATE studio_recipes SET status = $1 "
-                "WHERE status = $2 AND ontology_version IS NOT NULL "
-                "AND ontology_version != $3 RETURNING recipe_id",
+                "WHERE status = $2 AND ("
+                "(ontology_version IS NOT NULL AND ontology_version != $3) "
+                "OR (pack_versions IS NOT NULL AND jsonb_typeof(pack_versions) = 'object' "
+                "AND EXISTS ("
+                "SELECT 1 FROM jsonb_each(pack_versions) AS p(k, v) "
+                "WHERE jsonb_typeof(p.v) <> 'number' OR p.v::text !~ '^[0-9]+$' "
+                "OR ($4::jsonb -> p.k) IS DISTINCT FROM p.v))"
+                ") RETURNING recipe_id",
                 StudioRecipeStatus.FLAGGED.value,
                 StudioRecipeStatus.PUBLISHED.value,
                 current_ontology_version,
+                json.dumps(current_pack_versions),
             )
         return [row["recipe_id"] for row in rows]
+
+    async def backfill_pack_versions(
+        self,
+        read_recipe: Callable[[str], Recipe | None],
+        ontology: OntologySchema,
+    ) -> list[str]:
+        """Stamp the pins of every published recipe that has none (ADR-120 Amendment 1, decisions
+        4 and 6): each is read from its committed file and given the legacy version of every pack
+        it names or writes (`{}` when it names and writes none, so it is not read again at the
+        next start). A recipe whose file cannot be read, or that names or writes a pack with no
+        legacy version, is flagged, never stamped with a guess, and its id returned. Only
+        published rows with no pins are read (a column holding a JSON value that is not an object
+        counts as none, ADR-120 Amendment 3); any other row is left exactly as it is. No row lock
+        is held while a file is read, so each write re-checks that its row is still published and
+        unpinned, and a row superseded or pinned meanwhile is left unchanged."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT recipe_id, version, git_path FROM studio_recipes "
+                "WHERE status = $1 AND (pack_versions IS NULL "
+                "OR jsonb_typeof(pack_versions) <> 'object') ORDER BY recipe_id, version",
+                StudioRecipeStatus.PUBLISHED.value,
+            )
+        flagged: list[str] = []
+        for row in rows:
+            git_path = row["git_path"]
+            recipe = read_recipe(git_path) if isinstance(git_path, str) else None
+            pins: dict[str, int] | None = None
+            if recipe is not None:
+                packs = recipe_packs(recipe.pipeline, recipe.row_template, ontology)
+                if all(pack in LEGACY_PACK_VERSIONS for pack in packs):
+                    pins = {pack: LEGACY_PACK_VERSIONS[pack] for pack in packs}
+            async with self._pool.acquire() as conn:
+                if pins is None:
+                    # A file that cannot be read, or a pack with no legacy version: no guess.
+                    done = await conn.execute(
+                        "UPDATE studio_recipes SET status = $1 "
+                        "WHERE recipe_id = $2 AND version = $3 AND status = $4 "
+                        "AND (pack_versions IS NULL OR jsonb_typeof(pack_versions) <> 'object')",
+                        StudioRecipeStatus.FLAGGED.value,
+                        row["recipe_id"],
+                        row["version"],
+                        StudioRecipeStatus.PUBLISHED.value,
+                    )
+                    if done.endswith(" 1"):
+                        flagged.append(row["recipe_id"])
+                    continue
+                await conn.execute(
+                    "UPDATE studio_recipes SET pack_versions = $1::jsonb "
+                    "WHERE recipe_id = $2 AND version = $3 AND status = $4 "
+                    "AND (pack_versions IS NULL OR jsonb_typeof(pack_versions) <> 'object')",
+                    json.dumps(pins),
+                    row["recipe_id"],
+                    row["version"],
+                    StudioRecipeStatus.PUBLISHED.value,
+                )
+        return flagged
+
+
+class _PinStore(Protocol):
+    """What `reconcile_recipe_pins` needs of the registry; the real store satisfies it."""
+
+    def backfill_pack_versions(
+        self, read_recipe: Callable[[str], Recipe | None], ontology: OntologySchema
+    ) -> Awaitable[list[str]]: ...
+
+    def flag_stale(
+        self, current_ontology_version: int, current_pack_versions: dict[str, int]
+    ) -> Awaitable[list[str]]: ...
+
+
+async def reconcile_recipe_pins(
+    store: _PinStore,
+    ontology: OntologySchema,
+    read_recipe: Callable[[str], Recipe | None],
+) -> list[str]:
+    """Start-up's one step (ADR-120 Amendment 1, decision 6): stamp the legacy recipes' pins,
+    then flag every published recipe whose core version or pinned packs differ from the ontology
+    in force. Stamping first matters: a row with no pins is not flagged on packs, so flagging
+    first would leave a legacy NIEM recipe published past a bump. Returns every id flagged by
+    either pass, once each."""
+    unreadable = await store.backfill_pack_versions(read_recipe, ontology)
+    stale = await store.flag_stale(ontology.version, ontology.packs)
+    return list(dict.fromkeys([*unreadable, *stale]))
+
+
+def recipe_reader(repo_root: Path) -> Callable[[str], Recipe | None]:
+    """Reads a recipe from the recipe repository by its row's `git_path`; a missing, unreadable
+    or malformed file is `None`, which the backfill takes as "flag it" (ADR-120 Amendment 1,
+    decision 6). A file that is not text (`UnicodeDecodeError`) or any other `ValueError` from
+    reading it is unreadable too, so a bad row can never stop the start-up (the same rule)."""
+
+    def read(git_path: str) -> Recipe | None:
+        try:
+            return load_recipe(repo_root / git_path)
+        except (OSError, ValueError, yaml.YAMLError):
+            # `ValueError` covers `UnicodeDecodeError` and pydantic's `ValidationError`.
+            return None
+
+    return read

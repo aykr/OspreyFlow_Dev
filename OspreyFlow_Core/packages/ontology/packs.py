@@ -9,9 +9,12 @@ Accounts to `TRANSACTED`'s ends; STIX adds SDOs to `USES`'); everything else abo
 type stays the core's. The composed schema then passes the loader's own checks (channel-and-shape
 uniqueness, endpoint names), so a pack cannot smuggle in what `default.yaml` could not declare.
 The composed version stays the core's; the composed schema also carries each pack's
-`pack_version` (`OntologySchema.packs`), which a published recipe is to pin beside
-`ontology_version`, so that a pack bump is to flag the recipes naming that pack as a core bump
-flags every recipe (ADR-120 D10; the pinning and flagging are a later unit).
+`pack_version` (`OntologySchema.packs`) and which pack defines each type it adds
+(`OntologySchema.type_packs`, a type a pack only widens excluded). A published recipe pins, beside
+`ontology_version`, every pack it names and every pack whose types it writes ("names or writes",
+ADR-120 Amendment 1), and a pack bump flags those recipes as a core bump flags every recipe; the
+pinning (publish and the start-up backfill), the engine's refusal of a stale pin and the flagging
+are built (ADR-120 D10, Amendments 1 to 3).
 """
 
 from __future__ import annotations
@@ -47,6 +50,7 @@ def compose_with_packs(base: OntologySchema, packs: list[str]) -> OntologySchema
     entity_types = list(base.entity_types)
     edge_types = list(base.edge_types)
     versions = {**base.packs}
+    type_packs = {**base.type_packs}
     for name in packs:
         raw = load_pack(name)
         declared = raw.get("pack_version")
@@ -60,6 +64,7 @@ def compose_with_packs(base: OntologySchema, packs: list[str]) -> OntologySchema
                     f"pack '{name}' defines entity type '{entry['name']}', which already exists"
                 )
             entity_types.append(EntityTypeDef.model_validate(entry))
+            type_packs[entry["name"]] = name
             known_entities.add(entry["name"])
         edges_by_name = {e.name: e for e in edge_types}
         for entry in raw.get("edge_types") or []:
@@ -92,11 +97,16 @@ def compose_with_packs(base: OntologySchema, packs: list[str]) -> OntologySchema
             defined = EdgeTypeDef.model_validate(entry)
             edge_types.append(defined)
             edges_by_name[defined.name] = defined
+            type_packs[defined.name] = name
 
     _check_entity_types(entity_types)
     _check_edge_endpoints(entity_types, edge_types)
     return OntologySchema(
-        version=base.version, entity_types=entity_types, edge_types=edge_types, packs=versions
+        version=base.version,
+        entity_types=entity_types,
+        edge_types=edge_types,
+        packs=versions,
+        type_packs=type_packs,
     )
 
 

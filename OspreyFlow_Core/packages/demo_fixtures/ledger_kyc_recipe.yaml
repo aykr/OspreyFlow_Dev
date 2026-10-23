@@ -7,6 +7,7 @@ label: "Operation Ledger — KYC customer list"
 connector:
   profile: ledger-fixture-generic
 ontology_version: 16
+pack_versions: {fibo: 1}
 
 defaults:
   provenance: {state: asserted}

@@ -27,6 +27,7 @@ import csv
 import functools
 import io
 import json
+import logging
 import os
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -552,6 +553,8 @@ from .studio_publish import (
     GitCommitError,
     RecipeNotRunnableError,
     build_recipe,
+    load_published_recipe,
+    pack_versions_for,
     run_published_recipe,
     write_and_commit_recipe,
 )
@@ -561,6 +564,8 @@ from .studio_recipes import (
     StudioRecipeNotFoundError,
     StudioRecipeNotVerifiedError,
     StudioRecipeStore,
+    recipe_reader,
+    reconcile_recipe_pins,
 )
 from .studio_verify import RowTemplateMissingError, run_verify
 from .supersede import JOB_TYPE_SUPERSEDE_NODE, run_supersede_node_job
@@ -627,6 +632,8 @@ from .working_set.models import (
 from .working_set.service import WorkingSetService
 from .working_set.store import ValkeyWorkingSetStore
 from .ws_ticket import WsTicketResponse, mint_ws_ticket, redeem_ws_ticket
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -701,8 +708,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # only "ontology reload" trigger today is a process restart after a new
     # `packages/ontology/default.yaml` ships — there is no live-reload admin
     # action yet (Phase 8's own territory) — so this is that routine, run
-    # once, right after the ontology this process will serve is known.
-    await studio_recipes.flag_stale(ontology.version)
+    # once, right after the ontology this process will serve is known. ADR-120 Amendment 1,
+    # decision 6: it also stamps the pack pins of a recipe published before pinning (read from its
+    # committed file under the recipe repository root a publish writes to), and flags a recipe
+    # whose pinned packs are no longer the ones this process composes.
+    flagged_at_start = await reconcile_recipe_pins(
+        studio_recipes, ontology, recipe_reader(_RECIPES_REPO_ROOT)
+    )
+    if flagged_at_start:
+        logger.warning(
+            "start-up flagged %d published recipe(s) as stale: %s",
+            len(flagged_at_start),
+            ", ".join(flagged_at_start),
+        )
 
     # The store `components.analytics_engine` names (ADR-114 decision 9): a DuckDB file on a
     # single machine, ClickHouse where Conduits are replicated. `analytics_store.py` refuses any
@@ -6894,9 +6912,19 @@ async def publish_studio_recipe(
                 status_code=422,
                 content={"error": "pipeline_not_runnable", "problems": unrunnable},
             )
+    # ADR-120 D10, Amendment 1: the pins come from the live ontology, for the packs the recipe
+    # names and the packs whose types it writes.
+    assert recipe.row_template is not None
+    try:
+        pins = pack_versions_for(recipe.pipeline, recipe.row_template, ontology)
+    except ValueError as error:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422, content={"error": "pack_not_composed", "message": str(error)}
+        )
     built = build_recipe(
         recipe,
         ontology_version=ontology.version,
+        pack_versions=pins,
         schedule_cron=body.schedule_cron,
         schedule_watch=body.schedule_watch,
     )
@@ -6909,6 +6937,7 @@ async def publish_studio_recipe(
         recipe.recipe_id,
         principal,
         ontology_version=ontology.version,
+        pack_versions=pins,
         git_path=git_path,
         schedule_cron=body.schedule_cron,
         schedule_watch=body.schedule_watch,
@@ -6934,7 +6963,6 @@ async def update_studio_recipe_schedule(
     recipe: AuthorizedStudioRecipeDep,
     principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
     studio_recipes: StudioRecipesDep,
-    ontology: OntologyDep,
     repo_root: RecipesRepoRootDep,
     audit: AuditDep,
     body: ScheduleUpdateInput,
@@ -6946,7 +6974,9 @@ async def update_studio_recipe_schedule(
     mapping itself is unchanged.
 
     ADR-110 decision 7: a schedule it could not keep is refused in words before anything is saved,
-    and whoever sets it becomes its owner (decision 3)."""
+    and whoever sets it becomes its owner (decision 3). ADR-120 Amendment 2, decision 2: the
+    re-commit carries the row's pins as stored, none included, and a mapped row with no core
+    version is saved without one, as the administrator's route does."""
     if body.schedule_cron is not None:
         validate_schedule(body.schedule_cron, body.schedule_timezone or DEFAULT_TIMEZONE)
     if body.schedule_watch is not None:
@@ -6959,14 +6989,7 @@ async def update_studio_recipe_schedule(
         schedule_timezone=body.schedule_timezone,
         schedule_case=investigation.id,
     )
-    assert updated.row_template is not None and updated.ontology_version is not None
-    built = build_recipe(
-        updated,
-        ontology_version=updated.ontology_version,
-        schedule_cron=body.schedule_cron,
-        schedule_watch=body.schedule_watch,
-    )
-    await write_and_commit_recipe(built, repo_root=repo_root)
+    await _commit_schedule(updated, repo_root)
     await audit.record(
         principal=principal,
         action="update_studio_recipe_schedule",
@@ -8166,7 +8189,7 @@ async def release_held_rows_route(
     load_id = new_id()
     report = await release_held_rows(
         held,
-        load_recipe(repo_root / recipe.git_path),
+        load_published_recipe(recipe, repo_root),
         principal,
         graph=graph,
         ontology=ontology,
@@ -8769,12 +8792,14 @@ async def run_schedule_now_route(
 
 async def _commit_schedule(recipe: StudioRecipeDraft, repo_root: Path) -> None:
     """The recipe repository stays the record of a schedule too (`update_studio_recipe_schedule`):
-    the recipe's YAML re-committed at its own path, the mapping and version unchanged."""
+    the recipe's YAML re-committed at its own path, the mapping and version unchanged, and the pins
+    the row holds exactly as stored, none included (ADR-120 Amendment 2, decision 2)."""
     if recipe.row_template is None or recipe.ontology_version is None:
         return
     built = build_recipe(
         recipe,
         ontology_version=recipe.ontology_version,
+        pack_versions=recipe.pack_versions,
         schedule_cron=recipe.schedule_cron,
         schedule_watch=recipe.schedule_watch,
     )

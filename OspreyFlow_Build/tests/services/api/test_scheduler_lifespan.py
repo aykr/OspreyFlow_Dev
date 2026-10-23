@@ -39,13 +39,15 @@ async def _schedule_a_due_recipe() -> str:
     conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
     try:
         now = datetime.now(UTC)
+        # (ADR-120 Amendment 1: a pinned row, so start-up's reconcile leaves it published)
         await conn.execute(
             "INSERT INTO studio_recipes (recipe_id, version, ontology_version, label, status, "
             "content, git_path, owning_unit, created_by, published_by, schedule_cron, created_at, "
-            "published_at, schedule_owner, schedule_set_at, schedule_case, schedule_timezone) "
+            "published_at, schedule_owner, schedule_set_at, schedule_case, schedule_timezone, "
+            "pack_versions) "
             "VALUES ($1, 1, $5, 'Lifespan check', 'published', $2, 'recipes/x.yaml', 'unit-1', "
             "'author-1', 'approver-1', '*/15 * * * *', $3, $3, 'approver-1', $4, 'case-1', "
-            "'Europe/London')",
+            "'Europe/London', '{}')",
             recipe_id,
             json.dumps({"handling": HANDLING}),
             now,

@@ -105,7 +105,11 @@ def test_a_layouts_declared_date_order_survives_publish() -> None:
     assert profile.date_order == "dmy", "fixture precondition: the profile declares an order"
 
     recipe = build_recipe(
-        _draft("cdr-generic-csv"), ontology_version=1, schedule_cron=None, schedule_watch=None
+        _draft("cdr-generic-csv"),
+        ontology_version=1,
+        pack_versions={},
+        schedule_cron=None,
+        schedule_watch=None,
     )
 
     assert recipe.connector.date_order == "dmy"
@@ -138,13 +142,23 @@ def test_publish_refuses_a_draft_with_no_connector_profile() -> None:
     reached Publish without a connector was published as a plain comma-separated file with no date
     order. Refused by name now; there is no default connector."""
     with pytest.raises(ConnectorNotAvailableError):
-        build_recipe(_draft(None), ontology_version=1, schedule_cron=None, schedule_watch=None)
+        build_recipe(
+            _draft(None),
+            ontology_version=1,
+            pack_versions={},
+            schedule_cron=None,
+            schedule_watch=None,
+        )
 
 
 def test_publish_refuses_a_connector_with_no_profile_file() -> None:
     with pytest.raises(ConnectorNotAvailableError):
         build_recipe(
-            _draft("no-such-carrier"), ontology_version=1, schedule_cron=None, schedule_watch=None
+            _draft("no-such-carrier"),
+            ontology_version=1,
+            pack_versions={},
+            schedule_cron=None,
+            schedule_watch=None,
         )
 
 

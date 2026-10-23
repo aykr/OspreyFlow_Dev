@@ -182,14 +182,26 @@ async def _publish_pipeline(
     draft = await store.update_pipeline(draft.recipe_id, AUTHOR, pipeline=pipeline)
     await store.mark_verified(draft.recipe_id, draft.version, now=datetime.now(UTC))
     draft = await store.get(draft.recipe_id)
+    from services.api.studio_publish import pack_versions_for
+
+    from ontology.packs import load_deployment_ontology
+
+    # What the publish route stamps (ADR-120 Amendment 1): the packs the pipeline names and the
+    # packs whose types the row template writes, at the versions the deployment carries.
+    pack_versions = pack_versions_for(pipeline, row_template, load_deployment_ontology())
     built = build_recipe(
-        draft, ontology_version=ontology_version, schedule_cron=None, schedule_watch=None
+        draft,
+        ontology_version=ontology_version,
+        pack_versions=pack_versions,
+        schedule_cron=None,
+        schedule_watch=None,
     )
     git_path = await write_and_commit_recipe(built, repo_root=git_repo)
     return await store.publish(
         draft.recipe_id,
         APPROVER,
         ontology_version=ontology_version,
+        pack_versions=pack_versions,
         git_path=git_path,
         schedule_cron=None,
         schedule_watch=None,

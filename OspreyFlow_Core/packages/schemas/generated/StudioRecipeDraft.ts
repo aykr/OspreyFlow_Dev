@@ -53,6 +53,9 @@ export type Note = string | null;
 export type UnmappedFields = UnmappedField[];
 export type VerifiedAt = string | null;
 export type OntologyVersion = number | null;
+export type PackVersions = {
+  [k: string]: number;
+} | null;
 export type GitPath = string | null;
 export type PublishedByName = string | null;
 export type PublishedAt = string | null;
@@ -100,6 +103,7 @@ export interface StudioRecipeDraft {
   unmapped_fields?: UnmappedFields;
   verified_at?: VerifiedAt;
   ontology_version?: OntologyVersion;
+  pack_versions?: PackVersions;
   git_path?: GitPath;
   published_by?: PrincipalId | null;
   published_by_name?: PublishedByName;

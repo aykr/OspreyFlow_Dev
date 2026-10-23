@@ -25,6 +25,7 @@ from pathlib import Path
 import yaml
 from services.ingest.engine import recipe_handlings, run_recipe
 from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
+from services.ingest.pipeline import recipe_packs
 from services.ingest.recipe_loader import load_recipe
 
 from ontology.handling import merge_handling
@@ -35,8 +36,10 @@ from schemas.analytics import EventRecord
 from schemas.domain import EdgeWrite, NodeWrite, OntologySchema, Principal
 from schemas.ingest import (
     LoadReport,
+    PipelineGraph,
     Recipe,
     RecipeDefaults,
+    RowTemplate,
     ScheduleConfig,
     StudioRecipeDraft,
     StudioRecipeStatus,
@@ -50,7 +53,9 @@ __all__ = [
     "GitCommitError",
     "RecipeNotRunnableError",
     "build_recipe",
+    "load_published_recipe",
     "load_with_rules",
+    "pack_versions_for",
     "recipe_git_relative_path",
     "run_published_recipe",
     "serialise_recipe",
@@ -107,10 +112,28 @@ class RecipeNotRunnableError(Exception):
         )
 
 
+def pack_versions_for(
+    pipeline: PipelineGraph | None, row_template: RowTemplate, ontology: OntologySchema
+) -> dict[str, int]:
+    """The pins a publish stamps (`06_DECISIONS.md` ADR-120 D10, Amendment 1): each pack the
+    pipeline names or whose types the row template writes, at the version the loaded ontology
+    carries. `{}` for a recipe that names and writes none. A pack the ontology does not carry is
+    refused by name rather than dropped, since the recipe could never run."""
+    pins: dict[str, int] = {}
+    for pack in recipe_packs(pipeline, row_template, ontology):
+        if pack not in ontology.packs:
+            raise ValueError(
+                f"the recipe needs the pack {pack!r}, which the loaded ontology does not carry"
+            )
+        pins[pack] = ontology.packs[pack]
+    return pins
+
+
 def build_recipe(
     draft: StudioRecipeDraft,
     *,
     ontology_version: int,
+    pack_versions: dict[str, int] | None,
     schedule_cron: str | None,
     schedule_watch: str | None,
 ) -> Recipe:
@@ -120,7 +143,11 @@ def build_recipe(
     `StudioRecipeStore.publish` has already confirmed `verified_at` is
     set, which itself implies a row template exists (Verify cannot run
     without one, `services/api/studio_verify.py`'s own
-    `RowTemplateMissingError`)."""
+    `RowTemplateMissingError`).
+
+    `pack_versions` has no default and may be `None` (ADR-120 Amendment 2, decision 3): a
+    re-commit passes the row's pins exactly as stored, none included; a fresh publish always
+    passes a map, and the store's `publish` refuses `None`."""
     assert draft.row_template is not None
     schedule = (
         ScheduleConfig(cron=schedule_cron, watch=schedule_watch)
@@ -135,6 +162,7 @@ def build_recipe(
         # `date_order` survives Publish. See `studio_profile.connector_for`.
         connector=connector_for(draft),
         ontology_version=ontology_version,
+        pack_versions=pack_versions,
         defaults=RecipeDefaults(
             handling=draft.handling, provenance={}, legal_basis=draft.legal_basis
         ),
@@ -145,6 +173,19 @@ def build_recipe(
         # is provably against what was published. `None` for a v1 draft — its YAML is unchanged.
         pipeline=draft.pipeline,
     )
+
+
+def load_published_recipe(row: StudioRecipeDraft, repo_root: Path) -> Recipe:
+    """The committed recipe of a published Studio row, with the row's pins when the file has none
+    (`06_DECISIONS.md` ADR-120 Amendment 2, decision 1). A file committed before pinning carries no
+    `pack_versions`, while the backfill stamps the registry row; a run that read the file alone
+    would be refused by the engine for a recipe whose row is pinned. Pins written in the file
+    always win. Every load of a published row's file in `services/api` goes through here."""
+    assert row.git_path is not None
+    recipe = load_recipe(repo_root / row.git_path)
+    if recipe.pack_versions is None and row.pack_versions is not None:
+        return recipe.model_copy(update={"pack_versions": dict(row.pack_versions)})
+    return recipe
 
 
 def serialise_recipe(recipe: Recipe) -> str:
@@ -265,7 +306,7 @@ async def run_published_recipe(
     if draft.status is not StudioRecipeStatus.PUBLISHED:
         raise RecipeNotRunnableError(draft.recipe_id, draft.status)
     assert draft.git_path is not None
-    recipe = load_recipe(repo_root / draft.git_path)
+    recipe = load_published_recipe(draft, repo_root)
 
     read_from = draft if source_location is None else draft.model_copy(
         update={"source_location": source_location}

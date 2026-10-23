@@ -370,6 +370,9 @@ class StudioRecipeDraft(BaseModel):
     #: later `PATCH .../schedule` may change without touching anything else.
     verified_at: datetime | None = None
     ontology_version: int | None = None
+    #: ADR-120 D10, Amendment 1: the pack versions it was published against. `None` = not pinned;
+    #: `{}` = pinned, names and writes no pack.
+    pack_versions: dict[str, int] | None = None
     git_path: str | None = None
     published_by: PrincipalId | None = None
     #: Resolved at read time, never stored (ADR-106).
@@ -679,6 +682,8 @@ class Recipe(BaseModel):
     label: str
     connector: RecipeConnector
     ontology_version: int
+    #: ADR-120 D10, Amendment 1: `None` = not pinned; `{}` = pinned, names and writes no pack.
+    pack_versions: dict[str, int] | None = None
     defaults: RecipeDefaults = Field(default_factory=RecipeDefaults)
     deduplicate: DeduplicateConfig | None = None
     row_template: RowTemplate

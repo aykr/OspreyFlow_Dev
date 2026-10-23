@@ -71,6 +71,7 @@ async def test_a_new_version_stays_in_its_recipes_dataset(store: StudioRecipeSto
         draft.recipe_id,
         _in(author, "fixture-corp"),
         ontology_version=1,
+        pack_versions={},
         git_path="recipes/x.yaml",
         schedule_cron=None,
         schedule_watch=None,

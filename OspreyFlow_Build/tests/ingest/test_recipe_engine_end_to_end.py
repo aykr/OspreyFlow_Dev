@@ -206,3 +206,278 @@ def test_preview_handling_and_provenance_needs_no_transaction() -> None:
     assert provenance.sources[0].document_id == "cdr.csv"
     assert provenance.sources[0].locator == "row 0"
     assert provenance.first_seen == now
+
+
+# --- Pack pins (ADR-120 D10, Amendment 1) -------------------------------------
+#
+# What each test checks, and the violation that fails it:
+# - `test_a_stale_pack_pin_is_refused`: a run proceeding against a pack whose version moved.
+# - `test_a_pinned_pack_the_ontology_lacks_is_refused`: a pin on a pack the loaded ontology does not
+#   carry being treated as unchanged (a `KeyError`, or a silent pass).
+# - `test_a_recipe_naming_a_pack_with_no_pin_is_refused`: an unpinned recipe naming a pack running
+#   (the legacy-recipe hole the pin exists to close).
+# - `test_a_recipe_pinning_the_loaded_version_runs`: the check refusing a recipe it should accept.
+# - `test_a_recipe_naming_no_pack_still_runs_unpinned`: the check demanding a pin of a recipe that
+#   names and writes no pack, which would break every existing recipe.
+# - `test_a_recipe_writing_fibo_types_under_the_core_is_refused_when_it_pins_nothing_for_fibo`: a
+#   recipe that writes a pack's types without naming the pack escaping the check, or an empty map
+#   or another pack's pin standing in for the pin that is missing.
+# - `test_a_recipe_writing_fibo_types_under_the_core_runs_when_pinned`: the check refusing a
+#   recipe whose written pack is pinned at the loaded version.
+# - `test_a_recipe_naming_no_pack_and_pinning_an_empty_map_runs_on_the_deployment_ontology`: an
+#   empty map being read as a pin that differs, for a recipe with nothing to pin.
+# - `test_an_extra_pin_is_ignored`: a pin on a pack the recipe neither names nor writes being
+#   checked, so a recipe is refused for a pack it does not use.
+# - `test_an_extra_pin_on_a_pack_the_ontology_lacks_is_ignored`: the same, for a pin that names a
+#   pack the ontology does not even carry (a `KeyError` on the lookup, or a refusal).
+# - `test_a_dry_run_of_an_unpinned_draft_writing_fibo_is_not_refused`: the pin check reaching
+#   Verify's dry run, which would make a draft impossible to verify before it can be published
+#   (a draft is not yet pinned).
+
+_COLUMNS = ["seq", "a_party", "b_party", "start_time", "duration", "direction"]
+_EMPTY_CDR = ",".join(_COLUMNS) + "\n"
+_ACCOUNT_TEMPLATE = {
+    "entities": [
+        {
+            "ref": "a",
+            "pole_class": "object",
+            "type": "Account",
+            "match_on": "account_number",
+            "on_match": "reference",
+            "properties": {"account_number": {"field": "iban"}},
+        }
+    ]
+}
+
+
+def _recipe_from_yaml(
+    tmp_path: Path,
+    *,
+    ontology_version: int,
+    pack_versions: dict[str, int] | None,
+    domain_pack: str | None = None,
+    row_template: dict[str, object] | None = None,
+):  # type: ignore[no-untyped-def]
+    """A recipe written to YAML and read back through `load_recipe`, as a published one is."""
+    import yaml
+
+    document = yaml.safe_load((FIXTURES / "cdr_recipe.yaml").read_text())
+    document["ontology_version"] = ontology_version
+    if row_template is not None:
+        document["row_template"] = row_template
+        document.pop("deduplicate", None)
+        document.pop("unmapped_fields", None)
+    if domain_pack is not None:
+        document["pipeline"] = {
+            "nodes": [
+                {
+                    "id": "domain",
+                    "kind": "domain_model",
+                    "label": "D",
+                    "config": {"pack": domain_pack},
+                }
+            ],
+            "edges": [],
+        }
+    if pack_versions is not None:
+        document["pack_versions"] = pack_versions
+    path = tmp_path / f"recipe-{len(list(tmp_path.glob('recipe-*.yaml')))}.yaml"
+    path.write_text(yaml.safe_dump(document))
+    return load_recipe(path)
+
+
+async def _run_against(recipe, ontology, csv_path: Path):  # type: ignore[no-untyped-def]
+    async with arcadedb_adapter(ontology, load_uk_le_scheme()) as graph:
+        tx = await graph.begin_transaction()
+        try:
+            report, _events = await run_recipe(
+                recipe,
+                read_csv(csv_path),
+                graph=graph,
+                ontology=ontology,
+                tx=tx,
+                principal=CLEARED,
+                load_id="load-pack-pin",
+                investigation_scope="case-cdr-fixture",
+                source=str(csv_path),
+            )
+        except BaseException:
+            await graph.rollback_transaction(tx)
+            raise
+        await graph.commit_transaction(tx)
+        return report
+
+
+def _empty_cdr_csv(tmp_path: Path) -> Path:
+    path = tmp_path / "empty.csv"
+    path.write_text(_EMPTY_CDR)
+    return path
+
+
+def _cdr_csv(tmp_path: Path) -> Path:
+    from demo_fixtures.cdr import generate_cdr_rows
+
+    path = tmp_path / "cdr.csv"
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=_COLUMNS)
+        writer.writeheader()
+        writer.writerows(generate_cdr_rows())
+    return path
+
+
+def _account_csv(tmp_path: Path) -> Path:
+    path = tmp_path / "accounts.csv"
+    path.write_text("iban\nGB00SYNTH00000001\n")
+    return path
+
+
+async def test_a_stale_pack_pin_is_refused(tmp_path: Path) -> None:
+    from ontology.packs import load_deployment_ontology
+
+    ontology = load_deployment_ontology()
+    recipe = _recipe_from_yaml(
+        tmp_path, ontology_version=ontology.version, pack_versions={"niem": 2}, domain_pack="niem"
+    )
+    with pytest.raises(StaleRecipeError, match="niem"):
+        await _run_against(recipe, ontology, _empty_cdr_csv(tmp_path))
+
+
+async def test_a_pinned_pack_the_ontology_lacks_is_refused(tmp_path: Path) -> None:
+    ontology = load_default_ontology()
+    recipe = _recipe_from_yaml(
+        tmp_path, ontology_version=ontology.version, pack_versions={"niem": 3}, domain_pack="niem"
+    )
+    with pytest.raises(StaleRecipeError, match="niem"):
+        await _run_against(recipe, ontology, _empty_cdr_csv(tmp_path))
+
+
+async def test_a_recipe_naming_a_pack_with_no_pin_is_refused(tmp_path: Path) -> None:
+    from ontology.packs import load_deployment_ontology
+
+    ontology = load_deployment_ontology()
+    recipe = _recipe_from_yaml(
+        tmp_path, ontology_version=ontology.version, pack_versions=None, domain_pack="niem"
+    )
+    with pytest.raises(StaleRecipeError, match="not pinned"):
+        await _run_against(recipe, ontology, _empty_cdr_csv(tmp_path))
+
+
+async def test_a_recipe_pinning_the_loaded_version_runs(tmp_path: Path) -> None:
+    from ontology.packs import load_deployment_ontology
+
+    ontology = load_deployment_ontology()
+    recipe = _recipe_from_yaml(
+        tmp_path,
+        ontology_version=ontology.version,
+        pack_versions={"niem": ontology.packs["niem"]},
+        domain_pack="niem",
+    )
+    report = await _run_against(recipe, ontology, _cdr_csv(tmp_path))
+    assert report.rows_read == 10
+    assert report.nodes_created == 2
+
+
+async def test_a_recipe_naming_no_pack_still_runs_unpinned(tmp_path: Path) -> None:
+    from ontology.packs import load_deployment_ontology
+
+    ontology = load_deployment_ontology()
+    recipe = load_recipe(FIXTURES / "cdr_recipe.yaml")
+    assert recipe.pipeline is None
+    report = await _run_against(recipe, ontology, _cdr_csv(tmp_path))
+    assert report.rows_read == 10
+
+
+@pytest.mark.parametrize("pins", [{}, {"niem": 3}], ids=["empty-map", "another-pack-only"])
+async def test_a_recipe_writing_fibo_types_under_the_core_is_refused_when_it_pins_nothing_for_fibo(
+    tmp_path: Path, pins: dict[str, int]
+) -> None:
+    from ontology.packs import load_deployment_ontology
+
+    ontology = load_deployment_ontology()
+    recipe = _recipe_from_yaml(
+        tmp_path,
+        ontology_version=ontology.version,
+        pack_versions=pins,
+        domain_pack="pole",
+        row_template=_ACCOUNT_TEMPLATE,
+    )
+    with pytest.raises(StaleRecipeError, match="fibo"):
+        await _run_against(recipe, ontology, _account_csv(tmp_path))
+
+
+async def test_a_recipe_writing_fibo_types_under_the_core_runs_when_pinned(
+    tmp_path: Path,
+) -> None:
+    from ontology.packs import load_deployment_ontology
+
+    ontology = load_deployment_ontology()
+    recipe = _recipe_from_yaml(
+        tmp_path,
+        ontology_version=ontology.version,
+        pack_versions={"fibo": ontology.packs["fibo"]},
+        domain_pack="pole",
+        row_template=_ACCOUNT_TEMPLATE,
+    )
+    report = await _run_against(recipe, ontology, _account_csv(tmp_path))
+    assert report.rows_read == 1
+    assert report.nodes_created == 1
+
+
+async def test_a_recipe_naming_no_pack_and_pinning_an_empty_map_runs_on_the_deployment_ontology(
+    tmp_path: Path,
+) -> None:
+    from ontology.packs import load_deployment_ontology
+
+    ontology = load_deployment_ontology()
+    recipe = _recipe_from_yaml(tmp_path, ontology_version=ontology.version, pack_versions={})
+    report = await _run_against(recipe, ontology, _cdr_csv(tmp_path))
+    assert report.rows_read == 10
+
+
+async def test_an_extra_pin_is_ignored(tmp_path: Path) -> None:
+    from ontology.packs import load_deployment_ontology
+
+    ontology = load_deployment_ontology()
+    recipe = _recipe_from_yaml(
+        tmp_path, ontology_version=ontology.version, pack_versions={"stix": 99}
+    )
+    report = await _run_against(recipe, ontology, _cdr_csv(tmp_path))
+    assert report.rows_read == 10
+
+
+async def test_an_extra_pin_on_a_pack_the_ontology_lacks_is_ignored(tmp_path: Path) -> None:
+    from ontology.packs import load_deployment_ontology
+
+    ontology = load_deployment_ontology()
+    recipe = _recipe_from_yaml(
+        tmp_path, ontology_version=ontology.version, pack_versions={"nosuchpack": 1}
+    )
+    report = await _run_against(recipe, ontology, _cdr_csv(tmp_path))
+    assert report.rows_read == 10
+
+
+async def test_a_dry_run_of_an_unpinned_draft_writing_fibo_is_not_refused(
+    tmp_path: Path,
+) -> None:
+    from services.ingest.engine import dry_run_recipe
+
+    from ontology.packs import load_deployment_ontology
+
+    ontology = load_deployment_ontology()
+    recipe = _recipe_from_yaml(
+        tmp_path,
+        ontology_version=ontology.version,
+        pack_versions=None,
+        domain_pack="pole",
+        row_template=_ACCOUNT_TEMPLATE,
+    )
+    async with arcadedb_adapter(ontology, load_uk_le_scheme()) as graph:
+        result = await dry_run_recipe(
+            recipe,
+            read_csv(_account_csv(tmp_path)),
+            graph=graph,
+            ontology=ontology,
+            principal=CLEARED,
+            source="accounts.csv",
+        )
+    assert result.rows_read == 1
