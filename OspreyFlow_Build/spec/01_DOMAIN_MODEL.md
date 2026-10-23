@@ -846,7 +846,7 @@ suppresses high-volume, low-information relationships — the broadcast sender, 
 that everyone calls:
 
 ```
-mutual_information(u,v) = clamp( pmi(u,v) / −ln p(u,v), −1, 1 )   # 1 when p(u,v) = 1; 0 where pmi is undefined
+mutual_information(u,v) = clamp( pmi(u,v) / −ln p(u,v), −1, 1 )   # 1 when p(u,v) = 1; 0 where pmi is undefined; 0 for a self-loop (ADR-120 Amendment 4)
 pmi(u,v)                = ln( p(u,v) / (p(u)·p(v)) )
 ```
 

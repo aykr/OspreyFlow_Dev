@@ -14174,6 +14174,33 @@ value, one with a numeric string and one with a decimal `1.0`, read as `None`, a
 and are flagged at start-up); `tests/services/api/test_load_published_recipe_sites.py` (one planted
 violation per shape the allow-list catches).
 
+### ADR-120, Amendment 4 (23 October 2026) — a self-loop's mutual-information term is 0
+
+Status: **ACCEPTED by the owner, 23 October 2026** (decision 1, from options put to him:
+"Self-loop's PMI term is 0"); decisions 2 and 3 are the coordinator's, recorded with it. Found by
+stage 3's property test before any of D3's code was written.
+
+1. **A self-loop's mutual-information term is 0.** A link from a node to itself is counted twice in
+   that node's degree, so in a small corpus its normalised PMI falls as its occurrences rise, and
+   the same-pair invariant D3 states (adding occurrences never lowers a weight) failed for it on the
+   property-test grid (for example a cell-share self-loop, 22 to 23 occurrences, 0.89696 to
+   0.89695); every pair of distinct nodes held. A link to itself says nothing about a pair of
+   distinct nodes, so its term is 0 and its weight follows its count and recency only, which makes
+   the invariant hold for every link. The weight's stored inputs do not say whether a link is a
+   self-loop, so `compute_weight` takes a required `self_loop` argument that every caller (the
+   adapter, the bulk loader, `scripts/compare_vaults.py`) passes.
+2. **`scripts/compare_vaults.py` recomputes with the store's own rules.** It passes the link's type,
+   the weights file's rules and `self_loop`, and counts a self-loop twice in a node's degree, as the
+   adapter and the bulk loader do (it counted it once).
+3. **The weights loader refuses a malformed file by name.** A file whose versions are not 1, 2, ...
+   in order, or a version whose `midpoint` or `scale` is not the one derived from its α and β, is
+   refused with `OntologyError` naming the version and the field.
+
+Tests: `tests/adapters/graph_arcadedb/test_weight_rules.py` (the same-pair invariant over the grid,
+self-loop series included, with a self-loop's term 0; `npmi`'s edge cases; the loader's two
+refusals); `tests/test_compare_vaults.py` (the recompute uses the store's rules and counts a
+self-loop twice).
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
