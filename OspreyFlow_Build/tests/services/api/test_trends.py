@@ -8,7 +8,8 @@ What a mistake would do, and the case that catches it:
 - an aliased link's events left out, or counted under the old name — `test_aliases_are_read_with_their_type_and_shown_under_its_name`;
 - a snapshot marked lower than something it counted — `test_the_marking_is_the_highest_counted_and_an_unknown_ranks_highest`;
 - a Viewer saving to the case — `test_saving_needs_editor_and_reading_needs_viewer`;
-- another case's trend read through this one — `test_another_cases_trend_is_not_found`.
+- another case's trend read through this one — `test_another_cases_trend_is_not_found`;
+- a throw-over's yard and item type not offered to split by, because `OCCURRED_AT` declares neither — `test_the_builder_offers_a_throw_over_s_yard_and_item_type_as_categories`.
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ from services.api.trends import (
 )
 
 from ontology.handling import load_uk_le_scheme
+from ontology.packs import load_deployment_ontology
 from schemas.analytics import TrendMeasure, TrendPoint, TrendRequest, TrendResult
 from schemas.domain import EdgeTypeDef, OntologySchema, Principal, PropertyDef
 from schemas.trends import TrendDefinition, TrendDefinitionInput, TrendFilter
@@ -84,6 +86,16 @@ def test_the_builder_offers_only_temporal_types_and_never_a_high_sensitivity_pro
     assert [o.name for o in options.event_types] == ["TRANSACTED", "CALLED"]
     transacted = options.event_types[0]
     assert [(f.name, f.kind) for f in transacted.fields] == [("amount", "number"), ("channel", "category")]
+
+
+def test_the_builder_offers_a_throw_over_s_yard_and_item_type_as_categories() -> None:
+    """ADR-120 Amendment 7 decision 1: Trends offers only what an event's link type declares, so
+    the yard and the item can be split or filtered by only once `OCCURRED_AT` declares them."""
+    options = trend_options(load_deployment_ontology())
+    occurred_at = next(o for o in options.event_types if o.name == "OCCURRED_AT")
+    fields = {f.name: f.kind for f in occurred_at.fields}
+    assert fields.get("yard") == "category"
+    assert fields.get("item_type") == "category"
 
 
 def test_a_definition_names_only_what_the_ontology_declares() -> None:
@@ -243,3 +255,4 @@ def test_a_refused_definition_and_a_trend_past_its_bound_are_said(world: tuple[_
     assert over.status_code == 409
     assert over.json() == {"error": "limit_exceeded", "cap_kind": "periods", "cap": 104, "would_be": 130,
                            "options": ["shorter_period", "monthly_interval", "fewer_series"]}  # fmt: skip
+

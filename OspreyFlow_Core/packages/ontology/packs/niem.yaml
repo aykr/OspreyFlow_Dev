@@ -12,7 +12,8 @@
 # Version 3 (ADR-120): prison intelligence — an establishment with its NIU area and SOCT region,
 # the place links (held at, part of, adjoins, used by, occurred at), the throw-over incident, and
 # passes-items-to, the pack's only Probabilistic link, which a recipe can never write. Additions
-# only.
+# only; occurred-at's four optional properties (lat, lon, yard, item_type) were added in place
+# (ADR-120 Amendment 7).
 pack: niem
 pack_version: 3
 entity_types:
@@ -141,6 +142,13 @@ edge_types:
     temporal: true
     label: Occurred at
     colour: jade
+    # ADR-120 Amendment 7: an event takes its position from its link, and Trends splits by the
+    # properties a link declares; none is required, so a find or an assault carries none.
+    properties:
+      - {name: lat, type: float}
+      - {name: lon, type: float}
+      - {name: yard, type: string}
+      - {name: item_type, type: string}
   # Items passed from one person to another; inferred, so Probabilistic, never written by a recipe.
   - name: PASSES_ITEMS_TO
     from: [Person]

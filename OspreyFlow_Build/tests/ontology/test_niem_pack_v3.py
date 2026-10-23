@@ -21,6 +21,14 @@ Rule 12's named tests, each with the violation that turns it red:
 - `test_throw_over_is_an_incident_category`: `throw_over` absent, or a bad category accepted.
 - `test_version_3_keeps_everything_version_2_had`: any version-2 entity type, edge type, field,
   property, enum value or end dropped or changed, or a new required property on an old type.
+- `test_occurred_at_declares_its_four_optional_properties`: `lat`, `lon`, `yard` or `item_type`
+  missing, of another type, or required, or `pack_version` moved off 3 (Amendment 7 puts them in
+  version 3 in place).
+- `test_an_occurred_at_write_with_its_position_yard_and_item_passes_validation`: any of the four
+  undeclared (the graph adapter and the bulk loader refuse the write), or one made required (an
+  empty properties dict is refused).
+- `test_an_occurred_at_write_with_an_undeclared_key_is_still_refused`: the link type accepting any
+  key (an `OCCURRED_AT` that stops refusing `recovered`).
 - The `test_the_superset_check_*` tests: six plant a violation and assert `_losses` names it and
   why (a dropped enum value, a dropped edge end, a link property made required, a new required
   property on an old type, a link made a system type, an unknown key in the frozen baseline); one,
@@ -33,6 +41,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -379,3 +388,41 @@ def test_the_superset_check_refuses_an_unknown_key_in_the_old_version() -> None:
     # would drop is a broken baseline, not a loss.
     with pytest.raises(AssertionError, match="mystery"):
         _losses(old, load_pack("niem"))
+
+
+# ADR-120 Amendment 7 decision 1: a throw-over's position, yard and item ride on its link.
+_OCCURRED_AT_PROPERTIES = {
+    "lat": "float",
+    "lon": "float",
+    "yard": "string",
+    "item_type": "string",
+}
+
+
+def _occurred_at() -> EdgeTypeDef:
+    composed = compose_with_packs(load_default_ontology(), ["niem"])
+    return next(e for e in composed.edge_types if e.name == "OCCURRED_AT")
+
+
+def test_occurred_at_declares_its_four_optional_properties() -> None:
+    declared = {p.name: p for p in _occurred_at().properties}
+    assert {name: p.type.value for name, p in declared.items()} == _OCCURRED_AT_PROPERTIES
+    assert not any(p.required for p in declared.values())
+    # Still version 3 itself, not a version 4 (Amendment 7: nothing has loaded or pinned it).
+    assert load_pack("niem")["pack_version"] == 3
+
+
+def test_an_occurred_at_write_with_its_position_yard_and_item_passes_validation() -> None:
+    validate_properties(
+        _occurred_at(), {"lat": 51.43, "lon": -1.15, "yard": "03", "item_type": "mobile phone"}
+    )
+    # None is required, so a find or an assault placed in a cell carries none of them.
+    validate_properties(_occurred_at(), {})
+
+
+def test_an_occurred_at_write_with_an_undeclared_key_is_still_refused() -> None:
+    # The message must name `recovered` alone: while the four are undeclared it names them too.
+    with pytest.raises(
+        OntologyError, match=re.escape("'OCCURRED_AT' does not declare property 'recovered'")
+    ):
+        validate_properties(_occurred_at(), {"lat": 51.43, "recovered": "yes"})
