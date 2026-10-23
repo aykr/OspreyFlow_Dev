@@ -182,7 +182,8 @@ Version 3 adds, for prison intelligence: the entity `Establishment` (`pole_class
 `establishment_ref`, `name`, `niu_area`, `soct_region`, `security_category`); the place links
 `HELD_AT` (Person → Establishment, temporal), `PART_OF` (Location → Location or Establishment),
 `ADJOINS` (Location — Location, undirected), `USED_BY` (Location → Location) and `OCCURRED_AT`
-(Incident → Location, temporal); `PASSES_ITEMS_TO` (Person → Person, temporal), the pack's only
+(Incident → Location, temporal; optional `lat` and `lon` (`float`), `yard` and `item_type` (`string`),
+which an event placed by the link carries — ADR-120 Amendment 7); `PASSES_ITEMS_TO` (Person → Person, temporal), the pack's only
 Probabilistic type, which a recipe can therefore never write; `throw_over` among
 `Incident.category`'s values; and core `DEPICTS` widened to end at `Establishment`, so an
 establishment can carry its own picture. The prison itself is an `Establishment`; its wings,

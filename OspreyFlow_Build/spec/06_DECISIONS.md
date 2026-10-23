@@ -14277,6 +14277,161 @@ recorded in the backup's schema versions (key `weights`) and the weights file is
 Tests: the harness backup tests (the key `weights` holds the file's latest version; the file is
 copied and checksummed).
 
+### ADR-120, Amendment 7 (23 October 2026) — a throw-over's position, yard and item ride on its `OCCURRED_AT` link, and the principal's star is his payment and call circle
+
+Status: **ACCEPTED by the owner, 23 October 2026** ("Accept Amendment 7, put them in version 3
+in place"). Found while designing stage 4's plan, before any of its code; adversarially reviewed
+three times before the owner saw it.
+
+1. **`OCCURRED_AT` declares four optional properties in NIEM version 3: `lat` and `lon` (`float`),
+   `yard` and `item_type` (`string`).**
+   - **Why the brief needs them.** The brief contradicts itself here: §5.2 gives `OCCURRED_AT` no
+     properties, and §5.7 requires throw-over events to carry the yard's latitude and longitude
+     and the properties `yard` and `item_type`. D1 followed §5.2.
+   - **Where the code reads them.** On the recipe path an event takes its position only from its
+     link's properties (`services/ingest/engine.py`, the `EventRecord` of a temporal link reads
+     `properties.get("lat")` and `properties.get("lon")`). A text value becomes a number only for a
+     property declared numeric (`_coerce_declared_numeric_types`), and anything that is not a
+     number is dropped to no position (`_as_float`). A link property its type does not declare is
+     refused by the graph adapter and the bulk loader (`validate_properties`,
+     `packages/ontology/validation.py`, called from `graph_arcadedb/adapter.py` and `bulk.py`).
+   - **What reads them.** The position is what the map's heat layer, snail trail and site-grid
+     geocode read; each selects events with a position. `yard` and `item_type` are what Trends can
+     split or filter by, because Trends offers only the properties an event's link type declares
+     (`services/api/trends.py`, `trend_options`). The hotspot cells and the weekday-by-hour view
+     need none of the four: they bucket by the event's target place and by its time.
+   - **What stays unchanged.** None of the four is required, so a find or an assault placed in a
+     cell carries none.
+   - **Side effects accepted.** Trends also offers `lat` and `lon` as numbers to sum. The
+     link-change form lists them as editable, though editing one does not move a stored event.
+   - **Duplicated facts.** `yard` repeats the event's target place and `item_type` repeats the
+     incident's `item`. The plan test checks that each pair agrees. After a recipe load the
+     incident holds an `item` only if Brief 2's throw-over recipe (R10) binds one, so R10 binds
+     `item` from the same column as `item_type`.
+
+   **They go into version 3 itself, not a version 4.**
+   - **The house rule.** A content change bumps the version (`default.yaml`'s own history), because
+     a bump is what flags the recipes pinned to the old content and stops a stale run. That
+     protects content something has loaded or pinned.
+   - **Nothing has loaded or pinned version 3.**
+     - It has never been pushed: the last push to `origin/main` was on 20 October, and version 3
+       was committed on 23 October.
+     - The owner's running deployment holds version 2. Its image was built on 20 October, it
+       mounts no `packages/` path, and its `niem.yaml` reads `pack_version: 2`.
+     - The throwaway test stack runs no service of its own, and its tests read the pack from the
+       checkout.
+     - No committed recipe writes `OCCURRED_AT`.
+     - No snapshot or hash of version 3 exists anywhere. A store that applied the old version 3
+       holds nothing the new one conflicts with: its schema declares only the indexed properties,
+       each created `IF NOT EXISTS`.
+   - **The risk that remains.** An environment that loads version 3 before this change and then
+     runs a recipe written after it. That recipe would pass the pin check, and its run would then
+     fail outright at its first `OCCURRED_AT` write, committing nothing. So no image is rebuilt
+     (`ospreyflow start --build`) and no stack is rebuilt from this checkout until `niem.yaml`
+     carries the four properties.
+   - **Additions only still holds.** Version 3 stays a strict superset of version 2, which is all
+     D1's "additions only" test compares.
+   - **Where else this lands.** `01_DOMAIN_MODEL.md`'s NIEM version 3 paragraph names the four
+     properties. Brief 2's throw-over file (R10) gains `lat` and `lon` columns. Its `recovered`
+     column is declared nowhere and is that brief's to settle.
+
+2. **"The principal's star" in the weight check is his payment and call circle.**
+   - **The problem.** D3's Tests line and Amendment 4 decision 4 ask that, on the principal's star,
+     the coordinator's call link and the shared payer's transfer links rank among the heaviest,
+     and a one-off cell share and his picture link among the lightest. A call joins `Endpoint` to
+     `Endpoint`, and a transfer joins `Asset` or `Endpoint` to `Asset` or `Endpoint`
+     (`default.yaml`: `COMMUNICATED_WITH`, `TRANSACTED`). So neither touches his `Person` node,
+     and on his own links the check cannot be made.
+   - **The circle.** The check is made on his circle as the demo analyst sees it, the `SECRET`
+     link excluded. The circle holds:
+     - his own links;
+     - every link of each endpoint he uses (his PIN account and his private-cash account);
+     - every link of each endpoint that those exchange calls or money with (here the
+       coordinator's number, the unidentified number and the payer's account).
+
+     It holds about 62 links, including all three of the payer's transfers and the relays' calls
+     to the coordinator.
+   - **The thresholds.** A heavy-end place is counted from the heavy end and a light-end place
+     from the light end; either way, a tie takes the worse place. A fraction of the circle rounds
+     up.
+     - The coordinator's call link from his PIN account ranks in the top three. The plan makes
+       him the coordinator's heaviest caller by a margin: at least 40 calls more than each relay
+       over the window (9 a week against 7 from December 2025). The margin is needed because his
+       PIN account also calls the unidentified number, which lowers his link's mutual information
+       slightly.
+     - Each of the payer's three transfer links ranks in the top quarter.
+     - His picture link and his one-week cell share both rank in the bottom eighth.
+   - **The test, and the dates it holds at.** The binding test is stage 5's, against a real load
+     of the generated case into a store that holds that case alone. It asserts the thresholds at
+     three points:
+     - on the weights as stored at load, which are the weights the canvas draws (each is computed
+       with the time of the write);
+     - recomputed by the store's own `compute_weight` from the stored components, with `now` at
+       the intelligence cut-off (30 April 2026 23:59:59 UTC);
+     - recomputed the same way with every temporal link's end far in the past (recency halves
+       every 90 days and never reaches 0).
+
+     So the result does not depend on the day the case is loaded. That test re-counts nothing; it
+     reads the store's components and so inherits Amendments 4 and 5's counting. The standard
+     demo store also holds other datasets' links of the same types, and its larger per-type
+     totals raise an exclusive pair's mutual information. For the heavy-end thresholds the
+     case-only store is therefore the harder one. For the light end it is slightly the easier: the
+     demo store's other prison data adds cell shares, which lifts the one-week share a little
+     (about 0.01 raw).
+   - **The arithmetic** (D3: "checked by arithmetic before it is built"). It uses the real rules
+     (weights file version 1) and the real function, on per-type counts estimated from the
+     stage 4 design for all 62 links. Across the three points:
+     - the call link places 1st;
+     - the transfers place 8th to 15th (the top quarter is 16);
+     - the picture is the lightest;
+     - the one-week cell share is at most 5th from the bottom (the bottom eighth is 8).
+
+     An earlier draft proposed "the two lightest", and it fails here: the three inferred
+     `PASSES_ITEMS_TO` links, one occurrence each, fall below the cell share once recency fades.
+   - **Shown red against planted wrong rules** (rule 15; the brief asks for this in §6). Each
+     plant turns the check red at all three points:
+     - `TRANSACTED` with heavy 60 (ten times too heavy): the transfers fall to 18th–44th.
+     - `SHARED_CELL_WITH` with heavy 1: the one-week cell share rises to 40th or higher from the
+       light end.
+     - `COMMUNICATED_WITH` with heavy 4,000: the call link falls to 12th–23rd.
+
+     At the cut-off point alone, a looser "top third" would have let the first plant pass, because
+     recency lifts every April link. That is why the threshold is the top quarter.
+   - **The stage 4 check.** Stage 4's plan test repeats this arithmetic on the plan's own per-type
+     counts. It is advisory: with no store it has to count, and it counts as Amendments 4 and 5 do
+     (a self-loop twice, a superseded link not at all).
+   - **J1 is unchanged.** J1's 49 counts his own links only, as "With all links" does.
+
+Tests:
+- `tests/ontology/test_niem_pack_v3.py`, shown red before `niem.yaml` changes:
+  - `OCCURRED_AT` declares the four properties with those types, and none is required.
+  - An `OCCURRED_AT` write with `lat`, `lon`, `yard` and `item_type` passes `validate_properties`.
+  - One with an undeclared key is still refused.
+  - Version 3 is still a superset of version 2.
+- `tests/ingest/test_occurred_at_event_position.py`, through `run_recipe`:
+  - **The fake graph port.** It is bound to `load_deployment_ontology()` (core and NIEM), not the
+    core alone. It refuses an unknown type, an undeclared property and a link whose ends its type
+    does not allow, as the graph adapter does.
+  - **The recipe.** It pins `{"niem": 3}` and binds text values, as a CSV gives them.
+  - **What it asserts.** An `OCCURRED_AT` row's event carries `lat` and `lon` as floats, and
+    `yard` and `item_type` in its properties. A recipe that also binds an undeclared `recovered`
+    on the link fails: `run_recipe` raises `OntologyError` at the graph write, and nothing is
+    committed. Resolution checks only declared properties, so this is not a row rejection.
+  - **Shown red.** The ontology passed to `run_recipe` declares both `lat` and `lon` as `string`.
+    The event then still exists, with no position. (Declaring one alone fails by a different path:
+    an event refuses one coordinate without the other.)
+- `tests/services/api/test_trends.py`: `trend_options` over `load_deployment_ontology()` offers
+  `yard` and `item_type` for `OCCURRED_AT`.
+- `tests/scenarios/test_pid_plan.py`:
+  - All 262 throw-over `OCCURRED_AT` links carry the four properties.
+  - Each link's `yard` names its target yard.
+  - Each link's `item_type` equals its incident's `item`.
+  - The item multiset holds.
+  - Every property the plan writes is declared on its type.
+  - Decision 2's thresholds hold on the plan's counts (advisory).
+- `tests/scenarios/test_pid_files.py` (stage 5): decision 2's thresholds at the three points, from a
+  real load. It is shown red with each of the three plants above.
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
