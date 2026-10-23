@@ -890,8 +890,9 @@ a weight was computed under (`"<version>/<rule>"`: the link type's own rule, or 
 type with none), so every value it used is recoverable; a
 component with none was computed under the uncalibrated curve that preceded ADR-120. Weights stored
 before then are not recomputed (`GraphPort` has no in-place edge update; a recompute is its own
-record). The Glass draws the stored weight it is sent and recomputes none; it exposes the
-normalised result as the edge-strength filter slider.
+record). The Glass draws the stored weight it is sent and recomputes none; it is never sent the
+components, whose corpus-wide counts include links above its principal's clearance (ADR-122). It
+exposes the normalised result as the edge-strength filter slider.
 
 **`WeightComponents` stores the raw counts, not just the derived float.** `mutual_information` is
 corpus-wide — it depends on how the *whole* corpus looks, which changes as more data loads and

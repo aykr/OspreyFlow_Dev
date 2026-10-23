@@ -14236,6 +14236,31 @@ is the stored weight); `tests/test_compare_vaults.py` (the recompute uses the st
 counts a self-loop twice; each weight recomputed under the version its `parameter_set` names; an
 unknown version and another rule are mismatches; a legacy component is skipped and listed).
 
+### ADR-120, Amendment 5 (23 October 2026) — the corpus counts leave out superseded links, and a backup carries the weights file
+
+Status: **ACCEPTED by the owner, 23 October 2026** ("go ahead with the best course of action that
+you decide"), on two findings of stage 3's code review put to him at its gate.
+
+1. **A superseded link does not count in the corpus.** The degree and total queries behind a weight
+   filtered only `reverted` links, while every read excludes a link with `superseded_by`; a
+   superseded link's occurrences live on in its successor, so counting both counted them twice, and
+   `supersede_edge` weighed the replacement against counts that included the link it replaced. The
+   corpus counts (the adapter's upsert and supersede, the bulk loader's `degrees` and total, and
+   `scripts/compare_vaults.py`) now leave out a link that is reverted or superseded, as reads do.
+   Weights already stored keep their value (ADR-120 D3).
+2. **A backup carries the weights file and names its version.** `harness/backup.py` copies the
+   ontology and the handling scheme so a restore is reproducible; it now copies
+   `packages/ontology/weights/default.yaml` too and records the weights file's latest version beside
+   the other schema versions, so a restore into a checkout whose weights file lacks a version that
+   stored weights name can be detected. The backup tests are fake-driven; this is not proven against
+   a live deployment by this record.
+
+Tests: `tests/conformance/graph_port/test_suite.py` and
+`tests/adapters/graph_arcadedb/test_bulk_edge_loader.py` (a superseded link's occurrences are not in
+its ends' degrees or the type's total, on every path); `tests/test_compare_vaults.py` (the recompute
+leaves out superseded links); the harness backup tests (the weights file is in the configuration
+sources and its version is recorded).
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
@@ -14270,3 +14295,39 @@ argument then applies).
 narrows the match exactly; a condition on a node the principal cannot see leaves no trace in the
 count; a condition on a non-indexed or sensitive property is refused by name; a keyboard case for
 the value field (rule 13).
+
+---
+
+## ADR-122 — The Conduit never sends a link's corpus-wide counts — ACCEPTED (design)
+
+Status: **ACCEPTED by the owner, 23 October 2026** ("Go ahead with your recommendation"), on a
+finding of stage 3's review of the prison intelligence dataset build, confirmed against a live
+response before this record.
+
+**Context.** `Edge.weight_components` carries the inputs of a link's weight (ADR-120 D3):
+`corpus_pair_count`, `corpus_source_degree`, `corpus_target_degree` and `corpus_total_occurrences`,
+counted over the whole store, links above any one principal's clearance included. Nothing stripped
+it: an expansion through the working-set service, serialised as the expand route returns it, carried
+every link's components (checked on the throwaway store, 23 October 2026). A degree that counts a
+link the principal cannot see is exactly what rule 3 forbids (an unauthorised principal must not
+detect a filtered link through a degree count) and an unfiltered count, which rule 7 keeps from the
+Glass. The Glass recomputes nothing from these counts (ADR-120 D3).
+
+**Decision.** No Conduit response carries `weight_components`. The counts stay in the Vault and the
+Conduit, where the weight is computed and recomputed; every link the Glass receives carries its
+`weight` and nothing it was computed from. The rule is enforced where every response is built, not
+route by route, so a new route cannot reintroduce it.
+
+**Cost.** A client that wanted to recompute or explain a weight from its inputs cannot; an
+explanation of a weight, if one is wanted, is a Conduit route that explains in words without counts.
+The generated TypeScript loses the field.
+
+**Revisit if.** Weights per clearance are wanted. A link's weight is itself computed from
+corpus-wide counts, so in principle it moves slightly when a link above the viewer's clearance
+exists at one of its ends; that is a far weaker signal than a raw degree, and removing it means
+computing weights per clearance level, which this record does not do.
+
+**Tests that fail if this is violated.** A test over every Conduit route that returns links (the
+working set, expand, links among, paths, subgraphs) asserting no `weight_components` in the
+serialised response, shown red first; and an access-control case: an OFFICIAL analyst's serialised
+expansion around a node with a SECRET link carries no count from which the link could be inferred.
