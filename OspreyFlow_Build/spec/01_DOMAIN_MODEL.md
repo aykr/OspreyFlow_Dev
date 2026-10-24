@@ -865,7 +865,8 @@ a wide grid.
 
 **A structural link type has a fixed weight** (ADR-120 D3): co-defendant, family, membership and
 custody links weigh 0.75 and a picture link (`DEPICTS`) 0.2, whatever their occurrences, recency or
-mutual information. Under version 1 the formula's other exception was a self-loop, whose
+mutual information; from weights version 3, so do `USES`, `PAIRED_WITH` and `OCCURRED_AT` (0.75), whose
+count is the number of rows that carry them, not evidence of their own (ADR-120 Amendment 9). Under version 1 the formula's other exception was a self-loop, whose
 mutual-information term is 0 (ADR-120 Amendment 4); at γ 0 the term weighs nothing for any link.
 
 The two functions the formula leans on, which earlier drafts left undefined:

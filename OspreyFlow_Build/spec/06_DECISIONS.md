@@ -14619,6 +14619,187 @@ Tests: `tests/scenarios/test_pid_plan.py`:
 
 `tests/scenarios/test_pid_files.py` (decision 8, and decision 9's binding check, in stage 5).
 
+### ADR-120, Amendment 9 (24 October 2026) — the generated files: one row per occurrence, ids, handling columns, places, the teaching row, and where the stage 5 tests live
+
+Status: **ACCEPTED by the coordinator under the owner's delegation, 24 October 2026**. Asked in chat
+"When the work finds a spec gap or an error in an ADR, what may I accept without you?", the owner
+chose "Everything" (accept every ADR and amendment once the reviewer clears it, access decisions
+included, and report them at the end). Adversarially reviewed four times before acceptance; found by
+the review of stage 5's specification, before any of its code. Found by the review of stage 5's specification,
+before any of its code.
+
+1. **A counted link is written one row per occurrence.**
+   - **Why.** The Studio's engine writes `occurrences = 1` for each row and adds 1 for each further
+     row of the same pair (`services/ingest/engine.py`). A recipe cannot bind a count, so a file
+     holding a count column would load every counted link as one occurrence.
+   - **What the files hold.** Every file holds one row per occurrence, as Brief 2's recipes already
+     say ("one row per visit", "one row per pair per week", "one row per transfer"):
+     - a cell share: one row per week shared;
+     - a visit: one row per visit;
+     - a call: one row per call;
+     - a transfer: one row per transfer;
+     - a conflict: one row per episode;
+     - a report mention: one row per report and subject;
+     - an incident role: one row per incident and participant.
+   - **Every link a row writes gains an occurrence.** The engine adds an occurrence to every link a
+     row's template writes, not only the row's main link. So a link carried on every row of a file
+     (a prisoner's `USES` of his PIN account on each call, a payee's `USES` of their cash account on
+     each transfer, a seized handset's `USES` and `PAIRED_WITH` on each communication, an
+     incident's `OCCURRED_AT` on each participant's row) takes as its occurrences the number of rows
+     that carry it. The plan models what a load produces: those links' `occurrences` are their row
+     counts.
+   - **A carried link's instants are its rows'.** A link that rides on another link's rows takes
+     its instants from those rows, or has none where its recipe edge is undated. An incident's
+     `OCCURRED_AT` takes the incident's one time on every participant row. Every such link has at
+     least one carrying row, which the plan test proves.
+   - **The dates come from one function.** Each occurrence of a row's own link is dated by one
+     shared function, `occurrence_instants(link)`, which returns an empty list for an undated
+     link:
+     - the first is at `first_seen` T00:00:00Z, the last at `last_seen` T23:59:59Z, and the rest are
+       spread evenly and deterministically between them;
+     - a link of one occurrence has one instant, so the plan gives such a link one date
+       (`first_seen` equals `last_seen`), and its instant is that day at 12:00:00Z.
+
+     The files, the store writes (`pid_writes`) and the plan test's reader all use it, so the
+     engine's interval, the stored interval and the plan's agree.
+   - **Spans.** A genuine span, a custody or a cell stay, carries two date-time columns, under the
+     span binding Brief 2 must add (already listed for R1). D8's `PASSES_ITEMS_TO` links, which the
+     graph port writes directly, keep their spans.
+   - **Keeping the plan stable.** Where a background link of one occurrence is given a single date,
+     the random generator's draws are kept unchanged (drawn, then set aside), so the rest of the
+     plan does not move.
+   - **Every dated row is a date-time**, with an explicit offset.
+   - **Report rows.** A report is one row, with up to three subjects in their own columns.
+   - **The report-day links.** A report's throw-overs go in a report-incident file of their own, one
+     row per report and throw-over (`pid_report_incidents.csv`, a new recipe), because a recipe
+     cannot split a list held in one column.
+   - **What the plan's test checks.** It reads the files back as the engine counts:
+     - rows grouped by the recipe's de-duplication key, then by pair;
+     - every link a row carries counted once for that row;
+     - the interval as the first and last instant.
+
+     It must reconstruct the plan exactly. For the call file it uses the engine's own `dedup_key`.
+2. **Store ids are derived from the plan.**
+   - **Nodes.** A node's id is `pid-` followed by the first 24 hex digits of the SHA-256 of its
+     plan key.
+   - **Links.** A link's is the same over its type, source key and target key, so a link's id
+     survives a regeneration that renumbers the plan's link keys.
+   - **Pictures.** The picture route makes its own ids, so pictures are compared by type, source
+     and target.
+   - **The pattern.** `REPORT_PATTERN` pins the zone by its derived id.
+3. **Handling columns.**
+   - **Which files.** Every file whose rows carry more than one handling (the plan computes the
+     list) has the columns `classification`, `handling_code`, `action_code`, `sanitisation_code`,
+     `originator` and `owning_unit` on every row.
+   - **The conflicts file.** It holds the one `SECRET` link, and is among them.
+   - **The rest.** A file of one handling carries none, and its recipe's handling applies.
+4. **Places take their points from their coordinates.**
+   - The plan's hand-written `geometry_ref` values are removed. The establishment-plan file carries
+     `lat` and `lon` for every place with a point, the outside arrest site included.
+   - A Studio load then gives each its point and its `geometry_ref`, through the `geometry_ref`
+     transform and `point_geometries`, as every recipe-loaded place does.
+   - The plan test checks that each place's coordinates resolve through the real transform, and
+     that every throw-over's position lies within the jitter of its yard's.
+   - **Analytics events.** Brief 1 §7 asks for "analytics events the recipes cannot produce". The
+     only temporal links written outside a recipe are D8's `PASSES_ITEMS_TO`, and the graph port
+     writes them with no event. No event is written for them, because no scene of the script reads
+     a cell-line pass on the map, the timeline or Trends.
+   - **This overrides Brief 1 §5.7's `pid:` prefix for geometry refs.** A Studio load mints
+     hash-based refs.
+5. **The teaching row's bad number is a bound column of the reports file.**
+   - **Why a column.** Brief 2 §5 requires the dry run to reject the row and name its cause, which
+     needs a column bound through `msisdn`.
+   - **The column.** The reports file gains `phone_mentioned`, empty on every row except teaching
+     row 17, where it holds `07700 900 6O3`. Filling it for any other report would give the
+     coordinator's number report links, and would change J2 and J7.
+   - **What R9 does with it.** R9 maps it, gated on not-null, to an outside `Endpoint`
+     `MENTIONED_IN` the report.
+   - **The corrected row.** Its value is `07700 900603`, a background number. The plan holds that
+     one link (moment "chapter4"). No other report's row binds a number, so the coordinator's
+     number gains no link and J7 is unmoved.
+   - **What else changes.** It is a Brief 2 addition, and `LOAD_SHAPES` gains its shape.
+   - **Overridden.** The plan's earlier comment that the bad number goes in the call file.
+6. **The scale profile holds no PIN accounts.** D6 gives it no call file, so the 3,000 PIN
+   `Endpoint`s and their `USES` links leave the scale plan, and associations top it back up to
+   exactly 30,000 links.
+7. **Where the stage 5 tests live.**
+   - **The binding weight check.** Amendment 7 decision 2's binding check (with ADR-123 decision 6)
+     needs a store, so it lives in `tests/services/api/test_pid_access_control.py`, not
+     `tests/scenarios/test_pid_files.py` (Amendment 4 decision 4; Amendment 7's Tests line).
+   - **Its plants.** They run at all three points: as stored by loads under the planted rules, and
+     at the two recomputed points.
+   - **The adapter.** That file uses `arcadedb_adapter` with the composed ontology (core and NIEM)
+     directly, not `GRAPH_PORT_ADAPTERS`, whose factory composes the core only and would refuse
+     the pack's types (D4–D9's Tests line named the registry).
+   - **"Not connected" (J5).** It is proved live only to length 3, because an unbounded search over
+     the whole case enumerates every simple path. The plan test proves the component is separate.
+     No unbounded search is run, live or for timing: on this store a heavy query keeps running on the
+     server after its client gives up (rule 14).
+8. **The pictures.**
+   - **Every picture differs from every other.** The picture route keys a Document by its content,
+     so two identical pictures would become one Document depicting two entities.
+   - **Visible to the case.** Pictures are written through the route with the case's dataset
+     stamped (`stamping`), so the case sees them.
+   - **The live test.** It asserts that every `DEPICTS` joins an image Document to exactly one
+     entity (brief §5.7a).
+
+9. **Weights version 3: uses, paired-with and occurred-at are structural.**
+   - **Why.** Counted per carrying row (decision 1), a prisoner's `USES` of his PIN account carries
+     one occurrence per call: 213 for the principal. Undated, it counts as fully recent, so it
+     outweighs the coordinator call link. Under version 2 the call link falls to 2nd or 3rd on the
+     principal's circle, and the check fails.
+   - **Why the rule is wrong for them.** "Uses", "paired with" and "occurred at" state a fact. They
+     are not evidence that grows with volume: their row count measures other links' evidence.
+   - **The change.** Version 3 gives the three a fixed strength of 0.75, as custody and family links
+     have (ADR-120 D3's structural rule). Every other value is version 2's, γ 0 included (ADR-123
+     decision 2).
+   - **Re-run arithmetic** (the stage 4 plan with decision 1's row counts, the real function, both
+     moments, the cut-off and the far past):
+     - the coordinator's call link is 1st at every point;
+     - the transfers place 6th to 10th (a top quarter of 15 or 16);
+     - the picture and the one-week cell share are the two lightest;
+     - the three planted wrong rules are each red at every point.
+
+     These are the placings Amendment 7 decision 2 and ADR-123 decision 6 record, now under
+     version 3.
+   - **The tests are stricter than the rule.** The plan test asserts the call link 1st, which is
+     stricter than Amendment 7's "top three", the rule itself.
+   - **Cost.** A link to an account, a number or a handset no longer thickens with use; the calls
+     and transfers themselves carry that.
+     - **It reaches every dataset.** The weights file governs every dataset (D3's own Cost). After
+       a reseed, every fixture's `USES`, `PAIRED_WITH` and `OCCURRED_AT` links weigh 0.75 too, the
+       Ledger's and PaySim's included, and weighted degree and the strength filter move with them.
+
+10. **What this amendment overrides.** In addition to the items below:
+    - ADR-123 decision 3: a new weight records "3/<rule>";
+    - ADR-123's Tests lines: the frozen copy holds versions 1 to 3, and the plan's circle is checked
+      under version 3;
+    - ADR-120 D3's statement that every type it does not list takes the default rule, since
+      version 3 lists three more types.
+   - D4–D9's Tests line: the registry, and the place of the binding check.
+   - Amendment 7's Tests line: the binding check's file.
+   - Amendment 4 decision 4's placement of that check.
+   - Brief 1 §5.7's `pid:` geometry refs.
+   - The plan's comment on the teaching number.
+
+Tests: `tests/scenarios/test_pid_files.py`:
+- the round trip of decision 1, through the engine's own counting and the real `dedup_key`;
+- the handling columns of decision 3;
+- the places of decision 4;
+- the teaching row of decision 5, refused by the real `msisdn` adapter, and its corrected value;
+- the picture rules of decision 8.
+
+`tests/adapters/graph_arcadedb/test_weight_rules.py`:
+- version 3 loads with the three fixed rules and γ 0;
+- the frozen copy holds versions 1 to 3.
+
+`tests/scenarios/test_pid_plan.py`:
+- the scale profile without PIN data, still exactly 30,000 links;
+- the new mention link;
+- no plan `geometry_ref`.
+
+`tests/services/api/test_pid_access_control.py`: decision 7's checks.
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
