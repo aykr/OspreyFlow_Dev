@@ -11874,6 +11874,21 @@ unpacks only its own cached results, and reads Arrow only from them; it is the o
 behind the proxy, reading the mart read-only. Superset 7.0 (a release candidate since 13 October) is
 the way out: move to it when it is released, and drop the entries.
 
+### ADR-111, Amendment 6 (24 October 2026) — the Figures tab follows the case's domain packs (ADR-126)
+
+ADR-126, accepted by the owner, amends decisions 3, 4 and 6:
+- **Decision 3, what the view shows.**
+  - The case's customers by KYC status and risk band are shown only when `fibo` is among the case's
+    domain packs.
+  - A POLE summary is shown whenever the packs are anything other than exactly `[fibo]`. It gives the
+    case's records per POLE class and type, and its links, counted for the reader.
+- **Decision 4, the bound.** The 2,000-customer bound applies only when the KYC figures are computed.
+- **Decision 6, the feed.** The feed carries the rows of whichever figures the view shows. "No …
+  graph content" now admits per-type counts: closed ontology type names and numbers, never an
+  entity. Entity types travel in `label`, never in `typology`.
+- **Amendment 2, the mart.** A change of a case's packs replaces its rows in the dashboards' mart, so
+  a chart filtered on `section='kyc'` goes empty for that case.
+
 ### ADR-112, Amendment 1 (11 October 2026) — steps 1 and 2 built; who calls the identity provider for the Admin area
 
 **Built (steps 1 and 2, `51e7337`).** `packages/schemas/rights.py` and a right declared on every route
@@ -11892,6 +11907,13 @@ grants and the old role names — anything else refused) and only clients named 
 confidential client with a service account, its clearance and unit, the *Reports Viewer* role); a case
 **Author** grants that identity Viewer on their case through the case's existing access screen, as for
 a person. The administrator never reaches into a case to do it (decision 6).
+
+### ADR-112, Amendment 2 (24 October 2026) — R1/R2 read the POLE figures (ADR-126)
+
+A note, not a change of rights. Under ADR-126 decision 5, the Reports Viewer (R1) and dashboard
+identities (R2), which hold no `INVESTIGATE`, read a case's POLE summary in the Reports view and the
+feed: per-type counts of what the case holds, filtered for the reader. They already read the KYC
+figures, which are of the same kind.
 
 ## ADR-113 — Trend reports, case report packs and their distribution; four demo personas — ACCEPTED
 
@@ -12576,6 +12598,15 @@ the empty bar in its place with each bar's stack (`TrendChart.test.tsx`) and the
 planted faults, each red: no window fill, Sunday weeks, months bucketed as weeks, a point outside
 the window dropped, the empty row omitted from the print, and the chart's stacks, the chart's
 totals and the print's rows each matched on the raw timestamp.
+
+### ADR-113, Amendment 4 (24 October 2026) — trend options are the case's domain packs (ADR-126)
+
+ADR-126 decision 6 amends decision 1's "the deployment ontology's temporal link types".
+- **What a case is offered.** The core types, plus those of the packs among the case's domain packs,
+  narrowed by `OntologySchema.type_packs`.
+- **Where the narrowing applies.** It is checked when a trend is saved or previewed, never when a
+  saved trend runs or a pack holding it is refreshed. So a trend saved before a change of packs keeps
+  running, marked as outside the case's domain models.
 
 ### ADR-114, Amendment 6 (13 October 2026) — owner rulings for stages B5–B8
 
@@ -16155,3 +16186,328 @@ Units run in this order, with one writer and one agent on the tree at a time (ru
   - **The live access test.** The Brief 1 live test runs on ArcadeDB with nothing else on the stack,
     and `PID_ACTUALS.md`'s §5.3 line moves to met for a case the analyst works alone, with the
     shared-case remainder (decision 12's existence signals, and cluster ids until ADR-125) reported.
+
+### ADR-124, Amendment 1 (24 October 2026) — a filtered branch takes its parent's domain packs (ADR-126)
+
+ADR-126 decision 1 adds to decision 2: a branch made by `POST /investigations/{id}/branch-by-filter`
+takes its parent case's domain packs, as every branch does. Its test is built in U6b with the route.
+
+## ADR-126 — A case's domain packs, and what the Reports view offers from them — ACCEPTED (design)
+
+**Status.** Accepted by the owner on 24 October 2026. Two adversarial reviews preceded its entry.
+
+**What the owner asked for.**
+- "Customers by KYC status" should appear only for AML or fraud domain models, with a POLE summary
+  for every other domain model.
+- Then: "The trends tab needs to account for the domain model type as well … beneficial owner has no
+  meaning for the prison case".
+
+**What the owner ruled.** The recommended option on four questions:
+- the domain is a case setting;
+- the POLE card shows classes with their types;
+- the feed matches the card;
+- it is built before ADR-124's U1.
+
+**Decided by the coordinator** under the owner's instruction of 24 October 2026 to take the
+recommended option. Each is marked where it appears and reported to the owner, who may overturn it:
+- **A set of packs.** The setting is a set of packs, not one value, because shipped cases mix packs
+  (decision 1).
+- **Existing cases** (decision 2). This **departs from the owner's explicit pick**, for a rule 3
+  reason. It is reported to the owner as a departure.
+- **Where the figures come from** (decision 4).
+- **Reports Viewers** get the POLE figures (decision 5).
+- **The Trends rule** (decision 6).
+- **The wording.**
+
+**It amends:**
+- ADR-111 decisions 3 ("What it shows"), 4 (the bound) and 6 (the feed's content);
+- ADR-113 decision 1 ("the deployment ontology's temporal link types");
+- ADR-124 decision 2 (a `branch-by-filter` branch takes its parent's packs);
+- ADR-112, with a note against R1/R2 (decision 5).
+
+The KYC figures on the Reports view are ADR-111's decisions 2–4, and the KYC assessment itself is
+ADR-109's, which is unchanged.
+
+### Context
+
+- **Nothing per case decides which figures or choices make sense.**
+  - Every deployment serves the core ontology composed with all three packs
+    (`packages/ontology/packs.py:137-148`): FIBO (AML and fraud), NIEM (crime case analysis) and
+    STIX (cyber).
+  - No investigation, dataset or seed records a domain (`services/api/investigations.py:122-128`,
+    `services/api/datasets.py:35-40`, `demo_fixtures/datasets.py:13-19`).
+- **The Figures tab** (`apps/workspace/src/reports/ReportsView.tsx:172-183`) always draws "Customers
+  by KYC status". `case_report` always computes it (`services/api/reports.py:130-144`, `:180`), and
+  the feed always carries its rows (`reports.py:199-201`).
+- **The Trends tab** offers every temporal link type of every pack (`services/api/trends.py:52-65`).
+- **Shipped cases mix packs.** HMP writes NIEM's custody links and FIBO's `Account`/`HOLDS_ACCOUNT`
+  (`demo_fixtures/hmp_network.py:292, 316, 325, 378, 404, 416, 459`). The harness seeds HMP, Fixture
+  Corp and the scenarios into one case (`harness/apply.py:339-402`).
+- **Customers.** Only Operation Ledger holds KYC customers (`Document` with `VERIFIED_BY`). Fixture
+  Corp writes Person, Organisation, `MEMBER_OF` and `ASSOCIATE_OF` (`fixture_corp.py:129, 229, 272,
+  276`). PaySim writes Endpoint and `TRANSACTED` (`seed_paysim.py:315-317`).
+- **POLE.** Every entity type carries a `pole_class` (`ontology.schema.json:53-56`): Person, Object,
+  Location, Event, and Organisation as the fifth class (POLE+'s sixth) (`01_DOMAIN_MODEL.md:110-138`,
+  ADR-018).
+- **Counts already kept.** `ExploreService.counts` (`services/api/explore.py:117-126`) keeps the
+  case's per-type node and link counts per access class, cleared on writes. They come from the
+  adapter's access-filtered `type_counts`, so a node or link the reader cannot read, or one outside
+  the case's datasets, is in no count (rule 3, ADR-099). `type_counts` measured 8.4 s on the Enron
+  case uncached (ADR-100 Amendment 3).
+
+### Decision
+
+1. **A case carries a set of domain packs** (the set, not one value, decided by the coordinator).
+   - **The model.** `domains: list[DomainPack]` on `Investigation`.
+     - `DomainPack = Literal["fibo", "niem", "stix"]` is defined once in `packages/schemas`.
+     - `packages/ontology/packs.py` sets `PACK_NAMES = get_args(DomainPack)`. The values live in one
+       place, and the existing direction of import (`ontology` imports `schemas`) is unchanged.
+     - The list is sorted, without repeats.
+     - **Empty means the POLE core model alone.**
+     - The labels are the Studio's (`pack_catalogue`):
+       - an empty list is "Bespoke POLE (the core model)";
+       - `fibo` is "Financial fraud and AML (FIBO)";
+       - `niem` is "Crime case analysis (NIEM)";
+       - `stix` is "Cyber threat analytics (STIX 2.1)".
+   - **Where it is stored.** `investigations.domains TEXT[]`, which is NULL until anyone chooses.
+     - NULL is read as the empty list, and means "never chosen" (decision 2).
+     - A separate `_DOMAIN_SQL` runs every start:
+       `ALTER TABLE investigations ADD COLUMN IF NOT EXISTS domains TEXT[]`.
+     - There is no CHECK constraint, so a new pack needs no constraint change.
+     - **On the way in,** an unknown value is refused, at the POST, the PATCH and `ensure_case`.
+     - **On the way out,** a stored value the model does not know (written by hand, or left by a
+       removed pack) is dropped, with a warning logged. It never fails the read, because every
+       case-scoped route reads the case through `get_authorized`.
+     - **Every column list carries it.** The column is added to `get` (`investigations.py:216`),
+       `_LEVEL_SQL` (`:84-91`), `get_authorized` (`:269-274`), `list_for` (`:368-375`),
+       `_parse_level_row` (`:234-237`) and the INSERT (`:189-199`).
+   - **At creation.** `POST /v1/investigations` (`CreateInvestigationInput`, `app.py:2248-2252`)
+     takes an optional `domains`, defaulting to NULL. The new-case form (`NewCaseForm.tsx`) gains a
+     "Domain models" choice of three checkboxes, none ticked meaning POLE. Submitting it stores the
+     list it shows, so the case counts as chosen.
+   - **Changing it.**
+     - **Who.** An Author changes it through `PATCH /v1/investigations/{id}` (`SHARE_CASE`,
+       `InvestigationAuthorDep`).
+     - **The request.** The route's body becomes `CaseChangeInput {name?: str, domains?:
+       list[DomainPack]}`, at least one given (replacing `RenameInput`, `app.py:2415-2423`).
+     - **Audit.** Each change is audited.
+     - **The model keeps today's rules.** `CaseChangeInput` keeps `RenameInput`'s refusal of a blank
+       name.
+     - **The response** carries the case's `domains` as well as its name.
+     - **Where in the Glass.** It is offered beside "Data this case reads" (`CaseDatasets.tsx`).
+   - **Reading it.** `InvestigationListing` (`app.py:2348-2384`) carries `domains`, which is how the
+     Glass reads it. The Glass's hand-written case types (`apps/workspace/src/investigation/cases.ts:
+     17-21, 159`) are changed by hand, because they are outside `schemas-check`.
+   - **Branches.** A branch (`app.py:2665`) takes its parent's `domains`. So does a
+     `branch-by-filter` branch (ADR-124 decision 2, amended here; its test is in ADR-124's U6b).
+     - **The alert jump's branch** takes the domains of the route's own authorised case, never those
+       of `alert.investigation_id`. The jumper is not authorised against that case, and the id may be
+       None.
+   - **Who sees it.** Every reader of the case may see the setting. It says what kind of case it is,
+     never what it holds.
+2. **Existing cases, and seeds** (decided by the coordinator; a departure from the owner's pick).
+   - **The owner picked:** "Existing cases holding KYC customers are set to AML and fraud by
+     migration".
+   - **Why it was not built that way.** A case's customers can be hidden from some of its readers.
+     A setting chosen because `SECRET` customers exist would tell every reader they exist, which
+     rule 3 forbids. And nothing a reader can see records a domain.
+   - **Existing cases** start NULL, read as POLE.
+   - **The seeds.**
+     - `SeedDataset` alone gains `domains` (`demo_fixtures/datasets.py`).
+     - `ensure_case` (`scripts/case_seed.py:36-42`) gains a `domains` parameter, which
+       `case_from_arguments` (`:87-106`) passes from the seed's `SeedDataset`.
+     - It sets the column only while it is NULL, in one atomic `UPDATE … WHERE domains IS NULL`
+       recorded in the case's access history. So a choice anyone has made, POLE included, is never
+       overwritten.
+   - **The seeds' packs:**
+     - Operation Ledger: `[fibo]`;
+     - HMP: `[fibo, niem]`;
+     - `PID` and `PID_SCALE`: `[niem]`;
+     - Fixture Corp and PaySim: `[]`. They hold no KYC customers, so a `fibo` setting would draw the
+       empty card this record removes. An Author may add `fibo`;
+     - every other seed: `[]`.
+   - **No PID seed.** No seed creates the Prison Intelligence case today. Brief 1's stage 6/7 loader
+     must create it through `ensure_case` with `PID.domains`, and this is recorded in the build plan.
+   - **The harness.** Its POST (`harness/apply.py:339-345`) sends `domains` as the union of the
+     seeded datasets' `SeedDataset.domains`, so `[fibo, niem]` whenever HMP is seeded.
+     - **Why.** Its Author is the harness's own sign-in identity, as which no demo person signs in,
+       and its case holds HMP's custody links.
+     - **The `--investigation-scope` path** creates no case, so it sets nothing.
+   - **The owner's deployment** is not rebuilt ("Leave it, record it"). Its cases read POLE until an
+     Author or a reseed of a new case sets them.
+3. **The Figures tab follows the packs.**
+   - **The model.** `ReportFigures.kyc` becomes `KycFigures | None`, and `ReportFigures` gains
+     `pole: PoleFigures | None`.
+   - **When each is set:**
+     - `kyc` when `fibo` is among the case's packs;
+     - `pole` when the packs are anything other than exactly `[fibo]`.
+
+     So a mixed case such as HMP's gets both, a pure AML case gets KYC alone, and every other case
+     gets POLE alone.
+   - **No needless customer reads.** `case_report` gains the case's `domains` and the ontology
+     (`OntologyDep`, `app.py:1032`, passed through `_case_report`, `:7683-7705`). It computes `kyc`
+     only when it is to be sent, so a case without `fibo` assesses no customer.
+   - **The bound.** ADR-111 decision 4's 2,000-customer bound applies only when `kyc` is computed.
+4. **The POLE summary** (where the figures come from, decided by the coordinator).
+   - **The source.** The figures come from `ExploreService.counts`, the kept per-access-class counts,
+     through the same `get_explore` the Explore page uses (`app.py:3511-3515`). They are never a
+     second count. They are therefore the reader's own, for the case's datasets (rule 3), and
+     `case_report` adds no graph cost.
+   - **`PoleFigures`:**
+     - `classes`: always five `PoleClassCount`s, in the order person, object, location, event,
+       organisation;
+       - each has `pole_class: PoleClass`, `total` and `types: list[PoleTypeCount{entity_type,
+         count}]`;
+       - each class lists its types largest first, then by name, with no zero rows;
+     - `other`: `list[PoleTypeCount]`, for stored types the current ontology does not know, so no
+       node vanishes from the figures;
+     - `links`: links of every type that is not `system`, so `SAME_AS`, `NOT_SAME_AS` and
+       `ALERTED_ON` are left out. A link type the ontology does not know, such as a pending
+       proposal's, whose logical name `logical_type_name` returns, counts in `links`;
+     - `counted_at`: when the kept counts were computed.
+   - **What is left out.** The `Alert` entity type is left out of Event and of every figure. Alerts
+     are the Figures tab's own subject, and including system-written alerts from shared datasets
+     would disagree with `alerts_total`.
+   - **The card.** It is titled "POLE summary".
+     - It shows one line per class ("Person: 412") with its types beneath.
+     - It shows an "Other (not in this ontology)" line only when `other` is non-empty.
+     - It shows "Links: 9,951".
+     - The footnote reads: "Records before resolution, counted at {time}; not for the period."
+5. **Reports Viewers get the POLE figures** (decided by the coordinator).
+   - **The widening.** A Reports Viewer and a dashboard identity hold no `INVESTIGATE`
+     (`packages/schemas/rights.py:97-99`), so today they cannot read Explore's counts. Giving them
+     the POLE figures, in the card and the feed, widens what ADR-112's R1/R2 roles and ADR-111's feed
+     carry: per-type counts of what the case holds.
+   - **Why it is accepted.**
+     - **Filtered.** The counts are the reader's own (rule 3).
+     - **No content.** They name only ontology type names, closed and declared, never an entity.
+     - **Precedent.** The KYC figures, which those roles already read, are of the same kind.
+   - **The records.** ADR-111 decision 6 is amended: the feed's "no … graph content" now admits
+     per-type counts. ADR-112 is amended with a note against R1/R2 that they read these figures.
+6. **Trends offer the case's packs** (decided by the coordinator).
+   - **The rule.** The options are the ontology's temporal link types whose
+     `OntologySchema.type_packs` entry is none (core), or a pack among the case's `domains`.
+     - Types in no pack are core and offered to every case. That covers analyst-promoted types
+       (ADR-090), and types a pack only widens through `extends`, which `type_packs` already leaves
+       out, such as `TRANSACTED`, `USES` and `DEPICTS` (`packs.py:67, 100`).
+     - Narrowing is on logical names; aliases follow through `_storage_names`
+       (`trends.py:103-114`).
+     - The code is `trend_options(ontology, domains)`.
+   - **Where the domain check applies.**
+     - **Saving and previewing.** A new `check_in_case_domains(defn, ontology, domains)` refuses, in
+       words naming the case's packs and where to change them, a definition with a type outside them.
+       It runs only in `save_trend` (`app.py:9023`) and in preview (`:9000`).
+     - **Running.** `validate_definition` stays on the whole ontology for running a saved trend
+       (`:9060`), and for adding a trend to a pack and refreshing it (`:9276`). So a saved trend keeps
+       running after the packs change.
+   - **The marker.** `TrendDefinition` (`packages/schemas/trends.py`, generated TS) gains
+     `outside_case_domains: bool`, computed on read. The Trends list shows "Uses link types outside
+     this case's domain models" on such a row.
+   - **The domain sentence.** Whenever the case's packs are not all three, the Trends form shows the
+     static line "This case's domain models are {labels}; an Author can change them beside 'Data
+     this case reads'."
+   - **Only Trends narrows.** The canvas, the pattern builder and Explore's starter questions still
+     offer every type, so an analyst in a NIEM case can draw a `BENEFICIAL_OWNER_OF` they cannot then
+     trend. These are recorded as candidates, not changed.
+7. **The feed follows the card.**
+   - **Rows.**
+     - A case whose `kyc` is set carries the `kyc` and `kyc_band` rows.
+     - A case whose `pole` is set carries:
+       - one `("pole", <pole_class>, "", "", total)` row per class;
+       - one `("pole_type", "<pole_class>:<entity_type>", "", "", count)` row per type;
+       - `("pole_other", "other:<entity_type>", "", "", count)` rows.
+
+       `typology` stays empty, so a BI user filtering typologies never meets an entity type.
+       - `("pole_links", "links", "", "", links)`.
+   - **The free-text gate.** `test_the_feed_carries_no_free_text`'s allowlist gains `entity_type`
+     and `pole_class`, each justified as a closed ontology name, and `pole_class` is typed
+     `PoleClass`. A `pole_type` label is built only from those two.
+   - **Superset.** A packs change replaces the case's rows in the dashboards' mart
+     (`services/report_sync/mart.py:79-94`). A chart filtered on `section='kyc'` then goes empty for
+     that case. This is recorded under ADR-111 Amendment 2.
+   - **Branches.** A branch's POLE figures cover all its datasets (inherited from its parent), not
+     its working set, and the card's footnote applies.
+8. **Spec**, all in unit D4:
+   - `01_DOMAIN_MODEL.md`: §1, a case's domain packs, and `:1928-1937` (`ReportFigures`);
+   - `02_GLASS_FRONTEND.md`: §Reports (`:950-959`) and its Trends paragraph (`:984-992`);
+   - `03_CONDUIT_MIDDLEWARE.md`: `:762, 764` (trend options), and the POST/PATCH lines of the API
+     surface;
+   - `08_ACCEPTANCE_SCENARIOS.md`: C8 (`:672`) and the Trends row;
+   - `09_INGEST_STUDIO.md`: the Studio's per-pipeline domain choice and the case's packs are
+     separate;
+   - The amendment entries under ADR-111, ADR-112, ADR-113 and ADR-124 are entered with this record,
+     not in D4, so none of them reads unamended while D1–D3 are built.
+
+### Tests, each shown red first against a named plant (rules 1, 4, 12, 13, 15)
+
+- **D1, the store.**
+  - The packs are stored and read back through `get_authorized` and `list_for`. The plant is a
+    column list without `domains`.
+  - NULL reads as empty, and an unknown pack is refused.
+  - A branch inherits its parent's packs.
+  - The alert jump's branch takes its own case's packs.
+  - The `PATCH` changes the packs for an Author, gives 403 to an Editor and 404 to an outsider, and is
+    audited.
+  - `ensure_case` sets the packs while NULL and never overwrites. The plant is an overwrite on reuse.
+  - **Unknown stored values.** A case whose column holds `{'fibo','gone'}`, written by SQL, reads
+    back as `[fibo]` with a warning. The plant is strict validation on read.
+  - **The harness POST** sends the union of its seeded datasets' packs. The plant is a POST with no
+    `domains`.
+  - **The PATCH** keeps the blank-name refusal (`test_investigation_access_routes.py:297` stays
+    green) and returns `domains`.
+  - `case-datasets.spec.ts:51-54`'s exact POST body is updated in the same unit.
+- **D2, Reports.**
+  - **Which figures.** A `[fibo]` case gets `kyc` only, a `[]`, `[niem]` or `[stix]` case `pole`
+    only, and a `[fibo, niem]` case both. The plant is `case_report` ignoring the packs.
+  - **No customer reads.** A case without `fibo` assesses no customer. Against ArcadeDB,
+    `_kyc_figures` is monkeypatched to raise.
+  - **Access control (rules 3 and 4).** The fixture data is written before the first read, or the
+    `explore` cache prefix is cleared in the test, so the comparison can never be green against a kept
+    empty count. Against ArcadeDB, in the live `test_reports.py`, at the route
+    level (so `scope_to_case` is exercised). These are in no POLE figure, class total, type row or
+    links total:
+    - a node the reader cannot read;
+    - a node outside the case's datasets;
+    - a readable link to a hidden node;
+    - a hidden link between readable nodes.
+
+    The figures equal those of a case without them. The plant is the figures counted for a widened
+    principal (higher clearance, `datasets=None`).
+  - **The classifier.** A unit test with a planted `TypeCounts` holding an unknown type checks that
+    it lands under `other`. `Alert` and `system` link types are left out.
+  - **The feed** carries exactly the card's rows. The free-text gate passes with the extended
+    allowlist and fails for any other new string field.
+  - **Existing tests changed in the same unit:** `test_reports.py:165-182`, which uses a `[fibo]`
+    case.
+- **D3, Trends.**
+  - **Options.** A `[niem]` case is offered no FIBO or STIX type, and a `[]` case only core types.
+    `TRANSACTED`, `USES` and `DEPICTS` are offered to a `[]` case. Plants:
+    - options ignoring the packs;
+    - narrowing by `load_pack`'s raw lists, which include the `extends` entries.
+  - **Saving and previewing.** A definition with a type outside the packs is refused in words on
+    save and preview.
+  - **Running.** A saved trend runs after a packs change, and a pack holding it refreshes. The plant
+    is the domain check called inside `_trend_figures`.
+  - **The marker** is set exactly for such a trend.
+  - **Existing tests changed:** `test_trends.py:84-117`, with `:94` using `[niem]`.
+- **D4, the Glass.**
+  - The Figures tab draws the card(s) the figures carry, and `ReportsView.tsx:172-183` handles a null
+    `kyc` (`tsc`).
+  - The new-case form and the case settings offer the packs.
+  - The Trends form shows only the offered types, the marker, and the empty-form sentence.
+- **D4, keyboard (rule 13).** New steps with kebab-case registry ids, each asserting the request body
+  and the packs shown afterwards:
+  - `choose-a-cases-domain-models-when-creating-it-by-keyboard`;
+  - `change-a-cases-domain-models-by-keyboard`.
+- **Generated types.** They are regenerated, and `schemas-check` and `tsc` pass.
+
+### Units
+
+Each unit is a writer's, then reviewed, then committed.
+
+| Unit | What it covers |
+|---|---|
+| D1 | the packs on the case, the routes and the seeds (decisions 1 and 2) |
+| D2 | the Reports figures and the feed (decisions 3, 4, 5 and 7) |
+| D3 | Trends (decision 6) |
+| D4 | the Glass, the keyboard steps and the spec (decision 8) |
