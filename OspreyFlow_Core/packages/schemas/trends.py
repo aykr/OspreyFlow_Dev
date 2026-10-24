@@ -44,6 +44,10 @@ class TrendDefinition(TrendDefinitionInput):
     created_by: str
     created_at: datetime
     updated_at: datetime
+    #: ADR-126 decision 6: the definition uses a link type outside the case's domain packs as they
+    #: stand now. Computed on read, never stored; such a trend still runs, and a pack holding it
+    #: still refreshes.
+    outside_case_domains: bool = False
 
 
 class TrendFieldOption(BaseModel):

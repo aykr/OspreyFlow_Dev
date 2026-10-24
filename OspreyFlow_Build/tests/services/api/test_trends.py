@@ -19,7 +19,6 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from ports.analytics import TrendLimitExceeded
 from services.api.app import (
     app,
     get_analytics,
@@ -48,6 +47,7 @@ from services.api.trends import (
 
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
+from ports.analytics import TrendLimitExceeded
 from schemas.analytics import TrendMeasure, TrendPoint, TrendRequest, TrendResult
 from schemas.domain import EdgeTypeDef, OntologySchema, Principal, PropertyDef
 from schemas.trends import TrendDefinition, TrendDefinitionInput, TrendFilter
@@ -82,7 +82,7 @@ def _defn(**kwargs: Any) -> TrendDefinitionInput:
 
 
 def test_the_builder_offers_only_temporal_types_and_never_a_high_sensitivity_property() -> None:
-    options = trend_options(ONTOLOGY)
+    options = trend_options(ONTOLOGY, [])
     assert [o.name for o in options.event_types] == ["TRANSACTED", "CALLED"]
     transacted = options.event_types[0]
     assert [(f.name, f.kind) for f in transacted.fields] == [("amount", "number"), ("channel", "category")]
@@ -91,7 +91,7 @@ def test_the_builder_offers_only_temporal_types_and_never_a_high_sensitivity_pro
 def test_the_builder_offers_a_throw_over_s_yard_and_item_type_as_categories() -> None:
     """ADR-120 Amendment 7 decision 1: Trends offers only what an event's link type declares, so
     the yard and the item can be split or filtered by only once `OCCURRED_AT` declares them."""
-    options = trend_options(load_deployment_ontology())
+    options = trend_options(load_deployment_ontology(), ["niem"])  # ADR-126: `OCCURRED_AT` is NIEM's
     occurred_at = next(o for o in options.event_types if o.name == "OCCURRED_AT")
     fields = {f.name: f.kind for f in occurred_at.fields}
     assert fields.get("yard") == "category"

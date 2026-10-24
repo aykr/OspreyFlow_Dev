@@ -590,7 +590,9 @@ from .tile_proxy import build_upstream_url, fetch_tile
 from .trends import (
     TrendDefinitionRefused,
     TrendStore,
+    check_in_case_domains,
     highest,
+    mark_outside_case_domains,
     name_series,
     to_request,
     trend_options,
@@ -9012,8 +9014,9 @@ async def case_event_holders_route(
 async def trend_options_route(
     investigation: InvestigationViewerDep, ontology: OntologyDep
 ) -> TrendOptions:
-    """The event types and properties a trend may use, from this deployment's ontology."""
-    return trend_options(ontology)
+    """The event types and properties a trend may use: this deployment's ontology, narrowed to
+    the core types and the case's own domain packs (ADR-126 decision 6)."""
+    return trend_options(ontology, investigation.domains)
 
 
 async def _trend_figures(
@@ -9061,6 +9064,7 @@ async def preview_trend(
     working_set: WorkingSetDep,
     handling_scheme: HandlingSchemeDep,
 ) -> TrendFigures:
+    check_in_case_domains(body, ontology, investigation.domains)
     figures = await _trend_figures(body, investigation, principal, ontology, analytics,
                                    investigations, audit, working_set, handling_scheme)  # fmt: skip
     await audit.record(principal=principal, action="preview_trend",
@@ -9085,6 +9089,7 @@ async def save_trend(
 ) -> TrendDefinition:
     """Saving writes to the case, so it needs Editor; the definition is checked first."""
     validate_definition(body, ontology)
+    check_in_case_domains(body, ontology, investigation.domains)
     saved = await trends.create(investigation.id, body, principal)
     await audit.record(principal=principal, action="save_trend", investigation_id=investigation.id,
                        resolved_query={"trend": saved.id, "title": saved.title},
@@ -9097,9 +9102,14 @@ async def save_trend(
     dependencies=[Depends(require_right(Right.RUN_ANALYSIS))],
 )
 async def list_trends(
-    investigation: InvestigationViewerDep, trends: TrendStoreDep
+    investigation: InvestigationViewerDep, trends: TrendStoreDep, ontology: OntologyDep
 ) -> list[TrendDefinition]:
-    return await trends.list_for_case(investigation.id)
+    """The case's trends, each marked when it uses a link type outside the case's domain packs as
+    they stand now (ADR-126 decision 6)."""
+    return [
+        mark_outside_case_domains(t, ontology, investigation.domains)
+        for t in await trends.list_for_case(investigation.id)
+    ]
 
 
 @app.get(

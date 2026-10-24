@@ -16511,3 +16511,20 @@ Each unit is a writer's, then reviewed, then committed.
 | D2 | the Reports figures and the feed (decisions 3, 4, 5 and 7) |
 | D3 | Trends (decision 6) |
 | D4 | the Glass, the keyboard steps and the spec (decision 8) |
+
+### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
+
+- **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are
+  offered to a case with no packs. Of the three, only `TRANSACTED` is a temporal link type in the
+  shipped ontology, so only it reaches the Trends options. `USES` and `DEPICTS` are core by
+  `type_packs`, and would be offered if they were temporal, which the D3 tests show.
+- **A deployment built before this record.** Its cases read as POLE, the demo cases among them.
+  Once such a deployment runs D3, the Ledger, HMP and Prison Intelligence cases are offered no FIBO
+  or NIEM trend type until an Author sets their packs, although saved trends still run. The step,
+  run once per deployment by an Author of each case, is `PATCH /v1/investigations/{id}` with:
+  - Ledger: `{"domains": ["fibo"]}`;
+  - HMP: `{"domains": ["fibo", "niem"]}`;
+  - Prison Intelligence: `{"domains": ["niem"]}`.
+
+  It is recorded in the demo run-sheet.
+

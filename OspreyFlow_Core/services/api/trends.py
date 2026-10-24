@@ -49,9 +49,25 @@ def _label(edge: EdgeTypeDef) -> str:
     return edge.label or edge.name.replace("_", " ").capitalize()
 
 
-def trend_options(ontology: OntologySchema) -> TrendOptions:
+def _in_domains(ontology: OntologySchema, edge: EdgeTypeDef, domains: Sequence[str]) -> bool:
+    """Whether a link type is core or belongs to one of the case's packs (ADR-126 decision 6).
+
+    `OntologySchema.type_packs` names the pack that *defines* a type and leaves out one a pack
+    only widens through `extends` (`TRANSACTED`, `USES`, `DEPICTS`) and any type in no pack
+    (analyst-promoted ones, ADR-090): both are core. Narrowing by a pack file's own list would
+    wrongly take `TRANSACTED` for FIBO's. The name is the logical one; an alias is read with its
+    type by `_storage_names`, so it needs no entry here."""
+    pack = ontology.type_packs.get(edge.name)
+    return pack is None or pack in domains
+
+
+def _offered(ontology: OntologySchema, domains: Sequence[str] | None) -> list[TrendEventTypeOption]:
+    """The event types offered; `domains=None` is the whole ontology (running and pack refresh,
+    which never narrow by the case's packs)."""
     options = []
     for edge in _event_types(ontology):
+        if domains is not None and not _in_domains(ontology, edge, domains):
+            continue
         fields = [
             TrendFieldOption(
                 name=p.name,
@@ -62,12 +78,64 @@ def trend_options(ontology: OntologySchema) -> TrendOptions:
             if p.type in _NUMBER | _CATEGORY and p.sensitivity != "high"
         ]
         options.append(TrendEventTypeOption(name=edge.name, label=_label(edge), fields=fields))
-    return TrendOptions(event_types=options)
+    return options
+
+
+def trend_options(ontology: OntologySchema, domains: Sequence[str]) -> TrendOptions:
+    """What the builder offers a case: the ontology's temporal link types that are core, or belong
+    to one of the case's `domains` (ADR-126 decision 6)."""
+    return TrendOptions(event_types=_offered(ontology, domains))
+
+
+def _pack_labels(domains: Sequence[str]) -> str:
+    from ontology.packs import pack_catalogue
+
+    labels = {e.name: e.label for e in pack_catalogue()}
+    return ", ".join(labels.get(d, d) for d in sorted(domains)) if domains else labels["pole"]
+
+
+def _outside(
+    defn: TrendDefinitionInput, ontology: OntologySchema, domains: Sequence[str]
+) -> list[str]:
+    """The chosen event types the case's packs do not offer, in the order chosen. A type the
+    ontology does not know is not here: `validate_definition` refuses that, in its own words."""
+    outside = {
+        edge.name for edge in _event_types(ontology) if not _in_domains(ontology, edge, domains)
+    }
+    return [t for t in dict.fromkeys(defn.event_types) if t in outside]
+
+
+def check_in_case_domains(
+    defn: TrendDefinitionInput, ontology: OntologySchema, domains: Sequence[str]
+) -> None:
+    """Refuses, in words, a definition naming a type outside the case's domain packs (ADR-126
+    decision 6). Only saving and previewing call this: a saved trend keeps running, and a pack
+    keeps refreshing it, after the packs change, because running checks the whole ontology."""
+    outside = _outside(defn, ontology, domains)
+    if outside:
+        # Named as the builder shows them ("Beneficial owner of"), not by their stored keys.
+        shown = [_label(e) for t in outside if (e := ontology.edge_type(t)) is not None]
+        raise TrendDefinitionRefused(
+            f"{', '.join(shown)} {'is' if len(outside) == 1 else 'are'} outside this case's "
+            f"domain models ({_pack_labels(domains)}). An Author can change them beside "
+            "'Data this case reads'."
+        )
+
+
+def mark_outside_case_domains(
+    saved: TrendDefinition, ontology: OntologySchema, domains: Sequence[str]
+) -> TrendDefinition:
+    """`saved` with `outside_case_domains` set when it uses a type outside the case's packs now.
+    Computed on every read, never stored: the packs can change after a trend is saved."""
+    return saved.model_copy(
+        update={"outside_case_domains": bool(_outside(saved, ontology, domains))}
+    )
 
 
 def validate_definition(defn: TrendDefinitionInput, ontology: OntologySchema) -> None:
-    """Refuses, in words, anything the ontology does not declare for every chosen event type."""
-    offered = {o.name: o for o in trend_options(ontology).event_types}
+    """Refuses, in words, anything the ontology does not declare for every chosen event type. On
+    the whole ontology, never the case's packs (ADR-126 decision 6): see `check_in_case_domains`."""
+    offered = {o.name: o for o in _offered(ontology, None)}
     unknown = [t for t in defn.event_types if t not in offered]
     if unknown:
         raise TrendDefinitionRefused(f"not an event type of this deployment: {', '.join(unknown)}")

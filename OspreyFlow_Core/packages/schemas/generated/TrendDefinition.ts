@@ -40,6 +40,7 @@ export type InvestigationId = string;
 export type CreatedBy = string;
 export type CreatedAt = string;
 export type UpdatedAt = string;
+export type OutsideCaseDomains = boolean;
 
 export interface TrendDefinition {
   title: Title;
@@ -55,6 +56,7 @@ export interface TrendDefinition {
   created_by: CreatedBy;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  outside_case_domains?: OutsideCaseDomains;
   [k: string]: unknown;
 }
 /**
