@@ -14800,6 +14800,118 @@ Tests: `tests/scenarios/test_pid_files.py`:
 
 `tests/services/api/test_pid_access_control.py`: decision 7's checks.
 
+### ADR-120, Amendment 10 (24 October 2026) — calls keep their weekly shape, a carried link takes its own date from each carrying row, and what a row's handling can say
+
+Status: **ACCEPTED by the coordinator under the owner's delegation, 24 October 2026** (asked "When
+the work finds a spec gap or an error in an ADR, what may I accept without you?", the owner chose
+"Everything"). Adversarially reviewed three times; its last review left only wording, made here.
+Found by the review of stage 5's unit 5a.
+
+1. **A PIN call link's instants follow its weekly counts.**
+   - **The rule.** A PIN account's call link (`COMMUNICATED_WITH` from an `Endpoint:handle`) places
+     its calls week by week, as its `CallAggregate.weekly` gives them (`pid_plan.py`,
+     `CallAggregate` ~186-193; `_call_link` ~1047-1055). This keeps the coordinator's December
+     surge: one call a fortnight, then nine a week for the principal and seven for each relay.
+   - **The windows.**
+     - Week k runs from its Monday 00:00:00 to its Sunday 23:59:59 UTC.
+     - The first live week starts at the link's `first_seen` 00:00:00, its first week's Monday.
+     - The last live week ends at its `last_seen` 23:59:59, the Thursday that holds the cut-off,
+       or earlier.
+     - **Two or more calls.** A week's n calls (n ≥ 2) sit at `start + i·(end − start)/(n − 1)` for
+       i = 0 … n−1, both ends of the window included, truncated to the second, as Amendment 9 does.
+     - **The link's first and last calls take precedence.** They are at the first live week's start
+       and the last live week's end, so the stored interval is Amendment 9's, `first_seen` 00:00:00
+       to `last_seen` 23:59:59.
+       - A single-call week that is the first live week puts its call at the window's start.
+       - A single-call week that is the last live week puts its call at the window's end.
+       - Only a single-call week in between puts its call at the window's midpoint, to the second.
+   - **Where it lives.** The exception lives in `link_instants(plan, link)` (decision 2).
+     `occurrence_instants(link)` stays Amendment 9's even spread.
+   - **The seized SIMs' calls** (from an `Endpoint:imsi`) have no aggregate and keep the even
+     spread.
+2. **A carried link takes its own date from each carrying row.**
+   - **The function.** `link_instants(plan, link)` returns a link's instants:
+     - **a link a row carries as its own occurrence:** `occurrence_instants`, or decision 1's rule
+       for a PIN call link;
+     - **a carried link:** its own date cell on each carrying row. That is noon for a date, or a
+       date-time as it stands; a carried link that is undated has none.
+   - **A dated carried link has one date** (`first_seen` equals `last_seen`). Two kinds exist:
+     - a seized handset's `USES` (the find day): n instants at that day's 12:00:00 UTC, one per
+       communication row;
+     - a non-throw-over incident's `OCCURRED_AT` (its `occurred_at`).
+   - **Undated carried links** are the `USES` of a PIN, cash or bank account, and `PAIRED_WITH`.
+   - **Who uses it.** The files (`_fill_link`, ~2691-2712), the store writes (`pid_writes`) and the
+     reader all call it.
+3. **What a row's handling can say.**
+   - **Per-row handling is still a Brief 2 addition.** The engine today takes handling from the
+     recipe's defaults and fixed per-element overrides (`services/ingest/engine.py` ~311-344), and
+     reads none from a row.
+   - **The limit, under that addition.** Each mixed file carries one set of handling columns per
+     row, which a recipe would apply to every element it writes from that row. The files carry the
+     row owner's handling: the row's own link, or the report or the place for the reports and
+     estate files. Every element with a different handling is then represented only approximately.
+   - **The categories,** computed by the plan, not listed by hand:
+     - a Fenwick Moor prisoner written on the row of his regional custody at Saltmarsh Grange;
+     - every mention on a report row, whether a subject's, an area's or the teaching phone mention,
+       where the row carries the report's sanitisation or action code (the 12 consult-originator and
+       20 covert-development reports) and the mention does not;
+     - an endpoint or device of another unit on a call or seized-handset row (a local PIN account
+       calling a regional visitor's number, and the reverse; a local find handset on a row made
+       regional by its called number);
+     - a local cash account on a regional payer's transfer row;
+     - a carried link on rows of another handling, or on rows of two different handlings (a
+       prisoner's local `USES` of his PIN account on regional call rows; a payee's `USES` on
+       regional transfer rows).
+   - **The test.** It computes every element whose handling differs from its row's, and asserts the
+     set of categories equals this declared set. A new category fails it.
+   - **Where else it is recorded.** The round trip checks handling for each row's owner. The
+     categories and their counts go in `PID_ACTUALS.md`. Per-element handling is Brief 2's open
+     point S4.
+4. **Smaller rulings of stage 5, recorded.**
+   - **One date.** The cast's one-week cell share (the principal and cellmate_3) has the single
+     date 6 January 2025.
+   - **Subject roles.** The reports file keeps Brief 2 R9's `subject_1_role` to `subject_3_role`
+     columns in its header, and leaves them empty, because the plan holds no role for a subject
+     (Brief 2 R9's columns; it supersedes the stage 5 specification's §9 B4 "and their roles").
+   - **One dated end.** A link with one dated end takes that date for both.
+   - **Date formats.** Date-valued properties (a date of birth) are `YYYY-MM-DD`. Every occurrence,
+     span and call column is an ISO date-time with `+00:00`. This supersedes the stage 5
+     specification's §2 day granularity.
+   - **Every file takes Brief 2's column name wherever Brief 2 names the value**
+     (`02_INGEST_STUDIO_JOBS_BRIEF.md` R1–R13), for example:
+     - R1: `nomis_id`, `custody_from`, …;
+     - R2: `week_start`;
+     - R3: `visit_ref`, `visit_date`, `visitor_nino`;
+     - R4: `incident_ref`, `area_ref`;
+     - R5: `pin_account`, `nomis_id`, `called_number`, `call_start`;
+     - R6: `imei`, `imsi`, `other_number`, `occurred_at`, `found_with_nomis_id`, `found_on` (the
+       handset `USES` date);
+     - R7: `transfer_id`, `transferred_at`, `payer_account`, `payer_nino`, `payee_nomis_id`,
+       `payee_account`;
+     - R8: `case_ref`, `nomis_id_a`, `nomis_id_b`;
+     - R9: `report_ref`, `submitted_at`, `area_ref`, `subject_1` …;
+     - R10's and R11's columns likewise.
+
+     A value Brief 2 does not name (a Brief 2 addition's column, or a span's `end`) keeps the plan's
+     name, and the column's shape row says so.
+5. **What this amendment overrides.**
+   - Amendment 9 decision 1's "each occurrence is dated by `occurrence_instants(link)`", for PIN
+     call links, and its use of `occurrence_instants` by the files, `pid_writes` and the reader:
+     `link_instants` replaces it.
+   - The stage 5 specification's §9 M5 ("as `occurrence_instants` gives").
+   - It restores §2's "call_start inside its week".
+
+Tests: `tests/scenarios/test_pid_plan.py`:
+- **Calls by week.** The rows' weekly call counts equal the aggregates, every call lies within its
+  own week's window, and a single-call week's call is at the midpoint.
+- **Carried instants.** Every link's row instants equal `link_instants`, and every dated carried
+  link has one date. Each branch is shown red by a plant in the demo profile.
+- **Handling categories.** The set of handling categories that differ from their row's equals the
+  declared set, shown red by a plant that adds a category.
+- **Cast counts.** A cast-only carried link's count is fixed across seeds.
+- **Column names.** Every Brief 2-named value uses Brief 2's column name, checked against a
+  table of R1–R13's names transcribed from the brief.
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
