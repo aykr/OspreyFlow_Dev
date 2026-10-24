@@ -2773,7 +2773,11 @@ def test_every_plan_entity_has_a_shape(demo: View, scale: View) -> None:
     for sh in shapes:
         assert isinstance(sh.properties, frozenset) and sh.columns
         assert len(set(sh.columns)) == len(sh.columns)
-        assert sh.key in sh.columns and set(sh.properties) <= set(sh.columns), sh
+        # Amendment 12 decision 8: the columns are Brief 2's names, so each property is found
+        # under the name `names` gives it (`None`: the file carries it in no column of its own).
+        mapped = {sh.names.get(p, p) for p in sh.properties}
+        assert mapped - {None} <= set(sh.columns), sh
+        assert sh.columns[0] not in HANDLING_COLUMNS, sh  # the key's column comes first
         assert sh.moment in ("seed", "chapter4", "chapter9"), sh
         assert _recipe_ok(sh.recipe) and sh.handling in ("recipe", "column"), sh
         assert re.fullmatch(r"pid_[a-z0-9_]+\.csv", sh.file) or sh.recipe == "seed", sh

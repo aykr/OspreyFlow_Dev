@@ -10,10 +10,11 @@ must come before the first one."""
 from __future__ import annotations
 
 import pytest
-from services.ingest.engine import run_recipe
+from services.ingest.engine import StaleRecipeError, run_recipe
 from services.ingest.recipe_rules import RecipeRuleError, recipe_rule_violations
 
 from ontology.loader import load_default_ontology
+from ontology.packs import load_deployment_ontology
 from schemas.domain import EdgeTypeDef, Principal
 from schemas.ingest import (
     FieldBinding,
@@ -109,3 +110,50 @@ async def test_a_run_is_refused_before_anything_is_written() -> None:
             investigation_scope="case-1",
             source="rows.csv",
         )
+
+
+class _NoGraph:
+    def __getattr__(self, name: str) -> object:
+        raise AssertionError(f"the graph was asked to {name} before the recipe was refused")
+
+
+async def _run_naming_passes_items_to(pack_versions: dict[str, int] | None) -> None:
+    ontology = load_deployment_ontology()
+    recipe = Recipe(
+        id="r2",
+        version=1,
+        label="A loader that names a Probabilistic NIEM link",
+        connector=RecipeConnector(profile="csv"),
+        ontology_version=ontology.version,
+        pack_versions=pack_versions,
+        row_template=_template("PASSES_ITEMS_TO"),
+    )
+    await run_recipe(
+        recipe,
+        iter([{"name": "Ada"}]),
+        graph=_NoGraph(),  # type: ignore[arg-type]
+        ontology=ontology,
+        tx="tx-1",  # type: ignore[arg-type]
+        principal=ANALYST,
+        load_id="load-2",
+        investigation_scope="case-1",
+        source="rows.csv",
+    )
+
+
+async def test_a_run_naming_passes_items_to_is_refused_by_the_rule_before_any_write() -> None:
+    """ADR-120 D8 at run time. The recipe is pinned to the NIEM pack at the version the composed
+    ontology carries (3), so the pin check passes and it is the rule that refuses it: a run that
+    reached a write would assert, as a source's record, a link only an analyst or a model can
+    infer."""
+    assert load_deployment_ontology().packs["niem"] == 3
+    with pytest.raises(RecipeRuleError, match="PASSES_ITEMS_TO") as refused:
+        await _run_naming_passes_items_to({"niem": 3})
+    assert "Probabilistic" in str(refused.value)
+
+
+async def test_the_same_run_unpinned_is_refused_by_the_pin_check_not_the_rule() -> None:
+    """The control for the case above: without the pin the run stops earlier, at the pack check,
+    so the pin is what lets the first case reach the rule it is about."""
+    with pytest.raises(StaleRecipeError, match="not pinned"):
+        await _run_naming_passes_items_to(None)

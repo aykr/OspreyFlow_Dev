@@ -47,5 +47,22 @@ LEDGER = SeedDataset(
     case_name="Operation Ledger (synthetic demo)",
 )
 SCENARIOS = SeedDataset(id="scenarios", name="Acceptance scenarios", source="fixture")
+#: The Prison Intelligence Dataset (ADR-120 D6). The generator writes each element's provenance
+#: `document_id` as `<source>:<dataset id>`, so `scripts.stamp_datasets` (the source, or the source
+#: and a colon) finds each dataset's elements and never the other's.
+PID = SeedDataset(
+    id="prison-intelligence",
+    name="Prison Intelligence Dataset (synthetic)",
+    source="pid-generator",
+    case_name="Prison Intelligence Dataset (synthetic demo)",
+)
+PID_SCALE = SeedDataset(
+    id="prison-intelligence-scale",
+    name="Prison Intelligence Dataset: scale cohort (synthetic)",
+    source="pid-scale-generator",
+    case_name="Prison Intelligence Dataset: scale cohort (synthetic demo)",
+)
 
-SEED_DATASETS: tuple[SeedDataset, ...] = (ENRON, FIXTURE_CORP, HMP, LEDGER, PAYSIM, SCENARIOS)
+SEED_DATASETS: tuple[SeedDataset, ...] = (
+    ENRON, FIXTURE_CORP, HMP, LEDGER, PAYSIM, SCENARIOS, PID, PID_SCALE,
+)  # fmt: skip

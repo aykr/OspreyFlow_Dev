@@ -56,8 +56,8 @@ import hashlib
 import math
 import random
 from collections import Counter
-from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from functools import cached_property
 from typing import Any, Literal
@@ -1524,7 +1524,7 @@ _ITEMS = (
     "a second handset",
 )
 _ILLICIT_LINE = (
-    "Officer {s} reports that {names} were seen at the cell door after lock-up passing {item} "
+    "Officer {s} reports that {names} {were} seen at the cell door after lock-up passing {item} "
     "along the line between cells. The matter is logged for the security meeting.",
     "Cell search on {landing}: {item} recovered. {names} named by a reliable source as involved "
     "in the line between cells that runs after lock-up. No adjudication yet.",
@@ -1569,7 +1569,8 @@ def _report_text(rng: random.Random, b: _Build, r: _Rep, number: int) -> str:
     names = _list_of([f"Prisoner {_who(b, p)}" for p in r.persons])
     landing = f"{r.landing} landing" if r.landing else r.label
     return head + rng.choice(_TEMPLATES[r.kind]).format(
-        s=s, names=names, item=rng.choice(_ITEMS), landing=landing, yard=r.label[-2:]
+        s=s, names=names, item=rng.choice(_ITEMS), landing=landing, yard=r.label[-2:],
+        were="was" if len(r.persons) == 1 else "were",
     )
 
 
@@ -2108,6 +2109,11 @@ class EntityShape:
     columns: tuple[str, ...]
     handling: Literal["recipe", "column"]
     brief2_addition: str | None
+    #: Each property's file column, where it is not the property's own name: Brief 2's name for the
+    #: value (ADR-120 Amendment 12 decision 8). `None` marks a property the file does not carry in
+    #: a column of its own (a literal, an endpoint's normalised form, an outsider's names, which sit
+    #: in the report's `subject_N_*` columns).
+    names: Mapping[str, str | None] = field(default_factory=dict)
 
 
 HANDLING_COLUMNS = (
@@ -2305,8 +2311,13 @@ _LINK_ROWS: tuple[tuple[Any, ...], ...] = (
 def _entity(
     label: str, props: set[str], file: str, recipe: str, key: str,
     *, moment: Moment = "seed", extra: tuple[str, ...] = (), addition: str | None = None,
+    names: Mapping[str, str | None] | None = None, key_col: str | None = None,
+    more: tuple[str, ...] = (),
 ) -> tuple[Any, ...]:  # fmt: skip
-    return (label, frozenset(props), file, recipe, moment, key, extra, addition)
+    """`names` and `key_col` give Brief 2's column for each property and for the identifying one;
+    `more` are the other columns Brief 2 names for this kind of entity that the file carries."""
+    return (label, frozenset(props), file, recipe, moment, key, extra, names or {}, key_col or key,
+            more, addition)  # fmt: skip
 
 
 _PERSON = {"family_name", "given_names", "date_of_birth", "aliases"}
@@ -2316,40 +2327,78 @@ _PLACE = {"name", "site_ref"}
 _POINT = ("lat", "lon")
 _ENDPOINT = {"value_raw", "value_normalised", "endpoint_kind"}
 _INCIDENT = {"name", "incident_ref", "category", "item", "occurred_at"}
+_NONE: Mapping[str, str | None] = {
+    "value_raw": None, "value_normalised": None, "endpoint_kind": None,
+    "e164": None, "handle": None, "imsi": None,
+}  # fmt: skip
+#: Brief 2's column for each property of an entity, where it is not the property's own name (the
+#: entity shapes' `_PROPERTY_COLUMNS`), and `None` for a property the file carries in no column of
+#: its own. A visitor's names are `visitor_*` (R3), a report's `sent_at` is `submitted_at` and its
+#: `document_kind` is `category` (R9); `title` keeps the plan's name (R9 derives it from the text).
+_VISITOR_NAMES: Mapping[str, str | None] = {
+    p: f"visitor_{p}" for p in ("family_name", "given_names", "date_of_birth", "aliases")
+} | {"nino": "visitor_nino"}
+_SUBJECT_NAMES = tuple(
+    f"subject_{i}_{n}" for i in (1, 2, 3) for n in ("family_name", "given_names", "date_of_birth")
+)
+_PLACE_MORE = ("place_kind", "parent_kind")
 _ENTITY_ROWS: tuple[tuple[Any, ...], ...] = (
     _entity(_P, {*_PERSON, "prison_number"}, _PRISONERS, "R1", "prison_number",
+            names={"prison_number": "nomis_id"}, key_col="nomis_id",
             addition="R1 must carry aliases, the principal's nickname among them, in a column."),
-    _entity(_V, {*_PERSON, "nino"}, _VISITS, "R3", "nino",
+    _entity(_V, {*_PERSON, "nino"}, _VISITS, "R3", "nino", names=_VISITOR_NAMES,
+            key_col="visitor_nino",
             addition="R3 must carry each visitor's date_of_birth and aliases (the coordinator's "
             '"Mo") beside the NINO.'),
-    _entity(_N, {*_PERSON, "nino"}, _REPORTS, "R9", "nino", moment="chapter4", addition=_NAMED),
+    _entity(_N, {*_PERSON, "nino"}, _REPORTS, "R9", "nino", moment="chapter4", addition=_NAMED,
+            names={"family_name": None, "given_names": None, "date_of_birth": None,
+                   "aliases": None, "nino": "subject_1"},
+            key_col="subject_1", more=_SUBJECT_NAMES),
     _entity("Establishment",
             {"name", "establishment_ref", "niu_area", "soct_region", "security_category"},
-            _ESTATE, "R11", "establishment_ref"),
-    _entity("Location:wing", _PLACE, _ESTATE, "R11", "site_ref", extra=_POINT),
-    _entity("Location:landing", _PLACE, _ESTATE, "R11", "site_ref"),
-    _entity("Location:cell", _PLACE, _ESTATE, "R11", "site_ref"),
-    _entity("Location:yard", _PLACE, _ESTATE, "R11", "site_ref", extra=_POINT),
+            _ESTATE, "R11", "establishment_ref", names={"establishment_ref": "place_ref"},
+            key_col="place_ref", more=_PLACE_MORE),
+    _entity("Location:wing", _PLACE, _ESTATE, "R11", "site_ref", extra=_POINT,
+            names={"site_ref": "place_ref"}, key_col="place_ref", more=_PLACE_MORE),
+    _entity("Location:landing", _PLACE, _ESTATE, "R11", "site_ref",
+            names={"site_ref": "place_ref"}, key_col="place_ref", more=_PLACE_MORE),
+    _entity("Location:cell", _PLACE, _ESTATE, "R11", "site_ref",
+            names={"site_ref": "place_ref"}, key_col="place_ref", more=_PLACE_MORE),
+    _entity("Location:yard", _PLACE, _ESTATE, "R11", "site_ref", extra=_POINT,
+            names={"site_ref": "place_ref"}, key_col="place_ref", more=_PLACE_MORE),
     _entity("Location:zone", _PLACE, _ESTATE, "R11", "site_ref", extra=_POINT,
+            names={"site_ref": "place_ref"}, key_col="place_ref", more=_PLACE_MORE,
             addition="R11 must gain the zone kind, a place made of other places."),
     _entity("Location:hall", _PLACE, _ESTATE, "R11", "site_ref",
+            names={"site_ref": "place_ref"}, key_col="place_ref", more=_PLACE_MORE,
             addition="R11 must gain the visits hall kind."),
     _entity("Location:place", _PLACE, _ESTATE, "R11", "site_ref", extra=_POINT,
+            names={"site_ref": "place_ref"}, key_col="place_ref", more=_PLACE_MORE,
             addition="R11 must gain the outside place kind, where a report is set away from any "
             "establishment."),
-    _entity("Organisation", {"name", "org_ref"}, "pid_soc_nominals.csv", "R12", "org_ref"),
+    _entity("Organisation", {"name", "org_ref"}, "pid_soc_nominals.csv", "R12", "org_ref",
+            names={"org_ref": "group_ref", "name": "group_name"}, key_col="group_ref",
+            more=("role",)),
     _entity("Incident:other", _INCIDENT, _INCIDENTS, "R4", "incident_ref"),
     _entity("Incident:throw_over", _INCIDENT, "pid_throwover_log.csv", "R10", "incident_ref",
+            names={"category": None, "item": "item_type"}, more=("recovered",),
             addition="R10 must carry each throw-over's name in a column."),
     _entity("Device", {"imei"}, _BATCH_1, "R6", "imei"),
     _entity("Device", {"imei"}, _BATCH_2, "R6", "imei", moment="chapter9"),
-    _entity("Endpoint:msisdn", {*_ENDPOINT, "e164"}, _PINS, "R5", "e164"),
-    _entity("Endpoint:handle", {*_ENDPOINT, "handle"}, _PINS, "R5", "handle"),
-    _entity("Endpoint:imsi", {*_ENDPOINT, "imsi"}, _BATCH_1, "R6", "imsi"),
-    _entity("Endpoint:imsi", {*_ENDPOINT, "imsi"}, _BATCH_2, "R6", "imsi", moment="chapter9"),
-    _entity("Endpoint:account", _ENDPOINT, _MONEY, "R7", "value_normalised"),
+    _entity("Endpoint:msisdn", {*_ENDPOINT, "e164"}, _PINS, "R5", "e164", names=_NONE,
+            key_col="called_number"),
+    _entity("Endpoint:handle", {*_ENDPOINT, "handle"}, _PINS, "R5", "handle", names=_NONE,
+            key_col="pin_account"),
+    _entity("Endpoint:imsi", {*_ENDPOINT, "imsi"}, _BATCH_1, "R6", "imsi", names=_NONE,
+            key_col="imsi"),
+    _entity("Endpoint:imsi", {*_ENDPOINT, "imsi"}, _BATCH_2, "R6", "imsi", moment="chapter9",
+            names=_NONE, key_col="imsi"),
+    _entity("Endpoint:account", _ENDPOINT, _MONEY, "R7", "value_normalised", names=_NONE,
+            key_col="payer_account", more=("payee_account",)),
     _entity("Document", {"title", "sent_at", "media_kind", "document_kind"}, _REPORTS, "R9",
-            "report_ref", moment="chapter4"),
+            "report_ref", moment="chapter4",
+            names={"sent_at": "submitted_at", "document_kind": "category", "media_kind": None},
+            more=("report_text",)),
     _entity("Document", {"title", "media_kind", "object_ref"}, "picture route", "seed",
             "picture"),
 )  # fmt: skip
@@ -2381,6 +2430,10 @@ def _handling_columns(file: str) -> tuple[str, ...]:
     return HANDLING_COLUMNS if file in _COLUMN_FILES else ()
 
 
+def _unique(columns: Iterable[str]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(columns))
+
+
 _SEEN_FILES: set[str] = set()
 ENTITY_SHAPES: tuple[EntityShape, ...] = tuple(
     EntityShape(
@@ -2390,11 +2443,26 @@ ENTITY_SHAPES: tuple[EntityShape, ...] = tuple(
         recipe,
         moment,
         key,
-        (key, *sorted(p for p in props if p != key), *extra, *_handling_columns(file)),
+        _unique(
+            (
+                key_col,
+                *(
+                    col
+                    for p in sorted(props - {key})
+                    if (col := names.get(p, p)) is not None
+                ),
+                *extra,
+                *more,
+                *_handling_columns(file),
+            )
+        ),
         _handling_of(file),
         add,
+        names,
     )  # fmt: skip
-    for label, props, file, recipe, moment, key, extra, add in _clause(_ENTITY_ROWS, 2, _SEEN_FILES)
+    for label, props, file, recipe, moment, key, extra, names, key_col, more, add in _clause(
+        _ENTITY_ROWS, 2, _SEEN_FILES
+    )
 )
 LOAD_SHAPES: tuple[LoadShape, ...] = tuple(
     LoadShape(
@@ -2441,6 +2509,21 @@ _IDENTIFIERS = (
     "prison_number", "nino", "site_ref", "establishment_ref", "org_ref", "incident_ref", "imei",
     "value_normalised",
 )  # fmt: skip
+
+
+def start_of(value: date | datetime) -> datetime:
+    """A date's first second in UTC; a date-time as it stands."""
+    return _start_of(value)
+
+
+def end_of(value: date | datetime) -> datetime:
+    """A date's last second (23:59:59) in UTC; a date-time as it stands."""
+    return _end_of(value)
+
+
+def cell_text(value: object) -> str:
+    """A plan value as a CSV cell (see `_cell`)."""
+    return _cell(value)
 
 
 def _start_of(value: date | datetime) -> datetime:
@@ -2713,6 +2796,15 @@ class _PlanIndex:
         return "chapter9" if key in ("handset:batch2", "sim:batch2") else "seed"
 
 
+def entity_moment(plan: Plan, key: str) -> Moment:
+    """The moment an entity is loaded at: the reports and the outsiders they name at "chapter4", the
+    second seized handset and its SIM at "chapter9", everything else at "seed". `KeyError` for a key
+    the plan does not hold."""
+    if key not in plan._entity_index:
+        raise KeyError(key)
+    return plan._rows._moment(key)
+
+
 def mixed_files(plan: Plan) -> frozenset[str]:
     """The files whose rows carry more than one handling, derived from the plan's links and
     entities by their shapes; the two carve-outs, which no file carries, are left out."""
@@ -2739,15 +2831,33 @@ def file_columns(file: str) -> tuple[str, ...]:
             columns += [c for c in sh.columns if c not in columns and c not in HANDLING_COLUMNS]
     for entity_shape in ENTITY_SHAPES:
         if entity_shape.file == file:
-            columns += [
-                c
-                for c in entity_shape.columns
-                if c not in columns
-                and c not in HANDLING_COLUMNS
-                and c != entity_shape.key
-                and c not in entity_shape.properties
-            ]
+            columns += [c for c in entity_shape.columns if c in _POINT and c not in columns]
     return (*columns, *_handling_columns(file))
+
+
+def file_header(file: str) -> tuple[str, ...]:
+    """Every column a file's shapes name, in first-seen order: its links' columns, then its
+    entities' (Brief 2's names, ADR-120 Amendment 12 decision 8), then the handling columns where
+    the contract says the file carries them (`handling="column"`), in every profile. A column the
+    plan holds no value for (`recovered`, `role`) is here, and empty."""
+    if file not in _FILES:
+        raise ValueError(f"{file!r} is not one of the plan's files")
+    columns: list[str] = []
+    shapes: list[LoadShape | EntityShape] = [*LOAD_SHAPES, *ENTITY_SHAPES]
+    for sh in shapes:
+        if sh.file == file:
+            columns += [c for c in sh.columns if c not in columns and c not in HANDLING_COLUMNS]
+    return (*columns, *_handling_columns(file))
+
+
+def entity_shape(plan: Plan, key: str) -> EntityShape:
+    """The entity shape that writes an entity: the one of its file's kind and moment."""
+    index = plan._rows
+    file, label, moment = index.entity_file[key], index.label[key], index._moment(key)
+    for shape in ENTITY_SHAPES:
+        if (shape.file, shape.entity_type, shape.moment) == (file, label, moment):
+            return shape
+    raise KeyError(key)
 
 
 def _fill_link(

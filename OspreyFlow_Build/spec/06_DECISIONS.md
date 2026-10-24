@@ -14960,6 +14960,144 @@ rulings were given to unit 5a's writer in chat, and the unit's review found them
    only a single-call week between the first and last live weeks is at the midpoint, as decision 1
    says.
 
+### ADR-120, Amendment 12 (24 October 2026) — the generated files' remaining rules (stage 5 unit 5b)
+
+Status: **ACCEPTED by the coordinator under the owner's delegation, 24 October 2026** (asked "When
+the work finds a spec gap or an error in an ADR, what may I accept without you?", the owner chose
+"Everything"). Adversarially reviewed three times; its last review left minor points, made here.
+These are unit 5b's rulings, recorded (rule 11).
+
+1. **A store write's provenance names its own dataset's source.**
+   - **The rule.** `pid_writes` gives each element the source document `<source>:<dataset id>`:
+     `pid-generator:prison-intelligence` for the demo dataset and
+     `pid-scale-generator:prison-intelligence-scale` for the scale one (D6's sources).
+   - **Why.** `scripts/stamp_datasets.py` files a document under the seed whose source it equals,
+     or that it begins with followed by a colon. Its ArcadeDB SQL is `document_id = :src OR
+     document_id LIKE :pre` with `:pre` = `<source>:%`. With the generator's source alone, the scale case's documents
+     would be filed under the demo dataset.
+   - **Refused.** Any other dataset id is refused, and so is a plan written into the other profile's
+     dataset.
+   - **The test.** Only the pattern side, each seed's `source`, can carry a wildcard. So the test
+     asserts that no `source` in `SEED_DATASETS` (every seed) contains `%`, `?` or `_`, whichever of
+     them ArcadeDB's `LIKE` treats as a wildcard. It then checks filing with a copy of the rule.
+2. **Columns that live in the files only.**
+   - **`duration_s` and `direction`.** The call file's `duration_s` and `direction`, and the
+     seized-handset files' `duration_s`, are written to the files and are not link properties in
+     `pid_writes`. A Studio load can write them on its links, since `COMMUNICATED_WITH` declares both.
+   - **The rest.** The call file's `sequence` and the seized-handset file's `kind` are file columns
+     only. The composed ontology (core and NIEM) declares neither, so a recipe leaves them
+     unmapped.
+   - **Why it does not matter here.** The live access test compares counts, paths and weights, which
+     none of these affect.
+3. **Handling columns follow the contract, in every profile.**
+   - **The rule.** A file carries the six handling columns exactly when the contract
+     (`LOAD_SHAPES`/`ENTITY_SHAPES`, `handling="column"`) says so, in every profile, even where one
+     profile's rows happen to hold one handling. So a recipe built from the contract always finds
+     them.
+   - **The test.** In both profiles, a file's header carries the six handling columns exactly when
+     the contract says "column", and every file a profile's rows make mixed is among the column
+     files. It is shown red by removing a file the scale profile makes mixed, such as
+     `pid_soc_nominals.csv`, from the contract's column files.
+   - **Overridden.** This supersedes the profile-dependent reading 5b's first build used.
+4. **Brief 2 columns the plan holds no value for are kept, empty.** R10's `recovered` and R12's
+   `role` stay in their files' headers, left empty, as R9's subject roles are (Amendment 10 decision
+   4). R1's `wing_ref` and `cell_ref` are not kept: they moved to the cell-stay file under R1's split
+   addition (Amendment 9 decision 1). The test's table of Brief 2 columns says so.
+5. **A file with no rows is not written.** The test pins the list:
+   - in the scale profile, the call, reports, both seized-handset, number-owner, report-incident
+     and throw-over files, and the pictures;
+   - in the demo profile, none.
+6. **Generation details.**
+   - **Draws.** Every random draw comes from the plan's seed. Most are hashed with the file or
+     purpose they serve; the call file's mess and its durations use their own seeded generators. So
+     a change to one file's draws moves no other file.
+   - **Number forms.**
+     - In the call file, every outside number is written in all four forms at least once.
+     - Wherever a number appears in any file, its first row in each file uses the plan's own
+       written form (`value_raw`). That holds for the call file, the seized-handset files and the
+       number-owner file alike.
+     - So whichever recipe runs first, its first row gives the plan's `value_raw`.
+     - **The one exception is deliberate.** In the reports file, the only row naming `+447700900603`
+       is teaching row 17, carrying `07700 900 6O3`, which `msisdn` refuses. Its corrected value
+       equals that number's `value_raw`, so the repaired run creates nothing new and agrees with the
+       plan. The first-row test exempts that row and asserts the correction.
+   - **The report reference.** A report's `report_ref` is its IR reference as its text shows it (for
+     example `IR 0263`), in every file that names a report (`pid_report_incidents.csv` included).
+     - IR references are unique across the 350 reports.
+     - Rows are still ordered by plan key, so teaching rows 17 and 101 stay where they are.
+     - A test asserts the uniqueness, and that `report:` appears in no CSV.
+   - **The CSV writing.** The files are written with `csv.writer`, UTF-8, `\n` line ends and one
+     header row.
+   - **The manifest.**
+     - It records planted rows' positions as 1-based data rows, the header excluded, and says so.
+     - It records the counts actually written, not constants.
+     - It records the runtime `zlib` version.
+     - It carries no timestamp, and says byte-identity holds on one interpreter and `zlib` runtime.
+   - **Picture uniqueness.** Every picture differs from every other (Amendment 9 decision 8). A
+     seeded 32-bit strip along each picture's lower edge makes a collision improbable, and the test
+     guarantees it.
+7. **The contact sheet** is 18 pictures, laid out 6 by 3 at 128 pixels:
+   - the principal, the brother, the coordinator and six other people;
+   - the three establishments;
+   - a hotspot yard and an ordinary yard;
+   - Wing F;
+   - Pryce's handset;
+   - both groups.
+
+   It is written by the script for a human to look at, is not in the manifest, and its test
+   checks its tiles are those pictures.
+8. **Entity shapes carry Brief 2's names.** Amendment 11 decision 3 deferred the entity columns to
+   this unit. `ENTITY_SHAPES` itself takes Brief 2's names wherever Brief 2 names the value (a
+   visitor's `visitor_nino` and names; a report's `submitted_at`, `category` and `report_text`;
+   and so on).
+   - **The mapping.** An entity shape maps each property to its column as `_PROPERTY_COLUMNS` does
+     for links (a visitor's `family_name` is `visitor_family_name`). A report row's subjects fill
+     `subject_1…3_*` from the one Person shape, numbered by position. `title` keeps the plan's name.
+   - **File-only columns.** A file's columns are its shapes' columns, then `EXTRAS`: the file-only
+     columns, such as `duration_s`, `sequence` and `reviewer_initials`, which no shape names.
+   - **The test.** It asserts each file's header equals the shapes' columns plus `EXTRAS`, exactly
+     and in order, and that `EXTRAS` names no shape column.
+9. **Store writes carry the recipes' normalised identifiers.** The `imei` adapter normalises an
+   IMEI to its 14 digits, the check digit dropped, and the `imsi` adapter normalises an IMSI. So
+   `pid_writes` applies the same adapters to a Device's `imei` and a SIM's identifier, as it already
+   carries each number's normalised value. The files keep the written forms. A test asserts every
+   Device and SIM `pid_writes` writes carries the adapter's value, so a Studio load and the live test
+   store the same identifier. Another test asserts each seized-handset file's `imei` cell is the
+   plan's written 15-digit value.
+   - **Cost.** The store holds 14-digit IMEIs, so anything that finds a handset by its written
+     15-digit form must normalise it through `imei` first: an analyst's search, and any script step
+     that names an IMEI.
+10. **What this amendment overrides.**
+   - The stage 5 specification's §3 `pid-generator:{dataset}`.
+   - §2's `csv.DictWriter`, and its "one CSV per distinct shape file", for files with no rows.
+   - Amendment 9 decision 3's "a file of one handling carries none".
+   - The stage 5 specification's §2 "plus the handling columns where the file is mixed", and its §6
+     "present on exactly the mixed files".
+
+Tests: `tests/scenarios/test_pid_files.py`. It covers:
+- the round trip through the real `dedup_key`, with the full digest, the R6 identity adapters, and
+  Endpoints created from every file that names a number;
+- the provenance per dataset, and the dataset tied to the profile;
+- the handling columns against the contract;
+- the empty kept columns;
+- the absent files;
+- the mess counts and positions, as written;
+- the four written forms;
+- the first row of every number in each file;
+- the manifest;
+- every picture distinct and valid;
+- the yard pictures: all twelve drawn through `picture_writes`, identical after the module is
+  reloaded with the plan's hotspots patched, shown red by an import used in drawing;
+- the contact sheet's tiles;
+- each file's header equal to its shapes' columns plus `EXTRAS` (decision 8);
+- the entity shapes' Brief 2 names (decision 8);
+- the report references and line ends (decision 6);
+- the handsets and SIMs as the adapters make them (decision 9);
+- the store writes against the plan, in both profiles.
+
+`tests/demo_fixtures/test_datasets.py`: no seed's source carries a `LIKE` wildcard, and each dataset's
+documents are filed only under their own seed, by a copy of the rule `stamp_datasets` applies.
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
