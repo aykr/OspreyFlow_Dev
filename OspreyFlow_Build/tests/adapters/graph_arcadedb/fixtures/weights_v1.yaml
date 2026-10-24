@@ -1,12 +1,37 @@
-# The frozen baseline of version 1 of the weights file (ADR-120 D3). An old version of
-# `packages/ontology/weights/default.yaml` is never edited, as an ADR is not; this copy is what
-# `test_weight_rules.py` compares the real file against. Never change it: a recalibration is a
-# new version in the real file, and this file stays as it is.
+# The frozen baseline of versions 1 and 2 of the weights file (ADR-120 D3; ADR-123 for version 2).
+# An old version of `packages/ontology/weights/default.yaml` is never edited, as an ADR is not;
+# this copy is what `test_weight_rules.py` compares the real file against. Never change a version
+# here: a recalibration is a new version in the real file, appended here once it is accepted, and
+# the versions already here stay as they are. (The file keeps its name, `weights_v1.yaml`, from
+# when it held version 1 alone.)
 versions:
   - version: 1
     alpha: 0.5
     beta: 0.2
     gamma: 0.3
+    half_life_days: 90
+    midpoint: 0.3666666666666667
+    scale: 0.16666666666666666
+    default: {unit: one occurrence, heavy: 10}
+    rules:
+      SHARED_CELL_WITH: {unit: one week shared, heavy: 12}
+      VISITED: {unit: one visit, heavy: 8}
+      COMMUNICATED_WITH: {unit: one call, heavy: 40}
+      TRANSACTED: {unit: one transfer, heavy: 6}
+      MENTIONED_IN: {unit: one report, heavy: 3}
+      ROLE_IN: {unit: one incident, heavy: 3}
+      IN_CONFLICT_WITH: {unit: one episode, heavy: 2}
+      CO_DEFENDANT_OF: {fixed: 0.75}
+      FAMILY_OF: {fixed: 0.75}
+      MEMBER_OF: {fixed: 0.75}
+      HELD_AT: {fixed: 0.75}
+      DEPICTS: {fixed: 0.2}
+  - version: 2
+    # ADR-123: a link's weight comes from the link alone. Gamma is 0, so no other link's count
+    # reaches a weight; every other parameter and every rule is version 1's.
+    alpha: 0.5
+    beta: 0.2
+    gamma: 0
     half_life_days: 90
     midpoint: 0.3666666666666667
     scale: 0.16666666666666666

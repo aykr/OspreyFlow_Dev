@@ -85,7 +85,7 @@ from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from ontology.packs import load_deployment_ontology, load_pack
 from ontology.validation import validate_edge_endpoints, validate_properties
-from ontology.weights import load_weight_rules
+from ontology.weights import load_weight_history
 from schemas.compute import CentralityRequest
 from schemas.domain import (
     AuditStub,
@@ -1392,7 +1392,7 @@ def test_ch6_the_coordinator_visits_the_principal_and_one_payer_funds_three_pris
     transfers = demo.links("TRANSACTED")
     from_payer = [lk for lk in transfers if lk.source == "account:payer"]
     assert {lk.target: lk.occurrences for lk in from_payer} == {
-        "cash:principal": 8, "cash:relay_1": 7, "cash:relay_2": 7,
+        "cash:principal": 9, "cash:relay_1": 8, "cash:relay_2": 8,
     }  # fmt: skip
     for lk in from_payer:
         assert lk.properties["transaction_type"] == "TRANSFER"
@@ -2037,13 +2037,20 @@ def _circle_verdict(
     quarter, eighth = math.ceil(n / 4), math.ceil(n / 8)
     return {
         "n": n, "call": call, "transfers": transfers, "lightest": lightest,
-        "green": call <= 3 and max(transfers) <= quarter and max(lightest) <= eighth,
+        # ADR-123 decision 6: the call is 1st at every point (Amendment 7's own threshold, the top
+        # three, must hold too); a tie takes the worse place, so `call == 1` is a clear first.
+        "green": call == 1 and call <= 3 and max(transfers) <= quarter
+        and max(lightest) <= eighth,
     }  # fmt: skip
 
 
 def test_the_principals_circle_weighs_as_amendment_7_says(demo: View) -> None:
     # ADVISORY: the binding test is stage 5's, against a store. This one has to count itself.
-    rules = load_weight_rules()
+    # ADR-123: weights version 2 (gamma 0), named by version and not as "latest", so a later
+    # version cannot change what this test measures. At gamma 0 the payer's transfers must be
+    # 9, 8 and 8 for the circle to hold at the far-past recency point.
+    rules = load_weight_history()[1]
+    assert (rules.version, rules.gamma) == (2, 0.0)
     cut = datetime(2026, 4, 30, 23, 59, 59, tzinfo=UTC)
     assert _as_date(pid_plan.CUT_OFF) == cut.date()
     for moment in ("seed", "chapter4"):

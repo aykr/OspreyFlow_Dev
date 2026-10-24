@@ -3,7 +3,8 @@ scanning the edge type (ADR-056 Amendment 19).
 
 Seen, 1 October 2026: ArcadeDB stores a few edges twice, and the second record is one a traversal
 never reaches but a scan of the type finds. The adapter's corpus total was `g.E().hasLabel(…)`, a
-scan, so every stray inflated the total behind the weight of each edge written afterwards. The
+scan, so every stray inflated the total stored with each edge written afterwards (and so its
+weight, under weights version 1; from version 2 gamma is 0, ADR-123). The
 store below answers the way the real one does about strays: a scan sees 13,076 records, a
 traversal from the vertices reaches the 13,068 real edges. The test fails if the total comes from
 the scan, whatever the query happens to look like.
@@ -43,7 +44,7 @@ def _stats(store: _StoreWithStrays) -> tuple[int, int, int]:
 
 def test_the_corpus_total_does_not_count_records_only_a_scan_finds() -> None:
     """Catches a corpus total taken from a scan of the edge type: it would be 13,076, eight more
-    than the edges that exist, and every later weight would be computed against it."""
+    than the edges that exist, and every later set of stored components would carry it."""
     _, _, total = _stats(_StoreWithStrays())
     assert total == TRAVERSAL_REACHES
 

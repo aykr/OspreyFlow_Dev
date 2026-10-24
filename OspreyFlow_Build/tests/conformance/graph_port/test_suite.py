@@ -2274,30 +2274,44 @@ async def test_every_stored_weight_carries_the_current_parameter_set(
         )
 
 
+@pytest.mark.parametrize("weights_version", [1, 2])
 async def test_the_stored_weight_is_what_the_rules_compute(
-    factory: GraphAdapterFactory,
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch, weights_version: int
 ) -> None:
     """ADR-120 D3, the weight on the wire equal to the weight computed, at the `now` the adapter
     took (stored as the components' `computed_at`) and with an interval in the past, so a recency
     that was ignored or taken as 1 shows. Catches a stored weight that does not follow from the
-    components stored beside it under the current rules, for a counted, a structural and a
-    default-rule type and a self-loop."""
-    from ontology.weights import load_weight_rules
+    components stored beside it under the rules in force, for a counted, a structural and a
+    default-rule type and a self-loop.
 
-    rules = load_weight_rules()
+    ADR-123: run under version 1 and under version 2, each pinned by index and given to the
+    adapter (`_use_weights_version`), not "latest". Only version 1 (gamma 0.3) makes the flag
+    matter: a caller that passed the wrong `self_loop` stores another weight there, and the
+    assertion below proves the case is one that term moves. Under version 2 the flag changes
+    nothing, which is asserted too, so each case is what it claims to be."""
+    from ontology.weights import load_weight_history
+
+    rules = load_weight_history()[weights_version - 1]
+    assert rules.version == weights_version
+    _use_weights_version(monkeypatch, weights_version)
     async with factory.context() as adapter:
         for label, edge in (await _weighted_edges_by_label(adapter)).items():
             components = edge.weight_components
             assert components is not None, label
             assert edge.interval is not None and edge.interval.valid_to is not None, label
             assert components.computed_at > edge.interval.valid_to + timedelta(days=100), label
+            assert components.parameter_set == rules.parameter_set(edge.type), label
 
             is_loop = edge.source == edge.target
             assert edge.weight == pytest.approx(_recomputed(edge, rules, is_loop), abs=1e-9), label
             if label in ("COMMUNICATED_WITH", "SELF_LOOP", "USES"):
-                # A caller that passed the wrong flag would store another weight: the counts here
-                # give a non-zero mutual-information term.
-                assert abs(edge.weight - _recomputed(edge, rules, not is_loop)) > 1e-3, label
+                other_flag = _recomputed(edge, rules, not is_loop)
+                if weights_version == 1:
+                    # A caller that passed the wrong flag would store another weight: the counts
+                    # here give a non-zero mutual-information term.
+                    assert abs(edge.weight - other_flag) > 1e-3, label
+                else:
+                    assert edge.weight == pytest.approx(other_flag, abs=1e-12), label
 
 
 async def test_a_self_loop_counts_its_occurrences_twice_in_its_nodes_degree(
@@ -4245,3 +4259,329 @@ async def test_a_node_written_again_lower_keeps_its_higher_handling(
         assert await adapter.get_node(secret.id, OFFICIAL) is None
         kept = await adapter.get_node(secret.id, CLEARED)
         assert kept is not None and kept.handling.classification == "SECRET"
+
+
+# --- ADR-123: a link's weight comes from the link alone ------------------------------------------
+#
+# A visible link K's stored weight must not move because of a link L the viewer cannot see. Each
+# case builds two stores that differ only by L, writes K the same way into both, and compares K's
+# weight as the viewer reads it. `now_utc` is pinned where the adapter and the bulk loader import
+# it (two bindings), so recency is equal and only the counts can differ. Each case is shown red
+# under weights version 1 by `test_the_two_store_case_is_red_under_weights_version_1` (and, for
+# the bulk path, `test_the_bulk_two_store_case_is_red_under_weights_version_1`): the same two
+# stores, the adapter handed version 1's rules, must give K two different weights, so a green
+# under the latest version is not a case whose counts never reached the weight.
+#
+# The paths are how K gets its weight: `upsert_edges`, `supersede_edge` (K is the replacement),
+# `supersede_node` (K is re-pointed and keeps the weight it had) and the bulk loader
+# (`test_bulk_loader.py`). L is written before K is weighed, except in the three cases that raise
+# L's handling after K was weighed (an edge correction, a same-pair merge that raises handling, a
+# node correction): there L is visible when K is weighed and hidden afterwards, which is the
+# route a weight stored once at write would otherwise keep.
+
+#: The clock the adapter and the bulk loader read, so recency is equal in both stores.
+PINNED_NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+#: Sees K, and sees none of the links the cases hide from it.
+VIEWER = Principal(
+    id="analyst-viewer", clearance="OFFICIAL", org_unit="unit-1", datasets=["fixture"]
+)
+#: Sees everything the cases write, to prove each hidden link is stored and is hidden from VIEWER.
+EVERYTHING = Principal(
+    id="analyst-all",
+    clearance="SECRET",
+    org_unit="unit-restricted",
+    receivable_handling_codes=["R"],
+)
+#: L is hidden when it is written, in turn: above the viewer's clearance, under a restricted
+#: handling code, to a node the viewer cannot see, and in a dataset outside the viewer's case.
+HIDING_CASES = ("secret", "restricted", "hidden_node", "other_dataset")
+#: L is visible when K is weighed and raised afterwards.
+RAISING_CASES = ("raised_by_supersede_edge", "raised_by_merge", "raised_by_supersede_node")
+ALL_CASES = (*HIDING_CASES, *RAISING_CASES)
+K_OCCURRENCES = 3
+L_OCCURRENCES = 12
+_NODE_DATASETS = ["fixture", "enron"]
+
+
+def _pin_now(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both places the clock is imported: the adapter's (`upsert_edges`, `supersede_edge`,
+    `supersede_node`) and the bulk loader's."""
+    import adapters.graph_arcadedb.adapter as adapter_module
+    import adapters.graph_arcadedb.bulk as bulk_module
+
+    monkeypatch.setattr(adapter_module, "now_utc", lambda: PINNED_NOW)
+    monkeypatch.setattr(bulk_module, "now_utc", lambda: PINNED_NOW)
+
+
+def _use_weights_version(monkeypatch: pytest.MonkeyPatch, version: int | None) -> None:
+    """The conformance factory builds the adapter itself (`arcadedb_adapter`) and takes no rules,
+    and the adapter reads the weights file by `load_weight_rules()` where it is constructed and
+    hands the result to its bulk loader. So a version is chosen by pointing that name, in the
+    adapter's module, at the version by index; `None` leaves the latest in force."""
+    if version is None:
+        return
+    import adapters.graph_arcadedb.adapter as adapter_module
+    from ontology.weights import load_weight_history
+
+    rules = load_weight_history()[version - 1]
+    assert rules.version == version
+    monkeypatch.setattr(adapter_module, "load_weight_rules", lambda: rules)
+
+
+def _k_interval() -> Interval:
+    return Interval(
+        valid_from=PINNED_NOW - timedelta(days=200), valid_to=PINNED_NOW - timedelta(days=120)
+    )
+
+
+def _link_k(source: str, target: str, *, occurrences: int = K_OCCURRENCES) -> EdgeWrite:
+    return _edge(
+        "COMMUNICATED_WITH",
+        source,
+        target,
+        classification="OFFICIAL",
+        occurrences=occurrences,
+        interval=_k_interval(),
+        datasets=["fixture"],
+    )
+
+
+def _link_l(case: str, source: str, target: str) -> EdgeWrite:
+    """L, of K's type and at K's source node, so it can move K's degree and its type's total."""
+    base: dict[str, Any] = {
+        "classification": "OFFICIAL",
+        "occurrences": L_OCCURRENCES,
+        "interval": _k_interval(),
+        "datasets": ["fixture"],
+    }
+    if case == "secret":
+        base["classification"] = "SECRET"
+    elif case == "restricted":
+        base.update(handling_code="R", owning_unit="unit-restricted")
+    elif case == "other_dataset":
+        base["datasets"] = ["enron"]
+    # "hidden_node": the link is ordinary, its far end is not (see `_two_store_nodes`). The
+    # raising cases write the visible form here and raise it afterwards.
+    return _edge("COMMUNICATED_WITH", source, target, **base)
+
+
+async def _two_store_nodes(adapter: GraphPort, case: str) -> tuple[str, str, str]:
+    """K's two ends and L's far end: the same in both stores. Only the hidden-node case makes
+    the far end one the viewer cannot see."""
+    (ka, kb, lx), _ = await _write(
+        adapter,
+        [
+            _node(
+                "Endpoint",
+                classification="OFFICIAL",
+                datasets=_NODE_DATASETS,
+                value_normalised="+441000000001",
+            ),
+            _node(
+                "Endpoint",
+                classification="OFFICIAL",
+                datasets=_NODE_DATASETS,
+                value_normalised="+441000000002",
+            ),
+            _node(
+                "Endpoint",
+                classification="SECRET" if case == "hidden_node" else "OFFICIAL",
+                datasets=_NODE_DATASETS,
+                value_normalised="+441000000003",
+            ),
+        ],
+        [],
+    )
+    return ka, kb, lx
+
+
+async def _replace_node(
+    adapter: GraphPort, node_id: str, *, classification: str, value: str
+) -> str:
+    tx = await adapter.begin_transaction()
+    new_id = await adapter.supersede_node(
+        node_id,
+        _node(
+            "Endpoint",
+            classification=classification,
+            datasets=_NODE_DATASETS,
+            value_normalised=value,
+        ),
+        tx,
+    )
+    await adapter.commit_transaction(tx)
+    return new_id
+
+
+async def _build_store(
+    adapter: GraphPort, *, case: str, path: str, with_link: bool, same_call: bool = False
+) -> tuple[str, str, str]:
+    """One of the two stores. Returns K's two ends as they stand at the end (a node correction
+    replaces one) and L's far end."""
+    from ports.graph import BulkGraphLoader
+
+    ka, kb, lx = await _two_store_nodes(adapter, case)
+    link_l = _link_l(case, ka, lx)
+    link_k = _link_k(ka, kb)
+    l_id: str | None = None
+    if with_link and not same_call:
+        _, (l_id,) = await _write(adapter, [], [link_l])
+
+    kb_end = kb
+    if path == "upsert":
+        await _write(adapter, [], [link_k])
+    elif path == "edge_supersede":
+        _, (first,) = await _write(adapter, [], [_link_k(ka, kb, occurrences=1)])
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_edge(first, link_k, tx)
+        await adapter.commit_transaction(tx)
+    elif path == "node_supersede":
+        await _write(adapter, [], [link_k])
+        kb_end = await _replace_node(
+            adapter, kb, classification="OFFICIAL", value="+441000000002"
+        )
+    elif path == "bulk":
+        if not isinstance(adapter, BulkGraphLoader):
+            pytest.skip("this adapter does not declare BulkGraphLoader")
+        await adapter.bulk_load_edges([link_l, link_k] if with_link and same_call else [link_k])
+    else:
+        raise AssertionError(f"unknown path {path!r}")
+
+    lx_end = lx
+    if with_link and case == "raised_by_supersede_edge":
+        assert l_id is not None
+        raised = _link_l("secret", ka, lx)
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_edge(l_id, raised, tx)
+        await adapter.commit_transaction(tx)
+    elif with_link and case == "raised_by_merge":
+        await _write(
+            adapter,
+            [],
+            [_link_l("secret", ka, lx).model_copy(update={"occurrences": 1})],
+        )
+    elif with_link and case == "raised_by_supersede_node":
+        lx_end = await _replace_node(
+            adapter, lx, classification="SECRET", value="+441000000003"
+        )
+    return ka, kb_end, lx_end
+
+
+async def _visible_k_weight(
+    adapter: GraphPort, *, case: str, path: str, with_link: bool, same_call: bool = False
+) -> float:
+    """K's weight as the viewer reads it. With L present, proves L is stored and is hidden from
+    the viewer, so the comparison is between stores that differ by a link the viewer cannot see
+    (not by one that is absent, or one the viewer can see)."""
+    ka, kb, lx = await _build_store(
+        adapter, case=case, path=path, with_link=with_link, same_call=same_call
+    )
+    seen = await adapter.edges_among([ka, kb], VIEWER)
+    assert len(seen) == 1, f"the viewer must see exactly K, saw {len(seen)}"
+    (link_k,) = seen
+    assert link_k.weight_components is not None
+    assert link_k.weight_components.occurrences == K_OCCURRENCES
+    if with_link:
+        assert len(await adapter.edges_among([ka, lx], EVERYTHING)) == 1, "L must be stored"
+        assert await adapter.edges_among([ka, lx], VIEWER) == [], "L must be hidden from the viewer"
+    return link_k.weight
+
+
+async def two_store_weights(
+    factory: GraphAdapterFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    case: str,
+    path: str,
+    version: int | None = None,
+    same_call: bool = False,
+) -> tuple[float, float]:
+    """K's weight without L and with L, each in a fresh database, under the weights version chosen
+    (`None` is the latest) and a pinned clock. Shared with `test_bulk_loader.py`."""
+    _pin_now(monkeypatch)
+    _use_weights_version(monkeypatch, version)
+    weights: dict[bool, float] = {}
+    for with_link in (False, True):
+        async with factory.context() as adapter:
+            weights[with_link] = await _visible_k_weight(
+                adapter, case=case, path=path, with_link=with_link, same_call=same_call
+            )
+    return weights[False], weights[True]
+
+
+@pytest.mark.parametrize("path", ["upsert", "edge_supersede", "node_supersede"])
+@pytest.mark.parametrize("case", ALL_CASES)
+async def test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link(
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch, case: str, path: str
+) -> None:
+    """ADR-123 decisions 1 and 2, `01_DOMAIN_MODEL.md` §6.1, rule 3: a link the viewer cannot see
+    (above their clearance, under a restricted handling code, to a node they cannot see, in another
+    dataset, or raised after K was weighed by a correction, a merge or a node correction) must not
+    move the stored weight of a link they can. Run under the latest weights version; the same cases
+    are shown red under version 1 by the test below."""
+    without, with_link = await two_store_weights(factory, monkeypatch, case=case, path=path)
+    assert with_link == without, (case, path, without, with_link)
+
+
+@pytest.mark.parametrize("path", ["upsert", "edge_supersede", "node_supersede"])
+@pytest.mark.parametrize("case", ALL_CASES)
+async def test_the_two_store_case_is_red_under_weights_version_1(
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch, case: str, path: str
+) -> None:
+    """Rule 15 for the test above: the same two stores with the adapter handed version 1's rules
+    (gamma 0.3) give K two different weights, in every case and by every path. A green above is
+    therefore not a pair of stores whose counts never reached K's weight."""
+    without, with_link = await two_store_weights(
+        factory, monkeypatch, case=case, path=path, version=1
+    )
+    assert abs(with_link - without) > 1e-6, (case, path, without, with_link)
+
+
+async def test_a_same_pair_merge_carries_another_datasets_occurrences_today(
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-123 decision 4 RECORDS an open route; it does not close it. A write to a pair the store
+    already holds is merged into the stored link whatever dataset wrote it (`_find_existing_edge`
+    does not filter by dataset), so a case reading one dataset sees the occurrences another wrote,
+    in the link's count and so in its weight.
+
+    This asserts today's behaviour. It is the defect logged in `07_BUILD_PLAN.md` as "a same-pair
+    merge carries another dataset's occurrences", for the owner to decide: when that is fixed,
+    this test changes with it (and must then assert the opposite). Here an `enron` write of 5 and a
+    `fixture` write of 2 to one pair give a viewer of `fixture` alone one link of 7, weighed as a
+    link of 7 and not as one of 2."""
+    _pin_now(monkeypatch)
+
+    async def stored_link(writes: list[tuple[list[str], int]]) -> Edge:
+        async with factory.context() as adapter:
+            (a, b), _ = await _write(
+                adapter,
+                [
+                    _node(
+                        "Endpoint",
+                        classification="OFFICIAL",
+                        datasets=_NODE_DATASETS,
+                        value_normalised=f"+44100000000{n}",
+                    )
+                    for n in (1, 2)
+                ],
+                [],
+            )
+            for datasets, occurrences in writes:
+                link = _link_k(a, b, occurrences=occurrences).model_copy(
+                    update={"datasets": datasets}
+                )
+                await _write(adapter, [], [link])
+            (seen,) = await adapter.edges_among([a, b], IN_FIXTURE)
+            return seen
+
+    merged = await stored_link([(["enron"], 5), (["fixture"], 2)])
+    seven = await stored_link([(["fixture"], 7)])
+    two = await stored_link([(["fixture"], 2)])
+
+    assert merged.datasets == ["enron", "fixture"]
+    assert merged.occurrences == 7, "the viewer of `fixture` alone sees enron's 5 in the count"
+    assert merged.weight_components is not None and merged.weight_components.occurrences == 7
+    assert merged.weight == pytest.approx(seven.weight, abs=1e-9)
+    assert abs(merged.weight - two.weight) > 1e-3, "and in the weight"
+

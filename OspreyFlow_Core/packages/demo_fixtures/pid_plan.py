@@ -1176,9 +1176,9 @@ def _add_cast(
     for who in ("principal", "relay_2", "brother"):
         _call_link(b, calls, f"pin:{who}", "number:unidentified", _UNIDENTIFIED_CALLS)
     for who, n, amount, first, last in (
-        ("principal", 8, 120.0, date(2025, 12, 5), date(2026, 4, 20)),
-        ("relay_1", 7, 90.0, date(2025, 12, 12), date(2026, 4, 18)),
-        ("relay_2", 7, 75.0, date(2026, 1, 9), date(2026, 4, 10)),
+        ("principal", 9, 120.0, date(2025, 12, 5), date(2026, 4, 20)),
+        ("relay_1", 8, 90.0, date(2025, 12, 12), date(2026, 4, 18)),
+        ("relay_2", 8, 75.0, date(2026, 1, 9), date(2026, 4, 10)),
     ):  # fmt: skip
         b.link(
             "TRANSACTED", "account:payer", f"cash:{who}", occ=n, first=first, last=last,

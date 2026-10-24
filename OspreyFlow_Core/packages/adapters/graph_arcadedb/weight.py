@@ -5,12 +5,15 @@ weight(e) = normalise( alpha * log1p(occurrences) / log1p(heavy(type))
                        + beta * recency(interval.to) + gamma * npmi(u, v) )
 ```
 
-`weight` is derived at load time from corpus-wide counts gathered from the store itself, but it is
-a load-time *snapshot*, never frozen ground truth: the mutual-information term depends on how the
-whole corpus looks, which changes as more data loads and again when a caller scopes the same
-formula to a working set rather than the full corpus. `WeightComponents` persists the raw counts
-the formula needs alongside the derived float, so a later, more scoped recompute is arithmetic
-over stored numbers, never a full corpus rescan.
+From weights version 2 (ADR-123) gamma is 0, so a link's weight comes from the link alone: its own
+occurrences and recency, or a structural type's fixed strength. No other link's count enters it,
+which is what keeps a link a viewer cannot see from moving the weight of one they can (rule 3).
+Version 1 (gamma 0.3) is kept, and the weights of links stored under it still carry the
+mutual-information term until they are reseeded or recomputed.
+
+`WeightComponents` still persists the raw counts the formula takes, and the adapter and the bulk
+loader still gather them; at gamma 0 they move no weight. The mutual-information term below is
+defined, and used only under version 1.
 
 The parameters (alpha, beta, gamma, the half-life, `midpoint` and `scale`) and each link type's
 rule (its `heavy` count, or a structural type's fixed strength) are the weights file's
@@ -41,10 +44,12 @@ def recency(valid_to: datetime | None, *, now: datetime, rules: WeightRules) -> 
 
 def npmi(components: WeightComponents) -> float:
     """Normalised pointwise mutual information of the pair against the corpus,
-    `pmi(u,v) / -ln p(u,v)` clamped to [-1, 1] — what suppresses a high-volume, low-information
-    relationship: the broadcast sender, the service number everyone calls. It is 1 when
-    `p(u,v) = 1` (the pair is the whole corpus) and 0 wherever the corpus total, the pair count or
-    either degree is 0."""
+    `pmi(u,v) / -ln p(u,v)` clamped to [-1, 1]. It is 1 when `p(u,v) = 1` (the pair is the whole
+    corpus) and 0 wherever the corpus total, the pair count or either degree is 0.
+
+    Defined here and used only by weights version 1 (gamma 0.3), where it suppressed a
+    high-volume, low-information relationship. From version 2 gamma is 0 and the term moves no
+    weight (ADR-123): it counted links a viewer cannot see, which rule 3 forbids."""
     total = components.corpus_total_occurrences
     if total == 0 or components.corpus_pair_count == 0:
         return 0.0

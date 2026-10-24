@@ -4,8 +4,12 @@
 # handling scheme, and the ontology and its packs do not hold it. It is an APPEND-ONLY list of
 # versions. A version already here is never edited, as an ADR is not; a recalibration is a new
 # version at the end, and `tests/adapters/graph_arcadedb/test_weight_rules.py` compares this file
-# with a frozen copy of version 1 to enforce it. Each stored weight records the version and rule
-# it was computed under (`WeightComponents.parameter_set`, "<version>/<rule>").
+# with a frozen copy holding versions 1 and 2 to enforce it. Each stored weight records the version
+# and rule it was computed under (`WeightComponents.parameter_set`, "<version>/<rule>").
+#
+# Every version after 1 keeps `gamma` at 0 (ADR-123: a link's weight comes from the link alone):
+# the loader (`ontology/weights.py`) refuses a later version with any other gamma, and a test
+# proves it.
 #
 # `midpoint` and `scale` are derived, never hand-tuned: scale = alpha / 3 and
 # midpoint = beta + alpha / 3, so that at recency 1 and a mutual-information term of 0 a count term
@@ -20,6 +24,29 @@ versions:
     alpha: 0.5
     beta: 0.2
     gamma: 0.3
+    half_life_days: 90
+    midpoint: 0.3666666666666667
+    scale: 0.16666666666666666
+    default: {unit: one occurrence, heavy: 10}
+    rules:
+      SHARED_CELL_WITH: {unit: one week shared, heavy: 12}
+      VISITED: {unit: one visit, heavy: 8}
+      COMMUNICATED_WITH: {unit: one call, heavy: 40}
+      TRANSACTED: {unit: one transfer, heavy: 6}
+      MENTIONED_IN: {unit: one report, heavy: 3}
+      ROLE_IN: {unit: one incident, heavy: 3}
+      IN_CONFLICT_WITH: {unit: one episode, heavy: 2}
+      CO_DEFENDANT_OF: {fixed: 0.75}
+      FAMILY_OF: {fixed: 0.75}
+      MEMBER_OF: {fixed: 0.75}
+      HELD_AT: {fixed: 0.75}
+      DEPICTS: {fixed: 0.2}
+  - version: 2
+    # ADR-123: a link's weight comes from the link alone. Gamma is 0, so no other link's count
+    # reaches a weight; every other parameter and every rule is version 1's.
+    alpha: 0.5
+    beta: 0.2
+    gamma: 0
     half_life_days: 90
     midpoint: 0.3666666666666667
     scale: 0.16666666666666666

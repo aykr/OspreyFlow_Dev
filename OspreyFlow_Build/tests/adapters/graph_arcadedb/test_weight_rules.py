@@ -41,6 +41,38 @@ old formula, the self-loop series with its mutual-information term left in.
 - `test_an_unlisted_type_takes_the_default_rule` and
   `test_the_parameter_set_names_the_version_and_the_rule` catch a type with no rule failing, or
   a parameter set that does not name the version and rule a weight was computed under.
+- ADR-123 (a link's weight comes from the link alone):
+  `test_version_two_loads_with_gamma_0_and_version_one_s_other_values` catches a version 2 whose
+  gamma is not 0 or whose other values are not version 1's;
+  `test_a_version_after_one_with_a_gamma_other_than_0_is_refused_naming_it` catches a loader that
+  takes a later version with gamma other than 0 (refused naming the version and the field, with a
+  positive control that differs only in gamma);
+  `test_under_version_two_a_link_s_weight_is_the_same_whatever_its_corpus_counts` catches any
+  corpus count reaching a weight, over the pair grid, and proves the same assertion fails under
+  version 1 (rule 15);
+  `test_the_grid_through_the_weight_would_catch_a_self_loop_not_told_it_is_one` plants the missing
+  `self_loop` flag through `compute_weight` itself and shows version 1 reports it and version 2
+  cannot; `test_version_two_keeps_the_calibration_and_weighs_its_count_and_recency_alone` catches a
+  version 2 whose calibration drifted from version 1's.
+- Which tests are pinned to version 1 (`_rules(1)`, by index, not "latest"), because they need the
+  mutual-information term (gamma 0.3) to be able to fail, and which run under both versions:
+  - Pinned to version 1: `test_a_self_loop_s_mutual_information_term_is_zero`,
+    `test_the_grid_through_the_weight_would_catch_a_self_loop_not_told_it_is_one` (its version 1
+    half), `test_under_version_two_a_link_s_weight_is_the_same_whatever_its_corpus_counts` (its
+    version 1 half) and `test_version_one_carries_the_brief_s_rules` (by index). The two grid
+    plants that compute the formula by hand
+    (`test_the_grid_would_catch_raw_pmi_under_the_count_term` and
+    `test_the_grid_would_catch_a_self_loop_given_its_pmi`) and
+    `test_npmi_is_bounded_and_defined_at_every_edge_case` take no rules, so are version 1's
+    constants by construction.
+  - Run under both versions (`weights_version` 1 and 2):
+    `test_adding_occurrences_to_one_pair_never_lowers_its_weight`,
+    `test_a_counted_type_s_heavy_count_draws_at_the_logistic_of_two`,
+    `test_one_occurrence_draws_at_its_formula_value`,
+    `test_a_structural_type_weighs_its_strength_whatever_its_occurrences`,
+    `test_an_unlisted_type_takes_the_default_rule`,
+    `test_the_parameter_set_names_the_version_and_the_rule` and
+    `test_on_a_star_the_heavy_links_outweigh_a_one_off_cell_share_and_the_picture`.
 - `test_on_a_star_the_heavy_links_outweigh_a_one_off_cell_share_and_the_picture` catches a
   formula that draws the principal's one-off links as heavy as the coordinator's calls.
 """
@@ -116,11 +148,25 @@ def _edited_versions(
     return sorted(int(v["version"]) for v in frozen if current.get(int(v["version"])) != v)
 
 
-@functools.cache
-def _rules() -> Any:
-    from ontology.weights import load_weight_rules
+#: The weights versions the cases that do not depend on the mutual-information term run under.
+VERSIONS = pytest.mark.parametrize("weights_version", [1, 2])
 
-    return load_weight_rules()
+
+@functools.cache
+def _rules(version: int = 1) -> Any:
+    """A version of the weights file, by index and not "latest" (ADR-123). Version 1 (gamma 0.3) is
+    the one the mutual-information cases are pinned to, so each still exercises the term and can
+    still fail; version 2 (gamma 0) is the other the unpinned cases run under."""
+    from ontology.weights import load_weight_history
+
+    rules = load_weight_history()[version - 1]
+    assert rules.version == version
+    assert rules.gamma == (0.3 if version == 1 else 0.0)
+    return rules
+
+
+def _rules_v2() -> Any:
+    return _rules(2)
 
 
 def _components(
@@ -158,6 +204,7 @@ def _weigh(
     *,
     valid_to: datetime | None,
     self_loop: bool,
+    rules: Any,
 ) -> float:
     from adapters.graph_arcadedb.weight import compute_weight
 
@@ -166,7 +213,7 @@ def _weigh(
         edge_type=edge_type,
         valid_to=valid_to,
         now=NOW,
-        rules=_rules(),
+        rules=rules,
         self_loop=self_loop,
     )
 
@@ -216,10 +263,11 @@ def test_version_one_carries_the_brief_s_rules() -> None:
 
 
 def test_no_earlier_version_of_the_weights_file_is_edited() -> None:
-    """Catches version 1 of the real file differing from the frozen copy; an appended version is
-    allowed and reported by nothing."""
+    """Catches version 1 or 2 of the real file differing from the frozen copy, or the real file
+    lacking version 2 (ADR-123); an appended version 3 is allowed and reported by nothing."""
     frozen = _raw_versions(FROZEN)
-    assert [v["version"] for v in frozen] == [1]
+    assert [v["version"] for v in frozen] == [1, 2]
+    assert frozen[1]["gamma"] == 0
     assert _edited_versions(frozen, _raw_versions(_weights_path())) == []
 
 
@@ -234,14 +282,19 @@ def test_the_history_check_reports_an_edited_version() -> None:
     recalibrated[0]["alpha"] = 0.6
     assert _edited_versions(frozen, recalibrated) == [1]
 
+    gamma_changed = copy.deepcopy(frozen)
+    gamma_changed[1]["gamma"] = 0.3
+    assert _edited_versions(frozen, gamma_changed) == [2]
+
     appended = copy.deepcopy(frozen)
-    later = copy.deepcopy(frozen[0])
-    later["version"] = 2
+    later = copy.deepcopy(frozen[1])
+    later["version"] = 3
     later["rules"]["COMMUNICATED_WITH"]["heavy"] = 41
     appended.append(later)
     assert _edited_versions(frozen, appended) == []
 
-    assert _edited_versions(frozen, []) == [1]
+    assert _edited_versions(frozen, frozen[:1]) == [2]
+    assert _edited_versions(frozen, []) == [1, 2]
 
 
 # --- the loader ---------------------------------------------------------------
@@ -249,7 +302,9 @@ def test_the_history_check_reports_an_edited_version() -> None:
 
 def _second_version() -> dict[str, Any]:
     version = copy.deepcopy(_raw_versions(FROZEN)[0])
-    version.update(version=2, alpha=0.6, midpoint=0.2 + 0.6 / 3, scale=0.6 / 3)
+    # Gamma 0, as ADR-123 requires of every version after 1: a second version with gamma 0.3 is
+    # refused, so a "good" file must not carry one.
+    version.update(version=2, alpha=0.6, gamma=0.0, midpoint=0.2 + 0.6 / 3, scale=0.6 / 3)
     return version
 
 
@@ -268,6 +323,67 @@ def _refused(path: Path) -> list[str]:
 
 def _names(message: str, version: int) -> bool:
     return re.search(rf"\bversion {version}\b", message) is not None
+
+
+def test_version_two_loads_with_gamma_0_and_version_one_s_other_values() -> None:
+    """ADR-123 decision 1. Catches a real weights file with no version 2, a version 2 whose gamma
+    is not 0, one whose other parameters or rules are not version 1's, and a parameter set that
+    does not name version 2. Read from the raw file and as the loader gives it."""
+    from ontology.weights import load_weight_history, load_weight_rules
+
+    raw_one, raw_two = _raw_versions(_weights_path())[:2]
+    assert raw_two["version"] == 2
+    assert raw_two["gamma"] == 0
+    assert {k: v for k, v in raw_two.items() if k not in ("version", "gamma")} == {
+        k: v for k, v in raw_one.items() if k not in ("version", "gamma")
+    }
+
+    one, two = load_weight_history()[:2]
+    assert (one.version, one.gamma) == (1, 0.3)
+    assert (two.version, two.gamma) == (2, 0.0)
+    for field in ("alpha", "beta", "half_life_days", "midpoint", "scale", "default", "rules"):
+        assert getattr(two, field) == getattr(one, field), field
+    assert load_weight_rules().version >= 2
+    assert two.parameter_set("COMMUNICATED_WITH") == "2/COMMUNICATED_WITH"
+    assert two.parameter_set("FAMILY_OF") == "2/FAMILY_OF"
+    assert two.parameter_set(UNLISTED) == "2/default"
+
+
+def test_a_version_after_one_with_a_gamma_other_than_0_is_refused_naming_it(
+    tmp_path: Path,
+) -> None:
+    """ADR-123 decision 2. Catches a loader that takes a version 2 or 3 carrying `gamma: 0.3`
+    (mutual information over the whole corpus would be back), or refuses it without naming the
+    version and the field. Positive controls differ only in gamma: version 1 may carry 0.3, and
+    versions 2 and 3 carrying 0 load, so each refusal is for the gamma and nothing else."""
+    from ontology.weights import load_weight_history
+
+    frozen = _raw_versions(FROZEN)
+    first, second = frozen[0], frozen[1]
+    third = copy.deepcopy(second)
+    third["version"] = 3
+
+    assert first["gamma"] == 0.3
+    only_one = _write_versions(tmp_path / "one.yaml", [first])
+    assert [v.version for v in load_weight_history(only_one)] == [1]
+    ok = _write_versions(tmp_path / "ok.yaml", [first, second, third])
+    assert [(v.version, v.gamma) for v in load_weight_history(ok)] == [(1, 0.3), (2, 0.0), (3, 0.0)]
+
+    second_gamma = copy.deepcopy(second)
+    second_gamma["gamma"] = 0.3
+    third_gamma = copy.deepcopy(third)
+    third_gamma["gamma"] = 0.3
+    #: label -> (the versions as written, the version the message must name)
+    cases = {
+        "version 2": ([first, second_gamma], 2),
+        "version 3": ([first, second, third_gamma], 3),
+    }
+    for label, (versions, offending) in cases.items():
+        path = _write_versions(tmp_path / f"{label.replace(' ', '_')}.yaml", versions)
+        for message in _refused(path):
+            assert _names(message, offending), (label, message)
+            assert "gamma" in message, (label, message)
+            assert "midpoint" not in message and "scale" not in message, (label, message)
 
 
 def test_the_loader_refuses_versions_out_of_order(tmp_path: Path) -> None:
@@ -642,9 +758,9 @@ def _series() -> tuple[tuple[str, tuple[WeightComponents, ...]], ...]:
 
 
 def _weigh_at(
-    edge_type: str, valid_to: datetime | None, c: WeightComponents, self_loop: bool
+    rules: Any, edge_type: str, valid_to: datetime | None, c: WeightComponents, self_loop: bool
 ) -> float:
-    return _weigh(c, edge_type, valid_to=valid_to, self_loop=self_loop)
+    return _weigh(c, edge_type, valid_to=valid_to, self_loop=self_loop, rules=rules)
 
 
 def _decreasing_steps(
@@ -664,7 +780,8 @@ def _decreasing_steps(
     return found
 
 
-def test_adding_occurrences_to_one_pair_never_lowers_its_weight() -> None:
+@VERSIONS
+def test_adding_occurrences_to_one_pair_never_lowers_its_weight(weights_version: int) -> None:
     """Catches any decrease in weight as one pair gains occurrences, for every counted rule and
     the default, at a recency held fixed; the grid includes the exclusive pair (p(u,v) = 1) and a
     self-loop (computed with self_loop=True, its mutual-information term 0)."""
@@ -673,7 +790,9 @@ def test_adding_occurrences_to_one_pair_never_lowers_its_weight() -> None:
     assert any(label.startswith("self-loop") for label, _ in series)
     valid_to = NOW - timedelta(days=45)
     for edge_type in (*COUNTED, UNLISTED):
-        found = _decreasing_steps(functools.partial(_weigh_at, edge_type, valid_to))
+        found = _decreasing_steps(
+            functools.partial(_weigh_at, _rules(weights_version), edge_type, valid_to)
+        )
         assert found == [], f"{edge_type}: {found[:3]}"
 
 
@@ -691,6 +810,80 @@ def test_the_grid_would_catch_raw_pmi_under_the_count_term() -> None:
     found = _decreasing_steps(old_weight)
     assert found, "the grid found no decrease under raw PMI, so it proves nothing"
     assert any("others=(0, 0)" in line for line in found), found[:3]
+
+
+def _count_dependent(rules: Any) -> list[str]:
+    """Where a link's weight differs from the weight of the same link seen with no other link's
+    count behind it: for every type, over the whole grid, each step's weight is compared with the
+    weight of the same occurrences at the lone-link counts (`_components(n, n, n, n)`). The weight
+    is taken as the store takes it for a pair, `self_loop=False`, so the mutual-information term
+    is fully exposed to every count in the grid."""
+    valid_to = NOW - timedelta(days=45)
+    found: list[str] = []
+    for edge_type in (*COUNTED, UNLISTED):
+        alone = {
+            n: _weigh(
+                _components(n, source_degree=n, target_degree=n, total=n),
+                edge_type,
+                valid_to=valid_to,
+                self_loop=False,
+                rules=rules,
+            )
+            for n in range(1, STEPS + 1)
+        }
+        for label, series in _series():
+            for n, components in enumerate(series, start=1):
+                weight = _weigh(
+                    components, edge_type, valid_to=valid_to, self_loop=False, rules=rules
+                )
+                if weight != alone[n]:
+                    found.append(f"{edge_type} {label}: {n} occurrences, {alone[n]} -> {weight}")
+    return found
+
+
+def test_under_version_two_a_link_s_weight_is_the_same_whatever_its_corpus_counts() -> None:
+    """ADR-123 decisions 1 and 3. Catches any corpus count (the pair's, either end's, the type's
+    total) reaching a link's weight, which would let links a viewer cannot see move the weights of
+    links they can. Over the whole grid, every type and the default. The same assertion is shown
+    to fail under version 1 inside this test (rule 15): a green here is not a grid whose counts
+    never mattered."""
+    assert _count_dependent(_rules_v2()) == []
+    under_one = _count_dependent(_rules(1))
+    assert under_one, "no weight moved with its counts under version 1, so the grid proves nothing"
+    # Version 1 moves with the type's total alone and with one end's degree alone, not only with
+    # all of them at once.
+    assert any("others=(0, 0) extra=57" in line for line in under_one), under_one[:3]
+    assert any("others=(1000, 0) extra=0" in line for line in under_one), under_one[:3]
+
+
+def test_the_grid_through_the_weight_would_catch_a_self_loop_not_told_it_is_one() -> None:
+    """Rule 15, ADR-123 decision 3: Amendment 4's self-loop rule is still defined and its tests are
+    pinned to version 1. Computed through `compute_weight` itself (the shape the store calls), a
+    self-loop weighed with `self_loop=False` reports a decrease on the self-loop series under
+    version 1; under version 2 it cannot, since the term is unused, which is why this case is
+    pinned to version 1."""
+    valid_to = NOW - timedelta(days=45)
+
+    def told_it_is_not(rules: Any) -> list[str]:
+        return _decreasing_steps(
+            lambda c, _self_loop: _weigh(
+                c, "COMMUNICATED_WITH", valid_to=valid_to, self_loop=False, rules=rules
+            ),
+            only_self_loops=True,
+        )
+
+    under_one = told_it_is_not(_rules(1))
+    assert under_one, "no decrease with the flag missing under version 1: the series proves nothing"
+    assert any("others=0 extra=57" in line for line in under_one), under_one[:3]
+    assert told_it_is_not(_rules_v2()) == []
+    # The flag, given, is what stops it under version 1 (the pinned case above).
+    told = _decreasing_steps(
+        lambda c, self_loop: _weigh(
+            c, "COMMUNICATED_WITH", valid_to=valid_to, self_loop=self_loop, rules=_rules(1)
+        ),
+        only_self_loops=True,
+    )
+    assert told == []
 
 
 def _by_hand(
@@ -714,18 +907,21 @@ def test_a_self_loop_s_mutual_information_term_is_zero() -> None:
     """ADR-120 Amendment 4: catches a self-loop whose weight still takes the pair's mutual
     information (its degrees are counted twice, so the term misleads), and a structural
     self-loop that stops weighing its strength."""
+    rules = _rules(1)  # pinned: the term is zero from version 2
     loop = _components(10, source_degree=20, target_degree=20, total=11)
     assert _npmi_by_hand(loop) == -1.0, "the case must be one where the term would matter"
     for valid_to, recency in ((None, 1.0), (NOW - timedelta(days=90), 0.5)):
         expected = _by_hand(loop, heavy=40, recency=recency, npmi_term=0.0)
-        got = _weigh(loop, "COMMUNICATED_WITH", valid_to=valid_to, self_loop=True)
+        got = _weigh(loop, "COMMUNICATED_WITH", valid_to=valid_to, self_loop=True, rules=rules)
         assert got == pytest.approx(expected, abs=1e-9)
-        pair = _weigh(loop, "COMMUNICATED_WITH", valid_to=valid_to, self_loop=False)
+        pair = _weigh(loop, "COMMUNICATED_WITH", valid_to=valid_to, self_loop=False, rules=rules)
         assert pair < got - 1e-3, "the flag must change the weight where the term is not zero"
     default = _by_hand(loop, heavy=10, recency=1.0, npmi_term=0.0)
-    assert _weigh(loop, UNLISTED, valid_to=None, self_loop=True) == pytest.approx(default, abs=1e-9)
+    assert _weigh(
+        loop, UNLISTED, valid_to=None, self_loop=True, rules=rules
+    ) == pytest.approx(default, abs=1e-9)
     for edge_type, strength in FIXED.items():
-        assert _weigh(loop, edge_type, valid_to=None, self_loop=True) == strength
+        assert _weigh(loop, edge_type, valid_to=None, self_loop=True, rules=rules) == strength
 
 
 def _npmi_by_hand(c: WeightComponents) -> float:
@@ -798,29 +994,31 @@ def test_npmi_is_bounded_and_defined_at_every_edge_case() -> None:
 # --- the calibration ----------------------------------------------------------
 
 
-def test_a_counted_type_s_heavy_count_draws_at_the_logistic_of_two() -> None:
+@VERSIONS
+def test_a_counted_type_s_heavy_count_draws_at_the_logistic_of_two(weights_version: int) -> None:
     """Catches a count term that is not divided by the type's own heavy count: at its heavy
     count, recency 1 and npmi 0, every counted type draws at the logistic of 2 (about 0.8808)."""
     from adapters.graph_arcadedb.weight import npmi
 
-    rules = _rules()
+    rules = _rules(weights_version)
     assert LOGISTIC_OF_TWO == pytest.approx(0.8808, abs=5e-5)
     for edge_type in COUNTED:
         _, rule = rules.rule_for(edge_type)
         assert rule.heavy is not None
         components = _independent(rule.heavy)
         assert npmi(components) == pytest.approx(0.0, abs=1e-12)
-        assert _weigh(components, edge_type, valid_to=None, self_loop=False) == pytest.approx(
-            LOGISTIC_OF_TWO, abs=1e-9
-        ), edge_type
+        assert _weigh(
+            components, edge_type, valid_to=None, self_loop=False, rules=rules
+        ) == pytest.approx(LOGISTIC_OF_TWO, abs=1e-9), edge_type
     default_heavy = rules.rule_for(UNLISTED)[1].heavy
     assert default_heavy == 10
-    assert _weigh(_independent(10), UNLISTED, valid_to=None, self_loop=False) == pytest.approx(
-        LOGISTIC_OF_TWO, abs=1e-9
-    )
+    assert _weigh(
+        _independent(10), UNLISTED, valid_to=None, self_loop=False, rules=rules
+    ) == pytest.approx(LOGISTIC_OF_TWO, abs=1e-9)
 
 
-def test_one_occurrence_draws_at_its_formula_value() -> None:
+@VERSIONS
+def test_one_occurrence_draws_at_its_formula_value(weights_version: int) -> None:
     """Catches a one-occurrence figure the formula does not give for the type, for each of the
     seven counted rules and the default, at recency 1 and npmi 0; the figures the ADR quotes
     (about 0.392 for a type heavy at 40, 0.709 at 2 and 0.467 at the default) are checked too."""
@@ -831,17 +1029,55 @@ def test_one_occurrence_draws_at_its_formula_value() -> None:
         count_term = math.log1p(1) / math.log1p(heavy)
         logit = (0.5 * count_term + 0.2 - (0.2 + 0.5 / 3)) / (0.5 / 3)
         expected = 1.0 / (1.0 + math.exp(-logit))
-        got = _weigh(_independent(1), edge_type, valid_to=None, self_loop=False)
+        got = _weigh(
+            _independent(1),
+            edge_type,
+            valid_to=None,
+            self_loop=False,
+            rules=_rules(weights_version),
+        )
         assert got == pytest.approx(expected, abs=1e-9), edge_type
         if edge_type in quoted:
             assert got == pytest.approx(quoted[edge_type], abs=5e-4), edge_type
 
 
+def test_version_two_keeps_the_calibration_and_weighs_its_count_and_recency_alone() -> None:
+    """ADR-123 decision 1: `midpoint` and `scale` are derived from alpha and beta alone, at a
+    mutual-information term of 0, so version 2 draws a counted type's heavy count at the logistic
+    of 2 and a one-off link at its formula value, whatever the counts behind it. Catches a version
+    2 whose calibration drifted from version 1's."""
+    rules = _rules_v2()
+    for edge_type in COUNTED:
+        heavy = rules.rule_for(edge_type)[1].heavy
+        assert heavy is not None
+        for components in (
+            _independent(heavy),
+            _components(heavy, source_degree=heavy, target_degree=heavy, total=heavy),
+            _components(heavy, source_degree=heavy + 900, target_degree=heavy, total=10**7),
+        ):
+            assert _weigh(
+                components, edge_type, valid_to=None, self_loop=False, rules=rules
+            ) == pytest.approx(LOGISTIC_OF_TWO, abs=1e-9), edge_type
+    quoted = {"COMMUNICATED_WITH": 0.392, "IN_CONFLICT_WITH": 0.709, UNLISTED: 0.467}
+    for edge_type, figure in quoted.items():
+        got = _weigh(_independent(1), edge_type, valid_to=None, self_loop=False, rules=rules)
+        assert got == pytest.approx(figure, abs=5e-4), edge_type
+    for edge_type, strength in FIXED.items():
+        assert (
+            _weigh(_independent(3), edge_type, valid_to=None, self_loop=False, rules=rules)
+            == strength
+        )
+
+
 # --- structural types, default rule, parameter set ---------------------------
 
 
-def test_a_structural_type_weighs_its_strength_whatever_its_occurrences() -> None:
+@VERSIONS
+def test_a_structural_type_weighs_its_strength_whatever_its_occurrences(
+    weights_version: int,
+) -> None:
     """Catches a fixed rule that still follows its occurrences, recency or npmi."""
+    rules = _rules(weights_version)
     for edge_type, strength in FIXED.items():
         for occurrences in (1, 5, 500):
             for valid_to in (None, NOW - timedelta(days=1), NOW - timedelta(days=1000)):
@@ -861,7 +1097,9 @@ def test_a_structural_type_weighs_its_strength_whatever_its_occurrences() -> Non
                     ),
                 ):
                     assert (
-                        _weigh(components, edge_type, valid_to=valid_to, self_loop=False)
+                        _weigh(
+                            components, edge_type, valid_to=valid_to, self_loop=False, rules=rules
+                        )
                         == strength
                     ), (
                         edge_type,
@@ -869,24 +1107,31 @@ def test_a_structural_type_weighs_its_strength_whatever_its_occurrences() -> Non
                     )
 
 
-def test_an_unlisted_type_takes_the_default_rule() -> None:
+@VERSIONS
+def test_an_unlisted_type_takes_the_default_rule(weights_version: int) -> None:
     """Catches a type with no rule raising, or taking another type's heavy count."""
-    rules = _rules()
+    rules = _rules(weights_version)
     name, rule = rules.rule_for(UNLISTED)
     assert (name, rule.heavy, rule.fixed) == ("default", 10, None)
     for components in (_independent(1), _independent(10), _independent(300)):
-        assert _weigh(components, UNLISTED, valid_to=None, self_loop=False) == _weigh(
-            components, "SOME_TYPE_NO_FILE_NAMES", valid_to=None, self_loop=False
+        assert _weigh(
+            components, UNLISTED, valid_to=None, self_loop=False, rules=rules
+        ) == _weigh(
+            components, "SOME_TYPE_NO_FILE_NAMES", valid_to=None, self_loop=False, rules=rules
         )
-    assert _weigh(_independent(10), UNLISTED, valid_to=None, self_loop=False) != pytest.approx(
-        _weigh(_independent(10), "COMMUNICATED_WITH", valid_to=None, self_loop=False), abs=1e-3
+    assert _weigh(
+        _independent(10), UNLISTED, valid_to=None, self_loop=False, rules=rules
+    ) != pytest.approx(
+        _weigh(_independent(10), "COMMUNICATED_WITH", valid_to=None, self_loop=False, rules=rules),
+        abs=1e-3,
     )
 
 
-def test_the_parameter_set_names_the_version_and_the_rule() -> None:
+@VERSIONS
+def test_the_parameter_set_names_the_version_and_the_rule(weights_version: int) -> None:
     """Catches a parameter set that does not name the version and the rule a weight was computed
     under, which is what makes a stored weight comparable with another."""
-    rules = _rules()
+    rules = _rules(weights_version)
     assert rules.parameter_set("COMMUNICATED_WITH") == f"{rules.version}/COMMUNICATED_WITH"
     assert rules.parameter_set("FAMILY_OF") == f"{rules.version}/FAMILY_OF"
     assert rules.parameter_set(UNLISTED) == f"{rules.version}/default"
@@ -900,7 +1145,10 @@ def test_the_parameter_set_names_the_version_and_the_rule() -> None:
 # --- the principal's star -----------------------------------------------------
 
 
-def test_on_a_star_the_heavy_links_outweigh_a_one_off_cell_share_and_the_picture() -> None:
+@VERSIONS
+def test_on_a_star_the_heavy_links_outweigh_a_one_off_cell_share_and_the_picture(
+    weights_version: int,
+) -> None:
     """Catches a formula that draws the coordinator's calls and the shared payer's transfers no
     heavier than a one-off cell share or the picture. A synthetic star: the principal's 60 calls
     to the coordinator, the payer's 6 transfers to the principal, one week of cell sharing with
@@ -924,6 +1172,7 @@ def test_on_a_star_the_heavy_links_outweigh_a_one_off_cell_share_and_the_picture
             edge_type,
             valid_to=None,
             self_loop=False,
+            rules=_rules(weights_version),
         )
         for name, (edge_type, n, ds, dt, total) in star.items()
     }

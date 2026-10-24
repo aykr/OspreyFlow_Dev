@@ -324,20 +324,36 @@ def test_the_row_carries_what_upsert_would_store_for_a_single_edge() -> None:
     assert row["p"]["audit"]["revision"] == upserted["audit"]["revision"] == 1
 
 
-def test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert() -> None:
+@pytest.mark.parametrize("weights_version", [1, 2])
+def test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert(
+    weights_version: int,
+) -> None:
     """ADR-120 Amendment 4. Catches a path that counts a self-loop's occurrences once in its
     node's degree (the store reads it back twice through `bothE`), or weighs it with a
     mutual-information term: the same loop, at a node with other occurrences, must store the same
-    components and the same weight by either path. Both counts are 7 + 2 x 3 = 13 at the node."""
+    components and the same weight by either path. Both counts are 7 + 2 x 3 = 13 at the node.
+
+    ADR-123: the term is zero from version 2, so only version 1 (pinned by index, not "latest")
+    can show a path that weighs the loop with it. The version 1 case proves that: the loop's
+    weight with the term left in is another number, so a path that did that would fail here."""
+    from adapters.graph_arcadedb.weight import compute_weight
+    from ontology.weights import load_weight_history
     from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter
+
+    rules = load_weight_history()[weights_version - 1]
+    assert rules.version == weights_version
 
     other, loop = _edge("a", "b", 1, 7), _edge("a", "a", 2, 3)
     transport = _store("a", "b")
-    _load(transport, [other, loop])
+    asyncio.run(
+        BulkEdgeLoader(transport, rules, handling_scheme=load_uk_le_scheme()).load(
+            SCHEMA, [other, loop]
+        )
+    )
     bulk = {row["p"]["id"]: row["p"] for row in transport.written}["edge-2"]
 
     store = CountingStore()
-    graph = make_adapter(store)
+    graph = make_adapter(store, rules)
     asyncio.run(graph.upsert_edges([other], "tx"))
     asyncio.run(graph.upsert_edges([loop], "tx"))
     upserted = store.edges[("a", "a")]
@@ -352,6 +368,22 @@ def test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert() -> None
     }
     assert bulk_components == upsert_components
     assert bulk["weight"] == pytest.approx(upserted["weight"], abs=1e-9)
+
+    from schemas.domain import WeightComponents
+
+    components = WeightComponents.model_validate(upserted["weight_components"])
+    with_the_term = compute_weight(
+        components,
+        edge_type="TRANSACTED",
+        valid_to=None,
+        now=components.computed_at,
+        rules=rules,
+        self_loop=False,
+    )
+    if weights_version == 1:
+        assert abs(with_the_term - upserted["weight"]) > 1e-3, "the case must be one the term moves"
+    else:
+        assert with_the_term == upserted["weight"]
 
 
 def test_the_memory_transport_counts_a_self_loop_twice_like_bothE() -> None:

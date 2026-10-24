@@ -8,9 +8,10 @@ term) or fixed (`fixed`: a structural type's strength).
 
 The loader refuses a malformed file with an `OntologyError` that names the version and the field:
 versions that are not 1, 2, ... in order (a `version` that is not a whole number, `true`
-included); a missing or non-numeric parameter; an alpha at or below 0, or a beta or gamma below 0;
-a `half_life_days` at or below 0; a `midpoint` or `scale` that is not the derived one; a rule that
-sets both or neither of `heavy` and `fixed`, a `heavy` below 1 or not a whole number (a YAML
+included); a missing or non-numeric parameter; an alpha at or below 0, or a beta or gamma
+below 0, or a gamma other than 0 in any version after 1 (ADR-123); a `half_life_days` at or
+below 0; a `midpoint` or `scale` that is not the derived one; a rule that sets both or neither of
+`heavy` and `fixed`, a `heavy` below 1 or not a whole number (a YAML
 `12.0` is one), or a `fixed` outside (0, 1]; and a key it does not know or a key repeated within
 a mapping. A fixed default rule is allowed. A rule naming a link type no ontology composes is not
 refused: this file is read before and apart from the ontology, and such a type simply never
@@ -152,6 +153,13 @@ def _parse_version(raw: Any, expected: int) -> WeightRules:
         raise OntologyError(f"version {version}: `beta` must not be below 0")
     if gamma < 0:
         raise OntologyError(f"version {version}: `gamma` must not be below 0")
+    # ADR-123: a link's weight comes from the link alone, so no version after 1 may bring the
+    # corpus-wide mutual-information term back.
+    if version > 1 and gamma != 0:
+        raise OntologyError(
+            f"version {version}: `gamma` must be 0 in every version after 1 (ADR-123: a link's "
+            "weight comes from the link alone)"
+        )
     if half_life <= 0:
         raise OntologyError(f"version {version}: `half_life_days` must be above 0")
     derived_midpoint = beta + alpha / 3

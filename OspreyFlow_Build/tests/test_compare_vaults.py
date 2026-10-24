@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import math
 from typing import Any
 
 from scripts import compare_vaults
@@ -290,17 +291,36 @@ def test_the_recompute_uses_the_store_s_rules_and_counts_a_self_loop_twice() -> 
     the one the vault's edges carry (the scan reads TRANSACTED, heavy at 6; the default rule is
     heavy at 10, so a weight under it is not the stored one), and (b) counts a self-loop once in
     its node's degree, as it did, where the adapter and the bulk loader count it twice and weigh it
-    with no mutual-information term."""
+    with no mutual-information term.
+
+    ADR-123: the records are built under weights version 1 (`load_weight_history()[0]`, gamma 0.3),
+    not "latest". The term is zero from version 2, so only version 1 can show a recomputation that
+    drops `self_loop`; the assertion below proves the loop's weight moves with the flag there."""
     from adapters.graph_arcadedb.weight import compute_weight
-    from ontology.weights import load_weight_rules
+    from ontology.weights import load_weight_history
     from schemas.domain import WeightComponents
 
+    rules = load_weight_history()[0]
+    assert (rules.version, rules.gamma) == (1, 0.3)
     transport = _store("a", "b")
     edges = [make_edge("a", "a", 1).model_copy(update={"occurrences": 3}), make_edge("a", "b", 2)]
-    asyncio.run(BulkEdgeLoader(transport, handling_scheme=load_uk_le_scheme()).load(SCHEMA, edges))
+    asyncio.run(
+        BulkEdgeLoader(transport, rules, handling_scheme=load_uk_le_scheme()).load(SCHEMA, edges)
+    )
     records = [dict(row["p"]) for row in transport.written]
     by_id = {str(r["id"]): r for r in records}
     loop, pair = by_id["edge-1"], by_id["edge-2"]
+    assert loop["weight_components"]["parameter_set"] == "1/TRANSACTED"
+    loop_components = WeightComponents.model_validate(loop["weight_components"])
+    told_it_is_not = compute_weight(
+        loop_components,
+        edge_type="TRANSACTED",
+        valid_to=None,
+        now=loop_components.computed_at,
+        rules=rules,
+        self_loop=False,
+    )
+    assert abs(told_it_is_not - float(loop["weight"])) > 1e-3, "the flag must move this weight"
 
     # (b) the self-loop's 3 occurrences are counted twice at `a`, plus the other link's 1.
     assert loop["weight_components"]["corpus_source_degree"] == 7
@@ -314,7 +334,6 @@ def test_the_recompute_uses_the_store_s_rules_and_counts_a_self_loop_twice() -> 
     # (a) the stored weight of `pair` is the TRANSACTED rule's for its own components; the same
     # components under the default rule (heavy 10, not 6) give another weight, and planting that
     # on the very record whose components produced it is a mismatch only because of the rule.
-    rules = load_weight_rules()
     assert rules.rule_for("TRANSACTED")[0] == "TRANSACTED"
     components = WeightComponents.model_validate(pair["weight_components"])
     assert components.parameter_set == f"{rules.version}/TRANSACTED"
@@ -338,17 +357,50 @@ def test_the_recompute_uses_the_store_s_rules_and_counts_a_self_loop_twice() -> 
 # --- each weight is recomputed under the version its parameter set names (ADR-120 Amendment 4) ---
 
 
+def _weighed_by_hand(rules: Any, record: dict[str, Any]) -> float:
+    """`normalise(α·log1p(n)/log1p(heavy) + β·recency + γ·npmi)` for a `TRANSACTED` record with no
+    end date (recency 1), from the version's own parameters and the record's stored counts, written
+    out here and not taken from `compute_weight`."""
+    from schemas.domain import WeightComponents
+    from tests.adapters.graph_arcadedb.test_weight_rules import _npmi_by_hand
+
+    assert record.get("valid_to") is None
+    assert record["source"] != record["target"]
+    components = WeightComponents.model_validate(record["weight_components"])
+    heavy = rules.rule_for("TRANSACTED")[1].heavy
+    raw = (
+        rules.alpha * math.log1p(components.occurrences) / math.log1p(heavy)
+        + rules.beta
+        + rules.gamma * _npmi_by_hand(components)
+    )
+    return 1.0 / (1.0 + math.exp(-(raw - rules.midpoint) / rules.scale))
+
+
+def _records_under(rules: Any) -> list[dict[str, Any]]:
+    """The real loader's records, relabelled as written under `rules` (a version of the weights
+    file) with each weight worked out by hand under that version, so the case does not depend on
+    which version the loader writes under today."""
+    out = copy.deepcopy(_records())
+    for record in out:
+        record["weight_components"]["parameter_set"] = rules.parameter_set("TRANSACTED")
+        record["weight"] = _weighed_by_hand(rules, record)
+    return out
+
+
 def _two_version_history(tmp_path: Any) -> Any:
     """The shipped version 1, and a version 2 with another beta and alpha (midpoint and scale
-    re-derived): a weight computed under version 1 is not the one version 2 gives. (Beta alone
-    would not do: at recency 1 a beta change cancels against the midpoint it moves.)"""
+    re-derived; gamma 0, as ADR-123 requires of every version after 1): a weight computed under
+    version 1 is not the one version 2 gives. (Beta alone would not do: at recency 1 a beta change
+    cancels against the midpoint it moves.)"""
     import yaml
 
     from tests.adapters.graph_arcadedb.test_weight_rules import FROZEN, _raw_versions
 
     first = _raw_versions(FROZEN)[0]
     second = copy.deepcopy(first)
-    second.update(version=2, alpha=0.6, beta=0.3, midpoint=0.3 + 0.6 / 3, scale=0.6 / 3)
+    second.update(
+        version=2, alpha=0.6, beta=0.3, gamma=0.0, midpoint=0.3 + 0.6 / 3, scale=0.6 / 3
+    )  # gamma 0: the loader refuses any version after 1 with another (ADR-123)
     path = tmp_path / "weights.yaml"
     path.write_text(yaml.safe_dump({"versions": [first, second]}), encoding="utf-8")
     return path
@@ -358,8 +410,10 @@ def test_a_weight_is_recomputed_under_the_version_its_parameter_set_names(tmp_pa
     """Catches a recomputation that always uses the latest version: weights stored under version 1
     are not mismatches once a version 2 exists, and a stored weight that is version 1's under a
     parameter set naming version 2 is one. A version the file does not hold is a mismatch too."""
+    from ontology.weights import load_weight_history
+
     path = _two_version_history(tmp_path)
-    records = _records()
+    records = _records_under(load_weight_history()[0])
     assert all(r["weight_components"]["parameter_set"] == "1/TRANSACTED" for r in records)
     assert compare_vaults.component_mismatches(records, weights_path=path) == []
 
@@ -372,6 +426,41 @@ def test_a_weight_is_recomputed_under_the_version_its_parameter_set_names(tmp_pa
     unknown[0]["weight_components"]["parameter_set"] = "3/TRANSACTED"
     lines = compare_vaults.component_mismatches(unknown, weights_path=path)
     assert len(lines) == 1 and "3/TRANSACTED" in lines[0] and "parameter_set" in lines[0]
+
+
+def test_a_version_2_weight_is_recomputed_with_gamma_0_and_version_1_s_with_its_own() -> None:
+    """ADR-123. Catches a recomputation that weighs every stored weight with one version's gamma:
+    a weight written under version 2 (gamma 0) is not a mismatch, and is reported when it was
+    really weighed with version 1's gamma 0.3, and the other way round. The records are the real
+    loader's, whose mutual-information terms are not 0, so the two versions differ on every one."""
+    from ontology.weights import load_weight_history
+
+    one, two = load_weight_history()[:2]
+    assert (one.version, one.gamma) == (1, 0.3)
+    assert (two.version, two.gamma) == (2, 0.0)
+
+    def relabelled(rules: Any, weighed_under: Any) -> list[dict[str, Any]]:
+        out = _records_under(weighed_under)
+        for record in out:
+            record["weight_components"]["parameter_set"] = rules.parameter_set("TRANSACTED")
+        return out
+
+    base = _records()
+    differing = [
+        r
+        for r in base
+        if abs(_weighed_by_hand(one, r) - _weighed_by_hand(two, r)) > 1e-3
+    ]
+    assert len(differing) == len(base), "the case must be one where gamma changes every weight"
+
+    assert compare_vaults.component_mismatches(relabelled(two, two)) == []
+    assert compare_vaults.component_mismatches(relabelled(one, one)) == []
+
+    # Each is a mismatch if it was weighed with the other version's gamma.
+    for label, rules, weighed_under in (("2", two, one), ("1", one, two)):
+        lines = compare_vaults.component_mismatches(relabelled(rules, weighed_under))
+        assert len(lines) == len(base), (label, lines)
+        assert all("components give" in line for line in lines), (label, lines)
 
 
 def test_a_component_with_no_parameter_set_is_legacy_and_not_a_mismatch() -> None:
@@ -403,13 +492,18 @@ def test_a_component_with_no_parameter_set_is_legacy_and_not_a_mismatch() -> Non
 def test_a_parameter_set_naming_another_rule_is_a_mismatch() -> None:
     """Catches a vault of TRANSACTED links whose components say another rule computed them: the
     weight would be right for that rule and the label wrong, so it is reported as a mismatch."""
+    from ontology.weights import load_weight_rules
+
     records = _records()
+    version = load_weight_rules().version  # the version the loader wrote them under
+    assert records[0]["weight_components"]["parameter_set"] == f"{version}/TRANSACTED"
     planted = copy.deepcopy(records)
-    planted[0]["weight_components"]["parameter_set"] = "1/default"
+    # Only the rule changes: the version stays the one the weight was computed under.
+    planted[0]["weight_components"]["parameter_set"] = f"{version}/default"
     lines = compare_vaults.component_mismatches(planted)
     assert len(lines) == 1
     assert planted[0]["id"] in lines[0] and "parameter_set" in lines[0]
-    assert "1/default" in lines[0] and "1/TRANSACTED" in lines[0]
+    assert f"{version}/default" in lines[0] and f"{version}/TRANSACTED" in lines[0]
     code, _ = _report(_graph(_records()), _graph(planted))
     assert code == 1
 

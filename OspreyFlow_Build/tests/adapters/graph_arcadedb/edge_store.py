@@ -2,7 +2,9 @@
 
 It answers as the real one does where it matters (it refuses a query it does not recognise, and
 computes every answer from the edges actually written), so a test that carries a total or an
-aggregate wrongly sees a different weight. Used by the tests of `upsert_edges`' per-call total and
+aggregate wrongly sees different stored components, and a different weight too under weights
+version 1 only (the corpus counts reach the weight through gamma, which is 0 from version 2,
+ADR-123). Used by the tests of `upsert_edges`' per-call total and
 of the shared merge rules (ADR-056 Amendment 22, ADR-058).
 """
 
@@ -104,8 +106,15 @@ def make_edge(source: str, target: str, n: int) -> EdgeWrite:
     )
 
 
-def make_adapter(store: CountingStore) -> adapter_module.GraphArcadeDBAdapter:
-    graph = adapter_module.GraphArcadeDBAdapter(store, load_uk_le_scheme())  # type: ignore[arg-type]
+def make_adapter(
+    store: CountingStore, weight_rules: Any = None
+) -> adapter_module.GraphArcadeDBAdapter:
+    """`weight_rules` pins a version of the weights file (ADR-123); none takes the latest."""
+    graph = adapter_module.GraphArcadeDBAdapter(
+        store,  # type: ignore[arg-type]
+        load_uk_le_scheme(),
+        weight_rules=weight_rules,
+    )
     # `apply_schema` creates types in a live store; the weights only need the ontology in place.
     graph._schema = load_default_ontology()
     return graph

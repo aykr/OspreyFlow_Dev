@@ -9,7 +9,10 @@ carried forward, because the call's own writes are the only change it can see.
 
 The store below answers as the real one does where it matters here: it refuses a query it does not
 recognise, and it computes every answer from the edges actually written, so a total that is carried
-forward wrongly changes a weight and fails the comparison with the one-at-a-time result.
+forward wrongly changes the stored components and fails the comparison with the one-at-a-time
+result. It changes the weight too only under weights version 1: from version 2 gamma is 0 and the
+counts move no weight (ADR-123), so the comparison is made on the components, which `weights()`
+includes.
 """
 
 from __future__ import annotations
@@ -44,7 +47,8 @@ def test_a_batch_reads_the_corpus_total_once() -> None:
 def test_a_batch_weighs_each_edge_as_if_written_one_at_a_time() -> None:
     """Catches the carried-forward total drifting from the stored one: skipping the call's own
     delta, adding it twice, or not adding it for a merge into an existing pair would each change a
-    weight, so the batch and the one-at-a-time loads would disagree."""
+    stored component (and the weight, under version 1 only), so the batch and the one-at-a-time
+    loads would disagree."""
     batched = CountingStore()
     asyncio.run(make_adapter(batched).upsert_edges(_batch(), "tx"))
 

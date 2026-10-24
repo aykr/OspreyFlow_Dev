@@ -27,14 +27,20 @@ from schemas.domain import (
 
 from tests.adapters.graph_arcadedb.edge_store import without_clock
 from tests.conformance.graph_port.test_suite import (
+    ALL_CASES,
     CLEARED,
+    HIDING_CASES,
     LOOP_OCCURRENCES,
+    _link_k,
+    _pin_now,
     OTHER_OCCURRENCES,
     _edge,
     _node,
     _links_among,
     _past_interval,
+    _use_weights_version,
     _write,
+    two_store_weights,
 )
 from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
 
@@ -324,8 +330,9 @@ async def test_a_superseded_link_is_not_in_the_end_of_load_corpus(
         assert loaded.weight_components.corpus_total_occurrences == 2 + 4
 
 
+@pytest.mark.parametrize("weights_version", [1, 2])
 async def test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert(
-    factory: GraphAdapterFactory,
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch, weights_version: int
 ) -> None:
     """ADR-120 D3 and Amendment 4: the bulk path and `upsert_edges` weigh with the same rules, so
     a stored link has the same parameter set, components and weight whichever wrote it. Catches the
@@ -334,12 +341,19 @@ async def test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert(
     default rule, a self-loop counted once in its node's degree or given a mutual-information term,
     and a weight taken at a recency of 1 for a link that ended in the past. A counted type, a
     self-loop of it (at a node with other occurrences), a structural type and an unlisted type,
-    each written once by each path."""
-    from ontology.weights import load_weight_rules
+    each written once by each path.
+
+    ADR-123: run under version 1 and version 2, each pinned by index and handed to the adapter
+    (`_use_weights_version`), not "latest". The mutual-information term is zero from version 2, so
+    a path that gave the self-loop one can be seen only under version 1, which is why that version
+    stays in the matrix."""
+    from ontology.weights import load_weight_history
 
     from adapters.graph_arcadedb.weight import compute_weight
 
-    rules = load_weight_rules()
+    rules = load_weight_history()[weights_version - 1]
+    assert rules.version == weights_version
+    _use_weights_version(monkeypatch, weights_version)
     interval = _past_interval()
 
     async def write(adapter: GraphPort, *, bulk: bool) -> dict[str, Edge]:
@@ -495,3 +509,106 @@ async def test_reverting_what_a_load_wrote_leaves_the_rest_alone(
         await adapter.commit_transaction(tx)
         assert await _edges_of(adapter, c) == []
         assert [e.id for e in await _edges_of(adapter, a)] == [kept_id]
+
+
+
+# --- ADR-123: a link's weight comes from the link alone, on the bulk path -----------------------
+#
+# The bulk loader reads degrees and the type's total from the store, unfiltered, and weighs a link
+# against them. The same two-store cases as `test_suite.py` (K is written by `bulk_load_edges`; L is
+# in the store already, or in the same call), under the latest weights version and shown red under
+# version 1. `now_utc` is pinned where `bulk.py` imports it and where `adapter.py` does.
+
+_BULK_SHAPES = [(case, False) for case in ALL_CASES] + [(case, True) for case in HIDING_CASES]
+
+
+@pytest.mark.parametrize(("case", "same_call"), _BULK_SHAPES)
+async def test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link(
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch, case: str, same_call: bool
+) -> None:
+    """ADR-123: the weight the bulk loader stores for a link the viewer can see is the same whether
+    or not the store (or the same call) also holds a link the viewer cannot see: classified above
+    them, restricted, to a node they cannot see, in another dataset, or raised afterwards. Catches a
+    loader whose degrees or type total reach the weight."""
+    without, with_link = await two_store_weights(
+        factory, monkeypatch, case=case, path="bulk", same_call=same_call
+    )
+    assert with_link == without, (case, same_call, without, with_link)
+
+
+@pytest.mark.parametrize(("case", "same_call"), _BULK_SHAPES)
+async def test_the_bulk_two_store_case_is_red_under_weights_version_1(
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch, case: str, same_call: bool
+) -> None:
+    """Rule 15 for the test above: the same stores with version 1's rules (gamma 0.3) give the
+    bulk-loaded link two different weights, in every shape."""
+    without, with_link = await two_store_weights(
+        factory, monkeypatch, case=case, path="bulk", version=1, same_call=same_call
+    )
+    assert abs(with_link - without) > 1e-6, (case, same_call, without, with_link)
+
+
+async def test_a_bulk_load_carries_another_datasets_occurrences_into_a_pair_today(
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-123 decision 4 RECORDS an open route on the bulk path as well as the upsert path
+    (`test_suite.py`'s `test_a_same_pair_merge_carries_another_datasets_occurrences_today`). Two
+    shapes, each giving a viewer of `fixture` alone a link of 7 occurrences, weighed as a link of
+    7 and not as one of 2:
+    - one call holding an `enron` write of 5 and a `fixture` write of 2 to the pair, which the
+      loader aggregates into one link (occurrences added, datasets joined);
+    - a pair already stored from `enron` (5), and a `fixture` write of 2 bulk-loaded after it,
+      which comes back as a collision, and routed through `upsert_edges` as the engine does it
+      merges into the stored link.
+
+    This asserts today's behaviour. It is the defect logged in `07_BUILD_PLAN.md` as "a same-pair
+    merge carries another dataset's occurrences", for the owner to decide: when that is fixed,
+    this test changes with it and must then assert the opposite."""
+    from tests.conformance.graph_port.test_suite import IN_FIXTURE
+
+    _pin_now(monkeypatch)
+
+    async def stored_link(shape: str) -> Edge:
+        async with factory.context() as adapter:
+            loader = _loader(adapter)
+            nodes = [
+                _node(
+                    "Endpoint",
+                    classification="OFFICIAL",
+                    datasets=["enron", "fixture"],
+                    value_normalised=f"+44300000{n:04d}",
+                )
+                for n in range(2)
+            ]
+            (a, b), _ = await _write(adapter, nodes, [])
+
+            def link(datasets: list[str], occurrences: int) -> EdgeWrite:
+                return _link_k(a, b, occurrences=occurrences).model_copy(
+                    update={"datasets": datasets}
+                )
+
+            if shape == "one_call":
+                await loader.bulk_load_edges([link(["enron"], 5), link(["fixture"], 2)])
+            elif shape == "stored_then_bulk":
+                await _write(adapter, [], [link(["enron"], 5)])
+                result = await loader.bulk_load_edges([link(["fixture"], 2)])
+                assert result.written == [] and len(result.collisions) == 1
+                tx = await adapter.begin_transaction()
+                await adapter.upsert_edges(result.collisions, tx)
+                await adapter.commit_transaction(tx)
+            elif shape == "seven":
+                await loader.bulk_load_edges([link(["fixture"], 7)])
+            else:
+                await loader.bulk_load_edges([link(["fixture"], 2)])
+            (seen,) = await adapter.edges_among([a, b], IN_FIXTURE)
+            return seen
+
+    seven = await stored_link("seven")
+    two = await stored_link("two")
+    for shape in ("one_call", "stored_then_bulk"):
+        merged = await stored_link(shape)
+        assert merged.datasets == ["enron", "fixture"], shape
+        assert merged.occurrences == 7, shape
+        assert merged.weight_components is not None and merged.weight_components.occurrences == 7
+        assert merged.weight == pytest.approx(seven.weight, abs=1e-9), shape
+        assert abs(merged.weight - two.weight) > 1e-3, shape
