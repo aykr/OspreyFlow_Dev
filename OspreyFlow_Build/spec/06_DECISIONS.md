@@ -14912,6 +14912,54 @@ Tests: `tests/scenarios/test_pid_plan.py`:
 - **Column names.** Every Brief 2-named value uses Brief 2's column name, checked against a
   table of R1–R13's names transcribed from the brief.
 
+### ADR-120, Amendment 11 (24 October 2026) — rulings of stage 5 unit 5a, recorded, and an erratum
+
+Status: **ACCEPTED by the coordinator under the owner's delegation, 24 October 2026** (asked "When
+the work finds a spec gap or an error in an ADR, what may I accept without you?", the owner chose
+"Everything"). Adversarially reviewed twice; its last review left only wording, made here. Its
+rulings were given to unit 5a's writer in chat, and the unit's review found them recorded nowhere
+(rule 11).
+
+1. **A scale group is formed within one establishment and takes its handling.**
+   - **The rule.** In the scale profile, each establishment holds two of the twelve organised-crime
+     groups. A prisoner joins one of his own establishment's two groups, and the pick is still one
+     `randrange(12)` draw, so no other draw moves. A group carries its establishment's handling.
+   - **Why.** Otherwise a group would be written on membership rows of other units, which a row's
+     single handling cannot represent (Amendment 10 decision 3). The demo profile's two groups are
+     unchanged.
+   - **Test:** `tests/scenarios/test_pid_plan.py` asserts that every member's establishment is his
+     group's, shown red by a member moved between two regional establishments.
+2. **An incident role is dated at the incident's date-time.**
+   - **The rule.** A participant's `ROLE_IN` takes its incident's `occurred_at` as both its first and
+     last seen, where it had the day. A one-occurrence date-time is used as it stands, not at noon.
+   - **Why.** R4 carries the role and the incident's `OCCURRED_AT` on one row, in one `occurred_at`
+     column, so the two must agree.
+   - **Test:** the carried-date check of the rows scan (`_date_problems`), where a disagreement shows
+     as "carried dates".
+3. **Deferred to stage 5 unit 5b, with their tests there.**
+   - **Entity columns.** The entity shapes' property columns take Brief 2's names wherever it names
+     them (a visitor's `visitor_nino` and names, and the like).
+   - **Columns the rows do not yet carry:**
+     - R5's `duration_s`, `direction` and `sequence`;
+     - R6's `kind` and `duration_s`;
+     - the reports' `report_text`;
+     - `reviewer_initials`, with teaching row 101's three letters.
+4. **R2's `week_start` holds each occurrence's instant.**
+   - **The rule.** Amendment 9 decision 1 spreads a cell share's occurrences evenly, the first at the
+     first day 00:00:00 and the last at the plan's last day 23:59:59. A one-week share (one
+     occurrence, such as cellmate_3's) has its single instant at 12:00:00.
+   - **What the column holds.** So the column Brief 2 calls `week_start` carries those instants, not
+     Mondays. The Brief 2 addition on R2 reads: "R2 must write one dated row per week shared, so the
+     link's occurrences are the weeks and its interval the first and last row."
+   - **Test:** a cell share's `week_start` cells equal `link_instants`.
+5. **An addition's column takes Brief 2's name when it holds a value Brief 2 names.** The conflicts
+   file, a Brief 2 addition, holds a prisoner pair, which R8 and R13 name `nomis_id_a` and
+   `nomis_id_b`, so it uses those. This refines Amendment 10 decision 4, whose "keeps the plan's
+   name" applies to a value Brief 2 does not name.
+6. **Erratum to Amendment 10's Tests line.** "A single-call week's call is at the midpoint" reads:
+   only a single-call week between the first and last live weeks is at the midpoint, as decision 1
+   says.
+
 ---
 
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
