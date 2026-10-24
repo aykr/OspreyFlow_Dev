@@ -147,7 +147,7 @@ function Showcase() {
         onSelect={() => {}}
       />
       <Toast message="Query timed out at 30s. Narrow the date range." kind="error" />
-      <Toast message="6 item(s) withheld by handling policy" kind="warning" />
+      <Toast message="Some of this was left out because of its handling." kind="warning" />
       <Panel title="Messages">
         <HighlightedMessage document={DOSSIER_DOCUMENT} ontology={DOSSIER_ONTOLOGY} />
       </Panel>

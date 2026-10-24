@@ -13,7 +13,7 @@ export interface ActionErrorOverlayProps {
 /** `expandNode`/`manualAssertion`/`explainCluster` (`GlassCanvas.tsx`) used to drop a failed call
  * silently (`if (!response.ok) return;`) behind a comment claiming it "surfaces via a Toast at
  * the App layer" — checked directly and found false: the App-layer Toast is driven only by
- * server-pushed `notice` deltas over the websocket, never by a client-side `fetch` failure, so
+ * what the App sets itself, never by a client-side `fetch` failure, so
  * none of the three ever actually reached the analyst. `manualAssertion` was the priority to fix:
  * `expandNode`/`explainCluster` are failed *reads* that mislead an analyst about what the data
  * shows; a failed `manualAssertion` is a failed *write* that leaves the analyst believing a link

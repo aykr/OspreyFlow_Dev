@@ -28,9 +28,10 @@ describe("zoom vs filter separation (exit-criterion invariant)", () => {
     const { graph, store } = createWorkingSet();
     store.getState().applyDelta({
       seq: 1,
-      op: "add",
+      op: "snapshot",
       nodes: [makeNode("n1"), makeNode("n2"), makeNode("n3")],
       edges: [makeEdge("e1", "n1", "n2"), makeEdge("e2", "n2", "n3")],
+      withheld: true,
     });
 
     const orderBefore = graph.order;
@@ -55,8 +56,9 @@ describe("zoom vs filter separation (exit-criterion invariant)", () => {
       expect(graph.size).toBe(sizeBefore);
     }
 
-    // And the store's own status-bar-facing count is untouched by any of
-    // this — zoom is not a filter, so it must not have moved either.
-    expect(store.getState().filteredCount).toBe(0);
+    // And the store's own status-bar-facing flag is untouched by any of
+    // this — zoom is not a filter, so it must not have moved either (it began true, so a sweep that
+    // reset it would be seen).
+    expect(store.getState().withheld).toBe(true);
   });
 });

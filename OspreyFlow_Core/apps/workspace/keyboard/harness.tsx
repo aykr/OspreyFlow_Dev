@@ -327,7 +327,7 @@ if (wantsLinkStyle) {
     edges.push(basis ? { ...link, basis } : link);
   }
 }
-workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges, filtered_count: 0 });
+workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges });
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");

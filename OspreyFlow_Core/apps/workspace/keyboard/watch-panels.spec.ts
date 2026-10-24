@@ -232,7 +232,6 @@ test("jumping from an alert calls the real jump route and shows the result, reac
           branched_from: "inv-source-1",
         },
         seeded_count: 1,
-        unreadable_count: 0,
       }),
     });
   });

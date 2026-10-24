@@ -86,7 +86,7 @@ const ontology = new OntologyRegistry(SCHEMA);
 
 const nodes = [node("n0"), node("n1"), node("n2")];
 const edges = [edge("e0", "n0", "n1"), edge("e1", "n1", "n2")];
-workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges, filtered_count: 0 });
+workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges });
 
 function Harness() {
   const glassCanvasRef = useRef<GlassCanvasHandle>(null);

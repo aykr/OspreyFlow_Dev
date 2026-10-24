@@ -3,11 +3,8 @@ export interface ToastProps {
   kind?: "info" | "error" | "warning" | "success";
 }
 
-/** `spec/02_GLASS_FRONTEND.md` §3.2's `notice` op reaches the analyst
- * through here — "N item(s) withheld by handling policy" is a toast, not
- * a silent state change (the status-bar
- * requirement: the analyst must never mistake a filtered picture for a
- * complete one). */
+/** A short message that says what happened, so it is never a silent state change. The retired
+ * `notice` step (ADR-124) no longer reaches it. */
 const SAID: Record<Exclude<ToastProps["kind"], "info" | undefined>, { glyph: string; word: string }> = {
   error: { glyph: "!", word: "Error" },
   warning: { glyph: "△", word: "Warning" },

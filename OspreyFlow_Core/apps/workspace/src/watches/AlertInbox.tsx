@@ -81,16 +81,8 @@ export interface JumpResultSummaryProps {
   onOpen: (investigationId: string) => void;
 }
 
-/** `AlertJumpResult.unreadable_count` is safe to show because of what it can never mean, not
- * merely because the number itself is small: `AlertStore.get_authorized`/`list_authorized`
- * (`services/api/alerts.py`, ADR-041) filter `WHERE owner_id = $1` — an alert is only ever
- * reachable by its own recipient — and `fetch_jumpable_referents` (`watch_routes.py`) re-checks
- * every referent fresh as *this* viewer's own current principal, never a cached or historical one.
- * So `unreadable_count` can only ever recount referents belonging to an alert this same viewer
- * already had a standing claim to receive; it can shrink what they can now see, it can never
- * reveal the existence of something they had no prior claim to. The copy below is written to that
- * guarantee — "no longer accessible", never "found" or "new" — so the render layer doesn't
- * misrepresent a number the server already made safe. */
+/** ADR-124 decision 1: the summary says what was added and nothing of what could not be read — no
+ * count of it, however it is framed. */
 export function JumpResultSummary({ result, onOpen }: JumpResultSummaryProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
@@ -98,12 +90,6 @@ export function JumpResultSummary({ result, onOpen }: JumpResultSummaryProps) {
         {result.seeded_count} entit{result.seeded_count === 1 ? "y" : "ies"} added to the new
         investigation.
       </p>
-      {result.unreadable_count > 0 && (
-        <p className="label" data-testid="jump-unreadable-summary">
-          {result.unreadable_count} referent{result.unreadable_count === 1 ? "" : "s"} no longer
-          accessible to you.
-        </p>
-      )}
       <Button variant="primary" onClick={() => onOpen(result.investigation.id)}>
         Open investigation
       </Button>

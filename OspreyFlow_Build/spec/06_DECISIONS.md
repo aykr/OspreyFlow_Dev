@@ -16588,6 +16588,27 @@ option; found by U1's adversarial review and measured.
    `edges_among` judges an end the test does not hold by those overrides alone, as the existing
    tests rely on.
 
+### ADR-124, Amendment 3 (24 October 2026) — U2b before U2a, and U2a with U2c
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option.
+- **The problem.** The Units list runs U2a, U2b, U2c, each committed with `make ci` green. But
+  U2a's wire gate is red against today's code by design: it forbids the withheld fields the server
+  still sends until U2c removes them. A U2a commit on its own would leave `make ci` red.
+- **The new order.**
+  1. **U2b, the Glass, first.** It stops depending on the withheld figures it owns (the status bar's,
+     the notices, the alert inbox's) while the server still sends them, so it is green on its own.
+  2. **U2a and U2c, as one change.** The wire gate is written and recorded red against the server
+     as it stands; then the server's fields are removed and the gate goes green; both are committed
+     together.
+- **Nothing else changes.** No unit's content changes; only the order and the grouping.
+- **Two channels still show a figure after U2b:**
+  - the radial menu's per-type preview, whose candidate count still includes hidden stored items,
+    until U2c fixes it server-side;
+  - the export manifest, until U9.
+
+  U2b does not claim rule 7 is met.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

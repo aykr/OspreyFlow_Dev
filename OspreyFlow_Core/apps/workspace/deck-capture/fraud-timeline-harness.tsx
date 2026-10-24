@@ -17,7 +17,7 @@ const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(FRAUD_SCHEMA);
 workingSet.store
   .getState()
-  .applyDelta({ seq: 1, op: "snapshot", nodes: FRAUD_NODES, edges: FRAUD_EDGES, filtered_count: 0 });
+  .applyDelta({ seq: 1, op: "snapshot", nodes: FRAUD_NODES, edges: FRAUD_EDGES });
 
 const crossFilterStore = createCrossFilterStore("http://deck-capture.invalid", "unused", "inv-1");
 // The analyst's brush: the structuring fortnight selected, so the trend outside it dims.

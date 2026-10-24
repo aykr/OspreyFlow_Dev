@@ -6,34 +6,33 @@ export interface StatusBarProps {
   nodeCount: number;
   edgeCount: number;
   dimmedCount: number;
-  filteredCount: number;
+  /** ADR-124 decision 5: the case holds material this reader is not cleared to see. A flag, never a
+   * number. */
+  withheld?: boolean;
   /** Nodes folded into Group Nodes by Communities, so counted but not drawn one by one. */
   groupedCount?: number;
 }
 
-/** `spec/02_GLASS_FRONTEND.md` §2: "12,481 nodes · 38,902 edges · 214
- * dimmed by filter · 6 hidden by handling ⓘ" — and its own rule 4: "The
- * status bar never lies... An analyst must never be able to mistake a
- * filtered picture for a complete one."
+/** `spec/02_GLASS_FRONTEND.md` §2's counts, and its own rule 4: "The status bar never lies... An
+ * analyst must never be able to mistake a filtered picture for a complete one."
  *
- * `nodeCount`/`edgeCount` come from `graph.order`/`graph.size` — the
- * store's actual membership. `filteredCount` comes verbatim from the
- * server (`WorkingSetStoreState.filteredCount`, set only by a
- * `DeltaSnapshot`/accumulated from a `DeltaNotice`) — never recomputed
- * client-side (a stated constraint:
- * a client-side recount would silently diverge from a stale view). */
+ * `nodeCount`/`edgeCount` come from `graph.order`/`graph.size` — the store's actual membership.
+ * What the reader may not see is said once, in a sentence with no number (ADR-124 decision 5,
+ * which retired the withheld figure): `withheld` is `WorkingSetStoreState.withheld`, and the
+ * sentence stands only while it is `true`. */
+export const WITHHELD_SENTENCE = "This case holds material you are not cleared to see.";
+
 export function StatusBar({
   nodeCount,
   edgeCount,
   dimmedCount,
-  filteredCount,
+  withheld = false,
   groupedCount = 0,
 }: StatusBarProps) {
   const pairs: [number, string][] = [
     [nodeCount, "nodes"],
     [edgeCount, "edges"],
     [dimmedCount, "dimmed by filter"],
-    [filteredCount, "hidden by handling"],
     ...(groupedCount > 0 ? ([[groupedCount, "folded into groups"]] as [number, string][]) : []),
   ];
   const [tip, setTip] = useState(0);
@@ -48,6 +47,7 @@ export function StatusBar({
             <span className="value">{count.toLocaleString("en-GB")}</span> {words}
           </span>
         ))}
+        {withheld && <span className="status-bar__withheld">{WITHHELD_SENTENCE}</span>}
       </div>
       <section aria-label="Tip" className="status-bar__tip">
         <span className="status-bar__tip-label">Tip</span>

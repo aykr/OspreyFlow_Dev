@@ -272,7 +272,6 @@ test("Enter expands the focused node — a real network call, not a stub", async
       contentType: "application/json",
       body: JSON.stringify({
         delta: { seq: 2, op: "add", nodes: [], edges: [] },
-        filtered_count: 0,
       }),
     });
   });
@@ -323,7 +322,6 @@ test("an expansion leaves the view and the settled nodes where they were (ADR-06
           nodes: [person("x1"), person("x2")],
           edges: [link("ex1", "n1", "x1"), link("ex2", "n1", "x2")],
         },
-        filtered_count: 0,
       }),
     });
   });
@@ -492,7 +490,7 @@ test("the radial list's own auto-focused first item is itself reachable and acti
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
     });
   });
 
@@ -1249,7 +1247,7 @@ test("a very large expansion asks first; Escape cancels it and nothing is added"
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
     });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -1279,7 +1277,7 @@ test("a very large expansion can be accepted by keyboard, and only then does it 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
     });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -1643,7 +1641,7 @@ test("choosing a search result draws three steps out from it, counted first, in 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
     });
   });
   await page.evaluate(() => (window as unknown as { __CANVAS__: { expandFrom: (id: string, depth: number) => void } }).__CANVAS__.expandFrom("n5", 3));
@@ -1667,7 +1665,7 @@ test("a three-step draw that is very large asks first, and the answer keeps its 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
     });
   });
   await page.evaluate(() => (window as unknown as { __CANVAS__: { expandFrom: (id: string, depth: number) => void } }).__CANVAS__.expandFrom("n5", 3));
@@ -1703,7 +1701,6 @@ test("an expansion that adds nothing says so, and Escape dismisses the message",
         delta: alreadyDrawn
           ? { seq: 2, op: "add", nodes: [{ id: "n0" }, { id: "n1" }], edges: [{ id: "e0" }] }
           : { seq: 2, op: "add", nodes: [], edges: [] },
-        filtered_count: 0,
       }),
     });
   });

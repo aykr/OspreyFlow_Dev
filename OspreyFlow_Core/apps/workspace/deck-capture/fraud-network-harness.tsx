@@ -20,7 +20,7 @@ const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(FRAUD_SCHEMA);
 workingSet.store
   .getState()
-  .applyDelta({ seq: 1, op: "snapshot", nodes: FRAUD_NODES, edges: FRAUD_EDGES, filtered_count: 0 });
+  .applyDelta({ seq: 1, op: "snapshot", nodes: FRAUD_NODES, edges: FRAUD_EDGES });
 
 const canvasHandle = createRef<GlassCanvasHandle>();
 const container = document.getElementById("root");

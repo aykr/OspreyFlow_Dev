@@ -591,6 +591,7 @@
 .status-bar__next { min-height: var(--h-control-24); padding: 0 var(--sp-6); font-size: var(--fs-11); }
 .status-pair { display: inline-flex; align-items: baseline; gap: var(--sp-4); white-space: nowrap; }
 .status-pair .value { color: var(--text-primary); }
+.status-bar__withheld { color: var(--text-primary); white-space: nowrap; }
 /* The grid switched off from the canvas toolbar's Show group (owner, 6 October 2026). */
 .network-canvas--no-grid { background-image: none; }
 /* A side panel's name folds the whole panel (owner, 6 October 2026). */

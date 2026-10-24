@@ -85,7 +85,7 @@ test("the large-expansion prompt's buttons can be clicked with the mouse", async
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] }, filtered_count: 0 }),
+      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
     });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });

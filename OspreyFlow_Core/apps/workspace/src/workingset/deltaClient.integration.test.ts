@@ -151,7 +151,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
     return ws as unknown as SocketLike;
   }
 
-  it("receives a snapshot on first connect, carrying filtered_count", async () => {
+  it("receives a snapshot on first connect", async () => {
     const investigationId = await createInvestigation();
     await seedOneNode(investigationId, "n1");
 
@@ -170,7 +170,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
     });
 
     expect(deltas).toHaveLength(1);
-    expect(deltas[0]).toMatchObject({ op: "snapshot", filtered_count: 0 });
+    expect(deltas[0]).toMatchObject({ op: "snapshot" });
     expect((deltas[0] as { nodes: { id: string }[] }).nodes.map((n) => n.id)).toEqual(["n1"]);
   }, 15_000);
 

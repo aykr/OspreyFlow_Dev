@@ -18,6 +18,8 @@ import type { App as AppComponent } from "./App";
 // nothing here exercises canvas or map rendering, only the auth gate that sits in front of them.
 vi.mock("./canvas/GlassCanvas", () => ({ GlassCanvas: () => null }));
 vi.mock("./map/MapView", () => ({ MapView: () => null }));
+// The timeline draws with ECharts, which needs a real canvas that jsdom has none of.
+vi.mock("./timeline/Timeline", () => ({ Timeline: () => null }));
 
 let App!: typeof AppComponent;
 beforeAll(async () => {
@@ -369,6 +371,80 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to the investigation" }));
     expect(screen.getByRole("button", { name: "Watches" }).getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
+  });
+
+  // ADR-124 decision 5: what the open case withholds is that case's own. The sentence from case A
+  // must not stay on the bar when the analyst is taken into case B (a jump from an alert) before B
+  // has sent anything.
+  test("the standing sentence from one case is gone when another case opens, before it sends anything", async () => {
+    const sentence = "This case holds material you are not cleared to see.";
+    const sockets: { url: string; onmessage: ((e: { data: unknown }) => void) | null }[] = [];
+    class FakeSocket {
+      url: string;
+      onopen: (() => void) | null = null;
+      onclose: unknown = null;
+      onerror: unknown = null;
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      constructor(url: string) {
+        this.url = url;
+        sockets.push(this);
+      }
+      send(): void {}
+      close(): void {}
+    }
+    vi.stubGlobal("WebSocket", FakeSocket);
+    const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+    vi.mocked(globalThis.fetch).mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/v1/ws-ticket")) return json({ ticket: "t" });
+      if (url.endsWith("/v1/ontology")) return json({ entity_types: [], edge_types: [] });
+      if (url.endsWith("/v1/analytics/geobins")) return json([]);
+      if (url.endsWith("/v1/yardstick")) return json({ bands: [] });
+      for (const list of ["judgements", "gaps", "assumptions"]) {
+        if (url.endsWith(`/${list}`)) return json({ [list]: [] });
+      }
+      if (url.endsWith("/v1/me/rights")) return json({ rights: ["investigate", "keep_watches"] });
+      if (url.endsWith("/inv-1/alerts")) {
+        return json({
+          alerts: [
+            {
+              id: "a1", rule_id: "rule-1", owner_id: "analyst-1", mode: "full", referent_node_ids: ["n1"],
+              evidence_available: true, investigation_id: null, created_at: "2026-10-10T09:00:00Z",
+            },
+          ],
+        });
+      }
+      if (url.endsWith("/alerts/a1/jump")) {
+        return json({
+          investigation: {
+            id: "inv-2", created_at: "2026-10-10T09:00:00Z", created_by: "analyst-1",
+            owning_unit: "unit-1", branched_from: "inv-1",
+          },
+          seeded_count: 1,
+        });
+      }
+      // Anything this test does not need is refused, not answered in a shape a panel may misread.
+      return Promise.resolve(new Response("{}", { status: 500 }));
+    });
+
+    try {
+      render(<App />);
+      await vi.waitFor(() => expect(sockets.some((x) => x.url.includes("/inv-1/stream"))).toBe(true));
+      sockets
+        .find((x) => x.url.includes("/inv-1/stream"))!
+        .onmessage?.({ data: JSON.stringify({ seq: 1, op: "snapshot", nodes: [], edges: [], withheld: true }) });
+      expect(await screen.findByText(sentence)).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Watches" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Jump into investigation" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Open investigation" }));
+
+      await vi.waitFor(() => expect(sockets.some((x) => x.url.includes("/inv-2/stream"))).toBe(true));
+      await screen.findByRole("status");
+      expect(screen.queryByText(sentence)).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   test("after the Glass tile, the graph is the one showing and the Studio is not", async () => {

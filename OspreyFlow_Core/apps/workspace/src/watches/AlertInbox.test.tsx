@@ -71,7 +71,9 @@ describe("test_a_notify_mode_alert_renders_with_no_referent_the_viewer_cannot_re
   });
 });
 
-const JUMP_RESULT: AlertJumpResult = {
+// ADR-124 decision 1: the jump summary carries no count of what the reader cannot read. A server
+// that still sends `unreadable_count` has it ignored.
+const JUMP_RESULT = {
   investigation: {
     id: "inv-branch-1",
     created_at: "2026-09-22T00:00:00Z",
@@ -81,37 +83,16 @@ const JUMP_RESULT: AlertJumpResult = {
   },
   seeded_count: 3,
   unreadable_count: 2,
-};
+} as unknown as AlertJumpResult;
 
-describe("test_jump_result_never_frames_unreadable_count_as_newly_visible_content", () => {
-  test("the jump summary frames unreadable_count as lost access, never as newly found content", () => {
-    const { getByTestId } = render(
+describe("test_jump_result_shows_no_unreadable_count", () => {
+  test("the jump summary says how many were added and nothing of what could not be read", () => {
+    const { container, queryByTestId } = render(
       <JumpResultSummary result={JUMP_RESULT} onOpen={() => undefined} />,
     );
-    const unreadableText = getByTestId("jump-unreadable-summary").textContent ?? "";
-
-    expect(unreadableText).toBe("2 referents no longer accessible to you.");
-    // The framing this test exists to pin, scoped to the *unreadable_count* sentence specifically
-    // (not the whole summary — "…added to the new investigation" legitimately uses "new" to
-    // describe the investigation itself, which really is new; that is not the claim under test):
-    // `unreadable_count` can only ever recount referents belonging to an alert this same viewer
-    // already had a standing claim to receive (`AlertStore.get_authorized`/`list_authorized`
-    // filter `WHERE owner_id = $1`, ADR-041) — re-checked fresh as the viewer's own current
-    // principal (`fetch_jumpable_referents`, `watch_routes.py`). Copy implying newly-revealed or
-    // newly-found content would misrepresent that guarantee at the render layer even though the
-    // server-side number itself is safe; asserted as an explicit negative match against that one
-    // sentence, not just an absence noticed by omission.
-    expect(unreadableText).not.toMatch(/new|found|discovered|hidden/i);
-  });
-
-  test("a copy regression that frames the count as newly-found content fails this test", () => {
-    // A minimal stand-in for the same summary with a copy regression — proves the assertion above
-    // is real, not a tautology that would pass against any string.
-    function Regressed({ result }: { result: AlertJumpResult }) {
-      return <p data-testid="jump-unreadable-summary">{result.unreadable_count} new hidden entities found.</p>;
-    }
-    const { getByTestId } = render(<Regressed result={JUMP_RESULT} />);
-    expect(getByTestId("jump-unreadable-summary").textContent ?? "").toMatch(/new|found|hidden/i);
+    expect(queryByTestId("jump-unreadable-summary")).toBeNull();
+    expect(container.textContent ?? "").toContain("3 entities added to the new investigation.");
+    expect(container.textContent ?? "").not.toMatch(/referent|accessible|unreadable|\b2\b/);
   });
 });
 

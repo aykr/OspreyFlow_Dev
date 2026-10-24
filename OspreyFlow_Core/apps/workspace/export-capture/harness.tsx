@@ -105,7 +105,7 @@ const nodes: Node[] = [
 ];
 const edges: Edge[] = [assocEdge("e1", "n1", "n2"), assocEdge("e2", "n2", "n3")];
 
-workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges, filtered_count: 0 });
+workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges });
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");

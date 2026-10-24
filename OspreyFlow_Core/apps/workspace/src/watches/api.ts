@@ -46,7 +46,6 @@ export interface InvestigationSummary {
 export interface AlertJumpResult {
   investigation: InvestigationSummary;
   seeded_count: number;
-  unreadable_count: number;
 }
 
 /** ADR-099 Amendment 3: watches and their alerts are the dataset's, asked of the case. */

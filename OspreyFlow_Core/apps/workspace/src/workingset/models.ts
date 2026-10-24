@@ -8,7 +8,7 @@
 // worth naming rather than leaving implicit (the "invariant stated
 // in prose that no test exercises" failure mode,
 // applied to a cross-language contract instead of a domain invariant).
-// `deltaClient.test.ts` exercises this file against the *real* Python
+// `deltaClient.integration.test.ts` exercises this file against the *real* Python
 // WebSocket route, which is what actually proves the two sides still
 // agree — not a hope that no one edits one side alone.
 
@@ -55,21 +55,24 @@ export interface DeltaReproject {
   seq: number;
   op: "reproject";
   reason: string;
-  merged: number;
-  split: number;
-  affected: number;
+  /** Optional since ADR-124 U2b: the new `ResolutionOutcome` carries these figures itself, so the
+   * delta inside it may not. The bare delta sent until U2c lands still has them. */
+  merged?: number;
+  split?: number;
+  affected?: number;
   /** Phase 6a Stage 2 — every node whose cluster membership moved, mapped to its new cluster
    * id, mirroring `services/api/working_set/models.py`'s own field. Bounded by `affected`, never
    * the full working set. */
   affected_cluster_ids: Record<string, string>;
 }
 
-export interface DeltaNotice {
-  seq: number;
-  op: "notice";
-  level: "info" | "warning";
-  message: string;
-  count: number;
+/** ADR-124 decision 1: the answer to a change of match strictness. Until U2c lands the server
+ * sends the bare `DeltaReproject`; `ThresholdControl` reads either. */
+export interface ResolutionOutcome {
+  delta: DeltaReproject;
+  merged: number;
+  split: number;
+  affected: number;
 }
 
 export interface DeltaSnapshot {
@@ -77,7 +80,10 @@ export interface DeltaSnapshot {
   op: "snapshot";
   nodes: Node[];
   edges: Edge[];
-  filtered_count: number;
+  /** ADR-124 decision 5: `true` when the case holds anything this reader may not view. Set only in
+   * the full snapshot `sync` returns; `null` or absent everywhere else, and then the Glass keeps
+   * what it last had. Never a number. */
+  withheld?: boolean | null;
 }
 
 export type WorkingSetDelta =
@@ -86,7 +92,6 @@ export type WorkingSetDelta =
   | DeltaRemove
   | DeltaReplaceEdge
   | DeltaReproject
-  | DeltaNotice
   | DeltaSnapshot;
 
 export interface HistoryStepSummary {

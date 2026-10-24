@@ -13,7 +13,7 @@ import { COORDINATES, FRAUD_EDGES, FRAUD_NODES } from "./fraudFixture";
 const workingSet = createWorkingSet();
 workingSet.store
   .getState()
-  .applyDelta({ seq: 1, op: "snapshot", nodes: FRAUD_NODES, edges: FRAUD_EDGES, filtered_count: 0 });
+  .applyDelta({ seq: 1, op: "snapshot", nodes: FRAUD_NODES, edges: FRAUD_EDGES });
 
 const provider: PublicMapProvider = {
   id: "deck-local-gb",

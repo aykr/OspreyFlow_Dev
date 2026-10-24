@@ -11,13 +11,13 @@ afterEach(cleanup);
 
 describe("StatusBar", () => {
   it("says nothing about groups when nothing is folded", () => {
-    render(<StatusBar nodeCount={10} edgeCount={12} dimmedCount={0} filteredCount={0} />);
+    render(<StatusBar nodeCount={10} edgeCount={12} dimmedCount={0} />);
     expect(screen.getByRole("status").textContent).not.toContain("folded");
   });
 
   it("says how many nodes are folded into groups", () => {
     render(
-      <StatusBar nodeCount={10} edgeCount={12} dimmedCount={0} filteredCount={0} groupedCount={1234} />,
+      <StatusBar nodeCount={10} edgeCount={12} dimmedCount={0} groupedCount={1234} />,
     );
     expect(screen.getByRole("status").textContent).toContain("1,234 folded into groups");
   });
@@ -28,7 +28,7 @@ describe("StatusBar", () => {
 // pairs stand apart by 16px, with no separator character between them.
 describe("StatusBar pairs", () => {
   it("draws each count as a number in mono beside its words, apart and with no separator", () => {
-    render(<StatusBar nodeCount={12481} edgeCount={38902} dimmedCount={214} filteredCount={6} />);
+    render(<StatusBar nodeCount={12481} edgeCount={38902} dimmedCount={214} />);
     const bar = screen.getByRole("status");
     expect(bar.classList.contains("value")).toBe(false);
     const pairs = Array.from(bar.querySelectorAll(".status-pair"));
@@ -36,7 +36,6 @@ describe("StatusBar pairs", () => {
       ["12,481", "12,481 nodes"],
       ["38,902", "38,902 edges"],
       ["214", "214 dimmed by filter"],
-      ["6", "6 hidden by handling"],
     ]);
     expect(bar.querySelectorAll(".status-pair__sep")).toHaveLength(0);
     expect(bar.textContent).not.toContain("·");
@@ -47,7 +46,7 @@ describe("StatusBar pairs", () => {
 // new tip is not read out as a change to the counts; *Next tip* steps through them.
 describe("StatusBar tip", () => {
   it("shows a tip with a way to the next one, outside the live counts", () => {
-    render(<StatusBar nodeCount={1} edgeCount={0} dimmedCount={0} filteredCount={0} />);
+    render(<StatusBar nodeCount={1} edgeCount={0} dimmedCount={0} />);
     const tip = screen.getByRole("region", { name: "Tip" });
     expect(screen.getByRole("status").contains(tip)).toBe(false);
     const first = tip.textContent;
@@ -55,5 +54,33 @@ describe("StatusBar tip", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next tip" }));
     expect(tip.textContent).not.toBe(first);
     expect(tip.textContent).toContain("press Enter to expand it by one hop");
+  });
+});
+
+// ADR-124 decision 5: one standing sentence, no number, only when the case holds material the reader
+// may not see.
+describe("StatusBar standing sentence", () => {
+  const SENTENCE = "This case holds material you are not cleared to see.";
+
+  it("shows exactly the sentence when withheld is true", () => {
+    render(<StatusBar nodeCount={3} edgeCount={2} dimmedCount={0} withheld />);
+    expect(screen.getByText(SENTENCE)).toBeTruthy();
+  });
+
+  it("shows nothing about withholding when withheld is false or absent", () => {
+    const { rerender } = render(<StatusBar nodeCount={3} edgeCount={2} dimmedCount={0} withheld={false} />);
+    expect(screen.queryByText(SENTENCE)).toBeNull();
+    rerender(<StatusBar nodeCount={3} edgeCount={2} dimmedCount={0} />);
+    expect(screen.queryByText(SENTENCE)).toBeNull();
+    expect(screen.getByRole("status").textContent).not.toMatch(/hidden by handling|cleared/);
+  });
+
+  it("shows no number for it, ever", () => {
+    render(<StatusBar nodeCount={3} edgeCount={2} dimmedCount={0} withheld />);
+    const sentence = screen.getByText(SENTENCE);
+    expect(sentence.textContent).toBe(SENTENCE);
+    expect(sentence.textContent).not.toMatch(/\d/);
+    expect(sentence.closest(".status-pair")).toBeNull();
+    expect(document.body.textContent).not.toContain("hidden by handling");
   });
 });

@@ -7,7 +7,7 @@
 // their *derived* dimming result as plain reactive state, never the working
 // set's own graphology instance — `GlassCanvas.tsx` reads `dimmedNodeIds`
 // from here to feed its own `refreshNodeVisualState`, the same way it reads
-// `filteredCount` from the working-set store, rather than this module
+// the working-set store, rather than this module
 // reaching into the graph itself.
 //
 // **The dimming mechanism reuses existing `AnalyticsPort` machinery rather

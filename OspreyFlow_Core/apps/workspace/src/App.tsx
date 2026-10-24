@@ -1,5 +1,6 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useStore } from "zustand/react";
 
 import type {
   Edge,
@@ -194,6 +195,9 @@ const GEO_BIN_PRECISION = 8;
 
 export function App() {
   const workingSetRef = useRef(createWorkingSet());
+  // Read from the store itself, not copied into this component's own state by a subscription that a
+  // change of case tears down: the reset on a new case would then never reach the bar.
+  const withheld = useStore(workingSetRef.current.store, (s) => s.withheld);
   const glassCanvasRef = useRef<GlassCanvasHandle>(null);
   const [groupedCount, setGroupedCount] = useState(0);
   // How many judgements rest on each node, drawn as a small count beside it (ADR-070).
@@ -553,7 +557,6 @@ export function App() {
   const [counts, setCounts] = useState({
     nodes: 0,
     edges: 0,
-    filteredCount: 0,
   });
   // The highest classification among the nodes and links in the view (ADR-097 Amendment 1), read
   // again whenever the view's counts change.
@@ -763,6 +766,11 @@ export function App() {
   // A case's degree marks are its own: another case opens with none.
   useEffect(() => setDegreeMarks(new Map()), [investigationId]);
 
+  // What the open case withholds from this reader is the case's own (ADR-124 decision 5): another
+  // case opens knowing nothing of it until its snapshot says. Declared before the stream's effect so
+  // it runs first on a change of case.
+  useEffect(() => workingSetRef.current.store.getState().resetCase(), [investigationId]);
+
   // The count of judgements beside each node (ADR-070): fetched when the case opens, then kept
   // current by the Judgements tab each time it reloads the list. A failure leaves no badges; it
   // never blocks the canvas.
@@ -785,15 +793,11 @@ export function App() {
   useEffect(() => {
     if (!investigationId || !bearerToken) return;
     const workingSet = workingSetRef.current;
-    const unsubscribe = workingSet.store.subscribe((state) => {
+    const unsubscribe = workingSet.store.subscribe(() => {
       setCounts({
         nodes: workingSet.graph.order,
         edges: workingSet.graph.size,
-        filteredCount: state.filteredCount,
       });
-      for (const notice of state.notices) {
-        setToast(notice.message);
-      }
       // A delta can add/remove working-set nodes the cross-filter has never
       // seen — re-derive dimming against the current membership so a newly
       // streamed-in node gets its correct dimmed state right away, per
@@ -1762,7 +1766,7 @@ export function App() {
           nodeCount={counts.nodes}
           edgeCount={counts.edges}
           dimmedCount={dimmedNodeIds.size}
-          filteredCount={counts.filteredCount}
+          withheld={withheld}
           groupedCount={groupedCount}
         />
       )}

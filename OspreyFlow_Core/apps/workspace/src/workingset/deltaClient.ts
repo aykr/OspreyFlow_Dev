@@ -25,15 +25,18 @@
 // same socket rather than applying something it cannot place correctly.
 import type { WorkingSetDelta } from "./models";
 
-const DELTA_OPS = new Set([
-  "add",
-  "update",
-  "remove",
-  "replace_edge",
-  "reproject",
-  "notice",
-  "snapshot",
-]);
+const DELTA_OPS = new Set(["add", "update", "remove", "replace_edge", "reproject", "snapshot"]);
+
+/** A server that still sends the retired `notice` step (ADR-124): it is dropped quietly. The server
+ * stamps it with the previous step's own number, so it neither advances nor checks the sequence. */
+function isRetiredNotice(value: unknown): value is { op: "notice"; seq: number } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { op?: unknown }).op === "notice" &&
+    typeof (value as { seq?: unknown }).seq === "number"
+  );
+}
 
 export function isWorkingSetDelta(value: unknown): value is WorkingSetDelta {
   return (
@@ -100,6 +103,7 @@ export function connectDeltaClient(
       handlers.onError?.(error);
       return;
     }
+    if (isRetiredNotice(parsed)) return; // dropped: it takes no place in the sequence
     if (!isWorkingSetDelta(parsed)) {
       handlers.onError?.(new Error(`not a WorkingSetDelta: ${String(event.data)}`));
       return;

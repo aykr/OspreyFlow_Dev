@@ -81,7 +81,6 @@ test("a node moved by hand stays where it was put when an expansion re-arranges 
           nodes: ["x1", "x2"].map((id) => ({ id, type: "Person", properties: { family_name: id }, ...meta })),
           edges: ["x1", "x2"].map((id) => ({ id: `e-${id}`, type: "ASSOCIATE_OF", source: "n1", target: id, ...meta })),
         },
-        filtered_count: 0,
       }),
     }),
   );
