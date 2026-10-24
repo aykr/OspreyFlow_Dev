@@ -12,8 +12,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
+from services.api.rule_evaluation import handling_readable
 from services.api.working_set.models import WorkingSetDelta
 
+from ontology.handling import load_uk_le_scheme
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -32,6 +34,8 @@ from schemas.domain import (
     Subgraph,
     TxId,
 )
+
+_SCHEME = load_uk_le_scheme()
 
 #: `FakeGraphPort.get_node`'s own default "visible" response — its content is never asserted on
 #: by any test; only whether `get_node` was called and whether it returned `None` is.
@@ -170,12 +174,28 @@ class FakeGraphPort:
         *,
         hidden_node_ids: frozenset[NodeId] = frozenset(),
         graph_edges: Sequence[Edge] = (),
+        graph_nodes: Sequence[Node] = (),
+        superseded_node_ids: frozenset[NodeId] = frozenset(),
+        hidden_edge_ids: frozenset[EdgeId] = frozenset(),
+        superseded_edge_ids: frozenset[EdgeId] = frozenset(),
     ) -> None:
         self.expand_result = expand_result
-        #: The graph's links for `edges_among` (ADR-098), which returns those with both ends in
-        #: the set and neither end hidden, as the real adapter refuses an edge to a hidden node.
+        #: The graph's links, for `edges_among` (ADR-098) and `get_edges` (ADR-124). The links
+        #: `expand_result` returns are in the graph too (see `_world_edges`).
         self._graph_edges = list(graph_edges)
         self.edges_among_requests: list[tuple[list[NodeId], Principal]] = []
+        #: The nodes `get_nodes` and `get_edges` (ADR-124) can find, besides those `expand_result`
+        #: returns (see `_world_nodes`): an id outside both is absent, as an id the Vault never held
+        #: is. "Hidden" therefore means present but unreadable: each element is judged by its own
+        #: body, for the principal given, as the adapter's access step judges it.
+        self._graph_nodes = {n.id: n for n in graph_nodes}
+        #: Overrides, kept for tests that name an id rather than build a body: left out whatever
+        #: the body says, as `hidden_node_ids` is.
+        self._superseded_node_ids = superseded_node_ids
+        self._hidden_edge_ids = hidden_edge_ids
+        self._superseded_edge_ids = superseded_edge_ids
+        self.get_nodes_requests: list[tuple[list[NodeId], Principal]] = []
+        self.get_edges_requests: list[tuple[list[EdgeId], Principal]] = []
         self.paths_at_length_requests: list[tuple[NodeId, NodeId, int, Principal]] = []
         self.candidate_count = candidate_count
         self.expand_requests: list[ExpandRequest] = []
@@ -184,20 +204,98 @@ class FakeGraphPort:
         self.committed_edges: list[EdgeWrite] = []
         self._pending_edges: dict[TxId, list[EdgeWrite]] = {}
         self._next_tx = 0
-        #: Every node is visible to every principal by default — this fake is not a stand-in for
-        #: real classification-based filtering (`tests/resolve/test_projection_access_control.py`
-        #: proves that against the real adapter). Configuring `hidden_node_ids` lets a test that
-        #: only cares about `_manual_assertion`'s own *call shape* (does it call `get_node` and
-        #: honour a `None` result) do so without needing a live ArcadeDB.
+        #: Only for `get_node`, which predates ADR-124 and is not a stand-in for the adapter: every
+        #: id not named here is visible to every principal, an id nobody holds included
+        #: (`tests/resolve/test_projection_access_control.py` proves the real filtering against the
+        #: real adapter). A test that only cares about `_manual_assertion`'s own *call shape* (does
+        #: it call `get_node` and honour a `None` result) configures this. `get_nodes`,
+        #: `get_edges` and `edges_among` also leave these ids out, as an override.
         self._hidden_node_ids = hidden_node_ids
 
     async def get_node(
         self, node_id: NodeId, principal: Principal, *, include_superseded: bool = False
     ) -> Node | None:
+        # Predates ADR-124 and is left as it was: it returns a visible node for any id not marked
+        # hidden. `get_nodes` and `get_edges` below do not copy that.
         self.get_node_requests.append((node_id, principal))
         if node_id in self._hidden_node_ids:
             return None
         return _FAKE_VISIBLE_NODE
+
+    def _world_nodes(self) -> dict[NodeId, Node]:
+        """What a lookup by id can find: `graph_nodes` and the nodes `expand_result` returns."""
+        return {**{n.id: n for n in self.expand_result.nodes}, **self._graph_nodes}
+
+    def _world_edges(self) -> dict[EdgeId, Edge]:
+        """The links `graph_edges` holds and the links `expand_result` returns."""
+        return {
+            **{e.id: e for e in self.expand_result.edges},
+            **{e.id: e for e in self._graph_edges},
+        }
+
+    @staticmethod
+    def _body_readable(
+        principal: Principal, element: Node | Edge, *, superseded: bool, hidden: bool
+    ) -> bool:
+        """The adapter's access step, on the element's own body: handling, datasets, a superseded
+        body, a reverted body; and the explicit overrides."""
+        if hidden or superseded or element.audit.superseded_by is not None:
+            return False
+        if element.audit.reverted:
+            return False
+        if principal.datasets is not None and not set(principal.datasets) & set(element.datasets):
+            return False
+        return handling_readable(_SCHEME, principal, element.handling)
+
+    def _node_readable(self, principal: Principal, node: Node) -> bool:
+        return self._body_readable(
+            principal,
+            node,
+            superseded=node.id in self._superseded_node_ids,
+            hidden=node.id in self._hidden_node_ids,
+        )
+
+    def _edge_readable(self, principal: Principal, edge: Edge) -> bool:
+        return self._body_readable(
+            principal,
+            edge,
+            superseded=edge.id in self._superseded_edge_ids,
+            hidden=edge.id in self._hidden_edge_ids,
+        )
+
+    async def get_nodes(self, node_ids: Sequence[NodeId], principal: Principal) -> list[Node]:
+        """ADR-124's read by id. Unlike `get_node` above, this finds only what the fake holds and
+        judges each node by its own body for `principal`: an absent, an unreadable, a superseded
+        and a reverted id are left out alike, each node once, ordered by id."""
+        # A bare str is a sequence of characters: refused as the adapter does.
+        if isinstance(node_ids, str):
+            raise TypeError("ids must be a sequence of ids, not a single string")
+        self.get_nodes_requests.append((list(node_ids), principal))
+        world = self._world_nodes()
+        return [
+            world[i]
+            for i in sorted(set(node_ids))
+            if i in world and self._node_readable(principal, world[i])
+        ]
+
+    async def get_edges(self, edge_ids: Sequence[EdgeId], principal: Principal) -> list[Edge]:
+        """ADR-124's read by id: a link comes back only when it is held, it is readable by its own
+        body, and both its ends are held and readable by theirs."""
+        # A bare str is a sequence of characters: refused as the adapter does.
+        if isinstance(edge_ids, str):
+            raise TypeError("ids must be a sequence of ids, not a single string")
+        self.get_edges_requests.append((list(edge_ids), principal))
+        nodes = self._world_nodes()
+        edges = self._world_edges()
+        found: list[Edge] = []
+        for edge_id in sorted(set(edge_ids)):
+            edge = edges.get(edge_id)
+            if edge is None or not self._edge_readable(principal, edge):
+                continue
+            ends = (nodes.get(edge.source), nodes.get(edge.target))
+            if all(end is not None and self._node_readable(principal, end) for end in ends):
+                found.append(edge)
+        return found
 
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph:
         self.expand_requests.append(req)
@@ -210,11 +308,25 @@ class FakeGraphPort:
         edge_types: list[str] | None = None,
     ) -> list[Edge]:
         self.edges_among_requests.append((list(node_ids), principal))
-        ids = set(node_ids) - self._hidden_node_ids
+        asked = set(node_ids)
+        nodes = self._world_nodes()
+
+        def end_readable(node_id: NodeId) -> bool:
+            # An end the fake holds no body for (a node the test keeps only in its store) is
+            # judged by the override sets alone, as before ADR-124.
+            if node_id in nodes:
+                return self._node_readable(principal, nodes[node_id])
+            return node_id not in self._hidden_node_ids | self._superseded_node_ids
+
         return [
             e
-            for e in self._graph_edges
-            if e.source in ids and e.target in ids and (not edge_types or e.type in edge_types)
+            for e in self._world_edges().values()
+            if e.source in asked
+            and e.target in asked
+            and (not edge_types or e.type in edge_types)
+            and self._edge_readable(principal, e)
+            and end_readable(e.source)
+            and end_readable(e.target)
         ]
 
     async def paths_at_length(

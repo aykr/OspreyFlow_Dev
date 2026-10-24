@@ -86,6 +86,28 @@ class GraphPort(Protocol):
         its history either."""
         ...
 
+    async def get_nodes(self, node_ids: Sequence[NodeId], principal: Principal) -> list[Node]:
+        """ADR-124 decision 6: the given ids looked up alone, with no traversal and no neighbour
+        read: resolved through each stored type's unique `id` index, then read through the access
+        step, per 1,000 ids (ADR-124 Amendment 2). Access-filtered in the adapter (rule 3), by the
+        same step as every other read: `principal`'s clearance, a restricted `handling_code`, the
+        case's datasets, and the structural exclusion of a reverted or superseded node. A hidden,
+        superseded, reverted or absent id is left out identically: nothing in the result, and no
+        error, says which. Each node comes back once however often its id is given, ordered by id.
+        No ids give `[]`. `node_ids` is a sequence of ids: a bare `str` is a `TypeError`, since it
+        is a sequence of characters and would be read as one-character ids."""
+        ...
+
+    async def get_edges(self, edge_ids: Sequence[EdgeId], principal: Principal) -> list[Edge]:
+        """`get_nodes`, for links. A link comes back only when the link *and both its ends* pass
+        the access step (rule 3): a readable link to a hidden end is left out as a hidden link is,
+        so the result for a list is the result for the list without those ids. A superseded,
+        reverted or absent id is left out the same way. Each link comes back once, ordered by id.
+        No ids give `[]`. A bare `str` for `edge_ids` is a `TypeError`, as for `get_nodes`. If the
+        store holds two copies of one link id (ADR-056 Amendments 15 and 19), the one that comes
+        back is whichever the store answered last: the port does not choose between them."""
+        ...
+
     async def supersede_node(self, node_id: NodeId, replacement: NodeWrite, tx: TxId) -> NodeId:
         """`01_DOMAIN_MODEL.md` §2.4: "Nodes are versioned, not
         overwritten. A correction writes a new revision and points the old

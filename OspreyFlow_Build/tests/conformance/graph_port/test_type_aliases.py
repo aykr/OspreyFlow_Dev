@@ -143,3 +143,90 @@ async def test_a_pending_proposals_links_are_stored_under_its_label_and_read_as_
             ExpandRequest(node_ids=[a], edge_types=["ACQUAINTED_WITH"]), CLEARED
         )
         assert [e.type for e in found.edges] == ["ACQUAINTED_WITH"]
+
+
+async def test_get_edges_reads_an_aliased_link_as_its_type_among_other_types(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`get_edges` asks every stored link type for the ids, so a link stored under an alias is
+    found and read back as the type it now answers to, beside links of other types, in one call
+    (ADR-124 U1)."""
+    from schemas.domain import Principal
+
+    reader = Principal(id="reader", clearance="OFFICIAL", org_unit="unit-1", datasets=["enron"])
+    async with factory.context() as adapter:
+        await adapter.apply_schema(_with(PROPOSED))
+        (a, b, c), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "abc"],
+            [],
+        )
+        _, (aliased, assoc, family) = await _write(
+            adapter,
+            [],
+            [
+                _edge("KNOWN_TO", a, b, classification="OFFICIAL", datasets=["enron"]),
+                _edge("ASSOCIATE_OF", b, c, classification="OFFICIAL", datasets=["enron"]),
+                _edge("FAMILY_OF", a, c, classification="OFFICIAL", datasets=["enron"]),
+            ],
+        )
+
+        await adapter.apply_schema(_with(PROMOTED))
+
+        edges = await adapter.get_edges([family, aliased, assoc], reader)
+        assert [e.id for e in edges] == sorted([aliased, assoc, family])
+        assert {e.id: e.type for e in edges} == {
+            aliased: "ACQUAINTED_WITH",
+            assoc: "ASSOCIATE_OF",
+            family: "FAMILY_OF",
+        }
+
+
+async def test_reads_by_id_find_a_type_another_process_created_after_this_one_applied_its_ontology(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-124 Amendment 2: the types a lookup asks come from the store, not from the ontology the
+    reading process applied. A link stored under a pending proposal's own storage type, and a node
+    of an entity type, both created by another process, are found by one that knows neither."""
+    from typing import Any
+
+    from services.api.link_types import compose_ontology
+
+    from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
+    from schemas.domain import Principal
+
+    pending = _proposal()
+    boat = next(e for e in BASE.entity_types if e.name == "Person").model_copy(
+        update={"name": "Boat"}
+    )
+    composed = compose_ontology(BASE, [pending], revision=0)
+    composed = composed.model_copy(update={"entity_types": [*composed.entity_types, boat]})
+    reader = Principal(id="reader", clearance="OFFICIAL", org_unit="unit-1", datasets=["enron"])
+    async with factory.context() as writer:
+        await writer.apply_schema(composed)
+        (a, b, boat_id), _ = await _write(
+            writer,
+            [
+                _node("Person", classification="OFFICIAL", datasets=["enron"]),
+                _node("Person", classification="OFFICIAL", datasets=["enron"]),
+                _node("Boat", classification="OFFICIAL", datasets=["enron"], family_name="Hull"),
+            ],
+            [],
+        )
+        _, (link,) = await _write(
+            writer,
+            [],
+            [_edge(pending.storage_name, a, b, classification="OFFICIAL", datasets=["enron"])],
+        )
+
+        # Another process on the same database, whose ontology lacks the proposal and the type.
+        shared: Any = writer
+        other = GraphArcadeDBAdapter(shared._client, shared._scheme)
+        await other.apply_schema(BASE)
+
+        (edge,) = await other.get_edges([link], reader)
+        assert (edge.id, edge.type) == (link, "KNOWN_TO")
+        nodes = await other.get_nodes([boat_id, a], reader)
+        assert {n.id: n.type for n in nodes} == {boat_id: "Boat", a: "Person"}
+        # The access step still applies to what it found.
+        assert await other.get_edges([link], reader.model_copy(update={"datasets": []})) == []

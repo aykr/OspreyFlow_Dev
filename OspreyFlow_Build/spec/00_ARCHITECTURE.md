@@ -652,8 +652,9 @@ can cite an `EdgeId` directly, so an edge needs the same "corrected, not vanishe
 has nothing to repoint, since nothing else in the domain model references an edge by id.
 Later reads, each with the access step on the element and on both ends of every link: `edges_among`
 (the links among a set of nodes, ADR-098 decision 1), and `type_counts` and `most_connected` (the
-Explore panel's counts and degree ranking, ADR-100 Amendment 1). `expand_candidate_count` takes the
-case's `datasets` (ADR-099 decision 4).
+Explore panel's counts and degree ranking, ADR-100 Amendment 1), and `get_nodes` and `get_edges`
+(the given ids alone, ADR-124 decision 6). `expand_candidate_count` takes the case's `datasets`
+(ADR-099 decision 4).
 
 Supported adapters: `arcadedb`, `janusgraph`. Candidate: `hugegraph`.
 

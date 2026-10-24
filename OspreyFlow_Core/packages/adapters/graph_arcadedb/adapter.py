@@ -21,6 +21,8 @@ adapter exists to prevent. Flagged rather than guessed at.
 
 from __future__ import annotations
 
+import asyncio
+import re
 from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Any
@@ -88,9 +90,12 @@ from .builders import (
     SuggestLocationsBuilder,
     SuggestNodesBuilder,
     render_edges_among_gremlin,
+    render_get_edges_gremlin,
+    render_get_nodes_gremlin,
     render_link_structure_gremlin,
     render_recent_loads_gremlin,
     render_recently_confirmed_gremlin,
+    render_record_id_lookup_sql,
     render_shared_contacts_gremlin,
     render_type_counts_gremlin,
     suggestion_scope,
@@ -112,6 +117,24 @@ from .serialization import (
     node_write_to_properties,
 )
 from .weight import compute_weight
+
+#: Ids per query for `get_nodes` and `get_edges` (ADR-124 decision 6): one `IN` list stays a bounded
+#: parameter however many ids a caller asks for.
+_ID_CHUNK = 1000
+
+#: What ArcadeDB calls a record: `#<bucket>:<position>`. Checked before one is put in a Gremlin
+#: literal, though the store is what said it.
+_RECORD_ID = re.compile(r"^#\d+:\d+$")
+
+
+def _id_chunks(ids: Sequence[str]) -> list[list[str]]:
+    """`ids` without repeats, in the order given, in lists of at most `_ID_CHUNK`. No ids give no
+    lists, so an empty read sends no query. A bare `str` is refused: it is a sequence of
+    characters, and `get_nodes("01ABC")` would look up five one-character ids."""
+    if isinstance(ids, str):
+        raise TypeError("ids must be a sequence of ids, not a single string")
+    unique = list(dict.fromkeys(ids))
+    return [unique[start : start + _ID_CHUNK] for start in range(0, len(unique), _ID_CHUNK)]
 
 
 class GraphArcadeDBAdapter:
@@ -566,6 +589,73 @@ class GraphArcadeDBAdapter:
         if not results:
             return None
         return node_from_element_map(results[0])
+
+    async def _types_with_unique_id(self, kind: str) -> list[str]:
+        """The stored types of `kind` (`"vertex"` or `"edge"`) a lookup by id can ask, from the
+        store itself on every call (ADR-124 Amendment 2): exactly those that carry a unique index
+        on `id` alone. Not this process's applied ontology: a link type another process created
+        since (a proposal's own storage type) would be left out, and its links would read as
+        absent. A type without that index is not asked, since asking would scan it."""
+        types = await self._client.sql("SELECT name, type, indexes FROM schema:types")
+        return [
+            t["name"]
+            for t in types
+            if t.get("type") == kind
+            and any(
+                i.get("unique") is True and i.get("properties") == ["id"]
+                for i in t.get("indexes") or []
+            )
+        ]
+
+    async def _record_ids(self, type_names: Sequence[str], ids: list[str]) -> list[str]:
+        """The record ids of the elements holding `ids`, over each stored type in `type_names`
+        (ADR-124 decision 6). One SQL query per type, run together: a type's own unique `id` index
+        answers it, which Gremlin's `has("id", within(...))` does not (it scans the store). The
+        ids are bound as `:ids`. Nothing here is access-filtered and nothing leaves the adapter:
+        the Gremlin step that follows is what applies the access step. Every type asked exists,
+        so there is no missing type to read as no rows: any error is raised."""
+        found = await asyncio.gather(
+            *(
+                self._client.sql(render_record_id_lookup_sql(t), params={"ids": ids})
+                for t in type_names
+            )
+        )
+        rids: list[str] = []
+        for rows in found:
+            for row in rows:
+                rid = row.get("rid")
+                if not isinstance(rid, str) or not _RECORD_ID.match(rid):
+                    raise ValueError(f"not an ArcadeDB record id: {rid!r}")
+                rids.append(rid)
+        return rids
+
+    async def get_nodes(self, node_ids: Sequence[NodeId], principal: Principal) -> list[Node]:
+        found: dict[str, Node] = {}
+        chunks = _id_chunks(node_ids)
+        types = await self._types_with_unique_id("vertex") if chunks else []
+        for chunk in chunks:
+            rids = await self._record_ids(types, chunk)
+            query = render_get_nodes_gremlin(rids, self._access, principal)
+            if query is None:
+                continue
+            for record in await self._client.gremlin(query):
+                node = node_from_element_map(record)
+                found[node.id] = node
+        return [found[node_id] for node_id in sorted(found)]
+
+    async def get_edges(self, edge_ids: Sequence[EdgeId], principal: Principal) -> list[Edge]:
+        found: dict[str, Edge] = {}
+        chunks = _id_chunks(edge_ids)
+        types = await self._types_with_unique_id("edge") if chunks else []
+        for chunk in chunks:
+            rids = await self._record_ids(types, chunk)
+            query = render_get_edges_gremlin(rids, self._access, principal)
+            if query is None:
+                continue
+            for record in await self._client.gremlin(query):
+                edge = edge_from_element_map(record)
+                found[edge.id] = edge
+        return [found[edge_id] for edge_id in sorted(found)]
 
     async def find_node(
         self, entity_type: str, identifier_field: str, value: str, principal: Principal

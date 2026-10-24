@@ -26,6 +26,7 @@ from schemas.domain import (
 from .access_filter import AccessFilter
 from .gremlin_literals import (
     groovy_args_literal,
+    groovy_identifier,
     groovy_string_list_literal,
     groovy_string_literal,
 )
@@ -255,6 +256,49 @@ def render_edges_among_gremlin(
         f".outE(){label_filter}.{has_access}"
         f'.where(inV().has("id",within({ids})).{has_access})'
         ".dedup().elementMap()"
+    )
+
+
+def render_record_id_lookup_sql(type_name: str) -> str:
+    """The first half of `GraphPort.get_nodes`/`get_edges` (ADR-124 decision 6): the record ids of
+    the elements of one stored type that hold the ids bound to `:ids`. Gremlin's own
+    `has("id", within(...))` scans the whole store (measured on ArcadeDB 26.10.1: 3.6 s for 1,000
+    ids over 200,000 elements), where SQL `WHERE id IN` on one type is answered from that type's
+    unique `id` index. The ids are a bound parameter, never part of the text; the type name is
+    checked as an identifier, since a name cannot be bound, and quoted in backticks: a proposal's
+    storage type, `KNOWN_TO__01JP...`, needs them."""
+    return f"SELECT @rid AS rid FROM `{groovy_identifier(type_name)}` WHERE id IN :ids"
+
+
+def render_get_nodes_gremlin(
+    record_ids: Sequence[str], access: AccessFilter, principal: Principal
+) -> str | None:
+    """`GraphPort.get_nodes` (ADR-124 decision 6), the second half: the vertices at `record_ids`
+    (resolved from the given ids by `render_record_id_lookup_sql`) read directly, no traversal,
+    with the access step on the vertex itself. The step is the one every other read carries, so a
+    hidden, superseded or reverted node gives no record. `None` for no record ids: `g.V([])` may
+    be every vertex, so it is never rendered."""
+    if not record_ids:
+        return None
+    has_access = access.gremlin_has_step(principal)
+    rids = groovy_string_list_literal(list(record_ids))
+    return f"g.V({rids}).{has_access}.elementMap()"
+
+
+def render_get_edges_gremlin(
+    record_ids: Sequence[str], access: AccessFilter, principal: Principal
+) -> str | None:
+    """`GraphPort.get_edges`: as `render_get_nodes_gremlin`, for links, with the access step on the
+    link and on each end. A link whose end the principal may not read is therefore absent, not
+    returned with a hole in it (rule 3), as `render_edges_among_gremlin` refuses it. `None` for no
+    record ids, as there."""
+    if not record_ids:
+        return None
+    has_access = access.gremlin_has_step(principal)
+    rids = groovy_string_list_literal(list(record_ids))
+    return (
+        f"g.E({rids}).{has_access}"
+        f".where(outV().{has_access}).where(inV().{has_access}).elementMap()"
     )
 
 

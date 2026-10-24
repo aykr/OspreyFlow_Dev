@@ -277,7 +277,9 @@ principals of differing clearance; assert that an unauthorised principal cannot 
 filtered node's existence via path length, degree count or aggregate bucket; transaction
 rollback; schema migration up and down. A dataset section modelled on the handling one (ADR-099):
 another dataset's node and link match a graph where they never existed, through every read and the
-candidate count. `edges_among` (ADR-098); `type_counts` and `most_connected`, each checked right on
+candidate count. `edges_among` (ADR-098); `get_nodes` and `get_edges` (ADR-124), each leaving out
+a hidden, superseded, reverted, other-dataset or absent id identically, a link with any unreadable
+end, and past one 1,000-id chunk; `type_counts` and `most_connected`, each checked right on
 its own and unchanged once hidden, other-dataset and reverted neighbours are added beside it
 (ADR-100); `busiest_links` and `link_structure`, the same way, the structure refused past its caps
 with only what is seen counted (ADR-100 Amendments 4 and 5); `recent_loads` and `recently_confirmed`,

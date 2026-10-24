@@ -18,6 +18,7 @@ is exactly what must never be observable.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -3480,6 +3481,549 @@ async def test_edges_among_an_empty_or_single_node_set_is_empty(
         (a,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
         assert await adapter.edges_among([], CLEARED) == []
         assert await adapter.edges_among([a], CLEARED) == []
+
+
+# --- ADR-124 (U1): two reads by id, filtered in the adapter -------------------------------------
+#
+# `get_nodes` and `get_edges` look the given ids up and nothing else. Whatever the reason an id is
+# not readable (above the reader's clearance, a restricted handling code, another dataset, a
+# correction that replaced it, a revert, or no such id at all) it is left out the same way, so the
+# result for a list is the result for the list without those ids. A link comes back only when it
+# and both its ends are readable. Each reason below is its own case, so a plant that lifts one step
+# of the access filter fails the case for that step by name; the mixed cases fail too, but alone
+# they would not say which step it was. A link's two ends are checked separately in the query, so
+# each axis is a case for the source end and for the target end. For every reason a principal can
+# read past, a positive control reads the id with only that axis opened: without it, a lookup that
+# finds nothing would pass every case here.
+
+#: A reader for a case over one dataset: OFFICIAL, in `unit-1`, receiving no restricted code.
+READER = Principal(id="reader-enron", clearance="OFFICIAL", org_unit="unit-1", datasets=["enron"])
+
+_NODE_REASONS = ["clearance", "handling_code", "dataset", "superseded", "reverted", "absent"]
+#: A reason ending `_source` or `_target` is an unreadable end of a readable link.
+_EDGE_REASONS = [
+    "clearance",
+    "handling_code",
+    "dataset",
+    "hidden_source",
+    "hidden_target",
+    "reverted_source",
+    "reverted_target",
+    "dataset_source",
+    "dataset_target",
+    "restricted_source",
+    "restricted_target",
+    "superseded",
+    "reverted",
+    "absent",
+]
+#: Differs from `READER` in one axis each: a second dataset, and the restricted code `R` of the
+#: unit that owns what the "restricted" cases write.
+READER_BOTH = READER.model_copy(update={"datasets": ["enron", "fixture"]})
+RESTRICTED_READER = Principal(
+    id="reader-restricted",
+    clearance="OFFICIAL",
+    org_unit="unit-restricted",
+    receivable_handling_codes=["R"],
+    datasets=["enron"],
+)
+
+
+async def _unreadable_node(adapter: GraphPort, reason: str) -> str:
+    """The id of one node `READER` cannot read, for `reason`; every other axis is open."""
+    if reason == "absent":
+        return new_node_id()
+    if reason == "clearance":
+        nodes = [_node("Person", classification="SECRET", datasets=["enron"])]
+    elif reason == "handling_code":
+        nodes = [
+            _node(
+                "Person",
+                classification="OFFICIAL",
+                handling_code="R",
+                owning_unit="unit-restricted",
+                datasets=["enron"],
+            )
+        ]
+    elif reason == "dataset":
+        nodes = [_node("Person", classification="OFFICIAL", datasets=["fixture"])]
+    else:
+        nodes = [_node("Person", classification="OFFICIAL", datasets=["enron"])]
+    (node_id,), _ = await _write(adapter, nodes, [])
+    if reason == "superseded":
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_node(
+            node_id, _node("Person", classification="OFFICIAL", datasets=["enron"]), tx
+        )
+        await adapter.commit_transaction(tx)
+    elif reason == "reverted":
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([node_id], [], tx)
+        await adapter.commit_transaction(tx)
+    return node_id
+
+
+async def test_get_nodes_returns_readable_nodes_ordered_by_id(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        written, _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", datasets=["enron"], family_name=name)
+                for name in ("A", "B", "C")
+            ],
+            [],
+        )
+        # Asked for out of order: the result is ordered by id, not by the order asked.
+        nodes = await adapter.get_nodes([written[2], written[0], written[1]], READER)
+        assert [n.id for n in nodes] == sorted(written)
+        by_id = {n.id: n for n in nodes}
+        assert by_id[written[0]].properties["family_name"] == "A"
+        assert by_id[written[2]].datasets == ["enron"]
+
+
+@pytest.mark.parametrize("reason", _NODE_REASONS)
+async def test_get_nodes_leaves_out_an_unreadable_id_whatever_the_reason(
+    factory: GraphAdapterFactory, reason: str
+) -> None:
+    async with factory.context() as adapter:
+        (readable,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        unreadable = await _unreadable_node(adapter, reason)
+
+        assert [n.id for n in await adapter.get_nodes([unreadable, readable], READER)] == [readable]
+        # The one id on its own gives the empty list, not an error and not a marker.
+        assert await adapter.get_nodes([unreadable], READER) == []
+        # What the reason hides is real: a principal for whom it is open reads it (the filter
+        # works, it is not a lookup that finds nothing).
+        if reason in ("clearance", "dataset"):
+            opener = CLEARED if reason == "clearance" else READER_BOTH
+            assert [n.id for n in await adapter.get_nodes([unreadable], opener)] == [unreadable]
+        if reason == "handling_code":
+            opened = await adapter.get_nodes([unreadable], RESTRICTED_READER)
+            assert [n.id for n in opened] == [unreadable]
+
+
+async def test_get_nodes_of_a_mixed_list_is_exactly_the_readable_subset(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        readable, _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(3)],
+            [],
+        )
+        unreadable = [await _unreadable_node(adapter, reason) for reason in _NODE_REASONS]
+        # A correction's replacement is a readable node of its own: only the old revision goes.
+        replacement_source = await _unreadable_node(adapter, "superseded")
+        revision = await adapter.get_node(replacement_source, CLEARED, include_superseded=True)
+        assert revision is not None and revision.audit.superseded_by is not None
+        readable = [*readable, revision.audit.superseded_by]
+
+        asked = [*unreadable, *readable, replacement_source]
+        nodes = await adapter.get_nodes(asked, READER)
+        assert [n.id for n in nodes] == sorted(readable)
+        # The same as the list without the unreadable ids: nothing in the result says they exist.
+        assert nodes == await adapter.get_nodes(readable, READER)
+
+
+async def test_get_nodes_returns_a_duplicated_id_once(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "ab"],
+            [],
+        )
+        nodes = await adapter.get_nodes([b, a, b, a, a], READER)
+        assert [n.id for n in nodes] == sorted([a, b])
+
+
+async def test_get_nodes_of_no_ids_is_empty(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        await _write(adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], [])
+        assert await adapter.get_nodes([], READER) == []
+
+
+async def test_get_nodes_past_one_chunk_returns_exactly_the_readable_ones(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The port chunks at 1,000 ids per query. 1,050 readable nodes, 50 hidden ones and 50 absent
+    ids, mixed so that every chunk holds some of each and the last, partial chunk holds readable
+    ones: a chunker that stops at the last full chunk, or that repeats or skips a boundary id,
+    changes the count."""
+    async with factory.context() as adapter:
+        tx = await adapter.begin_transaction()
+        readable = await adapter.upsert_nodes(
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(1050)],
+            tx,
+        )
+        hidden = await adapter.upsert_nodes(
+            [_node("Person", classification="SECRET", datasets=["enron"]) for _ in range(50)], tx
+        )
+        await adapter.commit_transaction(tx)
+        absent = [new_node_id() for _ in range(50)]
+
+        asked: list[str] = []
+        for i, node_id in enumerate(readable):
+            asked.append(node_id)
+            if i % 21 == 0 and absent:
+                asked.append(absent.pop())
+            if i % 21 == 10 and hidden:
+                asked.append(hidden.pop())
+        assert len(asked) > 1000
+        assert asked[-1] in readable  # the last, partial chunk holds readable nodes
+
+        nodes = await adapter.get_nodes(asked, READER)
+        assert [n.id for n in nodes] == sorted(readable)
+
+
+@dataclass(frozen=True)
+class _Unreadable:
+    """A link `READER` cannot read. `opener` is a principal who differs from `READER` in just the
+    one axis that hides it and so can read it: the proof that the lookup finds the link and the
+    filter is what leaves it out. `None` when no principal can (superseded, reverted, absent).
+    `replacement` is the link that took a superseded one's place, which is readable."""
+
+    id: str
+    opener: Principal | None = None
+    replacement: str | None = None
+
+
+async def _readable_pair(adapter: GraphPort) -> tuple[str, str]:
+    """Two fresh nodes `READER` can read, in the case's dataset. Every link below gets its own
+    pair, so no two of them are the same pair and type, which the store would merge into one."""
+    (a, b), _ = await _write(
+        adapter,
+        [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "ab"],
+        [],
+    )
+    return a, b
+
+
+async def _readable_link(adapter: GraphPort) -> str:
+    a, b = await _readable_pair(adapter)
+    _, (edge_id,) = await _write(
+        adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["enron"])]
+    )
+    return edge_id
+
+
+async def _unreadable_edge(adapter: GraphPort, reason: str) -> _Unreadable:
+    """One link `READER` cannot read, for `reason`; every other axis is open. A reason ending
+    `_source` or `_target` is one *end* that is unreadable while the link itself is readable: the
+    query checks each end on its own, so each axis on each side is its own case."""
+    if reason == "absent":
+        return _Unreadable(new_edge_id())
+    a, b = await _readable_pair(adapter)
+    link: dict[str, Any] = {"classification": "OFFICIAL", "datasets": ["enron"]}
+    opener: Principal | None = None
+    revert_end: str | None = None  # reverted once the link is written to it, not before
+    end_axis, _, side = reason.rpartition("_")
+    if side in ("source", "target"):
+        end = {
+            "hidden": _node("Person", classification="SECRET", datasets=["enron"]),
+            "reverted": _node("Person", classification="OFFICIAL", datasets=["enron"]),
+            "dataset": _node("Person", classification="OFFICIAL", datasets=["fixture"]),
+            "restricted": _node(
+                "Person",
+                classification="OFFICIAL",
+                handling_code="R",
+                owning_unit="unit-restricted",
+                datasets=["enron"],
+            ),
+        }[end_axis]
+        (end_id,), _ = await _write(adapter, [end], [])
+        a, b = (end_id, b) if side == "source" else (a, end_id)
+        opener = {
+            "hidden": CLEARED,
+            "reverted": None,
+            "dataset": READER_BOTH,
+            "restricted": RESTRICTED_READER,
+        }[end_axis]
+        if end_axis == "reverted":
+            revert_end = end_id
+    elif reason == "clearance":
+        link["classification"], opener = "SECRET", CLEARED
+    elif reason == "handling_code":
+        link.update(handling_code="R", owning_unit="unit-restricted")
+        opener = RESTRICTED_READER
+    elif reason == "dataset":
+        link["datasets"], opener = ["fixture"], READER_BOTH
+    _, (edge_id,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, **link)])
+    if revert_end is not None:
+        # Read before the end is reverted: the lookup finds the link, the revert takes it away.
+        assert [e.id for e in await adapter.get_edges([edge_id], READER)] == [edge_id]
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([revert_end], [], tx)
+        await adapter.commit_transaction(tx)
+    replacement = None
+    if reason == "superseded":
+        tx = await adapter.begin_transaction()
+        replacement = await adapter.supersede_edge(
+            edge_id,
+            _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["enron"]),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+    elif reason == "reverted":
+        # Read before it is reverted: the lookup finds it, the revert is what takes it away.
+        assert [e.id for e in await adapter.get_edges([edge_id], READER)] == [edge_id]
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([], [edge_id], tx)
+        await adapter.commit_transaction(tx)
+    return _Unreadable(edge_id, opener, replacement)
+
+
+async def test_get_edges_returns_readable_links_with_readable_ends_ordered_by_id(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        first = await _readable_link(adapter)
+        second = await _readable_link(adapter)
+        edges = await adapter.get_edges([second, first], READER)
+        assert [e.id for e in edges] == sorted([first, second])
+        for edge in edges:
+            assert edge.type == "ASSOCIATE_OF"
+            assert edge.datasets == ["enron"]
+            assert edge.source != edge.target
+
+
+@pytest.mark.parametrize("reason", _EDGE_REASONS)
+async def test_get_edges_leaves_out_an_unreadable_id_whatever_the_reason(
+    factory: GraphAdapterFactory, reason: str
+) -> None:
+    async with factory.context() as adapter:
+        readable = await _readable_link(adapter)
+        unreadable = await _unreadable_edge(adapter, reason)
+
+        assert [e.id for e in await adapter.get_edges([unreadable.id, readable], READER)] == [
+            readable
+        ]
+        # The one id on its own gives the empty list, not an error and not a marker.
+        assert await adapter.get_edges([unreadable.id], READER) == []
+        # What the reason hides is real: a principal who differs only on that axis reads it.
+        if unreadable.opener is not None:
+            opened = await adapter.get_edges([unreadable.id], unreadable.opener)
+            assert [e.id for e in opened] == [unreadable.id]
+        if unreadable.replacement is not None:
+            # The correction's replacement is a link of its own, and readable.
+            replaced = await adapter.get_edges([unreadable.replacement], READER)
+            assert [e.id for e in replaced] == [unreadable.replacement]
+
+
+async def test_get_edges_of_a_mixed_list_is_exactly_the_readable_subset(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        readable = [await _readable_link(adapter) for _ in range(2)]
+        unreadable = [await _unreadable_edge(adapter, reason) for reason in _EDGE_REASONS]
+        # A superseded link's replacement is a readable link of its own: only the old one goes.
+        replacements = [u.replacement for u in unreadable if u.replacement is not None]
+        assert len(replacements) == 1
+        readable = [*readable, *replacements]
+        assert await adapter.get_edges([u.id for u in unreadable], READER) == []
+        edges = await adapter.get_edges([*(u.id for u in unreadable), *readable], READER)
+        assert [e.id for e in edges] == sorted(readable)
+        # The same as the list without the unreadable ids: nothing in the result says they exist.
+        assert edges == await adapter.get_edges(readable, READER)
+
+
+async def test_get_edges_of_several_link_types_in_one_call(factory: GraphAdapterFactory) -> None:
+    """Links of different types in one lookup come back as the types they are. The lookup asks
+    each stored link type for the ids and so filters on no type; the label each link is stored
+    under is read back as its type."""
+    async with factory.context() as adapter:
+        (p1, p2), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "ab"],
+            [],
+        )
+        (phone,), _ = await _write(
+            adapter,
+            [_node("Endpoint", classification="OFFICIAL", datasets=["enron"])],
+            [],
+        )
+        wanted = {"ASSOCIATE_OF": (p1, p2), "FAMILY_OF": (p1, p2), "USES": (p1, phone)}
+        _, ids = await _write(
+            adapter,
+            [],
+            [
+                _edge(t, s, d, classification="OFFICIAL", datasets=["enron"])
+                for t, (s, d) in wanted.items()
+            ],
+        )
+        edges = await adapter.get_edges(list(reversed(ids)), READER)
+        assert [e.id for e in edges] == sorted(ids)
+        assert {e.type for e in edges} == set(wanted)
+        for edge in edges:
+            assert (edge.source, edge.target) == wanted[edge.type]
+
+
+async def test_get_edges_returns_a_duplicated_id_once(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        first = await _readable_link(adapter)
+        second = await _readable_link(adapter)
+        edges = await adapter.get_edges([second, first, second, first], READER)
+        assert [e.id for e in edges] == sorted([first, second])
+
+
+async def test_get_edges_of_no_ids_is_empty(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        await _readable_link(adapter)
+        assert await adapter.get_edges([], READER) == []
+
+
+async def test_get_edges_past_one_chunk_returns_exactly_the_readable_ones(
+    factory: GraphAdapterFactory,
+) -> None:
+    """As the nodes' chunk case, for links: 1,050 readable links from one hub to 1,050 readable
+    nodes, 50 links to a hidden node and 50 absent ids, the last chunk holding readable links."""
+    async with factory.context() as adapter:
+        tx = await adapter.begin_transaction()
+        hub, *spokes = await adapter.upsert_nodes(
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(1051)],
+            tx,
+        )
+        hidden_ends = await adapter.upsert_nodes(
+            [_node("Person", classification="SECRET", datasets=["enron"]) for _ in range(50)], tx
+        )
+        readable = await adapter.upsert_edges(
+            [
+                _edge("ASSOCIATE_OF", hub, spoke, classification="OFFICIAL", datasets=["enron"])
+                for spoke in spokes
+            ],
+            tx,
+        )
+        hidden = await adapter.upsert_edges(
+            [
+                _edge("ASSOCIATE_OF", hub, end, classification="OFFICIAL", datasets=["enron"])
+                for end in hidden_ends
+            ],
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+        absent = [new_edge_id() for _ in range(50)]
+
+        asked: list[str] = []
+        for i, edge_id in enumerate(readable):
+            asked.append(edge_id)
+            if i % 21 == 0 and absent:
+                asked.append(absent.pop())
+            if i % 21 == 10 and hidden:
+                asked.append(hidden.pop())
+        assert len(asked) > 1000
+        assert asked[-1] in readable
+
+        edges = await adapter.get_edges(asked, READER)
+        assert [e.id for e in edges] == sorted(readable)
+
+
+async def test_get_nodes_of_several_node_types_in_one_call(factory: GraphAdapterFactory) -> None:
+    """Nodes of different types in one lookup come back as the types they are. The lookup asks
+    each stored vertex type for the ids and so filters on no type; the type each node is stored
+    under is read back."""
+    types = ["Person", "Endpoint", "Location", "Alert"]
+    async with factory.context() as adapter:
+        ids, _ = await _write(
+            adapter,
+            [_node(t, classification="OFFICIAL", datasets=["enron"]) for t in types],
+            [],
+        )
+        wanted = dict(zip(ids, types, strict=True))
+        nodes = await adapter.get_nodes(list(reversed(ids)), READER)
+        assert [n.id for n in nodes] == sorted(ids)
+        assert {n.id: n.type for n in nodes} == wanted
+
+
+async def _many_readable_nodes(adapter: GraphPort, count: int) -> list[str]:
+    tx = await adapter.begin_transaction()
+    ids = await adapter.upsert_nodes(
+        [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(count)], tx
+    )
+    await adapter.commit_transaction(tx)
+    return ids
+
+
+async def _many_readable_edges(adapter: GraphPort, count: int) -> list[str]:
+    """`count` links from one hub to as many readable nodes."""
+    tx = await adapter.begin_transaction()
+    hub, *spokes = await adapter.upsert_nodes(
+        [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(count + 1)],
+        tx,
+    )
+    ids = await adapter.upsert_edges(
+        [
+            _edge("ASSOCIATE_OF", hub, spoke, classification="OFFICIAL", datasets=["enron"])
+            for spoke in spokes
+        ],
+        tx,
+    )
+    await adapter.commit_transaction(tx)
+    return ids
+
+
+async def test_get_nodes_asked_in_descending_order_across_a_chunk_comes_back_ascending(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _many_readable_nodes(adapter, 1100)
+        nodes = await adapter.get_nodes(sorted(ids, reverse=True), READER)
+        assert [n.id for n in nodes] == sorted(ids)
+
+
+async def test_get_edges_asked_in_descending_order_across_a_chunk_comes_back_ascending(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _many_readable_edges(adapter, 1100)
+        edges = await adapter.get_edges(sorted(ids, reverse=True), READER)
+        assert [e.id for e in edges] == sorted(ids)
+
+
+async def test_get_nodes_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _many_readable_nodes(adapter, 1100)
+        asked = [ids[0], *ids[1:], ids[0]]  # 1,101 asked: the same id leads and trails
+        nodes = await adapter.get_nodes(asked, READER)
+        assert [n.id for n in nodes] == sorted(ids)
+
+
+async def test_get_edges_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _many_readable_edges(adapter, 1100)
+        asked = [ids[0], *ids[1:], ids[0]]
+        edges = await adapter.get_edges(asked, READER)
+        assert [e.id for e in edges] == sorted(ids)
+
+
+@pytest.mark.parametrize("awkward", ["a\nb", "c\rd"])
+async def test_a_line_break_in_a_property_and_in_a_dataset_name_round_trips_through_get_nodes(
+    factory: GraphAdapterFactory, awkward: str
+) -> None:
+    """A line feed or carriage return in a stored value comes back equal, and a dataset name with
+    one reads: the name is in the query's literal (`within(['a\\nb'])`), which a raw line break
+    would make a compile error."""
+    reader = Principal(id="reader", clearance="OFFICIAL", org_unit="unit-1", datasets=[awkward])
+    async with factory.context() as adapter:
+        (node_id,), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=[awkward], family_name=awkward)],
+            [],
+        )
+        (node,) = await adapter.get_nodes([node_id], reader)
+        assert node.id == node_id
+        assert node.properties["family_name"] == awkward
+        assert node.datasets == [awkward]
+        # The same name is a different dataset from one without the line break.
+        plain = awkward.replace("\n", "").replace("\r", "")
+        elsewhere = reader.model_copy(update={"datasets": [plain]})
+        assert await adapter.get_nodes([node_id], elsewhere) == []
 
 
 # --- ADR-099: a case sees only its own datasets ------------------------------

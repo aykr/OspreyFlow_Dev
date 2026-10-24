@@ -16512,6 +16512,82 @@ Each unit is a writer's, then reviewed, then committed.
 | D3 | Trends (decision 6) |
 | D4 | the Glass, the keyboard steps and the spec (decision 8) |
 
+### ADR-124, Amendment 2 (24 October 2026) — `get_nodes` and `get_edges` resolve ids by SQL, then read through the traversal (U1)
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option; found by U1's adversarial review and measured.
+
+1. **The lookup is two steps per 1,000-id chunk, not one Gremlin query** (amends decision 6's "one
+   batched query").
+   - **Why.** On ArcadeDB 26.10.1 (the version the build pins, and the throwaway server's), a Gremlin lookup by our `id` property scans every element, with or
+     without `hasLabel`. Best of five, 1,000 ids:
+     - `g.V().has("id", within(...))`: 369 ms at 20,000 vertices, 3,561 ms at 200,000;
+     - `g.E()` likewise: 366 ms, then 3,576 ms;
+     - one unlabelled id: 11 ms, then 77 ms.
+
+     SQL `SELECT @rid FROM <type> WHERE id IN :ids` per type uses the unique index (10 ms, then
+     11 ms). So does that followed by Gremlin from the record ids, `g.V([rids])` (13.7 ms, then
+     15.5 ms).
+   - **What is built.**
+     - **Step one, SQL.** It resolves the ids to record ids, over every type the store holds of the
+       right kind (vertex for `get_nodes`, edge for `get_edges`) that carries a unique index on `id`.
+       - **The type list comes from the store,** read on each call from `schema:types` (about
+         1 ms). It never comes from this process's ontology, so a type created by another process,
+         such as a pending proposal's storage type, is still found.
+       - **The ids** are bound as a parameter and never written into the command.
+     - **Step two, the traversal.** It starts from those record ids and carries the unchanged access
+       step, and for links the step on both ends. So access stays in the traversal (rule 3).
+     - **What stays in the adapter.** The record ids never leave it, and a hidden id still reads as
+       absent.
+     - **An empty record-id list** sends no Gremlin.
+   - **The same scan affects every other Gremlin read that starts from our ids.**
+     - **Where it was first suspected.** ADR-058 Amendment 5 put it forward as a hypothesis, and
+       `scripts/probe_lookup_cost.py` was written to test it. These figures confirm it.
+     - **Where it is recorded.** It is pre-existing, and is in the build plan with these figures.
+       Fixing those reads is its own record.
+2. **A timing difference accepted** (adds to decision 12).
+   - **What differs.** A hidden id costs an index hit and a filtered record load, where an absent id
+     costs an index miss, and a link with a hidden end also loads its ends.
+   - **Why it is accepted.** The difference is microseconds, against an HTTP round trip, and tells
+     nothing about what or where.
+3. **How U1 was shown red** (rules 12 and 15). There are 40 cases against ArcadeDB:
+   - every reason a node or link is unreadable, each with a positive control;
+   - mixed node and link types, an aliased link included;
+   - a type another process created after this one applied its ontology;
+   - ordering asked in descending order across a chunk boundary;
+   - a duplicate in the first and last chunk;
+   - chunking past 1,000 ids;
+   - a line break in a value and in a dataset name.
+
+   All 40 failed against a stub, then passed, and the whole GraphPort suite passed (264). Planted
+   faults, each restored by md5:
+   - **Access:** the access step removed (9 red); superseded made visible, on nodes and on links (2
+     each); the link's own access step removed (6).
+   - **End checks:** each end check dropped (5, 6), both dropped (10), each reduced to clearance only
+     (4 each), both reduced (7).
+   - **Ordering and chunking:** the sort dropped (4); the last partial chunk dropped (38).
+   - **Types:** the type list taken from this process's ontology, not the store (1, the other-process
+     case); the wrong kind of type read (16 for nodes, 23 for links).
+   - **Offline only:** an empty record-id list sent to Gremlin is red only in the pure tests.
+   - **Three faults stay green live, each red in the pure tests:**
+     - merging results as a list in place of a dict;
+     - dropping the de-duplication before chunking;
+     - dropping the unique-index filter on the type list.
+
+     The first two are each the other's backstop, and the live store holds no second copy of an id.
+     Every type our schema creates carries the index, so the third has nothing to filter there.
+
+4. **The fake used by the fast tests** (`tests/services/api/working_set/fakes.py`) judges each
+   element by its own body, for the principal given:
+   - handling;
+   - the case's datasets;
+   - superseded;
+   - reverted.
+
+   So it refuses what the adapter refuses (rule 15), and the explicit hidden sets are overrides only.
+   `edges_among` judges an end the test does not hold by those overrides alone, as the existing
+   tests rely on.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

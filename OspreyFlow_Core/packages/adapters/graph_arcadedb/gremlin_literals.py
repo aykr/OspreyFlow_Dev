@@ -5,7 +5,9 @@ GString and interpolates `$var`/`${expr}` — embedding an untrusted value
 (a property from an ingested document, say) in one is a script-injection
 hole. Single-quoted Groovy strings are plain strings with no interpolation,
 so every literal this adapter embeds uses single quotes, with the value's
-own backslashes and single quotes escaped first.
+own backslashes and single quotes escaped first. A line feed or carriage return is escaped too:
+a single-quoted Groovy string cannot hold a raw one (a compile error), and `\\n` reads back as the
+same character, so no query that ran before is changed by it.
 """
 
 from __future__ import annotations
@@ -14,7 +16,9 @@ from collections.abc import Iterable
 
 
 def groovy_string_literal(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+    escaped = (
+        value.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+    )
     return f"'{escaped}'"
 
 

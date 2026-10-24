@@ -1284,12 +1284,22 @@ are on the port too, each taking the principal like every other read.
   load ledger), not a principal-scoped read. A reverted element is invisible to every read
   afterwards, any clearance, and is never actually deleted.
 
-Three reads take a set of nodes or the whole case rather than one seed, each with the access step on
+These reads take a set of nodes or links, or the whole case, rather than one seed, each with the access step on
 every node, every link and each link's other end, so a link counts only when both its ends can be
 seen and reverted, superseded and other-dataset elements count nowhere:
 
 - **`edges_among(node_ids, principal, edge_types=None) -> list[Edge]`** (ADR-098 decision 1). Every
   link with both ends in the set: the links among a selection, or among everything in view.
+- **`get_nodes(node_ids, principal) -> list[Node]` and `get_edges(edge_ids, principal) -> list[Edge]`**
+  (ADR-124 decision 6).
+  - **What they read.** The given ids alone, with no traversal, each once and ordered by id.
+    - **How.** Per 1,000 ids, the ids are resolved through each stored type's unique `id` index (the
+      types read from the store), then read through the access step (ADR-124 Amendment 2).
+    - **Access** is filtered in the adapter (rule 3).
+  - **What they leave out.** A hidden, superseded, reverted or absent id is left out identically. A
+    link comes back only when it and both its ends are readable.
+  - **Who is to use them.** Restore and `/seed` (ADR-124 U6 and U7), so that what they store is
+    judged against the current Vault, never against a body the caller sent or a step recorded.
 - **`type_counts(principal) -> TypeCounts`** (ADR-100 Amendment 1). Nodes per entity type and links
   per link type the principal can see.
 - **`most_connected(principal, *, entity_type=None, limit=10, offset=0) -> RankedNodes`** (ADR-100
