@@ -46,7 +46,12 @@ class _Investigations:
         self.made: list[Investigation] = []
 
     async def create(
-        self, principal: Principal, *, name: str, branched_from: str | None = None
+        self,
+        principal: Principal,
+        *,
+        name: str,
+        branched_from: str | None = None,
+        domains: list[str] | None = None,
     ) -> Investigation:
         case = Investigation(
             id=f"case-{len(self.made) + 1}",

@@ -128,11 +128,19 @@ class _FakeInvestigations:
         self.cases: dict[str, Investigation] = {}
         self.hidden: dict[str, set[str]] = {}
         self.created: list[Investigation] = []
+        #: What each `create` was given for `domains`; None is NULL, "never chosen".
+        self.asked_domains: list[list[str] | None] = []
         self._next = 1
         self.add("inv-1", "Fixture Corp", owner=ALICE)
 
     def add(
-        self, case_id: str, name: str, *, owner: Principal, branched_from: str | None = None
+        self,
+        case_id: str,
+        name: str,
+        *,
+        owner: Principal,
+        branched_from: str | None = None,
+        domains: list[str] | None = None,
     ) -> Investigation:
         case = Investigation(
             id=case_id,
@@ -141,16 +149,28 @@ class _FakeInvestigations:
             created_by=owner.id,
             owning_unit=owner.org_unit,
             branched_from=branched_from,
+            domains=domains or [],  # type: ignore[arg-type]
+            domains_chosen=domains is not None,
         )
         self._next += 1
         self.cases[case_id] = case
         return case
 
     async def create(
-        self, principal: Principal, *, name: str, branched_from: str | None = None
+        self,
+        principal: Principal,
+        *,
+        name: str,
+        branched_from: str | None = None,
+        domains: list[str] | None = None,
     ) -> Investigation:
+        self.asked_domains.append(None if domains is None else list(domains))
         case = self.add(
-            f"branch-{len(self.created) + 1}", name, owner=principal, branched_from=branched_from
+            f"branch-{len(self.created) + 1}",
+            name,
+            owner=principal,
+            branched_from=branched_from,
+            domains=domains,
         )
         self.created.append(case)
         return case
@@ -221,6 +241,36 @@ def test_a_branch_of_a_choice_passes_the_choice_to_the_service(client: TestClien
     # ADR-097: a fact about the branch, not a selection count, and no middle dot (review item 3).
     assert body["name"] == "Branch of Fixture Corp (2 nodes)"
     assert client.working_set.branch_calls == [("inv-1", body["id"], ["a", "b"])]  # type: ignore[attr-defined]
+
+
+def test_a_branch_takes_its_parents_domain_packs(client: TestClient) -> None:
+    """ADR-126 decision 1: a branch is the same kind of case as the one it was made from. The
+    parent here holds two packs; a branch route that did not pass them on would read as POLE."""
+    investigations = client.investigations  # type: ignore[attr-defined]
+    investigations.add("inv-2", "Mixed case", owner=ALICE, domains=["fibo", "niem"])
+
+    whole = client.post("/v1/investigations/inv-2/branch")
+    chosen = client.post("/v1/investigations/inv-2/branch", json={"node_ids": ["a"]})
+
+    assert whole.status_code == chosen.status_code == 201
+    assert whole.json()["domains"] == ["fibo", "niem"]
+    assert chosen.json()["domains"] == ["fibo", "niem"]
+    plain = client.post("/v1/investigations/inv-1/branch")
+    assert plain.json()["domains"] == [], "a parent that reads as POLE passes on POLE"
+
+
+def test_a_branch_inherits_the_stored_value_exactly(client: TestClient) -> None:
+    """ADR-126 decision 2: a branch of a never-chosen parent (NULL) is never chosen, and one of a
+    parent chosen as POLE (`{}`) is `{}`. The read-side list is `[]` for both."""
+    investigations = client.investigations  # type: ignore[attr-defined]
+    investigations.add("unchosen", "Never chosen", owner=ALICE, domains=None)
+    investigations.add("pole", "Chosen POLE", owner=ALICE, domains=[])
+    investigations.add("mixed", "Mixed", owner=ALICE, domains=["niem"])
+
+    for case in ("unchosen", "pole", "mixed"):
+        assert client.post(f"/v1/investigations/{case}/branch").status_code == 201
+
+    assert investigations.asked_domains == [None, [], ["niem"]]
 
 
 def test_a_branch_with_no_body_still_forks_the_whole_working_set(client: TestClient) -> None:

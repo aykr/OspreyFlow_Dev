@@ -55,7 +55,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from scripts.build_local_basemap import GEOFABRIK_REGIONS, BasemapBuildResult, build_local_basemap
 from scripts.verify_map import verify_map
 from services.extract.writer import (
@@ -154,6 +154,7 @@ from schemas.domain import (
     Assumption,
     Connections,
     ConnectionsRequest,
+    DomainPack,
     Edge,
     EdgeWrite,
     ExpandRequest,
@@ -2250,6 +2251,10 @@ class CreateInvestigationInput(BaseModel):
     #: ADR-099: the datasets the case reads, all of the creator's unit. Left out, the case gets a
     #: new dataset of its own, named after it, for the data that will be added to it.
     dataset_ids: list[str] | None = None
+    #: ADR-126: the domain packs the case carries. Left out, the column stays NULL, "never chosen",
+    #: which reads as the POLE core model; a list, empty included, is a choice. An unknown pack is a
+    #: 422.
+    domains: list[DomainPack] | None = None
 
 
 @app.post(
@@ -2273,7 +2278,9 @@ async def create_investigation(
         own = {d.id for d in await datasets.list_for_unit(principal.org_unit)}
         if not set(named) <= own:
             raise DatasetRefusedError("not every dataset is one of this unit's")
-    investigation = await investigations.create(principal, name=name)
+    investigation = await investigations.create(
+        principal, name=name, domains=body.domains if body is not None else None
+    )
     if not named:
         named = [(await datasets.create(principal, investigation.name, suffix_if_taken=True)).id]
     await datasets.set_for_case(investigation.id, named, principal)
@@ -2356,6 +2363,9 @@ class InvestigationListing(BaseModel):
     created_at: datetime
     created_by: str
     branched_from: str | None = None
+    #: ADR-126: the case's domain packs, which every reader of the case may see: it says what kind
+    #: of case it is, never what it holds.
+    domains: list[DomainPack] = Field(default_factory=list)
     #: ADR-084: this account has closed the case's tab. A flag per account, so it says nothing about
     #: anyone else's view of the same case.
     tab_hidden: bool = False
@@ -2378,6 +2388,7 @@ async def list_investigations(
             created_at=case.created_at,
             created_by=case.created_by,
             branched_from=case.branched_from,
+            domains=case.domains,
             tab_hidden=case.id in hidden,
             datasets=[d.name for d in reads],
             dataset_ids=[d.id for d in reads],
@@ -2412,15 +2423,28 @@ async def set_tab_state(
     )
 
 
-class RenameInput(BaseModel):
-    name: str
+class CaseChangeInput(BaseModel):
+    """What an Author changes on a case: its name, its domain packs, or both, at least one given
+    (ADR-126 decision 1; it replaces `RenameInput`). An empty `domains` is a change, the POLE core
+    model; a field left out, or null, is left alone."""
+
+    name: str | None = None
+    domains: list[DomainPack] | None = None
 
     @field_validator("name")
     @classmethod
-    def _not_blank(cls, value: str) -> str:
+    def _not_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         if not value.strip():
             raise ValueError("a case needs a name")
         return value.strip()
+
+    @model_validator(mode="after")
+    def _something_to_change(self) -> CaseChangeInput:
+        if self.name is None and self.domains is None:
+            raise ValueError("give a new name, new domain packs, or both")
+        return self
 
 
 @app.patch(
@@ -2428,20 +2452,41 @@ class RenameInput(BaseModel):
 )
 async def rename_investigation(
     investigation: InvestigationAuthorDep,
-    body: RenameInput,
+    body: CaseChangeInput,
     principal: PrincipalDep,
     investigations: InvestigationsDep,
     audit: AuditDep,
 ) -> Investigation:
-    await investigations.rename(investigation.id, body.name, by=principal)
-    await audit.record(
-        principal=principal,
-        action="rename_investigation",
-        investigation_id=investigation.id,
-        resolved_query={"name": body.name},
-        result_cardinality=1,
-    )
-    return investigation.model_copy(update={"name": body.name})
+    """Change the case: its name, its domain packs, or both. The handler keeps the name it had when
+    a rename was all it did, which `test_route_rights.py`'s table is keyed by. Each change is
+    audited on its own: a rename as `rename_investigation`, a change of packs as
+    `set_case_domains` with the packs before and after. The response carries the case's name and
+    packs as they now stand."""
+    # One store call, one transaction: a case removed between two separate writes would leave a
+    # rename committed and audited beside packs that were refused.
+    after = None if body.domains is None else sorted(set(body.domains))
+    await investigations.change(investigation.id, name=body.name, domains=after, by=principal)
+    changed = investigation
+    if body.name is not None:
+        await audit.record(
+            principal=principal,
+            action="rename_investigation",
+            investigation_id=investigation.id,
+            resolved_query={"name": body.name},
+            result_cardinality=1,
+        )
+        changed = changed.model_copy(update={"name": body.name})
+    if after is not None:
+        await audit.record(
+            principal=principal,
+            action="set_case_domains",
+            investigation_id=investigation.id,
+            # The stored value, so a never-chosen case (None) is not reported as a choice of POLE.
+            resolved_query={"before": investigation.domains_to_inherit(), "after": after},
+            result_cardinality=1,
+        )
+        changed = changed.model_copy(update={"domains": after, "domains_chosen": True})
+    return changed
 
 
 @app.delete(
@@ -2663,7 +2708,10 @@ async def branch_investigation(
     if body is not None and body.name is not None and body.name.strip():
         name = body.name.strip()
     new_investigation = await investigations.create(
-        principal, name=name, branched_from=investigation.id
+        principal,
+        name=name,
+        branched_from=investigation.id,
+        domains=investigation.domains_to_inherit(),
     )
     # ADR-099: a branch reads what its parent reads.
     await datasets.copy_case(investigation.id, new_investigation.id)
@@ -5291,8 +5339,13 @@ async def jump_alert_route(
     branch still succeeds, simply unlinked, disclosed via `Investigation.branched_from` being
     `None` rather than silently pointed at a wrong investigation."""
     alert = await alerts_store.get_authorized(alert_id, principal)
+    # ADR-126: the packs are those of the route's own authorised case, never of
+    # `alert.investigation_id`, which the jumper is not authorised against and which may be None.
     branch = await investigations.create(
-        principal, name=f"Opened from alert {alert.id}", branched_from=alert.investigation_id
+        principal,
+        name=f"Opened from alert {alert.id}",
+        branched_from=alert.investigation_id,
+        domains=investigation.domains_to_inherit(),
     )
     # ADR-099: the new case reads the alert's dataset; with none, what the alert's case reads; with
     # neither, a dataset of its own.

@@ -668,6 +668,11 @@ class Alert(BaseModel):
     decided_at: datetime | None = None
 
 
+#: ADR-126 decision 1: the domain packs a case can carry, defined once here. `ontology.packs`
+#: sets `PACK_NAMES = get_args(DomainPack)`, so the values live in one place and `ontology` keeps
+#: importing `schemas`, never the other way. Empty means the POLE core model alone.
+DomainPack = Literal["fibo", "niem", "stix"]
+
 #: `Hotlist.status`/`Monitor.status` — ADR-036's own "the monitor stops" (extended in Stage 6b to
 #: a hotlist's identical owner-principal-unresolvable case) must be surfaced somewhere the analyst
 #: or another owner can see it, not left as a silent skip with no visible state change. Written by

@@ -6,6 +6,11 @@ import { INVESTIGATION_ID_SESSION_KEY } from "./investigationId";
 
 export type AccessLevel = "viewer" | "editor" | "author";
 
+/** ADR-126: a domain pack a case can carry. Written by hand, since these types sit outside
+ * `schemas-check`; the Conduit's `DomainPack` (`packages/schemas/domain.py`) is the one definition,
+ * and an empty list is the POLE core model alone. */
+export type DomainPack = "fibo" | "niem" | "stix";
+
 export interface CaseListing {
   id: string;
   name: string;
@@ -13,6 +18,9 @@ export interface CaseListing {
   created_at: string;
   created_by: string;
   branched_from?: string | null;
+  /** ADR-126: the case's domain packs, sorted; empty is the POLE core model. Every reader of the
+   * case may see it: it says what kind of case it is, never what it holds. */
+  domains?: DomainPack[];
   /** This account has closed the case's tab (ADR-084). Says nothing about anyone else's view. */
   tab_hidden?: boolean;
   /** ADR-099: the names of the datasets the case reads, in order. */
@@ -147,7 +155,7 @@ export async function createCase(
   bearerToken: string,
   name: string,
   datasetIds: string[] = [],
-): Promise<{ id: string; name: string }> {
+): Promise<{ id: string; name: string; domains?: DomainPack[] }> {
   const trimmed = name.trim();
   if (!trimmed) {
     throw new Error("A case needs a name.");
@@ -164,7 +172,7 @@ export async function createCase(
   if (!response.ok) {
     throw new Error(`Could not create the case (${response.status}).`);
   }
-  return (await response.json()) as { id: string; name: string };
+  return (await response.json()) as { id: string; name: string; domains?: DomainPack[] };
 }
 
 /** A soft remove: the case leaves every list and answers "not found", and nothing is deleted from

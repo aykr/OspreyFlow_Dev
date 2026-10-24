@@ -114,7 +114,12 @@ class _FakeInvestigations:
         self.created: Investigation | None = None
 
     async def create(
-        self, principal: Principal, *, name: str, branched_from: str | None = None
+        self,
+        principal: Principal,
+        *,
+        name: str,
+        branched_from: str | None = None,
+        domains: list[str] | None = None,
     ) -> Investigation:
         self.created = Investigation(
             id="inv-1",

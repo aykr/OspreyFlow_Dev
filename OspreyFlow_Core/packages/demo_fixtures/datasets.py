@@ -7,7 +7,10 @@ that dataset. `source` is the provenance `document_id` the seed has always writt
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
+
+from schemas.domain import DomainPack
 
 
 @dataclass(frozen=True)
@@ -17,6 +20,10 @@ class SeedDataset:
     source: str
     #: The case the seed makes (`scripts/seed_internal.py`'s `DATASETS`), if it makes one.
     case_name: str | None = None
+    #: ADR-126 decision 2: the domain packs the seed's case is set to while nobody has chosen,
+    #: sorted and without repeats. Empty is the POLE core model, and is a setting like any other:
+    #: a seed with no KYC customers does not draw the empty KYC card.
+    domains: tuple[DomainPack, ...] = ()
 
 
 ENRON = SeedDataset(
@@ -32,7 +39,11 @@ FIXTURE_CORP = SeedDataset(
     case_name="Fixture Corp (synthetic demo)",
 )
 HMP = SeedDataset(
-    id="hmp", name="HMP fixture", source="hmp-fixture", case_name="HMP fixture (synthetic demo)"
+    id="hmp",
+    name="HMP fixture",
+    source="hmp-fixture",
+    case_name="HMP fixture (synthetic demo)",
+    domains=("fibo", "niem"),
 )
 PAYSIM = SeedDataset(
     id="paysim",
@@ -45,6 +56,7 @@ LEDGER = SeedDataset(
     name="Operation Ledger",
     source="ledger-fixture",
     case_name="Operation Ledger (synthetic demo)",
+    domains=("fibo",),
 )
 SCENARIOS = SeedDataset(id="scenarios", name="Acceptance scenarios", source="fixture")
 #: The Prison Intelligence Dataset (ADR-120 D6). The generator writes each element's provenance
@@ -55,14 +67,27 @@ PID = SeedDataset(
     name="Prison Intelligence Dataset (synthetic)",
     source="pid-generator",
     case_name="Prison Intelligence Dataset (synthetic demo)",
+    domains=("niem",),
 )
 PID_SCALE = SeedDataset(
     id="prison-intelligence-scale",
     name="Prison Intelligence Dataset: scale cohort (synthetic)",
     source="pid-scale-generator",
     case_name="Prison Intelligence Dataset: scale cohort (synthetic demo)",
+    domains=("niem",),
 )
 
 SEED_DATASETS: tuple[SeedDataset, ...] = (
     ENRON, FIXTURE_CORP, HMP, LEDGER, PAYSIM, SCENARIOS, PID, PID_SCALE,
 )  # fmt: skip
+
+
+def domains_for(dataset_ids: Iterable[str]) -> list[DomainPack]:
+    """The union of the named seeds' packs, sorted and without repeats (ADR-126 decision 2): what
+    the harness's own case is created with, since its case holds every dataset it seeds. An id that
+    is not a seed is a `KeyError` naming it, as the harness's own `--seed` handling is."""
+    by_id = {seed.id: seed for seed in SEED_DATASETS}
+    packs: set[DomainPack] = set()
+    for dataset_id in dataset_ids:
+        packs.update(by_id[dataset_id].domains)
+    return sorted(packs)

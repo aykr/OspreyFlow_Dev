@@ -20,17 +20,19 @@ are built (ADR-120 D10, Amendments 1 to 3).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import yaml
 
-from schemas.domain import EdgeTypeDef, EntityTypeDef, OntologySchema
+from schemas.domain import DomainPack, EdgeTypeDef, EntityTypeDef, OntologySchema
 from schemas.ingest import DomainPackEntry
 
 from .errors import OntologyError
 from .loader import _check_edge_endpoints, _check_entity_types
 
-PACK_NAMES: tuple[str, ...] = ("fibo", "niem", "stix")
+#: ADR-126: the values are `schemas.domain.DomainPack`'s, so a case's packs and the deployment's
+#: packs cannot drift apart.
+PACK_NAMES: tuple[str, ...] = get_args(DomainPack)
 
 _PACKS_DIR = Path(__file__).parent / "packs"
 

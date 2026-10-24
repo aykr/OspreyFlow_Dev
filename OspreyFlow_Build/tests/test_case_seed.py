@@ -107,6 +107,62 @@ async def test_the_case_is_never_shared_with_the_whole_unit_unless_asked(
     assert await store.effective_level(case.id, bystander) is None
 
 
+async def test_a_seed_sets_the_packs_while_they_are_unchosen_and_never_overwrites(
+    store: InvestigationStore,
+) -> None:
+    """ADR-126 decision 2. The plant is an overwrite on reuse: the second run below, and the
+    Author's own change before the third, must both survive."""
+    first = await ensure_case(
+        store, name="Mixed", seeder=SEEDER, grants={}, domains=["fibo", "niem"]
+    )
+    assert first.domains == ["fibo", "niem"]
+    assert await _raw_domains(store, first.id) == ["fibo", "niem"]
+
+    again = await ensure_case(store, name="Mixed", seeder=SEEDER, grants={}, domains=["stix"])
+    assert again.id == first.id
+    assert again.domains == ["fibo", "niem"]
+    assert await _raw_domains(store, first.id) == ["fibo", "niem"]
+
+    await store.set_domains(first.id, ["stix"], by=SEEDER)
+    await ensure_case(store, name="Mixed", seeder=SEEDER, grants={}, domains=["fibo"])
+    assert await _raw_domains(store, first.id) == ["stix"], "an Author's change is never undone"
+
+
+async def test_a_seed_never_overwrites_a_choice_of_pole_either(store: InvestigationStore) -> None:
+    case = await ensure_case(store, name="Plain", seeder=SEEDER, grants={}, domains=[])
+    assert await _raw_domains(store, case.id) == [], "a seed of [] sets POLE while unchosen"
+
+    await ensure_case(store, name="Plain", seeder=SEEDER, grants={}, domains=["fibo"])
+
+    assert await _raw_domains(store, case.id) == []
+
+
+async def test_a_seed_that_gives_no_packs_leaves_the_case_unchosen(
+    store: InvestigationStore,
+) -> None:
+    case = await ensure_case(store, name="Silent", seeder=SEEDER, grants={})
+
+    assert case.domains == []
+    assert await _raw_domains(store, case.id) is None
+
+
+async def test_a_seeds_setting_of_the_packs_is_in_the_access_history(
+    store: InvestigationStore,
+) -> None:
+    case = await ensure_case(store, name="Recorded", seeder=SEEDER, grants={}, domains=["niem"])
+    await ensure_case(store, name="Recorded", seeder=SEEDER, grants={}, domains=["niem"])
+
+    history = [h for h in await store.access_history(case.id) if h.action == "domains"]
+
+    assert [(h.subject, h.changed_by) for h in history] == [("niem", SEEDER.id)]
+
+
+async def _raw_domains(store: InvestigationStore, case_id: str) -> list[str] | None:
+    async with store._pool.acquire() as conn:
+        value = await conn.fetchval("SELECT domains FROM investigations WHERE id = $1", case_id)
+    return None if value is None else list(value)
+
+
 def test_grants_are_written_account_equals_level_and_a_bad_one_is_refused() -> None:
     assert parse_grant("abc-123=editor") == ("abc-123", AccessLevel.EDITOR)
     for bad in ("", "abc", "abc=", "=editor", "abc=owner", "abc=editor=x"):

@@ -41,13 +41,14 @@ import os
 import subprocess
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from demo_fixtures.datasets import domains_for
 from harness.keycloak_admin import (
     grant_service_account_roles,
     set_demo_admin_password,
@@ -283,8 +284,21 @@ def _conduit_url(args: argparse.Namespace, config: OspreyConfig) -> str:
     return _workspace_url(config)
 
 
-def create_investigation(issuer: str, realm: str, secret: str, api_url: str) -> str:
+def create_investigation(
+    issuer: str,
+    realm: str,
+    secret: str,
+    api_url: str,
+    *,
+    datasets: Sequence[str] | None = None,
+) -> str:
     """Creates the investigation the seed tags its data with, and returns its id.
+
+    **`datasets`** (ADR-126 decision 2) are the seeds the case is about to hold. The POST then
+    sends `domains`, the union of their packs (`demo_fixtures.datasets.domains_for`), so the case
+    is `[fibo, niem]` whenever HMP is seeded: its Author is this identity, as which no demo person
+    signs in, and its case holds HMP's custody links. Left out, nothing is sent and the case is
+    never chosen.
 
     **This is why the Conduit starts twice.** `DEMO_GUIDE.md` states the constraint in its own
     words: creating an investigation is an HTTP call and needs the Conduit *running*; seeding needs
@@ -302,6 +316,13 @@ def create_investigation(issuer: str, realm: str, secret: str, api_url: str) -> 
     import urllib.request
 
     from harness.realm import CONDUIT_CLIENT_ID, VERIFY_SUBJECT
+
+    # Before any request, and outside the `try` below: an unknown seed is the operator's own typing,
+    # refused by name, not a `KeyError` taken for a missing field of the token response.
+    try:
+        case_domains = None if datasets is None else domains_for(datasets)
+    except KeyError as unknown:
+        raise ApplyFailed("seed", f"{unknown.args[0]!r} is not a seed dataset") from unknown
 
     token_url = f"{issuer}/realms/{realm}/protocol/openid-connect/token"
 
@@ -336,10 +357,13 @@ def create_investigation(issuer: str, realm: str, secret: str, api_url: str) -> 
                 "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
             },
         )
+        headers = {"Authorization": f"Bearer {exchanged['access_token']}"}
+        body: bytes | None = None
+        if case_domains is not None:
+            body = _json.dumps({"domains": case_domains}).encode()
+            headers["Content-Type"] = "application/json"
         request = urllib.request.Request(
-            f"{api_url}/v1/investigations",
-            headers={"Authorization": f"Bearer {exchanged['access_token']}"},
-            method="POST",
+            f"{api_url}/v1/investigations", data=body, headers=headers, method="POST"
         )
         with urllib.request.urlopen(request, timeout=30) as response:
             return str(_json.loads(response.read().decode())["id"])
@@ -789,7 +813,11 @@ def main(argv: list[str] | None = None) -> int:
             # same-origin proxy the Glass uses. Reaching for `--api-port` here would have made
             # the seed work only on a deployment configured the way it no longer is by default.
             investigation_id = create_investigation(
-                args.keycloak_url, args.realm, secret, _conduit_url(args, config)
+                args.keycloak_url,
+                args.realm,
+                secret,
+                _conduit_url(args, config),
+                datasets=datasets,
             )
             _run(_compose(compose_file) + ["stop", "api"], stage="seed")
             seed(compose_file, datasets, investigation_id)

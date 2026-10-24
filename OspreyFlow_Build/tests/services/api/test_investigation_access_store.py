@@ -4,6 +4,8 @@ a fresh schema per test so none of them sees another's cases."""
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from collections.abc import AsyncIterator
 
@@ -406,3 +408,234 @@ async def test_a_flag_cannot_be_written_for_a_case_that_does_not_exist(
     """The row references the case, so the database refuses a flag on an id with no case."""
     with pytest.raises(asyncpg.ForeignKeyViolationError):
         await store.set_tab_hidden(AUTHOR, "no-such-case", True)
+
+
+# --- ADR-126 unit D1: a case's domain packs ---------------------------------------------------
+
+
+async def _raw_domains(store: InvestigationStore, case_id: str) -> list[str] | None:
+    """The column as stored, not as the model reads it: NULL must stay distinguishable from {}."""
+    async with store._pool.acquire() as conn:
+        value = await conn.fetchval("SELECT domains FROM investigations WHERE id = $1", case_id)
+    return None if value is None else list(value)
+
+
+async def test_the_packs_are_stored_and_read_back_through_every_read(
+    store: InvestigationStore,
+) -> None:
+    """The plant is a column list without `domains`: each read below builds its own."""
+    case = await store.create(AUTHOR, name="Mixed", domains=["niem", "fibo", "niem"])
+
+    assert case.domains == ["fibo", "niem"], "sorted, without repeats"
+    assert await _raw_domains(store, case.id) == ["fibo", "niem"]
+    assert (await store.get(case.id)).domains == ["fibo", "niem"]
+    authorised = await store.get_authorized(case.id, AUTHOR, need=AccessLevel.VIEWER)
+    assert authorised.domains == ["fibo", "niem"]
+    listed = [c for c, _ in await store.list_for(AUTHOR)]
+    assert [(c.id, c.domains) for c in listed] == [(case.id, ["fibo", "niem"])]
+    found = await store.effective_level(case.id, AUTHOR)
+    assert found is AccessLevel.AUTHOR
+
+
+async def test_null_reads_as_empty_and_an_empty_choice_is_not_null(
+    store: InvestigationStore,
+) -> None:
+    never = await store.create(AUTHOR, name="Never chosen")
+    pole = await store.create(AUTHOR, name="POLE chosen", domains=[])
+
+    assert never.domains == [] and pole.domains == []
+    assert await _raw_domains(store, never.id) is None
+    assert await _raw_domains(store, pole.id) == []
+    read = await store.get_authorized(never.id, AUTHOR, need=AccessLevel.VIEWER)
+    assert read.domains == []
+
+
+async def test_an_unknown_pack_is_refused_on_the_way_in(store: InvestigationStore) -> None:
+    case = await store.create(AUTHOR, name="Fine", domains=["fibo"])
+
+    with pytest.raises(ValueError, match="domains"):
+        await store.create(AUTHOR, name="Bad", domains=["fibo", "gone"])
+    with pytest.raises(ValueError, match="domains"):
+        await store.set_domains(case.id, ["gone"], by=AUTHOR)
+    with pytest.raises(ValueError, match="domains"):
+        await store.set_domains_if_unset(case.id, ["gone"], by=AUTHOR)
+
+    assert [c.name for c, _ in await store.list_for(AUTHOR)] == ["Fine"], "no case was left behind"
+    assert await _raw_domains(store, case.id) == ["fibo"]
+
+
+async def test_a_stored_pack_the_model_does_not_know_is_dropped_with_a_warning(
+    store: InvestigationStore, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Written by hand, or left by a removed pack. It must never fail the read: every case-scoped
+    route reads the case through `get_authorized`. The plant is strict validation on read."""
+    case = await store.create(AUTHOR, name="Odd", domains=["fibo"])
+    async with store._pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE investigations SET domains = ARRAY['fibo','gone'] WHERE id = $1", case.id
+        )
+
+    with caplog.at_level(logging.WARNING, logger="services.api.investigations"):
+        authorised = await store.get_authorized(case.id, AUTHOR, need=AccessLevel.VIEWER)
+        raw = await store.get(case.id)
+        listed = [c for c, _ in await store.list_for(AUTHOR)]
+
+    assert authorised.domains == ["fibo"]
+    assert raw.domains == ["fibo"]
+    assert [c.domains for c in listed] == [["fibo"]]
+    warned = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warned, "a dropped value is logged, not silent"
+    assert all("gone" in r.getMessage() and case.id in r.getMessage() for r in warned)
+
+
+async def test_set_domains_changes_the_packs_and_is_in_the_access_history(
+    store: InvestigationStore,
+) -> None:
+    case = await store.create(AUTHOR, name="Case", domains=["fibo"])
+
+    await store.set_domains(case.id, ["stix", "niem"], by=AUTHOR)
+    await store.set_domains(case.id, [], by=AUTHOR)
+
+    assert await _raw_domains(store, case.id) == []
+    history = await store.access_history(case.id)
+    assert [(h.action, h.subject, h.changed_by) for h in history if h.action == "domains"] == [
+        ("domains", "niem,stix", "alice"),
+        ("domains", "pole", "alice"),
+    ]
+
+
+async def test_set_domains_on_a_case_that_does_not_exist_is_not_found(
+    store: InvestigationStore,
+) -> None:
+    with pytest.raises(InvestigationNotFoundError):
+        await store.set_domains("no-such-case", ["fibo"], by=AUTHOR)
+
+
+async def test_set_domains_if_unset_sets_only_while_null_and_never_overwrites(
+    store: InvestigationStore,
+) -> None:
+    unset = await store.create(AUTHOR, name="Unset")
+    chosen = await store.create(AUTHOR, name="Chosen", domains=["stix"])
+    pole = await store.create(AUTHOR, name="POLE", domains=[])
+
+    assert await store.set_domains_if_unset(unset.id, ["fibo"], by=AUTHOR) is True
+    assert await store.set_domains_if_unset(unset.id, ["niem"], by=AUTHOR) is False
+    assert await store.set_domains_if_unset(chosen.id, ["fibo"], by=AUTHOR) is False
+    assert await store.set_domains_if_unset(pole.id, ["fibo"], by=AUTHOR) is False
+
+    assert await _raw_domains(store, unset.id) == ["fibo"]
+    assert await _raw_domains(store, chosen.id) == ["stix"]
+    assert await _raw_domains(store, pole.id) == [], "a choice of POLE is a choice"
+    only_one = [h for h in await store.access_history(unset.id) if h.action == "domains"]
+    assert [(h.subject, h.changed_by) for h in only_one] == [("fibo", "alice")]
+    assert [h for h in await store.access_history(chosen.id) if h.action == "domains"] == []
+
+
+async def test_two_seeds_racing_set_the_packs_once(store: InvestigationStore) -> None:
+    """The `UPDATE ... WHERE domains IS NULL` is one statement, so exactly one caller wins."""
+    case = await store.create(AUTHOR, name="Raced")
+
+    results = await asyncio.gather(
+        *(store.set_domains_if_unset(case.id, [pack], by=AUTHOR) for pack in ("fibo", "niem"))
+    )
+
+    assert sorted(results) == [False, True]
+    assert len([h for h in await store.access_history(case.id) if h.action == "domains"]) == 1
+
+
+async def test_the_column_is_added_to_a_database_from_before_the_change(
+    schema: str,
+) -> None:
+    """`_DOMAIN_SQL` runs every start, so an older database gains the column, and a start with the
+    column already there is not an error."""
+    dsn = f"{PostgresConfig.from_env().dsn}?search_path={schema}"
+    first = await InvestigationStore.connect(dsn)
+    case = await first.create(AUTHOR, name="Older")
+    async with first._pool.acquire() as conn:
+        await conn.execute("ALTER TABLE investigations DROP COLUMN domains")
+    await first.close()
+
+    second = await InvestigationStore.connect(dsn)
+    third = await InvestigationStore.connect(dsn)
+    try:
+        read = await second.get_authorized(case.id, AUTHOR, need=AccessLevel.VIEWER)
+        assert read.domains == []
+        assert await _raw_domains(second, case.id) is None
+    finally:
+        await second.close()
+        await third.close()
+
+
+async def test_a_case_says_whether_anyone_chose_so_a_branch_can_inherit_the_stored_value(
+    store: InvestigationStore,
+) -> None:
+    """ADR-126 decision 2. The read-side list is `[]` for NULL and for `{}`; `domains_chosen` is
+    what tells them apart, through every read, and a case created from `domains_to_inherit()`
+    stores exactly what its parent did. The plant is inheriting the read-side list."""
+    never = await store.create(AUTHOR, name="Never")
+    pole = await store.create(AUTHOR, name="POLE", domains=[])
+    mixed = await store.create(AUTHOR, name="Mixed", domains=["niem"])
+
+    for case, chosen in ((never, False), (pole, True), (mixed, True)):
+        authorised = await store.get_authorized(case.id, AUTHOR, need=AccessLevel.VIEWER)
+        listed = {c.id: c for c, _ in await store.list_for(AUTHOR)}[case.id]
+        assert case.domains_chosen is chosen
+        assert (await store.get(case.id)).domains_chosen is chosen
+        assert authorised.domains_chosen is chosen
+        assert listed.domains_chosen is chosen
+
+    stored: dict[str, list[str] | None] = {}
+    for parent in (never, pole, mixed):
+        read = await store.get_authorized(parent.id, AUTHOR, need=AccessLevel.VIEWER)
+        branch = await store.create(
+            AUTHOR,
+            name=f"Branch of {parent.name}",
+            branched_from=parent.id,
+            domains=read.domains_to_inherit(),
+        )
+        stored[parent.name] = await _raw_domains(store, branch.id)
+    assert stored == {"Never": None, "POLE": [], "Mixed": ["niem"]}
+
+
+async def test_change_applies_the_name_and_the_packs_together_and_records_both(
+    store: InvestigationStore,
+) -> None:
+    case = await store.create(AUTHOR, name="Old", domains=["fibo"])
+
+    await store.change(case.id, name=" New ", domains=["niem"], by=AUTHOR)
+
+    read = await store.get_authorized(case.id, AUTHOR, need=AccessLevel.VIEWER)
+    assert (read.name, read.domains) == ("New", ["niem"])
+    actions = [(h.action, h.subject) for h in await store.access_history(case.id)]
+    assert ("rename", "New") in actions and ("domains", "niem") in actions
+
+
+async def test_change_of_a_removed_case_writes_and_records_nothing(
+    store: InvestigationStore,
+) -> None:
+    """The case is removed before the change lands: neither field is written, nothing recorded."""
+    case = await store.create(AUTHOR, name="Old", domains=["fibo"])
+    await store.remove(case.id, by=AUTHOR)
+    before = await store.access_history(case.id)
+
+    with pytest.raises(InvestigationNotFoundError):
+        await store.change(case.id, name="New", domains=["niem"], by=AUTHOR)
+
+    assert await store.access_history(case.id) == before
+    async with store._pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT name, domains FROM investigations WHERE id = $1", case.id)
+    assert (row["name"], list(row["domains"])) == ("Old", ["fibo"])
+
+
+async def test_change_refuses_a_blank_name_or_an_unknown_pack_before_writing(
+    store: InvestigationStore,
+) -> None:
+    case = await store.create(AUTHOR, name="Old", domains=["fibo"])
+
+    with pytest.raises(ValueError, match="name"):
+        await store.change(case.id, name="  ", domains=["niem"], by=AUTHOR)
+    with pytest.raises(ValueError, match="domains"):
+        await store.change(case.id, name="New", domains=["gone"], by=AUTHOR)
+
+    read = await store.get_authorized(case.id, AUTHOR, need=AccessLevel.VIEWER)
+    assert (read.name, read.domains) == ("Old", ["fibo"])

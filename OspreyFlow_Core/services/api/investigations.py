@@ -20,14 +20,22 @@ separately by the handling filter on every read
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import cast, get_args
 
 import asyncpg
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from conduit_common.identity import new_id
-from schemas.domain import Principal
+from schemas.domain import DomainPack, Principal
+
+logger = logging.getLogger(__name__)
+
+#: What a stored pack may be. `schemas.domain.DomainPack` is the one definition (ADR-126).
+_KNOWN_PACKS: frozenset[str] = frozenset(get_args(DomainPack))
 
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS investigations (
@@ -75,6 +83,12 @@ CREATE TABLE IF NOT EXISTS investigation_tab_state (
 );
 """
 
+#: ADR-126 decision 1. The case's domain packs: NULL until anyone chooses (read as the empty list,
+#: the POLE core model), an array once someone has, `{}` included. Run on every start, so a database
+#: from before the change gains the column. There is no CHECK constraint, so a new pack needs no
+#: constraint change; an unknown value is refused on the way in and dropped on the way out.
+_DOMAIN_SQL = "ALTER TABLE investigations ADD COLUMN IF NOT EXISTS domains TEXT[]"
+
 _MIGRATE_EXISTING_SQL = """
 UPDATE investigations SET unit_level = 'viewer';
 INSERT INTO investigation_grants (investigation_id, account_id, level)
@@ -83,7 +97,7 @@ INSERT INTO investigation_grants (investigation_id, account_id, level)
 
 _LEVEL_SQL = (
     "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
-    "i.branched_from, g.level AS grant_level, i.unit_level "
+    "i.branched_from, i.domains, g.level AS grant_level, i.unit_level "
     "FROM investigations i "
     "LEFT JOIN investigation_grants g "
     "ON g.investigation_id = i.id AND g.account_id = $3 "
@@ -126,6 +140,61 @@ class Investigation(BaseModel):
     created_by: str
     owning_unit: str
     branched_from: str | None = None
+    #: ADR-126: the domain packs the case carries, sorted and without repeats. Empty means the POLE
+    #: core model alone. An unknown value is refused here, so no write can take one; a stored one is
+    #: dropped on the way out by `_known_domains`, before it reaches this model.
+    domains: list[DomainPack] = Field(default_factory=list)
+    #: ADR-126 decision 2: someone has chosen (the column is not NULL), `{}` included. Not on the
+    #: wire (`exclude`): it is for a branch, which inherits the stored value exactly, so a branch of
+    #: a never-chosen case is never chosen too. See `domains_to_inherit`.
+    domains_chosen: bool = Field(default=False, exclude=True)
+
+    def domains_to_inherit(self) -> list[DomainPack] | None:
+        """What a branch of this case is created with: the stored value, NULL (None) included, not
+        the read-side list, which cannot tell "never chosen" from "chosen POLE"."""
+        return self.domains if self.domains_chosen else None
+
+    @field_validator("domains")
+    @classmethod
+    def _sorted_without_repeats(cls, value: list[DomainPack]) -> list[DomainPack]:
+        return sorted(set(value))
+
+
+def _known_domains(stored: Sequence[str] | None, investigation_id: str) -> list[str]:
+    """The stored column as the empty list when NULL, without any value the model does not know
+    (written by hand, or left by a removed pack). Such a value is logged and dropped, never an
+    error: every case-scoped route reads the case through `get_authorized`, so a strict read would
+    make the whole case unreadable (ADR-126 decision 1)."""
+    if stored is None:
+        return []
+    unknown = sorted({value for value in stored if value not in _KNOWN_PACKS})
+    if unknown:
+        logger.warning(
+            "case %s holds domain packs this deployment does not know, ignored: %s",
+            investigation_id,
+            ", ".join(unknown),
+        )
+    return [value for value in stored if value in _KNOWN_PACKS]
+
+
+def _domain_fields(row: asyncpg.Record) -> dict[str, object]:
+    """The `domains` and `domains_chosen` fields of a case row, from the stored column."""
+    return {
+        "domains": _known_domains(row["domains"], row["id"]),
+        "domains_chosen": row["domains"] is not None,
+    }
+
+
+def _checked_domains(domains: Sequence[str]) -> list[DomainPack]:
+    """`domains` as the model holds it: sorted, without repeats, and a `ValueError` naming any pack
+    this deployment does not know."""
+    unknown = sorted({value for value in domains if value not in _KNOWN_PACKS})
+    if unknown:
+        raise ValueError(
+            f"unknown domain packs {', '.join(unknown)}; domains are among "
+            f"{', '.join(sorted(_KNOWN_PACKS))}"
+        )
+    return sorted({cast(DomainPack, value) for value in domains})
 
 
 class InvestigationNotFoundError(Exception):
@@ -158,6 +227,7 @@ class InvestigationStore:
                 )
                 await conn.execute(_ACCESS_SQL)
                 await conn.execute(_TAB_SQL)
+                await conn.execute(_DOMAIN_SQL)
                 if first_time:
                     await conn.execute(_MIGRATE_EXISTING_SQL)
         return cls(pool)
@@ -166,17 +236,26 @@ class InvestigationStore:
         await self._pool.close()
 
     async def create(
-        self, principal: Principal, *, name: str, branched_from: str | None = None
+        self,
+        principal: Principal,
+        *,
+        name: str,
+        branched_from: str | None = None,
+        domains: Sequence[str] | None = None,
     ) -> Investigation:
         """`owning_unit` is always the *acting* principal's own `org_unit`
         — for a branch, that is the branching principal, never inherited
         from the source investigation (`app.py`'s `branch_investigation`
         already authorised the branching principal against the source
         before calling this). The creator is the case's first Author, and a new case is
-        visible to nobody else until an Author shares it (ADR-052 §2, §4)."""
+        visible to nobody else until an Author shares it (ADR-052 §2, §4).
+
+        `domains` (ADR-126): None leaves the column NULL, "never chosen"; a list, empty included,
+        is a choice. An unknown pack is a `ValueError`, before any row is written."""
         clean_name = name.strip()
         if not clean_name:
             raise ValueError("a case needs a name")
+        chosen = None if domains is None else _checked_domains(domains)
         investigation = Investigation(
             id=new_id(),
             name=clean_name,
@@ -184,18 +263,21 @@ class InvestigationStore:
             created_by=principal.id,
             owning_unit=principal.org_unit,
             branched_from=branched_from,
+            domains=chosen or [],
+            domains_chosen=chosen is not None,
         )
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 "INSERT INTO investigations "
-                "(id, name, created_at, created_by, owning_unit, branched_from) "
-                "VALUES ($1, $2, $3, $4, $5, $6)",
+                "(id, name, created_at, created_by, owning_unit, branched_from, domains) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
                 investigation.id,
                 investigation.name,
                 investigation.created_at,
                 investigation.created_by,
                 investigation.owning_unit,
                 investigation.branched_from,
+                chosen,
             )
             await conn.execute(
                 "INSERT INTO investigation_grants (investigation_id, account_id, level) "
@@ -213,13 +295,13 @@ class InvestigationStore:
         `get_authorized` is what every route actually uses."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, name, created_at, created_by, owning_unit, branched_from "
+                "SELECT id, name, created_at, created_by, owning_unit, branched_from, domains "
                 "FROM investigations WHERE id = $1 AND removed_at IS NULL",
                 investigation_id,
             )
         if row is None:
             raise InvestigationNotFoundError(investigation_id)
-        return Investigation(**dict(row))
+        return Investigation(**{**dict(row), **_domain_fields(row)})
 
     @staticmethod
     def _parse_level_row(
@@ -235,6 +317,7 @@ class InvestigationStore:
             k: row[k]
             for k in ("id", "name", "created_at", "created_by", "owning_unit", "branched_from")
         }
+        fields.update(_domain_fields(row))
         return Investigation(**fields), level
 
     async def effective_level(
@@ -267,7 +350,7 @@ class InvestigationStore:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
-                "i.branched_from, g.level AS grant_level, i.unit_level "
+                "i.branched_from, i.domains, g.level AS grant_level, i.unit_level "
                 "FROM investigations i "
                 "LEFT JOIN investigation_grants g "
                 "ON g.investigation_id = i.id AND g.account_id = $3 "
@@ -366,7 +449,7 @@ class InvestigationStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
-                "i.branched_from, g.level AS grant_level, i.unit_level "
+                "i.branched_from, i.domains, g.level AS grant_level, i.unit_level "
                 "FROM investigations i "
                 "LEFT JOIN investigation_grants g "
                 "ON g.investigation_id = i.id AND g.account_id = $2 "
@@ -433,6 +516,87 @@ class InvestigationStore:
                 raise InvestigationNotFoundError(investigation_id)
             await self._record(conn, investigation_id, by.id, "rename", clean_name, None)
 
+    async def change(
+        self,
+        investigation_id: str,
+        *,
+        name: str | None = None,
+        domains: Sequence[str] | None = None,
+        by: Principal,
+    ) -> None:
+        """An Author's change of the name, the packs or both, in one transaction: if the case is
+        gone (removed by someone else a moment ago) nothing is written and nothing is recorded,
+        so a request that changes both is never half applied. Each change is recorded in the
+        access history as `rename` and `domains` do on their own. A blank name or an unknown pack
+        is a `ValueError`, before anything is written. Authorisation is the caller's job."""
+        clean_name = None if name is None else name.strip()
+        if clean_name is not None and not clean_name:
+            raise ValueError("a case needs a name")
+        chosen = None if domains is None else _checked_domains(domains)
+        async with self._pool.acquire() as conn, conn.transaction():
+            exists = await conn.fetchval(
+                "SELECT id FROM investigations WHERE id = $1 AND removed_at IS NULL FOR UPDATE",
+                investigation_id,
+            )
+            if exists is None:
+                raise InvestigationNotFoundError(investigation_id)
+            if clean_name is not None:
+                await conn.execute(
+                    "UPDATE investigations SET name = $2 WHERE id = $1",
+                    investigation_id,
+                    clean_name,
+                )
+                await self._record(conn, investigation_id, by.id, "rename", clean_name, None)
+            if chosen is not None:
+                await conn.execute(
+                    "UPDATE investigations SET domains = $2 WHERE id = $1", investigation_id, chosen
+                )
+                await self._record(
+                    conn, investigation_id, by.id, "domains", ",".join(chosen) or "pole", None
+                )
+
+    async def set_domains(
+        self, investigation_id: str, domains: Sequence[str], *, by: Principal
+    ) -> None:
+        """An Author's change of the case's packs (ADR-126 decision 1), kept in the access history
+        as `domains`, the subject the packs in order or `pole` for none. Authorisation is the
+        caller's job. An unknown pack is a `ValueError`, before anything is written."""
+        chosen = _checked_domains(domains)
+        async with self._pool.acquire() as conn, conn.transaction():
+            updated = await conn.fetchval(
+                "UPDATE investigations SET domains = $2 WHERE id = $1 AND removed_at IS NULL "
+                "RETURNING id",
+                investigation_id,
+                chosen,
+            )
+            if updated is None:
+                raise InvestigationNotFoundError(investigation_id)
+            await self._record(
+                conn, investigation_id, by.id, "domains", ",".join(chosen) or "pole", None
+            )
+
+    async def set_domains_if_unset(
+        self, investigation_id: str, domains: Sequence[str], *, by: Principal
+    ) -> bool:
+        """The seeds' setting (ADR-126 decision 2): the packs, only while the column is NULL, in
+        one atomic `UPDATE ... WHERE domains IS NULL`, so a choice anyone has made, POLE included,
+        is never overwritten and two seeds racing set it once. True when this call set it, and only
+        then is it recorded in the access history."""
+        chosen = _checked_domains(domains)
+        async with self._pool.acquire() as conn, conn.transaction():
+            updated = await conn.fetchval(
+                "UPDATE investigations SET domains = $2 "
+                "WHERE id = $1 AND domains IS NULL AND removed_at IS NULL RETURNING id",
+                investigation_id,
+                chosen,
+            )
+            if updated is None:
+                return False
+            await self._record(
+                conn, investigation_id, by.id, "domains", ",".join(chosen) or "pole", None
+            )
+            return True
+
     async def remove(self, investigation_id: str, *, by: Principal) -> None:
         """A soft remove (ADR-052 Amendment 7): the case, its grants and its history stay in the
         database and the graph and analytics stores are untouched; every read then treats the case
@@ -475,11 +639,11 @@ class InvestigationStore:
         administrator finds nothing."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, name, created_at, created_by, owning_unit, branched_from "
+                "SELECT id, name, created_at, created_by, owning_unit, branched_from, domains "
                 "FROM investigations WHERE id = $1 AND owning_unit = $2 AND removed_at IS NULL",
                 investigation_id,
                 principal.org_unit,
             )
         if row is None:
             raise InvestigationNotFoundError(investigation_id)
-        return Investigation(**dict(row))
+        return Investigation(**{**dict(row), **_domain_fields(row)})

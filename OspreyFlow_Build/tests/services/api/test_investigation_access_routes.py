@@ -109,6 +109,10 @@ class _Store:
         self.case = self.case.model_copy(update={"name": name.strip()})
         self._note(by, "rename", name.strip(), None)
 
+    async def change(self, investigation_id, *, name=None, domains=None, by) -> None:  # type: ignore[no-untyped-def]
+        if name is not None:
+            await self.rename(investigation_id, name, by=by)
+
     async def access_history(self, investigation_id: str) -> list[AccessHistoryEntry]:
         return list(self.history)
 

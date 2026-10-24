@@ -10,6 +10,7 @@ removed (ADR-052 Amendment 7) is not brought back, a fresh one is made.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from services.api.datasets import Dataset, DatasetStore
@@ -39,15 +40,23 @@ async def ensure_case(
     name: str,
     seeder: Principal,
     grants: dict[str, AccessLevel],
+    domains: Sequence[str] | None = None,
 ) -> Investigation:
     """The case called `name` in the seeder's unit, made if it does not exist, with `grants` set.
 
     The seeder is the case's creator and so its first Author, which is nobody a person signs in as:
-    the levels the demo accounts hold come from `grants`."""
+    the levels the demo accounts hold come from `grants`.
+
+    **`domains`** (ADR-126 decision 2) are the packs the seed says the case is. They are set only
+    while nobody has chosen, in one atomic `UPDATE ... WHERE domains IS NULL` that the case's
+    access history records, so a choice anyone has made, POLE included, is never overwritten on a
+    reseed. An empty list is a setting like any other. Left out (None), the setting is untouched."""
     existing = [case for case, _level in await store.list_for(seeder) if case.name == name]
     case = existing[0] if existing else await store.create(seeder, name=name)
     for account, level in grants.items():
         await store.set_grant(case.id, account, level, by=seeder)
+    if domains is not None and await store.set_domains_if_unset(case.id, domains, by=seeder):
+        case = await store.get(case.id)
     return case
 
 
@@ -99,6 +108,7 @@ async def case_from_arguments(
             name=name,
             seeder=seeder,
             grants=dict(parse_grant(text) for text in grant_texts),
+            domains=list(dataset.domains),
         )
     finally:
         await store.close()

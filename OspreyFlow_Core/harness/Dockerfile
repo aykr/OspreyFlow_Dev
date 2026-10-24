@@ -7,9 +7,11 @@
 # source directories this image's own entrypoint actually reaches are copied in. Checked directly,
 # not assumed: tracing every module `harness.render`, `harness.apply`, `harness.backup`,
 # `harness.restore`, `harness.preflight.__main__`, `harness.webapp` (`Stage 2 §6` part A) and
-# `tools.osprey_bundle` import, recursively, touches exactly three project-tree roots —
-# `harness`, `packages/schemas`, `packages/principal_auth`, `scripts` — and nothing under
-# `services/`.
+# `tools.osprey_bundle` import, recursively, touches exactly six project-tree roots —
+# `harness`, `packages/schemas`, `packages/principal_auth`, `packages/ontology`,
+# `packages/demo_fixtures`, `scripts` — and nothing under `services/`. (It said "three" while
+# listing four; the last two were added with ADR-115 E1 and ADR-126 and the count was not
+# brought up to date.)
 #
 # **Corrected 27 September 2026 (round 13b).** This comment used to say "nothing under
 # `services/` or any other `packages/*` subdirectory", and the first half was the problem:
@@ -56,6 +58,10 @@ COPY packages/principal_auth ./packages/principal_auth
 # `harness/render.py` checks the deployment's marking floor against the handling scheme, which
 # `packages/ontology` reads (ADR-115 E1); without it every render failed on import (15 October 2026).
 COPY packages/ontology ./packages/ontology
+# ADR-126 decision 2: `harness/apply.py` sends the seeded datasets' domain packs when it creates the
+# seeded case, and `SeedDataset.domains` is `packages/demo_fixtures/datasets.py`'s (a module of
+# dataclasses, importing only `schemas`). Without it `harness.apply` failed on import.
+COPY packages/demo_fixtures ./packages/demo_fixtures
 COPY scripts ./scripts
 
 # The Docker CLI itself, taken from Docker's own official `cli` image rather than Debian's package
