@@ -40,6 +40,15 @@ test reads the source files of `OspreyFlow_Build/tests` and `OspreyFlow_Core/app
 `scripts`; the determinism test starts two Python subprocesses to build the plan under two hash
 seeds.
 
+ADR-120 Amendment 9 (stage 5, unit 5a) adds, at the end of this file: the derived store ids, the
+places without a hand-written `geometry_ref`, the teaching link, the scale profile without PIN data,
+the mixed files' handling columns, one report row per report, the report-incident file, the shared
+`occurrence_instants` rule, the pure `rows_for(plan, file)` generator (every link written once per
+occurrence, carried links counted by their carrying rows, every LoadShape's columns present in the
+rows that carry it), the one-date rule for a one-occurrence link, and a pinned digest proving the
+background's random draws did not move. The circle test runs under weights version 3; version 2 is
+kept only as an expected-red record.
+
 Limits, stated: the advisory circle counts final totals, where the store snapshots the counts at
 write time (stage 5's binding test reads the store's own); and the discovery runs in this
 process on this checkout, so a generator that writes an absolute path outside `tmp_path` is not
@@ -49,6 +58,7 @@ contained by it, only by the network, process and working-directory guards.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import importlib
 import inspect
 import itertools
@@ -63,8 +73,8 @@ import sys
 import types
 import warnings
 from collections import Counter, deque
-from collections.abc import Iterable, Mapping
-from datetime import UTC, date, datetime
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
+from datetime import UTC, date, datetime, timedelta
 from functools import cached_property
 from pathlib import Path
 from typing import Any
@@ -330,6 +340,27 @@ class View:
         return out
 
     @cached_property
+    def subject_column(self) -> dict[str, str]:
+        """For each person-to-report link, the report-file column it comes from: the report's
+        first person is `subject_1`, its second `subject_2`, its third `subject_3`."""
+        seen: Counter[str] = Counter()
+        out: dict[str, str] = {}
+        for lk in self.all_links:
+            if (
+                lk.link_type == "MENTIONED_IN"
+                and self.etype(lk.source) == "Person"
+                and lk.target in self.reports
+            ):
+                n = seen[lk.target]
+                seen[lk.target] += 1
+                out[lk.key] = f"subject_{n + 1}"
+        return out
+
+    @cached_property
+    def by_key(self) -> dict[str, Any]:
+        return {lk.key: lk for lk in self.all_links}
+
+    @cached_property
     def prisoners(self) -> list[Any]:
         return [e for e in self.of_type("Person") if "prison_number" in e.properties]
 
@@ -470,10 +501,24 @@ def ontology() -> Any:
 
 
 def _cast_link_signature(view: View) -> list[tuple[Any, ...]]:
+    """Every link among the cast's keys, to the last property. A carried link's count is the row
+    count of the links that carry it (Amendment 9 decision 1). Where one of those carrying rows
+    touches a key outside the cast (a cast PIN account called, or a seized SIM calling, a
+    background number), the count follows the background's draws by design, so the signature holds
+    the type and ends but not the count. Where every carrying row is cast-only (the principal's
+    PIN account, calling the coordinator and the unidentified number) the count is part of the
+    signature and must be the same whatever the seed."""
     keys = view.cast_keys()
+    by_key = view.by_key
+    follows_background = {
+        key
+        for key, carriers in _carriers(view).items()
+        if any(by_key[c].source not in keys or by_key[c].target not in keys for c in carriers)
+    }
     return sorted(
         (
-            link.link_type, link.source, link.target, link.occurrences,
+            link.link_type, link.source, link.target,
+            None if link.key in follows_background else link.occurrences,
             repr(link.first_seen), repr(link.last_seen), link.provenance,
             sorted(link.properties.items()),
         )
@@ -491,6 +536,16 @@ def test_the_plan_is_deterministic(demo: View) -> None:
     # The cast is the same whatever the seed: every link among its keys, to the last property.
     assert _cast_link_signature(other) == _cast_link_signature(demo)
     assert len(_cast_link_signature(demo)) > 100, "the comparison must cover the cast's links"
+    # A cast-only carried count stays in the comparison, and is fixed: the principal's PIN account
+    # is used once per call, 213 times, whatever the seed.
+    assert ("USES", "principal", "pin:principal", 213) == next(
+        row[:4]
+        for row in _cast_link_signature(other)
+        if row[:3] == ("USES", "principal", "pin:principal")
+    )
+    assert any(row[3] is None for row in _cast_link_signature(demo)), (
+        "some counts follow the background"
+    )
     # Nor does the plan move with the interpreter's hash seed: two fresh processes, one digest.
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": os.pathsep.join(sys.path)}
     digests = set()
@@ -680,11 +735,14 @@ def test_the_map_points_sit_in_the_basemap_and_a_boundary_round_wing_f_takes_onl
         lk.source for lk in demo.links("PART_OF") if lk.target == demo.site[ZONE_REF]
     }
     assert site in demo.areas_of(PRYCE)
-    # Every place reference is the PID's own.
+    # Every place reference is the PID's own. No place carries a hand-written `geometry_ref` now
+    # (Amendment 9 decision 4): a Studio load mints the ref and the point from the coordinates, so
+    # the old check that a `geometry_ref` starts `pid:` has nothing to read and is replaced by its
+    # absence (proved, and shown able to fail, by
+    # `test_no_location_carries_a_geometry_ref_and_every_pointed_place_has_lat_and_lon_columns`).
     for ent in demo.of_type("Location"):
         assert str(ent.properties["site_ref"]).startswith("pid:"), ent.key
-        if "geometry_ref" in ent.properties:
-            assert str(ent.properties["geometry_ref"]).startswith("pid:"), ent.key
+        assert "geometry_ref" not in ent.properties, ent.key
 
 
 # --- The reports: one pattern, the selection, the used reports (brief 5.5) ------------------------
@@ -722,15 +780,21 @@ def test_the_one_pattern_selects_the_same_229(demo: View) -> None:
         ("OCCURRED_AT", "incident", "yard"),
         ("PART_OF", "yard", "zone"),
     }
-    zone = nodes["zone"].node_id
-    assert zone is not None and zone in demo.ent
+    # Amendment 9 decision 2: the pattern pins the zone by its derived store id, not its plan key.
+    zone_id = nodes["zone"].node_id
+    assert (
+        zone_id == pid_plan.node_id("zone:wing-f") == pid_plan.REPORT_PATTERN["nodes"][0]["node_id"]
+    )
+    key_of_id = {pid_plan.node_id(k): k for k in demo.ent}
+    assert zone_id in key_of_id, "the pinned id is one of the plan's entities"
+    zone = key_of_id[zone_id]
     assert demo.ent[zone].properties["site_ref"] == ZONE_REF
     assert [n.var for n in pattern.nodes if n.node_id] == ["zone"], "one pinned root only"
     # The real compiler takes it as one chain, pins the zone, and tells the Locations apart.
     reader = Principal(id="r", clearance="OFFICIAL", org_unit="u", datasets=["pid"])
     compiled = MatchBuilder(pattern)._render_single_chain(AccessFilter(load_uk_le_scheme()), reader)
     assert isinstance(compiled, str), "the pattern must compile as one chain"
-    assert f"'{zone}'" in compiled
+    assert f"'{zone_id}'" in compiled
     assert compiled.count(".where(neq(") == 3, "area, yard and zone are three distinct Locations"
     # Its semantics, emulated over the plan exactly as the compiled chain reads it.
     in_zone = {lk.source for lk in demo.links("PART_OF") if lk.target == zone}
@@ -1655,7 +1719,8 @@ def test_identifiers_are_synthetic_by_construction(demo: View, scale: View) -> N
             for e in view.of_type("Endpoint")
             if e.properties.get("endpoint_kind") == "handle"
         }
-        assert pins == {f"PIN-{n}" for n in nums}
+        # The scale profile holds no PIN accounts (Amendment 9 decision 6): D6 gives it no calls.
+        assert pins == ({f"PIN-{n}" for n in nums} if name == "demo" else set())
         for e in view.of_type("Endpoint"):
             kind = e.properties.get("endpoint_kind")
             value = str(e.properties["value_normalised"])
@@ -2025,7 +2090,9 @@ def _circle_verdict(
     def light(k: str) -> int:  # from the light end; a tie takes the worse place
         return sum(1 for v in weights.values() if v <= weights[k])
 
-    call = heavy(key_of("COMMUNICATED_WITH", "pin:principal", "number:coordinator"))
+    call_key = key_of("COMMUNICATED_WITH", "pin:principal", "number:coordinator")
+    call = heavy(call_key)
+    outranking = sorted({lk.link_type for lk in circle if weights[lk.key] > weights[call_key]})
     transfers = [
         heavy(key_of("TRANSACTED", "account:payer", f"cash:{who}"))
         for who in ("principal", "relay_1", "relay_2")
@@ -2037,6 +2104,7 @@ def _circle_verdict(
     quarter, eighth = math.ceil(n / 4), math.ceil(n / 8)
     return {
         "n": n, "call": call, "transfers": transfers, "lightest": lightest,
+        "outranking": outranking,
         # ADR-123 decision 6: the call is 1st at every point (Amendment 7's own threshold, the top
         # three, must hold too); a tie takes the worse place, so `call == 1` is a clear first.
         "green": call == 1 and call <= 3 and max(transfers) <= quarter
@@ -2044,13 +2112,22 @@ def _circle_verdict(
     }  # fmt: skip
 
 
+def _the_four_points() -> tuple[tuple[str, bool], ...]:
+    """The two moments and the two recency points the circle is held at (Amendment 7 decision 2)."""
+    return tuple((m, z) for m in ("seed", "chapter4") for z in (False, True))
+
+
 def test_the_principals_circle_weighs_as_amendment_7_says(demo: View) -> None:
     # ADVISORY: the binding test is stage 5's, against a store. This one has to count itself.
-    # ADR-123: weights version 2 (gamma 0), named by version and not as "latest", so a later
-    # version cannot change what this test measures. At gamma 0 the payer's transfers must be
-    # 9, 8 and 8 for the circle to hold at the far-past recency point.
-    rules = load_weight_history()[1]
-    assert (rules.version, rules.gamma) == (2, 0.0)
+    # ADR-120 Amendment 9 decision 9: weights version 3, named by index and not as "latest", so a
+    # later version cannot change what this test measures. Counted per carrying row, the
+    # principal's `USES` of his PIN account carries 213 occurrences; version 3 makes `USES`,
+    # `PAIRED_WITH` and `OCCURRED_AT` structural (fixed 0.75), so the coordinator's call link is
+    # first on the circle at every point (stricter than Amendment 7's "top three").
+    rules = load_weight_history()[2]
+    assert (rules.version, rules.gamma) == (3, 0.0)
+    for name in ("USES", "PAIRED_WITH", "OCCURRED_AT"):
+        assert rules.rule_for(name)[1].fixed == 0.75, name
     cut = datetime(2026, 4, 30, 23, 59, 59, tzinfo=UTC)
     assert _as_date(pid_plan.CUT_OFF) == cut.date()
     for moment in ("seed", "chapter4"):
@@ -2062,9 +2139,12 @@ def test_the_principals_circle_weighs_as_amendment_7_says(demo: View) -> None:
             verdict = _circle_verdict(
                 demo, rules, now=cut, zero_recency=zero_recency, moment=moment
             )
+            assert verdict["call"] == 1, f"{moment}, zero_recency={zero_recency}: {verdict}"
+            assert verdict["outranking"] == [], f"{moment}, zero_recency={zero_recency}: {verdict}"
             assert verdict["green"], f"{moment}, zero_recency={zero_recency}: {verdict}"
 
-    # The check can fail: three planted wrong rules turn it red at both points (rule 15).
+    # The check can fail: three planted wrong rules turn it red at both moments and both recency
+    # points (rule 15). Each plant is a version 3 with one rule changed.
     def planted(link_type: str, heavy: int) -> Any:
         wrong = dataclasses.replace(rules.rules[link_type], heavy=heavy)
         return dataclasses.replace(rules, rules={**rules.rules, link_type: wrong})
@@ -2074,15 +2154,31 @@ def test_the_principals_circle_weighs_as_amendment_7_says(demo: View) -> None:
         ("SHARED_CELL_WITH", 1),
         ("COMMUNICATED_WITH", 4000),
     ):
-        for moment in ("seed", "chapter4"):
-            for zero_recency in (False, True):
-                verdict = _circle_verdict(
-                    demo, planted(link_type, heavy), now=cut, zero_recency=zero_recency,
-                    moment=moment,
-                )  # fmt: skip
-                assert not verdict["green"], (
-                    f"{moment}: {link_type} heavy {heavy} should turn it red: {verdict}"
-                )
+        for moment, zero_recency in _the_four_points():
+            verdict = _circle_verdict(
+                demo, planted(link_type, heavy), now=cut, zero_recency=zero_recency,
+                moment=moment,
+            )  # fmt: skip
+            assert not verdict["green"], (
+                f"{moment}: {link_type} heavy {heavy} should turn it red: {verdict}"
+            )
+
+
+def test_under_weights_version_2_the_circle_is_red_as_a_record(demo: View) -> None:
+    # EXPECTED RED, kept as a record and not as a requirement (Amendment 9 decision 9, why): under
+    # version 2 a prisoner's `USES` of his PIN account counts one occurrence per call, undated, so
+    # it weighs as fully recent and outweighs the coordinator's call link, which falls from first.
+    # The circle is therefore checked under version 3 above; if this test ever turns green the
+    # record is out of date and the decision it supports needs revisiting, not this assertion.
+    rules = load_weight_history()[1]
+    assert (rules.version, rules.gamma) == (2, 0.0)
+    cut = datetime(2026, 4, 30, 23, 59, 59, tzinfo=UTC)
+    for moment, zero_recency in _the_four_points():
+        verdict = _circle_verdict(demo, rules, now=cut, zero_recency=zero_recency, moment=moment)
+        assert not verdict["green"], f"{moment}, zero_recency={zero_recency}: {verdict}"
+        assert verdict["call"] in (2, 3), f"{moment}, zero_recency={zero_recency}: {verdict}"
+        # What outranks the call is the `USES` of the PIN account counted per call, undated.
+        assert "USES" in verdict["outranking"], f"{moment}, zero_recency={zero_recency}: {verdict}"
 
 
 # --- Volumes and structure ----------------------------------------------------------------------
@@ -2509,7 +2605,8 @@ def _shape_matches(shape: Any, link: Any, view: View) -> bool:
         and shape.target_type == _label(view, link.target)
         and set(shape.properties) == set(link.properties)
         and shape.moment == _link_moment(view, link)
-        and shape.source_key == view.area_column.get(link.key, shape.source_key)
+        and shape.source_key
+        == view.area_column.get(link.key, view.subject_column.get(link.key, shape.source_key))
     )
 
 
@@ -2546,7 +2643,9 @@ def test_every_plan_link_has_a_load_shape(demo: View, scale: View) -> None:
         )
         # A column for each property and a key column for each end, said in the shape itself.
         assert sh.source_key in sh.columns and sh.target_key in sh.columns, sh
-        assert sh.source_key != sh.target_key and set(sh.properties) <= set(sh.columns), sh
+        # A property's column is its own name unless Brief 2 names the value otherwise.
+        named = {pid_plan.property_column(sh, p) for p in sh.properties}
+        assert sh.source_key != sh.target_key and named <= set(sh.columns), sh
         assert sh.moment in ("seed", "chapter4", "chapter9"), sh
         assert _recipe_ok(sh.recipe), sh
         assert sh.handling in ("recipe", "column"), sh
@@ -2620,13 +2719,18 @@ def test_the_brief_2_additions_are_listed() -> None:
         ("USES", "Person:visitor", "Endpoint:msisdn"): ("owner",),
         ("MENTIONED_IN", "Person:named", "Document"): ("outsider", "NINO"),
         ("USES", "Person:prisoner", "Device"): ("when",),
-        ("SHARED_CELL_WITH", "Person:prisoner", "Person:prisoner"): ("last day",),
-        ("MENTIONED_IN", "Incident:throw_over", "Document"): ("incident_refs",),
+        # Amendment 9 decision 1 replaced the count and the last-day interval with one row per week
+        # shared, so the sentence now says so (it said "the plan's last day" before).
+        ("SHARED_CELL_WITH", "Person:prisoner", "Person:prisoner"): ("week",),
+        # The throw-over mentions moved out of the reports file to a file of their own.
+        ("MENTIONED_IN", "Incident:throw_over", "Document"): ("report-incident",),
+        ("MENTIONED_IN", "Endpoint:msisdn", "Document"): ("phone_mentioned",),
         ("MENTIONED_IN", "Location:wing", "Document"): ("area_ref_2", "area_ref_3"),
         ("PART_OF", "Location:wing", "Location:zone"): ("zone", "parent"),
         ("PART_OF", "Location:yard", "Location:zone"): ("zone", "parent"),
-        ("HELD_AT", "Person:prisoner", "Establishment"): ("interval",),
-        ("PRESENT_AT", "Person:prisoner", "Location:cell"): ("interval",),
+        # A span carries `start` and `end` date-time columns (Amendment 9 decision 1).
+        ("HELD_AT", "Person:prisoner", "Establishment"): ("interval", "custody_from", "custody_to"),
+        ("PRESENT_AT", "Person:prisoner", "Location:cell"): ("interval", "start", "end"),
     }
     for triple, words in expected.items():
         assert triple in added, f"Brief 2 must be told to add {triple}"
@@ -2731,6 +2835,8 @@ def test_a_file_with_rows_of_two_handlings_carries_them_by_column(demo: View, sc
 
 def test_each_links_shape_file_agrees_with_its_moment(demo: View, scale: View) -> None:
     batch_2, reports = "pid_seized_comms_batch2.csv", "pid_intel_reports.csv"
+    # Chapter 4 loads the reports file and, beside it, the report-incident file (Amendment 9).
+    report_files = {reports, "pid_report_incidents.csv"}
     seen_moments: Counter[str] = Counter()
     for view in (demo, scale):
         for link in view.all_links:
@@ -2740,9 +2846,9 @@ def test_each_links_shape_file_agrees_with_its_moment(demo: View, scale: View) -
             if moment == "chapter9":
                 assert sh.file == batch_2, link.key
             elif moment == "chapter4":
-                assert sh.file == reports, link.key
+                assert sh.file in report_files, link.key
             else:
-                assert sh.file not in (batch_2, reports), f"a seed link loaded from {sh.file}"
+                assert sh.file not in {batch_2, *report_files}, f"a seed link loaded from {sh.file}"
         for ent in view.plan.entities:
             (esh,) = [x for x in pid_plan.ENTITY_SHAPES if _entity_matches(x, view, ent.key)]
             moment = _entity_moment(view, ent.key)
@@ -2757,7 +2863,7 @@ def test_each_links_shape_file_agrees_with_its_moment(demo: View, scale: View) -
     # for the report Document itself), is of that moment.
     for sh in pid_plan.LOAD_SHAPES:
         assert (sh.file == batch_2) == (sh.moment == "chapter9"), sh
-        assert (sh.file == reports) == (sh.moment == "chapter4"), sh
+        assert (sh.file in report_files) == (sh.moment == "chapter4"), sh
     # The second handset gets no picture: Brief 2 attaches pictures at the seed, before it
     # exists.
     assert "picture:handset:batch2" not in demo.ent
@@ -2796,3 +2902,1810 @@ def test_every_account_endpoint_has_a_transfer(demo: View, scale: View) -> None:
         assert not [k for k in accounts if k not in moved], (
             "an account with a USES and no TRANSACTED"
         )
+
+
+# --- Stage 5, unit 5a: ids, places, the teaching link, the scale profile (ADR-120 Amendment 9) ---
+
+HANDLING_COLUMNS = (
+    "classification", "handling_code", "action_code", "sanitisation_code", "originator",
+    "owning_unit",
+)  # fmt: skip
+#: Columns a counted link's shape used to hold. One row per occurrence replaced every count, and an
+#: interval is the first and last row's instant, so no shape carries a count or a `last_seen`.
+COUNT_COLUMNS = frozenset({"weeks", "visits", "episodes", "weekly_calls", "calls", "transfers",
+                           "last_seen"})  # fmt: skip
+#: The date-time columns a shape can carry: one per occurrence, or `start` and `end` for a span.
+DATE_COLUMNS = (
+    "first_seen", "week_start", "visit_date", "call_start", "found_on", "occurred_at",
+    "transferred_at", "custody_from", "custody_to", "start", "end",
+)  # fmt: skip
+PSEUDO_FILES = frozenset({"graph port", "picture route"})
+REPORTS_FILE = "pid_intel_reports.csv"
+REPORT_INCIDENTS_FILE = "pid_report_incidents.csv"
+ESTATE_FILE = "pid_establishment_plan.csv"
+TEACHING_REPORT_KEY = "report:0017"
+TEACHING_NUMBER = "+447700900603"
+#: Links that take their instants from the rows carrying them, and are never given a spread of
+#: their own: a span's ends, `PASSES_ITEMS_TO` (the graph port writes it) and the exempt types.
+ONE_DATE_EXEMPT = frozenset({"HELD_AT", "PRESENT_AT", "PASSES_ITEMS_TO"})
+
+#: Digests of what the background drew, from the plan as it stood before this unit changed it: the
+#: random generator's draws must be unchanged (Amendment 9, "Keeping the plan stable"). Entities
+#: are compared without `geometry_ref`; links are compared by type, ends and occurrences (and the
+#: dates of those with more than one occurrence), leaving out the links this unit changes (a
+#: carried link's count and dates, the teaching link, the scale profile's PIN accounts).
+DEMO_DIGESTS = (
+    "23e7e6552600fc5e99e9f59b10a87ed358cc414eff6809977378511cb17e4606",
+    "8f7e4bab9ed10ebfabb870fd7bc97b9bb97fca0ae204052ed23871b385651d6b",
+    "d4c51d252a335657ee785de34abc2bc9ea7ca241f47c216ac2efbd446e57fe83",
+    "c3d31315269e7b31d1d8ca1940f2507f0f14587f20c0a7e4b0f6b67397f6b979",
+    "ada7d692d898778388291975f68b5bb407b7f5eb54664be2d0949b7e484701a8",
+    "2877c05f1a20a7bc854c851b57b3c3ce5abf59216ef7abbf57d76ab021e17a88",
+)
+SCALE_DIGESTS = (
+    "b2cab455b10fdb0ccfb5fdaafb4398861af8760cc743cf903d9097fbfa95ab42",
+    "bc8de9bac18f2bbcc7bf5b82553c8529e54a6b7b832f2cb534bab7b1711ea992",
+    "e23462aa3641f844a0040419ebe9b0b14f90ce2d182aa153730c9d47e446210f",
+    "092ba82811df7960935962e71861444e07285d3af7ac3862311fee366023c8de",
+    "3b52d93e9180ebc0b11d17799e38469d17c57209dd1d560ed1048f598079b3dd",
+    "b684f74b2b12c4b5b506e7fa2e03496ff11682960d82edb33c81f2c7ab371881",
+)
+# Provenance of the digests: computed with `_digests` below over the plan built by the COMMITTED
+# module, not the module this unit changed: commit 22df39cbfee7c9b9bac9b4993c802f073bb505ea,
+# `pid_plan.py` blob d3b584f3c7de8c7b027d47da07c479bc9bce3c92 and `pid_names.py` blob
+# 3c96cebfd2db49d2cb76d1beb78c157e3d660ebf (`git show HEAD:...` into a scratch package, its
+# `git hash-object` equal to the blob id, and an assertion that it has no `node_id` or `rows_for`).
+# The entity digest leaves out `geometry_ref`; the scale digests leave out the PIN accounts, the
+# groups and their memberships. The demo's digests 0 to 3 and 5 are the values first pinned from
+# the same commit before the groups ruling; digest 4 changed only because it now compares days.
+
+
+def _derived(text: str) -> str:
+    return "pid-" + hashlib.sha256(text.encode()).hexdigest()[:24]
+
+
+def _collisions(ids: Iterable[str]) -> list[str]:
+    return sorted(i for i, n in Counter(ids).items() if n > 1)
+
+
+def _replaced(view: View, *, links: Iterable[Any] | None = None, entities: Any = None) -> View:
+    """A view of the same plan with links or entities swapped, for planting a defect."""
+    changes: dict[str, Any] = {}
+    if links is not None:
+        changes["links"] = tuple(links)
+    if entities is not None:
+        changes["entities"] = tuple(entities)
+    return View(dataclasses.replace(view.plan, **changes))
+
+
+def _iso(moment: datetime) -> str:
+    return moment.isoformat()
+
+
+def _start_of(value: date | datetime) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime(value.year, value.month, value.day, tzinfo=UTC)
+
+
+def _end_of(value: date | datetime) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime(value.year, value.month, value.day, 23, 59, 59, tzinfo=UTC)
+
+
+def _noon_of(value: date | datetime) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime(value.year, value.month, value.day, 12, tzinfo=UTC)
+
+
+def _cell(value: object) -> str:
+    """How a plan value is written in a CSV cell: text as it is, a date as `YYYY-MM-DD`, a
+    date-time as ISO-8601 with its offset, a float as its `repr`, a list joined by `|`."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, list | tuple):
+        return "|".join(_cell(v) for v in value)
+    return str(value)
+
+
+def _identifier(view: View, key: str) -> str:
+    """The cell a file holds to name an entity: a prison number, a NINO, a place or establishment
+    reference, an organisation reference, an incident reference, an IMEI, an endpoint's value, or
+    (a report has no reference property) the plan's own key."""
+    props = view.ent[key].properties
+    for name in (
+        "prison_number", "nino", "site_ref", "establishment_ref", "org_ref", "incident_ref",
+        "imei", "value_normalised",
+    ):  # fmt: skip
+        if name in props:
+            return str(props[name])
+    return key
+
+
+def _written_forms(view: View, key: str) -> frozenset[str]:
+    """What a cell naming this entity may hold: its identifier, and for a phone number its
+    written form too (the writer chooses the form; `msisdn` normalises each to the same number)."""
+    forms = {_identifier(view, key)}
+    props = view.ent[key].properties
+    if props.get("endpoint_kind") == "msisdn":
+        forms.add(str(props["value_raw"]))
+    return frozenset(forms)
+
+
+# --- ids (Amendment 9 decision 2) ---------------------------------------------------------------
+
+
+def test_store_ids_are_derived_from_the_plan_keys_and_unique_across_both_plans(
+    demo: View, scale: View
+) -> None:
+    assert pid_plan.node_id("zone:wing-f") == "pid-ac1fbc64aeadfe3100bfcb9a"
+    assert pid_plan.node_id("zone:wing-f") == _derived("zone:wing-f")
+    uses = next(
+        lk
+        for lk in demo.all_links
+        if (lk.link_type, lk.source, lk.target) == ("USES", "principal", "pin:principal")
+    )
+    assert pid_plan.link_id(uses) == "pid-e979cad8cbdc30dda0764b63"
+    assert pid_plan.link_id(uses) == _derived("USES|principal|pin:principal")
+    # A link's id survives a regeneration that renumbers the plan's link keys, and depends on its
+    # type and on the direction of its ends.
+    renumbered = dataclasses.replace(uses, key="l999999")
+    assert pid_plan.link_id(renumbered) == pid_plan.link_id(uses)
+    reversed_ends = dataclasses.replace(uses, source=uses.target, target=uses.source)
+    retyped = dataclasses.replace(uses, link_type="ASSOCIATE_OF")
+    assert len({pid_plan.link_id(x) for x in (uses, reversed_ends, retyped)}) == 3
+    node_ids = [pid_plan.node_id(e.key) for view in (demo, scale) for e in view.plan.entities]
+    link_ids = [pid_plan.link_id(lk) for view in (demo, scale) for lk in view.all_links]
+    assert len(demo.plan.entities) == 7_353 and len(scale.plan.entities) == 7_176
+    assert len(node_ids) == 7_353 + 7_176 == 14_529
+    assert _collisions(node_ids) == [] and _collisions(link_ids) == []
+    assert all(re.fullmatch(r"pid-[0-9a-f]{24}", i) for i in (*node_ids, *link_ids))
+    # No two links of one type and pair: a plan defect to be fixed in the plan, never in the id.
+    for view in (demo, scale):
+        pairs = Counter((lk.link_type, lk.source, lk.target) for lk in view.all_links)
+        assert max(pairs.values()) == 1
+    # Shown able to fail: two links of the same type and pair share an id whatever their keys.
+    twin = dataclasses.replace(uses, key="l999998")
+    assert _collisions(pid_plan.link_id(x) for x in (uses, twin)) == [pid_plan.link_id(uses)]
+
+
+# --- places (Amendment 9 decision 4) ------------------------------------------------------------
+
+
+def _geometry_refs(view: View) -> list[str]:
+    return [e.key for e in view.of_type("Location") if "geometry_ref" in e.properties]
+
+
+def test_no_location_carries_a_geometry_ref_and_every_pointed_place_has_lat_and_lon_columns(
+    demo: View, scale: View
+) -> None:
+    for view in (demo, scale):
+        assert _geometry_refs(view) == []
+    # Shown able to fail: a plan whose Wing F carries a hand-written ref is reported.
+    handwritten = [
+        dataclasses.replace(e, properties={**e.properties, "geometry_ref": "pid:x"})
+        if e.key == "wing:F"
+        else e
+        for e in demo.plan.entities
+    ]
+    assert _geometry_refs(_replaced(demo, entities=handwritten)) == ["wing:F"]
+    for sh in pid_plan.ENTITY_SHAPES:
+        assert "geometry_ref" not in sh.properties and "geometry_ref" not in sh.columns, sh
+    points = pid_plan.PLACE_POINTS
+    assert "place:arrest-site" in points, "the outside arrest site has a point"
+    assert set(points) <= set(demo.ent) and all(demo.etype(k) == "Location" for k in points)
+    assert {"lat", "lon"} <= set(pid_plan.file_columns(ESTATE_FILE))
+    for key in points:
+        (shape,) = [sh for sh in pid_plan.ENTITY_SHAPES if _entity_matches(sh, demo, key)]
+        assert shape.file == ESTATE_FILE and {"lat", "lon"} <= set(shape.columns), key
+    # The estate rows give a point to exactly the places that have one.
+    rows = {r.entities[0]: r for r in pid_plan.rows_for(demo.plan, ESTATE_FILE)}
+    assert set(points) <= set(rows)
+    for key, row in rows.items():
+        if key in points:
+            assert float(row.values["lat"]) == points[key][0], key
+            assert float(row.values["lon"]) == points[key][1], key
+        else:
+            assert row.values["lat"] == "" and row.values["lon"] == "", key
+
+
+# --- the teaching link (Amendment 9 decision 5) -------------------------------------------------
+
+
+def _phone_mentions(view: View) -> list[Any]:
+    return [
+        lk
+        for lk in view.all_links
+        if lk.link_type == "MENTIONED_IN" and view.etype(lk.source) == "Endpoint"
+    ]
+
+
+def test_the_teaching_link_is_one_mention_of_a_background_number_in_the_teaching_report(
+    demo: View,
+) -> None:
+    assert pid_plan.PID_TEACHING_BAD_NUMBER == "07700 900 6O3"
+    report = pid_plan.PID_TEACHING_REPORT
+    assert report == TEACHING_REPORT_KEY
+    cast_reports = {"report:p1", "report:p2", "report:p3", PRYCE}
+    assert report in demo.used and report not in cast_reports
+    (number,) = [
+        e.key
+        for e in demo.of_type("Endpoint")
+        if e.properties["value_normalised"] == TEACHING_NUMBER
+    ]
+    assert number not in ("number:coordinator", "number:unidentified")
+    (link,) = _phone_mentions(demo)
+    assert (link.source, link.target) == (number, report)
+    assert link.occurrences == 1 and link.first_seen is None and link.last_seen is None
+    assert demo.plan.moment_of[link.key] == "chapter4"
+    assert link.key not in {lk.key for lk in demo.at("seed")}
+    assert link.key in {lk.key for lk in demo.at("chapter4")}
+    # The corrected number is the endpoint's, and the written number is refused by `msisdn`.
+    with pytest.raises(NormalisationError):
+        msisdn(pid_plan.PID_TEACHING_BAD_NUMBER)
+    assert msisdn("07700 900603") == TEACHING_NUMBER
+    assert msisdn(pid_plan.PID_TEACHING_BAD_NUMBER.replace("O", "0")) == TEACHING_NUMBER
+    # Filling it for any other report would give the coordinator's number report links and change
+    # J2 and J7: the coordinator's number, and every cast number, touches no report.
+    for key in ("number:coordinator", "number:unidentified"):
+        assert not [
+            lk for lk in demo.all_links if lk.link_type == "MENTIONED_IN" and key in (lk.source,)
+        ], key
+    # The load shape: the reports' file, R9, the number column, chapter 4, one addition sentence.
+    (shape,) = [
+        sh
+        for sh in pid_plan.LOAD_SHAPES
+        if (sh.link_type, sh.source_type, sh.target_type)
+        == ("MENTIONED_IN", "Endpoint:msisdn", "Document")
+    ]
+    assert (shape.file, shape.recipe, shape.moment) == (REPORTS_FILE, "R9", "chapter4")
+    assert (shape.source_key, shape.target_key) == ("phone_mentioned", "report_ref")
+    assert shape.brief2_addition and shape.brief2_addition.rstrip().endswith(".")
+    assert _shape_matches(shape, link, demo)
+    # The reports' rows: only row 17 fills the column, with the number as written; the link rides
+    # on that row.
+    rows = list(pid_plan.rows_for(demo.plan, REPORTS_FILE))
+    filled = [r for r in rows if r.values["phone_mentioned"]]
+    assert filled == [rows[16]] and rows[16].values["report_ref"] == report
+    assert rows[16].values["phone_mentioned"] == pid_plan.PID_TEACHING_BAD_NUMBER
+    assert link.key in rows[16].links
+    # The comment that said stage 5 places the bad number in the PIN calls is corrected.
+    source = Path(pid_plan.__file__).read_text()
+    assert "stage 5 places it in the PIN calls" not in source
+    assert "phone_mentioned" in source
+    # Shown able to fail: a second phone mention (any report) is reported by the same count.
+    second = dataclasses.replace(link, key="l999999", target="report:0018")
+    assert len(_phone_mentions(_replaced(demo, links=[*demo.all_links, second]))) == 2
+
+
+# --- the scale profile (Amendment 9 decision 6) -------------------------------------------------
+
+
+def _pin_uses(view: View) -> list[Any]:
+    return [
+        lk
+        for lk in view.all_links
+        if lk.link_type == "USES"
+        and view.etype(lk.target) == "Endpoint"
+        and view.ent[lk.target].properties["endpoint_kind"] == "handle"
+    ]
+
+
+def test_the_scale_profile_holds_no_pin_accounts_and_exactly_30000_links(
+    demo: View, scale: View
+) -> None:
+    handles = [e for e in scale.of_type("Endpoint") if e.properties["endpoint_kind"] == "handle"]
+    assert handles == [] and _pin_uses(scale) == []
+    assert not [k for k in scale.ent if ":pin:" in k]
+    assert len(scale.all_links) == pid_plan.SCALE_LINKS == 30_000
+    assert scale.plan.calls == ()
+    # Topped up with associations: the cheapest link there is, and a pair is never made twice.
+    others = [lk for lk in scale.all_links if lk.link_type != "ASSOCIATE_OF"]
+    assert len(scale.links("ASSOCIATE_OF", everything=True)) == 30_000 - len(others) > 14_000
+    # The demo keeps its thousand PIN accounts and their links (one per prisoner).
+    assert len(_pin_uses(demo)) == 1_000
+    # Shown able to fail: the checks above see a PIN account added to the scale plan.
+    pin = next(e for e in demo.of_type("Endpoint") if e.properties["endpoint_kind"] == "handle")
+    use = next(lk for lk in _pin_uses(demo))
+    planted = _replaced(scale, links=[*scale.all_links, use], entities=[*scale.plan.entities, pin])
+    assert len(_pin_uses(planted)) == 1
+
+
+# --- handling columns (Amendment 9 decision 3) --------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def mixed(demo: View, scale: View) -> frozenset[str]:
+    """The files whose rows carry more than one handling, derived from the plan by the shape of
+    each link and entity (not from the plan module's own answer)."""
+    files = {f for view in (demo, scale) for f, hs in _row_handlings(view).items() if len(hs) > 1}
+    return frozenset(files - PSEUDO_FILES)
+
+
+def test_the_mixed_files_carry_the_six_handling_columns_on_every_shape(
+    demo: View, scale: View, mixed: frozenset[str]
+) -> None:
+    assert pid_plan.HANDLING_COLUMNS == HANDLING_COLUMNS
+    assert pid_plan.mixed_files(demo.plan) | pid_plan.mixed_files(scale.plan) == mixed
+    assert "pid_conflicts.csv" in mixed, "the one SECRET link makes the conflicts file mixed"
+    wanted = set(HANDLING_COLUMNS)
+    seen_files: set[str] = set()
+    every_shape: list[Any] = [*pid_plan.LOAD_SHAPES, *pid_plan.ENTITY_SHAPES]
+    for sh in every_shape:
+        if sh.recipe == "seed":
+            continue
+        seen_files.add(sh.file)
+        if sh.file in mixed:
+            assert wanted <= set(sh.columns), f"{sh.file}: a mixed file's shape lacks the columns"
+            assert sh.columns[-len(HANDLING_COLUMNS) :] == HANDLING_COLUMNS, sh
+        else:
+            assert not wanted & set(sh.columns), f"{sh.file} holds one handling and carries some"
+    assert mixed <= seen_files
+    # Shown able to fail: one REGIONAL throw-over link makes the throw-over log a mixed file, in
+    # both derivations, and the demo as it is has it as a file of one handling.
+    assert "pid_throwover_log.csv" not in mixed
+    throw = next(
+        lk for lk in demo.all_links if lk.link_type == "OCCURRED_AT" and lk.source in demo.yard_of
+    )
+    changed = dataclasses.replace(throw, handling=pid_plan.REGIONAL)
+    planted = _replaced(
+        demo, links=[changed if lk.key == throw.key else lk for lk in demo.all_links]
+    )
+    assert len(_row_handlings(planted)["pid_throwover_log.csv"]) == 2
+    assert "pid_throwover_log.csv" in pid_plan.mixed_files(planted.plan)
+
+
+# --- reports: one row per report (Amendment 9 decision 1, B4) -----------------------------------
+
+
+def _people_and_areas(view: View) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Report key -> the keys of the people, and of the places, it mentions, in the plan's link
+    order: the order of its `subject_1..3` and `area_ref`, `area_ref_2`, `area_ref_3`."""
+    people: dict[str, list[str]] = {}
+    areas: dict[str, list[str]] = {}
+    for lk in view.all_links:
+        if lk.link_type != "MENTIONED_IN" or lk.target not in view.reports:
+            continue
+        if view.etype(lk.source) == "Person":
+            people.setdefault(lk.target, []).append(lk.source)
+        elif view.etype(lk.source) == "Location":
+            areas.setdefault(lk.target, []).append(lk.source)
+    return people, areas
+
+
+def _subject_overflow(view: View) -> list[str]:
+    people, _ = _people_and_areas(view)
+    return sorted(report for report, who in people.items() if len(who) > 3)
+
+
+def test_a_report_is_one_row_with_up_to_three_subjects_and_up_to_three_areas(demo: View) -> None:
+    rows = list(pid_plan.rows_for(demo.plan, REPORTS_FILE))
+    assert len(rows) == pid_plan.REPORTS_TOTAL == 350 == len(demo.reports)
+    # One row per report, in report-key order, so the 17th data row is `report:0017`.
+    assert [r.values["report_ref"] for r in rows] == sorted(demo.reports)
+    assert [r.entities[0] for r in rows] == sorted(demo.reports)
+    columns = pid_plan.file_columns(REPORTS_FILE)
+    for name in ("subject_1_role", "subject_2_role", "subject_3_role"):
+        assert name in columns, name
+        assert {r.values[name] for r in rows} == {""}, "the plan holds no role for a subject"
+    for name in ("subject_1", "subject_2", "subject_3", "area_ref", "area_ref_2", "area_ref_3",
+                 "phone_mentioned", *HANDLING_COLUMNS):  # fmt: skip
+        assert name in columns, name
+    assert not {"incident_ref", "incident_refs"} & set(columns), (
+        "throw-overs have a file of their own"
+    )
+    people, areas = _people_and_areas(demo)
+    assert _subject_overflow(demo) == [], "no report names more than three people"
+    assert max(len(v) for v in areas.values()) == 3
+    for row in rows:
+        report = row.entities[0]
+        subjects = [_identifier(demo, k) for k in people.get(report, [])]
+        places = [_identifier(demo, k) for k in areas.get(report, [])]
+        got = [row.values[f"subject_{i}"] for i in (1, 2, 3)]
+        assert got == subjects + [""] * (3 - len(subjects)), report
+        got_areas = [row.values[c] for c in ("area_ref", "area_ref_2", "area_ref_3")]
+        assert got_areas == places + [""] * (3 - len(places)), report
+    # The person and place links of the report ride on its one row.
+    for row in rows:
+        report = row.entities[0]
+        carried = {k for k in row.links if demo.by_key[k].target == report}
+        wanted = {
+            lk.key
+            for lk in demo.all_links
+            if lk.link_type == "MENTIONED_IN"
+            and lk.target == report
+            and demo.etype(lk.source) in ("Person", "Location", "Endpoint")
+        }
+        assert carried == wanted, report
+    # Shown able to fail: a fourth person in one report is found.
+    named_already = len(people["report:0017"])
+    template = next(
+        lk
+        for lk in demo.all_links
+        if lk.link_type == "MENTIONED_IN" and lk.target == "report:0017"
+        and demo.etype(lk.source) == "Person"
+    )  # fmt: skip
+    more = [
+        dataclasses.replace(template, key=f"l99999{i}", source=who)
+        for i, who in enumerate(("third_member", "cellmate_1", "cellmate_2", "cellmate_3"))
+        if who not in people["report:0017"]
+    ]
+    assert named_already + len(more) > 3
+    assert _subject_overflow(_replaced(demo, links=[*demo.all_links, *more])) == ["report:0017"]
+
+
+def test_throw_over_mentions_are_a_file_of_their_own_one_row_per_report_and_incident(
+    demo: View,
+) -> None:
+    (shape,) = [
+        sh
+        for sh in pid_plan.LOAD_SHAPES
+        if (sh.link_type, sh.source_type, sh.target_type)
+        == ("MENTIONED_IN", "Incident:throw_over", "Document")
+    ]
+    assert shape.file == REPORT_INCIDENTS_FILE
+    assert shape.recipe == "new:pid-report-incidents"
+    assert shape.moment == "chapter4"
+    assert (shape.source_key, shape.target_key) == ("incident_ref", "report_ref")
+    assert shape.brief2_addition and "report-incident" in shape.brief2_addition
+    links = [
+        lk
+        for lk in demo.all_links
+        if lk.link_type == "MENTIONED_IN" and demo.etype(lk.source) == "Incident"
+    ]
+    assert len(links) > 500
+    rows = list(pid_plan.rows_for(demo.plan, REPORT_INCIDENTS_FILE))
+    assert len(rows) == len(links), "one row per report and throw-over"
+    assert [r.links for r in rows] == [(lk.key,) for lk in links]
+    for row, lk in zip(rows, links, strict=True):
+        assert row.values["incident_ref"] == demo.ent[lk.source].properties["incident_ref"]
+        assert row.values["report_ref"] == lk.target
+    assert len({(r.values["incident_ref"], r.values["report_ref"]) for r in rows}) == len(rows)
+    # No shape of the reports' file names an incident any more.
+    for sh in pid_plan.LOAD_SHAPES:
+        if sh.file == REPORTS_FILE:
+            assert "incident_ref" not in sh.columns and "incident_refs" not in sh.columns, sh
+
+
+# --- the shared instants rule (Amendment 9 decision 1; spec 9, B2 and B3) -----------------------
+
+
+def _plan_link(n: int, first: Any, last: Any) -> Any:
+    return pid_plan.PlanLink(
+        key="t", link_type="VISITED", source="a", target="b", occurrences=n, first_seen=first,
+        last_seen=last, properties={},
+    )  # fmt: skip
+
+
+def test_occurrence_instants_follow_the_one_rule() -> None:
+    first, last = date(2026, 1, 10), date(2026, 3, 12)
+    start = datetime(2026, 1, 10, tzinfo=UTC)
+    end = datetime(2026, 3, 12, 23, 59, 59, tzinfo=UTC)
+    span = int((end - start).total_seconds())
+    for n in (2, 3, 4, 7, 60):
+        got = pid_plan.occurrence_instants(_plan_link(n, first, last))
+        # The first is at `first_seen` 00:00:00Z, the last at `last_seen` 23:59:59Z, and the rest
+        # are evenly spaced and truncated to the second.
+        assert got == [start + timedelta(seconds=span * i // (n - 1)) for i in range(n)], n
+        assert got[0] == start and got[-1] == end
+        assert got == sorted(got) and len(got) == n
+        assert all(g.utcoffset() == timedelta(0) and g.microsecond == 0 for g in got)
+    # One occurrence: that day at 12:00:00Z (a link of one occurrence has one date).
+    assert pid_plan.occurrence_instants(_plan_link(1, first, first)) == [
+        datetime(2026, 1, 10, 12, tzinfo=UTC)
+    ]
+    # A datetime in the plan is used as it is, at either end.
+    a = datetime(2026, 2, 3, 7, 30, tzinfo=UTC)
+    b = datetime(2026, 2, 3, 9, 45, tzinfo=UTC)
+    middle = a + timedelta(seconds=int((b - a).total_seconds()) // 2)
+    assert pid_plan.occurrence_instants(_plan_link(2, a, b)) == [a, b]
+    assert pid_plan.occurrence_instants(_plan_link(3, a, b)) == [a, middle, b]
+    assert pid_plan.occurrence_instants(_plan_link(1, a, a)) == [a]
+    # Within one day: 00:00:00, then the truncated half of 86,399 seconds, then 23:59:59.
+    day = date(2026, 2, 3)
+    within_a_day = pid_plan.occurrence_instants(_plan_link(3, day, day))
+    assert [i.time().isoformat() for i in within_a_day] == [
+        "00:00:00", "11:59:59", "23:59:59",
+    ]  # fmt: skip
+    # An undated link has no instants, whatever its count.
+    for n in (1, 2, 9):
+        assert pid_plan.occurrence_instants(_plan_link(n, None, None)) == []
+    # The function never returns a `datetime` without an offset, and keeps the order of n.
+    assert pid_plan.occurrence_instants(_plan_link(5, first, last)) != pid_plan.occurrence_instants(
+        _plan_link(6, first, last)
+    )
+
+
+def test_occurrence_instants_use_the_one_date_given_as_both_ends() -> None:
+    """A link with one end dated (the coordinator's ruling): that date is both ends. Catches a
+    function that returns nothing, or fails, for a link with only a first or only a last date."""
+    day = date(2026, 2, 3)
+    noon = datetime(2026, 2, 3, 12, tzinfo=UTC)
+    whole_day = ["00:00:00", "11:59:59", "23:59:59"]
+    for first, last in ((day, None), (None, day)):
+        assert pid_plan.occurrence_instants(_plan_link(1, first, last)) == [noon]
+        three = pid_plan.occurrence_instants(_plan_link(3, first, last))
+        assert [i.time().isoformat() for i in three] == whole_day
+        assert {i.date() for i in three} == {day}
+    stamp = datetime(2026, 2, 3, 7, 30, tzinfo=UTC)
+    assert pid_plan.occurrence_instants(_plan_link(2, stamp, None)) == [stamp, stamp]
+    assert pid_plan.occurrence_instants(_plan_link(2, None, stamp)) == [stamp, stamp]
+
+
+# --- the rows (Amendment 9 decision 1; spec 2, 9 and 10) ----------------------------------------
+#
+# `pid_plan.rows_for(plan, file)` is a pure generator: one `PlanRow` per row of the file, with
+# `values` (every column of `pid_plan.file_columns(file)`, written as text), `links` (the keys of
+# the plan links the row is one occurrence of, the row's own link first) and `entities` (the keys
+# of the entities the row writes: the row's own entity first for the reports and the estate, whose
+# rows are one per entity). A later unit's writer serialises it. The tests below read it only
+# through the shapes' columns and the plan's own ends, never through the module's answer to the
+# question they ask.
+
+ISO_CELL = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+00:00")
+
+
+def _shape_map(view: View) -> dict[str, Any]:
+    """Link key -> its one load shape."""
+    by_type: dict[str, list[Any]] = {}
+    for sh in pid_plan.LOAD_SHAPES:
+        by_type.setdefault(sh.link_type, []).append(sh)
+    out: dict[str, Any] = {}
+    for lk in view.all_links:
+        (sh,) = [x for x in by_type[lk.link_type] if _shape_matches(x, lk, view)]
+        out[lk.key] = sh
+    return out
+
+
+def _carriers(view: View) -> dict[str, list[str]]:
+    """Carried link key -> the keys of the links whose rows carry it, from the plan's own ends:
+    a prisoner's `USES` of his PIN account is carried by that PIN account's calls; an owner's `USES`
+    of an account by the transfers out of it (a payer's) or into it (a payee's); a handset's `USES`
+    and `PAIRED_WITH` by the communications of its SIM; an incident's `OCCURRED_AT` by the
+    `ROLE_IN` rows of its participants. Never read from the rows."""
+    comm_from: dict[str, list[str]] = {}
+    paid_from: dict[str, list[str]] = {}
+    paid_into: dict[str, list[str]] = {}
+    role_in: dict[str, list[str]] = {}
+    sim_of: dict[str, str] = {}
+    for lk in view.all_links:
+        if lk.link_type == "COMMUNICATED_WITH":
+            comm_from.setdefault(lk.source, []).append(lk.key)
+        elif lk.link_type == "TRANSACTED":
+            paid_from.setdefault(lk.source, []).append(lk.key)
+            paid_into.setdefault(lk.target, []).append(lk.key)
+        elif lk.link_type == "ROLE_IN":
+            role_in.setdefault(lk.target, []).append(lk.key)
+        elif lk.link_type == "PAIRED_WITH":
+            sim_of[lk.target] = lk.source
+    out: dict[str, list[str]] = {}
+    for lk in view.all_links:
+        target = view.ent[lk.target]
+        if lk.link_type == "USES" and target.entity_type == "Endpoint":
+            kind = target.properties["endpoint_kind"]
+            if kind == "handle":
+                out[lk.key] = comm_from.get(lk.target, [])
+            elif kind == "account":
+                out[lk.key] = [*paid_from.get(lk.target, []), *paid_into.get(lk.target, [])]
+        elif lk.link_type == "USES" and target.entity_type == "Device":
+            out[lk.key] = comm_from.get(sim_of.get(lk.target, ""), [])
+        elif lk.link_type == "PAIRED_WITH":
+            out[lk.key] = comm_from.get(lk.source, [])
+        elif lk.link_type == "OCCURRED_AT" and view.etype(lk.source) == "Incident":
+            if view.ent[lk.source].properties["category"] != "throw_over":
+                out[lk.key] = role_in.get(lk.source, [])
+    return out
+
+
+def _carried_problems(view: View) -> list[str]:
+    """Every carried link has at least one carrying row, and its occurrences are their sum."""
+    problems: list[str] = []
+    for key, carriers in _carriers(view).items():
+        lk = view.by_key[key]
+        if not carriers:
+            problems.append(f"{key} ({lk.link_type} {lk.source} {lk.target}) has no carrying row")
+        elif lk.occurrences != sum(view.by_key[c].occurrences for c in carriers):
+            problems.append(
+                f"{key} ({lk.link_type} {lk.source} {lk.target}) counts {lk.occurrences}"
+            )
+    return problems
+
+
+class Scan:
+    """What one pass over a profile's rows found."""
+
+    def __init__(self) -> None:
+        self.rows: Counter[str] = Counter()
+        self.count: Counter[str] = Counter()
+        self.dates: dict[tuple[str, str], list[str]] = {}
+        self.covered: dict[str, set[str]] = {}
+        self.refs: dict[str, list[str]] = {"visit_ref": [], "transfer_id": []}
+        self.problems: list[str] = []
+        #: Elements whose handling differs from their row's owner's, by category (Amendment 10
+        #: decision 3), and for each carried link the handlings of the rows that carry it.
+        self.categories: Counter[str] = Counter()
+        self.carried_owner: dict[str, set[Any]] = {}
+
+    def problem(self, text: str) -> None:
+        if len(self.problems) < 30:
+            self.problems.append(text)
+
+
+HANDLING_CATEGORIES = frozenset(
+    {
+        "prisoner-on-a-regional-custody-row",
+        "mention-on-a-report-row",
+        "endpoint-or-device-on-a-call-or-handset-row",
+        "account-on-a-transfer-row",
+        "carried-link-on-another-handling",
+    }
+)
+
+
+def _entity_category(view: View, file: str, key: str) -> str:
+    kind = view.etype(key)
+    if file == "pid_nomis_prisoners.csv" and kind == "Person":
+        return "prisoner-on-a-regional-custody-row"
+    calls = ("pid_pin_calls.csv", "pid_seized_comms_batch1.csv", "pid_seized_comms_batch2.csv")
+    if file in calls and kind in ("Endpoint", "Device"):
+        return "endpoint-or-device-on-a-call-or-handset-row"
+    if file == "pid_prisoner_money.csv" and kind == "Endpoint":
+        return "account-on-a-transfer-row"
+    return f"other: {file} {kind}"
+
+
+def _classify_handling(
+    view: View, scan: Scan, file: str, row: Any, owner: Any, entity_driven: bool,
+    carried_keys: set[str],
+) -> None:  # fmt: skip
+    """Every element of the row (the entities it writes, the links it carries) whose handling is not
+    its owner's, counted by category; and, for a carried link, the owner handling of each row."""
+    entities = row.entities[1:] if entity_driven else row.entities
+    links = row.links if entity_driven else row.links[1:]
+    for key in entities:
+        if view.ent[key].handling != owner:
+            scan.categories[_entity_category(view, file, key)] += 1
+    for key in links:
+        link = view.by_key[key]
+        if key in carried_keys:
+            scan.carried_owner.setdefault(key, set()).add(owner)
+        if link.handling != owner:
+            scan.categories[
+                "mention-on-a-report-row" if file == REPORTS_FILE
+                else "carried-link-on-another-handling"
+            ] += 1  # fmt: skip
+
+
+def _handling_categories(scan: Scan) -> set[str]:
+    """The categories found, plus a carried link whose rows are of two handlings."""
+    found = set(scan.categories)
+    if any(len(owners) > 1 for owners in scan.carried_owner.values()):
+        found.add("carried-link-on-another-handling")
+    return found
+
+
+def _scan(
+    view: View,
+    shapes: dict[str, Any],
+    rows_of: Callable[[str], Iterable[Any]],
+    files: Iterable[str],
+    mixed: frozenset[str],
+) -> Scan:
+    scan = Scan()
+    ends = {
+        lk.key: (_written_forms(view, lk.source), _written_forms(view, lk.target))
+        for lk in view.all_links
+    }
+    teaching = [lk.key for lk in view.all_links if lk.link_type == "MENTIONED_IN"
+                and view.etype(lk.source) == "Endpoint"]  # fmt: skip
+    for key in teaching:
+        ends[key] = (ends[key][0] | {pid_plan.PID_TEACHING_BAD_NUMBER}, ends[key][1])
+    plans: dict[int, tuple[list[tuple[str, str]], list[str], list[str]]] = {}
+    for sh in pid_plan.LOAD_SHAPES:
+        plans[id(sh)] = (
+            [(pid_plan.property_column(sh, p), p) for p in sorted(sh.properties)],
+            [c for c in sh.columns if c in DATE_COLUMNS],
+            [c for c in sh.columns if c in ("visit_ref", "transfer_id")],
+        )
+    carried_keys = set(_carriers(view))
+    seen_owners: set[str] = set()
+    for file in files:
+        columns = pid_plan.file_columns(file)
+        covered = scan.covered.setdefault(file, set())
+        for row in rows_of(file):
+            scan.rows[file] += 1
+            values = row.values
+            if tuple(values) != columns:
+                scan.problem(f"{file}: a row's columns differ from the file's")
+                continue
+            covered.update(row.entities)
+            entity_driven = file in (REPORTS_FILE, ESTATE_FILE)
+            if entity_driven:
+                owner = view.ent[row.entities[0]].handling
+            else:
+                owner = view.by_key[row.links[0]].handling
+            if entity_driven or row.links[0] not in seen_owners:
+                seen_owners.add(row.links[0] if row.links else "")
+                _classify_handling(view, scan, file, row, owner, entity_driven, carried_keys)
+            if file in mixed:
+                for name in HANDLING_COLUMNS:
+                    if values[name] != (getattr(owner, name) or ""):
+                        scan.problem(f"{file}: a row's {name} is not its owner's")
+            for key in row.links:
+                scan.count[key] += 1
+                shape = shapes.get(key)
+                if shape is None or shape.file != file:
+                    scan.problem(f"{file}: carries {key}, which belongs elsewhere")
+                    continue
+                lk = view.by_key[key]
+                source_forms, target_forms = ends[key]
+                if values[shape.source_key] not in source_forms:
+                    scan.problem(
+                        f"{file}: {shape.source_key} of {key} is {values[shape.source_key]!r}"
+                    )
+                if values[shape.target_key] not in target_forms:
+                    scan.problem(
+                        f"{file}: {shape.target_key} of {key} is {values[shape.target_key]!r}"
+                    )
+                props, dates, refs = plans[id(shape)]
+                for col, name in props:
+                    if values[col] != _cell(lk.properties[name]):
+                        scan.problem(f"{file}: {col} of {key} is {values[col]!r}")
+                for col in dates:
+                    scan.dates.setdefault((key, col), []).append(values[col])
+                for col in refs:
+                    if not values[col]:
+                        scan.problem(f"{file}: {col} of {key} is empty")
+                    scan.refs[col].append(values[col])
+    return scan
+
+
+def _count_problems(view: View, shapes: dict[str, Any], scan: Scan) -> list[str]:
+    """Every link is written once per occurrence by the rows of its file (the two carve-outs, which
+    the graph port and the picture route write, by no row at all)."""
+    out = []
+    for lk in view.all_links:
+        want = 0 if shapes[lk.key].recipe == "seed" else lk.occurrences
+        if scan.count[lk.key] != want:
+            out.append(f"{lk.key} {lk.link_type}: {scan.count[lk.key]} rows, wanted {want}")
+    out += [f"{k}: not a plan link" for k in scan.count if k not in view.by_key]
+    return out
+
+
+def _date_problems(
+    view: View,
+    shapes: dict[str, Any],
+    scan: Scan,
+    carried: Mapping[str, Any],
+    keys: Collection[str] | None = None,
+) -> list[str]:
+    """The dates in the rows are the plan's, by the one function `pid_plan.link_instants`: an own
+    counted link's rows are its instants (a call link's follow its weekly counts), a carried link's
+    rows all hold its one date (a date-time as it is, a day at 12:00:00Z), a span's two columns are
+    its first day 00:00:00Z and its last day 23:59:59Z (or empty where open), and an undated
+    link's shape holds no date column. `keys` limits the links looked at."""
+    out: list[str] = []
+    for lk in view.all_links:
+        if keys is not None and lk.key not in keys:
+            continue
+        shape = shapes[lk.key]
+        if shape.recipe == "seed":
+            continue
+        cols = [c for c in shape.columns if c in DATE_COLUMNS]
+        dated = lk.first_seen is not None or lk.last_seen is not None
+        if bool(cols) != dated:
+            out.append(
+                f"{lk.key} {lk.link_type}: shape has date columns {cols}, link dated {dated}"
+            )
+            continue
+        if not cols:
+            continue
+        cells = {c: scan.dates.get((lk.key, c), []) for c in cols}
+        if not all(ISO_CELL.fullmatch(x) for c in cols for x in cells[c] if x):
+            out.append(f"{lk.key}: a date cell is not an ISO date-time with +00:00")
+        if lk.link_type in ("HELD_AT", "PRESENT_AT"):
+            low, high = cols
+            want_end = "" if lk.last_seen is None else _iso(_end_of(lk.last_seen))
+            if cells[low] != [_iso(_start_of(lk.first_seen))] or cells[high] != [want_end]:
+                out.append(f"{lk.key} {lk.link_type}: span {cells[low]} {cells[high]}")
+            continue
+        (col,) = cols
+        got = cells[col]
+        instants = sorted(_iso(i) for i in pid_plan.link_instants(view.plan, lk))
+        if lk.key in carried:
+            constant = [_iso(_noon_of(lk.first_seen))] * lk.occurrences
+            if lk.first_seen != lk.last_seen or got != constant or instants != constant:
+                out.append(
+                    f"{lk.key} {lk.link_type}: carried dates {got[:2]} wanted {constant[:1]}"
+                )
+            continue
+        if sorted(got) != instants:
+            out.append(
+                f"{lk.key} {lk.link_type}: {len(got)} dates {sorted(got)[:2]}, "
+                f"wanted {instants[:2]}"
+            )
+        elif len(set(got)) != len(got):
+            out.append(f"{lk.key} {lk.link_type}: two rows share a date-time")
+        elif got:
+            low, high = datetime.fromisoformat(min(got)), datetime.fromisoformat(max(got))
+            if _as_date(low) != _as_date(lk.first_seen) or _as_date(high) != _as_date(lk.last_seen):
+                out.append(f"{lk.key} {lk.link_type}: interval {low} to {high}")
+    return out
+
+
+def _uncovered(view: View, scan: Scan) -> list[str]:
+    """Entities no row of their shape's file writes."""
+    out = []
+    for ent in view.plan.entities:
+        (shape,) = [x for x in pid_plan.ENTITY_SHAPES if _entity_matches(x, view, ent.key)]
+        if shape.recipe != "seed" and ent.key not in scan.covered.get(shape.file, set()):
+            out.append(ent.key)
+    return out
+
+
+FILES = sorted({sh.file for sh in pid_plan.LOAD_SHAPES} - PSEUDO_FILES)
+
+
+@pytest.fixture(scope="module")
+def shapes_of(demo: View, scale: View) -> dict[str, dict[str, Any]]:
+    return {"demo": _shape_map(demo), "scale": _shape_map(scale)}
+
+
+@pytest.fixture(scope="module")
+def demo_scan(demo: View, shapes_of: dict[str, dict[str, Any]], mixed: frozenset[str]) -> Scan:
+    return _scan(demo, shapes_of["demo"], lambda f: pid_plan.rows_for(demo.plan, f), FILES, mixed)
+
+
+@pytest.fixture(scope="module")
+def scale_scan(scale: View, shapes_of: dict[str, dict[str, Any]], mixed: frozenset[str]) -> Scan:
+    return _scan(
+        scale, shapes_of["scale"], lambda f: pid_plan.rows_for(scale.plan, f), FILES, mixed
+    )
+
+
+def _edited_rows(
+    view: View, file: str, edit: Callable[[Any], Any | None], *, nth: int = 0, where: str = ""
+) -> Callable[[str], Iterator[Any]]:
+    """`rows_of` for a profile with one row of `file` edited (`None` drops it): the nth row whose
+    first link has the type `where`, or the nth row of the file when `where` is empty."""
+
+    def rows_of(name: str) -> Iterator[Any]:
+        seen = 0
+        for row in pid_plan.rows_for(view.plan, name):
+            hit = name == file and (not where or view.by_key[row.links[0]].link_type == where)
+            if hit and seen == nth:
+                seen += 1
+                changed = edit(row)
+                if changed is not None:
+                    yield changed
+                continue
+            seen += hit
+            yield row
+
+    return rows_of
+
+
+def test_rows_carry_the_files_columns_and_every_shapes_cells(
+    demo: View, scale: View, shapes_of: dict[str, dict[str, Any]], mixed: frozenset[str],
+    demo_scan: Scan, scale_scan: Scan,
+) -> None:  # fmt: skip
+    for file in FILES:
+        columns = pid_plan.file_columns(file)
+        assert len(set(columns)) == len(columns), file
+        union = {c for sh in pid_plan.LOAD_SHAPES if sh.file == file for c in sh.columns}
+        union |= {"lat", "lon"} if file == ESTATE_FILE else set()
+        assert set(columns) == union, file
+        assert (columns[-6:] == HANDLING_COLUMNS) == (file in mixed), file
+    assert demo_scan.problems == [] and scale_scan.problems == []
+    assert all(demo_scan.rows[f] > 0 for f in FILES), {f: demo_scan.rows[f] for f in FILES}
+    assert demo_scan.rows["pid_pin_calls.csv"] == pid_plan.CALL_ROWS == 1_000_000
+    assert scale_scan.rows["pid_pin_calls.csv"] == 0, "the scale profile has no call file"
+    assert scale_scan.rows[REPORTS_FILE] == 0 and scale_scan.rows[REPORT_INCIDENTS_FILE] == 0
+    # Shown able to fail, on the scale profile (small): a row missing a column, a property cell
+    # blanked, an end cell wrong, a handling cell that is not its owner's, a row in the wrong file.
+    mixed_file = "pid_nomis_visits.csv"
+    assert mixed_file in mixed
+    shapes = shapes_of["scale"]
+
+    def run(rows_of: Callable[[str], Iterable[Any]]) -> list[str]:
+        return _scan(scale, shapes, rows_of, FILES, mixed).problems
+
+    def without(row: Any) -> Any:
+        return dataclasses.replace(
+            row, values={k: v for k, v in row.values.items() if k != "owning_unit"}
+        )
+
+    def blank(col: str) -> Callable[[Any], Any]:
+        return lambda row: dataclasses.replace(row, values={**row.values, col: ""})
+
+    assert run(_edited_rows(scale, mixed_file, without))
+    assert run(_edited_rows(scale, mixed_file, blank("channel")))
+    assert run(_edited_rows(scale, mixed_file, blank("visitor_nino")))
+    assert run(_edited_rows(scale, mixed_file, blank("owning_unit")))
+    wrong = {**dict.fromkeys(HANDLING_COLUMNS, "")}
+    assert run(
+        _edited_rows(
+            scale, mixed_file, lambda r: dataclasses.replace(r, values={**r.values, **wrong})
+        )
+    )
+
+
+def test_every_link_is_written_once_per_occurrence_and_carried_links_are_counted_by_their_rows(
+    demo: View, scale: View, shapes_of: dict[str, dict[str, Any]], mixed: frozenset[str],
+    demo_scan: Scan, scale_scan: Scan,
+) -> None:  # fmt: skip
+    for view, scan, shapes in (
+        (demo, demo_scan, shapes_of["demo"]),
+        (scale, scale_scan, shapes_of["scale"]),
+    ):
+        assert _count_problems(view, shapes, scan) == []
+        assert _carried_problems(view) == [], "every carried link has a carrying row"
+        for key, carriers in _carriers(view).items():
+            lk = view.by_key[key]
+            assert carriers, key
+            assert lk.occurrences == sum(view.by_key[c].occurrences for c in carriers), key
+            assert scan.count[key] == lk.occurrences, key
+        # Every counted link too: as many rows as occurrences, never fewer.
+        assert sum(scan.count.values()) == sum(
+            lk.occurrences for lk in view.all_links if shapes[lk.key].recipe != "seed"
+        )
+    kinds = Counter(demo.by_key[k].link_type for k in _carriers(demo))
+    assert set(kinds) == {"USES", "PAIRED_WITH", "OCCURRED_AT"}
+    assert (
+        kinds["USES"] == 1_000 + 341 + 8
+        and kinds["PAIRED_WITH"] == 9
+        and kinds["OCCURRED_AT"] == 57
+    )
+    # Amendment 9 decision 9's figure: the principal's `USES` of his PIN account carries one
+    # occurrence per call, 213 of them, undated.
+    (principal_pin,) = [
+        lk for lk in demo.all_links
+        if (lk.link_type, lk.source, lk.target) == ("USES", "principal", "pin:principal")
+    ]  # fmt: skip
+    assert principal_pin.occurrences == 213 == demo_scan.count[principal_pin.key]
+    assert principal_pin.first_seen is None and principal_pin.last_seen is None
+    # The seized handsets' `USES` and `PAIRED_WITH`: one per communication of the SIM.
+    batch_pair = next(lk for lk in demo.all_links if lk.link_type == "PAIRED_WITH"
+                      and lk.source == "sim:batch2")  # fmt: skip
+    assert batch_pair.occurrences == 8 == demo_scan.count[batch_pair.key]
+    pryce_pair = next(lk for lk in demo.all_links if lk.link_type == "PAIRED_WITH"
+                      and lk.source == "sim:pryce")  # fmt: skip
+    assert pryce_pair.occurrences == 30
+    # An incident's `OCCURRED_AT`: one per participant row.
+    find = next(lk for lk in demo.all_links if lk.link_type == "OCCURRED_AT"
+                and lk.source == "incident:find_01")  # fmt: skip
+    assert find.occurrences == len(
+        [
+            lk
+            for lk in demo.all_links
+            if lk.link_type == "ROLE_IN" and lk.target == "incident:find_01"
+        ]
+    )
+
+    # Shown able to fail (rule 15), each with a planted defect of the shape the plan emits:
+    # a carried count left at one occurrence,
+    one = dataclasses.replace(principal_pin, occurrences=1)
+    bad_count = _replaced(demo, links=[one if lk.key == one.key else lk for lk in demo.all_links])
+    assert _carried_problems(bad_count) == [f"{one.key} (USES principal pin:principal) counts 1"]
+    # a PIN account with no call (its carried link has no carrying row),
+    no_calls = _replaced(
+        demo,
+        links=[
+            lk
+            for lk in demo.all_links
+            if not (lk.link_type == "COMMUNICATED_WITH" and lk.source == "pin:principal")
+        ],
+    )  # fmt: skip
+    assert any("has no carrying row" in p for p in _carried_problems(no_calls))
+    # an incident with no participant,
+    no_one = _replaced(
+        demo,
+        links=[
+            lk
+            for lk in demo.all_links
+            if not (lk.link_type == "ROLE_IN" and lk.target == "incident:find_01")
+        ],
+    )  # fmt: skip
+    assert any(p.startswith(find.key) for p in _carried_problems(no_one))
+    # and a row dropped from a file, so a link has one occurrence fewer than the plan says.
+    shapes = shapes_of["scale"]
+    drop = _edited_rows(scale, "pid_nomis_visits.csv", lambda row: None)
+    red = _scan(scale, shapes, drop, FILES, mixed)
+    assert _count_problems(scale, shapes, red), "the count check sees a dropped row"
+    assert _count_problems(scale, shapes, scale_scan) == []
+
+
+def test_the_rows_dates_are_the_shared_instants_spans_and_constants(
+    demo: View, scale: View, shapes_of: dict[str, dict[str, Any]], mixed: frozenset[str],
+    demo_scan: Scan, scale_scan: Scan,
+) -> None:  # fmt: skip
+    for view, scan, shapes in (
+        (demo, demo_scan, shapes_of["demo"]),
+        (scale, scale_scan, shapes_of["scale"]),
+    ):
+        assert _date_problems(view, shapes, scan, _carriers(view)) == []
+    # The principal's calls to the coordinator: 201 of them, the first on the first day at
+    # 00:00:00Z and the last on the cut-off at 23:59:59Z, whatever the weeks hold.
+    (call,) = [
+        lk for lk in demo.all_links
+        if (lk.link_type, lk.source, lk.target)
+        == ("COMMUNICATED_WITH", "pin:principal", "number:coordinator")
+    ]  # fmt: skip
+    cells = demo_scan.dates[(call.key, "call_start")]
+    assert len(cells) == call.occurrences == 201
+    assert min(cells) == "2025-09-01T00:00:00+00:00"
+    assert max(cells) == "2026-04-30T23:59:59+00:00"
+    assert all(c <= "2026-04-30T23:59:59+00:00" for c in cells)
+    # Spans: a closed custody carries both ends, an open one an empty `end`.
+    spans = [lk for lk in demo.all_links if lk.link_type in ("HELD_AT", "PRESENT_AT")]
+    assert any(lk.last_seen is None for lk in spans) and any(
+        lk.last_seen is not None for lk in spans
+    )
+    # Shown able to fail on the scale profile: a date moved, a span's end wrong, a carried date
+    # spread out, and an interval that no longer matches.
+    shapes = shapes_of["scale"]
+    carried = _carriers(scale)
+
+    def moved(col: str, value: str) -> Callable[[Any], Any]:
+        return lambda row: dataclasses.replace(row, values={**row.values, col: value})
+
+    for file, col, value, where in (
+        ("pid_nomis_cell_shares.csv", "week_start", "1999-01-01T00:00:00+00:00", ""),
+        ("pid_nomis_cell_shares.csv", "week_start", "2026-03-01", ""),
+        ("pid_nomis_prisoners.csv", "custody_to", "1999-01-01T23:59:59+00:00", "HELD_AT"),
+        ("pid_nomis_prisoners.csv", "custody_from", "", "HELD_AT"),
+        ("pid_nomis_visits.csv", "visit_date", "2031-01-01T00:00:00+00:00", ""),
+    ):
+        red = _scan(
+            scale, shapes, _edited_rows(scale, file, moved(col, value), where=where), FILES, mixed
+        )
+        assert _date_problems(scale, shapes, red, carried), (file, col, value)
+    _plant_the_carried_date_checks(demo, shapes_of["demo"], demo_scan)
+
+
+def _planted_scan(scan: Scan, **cells: list[str]) -> Scan:
+    """The scan with the date cells of some links replaced (`key__column`)."""
+    out = Scan()
+    out.dates = dict(scan.dates)
+    for name, value in cells.items():
+        key, column = name.split("__")
+        out.dates[(key, column)] = value
+    return out
+
+
+def _plant_the_carried_date_checks(view: View, shapes: dict[str, Any], scan: Scan) -> None:
+    """The demo profile has the carried dated links the scale profile lacks (an incident's
+    `OCCURRED_AT`, a handset's `USES`), so the three date branches are shown red here, each by a
+    defect that can only reach its own branch (rule 15)."""
+    carried = _carriers(view)
+    assert _date_problems(view, shapes, scan, carried) == []
+    # 1. A carried date spread across its day instead of held constant (the shape the plan emitted
+    #    before Amendment 9 decision 2): reaches "carried dates".
+    spread = next(
+        lk
+        for lk in view.all_links
+        if lk.key in carried and lk.occurrences >= 3 and lk.link_type == "OCCURRED_AT"
+    )
+    col = next(c for c in shapes[spread.key].columns if c in DATE_COLUMNS)
+    day = _as_date(spread.first_seen)
+    start = datetime(day.year, day.month, day.day, tzinfo=UTC)
+    n = spread.occurrences
+    cells = [_iso(start + timedelta(seconds=86_399 * i // (n - 1))) for i in range(n)]
+    problems = _date_problems(
+        view, shapes, _planted_scan(scan, **{f"{spread.key}__{col}": cells}), carried, {spread.key}
+    )
+    assert len(problems) == 1 and "carried dates" in problems[0], problems
+    handset = next(
+        lk for lk in view.all_links if lk.key in carried and lk.link_type == "USES"
+        and view.etype(lk.target) == "Device"
+    )  # fmt: skip
+    assert (
+        pid_plan.link_instants(view.plan, handset)
+        == [_noon_of(handset.first_seen)] * handset.occurrences
+    ), "a handset's USES on n rows of one day is n instants at 12:00:00Z"
+    # 2. An interval that is not the rows': one date for a link of one occurrence, and a last
+    #    date three days on. The rows still match the instants, so only the interval check sees it.
+    one = next(
+        lk
+        for lk in view.all_links
+        if lk.link_type == "VISITED" and lk.occurrences == 1 and lk.key not in carried
+    )
+    stretched = dataclasses.replace(one, last_seen=_as_date(one.first_seen) + timedelta(days=3))
+    planted = _replaced(
+        view, links=[stretched if lk.key == one.key else lk for lk in view.all_links]
+    )
+    problems = _date_problems(planted, shapes, scan, carried, {one.key})
+    assert len(problems) == 1 and "interval" in problems[0], problems
+    # 3. Two rows sharing a date-time: a link of 90,000 occurrences in one day cannot give each its
+    #    own second, and its rows are exactly its instants, so only the collision check sees it.
+    crowded = dataclasses.replace(one, occurrences=90_000, last_seen=one.first_seen)
+    planted = _replaced(view, links=[crowded if lk.key == one.key else lk for lk in view.all_links])
+    cells = sorted(_iso(i) for i in pid_plan.link_instants(planted.plan, crowded))
+    assert len(set(cells)) < len(cells)
+    col = next(c for c in shapes[one.key].columns if c in DATE_COLUMNS)
+    problems = _date_problems(
+        planted, shapes, _planted_scan(scan, **{f"{one.key}__{col}": cells}), carried, {one.key}
+    )
+    assert len(problems) == 1 and "share a date-time" in problems[0], problems
+
+
+def test_every_entity_is_written_by_a_row_of_its_file(
+    demo: View, scale: View, shapes_of: dict[str, dict[str, Any]], mixed: frozenset[str],
+    demo_scan: Scan, scale_scan: Scan,
+) -> None:  # fmt: skip
+    assert _uncovered(demo, demo_scan) == [] and _uncovered(scale, scale_scan) == []
+    # Shown able to fail: leave one file out of the scan and its entities are reported.
+    short = _scan(
+        scale, shapes_of["scale"], lambda f: pid_plan.rows_for(scale.plan, f),
+        [f for f in FILES if f != "pid_nomis_visits.csv"], mixed,
+    )  # fmt: skip
+    missing = _uncovered(scale, short)
+    assert missing and all(scale.etype(k) == "Person" and k in scale.visitor_keys for k in missing)
+
+
+def test_a_visit_and_a_transfer_each_carry_a_reference_of_their_own(
+    demo: View, demo_scan: Scan
+) -> None:
+    visits = sum(lk.occurrences for lk in demo.all_links if lk.link_type == "VISITED")
+    transfers = sum(lk.occurrences for lk in demo.all_links if lk.link_type == "TRANSACTED")
+    assert len(demo_scan.refs["visit_ref"]) == visits == 6_421
+    assert len(demo_scan.refs["transfer_id"]) == transfers == 1_252
+    for column, cells in demo_scan.refs.items():
+        assert all(cells), column
+        assert _collisions(cells) == [], (
+            f"two {column} cells are alike, so two occurrences collapse"
+        )
+    # Shown able to fail: a repeated reference is reported by the same helper.
+    cells = demo_scan.refs["visit_ref"]
+    assert _collisions([*cells, cells[0]]) == [cells[0]]
+
+
+def test_counted_shapes_hold_no_count_spans_hold_start_and_end_and_calls_hold_call_start() -> None:
+    for sh in pid_plan.LOAD_SHAPES:
+        assert not set(sh.columns) & COUNT_COLUMNS, sh
+        assert all(sh.columns.count(c) == 1 for c in sh.columns), sh
+    spans = [sh for sh in pid_plan.LOAD_SHAPES if sh.link_type in ("HELD_AT", "PRESENT_AT")]
+    assert len(spans) == 2
+    for sh in spans:
+        # R1 names a custody's span `custody_from` and `custody_to`; cell stays are a file Brief 2
+        # does not name, so keep `start` and `end`.
+        wanted = {"custody_from", "custody_to"} if sh.link_type == "HELD_AT" else {"start", "end"}
+        assert wanted <= set(sh.columns), sh
+        assert not {"first_seen", "last_seen"} & set(sh.columns), sh
+    (calls,) = [
+        sh
+        for sh in pid_plan.LOAD_SHAPES
+        if sh.link_type == "COMMUNICATED_WITH" and sh.source_type == "Endpoint:handle"
+    ]
+    assert "call_start" in calls.columns
+    # Every other counted or dated shape has exactly one date column (one per occurrence).
+    for sh in pid_plan.LOAD_SHAPES:
+        cols = [c for c in sh.columns if c in DATE_COLUMNS]
+        if sh.recipe == "seed" or sh in spans:
+            continue
+        assert len(cols) <= 1, sh
+        if sh.link_type in ("VISITED", "SHARED_CELL_WITH", "IN_CONFLICT_WITH", "TRANSACTED",
+                            "COMMUNICATED_WITH", "ROLE_IN"):  # fmt: skip
+            assert len(cols) == 1, sh
+    (visit,) = [sh for sh in pid_plan.LOAD_SHAPES if sh.link_type == "VISITED"]
+    (money,) = [sh for sh in pid_plan.LOAD_SHAPES if sh.link_type == "TRANSACTED"]
+    assert "visit_ref" in visit.columns and "transfer_id" in money.columns
+    # A payer's and a payee's account `USES` links ride on one transfer row, so each names its own
+    # cells: no column is both an end of the one and an end of the other.
+    uses = [
+        sh
+        for sh in pid_plan.LOAD_SHAPES
+        if sh.file == "pid_prisoner_money.csv" and sh.link_type == "USES"
+    ]
+    assert len(uses) == 2
+    first_ends = {uses[0].source_key, uses[0].target_key}
+    assert first_ends.isdisjoint({uses[1].source_key, uses[1].target_key}), uses
+
+
+def test_rows_for_is_a_pure_generator_and_refuses_an_unknown_file(
+    scale: View, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = pid_plan.rows_for(scale.plan, ESTATE_FILE)
+    assert iter(rows) is rows, "an iterator, so a writer can stream it"
+    with pytest.raises(ValueError):
+        list(pid_plan.rows_for(scale.plan, "pid_not_a_file.csv"))
+
+    def refuse(*_a: object, **_k: object) -> None:
+        raise AssertionError("rows_for must not open a file")
+
+    import builtins
+
+    monkeypatch.setattr(builtins, "open", refuse)
+    monkeypatch.setattr(os, "open", refuse)
+    monkeypatch.setattr(Path, "open", refuse)
+    monkeypatch.setattr(Path, "read_text", refuse)
+    first = next(iter(pid_plan.rows_for(scale.plan, ESTATE_FILE)))
+    assert first.values
+    # Shown able to fail: the same patches stop a read.
+    with pytest.raises(AssertionError):
+        Path(__file__).read_text()
+
+
+# --- the background's draws did not move (Amendment 9, "Keeping the plan stable") ---------------
+
+
+def _digest(rows: Iterable[object]) -> str:
+    return hashlib.sha256("\n".join(sorted(repr(r) for r in rows)).encode()).hexdigest()
+
+
+def _digests(view: View, *, skip_associations: bool) -> tuple[str, ...]:
+    """Entities (without `geometry_ref`), then the links the background drew: by type, ends and
+    occurrences; those with more than one occurrence by their dates too; and the carried links by
+    type and ends. Left out: the teaching link, a scale PIN `USES`, the scale top-up and, in the
+    scale profile, the groups and their memberships (ADR-120 Amendment 11 decision 1: a group takes
+    one establishment's handling); and, for a carried link, its count and dates, which Amendment 9
+    gives it. A one-occurrence link's date is compared by its day, since a participant's role takes
+    the incident's date-time where it had the day."""
+    entities = _digest(
+        (
+            e.key,
+            e.entity_type,
+            sorted((k, repr(v)) for k, v in e.properties.items() if k != "geometry_ref"),
+            e.handling,
+        )
+        for e in view.plan.entities
+        if not e.key.startswith("scale:pin:")
+        and not (skip_associations and e.entity_type == "Organisation")
+    )  # fmt: skip
+    carried = set(_carriers(view))
+    kept = []
+    for lk in view.all_links:
+        target = view.ent[lk.target]
+        if lk.link_type == "MENTIONED_IN" and view.etype(lk.source) == "Endpoint":
+            continue
+        if skip_associations and lk.link_type in ("ASSOCIATE_OF", "MEMBER_OF"):
+            continue
+        if (
+            lk.link_type == "USES"
+            and target.entity_type == "Endpoint"
+            and target.properties["endpoint_kind"] == "handle"
+            and lk.source.startswith("scale:")
+        ):
+            continue
+        kept.append(lk)
+    own = [lk for lk in kept if lk.key not in carried]
+    return (
+        entities,
+        _digest((lk.link_type, lk.source, lk.target, lk.occurrences) for lk in own),
+        _digest(
+            (lk.link_type, lk.source, lk.target, repr(lk.first_seen), repr(lk.last_seen))
+            for lk in own
+            if lk.occurrences > 1 and lk.link_type not in ONE_DATE_EXEMPT
+        ),
+        _digest((lk.link_type, lk.source, lk.target) for lk in kept if lk.key in carried),
+        # One-occurrence links keep the date they were drawn first (the other draw is set aside).
+        _digest(
+            (lk.link_type, lk.source, lk.target, repr(_as_date(lk.first_seen)))
+            for lk in own
+            if lk.occurrences == 1
+            and lk.link_type not in ONE_DATE_EXEMPT
+            and lk.first_seen is not None
+        ),
+        # Spans keep both of theirs: custody, cell stays and `PASSES_ITEMS_TO`.
+        _digest(
+            (
+                lk.link_type,
+                lk.source,
+                lk.target,
+                lk.occurrences,
+                repr(lk.first_seen),
+                repr(lk.last_seen),
+            )
+            for lk in own
+            if lk.link_type in ONE_DATE_EXEMPT
+        ),
+    )
+
+
+def test_the_background_draws_do_not_move(demo: View, scale: View) -> None:
+    assert _digests(demo, skip_associations=False) == DEMO_DIGESTS
+    assert _digests(scale, skip_associations=True) == SCALE_DIGESTS
+    # Shown able to fail: a changed property, a changed count and a dropped link each move one.
+    ent = demo.plan.entities[500]
+    changed = dataclasses.replace(
+        ent, properties={**ent.properties, "name": "x", "family_name": "x"}
+    )
+    moved = _replaced(
+        demo, entities=[changed if e.key == ent.key else e for e in demo.plan.entities]
+    )
+    assert _digests(moved, skip_associations=False)[0] != DEMO_DIGESTS[0]
+    visit = next(lk for lk in demo.all_links if lk.link_type == "VISITED" and lk.occurrences > 1)
+    recounted = _replaced(
+        demo,
+        links=[
+            dataclasses.replace(lk, occurrences=lk.occurrences + 1) if lk.key == visit.key else lk
+            for lk in demo.all_links
+        ],
+    )
+    assert _digests(recounted, skip_associations=False)[1] != DEMO_DIGESTS[1]
+    redated = _replaced(
+        demo,
+        links=[
+            dataclasses.replace(lk, last_seen=_as_date(lk.last_seen) + timedelta(days=1))
+            if lk.key == visit.key
+            else lk
+            for lk in demo.all_links
+        ],
+    )
+    assert _digests(redated, skip_associations=False)[2] != DEMO_DIGESTS[2]
+    dropped = _replaced(demo, links=[lk for lk in demo.all_links if lk.key != visit.key])
+    assert _digests(dropped, skip_associations=False)[1] != DEMO_DIGESTS[1]
+
+
+# --- one occurrence, one date (Amendment 9 decision 1; spec 10) ---------------------------------
+
+
+def _two_dates_for_one_occurrence(view: View) -> list[str]:
+    return [
+        lk.key
+        for lk in view.all_links
+        if lk.occurrences == 1
+        and lk.link_type not in ONE_DATE_EXEMPT
+        and lk.first_seen is not None
+        and lk.last_seen is not None
+        and lk.first_seen != lk.last_seen
+    ]
+
+
+def test_a_link_of_one_occurrence_has_one_date_except_spans_and_passes_items_to(
+    demo: View, scale: View
+) -> None:
+    for view in (demo, scale):
+        assert _two_dates_for_one_occurrence(view) == []
+    # The exemptions are real: a one-occurrence custody and `PASSES_ITEMS_TO` have two dates.
+    assert any(
+        lk.link_type == "HELD_AT" and lk.occurrences == 1 and lk.first_seen != lk.last_seen
+        and lk.last_seen is not None
+        for lk in demo.all_links
+    )  # fmt: skip
+    assert all(
+        lk.first_seen != lk.last_seen for lk in demo.all_links if lk.link_type == "PASSES_ITEMS_TO"
+    )
+    # Shown able to fail, on each kind of link the plan draws two dates for.
+    for link_type in (
+        "VISITED",
+        "TRANSACTED",
+        "IN_CONFLICT_WITH",
+        "COMMUNICATED_WITH",
+        "SHARED_CELL_WITH",
+    ):
+        one = next(lk for lk in demo.all_links if lk.link_type == link_type and lk.occurrences == 1)
+        stretched = dataclasses.replace(one, last_seen=_as_date(one.first_seen) + timedelta(days=3))
+        planted = _replaced(
+            demo, links=[stretched if lk.key == one.key else lk for lk in demo.all_links]
+        )
+        assert _two_dates_for_one_occurrence(planted) == [one.key], link_type
+
+
+# --- Amendment 10: calls keep their weekly shape, one instants function, what a row's handling says
+
+
+def _call_links(view: View) -> dict[tuple[str, str], Any]:
+    return {
+        (lk.source, lk.target): lk
+        for lk in view.all_links
+        if lk.link_type == "COMMUNICATED_WITH" and view.etype(lk.source) == "Endpoint"
+        and view.ent[lk.source].properties["endpoint_kind"] == "handle"
+    }  # fmt: skip
+
+
+def _weekly(cells: Iterable[str]) -> list[int]:
+    """Calls per week from the call file's `call_start` cells, week 0 being the week commencing
+    Monday 1 September 2025 (`CALL_START`)."""
+    weeks = [0] * pid_plan.CALL_WEEKS
+    for cell in cells:
+        weeks[(datetime.fromisoformat(cell).date() - pid_plan.CALL_START).days // 7] += 1
+    return weeks
+
+
+def test_the_rows_weekly_call_counts_equal_the_aggregates(demo: View, demo_scan: Scan) -> None:
+    calls = _call_links(demo)
+    assert len(demo.plan.calls) == len(calls) > 2_000
+    for aggregate in demo.plan.calls:
+        link = calls[(aggregate.pin, aggregate.number)]
+        cells = demo_scan.dates[(link.key, "call_start")]
+        assert _weekly(cells) == list(aggregate.weekly), (aggregate.pin, aggregate.number)
+        # The first call is at `first_seen` 00:00:00Z, the last at `last_seen` 23:59:59Z, none
+        # after the cut-off.
+        assert min(cells) == _iso(_start_of(link.first_seen)), link.key
+        assert max(cells) == _iso(_end_of(link.last_seen)), link.key
+        assert max(cells) <= "2026-04-30T23:59:59+00:00"
+    # Every call lies within its own week's window (Monday 00:00:00 to Sunday 23:59:59, cut to the
+    # link's first and last day), and a single-call week in between sits at the window's midpoint.
+    midpoints = 0
+    for aggregate in demo.plan.calls:
+        link = calls[(aggregate.pin, aggregate.number)]
+        live = [w for w, n in enumerate(aggregate.weekly) if n]
+        by_week: dict[int, list[datetime]] = {}
+        for cell in demo_scan.dates[(link.key, "call_start")]:
+            moment = datetime.fromisoformat(cell)
+            by_week.setdefault((moment.date() - pid_plan.CALL_START).days // 7, []).append(moment)
+        for week, moments in by_week.items():
+            monday = datetime.combine(pid_plan.CALL_START, datetime.min.time(), tzinfo=UTC)
+            monday += timedelta(days=7 * week)
+            low = max(monday, _start_of(link.first_seen))
+            high = min(monday + timedelta(days=7) - timedelta(seconds=1), _end_of(link.last_seen))
+            assert all(low <= m <= high for m in moments), (link.key, week)
+            if len(moments) == 1 and live[0] < week < live[-1]:
+                assert moments[0] == low + timedelta(seconds=int((high - low).total_seconds()) // 2)
+                midpoints += 1
+    assert midpoints > 20, "the unidentified number's fortnightly calls are single-call weeks"
+    # The first call of a single-call first week is at the start, of a single-call last week at
+    # the end: the link's first and last calls take precedence over the midpoint.
+    unidentified = calls[("pin:principal", "number:unidentified")]
+    cells = sorted(demo_scan.dates[(unidentified.key, "call_start")])
+    assert cells[0] == _iso(_start_of(unidentified.first_seen))
+    assert cells[-1] == _iso(_end_of(unidentified.last_seen))
+    # The coordinator's December surge survives: one call a fortnight, then nine a week.
+    principal = next(
+        c for c in demo.plan.calls if (c.pin, c.number) == ("pin:principal", "number:coordinator")
+    )
+    link = calls[("pin:principal", "number:coordinator")]
+    weeks = _weekly(demo_scan.dates[(link.key, "call_start")])
+    assert weeks[:13] == [1, 0] * 6 + [1] and weeks[13:33] == [9] * 20
+    assert weeks == list(principal.weekly)
+    # Shown able to fail: the even spread over the whole period (what Amendment 9 decision 1 gave
+    # before Amendment 10) puts the principal's calls in other weeks than the aggregate says.
+    spread = [_iso(i) for i in pid_plan.occurrence_instants(link)]
+    assert _weekly(spread) != list(principal.weekly)
+
+
+def test_link_instants_is_the_one_function_for_own_and_carried_links(demo: View) -> None:
+    plan = demo.plan
+    carried = _carriers(demo)
+    own = next(lk for lk in demo.all_links if lk.link_type == "VISITED" and lk.occurrences > 2)
+    assert pid_plan.link_instants(plan, own) == pid_plan.occurrence_instants(own)
+    # A call link: its calls week by week, n of them, first and last at the ends.
+    call = _call_links(demo)[("pin:principal", "number:coordinator")]
+    got = pid_plan.link_instants(plan, call)
+    assert len(got) == call.occurrences == 201 and got == sorted(got)
+    assert got[0] == _start_of(call.first_seen) and got[-1] == _end_of(call.last_seen)
+    assert got != pid_plan.occurrence_instants(call)
+    # A carried dated link: the constant of its rows, once per carrying row; an incident's date-time
+    # as it is, a handset's found day at 12:00:00Z.
+    incident = next(
+        lk for lk in demo.all_links
+        if lk.key in carried and lk.link_type == "OCCURRED_AT" and lk.occurrences >= 2
+    )  # fmt: skip
+    assert pid_plan.link_instants(plan, incident) == [incident.first_seen] * incident.occurrences
+    handset = next(
+        lk for lk in demo.all_links
+        if lk.key in carried and lk.link_type == "USES" and demo.etype(lk.target) == "Device"
+    )  # fmt: skip
+    assert (
+        pid_plan.link_instants(plan, handset)
+        == [_noon_of(handset.first_seen)] * handset.occurrences
+    )
+    # A carried undated link has none: the principal's PIN account, the handsets' pairing.
+    undated = [lk for lk in demo.all_links if lk.key in carried and lk.first_seen is None]
+    assert len(undated) > 1_000
+    assert all(pid_plan.link_instants(plan, lk) == [] for lk in undated)
+    # An own undated link has none either.
+    family = next(lk for lk in demo.all_links if lk.link_type == "FAMILY_OF")
+    assert pid_plan.link_instants(plan, family) == []
+
+
+def test_the_carrying_rows_finder_is_one_function_the_builder_and_the_rows_share(
+    demo: View, scale: View
+) -> None:
+    for view in (demo, scale):
+        assert pid_plan.carrying_links(view.plan) == _carriers(view)
+    # The plan's carried counts are that finder's sums.
+    for key, carriers in pid_plan.carrying_links(demo.plan).items():
+        assert demo.by_key[key].occurrences == sum(demo.by_key[c].occurrences for c in carriers)
+
+
+def test_the_call_file_names_its_columns_as_r5_does() -> None:
+    uses = [
+        sh
+        for sh in pid_plan.LOAD_SHAPES
+        if sh.link_type == "USES" and sh.target_type == "Endpoint:handle"
+    ]
+    (call,) = [
+        sh
+        for sh in pid_plan.LOAD_SHAPES
+        if sh.link_type == "COMMUNICATED_WITH" and sh.source_type == "Endpoint:handle"
+    ]
+    assert [(sh.source_key, sh.target_key) for sh in uses] == [("nomis_id", "pin_account")]
+    assert (call.source_key, call.target_key) == ("pin_account", "called_number")
+    assert "call_start" in call.columns
+    assert not {"pin", "number", "prison_number"} & set(pid_plan.file_columns("pid_pin_calls.csv"))
+
+
+def test_the_teaching_number_is_written_only_in_the_teaching_report(demo: View) -> None:
+    """A phone mention in another report writes the endpoint's own number, not the teaching
+    literal: the bad number belongs to row 17 alone."""
+    (link,) = _phone_mentions(demo)
+    other = next(r for r in sorted(demo.reports) if r != pid_plan.PID_TEACHING_REPORT)
+    second = dataclasses.replace(link, key="l999999", target=other)
+    plan = dataclasses.replace(
+        demo.plan,
+        links=(*demo.plan.links, second),
+        moment_of={**demo.plan.moment_of, second.key: "chapter4"},
+    )
+    rows = {r.values["report_ref"]: r for r in pid_plan.rows_for(plan, REPORTS_FILE)}
+    teaching = rows[pid_plan.PID_TEACHING_REPORT].values["phone_mentioned"]
+    assert teaching == pid_plan.PID_TEACHING_BAD_NUMBER
+    got = rows[other].values["phone_mentioned"]
+    assert got and got != pid_plan.PID_TEACHING_BAD_NUMBER
+    assert msisdn(got) == TEACHING_NUMBER
+
+
+def test_the_handling_that_differs_from_its_row_falls_in_the_declared_categories(
+    demo: View, scale: View, shapes_of: dict[str, dict[str, Any]], mixed: frozenset[str],
+    demo_scan: Scan, scale_scan: Scan,
+) -> None:  # fmt: skip
+    """Amendment 10 decision 3. A mixed file carries the row owner's handling on every row, so an
+    element on a row with another handling is represented only approximately. The plan computes
+    which elements those are; this asserts the categories they fall in are exactly the declared
+    five, so a new kind of mismatch fails here and not silently in a load. The round trip itself
+    checks handling for each row's owner only (`_scan`); the counts go in `PID_ACTUALS.md`."""
+    assert _handling_categories(demo_scan) == HANDLING_CATEGORIES, demo_scan.categories
+    # The scale profile has no category of its own: each group's members come from one
+    # establishment and the group takes that establishment's handling, so nothing is "other".
+    assert _handling_categories(scale_scan) <= HANDLING_CATEGORIES, scale_scan.categories
+    assert not [c for c in scale_scan.categories if c.startswith("other")]
+    assert all(n > 0 for n in demo_scan.categories.values())
+    # Shown able to fail: a visitor whose handling is not that of the visit rows they ride on is a
+    # category the declared set does not have.
+    visitor = next(e for e in scale.plan.entities if e.key in scale.visitor_keys)
+    changed = dataclasses.replace(visitor, handling=pid_plan.PlanHandling(classification="SECRET"))
+    planted = _replaced(
+        scale, entities=[changed if e.key == visitor.key else e for e in scale.plan.entities]
+    )
+    red = _scan(
+        planted, shapes_of["scale"], lambda f: pid_plan.rows_for(planted.plan, f), FILES, mixed
+    )
+    extra = _handling_categories(red) - _handling_categories(scale_scan)
+    assert extra == {"other: pid_nomis_visits.csv Person"}, extra
+
+
+# --- Amendment 10 decision 4: Brief 2's column names ---------------------------------------------
+
+#: Transcribed from `02_INGEST_STUDIO_JOBS_BRIEF.md` section 4, R1 to R13: for each shape (file,
+#: link type, source type, target type) the source column, the target column and the other columns
+#: that Brief 2 names for the values the shape holds. A column the brief does not name keeps the
+#: plan's.
+BRIEF_2_COLUMNS: dict[tuple[str, str, str, str], tuple[str, str, frozenset[str]]] = {
+    ("pid_nomis_prisoners.csv", "HELD_AT", "Person:prisoner", "Establishment"):
+        ("nomis_id", "establishment_ref", frozenset({"custody_from", "custody_to"})),
+    ("pid_nomis_cell_stays.csv", "PRESENT_AT", "Person:prisoner", "Location:cell"):
+        ("nomis_id", "cell_ref", frozenset()),
+    ("pid_nomis_cell_shares.csv", "SHARED_CELL_WITH", "Person:prisoner", "Person:prisoner"):
+        ("nomis_id_a", "nomis_id_b", frozenset({"cell_ref", "week_start"})),
+    ("pid_nomis_visits.csv", "VISITED", "Person:visitor", "Person:prisoner"):
+        ("visitor_nino", "nomis_id", frozenset({"visit_ref", "visit_date", "channel"})),
+    ("pid_nomis_incidents.csv", "ROLE_IN", "Person:prisoner", "Incident:other"):
+        ("nomis_id", "incident_ref", frozenset({"role", "occurred_at"})),
+    ("pid_pin_calls.csv", "USES", "Person:prisoner", "Endpoint:handle"):
+        ("nomis_id", "pin_account", frozenset()),
+    ("pid_pin_calls.csv", "COMMUNICATED_WITH", "Endpoint:handle", "Endpoint:msisdn"):
+        ("pin_account", "called_number", frozenset({"call_start"})),
+    ("pid_seized_comms_batch1.csv", "USES", "Person:prisoner", "Device"):
+        ("found_with_nomis_id", "imei", frozenset({"found_on"})),
+    ("pid_seized_comms_batch1.csv", "PAIRED_WITH", "Endpoint:imsi", "Device"):
+        ("imsi", "imei", frozenset()),
+    ("pid_seized_comms_batch1.csv", "COMMUNICATED_WITH", "Endpoint:imsi", "Endpoint:msisdn"):
+        ("imsi", "other_number", frozenset({"occurred_at"})),
+    ("pid_seized_comms_batch2.csv", "USES", "Person:prisoner", "Device"):
+        ("found_with_nomis_id", "imei", frozenset({"found_on"})),
+    ("pid_seized_comms_batch2.csv", "PAIRED_WITH", "Endpoint:imsi", "Device"):
+        ("imsi", "imei", frozenset()),
+    ("pid_seized_comms_batch2.csv", "COMMUNICATED_WITH", "Endpoint:imsi", "Endpoint:msisdn"):
+        ("imsi", "other_number", frozenset({"occurred_at"})),
+    ("pid_prisoner_money.csv", "TRANSACTED", "Endpoint:account", "Endpoint:account"):
+        ("payer_account", "payee_account",
+         frozenset({"transfer_id", "transferred_at", "amount", "transaction_type"})),
+    ("pid_prisoner_money.csv", "USES", "Person:prisoner", "Endpoint:account"):
+        ("payee_nomis_id", "payee_account", frozenset()),
+    ("pid_prisoner_money.csv", "USES", "Person:visitor", "Endpoint:account"):
+        ("payer_nino", "payer_account", frozenset()),
+    ("pid_conflicts.csv", "IN_CONFLICT_WITH", "Person:prisoner", "Person:prisoner"):
+        ("nomis_id_a", "nomis_id_b", frozenset({"reason"})),
+    ("pid_codefendants.csv", "CO_DEFENDANT_OF", "Person:prisoner", "Person:prisoner"):
+        ("nomis_id_a", "nomis_id_b", frozenset({"case_ref"})),
+    ("pid_throwover_log.csv", "OCCURRED_AT", "Incident:throw_over", "Location:yard"):
+        ("incident_ref", "yard_ref", frozenset({"occurred_at", "item_type"})),
+    ("pid_soc_nominals.csv", "MEMBER_OF", "Person:prisoner", "Organisation"):
+        ("nomis_id", "group_ref", frozenset()),
+    ("pid_family_and_associates.csv", "FAMILY_OF", "Person:prisoner", "Person:prisoner"):
+        ("nomis_id_a", "nomis_id_b", frozenset({"relation"})),
+    ("pid_family_and_associates.csv", "ASSOCIATE_OF", "Person:prisoner", "Person:prisoner"):
+        ("nomis_id_a", "nomis_id_b", frozenset()),
+}  # fmt: skip
+#: The columns each recipe R1 to R13 names, transcribed from the brief (section 4).
+BRIEF_2_RECIPE_NAMES: dict[str, frozenset[str]] = {
+    "R1": frozenset("nomis_id family_name given_names date_of_birth establishment_ref wing_ref "
+                    "cell_ref custody_from custody_to".split()),
+    "R2": frozenset("nomis_id_a nomis_id_b cell_ref week_start".split()),
+    "R3": frozenset("visit_ref visit_date nomis_id visitor_nino visitor_family_name "
+                    "visitor_given_names channel".split()),
+    "R4": frozenset("incident_ref category occurred_at area_ref item nomis_id role".split()),
+    "R5": frozenset("pin_account nomis_id called_number call_start duration_s direction".split()),
+    "R6": frozenset("imei imsi other_number kind occurred_at duration_s found_with_nomis_id "
+                    "found_on".split()),
+    "R7": frozenset("transfer_id transferred_at payer_account payer_nino payer_family_name "
+                    "payer_given_names payee_nomis_id payee_account amount "
+                    "transaction_type".split()),
+    "R8": frozenset("case_ref nomis_id_a nomis_id_b".split()),
+    "R9": frozenset("report_ref submitted_at area_ref category subject_1 subject_1_role "
+                    "subject_2 subject_2_role subject_3 subject_3_role handling_code action_code "
+                    "sanitisation_code report_text".split()),
+    "R10": frozenset("incident_ref occurred_at yard_ref item_type recovered".split()),
+    "R11": frozenset("place_ref place_kind name parent_ref parent_kind lon lat adjoins_ref "
+                     "used_by_ref niu_area soct_region security_category".split()),
+    "R12": frozenset("nomis_id group_ref group_name role".split()),
+    "R13": frozenset("nomis_id_a nomis_id_b relation kind".split()),
+}  # fmt: skip
+BRIEF_2_NAMES = frozenset().union(*BRIEF_2_RECIPE_NAMES.values())
+#: The columns Brief 2 does not name for the recipe that holds them, which keep the plan's own name:
+#: a cell stay's span (a file Brief 2 does not have), the conflicts file's date and the number-owner
+#: file's columns, the second and third area and the second parent (Brief 2 additions), the phone
+#: column, and the throw-over's `lat`, `lon` and `yard` properties (R10 names `yard_ref` and
+#: `item_type`; the coordinates are the brief's spike S2, not an R10 column, and `lat`/`lon` are
+#: R11's names, not R10's).
+PLAN_NAMES_KEPT = frozenset(
+    {
+        "start", "end", "first_seen", "owner_ref", "number", "area_ref_2", "area_ref_3",
+        "parent_ref_2", "phone_mentioned", "yard", "reason", "lat", "lon",
+    }
+)  # fmt: skip
+
+
+def _name_problems(shapes: Sequence[Any], kept: frozenset[str] = PLAN_NAMES_KEPT) -> list[str]:
+    """Where a shape does not use Brief 2's names: against the table of shapes, and, per recipe,
+    every column must be one that recipe names, a handling column or one the plan keeps (a shape
+    of a file Brief 2 does not have may use any recipe's names). `kept` is a parameter so the check
+    can be shown red."""
+    by_shape = {(sh.file, sh.link_type, sh.source_type, sh.target_type): sh for sh in shapes}
+    out: list[str] = []
+    for (file, link_type, source, target), (skey, tkey, others) in BRIEF_2_COLUMNS.items():
+        shape = by_shape[(file, link_type, source, target)]
+        if (shape.source_key, shape.target_key) != (skey, tkey):
+            out.append(f"{file} {link_type}: keys {shape.source_key}, {shape.target_key}")
+        if not others <= set(shape.columns):
+            out.append(f"{file} {link_type}: lacks {sorted(others - set(shape.columns))}")
+    for sh in shapes:
+        if sh.recipe == "seed":
+            continue
+        named = BRIEF_2_RECIPE_NAMES.get(sh.recipe, BRIEF_2_NAMES)
+        for column in sh.columns:
+            if column not in named and column not in HANDLING_COLUMNS and column not in kept:
+                out.append(f"{sh.file} {sh.link_type} ({sh.recipe}): {column!r} is not named")
+        if sh.file == "pid_nomis_incidents.csv" and sh.link_type == "OCCURRED_AT":
+            if (sh.source_key, sh.target_key) != ("incident_ref", "area_ref"):
+                out.append(f"{sh.file} OCCURRED_AT: {sh.source_key}, {sh.target_key}")
+        if sh.file == ESTATE_FILE:
+            ends = ("parent_ref", "parent_ref_2", "adjoins_ref", "used_by_ref")
+            if sh.source_key != "place_ref" or sh.target_key not in ends:
+                out.append(f"{sh.file} {sh.link_type}: {sh.source_key}, {sh.target_key}")
+        if sh.file == REPORTS_FILE and sh.source_type.startswith("Person"):
+            if not sh.source_key.startswith("subject_") or sh.target_key != "report_ref":
+                out.append(f"{sh.file}: {sh.source_key}, {sh.target_key}")
+    return out
+
+
+def test_every_brief_2_named_value_uses_brief_2s_column_name() -> None:
+    shapes = list(pid_plan.LOAD_SHAPES)
+    assert _name_problems(shapes) == []
+    # Nothing is listed as kept that no shape uses.
+    used = {c for sh in shapes if sh.recipe != "seed" for c in sh.columns}
+    assert PLAN_NAMES_KEPT <= used, PLAN_NAMES_KEPT - used
+
+    def with_shape(old: Any, **changes: Any) -> list[Any]:
+        return [dataclasses.replace(sh, **changes) if sh is old else sh for sh in shapes]
+
+    # Shown able to fail: the check itself, run on shapes with a defect planted in the real one.
+    pins = next(
+        sh for sh in shapes if sh.link_type == "USES" and sh.target_type == "Endpoint:handle"
+    )
+    old_name = _name_problems(with_shape(pins, source_key="prison_number"))
+    assert any("keys prison_number" in p for p in old_name), old_name
+    calls = next(
+        sh for sh in shapes
+        if sh.link_type == "COMMUNICATED_WITH" and sh.source_type == "Endpoint:handle"
+    )  # fmt: skip
+    renamed = tuple("number" if c == "called_number" else c for c in calls.columns)
+    assert _name_problems(with_shape(calls, columns=renamed, target_key="number"))
+    # Per recipe, not against the union: the throw-over's `lat` and `lon` are R11's names, so they
+    # do not pass on R10's, and are accepted only as columns the plan keeps.
+    throw = next(sh for sh in shapes if sh.file == "pid_throwover_log.csv")
+    assert {"lat", "lon"} <= set(throw.columns) and not {"lat", "lon"} & BRIEF_2_RECIPE_NAMES["R10"]
+    assert {"lat", "lon"} <= BRIEF_2_RECIPE_NAMES["R11"]
+    without = _name_problems(shapes, PLAN_NAMES_KEPT - {"lat", "lon"})
+    assert [p for p in without if "'lat'" in p or "'lon'" in p] != []
+    assert all(sh.file == "pid_throwover_log.csv" for sh in shapes if "lat" in sh.columns)
+
+
+# --- the scale profile's groups (Amendment 11 decision 1) ----------------------------------------
+
+
+def _group_problems(view: View) -> list[str]:
+    """A group whose members are not all of one establishment, or whose handling is not that
+    establishment's."""
+    custody = _custody(view)
+    members: dict[str, set[str]] = {}
+    for lk in view.links("MEMBER_OF", everything=True):
+        members.setdefault(lk.target, set()).add(custody[lk.source])
+    out = []
+    for group in view.of_type("Organisation"):
+        found = members.get(group.key, set())
+        if len(found) != 1:
+            out.append(f"{group.key}: members of {sorted(found)}")
+        elif group.handling != view.ent[next(iter(found))].handling:
+            out.append(f"{group.key}: handling is not its establishment's")
+    return out
+
+
+def test_every_scale_member_is_of_his_groups_establishment(scale: View) -> None:
+    assert _group_problems(scale) == []
+    groups = scale.of_type("Organisation")
+    assert len(groups) == 12 and len(scale.links("MEMBER_OF", everything=True)) == 450
+    custody = _custody(scale)
+    per_establishment = Counter(
+        custody[lk.source] for lk in scale.links("MEMBER_OF", everything=True)
+    )
+    assert len(per_establishment) == 6, "every establishment has members"
+    assert {n > 0 for n in per_establishment.values()} == {True}
+    # Shown able to fail: one member moved to a group of another regional establishment (both
+    # regional, so the handling still agrees: only the membership check sees it).
+    links = list(scale.all_links)
+    member = next(
+        lk for lk in links
+        if lk.link_type == "MEMBER_OF" and custody[lk.source] == "scale:est:saltmarsh-grange"
+    )  # fmt: skip
+    other = next(
+        lk for lk in links
+        if lk.link_type == "MEMBER_OF" and custody[lk.source] == "scale:est:corrie-vale"
+    )  # fmt: skip
+    moved = [
+        dataclasses.replace(lk, target=other.target) if lk.key == member.key else lk for lk in links
+    ]
+    assert scale.ent[member.target].handling == scale.ent[other.target].handling
+    problems = _group_problems(_replaced(scale, links=moved))
+    assert len(problems) == 1 and other.target in problems[0], problems
+
+
+# --- a cell share's week_start (Amendment 11 decision 4) -----------------------------------------
+
+
+def test_a_cell_shares_week_start_cells_are_its_instants_not_mondays(
+    demo: View, shapes_of: dict[str, dict[str, Any]], demo_scan: Scan
+) -> None:
+    shares = [lk for lk in demo.all_links if lk.link_type == "SHARED_CELL_WITH"]
+    assert len(shares) > 400
+    for lk in shares:
+        cells = demo_scan.dates[(lk.key, "week_start")]
+        want = [_iso(i) for i in pid_plan.link_instants(demo.plan, lk)]
+        assert sorted(cells) == sorted(want) and len(cells) == lk.occurrences, lk.key
+        first = _start_of(lk.first_seen)
+        mondays = [_iso(first + timedelta(days=7 * i)) for i in range(lk.occurrences)]
+        if lk.occurrences >= 2:
+            assert sorted(cells) != mondays, f"{lk.key}: a Monday every seven days"
+    # The cast's one-week share (the principal and cellmate_3): one cell, 6 January 2025 at noon.
+    (one,) = [lk for lk in shares if {lk.source, lk.target} == {"principal", "cellmate_3"}]
+    assert demo_scan.dates[(one.key, "week_start")] == ["2025-01-06T12:00:00+00:00"]
+    # Shown able to fail: the rows written as Mondays, a week apart from the first day, go red; so
+    # does the one-week share written at midnight.
+    many = next(lk for lk in shares if lk.occurrences >= 4)
+    first = _start_of(many.first_seen)
+    mondays = [_iso(first + timedelta(days=7 * i)) for i in range(many.occurrences)]
+    shapes = shapes_of["demo"]
+    carried = _carriers(demo)
+    for lk, cells in ((many, mondays), (one, ["2025-01-06T00:00:00+00:00"])):
+        planted = _planted_scan(demo_scan, **{f"{lk.key}__week_start": cells})
+        problems = _date_problems(demo, shapes, planted, carried, {lk.key})
+        assert len(problems) == 1 and "dates" in problems[0], problems

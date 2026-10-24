@@ -52,10 +52,11 @@ begins `00101` (the test network) (D4).
 
 from __future__ import annotations
 
+import hashlib
 import math
 import random
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from functools import cached_property
@@ -118,8 +119,14 @@ PAIR_ROUTES_ACT1 = 5
 PRINCIPAL_BETWEENNESS = 0.87
 PRINCIPAL_BETWEENNESS_ACT1 = 0.87
 #: Brief 2's teaching row: a letter O for a nought. Corrected it is +447700900603, one of the
-#: background numbers, as a mistyped real number would be; stage 5 places it in the PIN calls.
+#: background numbers, as a mistyped real number would be. It is a bound column of the reports file
+#: (`phone_mentioned`, empty on every row but the teaching report's, Amendment 9 decision 5): the
+#: file holds the number as written, the plan holds its one corrected link (moment "chapter4").
 PID_TEACHING_BAD_NUMBER = "07700 900 6O3"
+#: The used report, not one of the cast's, whose row carries the teaching number: the 17th data row
+#: of the reports file, which is ordered by report key.
+PID_TEACHING_REPORT = "report:0017"
+PID_TEACHING_NUMBER = "+447700900603"
 BULK_LIST_SIZE = 40
 CALL_WEEKS = 35  # w/c Monday 1 September 2025 to the week holding the cut-off
 CALL_ROWS = 1_000_000
@@ -211,6 +218,10 @@ class Plan:
                 out.setdefault(link.target, []).append(link)
         return {k: tuple(v) for k, v in out.items()}
 
+    @cached_property
+    def _rows(self) -> _PlanIndex:
+        return _PlanIndex(self)
+
     def entity(self, key: str) -> PlanEntity:
         """The entity of this key; `KeyError` for a key the plan does not hold."""
         return self._entity_index[key]
@@ -252,10 +263,26 @@ def j7_working_set(
     return frozenset(keys), links
 
 
+def node_id(key: str) -> str:
+    """The store id of an entity: `pid-` and the first 24 hex digits of the SHA-256 of its plan key
+    (ADR-120 Amendment 9 decision 2)."""
+    return "pid-" + hashlib.sha256(key.encode()).hexdigest()[:24]
+
+
+def link_id(link: PlanLink) -> str:
+    """The store id of a link: the same over its type, source key and target key, so it survives a
+    regeneration that renumbers the plan's link keys. Two links of one type and pair are a plan
+    defect, never made distinct here."""
+    return (
+        "pid-"
+        + hashlib.sha256(f"{link.link_type}|{link.source}|{link.target}".encode()).hexdigest()[:24]
+    )
+
+
 #: The one pattern that selects the 229 reports (spec 6), shaped as `schemas.domain.PatternQuery`.
 REPORT_PATTERN: dict[str, Any] = {
     "nodes": [
-        {"var": "zone", "entity_type": "Location", "node_id": "zone:wing-f"},
+        {"var": "zone", "entity_type": "Location", "node_id": node_id("zone:wing-f")},
         {"var": "area", "entity_type": "Location"},
         {"var": "report", "entity_type": "Document"},
         {"var": "incident", "entity_type": "Incident"},
@@ -413,7 +440,7 @@ _PRINCIPAL_CELLS: tuple[tuple[str, date, date], ...] = (
 _CELL_SHARES: tuple[tuple[str, str, date, date], ...] = (
     ("cellmate_1", "F1-03", date(2024, 6, 3), date(2024, 10, 13)),
     ("cellmate_2", "F1-03", date(2024, 10, 14), date(2025, 1, 5)),
-    ("cellmate_3", "F2-05", date(2025, 1, 6), date(2025, 1, 12)),
+    ("cellmate_3", "F2-05", date(2025, 1, 6), date(2025, 1, 6)),
     ("relay_2", "F2-09", date(2025, 5, 5), date(2025, 9, 28)),
     ("cellmate_4", "F2-21", date(2025, 9, 29), date(2025, 10, 19)),
     ("relay_3", "F2-21", date(2025, 10, 20), date(2025, 12, 14)),
@@ -600,9 +627,26 @@ class _Build:
         assert key not in self.ents, f"duplicate entity key {key}"
         self.ents[key] = PlanEntity(key, entity_type, dict(properties), handling)
 
+    def carry(self) -> None:
+        """Give every carried link the count of the rows that carry it (Amendment 9 decision 1):
+        the sum of the occurrences of the links whose rows carry it, as `_carrying_links` finds
+        them (the one finder the row generator uses too). Counts only: no draw is made, and a link
+        no row carries keeps its one occurrence for the plan test to report."""
+        carriers = _carrying_links(self.links, self.ents)
+        occurrences = {lk.key: lk.occurrences for lk in self.links}
+        out = []
+        for lk in self.links:
+            rows = carriers.get(lk.key)
+            if rows:
+                lk = replace(lk, occurrences=sum(occurrences[k] for k in rows))
+            out.append(lk)
+        self.links = out
+
     def finish(self) -> None:
-        """Give every link the regional unit if either of its ends has it, now that the last
-        entity's handling is set (Amendment 8, decision 11); the one SECRET link keeps its own."""
+        """Count the carried links, then give every link the regional unit if either of its ends
+        has it, now that the last entity's handling is set (Amendment 8, decision 11); the one
+        SECRET link keeps its own."""
+        self.carry()
         out = []
         for lk in self.links:
             if lk.handling.classification != "SECRET":
@@ -755,8 +799,6 @@ def _estate(
         wkey = f"{kp}wing:{w}"
         est.wing_keys[w] = wkey
         wprops: dict[str, object] = {"name": f"Wing {w}", "site_ref": f"{sp}wing:{w}"}
-        if key == "est:fenwick-moor" and w == "F":
-            wprops["geometry_ref"] = "pid:est1:geom:wing:F"
         b.entity(wkey, "Location", wprops, unit)
         b.link("PART_OF", wkey, key)
         for n in (1, 2):
@@ -785,8 +827,6 @@ def _estate(
         ykey = f"{kp}yard:{code}"
         est.yard_keys[code] = ykey
         yprops: dict[str, object] = {"name": f"Yard {code}", "site_ref": f"{sp}yard:{code}"}
-        if key == "est:fenwick-moor":
-            yprops["geometry_ref"] = f"pid:est1:geom:yard:{code}"
         b.entity(ykey, "Location", yprops, unit)
         b.link("PART_OF", ykey, key)
         b.link("ADJOINS", ykey, est.wing_keys[wing])
@@ -807,10 +847,7 @@ def _fenwick(b: _Build) -> _Estate:
     b.entity(
         "zone:wing-f",
         "Location",
-        {
-            "name": "Wing F and its yards", "site_ref": "pid:est1:zone:wing-f",
-            "geometry_ref": "pid:est1:geom:zone:wing-f",
-        },
+        {"name": "Wing F and its yards", "site_ref": "pid:est1:zone:wing-f"},
         LOCAL,
     )  # fmt: skip
     b.link("PART_OF", "wing:F", "zone:wing-f")
@@ -1137,9 +1174,10 @@ def _add_cast(
                 "category": "find", "item": item, "occurred_at": _at(when, 7, 30),
             },
         )  # fmt: skip
-        b.link("OCCURRED_AT", ikey, f"cell:{cell}", first=when, last=when)
+        at = _at(when, 7, 30)
+        b.link("OCCURRED_AT", ikey, f"cell:{cell}", first=at, last=at)
         for who in _present(cell, when):
-            b.link("ROLE_IN", who, ikey, first=when, last=when, props={"role": "occupant"})
+            b.link("ROLE_IN", who, ikey, first=at, last=at, props={"role": "occupant"})
     for ikey, category, when, others, place in _OTHER_INCIDENTS:
         key = f"incident:{ikey}"
         b.entity(
@@ -1150,9 +1188,10 @@ def _add_cast(
                 "category": category, "occurred_at": _at(when, 14, 10),
             },
         )  # fmt: skip
-        b.link("OCCURRED_AT", key, place, first=when, last=when)
+        at = _at(when, 14, 10)
+        b.link("OCCURRED_AT", key, place, first=at, last=at)
         for who in ("principal", *others):
-            b.link("ROLE_IN", who, key, first=when, last=when, props={"role": "participant"})
+            b.link("ROLE_IN", who, key, first=at, last=at, props={"role": "participant"})
 
     for who, n, first, last, reason in (
         ("calder_1", 2, date(2025, 3, 10), date(2025, 11, 20), "wing dispute"),
@@ -1203,6 +1242,7 @@ def _bg_prisoners(
     reserved: frozenset[str] = frozenset(),
     quotas: Mapping[str, int] | None = None,
     first_key: str | None = None,
+    pins: bool = True,
 ) -> tuple[list[_Prisoner], dict[str, list[tuple[str, date]]]]:
     """`count` background prisoners, each with a PIN account, one open custody, and a cell
     (never one of `reserved`); `quotas` fixes how many a landing holds, the rest share the others
@@ -1232,7 +1272,7 @@ def _bg_prisoners(
                 b, key, given, family, number=number,
                 dob=_day(rng, date(1958, 1, 1), date(2005, 12, 28)), handling=est.unit,
             )  # fmt: skip
-            pin = _pin(b, key, number, est.unit, px)
+            pin = _pin(b, key, number, est.unit, px) if pins else ""
             arrived = _day(rng, date(2024, 9, 1), date(2026, 3, 31))
             held = arrived - timedelta(days=rng.randrange(200))
             cell = cells[i % len(cells)]
@@ -1267,9 +1307,10 @@ def _cell_shares(b: _Build, occupants: Mapping[str, list[tuple[str, date]]]) -> 
         ordered = sorted(people, key=lambda p: (p[1], p[0]))
         for (a, a_from), (c, c_from) in zip(ordered, ordered[1:], strict=False):
             first = max(a_from, c_from)
+            weeks = _weeks(first, CUT_OFF)
             b.link(
-                "SHARED_CELL_WITH", a, c, occ=_weeks(first, CUT_OFF), first=first, last=CUT_OFF,
-                props={"cell": label},
+                "SHARED_CELL_WITH", a, c, occ=weeks, first=first,
+                last=first if weeks == 1 else CUT_OFF, props={"cell": label},
             )  # fmt: skip
 
 
@@ -1362,10 +1403,13 @@ def _bg_social(
             targets = list(dict.fromkeys(targets))
         for target in targets:
             first = _day(rng, date(2025, 9, 1), date(2026, 2, 28))
+            visits = rng.randint(1, 12)
+            last = _day(rng, first, date(2026, 4, 25))
+            channel = "video" if rng.randrange(5) == 0 else "in_person"
+            # One occurrence, one date: both were drawn, so the draws stay as they were.
             b.link(
-                "VISITED", vkey, target, occ=rng.randint(1, 12), first=first,
-                last=_day(rng, first, date(2026, 4, 25)),
-                props={"channel": "video" if rng.randrange(5) == 0 else "in_person"},
+                "VISITED", vkey, target, occ=visits, first=first,
+                last=first if visits == 1 else last, props={"channel": channel},
             )  # fmt: skip
         if number is not None:
             assert owners is not None
@@ -1384,9 +1428,12 @@ def _bg_social(
         got = pair("IN_CONFLICT_WITH")
         if got:
             first = _day(rng, date(2025, 1, 1), date(2026, 2, 1))
+            episodes = rng.randint(1, 3)
+            last = _day(rng, first, date(2026, 4, 20))
+            reason = rng.choice(_REASONS)
             b.link(
-                "IN_CONFLICT_WITH", *got, occ=rng.randint(1, 3), first=first,
-                last=_day(rng, first, date(2026, 4, 20)), props={"reason": rng.choice(_REASONS)},
+                "IN_CONFLICT_WITH", *got, occ=episodes, first=first,
+                last=first if episodes == 1 else last, props={"reason": reason},
             )  # fmt: skip
     for _ in range(assoc):
         got = pair("ASSOCIATE_OF")
@@ -1396,20 +1443,21 @@ def _bg_social(
         ikey = f"{px}incident:bg:{tag}{i:03d}"
         when = _day(rng, date(2025, 6, 1), date(2026, 4, 20))
         category = rng.choice(("assault", "disorder", "other"))
+        at = _at(when, rng.randrange(7, 22))
         b.entity(
             ikey,
             "Incident",
             {
                 "name": f"{category.title()} {tag}{i:03d}",
                 "incident_ref": f"pid:{'scale:' if px else ''}inc:bg:{tag}{i:03d}",
-                "category": category, "occurred_at": _at(when, rng.randrange(7, 22)),
+                "category": category, "occurred_at": at,
             },
             unit,
         )  # fmt: skip
         if places:
-            b.link("OCCURRED_AT", ikey, rng.choice(places), first=when, last=when)
+            b.link("OCCURRED_AT", ikey, rng.choice(places), first=at, last=at)
         for who in rng.sample(keys, rng.choice((2, 2, 3))):
-            b.link("ROLE_IN", who, ikey, first=when, last=when, props={"role": rng.choice(_ROLES)})
+            b.link("ROLE_IN", who, ikey, first=at, last=at, props={"role": rng.choice(_ROLES)})
     accounts: list[str] = []
     for vkey in vkeys[:payers]:
         akey = f"{px}account:{vkey.removeprefix(px)}"
@@ -1424,10 +1472,13 @@ def _bg_social(
     def transfer(payer: str, ckey: str) -> None:
         first = _day(rng, date(2025, 9, 1), date(2026, 2, 28))
         paid.add(payer)
+        transfers = rng.randint(1, 8)
+        last = _day(rng, first, date(2026, 4, 25))
+        amount = rng.randint(2_000, 40_000) / 100
         b.link(
-            "TRANSACTED", payer, ckey, occ=rng.randint(1, 8), first=first,
-            last=_day(rng, first, date(2026, 4, 25)),
-            props={"amount": rng.randint(2_000, 40_000) / 100, "transaction_type": "TRANSFER"},
+            "TRANSACTED", payer, ckey, occ=transfers, first=first,
+            last=first if transfers == 1 else last,
+            props={"amount": amount, "transaction_type": "TRANSFER"},
         )  # fmt: skip
 
     for target in rng.sample(keys, min(cash, len(keys))):
@@ -1661,6 +1712,14 @@ def _reports(
         for ikey, yard in incidents_by_day.get(rep.day, ()):
             if users_of[yard] & set(rep.areas):
                 b.link("MENTIONED_IN", ikey, rep.key)
+    # The teaching row's corrected number (Amendment 9 decision 5): one background number is
+    # mentioned in the one teaching report, and in no other.
+    (number,) = [
+        e.key
+        for e in b.ents.values()
+        if e.entity_type == "Endpoint" and e.properties["value_normalised"] == PID_TEACHING_NUMBER
+    ]
+    b.link("MENTIONED_IN", number, PID_TEACHING_REPORT)
     return texts
 
 
@@ -1854,9 +1913,11 @@ def _demo(rng: random.Random, seed: int) -> Plan:
     for fkey, when, *_rest in _FINDS:
         for number in rng.sample(main_keys, rng.randint(2, 4)):
             first = _day(rng, date(2025, 12, 1), when)
+            calls_made = rng.randint(1, 9)
+            last = _day(rng, first, when)
             b.link(
-                "COMMUNICATED_WITH", f"sim:{fkey}", number, occ=rng.randint(1, 9), first=first,
-                last=_day(rng, first, when),
+                "COMMUNICATED_WITH", f"sim:{fkey}", number, occ=calls_made, first=first,
+                last=first if calls_made == 1 else last,
             )  # fmt: skip
 
     pairs: set[tuple[str, str, str]] = set()
@@ -1914,7 +1975,11 @@ def _scale(rng: random.Random, seed: int) -> Plan:
     ]  # fmt: skip
     by_est: list[list[_Prisoner]] = []
     for est in estates:
-        got, occupants = _bg_prisoners(b, rng, names, pool, est, 500, px="scale:", component=0)
+        # The scale profile holds no PIN accounts (D6 gives it no call file; Amendment 9
+        # decision 6), so its prisoners have none and the top-up is all associations.
+        got, occupants = _bg_prisoners(
+            b, rng, names, pool, est, 500, px="scale:", component=0, pins=False
+        )
         _cell_shares(b, occupants)
         by_est.append(got)
     people = [p for group in by_est for p in group]
@@ -1937,10 +2002,18 @@ def _scale(rng: random.Random, seed: int) -> Plan:
                 seen_names.add(label)
                 break
         gkey = f"scale:ocg:{i:02d}"
-        b.entity(gkey, "Organisation", {"name": label, "org_ref": f"pid:scale:ocg:{i:02d}"})
+        # A group's members come from one establishment (two groups to each), and the group takes
+        # that establishment's handling, so a membership row is of one unit throughout.
+        b.entity(
+            gkey, "Organisation", {"name": label, "org_ref": f"pid:scale:ocg:{i:02d}"},
+            estates[i // 2].unit,
+        )  # fmt: skip
         groups.append(gkey)
     for p in rng.sample(people, 450):
-        b.link("MEMBER_OF", p.key, rng.choice(groups))
+        # One draw of twelve, as before; it picks one of the two groups of the member's own
+        # establishment, so no other draw moves.
+        pick = rng.randrange(len(groups))
+        b.link("MEMBER_OF", p.key, groups[2 * (p.est.index - 1) + pick % 2])
     keys = [p.key for p in people]
     assert len(b.links) <= SCALE_LINKS, f"the scale plan already holds {len(b.links)} links"
     while len(b.links) < SCALE_LINKS:
@@ -2037,9 +2110,13 @@ class EntityShape:
     brief2_addition: str | None
 
 
+HANDLING_COLUMNS = (
+    "classification", "handling_code", "action_code", "sanitisation_code", "originator",
+    "owning_unit",
+)  # fmt: skip
 #: The files whose rows carry more than one handling (Fenwick Moor's and the other
 #: establishments', a report with a covert-development code, the one SECRET link): the plan test
-#: derives the list from the plan and fails if this one is wrong.
+#: derives the list from the plan (`mixed_files`) and fails if this one is wrong.
 _COLUMN_FILES = frozenset(
     {
         "pid_nomis_prisoners.csv", "pid_nomis_cell_stays.csv", "pid_nomis_cell_shares.csv",
@@ -2048,6 +2125,7 @@ _COLUMN_FILES = frozenset(
         "pid_codefendants.csv",
         "pid_intel_reports.csv", "pid_establishment_plan.csv", "pid_family_and_associates.csv",
         "pid_conflicts.csv", "pid_soc_nominals.csv", "pid_number_owners.csv",
+        "pid_report_incidents.csv",
     }
 )  # fmt: skip
 _COLUMNS_CLAUSE = "the file must carry classification, originator and owning unit columns"
@@ -2068,6 +2146,7 @@ _BATCH_1 = "pid_seized_comms_batch1.csv"
 _BATCH_2 = "pid_seized_comms_batch2.csv"
 _MONEY = "pid_prisoner_money.csv"
 _REPORTS = "pid_intel_reports.csv"
+_REPORT_INCIDENTS = "pid_report_incidents.csv"
 _ESTATE = "pid_establishment_plan.csv"
 _NO = frozenset[str]()
 _P = "Person:prisoner"
@@ -2076,6 +2155,7 @@ _N = "Person:named"
 _NEW_STAYS = "new:pid-cell-stays"
 _NEW_CONFLICTS = "new:pid-conflicts"
 _NEW_OWNERS = "new:pid-number-owners"
+_NEW_REPORT_INCIDENTS = "new:pid-report-incidents"
 _DOC = "Document"
 _SUBJECT = (
     "R9 must take a prison number or a NINO in its subject columns, and a per-row originator "
@@ -2083,6 +2163,10 @@ _SUBJECT = (
 )
 _NAMED = (
     "R9's subject columns must create an outsider from a NINO and names, not only refer to one."
+)
+_PHONE = (
+    "R9 must map phone_mentioned, gated on not-null and through the msisdn adapter, to an outside "
+    "Endpoint MENTIONED_IN the report, so a malformed number is rejected with its cause named."
 )
 _FOUND_WITH = (
     "R6's found-with column may be empty (Pryce's handset) and needs a when gate so no empty "
@@ -2098,64 +2182,79 @@ def _link(
     return (link_type, source, target, props, file, recipe, moment, *keys, extra, addition)
 
 
+#: Each counted link is one row per occurrence (Amendment 9 decision 1), so a shape holds the one
+#: date-time of its row, never a count or a last-seen date; a span carries two date-times, R1's
+#: `custody_from`/`custody_to` for a custody and `start`/`end` for a cell stay (Amendment 11).
 _AT = ("first_seen",)
-_SPAN = ("first_seen", "last_seen")
-_PART = ("ref", "parent_ref")
+_SPAN = ("start", "end")
+_CUSTODY = ("custody_from", "custody_to")  # R1's names for a custody's span
+#: A span link's two date columns (a span is not an occurrence: one row, two ends).
+_SPAN_COLUMNS = {"HELD_AT": _CUSTODY, "PRESENT_AT": _SPAN}
+_PART = ("place_ref", "parent_ref")
+#: A property whose column Brief 2 names otherwise: SHARED_CELL_WITH's `cell` is R2's `cell_ref`.
+_PROPERTY_COLUMNS = {("SHARED_CELL_WITH", "cell"): "cell_ref"}
 _LINK_ROWS: tuple[tuple[Any, ...], ...] = (
-    _link("HELD_AT", _P, "Establishment", _PRISONERS, "R1", ("prison_number", "establishment_ref"),
-          extra=_SPAN, addition="R1 must be split so custody carries its own first and last seen "
-          "interval, a closed transfer stay ending before the open one begins."),
-    _link("USES", _P, "Endpoint:handle", _PINS, "R5", ("prison_number", "pin")),
-    _link("PRESENT_AT", _P, "Location:cell", _STAYS, _NEW_STAYS, ("prison_number", "cell_ref"),
+    _link("HELD_AT", _P, "Establishment", _PRISONERS, "R1", ("nomis_id", "establishment_ref"),
+          extra=_CUSTODY, addition="R1 must be split so custody carries its own interval, in "
+          "custody_from and custody_to date-time columns, a closed transfer stay ending before the "
+          "open one begins."),
+    _link("USES", _P, "Endpoint:handle", _PINS, "R5", ("nomis_id", "pin_account")),
+    _link("PRESENT_AT", _P, "Location:cell", _STAYS, _NEW_STAYS, ("nomis_id", "cell_ref"),
           extra=_SPAN, addition="R1 must be split so cell stays are their own rows, each with its "
-          "own first and last seen interval, and writes no PART_OF cell to wing beyond what the "
-          "plan has."),
+          "own interval in start and end date-time columns, and writes no PART_OF cell to wing "
+          "beyond what the plan has."),
     _link("SHARED_CELL_WITH", _P, _P, "pid_nomis_cell_shares.csv", "R2",
-          ("prison_number_a", "prison_number_b"), props=frozenset({"cell"}),
-          extra=("weeks", *_SPAN),
-          addition="R2's link must carry the plan's last day, not the last week's Monday."),
-    _link("VISITED", _V, _P, _VISITS, "R3", ("visitor_ref", "prison_number"),
-          props=frozenset({"channel"}), extra=("visits", *_SPAN)),
-    _link("ROLE_IN", _P, "Incident:other", _INCIDENTS, "R4", ("prison_number", "incident_ref"),
-          props=frozenset({"role"}), extra=_AT),
+          ("nomis_id_a", "nomis_id_b"), props=frozenset({"cell"}), extra=("week_start",),
+          addition="R2 must write one dated row per week shared, so the link's occurrences are "
+          "the weeks and its interval the first and last row."),
+    _link("VISITED", _V, _P, _VISITS, "R3", ("visitor_nino", "nomis_id"),
+          props=frozenset({"channel"}), extra=("visit_ref", "visit_date")),
+    _link("ROLE_IN", _P, "Incident:other", _INCIDENTS, "R4", ("nomis_id", "incident_ref"),
+          props=frozenset({"role"}), extra=("occurred_at",)),
     _link("IN_CONFLICT_WITH", _P, _P, "pid_conflicts.csv", _NEW_CONFLICTS,
-          ("prison_number_a", "prison_number_b"), props=frozenset({"reason"}),
-          extra=("episodes", *_SPAN),
+          ("nomis_id_a", "nomis_id_b"), props=frozenset({"reason"}), extra=_AT,
           addition="Brief 2 must add a conflicts file with a per-row classification column for "
           "the one SECRET link, besides the originator and owning unit."),
     *(
         _link("OCCURRED_AT", "Incident:other", f"Location:{kind}", _INCIDENTS, "R4",
-              ("incident_ref", "place_ref"), extra=_AT)
+              ("incident_ref", "area_ref"), extra=("occurred_at",))
         for kind in ("cell", "hall", "landing", "yard")
     ),
     _link("COMMUNICATED_WITH", "Endpoint:handle", "Endpoint:msisdn", _PINS, "R5",
-          ("pin", "number"), extra=("weekly_calls", *_SPAN)),
+          ("pin_account", "called_number"), extra=("call_start",)),
     _link("USES", _V, "Endpoint:msisdn", "pid_number_owners.csv", _NEW_OWNERS,
           ("owner_ref", "number"),
           addition="Brief 2 must add a number-owner file giving the coordinator and each visitor "
           "the one outside number they own."),
-    _link("USES", _P, "Device", _BATCH_1, "R6", ("found_with", "handset_imei"), extra=("when",),
-          addition=_FOUND_WITH),
-    _link("PAIRED_WITH", "Endpoint:imsi", "Device", _BATCH_1, "R6", ("imsi", "handset_imei")),
+    _link("USES", _P, "Device", _BATCH_1, "R6", ("found_with_nomis_id", "imei"),
+          extra=("found_on",), addition=_FOUND_WITH),
+    _link("PAIRED_WITH", "Endpoint:imsi", "Device", _BATCH_1, "R6", ("imsi", "imei")),
     _link("COMMUNICATED_WITH", "Endpoint:imsi", "Endpoint:msisdn", _BATCH_1, "R6",
-          ("imsi", "number"), extra=("calls", *_SPAN)),
-    _link("USES", _P, "Device", _BATCH_2, "R6", ("found_with", "handset_imei"), extra=("when",),
-          moment="chapter9", addition=_FOUND_WITH),
-    _link("PAIRED_WITH", "Endpoint:imsi", "Device", _BATCH_2, "R6", ("imsi", "handset_imei"),
+          ("imsi", "other_number"), extra=("occurred_at",)),
+    _link("USES", _P, "Device", _BATCH_2, "R6", ("found_with_nomis_id", "imei"),
+          extra=("found_on",), moment="chapter9", addition=_FOUND_WITH),
+    _link("PAIRED_WITH", "Endpoint:imsi", "Device", _BATCH_2, "R6", ("imsi", "imei"),
           moment="chapter9"),
     _link("COMMUNICATED_WITH", "Endpoint:imsi", "Endpoint:msisdn", _BATCH_2, "R6",
-          ("imsi", "number"), extra=("calls", *_SPAN), moment="chapter9"),
+          ("imsi", "other_number"), extra=("occurred_at",), moment="chapter9"),
     _link("TRANSACTED", "Endpoint:account", "Endpoint:account", _MONEY, "R7",
-          ("payer_account", "cash_account"),
-          props=frozenset({"amount", "transaction_type"}), extra=("transfers", "first_seen")),
-    _link("USES", _P, "Endpoint:account", _MONEY, "R7", ("owner_ref", "account")),
-    _link("USES", _V, "Endpoint:account", _MONEY, "R7", ("owner_ref", "account")),
+          ("payer_account", "payee_account"),
+          props=frozenset({"amount", "transaction_type"}),
+          extra=("transfer_id", "transferred_at")),
+    # A payer's and a payee's account `USES` ride on one transfer row, so each names its own cells.
+    _link("USES", _P, "Endpoint:account", _MONEY, "R7", ("payee_nomis_id", "payee_account")),
+    _link("USES", _V, "Endpoint:account", _MONEY, "R7", ("payer_nino", "payer_account")),
     _link("CO_DEFENDANT_OF", _P, _P, "pid_codefendants.csv", "R8",
-          ("prison_number_a", "prison_number_b"), props=frozenset({"case_ref"})),
-    _link("MENTIONED_IN", _P, _DOC, _REPORTS, "R9", ("subject_ref", "report_ref"),
-          extra=("originator", "owning_unit"), moment="chapter4", addition=_SUBJECT),
-    _link("MENTIONED_IN", _N, _DOC, _REPORTS, "R9", ("subject_ref", "report_ref"),
-          extra=("originator", "owning_unit"), moment="chapter4", addition=_NAMED),
+          ("nomis_id_a", "nomis_id_b"), props=frozenset({"case_ref"})),
+    *(
+        _link("MENTIONED_IN", kind, _DOC, _REPORTS, "R9", (f"subject_{i}", "report_ref"),
+              extra=(f"subject_{i}_role",), moment="chapter4",
+              addition=(_SUBJECT if kind == _P else _NAMED) if i == 1 else None)
+        for kind in (_P, _N)
+        for i in (1, 2, 3)
+    ),
+    _link("MENTIONED_IN", "Endpoint:msisdn", _DOC, _REPORTS, "R9",
+          ("phone_mentioned", "report_ref"), moment="chapter4", addition=_PHONE),
     *(
         _link("MENTIONED_IN", f"Location:{kind}", _DOC, _REPORTS, "R9", (column, "report_ref"),
               moment="chapter4", addition=_AREAS)
@@ -2164,10 +2263,10 @@ _LINK_ROWS: tuple[tuple[Any, ...], ...] = (
             ("cell", "area_ref_3"), ("yard", "area_ref"), ("place", "area_ref"),
         )
     ),
-    _link("MENTIONED_IN", "Incident:throw_over", _DOC, _REPORTS, "R9",
-          ("incident_refs", "report_ref"), moment="chapter4",
-          addition="R9 must gain incident_refs, or a report-incident file, naming the throw-overs "
-          "of the day."),
+    _link("MENTIONED_IN", "Incident:throw_over", _DOC, _REPORT_INCIDENTS, _NEW_REPORT_INCIDENTS,
+          ("incident_ref", "report_ref"), moment="chapter4",
+          addition="Brief 2 must add a report-incident file, one row per report and throw-over, "
+          "because a recipe cannot split a list held in one column."),
     _link("OCCURRED_AT", "Incident:throw_over", "Location:yard", "pid_throwover_log.csv", "R10",
           ("incident_ref", "yard_ref"), props=frozenset({"lat", "lon", "yard", "item_type"}),
           extra=("occurred_at",)),
@@ -2176,18 +2275,20 @@ _LINK_ROWS: tuple[tuple[Any, ...], ...] = (
     _link("PART_OF", "Location:wing", "Establishment", _ESTATE, "R11", _PART),
     _link("PART_OF", "Location:yard", "Establishment", _ESTATE, "R11", _PART),
     _link("PART_OF", "Location:hall", "Establishment", _ESTATE, "R11", _PART),
-    _link("PART_OF", "Location:wing", "Location:zone", _ESTATE, "R11", ("ref", "parent_ref_2"),
-          addition=_ZONE_PARENT),
-    _link("PART_OF", "Location:yard", "Location:zone", _ESTATE, "R11", ("ref", "parent_ref_2"),
-          addition=_ZONE_PARENT),
-    _link("ADJOINS", "Location:yard", "Location:wing", _ESTATE, "R11", ("ref", "adjoins_ref")),
-    _link("USED_BY", "Location:yard", "Location:wing", _ESTATE, "R11", ("ref", "used_by_ref")),
+    _link("PART_OF", "Location:wing", "Location:zone", _ESTATE, "R11",
+          ("place_ref", "parent_ref_2"), addition=_ZONE_PARENT),
+    _link("PART_OF", "Location:yard", "Location:zone", _ESTATE, "R11",
+          ("place_ref", "parent_ref_2"), addition=_ZONE_PARENT),
+    _link("ADJOINS", "Location:yard", "Location:wing", _ESTATE, "R11",
+          ("place_ref", "adjoins_ref")),
+    _link("USED_BY", "Location:yard", "Location:wing", _ESTATE, "R11",
+          ("place_ref", "used_by_ref")),
     _link("MEMBER_OF", _P, "Organisation", "pid_soc_nominals.csv", "R12",
-          ("prison_number", "org_ref")),
+          ("nomis_id", "group_ref")),
     _link("FAMILY_OF", _P, _P, "pid_family_and_associates.csv", "R13",
-          ("prison_number_a", "prison_number_b"), props=frozenset({"relation"})),
+          ("nomis_id_a", "nomis_id_b"), props=frozenset({"relation"})),
     _link("ASSOCIATE_OF", _P, _P, "pid_family_and_associates.csv", "R13",
-          ("prison_number_a", "prison_number_b")),
+          ("nomis_id_a", "nomis_id_b")),
     _link("PASSES_ITEMS_TO", _P, _P, "graph port", "seed", ("source", "target"),
           props=frozenset({"channel"}), extra=("confidence",)),
     *(
@@ -2203,13 +2304,16 @@ _LINK_ROWS: tuple[tuple[Any, ...], ...] = (
 
 def _entity(
     label: str, props: set[str], file: str, recipe: str, key: str,
-    *, moment: Moment = "seed", addition: str | None = None,
+    *, moment: Moment = "seed", extra: tuple[str, ...] = (), addition: str | None = None,
 ) -> tuple[Any, ...]:  # fmt: skip
-    return (label, frozenset(props), file, recipe, moment, key, addition)
+    return (label, frozenset(props), file, recipe, moment, key, extra, addition)
 
 
 _PERSON = {"family_name", "given_names", "date_of_birth", "aliases"}
 _PLACE = {"name", "site_ref"}
+#: A place with a point carries its coordinates in `lat` and `lon` (Amendment 9 decision 4): a
+#: Studio load gives it its point and `geometry_ref` through the `geometry_ref` transform.
+_POINT = ("lat", "lon")
 _ENDPOINT = {"value_raw", "value_normalised", "endpoint_kind"}
 _INCIDENT = {"name", "incident_ref", "category", "item", "occurred_at"}
 _ENTITY_ROWS: tuple[tuple[Any, ...], ...] = (
@@ -2222,15 +2326,15 @@ _ENTITY_ROWS: tuple[tuple[Any, ...], ...] = (
     _entity("Establishment",
             {"name", "establishment_ref", "niu_area", "soct_region", "security_category"},
             _ESTATE, "R11", "establishment_ref"),
-    _entity("Location:wing", {*_PLACE, "geometry_ref"}, _ESTATE, "R11", "site_ref"),
+    _entity("Location:wing", _PLACE, _ESTATE, "R11", "site_ref", extra=_POINT),
     _entity("Location:landing", _PLACE, _ESTATE, "R11", "site_ref"),
     _entity("Location:cell", _PLACE, _ESTATE, "R11", "site_ref"),
-    _entity("Location:yard", {*_PLACE, "geometry_ref"}, _ESTATE, "R11", "site_ref"),
-    _entity("Location:zone", {*_PLACE, "geometry_ref"}, _ESTATE, "R11", "site_ref",
+    _entity("Location:yard", _PLACE, _ESTATE, "R11", "site_ref", extra=_POINT),
+    _entity("Location:zone", _PLACE, _ESTATE, "R11", "site_ref", extra=_POINT,
             addition="R11 must gain the zone kind, a place made of other places."),
     _entity("Location:hall", _PLACE, _ESTATE, "R11", "site_ref",
             addition="R11 must gain the visits hall kind."),
-    _entity("Location:place", _PLACE, _ESTATE, "R11", "site_ref",
+    _entity("Location:place", _PLACE, _ESTATE, "R11", "site_ref", extra=_POINT,
             addition="R11 must gain the outside place kind, where a report is set away from any "
             "establishment."),
     _entity("Organisation", {"name", "org_ref"}, "pid_soc_nominals.csv", "R12", "org_ref"),
@@ -2273,6 +2377,10 @@ def _handling_of(file: str) -> Literal["recipe", "column"]:
     return "column" if file in _COLUMN_FILES else "recipe"
 
 
+def _handling_columns(file: str) -> tuple[str, ...]:
+    return HANDLING_COLUMNS if file in _COLUMN_FILES else ()
+
+
 _SEEN_FILES: set[str] = set()
 ENTITY_SHAPES: tuple[EntityShape, ...] = tuple(
     EntityShape(
@@ -2282,11 +2390,11 @@ ENTITY_SHAPES: tuple[EntityShape, ...] = tuple(
         recipe,
         moment,
         key,
-        (key, *sorted(p for p in props if p != key)),
+        (key, *sorted(p for p in props if p != key), *extra, *_handling_columns(file)),
         _handling_of(file),
         add,
     )  # fmt: skip
-    for label, props, file, recipe, moment, key, add in _clause(_ENTITY_ROWS, 2, _SEEN_FILES)
+    for label, props, file, recipe, moment, key, extra, add in _clause(_ENTITY_ROWS, 2, _SEEN_FILES)
 )
 LOAD_SHAPES: tuple[LoadShape, ...] = tuple(
     LoadShape(
@@ -2299,7 +2407,13 @@ LOAD_SHAPES: tuple[LoadShape, ...] = tuple(
         moment,
         skey,
         tkey,
-        (skey, tkey, *sorted(props), *extra),
+        (
+            skey,
+            tkey,
+            *sorted(_PROPERTY_COLUMNS.get((t, p), p) for p in props),
+            *extra,
+            *_handling_columns(file),
+        ),
         _handling_of(file),
         add,
     )  # fmt: skip
@@ -2307,3 +2421,449 @@ LOAD_SHAPES: tuple[LoadShape, ...] = tuple(
         _LINK_ROWS, 4, _SEEN_FILES
     )
 )
+
+
+# --- Instants and rows (ADR-120 Amendment 9 decision 1) ----------------------------------------
+#
+# A counted link is written one row per occurrence, and a carried link rides on the rows of the
+# link that owns them. Everything here is pure: no file, no clock, no draw. `rows_for` yields what
+# a later stage serialises; the plan's carried counts (`_Build.carry`) are the row counts this
+# generator produces, and the plan test proves they agree.
+
+#: The date-time columns a shape can carry: one per occurrence, or two for a span (`custody_from`
+#: and `custody_to` for a custody, `start` and `end` for a cell stay).
+DATE_COLUMNS = (
+    "first_seen", "week_start", "visit_date", "call_start", "found_on", "occurred_at",
+    "transferred_at", "custody_from", "custody_to", "start", "end",
+)  # fmt: skip
+_PSEUDO_FILES = frozenset({"graph port", "picture route"})
+_IDENTIFIERS = (
+    "prison_number", "nino", "site_ref", "establishment_ref", "org_ref", "incident_ref", "imei",
+    "value_normalised",
+)  # fmt: skip
+
+
+def _start_of(value: date | datetime) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime(value.year, value.month, value.day, tzinfo=UTC)
+
+
+def _end_of(value: date | datetime) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime(value.year, value.month, value.day, 23, 59, 59, tzinfo=UTC)
+
+
+def _noon_of(value: date | datetime) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime(value.year, value.month, value.day, 12, tzinfo=UTC)
+
+
+def occurrence_instants(link: PlanLink) -> list[datetime]:
+    """The instant of each of a link's occurrences, one rule for the files, the store writes and the
+    plan test: n = `occurrences`; the first at `first_seen` 00:00:00Z, the last at `last_seen`
+    23:59:59Z, the rest evenly spaced and truncated to the second; one occurrence is that day at
+    12:00:00Z (the plan gives it one date); a date-time in the plan is used as it is; a link with
+    one end dated uses it for both; an undated link has none."""
+    first, last = link.first_seen, link.last_seen
+    if first is None and last is None:
+        return []
+    first = first if first is not None else last
+    last = last if last is not None else first
+    assert first is not None and last is not None
+    n = link.occurrences
+    if n == 1:
+        return [_noon_of(first)]
+    start, end = _start_of(first), _end_of(last)
+    span = int((end - start).total_seconds())
+    return [start + timedelta(seconds=span * i // (n - 1)) for i in range(n)]
+
+
+def _weekly_instants(link: PlanLink, weekly: Sequence[int]) -> list[datetime]:
+    """A PIN call link's calls week by week (Amendment 10 decision 1): week k runs from its Monday
+    00:00:00 to its Sunday 23:59:59 UTC, the first live week from the link's `first_seen`
+    00:00:00 and the last from its `last_seen` 23:59:59 at the latest; a week's n >= 2 calls sit at
+    `start + i (end - start) / (n - 1)` truncated to the second; a single call sits at the window's
+    midpoint, except that the link's first call is at the first live week's start and its last at
+    the last live week's end."""
+    assert link.first_seen is not None and link.last_seen is not None
+    live = [w for w, n in enumerate(weekly) if n]
+    out: list[datetime] = []
+    for week in live:
+        monday = _start_of(CALL_START + timedelta(days=7 * week))
+        start = max(monday, _start_of(link.first_seen))
+        end = min(monday + timedelta(days=7) - timedelta(seconds=1), _end_of(link.last_seen))
+        span = int((end - start).total_seconds())
+        n = weekly[week]
+        if n == 1:
+            if week == live[0]:
+                at = start
+            elif week == live[-1]:
+                at = end
+            else:
+                at = start + timedelta(seconds=span // 2)
+            out.append(at)
+        else:
+            out += [start + timedelta(seconds=span * i // (n - 1)) for i in range(n)]
+    return out
+
+
+def link_instants(plan: Plan, link: PlanLink) -> list[datetime]:
+    """The instants of a link's rows, from the one function the files, the store writes and the
+    reader share (Amendment 10 decision 2). A link a row carries as its own occurrence: its
+    `occurrence_instants`, or, for a PIN account's call link, its calls week by week. A carried
+    link: its own date on each carrying row, noon for a day or a date-time as it stands, and none
+    where it is undated."""
+    index = plan._rows
+    if link.key in index.carried:
+        when = link.first_seen if link.first_seen is not None else link.last_seen
+        return [] if when is None else [_noon_of(when)] * link.occurrences
+    if link.link_type == "COMMUNICATED_WITH" and index.label[link.source] == "Endpoint:handle":
+        weekly = index.calls.get((link.source, link.target))
+        if weekly is not None:
+            return _weekly_instants(link, weekly)
+    return occurrence_instants(link)
+
+
+def property_column(shape: LoadShape, name: str) -> str:
+    """The column that holds a link property: its own name unless Brief 2 names the value."""
+    return _PROPERTY_COLUMNS.get((shape.link_type, name), name)
+
+
+def _cell(value: object) -> str:
+    """A plan value as a CSV cell: text as it is, a date as `YYYY-MM-DD`, a date-time as ISO-8601
+    with its offset, a float as its `repr`, a list joined by `|`."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, datetime | date):
+        return value.isoformat()
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, list | tuple):
+        return "|".join(_cell(v) for v in value)
+    return str(value)
+
+
+def _identifier(entity: PlanEntity) -> str:
+    """What a file's cell holds to name an entity: its prison number, NINO, place or establishment
+    reference, organisation or incident reference, IMEI or endpoint value, else its plan key (a
+    report has no reference property)."""
+    for name in _IDENTIFIERS:
+        if name in entity.properties:
+            return str(entity.properties[name])
+    return entity.key
+
+
+@dataclass(frozen=True)
+class PlanRow:
+    """One row of a file. `values` holds every column of `file_columns(file)` as text; `links` the
+    keys of the plan links the row is one occurrence of (its own link first); `entities` the keys
+    of the entities it writes (the row's own entity first for the reports and the estate)."""
+
+    values: Mapping[str, str]
+    links: tuple[str, ...]
+    entities: tuple[str, ...]
+
+
+def _carrying_links(
+    links: Sequence[PlanLink], ents: Mapping[str, PlanEntity]
+) -> dict[str, list[str]]:
+    """The one finder of carried links: for each link that rides on other links' rows, the keys of
+    the links whose rows carry it, in plan order. A prisoner's `USES` of his PIN account rides on
+    that account's calls; an owner's `USES` of a bank or cash account on the transfers out of or
+    into it; a seized handset's `USES` and `PAIRED_WITH` on the communications of its SIM; a
+    non-throw-over incident's `OCCURRED_AT` on its participants' `ROLE_IN` rows. A carried link
+    no row carries maps to an empty list. `_Build.carry` counts with it and `_PlanIndex` writes
+    with it, so the plan's counts are the generator's rows."""
+    comm: dict[str, list[str]] = {}
+    paid_from: dict[str, list[str]] = {}
+    paid_into: dict[str, list[str]] = {}
+    role: dict[str, list[str]] = {}
+    sim_of: dict[str, str] = {}
+    for lk in links:
+        if lk.link_type == "COMMUNICATED_WITH":
+            comm.setdefault(lk.source, []).append(lk.key)
+        elif lk.link_type == "TRANSACTED":
+            paid_from.setdefault(lk.source, []).append(lk.key)
+            paid_into.setdefault(lk.target, []).append(lk.key)
+        elif lk.link_type == "ROLE_IN":
+            role.setdefault(lk.target, []).append(lk.key)
+        elif lk.link_type == "PAIRED_WITH":
+            sim_of[lk.target] = lk.source
+    out: dict[str, list[str]] = {}
+    for lk in links:
+        target = ents[lk.target]
+        if lk.link_type == "USES" and target.entity_type == "Endpoint":
+            kind = str(target.properties["endpoint_kind"])
+            if kind == "handle":
+                out[lk.key] = comm.get(lk.target, [])
+            elif kind == "account":
+                out[lk.key] = [*paid_from.get(lk.target, []), *paid_into.get(lk.target, [])]
+        elif lk.link_type == "USES" and target.entity_type == "Device":
+            out[lk.key] = comm.get(sim_of.get(lk.target, ""), [])
+        elif lk.link_type == "PAIRED_WITH":
+            out[lk.key] = comm.get(lk.source, [])
+        elif lk.link_type == "OCCURRED_AT":
+            source = ents[lk.source]
+            if source.entity_type == "Incident" and source.properties["category"] != "throw_over":
+                out[lk.key] = role.get(lk.source, [])
+    return out
+
+
+def carrying_links(plan: Plan) -> dict[str, list[str]]:
+    """`_carrying_links` for a plan: carried link key -> the keys of the links carrying it."""
+    return dict(plan._rows.carriers)
+
+
+class _PlanIndex:
+    """What `rows_for` and `mixed_files` read about a plan: each link's shape, each entity's file,
+    which links are carried and by which."""
+
+    def __init__(self, plan: Plan) -> None:
+        self.plan = plan
+        ents = {e.key: e for e in plan.entities}
+        visitors = {lk.source for lk in plan.links if lk.link_type == "VISITED"}
+        self.reports = {
+            e.key
+            for e in plan.entities
+            if e.entity_type == "Document" and e.properties.get("media_kind") == "text"
+        }
+        self.label = {e.key: self._label(e, visitors) for e in plan.entities}
+        self.entity_file: dict[str, str] = {}
+        for e in plan.entities:
+            moment = self._moment(e.key)
+            for esh in ENTITY_SHAPES:
+                if (
+                    esh.entity_type == self.label[e.key]
+                    and esh.moment == moment
+                    and set(e.properties) <= esh.properties
+                ):
+                    self.entity_file[e.key] = esh.file
+                    break
+            else:
+                raise ValueError(f"no entity shape for {e.key}")
+        by_type: dict[tuple[str, str, str], list[LoadShape]] = {}
+        for sh in LOAD_SHAPES:
+            by_type.setdefault((sh.link_type, sh.source_type, sh.target_type), []).append(sh)
+        people: Counter[str] = Counter()
+        places: Counter[str] = Counter()
+        self.shape: dict[str, LoadShape] = {}
+        self.out_links: dict[str, list[PlanLink]] = {}
+        self.in_links: dict[str, list[PlanLink]] = {}
+        for lk in plan.links:
+            column: str | None = None
+            if lk.link_type == "MENTIONED_IN" and lk.target in self.reports:
+                kind = ents[lk.source].entity_type
+                if kind == "Person":
+                    column = f"subject_{people[lk.target] + 1}"
+                    people[lk.target] += 1
+                elif kind == "Location":
+                    n = places[lk.target]
+                    column = "area_ref" if n == 0 else f"area_ref_{n + 1}"
+                    places[lk.target] += 1
+            moment = plan.moment_of.get(lk.key, "seed")
+            found = [
+                sh
+                for sh in by_type.get(
+                    (lk.link_type, self.label[lk.source], self.label[lk.target]), ()
+                )
+                if sh.properties == frozenset(lk.properties)
+                and sh.moment == moment
+                and (column is None or sh.source_key == column)
+            ]
+            if len(found) != 1:
+                raise ValueError(f"{lk.key} {lk.link_type} matches {len(found)} load shapes")
+            self.shape[lk.key] = found[0]
+            self.out_links.setdefault(lk.source, []).append(lk)
+            self.in_links.setdefault(lk.target, []).append(lk)
+        # Carried links: the rows of the links that carry them also carry them.
+        self.carriers = _carrying_links(plan.links, ents)
+        self.carried: set[str] = set(self.carriers)
+        self.carried_by: dict[str, list[PlanLink]] = {}
+        by_key = {lk.key: lk for lk in plan.links}
+        for key, rows in self.carriers.items():
+            for row in rows:
+                self.carried_by.setdefault(row, []).append(by_key[key])
+        self.calls = {(c.pin, c.number): c.weekly for c in plan.calls}
+
+    @staticmethod
+    def _label(e: PlanEntity, visitors: set[str]) -> str:
+        """An entity's type as a shape names it (see `LoadShape`)."""
+        if e.entity_type == "Endpoint":
+            return f"Endpoint:{e.properties['endpoint_kind']}"
+        if e.entity_type == "Incident":
+            return (
+                "Incident:throw_over"
+                if e.properties["category"] == "throw_over"
+                else "Incident:other"
+            )
+        if e.entity_type == "Location":
+            return f"Location:{str(e.properties['site_ref']).split(':')[-2]}"
+        if e.entity_type == "Person":
+            if "prison_number" in e.properties:
+                return _P
+            return _V if e.key in visitors else _N
+        return e.entity_type
+
+    def _moment(self, key: str) -> Moment:
+        if key in self.reports or self.label[key] == _N:
+            return "chapter4"
+        return "chapter9" if key in ("handset:batch2", "sim:batch2") else "seed"
+
+
+def mixed_files(plan: Plan) -> frozenset[str]:
+    """The files whose rows carry more than one handling, derived from the plan's links and
+    entities by their shapes; the two carve-outs, which no file carries, are left out."""
+    index = plan._rows
+    handlings: dict[str, set[PlanHandling]] = {}
+    for lk in plan.links:
+        handlings.setdefault(index.shape[lk.key].file, set()).add(lk.handling)
+    for e in plan.entities:
+        handlings.setdefault(index.entity_file[e.key], set()).add(e.handling)
+    return frozenset(f for f, hs in handlings.items() if len(hs) > 1 and f not in _PSEUDO_FILES)
+
+
+_FILES = frozenset(sh.file for sh in LOAD_SHAPES) - _PSEUDO_FILES
+
+
+def file_columns(file: str) -> tuple[str, ...]:
+    """A file's columns: its load shapes' columns in first-seen order, the extra columns of its
+    entity shapes (a place's `lat` and `lon`), and the handling columns last where it is mixed."""
+    if file not in _FILES:
+        raise ValueError(f"{file!r} is not one of the plan's files")
+    columns: list[str] = []
+    for sh in LOAD_SHAPES:
+        if sh.file == file:
+            columns += [c for c in sh.columns if c not in columns and c not in HANDLING_COLUMNS]
+    for entity_shape in ENTITY_SHAPES:
+        if entity_shape.file == file:
+            columns += [
+                c
+                for c in entity_shape.columns
+                if c not in columns
+                and c not in HANDLING_COLUMNS
+                and c != entity_shape.key
+                and c not in entity_shape.properties
+            ]
+    return (*columns, *_handling_columns(file))
+
+
+def _fill_link(
+    values: dict[str, str], index: _PlanIndex, link: PlanLink, *, owner: bool, phone: str | None
+) -> None:
+    """The cells of one link: its ends, its properties and, for a carried link, its one date."""
+    shape = index.shape[link.key]
+    ents = index.plan._entity_index
+    source = _identifier(ents[link.source]) if phone is None else phone
+    values[shape.source_key] = source
+    values[shape.target_key] = _identifier(ents[link.target])
+    for name in shape.properties:
+        values[property_column(shape, name)] = _cell(link.properties[name])
+    dates = [c for c in shape.columns if c in DATE_COLUMNS]
+    if not dates or link.first_seen is None and link.last_seen is None:
+        return
+    span = _SPAN_COLUMNS.get(shape.link_type)
+    if span is not None:
+        assert link.first_seen is not None
+        values[span[0]] = _start_of(link.first_seen).isoformat()
+        values[span[1]] = "" if link.last_seen is None else _end_of(link.last_seen).isoformat()
+    elif not owner:
+        values[dates[0]] = link_instants(index.plan, link)[0].isoformat()
+
+
+#: The columns that hold a row's own reference, and the prefix of each reference.
+_ROW_REFERENCES = {"visit_ref": "VIS", "transfer_id": "TRF"}
+
+
+def _put_handling(values: dict[str, str], handling: PlanHandling) -> None:
+    for name in HANDLING_COLUMNS:
+        values[name] = getattr(handling, name) or ""
+
+
+def rows_for(plan: Plan, file: str) -> Iterator[PlanRow]:
+    """The rows of one of the plan's files, with no I/O: a counted link is one row per occurrence,
+    dated by `link_instants` (the even spread, or a PIN call link's week-by-week calls); a carried
+    link is written on each row of the links that carry it, with its own date from `link_instants`;
+    a span is one row with its two columns (`custody_from` and `custody_to` for a custody, `start`
+    and `end` for a cell stay); the reports are one row each, the estate one row per place.
+    `ValueError` for a name that is not one of the plan's files."""
+    if file not in _FILES:
+        raise ValueError(f"{file!r} is not one of the plan's files")
+    return _rows(plan, file)
+
+
+def _rows(plan: Plan, file: str) -> Iterator[PlanRow]:
+    index = plan._rows
+    ents = plan._entity_index
+    columns = file_columns(file)
+    blank = dict.fromkeys(columns, "")
+    mixed = file in _COLUMN_FILES
+
+    def written(*keys: str) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(k for k in keys if index.entity_file[k] == file))
+
+    if file in (_REPORTS, _ESTATE):
+        keys = (
+            sorted(index.reports)
+            if file == _REPORTS
+            else [e.key for e in plan.entities if index.entity_file[e.key] == file]
+        )
+        for key in keys:
+            entity = ents[key]
+            values = dict(blank)
+            mine = [
+                lk
+                for lk in (index.in_links if file == _REPORTS else index.out_links).get(key, ())
+                if index.shape[lk.key].file == file
+            ]
+            ends: list[str] = []
+            for lk in mine:
+                phone = None
+                if (
+                    lk.link_type == "MENTIONED_IN"
+                    and index.label[lk.source] == "Endpoint:msisdn"
+                    and lk.target == PID_TEACHING_REPORT
+                ):
+                    phone = PID_TEACHING_BAD_NUMBER
+                _fill_link(values, index, lk, owner=True, phone=phone)
+                ends += [lk.source, lk.target]
+            if file == _REPORTS:
+                values["report_ref"] = key
+            else:
+                values["place_ref"] = _identifier(entity)
+                if key in PLACE_POINTS:
+                    values["lat"], values["lon"] = (repr(x) for x in PLACE_POINTS[key])
+            if mixed:
+                _put_handling(values, entity.handling)
+            yield PlanRow(values, tuple(lk.key for lk in mine), written(key, *ends))
+        return
+    for lk in plan.links:
+        shape = index.shape[lk.key]
+        if shape.file != file or lk.key in index.carried:
+            continue
+        base = dict(blank)
+        _fill_link(base, index, lk, owner=True, phone=None)
+        carried = index.carried_by.get(lk.key, [])
+        for other in carried:
+            _fill_link(base, index, other, owner=False, phone=None)
+        if mixed:
+            _put_handling(base, lk.handling)
+        dates = [c for c in shape.columns if c in DATE_COLUMNS]
+        own_dates = shape.link_type not in _SPAN_COLUMNS and bool(dates)
+        instants = [i.isoformat() for i in link_instants(plan, lk)] if own_dates else []
+        links = (lk.key, *(c.key for c in carried))
+        entities = written(
+            lk.source, lk.target, *(k for c in carried for k in (c.source, c.target))
+        )
+        # A row's own reference, so no two occurrences collapse under the file's de-duplication key.
+        refs = [(c, prefix) for c, prefix in _ROW_REFERENCES.items() if c in shape.columns]
+        stem = link_id(lk)[4:]
+        for i in range(lk.occurrences):
+            values = dict(base)
+            if instants:
+                values[dates[0]] = instants[i]
+            for column, prefix in refs:
+                values[column] = f"{prefix}-{stem}-{i + 1:04d}"
+            yield PlanRow(values, links, entities)

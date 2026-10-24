@@ -2179,7 +2179,8 @@ async def _weighted_edges_by_label(adapter: GraphPort) -> dict[str, Edge]:
     """Links of four kinds, written through `upsert_edges` with an interval that ended in the past
     and read back: a counted type (`COMMUNICATED_WITH`), a self-loop of that type at a node that
     has other occurrences (so its normalised PMI would not be 0), a structural (fixed-weight) type
-    and a type the weights file does not name. Keyed by label: the type's name, and `SELF_LOOP`."""
+    and a type no version of the weights file names (`ASSOCIATE_OF`: `USES` took the default rule
+    until version 3 gave it a fixed one). Keyed by label: the type's name, and `SELF_LOOP`."""
     (a, b, p, q), _ = await _write(
         adapter,
         [
@@ -2204,7 +2205,9 @@ async def _weighted_edges_by_label(adapter: GraphPort) -> dict[str, Edge]:
                 interval=interval,
             ),
             _edge("FAMILY_OF", p, q, classification="OFFICIAL", occurrences=2, interval=interval),
-            _edge("USES", p, a, classification="OFFICIAL", occurrences=3, interval=interval),
+            _edge(
+                "ASSOCIATE_OF", p, q, classification="OFFICIAL", occurrences=3, interval=interval
+            ),
         ],
     )
     # Written after the other link at `a`, so the store already holds its occurrences.
@@ -2248,25 +2251,30 @@ def _recomputed(edge: Edge, rules: Any, self_loop: bool) -> float:
     )
 
 
+@pytest.mark.parametrize("weights_version", [1, 2, 3])
 async def test_every_stored_weight_carries_the_current_parameter_set(
-    factory: GraphAdapterFactory,
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch, weights_version: int
 ) -> None:
     """ADR-120 D3: a weight computed under one calibration is not comparable with another, so every
     stored component names the version and rule it was computed under. Catches a write path that
     stores components with no parameter set, or one naming the wrong rule: a counted type, a
     self-loop of it, a structural type and a type with no rule of its own (which takes
     `default`)."""
-    from ontology.weights import load_weight_rules
+    from ontology.weights import load_weight_history
 
-    rules = load_weight_rules()
+    rules = load_weight_history()[weights_version - 1]
+    assert rules.version == weights_version
+    _use_weights_version(monkeypatch, weights_version)
     async with factory.context() as adapter:
         by_label = await _weighted_edges_by_label(adapter)
-        assert set(by_label) == {"COMMUNICATED_WITH", "SELF_LOOP", "FAMILY_OF", "USES"}
+        assert set(by_label) == {"COMMUNICATED_WITH", "SELF_LOOP", "FAMILY_OF", "ASSOCIATE_OF"}
         for edge in by_label.values():
             assert edge.weight_components is not None, edge.type
             assert edge.weight_components.parameter_set == rules.parameter_set(edge.type)
-        assert by_label["USES"].weight_components is not None
-        assert by_label["USES"].weight_components.parameter_set == f"{rules.version}/default"
+        assert by_label["ASSOCIATE_OF"].weight_components is not None
+        assert (
+            by_label["ASSOCIATE_OF"].weight_components.parameter_set == f"{rules.version}/default"
+        )
         assert by_label["SELF_LOOP"].weight_components is not None
         assert (
             by_label["SELF_LOOP"].weight_components.parameter_set
@@ -2274,7 +2282,7 @@ async def test_every_stored_weight_carries_the_current_parameter_set(
         )
 
 
-@pytest.mark.parametrize("weights_version", [1, 2])
+@pytest.mark.parametrize("weights_version", [1, 2, 3])
 async def test_the_stored_weight_is_what_the_rules_compute(
     factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch, weights_version: int
 ) -> None:
@@ -2284,11 +2292,11 @@ async def test_the_stored_weight_is_what_the_rules_compute(
     components stored beside it under the rules in force, for a counted, a structural and a
     default-rule type and a self-loop.
 
-    ADR-123: run under version 1 and under version 2, each pinned by index and given to the
-    adapter (`_use_weights_version`), not "latest". Only version 1 (gamma 0.3) makes the flag
-    matter: a caller that passed the wrong `self_loop` stores another weight there, and the
-    assertion below proves the case is one that term moves. Under version 2 the flag changes
-    nothing, which is asserted too, so each case is what it claims to be."""
+    ADR-123: run under versions 1 and 2, and under version 3 (Amendment 9 decision 9), each
+    pinned by index and given to the adapter (`_use_weights_version`), not "latest". Only version 1
+    (gamma 0.3) makes the flag matter: a caller that passed the wrong `self_loop` stores another
+    weight there, and the assertion below proves the case is one that term moves. Under versions 2
+    and 3 the flag changes nothing, which is asserted too, so each case is what it claims to be."""
     from ontology.weights import load_weight_history
 
     rules = load_weight_history()[weights_version - 1]
@@ -2304,7 +2312,7 @@ async def test_the_stored_weight_is_what_the_rules_compute(
 
             is_loop = edge.source == edge.target
             assert edge.weight == pytest.approx(_recomputed(edge, rules, is_loop), abs=1e-9), label
-            if label in ("COMMUNICATED_WITH", "SELF_LOOP", "USES"):
+            if label in ("COMMUNICATED_WITH", "SELF_LOOP", "ASSOCIATE_OF"):
                 other_flag = _recomputed(edge, rules, not is_loop)
                 if weights_version == 1:
                     # A caller that passed the wrong flag would store another weight: the counts

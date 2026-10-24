@@ -75,6 +75,16 @@ old formula, the self-loop series with its mutual-information term left in.
     `test_on_a_star_the_heavy_links_outweigh_a_one_off_cell_share_and_the_picture`.
 - `test_on_a_star_the_heavy_links_outweigh_a_one_off_cell_share_and_the_picture` catches a
   formula that draws the principal's one-off links as heavy as the coordinator's calls.
+- ADR-120 Amendment 9 decision 9 (weights version 3: uses, paired-with and occurred-at are
+  structural): `test_version_three_loads_with_the_three_fixed_rules_and_version_two_s_other_values`
+  catches a version 3 that lacks one of the three fixed rules at 0.75, one that differs from
+  version 2 anywhere else (gamma 0 included), or one under which a prisoner's PIN `USES` link of
+  213 occurrences still outweighs its fixed strength; it also proves the same assertion fails
+  under version 2, so its green is not a weight that could not move (rule 15).
+  `test_no_earlier_version_of_the_weights_file_is_edited` now holds the frozen copy to versions
+  1 to 3. The type with no rule in any version is `ASSOCIATE_OF` (`UNLISTED`): `USES` took the
+  default rule until version 3 gave it a fixed one, so every default-rule case uses the new name,
+  and `VERSIONS` runs under 1, 2 and 3.
 """
 
 from __future__ import annotations
@@ -115,9 +125,13 @@ FIXED = {
     "HELD_AT": 0.75,
     "DEPICTS": 0.2,
 }
+#: What version 3 adds to version 2's fixed rules (Amendment 9 decision 9): a fact, not evidence
+#: that grows with volume, so its strength is fixed as custody's and family's is.
+FIXED_V3 = {"USES": 0.75, "PAIRED_WITH": 0.75, "OCCURRED_AT": 0.75}
 DEFAULT_UNIT = ("one occurrence", 10)
-#: A type the weights file does not name, so it takes the default rule.
-UNLISTED = "USES"
+#: A type no version of the weights file names, so it takes the default rule under every version.
+#: (`USES` was this until version 3 gave it a fixed rule.)
+UNLISTED = "ASSOCIATE_OF"
 LOGISTIC_OF_TWO = 1.0 / (1.0 + math.exp(-2.0))
 
 
@@ -149,14 +163,14 @@ def _edited_versions(
 
 
 #: The weights versions the cases that do not depend on the mutual-information term run under.
-VERSIONS = pytest.mark.parametrize("weights_version", [1, 2])
+VERSIONS = pytest.mark.parametrize("weights_version", [1, 2, 3])
 
 
 @functools.cache
 def _rules(version: int = 1) -> Any:
     """A version of the weights file, by index and not "latest" (ADR-123). Version 1 (gamma 0.3) is
     the one the mutual-information cases are pinned to, so each still exercises the term and can
-    still fail; version 2 (gamma 0) is the other the unpinned cases run under."""
+    still fail; versions 2 and 3 (gamma 0) are the others the unpinned cases run under."""
     from ontology.weights import load_weight_history
 
     rules = load_weight_history()[version - 1]
@@ -263,11 +277,12 @@ def test_version_one_carries_the_brief_s_rules() -> None:
 
 
 def test_no_earlier_version_of_the_weights_file_is_edited() -> None:
-    """Catches version 1 or 2 of the real file differing from the frozen copy, or the real file
-    lacking version 2 (ADR-123); an appended version 3 is allowed and reported by nothing."""
+    """Catches version 1, 2 or 3 of the real file differing from the frozen copy, or the real file
+    lacking version 2 (ADR-123) or version 3 (Amendment 9); an appended version 4 is allowed and
+    reported by nothing."""
     frozen = _raw_versions(FROZEN)
-    assert [v["version"] for v in frozen] == [1, 2]
-    assert frozen[1]["gamma"] == 0
+    assert [v["version"] for v in frozen] == [1, 2, 3]
+    assert frozen[1]["gamma"] == 0 and frozen[2]["gamma"] == 0
     assert _edited_versions(frozen, _raw_versions(_weights_path())) == []
 
 
@@ -286,15 +301,20 @@ def test_the_history_check_reports_an_edited_version() -> None:
     gamma_changed[1]["gamma"] = 0.3
     assert _edited_versions(frozen, gamma_changed) == [2]
 
+    strength_changed = copy.deepcopy(frozen)
+    strength_changed[2]["rules"]["USES"]["fixed"] = 0.8
+    assert _edited_versions(frozen, strength_changed) == [3]
+
     appended = copy.deepcopy(frozen)
-    later = copy.deepcopy(frozen[1])
-    later["version"] = 3
+    later = copy.deepcopy(frozen[2])
+    later["version"] = 4
     later["rules"]["COMMUNICATED_WITH"]["heavy"] = 41
     appended.append(later)
     assert _edited_versions(frozen, appended) == []
 
-    assert _edited_versions(frozen, frozen[:1]) == [2]
-    assert _edited_versions(frozen, []) == [1, 2]
+    assert _edited_versions(frozen, frozen[:2]) == [3]
+    assert _edited_versions(frozen, frozen[:1]) == [2, 3]
+    assert _edited_versions(frozen, []) == [1, 2, 3]
 
 
 # --- the loader ---------------------------------------------------------------
@@ -347,6 +367,64 @@ def test_version_two_loads_with_gamma_0_and_version_one_s_other_values() -> None
     assert two.parameter_set("COMMUNICATED_WITH") == "2/COMMUNICATED_WITH"
     assert two.parameter_set("FAMILY_OF") == "2/FAMILY_OF"
     assert two.parameter_set(UNLISTED) == "2/default"
+
+
+def test_version_three_loads_with_the_three_fixed_rules_and_version_two_s_other_values() -> None:
+    """ADR-120 Amendment 9 decision 9. Catches a real weights file with no version 3, a version 3
+    whose `USES`, `PAIRED_WITH` or `OCCURRED_AT` is not fixed at 0.75, one that differs from
+    version 2 anywhere else (gamma 0, the calibration and every other rule), a parameter set that
+    does not name version 3, a type that has a rule in version 2 and none in version 3, and a
+    prisoner's PIN `USES` link of 213 occurrences (the principal's, one per call) that still
+    outweighs its fixed strength. Read from the raw file and as the loader gives it; the weight
+    assertion is shown to fail under version 2 inside this test (rule 15), and `UNLISTED` is shown
+    to take the default rule under every version."""
+    from ontology.weights import load_weight_history, load_weight_rules
+
+    raw_two, raw_three = _raw_versions(_weights_path())[1:3]
+    assert raw_three["version"] == 3
+    assert raw_three["gamma"] == 0
+    for name, strength in FIXED_V3.items():
+        assert name not in raw_two["rules"], name
+        assert raw_three["rules"][name] == {"fixed": strength}, name
+    assert {k: v for k, v in raw_three.items() if k not in ("version", "rules")} == {
+        k: v for k, v in raw_two.items() if k not in ("version", "rules")
+    }
+    assert {n: r for n, r in raw_three["rules"].items() if n not in FIXED_V3} == raw_two["rules"]
+    assert set(raw_three["rules"]) == set(raw_two["rules"]) | set(FIXED_V3)
+
+    history = load_weight_history()
+    two, three = history[1:3]
+    assert (three.version, three.gamma) == (3, 0.0)
+    for field in ("alpha", "beta", "half_life_days", "midpoint", "scale", "default"):
+        assert getattr(three, field) == getattr(two, field), field
+    for name, strength in FIXED_V3.items():
+        rule_name, rule = three.rule_for(name)
+        assert (rule_name, rule.heavy, rule.fixed) == (name, None, strength), name
+        assert three.parameter_set(name) == f"3/{name}"
+        assert two.rule_for(name)[0] == "default", name
+        assert two.parameter_set(name) == "2/default"
+    for name, (_, heavy) in COUNTED.items():
+        assert three.rule_for(name)[1].heavy == heavy, name
+    for name, strength in FIXED.items():
+        assert three.rule_for(name)[1].fixed == strength, name
+    assert load_weight_rules().version >= 3
+
+    # A fact does not thicken with use: 213 occurrences weigh the fixed strength under version 3
+    # and something else under version 2, so the assertion can fail.
+    for name, strength in FIXED_V3.items():
+        for valid_to in (None, NOW - timedelta(days=1000)):
+            components = _independent(213)
+            under_three = _weigh(components, name, valid_to=valid_to, self_loop=False, rules=three)
+            under_two = _weigh(components, name, valid_to=valid_to, self_loop=False, rules=two)
+            assert under_three == strength, name
+            assert under_two != pytest.approx(strength, abs=1e-3), name
+
+    # The type with no rule in any version takes the default rule under each.
+    for rules in history:
+        assert rules.rule_for(UNLISTED)[0] == "default", rules.version
+        assert rules.parameter_set(UNLISTED) == f"{rules.version}/default"
+    for raw in _raw_versions(_weights_path()):
+        assert UNLISTED not in raw["rules"], raw["version"]
 
 
 def test_a_version_after_one_with_a_gamma_other_than_0_is_refused_naming_it(
@@ -600,10 +678,10 @@ def test_the_loader_takes_a_whole_heavy_count_and_a_fixed_default(tmp_path: Path
 
     fixed_default = _edited(tmp_path, "fixed default", lambda v: v.update(default={"fixed": 0.5}))
     rules = load_weight_rules(fixed_default)
-    assert rules.rule_for("USES") == ("default", rules.default)
+    assert rules.rule_for(UNLISTED) == ("default", rules.default)
     assert rules.default.fixed == 0.5 and rules.default.heavy is None
-    assert rules.parameter_set("USES") == "1/default"
-    assert _weigh_under(rules, "USES") == 0.5
+    assert rules.parameter_set(UNLISTED) == "1/default"
+    assert _weigh_under(rules, UNLISTED) == 0.5
 
 
 def _weigh_under(rules: Any, edge_type: str) -> float:
@@ -848,6 +926,9 @@ def test_under_version_two_a_link_s_weight_is_the_same_whatever_its_corpus_count
     to fail under version 1 inside this test (rule 15): a green here is not a grid whose counts
     never mattered."""
     assert _count_dependent(_rules_v2()) == []
+    assert _count_dependent(_rules(3)) == [], (
+        "version 3 keeps gamma 0, so no count reaches a weight"
+    )
     under_one = _count_dependent(_rules(1))
     assert under_one, "no weight moved with its counts under version 1, so the grid proves nothing"
     # Version 1 moves with the type's total alone and with one end's degree alone, not only with
@@ -917,9 +998,9 @@ def test_a_self_loop_s_mutual_information_term_is_zero() -> None:
         pair = _weigh(loop, "COMMUNICATED_WITH", valid_to=valid_to, self_loop=False, rules=rules)
         assert pair < got - 1e-3, "the flag must change the weight where the term is not zero"
     default = _by_hand(loop, heavy=10, recency=1.0, npmi_term=0.0)
-    assert _weigh(
-        loop, UNLISTED, valid_to=None, self_loop=True, rules=rules
-    ) == pytest.approx(default, abs=1e-9)
+    assert _weigh(loop, UNLISTED, valid_to=None, self_loop=True, rules=rules) == pytest.approx(
+        default, abs=1e-9
+    )
     for edge_type, strength in FIXED.items():
         assert _weigh(loop, edge_type, valid_to=None, self_loop=True, rules=rules) == strength
 
@@ -1078,7 +1159,8 @@ def test_a_structural_type_weighs_its_strength_whatever_its_occurrences(
 ) -> None:
     """Catches a fixed rule that still follows its occurrences, recency or npmi."""
     rules = _rules(weights_version)
-    for edge_type, strength in FIXED.items():
+    fixed = {**FIXED, **(FIXED_V3 if weights_version >= 3 else {})}
+    for edge_type, strength in fixed.items():
         for occurrences in (1, 5, 500):
             for valid_to in (None, NOW - timedelta(days=1), NOW - timedelta(days=1000)):
                 for components in (
@@ -1114,9 +1196,7 @@ def test_an_unlisted_type_takes_the_default_rule(weights_version: int) -> None:
     name, rule = rules.rule_for(UNLISTED)
     assert (name, rule.heavy, rule.fixed) == ("default", 10, None)
     for components in (_independent(1), _independent(10), _independent(300)):
-        assert _weigh(
-            components, UNLISTED, valid_to=None, self_loop=False, rules=rules
-        ) == _weigh(
+        assert _weigh(components, UNLISTED, valid_to=None, self_loop=False, rules=rules) == _weigh(
             components, "SOME_TYPE_NO_FILE_NAMES", valid_to=None, self_loop=False, rules=rules
         )
     assert _weigh(

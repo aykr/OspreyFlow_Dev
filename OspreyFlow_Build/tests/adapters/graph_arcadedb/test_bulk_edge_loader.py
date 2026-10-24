@@ -324,7 +324,7 @@ def test_the_row_carries_what_upsert_would_store_for_a_single_edge() -> None:
     assert row["p"]["audit"]["revision"] == upserted["audit"]["revision"] == 1
 
 
-@pytest.mark.parametrize("weights_version", [1, 2])
+@pytest.mark.parametrize("weights_version", [1, 2, 3])
 def test_a_self_loop_is_stored_the_same_by_the_bulk_path_and_an_upsert(
     weights_version: int,
 ) -> None:

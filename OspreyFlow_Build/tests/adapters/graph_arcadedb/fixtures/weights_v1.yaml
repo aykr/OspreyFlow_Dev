@@ -1,4 +1,5 @@
-# The frozen baseline of versions 1 and 2 of the weights file (ADR-120 D3; ADR-123 for version 2).
+# The frozen baseline of versions 1 to 3 of the weights file (ADR-120 D3; ADR-123 for version 2;
+# ADR-120 Amendment 9 decision 9 for version 3).
 # An old version of `packages/ontology/weights/default.yaml` is never edited, as an ADR is not;
 # this copy is what `test_weight_rules.py` compares the real file against. Never change a version
 # here: a recalibration is a new version in the real file, appended here once it is accepted, and
@@ -49,3 +50,30 @@ versions:
       MEMBER_OF: {fixed: 0.75}
       HELD_AT: {fixed: 0.75}
       DEPICTS: {fixed: 0.2}
+  - version: 3
+    # ADR-120 Amendment 9 decision 9: "uses", "paired with" and "occurred at" state a fact and are
+    # not evidence that grows with volume, so each has a fixed strength as custody and family
+    # links have. Every other value is version 2's, gamma 0 included.
+    alpha: 0.5
+    beta: 0.2
+    gamma: 0
+    half_life_days: 90
+    midpoint: 0.3666666666666667
+    scale: 0.16666666666666666
+    default: {unit: one occurrence, heavy: 10}
+    rules:
+      SHARED_CELL_WITH: {unit: one week shared, heavy: 12}
+      VISITED: {unit: one visit, heavy: 8}
+      COMMUNICATED_WITH: {unit: one call, heavy: 40}
+      TRANSACTED: {unit: one transfer, heavy: 6}
+      MENTIONED_IN: {unit: one report, heavy: 3}
+      ROLE_IN: {unit: one incident, heavy: 3}
+      IN_CONFLICT_WITH: {unit: one episode, heavy: 2}
+      CO_DEFENDANT_OF: {fixed: 0.75}
+      FAMILY_OF: {fixed: 0.75}
+      MEMBER_OF: {fixed: 0.75}
+      HELD_AT: {fixed: 0.75}
+      DEPICTS: {fixed: 0.2}
+      USES: {fixed: 0.75}
+      PAIRED_WITH: {fixed: 0.75}
+      OCCURRED_AT: {fixed: 0.75}

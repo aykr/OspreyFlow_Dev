@@ -330,7 +330,7 @@ async def test_a_superseded_link_is_not_in_the_end_of_load_corpus(
         assert loaded.weight_components.corpus_total_occurrences == 2 + 4
 
 
-@pytest.mark.parametrize("weights_version", [1, 2])
+@pytest.mark.parametrize("weights_version", [1, 2, 3])
 async def test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert(
     factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch, weights_version: int
 ) -> None:
@@ -343,10 +343,12 @@ async def test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert(
     self-loop of it (at a node with other occurrences), a structural type and an unlisted type,
     each written once by each path.
 
-    ADR-123: run under version 1 and version 2, each pinned by index and handed to the adapter
-    (`_use_weights_version`), not "latest". The mutual-information term is zero from version 2, so
-    a path that gave the self-loop one can be seen only under version 1, which is why that version
-    stays in the matrix."""
+    ADR-123: run under versions 1 and 2, and under version 3 (ADR-120 Amendment 9 decision 9), each
+    pinned by index and handed to the adapter (`_use_weights_version`), not "latest". The
+    mutual-information term is zero from version 2, so a path that gave the self-loop one can be
+    seen only under version 1, which is why that version stays in the matrix. The unlisted type is
+    `ASSOCIATE_OF`, which has no rule in any version: `USES` took the default rule until version 3
+    gave it a fixed one, so a case that names `USES` as unlisted would be wrong under version 3."""
     from ontology.weights import load_weight_history
 
     from adapters.graph_arcadedb.weight import compute_weight
@@ -380,7 +382,9 @@ async def test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert(
                 interval=interval,
             ),
             _edge("FAMILY_OF", p, q, classification="OFFICIAL", occurrences=2, interval=interval),
-            _edge("USES", p, a, classification="OFFICIAL", occurrences=3, interval=interval),
+            _edge(
+                "ASSOCIATE_OF", p, q, classification="OFFICIAL", occurrences=3, interval=interval
+            ),
         ]
         loop = _edge(
             "COMMUNICATED_WITH",
@@ -404,7 +408,7 @@ async def test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert(
     for path in ("bulk", "upsert"):
         async with factory.context() as adapter:  # a fresh database for each path
             found[path] = await write(adapter, bulk=path == "bulk")
-    labels = {"COMMUNICATED_WITH", "SELF_LOOP", "FAMILY_OF", "USES"}
+    labels = {"COMMUNICATED_WITH", "SELF_LOOP", "FAMILY_OF", "ASSOCIATE_OF"}
     assert set(found["bulk"]) == labels and set(found["upsert"]) == labels
 
     for path, edges in found.items():
@@ -424,18 +428,18 @@ async def test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert(
             assert edge.weight == pytest.approx(recomputed, abs=1e-9), (path, label)
         # The structural type weighs its strength; the unlisted one takes the default rule.
         assert edges["FAMILY_OF"].weight == 0.75, path
-        uses = edges["USES"]
-        assert uses.weight_components is not None and uses.interval is not None
-        assert uses.weight_components.parameter_set == f"{rules.version}/default", path
+        unlisted = edges["ASSOCIATE_OF"]
+        assert unlisted.weight_components is not None and unlisted.interval is not None
+        assert unlisted.weight_components.parameter_set == f"{rules.version}/default", path
         as_communicated = compute_weight(
-            uses.weight_components,
+            unlisted.weight_components,
             edge_type="COMMUNICATED_WITH",
-            valid_to=uses.interval.valid_to,
-            now=uses.weight_components.computed_at,
+            valid_to=unlisted.interval.valid_to,
+            now=unlisted.weight_components.computed_at,
             rules=rules,
             self_loop=False,
         )
-        assert abs(uses.weight - as_communicated) > 1e-3, path
+        assert abs(unlisted.weight - as_communicated) > 1e-3, path
         loop = edges["SELF_LOOP"].weight_components
         assert loop is not None
         assert loop.corpus_source_degree == OTHER_OCCURRENCES + 2 * LOOP_OCCURRENCES, path
@@ -444,7 +448,7 @@ async def test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert(
     # components, and the same weight to the clock's difference between the two calls. (The
     # ordinary COMMUNICATED_WITH link is left out: an upsert weighs it before the self-loop is
     # written, a bulk load after.)
-    for label in ("SELF_LOOP", "FAMILY_OF", "USES"):
+    for label in ("SELF_LOOP", "FAMILY_OF", "ASSOCIATE_OF"):
         from_bulk, from_upsert = found["bulk"][label], found["upsert"][label]
         assert from_bulk.weight_components is not None
         assert from_upsert.weight_components is not None
