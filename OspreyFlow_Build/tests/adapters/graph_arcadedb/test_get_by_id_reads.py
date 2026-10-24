@@ -18,7 +18,6 @@ from adapters.graph_arcadedb.builders import (
     render_get_nodes_gremlin,
     render_record_id_lookup_sql,
 )
-from adapters.graph_arcadedb.client import ArcadeDBClient
 from adapters.graph_arcadedb.gremlin_literals import groovy_string_literal
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
@@ -128,7 +127,7 @@ class _Client:
 def _adapter(client: _Client | None = None) -> tuple[GraphArcadeDBAdapter, _Client]:
     """An adapter that has applied no ontology: these reads do not depend on one."""
     client = client or _Client()
-    return GraphArcadeDBAdapter(cast(ArcadeDBClient, client), load_uk_le_scheme()), client
+    return GraphArcadeDBAdapter(cast(Any, client), load_uk_le_scheme()), client
 
 
 def _asked(client: _Client) -> set[str]:
