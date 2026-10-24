@@ -28,7 +28,9 @@ What each group of tests guards:
 - **Pictures** (Amendment 9 decision 8): valid, 256 by 256, small, named acceptably, reproducible,
   all different, read from no file, and blind to the plan's hotspots.
 - **The store writes** (`pid_writes`): ids, datasets, handling, provenance, the intervals
-  `link_instants` gives, and what is left to the picture route.
+  `link_instants` gives, and what is left to the picture route; and the Amendment 7 circle's
+  links and end nodes (`circle_links`, `circle_writes`), which the live access test loads alone
+  into its three planted-rule stores.
 - **The manifest and the script**: rows, bytes and SHA-256 per file, no timestamps, two runs
   byte-identical, and the script's refusal of a path inside the repository.
 
@@ -2031,6 +2033,92 @@ def test_picture_writes_pair_each_subjects_node_id_with_its_name_and_bytes(
     assert {node for node, _, _ in pictures} <= {n.id for n in nodes}
     assert pid_writes.picture_writes(scale) == []
     assert all(isinstance(d, bytes) and d.startswith(b"\x89PNG") for _, _, d in pictures)
+
+
+# --- The circle (Amendment 7 decision 2), as the live access test writes it ---------------------
+
+#: The links the amendment names, by (type, source key, target key): the call link, the payer's
+#: three transfers, the one-week cell share and the principal's picture. The live access test reads
+#: the same constants from `pid_writes`.
+_CALL = pid_writes.CIRCLE_CALL
+_TRANSFERS = pid_writes.CIRCLE_TRANSFERS
+_ONE_WEEK_SHARE = pid_writes.CIRCLE_ONE_WEEK_SHARE
+_PICTURE = pid_writes.CIRCLE_PICTURE
+#: The amendment's own list of the circle's centre, written out here and not read from
+#: `circle_links`: the principal, each endpoint he uses, and each endpoint those exchange with.
+_CENTRE = frozenset(
+    {
+        "principal", "pin:principal", "cash:principal",
+        "number:coordinator", "number:unidentified", "account:payer",
+    }
+)  # fmt: skip
+
+
+def _ends(links: Iterable[Any]) -> set[tuple[str, str, str]]:
+    return {(lk.link_type, lk.source, lk.target) for lk in links}
+
+
+@pytest.mark.parametrize("moment", ["seed", "chapter4"])
+def test_the_circle_is_the_principals_payment_and_call_circle_as_the_analyst_sees_it(
+    moment: str, demo: Any
+) -> None:
+    centre, links = pid_writes.circle_links(demo, moment)
+    # The amendment's own list: his own links, every link of each endpoint he uses (his PIN
+    # account and his private-cash account), and every link of each endpoint those exchange calls
+    # or money with (the coordinator's number, the unidentified number, the payer's account).
+    assert centre == _CENTRE
+    # About 58 links at the seed and about 62 after chapter 4 (Amendment 8 decision 9).
+    assert len(links) == {"seed": 58, "chapter4": 62}[moment]
+    ends = _ends(links)
+    assert {_CALL, *_TRANSFERS, _ONE_WEEK_SHARE, _PICTURE} <= ends
+    # The step that reaches a partner's own links: the payer's `USES` of his account touches
+    # neither the principal nor an account he uses, only a partner of one.
+    assert ("USES", "payer", "account:payer") in ends
+    for relay in ("relay_1", "relay_2", "relay_3"):
+        assert ("COMMUNICATED_WITH", f"pin:{relay}", "number:coordinator") in ends
+    # As the demo analyst sees it: the one SECRET link is not in it.
+    assert ("IN_CONFLICT_WITH", "principal", "calder_3") not in ends
+    assert not [lk for lk in links if lk.handling.classification == "SECRET"]
+    # Every link touches the centre, and every visible link that touches it is there.
+    assert all(lk.source in _CENTRE or lk.target in _CENTRE for lk in links)
+    visible = pid_plan.links_at(demo, moment, secret_cleared=False)
+    assert _ends(links) == _ends(
+        lk for lk in visible if lk.source in _CENTRE or lk.target in _CENTRE
+    )
+    assert len(links) == len({lk.key for lk in links})
+    # No reports at the seed, whatever the circle holds.
+    if moment == "seed":
+        assert not [lk for lk in links if lk.link_type == "MENTIONED_IN"]
+
+
+def test_the_circle_of_a_plan_with_no_principal_is_refused(scale: Any) -> None:
+    with pytest.raises(KeyError):
+        pid_writes.circle_links(scale, "seed")
+
+
+@pytest.mark.parametrize("moment", ["seed", "chapter4"])
+def test_the_circle_writes_are_the_circles_links_and_their_end_nodes_and_nothing_else(
+    moment: str, demo: Any
+) -> None:
+    nodes, edges = pid_writes.circle_writes(demo, moment, dataset=PID.id, created_at=CREATED)
+    _, links = pid_writes.circle_links(demo, moment)
+    written_nodes, written_edges = _writes(demo, moment)
+    # The picture route writes DEPICTS, so the circle's writes hold every other circle link.
+    want = {pid_plan.link_id(lk): lk for lk in links if lk.link_type != "DEPICTS"}
+    assert {e.id for e in edges} == set(want) and len(edges) == len(want)
+    assert len(edges) == len(links) - 1, "only the principal's picture link is left out"
+    # Each is the very write `writes` makes, so a store loaded from them weighs the same.
+    by_id = {e.id: e for e in written_edges}
+    assert all(e == by_id[e.id] for e in edges)
+    ends = {pid_plan.node_id(k) for lk in want.values() for k in (lk.source, lk.target)}
+    assert {n.id for n in nodes} == ends and len(nodes) == len(ends)
+    by_node = {n.id: n for n in written_nodes}
+    assert all(n == by_node[n.id] for n in nodes)
+    assert not [n for n in nodes if n.properties.get("media_kind") == "image"]
+    assert not [e for e in edges if e.handling.classification == "SECRET"]
+    assert {d for w in (*nodes, *edges) for d in w.datasets} == {PID.id}
+    with pytest.raises(ValueError):
+        pid_writes.circle_writes(demo, moment, dataset="not-a-pid-dataset", created_at=CREATED)
 
 
 # --- The report and the manifest ---------------------------------------------------------------

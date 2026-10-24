@@ -13,6 +13,10 @@ dataset named. Provenance's one source is `<the dataset's source>:<dataset id>`,
 `scripts.stamp_datasets` finds each of the two datasets' elements and never the other's; a dataset
 that is not one of the two is refused, and so is a plan written into the other
 profile's dataset.
+
+`circle_links` and `circle_writes` give the principal's payment and call circle (ADR-120 Amendment 7
+decision 2): the live access test loads that circle alone into the three stores that plant a wrong
+weights rule.
 """
 
 from __future__ import annotations
@@ -192,6 +196,59 @@ def writes(
             )
         )
     return nodes, edges
+
+
+#: The links Amendment 7 decision 2 names, by (type, source key, target key): the coordinator's call
+#: link, the payer's three transfers, the one-week cell share and the principal's picture.
+CIRCLE_CALL = ("COMMUNICATED_WITH", "pin:principal", "number:coordinator")
+CIRCLE_TRANSFERS = tuple(
+    ("TRANSACTED", "account:payer", f"cash:{who}") for who in ("principal", "relay_1", "relay_2")
+)
+CIRCLE_ONE_WEEK_SHARE = ("SHARED_CELL_WITH", "principal", "cellmate_3")
+CIRCLE_PICTURE = ("DEPICTS", "picture:principal", "principal")
+
+#: Links of these types are what "exchange calls or money with" means in Amendment 7 decision 2.
+_EXCHANGES = ("COMMUNICATED_WITH", "TRANSACTED")
+
+
+def circle_links(plan: Plan, moment: Moment) -> tuple[frozenset[str], tuple[PlanLink, ...]]:
+    """The principal's payment and call circle as the demo analyst sees it at a moment (ADR-120
+    Amendment 7 decision 2, `SECRET` link excluded): the centre keys, and every visible link that
+    touches one. The centre is the principal, each endpoint he uses (his PIN account and his
+    private-cash account) and each endpoint those exchange calls or money with. The links are the
+    plan's, his picture link included. `KeyError` for a plan with no principal."""
+    plan.entity("principal")
+    visible = links_at(plan, moment, secret_cleared=False)
+    used = {
+        lk.target
+        for lk in visible
+        if lk.link_type == "USES"
+        and lk.source == "principal"
+        and plan.entity(lk.target).entity_type == "Endpoint"
+    }
+    exchange: set[str] = set()
+    for lk in visible:
+        if lk.link_type in _EXCHANGES:
+            if lk.source in used:
+                exchange.add(lk.target)
+            if lk.target in used:
+                exchange.add(lk.source)
+    centre = frozenset({"principal"} | used | exchange)
+    return centre, tuple(lk for lk in visible if lk.source in centre or lk.target in centre)
+
+
+def circle_writes(
+    plan: Plan, moment: Moment, *, dataset: str, created_at: datetime
+) -> tuple[list[NodeWrite], list[EdgeWrite]]:
+    """Only the circle's links and their end nodes, as `writes` makes them, for a store that
+    holds the circle alone (a link's weight depends on the link alone from weights version 2, so
+    its stored weight is what a full load gives it). The principal's picture link is the picture
+    route's, so it is left out here as in `writes`. `ValueError` as `writes` has it."""
+    nodes, edges = writes(plan, moment, dataset=dataset, created_at=created_at)
+    wanted = {link_id(lk) for lk in circle_links(plan, moment)[1]}
+    kept = [e for e in edges if e.id in wanted]
+    ends = {end for e in kept for end in (e.source, e.target)}
+    return [n for n in nodes if n.id in ends], kept
 
 
 def picture_kind(plan: Plan, subject_key: str) -> str:

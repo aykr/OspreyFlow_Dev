@@ -15100,6 +15100,140 @@ documents are filed only under their own seed, by a copy of the rule `stamp_data
 
 ---
 
+### ADR-120, Amendment 13 (24 October 2026) — the live access test: what it compares, a pinned leak, and its stores
+
+Status: **ACCEPTED by the coordinator under the owner's delegation, 24 October 2026** (asked "When
+the work finds a spec gap or an error in an ADR, what may I accept without you?", the owner chose
+"Everything"). Its text was cleared by four adversarial reviews, and the test by seven rounds of review. Found by the reviews of stage 5 unit 5c.
+
+1. **Withheld counts leak the `SECRET` link, and this case does not settle it.**
+   - **The leak.** Every withheld figure the Conduit sends can be made to point at what it withholds.
+     That covers an expansion's or preview's `filtered_count`, a shared case's snapshot count, a
+     notice, history step sizes and `/seed`'s delta. So an analyst can learn that the principal has
+     one hidden `IN_CONFLICT_WITH` neighbour and that it is calder_3.
+   - **What this breaks.** Brief 1 §5.3 ("no trace … not in a count"), rule 3 and rule 7.
+   - **Why it is not ruled here.** The cause is platform-wide, so ADR-124 carries the decision. The
+     owner accepted it on 24 October 2026 (option A′) and ruled that it be built before Brief 1's
+     stages 6 and 7.
+   - **Measured on ArcadeDB.** All six expansion and preview counts read 1 with the link and 0
+     without it: the expansion, the untyped preview and the `IN_CONFLICT_WITH` preview, from each
+     end. The shared case's snapshot and manifest counts read 1 with the link and 0 without it. Each
+     matched the figure reasoned before the run.
+   - **The gate.** The stage 5 gate is recorded as **not met on Brief 1 §5.3** until ADR-124 is
+     built, and `PID_ACTUALS.md` reports it.
+   - **The live test pins the defect** in two characterisation tests that pass on today's code:
+     - **The expansion test** asserts the exact set of differing expansion and preview counts.
+     - **The shared-case test.** The cleared principal expands both ends, the analyst syncs. It
+       asserts the analyst's snapshot nodes and links are equal in the cases with and without the
+       link, and pins the count that differs.
+     - **Why not an expected failure.** Their expected figures are reasoned from the code before
+       any run. Fixing the defect turns them red, which forces their rewrite. A strict expected
+       failure was rejected: it reports any exception as the expected failure, and stays green under
+       a partial fix.
+     - **What they become under ADR-124's option A′.**
+       - **The expansion test** becomes an equality, since no withheld figure remains.
+       - **The shared-case test** becomes "`withheld` true in the case with the link, false
+         without". In a case shared with a cleared colleague, A′ deliberately tells the analyst that
+         material is withheld, never what or where. The owner chose A′ with that disclosure stated
+         ("What it still discloses: that something exists in this case").
+     - **So Brief 1 §5.3 ("no trace")** is met in full only in a case the analyst works alone. In a
+       shared case it is met except for the existence signals ADR-124 decision 12 accepts (the
+       standing sentence among them) and cluster ids until ADR-125 is built, which `PID_ACTUALS.md`
+       reports.
+   - **What the analyst sees on screen.** The Glass shows none of the expansion figures. In a case
+     only the analyst writes to, the status bar's figure is 0 in both cases by construction. That
+     reading is kept, and is listed as unproven by decision 3.
+2. **What the no-trace comparison covers.** The analyst's readings must be identical in the cases
+   with and without the `SECRET` link (stores A and B). Some are read through the service functions
+   the Glass's routes call, others through the `GraphPort` method the route calls directly.
+   - **Through the service functions:**
+     - the expansion of the principal and of calder_3, and the preview for each link type from
+       both (every field, apart from decision 1's counts);
+     - the links among a view of the principal and calder_3 alone, at degrees 1, 2 and 3, with
+       their added, unconnected and more-routes counts. A view of their full neighbourhoods would
+       already hold every link between them, so it would add nothing in either case;
+     - the snapshot;
+     - a one-link `IN_CONFLICT_WITH` pattern pinned to the principal, previewed and run;
+     - search and suggestions for calder_3;
+     - the starter questions offered to the analyst, and what each puts on the canvas;
+     - the shared-contacts canvas for the pair;
+     - connections;
+     - the export's withheld manifest over the analyst's own view, which is 0 in both cases by
+       construction, like the status bar's figure, and is listed as unproven by decision 3. Its
+       shared-case figure is pinned with decision 1's defect.
+   - **Through `GraphPort`:**
+     - neighbourhood statistics;
+     - type counts;
+     - the "most connected" degrees;
+     - the busiest links globally and around the principal, with totals;
+     - the link structure;
+     - shared contacts over `IN_CONFLICT_WITH`;
+     - recent loads, without the wall-clock time;
+     - routes at lengths 1 to 3;
+     - `/paths` at up to 2 hops, every route compared whole. At 3 hops the routes run past the
+       route limit of ten, and which ten come back is arbitrary;
+     - every `IN_CONFLICT_WITH` weight.
+   - **Through the compute adapter:** betweenness and the other centralities and communities, over
+     a working set holding both.
+
+   **Not covered**, each to be covered where it is next built or touched:
+   - **Histograms.** The histogram, cross-filter, geobins, first-seen, sightings, busiest-days and
+     trends routes need analytics events. This store is written through `write_graph`, not a Studio
+     load, so it has none. Brief 2's live test must cover them, and the build plan records the
+     hand-on in the same change as this amendment.
+   - **Other views and alerts.**
+     - The Reports view and its feed.
+     - History step summaries and labels (ADR-124 points 4 and 7).
+     - Hotlist and monitor alerts on `IN_CONFLICT_WITH`.
+     - The Dossier. It renders the spans of an email's accepted extraction candidates, and this case
+       has none, so a comparison would be trivially equal.
+   - **Other link types.** Ownership, KYC and risk walk link types this case's `SECRET` link is not.
+3. **The comparison is shown able to fail.**
+   - **The cleared principal.** For the `SECRET`-cleared principal, the cases' readings differ in
+     exactly a named set, stated in the test from reasoning before the first run. If a run disagrees,
+     the disagreement is investigated, not copied in.
+   - **Weights version 1.** Under weights version 1 the analyst's `IN_CONFLICT_WITH` weights differ,
+     and nothing else.
+   - **Readings neither proof can redden** are listed in the stage 5 gate note as unproven (rule 12).
+4. **The live test's stores.**
+   - **Pictures.** The cases with and without the link both carry pictures, so they differ only by
+     the link.
+   - **The planted-rule stores** load only the principal's circle, at chapter 4. The test asserts
+     that every circle link not of the planted type weighs exactly as in the full case, which proves
+     a circle-only load weighs as a full one does under version 3. The picture link is left out of
+     their verdicts, because the stores hold no picture.
+   - **Store lifetimes.** Single-use stores live for one test, not the whole module.
+   - **Weights version.** The full cases' weights are asserted to carry weights version 3.
+5. **Wiring the test.**
+   - **The rule.** The test file is committed in the same commit as its `Makefile` and `ci.yml`
+     entries: ignored by `make test`, run by the conformance job and `make test-all`. So no commit
+     exists in which `make test` collects it against the default port 2480, which is the owner's live
+     deployment. `make test-file-coverage-check` passes on that commit.
+   - **The wiring script is retired.** `apply_pid_live_test.sh`, which was written for the owner to
+     run after the commit, is not used. The coordinator applies the same edits before committing,
+     and the script is deleted.
+   - **Who pushes.** The commit changes `.github/workflows/ci.yml`. It is pushed by the owner, who
+     pushes everything in this brief.
+   - **The cost.** The conformance job's added time is recorded in the build plan. Above 30
+     minutes, the cases with and without the link and the planted-rule stores are to be loaded once
+     per session and shared, in place of the test being dropped from CI.
+6. **Centrality readings are compared within a tolerance.**
+   - **The measurement.** rustworkx computes betweenness in parallel above 50 nodes, and its sums
+     vary in the last bits from run to run. On one fixed 800-node graph, 19 of 19 repeat runs
+     differed from the first by up to 5×10⁻¹⁷; single-threaded, none did.
+   - **The live failure is an inference from this.** The first full live run failed on betweenness
+     alone, for the analyst and under weights version 1; its log names the reading, not the size of
+     the difference. That it is this noise is inferred:
+     - the analyst's centralities are computed over the same graph in A and B, given in the same
+       sorted order;
+     - its nodes, links, link types and weights are all compared exactly and were equal;
+     - only betweenness runs in parallel in the adapter.
+   - **The rule.** Every centrality reading is compared node by node with
+     `math.isclose(rel_tol=1e-9, abs_tol=1e-12)`, over identical node sets. The cleared principal's
+     real differences are structural and far larger, and they still register.
+   - **A defect recorded.** The compute adapter's betweenness is not deterministic for one input, so
+     tied rankings can reorder. It is recorded in the build plan, with no owner.
+
 ## ADR-121 — An equality condition on a pattern node's property — ACCEPTED (design)
 
 Status: **ACCEPTED by the owner, 23 October 2026** ("I accept ADR121"), put to him by ADR-120 D7.
@@ -15372,3 +15506,652 @@ Brief 1 stage 5's access test.
   weights, counts, paths and degrees; shown red under version 1.
 - **`tests/scenarios/test_pid_plan.py`.** The circle under version 2 at both moments and both recency
   points, with the transfers 9, 8 and 8, and its three plants red at every point.
+
+## ADR-124 — Withheld counts disclose what they withhold — ACCEPTED (design)
+
+**Status.** Accepted by the owner on 24 October 2026, option A′ ("Go ahead A'"). The owner ruled
+four
+build questions the same day, each on the recommended option:
+- the size cap counts "Per reader's view";
+- `/seed` links: "Verify each link";
+- the export ledger keeps "A yes/no only";
+- the order: "A′ now", before Brief 1 stages 6 and 7.
+
+After further reviews, the owner ruled four more points:
+- **Cluster ids** (Context point 12): "Own ADR, after A′". They become ADR-125.
+- **Link changes** (Context point 13): "Filter per reader". This amends ADR-102.
+- **The case ceiling** (decision 2): first "Hard ceiling, no figure". A further review then showed
+  that any refusal based on the whole case's total can be searched for the exact hidden count. On
+  being told, the owner ruled "Bound each view": no case-wide ceiling, and each reader's own view
+  is capped, including when it loads.
+- **A view pushed past the cap** (decision 2): "Open a filtered branch". The fifth review found that
+  a
+  less-cleared colleague's work can push a more-cleared reader's view past the cap, so the owner
+  ruled on what that reader can do.
+
+**How it got here.**
+- **Reviews.** Six adversarial reviews of the finding, then five of the build specification before
+  it was entered here.
+- **Who found it.** The reviews of Brief 1 stage 5 unit 5c found it, and the coordinator confirmed
+  it in the code and on ArcadeDB.
+- **Why it went to the owner.** It overturns accepted platform design, so it was put to the owner
+  and not accepted under the delegation of 24 October:
+  - `01_DOMAIN_MODEL.md` §8.2;
+  - `03_CONDUIT_MIDDLEWARE.md` §3.2 and §4;
+  - ADR-045, ADR-048 and ADR-099 decision 4;
+  - a Phase 3 exit criterion;
+  - three acceptance assertions.
+- **What was left to rule.** Rule 3 is standing, so the ruling was what an analyst is told in place
+  of a count, not whether to fix it.
+
+### Context: every withheld figure has a referent
+
+Rule 3 requires that "an unauthorised principal must not be able to detect a filtered node's
+existence
+via path length, degree count or histogram bucket". Rule 7 forbids the Glass from seeing an
+unfiltered count. Each channel below can be made to point at what it withholds.
+
+1. **An expansion's and a preview's `filtered_count`.**
+   - **How it is made.** It is `expand_candidate_count(req) − len(visible nodes)`
+     (`services/api/working_set/service.py:588-596`, `:675-698`; `builders.py:350-376`). The
+     candidate count applies no handling check, and has the request's seed set, depth, link types
+     and time scope.
+   - **The case.** The Prison Intelligence case holds one `SECRET` `IN_CONFLICT_WITH` link between
+     the principal and calder_3. No visible link joins them at depth 1.
+   - **Measured on ArcadeDB.** The live access test (`test_pid_access_control.py`) gave a count of
+     1 in the case with the link and 0 without it for all six of these readings:
+     - the expansion of the principal, and of calder_3;
+     - the untyped preview of the principal, and of calder_3;
+     - the `IN_CONFLICT_WITH` preview of the principal, and of calder_3.
+
+     Every other link type's preview agreed.
+   - **What the analyst learns.** From these, an analyst without `SECRET` learns three things:
+     - the link's type, because the radial menu previews each type separately
+       (`GlassCanvas.tsx:2572-2591`);
+     - its two ends;
+     - the unfiltered neighbour count.
+2. **The snapshot's count**, the status bar's baseline, made by `sync`, `restore` and `branch`.
+   - **How it is made.** It projects the case's shared stored set (`service.py:135-165`, `:832`,
+     `:961`, `:1033-1046`).
+   - **What it leaks.** In a shared case, a cleared colleague's expansion stores the `SECRET` link,
+     and the uncleared reader's count rises.
+   - **Measured.** In the shared case, the snapshot and the export manifest counted 1 with the link
+     and 0 without it.
+   - **How removal locates it.** Removing a node deletes only the node (`:985-993`), and the
+     projection drops, uncounted, any link whose end has left the view (`:163-165`). So removing
+     calder_3 drops the count by one.
+3. **A notice's count.** Notices are counted for each pushed delta (`app.py:9863-9871`), and in the
+   catch-up path of `sync` (`service.py:1024`). Each is tied to one colleague's specific action.
+4. **History step sizes.** `GET history` gives every Viewer the length of each step's unfiltered
+   body
+   (`history.py:166-167`, `app.py:3404-3410`).
+5. **`/seed` as a membership test.**
+   - **The mechanism.** A body submitted under a stored hidden id is not stored (`service.py:744`),
+     but the response's delta carries it (`:773`).
+   - **Why that matters.** Ids are derived (ADR-120 Amendment 9 decision 2), so they can be guessed.
+   - **A second problem.** `/seed` also judges handling by what the caller wrote (`:580`).
+6. **The export's withheld-item manifest and its ledger.**
+   - **The manifest.** `withheld_count_for` (`service.py:915-930`) counts over the shared stored
+     set,
+     so removing a node moves it.
+   - **The ledger.** The ledger's `withheld_count` (`export.py:318`, `:333`, `:549`) is readable by
+     a
+     compliance principal with no access to the case (`:342-347`, `:382-392`).
+7. **History labels.** "Expanded N node(s)", "Seeded N node(s)" and others take N from the actor's
+   view, and three name a case, an alert or a typology. Every Viewer reads them. The label sites are
+   in `app.py`: 2679, 2751, 2785, 2826-2829, 2887, 3744, 3829, 5315, 7576 and 7965.
+8. **Cap and preview figures.**
+   - **What they count.** `CardinalityPreview.candidate_node_count` and `candidate_edge_count`, and
+     `LimitExceeded.would_be`, add new items to the stored set, hidden items included
+     (`service.py:686-698`, `:730-736`, `:747-751`). Subtracting the visible count gives the hidden
+     stored count.
+   - **The links-among choice.** `expand`'s choice between asking links-among and not compares a
+     view that includes hidden ids against 2,000 (`:599-606`).
+9. **Links-among as a membership test.**
+   - **The flaw.** `ids = view & set(node_ids)` uses the stored set (`service.py:640-641`).
+   - **What it reveals.** A stored hidden id raises `unconnected_pairs` at degree above 1. At degree
+     1,
+     a request with fewer than two ids returns early (`adapter.py:711-712`), which reveals the same
+     thing through timing.
+10. **Deltas that pass referents through.** `project_delta` passes three ops through unchanged
+    (`service.py:191-212`):
+    - **`DeltaRemove`.** It sends a removed hidden node's id to every socket (`app.py:2879-2881`).
+    - **`DeltaReproject`.** Its `reason` names ids (`service.py:487`), and its `merged`, `split` and
+      `affected` are counted from the actor's view.
+    - **`DeltaReplaceEdge`.** It is judged on the link's own marking only, so a readable link whose
+      end is hidden sends that end's id.
+11. **Alerts.** `AlertJumpResult.unreadable_count` (`app.py:5325-5327`) counts what one alert holds
+    that the reader cannot read.
+12. **Cluster ids.**
+    - **How they are made.** A resolution cluster's id is its smallest member's `NodeId`
+      (`services/resolve/projection.py:66-92`). It is computed over the acting analyst's view and
+      written onto stored node bodies (`service.py:288-298`, `:472-482`).
+    - **What leaks.** A reader can see, on a node they may read, a `cluster_id` that names a node
+      hidden from them.
+    - **A path through a hidden node.** Two readable nodes can collapse together through a hidden
+      middle node, which reveals a path through it.
+    - **Deferred to ADR-125** (the owner's ruling). ADR-125 gives opaque cluster ids and a collapse
+      computed per reader, and is built straight after this record. Until then this channel stays
+      open, and is recorded here.
+13. **Link changes.**
+    - **What carries a referent.** When a link is lowered (ADR-102), three things point back at its
+      hidden past:
+      - its successor's provenance names `manual:change:{old.id}` and carries the old link's sources
+        (`link_changes.py:392-401`);
+      - its revision is the old one plus one (`:436`);
+      - its history returns every earlier revision's before and after (`:489-505`), including
+        revisions above the reader.
+    - **A raised link.** When a link is raised, a reader who could read it loses it, which says that
+      it was raised.
+
+**Integrity defects found on the way.** In a shared case, each of these destroys or overwrites a
+cleared colleague's work:
+- **`remove`** deletes any id it is given, including one the reader cannot read.
+- **An Editor's `restore`** deletes every stored item the restorer cannot read
+  (`service.py:961-973`).
+- **`restore`** also writes the step's recorded bodies over the current ones (`store.py:193-200`).
+  So a node reclassified upward since the step was recorded comes back at its old, lower marking,
+  and the reader can then read it.
+
+**Out of scope.** These carry figures of their own but are not read against a case's graph:
+- packs (`02_GLASS_FRONTEND.md:995`, `packs.py`);
+- rule holds;
+- pipeline runs.
+
+Each is checked against rule 3 when next touched.
+
+**Two premises were wrong.**
+- **§8.2's.** It accepted the count because "a bare integer … cannot itself leak which nodes are
+  hidden". That is false for any count tied to a seed, a type, a colleague's action or a view the
+  reader can change.
+- **ADR-048's.** It named the status bar and the notice as the safe shape
+  (`06_DECISIONS.md:5587-5588`).
+  Its own principle, where no inert partial shape exists, is to suppress (`:5612-5613`).
+
+### Options considered
+
+- **A. No withheld figures at all.** Not chosen.
+- **A′. As A, plus one standing sentence without a number.** Chosen.
+- **C. Coarsened counts.** Not chosen: any figure that moves with an action the reader chooses can
+  be
+  differenced.
+- **B. A named exception to rule 3.** Not available.
+
+### Decision (A′)
+
+Two predicates are used below:
+- **"May read"** is `principal_may_read`, the projection's predicate: handling and the case's
+  datasets.
+- **"May view"** is `principal_may_view`: handling alone.
+
+1. **No figure for withheld material is sent anywhere.**
+   - **Fields removed.** The following are removed, not held at 0, because a field that is always 0
+     claims completeness (ADR-048, `06_DECISIONS.md:5604-5606`):
+     - `filtered_count` on `ExpansionOutcome` (expand, seed and branch), on `CardinalityPreview` and
+       on `DeltaSnapshot`;
+     - `DeltaNotice`, whose only producers are the withheld notices (`app.py:9866`,
+       `service.py:1025`). It leaves the delta protocol, and neither the live forward nor the
+       catch-up path of `sync` sends one;
+     - `AlertJumpResult.unreadable_count`;
+     - `merged`, `split` and `affected` on `DeltaReproject`.
+   - **The resolution routes keep their own figures.**
+     - **What changes.** The threshold route and the manual same-as and split routes (`app.py:2937`,
+       `:2981`, `:3023`) return `ResolutionOutcome {delta, merged, split, affected}` in place of the
+       bare `DeltaReproject`.
+     - **Why the figures stay.** They are counted from the actor's own view and withhold nothing, so
+       they stay on the actor's own response. They leave the delta only.
+     - **The Glass.** `ThresholdControl.tsx:96-101` applies `.delta` and reads the figures from the
+       outcome.
+     - **The spec.** `01_DOMAIN_MODEL.md` §4's example is amended.
+   - **The alert inbox.** `watches/api.ts:49` and `AlertInbox.tsx:84-105` stop rendering
+     `unreadable_count`.
+   - **Old stream entries still parse.** `DeltaNotice` was never appended to the stream, and the
+     models ignore extra fields, so stored deltas that carry `filtered_count`, `merged`, `split` or
+     `affected` still parse.
+   - **The wire gate.** `tests/services/api/test_no_corpus_counts_on_the_wire.py` (ADR-122) gains
+     two things:
+     - a second walk, over every route's response model whether or not it holds an `Edge`, and over
+       every delta model;
+     - the forbidden keys `filtered_count`, `withheld_count` and `unreadable_count`.
+
+     It drops `DeltaNotice` from its pinned delta set.
+   - **Routes that return a raw mapping** are listed by U2a. Each is given a response model or a
+     case of its own.
+2. **The cap bounds each reader's view** (the owner's rulings: "Per reader's view"; then "Bound each
+   view").
+   - **What is counted.** The cap counts the reader's projected view: the output of `_project` over
+     the stored set, in which a link counts only when it and both its ends are readable. It is not a
+     count of readable elements one by one. These are computed over that view, plus what the request
+     adds:
+     - the preview's `candidate_node_count` and `candidate_edge_count`;
+     - `LimitExceeded.would_be`;
+     - `ensure_room`'s check (`service.py:723-736`);
+     - `expand`'s choice of asking links-among.
+
+     A reader over their own cap gets `limit_exceeded` with these figures, which come from their own
+     view.
+   - **No case-wide ceiling.**
+     - **Why.** A refusal that depends on the whole case's total can be searched for the hidden
+       count: seed k items, see whether it is refused, and adjust k. The "hard ceiling, no figure"
+       first ruled on was withdrawn for that reason.
+     - **What follows.** A shared case's stored set may hold more than the cap, because more-cleared
+       colleagues may add up to their own cap.
+   - **A view pushed past the cap.** A less-cleared colleague's cap counts only their own view, so
+     their ordinary work can push a more-cleared reader's projected view past the cap. Handling
+     codes
+     that cannot be ranked against each other make this possible in either direction.
+     - **What every path does.** `sync`'s full snapshot, its catch-up path and the live forward each
+       check the reader's projected view.
+     - **When it is past the cap,** they send no snapshot and no further delta. Instead they send
+       `DeltaViewOverCap`: a send-only type in `WorkingSetDeltaSent` carrying `would_be`, the
+       reader's own figures, and nothing about anyone else's view.
+     - **What the reader can do** (the owner's ruling, "Open a filtered branch"):
+       - **The dialog.** The Glass shows a limit dialog with two actions: open a filtered branch, or
+         try again.
+       - **Try again** (decided by the coordinator under the owner's instruction of 24 October 2026
+         to take the recommended option).
+         - It sends the existing resync message with no last sequence (`_handle_resync_requests`,
+           `app.py:9874-9885`). That runs the full-snapshot path, which checks the cap again.
+         - The server keeps no state for a stuck reader.
+         - It has its own `keyboard.spec.ts` step.
+       - **The filter** (decided by the coordinator under the owner's instruction of 24 October 2026
+         to take the recommended option).
+         - The reader chooses entity types, a date window, or both.
+         - Entity types select nodes.
+         - The window selects links whose `interval` overlaps it; links with no interval are kept.
+         - A link is kept only when both its ends are kept.
+         - An empty result raises `NothingToBranchError`, as `branch` does.
+       - **The route.** `POST /investigations/{id}/branch-by-filter` builds, on the server, a new
+         case
+         from the reader's own projected view, narrowed by the filter.
+       - **Within the cap.** It is created as a branch is today:
+         - the reader owns it, and it records its origin;
+         - it needs the same right and level as `branch`;
+         - it copies the parent's datasets (`app.py:2669`);
+         - it records the history step "Branched" (a site added to decision 8's table).
+       - **Still past the cap.** The route returns `limit_exceeded` with the filtered figures, again
+         the reader's own.
+     - **The route is a new read path**, so it gets its rule 4 access-control test: a branch never
+       holds what the reader may not read; the figures are the same whether or not hidden
+       material is stored; and a filter naming a type only hidden material holds gives the same
+       result as a type that is absent. The dialog's action gets its `keyboard.spec.ts` step (rule
+       13).
+   - **The cost on the live path** (decided by the coordinator under the owner's instruction of 24
+     October 2026 to take the recommended option). The live forward recounts a reader's projected
+     view
+     only when a projected delta adds something the reader can read. U6b measures this on a
+     50,000-node case with several sockets open, and records it.
+   - **The rule 10 budget** therefore holds per view: no reader is ever sent a view past the cap.
+   - **Cost.** Counting the projected view needs the stored bodies' handling, not only the stored
+     ids.
+     U2c measures this on a 50,000-node case and records it.
+3. **Links-among intersects with the reader's view.** The ids a request names are intersected with
+   the stored ids the reader may read before anything else, so a hidden id behaves exactly as an
+   absent one, in result and in timing.
+4. **Every delta is projected for its reader.**
+   - **`DeltaRemove`.**
+     - It gains `edge_ids: list[EdgeId] = []` and a `removed` record of each removed element's
+       handling and datasets.
+     - The record travels with the delta on the stream and on Pub/Sub. `project_delta` turns it into
+       `DeltaRemoveSent`, which carries only the ids the reader may read and never the record, so
+       the
+       record never reaches a socket.
+     - **The types.** `DeltaRemoveSent` is a send-only type, with `op: "remove"`.
+       - It sits in `WorkingSetDeltaSent`, the union of what is sent, which `sync`, `project_delta`,
+         the live forward and every route return.
+       - The stored union `WorkingSetDelta` keeps `DeltaRemove` and never holds `DeltaRemoveSent`.
+       - The wire gate walks `WorkingSetDeltaSent`, and forbids the key `removed` on every sent
+         delta.
+     - **The Glass.** `applyRemove` (`store.ts:130-131`) and `models.ts` gain `edge_ids`, so a sent
+       link removal takes the link off the canvas.
+     - The route's own `DeltaRemove`, built from the request body (`app.py:2879-2881`), is replaced
+       by
+       the service's.
+     - A stored `DeltaRemove` without the record (written before this change) makes `deltas_after`
+       return `None`, so the reader gets a full snapshot. Passing it on would leak ids; dropping its
+       ids would break a reconnect's equality with a full snapshot.
+   - **`DeltaReproject`.**
+     - `reason` stays a `str`, so old entries parse. `project_delta` always sends one of the fixed
+       codes `resolution_threshold` or `manual_resolution`, and any other stored text is sent as
+       `resolution_threshold`.
+     - `affected_cluster_ids` is cut to keys the reader may read. Its values are cluster ids,
+       ADR-125's concern (Context point 12).
+   - **`DeltaReplaceEdge`.** Each reader receives exactly one of these:
+     - **the replace**, when they may read the old link and its ends, and the new link and its ends;
+     - **a plain add of the new link**, when they may read the new link and its ends, but not the
+       old
+       link or one of its ends;
+     - **a `DeltaRemoveSent` of the old link**, when they may read the old link and its ends, but
+       not
+       the new link or one of its ends;
+     - **nothing**, otherwise.
+5. **The standing sentence.**
+   - **The field.** `DeltaSnapshot` gains `withheld: bool | None = None`.
+   - **When it is set.** Only in the full snapshot that `sync` returns to a reader.
+     - It is `true` when the case's stored set holds any node or link the reader may not view.
+     - Datasets play no part: under ADR-099, material outside a case's datasets is not withheld from
+       it but outside its world.
+     - Each element is judged on its own stored handling, whatever the view and whether or not a
+       link's ends remain.
+   - **Everywhere else it is `None`.** That covers every delta that is stored, replayed or pushed
+     live, restore's included.
+   - **Old entries.** Stored entries without the field parse as `None`.
+   - **The Glass.**
+     - **It keeps the last non-`None` value** it received for the open case, and resets it when the
+       case changes.
+     - **When that value is `true`**, the status bar shows exactly "This case holds material you are
+       not cleared to see." It shows no number, and nothing at all otherwise.
+     - **What is removed.** The status bar's withheld figure, the notice handling in `store.ts` and
+       the notice toasts in `App.tsx`.
+6. **A reader's own action never removes or downgrades what is stored that they cannot read.** The
+   only exception is a restore that stores a body the Vault has since declassified. That item is no
+   longer withheld, so the sentence may turn off for it.
+   - **`remove`.**
+     - It removes only ids whose stored body the reader may read.
+     - Any other id is ignored, whether hidden or absent, with the same response and the same
+       history
+       entry.
+     - Its delta names only what was removed.
+   - **`restore`.**
+     - **Stored items not in the step** are judged by the restorer's projected view, the same test
+       decision 2 uses:
+       - what is in that view is reconciled;
+       - everything else stays stored, a readable link with a hidden end included.
+     - **The step's members** are judged against the current Vault, not the step's recorded bodies,
+       and the Vault's current bodies are stored. They are read through two new port reads, below:
+       - nodes through `get_nodes`;
+       - links through `get_edges`.
+
+       So a node reclassified upward since the step is not written back at its old marking.
+     - **Step items the restorer may not read** are not added.
+     - **A step member whose stored body is readable but which the Vault now withholds** (one
+       reclassified upward since it was stored) is left stored and untouched by this restore.
+       - **What it costs.** The restorer goes on seeing its stale body, exactly as today.
+       - **Why.** Refreshing stored bodies against the Vault is a general staleness gap, not a
+         restore one, and it is recorded with ADR-125.
+       - **The stale-body rule.** Restore never writes a stale body over a newer one.
+     - **What is stored and published.** The stored and published snapshot holds the whole stored
+       set
+       after the restore, with `withheld` `None`, so every reader, replaying or live, projects it to
+       their own view. A reconnect then equals a full snapshot for every reader (the Phase 3
+       criterion).
+     - **The restorer's HTTP response** is that snapshot projected for the restorer, never the
+       stored
+       whole.
+     - **History.** Restore records no history step, as today.
+   - **Two new principal-filtered port reads** (U1). Each looks up the given ids alone, with no
+     traversal, in one batched query, chunked at 1,000 ids per query:
+     - `get_nodes(ids, principal) -> list[Node]`;
+     - `get_edges(ids, principal) -> list[Edge]`, which returns a link only when the link and both
+       its ends are readable.
+
+     A hidden, superseded or absent id is left out of both, identically.
+7. **`/seed`**, in `WorkingSetService.seed`, so all five server-side callers are covered
+   (`app.py:3737`, `:3822`, `:5308`, `:7567`, `:7958`).
+   - **Nodes and links.** Submitted node ids are read through `get_nodes`, and submitted link ids
+     through `get_edges`. The Vault's bodies are stored, never the caller's.
+   - **Links whose end is not on the canvas.** A link is kept only if each of its ends is either
+     seeded in this request or already in the reader's view. This is the owner's "Verify each link";
+     `get_edges` is that verification as one batched read.
+   - **Unreadable ids.** A hidden id, a superseded id and an id the Vault does not hold give the
+     same
+     response and the same following snapshot, with no error to tell them apart.
+8. **History.**
+   - **Sizes.**
+     - `GET history` carries no sizes: `node_count` and `edge_count` leave the response,
+       `models.ts:96-97` and `HistoryPanel.tsx`'s "Nodes / edges" column.
+     - No per-step read route is added.
+   - **Labels.** Every label is fixed text with no number and no name, one per site:
+
+     | Site (`app.py`) | Label |
+     |---|---|
+     | 2679, branch | "Branched" |
+     | `branch-by-filter` (new) | "Branched" |
+     | 2751, seed | "Seeded" |
+     | 2785, expand | "Expanded" |
+     | 2826-2829, links among | "Showed links among the view" |
+     | 2887, remove | "Removed" |
+     | 3744, starter question | "Ran a starter question" |
+     | 3829, shared contacts | "Showed two who share contacts" |
+     | 5315, alert jump | "Opened from an alert" |
+     | 7576, ownership | "Showed an ownership structure" |
+     | 7965, alert canvas | "Opened an alert" |
+
+     A label matching none of these becomes "Changed".
+   - **Stored labels.** `history.py`'s bootstrap SQL rewrites stored labels with idempotent
+     `UPDATE`s,
+     one pattern per site:
+
+     | Pattern | New label |
+     |---|---|
+     | `LIKE 'Branched from %'` | "Branched" |
+     | `LIKE 'Seeded % node(s)'` | "Seeded" |
+     | `LIKE 'Expanded % node(s) from %'` | "Expanded" |
+     | `LIKE 'Showed % link(s) among the nodes in view'` and `LIKE 'Showed the routes within %'` | "Showed links among the view" |
+     | `LIKE 'Removed % node(s)'` | "Removed" |
+     | `LIKE 'Ran a starter question: %'` | "Ran a starter question" |
+     | `LIKE 'Showed two who share contacts: %'` | "Showed two who share contacts" |
+     | `LIKE 'Opened from alert %'` | "Opened from an alert" |
+     | `LIKE 'Showed an ownership structure: %'` | "Showed an ownership structure" |
+     | `LIKE 'Opened an alert: %'` | "Opened an alert" |
+
+     Any label not among the new fixed texts becomes "Changed". Its test covers each pattern, the
+     fallback, a second run changing nothing, and a label with a character where a pattern has `_`
+     (a single-character wildcard), which must not match.
+   - **Where the labels show.** The toolbar's "Last change" (`lastChange.ts`) and the welcome panel
+     (`WorkspaceWelcome.tsx`) show the new labels. ADR-115 E6's reference wording is amended, along
+     with the tests that carry it (`lastChange.test.ts`, `WorkspaceWelcome.test.tsx`,
+     `welcome.spec.ts`).
+9. **Export.**
+   - **The manifest.** It replaces `withheld_count: int | None` with `withheld: bool | None`:
+     - under the `disclose` policy, it is the exporter's standing sentence for the case: `true` or
+       `false`, never `None`;
+     - under `omit`, it is absent, as before.
+
+     It renders as the standing sentence, or nothing, in every renderer: `ExportPanel.tsx:297-300`,
+     `reportExport.ts:111-112`, the subgraph artefact and `export/api.ts:53`.
+   - **The ledger** (the owner's ruling, "A yes/no only"). It keeps `withheld BOOLEAN NOT NULL` in
+     place of `withheld_count`. A migration sets it to `withheld_count > 0` and drops the count.
+   - **ADR-045** is amended to match.
+10. **The port.** `GraphPort.expand_candidate_count` is withdrawn, with:
+    - its conformance cases;
+    - its adapter and builder code;
+    - the fake's `candidate_count`;
+    - the docstrings that name it (`jobs.py:20`, `patterns.py:11`, `access_filter.py:79-80`).
+11. **Link changes** (the owner's ruling, "Filter per reader"; it amends ADR-102).
+    - **Link history** (`link_changes.py:489-505`) returns only the revisions whose before and after
+      the reader may view, judged on the link-change store's recorded `before` and `after` handling.
+      Datasets play no part, because the store does not record them (`_snapshot`,
+      `link_changes.py:252-260`), and link history is already reached only from a link in the
+      reader's case. A revision with an unreadable side is left out whole.
+    - **A successor link's provenance.**
+      - **New changes.** A successor keeps the old link's document sources: they are the evidence
+        for the link, and source references travel with the link as they do for every link today
+        (decided by the coordinator under the owner's instruction of 24 October 2026 to take the
+        recommended option). Whether a source `document_id` naming a document the reader cannot read
+        is itself
+        a referent is a general provenance question, recorded with ADR-125, not settled here.
+        What is no longer written is any `manual:change:<id>` entry, whether its own or one carried
+        from an earlier
+        revision. Its own change is recorded as `manual:change`, and the lineage lives only in the
+        link-change store, where link history filters it. Filtering it in the Conduit after
+        retrieval would be the very thing rule 3 forbids, so it is not written into a field every
+        reader sees.
+      - **ADR-080 is amended.** Its decision 6 (`06_DECISIONS.md:9331`) mandates
+        `manual:change:<old id>`. `test_link_changes.py:283` is rewritten in U10.
+      - **Successors already written.** A script, `python -m scripts.strip_change_provenance`, run
+        once per deployment, removes `manual:change:<id>` entries in two places:
+        - from links in the Vault, superseded ones included, through a new port method
+          `strip_provenance_references(prefix: str) -> int`;
+          - it takes no principal, like `revert_elements`;
+          - the script is its only caller;
+          - its conformance case includes a superseded link;
+        - from every working set's stored copies in Valkey. After rewriting them, the script
+          deletes each case's delta stream (`ws:*:deltas`), so `deltas_after` finds a gap
+          (`store.py:259-266`) and every client is sent a full projected snapshot from the rewritten
+          copies (decided by the coordinator under the owner's instruction of 24 October 2026 to
+          take the recommended option).
+
+        `entity_pictures.py:283-292` likewise carries no `manual:change:` entry over from an earlier
+        revision.
+
+        History bodies in Postgres are left as they are, because restore now reads the Vault and
+        never serves them.
+      - **The exception.** This in-place rewrite is a named exception to ADR-080's "every change is
+        a supersede", recorded in ADR-080's amendment: it changes no claim, only a reference.
+      - **Until the script runs,** old successors keep the reference. The script is recorded with
+        each deployment's upgrade steps.
+    - **The revision number stays.** It says only that the link changed before.
+12. **What A′ accepts.** A reader can still infer two things, each a statement that something exists
+    or happened, never what or where.
+    - **That hidden activity exists**, from:
+      - an empty projected delta at its sequence number (suppressing it would leave a sequence gap
+        that says the same thing);
+      - a history step whose label shows an action that changed nothing they can see;
+      - the standing sentence;
+      - a gap in a link's history chain, where a left-out revision's `previous_edge_id` no longer
+        matches.
+    - **That a link was raised above them**, from a `DeltaRemoveSent` naming only a link they could
+      read. Sending nothing would leave a superseded link on their canvas, against reconnect
+      equality, and their next snapshot would show it gone anyway.
+13. **Out of this record.**
+    - **ADR-125's, next.**
+      - Cluster ids (Context point 12).
+      - Stored bodies that are stale against the Vault. They are found by restore (decision 6). A
+        stale body hidden in the store can also make a reader's `added` or `would_be` disagree by
+        one
+        with what they see.
+      - A source `document_id` in a link's provenance that names a document the reader cannot read.
+    - **Packs, rule holds and pipeline runs** are each checked against rule 3 when next touched.
+14. **Spec, the published copy and the deployment.**
+    - **The spec** is corrected in U10, with amendments to ADR-045, ADR-048, ADR-080, ADR-099,
+      ADR-102 and ADR-115:
+      - `01_DOMAIN_MODEL.md`: 1128, 1305-1316, 1339-1353, and the §4 reproject example;
+      - `03_CONDUIT_MIDDLEWARE.md`: §3.2 (165-180), §4, §6;
+      - `00_ARCHITECTURE.md`: 655-656;
+      - `02_GLASS_FRONTEND.md`: 188, 995, 1580-1590;
+      - `07_BUILD_PLAN.md`: 708-711;
+      - `08_ACCEPTANCE_SCENARIOS.md`: 396, 636, 640.
+    - **The published copy** under `OspreyFlow_user_repo` follows on the owner's next publish.
+    - **The owner's deployment** is not rebuilt (the owner's ruling, "Leave it, record it").
+
+### Units
+
+Units run in this order, with one writer and one agent on the tree at a time (rule 14).
+- **Before each fix,** its test is shown red, for the reason it names, against a planted violation
+  in the shape the code really takes (rules 1 and 15).
+- **After each fix,** the unit is reviewed, `make ci`'s touched suites are green, and the unit is
+  committed before the next starts.
+- **With U0,** Brief 1 stage 5, with `test_pid_access_control.py`, is committed in the same change, because this
+  record cites its measurements.
+
+- **U0.** This record is entered in `06_DECISIONS.md`. ADR-125's scope (decision 13) goes in the
+  build plan; the record itself is written after A′, since `06_DECISIONS.md` holds only accepted
+  records.
+- **U1. The two new port reads, conformance first.** U1 delivers:
+  - the `Protocol` methods;
+  - the conformance cases;
+  - the ArcadeDB implementation, chunked at 1,000;
+  - the fake's versions, which leave out absent, hidden and superseded ids as the adapter does.
+
+  The cases are written and shown red against a stub before the implementation.
+  - **New cases**, against ArcadeDB, for `get_nodes` and `get_edges`:
+    - the same result for hidden, superseded and absent ids;
+    - no link with an unreadable end;
+    - chunking past 1,000 ids.
+  - **The red demonstration.** Each case is shown red by planting, in the rendered query, the
+    removal
+    of the access step and then of the superseded step.
+  - **The existing case**
+    `test_unauthorised_edges_among_shows_no_hidden_link_and_no_link_to_a_hidden_node`
+    (`test_suite.py:3428`) stays as it is.
+- **U2a. The wire gate**, with both walks and the raw-mapping list, shown red against today's code.
+- **U2b. The Glass, first.**
+  - **What is removed.**
+    - The figure, the notice handling and the toasts.
+    - Every literal `filtered_count`, with `models.ts` and `deltaClient.ts` changed by hand, since
+      they are outside `schemas-check`. The literals are in: `keyboard/harness.tsx:330`,
+      `keyboard/metrics-panel-harness.tsx:89`, `perf/harness.tsx:49`,
+      `export-capture/harness.tsx:108`, the four deck-capture harnesses,
+      `keyboard.spec.ts:275, 326, 495, 1252, 1282, 1646, 1670, 1706`, `node-drag.spec.ts:84`,
+      `link-selection.spec.ts:88`, `store.test.ts`, `deltaClient.integration.test.ts:154-173`,
+      `zoomBands.test.ts:60`, `StatusBar.test.tsx` and `deltaOps.test.ts:7`.
+  - **Also removed:** the alert inbox's unreadable count (`watches/api.ts:49`,
+    `AlertInbox.tsx:84-105`).
+  - **What is added.**
+    - The status bar's sentence.
+    - `ThresholdControl` reads `ResolutionOutcome`, tolerating either shape until U2c lands.
+  - **The Glass test.**
+    - The sentence shows exactly when the last non-`None` value is `true`.
+    - It shows no number.
+    - It survives later deltas.
+    - It resets on a case change.
+- **U2c. Server fields and the cap** (decisions 1 and 2, `ThresholdControl` included).
+  - **Tests rewritten in the same change,** so `make ci` stays green:
+    - `test_service.py`;
+    - the 10 files asserting on the fake's `candidate_count`;
+    - `test_hidden_count.py`;
+    - `test_app.py:79-88, 276-283`;
+    - `test_phase3_working_set.py:190-232, 325-394`;
+    - the Brief 1 live test's two characterisation tests, run live: the expansion test becomes an
+      equality; the shared-case test becomes "`withheld` true in A, false in B", with the manifest's
+      `withheld` likewise (decision 9).
+  - **The wire gate** goes green.
+  - **New fast-suite cases:**
+    - preview and `would_be` figures are equal with and without a hidden stored item, including a
+      readable link to a hidden node;
+    - the projected count's cost, measured over one radial menu's worth of per-type previews, not
+      just one.
+  - **Also in this unit:** `ResolutionOutcome` on the three resolution routes, and the alert jump
+    without `unreadable_count`.
+  - **The live run.** The Brief 1 live test runs with the stack to itself (rule 14).
+- **U3. The port withdrawn** (decision 10). This is a pure withdrawal, with no red to show.
+- **U4. Delta projection and links-among** (decisions 3 and 4). Each referent is shown red first:
+  - the removed hidden id;
+  - the reproject reason and keys;
+  - each `DeltaReplaceEdge` row;
+  - links-among's unconnected pairs.
+
+  An old `DeltaRemove` without the record gives a full snapshot.
+  - **The Glass.** It takes `edge_ids` in `models.ts` and `applyRemove`. Its test shows that a sent
+    link removal takes the link off the canvas, red first.
+  - **The wire gate.** It forbids `removed` on every sent delta, red against a `project_delta` that
+    passes the record through.
+- **U5. The flag** (decision 5). The test that remove and restore leave it unchanged is written here
+  and recorded red for the right reason: today's code deletes the hidden item.
+- **U6. Remove and restore** (decision 6), in this order:
+  1. The reclassified-node test (a restore must not write a step's lower-marked body over a node
+     raised since) is written and recorded red against today's restore.
+  2. `remove` and restore keep what the reader cannot read, and restore judges step members against
+     the Vault through `get_nodes` and `get_edges`. U5's test and the reclassified-node test go
+     green.
+  3. The reconnect-equality test (a more-cleared reader after a less-cleared reader's restore) is
+     written and recorded red.
+  4. The full-set stored snapshot is built, with the restorer's projected response.
+  5. The reconnect test goes green.
+- **U6b. A view pushed past the cap** (decision 2). It covers the dialog's "Try again" and its
+  keyboard step, the live-path cost measurement, and:
+  - `DeltaViewOverCap` on the full snapshot, the catch-up path and the live forward, each shown red
+    first;
+  - the `branch-by-filter` route and its rule 4 access-control test;
+  - the Glass dialog, its `deltaClient` handling and its `keyboard.spec.ts` step (rule 13).
+- **U7. `/seed`** (decision 7). The tests submit bodies forged to look readable:
+  - against a fake that refuses absent ids and filters as the adapter does (rule 15);
+  - and against ArcadeDB.
+- **U8. History** (decision 8). The labels, the migration's prefix test, `HistoryPanel`, "Last
+  change"
+  and the welcome panel. Tests in the Postgres layer and the Glass.
+- **U9. Export and ledger** (decision 9), with the migration. Tests in the Postgres layer.
+- **U10. Link changes** (decision 11), each part shown red first, and then the close.
+  - **Link changes:**
+    - link history filtered per reader;
+    - successor provenance no longer naming the old link;
+    - `strip_provenance_references` with its conformance case;
+    - the `strip_change_provenance` script, tested against a Vault and a Valkey working set each
+      holding an old successor, and showing a client's catch-up after it gets a full snapshot;
+    - `test_link_changes.py:283` rewritten.
+  - **The close:**
+  - **The spec.** The spec text and the ADR amendments.
+  - **The live access test.** The Brief 1 live test runs on ArcadeDB with nothing else on the stack,
+    and `PID_ACTUALS.md`'s §5.3 line moves to met for a case the analyst works alone, with the
+    shared-case remainder (decision 12's existence signals, and cluster ids until ADR-125) reported.

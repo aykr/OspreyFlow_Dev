@@ -498,6 +498,7 @@ jobs:
           ../OspreyFlow_Build/tests/resolve/test_trigger.py
           ../OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py
           ../OspreyFlow_Build/tests/services/api/test_access.py
+          ../OspreyFlow_Build/tests/services/api/test_pid_access_control.py
           ../OspreyFlow_Build/tests/services/api/test_dossier_access_control.py
           ../OspreyFlow_Build/tests/services/api/test_prefetch.py
           ../OspreyFlow_Build/tests/services/api/test_review.py
@@ -795,6 +796,7 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/resolve/test_trigger.py
           --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_access.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_pid_access_control.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_dossier_access_control.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_prefetch.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_review.py

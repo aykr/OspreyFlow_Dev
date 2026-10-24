@@ -14,3 +14,8 @@ scripts/probe_write_cost.py
 # Renamed to `describeChange.ts` (a9ea150) because it collided on case with `LinkHistory.tsx`;
 # `tools/case_collision_check.py` names the old file as the reason the check exists.
 apps/workspace/src/inspector/linkHistory.ts
+
+# Not a repository path: ADR-120 Amendment 6 and its build-plan row name `config/weights.yaml` as the
+# place inside a backup bundle where `harness/backup.py` copies the weights file. It is never a file
+# in the checkout.
+config/weights.yaml
