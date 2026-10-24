@@ -121,7 +121,10 @@ test("Confirm as the same asks why first, and sends the reason with the two ends
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ seq: 2, op: "reproject", merged: 1, split: 0, affected: 2 }),
+      body: JSON.stringify({
+        delta: { seq: 2, op: "reproject", reason: "manual link", affected_cluster_ids: {} },
+        merged: 1, split: 0, affected: 2,
+      }),
     });
   });
   await tabToEntry(page, "Confirm as the same");
@@ -151,7 +154,10 @@ test("Mark as not the same asks why first, and sends the reason with the two end
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ seq: 2, op: "reproject", merged: 0, split: 1, affected: 2 }),
+      body: JSON.stringify({
+        delta: { seq: 2, op: "reproject", reason: "manual split", affected_cluster_ids: {} },
+        merged: 0, split: 1, affected: 2,
+      }),
     });
   });
   await tabToEntry(page, "Mark as not the same");

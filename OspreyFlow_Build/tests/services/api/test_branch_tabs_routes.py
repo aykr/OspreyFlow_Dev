@@ -97,7 +97,7 @@ class _FakeWorkingSet:
     ) -> ExpansionOutcome:
         self.branch_calls.append((source, new, node_ids))
         nodes, edges, _ = await self.branch_contents(source, principal, node_ids)
-        return ExpansionOutcome(delta=DeltaAdd(seq=1, nodes=nodes, edges=edges), filtered_count=0)
+        return ExpansionOutcome(delta=DeltaAdd(seq=1, nodes=nodes, edges=edges))
 
     async def current_membership(self, investigation_id: str) -> tuple[list[Node], list[Edge]]:
         return [], []

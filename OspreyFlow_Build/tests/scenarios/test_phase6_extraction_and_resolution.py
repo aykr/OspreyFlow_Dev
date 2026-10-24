@@ -218,11 +218,11 @@ async def test_phase6_exit_criterion_end_to_end() -> None:
             investigation_id = new_id()
             await working_set.seed(investigation_id, [dup_a, dup_b], [], CLEARED)
             await working_set.set_resolution_threshold(investigation_id, THRESHOLD_STRICT, CLEARED)
-            delta = await working_set.set_resolution_threshold(
+            outcome = await working_set.set_resolution_threshold(
                 investigation_id, THRESHOLD_BROAD, CLEARED
             )
-            assert delta.merged == 1
-            assert delta.affected == 2
+            assert outcome.merged == 1
+            assert outcome.affected == 2
 
             # === Clause 3: "A manual split survives a subsequent resolution run that would have
             # === merged the pair, and the conflict is recorded for review."
@@ -244,10 +244,10 @@ async def test_phase6_exit_criterion_end_to_end() -> None:
             await working_set.manual_split(investigation_id, split_a_id, split_b_id, CLEARED)
             # Survives even though this pair is a near-certain match — proven directly, not
             # assumed, by immediately re-projecting at the broadest official threshold.
-            broad_delta = await working_set.set_resolution_threshold(
+            broad_outcome = await working_set.set_resolution_threshold(
                 investigation_id, THRESHOLD_BROAD, CLEARED
             )
-            assert broad_delta.merged == 0  # the split pair never merges, at any threshold tried
+            assert broad_outcome.merged == 0  # the split pair never merges, at any threshold tried
 
             # "A subsequent resolution run that would have merged the pair" — re-run Splink over
             # the same two nodes and confirm it really would have merged them absent the split.
@@ -289,9 +289,9 @@ async def test_phase6_exit_criterion_end_to_end() -> None:
             )
 
             # The split still holds after the conflict was recorded — recording is not acting.
-            still_split_delta = await working_set.set_resolution_threshold(
+            still_split_outcome = await working_set.set_resolution_threshold(
                 investigation_id, THRESHOLD_BROAD, CLEARED
             )
-            assert still_split_delta.merged == 0
+            assert still_split_outcome.merged == 0
         finally:
             await valkey.aclose()

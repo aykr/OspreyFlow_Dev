@@ -209,12 +209,11 @@ def test_the_working_sets_projection_leaves_out_another_datasets_node_and_link()
         ],
     )
     in_fixture = ANALYST.model_copy(update={"datasets": ["fixture"]})
-    projected, hidden = service.project_delta(delta, in_fixture)
+    projected = service.project_delta(delta, in_fixture)
     assert isinstance(projected, DeltaAdd)
     assert {n.id for n in projected.nodes} == {"shared", "mine"}
     assert {e.id for e in projected.edges} == {"e-mine"}
-    assert hidden == 3
-    unlimited, _ = service.project_delta(delta, ANALYST)
+    unlimited = service.project_delta(delta, ANALYST)
     assert isinstance(unlimited, DeltaAdd) and len(unlimited.nodes) == 3
 
 
@@ -233,6 +232,7 @@ async def test_what_the_conduit_writes_onto_a_canvas_is_in_the_cases_dataset_the
             "case-e",
             [_node("email:1", []), _node("named", ["fixture"])],
             [_edge("m1", "email:1", "named", [])],
+            ANALYST,
         )
     finally:
         set_case_datasets(None)

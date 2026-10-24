@@ -2,9 +2,10 @@
 `spec/03_CONDUIT_MIDDLEWARE.md` §3.2 (the delta protocol) and §4 (caps,
 storage, projection), `spec/00_ARCHITECTURE.md` §4.
 
-The five delta ops below (`add`/`update`/`remove`/`reproject`/`notice`) are
+The delta ops below (`add`/`update`/`remove`/`reproject`) are
 `03_CONDUIT_MIDDLEWARE.md` §3.2's own illustrative examples, given real
-types. `DeltaSnapshot` is not one of those five: §3.2's prose requires it
+types. §3.2's fifth, `notice`, left the protocol with ADR-124: a count of what a reader may not
+read points at it. `DeltaSnapshot` is not one of those five: §3.2's prose requires it
 ("a client that misses a sequence reconnects and requests a full snapshot
 rather than attempting to patch") without giving its wire shape, so this
 follows the same pattern `GraphPort` set when it grew past its own
@@ -115,6 +116,11 @@ class DeltaReproject(BaseModel):
     new τ; this is how the client learns what moved without re-fetching
     the whole set.
 
+    It carries no figure of its own: the counts of how many entities merged, split or moved are
+    the acting analyst's, from their own view, and ride on their own response
+    (`ResolutionOutcome`) and not on a delta every reader receives (ADR-124 decision 1). Stored
+    deltas that still carry `merged`, `split` or `affected` parse: the model ignores extra fields.
+
     `affected_cluster_ids` (Phase 6a Stage 2) is `ClusterDelta.affected_cluster_ids`
     (`services/resolve/projection.py`) carried through unchanged — every node whose cluster
     membership moved, mapped to its new cluster id, bounded by `affected` and therefore never a
@@ -127,47 +133,22 @@ class DeltaReproject(BaseModel):
     seq: int
     op: Literal["reproject"] = "reproject"
     reason: str
-    merged: int = 0
-    split: int = 0
-    affected: int = 0
     affected_cluster_ids: dict[NodeId, ClusterId] = Field(default_factory=dict)
-
-
-class DeltaNotice(BaseModel):
-    """`03_CONDUIT_MIDDLEWARE.md` §3.2: "carries a count and never carries
-    the withheld content, not even its identifiers" — enforced by this
-    type's shape, not by caller discipline: there is no field here a
-    withheld node's id could be put into."""
-
-    seq: int
-    op: Literal["notice"] = "notice"
-    level: Literal["info", "warning"] = "warning"
-    message: str
-    count: int
 
 
 class DeltaSnapshot(BaseModel):
     """The reconnect path's full-state response — see the module
-    docstring. `filtered_count` rides on the snapshot the same way it will
-    on every other projected read, so a client that reconnects mid-session
-    sees the same "N hidden by handling" figure it would have seen by
-    staying connected."""
+    docstring. It carries no count of what the reader may not read (ADR-124 decision 1); a stored
+    snapshot that still carries `filtered_count` parses, since the model ignores extra fields."""
 
     seq: int
     op: Literal["snapshot"] = "snapshot"
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)
-    filtered_count: int = 0
 
 
 WorkingSetDelta = Annotated[
-    DeltaAdd
-    | DeltaUpdate
-    | DeltaRemove
-    | DeltaReplaceEdge
-    | DeltaReproject
-    | DeltaNotice
-    | DeltaSnapshot,
+    DeltaAdd | DeltaUpdate | DeltaRemove | DeltaReplaceEdge | DeltaReproject | DeltaSnapshot,
     Field(discriminator="op"),
 ]
 
@@ -184,12 +165,11 @@ def decode_delta(data: dict[str, Any]) -> WorkingSetDelta:
 
 
 class ExpansionOutcome(BaseModel):
-    """What `WorkingSetService.expand` returns on success — the delta the
-    client should apply, plus the same `filtered_count` figure the status
-    bar reports (`02_GLASS_FRONTEND.md` §... "6 hidden by handling")."""
+    """What `WorkingSetService.expand` returns on success — the delta the client should apply. It
+    carries no count of what was withheld (ADR-124 decision 1): a figure tied to a seed and a link
+    type can be made to point at the one hidden link it counts."""
 
     delta: DeltaAdd
-    filtered_count: int
     #: ADR-098: whether the links among the expansion's nodes and the view were brought too.
     #: `not_asked` past the automatic limits; `view_full` when they would have passed the cap, so
     #: none was added (never some of them) and the canvas says so.
@@ -284,12 +264,26 @@ class CardinalityPreview(BaseModel):
     """`POST /expand/preview` (`03_CONDUIT_MIDDLEWARE.md` §3.2): cardinality
     only, no mutation. `would_breach` names which cap, if any, an actual
     `expand` with this request would hit — the same `LimitExceeded` shape,
-    computed without writing anything."""
+    computed without writing anything. Both counts are over the reader's own projected view
+    plus what the request adds (ADR-124 decision 2), so they are the same with and without a
+    stored item the reader may not read."""
 
     candidate_node_count: int
     candidate_edge_count: int
-    filtered_count: int
     would_breach: LimitExceeded | None = None
+
+
+class ResolutionOutcome(BaseModel):
+    """What the three resolution routes answer (`PUT .../resolution/threshold` and the manual
+    same-as and split, ADR-124 decision 1): the delta every reader receives, and the figures the
+    resolution changed, as the acting analyst's own view counts them. The figures are the actor's
+    own response and withhold nothing from them; they are not on the delta, which other readers
+    receive."""
+
+    delta: DeltaReproject
+    merged: int = 0
+    split: int = 0
+    affected: int = 0
 
 
 __all__ = [
@@ -299,7 +293,6 @@ __all__ = [
     "ClusterExplanation",
     "ClusterNotFoundError",
     "DeltaAdd",
-    "DeltaNotice",
     "DeltaRemove",
     "DeltaReplaceEdge",
     "DeltaReproject",
@@ -315,6 +308,7 @@ __all__ = [
     "NodeNotInWorkingSetError",
     "NodePropertyUpdate",
     "PairwiseExplanation",
+    "ResolutionOutcome",
     "SameNodeAssertionError",
     "WorkingSetDelta",
 ]

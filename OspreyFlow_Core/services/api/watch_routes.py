@@ -79,14 +79,13 @@ class AlertList(BaseModel):
 class AlertJumpResult(BaseModel):
     """`POST /v1/alerts/{alert_id}/jump`'s response — `08_ACCEPTANCE_SCENARIOS.md` B14: "The new
     working set contains the alert's entities and a link to the originating investigation."
-    `seeded_count`/`unreadable_count` answer the task's own question — what happens when a referent
-    became unreadable between the alert firing and the jump: it is not silently dropped from the
-    count the caller can act on, even though it is silently dropped from the seeded working set
-    itself (the only thing `working_set.seed` can do with a node it cannot fetch)."""
+    `seeded_count` is how many referents the jumper could read and so seeded. There is no count
+    of the rest (ADR-124 decision 1): a referent that became unreadable between the alert firing
+    and the jump is left out of the new case, and how many were left out is a figure that points at
+    what the jumper may not read."""
 
     investigation: Investigation
     seeded_count: int
-    unreadable_count: int
 
 
 async def alert_to_view(alert: Alert, principal: Principal, graph: GraphPort) -> AlertView:
@@ -106,7 +105,7 @@ async def alert_to_view(alert: Alert, principal: Principal, graph: GraphPort) ->
 
 async def fetch_jumpable_referents(
     alert: Alert, *, principal: Principal, graph: GraphPort
-) -> tuple[list[Node], int]:
+) -> list[Node]:
     """The node-fetch half of the jump — `app.py`'s own route does the investigation-branch and
     working-set-seed calls, since both are already-established app.py-local orchestration
     (`branch_investigation`'s own `investigations.create`/`working_set.seed`/`publish_delta`/
@@ -115,18 +114,14 @@ async def fetch_jumpable_referents(
     jump time, never trusted from whatever `evidence_available` found true when the alert was
     listed moments earlier, the same "re-verify from the authoritative source" discipline every
     other read in this codebase already follows. A referent that no longer resolves is not an
-    error (the jump still proceeds with whatever is readable) and is not silently absorbed either —
-    counted and returned so the caller can surface a partial-success notice, never a call that
-    looks fully successful when it wasn't."""
+    error: the jump proceeds with whatever is readable, and says nothing of how many were not
+    (ADR-124 decision 1)."""
     readable: list[Node] = []
-    unreadable = 0
     for node_id in alert.referent_node_ids:
         node = await graph.get_node(node_id, principal)
-        if node is None:
-            unreadable += 1
-            continue
-        readable.append(node)
-    return readable, unreadable
+        if node is not None:
+            readable.append(node)
+    return readable
 
 
 __all__ = [

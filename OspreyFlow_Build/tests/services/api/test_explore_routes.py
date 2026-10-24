@@ -381,9 +381,7 @@ def _run_overrides(seeded: list[tuple[str, list[str], list[str], Principal]]) ->
     class _WorkingSet:
         async def seed(self, case, nodes, edges, principal):  # type: ignore[no-untyped-def]
             seeded.append((case, [n.id for n in nodes], [e.id for e in edges], principal))
-            return ExpansionOutcome(
-                delta=DeltaAdd(seq=7, nodes=list(nodes), edges=list(edges)), filtered_count=0
-            )
+            return ExpansionOutcome(delta=DeltaAdd(seq=7, nodes=list(nodes), edges=list(edges)))
 
         async def current_membership(self, case):  # type: ignore[no-untyped-def]
             return [], []

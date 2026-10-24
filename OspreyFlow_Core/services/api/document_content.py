@@ -296,7 +296,7 @@ class DocumentContentService:
         ref = reference_for(data, content_type)
         document_id = f"content:{sha256(ref.encode()).hexdigest()[:32]}"
         edge_ids = [f"{document_id}:held-by:{holder.id}"] if holder else []
-        await self._working_set.ensure_room(investigation_id, [document_id], edge_ids)
+        await self._working_set.ensure_room(investigation_id, [document_id], edge_ids, principal)
 
         await self._media.put(data, content_type)
         now = datetime.now(UTC)
@@ -342,7 +342,10 @@ class DocumentContentService:
             raise
         await self._graph.commit_transaction(tx)
         delta = await self._working_set.add_written(
-            investigation_id, [_node_from_write(document)], [_edge_from_write(e) for e in edges]
+            investigation_id,
+            [_node_from_write(document)],
+            [_edge_from_write(e) for e in edges],
+            principal,
         )
         return DocumentUploadResult(document_id=document_id, delta=delta)
 
@@ -407,7 +410,10 @@ class DocumentContentService:
         if record.document_id != document_id:
             raise DocumentNotFoundError(document_id)
         await self._working_set.ensure_room(
-            investigation_id, [f"accepting:{candidate_id}"], [f"accepting:{candidate_id}:mention"]
+            investigation_id,
+            [f"accepting:{candidate_id}"],
+            [f"accepting:{candidate_id}:mention"],
+            principal,
         )
         node_id = await accept_candidate(self._candidates, self._graph, candidate_id, principal)
         now = datetime.now(UTC)
@@ -444,6 +450,6 @@ class DocumentContentService:
         if node is None:
             raise DocumentNotFoundError(document_id)
         delta = await self._working_set.add_written(
-            investigation_id, [node], [_edge_from_write(mention)]
+            investigation_id, [node], [_edge_from_write(mention)], principal
         )
         return DocumentAcceptResult(node_id=node_id, delta=delta)

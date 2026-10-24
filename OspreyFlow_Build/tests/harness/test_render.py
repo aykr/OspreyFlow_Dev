@@ -512,7 +512,10 @@ def test_the_cluster_profile_renders_the_charts_values_rather_than_compose() -> 
          "cluster": {"shared_storage_class": "efs-sc"},
          "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}}}
     )  # fmt: skip
-    assert set(render(config, resolver=_fake_resolver).artefacts) == {"values.yaml", "versions.lock"}
+    assert set(render(config, resolver=_fake_resolver).artefacts) == {
+        "values.yaml",
+        "versions.lock",
+    }
 
 
 # --- The digest refusal ------------------------------------------------------
@@ -684,6 +687,32 @@ def test_arcadedb_is_published_to_this_machine_only(rendered: RenderResult) -> N
     assert "OSPREY_ARCADEDB_PORT=2480" in rendered.artefacts["deployment.env"]
 
 
+#: The command Valkey is started with, wherever the deployment runs one itself.
+_VALKEY_NEVER_EVICTS = ["valkey-server", "--maxmemory-policy", "noeviction"]
+
+
+def test_the_rendered_valkey_never_evicts_a_key_on_its_own(rendered: RenderResult) -> None:
+    """Violation caught (ADR-124 Amendment 4, rule 3): a Valkey left to its default policy. The
+    working set's access index is a handful of keys beside the bodies, and the figures a reader is
+    shown are computed from them; an eviction under memory pressure that took one (a count, the
+    signature table) would make those figures wrong in the reader's favour or against it, with
+    nothing to say so. The index notices a key it has lost (`access_counts`), but a lost key is a
+    rebuild of a case's index at the worst moment, and `noeviction` makes the loss a refused write
+    instead, which is a thing an operator sees. Valkey's default `noeviction` is the value; the
+    argument is there so that the deployment says it and a changed default cannot change it."""
+    compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
+
+    assert compose["services"]["valkey"]["command"] == _VALKEY_NEVER_EVICTS
+
+
+def test_the_developer_stack_s_valkey_never_evicts_a_key_on_its_own() -> None:
+    """The same, in `deploy/compose/dev.yaml`: the stack the test suites and the owner's own work
+    run against should behave as a deployment does."""
+    developer = yaml.safe_load((_REPO / "deploy" / "compose" / "dev.yaml").read_text())
+
+    assert developer["services"]["valkey"]["command"] == _VALKEY_NEVER_EVICTS
+
+
 def test_the_conduit_is_not_published_by_default_and_is_when_asked_for() -> None:
     """`05_DEPLOYMENT.md` §2.6 item 1, the owner's decision of 25 September 2026.
 
@@ -786,7 +815,12 @@ def test_the_rendered_realm_carries_only_fields_keycloak_defines() -> None:
         f"unexpected top-level key(s) in the realm document: {sorted(set(realm) - known)}"
     )
     # ADR-112 Amendment 1: manage-users and manage-clients, for the Admin area's people and dashboards.
-    assert REQUIRED_SERVICE_ACCOUNT_ROLES == ("impersonation", "view-users", "manage-users", "manage-clients")
+    assert REQUIRED_SERVICE_ACCOUNT_ROLES == (
+        "impersonation",
+        "view-users",
+        "manage-users",
+        "manage-clients",
+    )
     assert "unmanagedAttributePolicy" not in realm
 
 
@@ -960,9 +994,7 @@ def test_the_rendered_model_proxy_is_the_developer_stacks() -> None:
     "same-named services agree" would silently skip it. A new model-tier service that is not
     added here fails the final assertion rather than being quietly unchecked.
     """
-    developer = yaml.safe_load(
-        (_REPO / "deploy" / "compose" / "dev.yaml").read_text()
-    )["services"]
+    developer = yaml.safe_load((_REPO / "deploy" / "compose" / "dev.yaml").read_text())["services"]
     rendered = {i.service: i.image for i in service_images(OspreyConfig())}
 
     for rendered_service, developer_service in _MODEL_TIER.items():
@@ -998,9 +1030,9 @@ def test_the_rendered_model_pull_matches_the_developer_stacks() -> None:
     would mean a developer and a deployment silently running different models — and the
     deployment's own would be the one nobody had looked at.
     """
-    developer_stack = yaml.safe_load(
-        (_REPO / "deploy" / "compose" / "dev.yaml").read_text()
-    )["services"]["ollama"]
+    developer_stack = yaml.safe_load((_REPO / "deploy" / "compose" / "dev.yaml").read_text())[
+        "services"
+    ]["ollama"]
 
     assert _OLLAMA_PULL_SCRIPT == developer_stack["command"][0], (
         "the rendered model pull has drifted from deploy/compose/dev.yaml's — a developer and a "
@@ -1394,7 +1426,11 @@ def test_only_the_uploaded_folder_inside_the_ingest_root_is_writable_for_the_con
         ingest = config.components.storage.ingest
         assert f"{ingest}:{INGEST_CONTAINER_PATH}:ro" in volumes, volumes
         assert f"{ingest}/uploaded:{INGEST_CONTAINER_PATH}/uploaded" in volumes, volumes
-        writable = [v for v in volumes if v.split(":")[1:2] == [INGEST_CONTAINER_PATH] and not v.endswith(":ro")]
+        writable = [
+            v
+            for v in volumes
+            if v.split(":")[1:2] == [INGEST_CONTAINER_PATH] and not v.endswith(":ro")
+        ]
         assert writable == [], f"{profile.value}: the ingest root itself is writable: {writable}"
 
     moved = OspreyConfig(

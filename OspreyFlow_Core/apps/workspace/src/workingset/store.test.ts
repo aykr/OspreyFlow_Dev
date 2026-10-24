@@ -169,9 +169,6 @@ describe("createWorkingSet", () => {
       seq: 2,
       op: "reproject",
       reason: "resolution_threshold",
-      merged: 1,
-      split: 0,
-      affected: 2,
       affected_cluster_ids: { n1: "n1", n2: "n1" },
     });
 
@@ -189,9 +186,6 @@ describe("createWorkingSet", () => {
       seq: 2,
       op: "reproject",
       reason: "resolution_threshold",
-      merged: 1,
-      split: 0,
-      affected: 2,
       affected_cluster_ids: { n1: "n1", "not-in-graph": "n1" },
     });
 

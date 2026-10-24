@@ -468,7 +468,7 @@ class _Alerts:
 
 class _Delta:
     async def seed(self, *args: object, **kwargs: object) -> ExpansionOutcome:
-        return ExpansionOutcome(delta=DeltaAdd(seq=1, nodes=[], edges=[]), filtered_count=0)
+        return ExpansionOutcome(delta=DeltaAdd(seq=1, nodes=[], edges=[]))
 
     async def current_membership(self, investigation_id: str):  # type: ignore[no-untyped-def]
         return [], []
@@ -503,8 +503,8 @@ def test_an_alert_jump_takes_the_packs_of_its_own_case_not_the_alerts(
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
-    async def _no_referents(*args: object, **kwargs: object) -> tuple[list[object], int]:
-        return [], 0
+    async def _no_referents(*args: object, **kwargs: object) -> list[object]:
+        return []
 
     monkeypatch.setattr(app_module, "fetch_jumpable_referents", _no_referents)
     client = _as(ALICE, cases, audit)
@@ -655,8 +655,8 @@ def test_an_alert_jump_inherits_the_stored_value_exactly(
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
-    async def _no_referents(*args: object, **kwargs: object) -> tuple[list[object], int]:
-        return [], 0
+    async def _no_referents(*args: object, **kwargs: object) -> list[object]:
+        return []
 
     monkeypatch.setattr(app_module, "fetch_jumpable_referents", _no_referents)
     client = _as(ALICE, cases, audit)

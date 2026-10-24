@@ -55,19 +55,16 @@ export interface DeltaReproject {
   seq: number;
   op: "reproject";
   reason: string;
-  /** Optional since ADR-124 U2b: the new `ResolutionOutcome` carries these figures itself, so the
-   * delta inside it may not. The bare delta sent until U2c lands still has them. */
-  merged?: number;
-  split?: number;
-  affected?: number;
   /** Phase 6a Stage 2 — every node whose cluster membership moved, mapped to its new cluster
    * id, mirroring `services/api/working_set/models.py`'s own field. Bounded by `affected`, never
    * the full working set. */
   affected_cluster_ids: Record<string, string>;
 }
 
-/** ADR-124 decision 1: the answer to a change of match strictness. Until U2c lands the server
- * sends the bare `DeltaReproject`; `ThresholdControl` reads either. */
+/** ADR-124 decision 1: the answer to each of the three resolution routes (a change of match
+ * strictness, a manual same-as, a manual split): the delta every reader receives, and the figures
+ * the change made, as the acting analyst's own view counts them. The figures are on this answer
+ * only, never on the delta. Mirrors `ResolutionOutcome` in `models.py`. */
 export interface ResolutionOutcome {
   delta: DeltaReproject;
   merged: number;

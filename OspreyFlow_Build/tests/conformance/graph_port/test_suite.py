@@ -329,19 +329,17 @@ async def test_action_code_and_sanitisation_code_never_gate_a_read(
         assert await adapter.get_node(node_id, OFFICIAL) is not None
 
 
-async def test_subgraph_filtered_count_is_the_declared_placeholder_zero(
-    factory: GraphAdapterFactory,
-) -> None:
-    """`01_DOMAIN_MODEL.md` §8: `filtered_count` is reserved and left at
-    `0` until Phase 3's Working-Set Service computes it — a declared gap,
-    not a silent one. Pinned here so a future change either keeps the
-    declaration honest or updates it deliberately, rather than drifting
-    unnoticed."""
-    async with factory.context() as adapter:
-        (hub,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
-        await _write(adapter, [_node("Person", classification="SECRET")], [])
-        subgraph = await adapter.expand(ExpandRequest(node_ids=[hub], depth=1), OFFICIAL)
-        assert subgraph.filtered_count == 0
+def test_subgraph_has_no_filtered_count_field(factory: GraphAdapterFactory) -> None:
+    """ADR-124 decision 1: a read returns the nodes and links the principal may read and no figure
+    for what it left out. `Subgraph.filtered_count` was reserved by `01_DOMAIN_MODEL.md` §8 and left
+    at `0` by every adapter, a field that claims completeness and went to every response holding a
+    `Subgraph`; it was removed, not held at 0. Pinned so a figure for what was filtered cannot come
+    back as a field of what every read returns. (It takes the suite's `factory` only because the
+    module is parametrised over it; it opens no store.)"""
+    from schemas.domain import Subgraph
+
+    assert "filtered_count" not in Subgraph.model_fields
+    assert set(Subgraph.model_fields) == {"nodes", "edges"}
 
 
 async def test_write_and_read_back_an_edge(factory: GraphAdapterFactory) -> None:

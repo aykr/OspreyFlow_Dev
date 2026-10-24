@@ -342,7 +342,8 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
         assert jumped.status_code == 201, jumped.text
         result = jumped.json()
         assert result["seeded_count"] == 1
-        assert result["unreadable_count"] == 1
+        # ADR-124: no figure for what the jumper may not read.
+        assert "unreadable_count" not in result
         assert result["investigation"]["branched_from"] == origin_investigation_id
 
         membership = client.get(

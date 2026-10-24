@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import type { StoreApi } from "zustand/vanilla";
 
 import { Slider } from "../design/primitives/Slider";
-import type { DeltaReproject, ResolutionOutcome, WorkingSetDelta } from "../workingset/models";
+import type { ResolutionOutcome, WorkingSetDelta } from "../workingset/models";
 import type { WorkingSetStoreState } from "../workingset/store";
 
 // `services/resolve/projection.py`'s three named constants, checked directly rather than assumed
@@ -26,29 +26,13 @@ function detentIndexFor(value: number): number {
   return DETENTS.findIndex((d) => d.value === value);
 }
 
-/** ADR-124 U2b: the answer is a `ResolutionOutcome`, or — until U2c lands — the bare
- * `DeltaReproject` the server sends today. Either reads the same. */
-function readOutcome(body: unknown): ResolutionOutcome {
-  const wrapped = body as Partial<ResolutionOutcome> | null;
-  if (wrapped && typeof wrapped === "object" && wrapped.delta && typeof wrapped.delta === "object") {
-    return {
-      delta: wrapped.delta,
-      merged: wrapped.merged ?? wrapped.delta.merged ?? 0,
-      split: wrapped.split ?? wrapped.delta.split ?? 0,
-      affected: wrapped.affected ?? wrapped.delta.affected ?? 0,
-    };
-  }
-  const bare = body as DeltaReproject;
-  return { delta: bare, merged: bare.merged ?? 0, split: bare.split ?? 0, affected: bare.affected ?? 0 };
-}
-
 export interface ResolutionThresholdControlProps {
   apiBaseUrl: string;
   bearerToken: string;
   investigationId: string;
   store: StoreApi<WorkingSetStoreState>;
   /** Bubbles the change summary up to the App-level Toast slot — `merged`/`split`/`affected` are the
-   * `ResolutionOutcome`'s own figures (or, until U2c lands, the bare `DeltaReproject`'s), read off
+   * `ResolutionOutcome`'s own figures, read off
    * the one answer this control's own `PUT` returns; the delta inside it drives the picture. */
   onChangeSummary?: (message: string) => void;
 }
@@ -109,7 +93,7 @@ export function ResolutionThresholdControl({
       },
     );
     if (!response.ok) return; // surfaces via a future notice/Toast at the App layer, same as GlassCanvas's own fetches
-    const outcome = readOutcome(await response.json());
+    const outcome = (await response.json()) as ResolutionOutcome;
     store.getState().applyDelta(outcome.delta as WorkingSetDelta);
     setThreshold(detent.value);
     onChangeSummary?.(

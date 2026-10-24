@@ -617,10 +617,8 @@ from .working_set.models import (
     ClusterExplanation,
     ClusterNotFoundError,
     DeltaAdd,
-    DeltaNotice,
     DeltaRemove,
     DeltaReplaceEdge,
-    DeltaReproject,
     DeltaSnapshot,
     ExpansionOutcome,
     LimitExceededError,
@@ -628,6 +626,7 @@ from .working_set.models import (
     LinksAmongRequest,
     NodeNotInWorkingSetError,
     NothingToBranchError,
+    ResolutionOutcome,
     SameNodeAssertionError,
     WorkingSetDelta,
     decode_delta,
@@ -2982,17 +2981,17 @@ async def set_resolution_threshold_route(
     working_set: WorkingSetDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
-) -> DeltaReproject:
-    delta = await resolution_module.set_threshold(working_set, investigation.id, body, principal)
-    await publish_delta(valkey, investigation.id, delta)
+) -> ResolutionOutcome:
+    outcome = await resolution_module.set_threshold(working_set, investigation.id, body, principal)
+    await publish_delta(valkey, investigation.id, outcome.delta)
     await audit.record(
         principal=principal,
         action="set_resolution_threshold",
         investigation_id=investigation.id,
         resolved_query={"threshold": body.threshold},
-        result_cardinality=delta.affected,
+        result_cardinality=outcome.affected,
     )
-    return delta
+    return outcome
 
 
 def _clean_reason(reason: str | None) -> str | None:
@@ -3020,15 +3019,15 @@ async def link_resolution_route(
     patterns_store: PatternsStoreDep,
     alerts_store: AlertsStoreDep,
     principal_resolver: PrincipalResolverDep,
-) -> DeltaReproject:
+) -> ResolutionOutcome:
     """Phase 7 Stage 6c: a manual link is a `SAME_AS` write that can grow a saved pattern's own
     match set (`06_DECISIONS.md` ADR-037's own change-stream amendment names manual assertion as
     one of its three producers) — evaluated synchronously here, the identical shape and the
     identical `run_studio_recipe`'s own docstring reasoning for why only this principal's own
     hotlists/monitors can fire from it. `split_resolution_route` below does not call evaluation at
     all — a `NOT_SAME_AS` write can only shrink a match set, never grow one."""
-    delta, entry = await resolution_module.link(working_set, investigation.id, body, principal)
-    await publish_delta(valkey, investigation.id, delta)
+    outcome, entry = await resolution_module.link(working_set, investigation.id, body, principal)
+    await publish_delta(valkey, investigation.id, outcome.delta)
     if entry is not None:
         await _evaluate_watches_best_effort(
             entry,
@@ -3051,10 +3050,10 @@ async def link_resolution_route(
         action="manual_link",
         investigation_id=investigation.id,
         resolved_query={"node_a": body.node_a, "node_b": body.node_b},
-        result_cardinality=delta.affected,
+        result_cardinality=outcome.affected,
         justification=_clean_reason(body.reason),
     )
-    return delta
+    return outcome
 
 
 @app.post(
@@ -3068,18 +3067,18 @@ async def split_resolution_route(
     working_set: WorkingSetDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
-) -> DeltaReproject:
-    delta, _entry = await resolution_module.split(working_set, investigation.id, body, principal)
-    await publish_delta(valkey, investigation.id, delta)
+) -> ResolutionOutcome:
+    outcome, _entry = await resolution_module.split(working_set, investigation.id, body, principal)
+    await publish_delta(valkey, investigation.id, outcome.delta)
     await audit.record(
         principal=principal,
         action="manual_split",
         investigation_id=investigation.id,
         resolved_query={"node_a": body.node_a, "node_b": body.node_b},
-        result_cardinality=delta.affected,
+        result_cardinality=outcome.affected,
         justification=_clean_reason(body.reason),
     )
-    return delta
+    return outcome
 
 
 @app.get(
@@ -5359,7 +5358,7 @@ async def jump_alert_route(
         own = await datasets.create(principal, branch.name, suffix_if_taken=True)
         await datasets.set_for_case(branch.id, [own.id], principal)
     principal = await scope_to_case(principal, branch.id, datasets)
-    nodes, unreadable = await fetch_jumpable_referents(alert, principal=principal, graph=graph)
+    nodes = await fetch_jumpable_referents(alert, principal=principal, graph=graph)
     outcome = await working_set.seed(branch.id, nodes, [], principal)
     await publish_delta(valkey, branch.id, outcome.delta)
     await _record_history_step(
@@ -5377,9 +5376,7 @@ async def jump_alert_route(
         resolved_query={"alert_id": alert.id, "from_investigation_id": alert.investigation_id},
         result_cardinality=len(nodes),
     )
-    return AlertJumpResult(
-        investigation=branch, seeded_count=len(nodes), unreadable_count=unreadable
-    )
+    return AlertJumpResult(investigation=branch, seeded_count=len(nodes))
 
 
 # --- the pathfinder (Phase 7 Stage 5) -----------------------------------------
@@ -9709,14 +9706,26 @@ async def export_pack_route(
     if version is None:
         raise HTTPException(status_code=404, detail="this pack has no publication to export")
     result = await export_pack(
-        pack=pack, version=version, request=body, exporter=principal, scheme=scheme, graph=graph,
-        ledger=export_ledger, policy=config.export_manifest_policy,
+        pack=pack,
+        version=version,
+        request=body,
+        exporter=principal,
+        scheme=scheme,
+        graph=graph,
+        ledger=export_ledger,
+        policy=config.export_manifest_policy,
     )
     await audit.record(
-        principal=principal, action="export_pack", investigation_id=investigation.id,
-        resolved_query={"pack": pack.id, "version": version.version,
-                        "ledger_entry": result.ledger_entry_id},
-        result_cardinality=len(result.items), justification=body.justification,
+        principal=principal,
+        action="export_pack",
+        investigation_id=investigation.id,
+        resolved_query={
+            "pack": pack.id,
+            "version": version.version,
+            "ledger_entry": result.ledger_entry_id,
+        },
+        result_cardinality=len(result.items),
+        justification=body.justification,
     )
     # ADR-106: the two people the manifest prints, named; nobody else is looked up.
     names = await principal_names.display_names([result.published_by, result.mark.exported_by])
@@ -9934,15 +9943,8 @@ async def _forward_notifications(
             continue
         data = message["data"]
         raw = decode_delta(json.loads(data.decode() if isinstance(data, bytes) else data))
-        delta, hidden = await working_set.project_live(investigation_id, raw, principal)
+        delta = await working_set.project_live(investigation_id, raw, principal)
         await websocket.send_text(delta.model_dump_json())
-        if hidden > 0:
-            notice = DeltaNotice(
-                seq=delta.seq,
-                message=f"{hidden} item(s) withheld by handling policy",
-                count=hidden,
-            )
-            await websocket.send_text(notice.model_dump_json())
 
 
 async def _handle_resync_requests(

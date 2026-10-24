@@ -157,7 +157,7 @@ import { PathfinderOverlay } from "./PathfinderOverlay";
 import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import { ActionErrorOverlay } from "./ActionErrorOverlay";
 import { describeEmptyExpansion } from "./expansionOutcome";
-import type { ClusterExplanation, WorkingSetDelta } from "../workingset/models";
+import type { ClusterExplanation, ResolutionOutcome, WorkingSetDelta } from "../workingset/models";
 
 const NODE_PROGRAM = createNodeCompoundProgram<
   WorkingSetNodeAttributes,
@@ -2407,8 +2407,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         });
         return;
       }
-      const delta = await response.json();
-      store.getState().applyDelta(delta);
+      // ADR-124: the answer is a `ResolutionOutcome`; the delta inside it is what the canvas applies.
+      const outcome = (await response.json()) as ResolutionOutcome;
+      store.getState().applyDelta(outcome.delta);
     }
 
     // `08_ACCEPTANCE_SCENARIOS.md` B10: "per-comparison match

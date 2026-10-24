@@ -1017,12 +1017,14 @@ export of a link checks the link's handling as the client submitted it, not its 
 
 ## 7. Caching
 
-Three layers, three different invalidation stories. Keep them separate or you will invalidate
+Four layers, four different invalidation stories. Keep them separate or you will invalidate
 the wrong one.
 
 | Layer | Store | Key | Invalidation |
 | --- | --- | --- | --- |
 | Working set | Valkey hash | `ws:{investigation_id}` | Explicit, on mutation |
+| Working-set access index (ADR-124 Amendment 4) | Valkey hashes and a sorted set beside the working set, maintained by Lua scripts | `ws:{investigation_id}:access_*` | Moved atomically by every write; checked on read and rebuilt from the bodies if damaged; expires with the working set; Valkey must be `noeviction` |
+| Readable signatures (ADR-124 Amendment 4) | In process | (case, epoch, signature version, principal_class) | None needed: a write or rebuild changes the version or the epoch, so a stale entry is never asked for |
 | Query result | Valkey string | hash of (query, principal_class, τ) | TTL 300s + on graph write to touched types |
 | Analytics result | Valkey string | hash of (query, principal_class) | TTL 900s + on partition load |
 

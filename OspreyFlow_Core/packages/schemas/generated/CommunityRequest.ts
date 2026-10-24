@@ -49,7 +49,6 @@ export type ComputedAt = string;
 export type Basis = ("direct" | "probabilistic") | null;
 export type Datasets1 = string[];
 export type Edges = Edge[];
-export type FilteredCount = number;
 export type Type2 = string;
 export type Nodes1 = StructureNode[];
 export type Weight1 = number;
@@ -72,10 +71,14 @@ export interface CommunityRequest {
   structure?: LinkStructure | null;
   [k: string]: unknown;
 }
+/**
+ * Nodes and links a read returned. It carries no count of what was left out (ADR-124
+ * decision 1): `filtered_count` was on it and was 0 on every read the adapter made, a field
+ * that claims completeness and is sent wherever a `Subgraph` is a response.
+ */
 export interface Subgraph {
   nodes: Nodes;
   edges: Edges;
-  filtered_count?: FilteredCount;
   [k: string]: unknown;
 }
 export interface Node {

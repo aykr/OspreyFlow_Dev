@@ -16609,6 +16609,134 @@ option.
 
   U2b does not claim rule 7 is met.
 
+### ADR-124, Amendment 4 (24 October 2026) — U2a and U2c: the wire gate, the fields removed, and a counted access index
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after three adversarial reviews and measurement on ArcadeDB 26.10.1 and Valkey 8.0.
+
+1. **The wire gate (U2a), red first.**
+   - **What it covers.** `tests/services/api/test_no_corpus_counts_on_the_wire.py` walks every
+     route's fields and every delta model, and forbids `filtered_count`, `unreadable_count` and
+     `withheld_count`.
+     - **Exemptions.** `withheld_count` is pinned as allowed only on the export manifest and the
+       export ledger (`POST .../export`, `GET /v1/exports`, `ExportManifest`, `ExportLedgerEntry`)
+       until U9.
+     - **Routes with no fields to walk.** A route with no reachable field must be on a pinned list:
+       3 JSON mappings (each checked by a source scan) or 15 non-JSON routes (each with a reason).
+   - **Recorded red.** Run against the last commit before this change (`7b102a4`, from a separate
+     worktree, with the loaded `app.py` printed to prove which code ran), the gate failed 9 cases:
+     - the delta set's `DeltaNotice`;
+     - `filtered_count` on seed, expand, expand preview, history restore and pattern run;
+     - `unreadable_count` on the alert jump;
+     - `DeltaSnapshot`;
+     - the reproject delta's figures.
+2. **What U2c removed** (decision 1):
+   - `filtered_count` on `ExpansionOutcome`, `CardinalityPreview`, `DeltaSnapshot` and **`Subgraph`**.
+     `Subgraph` is not in decision 1's list, but `patterns/run` returns it, so this record adds it.
+   - `DeltaNotice`, from the live forward and the catch-up path of `sync`.
+   - `AlertJumpResult.unreadable_count`.
+   - `merged`/`split`/`affected` on `DeltaReproject`. The threshold and manual same-as and split
+     routes answer `ResolutionOutcome`, and the Glass's `ThresholdControl` and manual link and split
+     read its `.delta`.
+
+   **Until U4,** `DeltaReproject.affected_cluster_ids` still has the actor's `affected` as its
+   length.
+3. **The cap counts the reader's projected view, from a counted access index** (decision 2; the
+   "Cost" sentence of decision 2 is replaced).
+   - **The first design was rejected on measurement.** Projecting the stored bodies for each reader
+     cost 3.3 s per preview and 56 s per radial menu at 50,000 nodes and 100,000 links, because
+     every body was read. A full-index load with a view cache still cost 1,180 ms cold, and 1,627 ms
+     for a 500-node expand end to end, at 50,000 nodes and 250,000 links. That is over
+     `02_GLASS_FRONTEND.md` §5's budget of under 800 ms for an expansion of up to 500 nodes.
+   - **What is built.** Per case, `ValkeyWorkingSetStore` keeps, beside the bodies:
+     - a signature table: an element's handling and datasets, its identity the full SHA-256 and its
+       key a short per-case number.
+       - **A rebuild** keeps the numbers and only appends, while the tables are whole.
+       - **A damaged rebuild.** When the tables themselves are damaged, a rebuild numbers afresh under
+         a new epoch. A request that read its signatures before the rebuild re-reads them once,
+         because the epoch it holds no longer matches the entries it reads.
+       - **No number is ever reissued:** a write refuses a number that already has a definition;
+     - per signature, the number of stored nodes;
+     - per `(link signature, source end signature, target end signature)`, the number of stored
+       links, with `absent` for an end not stored;
+     - per element, its signature (and ends);
+     - a node-to-link adjacency;
+     - one scalar hash: signature counter, version, signature version, epoch and self-link count.
+
+     Every write is a Valkey Lua script that moves all of these atomically, including a node's
+     removal or change of signature moving its links' triples. Scripts are chunked at 1,000
+     elements, and each chunk leaves the index consistent; one node's removal is bounded only by its
+     degree.
+   - **Reading.**
+     - **Visible totals.** A reader's visible totals are sums over the signatures they may read
+       (`principal_may_read`, over signatures with a non-zero count).
+     - **A request's new ids** are looked up alone. Links that a new node completes are counted.
+     - **The readable-signature cache** is keyed `(case, epoch, signature version, access class)`.
+       `03_CONDUIT_MIDDLEWARE.md` §7 is amended for it, as a fourth layer, in process and keyed by
+       version so it needs no invalidation.
+   - **Self-checking.** A read checks:
+     - every count against the bodies and the entries;
+     - the signature tables against each other and the counter;
+     - the adjacency's size against the links.
+
+     Damage rebuilds from the bodies, race-safe (`WATCH`, five tries, then an error, never a wrong
+     index), logged and counted.
+   - **Deployment requirement.** Valkey must never evict a key on its own: `maxmemory-policy
+     noeviction`.
+     - **Where it is set.** The harness and the developer stack now set it explicitly. The cluster
+       profile's managed Valkey (`external.valkey`, `05_DEPLOYMENT.md`) must be configured the same
+       way by its operator.
+     - **In a Valkey Cluster,** a case's keys must share one hash slot.
+   - **Measured on Valkey at 50,000 nodes and 250,000 links:**
+
+     | Measure | Result |
+     |---|---|
+     | Counts read | 0.7 ms |
+     | Cold preview | 1 ms |
+     | A menu of 16 previews sent at once, cold | 12 ms |
+     | A 500-node expand, end to end | 43 ms |
+     | A write of 500 nodes, or 500 links | 9-12 ms |
+     | A whole-case branch (47,520 nodes) | 17.3 s in 292 scripts, the longest 30 ms |
+     | A whole-case restore | 11.3 s in 298 scripts, the longest 43 ms |
+
+     The benchmark is `scripts/bench_reader_view_previews.py`.
+     - **No before-figure for branch and restore.** The code before this change wrote the whole set
+       in one pipeline with no index, and was not measured. So these figures size the operation, not
+       a regression against it.
+     - **What chunking costs.** A request is no longer one atomic write.
+       - **A branch** that fails part-way clears the new case's working set before it raises.
+       - **A restore** applies its adds before its removes, so a failure leaves a superset of what the
+         restorer saw, never a loss. Its data holds two signatures, where
+     a real case holds a few more; the count of signatures stays small either way.
+   - **Accepted.**
+     - `expand`'s links-among choice reads every stored node entry when the reader's view is 2,000
+       nodes or fewer, so its cost grows with hidden stored nodes. A per-signature member set was
+       weighed and declined as not cheap.
+     - An `HMGET` hit costs a little more than a miss.
+
+     Neither says what or where (decision 12).
+4. **`ensure_room` and `add_written` take the reader's principal**, at all 17 call sites.
+5. **How it was shown red** (rules 1 and 15).
+   - **Tests and code together.** Most tests and the code were written together, so the red evidence
+     is planted faults, each restored by md5.
+     - **On real Valkey:** 15 script and store faults, each red. They cover the triples kept on a
+       removal, a signature change and a replace; a node not counted; a link not in the adjacency;
+       each version not bumped; a definition reused; an unguarded entry; a key without expiry; each
+       consistency check removed; a rebuild that renumbers; one script for everything; a cache key
+       without the epoch.
+     - **In the pure suites:** the same in the in-memory store; `absent` read as readable; the cache
+       key without the access class; the old `would_add`.
+   - **Red before the code.** The final review round's tests were written red first: 11 live and 3
+     pure.
+   - **A randomised equivalence check,** over 40 runs of 30 operations, holds the counts and
+     membership to `_project` over the bodies for six readers.
+   - **An equivalent mutant.** The signature version in the cache key is redundant to the epoch, so
+     removing it is an equivalent mutant.
+   - **Live suites.** The live store tests passed (42).
+6. **The Brief 1 live test.** Its expansion characterisation became an equality. Its shared-case test
+   keeps the manifest's count as `(1, 0)` until U9, in place of U2c's "`withheld` true in A, false in
+   B", which needs U5.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

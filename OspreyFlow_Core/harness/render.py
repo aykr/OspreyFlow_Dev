@@ -664,6 +664,10 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
         },
     },
     "valkey": {
+        # ADR-124 Amendment 4: the working set's access index is a few keys beside the bodies, and
+        # what a reader is shown is computed from them, so no key may be evicted on its own under
+        # memory pressure; a full Valkey refuses a write instead, which an operator can see.
+        "command": ["valkey-server", "--maxmemory-policy", "noeviction"],
         "healthcheck": {
             "test": ["CMD", "valkey-cli", "ping"],
             "interval": "10s",

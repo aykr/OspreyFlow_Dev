@@ -120,9 +120,6 @@ class _FakeGraph:
         return Subgraph(
             nodes=[_node(n, _NODE_TYPES.get(n, "Endpoint")) for n in node_ids],
             edges=[_edge(f"e-{s}-{t}", s, t) for s, t in edges],
-            filtered_count=len(
-                hidden
-            ),  # what the adapter reports; the overview must not pass it on
         )
 
 

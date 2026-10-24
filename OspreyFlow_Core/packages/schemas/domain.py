@@ -1264,9 +1264,12 @@ class NeighbourhoodStats(BaseModel):
 
 
 class Subgraph(BaseModel):
+    """Nodes and links a read returned. It carries no count of what was left out (ADR-124
+    decision 1): `filtered_count` was on it and was 0 on every read the adapter made, a field
+    that claims completeness and is sent wherever a `Subgraph` is a response."""
+
     nodes: list[Node]
     edges: list[Edge]
-    filtered_count: int = 0
 
 
 class ListNodesPage(BaseModel):

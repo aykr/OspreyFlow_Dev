@@ -149,12 +149,14 @@ async def test_lowering_the_threshold_merges_and_reports_the_delta() -> None:
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
     await store.set_threshold(INVESTIGATION, THRESHOLD_STRICT)  # starts strict: not merged
 
-    delta = await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BROAD, PRINCIPAL)
+    outcome = await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BROAD, PRINCIPAL)
 
-    assert delta.op == "reproject"
-    assert delta.merged == 1
-    assert delta.split == 0
-    assert delta.affected == 2
+    assert outcome.delta.op == "reproject"
+    assert outcome.merged == 1
+    assert outcome.split == 0
+    assert outcome.affected == 2
+    # The figures are the acting analyst's own: the delta every reader receives carries none.
+    assert {"merged", "split", "affected"} & set(outcome.delta.model_dump()) == set()
 
     nodes = await store.source_fidelity_nodes(INVESTIGATION)
     assert nodes["n1"].resolution.cluster_id == nodes["n2"].resolution.cluster_id
@@ -168,11 +170,11 @@ async def test_raising_the_threshold_splits_and_reports_the_delta() -> None:
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
     await store.set_threshold(INVESTIGATION, THRESHOLD_BROAD)  # starts broad: merged
 
-    delta = await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_STRICT, PRINCIPAL)
+    outcome = await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_STRICT, PRINCIPAL)
 
-    assert delta.merged == 0
-    assert delta.split == 1
-    assert delta.affected == 2
+    assert outcome.merged == 0
+    assert outcome.split == 1
+    assert outcome.affected == 2
 
     nodes = await store.source_fidelity_nodes(INVESTIGATION)
     assert nodes["n1"].resolution.cluster_id != nodes["n2"].resolution.cluster_id
@@ -200,11 +202,11 @@ async def test_no_change_reports_a_zero_delta() -> None:
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
 
-    delta = await service.set_resolution_threshold(INVESTIGATION, DEFAULT_THRESHOLD, PRINCIPAL)
+    outcome = await service.set_resolution_threshold(INVESTIGATION, DEFAULT_THRESHOLD, PRINCIPAL)
 
-    assert delta.merged == 0
-    assert delta.split == 0
-    assert delta.affected == 0
+    assert outcome.merged == 0
+    assert outcome.split == 0
+    assert outcome.affected == 0
 
 
 async def test_msisdn_and_imsi_endpoints_cluster_together_the_device_does_not() -> None:

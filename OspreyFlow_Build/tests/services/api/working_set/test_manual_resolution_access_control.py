@@ -126,5 +126,5 @@ async def test_manual_link_denies_a_lower_clearance_principal_naming_a_hidden_no
         assert subgraph.edges == []
 
         # The same call succeeds for the principal who can actually see both nodes.
-        delta, _entry = await service.manual_link(INVESTIGATION, official_id, secret_id, SECRET)
-        assert delta.merged == 1
+        outcome, _entry = await service.manual_link(INVESTIGATION, official_id, secret_id, SECRET)
+        assert outcome.merged == 1

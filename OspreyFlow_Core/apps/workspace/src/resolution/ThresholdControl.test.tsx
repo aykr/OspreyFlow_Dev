@@ -55,13 +55,10 @@ describe("a refused threshold", () => {
   });
 });
 
-// ADR-124 U2b: the PUT answers a bare `DeltaReproject` today and a `ResolutionOutcome`
-// `{delta, merged, split, affected}` once U2c lands; the control tolerates either.
-describe("the change summary reads either answer shape", () => {
-  const REPROJECT = {
-    seq: 2, op: "reproject", reason: "threshold", merged: 4, split: 1, affected: 7, affected_cluster_ids: {},
-  };
-  const SUMMARY = "Match strictness: Strict — 4 merged, 1 split, 7 affected";
+// ADR-124 decision 1 (U2c): the PUT answers a `ResolutionOutcome` `{delta, merged, split, affected}`:
+// the figures are the acting analyst's own, on the answer and not on the delta.
+describe("the change summary reads the outcome", () => {
+  const SUMMARY = "Match strictness: Strict — 9 merged, 8 split, 6 affected";
 
   async function moveToStrict(answer: unknown): Promise<{ summaries: string[]; seq: () => number }> {
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) =>
@@ -87,25 +84,14 @@ describe("the change summary reads either answer shape", () => {
     return { summaries, seq: () => store.getState().seq };
   }
 
-  it("the bare DeltaReproject sent today", async () => {
-    const { summaries, seq } = await moveToStrict(REPROJECT);
-    expect(summaries).toEqual([SUMMARY]);
-    expect(seq()).toBe(2);
-  });
-
-  it("the new ResolutionOutcome", async () => {
-    // The figures are the outcome's own, and differ from any on the delta, so reading the delta's
-    // would be seen; the delta carries none, as the new answer's may not.
+  it("shows the outcome's figures and applies the delta inside it", async () => {
     const { summaries, seq } = await moveToStrict({
       delta: { seq: 2, op: "reproject", reason: "threshold", affected_cluster_ids: {} },
-      merged: 9, split: 8, affected: 6,
+      merged: 9,
+      split: 8,
+      affected: 6,
     });
-    expect(summaries).toEqual(["Match strictness: Strict — 9 merged, 8 split, 6 affected"]);
+    expect(summaries).toEqual([SUMMARY]);
     expect(seq()).toBe(2);
-  });
-
-  it("the outcome's own figures win over any the delta also carries", async () => {
-    const { summaries } = await moveToStrict({ delta: REPROJECT, merged: 9, split: 8, affected: 6 });
-    expect(summaries).toEqual(["Match strictness: Strict — 9 merged, 8 split, 6 affected"]);
   });
 });

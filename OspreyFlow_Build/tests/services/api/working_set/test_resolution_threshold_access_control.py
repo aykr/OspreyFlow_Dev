@@ -138,10 +138,10 @@ async def test_a_principal_blind_to_a_node_cannot_reset_its_persisted_cluster_st
         # `OFFICIAL` never receives `secret_id` at all, so this call's own `affected`/`merged`
         # counts must be zero — there is nothing this principal's own clustering could have
         # changed with no visible resolution edges.
-        delta = await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BROAD, OFFICIAL)
-        assert delta.merged == 0
-        assert delta.affected == 0
-        assert delta.affected_cluster_ids == {}
+        outcome = await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BROAD, OFFICIAL)
+        assert outcome.merged == 0
+        assert outcome.affected == 0
+        assert outcome.delta.affected_cluster_ids == {}
 
         # The real check: `secret_id`'s own persisted cluster state, established by a principal
         # `OFFICIAL` cannot see, must survive a call `OFFICIAL` was never entitled to make on its

@@ -15,6 +15,7 @@ import pytest
 import yaml
 from harness.cluster import REPLICAS, ClusterNotRenderable
 from harness.render import render
+
 from schemas.deployment import OspreyConfig
 
 MANAGED = {
@@ -122,9 +123,7 @@ def test_no_compose_variable_survives_the_translation() -> None:
 
 def test_every_secret_a_workload_reads_is_listed_for_the_install() -> None:
     values = values_for(cluster_config())
-    named = {
-        e["secret"] for c in _containers(values) for e in c.get("env", []) if "secret" in e
-    }
+    named = {e["secret"] for c in _containers(values) for e in c.get("env", []) if "secret" in e}
     assert named and named <= set(values["secrets"]["keys"])
     assert values["secrets"]["defaults"] == {"OSPREY_KEYCLOAK_ADMIN": "admin",
                                              "OSPREY_POSTGRES_USER": "osprey"}  # fmt: skip
@@ -154,9 +153,10 @@ def test_the_stores_are_clustered() -> None:
     )  # fmt: skip
     clickhouse_files = {f["key"] for f in workloads["clickhouse"]["files"]}
     assert clickhouse_files == {"clickhouse.xml", "clickhouse-users.xml"}
-    assert "<database_replicated_allow_only_replicated_engine>1<" in values["files"][
-        "clickhouse-users.xml"
-    ]
+    assert (
+        "<database_replicated_allow_only_replicated_engine>1<"
+        in values["files"]["clickhouse-users.xml"]
+    )
     assert "clickhouse-1.clickhouse-headless" in values["files"]["clickhouse.xml"]
     keycloak = {e["name"]: e.get("value") for e in workloads["keycloak"]["env"]}
     assert keycloak["KC_CACHE_STACK"] == "kubernetes" and workloads["keycloak"]["jgroups"]
@@ -276,3 +276,18 @@ def test_the_storage_classes_are_the_clusters_own() -> None:
     assert (storage["className"], storage["sharedClassName"]) == ("gp3", "efs-sc")
     default = values_for(cluster_config())["storage"]
     assert (default["className"], default["sharedClassName"]) == ("", "efs-sc")
+
+
+def test_a_valkey_workload_in_the_chart_would_never_evict_a_key_on_its_own() -> None:
+    """ADR-124 Amendment 4. The cluster profile runs no Valkey of its own (a managed one is
+    configured under `external:`, and its eviction policy is the operator's to set: the install
+    runbook says `noeviction`), so there is nothing in the chart to carry the argument today. If a
+    template ever adds a Valkey workload, it must carry it."""
+    from harness.render import REPO_ROOT
+
+    templates = "\n".join(
+        path.read_text()
+        for path in (REPO_ROOT / "deploy" / "helm" / "ospreyflow" / "templates").glob("*.yaml")
+    )
+    if "valkey" in templates.lower():
+        assert "--maxmemory-policy" in templates and "noeviction" in templates

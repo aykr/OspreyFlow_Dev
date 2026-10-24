@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 from services.api.change_stream import ChangeStreamEntry
-from services.api.working_set.models import ClusterExplanation, DeltaReproject
+from services.api.working_set.models import ClusterExplanation, ResolutionOutcome
 from services.api.working_set.service import WorkingSetService
 
 from schemas.domain import ClusterId, NodeId, Principal
@@ -56,7 +56,7 @@ async def set_threshold(
     investigation_id: str,
     body: SetThresholdRequest,
     principal: Principal,
-) -> DeltaReproject:
+) -> ResolutionOutcome:
     return await working_set.set_resolution_threshold(investigation_id, body.threshold, principal)
 
 
@@ -65,7 +65,7 @@ async def link(
     investigation_id: str,
     body: ManualAssertionRequest,
     principal: Principal,
-) -> tuple[DeltaReproject, ChangeStreamEntry | None]:
+) -> tuple[ResolutionOutcome, ChangeStreamEntry | None]:
     return await working_set.manual_link(investigation_id, body.node_a, body.node_b, principal)
 
 
@@ -74,7 +74,7 @@ async def split(
     investigation_id: str,
     body: ManualAssertionRequest,
     principal: Principal,
-) -> tuple[DeltaReproject, ChangeStreamEntry | None]:
+) -> tuple[ResolutionOutcome, ChangeStreamEntry | None]:
     return await working_set.manual_split(investigation_id, body.node_a, body.node_b, principal)
 
 

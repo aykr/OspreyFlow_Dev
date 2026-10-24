@@ -201,7 +201,7 @@ class DocumentReaderService:
             created_at=now,
         )
         # Asked before the graph is written, so a full working set leaves nothing behind (rule 2).
-        await self._working_set.ensure_room(investigation_id, [node.id], [mention.id])
+        await self._working_set.ensure_room(investigation_id, [node.id], [mention.id], principal)
         tx = await self._graph.begin_transaction()
         try:
             await self._graph.upsert_nodes([node], tx)
@@ -236,7 +236,7 @@ class DocumentReaderService:
             record.id, principal, status=CandidateStatus.ACCEPTED, node_id=node.id
         )
         delta = await self._working_set.add_written(
-            investigation_id, [_node_from_write(node)], [_edge_from_write(mention)]
+            investigation_id, [_node_from_write(node)], [_edge_from_write(mention)], principal
         )
         return DesignationResult(node_id=node.id, delta=delta)
 

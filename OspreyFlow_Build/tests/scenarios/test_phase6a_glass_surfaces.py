@@ -237,8 +237,8 @@ def test_phase6a_exit_criterion_end_to_end(
         assert link_delta["merged"] == 1
         assert link_delta["affected"] == 2
         cluster_id = min(node_a_id, node_b_id)  # `compute_clusters`'s own tie-break convention
-        assert link_delta["affected_cluster_ids"][node_a_id] == cluster_id
-        assert link_delta["affected_cluster_ids"][node_b_id] == cluster_id
+        assert link_delta["delta"]["affected_cluster_ids"][node_a_id] == cluster_id
+        assert link_delta["delta"]["affected_cluster_ids"][node_b_id] == cluster_id
 
         # === B9 (Stage 2) — move the threshold, for real: a genuine `PUT`, a genuine persisted τ,
         # === a genuine (truthfully empty) change summary — see this module's docstring for why

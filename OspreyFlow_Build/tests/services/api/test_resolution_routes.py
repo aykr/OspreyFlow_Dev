@@ -8,6 +8,7 @@ it with the right arguments, publishes the delta where one exists, and audits â€
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -36,6 +37,7 @@ from services.api.working_set.models import (
     DeltaReproject,
     NodeNotInWorkingSetError,
     PairwiseExplanation,
+    ResolutionOutcome,
     SameNodeAssertionError,
 )
 
@@ -63,29 +65,37 @@ class _FakeWorkingSet:
 
     async def set_resolution_threshold(
         self, investigation_id: str, tau: float, principal: Principal
-    ) -> DeltaReproject:
+    ) -> ResolutionOutcome:
         self.calls.append((investigation_id, tau, principal))
         self.threshold = tau
-        return DeltaReproject(seq=1, reason="test", merged=1, split=0, affected=2)
+        return ResolutionOutcome(
+            delta=DeltaReproject(seq=1, reason="test"), merged=1, split=0, affected=2
+        )
 
     async def manual_link(
         self, investigation_id: str, node_a: str, node_b: str, principal: Principal
-    ) -> tuple[DeltaReproject, ChangeStreamEntry | None]:
+    ) -> tuple[ResolutionOutcome, ChangeStreamEntry | None]:
         self.link_calls.append((investigation_id, node_a, node_b, principal))
         if self.link_error is not None:
             raise self.link_error
         # `entry=None` â€” this file only proves route wiring (see its own module docstring); a
         # non-`None` entry would exercise `_evaluate_watches_best_effort`'s own live-store path,
         # which `test_evaluation.py` already covers with real fakes at the right grain.
-        return DeltaReproject(seq=2, reason="manual link", merged=1, split=0, affected=2), None
+        outcome = ResolutionOutcome(
+            delta=DeltaReproject(seq=2, reason="manual link"), merged=1, split=0, affected=2
+        )
+        return outcome, None
 
     async def manual_split(
         self, investigation_id: str, node_a: str, node_b: str, principal: Principal
-    ) -> tuple[DeltaReproject, ChangeStreamEntry | None]:
+    ) -> tuple[ResolutionOutcome, ChangeStreamEntry | None]:
         self.split_calls.append((investigation_id, node_a, node_b, principal))
         if self.split_error is not None:
             raise self.split_error
-        return DeltaReproject(seq=3, reason="manual split", merged=0, split=1, affected=2), None
+        outcome = ResolutionOutcome(
+            delta=DeltaReproject(seq=3, reason="manual split"), merged=0, split=1, affected=2
+        )
+        return outcome, None
 
     async def explain_cluster(
         self, investigation_id: str, cluster_id: str, principal: Principal
@@ -173,17 +183,30 @@ def test_get_threshold_returns_the_current_session_value(client: TestClient) -> 
     assert client.audit.records[-1]["action"] == "get_resolution_threshold"  # type: ignore[attr-defined]
 
 
-def test_put_threshold_calls_the_service_and_returns_the_reproject_delta(
+_ACTORS_FIGURES = {"merged", "split", "affected"}
+
+
+def _published_delta(client: TestClient) -> dict[str, object]:
+    _channel, message = client.valkey.published[-1]  # type: ignore[attr-defined]
+    delta: dict[str, object] = json.loads(message)
+    return delta
+
+
+def test_put_threshold_answers_a_resolution_outcome_with_the_actors_own_figures(
     client: TestClient,
 ) -> None:
+    """ADR-124 decision 1: the figures are on the acting analyst's response and not on the delta
+    every reader receives, which is what is published."""
     response = client.put("/v1/investigations/inv-1/resolution/threshold", json={"threshold": 0.80})
 
     assert response.status_code == 200
     body = response.json()
-    assert body["op"] == "reproject"
-    assert body["merged"] == 1
-    assert body["split"] == 0
-    assert body["affected"] == 2
+    assert set(body) == {"delta", "merged", "split", "affected"}
+    assert body["delta"]["op"] == "reproject"
+    assert (body["merged"], body["split"], body["affected"]) == (1, 0, 2)
+    assert _ACTORS_FIGURES & set(body["delta"]) == set()
+    published = _published_delta(client)
+    assert published["op"] == "reproject" and _ACTORS_FIGURES & set(published) == set()
     assert client.working_set.calls == [("inv-1", 0.80, PRINCIPAL)]  # type: ignore[attr-defined]
 
 
@@ -236,15 +259,21 @@ def test_put_threshold_denies_a_principal_in_a_different_org_unit(client: TestCl
     assert client.working_set.calls == []  # type: ignore[attr-defined]
 
 
-def test_post_link_calls_the_service_and_returns_the_reproject_delta(client: TestClient) -> None:
+def test_post_link_answers_a_resolution_outcome_with_the_actors_own_figures(
+    client: TestClient,
+) -> None:
     response = client.post(
         "/v1/investigations/inv-1/resolution/link", json={"node_a": "n1", "node_b": "n2"}
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["op"] == "reproject"
+    assert set(body) == {"delta", "merged", "split", "affected"}
+    assert body["delta"]["op"] == "reproject"
     assert body["merged"] == 1
+    assert _ACTORS_FIGURES & set(body["delta"]) == set()
+    published = _published_delta(client)
+    assert published["op"] == "reproject" and _ACTORS_FIGURES & set(published) == set()
     assert client.working_set.link_calls == [("inv-1", "n1", "n2", PRINCIPAL)]  # type: ignore[attr-defined]
 
 
@@ -315,14 +344,21 @@ def test_post_link_denies_a_principal_in_a_different_org_unit(client: TestClient
     assert client.working_set.link_calls == []  # type: ignore[attr-defined]
 
 
-def test_post_split_calls_the_service_and_returns_the_reproject_delta(client: TestClient) -> None:
+def test_post_split_answers_a_resolution_outcome_with_the_actors_own_figures(
+    client: TestClient,
+) -> None:
     response = client.post(
         "/v1/investigations/inv-1/resolution/split", json={"node_a": "n1", "node_b": "n2"}
     )
 
     assert response.status_code == 200
     body = response.json()
+    assert set(body) == {"delta", "merged", "split", "affected"}
+    assert body["delta"]["op"] == "reproject"
     assert body["split"] == 1
+    assert _ACTORS_FIGURES & set(body["delta"]) == set()
+    published = _published_delta(client)
+    assert published["op"] == "reproject" and _ACTORS_FIGURES & set(published) == set()
     assert client.working_set.split_calls == [("inv-1", "n1", "n2", PRINCIPAL)]  # type: ignore[attr-defined]
 
 

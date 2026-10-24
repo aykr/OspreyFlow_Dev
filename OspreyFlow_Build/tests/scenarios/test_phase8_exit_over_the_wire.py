@@ -889,7 +889,7 @@ def test_scenario_b_over_the_wire(analyst: httpx.Client) -> None:
     # === total score.
     # `affected_cluster_ids` is a node-id → cluster-id map, not a list — the shape the Glass uses
     # to repaint cluster membership in place without re-syncing the working set.
-    moved = summary.get("affected_cluster_ids") or {}
+    moved = (summary.get("delta") or {}).get("affected_cluster_ids") or {}
     assert moved, f"the reprojection named no affected cluster: {summary}"
     cluster_id = next(iter(moved.values()))
     explained = analyst.get(f"/v1/investigations/{investigation}/resolution/explain/{cluster_id}")
@@ -1917,8 +1917,9 @@ def test_b14_an_alert_opens_into_an_investigation_linked_to_the_original(
     result = jumped.json()
 
     assert result["seeded_count"] >= 1, f"the new investigation was seeded with nothing: {result}"
-    assert result["unreadable_count"] == 0, (
-        f"{result['unreadable_count']} of the alert's referents were unreadable at jump time"
+    # ADR-124: no figure for what the jumper may not read.
+    assert "unreadable_count" not in result, (
+        f"the jump still answers with a count of unreadable referents: {result}"
     )
     assert result["investigation"]["branched_from"] == seizure_alert["scope"], (
         "the new investigation is not linked back to the one the alert fired in: "

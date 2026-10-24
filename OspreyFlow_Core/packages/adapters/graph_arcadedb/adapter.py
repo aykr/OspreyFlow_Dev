@@ -10,13 +10,8 @@ Every write validates against the ontology before it touches the store
 property's presence, and an edge's declared endpoint types are all checked
 here, on the write path, not left for a caller to have got right.
 
-`Subgraph.filtered_count` is left at its default here. Computing it
-accurately needs a full-vs-filtered comparison at the point the Working-Set
-Service holds both the requested expansion and the access-filtered result
-(`spec/03_CONDUIT_MIDDLEWARE.md`, Phase 3's expansion budget/cardinality
-preview) — attempting it here, one `GraphPort.expand` call at a time, risks
-adding a second, less-audited channel for exactly the kind of leak this
-adapter exists to prevent. Flagged rather than guessed at.
+No read here counts what it left out: a figure for what the reader may not read points at it
+(ADR-124 decision 1), so `Subgraph` has no such field.
 """
 
 from __future__ import annotations

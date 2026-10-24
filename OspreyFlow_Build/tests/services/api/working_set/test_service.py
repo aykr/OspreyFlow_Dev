@@ -1,6 +1,6 @@
 """`WorkingSetService` — `spec/03_CONDUIT_MIDDLEWARE.md` §4,
-this phase's exit criterion. Exercises the cap check,
-`filtered_count`'s derivation and the reconnect/resnapshot decision against
+this phase's exit criterion. Exercises the cap check, the expansion's outcome (which carries no
+count of what the filter left out, ADR-124 decision 1) and the reconnect/resnapshot decision against
 `FakeWorkingSetStore`/`FakeGraphPort` — the service's own logic, not
 `ValkeyWorkingSetStore` or a real adapter, which is why this needs neither
 Valkey nor ArcadeDB to run."""
@@ -93,18 +93,17 @@ async def test_seed_writes_nodes_and_edges_and_reports_seq_one() -> None:
 
     assert outcome.delta.seq == 1
     assert [n.id for n in outcome.delta.nodes] == ["n1"]
-    assert outcome.filtered_count == 0
     assert await store.node_count("inv-1") == 1
 
 
-# --- expand / filtered_count ---------------------------------------------
+# --- expand ---------------------------------------------------------------
 
 
-async def test_expand_reports_filtered_count_as_the_candidate_minus_delivered_gap() -> None:
-    """`01_DOMAIN_MODEL.md` §8.2: `expand_candidate_count` (unfiltered)
-    minus the delivered node count (filtered) is `filtered_count` — the
-    comparison the Working-Set Service, and only the Working-Set Service,
-    is positioned to make."""
+async def test_expand_adds_what_the_graph_returned_and_asks_for_no_count_of_the_rest() -> None:
+    """ADR-124 decision 1: an expansion's outcome is its delta, and the service no longer asks the
+    graph for an unfiltered candidate count to subtract from it (`expand_candidate_count` is
+    withdrawn from the port in U3): a figure tied to a seed and a link type can be made to point at
+    the one hidden link it counts."""
     store = FakeWorkingSetStore()
     delivered = Subgraph(nodes=[_node("hub"), _node("visible")], edges=[])
     graph = FakeGraphPort(expand_result=delivered, candidate_count=3)
@@ -113,20 +112,10 @@ async def test_expand_reports_filtered_count_as_the_candidate_minus_delivered_ga
     req = ExpandRequest(node_ids=["hub"], depth=1)
     outcome = await service.expand("inv-1", req, PRINCIPAL)
 
-    assert outcome.filtered_count == 1  # 3 candidates, 2 delivered
+    assert {n.id for n in outcome.delta.nodes} == {"hub", "visible"}
+    assert "filtered_count" not in outcome.model_dump()
     assert graph.expand_requests == [req]
-    assert graph.candidate_count_requests == [req]  # same request drove both calls
-
-
-async def test_expand_reports_zero_filtered_count_when_nothing_is_hidden() -> None:
-    store = FakeWorkingSetStore()
-    delivered = Subgraph(nodes=[_node("hub"), _node("visible")], edges=[])
-    graph = FakeGraphPort(expand_result=delivered, candidate_count=2)
-    service = WorkingSetService(graph, store, SCHEME)
-
-    outcome = await service.expand("inv-1", ExpandRequest(node_ids=["hub"], depth=1), PRINCIPAL)
-
-    assert outcome.filtered_count == 0
+    assert graph.candidate_count_requests == []  # the unfiltered count is never asked for
 
 
 async def test_expand_never_double_counts_a_node_already_in_the_working_set() -> None:
@@ -379,7 +368,7 @@ async def test_restore_reprojects_handling_fresh_against_the_requesting_principa
 
     assert PRINCIPAL.clearance == "OFFICIAL"
     assert {n.id for n in snapshot.nodes} == {"official-1"}  # not secret-1
-    assert snapshot.filtered_count == 1
+    assert "filtered_count" not in snapshot.model_dump()
     # The store itself must reflect the narrower view too, not just the
     # response — a later `sync`/reconnect must not resurrect it either.
     assert await store.node_ids("inv-1") == {"official-1"}
@@ -387,4 +376,3 @@ async def test_restore_reprojects_handling_fresh_against_the_requesting_principa
     # The same step, restored by a principal who *can* see SECRET, gets both.
     broader_snapshot = await service.restore("inv-1", recorded_step_nodes, [], CLEARED)
     assert {n.id for n in broader_snapshot.nodes} == {"official-1", "secret-1"}
-    assert broader_snapshot.filtered_count == 0

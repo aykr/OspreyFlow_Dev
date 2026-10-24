@@ -136,7 +136,7 @@ async def test_a_ticket_reader_is_sent_the_cases_working_set() -> None:
     assert snapshot["op"] == "snapshot"
     assert {n["id"] for n in snapshot["nodes"]} == {"okafor", "yard-a"}
     assert [e["id"] for e in snapshot["edges"]] == ["at"]
-    assert snapshot["filtered_count"] == 0
+    assert "filtered_count" not in snapshot
 
 
 async def test_a_header_reader_is_kept_to_the_cases_datasets() -> None:
@@ -145,7 +145,7 @@ async def test_a_header_reader_is_kept_to_the_cases_datasets() -> None:
     await _open(socket, HEADER_READER)
     (snapshot,) = socket.sent
     assert {n["id"] for n in snapshot["nodes"]} == {"okafor"}
-    assert snapshot["filtered_count"] == 1
+    assert "filtered_count" not in snapshot
 
 
 async def test_the_live_pushes_and_resyncs_are_read_as_the_case() -> None:

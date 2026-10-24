@@ -163,6 +163,8 @@ services:
 
   valkey:
     image: valkey/valkey:8.0
+    # ADR-124 Amendment 4: no key of the working set's access index may be evicted on its own.
+    command: ["valkey-server", "--maxmemory-policy", "noeviction"]
     ports:
       - "6379:6379"
     healthcheck:

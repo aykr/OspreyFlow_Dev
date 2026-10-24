@@ -7,6 +7,11 @@ returns the typed `limit_exceeded` error with its three options. An
 expansion that excludes a handling-filtered node reports a non-zero
 `filtered_count`."
 
+**The last clause is overturned (ADR-124 decision 1, the owner's ruling of 24 October 2026):** a
+count of what an expansion left out can be made to point at the one hidden link it counts, so no
+response carries one. The scenario below now asserts that the SECRET neighbour is excluded and that
+no `filtered_count` is in the answer.
+
 Runs the real `services.api.app` FastAPI app — real lifespan, real
 ArcadeDB/Valkey/Postgres connections (`make dev-up`), a real signed JWT
 against a loopback JWKS fixture (`tests/conftest.py`) — the only thing not
@@ -17,7 +22,7 @@ transparent.
 The graph fixture (`_arrange_graph`) is written directly through
 `GraphPort`, bypassing the API — `hub` (OFFICIAL) connects to `visible`
 (OFFICIAL) and to `secret` (SECRET). Seeding and expanding from `hub` as
-an OFFICIAL principal then exercises `filtered_count` for free on the
+an OFFICIAL principal then exercises the filtered expansion for free on the
 same expand calls the sequencing/audit/reconnect assertions already need,
 rather than a second, separate arrangement.
 """
@@ -110,7 +115,7 @@ async def _arrange_graph() -> dict[str, Any]:
     `hub` -- ASSOCIATE_OF --> `secret` (SECRET), written directly through
     `GraphPort` so `expand(hub, depth=1)` has something real to traverse
     — an OFFICIAL principal's `expand()` reaches `visible` but not
-    `secret`, which is what makes `filtered_count` non-zero below."""
+    `secret`, which is what makes the expansion below a filtered one."""
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
     await client.create_database_if_absent()
     graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
@@ -187,7 +192,7 @@ async def _audit_rows_for(investigation_id: str) -> list[asyncpg.Record]:
         await conn.close()
 
 
-def test_seed_expand_disconnect_reconnect_audit_cap_and_filtered_count(
+def test_seed_expand_disconnect_reconnect_audit_cap_and_no_withheld_count(
     api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> None:
     private_key, _ = keypair
@@ -213,7 +218,7 @@ def test_seed_expand_disconnect_reconnect_audit_cap_and_filtered_count(
         assert seeded.status_code == 200, seeded.text
         assert seeded.json()["delta"]["seq"] == 1
 
-        # --- expand three times; filtered_count is non-zero every time --
+        # --- expand three times; the SECRET neighbour is left out every time --
         seqs: list[int] = [1]
         for _ in range(3):
             response = client.post(
@@ -229,7 +234,7 @@ def test_seed_expand_disconnect_reconnect_audit_cap_and_filtered_count(
             # Identity, not just count — matching `test_suite.py`'s own
             # existence-leak style rather than asserting on the number
             # alone (the coverage gap the divergence review named).
-            assert body["filtered_count"] > 0
+            assert "filtered_count" not in body  # ADR-124: no figure for what was left out
             delivered_ids = {n["id"] for n in body["delta"]["nodes"]}
             assert secret_id not in delivered_ids
         assert seqs == [1, 2, 3, 4]  # seed + three expands, strictly monotonic
@@ -391,4 +396,4 @@ def test_a_lower_clearance_principal_sharing_an_investigation_sees_the_filtered_
         official_node_ids = {n["id"] for n in snapshot["nodes"]}
         assert secret_id not in official_node_ids
         assert hub_id in official_node_ids  # the OFFICIAL content is still there
-        assert snapshot["filtered_count"] > 0
+        assert "filtered_count" not in snapshot  # ADR-124: nothing says something was left out

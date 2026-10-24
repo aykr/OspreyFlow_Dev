@@ -75,18 +75,14 @@ class _FakeWorkingSet:
         edges: list[Edge],
         principal: Principal,
     ) -> ExpansionOutcome:
-        return ExpansionOutcome(
-            delta=DeltaAdd(seq=1, nodes=nodes, edges=edges), filtered_count=0
-        )
+        return ExpansionOutcome(delta=DeltaAdd(seq=1, nodes=nodes, edges=edges))
 
     async def expand(
         self, investigation_id: str, req: ExpandRequest, principal: Principal
     ) -> ExpansionOutcome:
         if self.expand_error is not None:
             raise self.expand_error
-        return ExpansionOutcome(
-            delta=DeltaAdd(seq=2, nodes=[_node("hub")], edges=[]), filtered_count=1
-        )
+        return ExpansionOutcome(delta=DeltaAdd(seq=2, nodes=[_node("hub")], edges=[]))
 
     async def current_membership(
         self, investigation_id: str
@@ -278,14 +274,26 @@ def test_expand_past_the_cap_returns_409_with_the_typed_body(client: TestClient)
     assert set(body["options"]) == {"branch", "filter", "promote_to_batch"}
 
 
-def test_expand_reports_filtered_count_in_the_response(client: TestClient) -> None:
+def test_expand_answers_with_no_count_of_what_was_withheld(client: TestClient) -> None:
+    """ADR-124 decision 1: the response is the delta and the links-among note, and no figure for
+    what the filter left out (`filtered_count` was removed, not held at 0)."""
     response = client.post(
         "/v1/investigations/inv-1/expand",
         json={"request": {"node_ids": ["a"], "depth": 1}},
     )
 
     assert response.status_code == 200
-    assert response.json()["filtered_count"] == 1
+    assert set(response.json()) == {"delta", "links_among"}
+
+
+def test_seed_answers_with_no_count_of_what_was_withheld(client: TestClient) -> None:
+    response = client.post(
+        "/v1/investigations/inv-1/seed",
+        json={"nodes": [], "edges": []},
+    )
+
+    assert response.status_code == 200
+    assert set(response.json()) == {"delta", "links_among"}
 
 
 def test_an_audit_write_failure_returns_503_and_discloses_nothing(client: TestClient) -> None:

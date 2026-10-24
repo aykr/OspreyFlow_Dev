@@ -1,18 +1,27 @@
 """In-memory fakes for `WorkingSetService` unit tests. `WorkingSetStorage`
 and the two `GraphPort` methods the service calls are both structural
-(`Protocol`), so exercising the service's own logic — the cap check,
-`filtered_count`'s arithmetic, the reconnect gap detection — needs neither
-a live Valkey nor a live ArcadeDB. `tests/services/api/working_set/
+(`Protocol`), so exercising the service's own logic — the cap check over the reader's
+view, the access index, the reconnect gap detection — needs neither
+a live Valkey nor a live ArcadeDB. `tests/services/api/
 test_valkey_store.py` covers `ValkeyWorkingSetStore` itself against the
 real thing, once `make dev-up` exists to provide one.
 """
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from services.api.rule_evaluation import handling_readable
+from services.api.working_set.access_index import (
+    AccessCounts,
+    AccessEntries,
+    CountedIndex,
+    IndexState,
+    signature_id,
+    signature_of,
+)
 from services.api.working_set.models import WorkingSetDelta
 
 from ontology.handling import load_uk_le_scheme
@@ -37,6 +46,9 @@ from schemas.domain import (
 
 _SCHEME = load_uk_le_scheme()
 
+#: Epoch tokens for the fake's access index: one new token for each case's life.
+_EPOCHS = itertools.count(1)
+
 #: `FakeGraphPort.get_node`'s own default "visible" response — its content is never asserted on
 #: by any test; only whether `get_node` was called and whether it returned `None` is.
 _FAKE_VISIBLE_NODE = Node(
@@ -60,6 +72,10 @@ class FakeWorkingSetStore:
         self._nodes: dict[str, dict[NodeId, Node]] = {}
         self._edges: dict[str, dict[EdgeId, Edge]] = {}
         self._seq: dict[str, int] = {}
+        #: The access index, kept beside the bodies as the Valkey store keeps it (ADR-124
+        #: Amendment 4): written by the same methods that write the bodies, never derived from
+        #: them on read, so a method that forgets it is a difference a test can see.
+        self._index: dict[str, IndexState] = {}
         self._deltas: dict[str, list[WorkingSetDelta]] = {}
         self._thresholds: dict[str, float] = {}
         #: Set to simulate the capped stream trimming older entries —
@@ -93,21 +109,68 @@ class FakeWorkingSetStore:
     async def get_node(self, investigation_id: str, node_id: NodeId) -> Node | None:
         return self._n(investigation_id).get(node_id)
 
+    def _state(self, investigation_id: str) -> IndexState:
+        return self._index.setdefault(investigation_id, IndexState())
+
     async def add_nodes(self, investigation_id: str, nodes: Sequence[Node]) -> None:
+        if not nodes:
+            return
         self._n(investigation_id).update({n.id: n for n in nodes})
+        state = self._state(investigation_id)
+        for n in nodes:
+            signature = signature_of(n.handling, n.datasets)
+            state.set_node(n.id, signature_id(signature), signature)
+        state.written(f"epoch-{next(_EPOCHS)}")
 
     async def add_edges(self, investigation_id: str, edges: Sequence[Edge]) -> None:
+        if not edges:
+            return
         self._e(investigation_id).update({e.id: e for e in edges})
+        state = self._state(investigation_id)
+        for e in edges:
+            signature = signature_of(e.handling, e.datasets)
+            state.set_edge(e.id, signature_id(signature), signature, e.source, e.target)
+        state.written(f"epoch-{next(_EPOCHS)}")
 
     async def remove_nodes(self, investigation_id: str, node_ids: Sequence[NodeId]) -> None:
+        if not node_ids:
+            return
         store = self._n(investigation_id)
+        state = self._state(investigation_id)
         for node_id in node_ids:
             store.pop(node_id, None)
+            state.remove_node(node_id)
+        state.written(f"epoch-{next(_EPOCHS)}")
 
     async def remove_edges(self, investigation_id: str, edge_ids: Sequence[EdgeId]) -> None:
+        if not edge_ids:
+            return
         store = self._e(investigation_id)
+        state = self._state(investigation_id)
         for edge_id in edge_ids:
             store.pop(edge_id, None)
+            state.remove_edge(edge_id)
+        state.written(f"epoch-{next(_EPOCHS)}")
+
+    async def access_counts(self, investigation_id: str) -> AccessCounts:
+        return self._state(investigation_id).counts()
+
+    async def access_entries(
+        self, investigation_id: str, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId]
+    ) -> AccessEntries:
+        return self._state(investigation_id).entries(list(node_ids), list(edge_ids))
+
+    async def adjacent_edge_ids(
+        self, investigation_id: str, node_ids: Sequence[NodeId]
+    ) -> dict[NodeId, list[EdgeId]]:
+        return self._state(investigation_id).adjacent(list(node_ids))
+
+    async def stored_node_signatures(self, investigation_id: str) -> dict[NodeId, str]:
+        return dict(self._state(investigation_id).index.nodes)
+
+    async def counted_index(self, investigation_id: str) -> CountedIndex:
+        """Everything the index holds, for the consistency tests."""
+        return self._state(investigation_id).index
 
     async def node_count(self, investigation_id: str) -> int:
         return len(self._n(investigation_id))
@@ -147,6 +210,7 @@ class FakeWorkingSetStore:
     async def clear(self, investigation_id: str) -> None:
         self._nodes.pop(investigation_id, None)
         self._edges.pop(investigation_id, None)
+        self._index.pop(investigation_id, None)
         self._seq.pop(investigation_id, None)
         self._deltas.pop(investigation_id, None)
         self._thresholds.pop(investigation_id, None)

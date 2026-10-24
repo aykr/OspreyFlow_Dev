@@ -59,6 +59,9 @@ declare global {
       /** Land a `reproject` delta, as the server sends when the resolution slider moves: each node
        * named takes the cluster id given. */
       reproject: (clusterIds: Record<string, string>) => void;
+      /** The cluster id the working set holds on a node now (ADR-124: what a manual link's answer
+       * moved), or `null` when it holds none. */
+      clusterOf: (nodeId: string) => string | null;
     };
     /** How many nodes are folded into Group Nodes now (ADR-066). */
     __GROUPED__?: number;
@@ -154,11 +157,12 @@ window.__CANVAS__ = {
       seq: workingSet.store.getState().seq + 1,
       op: "reproject",
       reason: "keyboard fixture",
-      merged: 0,
-      split: Object.keys(clusterIds).length,
-      affected: Object.keys(clusterIds).length,
       affected_cluster_ids: clusterIds,
     }),
+  clusterOf: (id) =>
+    workingSet.graph.hasNode(id)
+      ? (workingSet.graph.getNodeAttribute(id, "data").resolution?.cluster_id ?? null)
+      : null,
 };
 
 window.__KEYBOARD__ = {

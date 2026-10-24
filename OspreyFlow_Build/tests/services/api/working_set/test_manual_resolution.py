@@ -88,10 +88,12 @@ async def test_manual_link_merges_two_nodes_and_writes_the_edge() -> None:
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
 
-    delta, _entry = await service.manual_link(INVESTIGATION, "n1", "n2", PRINCIPAL)
+    outcome, _entry = await service.manual_link(INVESTIGATION, "n1", "n2", PRINCIPAL)
 
-    assert delta.merged == 1
-    assert delta.affected == 2
+    # The figures are the acting analyst's own, on their own outcome and not on the delta (ADR-124).
+    assert outcome.merged == 1
+    assert outcome.affected == 2
+    assert {"merged", "split", "affected"} & set(outcome.delta.model_dump()) == set()
     nodes = await store.source_fidelity_nodes(INVESTIGATION)
     assert nodes["n1"].resolution.cluster_id == nodes["n2"].resolution.cluster_id
 
@@ -114,9 +116,9 @@ async def test_manual_split_separates_two_nodes_even_at_a_broad_threshold() -> N
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
     await store.set_threshold(INVESTIGATION, THRESHOLD_STRICT)
 
-    delta, _entry = await service.manual_split(INVESTIGATION, "n1", "n2", PRINCIPAL)
+    outcome, _entry = await service.manual_split(INVESTIGATION, "n1", "n2", PRINCIPAL)
 
-    assert delta.split == 1  # 0.999 >= Strict's 0.99: merged pre-split, split by the new edge
+    assert outcome.split == 1  # 0.999 >= Strict's 0.99: merged pre-split, split by the new edge
     nodes = await store.source_fidelity_nodes(INVESTIGATION)
     assert nodes["n1"].resolution.cluster_id != nodes["n2"].resolution.cluster_id
 

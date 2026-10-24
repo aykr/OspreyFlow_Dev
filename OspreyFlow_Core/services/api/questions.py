@@ -480,7 +480,10 @@ class QuestionsService:
         the canvas. Only for a Document the analyst can see in this case."""
         record = await self._proposal(investigation_id, candidate_id, principal)
         await self._working_set.ensure_room(
-            investigation_id, [f"accepting:{candidate_id}"], [f"accepting:{candidate_id}:mention"]
+            investigation_id,
+            [f"accepting:{candidate_id}"],
+            [f"accepting:{candidate_id}:mention"],
+            principal,
         )
         node_id = await accept_candidate(self._candidates, self._graph, candidate_id, principal)
         now = datetime.now(UTC)
@@ -518,7 +521,7 @@ class QuestionsService:
         if node is None:
             raise DocumentNotFoundError(record.document_id)
         delta = await self._working_set.add_written(
-            investigation_id, [node], [_edge_from_write(mention)]
+            investigation_id, [node], [_edge_from_write(mention)], principal
         )
         return QuestionAccepted(node_id=node_id, delta=delta)
 

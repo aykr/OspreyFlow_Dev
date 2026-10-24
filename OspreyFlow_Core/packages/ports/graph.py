@@ -270,22 +270,21 @@ class GraphPort(Protocol):
         """`datasets` (ADR-099) limits the count to the case's datasets, as its `expand` is: what
         lies outside them is not "hidden" from the case, so it is not counted.
 
-        The unfiltered half of `Subgraph.filtered_count`'s comparison
-        (`01_DOMAIN_MODEL.md` §8.2): how many
+        **No longer called** (ADR-124 decision 1: `Subgraph.filtered_count` and the figure computed
+        from this count were removed, and U3 withdraws the method): the unfiltered count from
+        which a filtered figure was derived, which pointed at what it counted. How many
         nodes the *same* seed set, depth, edge-type and temporal scope as
         `expand(req, principal)` would reach with neither access axis
         applied. No `Principal` argument, matching `revert_elements` — not
         a principal-scoped read, and it returns only a bare count, never a
         node, an id or a property, so it cannot itself disclose which
-        nodes are hidden or why. `services/api`'s Working-Set Service is
-        the only sanctioned caller: it already holds the properly-filtered
+        nodes are hidden or why. `services/api`'s Working-Set Service
+        was the only sanctioned caller: it held the properly-filtered
         result of the matching `expand()` call under its own authority,
-        and `expand_candidate_count(req) - len(filtered.nodes)` is
-        `filtered_count` — the comparison `GraphPort` alone cannot make
+        and `expand_candidate_count(req) - len(filtered.nodes)` was
+        `filtered_count`, a comparison `GraphPort` alone cannot make
         from inside one filtered call, since a single `expand()` only ever
-        sees the already-filtered result (`01_DOMAIN_MODEL.md` §8.2's own
-        reasoning for why this couldn't be computed before this port grew
-        this method)."""
+        sees the already-filtered result."""
         ...
 
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]: ...
@@ -484,8 +483,8 @@ class GraphPort(Protocol):
         authorisation, never the scope). The overview's read.
 
         **Access control is in the read itself,** like every other (`CLAUDE.md` rule 3): a hidden
-        node is absent, is not counted, and its edges are absent. `Subgraph.filtered_count` is 0
-        here; a count of hidden elements is what the Conduit must never pass on.
+        node is absent, is not counted, and its edges are absent. A count of hidden elements is
+        what the Conduit must never pass on, and `Subgraph` has no field for one.
 
         **Never a slice (rule 2).** Over `max_nodes` or `max_edges` this raises `SubgraphTooLarge`
         carrying the counts of what the principal can see; it never returns a subset. The adapter

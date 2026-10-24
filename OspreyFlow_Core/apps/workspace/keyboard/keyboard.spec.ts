@@ -404,7 +404,15 @@ test("Space, then the radial list, reaches manual link — a real POST, not a st
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ seq: 2, op: "reproject", merged: 1, split: 0, affected: 2 }),
+      body: JSON.stringify({
+        delta: {
+          seq: 2,
+          op: "reproject",
+          reason: "manual link",
+          affected_cluster_ids: { n0: "c-linked", n1: "c-linked" },
+        },
+        merged: 1, split: 0, affected: 2,
+      }),
     });
   });
 
@@ -435,6 +443,11 @@ test("Space, then the radial list, reaches manual link — a real POST, not a st
   await expect.poll(() => linkRequestBody !== null).toBe(true);
   expect(linkRequestBody).toMatchObject({ node_a: "n1", node_b: "n0" });
   await expect(menu).toBeHidden(); // RadialMenu closes on select, same as a mouse click
+  // ADR-124: the answer is a `ResolutionOutcome`; the canvas applies the delta inside it, so the
+  // clusters it names are what the working set now holds (applying the whole answer would not).
+  await expect
+    .poll(() => page.evaluate(() => [window.__CANVAS__?.clusterOf("n0"), window.__CANVAS__?.clusterOf("n1")]))
+    .toEqual(["c-linked", "c-linked"]);
   registerCovered("CANVAS_ACTIONS", "menu-item-manual-link");
 });
 
@@ -449,7 +462,15 @@ test("the radial list also reaches Split, not only Link", async ({ page }) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ seq: 2, op: "reproject", merged: 0, split: 1, affected: 2 }),
+      body: JSON.stringify({
+        delta: {
+          seq: 2,
+          op: "reproject",
+          reason: "manual split",
+          affected_cluster_ids: { n0: "c-apart-0", n1: "c-apart-1" },
+        },
+        merged: 0, split: 1, affected: 2,
+      }),
     });
   });
 
@@ -471,6 +492,11 @@ test("the radial list also reaches Split, not only Link", async ({ page }) => {
   await expect.poll(() => splitRequestBody !== null).toBe(true);
   expect(splitRequestBody).toMatchObject({ node_a: "n1", node_b: "n0" });
   await expect(menu).toBeHidden();
+  // ADR-124: the canvas applies the delta inside the `ResolutionOutcome`, so the clusters it names
+  // are what the working set now holds.
+  await expect
+    .poll(() => page.evaluate(() => [window.__CANVAS__?.clusterOf("n0"), window.__CANVAS__?.clusterOf("n1")]))
+    .toEqual(["c-apart-0", "c-apart-1"]);
   registerCovered("CANVAS_ACTIONS", "menu-item-manual-split");
 });
 

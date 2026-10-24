@@ -2,8 +2,9 @@
 
 A community here is the one `02_GLASS_FRONTEND.md` §3.2 defines (Louvain with a connected-components
 split pass, ADR-029), never a resolution cluster. Nothing in this module can carry a count of hidden
-elements: `Subgraph.filtered_count` is deliberately not a field, and the test
+elements: no field here can hold one, and the test
 `test_the_overview_never_carries_the_count_of_hidden_elements` would fail if one were added.
+(`Subgraph` had a `filtered_count` until ADR-124 U2c removed it.)
 """
 
 from __future__ import annotations

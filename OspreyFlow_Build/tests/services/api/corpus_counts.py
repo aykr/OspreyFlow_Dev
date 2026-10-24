@@ -1,12 +1,15 @@
-"""Shared by the tests that hold ADR-122's rule: no response carries a link's corpus-wide counts.
+"""Shared by the tests that hold ADR-122's rule (no response carries a link's corpus-wide counts)
+and ADR-124's (no response carries a figure for what the reader may not read).
 
 The five keys, an `Edge` that has components, a walk for keys at any depth, and a builder of an
-instance of any response model holding that `Edge` wherever the model can hold one. Not a test
-file: it holds no `test_` function.
+instance of any response model holding that `Edge` wherever the model can hold one; and, for
+ADR-124, the withheld-figure keys and a walk over every field name a model can put on the wire,
+whether or not it holds an `Edge`. Not a test file: it holds no `test_` function.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import enum
 import types
 import typing
@@ -33,6 +36,12 @@ FORBIDDEN_KEYS = {
     "corpus_pair_count",
     "corpus_total_occurrences",
 }
+
+#: ADR-124 decision 1: a figure for withheld material is removed, not held at 0. `withheld_count`
+#: is in the set, with one exemption the gate pins by name (`EXEMPT_WITHHELD_*` in
+#: `test_no_corpus_counts_on_the_wire.py`): the export manifest and the export ledger keep it until
+#: U9 replaces it with a yes or no.
+WITHHELD_KEYS = {"filtered_count", "unreadable_count", "withheld_count"}
 
 WHEN = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -140,3 +149,68 @@ def keys_at_any_depth(value: Any) -> set[str]:
             found |= keys_at_any_depth(inner)
         return found
     return set()
+
+
+def field_names_reachable(annotation: Any, seen: set[type] | None = None) -> set[str]:
+    """Every field name a value of `annotation` can carry on the wire: the fields of each model or
+    dataclass reachable through fields and generics, their aliases and their computed fields. A
+    walk over the declared shape, not over an instance, so it needs no value to be buildable and
+    sees a field whatever its default; what it cannot see is a key put into a model typed
+    `dict[str, Any]` at run time (the limit `test_no_corpus_counts_on_the_wire.py` states)."""
+    seen = set() if seen is None else seen
+    names: set[str] = set()
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        if annotation in seen:
+            return names
+        seen.add(annotation)
+        for name, field in annotation.model_fields.items():
+            names |= {name, *(a for a in (field.alias, field.serialization_alias) if a)}
+            names |= field_names_reachable(field.annotation, seen)
+        for name, computed in annotation.model_computed_fields.items():
+            names.add(name)
+            names |= field_names_reachable(computed.return_type, seen)
+        return names
+    if isinstance(annotation, type) and dataclasses.is_dataclass(annotation):
+        if annotation in seen:
+            return names
+        seen.add(annotation)
+        hints = typing.get_type_hints(annotation)
+        for field in dataclasses.fields(annotation):
+            names.add(field.name)
+            names |= field_names_reachable(hints.get(field.name), seen)
+        return names
+    for inner in typing.get_args(annotation):
+        names |= field_names_reachable(inner, seen)
+    return names
+
+
+def models_with_field(annotation: Any, field: str, seen: set[type] | None = None) -> set[str]:
+    """The names of the models and dataclasses reachable from `annotation` that declare `field`
+    (or an alias of it): which of them carries it, where `field_names_reachable` says only that
+    something does."""
+    seen = set() if seen is None else seen
+    found: set[str] = set()
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        if annotation in seen:
+            return found
+        seen.add(annotation)
+        for name, model_field in annotation.model_fields.items():
+            if field in {name, model_field.alias, model_field.serialization_alias}:
+                found.add(annotation.__name__)
+            found |= models_with_field(model_field.annotation, field, seen)
+        if field in annotation.model_computed_fields:
+            found.add(annotation.__name__)
+        return found
+    if isinstance(annotation, type) and dataclasses.is_dataclass(annotation):
+        if annotation in seen:
+            return found
+        seen.add(annotation)
+        hints = typing.get_type_hints(annotation)
+        for dc_field in dataclasses.fields(annotation):
+            if dc_field.name == field:
+                found.add(annotation.__name__)
+            found |= models_with_field(hints.get(dc_field.name), field, seen)
+        return found
+    for inner in typing.get_args(annotation):
+        found |= models_with_field(inner, field, seen)
+    return found

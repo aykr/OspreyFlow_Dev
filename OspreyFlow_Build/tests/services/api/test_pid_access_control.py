@@ -35,9 +35,11 @@ What each test proves, and what shows it red:
   busiest links, links among, link structure, shared contacts, recent loads, type counts, routes,
   the path search and connections, the service's expand and per-type previews, a pattern's preview
   and run, links among at degrees 1 to 3, the shared pair's canvas, search, suggest and the
-  starter questions, the export manifest, the centralities and the communities). The withheld
-  counts (`filtered_count`) are not: they leak, and two `test_adr124_defect_...` tests pin the exact
-  leak as it is today (ADR-124, accepted, option A′); fixing it turns them red. *Red twice:* the
+  starter questions, the export manifest, the centralities and the communities). There is no
+  withheld count left to differ (`filtered_count` was removed, ADR-124 U2c), and the previews'
+  candidate counts, which were counted over the stored set, are equal for the analyst in A and B,
+  in a case the cleared principal has worked in too. The export manifest's count still differs, and
+  `test_adr124_the_manifest_count_still_differs_until_u9` pins it until U9. *Red twice:* the
   same comparison for the cleared principal finds exactly the readings in `CLEARED_DIFFERS`, and
   under weights version 1 (A1 against B1) only the readings that carry a weight differ.
 - **J1, J2, J5, J7** and the **229** reports, the **inferred** `PASSES_ITEMS_TO` links: the figures
@@ -467,13 +469,10 @@ class Observation:
     the same in every store.
 
     `weights` is every link any reading met, by triple, compared over the links both principals
-    met. `filtered` holds the expansion's and the previews' withheld counts, kept apart because
-    they are the readings that leak (a pinned defect, below); the status bar's own is the
-    snapshot's, read separately."""
+    met."""
 
     readings: dict[str, Any]
     weights: dict[Triple, float]
-    filtered: dict[str, int]
 
 
 def _triple(edge: Edge) -> Triple:
@@ -569,7 +568,6 @@ async def _observe(store: Store, principal: Principal) -> Observation:
     graph = store.graph
     readings: dict[str, Any] = {}
     weights: dict[Triple, float] = {}
-    filtered: dict[str, int] = {}
 
     def note(edges: Sequence[Edge]) -> None:
         weights.update({_triple(e): e.weight for e in edges})
@@ -673,8 +671,7 @@ async def _observe(store: Store, principal: Principal) -> Observation:
     readings["communities"] = frozenset(frozenset(g) for g in groups.values())
 
     # The service the routes call: the real `WorkingSetService.expand` of each end (its delta and
-    # `links_among` flag; its withheld count is kept apart), and `expand_preview` for every link
-    # type the ontology has, from each end.
+    # `links_among` flag), and `expand_preview` for every link type the ontology has, from each end.
     service, outcomes = await _view(store, principal)
     # The export gate's withheld manifest over the working set the service just built.
     readings["export_withheld"] = await service.withheld_count_for(CASE, principal)
@@ -683,7 +680,6 @@ async def _observe(store: Store, principal: Principal) -> Observation:
     }
     for seed, outcome in outcomes.items():
         note(outcome.delta.edges)
-        filtered[f"expand:{seed}"] = outcome.filtered_count
     previews: dict[tuple[str, str | None], Any] = {}
     for seed in (PRINCIPAL, CALDER_3):
         for link_type in (None, *LINK_TYPES):
@@ -696,7 +692,6 @@ async def _observe(store: Store, principal: Principal) -> Observation:
                 preview.candidate_edge_count,
                 preview.would_breach,
             )
-            filtered[f"preview:{seed}:{link_type}"] = preview.filtered_count
     readings["expand_preview"] = previews
 
     # `/paths` (bounded to two hops) and `/connections`, principal to calder_3.
@@ -782,7 +777,7 @@ async def _observe(store: Store, principal: Principal) -> Observation:
             ran_questions[question.id] = f"too many matches: {refused}"
     readings["starter"] = (offered.total, tuple(q.id for q in offered.questions), ran_questions)
 
-    observed = Observation(readings=readings, weights=weights, filtered=filtered)
+    observed = Observation(readings=readings, weights=weights)
     store.observed[principal.id] = observed
     print(
         f"PID-ACCESS observed {store.name} as {principal.id}: {time.monotonic() - started:,.0f} s",
@@ -810,7 +805,7 @@ def _same_reading(name: str, left: Any, right: Any) -> bool:
 
 
 def _differences(a: Observation, b: Observation) -> list[str]:
-    """The readings that differ, by name, the withheld counts excluded. Weights are compared over
+    """The readings that differ, by name. Weights are compared over
     the links both principals met, so that a link only one of them met is a difference of the
     links, not of the weights."""
     assert a.readings.keys() == b.readings.keys()
@@ -822,11 +817,6 @@ def _differences(a: Observation, b: Observation) -> list[str]:
         out.append("weights")
     return out
 
-
-def _filtered_differences(a: Observation, b: Observation) -> dict[str, tuple[int, int]]:
-    """Each withheld count the two cases give differently, as (a, b)."""
-    assert a.filtered.keys() == b.filtered.keys()
-    return {k: (a.filtered[k], b.filtered[k]) for k in a.filtered if a.filtered[k] != b.filtered[k]}
 
 
 # --- No trace of the SECRET link (rule 3) ---------------------------------------------------------
@@ -880,29 +870,51 @@ async def test_the_analysts_own_snapshot_is_the_same_with_and_without_the_link(
     store_a: Store, store_b: Store
 ) -> None:
     """The `sync` projection (what the WebSocket and a reconnect send) of the analyst's own working
-    set, after the service expanded both ends for the analyst. **Its `filtered_count` is 0 in both
-    cases by construction**: the store holds only what the analyst was given, so nothing in it is
-    above them. The test is kept for its nodes and links; the withheld count that can differ is
-    the shared-case one, pinned below."""
+    set, after the service expanded both ends for the analyst: the same nodes and links. It carries
+    no count of what is withheld (`filtered_count` was removed, ADR-124 U2c); the shared-case
+    manifest count, which still differs, is pinned below until U9."""
     snapshots = {}
     for store in (store_a, store_b):
         service, _ = await _view(store, ANALYST)
         (snapshot,) = await service.sync(CASE, ANALYST, last_acknowledged_seq=None)
         assert isinstance(snapshot, DeltaSnapshot)
-        snapshots[store.name] = (*_shape(snapshot.nodes, snapshot.edges), snapshot.filtered_count)
+        assert "filtered_count" not in snapshot.model_dump()
+        snapshots[store.name] = _shape(snapshot.nodes, snapshot.edges)
     assert snapshots["A"] == snapshots["B"]
-    assert snapshots["A"][2] == 0
 
 
 async def _shared_case(store: Store, reader: Principal = ANALYST) -> tuple[Any, ...]:
     """One `FakeWorkingSetStore` per store: the cleared principal expands the principal and
     calder_3 into it, then `reader` (the analyst, by default) `sync`s it (the shared-case path: a
-    case several people work in) and the export gate's manifest is read for `reader`."""
+    case several people work in) and the export gate's manifest is read for `reader`. Returns the
+    snapshot's nodes and links and the manifest's count."""
     service, _ = await _view(store, CLEARED)
     (snapshot,) = await service.sync(CASE, reader, last_acknowledged_seq=None)
     assert isinstance(snapshot, DeltaSnapshot)
     manifest = await service.withheld_count_for(CASE, reader)
-    return (*_shape(snapshot.nodes, snapshot.edges), snapshot.filtered_count, manifest)
+    return (*_shape(snapshot.nodes, snapshot.edges), manifest)
+
+
+async def _shared_previews(
+    store: Store, reader: Principal = ANALYST
+) -> dict[tuple[str, str | None], tuple[int, int, Any]]:
+    """The previews `reader` is shown in the shared case: for each end and every link type, the
+    candidate counts and any breach, over a working set the cleared principal built (ADR-124
+    decision 2: counted over `reader`'s own view of it)."""
+    service, _ = await _view(store, CLEARED)
+    previews = {}
+    for seed in (PRINCIPAL, CALDER_3):
+        for link_type in (None, *LINK_TYPES):
+            request = ExpandRequest(
+                node_ids=[seed], depth=1, edge_types=None if link_type is None else [link_type]
+            )
+            preview = await service.expand_preview(CASE, request, reader)
+            previews[(seed, link_type)] = (
+                preview.candidate_node_count,
+                preview.candidate_edge_count,
+                preview.would_breach,
+            )
+    return previews
 
 
 async def test_the_analysts_snapshot_of_a_shared_case_has_the_same_nodes_and_links(
@@ -922,76 +934,72 @@ async def test_the_analysts_snapshot_of_a_shared_case_has_the_same_nodes_and_lin
     assert cleared_b[1] - cleared_a[1] == frozenset()
 
 
-async def test_adr124_defect_the_expansion_count_leaks_the_secret_link(
+async def test_the_expansion_and_preview_figures_are_the_same_with_and_without_the_link(
     store_a: Store, store_b: Store
 ) -> None:
-    """Pins a known rule-3 defect (ADR-124, accepted, option A′): the withheld count the service
-    reports with an expansion or a preview is higher with the `SECRET` link present, so an analyst
-    can tell the case holds one more item than they can see. This test asserts the exact leak.
-    Under A′ there are no withheld figures anywhere, so the fix turns it red, and it is then
-    rewritten as an equality: no `filtered_count` exists to differ.
+    """ADR-124 decision 1, rewritten from the defect test
+    `test_adr124_defect_the_expansion_count_leaks_the_secret_link`, which pinned the leak: the
+    withheld count of an expansion or a preview was 1 with the `SECRET` link and 0 without, in six
+    readings, and so located the link by its type and its two ends.
+    There is no such count now: neither an expansion's outcome nor a preview has a field for one,
+    and the previews' candidate counts, which were counted over the stored set, are equal for the
+    analyst in A and B.
 
-    **The expected dict, reasoned before any run.** `WorkingSetService.expand` and
-    `expand_preview` report `candidate_count - len(subgraph.nodes)`. The candidate count
-    (`ExpandBuilder.render_candidate_count_gremlin`) walks the same seeds, depth and link types
-    with only the structural step (superseded, reverted, dataset), so no handling check: it counts
-    the seeds and every node they reach. The delivered nodes are the same walk with the access
-    step at every hop. The `SECRET` link joins the principal and calder_3 and is the only link
-    between them, so each is reached from the other by that link alone:
-    - principal as seed: the candidates include calder_3 (reached over the `SECRET` link), the
-      analyst's walk does not; calder_3 is `OFFICIAL`, but the analyst reaches it by no other link.
-      Case A counts 1 withheld. Case B has no such link, so its candidates never held calder_3: 0.
-    - calder_3 as seed: the same, with the principal as the node not reached.
-    - the walk is the untyped one, or one by `IN_CONFLICT_WITH`; every other type walks neither
-      the `SECRET` link nor a node it alone reaches, so the two cases agree (0 and 0).
-    - nothing else is withheld from the analyst: only classification and a restricted handling
-      code gate a read (`ontology/handling.py`, `principal_may_view`), every handling code the
-      plan gives is the default `P` (`PlanHandling` in `pid_plan.py`), and the one `SECRET`
-      element is the link. So each count is exactly 1 in A and 0 in B.
-    So the leak is these six readings, each (1, 0)."""
+    **In the analyst's own case and in a case the cleared principal worked in.** In the first the
+    analyst's expansions put nothing above them in the store, so equality is not yet a proof; the
+    second is: the cleared principal's expansions put the `SECRET` link in A's store, and the
+    analyst's preview of every type from each end is counted over their own view of it (a link
+    counts only when it and both its ends are readable). *Shown red:* the cleared principal's
+    previews of the same two stores differ by exactly that link."""
+    from services.api.working_set.models import CardinalityPreview, ExpansionOutcome
+
+    assert "filtered_count" not in ExpansionOutcome.model_fields
+    assert "filtered_count" not in CardinalityPreview.model_fields
+
     in_a = await _observe(store_a, ANALYST)
     in_b = await _observe(store_b, ANALYST)
-    expected = {}
+    assert in_a.readings["expand_preview"] == in_b.readings["expand_preview"]
+    assert len(in_a.readings["expand_preview"]) == 2 * (1 + len(LINK_TYPES))
+
+    shared_a = await _shared_previews(store_a)
+    shared_b = await _shared_previews(store_b)
+    assert shared_a == shared_b
+    assert any(counts[1] > 0 for counts in shared_a.values()), "the previews counted links"
+
+    cleared_a = await _shared_previews(store_a, CLEARED)
+    cleared_b = await _shared_previews(store_b, CLEARED)
     for seed in (PRINCIPAL, CALDER_3):
-        expected[f"expand:{seed}"] = (1, 0)
-        expected[f"preview:{seed}:None"] = (1, 0)
-        expected[f"preview:{seed}:IN_CONFLICT_WITH"] = (1, 0)
-    leak = _filtered_differences(in_a, in_b)
-    print(f"PID-ACCESS withheld counts that differ, as (A, B): {leak}", flush=True)
-    assert leak == expected
+        for link_type in (None, *LINK_TYPES):
+            nodes_a, edges_a, _ = cleared_a[(seed, link_type)]
+            nodes_b, edges_b, _ = cleared_b[(seed, link_type)]
+            # The cleared reader's view holds the `SECRET` link whatever type is asked about, so
+            # every preview of theirs counts it, and nothing else differs.
+            assert nodes_a == nodes_b, (seed, link_type)
+            assert edges_a - edges_b == 1, (seed, link_type)
 
 
-async def test_adr124_defect_the_status_bar_count_leaks_the_secret_link(
+async def test_adr124_the_manifest_count_still_differs_until_u9(
     store_a: Store, store_b: Store
 ) -> None:
-    """Pins the same known rule-3 defect (ADR-124, accepted, option A′) at the status bar: in a
-    case the cleared principal has worked in, the analyst's snapshot `filtered_count` (the status
-    bar's "N hidden by handling") and the export manifest's withheld count are higher with the
-    `SECRET` link present. Under A′ the fix turns this red, and it is then rewritten not as an
-    equality but as: the analyst's full snapshot has `withheld` true in A and false in B. In a case
-    shared with a cleared colleague, A′ deliberately tells the analyst that material is withheld
-    (the status bar says "This case holds material you are not cleared to see."), never what or
-    where. So Brief 1 section 5.3 is met only in a case the analyst works alone.
+    """Pins the one withheld figure that is left (ADR-124 U9 replaces it with a yes or no): in a
+    case the cleared principal has worked in, the export manifest's withheld count for the analyst
+    is higher with the `SECRET` link present. **The snapshot no longer carries a count** (U2c
+    removed `filtered_count`), so the status bar's pin is gone; the manifest's `(1, 0)` stays here
+    until U9 turns it red and it is rewritten as `withheld` true in A and false in B. In a case
+    shared with a cleared colleague, A′ deliberately tells the analyst that material is withheld,
+    never what or where, so Brief 1 section 5.3 is met only in a case the analyst works alone.
 
-    **Expected, reasoned before any run.** `sync` re-projects the stored working set for the
-    analyst with `_project`, which counts the nodes and the links above the analyst's clearance.
-    `withheld_count_for` is the same arithmetic over the store's membership. The cleared principal's
-    expansions put the `SECRET` link in A's store and nothing above `OFFICIAL` in B's. Only
-    classification and a restricted handling code gate a read (`ontology/handling.py`,
-    `principal_may_view`), every handling code the plan gives is the default `P`
-    (`PlanHandling` in `pid_plan.py`), and the one `SECRET` element is the link; calder_3 is
-    readable. So: 0 nodes hidden, and 1 link hidden in A against none in B. The snapshot's count
-    is (1, 0) and so is the manifest's."""
+    **Expected, reasoned before any run.** `withheld_count_for` is `_project`'s own arithmetic over
+    the store's membership, which counts the nodes and the links above the analyst's clearance. The
+    cleared principal's expansions put the `SECRET` link in A's store and nothing above `OFFICIAL`
+    in B's. Only classification and a restricted handling code gate a read
+    (`ontology/handling.py`, `principal_may_view`), every handling code the plan gives is the
+    default `P` (`PlanHandling` in `pid_plan.py`), and the one `SECRET` element is the link;
+    calder_3 is readable. So: 0 nodes hidden, and 1 link hidden in A against none in B."""
     in_a = await _shared_case(store_a)
     in_b = await _shared_case(store_b)
-    print(
-        f"PID-ACCESS shared-case withheld (snapshot, manifest): A {in_a[2:]} B {in_b[2:]}",
-        flush=True,
-    )
-    assert {"snapshot": (in_a[2], in_b[2]), "manifest": (in_a[3], in_b[3])} == {
-        "snapshot": (1, 0),
-        "manifest": (1, 0),
-    }
+    print(f"PID-ACCESS shared-case manifest count: A {in_a[2]} B {in_b[2]}", flush=True)
+    assert (in_a[2], in_b[2]) == (1, 0)
 
 
 async def test_the_comparison_can_see_the_secret_link_for_the_cleared_principal(

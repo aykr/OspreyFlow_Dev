@@ -467,6 +467,15 @@ def _at(event_id: str, day: int) -> EventRecord:
     return _event(event_id).model_copy(update={"occurred_at": sent})
 
 
+async def _readable_ids(working: FakeWorkingSetStore) -> set[str]:
+    """The nodes of the case `ANALYST` may read: those not marked above OFFICIAL."""
+    return {
+        n.id
+        for n in (await working.source_fidelity_nodes("inv-1")).values()
+        if n.handling.classification == "OFFICIAL"
+    }
+
+
 async def test_the_emails_in_the_window_are_written_as_documents_and_drawn() -> None:
     events = [_at("ev-1", 1), _at("ev-2", 10), _at("ev-3", 20)]
     service, graph, working, _, _ = await _build(events)
@@ -509,13 +518,16 @@ async def test_past_the_cap_nothing_is_written_and_the_answer_is_limit_exceeded(
     import services.api.working_set.service as service_module
 
     service, graph, working, _, _ = await _build([_at(f"ev-{n}", n) for n in range(1, 6)])
-    existing = len(await working.node_ids("inv-1"))
+    # The cap counts the analyst's own view of the case (ADR-124 decision 2): the store holds three
+    # nodes, one of them above ANALYST, so the view is two and the figure is two plus five.
+    existing = len(await _readable_ids(working))
+    assert existing == len(await working.node_ids("inv-1")) - 1
     monkeypatch.setattr(service_module, "MAX_NODES", existing + 2)
     with pytest.raises(LimitExceededError) as refused:
         await service.show_as_documents("inv-1", "e1", ANALYST, window=None)
     assert refused.value.detail.would_be == existing + 5
     assert graph.nodes == {} and graph.committed_edges == []
-    assert len(await working.node_ids("inv-1")) == existing
+    assert len(await working.node_ids("inv-1")) == existing + 1  # the hidden node is still stored
 
 
 @pytest.mark.parametrize("edge_id", ["secret-link", "secret-end", "no-such-link"])
@@ -536,7 +548,8 @@ async def test_extraction_past_the_cap_writes_nothing_to_the_graph(
     import services.api.working_set.service as service_module
 
     service, graph, working, _, _ = await _build()
-    monkeypatch.setattr(service_module, "MAX_NODES", len(await working.node_ids("inv-1")))
+    # A full working set is the analyst's own view of it at the cap (ADR-124 decision 2).
+    monkeypatch.setattr(service_module, "MAX_NODES", len(await _readable_ids(working)))
     with pytest.raises(LimitExceededError):
         await service.extract("inv-1", "e1", "ev-1", ANALYST)
     assert graph.nodes == {} and graph.committed_edges == []

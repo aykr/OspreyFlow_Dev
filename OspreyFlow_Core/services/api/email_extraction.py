@@ -236,9 +236,7 @@ class EmailExtractionService:
                 # Only what the email has: a missing id is left out, never written as null, which
                 # the ontology's `string` would refuse.
                 **(
-                    {"message_id": message_id}
-                    if isinstance(message_id, str) and message_id
-                    else {}
+                    {"message_id": message_id} if isinstance(message_id, str) and message_id else {}
                 ),
             },
             provenance=provenance,
@@ -277,7 +275,9 @@ class EmailExtractionService:
         now = datetime.now(UTC)
         node, edges = self._document_writes(event, principal, now)
         # Asked before the graph is written, so a full working set leaves nothing behind (rule 2).
-        await self._working_set.ensure_room(investigation_id, [node.id], [e.id for e in edges])
+        await self._working_set.ensure_room(
+            investigation_id, [node.id], [e.id for e in edges], principal
+        )
 
         tx = await self._graph.begin_transaction()
         try:
@@ -288,7 +288,10 @@ class EmailExtractionService:
             raise
         await self._graph.commit_transaction(tx)
         delta = await self._working_set.add_written(
-            investigation_id, [_node_from_write(node)], [_edge_from_write(e) for e in edges]
+            investigation_id,
+            [_node_from_write(node)],
+            [_edge_from_write(e) for e in edges],
+            principal,
         )
 
         text = event.properties.get("excerpt")
@@ -360,7 +363,7 @@ class EmailExtractionService:
             nodes.append(node)
             edges.extend(mentions)
         await self._working_set.ensure_room(
-            investigation_id, [n.id for n in nodes], [e.id for e in edges]
+            investigation_id, [n.id for n in nodes], [e.id for e in edges], principal
         )
         if nodes:
             tx = await self._graph.begin_transaction()
@@ -375,6 +378,7 @@ class EmailExtractionService:
             investigation_id,
             [_node_from_write(n) for n in nodes],
             [_edge_from_write(e) for e in edges],
+            principal,
         )
         return EmailDocumentsResult(
             written=len(nodes), without_text=len(events) - len(documents), delta=delta
@@ -413,7 +417,10 @@ class EmailExtractionService:
 
         # The node's id is made by the acceptance itself; one node and one link are what it adds.
         await self._working_set.ensure_room(
-            investigation_id, [f"accepting:{candidate_id}"], [f"accepting:{candidate_id}:mention"]
+            investigation_id,
+            [f"accepting:{candidate_id}"],
+            [f"accepting:{candidate_id}:mention"],
+            principal,
         )
         node_id = await accept_candidate(self._candidates, self._graph, candidate_id, principal)
         now = datetime.now(UTC)
@@ -451,6 +458,6 @@ class EmailExtractionService:
         if node is None:
             raise EmailNotFoundError("candidate")
         delta = await self._working_set.add_written(
-            investigation_id, [node], [_edge_from_write(mention)]
+            investigation_id, [node], [_edge_from_write(mention)], principal
         )
         return EmailAcceptResult(node_id=node_id, delta=delta)

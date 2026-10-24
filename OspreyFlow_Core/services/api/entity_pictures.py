@@ -201,7 +201,7 @@ class EntityPictureService:
         ref = reference_for(data, content_type)
         document_id = f"content:{sha256(ref.encode()).hexdigest()[:32]}"
         edge_id = new_edge_id()
-        await self._working_set.ensure_room(investigation_id, [document_id], [edge_id])
+        await self._working_set.ensure_room(investigation_id, [document_id], [edge_id], principal)
 
         await self._media.put(data, content_type)
         now = datetime.now(UTC)
@@ -250,14 +250,14 @@ class EntityPictureService:
         if before is None:
             deltas = [
                 await self._working_set.add_written(
-                    investigation_id, [_node_from_write(document)], [_edge_from(link)]
+                    investigation_id, [_node_from_write(document)], [_edge_from(link)], principal
                 )
             ]
         else:
             new = _edge_from(link, before[0].audit.revision + 1)
             deltas = [
                 await self._working_set.add_written(
-                    investigation_id, [_node_from_write(document)], []
+                    investigation_id, [_node_from_write(document)], [], principal
                 ),
                 await self._working_set.replace_edge(investigation_id, before[0].id, new),
             ]

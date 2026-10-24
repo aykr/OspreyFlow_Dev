@@ -19,27 +19,40 @@ delta cases below (the deltas it sends, built from the delta models). A route of
 kind is not proven by this file. Nor does it see a model field typed `Any` or `dict[str, Any]`
 that holds an `Edge` at run time.
 
+**ADR-124 (U2a) adds a second gate to this file, over a different rule:** no response and no delta
+carries a figure for what its reader may not read (`filtered_count`, `unreadable_count`,
+`withheld_count`; rules 3 and 7). It does not look for an `Edge`: it walks the field names of every
+route's response model, and of every delta model, so a route with no link in it is covered too.
+A route with no field to walk must be named: a JSON mapping in `RAW_MAPPING_ROUTES` (each has a
+case of its own), anything else in `NON_JSON_ROUTES` with the reason it carries no figure (no
+body, bytes, a stream), or the file fails. `withheld_count` has one pinned exemption, the export
+manifest and the export ledger, which keep it until U9 replaces it with a yes or no; the pin names
+the routes and the models, and fails when either stops carrying it, so U9 must remove it.
+
 Pure: imports the app and builds models, opens no connection. Needs `ARCADEDB_HTTP_PORT` and
 `POSTGRES_PORT` pointed at unreachable ports only because importing the app reads settings.
 """
 
 from __future__ import annotations
 
+import ast
+import dataclasses
+import inspect
 import json
+import textwrap
 import typing
+from collections.abc import Callable
+from typing import Annotated, Any
 
 import pytest
 from fastapi.routing import APIRoute, APIWebSocketRoute
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, computed_field
 from services.api.app import app
 from services.api.working_set.models import (
     DeltaAdd,
-    DeltaNotice,
-    DeltaRemove,
     DeltaReplaceEdge,
     DeltaReproject,
     DeltaSnapshot,
-    DeltaUpdate,
     WorkingSetDelta,
 )
 
@@ -47,10 +60,13 @@ from schemas.domain import Edge, WeightComponents
 
 from .corpus_counts import (
     FORBIDDEN_KEYS,
+    WITHHELD_KEYS,
     build,
     contains_model,
     edge_with_components,
+    field_names_reachable,
     keys_at_any_depth,
+    models_with_field,
 )
 
 
@@ -146,14 +162,15 @@ def test_the_stream_route_exists_and_every_delta_model_is_known_to_this_file() -
 
     holding = {m for m in _delta_models() if contains_model(m, Edge, set())}
     assert holding == {DeltaAdd, DeltaReplaceEdge, DeltaSnapshot}
-    assert set(_delta_models()) == {
-        DeltaAdd,
-        DeltaUpdate,
-        DeltaRemove,
-        DeltaReplaceEdge,
-        DeltaReproject,
-        DeltaNotice,
-        DeltaSnapshot,
+    # `DeltaNotice` left the protocol with ADR-124 U2c: its only producers were the withheld
+    # notices, so a delta set that still holds one is a delta set that can still send a count.
+    assert {m.__name__ for m in _delta_models()} == {
+        "DeltaAdd",
+        "DeltaUpdate",
+        "DeltaRemove",
+        "DeltaReplaceEdge",
+        "DeltaReproject",
+        "DeltaSnapshot",
     }
 
 
@@ -173,3 +190,271 @@ def test_a_delta_the_stream_sends_never_carries_corpus_counts(
     if contains_model(delta_model, Edge, set()):
         assert "e-1" in repr(sent), f"{delta_model.__name__}: no Edge in the built delta"
     assert keys_at_any_depth(sent) & FORBIDDEN_KEYS == set(), delta_model.__name__
+
+
+# --- ADR-124 (U2a): no response and no delta carries a figure for what the reader may not read ---
+
+
+def _wire_annotation(route: APIRoute) -> Any:
+    """What a route puts on the wire: its `response_model`, or, where it declares none, what its
+    handler is annotated to return (`reports/feed` returns `ReportFigures | Response`)."""
+    if route.response_model is not None:
+        return route.response_model
+    return inspect.signature(route.endpoint, eval_str=True).return_annotation
+
+
+def _api_routes() -> list[APIRoute]:
+    return [r for r in app.routes if isinstance(r, APIRoute)]
+
+
+def test_the_withheld_figure_walk_sees_every_route() -> None:
+    """Violation caught: the walk over `app.routes` finds few or none (a renamed attribute, a
+    changed FastAPI internal), so the per-route case below is parametrised over a short list and
+    the file passes having checked little."""
+    labels = {_label(r) for r in _api_routes()}
+
+    assert len(labels) >= 200
+    for pinned in (
+        "POST /v1/investigations/{investigation_id}/expand",
+        "POST /v1/investigations/{investigation_id}/expand/preview",
+        "POST /v1/investigations/{investigation_id}/seed",
+        "POST /v1/investigations/{investigation_id}/history/{step_id}",
+        "POST /v1/investigations/{investigation_id}/alerts/{alert_id}/jump",
+        "PUT /v1/investigations/{investigation_id}/resolution/threshold",
+        "GET /healthz",
+    ):
+        assert pinned in labels, pinned
+
+
+@pytest.mark.parametrize("route", _api_routes(), ids=_label)
+def test_no_route_can_put_a_withheld_figure_on_the_wire(route: APIRoute) -> None:
+    """Violation caught (ADR-124 decision 1, rules 3 and 7): a route whose response, at any depth,
+    can carry `filtered_count` or `unreadable_count`: a figure that points at what the reader may
+    not read, which a field held at 0 would still claim was complete. Every route is walked,
+    whether or not its response holds an `Edge`."""
+    assert _withheld_figures_on(route) == set(), _label(route)
+
+
+#: `withheld_count` is allowed on exactly these routes (ADR-124 U9 replaces it with a yes or no, and
+#: removes this exemption). It is carried by `ExportManifest` (`POST .../export`) and
+#: `ExportLedgerEntry` (`GET /v1/exports`); `packs.py:249` builds an `ExportLedgerEntry` for the
+#: ledger and answers with no figure (out of scope for U2, checked when next touched).
+EXEMPT_WITHHELD_ROUTES = {
+    "POST /v1/investigations/{investigation_id}/export",
+    "GET /v1/exports",
+}
+EXEMPT_WITHHELD_MODELS = {"ExportManifest", "ExportLedgerEntry"}
+
+
+def _withheld_figures_on(route: APIRoute) -> set[str]:
+    """The withheld figures `route` can carry that it is not exempted for."""
+    figures = field_names_reachable(_wire_annotation(route)) & WITHHELD_KEYS
+    if _label(route) in EXEMPT_WITHHELD_ROUTES:
+        figures -= {"withheld_count"}
+    return figures
+
+
+def test_the_withheld_count_exemption_is_exactly_the_export_manifest_and_ledger() -> None:
+    """Violation caught: the exemption goes stale (U9 removed the field and the pin stayed, so a
+    new `withheld_count` on those routes would pass), or it widens (another route or model carries
+    the field and is let through by the name of a neighbour)."""
+    carrying_routes = {
+        _label(r)
+        for r in _api_routes()
+        if "withheld_count" in field_names_reachable(_wire_annotation(r))
+    }
+    carrying_models = set().union(
+        *(models_with_field(_wire_annotation(r), "withheld_count") for r in _api_routes())
+    )
+
+    assert carrying_routes == EXEMPT_WITHHELD_ROUTES
+    assert carrying_models == EXEMPT_WITHHELD_MODELS
+
+
+class _Figure(BaseModel):
+    withheld_count: int = 0
+
+
+class _Page(BaseModel):
+    figures: list[_Figure]
+
+
+def test_a_new_withheld_count_anywhere_else_is_found_by_the_gate() -> None:
+    """Violation caught (rule 15, the gate shown able to fail): a route added later that carries
+    `withheld_count`, or either other figure, and is not one of the two exempt routes. A throwaway
+    app with such a route, walked by the same predicate the per-route case uses."""
+    from fastapi import FastAPI
+
+    planted = FastAPI()
+
+    @planted.get("/v1/investigations/{investigation_id}/something-new", response_model=_Page)
+    async def something_new() -> _Page:  # pragma: no cover - never called
+        return _Page(figures=[])
+
+    @planted.get("/v1/exports", response_model=_Page)  # the exempt path, but an unlisted app
+    async def named_like_an_exempt_one() -> _Page:  # pragma: no cover
+        return _Page(figures=[])
+
+    @planted.post("/v1/investigations/{investigation_id}/export", response_model=_Figure)
+    async def the_exempt_export() -> _Figure:  # pragma: no cover
+        return _Figure()
+
+    found = {_label(r): _withheld_figures_on(r) for r in planted.routes if isinstance(r, APIRoute)}
+
+    assert found["GET /v1/investigations/{investigation_id}/something-new"] == {"withheld_count"}
+    # Exempt by label: these two are let through, which is what the pin test above holds to the
+    # real app, so a planted copy elsewhere is the first case's catch.
+    assert found["GET /v1/exports"] == set()
+    assert found["POST /v1/investigations/{investigation_id}/export"] == set()
+
+
+class _Inner(BaseModel):
+    filtered_count: int = 0
+
+
+class _Deep(BaseModel):
+    by_kind: dict[str, list[_Inner | None]]
+
+
+class _Aliased(BaseModel):
+    n: int = Field(default=0, alias="unreadable_count")
+
+
+class _Computed(BaseModel):
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def filtered_count(self) -> int:
+        return 0
+
+
+@dataclasses.dataclass
+class _Plain:
+    inner: _Inner
+
+
+class _Clean(BaseModel):
+    edges: list[Edge]
+    total: int
+
+
+def test_the_withheld_figure_walk_finds_a_field_wherever_a_model_can_hold_it() -> None:
+    """Violation caught (rule 15, the gate shown able to fail): the field-name walk is blind to a
+    nesting, so every per-route case passes for a response that does carry the figure. Each shape a
+    response uses is built here with the field inside it, and the walk must find it; the same walk
+    over a model without it must find none."""
+    for shape in (
+        _Inner,
+        _Deep,
+        list[_Deep],
+        _Deep | None,
+        Annotated[_Deep, "doc"],
+        dict[str, _Deep],
+        _Plain,
+        _Computed,
+    ):
+        assert "filtered_count" in field_names_reachable(shape), shape
+    assert "unreadable_count" in field_names_reachable(_Aliased)
+    assert field_names_reachable(_Clean) & WITHHELD_KEYS == set()
+
+
+@pytest.mark.parametrize("delta_model", _delta_models(), ids=lambda m: m.__name__)
+def test_no_delta_model_can_carry_a_withheld_figure(delta_model: type[BaseModel]) -> None:
+    """Violation caught (ADR-124 decision 1): a delta sent on the working-set WebSocket whose
+    shape holds `filtered_count` or `unreadable_count`. Every model in `WorkingSetDelta` is walked,
+    whether or not it holds an `Edge`."""
+    assert field_names_reachable(delta_model) & WITHHELD_KEYS == set(), delta_model.__name__
+
+
+def test_a_reproject_delta_carries_no_figure_of_the_actors_view() -> None:
+    """Violation caught (ADR-124 decision 1): `merged`, `split` and `affected` ride a delta every
+    reader receives, counted from the actor's own view. They are the acting analyst's own
+    response (`ResolutionOutcome`), not the delta's."""
+    assert {"merged", "split", "affected"} & set(DeltaReproject.model_fields) == set()
+
+
+#: Routes that answer with a bare mapping, which has no model to walk. Each is read by hand: the
+#: three below return a figure of their own (`seq`, `removed`, a liveness word), none a withheld
+#: one; `test_a_raw_mapping_route_names_no_withheld_figure` is the case for each, and the list
+#: below is what lets a new one in only by being named here.
+RAW_MAPPING_ROUTES = {
+    "DELETE /v1/investigations/{investigation_id}/nodes",
+    "DELETE /v1/investigations/{investigation_id}/nodes/{node_id}/suppression-mark",
+    "GET /healthz",
+}
+
+
+#: Routes whose response has no field to walk and is not a JSON mapping, each with why it carries
+#: no figure. A route that returns a body of another kind has to be named here.
+NON_JSON_ROUTES: dict[str, str] = {
+    "PUT /v1/investigations/{investigation_id}/tab": "204, no body",
+    "DELETE /v1/investigations/{investigation_id}": "204, no body",
+    "PUT /v1/investigations/{investigation_id}/access": "204, no body",
+    "PUT /v1/investigations/{investigation_id}/access/grants/{account_id}": "204, no body",
+    "DELETE /v1/investigations/{investigation_id}/access/grants/{account_id}": "204, no body",
+    "DELETE /v1/investigations/{investigation_id}/links/{edge_id}/notes/{note_id}": "204, no body",
+    "DELETE /v1/admin/dashboards/{client_id}": "204, no body",
+    "DELETE /v1/investigations/{investigation_id}/trends/{trend_id}": "204, no body",
+    "DELETE /v1/investigations/{investigation_id}/packs/{pack_id}/items/{item_id}": "204, no body",
+    "GET /v1/investigations/{investigation_id}/documents/{document_id}/file": "a file's bytes",
+    "GET /v1/investigations/{investigation_id}/nodes/{node_id}/picture": "an image's bytes",
+    "GET /v1/map/tiles/{provider_id}/{z}/{x}/{y}": "a map tile's bytes",
+    "GET /v1/map/local-source/{provider_id}": "a map source file's bytes",
+    "GET /v1/investigations/{investigation_id}/sites/{site_id}/image": "an image's bytes",
+    "POST /v1/admin/geospatial/build-basemap": "a stream of build progress text",
+}
+
+
+def test_every_route_with_no_field_to_walk_is_named_and_given_a_reason() -> None:
+    """Violation caught: a route is added that answers with something the walk cannot see into (a
+    bare mapping, bytes, a stream, nothing) and is not named, so a withheld figure could go out in
+    it unseen. A route that is neither given a response model (which the walk then covers) nor
+    named here with its reason fails; so does a name here that no longer matches a route."""
+    no_fields = {_label(r) for r in _api_routes() if not field_names_reachable(_wire_annotation(r))}
+
+    assert no_fields == RAW_MAPPING_ROUTES | set(NON_JSON_ROUTES)
+    assert not RAW_MAPPING_ROUTES & set(NON_JSON_ROUTES)
+    assert all(reason.strip() for reason in NON_JSON_ROUTES.values())
+
+
+def _withheld_names_in_source(handler: Callable[..., Any]) -> set[str]:
+    """The withheld keys a handler's own source writes: a string constant, or a keyword argument
+    (`dict(filtered_count=...)`). The handler itself, not what it calls: a figure built in a helper
+    and returned by name is outside this scan, which is why the lists above are read by hand."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(handler)))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            found |= {node.value} & WITHHELD_KEYS
+        if isinstance(node, ast.keyword) and node.arg in WITHHELD_KEYS:
+            found.add(node.arg)
+    return found
+
+
+@pytest.mark.parametrize(
+    "route",
+    [r for r in _api_routes() if _label(r) in RAW_MAPPING_ROUTES],
+    ids=_label,
+)
+def test_a_raw_mapping_route_names_no_withheld_figure(route: APIRoute) -> None:
+    """Violation caught (ADR-124 decision 1): a handler that returns a bare mapping writes
+    `filtered_count` or `unreadable_count` into it."""
+    assert _withheld_names_in_source(route.endpoint) == set(), _label(route)
+
+
+def test_the_source_scan_finds_a_withheld_key_in_a_handler_that_writes_one() -> None:
+    """Violation caught (rule 15, the scan shown able to fail): a scan that reads the source and
+    finds nothing in any handler. Two handlers that put the figure in a mapping, as the keys of a
+    literal and as a keyword, and one that does not."""
+
+    async def literal() -> dict[str, int]:
+        return {"filtered_count": 1}
+
+    async def keyword() -> dict[str, int]:
+        return dict(unreadable_count=2)
+
+    async def clean() -> dict[str, int]:
+        return {"seq": 3}
+
+    assert _withheld_names_in_source(literal) == {"filtered_count"}
+    assert _withheld_names_in_source(keyword) == {"unreadable_count"}
+    assert _withheld_names_in_source(clean) == set()

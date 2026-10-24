@@ -50,7 +50,7 @@ class _FakeWorkingSet:
         principal: Principal,
     ) -> DeltaSnapshot:
         self.restore_calls.append((investigation_id, "restore", principal))
-        return DeltaSnapshot(seq=7, nodes=nodes, edges=edges, filtered_count=0)
+        return DeltaSnapshot(seq=7, nodes=nodes, edges=edges)
 
 
 class _FakeHistory:
