@@ -90,6 +90,15 @@ export function canBuildTrends(rights: Rights): boolean {
   return has(rights, "run_analysis");
 }
 
+/** A case's own settings, "Data this case reads" and "Domain models" (ADR-099, ADR-126), are offered
+ * to the case's Author who also holds `share_case`: the level and the right are both asked of the
+ * Conduit (`PUT .../datasets`, `PATCH /investigations/{id}`), so the Glass offers only what both
+ * would allow. While the rights are unknown an Author is offered them, as the rest of this file
+ * does. */
+export function canChangeCase(rights: Rights, level: string | undefined): boolean {
+  return level === "author" && has(rights, "share_case");
+}
+
 /** Packs are assembled from assessments and trends: the right to record an assessment. */
 export function canAssemblePacks(rights: Rights): boolean {
   return has(rights, "record_assessment");

@@ -80,7 +80,7 @@ import { CasePicker } from "./investigation/CasePicker";
 import { CaseSwitcher } from "./investigation/CaseSwitcher";
 import { CaseTree } from "./investigation/CaseTree";
 import { CaseAccessPanel } from "./investigation/CaseAccessPanel";
-import { CaseDatasets } from "./investigation/CaseDatasets";
+import { CaseSettings } from "./investigation/CaseSettings";
 import { caseIsOpenable, openCase } from "./investigation/cases";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { ExplorePanel } from "./explore/ExplorePanel";
@@ -1837,11 +1837,13 @@ export function App() {
           >
             Browse all cases
           </Button>
-          {/* ADR-099: what the open case reads, changed by its Author. */}
-          <CaseDatasets
+          {/* ADR-099, ADR-126: what the open case reads and its domain models, changed by its Author
+              (who holds `share_case`); the listing is read once for both. */}
+          <CaseSettings
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
             investigationId={investigationId}
+            rights={rights}
             onChanged={() => window.location.reload()}
           />
           {/* ADR-052 §9: who can open the case — its Author gives and removes levels. */}

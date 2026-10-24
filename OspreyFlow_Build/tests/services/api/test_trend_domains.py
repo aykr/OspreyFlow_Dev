@@ -184,7 +184,7 @@ def test_the_check_refuses_a_type_outside_the_packs_naming_the_packs_and_where_t
     assert "Beneficial owner of" in words and "BENEFICIAL_OWNER_OF" not in words
     assert "Transacted" not in words and "TRANSACTED" not in words
     assert "Crime case analysis (NIEM)" in words
-    assert "Data this case reads" in words and "Author" in words
+    assert "An Author can change them in the Cases drawer, beside 'Data this case reads'." in words
 
 
 def test_the_check_names_the_core_model_for_a_case_of_no_packs() -> None:
@@ -325,7 +325,8 @@ def test_save_and_preview_refuse_a_type_outside_the_cases_packs_in_words(world: 
     for refused in (saved, previewed):
         assert refused.status_code == 422 and refused.json()["error"] == "trend_refused"
         detail = refused.json()["detail"]
-        assert "Crime case analysis (NIEM)" in detail and "Data this case reads" in detail
+        assert "Crime case analysis (NIEM)" in detail
+        assert "in the Cases drawer, beside 'Data this case reads'" in detail
     assert store.saved == {} and analytics.asked == [], "nothing saved, nothing counted"
 
 

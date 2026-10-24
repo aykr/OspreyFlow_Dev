@@ -116,7 +116,7 @@ describe("CasePicker", () => {
 
     await waitFor(() => expect(onOpen).toHaveBeenCalledWith("fresh"));
     const post = mock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
-    expect(JSON.parse((post![1] as RequestInit).body as string)).toEqual({ name: "Enron review" });
+    expect(JSON.parse((post![1] as RequestInit).body as string)).toEqual({ name: "Enron review", domains: [] });
   });
 
   it("will not create a case with a blank name", async () => {

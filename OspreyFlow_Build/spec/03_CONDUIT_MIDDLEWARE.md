@@ -72,14 +72,14 @@ unauthenticated one is the one an attacker gets.
 ### 3.1 Investigations
 
 ```
-POST   /v1/investigations                      create
+POST   /v1/investigations                      create; optional `domains`, the case's domain packs (ADR-126); NULL until chosen
 GET    /v1/investigations/{id}                 metadata, not the working set
 POST   /v1/investigations/{id}/branch          fork the working set (or a chosen set of its nodes) into a new investigation
 PUT    /v1/investigations/{id}/tab             open or close this case's tab, for the caller only
 GET    /v1/investigations/{id}/history         addressable step history
 POST   /v1/investigations/{id}/history/{step}  restore to a step
 GET    /v1/investigations                      the cases the caller holds a level on
-PATCH  /v1/investigations/{id}                 rename (Author)
+PATCH  /v1/investigations/{id}                 rename and/or set the case's domain packs, atomically and audited (Author; ADR-126)
 DELETE /v1/investigations/{id}                 remove, softly (Author, or the unit's osprey-admin)
 GET    /v1/investigations/{id}/access          the caller's level; an Author sees every grant
 PUT    /v1/investigations/{id}/access          the unit-wide level (Author)
@@ -758,13 +758,13 @@ GET    /v1/admin/dashboards                                the registered dashbo
 POST   /v1/admin/dashboards                                register one: its secret in this answer only; clearance capped at the registrar's (403); manage_dashboards
 DELETE /v1/admin/dashboards/{client_id}                    remove one — only an osprey-dashboard-* client; manage_dashboards
 GET    /v1/admin/system                                    each component asked now: graph, Postgres, Valkey, models, identity provider; administer_system
-GET    /v1/investigations/{id}/reports                     the Reports view's figures (ADR-111): every figure counted as the reader; held rows for Editors and above; 409 limit_exceeded past the bound; Viewer
+GET    /v1/investigations/{id}/reports                     the Reports view's figures (ADR-111): every figure counted as the reader; KYC figures only for a case with the fibo pack, a POLE summary otherwise, both for a mixed case (ADR-126); held rows for Editors and above; 409 limit_exceeded past the bound; Viewer
 GET    /v1/investigations/{id}/reports/feed                the same figures for a dashboard, ?format=json|csv; figures only; every read in the export ledger (artefact_kind report_feed); Viewer
 GET    /v1/investigations/{id}/events/holders          whether the case holds events the reader may count and, when none, which cases the reader can open read one of its datasets and do — never a case without a level, never on a hidden event, never a count (ADR-099 Am. 9); investigate, Viewer
-GET    /v1/investigations/{id}/trends/options          the event types and properties a trend may use, from the deployment ontology (temporal link types; numeric and categorical properties, never a high-sensitivity one) — ADR-113; run_analysis, Viewer
-POST   /v1/investigations/{id}/trends/preview          a trend definition counted for the reader now, through AnalyticsPort.trend; marked at the highest classification counted; 422 trend_refused for anything the ontology does not declare; 409 limit_exceeded with its options past 104 periods or 12 series; run_analysis, Viewer
-POST   /v1/investigations/{id}/trends                  save a checked definition to the case; run_analysis, Editor
-GET    /v1/investigations/{id}/trends                  the case's saved definitions; run_analysis, Viewer
+GET    /v1/investigations/{id}/trends/options          the event types and properties a trend may use: the core's temporal link types and those of the case's domain packs (ADR-126; by `type_packs`); numeric and categorical properties, never a high-sensitivity one) — ADR-113; run_analysis, Viewer
+POST   /v1/investigations/{id}/trends/preview          a trend definition counted for the reader now, through AnalyticsPort.trend; marked at the highest classification counted; 422 trend_refused for anything the ontology does not declare, or a type outside the case's domain packs (ADR-126); 409 limit_exceeded with its options past 104 periods or 12 series; run_analysis, Viewer
+POST   /v1/investigations/{id}/trends                  save a checked definition to the case, refused for a type outside the case's domain packs (ADR-126); run_analysis, Editor
+GET    /v1/investigations/{id}/trends                  the case's saved definitions, each marked `outside_case_domains` when it uses a type outside the case's packs (it still runs); run_analysis, Viewer
 GET    /v1/investigations/{id}/trends/{trend}/figures  a saved trend counted for the reader now; another case's trend is 404; run_analysis, Viewer
 DELETE /v1/investigations/{id}/trends/{trend}          remove a saved definition; run_analysis, Editor
 POST   /v1/investigations/{id}/packs                   create a report pack (ADR-113 decision 3); record_assessment, Editor

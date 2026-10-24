@@ -4,8 +4,9 @@
 // design tokens. Held rows appear only when the server sends them (Editors and above).
 import { useEffect, useState } from "react";
 
-import type { ReportFigures } from "../../../../packages/schemas/generated";
+import type { PoleFigures, ReportFigures } from "../../../../packages/schemas/generated";
 import { typologyLabel } from "../alerts/names";
+import { utcStampOf } from "../time/utcStamp";
 import { Button, Select } from "../design/primitives";
 import { fetchFeedCsv, fetchReport, type ReportsApi } from "./api";
 
@@ -42,6 +43,53 @@ function Bars({ rows }: { rows: { label: string; value: number; colour?: string 
         </li>
       ))}
     </ul>
+  );
+}
+
+const POLE_CLASS_LABELS: Record<string, string> = {
+  person: "Person",
+  object: "Object",
+  location: "Location",
+  event: "Event",
+  organisation: "Organisation",
+};
+
+/** One line per type under its class, the class's own total on the line above (ADR-126 decision 4). */
+function PoleLine({ label, total, types }: { label: string; total: number; types: { entity_type: string; count: number }[] }) {
+  const line = `${label}: ${NUMBER.format(total)}`;
+  return (
+    <li aria-label={line} style={{ display: "grid", gap: "var(--sp-4)" }}>
+      <span className="value">{line}</span>
+      {types.length > 0 && (
+        <ul style={{ listStyle: "none", margin: 0, paddingLeft: "var(--sp-16)", display: "grid", gap: "var(--sp-4)" }}>
+          {types.map((t) => (
+            <li key={t.entity_type} className="label">{`${t.entity_type}: ${NUMBER.format(t.count)}`}</li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+/** The POLE summary (ADR-126 decision 4): the case's records by POLE class and type, as the reader
+ * sees them, before resolution and not for the period. */
+function PoleCard({ pole }: { pole: PoleFigures }) {
+  const other = pole.other ?? [];
+  return (
+    <Section title="POLE summary">
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-8)" }}>
+        {(pole.classes ?? []).map((c) => (
+          <PoleLine key={c.pole_class} label={POLE_CLASS_LABELS[c.pole_class] ?? c.pole_class} total={c.total} types={c.types ?? []} />
+        ))}
+        {other.length > 0 && (
+          <PoleLine label="Other (not in this ontology)" total={other.reduce((n, t) => n + t.count, 0)} types={other} />
+        )}
+      </ul>
+      <p className="value" style={{ margin: 0 }}>{`Links: ${NUMBER.format(pole.links)}`}</p>
+      <p className="label" style={{ margin: 0 }}>
+        {`Records before resolution, counted at ${utcStampOf(pole.counted_at)}; not for the period.`}
+      </p>
+    </Section>
   );
 }
 
@@ -184,6 +232,7 @@ export function ReportsView({ canDownload, ...api }: ReportsApi & { canDownload:
                 />
               </Section>
             )}
+            {figures.pole && <PoleCard pole={figures.pole} />}
             {figures.held && (
               <Section title="Held rows">
                 <p style={{ margin: 0 }}>

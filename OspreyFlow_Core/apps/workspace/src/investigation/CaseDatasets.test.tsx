@@ -40,7 +40,7 @@ describe("a new case's data", () => {
   it("names no dataset when none is ticked, so the case gets one of its own", async () => {
     const calls = serve({ "POST /v1/investigations": () => json(201, { id: "c1", name: "X" }) });
     await createCase("http://api", "t", "X");
-    expect(calls[0]!.body).toEqual({ name: "X" });
+    expect(calls[0]!.body).toEqual({ name: "X", domains: [] });
   });
 
   it("asks for the datasets ticked, in the order ticked", async () => {
@@ -60,6 +60,7 @@ describe("a new case's data", () => {
     expect(calls.find((c) => c.key === "POST /v1/investigations")!.body).toEqual({
       name: "Both",
       dataset_ids: ["fixture-corp", "enron"],
+      domains: [],
     });
   });
 
@@ -100,6 +101,16 @@ describe("CaseDatasets", () => {
     expect(calls.find((c) => c.key === "PUT /v1/investigations/c1/datasets")!.body).toEqual({
       dataset_ids: ["fixture-corp", "enron"],
     });
+  });
+
+  it("offers no change to an Author who does not hold share_case", async () => {
+    serve({
+      "GET /v1/investigations/c1/datasets": reads,
+      "GET /v1/investigations": () => json(200, [{ id: "c1", name: "C", level: "author", created_at: "", created_by: "" }]),
+    });
+    render(<CaseDatasets apiBaseUrl="http://api" bearerToken="t" investigationId="c1" rights={new Set(["investigate"])} />);
+    expect(await screen.findByText("Fixture Corp · fixture-corp")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Change what this case reads" })).toBeNull());
   });
 
   it("will not save a case reading nothing", async () => {

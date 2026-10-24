@@ -13,6 +13,7 @@ import type {
   TrendOptions,
 } from "../../../../packages/schemas/generated";
 import { fetchCaseEvents } from "../analytics/api";
+import { DOMAIN_PACKS, type DomainPack, domainLabels, listCases } from "../investigation/cases";
 import { eventsElsewhereSentence } from "../analytics/eventsElsewhere";
 import { Button, Checkbox, Input, RadioGroup, Select } from "../design/primitives";
 import type { ReportsApi } from "./api";
@@ -104,6 +105,9 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
   const [notice, setNotice] = useState<string | null>(null);
   // ADR-099 Amendment 9: a case reading a dataset whose events another case holds says where they are.
   const [elsewhere, setElsewhere] = useState<string | null>(null);
+  // ADR-126 decision 6: the case's packs, so the form can say what it is offered from. Only a help:
+  // if the case cannot be read, the line is not drawn and the builder still works.
+  const [domains, setDomains] = useState<DomainPack[] | null>(null);
 
   const fail = (e: unknown) => setProblem((e as Error).message);
 
@@ -115,6 +119,9 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
     fetchCaseEvents(api.apiBaseUrl, api.bearerToken, api.investigationId)
       .then((found) => live && setElsewhere(eventsElsewhereSentence(found)))
       .catch(() => live && setElsewhere(null));
+    listCases(api.apiBaseUrl, api.bearerToken)
+      .then((cases) => live && setDomains(cases.find((c) => c.id === api.investigationId)?.domains ?? null))
+      .catch(() => live && setDomains(null));
     if (canAssemble) {
       listPacks(api)
         .then((p) => {
@@ -221,6 +228,11 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
                 <Button aria-pressed={pane?.kind === "saved" && pane.trend.id === t.id} onClick={() => void choose(t)}>
                   {t.title}
                 </Button>
+                {t.outside_case_domains && (
+                  <span className="label" style={{ marginLeft: "var(--sp-8)" }}>
+                    Uses link types outside this case&apos;s domain models
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -231,6 +243,11 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
           onSubmit={(e) => e.preventDefault()}
           style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "grid", gap: "var(--sp-8)" }}
         >
+          {domains !== null && domains.length < DOMAIN_PACKS.length && (
+            <p className="label" style={{ margin: 0 }}>
+              {`This case's domain models are ${domainLabels(domains)}; an Author can change them in the Cases drawer, beside 'Data this case reads'.`}
+            </p>
+          )}
           <h3 className="value" style={{ margin: 0 }}>New trend</h3>
           <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
             Title

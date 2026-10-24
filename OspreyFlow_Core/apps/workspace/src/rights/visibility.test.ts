@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   canAssemblePacks,
+  canChangeCase,
   canBuildTrends,
   canDownloadFeed,
   canExportPacks,
@@ -104,5 +105,15 @@ describe("Start", () => {
       { place: "ingest", allowed: false, role: "Data Engineer" },
       { place: "admin", allowed: false, role: "Admin" },
     ]);
+  });
+
+  it("offers a case's settings only to an Author who holds share_case (ADR-126, ADR-099)", () => {
+    expect(canChangeCase(new Set(["share_case"]), "author")).toBe(true);
+    expect(canChangeCase(new Set(["investigate"]), "author")).toBe(false);
+    expect(canChangeCase(new Set(["share_case"]), "editor")).toBe(false);
+    expect(canChangeCase(new Set(["share_case"]), undefined)).toBe(false);
+    // Rights not yet known: what was always shown, for an Author; the Conduit still decides.
+    expect(canChangeCase(null, "author")).toBe(true);
+    expect(canChangeCase(null, "viewer")).toBe(false);
   });
 });

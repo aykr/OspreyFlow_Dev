@@ -35,6 +35,9 @@ transform remains a Knowledge Adapter with golden files, never an expression lan
 
 - **domain model** — exactly one, the pipeline's root: the POLE core, or the core plus one domain
   pack (§1.1).
+  - **Separate from the case's packs.** A pipeline's domain model is not a case's domain packs
+    (ADR-126): a case can read several pipelines' data, and its packs are chosen by an Author. A
+    pipeline's choice sets neither.
 - **source** — a connector profile and a location. A pipeline may hold several; each runs as its
   own branch under its own `load_id`, so each stays independently revertible (§9.1 discipline).
   Every branch runs the recipe's one committed row template — per-branch templates are future work,

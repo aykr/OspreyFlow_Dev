@@ -444,14 +444,24 @@ shows and asks; it enforces nothing.
   kept in the order ticked, each named by its name alone (names are unique, Amendment 6; a raw id
   in the list reads as noise). Returning to *Start empty* forgets what was ticked. The read-only
   "reads …" summaries keep the dataset id, where comparing records needs it.
+- **A new case also offers *Domain models*** (ADR-126): three boxes, labelled as the Studio labels
+  the packs. With none ticked, "Bespoke POLE (the core model)" is said beside them. The case is
+  created with the list shown.
 - **The case picker** says what each case reads beside its level ("reads Enron corpus · author").
 - **The Cases drawer** ends with *Data this case reads*: the open case's datasets, to every reader.
   Its Author is offered *Change what this case reads*, a list to tick and *Save*, which will not save
   a case reading nothing; the page reloads after a change, since every read in it has changed.
+- **After it, *Domain models*** (ADR-126): the case's packs by their labels, to every reader.
+  - **Who may change them.** An Author holding `share_case` is offered *Change domain models*, the
+    boxes and *Save*.
+  - **After a change** the page reloads, since the Reports figures and the Trends options follow.
 - Search, the query builder, paths and the node actions are asked of the case
   (`/v1/investigations/{id}/...`), so the Glass passes the open case to each.
 
-`keyboard/case-datasets.spec.ts` walks both forms by keyboard; `CaseDatasets.test.tsx` the rest.
+`keyboard/case-datasets.spec.ts` walks both forms by keyboard, including the two domain-model
+steps (`choose-a-cases-domain-models-when-creating-it-by-keyboard`,
+`change-a-cases-domain-models-by-keyboard`); `CaseDatasets.test.tsx` and `CaseDomains.test.tsx`
+the rest.
 
 ## 3. The five analytical capabilities
 
@@ -952,9 +962,17 @@ Reports* — for people who read rather than investigate (a case Viewer and abov
 figures as the Conduit counts them for this reader (`GET …/reports`): the alerts of the period
 ("3 alerts in the last 12 weeks"), alerts raised each week by typology (stacked bars in the channel
 tokens, with a key), open alerts by age (under a day, 1 to 7 days, 7 to 30, over 30), outcomes by
-typology (open, claimed, true, false), the customers holding a verifying document by KYC status and
-risk band, and — only when the server sends them, to Editors and above — held rows. A line says the
-figures are counted for the reader. *Period* chooses the last 4, 12, 26 or 52 weeks and is asked of
+typology (open, claimed, true, false), and — only when the server sends them, to Editors and above
+— held rows. What follows depends on the case's domain packs (ADR-126):
+- **A case with the AML and fraud pack alone** shows the customers holding a verifying document by
+  KYC status and risk band, and no POLE summary.
+- **Any other case** shows a *POLE summary*: one line per class (Person, Object, Location, Event,
+  Organisation) with its types beneath, an "Other (not in this ontology)" line when the case holds a
+  type the ontology no longer knows, and its links. Its footnote reads "Records before resolution,
+  counted at {time}; not for the period."
+- **A mixed case** (for example AML and fraud with Crime) shows both.
+
+A line says the figures are counted for the reader. *Period* chooses the last 4, 12, 26 or 52 weeks and is asked of
 the server; *Download the figures (CSV)* fetches the dashboards' feed, each read of which is in the
 export ledger. A report past its bound says so in words with its option ("Choose a shorter period"),
 never a partial chart. Every action has its case in `keyboard/reports.spec.ts` (`REPORTS_ACTIONS`);
@@ -984,7 +1002,15 @@ appear (`reports/EmbeddedDashboards.tsx`, `reports/ReportsPlace.tsx`; `keyboard/
 **Trends, report packs and their distribution (ADR-113, Amendments 1 to 3).** The Reports view's
 tabs are *Figures*, then — each only with its right (`rights/visibility.ts`) — *Trends*
 (run_analysis), *Packs* (record_assessment), *Published* (read_reports), then *Dashboards*.
-*Trends* builds a trend from `GET …/trends/options` only — event types as checkboxes, *Count* or
+*Trends* builds a trend from `GET …/trends/options` only, which offers the core types and those of
+the case's own domain packs (ADR-126):
+- **Outside types.** A saved trend that uses a type outside them is marked "Uses link types outside
+  this case's domain models", and still runs.
+- **The domain sentence.** Unless the case holds all three packs, the form says which domain models
+  the case has and that an Author can change them in the Cases drawer, beside "Data this case
+  reads".
+
+The form has event types as checkboxes, *Count* or
 *Sum* of a number property every chosen type declares, week or month, weeks back, a series by event
 type or a category, up to five filters from the declared values — with nothing typed as a formula;
 *Preview* draws a bar per period, stacked by series with a key naming every series, the sentence in

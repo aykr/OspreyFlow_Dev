@@ -399,6 +399,9 @@ export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
 export const CASE_DATASETS_ACTIONS = defineActionRegistry("CASE_DATASETS_ACTIONS", [
   "tick-datasets-and-create-a-case-by-keyboard",
   "change-what-a-case-reads-by-keyboard",
+  // ADR-126: the case's domain models, chosen when it is made and changed by its Author.
+  "choose-a-cases-domain-models-when-creating-it-by-keyboard",
+  "change-a-cases-domain-models-by-keyboard",
 ] as const);
 
 /** Who can open a case (ADR-052 §9): its Author gives and removes levels. `keyboard/case-access.spec.ts`. */

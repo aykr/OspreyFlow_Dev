@@ -137,6 +137,17 @@ filter groupings roll back up to POLE.
 A deployment may add entity types; it may not add POLE classes. That constraint keeps the
 vocabulary shared.
 
+**A case's domain packs (ADR-126).** Every deployment composes the core with every pack, but a case
+says which packs it is about: `Investigation.domains`, a sorted set of `fibo`, `niem` and `stix`.
+- **Empty means the POLE core alone.** NULL means no one has chosen yet, and reads as empty.
+- **Who sets it.** It is chosen at creation, changed by an Author, inherited by a branch, and set
+  by a seed only while NULL. Every reader of the case may see it: it says what kind of case it is,
+  never what it holds.
+- **What follows from it.** It decides which Reports figures the case shows (KYC for `fibo`, a POLE
+  summary otherwise) and which link types its Trends offer.
+- **What does not.** It narrows nothing else: the canvas, patterns and Explore still offer every
+  type.
+
 Nine entity types, nine data channels. That is not a coincidence — the design system defines
 exactly nine categorical channels, checked for protanopia and deuteranopia separation, and there
 is no tenth to allocate.

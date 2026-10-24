@@ -57,8 +57,17 @@ describe("createCase", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("http://api/v1/investigations");
     expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body as string)).toEqual({ name: "Enron" });
+    expect(JSON.parse(init.body as string)).toEqual({ name: "Enron", domains: [] });
     expect(created.id).toBe("new-1");
+  });
+
+  it("sends the domain models chosen, sorted as the catalogue lists them", async () => {
+    respond(201, { id: "new-1", name: "Enron", domains: ["fibo", "niem"] });
+
+    await createCase("http://api", "tok", "Enron", [], ["niem", "fibo"]);
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ name: "Enron", domains: ["fibo", "niem"] });
   });
 
   it("refuses a blank name without calling the server", async () => {

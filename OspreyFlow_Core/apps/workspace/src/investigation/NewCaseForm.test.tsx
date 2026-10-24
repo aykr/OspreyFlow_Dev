@@ -3,7 +3,7 @@
 // ADR-099 Amendment 8 (owner, 9 October 2026): what a new case can see is a first-class choice —
 // "Start empty" (the default) or "Read existing data…", which reveals the datasets. The old form
 // led with a bare tick list whose purpose was explained only in fine print at the bottom.
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { NewCaseForm } from "./NewCaseForm";
@@ -39,6 +39,12 @@ function mount() {
   return onCreated;
 }
 
+function sentBody(fetchMock: ReturnType<typeof serve>): Record<string, unknown> {
+  const call = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/v1/investigations"));
+  if (!call) throw new Error("no create call was made");
+  return JSON.parse(String((call[1] as RequestInit).body)) as Record<string, unknown>;
+}
+
 function sentDatasets(fetchMock: ReturnType<typeof serve>): unknown {
   const call = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/v1/investigations"));
   if (!call) throw new Error("no create call was made");
@@ -52,7 +58,9 @@ describe("NewCaseForm", () => {
     const empty = (await screen.findByRole("radio", { name: /Start empty/ })) as HTMLInputElement;
     expect(empty.checked).toBe(true);
     expect(screen.getByRole("radio", { name: /Read existing data/ })).toBeTruthy();
-    expect(screen.queryByRole("checkbox")).toBeNull();
+    // The datasets are hidden; the domain models (ADR-126) are not datasets and are always shown.
+    expect(screen.queryByRole("checkbox", { name: "Enron corpus" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "Carrier B intake" })).toBeNull();
   });
 
   it("creates an empty case without ever showing the dataset list", async () => {
@@ -93,5 +101,46 @@ describe("NewCaseForm", () => {
     fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Op Example" } });
     fireEvent.click(screen.getByRole("button", { name: "Create case" }));
     await vi.waitFor(() => expect(sentDatasets(fetchMock)).toEqual(["enron"]));
+  });
+
+  // ADR-126 decision 1: the case's domain packs are chosen when it is made.
+  it("offers the three domain models by the Studio's labels, none ticked, and says POLE", async () => {
+    serve();
+    mount();
+    const group = await screen.findByRole("group", { name: "Domain models" });
+    const boxes = within(group).getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxes.map((b) => b.parentElement?.textContent)).toEqual([
+      "Financial fraud and AML (FIBO)",
+      "Crime case analysis (NIEM)",
+      "Cyber threat analytics (STIX 2.1)",
+    ]);
+    expect(boxes.every((b) => !b.checked)).toBe(true);
+    expect(within(group).getByText("Bespoke POLE (the core model)")).toBeTruthy();
+  });
+
+  it("stops saying POLE once a domain model is ticked", async () => {
+    serve();
+    mount();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Crime case analysis (NIEM)" }));
+    expect(screen.queryByText("Bespoke POLE (the core model)")).toBeNull();
+  });
+
+  it("sends domains: [] when none is ticked, so the case counts as chosen POLE", async () => {
+    const fetchMock = serve();
+    mount();
+    await screen.findByRole("radio", { name: /Start empty/ });
+    fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Op Example" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create case" }));
+    await vi.waitFor(() => expect(sentBody(fetchMock).domains).toEqual([]));
+  });
+
+  it("sends the domain models ticked, in the catalogue's order whatever the order ticked", async () => {
+    const fetchMock = serve();
+    mount();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Crime case analysis (NIEM)" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Financial fraud and AML (FIBO)" }));
+    fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Op Example" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create case" }));
+    await vi.waitFor(() => expect(sentBody(fetchMock).domains).toEqual(["fibo", "niem"]));
   });
 });

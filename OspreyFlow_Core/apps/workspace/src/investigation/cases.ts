@@ -2,6 +2,7 @@
 // the dataset / case that I want to work on"). This lists the cases an account holds a level on
 // and creates a named one. It enforces nothing: the Conduit does (ADR-050), and answers a case the
 // account may not see with the same "not found" as one that does not exist.
+import { MONTHS, utcStamp } from "../time/utcStamp";
 import { INVESTIGATION_ID_SESSION_KEY } from "./investigationId";
 
 export type AccessLevel = "viewer" | "editor" | "author";
@@ -10,6 +11,28 @@ export type AccessLevel = "viewer" | "editor" | "author";
  * `schemas-check`; the Conduit's `DomainPack` (`packages/schemas/domain.py`) is the one definition,
  * and an empty list is the POLE core model alone. */
 export type DomainPack = "fibo" | "niem" | "stix";
+
+/** The packs a case can carry, in the catalogue's order, with the Studio's labels (the Conduit's
+ * `pack_catalogue`; `test_case_seed_packs.py` holds the two in step). Written by hand, as above. */
+export const DOMAIN_PACKS: readonly { name: DomainPack; label: string }[] = [
+  { name: "fibo", label: "Financial fraud and AML (FIBO)" },
+  { name: "niem", label: "Crime case analysis (NIEM)" },
+  { name: "stix", label: "Cyber threat analytics (STIX 2.1)" },
+];
+
+/** What an empty list of packs is called: the core model alone. */
+export const POLE_LABEL = "Bespoke POLE (the core model)";
+
+/** The packs in the catalogue's order, once each: what is sent and what is shown. */
+export function sortedDomains(domains: readonly DomainPack[]): DomainPack[] {
+  return DOMAIN_PACKS.map((p) => p.name).filter((name) => domains.includes(name));
+}
+
+/** The packs named by label, or the POLE core model when there are none. */
+export function domainLabels(domains: readonly DomainPack[]): string {
+  const held = DOMAIN_PACKS.filter((p) => domains.includes(p.name));
+  return held.length > 0 ? held.map((p) => p.label).join(", ") : POLE_LABEL;
+}
 
 export interface CaseListing {
   id: string;
@@ -82,15 +105,24 @@ export async function setCaseDatasets(
   return (await response.json()) as Dataset[];
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-// Written by hand, not by Intl: the month abbreviation differs between engines ("Sep" or "Sept").
-function utcStamp(made: Date): string {
-  const two = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${made.getUTCDate()} ${MONTHS[made.getUTCMonth()]} ${made.getUTCFullYear()} ` +
-    `${two(made.getUTCHours())}:${two(made.getUTCMinutes())} UTC`
-  );
+/** An Author's change of the case's domain models (ADR-126): `PATCH /v1/investigations/{id}` with
+ * the packs alone. The Conduit refuses anyone else (403); the answer is the case as it now stands. */
+export async function changeCaseDomains(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  domains: readonly DomainPack[],
+): Promise<DomainPack[]> {
+  const response = await fetch(`${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ domains: sortedDomains(domains) }),
+  });
+  if (response.status === 403) throw new Error("Only the case's Author can change its domain models.");
+  if (response.status === 404) throw new Error("That case was not found.");
+  if (!response.ok) throw new Error(`Could not change the domain models (${response.status}).`);
+  const saved = (await response.json()) as { domains?: DomainPack[] };
+  return saved.domains ?? [];
 }
 
 /** What a case is called on screen. A case made before names existed has none; it is shown as
@@ -155,6 +187,7 @@ export async function createCase(
   bearerToken: string,
   name: string,
   datasetIds: string[] = [],
+  domains: readonly DomainPack[] = [],
 ): Promise<{ id: string; name: string; domains?: DomainPack[] }> {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -164,7 +197,12 @@ export async function createCase(
   const response = await fetch(`${apiBaseUrl}/v1/investigations`, {
     method: "POST",
     headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(datasetIds.length > 0 ? { name: trimmed, dataset_ids: datasetIds } : { name: trimmed }),
+    // ADR-126: the packs shown, `[]` when none is ticked, so the case counts as chosen (POLE).
+    body: JSON.stringify({
+      name: trimmed,
+      ...(datasetIds.length > 0 ? { dataset_ids: datasetIds } : {}),
+      domains: sortedDomains(domains),
+    }),
   });
   if (response.status === 422) {
     throw new Error("One of those datasets is not one this case can read.");

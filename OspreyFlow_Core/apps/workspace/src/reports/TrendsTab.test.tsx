@@ -34,6 +34,54 @@ async function build() {
   fireEvent.click(await screen.findByLabelText("Payments"));
 }
 
+// ADR-126 decision 6: the case's packs narrow what the builder offers, and a saved trend that now
+// uses a type outside them says so.
+const CASES = (domains: string[]) => json(200, [{ id: "c1", name: "C", level: "editor", created_at: "", created_by: "", domains }]);
+
+function routesIn(domains: string[], saved: unknown[] = []) {
+  return routes((c) => (c.path.startsWith("/v1/investigations") && !c.path.includes("/c1") ? CASES(domains) : null), saved);
+}
+
+describe("the trend builder and the case's domain models", () => {
+  it("says which domain models the case has, and where an Author changes them, when not all three", async () => {
+    serve(routesIn(["niem"]));
+    place();
+    const line = await screen.findByText(
+      "This case's domain models are Crime case analysis (NIEM); an Author can change them in the Cases drawer, beside 'Data this case reads'.",
+    );
+    expect(line).toBeTruthy();
+  });
+
+  it("names the core model for a case of no packs", async () => {
+    serve(routesIn([]));
+    place();
+    expect(
+      await screen.findByText(
+        "This case's domain models are Bespoke POLE (the core model); an Author can change them in the Cases drawer, beside 'Data this case reads'.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says nothing of the kind when the case has all three", async () => {
+    serve(routesIn(["fibo", "niem", "stix"]));
+    place();
+    await screen.findByLabelText("Payments");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText(/This case's domain models are/)).toBeNull();
+  });
+
+  it("marks a saved trend that uses link types outside the case's domain models, and only that one", async () => {
+    const outside = { ...SAVED, id: "t2", title: "Owners", outside_case_domains: true };
+    const inside = { ...SAVED, outside_case_domains: false };
+    serve(routesIn(["niem"], [inside, outside]));
+    place();
+    const owners = (await screen.findByRole("button", { name: "Owners" })).closest("li") as HTMLElement;
+    const plain = screen.getByRole("button", { name: SAVED.title }).closest("li") as HTMLElement;
+    expect(within(owners).getByText("Uses link types outside this case's domain models")).toBeTruthy();
+    expect(within(plain).queryByText(/outside this case's domain models/)).toBeNull();
+  });
+});
+
 describe("the trend builder", () => {
   it("says where a reading case's events are, naming only the cases the server named (ADR-099 Am. 9)", async () => {
     const held = { has_events: false, held_by: [{ investigation_id: "l1", name: "Operation Ledger (synthetic demo)" }] };

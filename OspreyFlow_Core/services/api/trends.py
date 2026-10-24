@@ -117,8 +117,8 @@ def check_in_case_domains(
         shown = [_label(e) for t in outside if (e := ontology.edge_type(t)) is not None]
         raise TrendDefinitionRefused(
             f"{', '.join(shown)} {'is' if len(outside) == 1 else 'are'} outside this case's "
-            f"domain models ({_pack_labels(domains)}). An Author can change them beside "
-            "'Data this case reads'."
+            f"domain models ({_pack_labels(domains)}). An Author can change them in "
+            "the Cases drawer, beside 'Data this case reads'."
         )
 
 

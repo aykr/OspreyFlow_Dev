@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import { Button } from "../design/primitives/Button";
 import { Input } from "../design/primitives/Input";
 import { RadioGroup } from "../design/primitives/RadioGroup";
-import { type Dataset, createCase, listDatasets } from "./cases";
+import { type Dataset, type DomainPack, createCase, listDatasets } from "./cases";
 import { DatasetChoice } from "./DatasetChoice";
+import { DomainChoice } from "./DomainChoice";
 
 export interface NewCaseFormProps {
   apiBaseUrl: string;
@@ -24,6 +25,9 @@ export function NewCaseForm({ apiBaseUrl, bearerToken, inputLabel, onCreated }: 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [mode, setMode] = useState<"empty" | "existing">("empty");
   const [chosen, setChosen] = useState<string[]>([]);
+  // ADR-126: the case's domain packs, none ticked meaning the POLE core model. Submitting sends the
+  // list shown, `[]` included, so the case counts as chosen.
+  const [domains, setDomains] = useState<DomainPack[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,7 +43,7 @@ export function NewCaseForm({ apiBaseUrl, bearerToken, inputLabel, onCreated }: 
     setBusy(true);
     setError(null);
     try {
-      const created = await createCase(apiBaseUrl, bearerToken, name, mode === "existing" ? chosen : []);
+      const created = await createCase(apiBaseUrl, bearerToken, name, mode === "existing" ? chosen : [], domains);
       onCreated(created.id);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Could not create the case.");
@@ -91,6 +95,9 @@ export function NewCaseForm({ apiBaseUrl, bearerToken, inputLabel, onCreated }: 
             />
           </div>
         )}
+      </div>
+      <div style={{ flexBasis: "100%" }}>
+        <DomainChoice chosen={domains} onChange={setDomains} disabled={busy} />
       </div>
       {error && (
         <span role="alert" style={{ color: "var(--text-secondary)" }}>
