@@ -92,9 +92,14 @@ def client() -> Any:
         )
     )
     store.cases["case-e"] = ["enron"]
-    saved = {k: getattr(app.state, k, None) for k in ("principal_resolver", "datasets")}
+    saved = {
+        k: getattr(app.state, k, None) for k in ("principal_resolver", "datasets", "explore_cache")
+    }
     app.state.principal_resolver = _Resolver()
     app.state.datasets = store
+    # No kept answers: these tests ask what the route asks of the graph. Another file's app (a live
+    # route test run first) leaves its `explore_cache` here, and its key holds no store.
+    app.state.explore_cache = None
     graph = _FakeGraph()
     audit = _FakeAudit()
     app.dependency_overrides[get_graph] = lambda: graph
@@ -104,6 +109,45 @@ def client() -> Any:
     app.dependency_overrides.clear()
     for key, value in saved.items():
         setattr(app.state, key, value)
+
+
+class _LeftBehind:
+    """What a predecessor's app leaves in `app.state`: a kept answer for this principal. The key
+    holds no store or database, so in a suite that shares one Valkey across databases it would be
+    served to the next file's case (seen: `test_reports.py` before this file, 7 failed)."""
+
+    async def get(self, signature: str, principal: Principal) -> Any:
+        return TypeCounts(nodes={"Person": 99}, edges={}).model_dump(mode="json") | {
+            "computed_at": "2026-01-01T00:00:00Z"
+        }
+
+    async def put(self, *args: object) -> None:
+        return None
+
+    async def invalidate_prefix(self) -> None:
+        return None
+
+
+@pytest.fixture
+def left_behind() -> Any:
+    """Listed before `client` in a test's arguments, so it is in place when the client is built."""
+    had = getattr(app.state, "explore_cache", None)
+    app.state.explore_cache = _LeftBehind()
+    yield
+    app.state.explore_cache = had
+
+
+def test_a_cache_left_in_the_app_by_an_earlier_file_is_never_served_here(  # type: ignore[no-untyped-def]
+    left_behind, client
+) -> None:
+    """The fixture builds its own app state, whatever ran first: the route is asked of the graph,
+    and the answer is the graph's, not a predecessor's kept one."""
+    http, graph, _ = client
+
+    counts = http.get("/v1/investigations/case-e/explore/counts").json()
+
+    assert counts["nodes"] == {"Person": 5}, "served from a predecessor's cache"
+    assert len(graph.counts) == 1
 
 
 def test_the_counts_are_asked_with_the_cases_datasets(client) -> None:  # type: ignore[no-untyped-def]

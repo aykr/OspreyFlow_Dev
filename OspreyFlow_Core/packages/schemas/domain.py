@@ -53,6 +53,15 @@ class PoleClass(StrEnum):
     ORGANISATION = "organisation"
 
 
+#: The order the POLE summary lists the five classes in (ADR-126 decision 4).
+POLE_CLASS_ORDER: tuple[PoleClass, ...] = (
+    PoleClass.PERSON,
+    PoleClass.OBJECT,
+    PoleClass.LOCATION,
+    PoleClass.EVENT,
+    PoleClass.ORGANISATION,
+)
+
 # The nine categorical data channels the design system defines
 # (`spec/design/tokens.css`), checked for protanopia/deuteranopia
 # separation. Closed set: the ontology loader rejects an unknown channel
@@ -955,6 +964,50 @@ class KycFigures(BaseModel):
     by_band: list[ReportCount] = Field(default_factory=list)
 
 
+class PoleTypeCount(BaseModel):
+    """How many nodes of one entity type the reader can see (ADR-126 decision 4). `entity_type` is
+    a closed ontology type name, never an entity's own text."""
+
+    entity_type: str
+    count: int = Field(ge=1)
+
+
+class PoleClassCount(BaseModel):
+    """One POLE class: its total, and its types largest first, then by name, with no zero rows."""
+
+    pole_class: PoleClass
+    total: int = Field(ge=0)
+    types: list[PoleTypeCount] = Field(default_factory=list)
+
+
+class PoleFigures(BaseModel):
+    """The POLE summary of a case (ADR-126 decision 4), from the kept per-access-class counts the
+    Explore page reads: the reader's own, for the case's datasets, never a second count.
+
+    `classes` is always the five classes in the order person, object, location, event,
+    organisation. `other` holds stored types the current ontology does not know, so no node
+    vanishes from the figures. `links` counts links of every type that is not `system`, a type the
+    ontology does not know included. `Alert` is in no figure: alerts are the Figures tab's own
+    subject. `counted_at` is when the kept counts were computed."""
+
+    classes: list[PoleClassCount]
+    other: list[PoleTypeCount] = Field(default_factory=list)
+    links: int = Field(ge=0)
+    counted_at: datetime
+
+    @model_validator(mode="after")
+    def _the_five_classes_in_order(self) -> PoleFigures:
+        held = [c.pole_class for c in self.classes]
+        if sorted(held, key=str) != sorted(POLE_CLASS_ORDER, key=str):
+            raise ValueError("the POLE figures hold exactly the five classes, each once")
+        if held != list(POLE_CLASS_ORDER):
+            raise ValueError(
+                "the POLE figures list the classes in the order "
+                + ", ".join(c.value for c in POLE_CLASS_ORDER)
+            )
+        return self
+
+
 class ReportFigures(BaseModel):
     """A case's report (`06_DECISIONS.md` ADR-111): the Reports view and the dashboards' feed are
     both this, from one computation, so they cannot disagree. Every figure is counted as its
@@ -969,7 +1022,11 @@ class ReportFigures(BaseModel):
     open_by_age: list[ReportCount] = Field(default_factory=list)
     outcomes: list[OutcomeCount] = Field(default_factory=list)
     held: HeldFigures | None = None
-    kyc: KycFigures
+    #: ADR-126 decision 3: set when `fibo` is among the case's packs; `None` is "this case has no
+    #: KYC card", not zero customers.
+    kyc: KycFigures | None = None
+    #: Set when the case's packs are anything other than exactly `[fibo]`.
+    pole: PoleFigures | None = None
 
 
 ReportOption = Literal["shorter_period", "fewer_typologies"]
@@ -1279,6 +1336,9 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     OutcomeCount,
     HeldFigures,
     KycFigures,
+    PoleTypeCount,
+    PoleClassCount,
+    PoleFigures,
     ReportFigures,
     ReportLimitExceeded,
     QueuedAlert,

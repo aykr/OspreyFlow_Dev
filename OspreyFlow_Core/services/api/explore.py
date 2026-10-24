@@ -114,10 +114,18 @@ class ExploreService:
         self._cache = cache
         self._now = now
 
-    async def counts(self, principal: Principal) -> TypeCounts:
+    async def counts(self, principal: Principal, *, fresh: bool = False) -> TypeCounts:
+        """The principal's per-type counts, kept (ADR-100 Amendment 3). A kept entry that says
+        nothing of when it was counted (one from before the stamp existed) is a miss, and `fresh`
+        skips what is kept altogether; either way the new count is kept in its place."""
         signature = f"explore:{_VERSION}:counts"
-        if self._cache is not None and (held := await self._cache.get(signature, principal)):
-            return TypeCounts.model_validate(held)
+        if (
+            not fresh
+            and self._cache is not None
+            and (held := await self._cache.get(signature, principal))
+            and (kept := TypeCounts.model_validate(held)).computed_at is not None
+        ):
+            return kept
         counts = (await self._graph.type_counts(principal)).model_copy(
             update={"computed_at": self._now()}
         )

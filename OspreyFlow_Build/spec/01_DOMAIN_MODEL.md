@@ -1927,6 +1927,15 @@ class HeldFigures(BaseModel):         # held rows by what became of them; Editor
     held: int; released: int; rejected: int
 class KycFigures(BaseModel):          # customers by KYC status and risk band
     customers: int; verified: int; unverified: int; by_band: list[ReportCount]
+class PoleTypeCount(BaseModel):       # one entity type's records, for the reader (ADR-126)
+    entity_type: str; count: int
+class PoleClassCount(BaseModel):      # one POLE class: its total and its types, largest first
+    pole_class: PoleClass; total: int; types: list[PoleTypeCount]
+class PoleFigures(BaseModel):         # the case's records by POLE class, before resolution
+    classes: list[PoleClassCount]     # always five: person, object, location, event, organisation
+    other: list[PoleTypeCount]        # stored types the current ontology does not know
+    links: int                        # links of every type that is not `system`
+    counted_at: datetime              # when the kept Explore counts were computed
 class ReportFigures(BaseModel):
     period_weeks: int                 # 1..52
     as_of: date; generated_at: datetime
@@ -1934,10 +1943,11 @@ class ReportFigures(BaseModel):
     alerts_by_week: list[WeekCount]; open_by_age: list[ReportCount]
     outcomes: list[OutcomeCount]
     held: HeldFigures | None          # None for a reader below Editor
-    kyc: KycFigures
+    kyc: KycFigures | None            # only when `fibo` is among the case's packs (ADR-126)
+    pole: PoleFigures | None          # whenever the packs are not exactly [fibo] (ADR-126)
 class ReportLimitExceeded(BaseModel): # the report past its bound
     error: Literal["limit_exceeded"]
-    cap_kind: Literal["alerts", "customers"]   # bounds: 10,000 alerts, 2,000 customers
+    cap_kind: Literal["alerts", "customers"]   # bounds: 10,000 alerts, 2,000 customers (KYC only)
     cap: int; would_be: int
     options: list[Literal["shorter_period", "fewer_typologies"]]
 ```

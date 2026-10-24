@@ -169,18 +169,21 @@ export function ReportsView({ canDownload, ...api }: ReportsApi & { canDownload:
                 </tbody>
               </table>
             </Section>
-            <Section title="Customers by KYC status">
-              <p style={{ margin: 0 }}>
-                {`${plural(figures.kyc.customers, "customer")}: ${NUMBER.format(figures.kyc.verified)} verified, ${NUMBER.format(figures.kyc.unverified)} unverified`}
-              </p>
-              <Bars
-                rows={(figures.kyc.by_band ?? []).map((b) => ({
-                  label: `${b.label} risk`,
-                  value: b.value,
-                  colour: b.label === "high" ? "--error" : b.label === "medium" ? "--warning" : "--success",
-                }))}
-              />
-            </Section>
+            {/* ADR-126: a case without `fibo` carries no KYC card; the POLE card is D4. */}
+            {figures.kyc && (
+              <Section title="Customers by KYC status">
+                <p style={{ margin: 0 }}>
+                  {`${plural(figures.kyc.customers, "customer")}: ${NUMBER.format(figures.kyc.verified)} verified, ${NUMBER.format(figures.kyc.unverified)} unverified`}
+                </p>
+                <Bars
+                  rows={(figures.kyc.by_band ?? []).map((b) => ({
+                    label: `${b.label} risk`,
+                    value: b.value,
+                    colour: b.label === "high" ? "--error" : b.label === "medium" ? "--warning" : "--success",
+                  }))}
+                />
+              </Section>
+            )}
             {figures.held && (
               <Section title="Held rows">
                 <p style={{ margin: 0 }}>

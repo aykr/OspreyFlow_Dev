@@ -62,6 +62,14 @@ describe("the Reports view", () => {
     expect(screen.getByRole("region", { name: "Customers by KYC status" }).textContent).toContain("1 verified, 1 unverified");
   });
 
+  it("draws no KYC card for a case the server sends none for (ADR-126)", async () => {
+    serve(() => json(200, { ...FIGURES, kyc: null }));
+    place();
+    await screen.findByText("3 alerts in the last 12 weeks");
+    expect(screen.queryByRole("region", { name: "Customers by KYC status" })).toBeNull();
+    expect(screen.queryByText(/1 verified, 1 unverified/)).toBeNull();
+  });
+
   it("shows held rows only when the server sends them", async () => {
     serve();
     place();

@@ -9,6 +9,10 @@ What a mistake would do, and the case that catches it:
   without it, equal;
 - held rows shown to a Viewer, who may not read them — `test_held_figures_are_for_editors_only`;
 - a report silently cut at its bound (rule 2) — `test_a_report_past_its_bound_says_so`;
+- the POLE figures counting something the reader cannot read, or something outside the case's
+  datasets, or a link to or between such things (rule 3) —
+  `test_the_pole_figures_count_nothing_the_reader_cannot_read_at_the_route`, the same figures for
+  a case with those things and one without;
 - the feed and the view disagreeing — the route case reading both for one reader;
 - the feed leaving without a record — the route case finding its export-ledger entry;
 - a free-text field slipping into the feed — `test_the_feed_carries_no_free_text`.
@@ -18,7 +22,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -26,6 +32,8 @@ from fastapi.testclient import TestClient
 from services.api import reports as reports_module
 from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
+from services.api.datasets import Dataset, PostgresDatasetStore
+from services.api.explore import ExploreService
 from services.api.held_rows import HeldRowStore
 from services.api.investigations import AccessLevel, InvestigationStore
 from services.api.reports import ReportLimitExceededError, case_report
@@ -107,13 +115,17 @@ async def _write(graph: object, nodes: list[NodeWrite], edges: list[EdgeWrite] =
 
 
 async def _report(stores: dict[str, object], graph: object, case: str, **kw: object) -> ReportFigures:
+    # ADR-126: a case's packs choose its figures; a case of none (POLE) unless the test says so.
+    kw.setdefault("domains", [])
     return await case_report(alerts=stores["alerts"], graph=graph, held=stores["held"],  # type: ignore[arg-type]
                              compute=ComputeRustworkxAdapter(), investigation_id=case,
-                             reader=READER, today=TODAY, **kw)  # type: ignore[arg-type]  # fmt: skip
+                             reader=READER, today=TODAY, ontology=ONTOLOGY,
+                             explore=ExploreService(graph, None),  # type: ignore[arg-type]
+                             **kw)  # type: ignore[arg-type]  # fmt: skip
 
 
 def _without_time(figures: ReportFigures) -> dict[str, object]:
-    return figures.model_dump(exclude={"generated_at"})
+    return figures.model_dump(exclude={"generated_at": True, "pole": {"counted_at"}})
 
 
 async def test_a_report_counts_the_alerts_by_typology_age_and_outcome(stores: dict[str, object]) -> None:
@@ -177,7 +189,8 @@ async def test_the_kyc_book_is_assessed_as_the_reader(stores: dict[str, object])
                            handling=_handling(), created_by="test", created_at=datetime.now(UTC),
                            datasets=[DATASET]) for s, t in ((good, valid_doc), (lapsed, old_doc))]  # fmt: skip
         await _write(graph, [], edges)
-        figures = await _report(stores, graph, case)
+        figures = await _report(stores, graph, case, domains=["fibo"])  # ADR-126: a `[fibo]` case
+    assert figures.kyc is not None and figures.pole is None
     assert (figures.kyc.customers, figures.kyc.verified, figures.kyc.unverified) == (2, 1, 1)
     assert sum(b.value for b in figures.kyc.by_band) == 2
 
@@ -194,27 +207,64 @@ async def test_a_report_past_its_bound_says_so(stores: dict[str, object], monkey
     assert (refused.value.detail.cap_kind, refused.value.detail.cap, refused.value.detail.would_be) == ("alerts", 1, 2)
 
 
+#: ADR-126 decision 7. Each name here is justified: the feed leaves the Glass, so a string field is
+#: a possible leak and is listed one by one.
+#: - `label`, `typology`, `band`: fixed labels (ADR-111).
+#: - `entity_type`: an ontology type name, closed and declared by the deployment, never an entity's
+#:   own text (a stored type the ontology does not know is a type name too, never a property).
+#: - `pole_class`: the closed POLE class, typed `PoleClass`, so no free string can be written.
+FEED_STRING_ALLOWLIST = {"label", "typology", "band", "entity_type", "pole_class"}
+
+
+def _string_fields(model: type) -> set[str]:
+    """Every field of `model`, and of the models inside it, that is a string or a closed string
+    set (an enum), by name."""
+    import enum
+
+    found: set[str] = set()
+    for name, field in model.model_fields.items():  # type: ignore[attr-defined]
+        annotation = field.annotation
+        inner = getattr(annotation, "__args__", (annotation,))
+        for kind in inner:
+            if kind is str or (isinstance(kind, type) and issubclass(kind, enum.StrEnum)):
+                found.add(name)
+            elif isinstance(kind, type) and hasattr(kind, "model_fields"):
+                found |= _string_fields(kind)
+            for sub in getattr(kind, "__args__", ()):
+                if isinstance(sub, type) and hasattr(sub, "model_fields"):
+                    found |= _string_fields(sub)
+    return found
+
+
 def test_the_feed_carries_no_free_text() -> None:
-    """Figures only (ADR-111 decision 6): every string the feed can carry is a fixed label or a
-    date. A new free-text field — an alert's words, a name — fails here until it is justified."""
-    allowed = {"label", "typology", "band"}
+    """Figures only (ADR-111 decision 6): every string the feed can carry is a fixed label, a closed
+    ontology name or a date. A new free-text field — an alert's words, a name — fails here until it
+    is justified."""
+    assert _string_fields(ReportFigures) <= FEED_STRING_ALLOWLIST
 
-    def strings(model: type) -> set[str]:
-        found: set[str] = set()
-        for name, field in model.model_fields.items():  # type: ignore[attr-defined]
-            annotation = field.annotation
-            inner = getattr(annotation, "__args__", (annotation,))
-            for kind in inner:
-                if kind is str:
-                    found.add(name)
-                elif isinstance(kind, type) and hasattr(kind, "model_fields"):
-                    found |= strings(kind)
-                for sub in getattr(kind, "__args__", ()):
-                    if isinstance(sub, type) and hasattr(sub, "model_fields"):
-                        found |= strings(sub)
-        return found
 
-    assert strings(ReportFigures) <= allowed
+def test_the_free_text_gate_fails_for_any_other_new_string_field() -> None:
+    """Shown able to fail, in the shape the gate meets: a new string field on a model inside the
+    report (a pole type that carried a name), and one on the report itself."""
+    from pydantic import BaseModel
+
+    from schemas.domain import PoleFigures
+
+    class _Named(PoleFigures):
+        note: str = ""
+
+    class _WithName(ReportFigures):
+        pole: _Named | None = None  # type: ignore[assignment]
+
+    class _Reported(ReportFigures):
+        analyst: str = ""
+
+    assert _string_fields(_WithName) - FEED_STRING_ALLOWLIST == {"note"}
+    assert _string_fields(_Reported) - FEED_STRING_ALLOWLIST == {"analyst"}
+    assert issubclass(_Reported, BaseModel)
+    assert {"entity_type", "pole_class"} <= _string_fields(ReportFigures), (
+        "the gate sees the new fields, so the allowlist entries are what lets them through"
+    )
 
 
 # --- the routes ---------------------------------------------------------------------------------
@@ -265,19 +315,47 @@ async def _case_with_an_alert() -> str:
         await alerts.close()
 
 
+@contextmanager
+def _app_client() -> Iterator[TestClient]:
+    """The real app, driven as `test_the_view_and_the_feed_agree...` always has, with the `explore`
+    prefix cleared before the first read and again when the test ends, on the app's own loop (its
+    Valkey connection is made there; `asyncio.run` would use it from a second loop).
+
+    The key of a kept count holds the principal and no store or database, which is right for one
+    store per deployment. These tests share one Valkey across databases, so a count left here is
+    served to whichever file's case asks next (seen: `test_explore_routes.py` run after this file,
+    7 failed). Every route test in this file goes through this."""
+    from services.api.app import app
+
+    with TestClient(app) as client:
+        assert client.portal is not None
+        client.portal.call(app.state.explore_cache.invalidate_prefix)
+        try:
+            yield client
+        finally:
+            client.portal.call(app.state.explore_cache.invalidate_prefix)
+
+
 def test_the_view_and_the_feed_agree_and_the_feed_is_recorded(
     api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> None:
     key, _ = keypair
     case = asyncio.run(_case_with_an_alert())
-    from services.api.app import app
 
-    with TestClient(app) as client:
+    with _app_client() as client:
         view = client.get(f"/v1/investigations/{case}/reports", headers=_as(key, VIEWER))
         assert view.status_code == 200, view.text
         feed = client.get(f"/v1/investigations/{case}/reports/feed", headers=_as(key, VIEWER))
         assert feed.status_code == 200, feed.text
-        strip = lambda body: {k: v for k, v in body.items() if k != "generated_at"}  # noqa: E731
+        def strip(body: dict[str, object]) -> dict[str, object]:
+            pole = body.get("pole")
+            return {
+                **{k: v for k, v in body.items() if k not in ("generated_at", "pole")},
+                "pole": None
+                if pole is None
+                else {k: v for k, v in pole.items() if k != "counted_at"},  # type: ignore[attr-defined]
+            }
+
         assert strip(view.json()) == strip(feed.json())
         assert view.json()["alerts_total"] == 1 and view.json()["held"] is None, "a Viewer sees no held rows"
         csv = client.get(f"/v1/investigations/{case}/reports/feed?format=csv", headers=_as(key, VIEWER))
@@ -290,3 +368,158 @@ def test_the_view_and_the_feed_agree_and_the_feed_is_recorded(
         feeds = [e for e in ledger.json()["entries"] if e["investigation_id"] == case]
         assert [(e["artefact_kind"], e["principal_id"]) for e in feeds] == [("report_feed", VIEWER)] * 2, \
             "each feed read, JSON and CSV, is in the export ledger; the view is not"
+
+
+# --- ADR-126: the POLE figures are the reader's own, at the route ------------------------------
+
+
+async def _register_dataset(dataset_id: str) -> None:
+    store = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        await store.add(
+            Dataset(
+                id=dataset_id,
+                name=f"Pole figures {dataset_id}",
+                owning_unit="unit-1",
+                created_at=datetime.now(UTC),
+                created_by="test",
+            )
+        )
+    finally:
+        await store.close()
+
+
+#: The POLE fixture's nodes by key, and its links as (type, source, target, marking, hidden).
+#: One table, read by the fixture and by
+#: `test_the_pole_fixtures_links_are_ones_the_ontology_permits`, so a link the composed ontology
+#: refuses is found without a live run. A hidden pair is never a visible pair, so no store that
+#: merges same-pair links can fold a SECRET link into a readable one.
+POLE_NODE_TYPES = {"p1": "Person", "p2": "Person", "org": "Organisation", "secret": "Person"}
+POLE_LINKS: list[tuple[str, str, str, str, bool]] = [
+    ("MEMBER_OF", "p1", "org", "OFFICIAL", False),
+    ("ASSOCIATE_OF", "p1", "p2", "OFFICIAL", False),
+    # A readable link to the hidden node.
+    ("ASSOCIATE_OF", "p2", "secret", "OFFICIAL", True),
+    # A hidden link between two readable nodes.
+    ("MEMBER_OF", "p2", "org", "SECRET", True),
+]
+
+
+def test_the_pole_fixtures_links_are_ones_the_ontology_permits() -> None:
+    """The live fixture once wrote `MEMBER_OF` from a Person to a Person, which the composed
+    ontology refuses (it runs Person to Organisation), and failed only when run live. Every link
+    of the fixture, hidden or not, is checked here against the same composed ontology."""
+    ends = {e.name: (e.from_types, e.to_types) for e in ONTOLOGY.edge_types}
+    for kind, source, target, _marking, _hidden in POLE_LINKS:
+        from_types, to_types = ends[kind]
+        assert POLE_NODE_TYPES[source] in from_types, (kind, source)
+        assert POLE_NODE_TYPES[target] in to_types, (kind, target)
+    assert sum(1 for *_, hidden in POLE_LINKS if not hidden) == 2
+    assert {POLE_NODE_TYPES[k] for k in ("p1", "p2", "org")} == {"Person", "Organisation"}
+
+
+async def _pole_case(dataset_id: str, *, with_hidden: bool, other_dataset: str) -> str:
+    """A POLE case (`domains=[]`) reading `dataset_id`, holding two people, an organisation and two
+    links the viewer can read (`POLE_LINKS`). With `with_hidden`, also the four things the viewer
+    must not be able to count: a SECRET person, a person in a dataset the case does not read, a
+    readable link to the SECRET person, and a SECRET link between two readable people."""
+    await _register_dataset(dataset_id)
+    store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        case = await store.create(AUTHOR, name=f"Pole figures {dataset_id}", domains=[])
+        await store.set_grant(case.id, VIEWER, AccessLevel.VIEWER, by=AUTHOR)
+        datasets = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            await datasets.set_for_case(case.id, [dataset_id], AUTHOR)
+        finally:
+            await datasets.close()
+    finally:
+        await store.close()
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    try:
+        graph = GraphArcadeDBAdapter(client, SCHEME)
+        await graph.apply_schema(load_default_ontology())
+        p1, p2, org = await _write(graph, [
+            _node("Person", {"family_name": "A"}, dataset=dataset_id),
+            _node("Person", {"family_name": "B"}, dataset=dataset_id),
+            _node("Organisation", {"name": "Steady Freight Ltd"}, dataset=dataset_id),
+        ])  # fmt: skip
+
+        def link(kind: str, a: str, b: str, *, marking: str = "OFFICIAL") -> EdgeWrite:
+            return EdgeWrite(
+                id=new_edge_id(),
+                type=kind,
+                source=a,
+                target=b,
+                provenance=_provenance(),
+                handling=_handling(marking),
+                created_by="test",
+                created_at=datetime.now(UTC),
+                datasets=[dataset_id],
+            )
+
+        nodes: list[NodeWrite] = []
+        ids = {"p1": p1, "p2": p2, "org": org}
+        if with_hidden:
+            secret = _node("Person", {"family_name": "S"}, classification="SECRET",
+                           dataset=dataset_id)  # fmt: skip
+            nodes = [secret, _node("Person", {"family_name": "Elsewhere"}, dataset=other_dataset)]
+            ids["secret"] = secret.id
+        edges = [
+            link(kind, ids[source], ids[target], marking=marking)
+            for kind, source, target, marking, hidden in POLE_LINKS
+            if with_hidden or not hidden
+        ]
+        await _write(graph, nodes, edges)
+    finally:
+        await client.aclose()
+    return case.id
+
+
+def test_the_pole_figures_count_nothing_the_reader_cannot_read_at_the_route(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """Rule 3 and 4, at the route (so `scope_to_case` is exercised). Two POLE cases, the same for
+    the viewer but for four things in one: a node over the viewer's clearance, a node outside the
+    case's datasets, a readable link to the hidden node, and a hidden link between two readable
+    nodes. Their POLE figures, and the feed's POLE rows, must be equal, and not empty.
+
+    **Written before the first read**, and the `explore` cache prefix is cleared in the test, so a
+    kept count can never make this green. The plant is the figures counted for a widened principal
+    (higher clearance, `datasets=None`) in `case_report`'s `explore.counts(...)` call."""
+    key, _ = keypair
+    suffix = new_id()
+    other = f"pole-other-{suffix}"
+
+    async def build() -> tuple[str, str]:
+        await _register_dataset(other)
+        plain = await _pole_case(f"pole-plain-{suffix}", with_hidden=False, other_dataset=other)
+        hidden = await _pole_case(f"pole-hidden-{suffix}", with_hidden=True, other_dataset=other)
+        return plain, hidden
+
+    plain, hidden = asyncio.run(build())
+
+    def pole_rows(csv_text: str) -> list[str]:
+        return [line for line in csv_text.splitlines() if line.startswith("pole")]
+
+    with _app_client() as client:
+        seen: dict[str, tuple[dict[str, object], list[str]]] = {}
+        for name, case in (("plain", plain), ("hidden", hidden)):
+            view = client.get(f"/v1/investigations/{case}/reports", headers=_as(key, VIEWER))
+            assert view.status_code == 200, view.text
+            feed = client.get(
+                f"/v1/investigations/{case}/reports/feed?format=csv", headers=_as(key, VIEWER)
+            )
+            assert feed.status_code == 200, feed.text
+            body = view.json()
+            assert body["kyc"] is None, "a case of no packs has no KYC card"
+            pole = {k: v for k, v in body["pole"].items() if k != "counted_at"}
+            seen[name] = (pole, pole_rows(feed.text))
+
+    plain_pole, plain_rows = seen["plain"]
+    hidden_pole, hidden_rows = seen["hidden"]
+    classes: list[dict[str, Any]] = plain_pole["classes"]  # type: ignore[assignment]
+    people = next(c for c in classes if c["pole_class"] == "person")
+    assert people["total"] == 2 and plain_pole["links"] == 2, "a non-empty comparison"
+    assert hidden_pole == plain_pole, "a hidden node or link is in a figure"
+    assert plain_rows and hidden_rows == plain_rows, "the feed carries the same rows"

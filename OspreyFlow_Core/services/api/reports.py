@@ -24,20 +24,28 @@ from datetime import UTC, date, datetime, timedelta
 from ports.compute import ComputePort
 from ports.graph import GraphPort
 from schemas.domain import (
+    POLE_CLASS_ORDER,
     Alert,
     ExpandRequest,
     HeldFigures,
     KycFigures,
+    OntologySchema,
     OutcomeCount,
+    PoleClass,
+    PoleClassCount,
+    PoleFigures,
+    PoleTypeCount,
     Principal,
     ReportCount,
     ReportFigures,
     ReportLimitExceeded,
     WeekCount,
 )
+from schemas.explore import TypeCounts
 
 from .alert_queue import queue
 from .alerts import AlertStore
+from .explore import ExploreService
 from .held_rows import HeldRowStore
 from .kyc import assess
 from .kyc_rules import CUSTOMER_TYPES
@@ -144,12 +152,59 @@ async def _kyc_figures(
     )
 
 
+#: The one entity type left out of every POLE figure (ADR-126 decision 4): alerts are the Figures
+#: tab's own subject, and system-written alerts from shared datasets would disagree with
+#: `alerts_total`.
+_LEFT_OUT_OF_POLE = "Alert"
+
+
+def pole_figures(
+    counts: TypeCounts, ontology: OntologySchema, *, counted_at: datetime
+) -> PoleFigures:
+    """The POLE summary from the kept per-type counts (ADR-126 decision 4), classified by the
+    composed ontology's `pole_class`. A stored type the ontology does not know is under `other`;
+    `Alert` is in no figure; a link counts unless its type is `system`, one the ontology does not
+    know included."""
+    class_of = {e.name: e.pole_class for e in ontology.entity_types}
+    system_links = {e.name for e in ontology.edge_types if e.system}
+    by_class: dict[PoleClass, list[PoleTypeCount]] = {c: [] for c in PoleClass}
+    other: list[PoleTypeCount] = []
+    for entity_type, count in counts.nodes.items():
+        if entity_type == _LEFT_OUT_OF_POLE or count < 1:
+            continue
+        row = PoleTypeCount(entity_type=entity_type, count=count)
+        if entity_type in class_of:
+            by_class[class_of[entity_type]].append(row)
+        else:
+            other.append(row)
+
+    def largest_first(rows: list[PoleTypeCount]) -> list[PoleTypeCount]:
+        return sorted(rows, key=lambda r: (-r.count, r.entity_type))
+
+    return PoleFigures(
+        classes=[
+            PoleClassCount(
+                pole_class=c,
+                total=sum(r.count for r in by_class[c]),
+                types=largest_first(by_class[c]),
+            )
+            for c in POLE_CLASS_ORDER
+        ],
+        other=largest_first(other),
+        links=sum(n for t, n in counts.edges.items() if t not in system_links),
+        counted_at=counted_at,
+    )
+
+
 async def case_report(
     *,
     alerts: AlertStore,
     graph: GraphPort,
     held: HeldRowStore,
     compute: ComputePort,
+    explore: ExploreService,
+    ontology: OntologySchema,
+    domains: Sequence[str],
     investigation_id: str,
     reader: Principal,
     today: date,
@@ -168,6 +223,22 @@ async def case_report(
             released=len(await held.list_authorized(investigation_id, reader, status="released")),
             rejected=len(await held.list_authorized(investigation_id, reader, status="rejected")),
         )
+    # ADR-126 decision 3: `kyc` when `fibo` is among the case's packs, `pole` when they are anything
+    # other than exactly `[fibo]`. Each is computed only when it is to be sent, so a case without
+    # `fibo` assesses no customer and a pure AML case reads no counts.
+    kyc = await _kyc_figures(graph, compute, reader, today) if "fibo" in domains else None
+    pole = None
+    if sorted(set(domains)) != ["fibo"]:
+        counts = await explore.counts(reader)
+        if counts.computed_at is None:
+            # A kept entry from before the stamp existed: a miss. Recount past the cache, and never
+            # put "now" on counts that were taken earlier.
+            counts = await explore.counts(reader, fresh=True)
+        if counts.computed_at is None:
+            raise RuntimeError(
+                "the explore counts carry no computed_at, so the card cannot say when"
+            )
+        pole = pole_figures(counts, ontology, counted_at=counts.computed_at)
     return ReportFigures(
         period_weeks=period_weeks,
         as_of=today,
@@ -177,7 +248,8 @@ async def case_report(
         open_by_age=by_age,
         outcomes=outcomes,
         held=held_figures,
-        kyc=await _kyc_figures(graph, compute, reader, today),
+        kyc=kyc,
+        pole=pole,
     )
 
 
@@ -196,10 +268,21 @@ def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
     if figures.held is not None:
         rows += [("held_rows", label, "", "", getattr(figures.held, label))
                  for label in ("held", "released", "rejected")]  # fmt: skip
-    rows += [("kyc", label, "", "", getattr(figures.kyc, label))
-             for label in ("customers", "verified", "unverified")]  # fmt: skip
-    rows += [("kyc_band", c.label, "", "", c.value) for c in figures.kyc.by_band]
+    if figures.kyc is not None:
+        rows += [("kyc", label, "", "", getattr(figures.kyc, label))
+                 for label in ("customers", "verified", "unverified")]  # fmt: skip
+        rows += [("kyc_band", c.label, "", "", c.value) for c in figures.kyc.by_band]
+    if figures.pole is not None:
+        # `typology` stays empty: a BI user filtering typologies must never meet an entity type.
+        # A label is built only from the closed `pole_class` and an ontology `entity_type`.
+        for c in figures.pole.classes:
+            cls = c.pole_class.value
+            rows.append(("pole", cls, "", "", c.total))
+            rows += [("pole_type", f"{cls}:{t.entity_type}", "", "", t.count) for t in c.types]
+        rows += [("pole_other", f"other:{t.entity_type}", "", "", t.count)
+                 for t in figures.pole.other]  # fmt: skip
+        rows.append(("pole_links", "links", "", "", figures.pole.links))
     return rows
 
 
-__all__ = ["ReportLimitExceededError", "case_report", "feed_rows"]
+__all__ = ["ReportLimitExceededError", "case_report", "feed_rows", "pole_figures"]

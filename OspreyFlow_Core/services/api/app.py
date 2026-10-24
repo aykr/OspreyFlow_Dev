@@ -7742,6 +7742,8 @@ async def _case_report(
     alerts_store: AlertStore,
     held_rows: HeldRowStore,
     compute: ComputePort,
+    explore: ExploreService,
+    ontology: OntologySchema,
     period_weeks: int,
 ) -> ReportFigures:
     level = await investigations.effective_level(investigation.id, principal)
@@ -7750,6 +7752,9 @@ async def _case_report(
         graph=graph,
         held=held_rows,
         compute=compute,
+        explore=explore,
+        ontology=ontology,
+        domains=investigation.domains,
         investigation_id=investigation.id,
         reader=principal,
         today=datetime.now(UTC).date(),
@@ -7770,6 +7775,8 @@ async def read_case_report(
     alerts_store: AlertsStoreDep,
     held_rows: HeldRowsDep,
     compute: ComputeDep,
+    explore: ExploreDep,
+    ontology: OntologyDep,
     audit: AuditDep,
     weeks: Annotated[int, Query(ge=1, le=52)] = 12,
 ) -> ReportFigures:
@@ -7777,7 +7784,8 @@ async def read_case_report(
     held rows only for Editors and above; past its bound, `limit_exceeded` (rule 2)."""
     figures = await _case_report(
         investigation, principal, investigations=investigations, graph=graph,
-        alerts_store=alerts_store, held_rows=held_rows, compute=compute, period_weeks=weeks,
+        alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
+        ontology=ontology, period_weeks=weeks,
     )  # fmt: skip
     await audit.record(
         principal=principal,
@@ -7802,6 +7810,8 @@ async def read_report_feed(
     alerts_store: AlertsStoreDep,
     held_rows: HeldRowsDep,
     compute: ComputeDep,
+    explore: ExploreDep,
+    ontology: OntologyDep,
     audit: AuditDep,
     export_ledger: ExportLedgerDep,
     weeks: Annotated[int, Query(ge=1, le=52)] = 12,
@@ -7812,7 +7822,8 @@ async def read_report_feed(
     ledger as metadata (who, which case, when), since the figures leave the Glass."""
     figures = await _case_report(
         investigation, principal, investigations=investigations, graph=graph,
-        alerts_store=alerts_store, held_rows=held_rows, compute=compute, period_weeks=weeks,
+        alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
+        ontology=ontology, period_weeks=weeks,
     )  # fmt: skip
     rows = reports_module.feed_rows(figures)
     await export_ledger.record(
