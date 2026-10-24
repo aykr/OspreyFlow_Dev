@@ -14726,3 +14726,170 @@ stands.
 
 Tests: `tests/services/api/test_no_corpus_counts_on_the_wire.py` (the HTTP routes and the WebSocket
 delta models).
+
+---
+
+## ADR-123 — A link's weight comes from the link alone — ACCEPTED (design)
+
+Status: **ACCEPTED by the owner, 24 October 2026** ("I accept the ADR-123"), after four adversarial
+reviews. The owner ruled the direction the same day, from options put to him: "Weight from the
+link alone". That replaces an earlier choice of his the same day ("Restricted links count
+nowhere"), whose draft an adversarial review showed could not close the leak. Found while designing
+Brief 1 stage 5's access test.
+
+**Context.**
+- **The formula.** A link's stored weight (ADR-120 D3, `01_DOMAIN_MODEL.md` §6.1) adds to its own
+  count and recency a mutual-information term.
+- **The counts behind it.** That term comes from corpus-wide counts: the pair's occurrences, each
+  end's occurrences of the type, and the type's total. They are read with no access filter (the
+  graph adapter's `_corpus_edge_stats`; the bulk loader's degrees and totals).
+- **The leak.** The weight is sent to the Glass and drawn as thickness, so links a viewer cannot see
+  move the weights of links they can.
+- **Measured on the generated case.** The principal's two visible conflict links weigh 0.9355 and
+  0.7657 with the one `SECRET` conflict link, and 0.9419 and 0.7827 without it. This used the stage
+  4 plan's per-type counts, weights version 1 and the store's own function, at the cut-off.
+- **The routes.** Rule 3 forbids detecting a filtered element by any count, and ADR-099 decision 4
+  says the same of data outside a case's datasets. A weight built from other links' counts breaks
+  both, through:
+  - a link above the viewer's clearance;
+  - a link with a restricted handling code;
+  - a visible link to a node the viewer cannot see;
+  - another dataset's links of the same type, through the type's total;
+  - handling raised after a neighbour was weighed (a link correction, a same-pair merge, a node
+    correction), because a weight is stored once at write and never recomputed.
+- **Why filtering the counts fails.** No one stored value suits a PUBLIC viewer, an OFFICIAL one
+  and a case limited to one dataset. ADR-122's Revisit-if accepted this residual signal and named
+  per-clearance weights as its only remedy. This record answers that trigger differently.
+
+**Decision.**
+1. **Version 2 of the weights file sets the mutual-information coefficient γ to 0.** Every other
+   parameter and every rule is version 1's, and the file's comment on version 2 gives the reason.
+   - **The weight is now:** `normalise(α·log1p(occurrences)/log1p(heavy(type)) +
+     β·recency(interval.to))`, or a structural type's fixed strength.
+   - **Why that closes every counting route.** No other link's count enters it, so every route
+     above is closed for every viewer.
+   - **The calibration is unchanged.** `midpoint` and `scale` are derived from α and β alone, at a
+     mutual-information term of 0.
+2. **Every later version keeps γ at 0.**
+   - A version after 1 with γ other than 0 is refused by the weights loader, and a test proves it.
+   - Mutual information restricted to what a viewer can see, computed at read time over their
+     working set, was put to the owner and not chosen. It may come back only by its own record,
+     which would lift this refusal.
+3. **No counting code changes.**
+   - **Kept.** The adapter and the bulk loader still compute and store the corpus counts in
+     `WeightComponents`, and ADR-122 keeps them off the wire. At γ 0 they move no weight.
+   - **Recorded.** A weight records `parameter_set` "2/<rule>".
+   - **Defined, not used.** The term's definition (D3), the self-loop rule (Amendment 4 decision 1)
+     and the superseded-link rule (Amendment 5) still define it, and nothing uses it under version
+     2. The tests of those rules are pinned to version 1, so each can still fail.
+   - **Cost.** The counting queries' cost remains until a later record removes them.
+4. **Not closed by this record: a same-pair merge.**
+   - **The route.** A write to a pair the store already holds is merged into the stored link. Its
+     occurrences are summed, its interval extended and its datasets joined (the adapter's
+     `_find_existing_edge` and upsert merge, which do not filter by dataset; ADR-102's merge, which
+     keeps the first write's units). So a case reading one dataset can see occurrences written for
+     another, in a link's count, its interval and so its weight.
+   - **How it differs.** That is not a corpus count. It was in the store before this record, and
+     this change logs it in `07_BUILD_PLAN.md` as a defect for the owner.
+   - **The Prison Intelligence Dataset is not exposed.** It shares no node, and so no pair, with any
+     other fixture (D5; Amendment 8 decision 10's disjointness tests).
+5. **Amendments to earlier text.**
+   - **ADR-120 D3.**
+     - The owner's "Normalised PMI" ruling stands as the term's form, and its coefficient is 0 from
+       version 2.
+     - The calibration paragraph's figures: at γ 0 a one-off link draws at about 0.39 to 0.71, not
+       0.65 to 0.85.
+     - The `DEPICTS` rationale.
+     - The Cost's sentence that normalised PMI pulls down a number everyone calls, which no longer
+       holds.
+   - **ADR-120 Amendment 7 decision 2.**
+     - The reason given for the call margin (mutual information) no longer applies.
+     - The sentence that the case-only store is the harder one at the heavy end no longer applies:
+       at γ 0 every store gives the PID the same weights.
+     - The arithmetic and plants are re-run (below).
+   - **ADR-120 Amendment 4 decision 3.** The weights loader's refusals gain one: a version after 1
+     whose γ is not 0.
+   - **ADR-120 Amendment 8 decision 9.** The erratum's margin, re-run below.
+   - **The stage 4 plan and its test** (the load contract, Amendment 8 decision 3). The payer's
+     transfers become 9, 8 and 8, not 8, 7 and 7 (decision 6), and Brief 2's money file follows.
+   - **ADR-122's Revisit-if** is answered by this record.
+   - **`01_DOMAIN_MODEL.md` §6.1.**
+     - the formula and its comment;
+     - the mutual-information sentence ("what suppresses high-volume … relationships");
+     - the formula's exceptions;
+     - γ's value;
+     - "recency and exclusivity weigh the same";
+     - the sentence on corpus-wide counts reaching the Glass;
+     - the paragraph on `mutual_information` going stale as the corpus grows, which no longer moves
+       any weight.
+   - **Code comments, with the build:** `graph_arcadedb/weight.py`'s module docstring and `npmi`
+     docstring.
+6. **The re-run arithmetic** (Amendment 7 decision 2's circle). This uses the real rules with
+   γ 0, the real function and the stage 4 plan's counts, at two moments (seed and chapter 4) and
+   two recency points (the cut-off, and every end far in the past).
+   - **The transfers must rise.** At the far-past point an old link at exactly its type's heavy
+     count normalises to about 0.69, below the five structural links fixed at 0.75. So with the
+     payer's transfers at 8, 7 and 7, two of them fall to 16th, past the top quarter of 15 at the
+     seed. The payer's transfers therefore become 9, 8 and 8.
+   - **The placings then:**
+     - the coordinator's call link 1st at every point;
+     - the transfers 6th to 10th (a top quarter of 15 or 16);
+     - the picture and the one-week cell share in the bottom two (a bottom eighth of 8).
+   - **Shown red.** The three planted wrong rules each turn it red at every point:
+     - `TRANSACTED` heavy 60: transfers 24th–40th;
+     - `SHARED_CELL_WITH` heavy 1: the one-week share 31st or higher from the light end;
+     - `COMMUNICATED_WITH` heavy 4,000: the call 17th–30th.
+   - **The principal's call margin over each relay** (201 against 158 calls) is now carried by the
+     count alone.
+7. **Weights already stored.**
+   - **Nothing stored moves.** A weight stored under version 1, or before ADR-120, keeps its value
+     until recomputed, and such a weight still carries the signal.
+   - **`parameter_set` does not mean "written under".** A node correction copies its links'
+     weights onto the new links unchanged, so a link written after version 2 can still carry
+     "1/<rule>".
+   - **Where rule 3 stays breached.** On any store holding such weights, the owner's running
+     deployment included, rule 3 stays breached for weights until one of two remedies:
+     - **reseeding**, available now: a reseeded deployment holds only current weights (D3);
+     - **the recompute** the build plan logs ("stored weights are not recomputed after ADR-120's
+       formula change"), which needs an in-place edge update, its own record.
+   - **The Prison Intelligence Dataset** is loaded after version 2.
+
+**Cost.**
+- **Hub suppression is lost.** A number everyone calls, or a broadcast sender, now draws as heavy
+  as an exclusive pair with the same count. The per-type calibration still makes thickness mean
+  "heavy for its type".
+- **The counting queries still run.**
+- **The same-pair merge route stays open** (decision 4).
+
+**Tests that fail if this is violated:**
+- **`tests/adapters/graph_arcadedb/test_weight_rules.py`.**
+  - Version 2 loads with γ 0 and version 1's other values.
+  - A version after 1 with γ other than 0 is refused: a YAML file whose version 2 or 3 carries
+    `gamma: 0.3` is refused by name.
+  - The frozen copy holds versions 1 and 2 and is unchanged.
+  - Property test: under version 2, a link's weight is the same whatever its corpus counts, over
+    the existing grid; shown red under version 1.
+  - Every mutual-information case (the same-pair grid's self-loop series, `npmi` through the
+    weight, Amendment 4's self-loop plant) is pinned to version 1, each still shown red there.
+- **`tests/conformance/graph_port/test_suite.py` and `test_bulk_loader.py`.**
+  - A visible link K's stored weight is identical in two stores that differ only by one more link L
+    the viewer cannot see. L is in turn:
+    - classified `SECRET`;
+    - under a restricted handling code;
+    - to a hidden node;
+    - in another dataset;
+    - raised after K was weighed: by an edge correction (`supersede_edge`), by a same-pair merge
+      that raises its handling, and by a node correction (`supersede_node`).
+  - The cases run by the upsert, edge-supersede, node-supersede and bulk paths.
+  - `now_utc` is pinned where the adapter (`graph_arcadedb/adapter.py`) and the bulk loader
+    (`bulk.py`) import it, so recency is equal.
+  - Each case is shown red under version 1.
+  - A cross-dataset same-pair case records decision 4's open route, asserting today's behaviour
+    with a comment naming the defect.
+- **`tests/test_compare_vaults.py`.** A version 2 weight is recomputed with γ 0, and version 1's with
+  its own γ.
+- **`tests/services/api/test_pid_access_control.py`.** The generated case loaded with and without its
+  `SECRET` link, with `now_utc` pinned as above, gives the demo analyst identical nodes, links,
+  weights, counts, paths and degrees; shown red under version 1.
+- **`tests/scenarios/test_pid_plan.py`.** The circle under version 2 at both moments and both recency
+  points, with the transfers 9, 8 and 8, and its three plants red at every point.

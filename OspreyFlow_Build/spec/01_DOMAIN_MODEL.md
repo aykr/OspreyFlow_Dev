@@ -841,10 +841,14 @@ weight(e) = normalise( α·log1p(occurrences)/log1p(heavy(type)) + β·recency(i
 ```
 
 `heavy(type)` is the count that is heavy for the link's type (its weight rule, below), so every
-type's count term is 1 at its own heavy count (ADR-120 D3). `mutual_information` is the
-**normalised** pointwise mutual information of the pair against the corpus, which is what
-suppresses high-volume, low-information relationships — the broadcast sender, the service number
-that everyone calls:
+type's count term is 1 at its own heavy count (ADR-120 D3). **From weights version 2, γ is 0**
+(ADR-123): a link's weight comes from the link alone, its own count and recency, because the
+mutual-information term is built from corpus-wide counts no access filter can apply to, and a
+stored weight sent to the Glass must not move with links its viewer cannot see (rule 3; ADR-099
+decision 4). Every later version keeps γ at 0. `mutual_information` remains defined, as the
+**normalised** pointwise mutual information of the pair against the corpus (under version 1 it
+suppressed high-volume, low-information relationships such as the broadcast sender and the service
+number everyone calls; at γ 0 it suppresses nothing):
 
 ```
 mutual_information(u,v) = clamp( pmi(u,v) / −ln p(u,v), −1, 1 )   # 1 when p(u,v) = 1; 0 where pmi is undefined; 0 for a self-loop (ADR-120 Amendment 4)
@@ -861,8 +865,8 @@ a wide grid.
 
 **A structural link type has a fixed weight** (ADR-120 D3): co-defendant, family, membership and
 custody links weigh 0.75 and a picture link (`DEPICTS`) 0.2, whatever their occurrences, recency or
-mutual information. The formula's other exception is a self-loop, whose mutual-information term is
-0 (ADR-120 Amendment 4).
+mutual information. Under version 1 the formula's other exception was a self-loop, whose
+mutual-information term is 0 (ADR-120 Amendment 4); at γ 0 the term weighs nothing for any link.
 
 The two functions the formula leans on, which earlier drafts left undefined:
 
@@ -872,14 +876,14 @@ normalise(x) = 1 / (1 + e^(-(x - midpoint) / scale))  # logistic
 ```
 
 The parameters live in a weights file, `packages/ontology/weights/default.yaml`, beside the
-handling scheme and not in the ontology (ADR-120 D3): α = 0.5, β = 0.2, γ = 0.3, `half_life` =
-90 days, one `midpoint` and `scale` for every type, and one rule per link type naming what one
+handling scheme and not in the ontology (ADR-120 D3): α = 0.5, β = 0.2, γ = 0 (0.3 in version 1;
+ADR-123), `half_life` = 90 days, one `midpoint` and `scale` for every type, and one rule per link type naming what one
 occurrence is and what count is heavy, with a default rule (heavy 10) for a type with none.
 `midpoint` and `scale` are derived, never hand-tuned: at recency 1 and a mutual-information term of
 0, a count term of 0 normalises to the logistic of −1 (≈ 0.27) and a count term of 1, the type's
 heavy count, to the logistic of 2 (≈ 0.88), which with these α and β gives `scale` = 1/6 and
 `midpoint` = 0.2 + 1/6. So a link that is heavy for its type draws about as thick as one heavy for
-another type, and recency and exclusivity weigh the same for every type. What one occurrence is,
+another type, and recency weighs the same for every type. What one occurrence is,
 the writer decides: `occurrences` is set by whoever writes the link, so a cell-share source emits
 one row per pair per week shared.
 
@@ -892,14 +896,17 @@ type with none), so every value it used is recoverable; a
 component with none was computed under the uncalibrated curve that preceded ADR-120. Weights stored
 before then are not recomputed (`GraphPort` has no in-place edge update; a recompute is its own
 record). The Glass draws the stored weight it is sent and recomputes none; it is never sent the
-components, whose corpus-wide counts include links above its principal's clearance (ADR-122). It
-exposes the normalised result as the edge-strength filter slider.
+components, whose corpus-wide counts include links above its principal's clearance (ADR-122). From
+version 2 those counts move no weight (ADR-123); a weight stored under version 1 or before ADR-120
+still does until recomputed or reseeded. It exposes the normalised result as the edge-strength
+filter slider.
 
 **`WeightComponents` stores the raw counts, not just the derived float.** `mutual_information` is
 corpus-wide — it depends on how the *whole* corpus looks, which changes as more data loads and
-again when a caller scopes the formula to a working set rather than the full corpus. `weight` on
-`Edge` is a load-time snapshot using the corpus as it stood then, never frozen ground truth:
-freezing a single number and calling it the weight would silently go stale as the corpus grows.
+again when a caller scopes the formula to a working set rather than the full corpus. Under version 1
+the weight depended on it, so `weight` on `Edge` was a load-time snapshot of the corpus as it stood
+then; from version 2 (γ 0, ADR-123) no weight depends on the corpus, and the counts are kept for a
+later scoped recompute.
 `WeightComponents` (`occurrences`, `corpus_pair_count`, `corpus_source_degree`,
 `corpus_target_degree`, `corpus_total_occurrences`, `computed_at`, and since ADR-120
 `parameter_set`) persists exactly what the
