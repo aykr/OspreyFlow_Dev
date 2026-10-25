@@ -115,7 +115,9 @@ async def _open(socket: _Socket, reader: Principal) -> list[Principal]:
     started: list[Principal] = []
 
     async def _loop(*args: Any) -> None:
-        started.append(args[-1])
+        # By type, not by position: the loops take the principal and then (since U6b) the socket's
+        # state, so the last argument is not always the principal.
+        started.extend(a for a in args if isinstance(a, Principal))
 
     with (
         patch("services.api.app._authenticate_websocket", return_value=reader),

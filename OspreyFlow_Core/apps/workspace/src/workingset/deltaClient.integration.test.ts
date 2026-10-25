@@ -26,6 +26,7 @@ const HARNESS = `${REPO_ROOT}apps/workspace/test/glass_test_server.py`;
 
 interface ServerHandle {
   port: number;
+  vaultPort: number;
   token: string;
   process: ChildProcessWithoutNullStreams;
 }
@@ -33,10 +34,11 @@ interface ServerHandle {
 async function startServer(): Promise<ServerHandle> {
   const proc = spawn(PYTHON, [HARNESS], { cwd: REPO_ROOT });
   const rl = createInterface({ input: proc.stdout });
-  const ready = new Promise<{ port: number; token: string }>((resolve, reject) => {
+  const ready = new Promise<{ port: number; token: string; vaultPort: number }>((resolve, reject) => {
     rl.once("line", (line) => {
       try {
-        resolve(JSON.parse(line));
+        const ready = JSON.parse(line) as { port: number; token: string; vault_port: number };
+        resolve({ port: ready.port, token: ready.token, vaultPort: ready.vault_port });
       } catch (error) {
         reject(error);
       }
@@ -49,13 +51,13 @@ async function startServer(): Promise<ServerHandle> {
     });
   });
   let lastStderr = "";
-  const { port, token } = await Promise.race([
+  const { port, token, vaultPort } = await Promise.race([
     ready,
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error(`glass_test_server.py did not start: ${lastStderr}`)), 20_000),
     ),
   ]);
-  return { port, token, process: proc };
+  return { port, vaultPort, token, process: proc };
 }
 
 async function waitUntilReady(baseUrl: string, token: string): Promise<void> {
@@ -110,7 +112,25 @@ describe("deltaClient against the real Conduit WebSocket", () => {
     return ((await response.json()) as { id: string }[]).map((d) => d.id);
   }
 
-  async function seedOneNode(investigationId: string, nodeId: string): Promise<void> {
+  // Since ADR-124 U7 `/seed` stores what the Vault returns for each id, so a node must be in
+  // ArcadeDB before it is seeded (CI, 25 October 2026: every snapshot came back empty). The harness's
+  // side door writes it, in the case's own datasets, and says what id each got.
+  async function writeVaultNodes(investigationId: string, names: string[]): Promise<Record<string, string>> {
+    const datasets = await caseDatasets(investigationId);
+    const response = await fetch(`http://127.0.0.1:${server.vaultPort}/nodes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names, datasets }),
+    });
+    const body = (await response.json()) as { ids?: Record<string, string>; error?: string };
+    expect(body.error).toBeUndefined();
+    expect(response.ok).toBe(true);
+    return body.ids as Record<string, string>;
+  }
+
+  // Seeds a node the Vault holds, and returns the id it was given.
+  async function seedOneNode(investigationId: string, name: string): Promise<string> {
+    const nodeId = (await writeVaultNodes(investigationId, [name]))[name] as string;
     const datasets = await caseDatasets(investigationId);
     const response = await fetch(`${baseUrl}/v1/investigations/${investigationId}/seed`, {
       method: "POST",
@@ -142,6 +162,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
       }),
     });
     expect(response.ok).toBe(true);
+    return nodeId;
   }
 
   function openSocket(investigationId: string): SocketLike {
@@ -153,7 +174,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
 
   it("receives a snapshot on first connect", async () => {
     const investigationId = await createInvestigation();
-    await seedOneNode(investigationId, "n1");
+    const n1 = await seedOneNode(investigationId, "n1");
 
     const deltas: WorkingSetDelta[] = [];
     await new Promise<void>((resolve, reject) => {
@@ -171,7 +192,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
 
     expect(deltas).toHaveLength(1);
     expect(deltas[0]).toMatchObject({ op: "snapshot" });
-    expect((deltas[0] as { nodes: { id: string }[] }).nodes.map((n) => n.id)).toEqual(["n1"]);
+    expect((deltas[0] as { nodes: { id: string }[] }).nodes.map((n) => n.id)).toEqual([n1]);
   }, 15_000);
 
   it("applies a real live delta pushed over Pub/Sub while connected", async () => {
@@ -193,7 +214,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
     // working set, so the next thing it sees is a genuine live push, not
     // part of the initial catch-up.
     await gotSnapshot;
-    await seedOneNode(investigationId, "n-live");
+    const live = await seedOneNode(investigationId, "n-live");
 
     // Poll briefly for the live "add" to arrive — it comes over Pub/Sub
     // asynchronously relative to the HTTP call that triggered it.
@@ -205,7 +226,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
 
     const added = deltas.find((d) => d.op === "add");
     expect(added).toBeDefined();
-    expect((added as { nodes: { id: string }[] }).nodes.map((n) => n.id)).toEqual(["n-live"]);
+    expect((added as { nodes: { id: string }[] }).nodes.map((n) => n.id)).toEqual([live]);
   }, 15_000);
 
   it("requesting a resync after the delta history is gone gets a snapshot, not a patch", async () => {
@@ -221,8 +242,8 @@ describe("deltaClient against the real Conduit WebSocket", () => {
 
     try {
       const investigationId = await createInvestigation();
-      await seedOneNode(investigationId, "a");
-      await seedOneNode(investigationId, "b");
+      const a = await seedOneNode(investigationId, "a");
+      const b = await seedOneNode(investigationId, "b");
       await redis.call("XTRIM", `ws:${investigationId}:deltas`, "MAXLEN", "0");
 
       const deltas: WorkingSetDelta[] = [];
@@ -256,7 +277,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
       expect(snapshots).toHaveLength(2);
       expect(
         (snapshots[1] as { nodes: { id: string }[] }).nodes.map((n) => n.id).sort(),
-      ).toEqual(["a", "b"]);
+      ).toEqual([a, b].sort());
     } finally {
       redis.disconnect();
     }
