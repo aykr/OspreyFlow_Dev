@@ -110,7 +110,7 @@ class Graph:
 
 def WorkingSet() -> WorkingSetService:  # noqa: N802 - the real service over the in-memory store
     return WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), candidate_count=0),
+        FakeGraphPort(Subgraph(nodes=[], edges=[])),
         FakeWorkingSetStore(),
         SCHEME,
     )

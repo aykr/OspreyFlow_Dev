@@ -223,9 +223,9 @@ class FakeWorkingSetStore:
 
 
 class FakeGraphPort:
-    """`expand`/`expand_candidate_count` plus the transaction/`upsert_edges` trio
+    """`expand` plus the transaction/`upsert_edges` trio
     `manual_link`/`manual_split` need — the full set `WorkingSetService` actually calls, still no
-    real ArcadeDB. Configure `expand_result` and `candidate_count` per test; `expand_requests`
+    real ArcadeDB. Configure `expand_result` per test; `expand_requests`
     records every call for assertions like "the same request drove both calls". `committed_edges`
     records every edge a test's `manual_link`/`manual_split` call actually persisted (only after
     `commit_transaction`, never after a `rollback_transaction`), so a test can assert on the write
@@ -234,7 +234,6 @@ class FakeGraphPort:
     def __init__(
         self,
         expand_result: Subgraph,
-        candidate_count: int,
         *,
         hidden_node_ids: frozenset[NodeId] = frozenset(),
         graph_edges: Sequence[Edge] = (),
@@ -261,9 +260,7 @@ class FakeGraphPort:
         self.get_nodes_requests: list[tuple[list[NodeId], Principal]] = []
         self.get_edges_requests: list[tuple[list[EdgeId], Principal]] = []
         self.paths_at_length_requests: list[tuple[NodeId, NodeId, int, Principal]] = []
-        self.candidate_count = candidate_count
         self.expand_requests: list[ExpandRequest] = []
-        self.candidate_count_requests: list[ExpandRequest] = []
         self.get_node_requests: list[tuple[NodeId, Principal]] = []
         self.committed_edges: list[EdgeWrite] = []
         self._pending_edges: dict[TxId, list[EdgeWrite]] = {}
@@ -426,12 +423,6 @@ class FakeGraphPort:
         if source not in self._hidden_node_ids and target not in self._hidden_node_ids:
             walk(source, [source], [])
         return RoutesAtLength(length=length, paths=found[:limit], more=len(found) > limit)
-
-    async def expand_candidate_count(
-        self, req: ExpandRequest, *, datasets: list[str] | None = None
-    ) -> int:
-        self.candidate_count_requests.append(req)
-        return self.candidate_count
 
     async def begin_transaction(self) -> TxId:
         self._next_tx += 1

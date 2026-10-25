@@ -119,7 +119,7 @@ async def _service() -> tuple[LinkNoteService, InMemoryNotes, FakeWorkingSetStor
             edge("secret-end", "a", "c"),
         ],
     )
-    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]))
     notes = InMemoryNotes()
     storage: LinkNoteStorage = notes
     return LinkNoteService(storage, WorkingSetService(graph, working, SCHEME)), notes, working

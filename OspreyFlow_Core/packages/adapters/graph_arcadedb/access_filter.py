@@ -74,16 +74,11 @@ class AccessFilter:
     ) -> str:
         """The two exclusions `gremlin_has_step` bundles in that are not
         principal-dependent at all — reverted and (unless lifted)
-        superseded (`01_DOMAIN_MODEL.md` §2.4) — factored out so a caller
-        that must *not* also compile the two access axes
-        (`ExpandBuilder.render_candidate_count_gremlin`, the unfiltered
-        half of `Subgraph.filtered_count`'s comparison, §8.2) can still
-        exclude the same not-really-there-any-more elements without
-        reproducing the clearance/handling-code compilation below.
+        superseded (`01_DOMAIN_MODEL.md` §2.4) — factored out of `gremlin_has_step`, which adds the
+        two handling axes to them.
 
-        `datasets` (ADR-099) is carried here, not with the two handling axes, because the candidate
-        count must apply it too: what lies outside a case's datasets is not hidden from the case,
-        it is not in its world, and counting it would say there is more."""
+        `datasets` (ADR-099) is carried here, not with the two handling axes: what lies outside a
+        case's datasets is not hidden from the case, it is not in its world."""
         steps = ['has("reverted",false)']
         if not include_superseded:
             steps.append('hasNot("superseded_by")')

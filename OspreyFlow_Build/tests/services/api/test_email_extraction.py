@@ -114,9 +114,7 @@ class RecordingAnalytics:
             and all(_field(e, name) in values for name, values in f.value_filters.items() if values)
             and (f.window is None or e.occurred_at >= f.window.valid_from)
             and (
-                f.window is None
-                or f.window.valid_to is None
-                or e.occurred_at <= f.window.valid_to
+                f.window is None or f.window.valid_to is None or e.occurred_at <= f.window.valid_to
             )
         ]
         # Newest first and paged, as the adapter's `list_events` is.
@@ -133,7 +131,7 @@ class WritingGraph(FakeGraphPort):
     not declare fails here as it fails there (the defect the owner saw on 4 October 2026)."""
 
     def __init__(self) -> None:
-        super().__init__(Subgraph(nodes=[], edges=[]), candidate_count=0)
+        super().__init__(Subgraph(nodes=[], edges=[]))
         self.nodes: dict[str, NodeWrite] = {}
         self._pending_nodes: dict[TxId, list[NodeWrite]] = {}
 
@@ -625,9 +623,7 @@ async def test_extracting_with_the_model_on_request_still_asks_the_model() -> No
     assert [r.text for r in model.requests] == [TEXT]
 
 
-async def test_a_text_past_the_recognisers_limit_is_read_in_windows_located_in_the_whole() -> (
-    None
-):
+async def test_a_text_past_the_recognisers_limit_is_read_in_windows_located_in_the_whole() -> None:
     from services.api.review import run_recognition
 
     padding = "x " * 150_000

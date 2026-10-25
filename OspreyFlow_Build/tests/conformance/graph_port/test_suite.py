@@ -561,88 +561,90 @@ async def test_msisdn_reaches_its_device_in_two_hops_not_one(
         assert {n.id for n in two_hops.nodes} == {sim_msisdn, sim_imsi, handset}
 
 
-# --- expand_candidate_count (01_DOMAIN_MODEL.md §8.2 / filtered_count) ------
+# --- expand leaves out what was retracted or replaced ---------------------------------------
 
 
-async def test_expand_candidate_count_matches_expand_when_nothing_is_hidden(
-    factory: GraphAdapterFactory,
+@pytest.mark.parametrize("reader", [OFFICIAL, CLEARED], ids=["official", "cleared"])
+async def test_expand_leaves_out_a_reverted_neighbour_and_a_superseded_one_for_any_clearance(
+    factory: GraphAdapterFactory, reader: Principal
 ) -> None:
+    """A reverted element (`revert_elements`) and a superseded revision (`supersede_node`,
+    `supersede_edge`) are not principal-dependent exclusions (`01_DOMAIN_MODEL.md` §2.4): no
+    clearance sees them in an expansion. The positive control is the same neighbours and links
+    before they are reverted and superseded, which `expand` returns, so that their absence
+    afterwards is the exclusion and not a missing link.
+
+    **Each half is proven by the check it names, and the nodes keep a live link on purpose.**
+    - A node is reverted *alone*, leaving the hub's link to it live: a node reverted by its load
+      while a later load's link stays. Only the vertex-side check keeps it out (and the link with
+      it, since a link whose far end is not in the view is not returned).
+    - A node is superseded, and a link to the old revision is then written (`upsert_edges` finds
+      endpoints by id and does not refuse a superseded one). `supersede_node` re-pointed the
+      links that existed, so this later link is what makes the old node reachable, and only the
+      vertex-side check keeps it out.
+    - A link is superseded with `supersede_edge`, which leaves the old link stored and still
+      joining the hub and `kept`: only the superseded step on the link keeps it out, and one link
+      joins them afterwards (the successor)."""
     async with factory.context() as adapter:
-        (hub, visible), _ = await _write(
+        (hub, kept, reverted_nb, superseded_nb), _ = await _write(
             adapter,
             [
                 _node("Person", classification="OFFICIAL"),
                 _node("Endpoint", classification="OFFICIAL"),
+                _node("Endpoint", classification="OFFICIAL"),
+                _node("Endpoint", classification="OFFICIAL"),
             ],
             [],
         )
-        await _write(adapter, [], [_edge("USES", hub, visible, classification="OFFICIAL")])
-
-        req = ExpandRequest(node_ids=[hub], depth=1)
-        subgraph = await adapter.expand(req, CLEARED)
-        candidate_count = await adapter.expand_candidate_count(req)
-
-        assert candidate_count == len(subgraph.nodes) == 2
-
-
-async def test_expand_candidate_count_includes_nodes_an_unauthorised_expand_excludes(
-    factory: GraphAdapterFactory,
-) -> None:
-    """The unfiltered half of `filtered_count`'s comparison
-    (`01_DOMAIN_MODEL.md` §8.2): a SECRET neighbour an OFFICIAL principal's
-    `expand()` cannot see must still be in `expand_candidate_count`'s
-    reckoning, since that reckoning carries no principal at all — proving
-    it is genuinely unfiltered, not a second filtered call in disguise."""
-    async with factory.context() as adapter:
-        (hub,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
-        (visible,), _ = await _write(adapter, [_node("Endpoint", classification="OFFICIAL")], [])
-        (secret_neighbour,), _ = await _write(
-            adapter, [_node("Endpoint", classification="SECRET")], []
-        )
-        await _write(
+        _, (kept_edge, reverted_edge, superseded_edge) = await _write(
             adapter,
             [],
             [
-                _edge("USES", hub, visible, classification="OFFICIAL"),
-                _edge("USES", hub, secret_neighbour, classification="SECRET"),
+                _edge("USES", hub, kept, classification="OFFICIAL"),
+                _edge("USES", hub, reverted_nb, classification="OFFICIAL"),
+                _edge("USES", hub, superseded_nb, classification="OFFICIAL"),
             ],
         )
-
         req = ExpandRequest(node_ids=[hub], depth=1)
-        unauthorised = await adapter.expand(req, OFFICIAL)
-        authorised = await adapter.expand(req, CLEARED)
-        candidate_count = await adapter.expand_candidate_count(req)
 
-        assert len(unauthorised.nodes) == 2  # hub + visible only
-        assert len(authorised.nodes) == 3  # hub + visible + secret_neighbour
-        assert candidate_count == 3
-        assert candidate_count - len(unauthorised.nodes) == 1  # what filtered_count must report
+        before = await adapter.expand(req, reader)
+        assert {n.id for n in before.nodes} == {hub, kept, reverted_nb, superseded_nb}
+        assert {e.id for e in before.edges} == {kept_edge, reverted_edge, superseded_edge}
 
-
-async def test_expand_candidate_count_excludes_reverted_and_superseded_nodes(
-    factory: GraphAdapterFactory,
-) -> None:
-    """Structural exclusion (reverted, superseded) is not what
-    `filtered_count` means — those elements were never real data to begin
-    with, the same as for every other read — so `expand_candidate_count`
-    must drop them exactly as `expand()` does, even though it applies
-    neither access axis."""
-    async with factory.context() as adapter:
-        (hub,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL")], [])
-        (reverted_neighbour,), _ = await _write(
-            adapter, [_node("Endpoint", classification="OFFICIAL")], []
-        )
-        _, (touched_edge_id,) = await _write(
-            adapter, [], [_edge("USES", hub, reverted_neighbour, classification="OFFICIAL")]
-        )
         tx = await adapter.begin_transaction()
-        await adapter.revert_elements([reverted_neighbour], [touched_edge_id], tx)
+        await adapter.revert_elements([reverted_nb], [], tx)  # the node alone: its link stays live
+        replacement = await adapter.supersede_node(
+            superseded_nb, _node("Endpoint", classification="OFFICIAL"), tx
+        )
+        successor = await adapter.supersede_edge(
+            kept_edge,
+            EdgeWrite(
+                id=new_edge_id(),
+                type="USES",
+                source=hub,
+                target=kept,
+                provenance=_provenance(),
+                handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
+                created_by="reviewer-1",
+                created_at=now_utc(),
+            ),
+            tx,
+        )
         await adapter.commit_transaction(tx)
+        _, (late_link,) = await _write(
+            adapter, [], [_edge("USES", hub, superseded_nb, classification="OFFICIAL")]
+        )
 
-        req = ExpandRequest(node_ids=[hub], depth=1)
-        candidate_count = await adapter.expand_candidate_count(req)
-
-        assert candidate_count == 1  # hub only — the reverted neighbour never counts
+        after = await adapter.expand(req, reader)
+        node_ids = {n.id for n in after.nodes}
+        edge_ids = {e.id for e in after.edges}
+        assert node_ids == {hub, kept, replacement}
+        assert reverted_nb not in node_ids and superseded_nb not in node_ids
+        assert reverted_edge not in edge_ids  # live, but its far end is not in the view
+        assert late_link not in edge_ids  # to the superseded revision
+        assert kept_edge not in edge_ids  # superseded, still stored
+        assert [e.id for e in after.edges if {e.source, e.target} == {hub, kept}] == [successor]
+        assert len(after.edges) == 2  # the successor and the one carried to the replacement
 
 
 # --- k-shortest paths --------------------------------------------------------
@@ -1332,12 +1334,11 @@ async def test_match_count_agrees_with_the_filtered_results_own_count(
 
 
 async def test_match_count_never_leaks_a_hidden_node(factory: GraphAdapterFactory) -> None:
-    """The Glass never sees an unfiltered count, and an unauthorised
-    principal must not detect a filtered node's existence via an aggregate) — applied to the
-    visual query builder's own estimate, which is shown to the analyst directly rather than
-    reconciled by an authorised caller the way `expand_candidate_count` is. A principal who
-    cannot see a matching node must get a *smaller* count, not the same one with the node itself
-    merely missing from a list."""
+    """The Glass never sees an unfiltered count, and an unauthorised principal must not detect a
+    filtered node's existence via an aggregate: applied to the visual query builder's own
+    estimate, which is shown to the analyst directly. A principal who cannot see a matching node
+    must get a *smaller* count, not the same one with the node itself merely missing from a
+    list."""
     async with factory.context() as adapter:
         (a, hidden), _ = await _write(
             adapter,
@@ -4029,8 +4030,8 @@ async def test_a_line_break_in_a_property_and_in_a_dataset_name_round_trips_thro
 # The third axis, built like the other two: in the traversal, never after it. Each case below is
 # the dataset twin of a handling one above (get_node, degree, path length, match, its count,
 # edges_among), plus what only datasets have: an element in two datasets, the union on a second
-# write, search and suggestions, and the candidate count, which must not count another dataset's
-# neighbours as "hidden" (what lies outside a case's datasets is not in its world).
+# write, search and suggestions, and an expansion, which must not reach another dataset's
+# neighbours (what lies outside a case's datasets is not in its world).
 
 
 async def test_a_node_of_another_dataset_matches_a_graph_where_it_never_existed(
@@ -4139,7 +4140,7 @@ async def test_path_length_in_one_dataset_matches_a_graph_without_the_other_data
         assert {p.length for p in await adapter.paths(req, IN_ENRON)} == {1}
 
 
-async def test_expansion_and_its_candidate_count_stay_within_the_cases_datasets(
+async def test_expansion_stays_within_the_cases_datasets(
     factory: GraphAdapterFactory,
 ) -> None:
     async with factory.context() as adapter:
@@ -4168,9 +4169,6 @@ async def test_expansion_and_its_candidate_count_stay_within_the_cases_datasets(
         expanded = await adapter.expand(req, IN_FIXTURE)
         assert {n.id for n in expanded.nodes} == {hub, mine}
         assert len(expanded.edges) == 1
-        # Nothing is "hidden" from the case: the other dataset's neighbour is not counted at all.
-        assert await adapter.expand_candidate_count(req, datasets=["fixture"]) == 2
-        assert await adapter.expand_candidate_count(req) == 3  # unlimited, as before
 
 
 async def test_match_and_its_count_never_reach_another_dataset(

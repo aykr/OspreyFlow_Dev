@@ -86,7 +86,7 @@ def _edge(edge_id: str, source: str, target: str) -> Edge:
 
 async def test_seed_writes_nodes_and_edges_and_reports_seq_one() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
 
     outcome = await service.seed("inv-1", [_node("n1")], [], PRINCIPAL)
@@ -101,12 +101,11 @@ async def test_seed_writes_nodes_and_edges_and_reports_seq_one() -> None:
 
 async def test_expand_adds_what_the_graph_returned_and_asks_for_no_count_of_the_rest() -> None:
     """ADR-124 decision 1: an expansion's outcome is its delta, and the service no longer asks the
-    graph for an unfiltered candidate count to subtract from it (`expand_candidate_count` is
-    withdrawn from the port in U3): a figure tied to a seed and a link type can be made to point at
-    the one hidden link it counts."""
+    graph for a count of what lay beyond it to subtract from it (the port has no such method): a
+    figure tied to a seed and a link type can be made to point at the one hidden link it counts."""
     store = FakeWorkingSetStore()
     delivered = Subgraph(nodes=[_node("hub"), _node("visible")], edges=[])
-    graph = FakeGraphPort(expand_result=delivered, candidate_count=3)
+    graph = FakeGraphPort(expand_result=delivered)
     service = WorkingSetService(graph, store, SCHEME)
 
     req = ExpandRequest(node_ids=["hub"], depth=1)
@@ -115,7 +114,6 @@ async def test_expand_adds_what_the_graph_returned_and_asks_for_no_count_of_the_
     assert {n.id for n in outcome.delta.nodes} == {"hub", "visible"}
     assert "filtered_count" not in outcome.model_dump()
     assert graph.expand_requests == [req]
-    assert graph.candidate_count_requests == []  # the unfiltered count is never asked for
 
 
 async def test_expand_never_double_counts_a_node_already_in_the_working_set() -> None:
@@ -126,7 +124,7 @@ async def test_expand_never_double_counts_a_node_already_in_the_working_set() ->
     await store.add_nodes("inv-1", [_node("hub")])
 
     delivered = Subgraph(nodes=[_node("hub"), _node("new")], edges=[])
-    graph = FakeGraphPort(expand_result=delivered, candidate_count=2)
+    graph = FakeGraphPort(expand_result=delivered)
     service = WorkingSetService(graph, store, SCHEME)
 
     await service.expand("inv-1", ExpandRequest(node_ids=["hub"], depth=1), PRINCIPAL)
@@ -140,9 +138,7 @@ async def test_expand_never_double_counts_a_node_already_in_the_working_set() ->
 async def test_expand_past_the_node_cap_raises_limit_exceeded_with_all_three_options() -> None:
     store = FakeWorkingSetStore()
     too_many = [_node(f"n{i}") for i in range(MAX_NODES + 1)]
-    graph = FakeGraphPort(
-        expand_result=Subgraph(nodes=too_many, edges=[]), candidate_count=len(too_many)
-    )
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=too_many, edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
 
     with pytest.raises(LimitExceededError) as excinfo:
@@ -164,7 +160,6 @@ async def test_expand_past_the_edge_cap_raises_limit_exceeded() -> None:
     too_many_edges = [_edge(f"e{i}", "a", "b") for i in range(MAX_EDGES + 1)]
     graph = FakeGraphPort(
         expand_result=Subgraph(nodes=nodes, edges=too_many_edges),
-        candidate_count=len(nodes),
     )
     service = WorkingSetService(graph, store, SCHEME)
 
@@ -182,9 +177,7 @@ async def test_a_breach_leaves_the_sequence_counter_untouched() -> None:
     point of view, never happened."""
     store = FakeWorkingSetStore()
     too_many = [_node(f"n{i}") for i in range(MAX_NODES + 1)]
-    graph = FakeGraphPort(
-        expand_result=Subgraph(nodes=too_many, edges=[]), candidate_count=len(too_many)
-    )
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=too_many, edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
 
     with pytest.raises(LimitExceededError):
@@ -198,7 +191,7 @@ async def test_a_breach_leaves_the_sequence_counter_untouched() -> None:
 
 async def test_sync_with_no_prior_seq_returns_a_full_snapshot() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1"), _node("n2")], [], PRINCIPAL)
 
@@ -213,7 +206,7 @@ async def test_sync_with_no_prior_seq_returns_a_full_snapshot() -> None:
 
 async def test_sync_within_the_retained_stream_returns_only_the_missed_deltas() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1")], [], PRINCIPAL)  # seq 1
     await service.seed("inv-1", [_node("n2")], [], PRINCIPAL)  # seq 2
@@ -232,7 +225,7 @@ async def test_sync_past_a_trimmed_gap_resnapshots_instead_of_patching() -> None
     stream retains must never be served a partial, gapped patch."""
     store = FakeWorkingSetStore()
     store.stream_maxlen = 2  # only the last two deltas survive
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1")], [], PRINCIPAL)  # seq 1 — acked, then trimmed
     await service.seed("inv-1", [_node("n2")], [], PRINCIPAL)  # seq 2 — trimmed before return
@@ -250,7 +243,7 @@ async def test_sync_past_a_trimmed_gap_resnapshots_instead_of_patching() -> None
 
 async def test_sync_already_caught_up_returns_nothing_to_apply() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1")], [], PRINCIPAL)  # seq 1
 
@@ -285,7 +278,7 @@ async def test_current_membership_returns_the_full_unfiltered_store_contents() -
     method on this service, precisely so a step can later be re-projected
     for whoever restores it rather than baking in one principal's view."""
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
     secret_node = _node_with_classification("secret-1", "SECRET")
     await store.add_nodes("inv-1", [_node("n1"), secret_node])
@@ -298,7 +291,7 @@ async def test_current_membership_returns_the_full_unfiltered_store_contents() -
 
 async def test_restore_replaces_membership_and_emits_the_next_monotonic_seq() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1")], [], PRINCIPAL)  # seq 1
     await service.seed("inv-1", [_node("n2")], [], PRINCIPAL)  # seq 2 — current membership: n1, n2
@@ -322,7 +315,7 @@ async def test_restore_removes_an_edge_added_after_the_recorded_step_between_per
     survive a restore that only reconciled nodes. Restoring to the step
     (recorded with no edges) must remove it."""
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1"), _node("n2")], [], PRINCIPAL)  # seq 1 — the step
 
@@ -354,7 +347,7 @@ async def test_restore_reprojects_handling_fresh_against_the_requesting_principa
     step later — restore re-projects at request time, it does not reinstate
     whatever was visible when the step was written."""
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
 
     official_node = _node_with_classification("official-1", "OFFICIAL")

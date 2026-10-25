@@ -800,16 +800,6 @@ class GraphArcadeDBAdapter:
         )
         return [edge_from_element_map(r) for r in records]
 
-    async def expand_candidate_count(
-        self, req: ExpandRequest, *, datasets: list[str] | None = None
-    ) -> int:
-        structural_step = self._access.gremlin_structural_step(datasets=datasets)
-        query = ExpandBuilder(req).render_candidate_count_gremlin(structural_step)
-        results = await self._client.gremlin(query)
-        if not results:
-            return 0
-        return int(results[0].get("result") or 0)
-
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]:
         query = PathBuilder(req).render_gremlin(self._access, principal)
         if query is None:

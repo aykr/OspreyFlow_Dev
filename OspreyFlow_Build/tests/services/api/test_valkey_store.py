@@ -361,9 +361,7 @@ async def test_the_readers_counts_and_membership_are_the_projections(
     nodes, edges = _world()
     await working_store.add_nodes(case, nodes)
     await working_store.add_edges(case, edges)
-    service = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), working_store, SCHEME
-    )
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
     principal = READERS[reader]
 
     counts = await service._reader_counts(case, principal)
@@ -388,9 +386,7 @@ async def test_after_random_operations_the_counts_are_the_projections_for_each_r
     """The core property, against the real scripts: after each of thirty random operations the
     reader's counts equal the projection's for six readers."""
     working_store, _, case = indexed_store
-    service = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), working_store, SCHEME
-    )
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
     rng = random.Random(11)
     for step in range(30):
         kind = await apply_random_operation(working_store, case, rng)
@@ -413,9 +409,7 @@ async def test_restore_through_the_service_leaves_the_index_equal_to_the_bodies(
     working_store, _, case = indexed_store
     await working_store.add_nodes(case, [node("old-1"), node("old-2"), node("keep")])
     await working_store.add_edges(case, [edge("old-edge", "old-1", "keep")])
-    service = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), working_store, SCHEME
-    )
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
 
     await service.restore(
         case,
@@ -463,9 +457,7 @@ async def test_a_cleared_and_re_added_case_is_counted_afresh_by_the_service(
     numbers, which start again at 1, so signature 1 is another signature: here OFFICIAL before the
     clear and SECRET after it, asked of the same OFFICIAL reader, who was told 1 is readable."""
     working_store, _, case = indexed_store
-    service = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), working_store, SCHEME
-    )
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
     await working_store.add_nodes(case, [index_node("a")])
     first = await service._reader_counts(case, OFFICIAL_READER)
 
@@ -614,9 +606,7 @@ async def test_an_index_that_does_not_add_up_is_rebuilt_and_never_miscounts(
     assert working_store.access_index_rebuilds == 1, damage
     assert sum(healed.node_counts.values()) == 2 and sum(healed.edge_counts.values()) == 1
     await assert_index_matches_bodies(working_store, case, f"after {damage}")
-    service = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), working_store, SCHEME
-    )
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
     official = await service._reader_counts(case, OFFICIAL_READER)
     cleared = await service._reader_counts(case, SECRET_READER)
     assert (official.nodes, official.edges) == (1, 0), damage
@@ -798,9 +788,7 @@ async def test_a_new_signature_after_the_scalar_hash_is_lost_is_never_counted_as
 
     assert working_store.access_index_rebuilds == 1
     await assert_index_matches_bodies(working_store, case, "after the refused write")
-    service = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), working_store, SCHEME
-    )
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
     official = await service._reader_counts(case, OFFICIAL_READER)
     cleared = await service._reader_counts(case, SECRET_READER)
     assert official.nodes == 1 and cleared.nodes == 2
@@ -842,9 +830,7 @@ async def test_a_renumbering_between_the_counts_read_and_the_entries_read_gives_
     by_id = sorted(held, key=lambda n: signature_id(signature_of(n.handling, n.datasets)))
     for n in reversed(by_id):  # created in the reverse of the order a renumbering gives
         await working_store.add_nodes(case, [n])
-    service = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), working_store, SCHEME
-    )
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
     real = working_store.access_counts
     fired: list[int] = []
 
@@ -887,9 +873,7 @@ async def test_a_branch_that_fails_at_a_chunk_leaves_no_half_built_case(
     working_store, client, case = indexed_store
     new_case = f"{case}-branch"
     await working_store.add_nodes(case, [index_node(f"n{i}") for i in range(2_500)])
-    service = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), working_store, SCHEME
-    )
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
     runs: list[str] = []
 
     async def fail_at_the_second_chunk(name: str, size: int) -> None:
@@ -917,9 +901,7 @@ async def test_a_restore_that_fails_part_way_has_lost_nothing_it_held(
     held = [index_node(f"n{i}") for i in range(1_500)]
     await working_store.add_nodes(case, held)
     target = [index_node(f"n{i}") for i in range(1_000, 3_500)]
-    service = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), working_store, SCHEME
-    )
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
     runs: list[str] = []
 
     async def fail_at_the_second_add(name: str, size: int) -> None:
@@ -940,9 +922,7 @@ async def test_a_restore_adds_before_it_removes_and_removes_links_before_nodes(
     working_store, client, case = indexed_store
     await working_store.add_nodes(case, [index_node("a"), index_node("b"), index_node("c")])
     await working_store.add_edges(case, [index_edge("ab", "a", "b"), index_edge("bc", "b", "c")])
-    service = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), working_store, SCHEME
-    )
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
     working_store.script_runs.clear()
 
     await service.restore(

@@ -1135,8 +1135,7 @@ class NeighbourhoodStats(BaseModel):
 
 class Subgraph(BaseModel):
     nodes: list[Node]
-    edges: list[Edge]
-    filtered_count: int = 0              # §8.2 — computed via expand_candidate_count, see below
+    edges: list[Edge]                    # no withheld count (ADR-124 Amendment 4, item 2)
 ```
 
 ### 8.1 Pattern matching
@@ -1323,19 +1322,6 @@ seen and reverted, superseded and other-dataset elements count nowhere:
   Visible nodes whose provenance records a confirmation, the latest `last_confirmed` first, ties
   by id, each with who confirmed it, with `total`.
 
-One more method closes the `filtered_count` gap this section used to describe as outstanding
-(below):
-
-- **`expand_candidate_count(req, *, datasets=None) -> int`.** The unfiltered half of
-  `Subgraph.filtered_count`'s comparison. Same seed set, depth, edge-type and temporal scope as
-  `expand(req, principal)`, but with neither handling axis applied — only structural exclusion
-  (reverted, superseded) carries over, since those aren't principal-dependent, and the case's
-  `datasets` (ADR-099 decision 4): what lies outside a case's datasets is not hidden from it, it is
-  not in its world, and counting it would say there is more. No `principal` argument, matching
-  `revert_elements`: not a principal-scoped read, and it returns only a bare count, never a node,
-  an id or a property, so it cannot itself disclose which nodes are hidden or why.
-  `services/api`'s Working-Set Service is the only sanctioned caller — see below.
-
 The first bulk read this port has ever had (`06_DECISIONS.md` ADR-025):
 
 - **`list_nodes(entity_type, principal, cursor=None, limit=500) -> ListNodesPage`.** "Every
@@ -1357,21 +1343,13 @@ The first bulk read this port has ever had (`06_DECISIONS.md` ADR-025):
   on the next triggered run rather than this method guaranteeing a perfect snapshot it cannot
   cheaply give. `services/resolve/trigger.py` is the only caller today.
 
-**`Subgraph.filtered_count`** started as a placeholder `0`. It stood in for
-a specific question `GraphPort` alone could not answer: of the nodes an `expand` call excluded,
-how many were excluded because of the *access filter* specifically, as opposed to depth, edge-type
-or temporal scoping simply not reaching them? Answering that needs both the filtered and
-unfiltered node sets compared under one authority, and a single `expand()` call only ever sees the
-already-filtered result — computing the unfiltered side *inside* the adapter would mean a second,
-less-audited query channel with no caller to hold both results and reconcile them.
-
-The gap is closed by `expand_candidate_count` above, called by the Working-Set Service
-alongside the ordinary filtered `expand()`: `expand_candidate_count(req) - len(filtered.nodes)` is
-`filtered_count`. This is the one place the comparison can be made safely — the Working-Set
-Service already holds the filtered result under its own authority, and the unfiltered count adds
-no channel beyond a bare integer that cannot itself leak which nodes are hidden. See
-`03_CONDUIT_MIDDLEWARE.md` §4 for the read-time projection this feeds into, and §3.2 for
-`filtered_count`'s place in the delta protocol.
+**No withheld count (ADR-124).**
+- **What was here.** `Subgraph.filtered_count` and the port's `expand_candidate_count`, its
+  handling-blind half, once reported how many nodes an expansion left out for access. A count tied
+  to a seed and a link type points at what it withholds, so both are withdrawn (ADR-124 Amendment 4,
+  item 2, and decision 10).
+- **What the port offers now.** No read that ignores the principal and returns a figure about what
+  the principal may not see.
 
 ### 8.3 Saved patterns
 

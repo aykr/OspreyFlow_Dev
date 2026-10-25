@@ -92,7 +92,7 @@ async def _service(
         ],
     )
     analytics = RecordingAnalytics(events)
-    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]))
     service = LinkEventsService(
         WorkingSetService(graph, working, SCHEME),
         analytics,  # type: ignore[arg-type]

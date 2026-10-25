@@ -16737,6 +16737,34 @@ option, after three adversarial reviews and measurement on ArcadeDB 26.10.1 and 
    keeps the manifest's count as `(1, 0)` until U9, in place of U2c's "`withheld` true in A, false in
    B", which needs U5.
 
+### ADR-124, Amendment 5 (25 October 2026) — U3: what it did beyond the withdrawal
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after an adversarial review.
+- **The withdrawal is as decision 10 says.** `GraphPort.expand_candidate_count` is withdrawn, with
+  its adapter and builder code, the fake's `candidate_count`, three conformance cases that tested
+  only it, and the docstrings that named it. Nothing in code, generated types, the Makefile or CI
+  depends on it. The published copy under `OspreyFlow_user_repo` follows on the owner's next
+  publish.
+- **A conformance case replaces a lost structural guarantee.** One deleted case was the only one
+  tying an expansion to the structural exclusion. It reverted a node together with its link, so the
+  link's own check hid the node either way. Its replacement,
+  `test_expand_leaves_out_a_reverted_neighbour_and_a_superseded_one_for_any_clearance`, covers:
+  - **a node reverted alone,** while a live link to it remains (the shape of a node reverted with its
+    load after a later load linked to it), shown red with only the vertex-side check removed, and
+    with the reverted step removed;
+  - **a superseded link** that stays stored after `supersede_edge`, shown red with the superseded
+    step removed;
+  - **a superseded node** reached through a link written to it after it was superseded (the port
+    accepts such a link; recorded in the build plan as a defect with no owner), shown red with the
+    superseded step removed.
+- **Spec text moved forward from U10.** The spec lines that described the withdrawn method are
+  corrected now, so that no spec describes a method that does not exist: `01_DOMAIN_MODEL.md` §8.2,
+  `00_ARCHITECTURE.md` and `04_VAULT_BACKEND.md` (not in decision 14's list, but it described the
+  method's conformance cases). Until U10, `03_CONDUIT_MIDDLEWARE.md` §3.2 (lines 165 and 178) still
+  shows and describes the snapshot's `filtered_count`, which U2c removed. That contradiction is
+  known, and U10 removes it.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

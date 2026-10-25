@@ -186,8 +186,7 @@ class GraphPort(Protocol):
         predicates) this adapter has never needed and is not proven to
         support. This method is the v1 scope: it is a genuine capability
         gap `find_node` alone could not close (one caller-named field is not
-        a search box), added the same way `find_node` and
-        `expand_candidate_count` themselves grew `GraphPort` past its own
+        a search box), added the same way `find_node` grew `GraphPort` past its own
         illustrative sketch (`00_ARCHITECTURE.md` §2.1) — not a reason to
         also reach for fuzzy matching in the same change.
 
@@ -264,29 +263,6 @@ class GraphPort(Protocol):
         those logical types. An empty or one-node set has none."""
         ...
 
-    async def expand_candidate_count(
-        self, req: ExpandRequest, *, datasets: list[str] | None = None
-    ) -> int:
-        """`datasets` (ADR-099) limits the count to the case's datasets, as its `expand` is: what
-        lies outside them is not "hidden" from the case, so it is not counted.
-
-        **No longer called** (ADR-124 decision 1: `Subgraph.filtered_count` and the figure computed
-        from this count were removed, and U3 withdraws the method): the unfiltered count from
-        which a filtered figure was derived, which pointed at what it counted. How many
-        nodes the *same* seed set, depth, edge-type and temporal scope as
-        `expand(req, principal)` would reach with neither access axis
-        applied. No `Principal` argument, matching `revert_elements` — not
-        a principal-scoped read, and it returns only a bare count, never a
-        node, an id or a property, so it cannot itself disclose which
-        nodes are hidden or why. `services/api`'s Working-Set Service
-        was the only sanctioned caller: it held the properly-filtered
-        result of the matching `expand()` call under its own authority,
-        and `expand_candidate_count(req) - len(filtered.nodes)` was
-        `filtered_count`, a comparison `GraphPort` alone cannot make
-        from inside one filtered call, since a single `expand()` only ever
-        sees the already-filtered result."""
-        ...
-
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]: ...
 
     async def paths_at_length(
@@ -314,12 +290,9 @@ class GraphPort(Protocol):
     ) -> int:
         """`spec/02_GLASS_FRONTEND.md` §3.3's "estimated result count" for the visual query
         builder, and `08_ACCEPTANCE_SCENARIOS.md` B19's own "estimated count shown before
-        running". **Principal-filtered — deliberately not `expand_candidate_count`'s shape.**
-        That method exists to compute the *unfiltered* half of a comparison an authorised caller
-        (`WorkingSetService`) reconciles against its own already-filtered result; it is never
-        itself shown to an analyst. A pattern's estimate has no such reconciling caller and is
-        shown directly, so it must be filtered by this same call, the same way `match()` itself
-        is — an unfiltered count here is exactly what the Glass must never see, and the same
+        running". **Principal-filtered.** A pattern's estimate is shown directly to the analyst, so
+        it must be filtered by this same call, the same way `match()` itself is — an unfiltered
+        count here is exactly what the Glass must never see, and the same
         existence-leak-by-aggregate access control must prevent, not a shortcut.
 
         Compiles the identical access-filtered traversal `match()` does (same `has_access`

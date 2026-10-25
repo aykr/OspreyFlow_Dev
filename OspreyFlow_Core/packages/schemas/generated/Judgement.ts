@@ -31,9 +31,9 @@ export type FlagReason = string | null;
  * default this codebase already applies everywhere else it cannot positively confirm access.
  *
  * `flagged_for_review`/`flag_reason` are not in `01_DOMAIN_MODEL.md` §5's own illustrative
- * Pydantic snippet — grown past it the same way `GraphPort`, `SAME_AS`'s own properties and
- * `Subgraph.filtered_count` each already grew past their own doc's illustrative sketch
- * (`00_ARCHITECTURE.md` §2.1, `01_DOMAIN_MODEL.md` §4, §8.2's own precedent) — the review-flag
+ * Pydantic snippet — grown past it the same way `GraphPort` and `SAME_AS`'s own properties
+ * each already grew past their own doc's illustrative sketch
+ * (`00_ARCHITECTURE.md` §2.1, `01_DOMAIN_MODEL.md` §4) — the review-flag
  * loop (§5: "every judgement resting on it is flagged for review") needs somewhere to persist
  * that state, and the spec names the behaviour without naming a field for it.
  */

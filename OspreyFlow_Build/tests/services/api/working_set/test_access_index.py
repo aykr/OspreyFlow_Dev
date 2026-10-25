@@ -67,7 +67,7 @@ CASE = "case-1"
 
 
 def _service(store: FakeWorkingSetStore) -> WorkingSetService:
-    return WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), store, SCHEME)
+    return WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), store, SCHEME)
 
 
 # --- consistency -------------------------------------------------------------------------------
@@ -410,7 +410,7 @@ async def test_a_new_node_that_completes_stored_links_adds_them_to_the_preview_a
     The link to a node above the reader completes too, and is in nobody's view but theirs."""
     store, hub = await _hub_case()
     truth_store, _ = await _hub_case()
-    graph = FakeGraphPort(Subgraph(nodes=[hub], edges=[]), 0)
+    graph = FakeGraphPort(Subgraph(nodes=[hub], edges=[]))
     from schemas.domain import ExpandRequest
 
     request = ExpandRequest(node_ids=["hub"], depth=1)
@@ -447,7 +447,7 @@ async def test_a_link_between_two_new_nodes_is_counted_once() -> None:
     await store.add_nodes(CASE, [node("a"), node("b")])
     await store.add_edges(CASE, [edge("ab", "a", "b"), edge("ba", "b", "a")])
     await store.remove_nodes(CASE, ["a", "b"])  # both ends gone, both links dangle
-    graph = FakeGraphPort(Subgraph(nodes=[node("a"), node("b")], edges=[]), 0)
+    graph = FakeGraphPort(Subgraph(nodes=[node("a"), node("b")], edges=[]))
     from schemas.domain import ExpandRequest
 
     preview = await WorkingSetService(graph, store, SCHEME).expand_preview(

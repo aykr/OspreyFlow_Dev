@@ -8,12 +8,10 @@ for `/v1/search` and `/v1/resolution/{entity_type}/run`: a pattern match is a qu
 whole, principal-filtered graph, not a property of any one working set. Seeding a result into an
 investigation is a separate, later `/seed` call, already access-checked on its own terms.
 
-**The estimate is principal-filtered — deliberately not `GraphPort.expand_candidate_count`'s
-shape.** That method is the unfiltered half of a comparison only one authorised caller
-(`WorkingSetService`) ever sees, never itself shown to an analyst. A pattern's own estimate has
-no such reconciling caller and is shown directly, so it must be filtered exactly like `match()`
-itself — `GraphPort.match_count`'s own docstring has the full reasoning (access control and the
-and 7).
+**The estimate is principal-filtered.** A pattern's own estimate is shown directly to the analyst,
+so it must be filtered exactly like `match()` itself — `GraphPort.match_count`'s own docstring has
+the full reasoning (access control lives in the adapter, and the Glass never sees an unfiltered
+count: rules 3 and 7).
 
 **The cap is a job hand-off, not `working_set.models.LimitExceeded`.** That typed error's three
 options (`branch`/`filter`/`promote_to_batch`) are working-set mutations; a pattern result, before

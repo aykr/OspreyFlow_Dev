@@ -391,34 +391,6 @@ class ExpandBuilder:
             f".{self._repeat_clause(access, principal)}.select('e').dedup().elementMap()"
         )
 
-    def render_candidate_count_gremlin(self, structural_step: str) -> str:
-        """The unfiltered half of `Subgraph.filtered_count`'s comparison
-        (`01_DOMAIN_MODEL.md` §8.2): the same seed set, depth, edge-type
-        and temporal scope as `render_nodes_gremlin`, but with neither
-        access axis applied — only `structural_step`
-        (`AccessFilter.gremlin_structural_step`) carries over, since
-        reverted/superseded exclusion isn't principal-dependent and a
-        reverted or superseded element was never real data to begin with,
-        not a handling-filtered one. `union(identity(), repeat(...))`
-        mirrors `expand`'s own seeds-plus-reached union (`adapter.py`
-        currently does that union in Python across two separate queries)
-        in one traversal, since this method returns a bare count, not
-        elements to union in the caller."""
-        seeds = groovy_string_list_literal(self.request.node_ids)
-        edge_step = _EDGE_STEP[self.request.direction]
-        other_step = _OTHER_VERTEX_STEP[self.request.direction]
-        edge_filter = self._edge_label_filter()
-        temporal_filter = self._temporal_filter()
-        repeat = (
-            f"repeat({edge_step}(){edge_filter}.{structural_step}{temporal_filter}.as('e')"
-            f".{other_step}().{structural_step}.simplePath())"
-            f".times({self.request.depth}).emit()"
-        )
-        return (
-            f'g.V().has("id",within({seeds})).{structural_step}'
-            f".union(identity(),{repeat}).dedup().count()"
-        )
-
 
 def _route_step_filter(edge_types: tuple[str, ...] | list[str] | None) -> str | None:
     """The label filter on each link a route may take, or `None` when no type asked for may be

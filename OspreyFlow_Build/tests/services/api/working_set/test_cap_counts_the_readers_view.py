@@ -58,7 +58,7 @@ async def _case(
     store = FakeWorkingSetStore()
     await store.add_nodes(CASE, [node("a"), node("b"), *hidden_nodes])
     await store.add_edges(CASE, [edge("a-b", "a", "b"), *hidden_edges])
-    graph = FakeGraphPort(expansion, 0, graph_edges=graph_edges or [])
+    graph = FakeGraphPort(expansion, graph_edges=graph_edges or [])
     return WorkingSetService(graph, store, SCHEME), graph, store
 
 

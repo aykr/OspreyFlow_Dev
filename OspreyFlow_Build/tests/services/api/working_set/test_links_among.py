@@ -36,9 +36,7 @@ async def test_a_small_expansion_brings_the_links_among_its_nodes_and_the_view()
         _edge("l1-already", "l1", "already"),
         _edge("out", "l0", "elsewhere"),
     ]
-    graph = FakeGraphPort(
-        expand_result=star, candidate_count=3, graph_edges=[*star.edges, *between]
-    )
+    graph = FakeGraphPort(expand_result=star, graph_edges=[*star.edges, *between])
     service = WorkingSetService(graph, store, SCHEME)
 
     outcome = await service.expand("inv-1", ExpandRequest(node_ids=["hub"]), PRINCIPAL)
@@ -55,9 +53,7 @@ async def test_a_small_expansion_brings_the_links_among_its_nodes_and_the_view()
 async def test_a_large_expansion_does_not_ask_and_says_so() -> None:
     store = FakeWorkingSetStore()
     star = _star(AUTO_LINKS_MAX_NEW_NODES + 1)
-    graph = FakeGraphPort(
-        expand_result=star, candidate_count=len(star.nodes), graph_edges=star.edges
-    )
+    graph = FakeGraphPort(expand_result=star, graph_edges=star.edges)
     service = WorkingSetService(graph, store, SCHEME)
 
     outcome = await service.expand("inv-1", ExpandRequest(node_ids=["hub"]), PRINCIPAL)
@@ -72,7 +68,7 @@ async def test_links_that_would_pass_the_cap_are_left_out_of_an_expansion_and_it
     store = FakeWorkingSetStore()
     star = _star(2)
     extra = [_edge(f"x{i}", "l0", "l1") for i in range(MAX_EDGES)]
-    graph = FakeGraphPort(expand_result=star, candidate_count=3, graph_edges=[*star.edges, *extra])
+    graph = FakeGraphPort(expand_result=star, graph_edges=[*star.edges, *extra])
     service = WorkingSetService(graph, store, SCHEME)
 
     outcome = await service.expand("inv-1", ExpandRequest(node_ids=["hub"]), PRINCIPAL)
@@ -86,7 +82,6 @@ async def test_on_demand_the_links_among_the_whole_view_are_added() -> None:
     await store.add_nodes("inv-1", [_node("a"), _node("b"), _node("c")])
     graph = FakeGraphPort(
         expand_result=Subgraph(nodes=[], edges=[]),
-        candidate_count=0,
         graph_edges=[_edge("ab", "a", "b"), _edge("bc", "b", "c"), _edge("cz", "c", "z")],
     )
     service = WorkingSetService(graph, store, SCHEME)
@@ -100,7 +95,7 @@ async def test_on_demand_the_links_among_the_whole_view_are_added() -> None:
 async def test_on_demand_only_named_nodes_that_are_in_the_view_are_asked_about() -> None:
     store = FakeWorkingSetStore()
     await store.add_nodes("inv-1", [_node("a"), _node("b")])
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
 
     await service.links_among("inv-1", PRINCIPAL, node_ids=["a", "b", "not-on-screen"])
@@ -114,7 +109,6 @@ async def test_on_demand_past_the_cap_adds_nothing_and_raises_limit_exceeded() -
     await store.add_nodes("inv-1", [_node("a"), _node("b")])
     graph = FakeGraphPort(
         expand_result=Subgraph(nodes=[], edges=[]),
-        candidate_count=0,
         graph_edges=[_edge(f"e{i}", "a", "b") for i in range(MAX_EDGES + 1)],
     )
     service = WorkingSetService(graph, store, SCHEME)
@@ -125,13 +119,12 @@ async def test_on_demand_past_the_cap_adds_nothing_and_raises_limit_exceeded() -
     assert await store.edge_count("inv-1") == 0
 
 
-
 # --- ADR-098 Amendment 4: links among these within a chosen number of degrees -------------------
 
 
 def _view_graph(edges: list) -> tuple[FakeWorkingSetStore, FakeGraphPort, WorkingSetService]:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0,
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]),
                           graph_edges=edges)  # fmt: skip
     return store, graph, WorkingSetService(graph, store, SCHEME)
 
@@ -175,7 +168,7 @@ async def test_a_pair_joined_only_through_a_hidden_node_stays_unjoined() -> None
     """Rule 3: the search is the reader's, in the adapter — a route through what they cannot see is
     not found, and nothing says it exists."""
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), candidate_count=0,
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]),
                           graph_edges=[_edge("ah", "a", "h"), _edge("hd", "h", "d")],
                           hidden_node_ids=frozenset({"h"}))  # fmt: skip
     service = WorkingSetService(graph, store, SCHEME)

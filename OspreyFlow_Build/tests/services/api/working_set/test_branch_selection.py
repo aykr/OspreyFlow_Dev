@@ -87,7 +87,7 @@ def edge(edge_id: str, source: str, target: str, classification: str = "OFFICIAL
 
 
 def _service(store: FakeWorkingSetStore) -> WorkingSetService:
-    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]), candidate_count=0)
+    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]))
     return WorkingSetService(graph, store, SCHEME)
 
 

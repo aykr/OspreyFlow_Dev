@@ -15,9 +15,7 @@ ADR-001 names exactly those four as the ports separating the tiers, and a
 `QueuePort` is not one of them. This module is Conduit-internal plumbing
 for one worker pool's job shape, not a new Vault-crossing boundary, so it
 gets a focused test module (`tests/services/api/test_worker.py`, which
-exercises `JobQueue` directly) rather than a `tests/conformance/` suite —
-the distinction Phase 3's own scope note draws for
-`expand_candidate_count` applies here too.
+exercises `JobQueue` directly) rather than a `tests/conformance/` suite.
 """
 
 from __future__ import annotations

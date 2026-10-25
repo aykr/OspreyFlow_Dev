@@ -149,7 +149,7 @@ class SupersedingGraph(FakeGraphPort):
     transaction wrote."""
 
     def __init__(self, stored_edge_ids: set[str]) -> None:
-        super().__init__(Subgraph(nodes=[], edges=[]), candidate_count=0)
+        super().__init__(Subgraph(nodes=[], edges=[]))
         self.stored = set(stored_edge_ids)
         self.superseded: list[tuple[EdgeId, EdgeWrite]] = []
         self._pending: dict[TxId, list[tuple[EdgeId, EdgeWrite]]] = {}
@@ -580,7 +580,9 @@ from services.api.link_changes import (  # noqa: E402
 )
 
 OFFICIAL_SENSITIVE = Handling(
-    classification="OFFICIAL-SENSITIVE", handling_code="P", originator="unit-1",
+    classification="OFFICIAL-SENSITIVE",
+    handling_code="P",
+    originator="unit-1",
     owning_unit="unit-1",
 )
 

@@ -54,9 +54,7 @@ def _with[E: (Node, Edge)](
 
 
 def _world(nodes: list[Node], edges: list[Edge] | None = None) -> FakeGraphPort:
-    return FakeGraphPort(
-        Subgraph(nodes=[], edges=[]), 0, graph_nodes=nodes, graph_edges=edges or []
-    )
+    return FakeGraphPort(Subgraph(nodes=[], edges=[]), graph_nodes=nodes, graph_edges=edges or [])
 
 
 def _graph(
@@ -70,7 +68,6 @@ def _graph(
     nodes = [_node(name) for name in ("a", "b", "c", "d", "e")]
     return FakeGraphPort(
         Subgraph(nodes=[], edges=[]),
-        0,
         hidden_node_ids=hidden,
         graph_nodes=nodes,
         superseded_node_ids=superseded,
@@ -241,9 +238,7 @@ async def test_get_nodes_leaves_out_a_node_of_another_dataset() -> None:
 
 
 async def test_get_nodes_finds_a_node_the_expansion_returns_without_graph_nodes() -> None:
-    graph = FakeGraphPort(
-        Subgraph(nodes=[_node("x"), _node("y")], edges=[_edge("xy", "x", "y")]), 0
-    )
+    graph = FakeGraphPort(Subgraph(nodes=[_node("x"), _node("y")], edges=[_edge("xy", "x", "y")]))
     assert [n.id for n in await graph.get_nodes(["y", "x", "z"], PRINCIPAL)] == ["x", "y"]
     assert [e.id for e in await graph.get_edges(["xy"], PRINCIPAL)] == ["xy"]
 

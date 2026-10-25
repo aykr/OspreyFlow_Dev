@@ -126,13 +126,13 @@ def _paired_with(sim_endpoint: str, device: str) -> Edge:
 
 async def test_get_resolution_threshold_defaults_to_balanced_when_never_set() -> None:
     store = FakeWorkingSetStore()
-    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[]), 0), store, SCHEME)
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), store, SCHEME)
     assert await service.get_resolution_threshold(INVESTIGATION) == DEFAULT_THRESHOLD
 
 
 async def test_set_resolution_threshold_persists_and_get_reflects_it() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]), 0)
+    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
 
@@ -144,7 +144,7 @@ async def test_set_resolution_threshold_persists_and_get_reflects_it() -> None:
 async def test_lowering_the_threshold_merges_and_reports_the_delta() -> None:
     store = FakeWorkingSetStore()
     same_as = _same_as("n1", "n2", 0.85)  # below Strict, above Broad
-    graph = FakeGraphPort(Subgraph(nodes=[_person("n1"), _person("n2")], edges=[same_as]), 0)
+    graph = FakeGraphPort(Subgraph(nodes=[_person("n1"), _person("n2")], edges=[same_as]))
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
     await store.set_threshold(INVESTIGATION, THRESHOLD_STRICT)  # starts strict: not merged
@@ -165,7 +165,7 @@ async def test_lowering_the_threshold_merges_and_reports_the_delta() -> None:
 async def test_raising_the_threshold_splits_and_reports_the_delta() -> None:
     store = FakeWorkingSetStore()
     same_as = _same_as("n1", "n2", 0.85)
-    graph = FakeGraphPort(Subgraph(nodes=[_person("n1"), _person("n2")], edges=[same_as]), 0)
+    graph = FakeGraphPort(Subgraph(nodes=[_person("n1"), _person("n2")], edges=[same_as]))
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
     await store.set_threshold(INVESTIGATION, THRESHOLD_BROAD)  # starts broad: merged
@@ -186,7 +186,7 @@ async def test_a_manual_split_survives_even_at_a_broad_threshold() -> None:
     `NOT_SAME_AS` edge between them, at any threshold this test tries."""
     store = FakeWorkingSetStore()
     edges = [_same_as("n1", "n2", 0.999), _not_same_as("n1", "n2")]
-    graph = FakeGraphPort(Subgraph(nodes=[_person("n1"), _person("n2")], edges=edges), 0)
+    graph = FakeGraphPort(Subgraph(nodes=[_person("n1"), _person("n2")], edges=edges))
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
 
@@ -198,7 +198,7 @@ async def test_a_manual_split_survives_even_at_a_broad_threshold() -> None:
 
 async def test_no_change_reports_a_zero_delta() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]), 0)
+    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]))
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(INVESTIGATION, [_person("n1"), _person("n2")])
 
@@ -229,7 +229,6 @@ async def test_msisdn_and_imsi_endpoints_cluster_together_the_device_does_not() 
             ],
             edges=[same_as, paired_with],
         ),
-        0,
     )
     service = WorkingSetService(graph, store, SCHEME)
     await store.add_nodes(

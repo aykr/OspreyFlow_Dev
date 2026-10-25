@@ -1179,9 +1179,9 @@ class Judgement(BaseModel):
     default this codebase already applies everywhere else it cannot positively confirm access.
 
     `flagged_for_review`/`flag_reason` are not in `01_DOMAIN_MODEL.md` §5's own illustrative
-    Pydantic snippet — grown past it the same way `GraphPort`, `SAME_AS`'s own properties and
-    `Subgraph.filtered_count` each already grew past their own doc's illustrative sketch
-    (`00_ARCHITECTURE.md` §2.1, `01_DOMAIN_MODEL.md` §4, §8.2's own precedent) — the review-flag
+    Pydantic snippet — grown past it the same way `GraphPort` and `SAME_AS`'s own properties
+    each already grew past their own doc's illustrative sketch
+    (`00_ARCHITECTURE.md` §2.1, `01_DOMAIN_MODEL.md` §4) — the review-flag
     loop (§5: "every judgement resting on it is flagged for review") needs somewhere to persist
     that state, and the spec names the behaviour without naming a field for it."""
 
@@ -1265,8 +1265,8 @@ class NeighbourhoodStats(BaseModel):
 
 class Subgraph(BaseModel):
     """Nodes and links a read returned. It carries no count of what was left out (ADR-124
-    decision 1): `filtered_count` was on it and was 0 on every read the adapter made, a field
-    that claims completeness and is sent wherever a `Subgraph` is a response."""
+    Amendment 4, item 2): `filtered_count` was on it and was 0 on every read the adapter made, a
+    field that claims completeness and is sent wherever a `Subgraph` is a response."""
 
     nodes: list[Node]
     edges: list[Edge]
