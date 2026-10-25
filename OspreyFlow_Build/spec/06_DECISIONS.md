@@ -17467,6 +17467,25 @@ the owner's delegation of 24 October 2026.
   payer's account is therefore `SYN-70417`. The found account, `SYN-00988`, is unchanged: it appears
   only in report text and is on no entity.
 
+### ADR-124, Amendment 16 (25 October 2026) — how to run the one-off strip on a deployment
+
+Found by an adversarial reviewer checking Brief 1 stage 7's proposed demo script. Under the owner's
+delegation of 24 October 2026.
+- **The correction.** Amendment 15 gives the step as `python -m scripts.strip_change_provenance`. That
+  fails from a bare `python`: `pyproject.toml` sets `[tool.uv] package = false`, so `packages/` is not
+  on the path. The script also needs the deployment's ArcadeDB and Valkey, which sit on its internal
+  Docker network.
+- **The step.** Run it as a one-off container of the deployment's `api` service, as `scripts/seed_internal.py`
+  runs its modules, on the host that runs the deployment's Docker, from `OspreyFlow_Core`:
+
+  ```
+  docker compose --env-file deploy/generated/local-lite/deployment.env -f deploy/generated/local-lite/compose.yaml run --rm --no-deps --entrypoint python -v "$PWD/scripts:/app/scripts:ro" -v "$PWD/packages:/app/packages:ro" -v "$PWD/services:/app/services:ro" api -m scripts.strip_change_provenance
+  ```
+
+  A deployment under another profile has its own folder under `deploy/generated/`. The mounts lay the
+  checkout's code over the image's (the image keeps it under `/app`), so the step also works before
+  the image is rebuilt. The Conduit may keep running (Amendment 14).
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are
