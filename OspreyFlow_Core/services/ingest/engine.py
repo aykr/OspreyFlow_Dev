@@ -211,8 +211,7 @@ def _resolve_binding(
             )
         if len(binding.fields) != arity:
             raise RowRejected(
-                f"transform {binding.transform!r} takes {arity} field(s), "
-                f"got {len(binding.fields)}"
+                f"transform {binding.transform!r} takes {arity} field(s), got {len(binding.fields)}"
             )
         values: list[str] = []
         for name in binding.fields:
@@ -447,9 +446,7 @@ class _ResolvedEdge:
         self.content = content
 
 
-def _check_values(
-    type_def: EntityTypeDef | EdgeTypeDef | None, properties: dict[str, Any]
-) -> None:
+def _check_values(type_def: EntityTypeDef | EdgeTypeDef | None, properties: dict[str, Any]) -> None:
     """Refuses the row when a value does not fit the type the ontology declares for its property (9
     October 2026: it raised `OntologyError` from deep in the dry run or the load, so one bad row
     failed Verify). Only the values are checked here: whether a required property is there depends
@@ -490,7 +487,16 @@ def _resolve_row(
         )
         if ontology is not None:
             _check_values(ontology.entity_type(entity.type), properties)
-        entities.append(_ResolvedEntity(entity, properties, _held_content(entity, row)))
+        content = _held_content(entity, row)
+        if content is None and holds_own_text(entity):
+            # ADR-127 amendment: a Document that holds its own text and has none this row is not
+            # loaded text-less; the row is rejected, naming the column.
+            assert entity.content is not None
+            raise RowRejected(
+                f"{entity.content.field} is empty; a Document holds its own text, so a row with "
+                "none is not loaded"
+            )
+        entities.append(_ResolvedEntity(entity, properties, content))
 
     edges = []
     for edge in recipe.row_template.edges:
@@ -645,14 +651,31 @@ def resolve_rows(
 
 
 async def _write_entity(
-    resolved: _ResolvedEntity, *, row_index: int, now: datetime, state: _RunState
+    resolved: _ResolvedEntity,
+    *,
+    row_index: int,
+    now: datetime,
+    state: _RunState,
+    own_text_media: MediaStore | None = None,
 ) -> NodeId | None:
+    """`own_text_media`: the media store, for a `Document` that holds its own text (ADR-127
+    decision 1). Its text is put there, and `object_ref` and `media_kind: text` written onto the
+    Document, only when a node is about to be written: a Document matched by reference is not
+    rewritten by the row (it keeps the `object_ref` it has) and no object is stored for it. The
+    title is a bound `title` if there is one, else the text's first words; it is settled before the
+    match, so a recipe may match on it."""
     if resolved.properties is None:
         return None
     entity = resolved.entity
-    properties = _coerce_declared_numeric_types(
-        resolved.properties, state.ontology.entity_type(entity.type)
+    own_text = (
+        resolved.content["value"]
+        if own_text_media is not None and resolved.content is not None
+        else None
     )
+    base = resolved.properties
+    if own_text is not None:
+        base = {"title": _first_words(own_text), **base}
+    properties = _coerce_declared_numeric_types(base, state.ontology.entity_type(entity.type))
     handling = _handling(_merge_override(state.recipe.defaults.handling, entity.handling))
     provenance = _provenance(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
@@ -675,6 +698,10 @@ async def _write_entity(
             state.local_index[cache_key] = existing.id
             state.nodes_referenced += 1
             return existing.id
+
+    if own_text is not None and own_text_media is not None:
+        ref = await own_text_media.put(own_text.encode("utf-8"), "text/plain")
+        properties = {**properties, "object_ref": ref, "media_kind": _MEDIA_KIND["document_text"]}
 
     write = NodeWrite(
         id=new_node_id(),
@@ -744,6 +771,18 @@ def _held_content(entity: RecipeEntity, row: Mapping[str, str]) -> dict[str, str
 def _first_words(text: str) -> str:
     words = " ".join(text.split())
     return words if len(words) <= 60 else f"{words[:57]}…"
+
+
+def holds_own_text(entity: RecipeEntity) -> bool:
+    """ADR-127 decision 1: a `Document` entity whose `content` is `document_text` holds its own
+    text. The text is written onto that Document itself, with no content node and no `HOLDS`
+    (which the ontology does not allow from a Document). On any other entity `content` is held:
+    a content Document, linked by `HOLDS`."""
+    return (
+        entity.type == "Document"
+        and entity.content is not None
+        and entity.content.kind == "document_text"
+    )
 
 
 async def _write_held_content(
@@ -1309,12 +1348,17 @@ async def run_recipe(
         refs: dict[str, NodeId] = {}
         for staged_entity in staged_row.entities:
             resolved_entity = _staged_entity_to_resolved(staged_entity, recipe)
+            own_text = holds_own_text(resolved_entity.entity)
             node_id = await _write_entity(
-                resolved_entity, row_index=staged_row.row_index, now=now, state=state
+                resolved_entity,
+                row_index=staged_row.row_index,
+                now=now,
+                state=state,
+                own_text_media=media if own_text else None,
             )
             if node_id is not None:
                 refs[staged_entity.ref] = node_id
-                if resolved_entity.content and media is not None:
+                if resolved_entity.content and media is not None and not own_text:
                     await _write_held_content(
                         resolved_entity,
                         node_id,

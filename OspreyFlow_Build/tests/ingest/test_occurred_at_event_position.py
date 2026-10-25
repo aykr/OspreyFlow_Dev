@@ -23,125 +23,28 @@ directory, not the deployment's object store."""
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
-from pathlib import Path
 from typing import Any
 
-import pyarrow.fs as pa_fs
 import pytest
 from services.api.studio_publish import load_with_rules
-from services.ingest import staging
 
 from ontology.errors import OntologyError
 from ontology.packs import load_deployment_ontology
-from ontology.validation import validate_edge_endpoints, validate_properties
 from schemas.analytics import EventRecord
-from schemas.domain import EdgeWrite, NodeWrite, OntologySchema, Principal
+from schemas.domain import OntologySchema, Principal
 from schemas.ingest import Recipe
+from tests.ingest.recipe_test_support import (  # noqa: F401 (the autouse fixture)
+    ValidatingGraph,
+    local_staging,
+)
 
 LOADER = Principal(id="loader-1", clearance="OFFICIAL", org_unit="unit-1")
 LOAD_ID = "load-occurred-at-position-1"
 
 
-class _LocalStore:
-    """The slice of the object store's file system the staging module uses, over a directory. An
-    object store has no directories to make before a write; a disk does, so a write makes them."""
-
-    def __init__(self, root: Path) -> None:
-        self._fs = pa_fs.SubTreeFileSystem(str(root), pa_fs.LocalFileSystem())
-
-    def create_dir(self, path: str) -> None:
-        self._fs.create_dir(path, recursive=True)
-
-    def open_output_stream(self, path: str) -> Any:
-        self._fs.create_dir(path.rsplit("/", 1)[0], recursive=True)
-        return self._fs.open_output_stream(path)
-
-    def open_input_file(self, path: str) -> Any:
-        return self._fs.open_input_file(path)
-
-
-@pytest.fixture(autouse=True)
-def _local_staging(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The engine stages every run as Parquet through `staging.filesystem`, which is the object
-    store's. Pointed at a temporary directory instead, the same write and read-back happen and no
-    store is touched."""
-    root = tmp_path / "staging"
-    root.mkdir()
-    monkeypatch.setattr(staging, "filesystem", lambda config: _LocalStore(root))
-
-
 def _ontology() -> OntologySchema:
     """The one place the test's ontology comes from, so a variant can be planted through it."""
     return load_deployment_ontology()
-
-
-class TransactionalGraph:
-    """A fake graph bound to `_ontology()` that refuses as the real adapter does."""
-
-    def __init__(self) -> None:
-        self.committed_nodes: list[NodeWrite] = []
-        self.committed_edges: list[EdgeWrite] = []
-        self.open_nodes: list[NodeWrite] = []
-        self.open_edges: list[EdgeWrite] = []
-        self.discarded_nodes: list[NodeWrite] = []
-        self.discarded_edges: list[EdgeWrite] = []
-        self.rolled_back = 0
-        self.commits = 0
-
-    async def begin_transaction(self) -> str:
-        return "tx-1"
-
-    async def commit_transaction(self, tx: object) -> None:
-        # A rolled-back session has nothing left to commit; the real store refuses it.
-        if self.rolled_back:
-            raise RuntimeError(f"transaction {tx!r} was rolled back and cannot be committed")
-        self.commits += 1
-        self.committed_nodes.extend(self.open_nodes)
-        self.committed_edges.extend(self.open_edges)
-        self.open_nodes, self.open_edges = [], []
-
-    async def rollback_transaction(self, tx: object) -> None:
-        self.discarded_nodes.extend(self.open_nodes)
-        self.discarded_edges.extend(self.open_edges)
-        self.open_nodes, self.open_edges = [], []
-        self.rolled_back += 1
-
-    async def find_node(self, *args: Any, **kwargs: Any) -> None:
-        return None
-
-    def _type_of(self, node_id: str) -> str | None:
-        for node in [*self.committed_nodes, *self.open_nodes]:
-            if node.id == node_id:
-                return node.type
-        return None
-
-    async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: object) -> list[str]:
-        ontology = _ontology()
-        for node in nodes:
-            entity_type = ontology.entity_type(node.type)
-            if entity_type is None:
-                raise OntologyError(f"{node.type!r} is not a type in the active ontology")
-            validate_properties(entity_type, node.properties)
-        self.open_nodes.extend(nodes)
-        return [n.id for n in nodes]
-
-    async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: object) -> list[str]:
-        ontology = _ontology()
-        for edge in edges:
-            edge_type = ontology.edge_type(edge.type)
-            if edge_type is None:
-                raise OntologyError(f"{edge.type!r} is not a type in the active ontology")
-            validate_properties(edge_type, edge.properties)
-            source_type = self._type_of(edge.source)
-            target_type = self._type_of(edge.target)
-            if source_type is None:
-                raise OntologyError(f"edge source {edge.source!r} does not exist")
-            if target_type is None:
-                raise OntologyError(f"edge target {edge.target!r} does not exist")
-            validate_edge_endpoints(edge_type, source_type=source_type, target_type=target_type)
-        self.open_edges.extend(edges)
-        return [e.id for e in edges]
 
 
 def _throw_over_recipe(*, undeclared: bool = False) -> Recipe:
@@ -221,7 +124,7 @@ def _row() -> dict[str, str]:
     }
 
 
-async def _run(graph: TransactionalGraph, recipe: Recipe) -> tuple[Any, list[EventRecord]]:
+async def _run(graph: ValidatingGraph, recipe: Recipe) -> tuple[Any, list[EventRecord]]:
     report, events, _held = await load_with_rules(
         recipe,
         [_row()],
@@ -237,7 +140,7 @@ async def _run(graph: TransactionalGraph, recipe: Recipe) -> tuple[Any, list[Eve
 
 
 async def test_a_throw_over_link_carries_its_position_yard_and_item_to_its_event() -> None:
-    graph = TransactionalGraph()
+    graph = ValidatingGraph(_ontology)
     report, events = await _run(graph, _throw_over_recipe())
     assert report.rejections == []
     (event,) = [e for e in events if e.edge_type == "OCCURRED_AT"]
@@ -256,7 +159,7 @@ async def test_a_throw_over_link_carries_its_position_yard_and_item_to_its_event
 
 
 async def test_an_undeclared_link_property_fails_the_run_and_commits_nothing() -> None:
-    graph = TransactionalGraph()
+    graph = ValidatingGraph(_ontology)
     # Naming `recovered` alone: while the four are undeclared the message names them too, and a
     # run that failed for that reason would otherwise pass here.
     with pytest.raises(

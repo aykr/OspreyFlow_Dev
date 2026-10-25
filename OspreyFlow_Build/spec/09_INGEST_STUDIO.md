@@ -452,6 +452,18 @@ name or the text's first words), one per file however many entities hold it, and
 linked to it by `HOLDS`. A recipe that marks held content is refused at run if the run has no media
 store. Tests: `tests/ingest/test_held_content.py`, `tests/conformance/media_store`.
 
+**A `Document` holds its own text (ADR-127 decisions 1 and 2).** A `Document` entity row may name a
+column as its own *document text*. The text goes to the media store and the `Document` itself carries
+`object_ref` and `media_kind: text`: no second node and no `HOLDS`. Its title is a bound `title` if
+there is one, otherwise the text's first words; its `object_ref` and `media_kind` cannot be bound. Because the `Document` is the row's own entity, every
+link in the row can name it, so one report row gives the report and its `MENTIONED_IN` links from the
+people, number and areas it names. A row whose text cell is empty is rejected, naming the field. A
+`Document` holds only its own text: an image or video file on a `Document` entity is refused at Map
+save. A `Document` matched by reference is not rewritten by the row. Every link must name an entity the
+row declares: one naming an undeclared reference is refused at Map save and at run, while a declared
+entity skipped on a row by its `when` condition simply has no links on that row. Tests:
+`tests/ingest/test_document_holds_its_own_text.py`, `test_document_holds_its_own_text_live.py`.
+
 ### Files: the unstructured path, built for images, videos and text (ADR-094 step 3)
 
 The studio's **Files** tab (beside *Pipelines*, shown once the studio has a case to load into) adds images, videos

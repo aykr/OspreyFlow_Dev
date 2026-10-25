@@ -4,14 +4,17 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { OntologySchema, RecipeEdge } from "../../../../../packages/schemas/generated";
+import type { OntologySchema, RecipeEdge, RecipeEntity } from "../../../../../packages/schemas/generated";
 import { ElementInspector } from "./ElementInspector";
 
 afterEach(cleanup);
 
 const ONTOLOGY = {
   version: 11,
-  entity_types: [{ name: "Endpoint", pole_class: "object", channel: "cyan", shape: "circle", properties: [] }],
+  entity_types: [
+    { name: "Endpoint", pole_class: "object", channel: "cyan", shape: "circle", properties: [] },
+    { name: "Document", pole_class: "object", channel: "violet", shape: "page", properties: [] },
+  ],
   edge_types: [
     { name: "COMMUNICATED_WITH", from: ["Endpoint"], to: ["Endpoint"], temporal: true, basis: "direct" },
     { name: "OWNS", from: ["Endpoint"], to: ["Endpoint"], basis: "direct" },
@@ -97,6 +100,87 @@ describe("ElementInspector: content an entity holds (ADR-094 step 2)", () => {
       expect.objectContaining({ content: { kind: "image_file", field: "phone" } }),
     );
     expect(screen.getByText(/relative to the export's own folder/)).toBeTruthy();
+  });
+});
+
+// ADR-127 decision 1 and its amendment: a Document holds only its own text. An image or a video on a
+// Document entity is refused at Map save, so the inspector does not offer it there.
+describe("ElementInspector: a Document's own text (ADR-127)", () => {
+  function mountDocument(content: RecipeEntity["content"] = null, onChangeEntity = vi.fn()) {
+    render(
+      <ElementInspector
+        selection={
+          {
+            kind: "entity",
+            entity: { ref: "doc", pole_class: "object", type: "Document", properties: {}, content },
+          } as never
+        }
+        ontology={ONTOLOGY}
+        transforms={[]}
+        sourceFieldNames={["report_text", "title"]}
+        baselineClassification="OFFICIAL"
+        classificationOrder={["OFFICIAL"]}
+        onChangeEntity={onChangeEntity}
+        onChangeEdge={vi.fn()}
+        onDelete={vi.fn()}
+        onPreviewHandling={vi.fn()}
+      />,
+    );
+    return onChangeEntity;
+  }
+
+  it("offers only the Document's own text, labelled for what it is", () => {
+    mountDocument();
+    expect(screen.queryByLabelText("Content this holds")).toBeNull();
+    const select = screen.getByLabelText("Its own text") as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(["", "document_text"]);
+    expect(screen.queryByText("Image file")).toBeNull();
+    expect(screen.queryByText("Video file")).toBeNull();
+    expect(screen.queryByText(/relative to the export's own folder/)).toBeNull();
+  });
+
+  it("marks a column as its own text, and names which column holds it", () => {
+    const onChangeEntity = mountDocument();
+    fireEvent.change(screen.getByLabelText("Its own text"), { target: { value: "document_text" } });
+    expect(onChangeEntity).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: { kind: "document_text", field: "report_text" } }),
+    );
+    cleanup();
+    const again = mountDocument({ kind: "document_text", field: "report_text" });
+    fireEvent.change(screen.getByLabelText("Column holding its text"), { target: { value: "title" } });
+    expect(again).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: { kind: "document_text", field: "title" } }),
+    );
+  });
+
+  it("keeps the holder wording, with the files, for every other entity type", () => {
+    render(
+      <ElementInspector
+        selection={
+          {
+            kind: "entity",
+            entity: { ref: "phone", pole_class: "object", type: "Endpoint", properties: {} },
+          } as never
+        }
+        ontology={ONTOLOGY}
+        transforms={[]}
+        sourceFieldNames={["phone"]}
+        baselineClassification="OFFICIAL"
+        classificationOrder={["OFFICIAL"]}
+        onChangeEntity={vi.fn()}
+        onChangeEdge={vi.fn()}
+        onDelete={vi.fn()}
+        onPreviewHandling={vi.fn()}
+      />,
+    );
+    const select = screen.getByLabelText("Content this holds") as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual([
+      "",
+      "document_text",
+      "image_file",
+      "video_file",
+    ]);
+    expect(screen.queryByLabelText("Its own text")).toBeNull();
   });
 });
 

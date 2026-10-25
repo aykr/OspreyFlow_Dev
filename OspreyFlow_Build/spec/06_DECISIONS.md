@@ -17732,3 +17732,23 @@ a link cannot be a span. The spec is silent or wrong on each (rule 11).
 - **Decision 10:** a loader not cleared for an existing node makes a second copy, and the seed's one
   cleared principal makes none.
 - **Decision 11:** a custody row with an empty end loads an open span, and its event is at the start.
+
+### ADR-127, Amendment 1 (25 October 2026) — B2-1: what decisions 1 and 2 left open
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **The title.** A bound `title` wins. With none bound, the `Document`'s title is the text's first
+  words, as held content already has it. `object_ref` and `media_kind` cannot be bound on a `Document`
+  that holds its own text: they are the text's, and binding either is refused at Map save and at run.
+- **An empty text cell.** The row is rejected, naming the field. A `Document` with no text is never
+  written from a `document_text` binding.
+- **Images and video.** A `Document` holds only its own text. `image_file` or `video_file` content on a
+  `Document` entity is refused at Map save and at run, so the run never meets a `HOLDS` from a `Document`.
+- **A referenced `Document`.** One matched by `on_match: reference` is not rewritten by the row, as any
+  referenced node is not: it keeps its own `object_ref`, and the row's text is not written to the media
+  store.
+- **Verify** resolves the entity and its links but writes nothing to the media store, so it does not
+  check the text path. The run does.
+- **A skipped entity is not an undeclared one.** A declared entity that a `when` condition skips on a row
+  simply has no links on that row (R9's second and third subjects); only a reference no entity declares
+  is refused.
+

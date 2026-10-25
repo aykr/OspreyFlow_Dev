@@ -50,6 +50,40 @@ def recipe_rule_violations(template: RowTemplate, ontology: OntologySchema) -> l
                     f"{owner}.{prop} asks {name} for {part!r}, which it does not give "
                     f"(its parts: {', '.join(parts)})."
                 )
+    # ADR-127 decision 2: an edge names its ends by the refs the template declares. A ref that is
+    # declared but whose entity is skipped by its `when` on one row is normal (the edge is not
+    # written for that row); a ref nothing declares is a template error, never a silent skip.
+    declared = {entity.ref for entity in template.entities}
+    for edge in template.edges:
+        for end, ref in (("from", edge.from_ref), ("to", edge.to_ref)):
+            if ref not in declared:
+                problems.append(
+                    f"{edge.type!r} names {ref!r} as its {end!r} end, but no entity in the row "
+                    f"template has that ref (declared: {', '.join(sorted(declared)) or 'none'})."
+                )
+    # ADR-127 amendment: a Document holds only its own text. A file on a Document would be written
+    # as a content Document held by `HOLDS`, which the ontology does not allow from a Document.
+    for entity in template.entities:
+        if (
+            entity.type == "Document"
+            and entity.content is not None
+            and entity.content.kind in FILE_KINDS
+        ):
+            problems.append(
+                f"{entity.ref!r} is a Document and marks {entity.content.field!r} as a file "
+                f"({entity.content.kind}). A Document holds only its own text "
+                "(content kind document_text); a file is held by the entity it belongs to "
+                "(ADR-094)."
+            )
+    # ADR-127: the text's place in the media store is the engine's to write, never a column's.
+    for entity in template.entities:
+        if entity.type == "Document" and entity.content is not None:
+            for name in ("object_ref", "media_kind"):
+                if name in entity.properties and entity.content.kind == "document_text":
+                    problems.append(
+                        f"{entity.ref!r} is a Document that holds its own text, which sets "
+                        f"{name!r} itself; it cannot be bound to a column."
+                    )
     for edge in template.edges:
         type_def = ontology.edge_type(edge.type)
         if type_def is None:

@@ -500,7 +500,8 @@ class ContentBinding(BaseModel):
 
     #: On a link: `message_text` or `document_text`. On an entity (content it holds, linked by
     #: `HOLDS`): `document_text`, or a file named by a path relative to the export's own folder,
-    #: `image_file` or `video_file`.
+    #: `image_file` or `video_file`. On a `Document` entity, `document_text` is the Document's own
+    #: text (ADR-127 decision 1): written onto that Document, with no content node and no `HOLDS`.
     kind: Literal["message_text", "document_text", "image_file", "video_file"]
     field: str
 
