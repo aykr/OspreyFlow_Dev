@@ -107,7 +107,7 @@ describe("submitExport", () => {
         resolution_threshold: 0.95,
         handling_level: "OFFICIAL",
       },
-      manifest: { policy: "disclose", withheld_count: 3 },
+      manifest: { policy: "disclose", withheld: true },
       ledger_entry_id: "led-1",
     };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => body }));

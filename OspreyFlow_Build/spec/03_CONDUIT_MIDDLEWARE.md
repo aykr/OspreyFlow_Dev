@@ -780,7 +780,7 @@ POST   /v1/investigations/{id}/packs/{pack}/publish    a new immutable version; 
 POST   /v1/investigations/{id}/packs/{pack}/versions/{v}/withdraw  withdraw a publication, with a reason, recorded once; record_assessment, Editor
 GET    /v1/investigations/{id}/published               each pack's newest publication not withdrawn (Reports → Published), its publisher named (ADR-106); audited; read_reports, Viewer
 GET    /v1/investigations/{id}/packs/{pack}/published  that publication as the reader may see it, with the withheld count; every read audited; read_reports, Viewer
-POST   /v1/investigations/{id}/packs/{pack}/export     the newest live publication through the export gate (ADR-113 decision 6, Am. 2): the exporter's access re-checked item by item; withheld items counted under the manifest policy, never named; 403 export_refused when nothing is within their handling (nothing recorded); 422 override_required for an item whose originator must be consulted; the approved manifest with its mark, exporter and publisher named (ADR-106), and an export-ledger entry (report_pack); export, Editor
+POST   /v1/investigations/{id}/packs/{pack}/export     the newest live publication through the export gate (ADR-113 decision 6, Am. 2): the exporter's access re-checked item by item; a yes or no of withheld items under the manifest policy (true or false under `disclose`, absent under `omit`), never a count and never named; 403 export_refused when nothing is within their handling (nothing recorded); 422 override_required for an item whose originator must be consulted; the approved manifest with its mark, exporter and publisher named (ADR-106), and an export-ledger entry (report_pack); export, Editor
 GET    /v1/reports/dashboards                              the Superset boards this person may open: each counted for a dashboard identity whose every figure they could count (unit, clearance, handling codes, a level on each of its cases — ADR-111 Am. 3); read_reports
 POST   /v1/reports/dashboards/{slug}/guest-token           a five-minute, read-only Superset guest token for one such board, its rows limited to that identity (row-level rule); otherwise 404; Superset refusing is a 502 in words; read_reports
 POST   /v1/investigations/{id}/documents/{document_id}/candidates/accept   the reader's Accept all pending: an enumerated list of candidate ids, never a filter (ADR-108 Q1); Editor
@@ -1013,7 +1013,7 @@ worse than a refused one.
 handling scheme. A `consult_originator` item blocks the export and is named specifically.
 Override requires a justification and an originator reference, both recorded. Exports carry the
 Osprey mark, the investigation reference, the export timestamp, the resolution threshold in
-force, and a manifest of withheld items by count. A disclosed limit (ADR-099 Amendment 1 decision 6):
+force, and a manifest that says only whether material is withheld (ADR-124 decision 9). A disclosed limit (ADR-099 Amendment 1 decision 6):
 export of a link checks the link's handling as the client submitted it, not its datasets.
 
 ## 7. Caching

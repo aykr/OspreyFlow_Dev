@@ -17192,6 +17192,76 @@ Decided by the owner, 25 October 2026: "Accept it".
   Amendment 10's correction to Amendment 2, which makes a hidden id and an absent id cost the same
   round trips, stands: a membership test for a specific guessed id is not accepted by this ruling.
 
+### ADR-124, Amendment 13 (25 October 2026) — U9: the export and the ledger keep a yes or no
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after an adversarial review.
+- **The manifest's yes or no** is the same judgement as `sync`'s `withheld` (decision 5,
+  Amendment 7). `WorkingSetService.withheld_for` replaces `withheld_count_for` and returns the
+  counted index's judgement: handling only, datasets ignored. No count is kept anywhere.
+- **Every renderer** goes through one helper in `export/api.ts`. A case artefact shows the standing
+  sentence under `disclose` when `withheld` is true, and nothing otherwise.
+  - **The subgraph artefact** carries the structured boolean, not the sentence.
+  - **A defect corrected.** The report renderer printed the old count under `omit` and nothing
+    under `disclose`, the reverse of ADR-045. Its old test pinned that.
+- **The ledger.** Bootstrap creates `withheld BOOLEAN NOT NULL`.
+  - **The migration** runs on every connect in one `DO` block under an exclusive lock. If
+    `withheld_count` exists, it adds `withheld`, sets it to `withheld_count > 0`, drops the count
+    and sets `NOT NULL`; otherwise it does nothing. The lock stops two instances starting together
+    from colliding on the drop.
+  - **Tests.** A live test migrates an old-shape table with counts 0, 3 and 1 and runs it twice
+    more. Two plants each turned it red: dropping before copying, and running the body
+    unconditionally.
+- **The wire gate** now forbids `withheld_count` on every route. Amendment 4's exemption is gone.
+- **The pack export follows decision 9.** `PackExport.withheld` is `bool | None`, decided by the
+  coordinator under the owner's instruction because it was the same class of figure.
+  - **Its scope is unchanged:** the published version's own items. An item counts as withheld if the
+    exporter's handling does not clear it, or if an entity or assessment item's graph read no longer
+    returns it.
+  - **That second test applies datasets** through the adapter, so an entity item outside the
+    exporter's datasets reads as withheld. That differs from the case manifest's handling-only
+    judgement. It is recorded, not changed here.
+  - **The printed pack cover has its own sentence.** It reads "Some items of this pack are not
+    included in this export." under `disclose` when `withheld` is true, and nothing otherwise. The
+    case sentence would be false for a cleared exporter whose pack has a stale or out-of-datasets
+    item.
+  - **A pinned test** fails if the route sends an integer.
+- **Brief 1's live test.** The shared case's manifest now reads true in store A and false in B for
+  the analyst, and false in both for the cleared principal. Amendment 4's two U9 markers are met.
+- **Still a count:** the pack reads (draft, history, published) and the 409 `pack_has_withheld_items`
+  body, which ADR-113 Amendment 1 set as "the withheld count (never which)". Unit **U9b**, added to
+  the units after U9, brings them under the same rule and amends ADR-113.
+- **Old and new instances at once.** If they run side by side, as a rolling upgrade would, an
+  instance not yet upgraded fails its ledger `INSERT` once the count column is gone. An export on it
+  is then refused, never written wrong. The exclusive lock is taken on every start, and
+  is brief once the column is gone.
+
+### ADR-045, Amendment 1 (25 October 2026) — the manifest is a yes or no, not a count
+
+Under the owner's ruling of 24 October 2026 on ADR-124 (option A′, and "A yes/no only" for the
+ledger).
+- **What changes.** Wherever ADR-045 says the manifest, the export or the audit record carries a
+  count of withheld items, read it as a yes or no that material is withheld (ADR-124 decision 9).
+  This covers:
+  - "a manifest of withheld items by count";
+  - option (a)'s "a count of withheld items";
+  - option (c)'s count kept in the Conduit's own record;
+  - the test name `test_export_manifest_reports_withheld_count_regardless_of_declared_recipient`;
+  - option (c)'s test name `test_export_artefact_carries_no_withheld_count_but_audit_record_does`;
+  - the default's reasoning about "disclosing a count";
+  - the addendum's "a count, never a referent".
+- **The framing's premise is gone.** ADR-045's framing rests on the status bar's count ("6 hidden by
+  handling") and the delta protocol's `notice`. Under ADR-124 the status bar shows only the standing
+  sentence (decision 5) and `notice` is retired (decision 1; Amendment 4 records its removal). The exporter has seen that sentence,
+  not a count, so the manifest discloses nothing more than it.
+- **ADR-048's table** has its own row, "Learns a count of withheld items / Disclosed (count only)".
+  That belongs to ADR-048, which U10 amends under decision 14.
+- **What stays.** The deployment switch is unchanged: `disclose` by default, `omit` by
+  configuration, and audited in both modes. Under `disclose` the yes or no is never `None`; under
+  `omit` the manifest carries none, and the ledger records the yes or no either way.
+- **Why.** A count tied to a case or a pack can be differenced by the reader. ADR-124's context sets
+  out the measurements.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

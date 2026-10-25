@@ -45,7 +45,7 @@ test("submitting a subgraph export succeeds and shows the mark, reachable by key
           resolution_threshold: 0.95,
           handling_level: "OFFICIAL",
         },
-        manifest: { policy: "disclose", withheld_count: 2 },
+        manifest: { policy: "disclose", withheld: true },
         ledger_entry_id: "led-1",
       }),
     });
@@ -55,7 +55,7 @@ test("submitting a subgraph export succeeds and shows the mark, reachable by key
   await tabToButtonNamed(page, "Export");
   await page.keyboard.press("Enter");
 
-  await expect(page.getByText("2 hidden by handling")).toBeVisible();
+  await expect(page.getByText("This case holds material you are not cleared to see.")).toBeVisible();
   await expect(page.getByText(/OspreyFlow/)).toBeVisible();
   registerCovered("EXPORT_PANEL_ACTIONS", "submit-export-succeeds");
 });
@@ -83,7 +83,7 @@ test("a blocked export is overridden with justification and originator reference
             resolution_threshold: 0.95,
             handling_level: "OFFICIAL",
           },
-          manifest: { policy: "disclose", withheld_count: 0 },
+          manifest: { policy: "disclose", withheld: false },
           ledger_entry_id: "led-2",
         }),
       });
@@ -138,7 +138,7 @@ test("a successful export triggers a real file download, reachable by keyboard a
           resolution_threshold: 0.95,
           handling_level: "OFFICIAL",
         },
-        manifest: { policy: "disclose", withheld_count: 0 },
+        manifest: { policy: "disclose", withheld: false },
         ledger_entry_id: "led-3",
       }),
     });

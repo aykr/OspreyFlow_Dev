@@ -2475,10 +2475,11 @@ def test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_w
     assert result["mark"]["handling_level"], result["mark"]
 
     # **The withheld-item manifest**, which is what keeps the artefact honest about what it does
-    # not contain (ADR-045). `withheld_count` is computed server-side: `ExportRequest` has no such
+    # not contain (ADR-045). `withheld` is computed server-side: `ExportRequest` has no such
     # field, deliberately, so a client cannot make the manifest misstate completeness.
     assert result["manifest"] is not None, "the export proceeded without a withheld-item manifest"
-    assert "withheld_count" in result["manifest"], result["manifest"]
+    assert isinstance(result["manifest"]["withheld"], bool), result["manifest"]
+    assert "withheld_count" not in result["manifest"], result["manifest"]
     assert result["manifest"]["policy"], result["manifest"]
 
     # The override is recorded, not merely accepted — there is a ledger entry to point at.

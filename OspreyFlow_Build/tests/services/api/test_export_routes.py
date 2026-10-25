@@ -177,14 +177,14 @@ def _membership_node(*, owning_unit: str, classification: str = "OFFICIAL") -> N
 #: (ADR-124 decision 7), so seeding a SECRET node through `PRINCIPAL` (OFFICIAL) would silently
 #: drop it before it was ever stored. `_seed_working_set` below seeds as
 #: a principal cleared for everything the test hands it; the export itself still runs as
-#: `PRINCIPAL`, whose own access is what `withheld_count_for` measures.
+#: `PRINCIPAL`, whose own access is what `withheld_for` measures.
 _SEEDER = Principal(id="seeder-1", clearance="SECRET", org_unit=PRINCIPAL.org_unit, roles=["analyst"])
 
 
 async def _seed_working_set(investigation_id: str, nodes: list[Node]) -> None:
     """Seeds the *real*, Valkey-backed working set this app's own `WorkingSetDep` reads from —
     the same store `submit_export_route` (`services/api/app.py`) uses, so a test proving the
-    client cannot influence the export's own `withheld_count` over real HTTP is proving it against
+    client cannot influence the export's own `withheld` over real HTTP is proving it against
     the same membership the route itself will read, not a stand-in."""
     valkey = Valkey(**{
         "host": ValkeyConfig.from_env().host,
@@ -221,7 +221,7 @@ def test_export_route_succeeds_and_returns_a_mark_and_manifest(
                 "artefact_kind": "subgraph",
                 "items": [{"id": node_id, "kind": "node", "handling": _PLACEHOLDER_HANDLING}],
                 "resolution_threshold": 0.95,
-                # No client-writable count at all — `ExportRequest` has no such field.
+                # No client-writable flag at all — `ExportRequest` has no such field.
             },
         )
         assert response.status_code == 200, response.text
@@ -230,20 +230,23 @@ def test_export_route_succeeds_and_returns_a_mark_and_manifest(
         assert body["mark"]["osprey_mark"] == "OspreyFlow"
         assert body["manifest"]["policy"] == "disclose"
         # Nothing was ever seeded into this fresh investigation's own working set — the real,
-        # server-computed count for it is genuinely zero, not a client-supplied figure.
-        assert body["manifest"]["withheld_count"] == 0
+        # server-computed flag for it is genuinely false, not a client-supplied figure, and the
+        # manifest holds no count at all (ADR-124 decision 9).
+        assert body["manifest"]["withheld"] is False
+        assert "withheld_count" not in body["manifest"]
         assert body["ledger_entry_id"]
 
 
-def test_export_route_ignores_a_client_submitted_withheld_count_and_uses_the_working_set(
+def test_export_route_ignores_a_client_submitted_withheld_flag_and_uses_the_working_set(
     api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> None:
-    """A caller-supplied count would let an artefact state that nothing was withheld when items
+    """A caller-supplied flag would let an artefact state that nothing was withheld when items
     were — an active misstatement of completeness (`06_DECISIONS.md` ADR-045). Seeds the real,
     Valkey-backed working set with one node this principal can see and one SECRET-classified node
-    they cannot, so the true count is 1; the request body claims 0 anyway, via whatever extra JSON
-    field a client that remembered the old field name might still send — proving there is no path
-    from that field to the artefact at all, not merely that the honest path wins a tie."""
+    they cannot, so the true flag is true; the request body claims otherwise anyway, via whatever
+    extra JSON field a client that remembered the old field name might still send — proving there
+    is no path from that field to the artefact at all, not merely that the honest path wins a
+    tie."""
     private_key, _ = keypair
     headers = _bearer(private_key)
     investigation_id = asyncio.run(_write_investigation(PRINCIPAL))
@@ -272,11 +275,13 @@ def test_export_route_ignores_a_client_submitted_withheld_count_and_uses_the_wor
                 "items": [{"id": node_id, "kind": "node", "handling": _PLACEHOLDER_HANDLING}],
                 "resolution_threshold": 0.95,
                 "withheld_count": 0,  # ignored — ExportRequest has no such field
+                "withheld": False,  # nor this one
             },
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["manifest"]["withheld_count"] == 1
+        assert body["manifest"]["withheld"] is True
+        assert "withheld_count" not in body["manifest"]
 
 
 def test_export_route_blocks_a_consult_originator_item_and_names_it_over_http(

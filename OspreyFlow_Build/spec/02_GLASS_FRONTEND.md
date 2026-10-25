@@ -1603,19 +1603,19 @@ here rather than left a placeholder. Decided, not merely disclosed as open:
 
 ### 10.3 Manifest and mark
 
-- Every export carries a withheld-item manifest by count (`03_CONDUIT_MIDDLEWARE.md` §6). Per
-  `06_DECISIONS.md` ADR-045, this ships by default (`disclose`); a deployment may configure `omit`
-  to suppress it, in which case the export `Drawer` shows no manifest text at all rather than a
-  zeroed or placeholder count. The export `Drawer`'s own footer is where the manifest and the
+- Every export carries a withheld-item manifest that says only whether material is withheld, as a
+  yes or no (`03_CONDUIT_MIDDLEWARE.md` §6; ADR-124 decision 9). Per `06_DECISIONS.md` ADR-045, this
+  ships by default (`disclose`); a deployment may configure `omit` to suppress it, in which case the
+  export `Drawer` shows no manifest text at all. The export `Drawer`'s own footer is where the manifest and the
   Osprey mark both render. Per `06_DECISIONS.md` ADR-047, the
   mark carries the artefact's own highest handling level, not only provenance: a chart gets a
   visible footer/watermark plus embedded machine-readable image metadata carrying the same fields;
   a subgraph carries the mark as a top-level structured field with no visual rendering; a report
   carries both. The export pipeline never produces an artefact with no mark at all.
-- The manifest renders as plain text beside the `Export` button — "N items withheld by handling" —
-  reusing the exact status-bar phrasing (§2's own "6 hidden by handling") rather than a second
-  wording for the same fact, so an analyst who has read that count all session recognises it on the
-  export screen without re-learning it.
+- The manifest renders as plain text beside the `Export` button — "This case holds material you are
+  not cleared to see." — when the exporter's case holds such material, and as nothing otherwise. It
+  reuses the status bar's standing sentence (ADR-124 decision 5) rather than a second wording for the
+  same fact. No number is shown.
 
 ### 10.4 Theme
 

@@ -24,6 +24,7 @@ from services.api.export import (
     ComplianceRoleRequiredError,
     ExportBlockedError,
     ExportItem,
+    ExportLedgerEntry,
     ExportLedgerStore,
     ExportRequest,
     OverrideRequiredError,
@@ -31,6 +32,12 @@ from services.api.export import (
     submit_export,
 )
 from services.api.investigations import InvestigationStore
+from services.api.working_set.access_index import (
+    AccessCounts,
+    IndexState,
+    signature_id,
+    signature_of,
+)
 from services.api.working_set.service import WorkingSetService
 from services.extract.writer import retract_node
 
@@ -80,12 +87,21 @@ async def investigations():
 
 class _MembershipOnlyStore:
     """A minimal `WorkingSetStorage` stand-in for exactly the two methods
-    `WorkingSetService.current_membership`/`withheld_count_for` read — this module's own tests
+    `WorkingSetService.current_membership`/`withheld_for` read — this module's own tests
     never call `seed`/`expand`/etc. through the service, only its trusted read of a pre-populated
-    membership, so nothing else is implemented."""
+    membership, so nothing else is implemented. The counted access index the flag is read from is
+    built the way the working-set store builds it (`IndexState`)."""
 
     def __init__(self, nodes: list[Node]) -> None:
         self._nodes = {n.id: n for n in nodes}
+        self._state = IndexState()
+        for n in nodes:
+            signature = signature_of(n.handling, n.datasets)
+            self._state.set_node(n.id, signature_id(signature), signature)
+        self._state.written("epoch-test")
+
+    async def access_counts(self, investigation_id: str) -> AccessCounts:
+        return self._state.counts()
 
     async def source_fidelity_nodes(self, investigation_id: str) -> dict[str, Node]:
         return dict(self._nodes)
@@ -116,7 +132,7 @@ def _membership_node(*, owning_unit: str, classification: str = "OFFICIAL") -> N
 
 def _working_set(graph, scheme, nodes: list[Node] | None = None) -> WorkingSetService:
     """A `WorkingSetService` whose membership store already contains `nodes` (default: none, so
-    `withheld_count_for` returns 0) — every test below that doesn't care about the count's own
+    `withheld_for` is false) — every test below that doesn't care about the flag's own
     value uses the default; the tests that do construct one with a real hidden node."""
     return WorkingSetService(graph, _MembershipOnlyStore(nodes or []), scheme)
 
@@ -321,7 +337,7 @@ async def test_export_manifest_omitted_from_payload_under_omit_policy(
             working_set=working_set,
             manifest_policy="disclose",
         )
-        assert disclosed.manifest.withheld_count == 1
+        assert disclosed.manifest.withheld is True
 
         omitted = await submit_export(
             investigation_id="inv-1",
@@ -334,18 +350,18 @@ async def test_export_manifest_omitted_from_payload_under_omit_policy(
             working_set=working_set,
             manifest_policy="omit",
         )
-        assert omitted.manifest.withheld_count is None
+        assert omitted.manifest.withheld is None
 
 
-async def test_a_client_cannot_influence_the_withheld_count_in_the_artefact(
+async def test_a_client_cannot_influence_the_withheld_flag_in_the_artefact(
     judgement_store, ledger
 ) -> None:
     """The defect this test exists to catch: a caller-supplied count would let an artefact state
     that nothing was withheld when items were — an active misstatement of completeness, worse than
-    the omission ADR-045 exists to prevent. `ExportRequest` carries no `withheld_count` field at
-    all — a JSON body claiming one is silently ignored by Pydantic, not merely overridden — so a
-    client attempting `withheld_count=0` against a working set that genuinely hides one item still
-    gets the true, non-zero figure back."""
+    the omission ADR-045 exists to prevent. `ExportRequest` carries no `withheld_count` or
+    `withheld` field at all — a JSON body claiming one is silently ignored by Pydantic, not merely
+    overridden — so a client attempting `withheld=False` against a working set that genuinely
+    hides one item still gets `True` back."""
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
     async with arcadedb_adapter(ontology, scheme) as graph:
@@ -362,8 +378,8 @@ async def test_a_client_cannot_influence_the_withheld_count_in_the_artefact(
         # A raw dict, as an HTTP client's own JSON body would arrive, claiming zero withheld —
         # Pydantic drops the unknown field rather than raising, which is itself the point: there
         # is no field left for a client to lie through.
-        request = ExportRequest(**{**_base_request([item]).model_dump(), "withheld_count": 0})
-        assert not hasattr(request, "withheld_count")
+        request = ExportRequest(**{**_base_request([item]).model_dump(), "withheld": False})
+        assert not hasattr(request, "withheld")
 
         result = await submit_export(
             investigation_id="inv-1",
@@ -376,7 +392,7 @@ async def test_a_client_cannot_influence_the_withheld_count_in_the_artefact(
             working_set=working_set,
             manifest_policy="disclose",
         )
-        assert result.manifest.withheld_count == 1
+        assert result.manifest.withheld is True
 
 
 # --- 4. ADR-046's export rule: judgement citations re-verified against the exporter's own access -
@@ -503,7 +519,7 @@ async def test_the_export_pipeline_never_produces_an_artefact_with_no_mark(
 
     with pytest.raises(ValidationError):
         ExportResult(  # type: ignore[call-arg]
-            manifest=ExportManifest(policy="disclose", withheld_count=0), ledger_entry_id="x"
+            manifest=ExportManifest(policy="disclose", withheld=False), ledger_entry_id="x"
         )
 
     ontology = load_default_ontology()
@@ -781,3 +797,121 @@ async def test_an_export_resting_on_retracted_evidence_is_marked_as_such(
             "the artefact rests on evidence retracted since it was selected and says nothing "
             "about it — a recipient has no way to find that out, ever"
         )
+
+
+# --- 6. ADR-124 decision 9: the ledger keeps a yes or no, and an old ledger is migrated ----------
+
+_OLD_SHAPE = """
+CREATE TABLE {table} (
+    id TEXT PRIMARY KEY,
+    investigation_id TEXT NOT NULL,
+    principal_id TEXT NOT NULL,
+    artefact_kind TEXT NOT NULL,
+    handling_level TEXT NOT NULL,
+    exported_at TIMESTAMPTZ NOT NULL,
+    item_count INTEGER NOT NULL,
+    withheld_count INTEGER NOT NULL,
+    manifest_policy TEXT NOT NULL,
+    justification_given BOOLEAN NOT NULL DEFAULT FALSE,
+    originator_reference_given BOOLEAN NOT NULL DEFAULT FALSE
+)
+"""
+
+
+async def _ledger_rows(conn: asyncpg.Connection, table: str) -> list[tuple[str, object]]:
+    rows = await conn.fetch(f"SELECT * FROM {table} ORDER BY id")  # noqa: S608
+    return [(r["id"], dict(r)) for r in rows]
+
+
+async def _columns(conn: asyncpg.Connection, table: str) -> dict[str, str]:
+    rows = await conn.fetch(
+        "SELECT column_name, is_nullable FROM information_schema.columns "
+        "WHERE table_schema = current_schema() AND table_name = $1",
+        table,
+    )
+    return {r["column_name"]: r["is_nullable"] for r in rows}
+
+
+async def test_an_old_ledger_with_counts_migrates_to_a_yes_or_no_and_is_idempotent() -> None:
+    """Violation caught: a migration that drops the count before copying it (every row would read
+    false), one that is not safe to run twice (the second run fails or rewrites), or one that
+    leaves the column nullable. An old-shape table with counts 0 and 3 becomes false and true, the
+    count column is gone, `withheld` is NOT NULL, and a second run leaves every row as it was."""
+    from services.api.export import ledger_migration_sql
+
+    table = f"export_ledger_old_{new_id().lower()}"
+    conn = await asyncpg.connect(DSN)
+    try:
+        await conn.execute(_OLD_SHAPE.format(table=table))
+        for row_id, count in (("a-none", 0), ("b-some", 3), ("c-one", 1)):
+            await conn.execute(
+                f"INSERT INTO {table} (id, investigation_id, principal_id, artefact_kind, "  # noqa: S608
+                "handling_level, exported_at, item_count, withheld_count, manifest_policy) "
+                "VALUES ($1, 'inv-1', 'p-1', 'subgraph', 'OFFICIAL', now(), 5, $2, 'disclose')",
+                row_id,
+                count,
+            )
+
+        await conn.execute(ledger_migration_sql(table))
+
+        columns = await _columns(conn, table)
+        assert "withheld_count" not in columns
+        assert columns["withheld"] == "NO"
+        migrated = {
+            r["id"]: r["withheld"]
+            for r in await conn.fetch(f"SELECT id, withheld FROM {table}")  # noqa: S608
+        }
+        assert migrated == {"a-none": False, "b-some": True, "c-one": True}
+        after_first = await _ledger_rows(conn, table)
+
+        await conn.execute(ledger_migration_sql(table))
+        await conn.execute(ledger_migration_sql(table))
+        assert await _ledger_rows(conn, table) == after_first
+        assert await _columns(conn, table) == columns
+    finally:
+        await conn.execute(f"DROP TABLE IF EXISTS {table}")
+        await conn.close()
+
+
+async def test_the_ledger_migration_is_safe_on_a_fresh_database() -> None:
+    """A table created in the new shape has nothing to migrate: the migration runs, changes no
+    row and no column."""
+    from services.api.export import ledger_bootstrap_sql, ledger_migration_sql
+
+    table = f"export_ledger_new_{new_id().lower()}"
+    conn = await asyncpg.connect(DSN)
+    try:
+        await conn.execute(ledger_bootstrap_sql(table))
+        await conn.execute(
+            f"INSERT INTO {table} (id, investigation_id, principal_id, artefact_kind, "  # noqa: S608
+            "handling_level, exported_at, item_count, withheld, manifest_policy) "
+            "VALUES ('x', 'inv-1', 'p-1', 'subgraph', 'OFFICIAL', now(), 5, TRUE, 'omit')"
+        )
+        before = (await _columns(conn, table), await _ledger_rows(conn, table))
+        await conn.execute(ledger_migration_sql(table))
+        await conn.execute(ledger_migration_sql(table))
+        assert (await _columns(conn, table), await _ledger_rows(conn, table)) == before
+        assert "withheld_count" not in before[0]
+        assert before[0]["withheld"] == "NO"
+    finally:
+        await conn.execute(f"DROP TABLE IF EXISTS {table}")
+        await conn.close()
+
+
+async def test_a_ledger_entry_round_trips_as_a_yes_or_no(ledger) -> None:
+    """The store writes and reads `withheld` as a boolean and has no count to give back."""
+    entry = ExportLedgerEntry(
+        id=new_id(),
+        investigation_id="inv-roundtrip",
+        principal_id=COMPLIANCE.id,
+        artefact_kind="subgraph",
+        handling_level="OFFICIAL",
+        exported_at=datetime.now(UTC),
+        item_count=2,
+        withheld=True,
+        manifest_policy="disclose",
+    )
+    await ledger.record(entry)
+    listed = [e for e in await ledger.list_all(COMPLIANCE) if e.id == entry.id]
+    assert listed == [entry]
+    assert "withheld_count" not in listed[0].model_dump()

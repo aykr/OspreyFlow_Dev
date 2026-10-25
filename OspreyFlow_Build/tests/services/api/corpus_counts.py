@@ -38,9 +38,8 @@ FORBIDDEN_KEYS = {
 }
 
 #: ADR-124 decision 1: a figure for withheld material is removed, not held at 0. `withheld_count`
-#: is in the set, with one exemption the gate pins by name (`EXEMPT_WITHHELD_*` in
-#: `test_no_corpus_counts_on_the_wire.py`): the export manifest and the export ledger keep it until
-#: U9 replaces it with a yes or no.
+#: is in the set with no exemption: the export manifest and the export ledger carried it until
+#: U9 replaced it with a yes or no.
 WITHHELD_KEYS = {"filtered_count", "unreadable_count", "withheld_count"}
 
 #: ADR-124 decision 8: a step of the case's history carries no size. The listing's own counts were

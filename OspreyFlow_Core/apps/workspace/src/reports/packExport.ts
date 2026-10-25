@@ -3,7 +3,8 @@
 // the PDF from the browser's own print dialogue. Every page carries THAT item's own marking, top
 // and bottom — never the pack's level — and every interpolated string is escaped.
 import type { PackExport, PackItem } from "../../../../packages/schemas/generated";
-import { KIND_LABEL, formatDay, formatNumber, periodKey, periodsOf, trendSentence, withheldSentence } from "./packText";
+import { KIND_LABEL, formatDay, formatNumber, periodKey, periodsOf, trendSentence } from "./packText";
+import { manifestSentence } from "../export/api";
 
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
@@ -86,7 +87,8 @@ function itemPage(item: PackItem): string {
 /** The whole print document: a cover, then one page for each item in the manifest. */
 export function packPrintHtml(manifest: PackExport): string {
   const { mark } = manifest;
-  const withheld = typeof manifest.withheld === "number" && manifest.withheld > 0 ? manifest.withheld : 0;
+  // A yes or no (ADR-124 decision 9), in the pack's own words; nothing under `omit`, where it is null.
+  const withheldSentence = manifestSentence(manifest, "pack");
   // The cover is a printed page too: it carries the highest marking exported, top and bottom.
   const coverBanner = (where: "top" | "bottom") => `<div class="banner banner-${where}">Marked ${escapeHtml(mark.handling_level)}</div>`;
   const cover =
@@ -96,7 +98,7 @@ export function packPrintHtml(manifest: PackExport): string {
     `<p class="notice">Version ${manifest.version}, published ${escapeHtml(formatDay(manifest.published_at))} by ${escapeHtml(manifest.published_by_name ?? manifest.published_by)}</p>` +
     `<p class="notice">Exported by ${escapeHtml(mark.exported_by_name ?? mark.exported_by)} on ${escapeHtml(formatDay(mark.exported_at))}; ` +
     `handling level ${escapeHtml(mark.handling_level)}; OspreyFlow export ${escapeHtml(manifest.ledger_entry_id)}</p>` +
-    (withheld > 0 ? `<p class="notice">${escapeHtml(withheldSentence(withheld))}</p>` : "") +
+    (withheldSentence !== null ? `<p class="notice">${escapeHtml(withheldSentence)}</p>` : "") +
     (mark.rests_on_retracted_evidence ? `<p class="notice">This pack rests on evidence since retracted or corrected.</p>` : "") +
     coverBanner("bottom") +
     `</section>`;

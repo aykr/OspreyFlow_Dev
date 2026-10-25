@@ -203,8 +203,10 @@ class PackExport(BaseModel):
     published_by_name: str | None = None
     items: list[PackItem]
     policy: Literal["disclose", "omit"]
-    #: Items withheld from the exporter — `None` under `omit`, where the artefact carries no count.
-    withheld: int | None = None
+    #: Whether any of the pack's own items is withheld from the exporter (ADR-124 decision 9): a yes
+    #: or no, never a count. `None` under `omit`, where the artefact carries no such field; never
+    #: `None` under `disclose`.
+    withheld: bool | None = None
     ledger_entry_id: str
 
 

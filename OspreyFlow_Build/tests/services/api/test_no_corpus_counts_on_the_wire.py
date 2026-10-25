@@ -25,9 +25,8 @@ carries a figure for what its reader may not read (`filtered_count`, `unreadable
 route's response model, and of every delta model, so a route with no link in it is covered too.
 A route with no field to walk must be named: a JSON mapping in `RAW_MAPPING_ROUTES` (each has a
 case of its own), anything else in `NON_JSON_ROUTES` with the reason it carries no figure (no
-body, bytes, a stream), or the file fails. `withheld_count` has one pinned exemption, the export
-manifest and the export ledger, which keep it until U9 replaces it with a yes or no; the pin names
-the routes and the models, and fails when either stops carrying it, so U9 must remove it.
+body, bytes, a stream), or the file fails. `withheld_count` has no exemption: the export manifest
+and the export ledger carried it until U9 replaced it with a yes or no (`withheld`).
 
 Pure: imports the app and builds models, opens no connection. Needs `ARCADEDB_HTTP_PORT` and
 `POSTGRES_PORT` pointed at unreachable ports only because importing the app reads settings.
@@ -70,7 +69,6 @@ from .corpus_counts import (
     edge_with_components,
     field_names_reachable,
     keys_at_any_depth,
-    models_with_field,
 )
 
 
@@ -262,40 +260,10 @@ def test_a_step_size_on_a_response_is_found_by_the_gate() -> None:
     assert field_names_reachable(list[_Sized]) & SIZE_KEYS == SIZE_KEYS
 
 
-#: `withheld_count` is allowed on exactly these routes (ADR-124 U9 replaces it with a yes or no, and
-#: removes this exemption). It is carried by `ExportManifest` (`POST .../export`) and
-#: `ExportLedgerEntry` (`GET /v1/exports`); `packs.py:249` builds an `ExportLedgerEntry` for the
-#: ledger and answers with no figure (out of scope for U2, checked when next touched).
-EXEMPT_WITHHELD_ROUTES = {
-    "POST /v1/investigations/{investigation_id}/export",
-    "GET /v1/exports",
-}
-EXEMPT_WITHHELD_MODELS = {"ExportManifest", "ExportLedgerEntry"}
-
-
 def _withheld_figures_on(route: APIRoute) -> set[str]:
-    """The withheld figures `route` can carry that it is not exempted for."""
-    figures = field_names_reachable(_wire_annotation(route)) & WITHHELD_KEYS
-    if _label(route) in EXEMPT_WITHHELD_ROUTES:
-        figures -= {"withheld_count"}
-    return figures
-
-
-def test_the_withheld_count_exemption_is_exactly_the_export_manifest_and_ledger() -> None:
-    """Violation caught: the exemption goes stale (U9 removed the field and the pin stayed, so a
-    new `withheld_count` on those routes would pass), or it widens (another route or model carries
-    the field and is let through by the name of a neighbour)."""
-    carrying_routes = {
-        _label(r)
-        for r in _api_routes()
-        if "withheld_count" in field_names_reachable(_wire_annotation(r))
-    }
-    carrying_models = set().union(
-        *(models_with_field(_wire_annotation(r), "withheld_count") for r in _api_routes())
-    )
-
-    assert carrying_routes == EXEMPT_WITHHELD_ROUTES
-    assert carrying_models == EXEMPT_WITHHELD_MODELS
+    """The withheld figures `route` can carry. There is no exemption: the export manifest and the
+    export ledger carried `withheld_count` until ADR-124 U9 replaced it with a yes or no."""
+    return field_names_reachable(_wire_annotation(route)) & WITHHELD_KEYS
 
 
 class _Figure(BaseModel):
@@ -306,10 +274,11 @@ class _Page(BaseModel):
     figures: list[_Figure]
 
 
-def test_a_new_withheld_count_anywhere_else_is_found_by_the_gate() -> None:
-    """Violation caught (rule 15, the gate shown able to fail): a route added later that carries
-    `withheld_count`, or either other figure, and is not one of the two exempt routes. A throwaway
-    app with such a route, walked by the same predicate the per-route case uses."""
+def test_a_withheld_count_on_any_route_is_found_by_the_gate() -> None:
+    """Violation caught (rule 15, the gate shown able to fail): a route that carries
+    `withheld_count`, or either other figure, wherever it is, the export manifest's and the
+    ledger's own paths included. A throwaway app with such routes, walked by the same predicate the
+    per-route case uses."""
     from fastapi import FastAPI
 
     planted = FastAPI()
@@ -318,21 +287,59 @@ def test_a_new_withheld_count_anywhere_else_is_found_by_the_gate() -> None:
     async def something_new() -> _Page:  # pragma: no cover - never called
         return _Page(figures=[])
 
-    @planted.get("/v1/exports", response_model=_Page)  # the exempt path, but an unlisted app
-    async def named_like_an_exempt_one() -> _Page:  # pragma: no cover
+    @planted.get("/v1/exports", response_model=_Page)
+    async def the_ledger() -> _Page:  # pragma: no cover
         return _Page(figures=[])
 
     @planted.post("/v1/investigations/{investigation_id}/export", response_model=_Figure)
-    async def the_exempt_export() -> _Figure:  # pragma: no cover
+    async def the_export() -> _Figure:  # pragma: no cover
         return _Figure()
 
     found = {_label(r): _withheld_figures_on(r) for r in planted.routes if isinstance(r, APIRoute)}
 
     assert found["GET /v1/investigations/{investigation_id}/something-new"] == {"withheld_count"}
-    # Exempt by label: these two are let through, which is what the pin test above holds to the
-    # real app, so a planted copy elsewhere is the first case's catch.
-    assert found["GET /v1/exports"] == set()
-    assert found["POST /v1/investigations/{investigation_id}/export"] == set()
+    assert found["GET /v1/exports"] == {"withheld_count"}
+    assert found["POST /v1/investigations/{investigation_id}/export"] == {"withheld_count"}
+
+
+PACK_EXPORT_ROUTE = "POST /v1/investigations/{investigation_id}/packs/{pack_id}/export"
+
+
+def _is_a_yes_or_no(annotation: Any) -> bool:
+    """`bool` or `bool | None`, and nothing else: `withheld` is an allowed name for a flag, so the
+    gate pins its type where an export carries it."""
+    options = {a for a in typing.get_args(annotation) if a is not type(None)} or {annotation}
+    return options == {bool}
+
+
+def test_the_pack_export_sends_withheld_as_a_yes_or_no_never_a_number() -> None:
+    """Violation caught (ADR-124 decision 9, ruled for packs): the pack export's `withheld` typed
+    as an integer, a count of the pack's items the exporter may not view. The name is allowed (it
+    is the flag), so the type is what is pinned: on the route's response model, and on the wire
+    for an instance that says true."""
+    route = _route_named(PACK_EXPORT_ROUTE)
+    model = _wire_annotation(route)
+    assert _is_a_yes_or_no(model.model_fields["withheld"].annotation)
+    instance = build(model, edge_with_components())
+    assert instance is not None
+    wire = route.response_field.serialize(instance, mode="json")  # type: ignore[union-attr]
+    assert wire["withheld"] is False  # built fields are the type's zero: a bool, not 0
+
+
+class _CountedExport(BaseModel):
+    withheld: int | None = None
+
+
+class _FlagExport(BaseModel):
+    withheld: bool | None = None
+
+
+def test_the_yes_or_no_pin_rejects_an_integer_withheld() -> None:
+    """Violation caught (rule 15, the pin shown able to fail): the pack export's old shape."""
+    assert not _is_a_yes_or_no(_CountedExport.model_fields["withheld"].annotation)
+    assert _is_a_yes_or_no(_FlagExport.model_fields["withheld"].annotation)
+    assert _is_a_yes_or_no(bool)
+    assert not _is_a_yes_or_no(int)
 
 
 class _Inner(BaseModel):

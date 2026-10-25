@@ -13,7 +13,7 @@
 // cap in the first place.
 import type { Assumption, IntelligenceGap, Judgement } from "../../../../packages/schemas/generated";
 import type { Yardstick } from "../assessment/api";
-import type { ExportManifest, ExportMark } from "./api";
+import { manifestSentence, type ExportManifest, type ExportMark } from "./api";
 
 export interface ReportArtefactInput {
   judgements: Judgement[];
@@ -108,10 +108,8 @@ function markStampHtml(mark: ExportMark): string {
 }
 
 function manifestHtml(manifest: ExportManifest): string {
-  if (manifest.policy === "omit" && manifest.withheld_count) {
-    return `<p class="manifest">${manifest.withheld_count} hidden by handling</p>`;
-  }
-  return "";
+  const sentence = manifestSentence(manifest);
+  return sentence === null ? "" : `<p class="manifest">${escapeHtml(sentence)}</p>`;
 }
 
 /** Pure: assembles a self-contained HTML document — every style inline, no external asset, no

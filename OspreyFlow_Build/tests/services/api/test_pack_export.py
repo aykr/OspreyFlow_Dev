@@ -1,6 +1,6 @@
 """Exporting a published report pack (`06_DECISIONS.md` ADR-113 decision 6, through ADR-045/047):
 the exporter's own access is checked again now, item by item; what they may not see is withheld and
-counted under the manifest policy, never named; an exporter who may see nothing is refused and
+flagged (a yes or no, never a number) under the manifest policy, never named; an exporter who may see nothing is refused and
 nothing is recorded; an item needing its originator consulted needs a justification and a
 reference; every allowed export is in the export ledger as `report_pack`. The ledger is the real one,
 in Postgres; the rest are `test_packs.py`'s fakes.
@@ -9,7 +9,7 @@ What a mistake would do, and the case that catches it:
 - an export above the exporter's handling — `test_an_exporter_who_may_see_no_item_is_refused_and_nothing_is_recorded`;
 - the manifest carrying a withheld item, or the ledger missing the export —
   `test_the_manifest_names_only_what_the_exporter_may_see_and_the_ledger_records_it`;
-- a withheld count printed when the deployment says omit — `test_under_omit_the_manifest_carries_no_withheld_count`;
+- a withheld flag printed when the deployment says omit — `test_under_omit_the_manifest_carries_no_withheld_count`;
 - the originator's consent skipped — `test_an_item_needing_its_originator_needs_a_justification_and_a_reference`;
 - exporting by a Reports Viewer or at Viewer — `test_exporting_needs_the_export_right_and_editor`;
 - a withdrawn publication exported — `test_a_pack_with_no_live_publication_has_nothing_to_export`;
@@ -107,15 +107,15 @@ def test_the_manifest_names_only_what_the_exporter_may_see_and_the_ledger_record
     assert response.status_code == 200, response.text
     body = response.json()
     assert [i["id"] for i in body["items"]] == [official["id"]] and secret["id"] not in response.text
-    assert body["withheld"] == 2 and body["version"] == 1
+    assert body["withheld"] is True and body["version"] == 1
     assert body["mark"]["handling_level"] == "OFFICIAL" and body["mark"]["pack_id"] == pack
     (entry,) = _entries_since(since, LOW_EDITOR.id)
-    assert (entry.artefact_kind, entry.item_count, entry.withheld_count, entry.handling_level) == (
-        "report_pack", 1, 2, "OFFICIAL")  # fmt: skip
+    assert (entry.artefact_kind, entry.item_count, entry.withheld, entry.handling_level) == (
+        "report_pack", 1, True, "OFFICIAL")  # fmt: skip
     assert body["ledger_entry_id"] == entry.id
     assert (body["mark"]["exported_by_name"], body["published_by_name"]) == (None, "Edith Editor")
     whole = _export(w, pack, EDITOR).json()
-    assert whole["withheld"] == 0 and whole["mark"]["handling_level"] == "SECRET"
+    assert whole["withheld"] is False and whole["mark"]["handling_level"] == "SECRET"
     assert (whole["mark"]["exported_by"], whole["mark"]["exported_by_name"]) == ("ed", "Edith Editor")
 
 

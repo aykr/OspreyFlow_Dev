@@ -9,6 +9,8 @@
 // outside `packages/schemas/generate_ts.py`'s own `schemas.{analytics,compute,domain,ingest,
 // model,profile,provider_profile}` model list.
 
+import { WITHHELD_SENTENCE } from "../statusbar/StatusBar";
+
 export interface BlockedItem {
   id: string;
   kind: "node" | "edge" | "judgement";
@@ -48,9 +50,28 @@ export interface ExportMark {
   handling_level: string;
 }
 
+/** The export's manifest (ADR-045, ADR-124 decision 9): a yes or no, never a number. Under
+ * `disclose`, `withheld` is whether the case holds material the exporter may not view; under
+ * `omit` it is `null`. Mirrors `ExportManifest` in `services/api/export.py`. */
 export interface ExportManifest {
   policy: "disclose" | "omit";
-  withheld_count: number | null;
+  withheld: boolean | null;
+}
+
+/** The pack's own sentence: the flag on a pack export means some of the pack's items are left out
+ * of this export (its handling, a stale or superseded item, a dataset), which is not what the
+ * case's standing sentence says. */
+export const PACK_WITHHELD_SENTENCE = "Some items of this pack are not included in this export.";
+
+/** What every renderer of an export's manifest says, for a case export (`"case"`, the default: the
+ * status bar's standing sentence) or a pack export (`"pack"`): its sentence while the flag is true
+ * and the deployment discloses it, otherwise nothing. */
+export function manifestSentence(
+  manifest: { policy: "disclose" | "omit"; withheld?: boolean | null },
+  kind: "case" | "pack" = "case",
+): string | null {
+  if (manifest.policy !== "disclose" || manifest.withheld !== true) return null;
+  return kind === "pack" ? PACK_WITHHELD_SENTENCE : WITHHELD_SENTENCE;
 }
 
 export interface ExportResult {

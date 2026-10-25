@@ -45,13 +45,22 @@ describe("packPrintHtml", () => {
     expect(html).not.toContain("<td>2026-09-14");
   });
 
-  it("puts the withheld sentence on the cover only when withheld is a number above zero", () => {
-    const sentence = "2 items in this pack are withheld from you.";
-    expect(packPrintHtml(manifest([OFFICIAL_NOTE], { policy: "disclose", withheld: 2 }))).toContain(sentence);
-    for (const withheld of [null, 0] as const) {
-      expect(packPrintHtml(manifest([OFFICIAL_NOTE], { policy: "omit", withheld }))).not.toContain("withheld");
+  it("puts the standing sentence on the cover only when a disclosed manifest says material is withheld, and no number", () => {
+    const sentence = "Some items of this pack are not included in this export.";
+    const html = packPrintHtml(manifest([OFFICIAL_NOTE], { policy: "disclose", withheld: true }));
+    expect(html).toContain(sentence);
+    // The case's own sentence says something else (the case holds material the reader is not
+    // cleared for) and must not stand on a pack's cover.
+    expect(html).not.toContain("not cleared to see");
+    expect(html).not.toMatch(/\d+ items? in this pack/);
+    for (const over of [
+      { policy: "disclose", withheld: false },
+      { policy: "omit", withheld: null },
+      { policy: "omit", withheld: true },
+      { withheld: undefined },
+    ] as const) {
+      expect(packPrintHtml(manifest([OFFICIAL_NOTE], over))).not.toContain("not included in this export");
     }
-    expect(packPrintHtml(manifest([OFFICIAL_NOTE], { withheld: undefined }))).not.toContain("withheld");
   });
 
   it("states the cover in words, including the mark and any retracted evidence", () => {

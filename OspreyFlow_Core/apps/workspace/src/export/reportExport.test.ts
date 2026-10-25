@@ -14,7 +14,7 @@ const MARK: ExportMark = {
   handling_level: "OFFICIAL",
 };
 
-const MANIFEST: ExportManifest = { policy: "omit", withheld_count: 2 };
+const MANIFEST: ExportManifest = { policy: "disclose", withheld: true };
 
 const YARDSTICK: Yardstick = {
   name: "default",
@@ -122,7 +122,7 @@ describe("report export — test_report_export_produces_a_self_contained_html_do
     }
   });
 
-  it("the manifest's withheld count reuses the exact status-bar phrasing", () => {
+  it("a disclosed manifest that says material is withheld renders the standing sentence, and no number", () => {
     const html = buildReportArtefact({
       judgements: [],
       gaps: [],
@@ -131,7 +131,26 @@ describe("report export — test_report_export_produces_a_self_contained_html_do
       mark: MARK,
       manifest: MANIFEST,
     });
-    expect(html).toContain("2 hidden by handling");
+    expect(html).toContain("This case holds material you are not cleared to see.");
+    expect(html).not.toContain("hidden by handling");
+  });
+
+  it("renders nothing of the manifest when nothing is withheld, or when the deployment omits it", () => {
+    for (const manifest of [
+      { policy: "disclose", withheld: false },
+      { policy: "omit", withheld: null },
+      { policy: "omit", withheld: true },
+    ] as const) {
+      const html = buildReportArtefact({
+        judgements: [],
+        gaps: [],
+        assumptions: [],
+        yardstick: YARDSTICK,
+        mark: MARK,
+        manifest,
+      });
+      expect(html).not.toContain("not cleared to see");
+    }
   });
 
   it("a document assembled without a mark is distinguishable from one that carries it — the negative control", () => {

@@ -39,6 +39,7 @@ already given to every other consequence of this same missing method, not invent
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -315,14 +316,26 @@ class ExportLedgerEntry(BaseModel):
     handling_level: str
     exported_at: datetime
     item_count: int
-    withheld_count: int
+    withheld: bool  #: a yes or no: the exporter's own view of the case left something out
     manifest_policy: ExportManifestPolicy
     justification_given: bool = False
     originator_reference_given: bool = False
 
 
-_LEDGER_BOOTSTRAP_SQL = """
-CREATE TABLE IF NOT EXISTS export_ledger (
+def _table(name: str) -> str:
+    """A table name that is safe to put in a statement: the ledger's own, or a throwaway one a test
+    migrates."""
+    if not re.fullmatch(r"[a-z_][a-z0-9_]*", name):
+        raise ValueError(f"not a plain table name: {name!r}")
+    return name
+
+
+def ledger_bootstrap_sql(table: str = "export_ledger") -> str:
+    """The ledger's table in its current shape: a yes or no of what was withheld, never a count
+    (ADR-124 decision 9, the owner's ruling "A yes/no only")."""
+    table = _table(table)
+    return f"""
+CREATE TABLE IF NOT EXISTS {table} (
     id TEXT PRIMARY KEY,
     investigation_id TEXT NOT NULL,
     principal_id TEXT NOT NULL,
@@ -330,12 +343,39 @@ CREATE TABLE IF NOT EXISTS export_ledger (
     handling_level TEXT NOT NULL,
     exported_at TIMESTAMPTZ NOT NULL,
     item_count INTEGER NOT NULL,
-    withheld_count INTEGER NOT NULL,
+    withheld BOOLEAN NOT NULL,
     manifest_policy TEXT NOT NULL,
     justification_given BOOLEAN NOT NULL DEFAULT FALSE,
     originator_reference_given BOOLEAN NOT NULL DEFAULT FALSE
 );
-CREATE INDEX IF NOT EXISTS export_ledger_investigation_id_idx ON export_ledger (investigation_id);
+CREATE INDEX IF NOT EXISTS {table}_investigation_id_idx ON {table} (investigation_id);
+"""
+
+
+def ledger_migration_sql(table: str = "export_ledger") -> str:
+    """Brings a ledger written with `withheld_count INTEGER NOT NULL` to the yes or no: `withheld`
+    is `withheld_count > 0`, and then the count is dropped. Run after `ledger_bootstrap_sql` on
+    every start, so it is idempotent: with no `withheld_count` column (a new table, or one already
+    migrated) it changes nothing. The copy is before the drop, and both are under a table lock in
+    one block, so two instances starting together cannot both find the count and one fail on the
+    other's drop."""
+    table = _table(table)
+    return f"""
+DO $$
+BEGIN
+    LOCK TABLE {table} IN ACCESS EXCLUSIVE MODE;
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = '{table}' AND column_name = 'withheld_count'
+    ) THEN
+        ALTER TABLE {table} ADD COLUMN IF NOT EXISTS withheld BOOLEAN;
+        UPDATE {table} SET withheld = (withheld_count > 0) WHERE withheld IS NULL;
+        ALTER TABLE {table} DROP COLUMN withheld_count;
+        ALTER TABLE {table} ALTER COLUMN withheld SET NOT NULL;
+    END IF;
+END
+$$;
 """
 
 
@@ -353,7 +393,8 @@ class ExportLedgerStore:
     async def connect(cls, dsn: str) -> ExportLedgerStore:
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=5)
         async with pool.acquire() as conn:
-            await conn.execute(_LEDGER_BOOTSTRAP_SQL)
+            await conn.execute(ledger_bootstrap_sql())
+            await conn.execute(ledger_migration_sql())
         return cls(pool)
 
     async def close(self) -> None:
@@ -363,7 +404,7 @@ class ExportLedgerStore:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO export_ledger (id, investigation_id, principal_id, artefact_kind, "
-                "handling_level, exported_at, item_count, withheld_count, manifest_policy, "
+                "handling_level, exported_at, item_count, withheld, manifest_policy, "
                 "justification_given, originator_reference_given) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
                 entry.id,
@@ -373,7 +414,7 @@ class ExportLedgerStore:
                 entry.handling_level,
                 entry.exported_at,
                 entry.item_count,
-                entry.withheld_count,
+                entry.withheld,
                 entry.manifest_policy,
                 entry.justification_given,
                 entry.originator_reference_given,
@@ -399,7 +440,7 @@ class ExportLedgerStore:
                 handling_level=row["handling_level"],
                 exported_at=row["exported_at"],
                 item_count=row["item_count"],
-                withheld_count=row["withheld_count"],
+                withheld=row["withheld"],
                 manifest_policy=row["manifest_policy"],
                 justification_given=row["justification_given"],
                 originator_reference_given=row["originator_reference_given"],
@@ -413,9 +454,11 @@ class ExportLedgerStore:
 
 class ExportManifest(BaseModel):
     policy: ExportManifestPolicy
-    withheld_count: int | None = None  #: `None` under `omit` — the field is absent from the
-    #: artefact's own payload in that mode, not zeroed (`06_DECISIONS.md` ADR-045's own option
-    #: (c): "the artefact's own payload contains no manifest field").
+    withheld: bool | None = None  #: The exporter's standing sentence for the case (ADR-124
+    #: decision 9): true when the case holds material the exporter may not view, a yes or no and
+    #: never a count. `None` under `omit` — the field is absent from the artefact's own payload in
+    #: that mode, not false (`06_DECISIONS.md` ADR-045's own option (c): "the artefact's own
+    #: payload contains no manifest field"). Never `None` under `disclose`.
 
 
 class ExportResult(BaseModel):
@@ -430,15 +473,15 @@ class ExportResult(BaseModel):
 
 
 class ExportRequest(BaseModel):
-    """No `withheld_count` field. **Found and fixed rather than left as the original disclosed
-    limitation implied it could safely stay**: a caller-supplied count is not a narrower version
-    of the real figure, it is a channel through which a client can make the manifest actively
-    misstate completeness — the exact "an artefact that silently omits material misleads its
-    reader" failure `06_DECISIONS.md` ADR-045 exists to prevent, now reachable through the one
-    field that was supposed to be reporting it. `submit_export` (below) obtains the real count
-    itself, server-side, from `WorkingSetService.withheld_count_for` — the same fix shape this
-    stage's own node-handling recheck already applied to a client-submitted `handling` block,
-    applied here to a client-submitted count instead."""
+    """No `withheld` field. **Found and fixed rather than left as the original disclosed
+    limitation implied it could safely stay**: a caller-supplied flag is a channel through which a
+    client can make the manifest actively misstate completeness — the exact "an artefact that
+    silently omits material misleads its reader" failure `06_DECISIONS.md` ADR-045 exists to
+    prevent, now reachable through the one field that was supposed to be reporting it.
+    `submit_export` (below) obtains the real flag itself, server-side, from
+    `WorkingSetService.withheld_for` — the same fix shape this stage's own node-handling recheck
+    already applied to a client-submitted `handling` block, applied here to a client-submitted
+    flag instead."""
 
     artefact_kind: Literal["chart", "subgraph", "report"]
     items: list[ExportItem]
@@ -526,16 +569,16 @@ async def submit_export(
             break
     mark = mark.model_copy(update={"rests_on_retracted_evidence": rests_on_retracted})
 
-    # The withheld count is never accepted from the client — `withheld_count_for` computes it
-    # server-side, against `principal`'s own current access over the investigation's real,
-    # unfiltered membership, the same figure the status bar already shows this analyst all
-    # session. See `WorkingSetService.withheld_count_for`'s own docstring for why a caller-supplied
-    # count was found and fixed as a real defect, not kept as a disclosed limitation.
-    withheld_count = await working_set.withheld_count_for(investigation_id, principal)
+    # The withheld flag is never accepted from the client — `withheld_for` computes it
+    # server-side, against `principal`'s own current access over the investigation's stored set,
+    # the same yes or no the status bar's standing sentence shows this analyst all session. See
+    # `WorkingSetService.withheld_for`'s own docstring for why a caller-supplied value was found
+    # and fixed as a real defect, not kept as a disclosed limitation.
+    withheld = await working_set.withheld_for(investigation_id, principal)
 
     manifest = ExportManifest(
         policy=manifest_policy,
-        withheld_count=withheld_count if manifest_policy == "disclose" else None,
+        withheld=withheld if manifest_policy == "disclose" else None,
     )
 
     entry = ExportLedgerEntry(
@@ -546,7 +589,7 @@ async def submit_export(
         handling_level=handling_level,
         exported_at=exported_at,
         item_count=len(request.items),
-        withheld_count=withheld_count,
+        withheld=withheld,
         manifest_policy=manifest_policy,
         justification_given=bool(request.justification),
         originator_reference_given=bool(request.originator_reference),

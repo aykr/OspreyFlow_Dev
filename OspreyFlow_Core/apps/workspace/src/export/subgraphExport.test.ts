@@ -14,7 +14,7 @@ const MARK: ExportMark = {
 
 const MANIFEST: ExportManifest = {
   policy: "disclose",
-  withheld_count: 1,
+  withheld: true,
 };
 
 function fixtureGraph(): Graph {
@@ -48,7 +48,8 @@ describe("subgraph export — test_subgraph_export_produces_real_json_carrying_t
 
     const parsed = JSON.parse(text);
     expect(parsed.mark.osprey_mark).toBe("OspreyFlow");
-    expect(parsed.manifest.withheld_count).toBe(1);
+    expect(parsed.manifest.withheld).toBe(true);
+    expect(parsed.manifest).not.toHaveProperty("withheld_count");
     expect(parsed.nodes).toHaveLength(2);
     expect(parsed.edges).toHaveLength(1);
   });

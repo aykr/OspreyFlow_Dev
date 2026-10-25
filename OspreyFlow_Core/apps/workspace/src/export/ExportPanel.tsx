@@ -34,6 +34,7 @@ import {
   submitExport,
   type BlockedItem,
   type ExportItemRequest,
+  manifestSentence,
   type ExportMark,
   type ExportResult,
 } from "./api";
@@ -294,10 +295,11 @@ export function ExportPanel({
 
         {result && (
           <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "var(--sp-8)" }}>
-            {result.manifest.policy === "disclose" && result.manifest.withheld_count !== null && (
-              // The exact status-bar phrasing (`02_GLASS_FRONTEND.md` §2/§10.3) — "N hidden by
-              // handling" — not a second wording for the same fact.
-              <p className="value">{result.manifest.withheld_count} hidden by handling</p>
+            {manifestSentence(result.manifest) !== null && (
+              // The status bar's standing sentence (ADR-124 decision 5), a yes or no and never a
+              // number, while the case holds material this exporter may not view and the
+              // deployment discloses it (ADR-045); nothing otherwise.
+              <p className="value">{manifestSentence(result.manifest)}</p>
             )}
             <p className="label" style={{ margin: 0 }}>
               {result.mark.osprey_mark} · {result.mark.handling_level} ·{" "}

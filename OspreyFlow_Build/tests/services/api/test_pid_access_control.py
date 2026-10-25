@@ -38,8 +38,9 @@ What each test proves, and what shows it red:
   starter questions, the export manifest, the centralities and the communities). There is no
   withheld count left to differ (`filtered_count` was removed, ADR-124 U2c), and the previews'
   candidate counts, which were counted over the stored set, are equal for the analyst in A and B,
-  in a case the cleared principal has worked in too. The export manifest's count still differs, and
-  `test_adr124_the_manifest_count_still_differs_until_u9` pins it until U9. *Red twice:* the
+  in a case the cleared principal has worked in too. The export manifest carries a yes or no
+  (`withheld`, U9) that is true in A and false in B for the analyst in a shared case, pinned by
+  `test_adr124_the_manifest_says_withheld_in_the_case_that_holds_the_secret_link`. *Red twice:* the
   same comparison for the cleared principal finds exactly the readings in `CLEARED_DIFFERS`, and
   under weights version 1 (A1 against B1) only the readings that carry a weight differ.
 - **J1, J2, J5, J7** and the **229** reports, the **inferred** `PASSES_ITEMS_TO` links: the figures
@@ -674,7 +675,7 @@ async def _observe(store: Store, principal: Principal) -> Observation:
     # `links_among` flag), and `expand_preview` for every link type the ontology has, from each end.
     service, outcomes = await _view(store, principal)
     # The export gate's withheld manifest over the working set the service just built.
-    readings["export_withheld"] = await service.withheld_count_for(CASE, principal)
+    readings["export_withheld"] = await service.withheld_for(CASE, principal)
     readings["service_expand"] = {
         seed: (*_shape(o.delta.nodes, o.delta.edges), o.links_among) for seed, o in outcomes.items()
     }
@@ -871,7 +872,7 @@ async def test_the_analysts_own_snapshot_is_the_same_with_and_without_the_link(
     """The `sync` projection (what the WebSocket and a reconnect send) of the analyst's own working
     set, after the service expanded both ends for the analyst: the same nodes and links. It carries
     no count of what is withheld (`filtered_count` was removed, ADR-124 U2c); the shared-case
-    manifest count, which still differs, is pinned below until U9."""
+    manifest's yes or no is pinned below."""
     snapshots = {}
     for store in (store_a, store_b):
         service, _ = await _view(store, ANALYST)
@@ -886,11 +887,11 @@ async def _shared_case(store: Store, reader: Principal = ANALYST) -> tuple[Any, 
     """One `FakeWorkingSetStore` per store: the cleared principal expands the principal and
     calder_3 into it, then `reader` (the analyst, by default) `sync`s it (the shared-case path: a
     case several people work in) and the export gate's manifest is read for `reader`. Returns the
-    snapshot's nodes and links, the manifest's count and the snapshot's `withheld`."""
+    snapshot's nodes and links, the manifest's `withheld` and the snapshot's `withheld`."""
     service, _ = await _view(store, CLEARED)
     (snapshot,) = await service.sync(CASE, reader, last_acknowledged_seq=None)
     assert isinstance(snapshot, DeltaSnapshot)
-    manifest = await service.withheld_count_for(CASE, reader)
+    manifest = await service.withheld_for(CASE, reader)
     return (*_shape(snapshot.nodes, snapshot.edges), manifest, snapshot.withheld)
 
 
@@ -977,28 +978,29 @@ async def test_the_expansion_and_preview_figures_are_the_same_with_and_without_t
             assert edges_a - edges_b == 1, (seed, link_type)
 
 
-async def test_adr124_the_manifest_count_still_differs_until_u9(
+async def test_adr124_the_manifest_says_withheld_in_the_case_that_holds_the_secret_link(
     store_a: Store, store_b: Store
 ) -> None:
-    """Pins the one withheld figure that is left (ADR-124 U9 replaces it with a yes or no): in a
-    case the cleared principal has worked in, the export manifest's withheld count for the analyst
-    is higher with the `SECRET` link present. **The snapshot no longer carries a count** (U2c
-    removed `filtered_count`), so the status bar's pin is gone; the manifest's `(1, 0)` stays here
-    until U9 turns it red and it is rewritten as `withheld` true in A and false in B. In a case
-    shared with a cleared colleague, A′ deliberately tells the analyst that material is withheld,
-    never what or where, so Brief 1 section 5.3 is met only in a case the analyst works alone.
+    """Decision 9: the export manifest's `withheld` is true for the analyst in the case the cleared
+    principal has worked in with the `SECRET` link present (A), and false in the case without it
+    (B). It is a yes and never a number: U9 replaced the count, which was `(1, 0)` here until then.
+    In a case shared with a cleared colleague, A′ deliberately tells the analyst that material is
+    withheld, never what or where, so Brief 1 section 5.3 is met only in a case the analyst works
+    alone.
 
-    **Expected, reasoned before any run.** `withheld_count_for` is `_project`'s own arithmetic over
-    the store's membership, which counts the nodes and the links above the analyst's clearance. The
-    cleared principal's expansions put the `SECRET` link in A's store and nothing above `OFFICIAL`
-    in B's. Only classification and a restricted handling code gate a read
-    (`ontology/handling.py`, `principal_may_view`), every handling code the plan gives is the
-    default `P` (`PlanHandling` in `pid_plan.py`), and the one `SECRET` element is the link;
-    calder_3 is readable. So: 0 nodes hidden, and 1 link hidden in A against none in B."""
+    **Expected, reasoned before any run.** `withheld_for` reads the counted access index, which
+    judges every stored element by its own handling. The cleared principal's expansions put the
+    `SECRET` link in A's store and nothing above `OFFICIAL` in B's. Only classification and a
+    restricted handling code gate a read (`ontology/handling.py`, `principal_may_view`), every
+    handling code the plan gives is the default `P` (`PlanHandling` in `pid_plan.py`), and the one
+    `SECRET` element is the link; calder_3 is readable. So: true in A, false in B."""
     in_a = await _shared_case(store_a)
     in_b = await _shared_case(store_b)
-    print(f"PID-ACCESS shared-case manifest count: A {in_a[2]} B {in_b[2]}", flush=True)
-    assert (in_a[2], in_b[2]) == (1, 0)
+    print(f"PID-ACCESS shared-case manifest withheld: A {in_a[2]} B {in_b[2]}", flush=True)
+    assert (in_a[2], in_b[2]) == (True, False)
+    cleared_a = await _shared_case(store_a, CLEARED)
+    cleared_b = await _shared_case(store_b, CLEARED)
+    assert (cleared_a[2], cleared_b[2]) == (False, False)
 
 
 async def test_adr124_the_snapshot_says_withheld_in_the_case_that_holds_the_secret_link(
@@ -1007,8 +1009,8 @@ async def test_adr124_the_snapshot_says_withheld_in_the_case_that_holds_the_secr
     """Decision 5 and U2c's text, made true by U5: in the case the cleared principal has worked in,
     the analyst's full snapshot carries `withheld` true (the one `SECRET` link is stored and above
     them) and in the case without it, false. It is a yes and never a number. The cleared principal,
-    for whom nothing is above their clearance, is told false in both. The manifest's `(1, 0)`
-    above is untouched until U9."""
+    for whom nothing is above their clearance, is told false in both. The manifest's `withheld`
+    above says the same of the manifest."""
     in_a = await _shared_case(store_a)
     in_b = await _shared_case(store_b)
     cleared_a = await _shared_case(store_a, CLEARED)

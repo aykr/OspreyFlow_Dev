@@ -148,7 +148,7 @@ describe("test_the_export_button_is_disabled_until_both_override_fields_are_fill
 });
 
 describe("test_manifest_and_mark_render_on_a_successful_export", () => {
-  test("the withheld count reuses the exact status-bar phrasing, and the mark's own handling level renders", async () => {
+  test("a case that holds material the exporter may not view says so in the status bar's standing sentence, and the mark's own handling level renders", async () => {
     mockFetch((url) => {
       if (url.includes("/resolution/threshold")) return { threshold: 0.95 };
       if (url.includes("/export")) {
@@ -160,7 +160,7 @@ describe("test_manifest_and_mark_render_on_a_successful_export", () => {
             resolution_threshold: 0.95,
             handling_level: "OFFICIAL-SENSITIVE",
           },
-          manifest: { policy: "disclose", withheld_count: 3 },
+          manifest: { policy: "disclose", withheld: true },
           ledger_entry_id: "led-1",
         };
       }
@@ -180,11 +180,12 @@ describe("test_manifest_and_mark_render_on_a_successful_export", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
 
-    await screen.findByText("3 hidden by handling");
+    await screen.findByText("This case holds material you are not cleared to see.");
+    expect(screen.queryByText(/hidden by handling/)).toBeNull();
     expect(screen.getByText(/OFFICIAL-SENSITIVE/)).toBeTruthy();
   });
 
-  test("omit policy renders no manifest text at all, not a zero count", async () => {
+  test("omit policy renders no manifest text at all, and a case with nothing withheld renders none either", async () => {
     mockFetch((url) => {
       if (url.includes("/resolution/threshold")) return { threshold: 0.95 };
       if (url.includes("/export")) {
@@ -196,7 +197,7 @@ describe("test_manifest_and_mark_render_on_a_successful_export", () => {
             resolution_threshold: 0.95,
             handling_level: "OFFICIAL",
           },
-          manifest: { policy: "omit", withheld_count: null },
+          manifest: { policy: "omit", withheld: null },
           ledger_entry_id: "led-2",
         };
       }
@@ -217,7 +218,7 @@ describe("test_manifest_and_mark_render_on_a_successful_export", () => {
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
 
     await screen.findByText(/OspreyFlow/);
-    expect(screen.queryByText(/hidden by handling/)).toBeNull();
+    expect(screen.queryByText("This case holds material you are not cleared to see.")).toBeNull();
   });
 });
 
@@ -241,7 +242,7 @@ describe("test_export_panel_produces_subgraph_export.test.tsx", () => {
             resolution_threshold: 0.95,
             handling_level: "OFFICIAL",
           },
-          manifest: { policy: "disclose", withheld_count: 0 },
+          manifest: { policy: "disclose", withheld: false },
           ledger_entry_id: "led-3",
         };
       }

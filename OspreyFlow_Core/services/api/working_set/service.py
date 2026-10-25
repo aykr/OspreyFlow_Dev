@@ -1370,21 +1370,18 @@ class WorkingSetService:
         await self._store.append_delta(investigation_id, delta)
         return delta
 
-    async def withheld_count_for(self, investigation_id: str, principal: Principal) -> int:
-        """The export gate's own trusted source for the withheld-item manifest
-        (`06_DECISIONS.md` ADR-045, `services/api/export.py::submit_export`) — computed here,
-        server-side against `principal`'s own current access over the investigation's real,
-        unfiltered membership, never accepted from a client submission. The arithmetic is
-        `_project`'s own, reused rather than a second count invented for export. It is the one
-        withheld figure still computed: the status bar's "N hidden by handling" and the notices that
-        shared it were removed (ADR-124 decision 1), and U9 replaces this count with a yes or no.
-        A client-supplied count would let an artefact state that nothing was withheld when items
-        were — an active misstatement of completeness, not merely an omission, which is a
-        materially worse failure than the leak ADR-045's own `disclose` default already accepts
-        the cost of."""
-        nodes, edges = await self.current_membership(investigation_id)
-        _, _, hidden = self._project(nodes, edges, principal)
-        return hidden
+    async def withheld_for(self, investigation_id: str, principal: Principal) -> bool:
+        """The export gate's own trusted source for the manifest's standing sentence
+        (`06_DECISIONS.md` ADR-045, ADR-124 decision 9, `services/api/export.py::submit_export`):
+        whether the case's stored set holds anything `principal` may not view, judged exactly as
+        `DeltaSnapshot.withheld` is (`_holds_what_the_reader_may_not_view`: the counted access
+        index, handling alone, datasets ignored). A yes or no, never a count: there is no figure
+        for withheld material anywhere (decision 1). Computed here, server-side, against
+        `principal`'s own current access, never accepted from a client submission: a client-supplied
+        flag would let an artefact state that nothing was withheld when items were, an active
+        misstatement of completeness, which is a materially worse failure than the disclosure
+        ADR-045's own `disclose` default already accepts the cost of."""
+        return await self._holds_what_the_reader_may_not_view(investigation_id, principal)
 
     async def branch_filtered_contents(
         self, source_investigation_id: str, principal: Principal, filt: BranchFilter

@@ -90,7 +90,7 @@ export type ReplacedAt = string | null;
 export type ReplacedBy = string | null;
 export type Items = PackItem[];
 export type Policy = "disclose" | "omit";
-export type Withheld = number | null;
+export type Withheld = boolean | null;
 export type LedgerEntryId = string;
 
 /**

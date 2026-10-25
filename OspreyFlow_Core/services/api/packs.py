@@ -246,7 +246,7 @@ async def export_pack(
         handling_level=level,
         exported_at=now,
         item_count=len(served),
-        withheld_count=withheld,
+        withheld=withheld > 0,
         manifest_policy=policy,
         justification_given=bool(request.justification),
         originator_reference_given=bool(request.originator_reference),
@@ -269,7 +269,7 @@ async def export_pack(
         published_by=version.published_by,
         items=served,
         policy=policy,
-        withheld=withheld if policy == "disclose" else None,
+        withheld=(withheld > 0) if policy == "disclose" else None,
         ledger_entry_id=entry.id,
     )
 
