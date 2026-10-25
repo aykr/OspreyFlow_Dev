@@ -10,7 +10,11 @@
 // blank it is recorded as PUBLIC (ADR-068). "Cannot proceed to Profile
 // without all three" is enforced as a disabled button, gated on
 // `StudioRecipeDraft.ready_for_profile`, which the server computes.
-import { useEffect, useMemo, useRef, useState } from "react";
+//
+// Beside the marking a source may declare two more things (ADR-127 decision 3, Amendment 2): the
+// units its rows may name, and the column that carries each part of a marking. Both are optional and
+// are saved into the draft's handling as the API takes them (`units`, `handling_columns`).
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ConnectDraftInput,
@@ -22,6 +26,7 @@ import { Input } from "../design/primitives/Input";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
 import { describeFileSize } from "./fileSize";
+import { HANDLING_BINDABLE, HANDLING_PART_LABELS } from "./handlingParts";
 import {
   ForbiddenError,
   createDraft,
@@ -66,6 +71,10 @@ export interface FormState {
   originator: string;
   owningUnit: string;
   legalBasis: string;
+  /** ADR-127 decision 3: the units the source's rows may name. */
+  units: string[];
+  /** A marking part to the column that carries it; a blank entry declares nothing. */
+  handlingColumns: Record<string, string>;
 }
 
 const EMPTY_FORM: FormState = {
@@ -77,6 +86,8 @@ const EMPTY_FORM: FormState = {
   originator: "",
   owningUnit: "",
   legalBasis: "",
+  units: [],
+  handlingColumns: {},
 };
 
 export function draftToForm(draft: StudioRecipeDraft): FormState {
@@ -90,15 +101,56 @@ export function draftToForm(draft: StudioRecipeDraft): FormState {
     originator: typeof handling.originator === "string" ? handling.originator : "",
     owningUnit: typeof handling.owning_unit === "string" ? handling.owning_unit : "",
     legalBasis: draft.legal_basis ?? "",
+    units: Array.isArray(handling.units)
+      ? handling.units.filter((u): u is string => typeof u === "string")
+      : [],
+    handlingColumns: stringRecord(handling.handling_columns),
   };
 }
 
-export function formToInput(form: FormState): ConnectDraftInput {
-  const handling: Record<string, string> = {};
+function stringRecord(value: unknown): Record<string, string> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}
+
+/** The columns the form declares, names trimmed and blanks dropped, as the server keeps them. */
+function declaredColumns(form: FormState): Record<string, string> {
+  const declared: Record<string, string> = {};
+  for (const part of HANDLING_BINDABLE) {
+    const column = (form.handlingColumns[part] ?? "").trim();
+    if (column) declared[part] = column;
+  }
+  return declared;
+}
+
+/** The server's rule for a declared unit column (`check_source_declarations`), in its own words so
+ * the analyst reads the same sentence before and after a save: an originator or owning-unit column
+ * needs at least one unit, since a cell may name only a unit the source lists. */
+export function sourceDeclarationProblem(form: FormState): string | null {
+  const unitParts = (["originator", "owning_unit"] as const).filter((p) => p in declaredColumns(form));
+  if (unitParts.length === 0 || form.units.length > 0) return null;
+  return (
+    `handling_columns declares a column for ${unitParts.join(" and ")} but the source lists no units: ` +
+    "a cell may name only a unit the source declares in units"
+  );
+}
+
+/** `previous` is the draft being edited. The server keeps what a PATCH's handling leaves unsaid, so
+ * a declaration the analyst emptied is sent as an explicit empty value, not left out. */
+export function formToInput(form: FormState, previous?: StudioRecipeDraft | null): ConnectDraftInput {
+  const handling: Record<string, unknown> = {};
   if (form.classification) handling.classification = form.classification;
   if (form.handlingCode) handling.handling_code = form.handlingCode;
   if (form.originator) handling.originator = form.originator;
   if (form.owningUnit) handling.owning_unit = form.owningUnit;
+  const before = (previous?.handling ?? {}) as Record<string, unknown>;
+  if (form.units.length > 0 || "units" in before) handling.units = form.units;
+  const columns = declaredColumns(form);
+  if (Object.keys(columns).length > 0 || "handling_columns" in before) handling.handling_columns = columns;
   return {
     label: form.label,
     connector_profile: form.connectorProfile,
@@ -140,6 +192,7 @@ export function ConnectScreen({
   const [sourceFiles, setSourceFiles] = useState<IngestSourceListing | null>(null);
   const [sourceFilesError, setSourceFilesError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [unitDraft, setUnitDraft] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -219,6 +272,7 @@ export function ConnectScreen({
   function startNewDraft() {
     setActiveRecipeId(null);
     setForm(EMPTY_FORM);
+    setUnitDraft("");
     setLastSaved(null);
     setSaveError(null);
     setForbidden(false);
@@ -228,6 +282,7 @@ export function ConnectScreen({
   function resumeDraft(draft: StudioRecipeDraft) {
     setActiveRecipeId(draft.recipe_id);
     setForm(draftToForm(draft));
+    setUnitDraft("");
     setLastSaved(draft);
     setSaveError(null);
     setForbidden(false);
@@ -239,7 +294,7 @@ export function ConnectScreen({
     setSaveError(null);
     setForbidden(false);
     try {
-      const input = formToInput(form);
+      const input = formToInput(form, lastSaved);
       const saved = activeRecipeId
         ? await updateDraft(apiBaseUrl, bearerToken, investigationId, activeRecipeId, input)
         : await createDraft(apiBaseUrl, bearerToken, investigationId, input);
@@ -296,7 +351,19 @@ export function ConnectScreen({
     );
   }
 
-  const canSave = form.label.trim().length > 0 && form.connectorProfile.length > 0;
+  const declarationProblem = sourceDeclarationProblem(form);
+  const canSave =
+    form.label.trim().length > 0 && form.connectorProfile.length > 0 && declarationProblem === null;
+
+  function addUnit() {
+    const name = unitDraft.trim();
+    setUnitDraft("");
+    if (name && !form.units.includes(name)) setForm({ ...form, units: [...form.units, name] });
+  }
+
+  function setColumn(part: string, column: string) {
+    setForm({ ...form, handlingColumns: { ...form.handlingColumns, [part]: column } });
+  }
 
   return (
     <div
@@ -566,6 +633,71 @@ export function ConnectScreen({
               <p style={{ margin: "var(--sp-4) 0 0", color: "var(--text-tertiary)" }}>
                 Left blank: recorded as{" "}
                 {scheme.classification.includes("PUBLIC") ? "PUBLIC" : (scheme.classification[0] ?? "PUBLIC")}
+              </p>
+            ) : null}
+          </fieldset>
+
+          {/* ADR-127 decision 3: what a source may declare beside its marking. Both are optional; a
+              declared originator or owning-unit column needs a unit to name, which the server
+              enforces and this says first. */}
+          <fieldset style={{ border: "none", padding: 0, marginBottom: "var(--sp-16)" }}>
+            <legend>Units this source's rows may name</legend>
+            {form.units.length > 0 ? (
+              <ul style={{ listStyle: "none", margin: "0 0 var(--sp-8)", padding: 0 }}>
+                {form.units.map((unit) => (
+                  <li key={unit} style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+                    <span>{unit}</span>
+                    <Button
+                      aria-label={`Remove unit ${unit}`}
+                      onClick={() => setForm({ ...form, units: form.units.filter((u) => u !== unit) })}
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+              <Input
+                aria-label="Unit name"
+                value={unitDraft}
+                onChange={(e) => setUnitDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addUnit();
+                  }
+                }}
+                placeholder="Unit name (e.g. unit-42)"
+              />
+              <Button onClick={addUnit}>Add unit</Button>
+            </div>
+          </fieldset>
+
+          <fieldset style={{ border: "none", padding: 0, marginBottom: "var(--sp-16)" }}>
+            <legend>Columns that carry the marking</legend>
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "var(--sp-8)", alignItems: "center" }}>
+              {HANDLING_BINDABLE.map((part) => {
+                const label = HANDLING_PART_LABELS[part];
+                const column = form.handlingColumns[part] ?? "";
+                return (
+                  <Fragment key={part}>
+                    <span>{label}</span>
+                    {/* Connect reads no source, so the column is typed; Map offers the declared
+                        one from the source's own columns. */}
+                    <Input
+                      aria-label={`Column carrying ${label}`}
+                      value={column}
+                      onChange={(e) => setColumn(part, e.target.value)}
+                      placeholder="Column name (optional)"
+                    />
+                  </Fragment>
+                );
+              })}
+            </div>
+            {declarationProblem ? (
+              <p role="status" style={{ margin: "var(--sp-8) 0 0", color: "var(--warning)" }}>
+                {declarationProblem}
               </p>
             ) : null}
           </fieldset>

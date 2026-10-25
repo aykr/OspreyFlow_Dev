@@ -17830,3 +17830,21 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   `Handling` does not bind is refused) and kept on a later edit of the draft.
   Shared geometry points merge the markings of the rows that name them.
 
+
+### ADR-127, Amendment 3 (25 October 2026) — B2-2b: the Glass controls
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **Amendment 2's "No Connect screen sets them yet"** no longer holds. Connect now sets `units` (a list)
+  and `handling_columns` (a column per part, typed by name). An emptied declaration is sent as an
+  explicit empty value, because a PATCH keeps whatever it leaves unsaid. Connect does not read the
+  source's columns, so the names are typed, not chosen.
+- **The Map inspector** offers each bindable part as the source default, a literal from the scheme, or
+  "From column", which only the column Connect declared for that part can fill. A binding to a column
+  that is no longer the declared one is shown as itself, not as the declared column. An element that
+  does not bind a declared part says so; the server refuses the save. Provenance is never offered from a
+  column.
+- **The sample-row preview** that Amendment 2 assigned to B2-2b is not built. The inspector's preview
+  names a bound part by its column and never shows a cell. If a sample-row preview is built later, it
+  shows a marking derived from a cell, so it must be masked by that row's `row_markings`.
+- **A fixed originator or owning unit has no editor.** The scheme lists no units. A literal unit
+  already in a recipe is shown and kept; setting one is done in the recipe or through the draft's API.

@@ -269,6 +269,8 @@ export function MapScreen({
         : null;
 
   const baselineClassification = (draft.handling as { classification?: string }).classification ?? "";
+  // ADR-127 Amendment 2: the column Connect declared for each part of a marking, which Map may bind.
+  const declaredColumns = (draft.handling as { handling_columns?: Record<string, string> }).handling_columns ?? {};
 
   async function handleSave() {
     setSaving(true);
@@ -360,6 +362,9 @@ export function MapScreen({
               sourceFieldNames={columns.map((c) => c.name)}
               baselineClassification={baselineClassification}
               classificationOrder={scheme?.classification ?? []}
+              handlingScheme={scheme}
+              sourceHandling={draft.handling as Record<string, unknown>}
+              declaredColumns={declaredColumns}
               onChangeEntity={(next) =>
                 selection?.kind === "entity" ? updateEntity(selection.ref, next) : undefined
               }

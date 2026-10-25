@@ -176,6 +176,24 @@ async function parseDraftOrThrow(response: Response, action: string): Promise<St
   if (response.status === 403) {
     throw new ForbiddenError(`${action}: principal lacks the required studio role`);
   }
+  // ADR-127 Amendment 2: a source whose declared units or marking columns cannot stand is refused
+  // with the cause in `detail` (coded, or FastAPI's validation list); the analyst reads that
+  // sentence, not a bare status.
+  if (response.status === 422) {
+    let cause: string | null = null;
+    try {
+      const body = (await response.json()) as { error?: unknown; detail?: unknown };
+      if (body.error === "source_declarations_invalid" && typeof body.detail === "string") cause = body.detail;
+      // FastAPI's own list, for a body `ConnectDraftInput` refuses before the route runs.
+      else if (Array.isArray(body.detail)) {
+        const first = (body.detail[0] as { msg?: unknown } | undefined)?.msg;
+        if (typeof first === "string" && first) cause = first;
+      }
+    } catch {
+      // Not a JSON body; the status line below is all there is to say.
+    }
+    throw new Error(cause ?? `${action} failed: ${response.status}`);
+  }
   return parseOrThrow(response, action);
 }
 

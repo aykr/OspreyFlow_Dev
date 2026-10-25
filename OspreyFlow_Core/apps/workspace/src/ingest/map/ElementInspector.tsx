@@ -18,6 +18,14 @@ import { Input } from "../../design/primitives/Input";
 import { Panel } from "../../design/primitives/Panel";
 import { RadioGroup } from "../../design/primitives/RadioGroup";
 import { Select } from "../../design/primitives/Select";
+import type { HandlingScheme } from "../api";
+import {
+  HANDLING_BINDABLE,
+  HANDLING_PART_LABELS,
+  codeWouldLoosen,
+  handlingPartState,
+  type HandlingPart,
+} from "../handlingParts";
 import { FieldBindingEditor } from "./FieldBindingEditor";
 import { classificationWouldLoosen, entityTypesForPole, edgeTypesForEndpoints } from "./rowTemplate";
 
@@ -34,6 +42,13 @@ export interface ElementInspectorProps {
   sourceFieldNames: string[];
   baselineClassification: string;
   classificationOrder: string[];
+  /** The scheme's handling, action and sanitisation codes, for a part's literal value. */
+  handlingScheme?: HandlingScheme | null;
+  /** The source's own marking (the draft's handling), which a literal override may only tighten. */
+  sourceHandling?: Record<string, unknown>;
+  /** ADR-127 decision 3: the column Connect declared for each handling part (the draft's
+   * `handling_columns`). A part can be read from a column only if it is named here. */
+  declaredColumns?: Record<string, string>;
   onChangeEntity: (next: RecipeEntity) => void;
   onChangeEdge: (next: RecipeEdge) => void;
   onDelete: () => void;
@@ -99,16 +114,41 @@ function ConditionEditor({
   );
 }
 
+/** The values a part may take as a literal: the scheme's own list. A unit has none (a fixed unit
+ * need not be one the source declares), so a unit part offers only the default and its column. */
+function literalValuesFor(
+  part: HandlingPart,
+  classificationOrder: string[],
+  scheme: HandlingScheme | null | undefined,
+): string[] {
+  if (part === "classification") return classificationOrder;
+  if (part === "handling_code") return Object.keys(scheme?.handling_codes ?? {});
+  if (part === "action_code") return Object.keys(scheme?.action_codes ?? {});
+  if (part === "sanitisation_code") return Object.keys(scheme?.sanitisation_codes ?? {});
+  return [];
+}
+
+const FROM_COLUMN = "__column__";
+// A binding to a column other than the declared one is shown as itself, so the select never says
+// one column while the recipe holds another; choosing it again changes nothing.
+const HELD_COLUMN = "__held_column__";
+
 function HandlingOverrideEditor({
   override,
   baselineClassification,
   classificationOrder,
+  handlingScheme,
+  sourceHandling,
+  declaredColumns,
   onChange,
   onPreviewHandling,
 }: {
   override: Record<string, unknown> | null;
   baselineClassification: string;
   classificationOrder: string[];
+  handlingScheme?: HandlingScheme | null;
+  sourceHandling?: Record<string, unknown>;
+  declaredColumns: Record<string, string>;
   onChange: (next: Record<string, unknown> | null) => void;
   onPreviewHandling: (
     handlingOverride: Record<string, unknown> | null,
@@ -116,8 +156,26 @@ function HandlingOverrideEditor({
 }) {
   const [preview, setPreview] = useState<MapHandlingPreviewResult | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const classification = (override?.classification as string | undefined) ?? "";
-  const wouldLoosen = classificationWouldLoosen(classificationOrder, baselineClassification, classification || null);
+  // A part is a literal, or a `{field: <column>}` binding: never assume a string.
+  // A literal looser than the source's own marking is refused at save. Classification is ranked by
+  // the scheme's order, the three codes by `merge_handling`'s; a part whose order cannot be
+  // computed (no source code, or one the scheme lacks) is not warned about.
+  const loosened = HANDLING_BINDABLE.filter((part) => {
+    const state = handlingPartState(override, part);
+    if (state.kind !== "literal") return false;
+    if (part === "classification") {
+      return classificationWouldLoosen(classificationOrder, baselineClassification, state.value);
+    }
+    return codeWouldLoosen(part, handlingScheme, sourceHandling?.[part], state.value);
+  });
+  // Every declared part must be bound, to the declared column, on every element (Amendment 2): the
+  // server refuses the save otherwise, so the editor says which before the analyst gets there.
+  const unbound = HANDLING_BINDABLE.filter((part) => {
+    const declared = declaredColumns[part];
+    if (!declared) return false;
+    const state = handlingPartState(override, part);
+    return !(state.kind === "column" && state.field === declared);
+  });
 
   async function runPreview() {
     setPreviewError(null);
@@ -129,6 +187,30 @@ function HandlingOverrideEditor({
     }
   }
 
+  function setPart(part: HandlingPart, choice: string) {
+    const next = { ...override };
+    if (choice === "") delete next[part];
+    else if (choice === HELD_COLUMN) return;
+    else if (choice === FROM_COLUMN) next[part] = { field: declaredColumns[part] };
+    else next[part] = choice;
+    onChange(next);
+  }
+
+  // The preview gives the source's default for a bound part, not any row's value, so a bound part
+  // is named by its column rather than shown a value it will not have.
+  function previewLine(result: MapHandlingPreviewResult): string {
+    const shown = HANDLING_BINDABLE.filter(
+      (part) => part === "classification" || part === "handling_code" || handlingPartState(override, part).kind === "column",
+    );
+    const parts = shown.map((part) => {
+      const state = handlingPartState(override, part);
+      return state.kind === "column"
+        ? `${part}: from column ${state.field}`
+        : `${part}: ${String(result.handling[part] ?? "")}`;
+    });
+    return `${parts.join(" · ")} · provenance: ${result.provenance.state}`;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}>
       <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-4, 4px)" }}>
@@ -138,32 +220,69 @@ function HandlingOverrideEditor({
         />
         Override handling for this element
       </label>
+      {unbound.map((part) => (
+        <div key={part} role="status" style={{ color: "var(--warning)" }}>
+          This element does not bind {HANDLING_PART_LABELS[part]}, which the source declares in
+          column {declaredColumns[part]}. Saving will be refused.
+        </div>
+      ))}
       {override !== null && (
         <>
-          <Select
-            value={classification}
-            onChange={(e) => onChange({ ...override, classification: e.target.value || undefined })}
-          >
-            <option value="">(use source default: {baselineClassification})</option>
-            {classificationOrder.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
-          {wouldLoosen && (
-            <div role="alert" style={{ color: "var(--warning)" }}>
-              This loosens the source's own {baselineClassification} marking — an override may
-              only tighten it. Saving will be rejected.
+          {HANDLING_BINDABLE.map((part) => {
+            const label = HANDLING_PART_LABELS[part];
+            const state = handlingPartState(override, part);
+            const declared = declaredColumns[part];
+            const literals = literalValuesFor(part, classificationOrder, handlingScheme);
+            // A literal the recipe already holds stays shown, scheme list or not, so it is neither
+            // dropped nor shown as something else.
+            const held = state.kind === "literal" && !literals.includes(state.value) ? [state.value] : [];
+            return (
+              <Select
+                key={part}
+                aria-label={`${label} for this element`}
+                value={
+                  state.kind === "column"
+                    ? state.field === declared
+                      ? FROM_COLUMN
+                      : HELD_COLUMN
+                    : state.kind === "literal"
+                      ? state.value
+                      : ""
+                }
+                onChange={(e) => setPart(part, e.target.value)}
+              >
+                <option value="">
+                  {part === "classification"
+                    ? `${label}: use source default (${baselineClassification})`
+                    : `${label}: source default`}
+                </option>
+                {[...held, ...literals].map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+                {state.kind === "column" && state.field !== declared && (
+                  <option value={HELD_COLUMN}>From column {state.field} (not declared)</option>
+                )}
+                <option value={FROM_COLUMN} disabled={!declared}>
+                  {declared
+                    ? `From column ${declared}`
+                    : "From column (Connect must declare it first)"}
+                </option>
+              </Select>
+            );
+          })}
+          {loosened.map((part) => (
+            <div key={part} role="alert" style={{ color: "var(--warning)" }}>
+              This loosens the source's own {HANDLING_PART_LABELS[part].toLowerCase()},{" "}
+              {part === "classification" ? baselineClassification : String(sourceHandling?.[part])} — an
+              override may only tighten it. Saving will be rejected.
             </div>
-          )}
+          ))}
           <Button onClick={runPreview}>Preview handling</Button>
           {previewError && <div role="alert">{previewError}</div>}
           {preview && (
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.85em" }}>
-              classification: {preview.handling.classification} · handling_code:{" "}
-              {preview.handling.handling_code} · provenance: {preview.provenance.state}
-            </div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: "0.85em" }}>{previewLine(preview)}</div>
           )}
         </>
       )}
@@ -178,6 +297,9 @@ export function ElementInspector({
   sourceFieldNames,
   baselineClassification,
   classificationOrder,
+  handlingScheme,
+  sourceHandling,
+  declaredColumns = {},
   onChangeEntity,
   onChangeEdge,
   onDelete,
@@ -303,6 +425,9 @@ export function ElementInspector({
             override={entity.handling ?? null}
             baselineClassification={baselineClassification}
             classificationOrder={classificationOrder}
+            handlingScheme={handlingScheme}
+            sourceHandling={sourceHandling}
+            declaredColumns={declaredColumns}
             onChange={(handling) => onChangeEntity({ ...entity, handling })}
             onPreviewHandling={(handlingOverride) =>
               onPreviewHandling(handlingOverride, entity.provenance ?? null)
@@ -521,6 +646,9 @@ export function ElementInspector({
           override={edge.handling ?? null}
           baselineClassification={baselineClassification}
           classificationOrder={classificationOrder}
+          handlingScheme={handlingScheme}
+          sourceHandling={sourceHandling}
+          declaredColumns={declaredColumns}
           onChange={(handling) => onChangeEdge({ ...edge, handling })}
           onPreviewHandling={(handlingOverride) => onPreviewHandling(handlingOverride, edge.provenance ?? null)}
         />
