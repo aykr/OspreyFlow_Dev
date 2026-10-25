@@ -29,23 +29,6 @@ describe("createWorkingSet", () => {
     expect(graph.order).toBe(1);
   });
 
-  it("merges update properties without touching membership", () => {
-    const { graph, store } = createWorkingSet();
-    store
-      .getState()
-      .applyDelta({ seq: 1, op: "add", nodes: [makeNode("n1", { properties: { a: 1 } })], edges: [] });
-
-    store.getState().applyDelta({
-      seq: 2,
-      op: "update",
-      nodes: [{ id: "n1", properties: { b: 2 } }],
-    });
-
-    const data = graph.getNodeAttribute("n1", "data");
-    expect(data.properties).toEqual({ a: 1, b: 2 });
-    expect(graph.order).toBe(1);
-  });
-
   it("removing a node also drops its incident edges", () => {
     const { graph, store } = createWorkingSet();
     store.getState().applyDelta({
@@ -59,6 +42,37 @@ describe("createWorkingSet", () => {
 
     expect(graph.order).toBe(1);
     expect(graph.size).toBe(0);
+  });
+
+  it("a sent link removal takes the link off the canvas and leaves both of its ends (ADR-124)", () => {
+    const { graph, store } = createWorkingSet();
+    store.getState().applyDelta({
+      seq: 1,
+      op: "add",
+      nodes: [makeNode("n1"), makeNode("n2")],
+      edges: [makeEdge("e1", "n1", "n2"), makeEdge("e2", "n1", "n2")],
+    });
+
+    store.getState().applyDelta({ seq: 2, op: "remove", node_ids: [], edge_ids: ["e1"] });
+
+    expect(graph.hasEdge("e1")).toBe(false);
+    expect(graph.hasEdge("e2")).toBe(true);
+    expect(graph.order).toBe(2);
+    expect(store.getState().seq).toBe(2);
+  });
+
+  it("a removal naming a link that is not on the canvas does nothing to it", () => {
+    const { graph, store } = createWorkingSet();
+    store.getState().applyDelta({
+      seq: 1,
+      op: "add",
+      nodes: [makeNode("n1"), makeNode("n2")],
+      edges: [makeEdge("e1", "n1", "n2")],
+    });
+
+    store.getState().applyDelta({ seq: 2, op: "remove", node_ids: [], edge_ids: ["never-here"] });
+
+    expect(graph.size).toBe(1);
   });
 
   it("a snapshot replaces the entire graph contents", () => {

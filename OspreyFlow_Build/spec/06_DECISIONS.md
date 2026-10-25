@@ -16765,6 +16765,63 @@ option, after an adversarial review.
   shows and describes the snapshot's `filtered_count`, which U2c removed. That contradiction is
   known, and U10 removes it.
 
+### ADR-124, Amendment 6 (25 October 2026) — U4: what decision 4 needed beyond its text
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after an adversarial review.
+- **A replace carries a record too.** Decision 4 names the stored record for a removal. A
+  `DeltaReplaceEdge` carries one as well (the old link's handling, datasets and ends), because the
+  four-row table cannot choose a row for a reader without the old link's marking. A stored replace
+  without its record, written before U4, gives a reconnecting reader a full snapshot, as a removal
+  does.
+- **The replace takes the old link.** `WorkingSetService.replace_edge` takes the old `Edge`, not its
+  id. Its record comes from the working set's stored copy of that link, or from the caller's copy when
+  the working set holds none.
+- **A removal's record comes from the access index.** `remove()` builds each removed element's
+  record from the counted access index (Amendment 4), in a fixed number of reads, not from stored
+  bodies. It reads the entries before the signature counts, so an element rewritten between the two
+  reads still finds its signature defined.
+- **The "nothing" row.** It sends an empty `DeltaRemoveSent` at the delta's sequence number, so the
+  sequence stays continuous. It is decision 12's accepted "empty projected delta at its sequence
+  number". Its op says that something was removed or replaced, which the fixed history labels already
+  tell every Viewer.
+- **Stored and sent forms.** Routes convert a stored form to its sent form explicitly at the
+  boundary, and publishing takes the stored form. A test serialises a stored form carrying a record
+  through each route whose response contains a sent removal or replacement, and finds no record. The set of such
+  routes is derived from the application's routes and must equal the test's list.
+- **`update` leaves the delta protocol.** Nothing produced a `DeltaUpdate`, and its shape named node
+  ids with their properties outside the projection, so it is removed from the server and the Glass.
+  Projection raises on a delta type it does not know rather than passing it on unprojected. Tested
+  by `test_delta_projection.py` (the type is gone; an unknown type raises) and `deltaOps.test.ts`.
+  `03_CONDUIT_MIDDLEWARE.md` §3.2 still shows `"op": "update"`; U10 corrects it with the rest of
+  that section.
+- **The live forward.** It applies the old-entry rule: a record-less stored removal or replace on
+  Pub/Sub gives the socket a full snapshot. That snapshot carries the current sequence number, so a
+  delta already in flight behind it trips the Glass's gap check, and the client resyncs once for each
+  such delta. Each resync returns nothing. This is harmless, and arises only from entries written before U4.
+- **Row 2 is not rule-3 clean until U10.** A link changed through `LinkChangeService` carries the old
+  link's id in its provenance (`manual:change:<id>`). Decision 11 stops writing it and strips it in
+  U10. It keeps the revision number (old + 1) and the old link's document sources; whether such a
+  source is itself a referent is ADR-125's. A strict expected failure built through the real change
+  path pins the id until then.
+- **The picture route's carrier joins decision 11.** Removing a picture writes a successor whose
+  provenance names the old link, `manual:remove-picture:<id>` (`entity_pictures.py`). Decision 11
+  covered only `manual:change:`. In U10 the picture route writes `manual:remove-picture` with no id,
+  and `scripts.strip_change_provenance` strips both prefixes, calling
+  `strip_provenance_references` once for each. U10's script test and the port method's conformance
+  case each include a `manual:remove-picture:<id>` successor, in the Vault and in a Valkey working
+  set. ADR-080's named exception for this in-place rewrite covers both prefixes. A strict expected
+  failure pins the picture successor's id until then.
+- **Decision 3's "in timing" carries the residuals Amendment 4 accepted.** These are:
+  - an `HMGET` hit costing a little more than a miss;
+  - links-among with no ids named reading every stored node entry, hidden ones included, which has no
+    2,000 bound.
+
+  Neither says what or where.
+- **The datasets axis.** It is proven with dataset-scoped readers on every projected referent. The
+  picture path's replacement link is stamped with the case's datasets, as `add_written` stamps a
+  write, so a case-scoped reader is sent it.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

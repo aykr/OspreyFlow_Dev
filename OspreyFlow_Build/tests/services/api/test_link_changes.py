@@ -647,3 +647,52 @@ async def test_handling_keeps_its_units_and_stays_within_the_analysts_clearance(
             "inv-1", "e1", CLEARED, LinkChangeRequest(handling=unknown, reason="x")
         )
     assert graph.superseded == []
+
+
+# --- ADR-124 decision 4, row 2, on the real call site -----------------------------------------
+
+
+async def _lowered_link_projected_for_a_reader_of_the_new_one() -> tuple[Any, Any]:
+    """A SECRET link lowered to OFFICIAL by an Author through `LinkChangeService.change`, and what
+    an OFFICIAL reader (who may read the new link and its ends but not the old link) is sent."""
+    _, graph, store, changes, notes = await _build()
+    service = LinkChangeService(
+        changes, WorkingSetService(graph, store, SCHEME), graph, ONTOLOGY, notes, scheme=SCHEME
+    )
+    result = await service.change(
+        "inv-1",
+        "secret-link",
+        CLEARED,
+        LinkChangeRequest(
+            handling=_handling("OFFICIAL"), confirm_lower=True, reason="Released by the originator"
+        ),
+        is_author=True,
+    )
+    sent = await WorkingSetService(graph, store, SCHEME).project_live(
+        "inv-1", result.delta, ANALYST
+    )
+    return result, sent
+
+
+async def test_a_lowered_link_is_sent_to_a_reader_of_the_new_one_as_an_addition() -> None:
+    """Row two of ADR-124 decision 4, through the service that makes the delta: the reader may read
+    the new link and its ends and not the old link, so they are sent the new link as an addition."""
+    result, sent = await _lowered_link_projected_for_a_reader_of_the_new_one()
+
+    assert type(sent).__name__ == "DeltaAdd"
+    assert [e.id for e in sent.edges] == [result.edge.id]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="U10 strips the old link's id from a successor's provenance (decision 11)",
+)
+async def test_a_lowered_link_sent_as_an_addition_names_nothing_of_the_old_link() -> None:
+    """Violation, known and owned by U10: the successor's provenance names `manual:change:{old.id}`
+    and carries the old link's sources (`change`, above), so the addition that row two sends names
+    the old link, which this reader may not read. Strict: when U10 removes it this passes, and the
+    marker must come off."""
+    _, sent = await _lowered_link_projected_for_a_reader_of_the_new_one()
+
+    assert "secret-link" not in sent.model_dump_json()

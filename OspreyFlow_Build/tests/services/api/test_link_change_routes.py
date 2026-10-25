@@ -5,6 +5,7 @@ each refusal to the status and body the Glass words its message from."""
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -30,7 +31,7 @@ from services.api.link_changes import (
     ResolutionLinkError,
 )
 from services.api.link_notes import LinkNotFoundError
-from services.api.working_set.models import DeltaReplaceEdge
+from services.api.working_set.models import DeltaReplaceEdge, RemovedElement
 
 from schemas.domain import (
     AuditStub,
@@ -101,7 +102,18 @@ class _FakeLinkChanges:
         edge = _edge("e2", "FAMILY_OF")
         return LinkChangeResult(
             edge=edge,
-            delta=DeltaReplaceEdge(seq=7, old_edge_id=edge_id, edge=edge),
+            # The shape the service emits: the old link's record rides on the stored form.
+            delta=DeltaReplaceEdge(
+                seq=7,
+                old_edge_id=edge_id,
+                edge=edge,
+                removed=RemovedElement(
+                    handling=edge.handling,
+                    datasets=edge.datasets,
+                    source=edge.source,
+                    target=edge.target,
+                ),
+            ),
             change=_change(),
         )
 
@@ -183,6 +195,20 @@ def test_a_change_is_published_so_other_screens_see_it(client: TestClient) -> No
     assert len(client.valkey.published) == 1  # type: ignore[attr-defined]
 
 
+def test_a_change_publishes_the_stored_replacement_with_the_record_of_the_old_link(
+    client: TestClient,
+) -> None:
+    """What is published is the stored form the service emits, which holds the record of the old
+    link (ADR-124 decision 4); what the route answers with holds none."""
+    response = client.post(f"{URL}/change", json={"type": "FAMILY_OF", "reason": "Told so"})
+
+    [(_, message)] = client.valkey.published  # type: ignore[attr-defined]
+    published = json.loads(message)
+    assert published["removed"]["handling"]["classification"] == "OFFICIAL"
+    assert (published["removed"]["source"], published["removed"]["target"]) == ("a", "b")
+    assert "removed" not in response.json()["delta"]
+
+
 def test_a_change_is_audited_with_the_reason_and_the_old_and_new_values(
     client: TestClient,
 ) -> None:
@@ -245,13 +271,17 @@ def test_an_unknown_field_is_refused_so_nothing_is_smuggled_in(client: TestClien
 def test_a_handling_reaches_the_service_with_whether_the_analyst_is_an_author(
     client: TestClient,
 ) -> None:
-    handling = {"classification": "OFFICIAL", "handling_code": "P", "originator": "unit-1",
-                "owning_unit": "unit-1"}
+    handling = {
+        "classification": "OFFICIAL",
+        "handling_code": "P",
+        "originator": "unit-1",
+        "owning_unit": "unit-1",
+    }
     response = client.post(
         f"{URL}/change", json={"reason": "Released", "handling": handling, "confirm_lower": True}
     )
     assert response.status_code == 200, response.text
-    (_, _, _, request), = client.service.calls  # type: ignore[attr-defined]
+    ((_, _, _, request),) = client.service.calls  # type: ignore[attr-defined]
     assert request.handling is not None and request.handling.classification == "OFFICIAL"
     assert request.confirm_lower is True
     # `_FakeInvestigations` grants whatever is asked, so the analyst is an Author here.
@@ -295,8 +325,8 @@ def test_a_principal_in_another_org_unit_cannot_change_or_read_history(
     client: TestClient,
 ) -> None:
     app.dependency_overrides[get_principal] = lambda: Principal(
-        id="analyst-2", clearance="OFFICIAL", org_unit="unit-2"
-    , roles=["analyst"])
+        id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"]
+    )
     # `_FakeInvestigations` above always authorises; use one that applies the unit rule.
 
     class _UnitChecked(_FakeInvestigations):

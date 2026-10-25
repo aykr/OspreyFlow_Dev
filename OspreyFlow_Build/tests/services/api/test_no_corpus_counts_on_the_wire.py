@@ -50,13 +50,16 @@ from pydantic import BaseModel, Field, computed_field
 from services.api.app import app
 from services.api.working_set.models import (
     DeltaAdd,
+    DeltaRemove,
+    DeltaRemoveSent,
     DeltaReplaceEdge,
+    DeltaReplaceEdgeSent,
     DeltaReproject,
     DeltaSnapshot,
-    WorkingSetDelta,
+    WorkingSetDeltaSent,
 )
 
-from schemas.domain import Edge, WeightComponents
+from schemas.domain import Edge, Subgraph, WeightComponents
 
 from .corpus_counts import (
     FORBIDDEN_KEYS,
@@ -144,7 +147,9 @@ STREAM_PATH = "/v1/investigations/{investigation_id}/stream"
 
 
 def _delta_models() -> list[type[BaseModel]]:
-    union = typing.get_args(WorkingSetDelta)[0]
+    """The deltas that are *sent* (`WorkingSetDeltaSent`), not the stored ones, which hold the
+    record of what was removed (ADR-124 decision 4)."""
+    union = typing.get_args(WorkingSetDeltaSent)[0]
     return list(typing.get_args(union))
 
 
@@ -161,14 +166,13 @@ def test_the_stream_route_exists_and_every_delta_model_is_known_to_this_file() -
     assert len(streams) == 1
 
     holding = {m for m in _delta_models() if contains_model(m, Edge, set())}
-    assert holding == {DeltaAdd, DeltaReplaceEdge, DeltaSnapshot}
+    assert holding == {DeltaAdd, DeltaReplaceEdgeSent, DeltaSnapshot}
     # `DeltaNotice` left the protocol with ADR-124 U2c: its only producers were the withheld
     # notices, so a delta set that still holds one is a delta set that can still send a count.
     assert {m.__name__ for m in _delta_models()} == {
         "DeltaAdd",
-        "DeltaUpdate",
-        "DeltaRemove",
-        "DeltaReplaceEdge",
+        "DeltaRemoveSent",
+        "DeltaReplaceEdgeSent",
         "DeltaReproject",
         "DeltaSnapshot",
     }
@@ -363,6 +367,160 @@ def test_no_delta_model_can_carry_a_withheld_figure(delta_model: type[BaseModel]
     shape holds `filtered_count` or `unreadable_count`. Every model in `WorkingSetDelta` is walked,
     whether or not it holds an `Edge`."""
     assert field_names_reachable(delta_model) & WITHHELD_KEYS == set(), delta_model.__name__
+
+
+@pytest.mark.parametrize("delta_model", _delta_models(), ids=lambda m: m.__name__)
+def test_no_sent_delta_can_carry_the_record_of_what_was_removed(
+    delta_model: type[BaseModel],
+) -> None:
+    """Violation caught (ADR-124 decision 4, rule 3): a sent delta whose shape holds `removed`, the
+    record of the handling, datasets and ends of what a removal or a replacement removed. It is
+    for the stored form alone; a sent form that could hold it could send it. The behavioural half
+    (a projection that passes the record through) is `test_delta_projection.py`."""
+    assert "removed" not in field_names_reachable(delta_model), delta_model.__name__
+
+
+@pytest.mark.parametrize("route", _api_routes(), ids=_label)
+def test_no_route_can_put_the_removal_record_on_the_wire(route: APIRoute) -> None:
+    """Violation caught (ADR-124 decision 4, rule 3): a route whose response, at any depth, can hold
+    `removed`: the record of what a removal or a replacement removed, which belongs to the stored
+    form that is published and never to anything a route returns. A route that returns a stored
+    delta by annotating it as one is the way it would get out."""
+    assert "removed" not in field_names_reachable(_wire_annotation(route)), _label(route)
+
+
+#: The routes that return a delta the stored way (a replacement), and what each is given.
+ROUTES_RETURNING_A_REPLACEMENT = [
+    "DELETE /v1/investigations/{investigation_id}/nodes/{node_id}/picture",
+    "POST /v1/investigations/{investigation_id}/links/{edge_id}/change",
+    "PUT /v1/investigations/{investigation_id}/nodes/{node_id}/picture",
+]
+
+
+def test_the_pinned_replacement_routes_are_the_routes_that_can_return_one() -> None:
+    """Violation caught (rule 15): a route added that returns a replacement or a removal, and is
+    not in the hand-kept list above, so the serialisation case below never sees it. The set is
+    derived from the app's own routes (a response model that holds either sent form) and must
+    equal the list."""
+    derived = {
+        _label(r)
+        for r in _api_routes()
+        if contains_model(_wire_annotation(r), DeltaReplaceEdgeSent, set())
+        or contains_model(_wire_annotation(r), DeltaRemoveSent, set())
+    }
+
+    assert derived == set(ROUTES_RETURNING_A_REPLACEMENT)
+
+
+def _route_named(label: str) -> APIRoute:
+    (route,) = [r for r in _api_routes() if _label(r) == label]
+    return route
+
+
+@pytest.mark.parametrize("label", ROUTES_RETURNING_A_REPLACEMENT)
+async def test_a_stored_replacement_serialised_as_the_route_would_carries_no_record(
+    label: str,
+) -> None:
+    """Violation caught (rule 3): a route that returns the stored object, record and all. The
+    stored replacement is put through the route's own `response_field` as FastAPI puts a returned
+    value through it (`serialize_response`), at every place the response can hold one, and the key
+    `removed` is nowhere in what comes out."""
+    from fastapi.routing import serialize_response
+    from services.api.working_set.models import RemovedElement
+
+    from .working_set.test_visible_link import edge
+
+    stored = DeltaReplaceEdge(
+        seq=1,
+        old_edge_id="old",
+        edge=edge("new", "a", "b"),
+        removed=RemovedElement(handling=edge("old", "a", "b").handling, source="a", target="b"),
+    )
+    route = _route_named(label)
+    instance = build(route.response_model, edge_with_components())
+    assert instance is not None, f"cannot build an instance of {route.response_model}"
+
+    def with_the_stored_replacement(value: Any) -> Any:
+        """The built instance as plain data, each replacement in it swapped for the stored one."""
+        if isinstance(value, BaseModel):
+            value = value.model_dump(mode="json")
+        if isinstance(value, dict):
+            if value.get("op") == "replace_edge":
+                return stored.model_dump(mode="json")
+            return {k: with_the_stored_replacement(v) for k, v in value.items()}
+        if isinstance(value, list):
+            items = [with_the_stored_replacement(v) for v in value]
+            if items and all(isinstance(i, dict) and "op" in i for i in items):
+                # A list of deltas holds the stored replacement alone (an unvalidated built node
+                # in the others would not survive the route's own validation).
+                return [stored.model_dump(mode="json")]
+            return items
+        return value
+
+    returned = with_the_stored_replacement(instance)
+    assert "removed" in keys_at_any_depth(returned), f"{label}: the stored form was not planted"
+
+    wire = await serialize_response(
+        field=route.response_field, response_content=returned, is_coroutine=True
+    )
+
+    assert "old" in repr(wire), f"{label}: the replacement is not in what the route sends"
+    assert "removed" not in keys_at_any_depth(wire), label
+
+
+def test_the_record_walk_finds_the_field_on_the_stored_forms() -> None:
+    """Violation caught (rule 15, the gate shown able to fail): the walk is blind to `removed`, so
+    the case above passes whatever a sent delta holds. It must find the field on the two stored
+    forms, which do hold it, and the stored forms must be the only ones that do."""
+    assert "removed" in field_names_reachable(DeltaRemove)
+    assert "removed" in field_names_reachable(DeltaReplaceEdge)
+    assert not {m for m in _delta_models() if "removed" in field_names_reachable(m)}
+
+
+async def test_projecting_each_stored_delta_form_never_sends_the_record() -> None:
+    """Violation caught (ADR-124 decision 4, rule 3), by the projection and not only by the shape of
+    the sent models: a `project_delta` that passes the stored form through (`DeltaRemove` and
+    `DeltaReplaceEdge` hold the record of what they removed). Each stored form is projected for an
+    OFFICIAL and a SECRET reader, as the live forward builds it, and the key `removed` is nowhere
+    in what is sent. Unlike the shape case above this one is red against a leaking projection."""
+    from services.api.working_set.models import RemovedElement, RemovedRecord
+    from services.api.working_set.service import WorkingSetService
+
+    from .working_set.fakes import FakeGraphPort, FakeWorkingSetStore
+    from .working_set.test_visible_link import OFFICIAL_READER, SCHEME, SECRET_READER, edge, node
+
+    store = FakeWorkingSetStore()
+    await store.add_nodes("inv-1", [node("a"), node("b"), node("s", "SECRET")])
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), store, SCHEME)
+    old = edge("old", "a", "b")
+    stored_forms = [
+        DeltaRemove(
+            seq=1,
+            node_ids=["a", "s"],
+            edge_ids=["old"],
+            removed=RemovedRecord(
+                nodes={
+                    "a": RemovedElement(handling=node("a").handling),
+                    "s": RemovedElement(handling=node("s", "SECRET").handling),
+                },
+                edges={
+                    "old": RemovedElement(handling=old.handling, source="a", target="b"),
+                },
+            ),
+        ),
+        DeltaReplaceEdge(
+            seq=2,
+            old_edge_id="old",
+            edge=edge("new", "a", "b"),
+            removed=RemovedElement(handling=old.handling, source="a", target="b"),
+        ),
+    ]
+
+    for reader in (OFFICIAL_READER, SECRET_READER):
+        for stored in stored_forms:
+            sent = await service.project_live("inv-1", stored, reader)
+            assert "removed" not in keys_at_any_depth(sent.model_dump(mode="json"))
+            assert type(sent) not in {DeltaRemove, DeltaReplaceEdge}
 
 
 def test_a_reproject_delta_carries_no_figure_of_the_actors_view() -> None:

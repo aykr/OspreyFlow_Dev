@@ -25,7 +25,7 @@
 // same socket rather than applying something it cannot place correctly.
 import type { WorkingSetDelta } from "./models";
 
-const DELTA_OPS = new Set(["add", "update", "remove", "replace_edge", "reproject", "snapshot"]);
+const DELTA_OPS = new Set(["add", "remove", "replace_edge", "reproject", "snapshot"]);
 
 /** A server that still sends the retired `notice` step (ADR-124): it is dropped quietly. The server
  * stamps it with the previous step's own number, so it neither advances nor checks the sequence. */

@@ -18,11 +18,6 @@ import type { Edge, Node } from "../../../../packages/schemas/generated";
 // output too (`Node.ts`/`Edge.ts`) and aren't re-exported from the
 // generated `index.ts` — using `string` directly here avoids depending on
 // an identifier the drift gate doesn't actually promise to keep exported.
-export interface NodePropertyUpdate {
-  id: string;
-  properties: Record<string, unknown>;
-}
-
 export interface DeltaAdd {
   seq: number;
   op: "add";
@@ -30,16 +25,15 @@ export interface DeltaAdd {
   edges: Edge[];
 }
 
-export interface DeltaUpdate {
-  seq: number;
-  op: "update";
-  nodes: NodePropertyUpdate[];
-}
-
+/** What a removal looks like on the wire (`DeltaRemoveSent` in `models.py`, ADR-124 decision 4):
+ * only the ids this reader may read, never the record the server keeps of what each was.
+ * `edge_ids` takes a link off the canvas and leaves its ends; a node's removal still takes its
+ * links with it. Absent from an older server's message, which means none. */
 export interface DeltaRemove {
   seq: number;
   op: "remove";
   node_ids: string[];
+  edge_ids?: string[];
 }
 
 /** One link stands in for another (ADR-080): a link was changed, so the old one leaves the view
@@ -85,7 +79,6 @@ export interface DeltaSnapshot {
 
 export type WorkingSetDelta =
   | DeltaAdd
-  | DeltaUpdate
   | DeltaRemove
   | DeltaReplaceEdge
   | DeltaReproject

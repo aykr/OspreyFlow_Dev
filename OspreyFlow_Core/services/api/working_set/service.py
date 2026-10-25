@@ -73,7 +73,9 @@ from .models import (
     ClusterNotFoundError,
     DeltaAdd,
     DeltaRemove,
+    DeltaRemoveSent,
     DeltaReplaceEdge,
+    DeltaReplaceEdgeSent,
     DeltaReproject,
     DeltaSnapshot,
     ExpansionOutcome,
@@ -83,9 +85,12 @@ from .models import (
     NodeNotInWorkingSetError,
     NothingToBranchError,
     PairwiseExplanation,
+    RemovedElement,
+    RemovedRecord,
     ResolutionOutcome,
     SameNodeAssertionError,
     WorkingSetDelta,
+    WorkingSetDeltaSent,
 )
 from .store import WorkingSetStorage
 
@@ -96,6 +101,11 @@ def _decode_comparison_vector(raw: Any) -> dict[str, Any] | None:
     result: dict[str, Any] = json.loads(raw)
     return result
 
+
+#: ADR-124 decision 4: the only two reasons a `DeltaReproject` is sent with. What the service stores
+#: is one of them too; an older entry may hold prose that names ids, and is sent as the threshold.
+REASON_THRESHOLD = "resolution_threshold"
+REASON_MANUAL = "manual_resolution"
 
 #: ADR-098 decision 1: an expansion that adds at most this many new nodes, into a view of at most
 #: `AUTO_LINKS_MAX_VIEW_NODES`, also brings the links among its nodes and the view. Beyond either,
@@ -242,6 +252,24 @@ class _ReaderCounts:
                         new_edges += 1
         return len(node_list) - len(visible_nodes), new_edges, entries
 
+    async def visibly_stored_among(self, node_ids: Iterable[NodeId]) -> set[NodeId]:
+        """Of the named ids, those the store holds and the reader may read: the membership read
+        of the counted access index, one entry per id asked about (ADR-124 decision 3). An id the
+        store holds but the reader may not read is not in the result, exactly as one it does not
+        hold is not: nothing downstream can tell them apart. A renumbering met between the counts
+        and the entries is handled as `would_add` handles it."""
+        ids = list(dict.fromkeys(node_ids))
+        for attempt in (0, 1):
+            try:
+                entries = await self._entries(ids, [])
+            except _SignaturesRenumbered:
+                if attempt or self.reload is None:
+                    raise
+                await self.reload()
+            else:
+                return self.visibly_stored(entries)[0]
+        raise AssertionError("unreachable")  # pragma: no cover
+
     async def visible_node_ids(self) -> set[NodeId]:
         """The ids of the reader's visible nodes. Only for a view the counts have shown to be
         small (`expand` asks the graph for the links among them): reads the store's node entries."""
@@ -321,36 +349,128 @@ class WorkingSetService:
         delta: WorkingSetDelta,
         principal: Principal,
         known: Mapping[NodeId, Node] | None = None,
-    ) -> WorkingSetDelta:
+    ) -> WorkingSetDeltaSent:
         """Re-filters one already-recorded delta for `principal` — the
         replay-on-reconnect path (`sync`) and the live WebSocket push
         (`app.py`'s `_forward_notifications`) both need this: a delta
         recorded when a *different* principal populated the store must
         not reach *this* principal's socket or reconnect catch-up
         verbatim. It returns the delta alone: how much it hid is not reported to anyone
-        (ADR-124 decision 1). `DeltaRemove`/`DeltaReproject` carry nothing
-        disclosable and pass through unchanged."""
+        (ADR-124 decision 1).
+
+        **Every delta is projected** (decision 4): a removal names ids and a replacement names two
+        links, so each carries a record of what it names (`DeltaRemove.removed`,
+        `DeltaReplaceEdge.removed`) from which this decides what `principal` is sent, and the
+        sent forms never hold the record. A reproject is sent with a fixed reason code and only
+        the cluster keys the reader may read. `known` is the working set's nodes, which a link's
+        ends and a cluster's keys are judged against; without it no end or key can be judged and
+        none is sent."""
         if isinstance(delta, DeltaAdd):
             nodes, edges, _ = self._project(delta.nodes, delta.edges, principal, known)
             return delta.model_copy(update={"nodes": nodes, "edges": edges})
         if isinstance(delta, DeltaSnapshot):
             nodes, edges, _ = self._project(delta.nodes, delta.edges, principal)
             return delta.model_copy(update={"nodes": nodes, "edges": edges})
+        if isinstance(delta, DeltaRemove):
+            return self._project_removal(delta, principal, known)
         if isinstance(delta, DeltaReplaceEdge):
-            # A change keeps the link's marking and its ends, so whoever could not see the old link
-            # cannot see the new one: for them the step is nothing, and the new link's content does
-            # not leave. Judged on the link's own marking because a delta carries no ends to judge
-            # it by, which is the safe side of that gap.
-            if principal_may_read(
-                delta.edge.handling, delta.edge.datasets, principal, self._scheme
+            return self._project_replacement(delta, principal, known)
+        if isinstance(delta, DeltaReproject):
+            readable = {
+                node_id
+                for node_id in delta.affected_cluster_ids
+                if node_id in (known or {})
+                and principal_may_read(
+                    (known or {})[node_id].handling,
+                    (known or {})[node_id].datasets,
+                    principal,
+                    self._scheme,
+                )
+            }
+            return DeltaReproject(
+                seq=delta.seq,
+                reason=REASON_MANUAL if delta.reason == REASON_MANUAL else REASON_THRESHOLD,
+                affected_cluster_ids={
+                    k: v for k, v in delta.affected_cluster_ids.items() if k in readable
+                },
+            )
+        # No rule for it, so nothing to send: a delta of a kind added later names ids of its own,
+        # and passing it on unprojected is how a hidden one reaches a socket.
+        raise TypeError(f"no projection for a delta of type {type(delta).__name__}")
+
+    def _may_read_element(self, element: RemovedElement | None, principal: Principal) -> bool:
+        return element is not None and principal_may_read(
+            element.handling, element.datasets, principal, self._scheme
+        )
+
+    def _may_read_ends(
+        self,
+        ends: Sequence[NodeId | None],
+        principal: Principal,
+        known: Mapping[NodeId, Node] | None,
+        removed: RemovedRecord | None = None,
+    ) -> bool:
+        """Whether `principal` may read every one of these nodes, judged by the working set's body
+        (`known`) or, for a node removed in the same delta, by its record. A node found in neither
+        cannot be judged and is not readable: the safe side."""
+        for end in ends:
+            if end is None:
+                return False
+            body = (known or {}).get(end)
+            if body is not None:
+                if not principal_may_read(body.handling, body.datasets, principal, self._scheme):
+                    return False
+            elif not self._may_read_element(
+                (removed.nodes if removed else {}).get(end), principal
             ):
-                return delta
-            return DeltaRemove(seq=delta.seq, node_ids=[])
-        return delta
+                return False
+        return True
+
+    def _project_removal(
+        self, delta: DeltaRemove, principal: Principal, known: Mapping[NodeId, Node] | None
+    ) -> DeltaRemoveSent:
+        record = delta.removed or RemovedRecord()
+        node_ids = [
+            node_id
+            for node_id in delta.node_ids
+            if self._may_read_element(record.nodes.get(node_id), principal)
+        ]
+        edge_ids = [
+            edge_id
+            for edge_id in delta.edge_ids
+            if (element := record.edges.get(edge_id)) is not None
+            and self._may_read_element(element, principal)
+            and self._may_read_ends([element.source, element.target], principal, known, record)
+        ]
+        return DeltaRemoveSent(seq=delta.seq, node_ids=node_ids, edge_ids=edge_ids)
+
+    def _project_replacement(
+        self, delta: DeltaReplaceEdge, principal: Principal, known: Mapping[NodeId, Node] | None
+    ) -> DeltaAdd | DeltaRemoveSent | DeltaReplaceEdgeSent:
+        """The four rows of ADR-124 decision 4: the replace, the new link alone as an addition, the
+        old link alone as a removal, or nothing. Each half is judged by its own marking and both of
+        its ends."""
+        new = delta.edge
+        new_ok = principal_may_read(
+            new.handling, new.datasets, principal, self._scheme
+        ) and self._may_read_ends([new.source, new.target], principal, known)
+        old = delta.removed
+        old_ok = (
+            old is not None
+            and self._may_read_element(old, principal)
+            and self._may_read_ends([old.source, old.target], principal, known)
+        )
+        if old_ok and new_ok:
+            return DeltaReplaceEdgeSent(seq=delta.seq, old_edge_id=delta.old_edge_id, edge=new)
+        if new_ok:
+            return DeltaAdd(seq=delta.seq, edges=[new])
+        if old_ok:
+            return DeltaRemoveSent(seq=delta.seq, edge_ids=[delta.old_edge_id])
+        return DeltaRemoveSent(seq=delta.seq)
 
     async def project_live(
         self, investigation_id: str, delta: WorkingSetDelta, principal: Principal
-    ) -> WorkingSetDelta:
+    ) -> WorkingSetDeltaSent:
         """A live push, projected for `principal` with its links' ends judged against the working
         set as it now stands (`_project`'s `known`)."""
         known = await self._store.source_fidelity_nodes(investigation_id)
@@ -440,7 +560,7 @@ class WorkingSetService:
         seq = await self._store.next_seq(investigation_id)
         delta = DeltaReproject(
             seq=seq,
-            reason=f"resolution threshold changed from {old_tau} to {tau}",
+            reason=REASON_THRESHOLD,
             affected_cluster_ids=delta_counts.affected_cluster_ids,
         )
         await self._store.append_delta(investigation_id, delta)
@@ -625,7 +745,7 @@ class WorkingSetService:
         seq = await self._store.next_seq(investigation_id)
         delta = DeltaReproject(
             seq=seq,
-            reason=f"manual {reason} between {node_a} and {node_b}",
+            reason=REASON_MANUAL,
             affected_cluster_ids=delta_counts.affected_cluster_ids,
         )
         await self._store.append_delta(investigation_id, delta)
@@ -853,8 +973,15 @@ class WorkingSetService:
         Past one degree (Amendment 4), also the routes between each pair of them: the fewest
         degrees that join the pair, up to `degree`, as ADR-116 finds them (`paths_at_length`, the
         reader's search in the adapter), their nodes and links added with the direct ones."""
-        view = await self._store.node_ids(investigation_id)
-        ids = view if node_ids is None else view & set(node_ids)
+        # What the reader may read of the ids named, before anything else (ADR-124 decision 3): a
+        # stored id they may not read is dropped here exactly as one the store does not hold is, so
+        # nothing after this, in the result or in the time it takes, depends on which it was.
+        reader = await self._reader_counts(investigation_id, principal)
+        ids = (
+            await reader.visible_node_ids()
+            if node_ids is None
+            else await reader.visibly_stored_among(node_ids)
+        )
         among = await self._graph.edges_among(sorted(ids), principal)
         route_nodes: dict[NodeId, Node] = {}
         route_edges: dict[EdgeId, Edge] = {e.id: e for e in among}
@@ -1134,15 +1261,41 @@ class WorkingSetService:
         return source.type, target.type
 
     async def replace_edge(
-        self, investigation_id: str, old_edge_id: EdgeId, new_edge: Edge
+        self, investigation_id: str, old_edge: Edge, new_edge: Edge
     ) -> DeltaReplaceEdge:
         """Swaps one link for its replacement in the working set and records the step, so a client
         that reconnects is told of it. Membership only: nothing is checked here, the caller has
-        already shown the principal may change the old link (`link_changes.py`)."""
-        await self._store.remove_edges(investigation_id, [old_edge_id])
+        already shown the principal may change the old link (`link_changes.py`).
+
+        The delta records what the old link was (its handling, datasets and ends) so that each
+        reader's projection can be decided from it (ADR-124 decision 4). The record is of the
+        working set's own stored copy of the old link, which is what its readers were sent (the
+        caller's may be the Vault's, whose datasets and marking can differ); the caller's is used
+        when the working set holds none, in which case no reader has it on a canvas.
+
+        The new link is stamped with the case's first dataset when it names none, as `add_written`
+        stamps what the Conduit writes (ADR-099): otherwise the copy the canvas is drawn from
+        belongs to none, and a reader scoped to the case is never sent it."""
+        from ..dataset_scope import case_datasets
+
+        held = case_datasets()
+        if held and not new_edge.datasets:
+            new_edge = new_edge.model_copy(update={"datasets": [held[0]]})
+        stored = await self._store.get_edge(investigation_id, old_edge.id) or old_edge
+        await self._store.remove_edges(investigation_id, [old_edge.id])
         await self._store.add_edges(investigation_id, [new_edge])
         seq = await self._store.next_seq(investigation_id)
-        delta = DeltaReplaceEdge(seq=seq, old_edge_id=old_edge_id, edge=new_edge)
+        delta = DeltaReplaceEdge(
+            seq=seq,
+            old_edge_id=old_edge.id,
+            edge=new_edge,
+            removed=RemovedElement(
+                handling=stored.handling,
+                datasets=list(stored.datasets),
+                source=stored.source,
+                target=stored.target,
+            ),
+        )
         await self._store.append_delta(investigation_id, delta)
         return delta
 
@@ -1212,19 +1365,54 @@ class WorkingSetService:
         await self._store.append_delta(investigation_id, snapshot)
         return snapshot
 
-    async def remove(self, investigation_id: str, node_ids: Sequence[NodeId]) -> int:
+    async def _record_of_nodes(
+        self, investigation_id: str, node_ids: Sequence[NodeId]
+    ) -> RemovedRecord:
+        """What each stored node of `node_ids` is, as `principal_may_read` judges it: its handling
+        and datasets, which are its signature in the counted index (`access_counts` holds the
+        table, `access_entries` each node's number, one `HMGET`). An id the store does not hold has
+        no entry. A renumbering between the two reads is met by reading again, once."""
+        ids = list(dict.fromkeys(node_ids))
+        for attempt in (0, 1):
+            # The entries first, then the table: signatures are only ever added to it within an
+            # epoch, so a signature an entry names (written before the entries were read) is
+            # defined by a table read after them. The other order leaves a node written between the
+            # two with an entry the table does not define, and it drops out of the record.
+            entries = await self._store.access_entries(investigation_id, ids, [])
+            counts = await self._store.access_counts(investigation_id)
+            if entries.epoch == counts.epoch:
+                break
+            if attempt:
+                raise RuntimeError("the access index kept being renumbered under a removal")
+        record = RemovedRecord()
+        for node_id, key in entries.nodes.items():
+            signature = counts.signatures.get(key)
+            if signature is not None:
+                record.nodes[node_id] = RemovedElement(
+                    handling=signature.handling(), datasets=list(signature.datasets)
+                )
+        return record
+
+    async def remove(self, investigation_id: str, node_ids: Sequence[NodeId]) -> DeltaRemove:
         """`DELETE /nodes` — "remove from the working set (not from the
         Vault)" (`03_CONDUIT_MIDDLEWARE.md` §3.2). Removal never breaches a
-        cap, so there is no check to run here — only the delta to record."""
+        cap, so there is no check to run here — only the delta to record.
+
+        What each node was is read before it is removed, from the counted access index and not from
+        the bodies (one lookup for all the ids), and the delta records it (ADR-124 decision 4):
+        that is what lets every reader be sent only the ids they may read.
+        The delta is the stored form, which holds the record; the route publishes it as it is and
+        sends nothing of it to anyone (`project_delta`)."""
+        record = await self._record_of_nodes(investigation_id, node_ids)
         await self._store.remove_nodes(investigation_id, node_ids)
         seq = await self._store.next_seq(investigation_id)
-        delta = DeltaRemove(seq=seq, node_ids=list(node_ids))
+        delta = DeltaRemove(seq=seq, node_ids=list(node_ids), removed=record)
         await self._store.append_delta(investigation_id, delta)
-        return seq
+        return delta
 
     async def sync(
         self, investigation_id: str, principal: Principal, *, last_acknowledged_seq: int | None
-    ) -> list[WorkingSetDelta]:
+    ) -> list[WorkingSetDeltaSent]:
         """The reconnect decision (`03_CONDUIT_MIDDLEWARE.md` §3.2): a
         client with no prior sequence (`last_acknowledged_seq is None`, a
         first connect) or one whose last-seen sequence has fallen off the

@@ -11,12 +11,15 @@ actually behave the way `FakeWorkingSetStore` was written to model them.
 
 from __future__ import annotations
 
+import json
+import os
 import random
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import msgpack
 import pytest
+from services.api.notify import notify_channel, publish_delta
 from services.api.working_set.access_index import (
     ABSENT,
     encode_signature,
@@ -24,7 +27,15 @@ from services.api.working_set.access_index import (
     signature_of,
 )
 from services.api.working_set.access_scripts import ADD_NODES
-from services.api.working_set.models import DeltaAdd
+from services.api.working_set.models import (
+    DeltaAdd,
+    DeltaRemove,
+    DeltaRemoveSent,
+    DeltaReplaceEdge,
+    DeltaReplaceEdgeSent,
+    DeltaSnapshot,
+    decode_delta,
+)
 from services.api.working_set.service import WorkingSetService
 from services.api.working_set.store import ValkeyWorkingSetStore
 from valkey.asyncio import Valkey
@@ -88,9 +99,28 @@ def _edge(edge_id: str, source: str, target: str) -> Edge:
     )
 
 
+async def _connected_valkey() -> Valkey:
+    """The Valkey these live cases run against, at `VALKEY_PORT` (6379, as every neighbour reads it,
+    when unset). An offline run pins `VALKEY_PORT=9` as the other stores pin theirs, so that it
+    cannot reach a running deployment's Valkey, and then fails here, saying why, and not on the
+    first command with a bare connection error."""
+    port = int(os.environ.get("VALKEY_PORT", "6379"))
+    client = Valkey(host="localhost", port=port, db=0)
+    try:
+        await client.ping()
+    except Exception as error:
+        await client.aclose()
+        pytest.fail(
+            f"no Valkey at localhost:{port} (VALKEY_PORT): these cases need one; "
+            f"{type(error).__name__}: {error}",
+            pytrace=False,
+        )
+    return client
+
+
 @pytest.fixture
 async def store() -> ValkeyWorkingSetStore:
-    client = Valkey(host="localhost", port=6379, db=0)
+    client = await _connected_valkey()
     investigation_id = f"test-{datetime.now(UTC).timestamp()}"
     working_store = ValkeyWorkingSetStore(client)
     yield working_store, investigation_id  # type: ignore[misc]
@@ -244,7 +274,7 @@ async def test_deltas_after_a_seq_with_no_stream_at_all_signals_a_gap(
 
 @pytest.fixture
 async def indexed_store() -> AsyncIterator[tuple[ValkeyWorkingSetStore, Valkey, str]]:
-    client = Valkey(host="localhost", port=6379, db=0)
+    client = await _connected_valkey()
     case = f"test-index-{datetime.now(UTC).timestamp()}"
     working_store = ValkeyWorkingSetStore(client)
     yield working_store, client, case
@@ -936,3 +966,136 @@ async def test_a_restore_adds_before_it_removes_and_removes_links_before_nodes(
         "remove_nodes",
     ]
     await assert_index_matches_bodies(working_store, case, "after the restore")
+
+
+# --- ADR-124 decision 4: every delta is projected for its reader (stream and Pub/Sub) ---
+
+
+async def test_a_removal_goes_through_the_stream_with_its_record_and_is_projected_per_reader(
+    indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str],
+) -> None:
+    """Violation caught (rule 3): a removal whose record is lost on the stream (the stored JSON
+    dropped it, or the decode did), so the projection after a reconnect can only pass ids on or
+    drop them. Over the real stream the removal comes back with its record, and each reader is
+    sent only the ids they may read."""
+    working_store, client, case = indexed_store
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
+    await working_store.add_nodes(case, [index_node("pub"), index_node("sec", "SECRET")])
+    removal = await service.remove(case, ["pub", "sec"])
+
+    replayed = await working_store.deltas_after(case, 0)
+
+    assert replayed == [removal]
+    assert isinstance(replayed[0], DeltaRemove) and replayed[0].removed is not None
+    caught_up = await service.sync(case, OFFICIAL_READER, last_acknowledged_seq=0)
+    assert [type(d) for d in caught_up] == [DeltaRemoveSent]
+    assert caught_up[0].node_ids == ["pub"]  # type: ignore[union-attr]
+    assert "removed" not in caught_up[0].model_dump_json()
+    cleared = await service.sync(case, SECRET_READER, last_acknowledged_seq=0)
+    assert cleared[0].node_ids == ["pub", "sec"]  # type: ignore[union-attr]
+
+
+async def test_a_removal_stored_without_its_record_makes_the_real_stream_answer_none(
+    indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str],
+) -> None:
+    """Violation caught: a removal written before the record existed passed on to a reconnecting
+    reader, or its ids dropped. The real stream answers `None`, and the reader is sent a snapshot
+    of their own view."""
+    working_store, client, case = indexed_store
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
+    await working_store.add_nodes(case, [index_node("pub"), index_node("sec", "SECRET")])
+    await working_store.next_seq(case)
+    # Written as a deployment built before this change wrote them: raw JSON, with no `removed`
+    # and no `edge_ids` key, straight into the stream.
+    old_removal = {"seq": 1, "op": "remove", "node_ids": ["sec"]}
+    old_replacement = {
+        "seq": 2,
+        "op": "replace_edge",
+        "old_edge_id": "e0",
+        "edge": index_edge("e1", "pub", "sec").model_dump(mode="json"),
+    }
+    for entry in (old_removal, old_replacement):
+        await client.xadd(f"ws:{case}:deltas", {"json": json.dumps(entry)}, id=f"{entry['seq']}-0")
+    await working_store.next_seq(case)
+    await working_store.next_seq(case)
+
+    assert await working_store.deltas_after(case, 0) is None
+    assert await working_store.deltas_after(case, 1) is None
+    sent = await service.sync(case, OFFICIAL_READER, last_acknowledged_seq=0)
+    assert [type(d) for d in sent] == [DeltaSnapshot]
+
+
+async def test_pub_sub_carries_the_record_and_each_socket_projects_it_for_its_own_reader(
+    indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str],
+) -> None:
+    """Violation caught: the record is dropped on Pub/Sub (so the live forward cannot project a
+    removal or a replacement), or is sent on, to a reader, as published. What is published is the
+    stored form; what each socket is sent, built from the decoded message as the live forward
+    builds it, holds no record and only what that reader may read."""
+    working_store, client, case = indexed_store
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
+    await working_store.add_nodes(
+        case,
+        [index_node("pub"), index_node("b"), index_node("c"), index_node("sec", "SECRET")],
+    )
+    pubsub = client.pubsub()
+    await pubsub.subscribe(notify_channel(case))
+    removal = await service.remove(case, ["pub", "sec"])
+    old = index_edge("old", "c", "b", "SECRET")
+    replacement = await service.replace_edge(case, old, index_edge("new", "c", "b"))
+
+    await publish_delta(client, case, removal)
+    await publish_delta(client, case, replacement)
+
+    received = []
+    for _ in range(20):  # the first read is the subscription's own confirmation, ignored: a None
+        message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.5)
+        if message is None:
+            continue
+        assert message["type"] == "message"
+        data = message["data"]
+        received.append(
+            decode_delta(json.loads(data.decode() if isinstance(data, bytes) else data))
+        )
+        if len(received) == 2:
+            break
+    await pubsub.aclose()
+    assert received == [removal, replacement]
+    assert isinstance(received[0], DeltaRemove) and received[0].removed is not None
+    assert isinstance(received[1], DeltaReplaceEdge) and received[1].removed is not None
+    official = [await service.project_live(case, d, OFFICIAL_READER) for d in received]
+    cleared = [await service.project_live(case, d, SECRET_READER) for d in received]
+    assert type(official[0]) is DeltaRemoveSent and official[0].node_ids == ["pub"]
+    assert type(official[1]) is DeltaAdd  # the old link was SECRET: they are sent the new one
+    assert official[1].edges[0].id == "new"
+    assert type(cleared[0]) is DeltaRemoveSent and cleared[0].node_ids == ["pub", "sec"]
+    assert type(cleared[1]) is DeltaReplaceEdgeSent
+    for sent in (*official, *cleared):
+        assert '"removed"' not in sent.model_dump_json()
+
+
+async def test_the_removals_record_is_built_from_the_index_in_a_fixed_number_of_reads(
+    indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str],
+) -> None:
+    """Violation caught (cost): a record built by reading and decoding each removed node's body,
+    which is a round trip for every id. Over the real store, a removal of 500 nodes reads no body,
+    and the record says what each was."""
+    working_store, client, case = indexed_store
+    nodes = [index_node(f"n{i}", "SECRET" if i % 2 else "OFFICIAL") for i in range(500)]
+    await working_store.add_nodes(case, nodes)
+    bodies_read: list[str] = []
+    real = working_store.get_node
+
+    async def counting(investigation_id: str, node_id: str) -> object:
+        bodies_read.append(node_id)
+        return await real(investigation_id, node_id)
+
+    working_store.get_node = counting  # type: ignore[method-assign]
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
+
+    removal = await service.remove(case, [n.id for n in nodes])
+
+    assert bodies_read == []
+    assert removal.removed is not None and len(removal.removed.nodes) == 500
+    assert removal.removed.nodes["n1"].handling.classification == "SECRET"
+    assert removal.removed.nodes["n2"].handling.classification == "OFFICIAL"

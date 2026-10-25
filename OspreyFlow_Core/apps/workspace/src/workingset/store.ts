@@ -24,7 +24,6 @@ import type {
   DeltaReplaceEdge,
   DeltaReproject,
   DeltaSnapshot,
-  DeltaUpdate,
   WorkingSetDelta,
 } from "./models";
 
@@ -119,22 +118,15 @@ function applyAdd(graph: WorkingSetGraph, delta: DeltaAdd): void {
   }
 }
 
-function applyUpdate(graph: WorkingSetGraph, delta: DeltaUpdate): void {
-  for (const update of delta.nodes) {
-    if (!graph.hasNode(update.id)) continue;
-    const current = graph.getNodeAttribute(update.id, "data");
-    graph.setNodeAttribute(update.id, "data", {
-      ...current,
-      properties: { ...current.properties, ...update.properties },
-    });
-  }
-}
-
 function applyRemove(graph: WorkingSetGraph, delta: DeltaRemove): void {
   for (const nodeId of delta.node_ids) {
     // graphology drops every incident edge along with the node itself —
     // no separate edge bookkeeping needed here.
     if (graph.hasNode(nodeId)) graph.dropNode(nodeId);
+  }
+  // A link removed on its own (ADR-124 decision 4): the link goes, its ends stay.
+  for (const edgeId of delta.edge_ids ?? []) {
+    if (graph.hasEdge(edgeId)) graph.dropEdge(edgeId);
   }
 }
 
@@ -177,9 +169,6 @@ function applyDeltaToGraph(graph: WorkingSetGraph, delta: WorkingSetDelta): void
   switch (delta.op) {
     case "add":
       applyAdd(graph, delta);
-      return;
-    case "update":
-      applyUpdate(graph, delta);
       return;
     case "remove":
       applyRemove(graph, delta);

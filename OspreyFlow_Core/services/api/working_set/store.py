@@ -46,7 +46,7 @@ from .access_index import (
     triple_key,
 )
 from .access_scripts import ADD_EDGES, ADD_NODES, REMOVE_EDGES, REMOVE_NODES
-from .models import WorkingSetDelta, decode_delta
+from .models import WorkingSetDelta, decode_delta, lacks_record
 
 _log = logging.getLogger(__name__)
 
@@ -150,7 +150,10 @@ class WorkingSetStorage(Protocol):
         """`None` means `since_seq` has fallen off the capped stream (or
         nothing has ever been recorded for this investigation) — the
         caller's signal to resnapshot rather than patch
-        (`03_CONDUIT_MIDDLEWARE.md` §3.2)."""
+        (`03_CONDUIT_MIDDLEWARE.md` §3.2). It is also `None` when any delta after `since_seq` is a
+        removal or a replacement stored without the record of what it removed (`lacks_record`,
+        written before ADR-124 decision 4): none can be projected for a reader, so the reader is
+        sent a full snapshot."""
         ...
 
     async def clear(self, investigation_id: str) -> None:
@@ -789,6 +792,8 @@ class ValkeyWorkingSetStore:
         for _stream_id, fields in entries:
             payload = fields[b"json"].decode()
             deltas.append(decode_delta(json.loads(payload)))
+        if any(lacks_record(d) for d in deltas):
+            return None  # a removal stored before it carried its record: a full snapshot instead
         return deltas
 
     async def clear(self, investigation_id: str) -> None:

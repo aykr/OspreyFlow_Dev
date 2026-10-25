@@ -44,7 +44,7 @@ from schemas.domain import (
 
 from .document_content import DOCUMENT_TYPE, UploadRefusedError
 from .email_extraction import _node_from_write
-from .working_set.models import DeltaAdd, DeltaReplaceEdge
+from .working_set.models import DeltaAdd, DeltaReplaceEdge, DeltaReplaceEdgeSent
 from .working_set.service import WorkingSetService
 
 DEPICTS = "DEPICTS"
@@ -66,8 +66,25 @@ class PictureNotFoundError(Exception):
 
 
 class PictureSetResult(BaseModel):
+    """What `EntityPictureService.set` returns to its caller: the stored forms of the deltas, which
+    carry the record of the link replaced and are what the route publishes. Not a response model;
+    the route answers with `to_response()` (ADR-124 decision 4)."""
+
     document_id: str
     deltas: list[DeltaAdd | DeltaReplaceEdge]
+
+    def to_response(self) -> PictureSetResponse:
+        return PictureSetResponse(
+            document_id=self.document_id,
+            deltas=[d.to_sent() if isinstance(d, DeltaReplaceEdge) else d for d in self.deltas],
+        )
+
+
+class PictureSetResponse(BaseModel):
+    """What the picture upload answers: the document and the steps, in their sent form."""
+
+    document_id: str
+    deltas: list[DeltaAdd | DeltaReplaceEdgeSent]
 
 
 class EntityPicture(BaseModel):
@@ -259,7 +276,7 @@ class EntityPictureService:
                 await self._working_set.add_written(
                     investigation_id, [_node_from_write(document)], [], principal
                 ),
-                await self._working_set.replace_edge(investigation_id, before[0].id, new),
+                await self._working_set.replace_edge(investigation_id, before[0], new),
             ]
         return PictureSetResult(document_id=document_id, deltas=deltas)
 
@@ -304,5 +321,5 @@ class EntityPictureService:
             raise
         await self._graph.commit_transaction(tx)
         return await self._working_set.replace_edge(
-            investigation_id, old.id, _edge_from(write, old.audit.revision + 1)
+            investigation_id, old, _edge_from(write, old.audit.revision + 1)
         )

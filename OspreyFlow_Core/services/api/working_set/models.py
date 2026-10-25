@@ -2,10 +2,11 @@
 `spec/03_CONDUIT_MIDDLEWARE.md` §3.2 (the delta protocol) and §4 (caps,
 storage, projection), `spec/00_ARCHITECTURE.md` §4.
 
-The delta ops below (`add`/`update`/`remove`/`reproject`) are
+The delta ops below (`add`/`remove`/`reproject`, and `replace_edge`) are
 `03_CONDUIT_MIDDLEWARE.md` §3.2's own illustrative examples, given real
-types. §3.2's fifth, `notice`, left the protocol with ADR-124: a count of what a reader may not
-read points at it. `DeltaSnapshot` is not one of those five: §3.2's prose requires it
+types. §3.2's `notice` left the protocol with ADR-124 (a count of what a reader may not read
+points at it) and its `update` with U4 (nothing produced one, and it named node ids).
+`DeltaSnapshot` is not one of those: §3.2's prose requires it
 ("a client that misses a sequence reconnects and requests a full snapshot
 rather than attempting to patch") without giving its wire shape, so this
 follows the same pattern `GraphPort` set when it grew past its own
@@ -19,7 +20,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
-from schemas.domain import ClusterId, Edge, EdgeId, Node, NodeId
+from schemas.domain import ClusterId, Edge, EdgeId, Handling, Node, NodeId
 
 #: `00_ARCHITECTURE.md` §4 / `03_CONDUIT_MIDDLEWARE.md` §4 — "50,000 nodes
 #: and 250,000 edges" by policy (ADR-007). Not a config value: raising the
@@ -75,11 +76,6 @@ class NothingToBranchError(Exception):
     (`CLAUDE.md` rules 3 and 4). Raised before any case is created, so none is left behind empty."""
 
 
-class NodePropertyUpdate(BaseModel):
-    id: NodeId
-    properties: dict[str, Any]
-
-
 class DeltaAdd(BaseModel):
     seq: int
     op: Literal["add"] = "add"
@@ -87,27 +83,87 @@ class DeltaAdd(BaseModel):
     edges: list[Edge] = Field(default_factory=list)
 
 
-class DeltaUpdate(BaseModel):
-    seq: int
-    op: Literal["update"] = "update"
-    nodes: list[NodePropertyUpdate] = Field(default_factory=list)
+class RemovedElement(BaseModel):
+    """What the service needs to say, later and for any reader, whether a removed element is one
+    that reader may read (ADR-124 decision 4): its handling and datasets, and for a link its two
+    ends. It is stored with the delta and published with it, and is never sent: `project_delta`
+    reads it and drops it."""
+
+    handling: Handling
+    datasets: list[str] = Field(default_factory=list)
+    source: NodeId | None = None
+    target: NodeId | None = None
 
 
-class DeltaRemove(BaseModel):
+class RemovedRecord(BaseModel):
+    """The record of a `DeltaRemove`: each removed node's and link's `RemovedElement`, by id."""
+
+    nodes: dict[NodeId, RemovedElement] = Field(default_factory=dict)
+    edges: dict[EdgeId, RemovedElement] = Field(default_factory=dict)
+
+
+class DeltaRemoveSent(BaseModel):
+    """What a removal looks like on a socket, in a route's response and in a reconnect's catch-up:
+    the ids the reader may read, and nothing else (ADR-124 decision 4). It never holds the record
+    (`DeltaRemove.removed`), which is the stored form's alone. `edge_ids` takes a link off the
+    canvas without taking its ends."""
+
     seq: int
     op: Literal["remove"] = "remove"
     node_ids: list[NodeId] = Field(default_factory=list)
+    edge_ids: list[EdgeId] = Field(default_factory=list)
 
 
-class DeltaReplaceEdge(BaseModel):
+class DeltaRemove(BaseModel):
+    """The stored and published removal: the ids, and the record of what each removed id was
+    (`removed`), which is what lets every reader's projection be decided from the delta alone.
+    A stored removal written before the record existed has `removed = None`, and a reconnect over
+    one is answered with a full snapshot: passing it on would send ids the reader may not read, and
+    dropping its ids would leave the reader's canvas unlike a snapshot's (`deltas_after`).
+
+    **Not a `DeltaRemoveSent`, and not a subclass of it**, so that a function typed to send one
+    cannot be handed the other: the checker keeps the record off the wire. `to_sent` is the one
+    conversion, all of the ids and none of the record, for the analyst who made the change and
+    needs no projection of their own act."""
+
+    seq: int
+    op: Literal["remove"] = "remove"
+    node_ids: list[NodeId] = Field(default_factory=list)
+    edge_ids: list[EdgeId] = Field(default_factory=list)
+    removed: RemovedRecord | None = None
+
+    def to_sent(self) -> DeltaRemoveSent:
+        return DeltaRemoveSent(seq=self.seq, node_ids=self.node_ids, edge_ids=self.edge_ids)
+
+
+class DeltaReplaceEdgeSent(BaseModel):
     """One link stands in for another (ADR-080): an analyst changed a link's type or details, which
     supersedes it. The old link leaves the working set and `edge` arrives in its place, in one step,
-    so a client never shows both and a reconnecting client never keeps the old one."""
+    so a client never shows both and a reconnecting client never keeps the old one. This is the
+    shape that is sent; the stored form is `DeltaReplaceEdge`."""
 
     seq: int
     op: Literal["replace_edge"] = "replace_edge"
     old_edge_id: EdgeId
     edge: Edge
+
+
+class DeltaReplaceEdge(BaseModel):
+    """The stored and published replacement, with the old link's record (`removed`: its handling,
+    datasets and ends) so that a reader's projection can be decided from it: a reader may read the
+    replace, only the new link, only the removal of the old one, or nothing (ADR-124 decision 4).
+    The record is never sent. One stored before the record existed has `removed = None`, and a
+    reconnect over it is answered with a full snapshot. Not a subclass of `DeltaReplaceEdgeSent`
+    (see `DeltaRemove`); `to_sent` is the conversion for the analyst who made the change."""
+
+    seq: int
+    op: Literal["replace_edge"] = "replace_edge"
+    old_edge_id: EdgeId
+    edge: Edge
+    removed: RemovedElement | None = None
+
+    def to_sent(self) -> DeltaReplaceEdgeSent:
+        return DeltaReplaceEdgeSent(seq=self.seq, old_edge_id=self.old_edge_id, edge=self.edge)
 
 
 class DeltaReproject(BaseModel):
@@ -148,7 +204,19 @@ class DeltaSnapshot(BaseModel):
 
 
 WorkingSetDelta = Annotated[
-    DeltaAdd | DeltaUpdate | DeltaRemove | DeltaReplaceEdge | DeltaReproject | DeltaSnapshot,
+    DeltaAdd | DeltaRemove | DeltaReplaceEdge | DeltaReproject | DeltaSnapshot,
+    Field(discriminator="op"),
+]
+
+#: What is sent to a reader: on a socket, as a reconnect's catch-up, and in a route's response. It
+#: differs from `WorkingSetDelta`, which is what is stored and published, in two members, which
+#: never carry the record of what was removed (ADR-124 decision 4). The wire gate walks this union.
+WorkingSetDeltaSent = Annotated[
+    DeltaAdd
+    | DeltaRemoveSent
+    | DeltaReplaceEdgeSent
+    | DeltaReproject
+    | DeltaSnapshot,
     Field(discriminator="op"),
 ]
 
@@ -162,6 +230,14 @@ def decode_delta(data: dict[str, Any]) -> WorkingSetDelta:
     ever have a delta as plain JSON (from the Valkey stream or a Pub/Sub
     message) rather than a typed object."""
     return _delta_adapter.validate_python(data)  # type: ignore[no-any-return]
+
+
+def lacks_record(delta: WorkingSetDelta) -> bool:
+    """Whether `delta` is a removal or a replacement stored before it carried the record of what it
+    removed. It cannot be projected for any reader (passing it on could send ids they may not read,
+    dropping its ids would leave their canvas unlike a snapshot's), so a store's `deltas_after`
+    answers `None` over one and the reader is sent a full snapshot (ADR-124 decision 4)."""
+    return isinstance(delta, DeltaRemove | DeltaReplaceEdge) and delta.removed is None
 
 
 class ExpansionOutcome(BaseModel):
@@ -294,21 +370,25 @@ __all__ = [
     "ClusterNotFoundError",
     "DeltaAdd",
     "DeltaRemove",
+    "DeltaRemoveSent",
     "DeltaReplaceEdge",
+    "DeltaReplaceEdgeSent",
     "DeltaReproject",
     "DeltaSnapshot",
-    "DeltaUpdate",
     "EdgeId",
     "decode_delta",
+    "lacks_record",
     "ExpansionOutcome",
     "LimitExceeded",
     "LimitExceededError",
     "LimitOption",
     "NodeId",
     "NodeNotInWorkingSetError",
-    "NodePropertyUpdate",
     "PairwiseExplanation",
+    "RemovedElement",
+    "RemovedRecord",
     "ResolutionOutcome",
     "SameNodeAssertionError",
     "WorkingSetDelta",
+    "WorkingSetDeltaSent",
 ]

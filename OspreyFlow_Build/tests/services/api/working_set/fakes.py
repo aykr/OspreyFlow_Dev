@@ -10,6 +10,7 @@ real thing, once `make dev-up` exists to provide one.
 from __future__ import annotations
 
 import itertools
+import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
@@ -22,7 +23,7 @@ from services.api.working_set.access_index import (
     signature_id,
     signature_of,
 )
-from services.api.working_set.models import WorkingSetDelta
+from services.api.working_set.models import WorkingSetDelta, decode_delta, lacks_record
 
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import (
@@ -187,7 +188,9 @@ class FakeWorkingSetStore:
 
     async def append_delta(self, investigation_id: str, delta: WorkingSetDelta) -> None:
         deltas = self._d(investigation_id)
-        deltas.append(delta)
+        # As the real stream: what is stored is JSON, and what is read back is what decoding that
+        # makes of it, so a form that does not survive the trip does not survive it here.
+        deltas.append(decode_delta(json.loads(delta.model_dump_json())))
         if self.stream_maxlen is not None and len(deltas) > self.stream_maxlen:
             del deltas[: len(deltas) - self.stream_maxlen]
 
@@ -205,6 +208,8 @@ class FakeWorkingSetStore:
         after = [d for d in self._d(investigation_id) if d.seq > since_seq]
         if not after or after[0].seq != since_seq + 1:
             return None  # trimmed past what the client last saw
+        if any(lacks_record(d) for d in after):
+            return None  # as the real store: a removal with no record cannot be projected
         return after
 
     async def clear(self, investigation_id: str) -> None:

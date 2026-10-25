@@ -73,7 +73,7 @@ from schemas.domain import (
 
 from .link_notes import LinkNotFoundError
 from .link_types import LinkTypeService
-from .working_set.models import DeltaReplaceEdge
+from .working_set.models import DeltaReplaceEdge, DeltaReplaceEdgeSent
 from .working_set.service import WorkingSetService
 
 #: A reason is a sentence or two. Shown to the analyst as it is approached.
@@ -160,8 +160,24 @@ class LinkChangeRequest(BaseModel):
 
 
 class LinkChangeResult(BaseModel):
+    """What `LinkChangeService.change` returns to its caller: the stored form of the delta, which
+    carries the record of the old link and is what the route publishes. It is not a response model;
+    the route answers with `to_response()` (ADR-124 decision 4)."""
+
     edge: Edge
     delta: DeltaReplaceEdge
+    change: LinkChange
+
+    def to_response(self) -> LinkChangeResponse:
+        return LinkChangeResponse(edge=self.edge, delta=self.delta.to_sent(), change=self.change)
+
+
+class LinkChangeResponse(BaseModel):
+    """What `POST .../links/{edge}/change` answers: the new link, the step in its sent form (no
+    record of the old link), and the change."""
+
+    edge: Edge
+    delta: DeltaReplaceEdgeSent
     change: LinkChange
 
 
@@ -437,7 +453,7 @@ class LinkChangeService:
                 ),
             }
         )
-        delta = await self._working_set.replace_edge(investigation_id, old.id, new)
+        delta = await self._working_set.replace_edge(investigation_id, old, new)
         change = LinkChange(
             id=new_id(),
             investigation_id=investigation_id,

@@ -347,7 +347,7 @@ from .entity_pictures import (
     EntityPicture,
     EntityPictureService,
     PictureNotFoundError,
-    PictureSetResult,
+    PictureSetResponse,
 )
 from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .event_scope import visible_ancestors, with_inherited
@@ -411,7 +411,7 @@ from .link_changes import (
     ChangeNotMadeError,
     InvalidChangeError,
     LinkChangeRequest,
-    LinkChangeResult,
+    LinkChangeResponse,
     LinkChangeService,
     LinkChangeStore,
     LinkHistoryResponse,
@@ -617,8 +617,7 @@ from .working_set.models import (
     ClusterExplanation,
     ClusterNotFoundError,
     DeltaAdd,
-    DeltaRemove,
-    DeltaReplaceEdge,
+    DeltaReplaceEdgeSent,
     DeltaSnapshot,
     ExpansionOutcome,
     LimitExceededError,
@@ -628,8 +627,9 @@ from .working_set.models import (
     NothingToBranchError,
     ResolutionOutcome,
     SameNodeAssertionError,
-    WorkingSetDelta,
+    WorkingSetDeltaSent,
     decode_delta,
+    lacks_record,
 )
 from .working_set.service import WorkingSetService
 from .working_set.store import ValkeyWorkingSetStore
@@ -2924,10 +2924,9 @@ async def remove_nodes(
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
 ) -> dict[str, int]:
-    seq = await working_set.remove(investigation.id, body.node_ids)
-    await publish_delta(
-        valkey, investigation.id, DeltaRemove(seq=seq, node_ids=list(body.node_ids))
-    )
+    delta = await working_set.remove(investigation.id, body.node_ids)
+    seq = delta.seq
+    await publish_delta(valkey, investigation.id, delta)
     await _record_history_step(
         working_set,
         history,
@@ -4134,7 +4133,7 @@ async def change_link_route(
     investigations: InvestigationsDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
-) -> LinkChangeResult:
+) -> LinkChangeResponse:
     """Change a link's type or details (ADR-080): a supersede, with a required reason, kept in the
     link's history and in the audit stream with the old and new values. The old link is kept in
     the store and replaced in the working set; its notes move to the new one.
@@ -4163,7 +4162,7 @@ async def change_link_route(
         result_cardinality=1,
         justification=result.change.reason,
     )
-    return result
+    return result.to_response()
 
 
 # --- relationship types proposed by analysts (ADR-090) ------------------------------------
@@ -4581,7 +4580,7 @@ async def set_entity_picture_route(
     classification: str = Query(min_length=1),
     legal_basis: str = Query(min_length=1),
     handling_code: str = Query(default="P", min_length=1),
-) -> PictureSetResult:
+) -> PictureSetResponse:
     """One entity's own picture (ADR-105): an image Document that `DEPICTS` it, added as any file
     is (a marking the person could read and a legal basis), replacing the picture they could see
     before, which is kept. Audited with the name, size, marking and legal basis."""
@@ -4613,6 +4612,7 @@ async def set_entity_picture_route(
     )
     for delta in result.deltas:
         await publish_delta(valkey, investigation.id, delta)
+    response = result.to_response()
     await audit.record(
         principal=principal,
         action="set_entity_picture",
@@ -4627,7 +4627,7 @@ async def set_entity_picture_route(
         },
         result_cardinality=1,
     )
-    return result
+    return response
 
 
 @app.delete(
@@ -4641,7 +4641,7 @@ async def remove_entity_picture_route(
     pictures: EntityPicturesDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
-) -> DeltaReplaceEdge:
+) -> DeltaReplaceEdgeSent:
     """The entity goes back to its type's picture (ADR-105); its own is kept, no longer shown."""
     delta = await pictures.remove(investigation.id, node_id, principal)
     await publish_delta(valkey, investigation.id, delta)
@@ -4652,7 +4652,7 @@ async def remove_entity_picture_route(
         resolved_query={"node_id": node_id},
         result_cardinality=1,
     )
-    return delta
+    return delta.to_sent()
 
 
 @app.post(
@@ -9943,6 +9943,15 @@ async def _forward_notifications(
             continue
         data = message["data"]
         raw = decode_delta(json.loads(data.decode() if isinstance(data, bytes) else data))
+        if lacks_record(raw):
+            # A removal or replacement from before it carried the record of what it removed:
+            # nothing can be projected from it, and an empty step would leave this canvas unlike a
+            # snapshot's. The reader is sent their own full view, as a reconnect with none is.
+            for snapshot in await working_set.sync(
+                investigation_id, principal, last_acknowledged_seq=None
+            ):
+                await websocket.send_text(snapshot.model_dump_json())
+            continue
         delta = await working_set.project_live(investigation_id, raw, principal)
         await websocket.send_text(delta.model_dump_json())
 
@@ -10014,7 +10023,7 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
         init = await websocket.receive_json()
     except WebSocketDisconnect:
         return
-    initial_deltas: list[WorkingSetDelta] = await working_set.sync(
+    initial_deltas: list[WorkingSetDeltaSent] = await working_set.sync(
         investigation_id, principal, last_acknowledged_seq=init.get("last_acknowledged_seq")
     )
     for delta in initial_deltas:
