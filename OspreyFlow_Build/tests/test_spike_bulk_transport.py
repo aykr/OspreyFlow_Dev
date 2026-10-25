@@ -151,7 +151,11 @@ def test_a_progress_line_carries_the_elapsed_time_and_the_interval_speed(
     """Seen: the 10,000-edge run printed 'upsert: 2,000 of 10,000 edges' with no time, so the pace
     could not be read. Catches a line without the clock, or a speed worked out over the wrong
     count or interval."""
-    monkeypatch.setattr(spike.time, "perf_counter", lambda: spike._STARTED + 125)
+    # Both ends of the subtraction are fixed, exactly representable numbers: `_STARTED + 125 -
+    # _STARTED` over the real, machine-dependent start value can come out as 124.99999999999999
+    # and print [02:04] (seen twice in five CI runs).
+    monkeypatch.setattr(spike, "_STARTED", 1000.0)
+    monkeypatch.setattr(spike.time, "perf_counter", lambda: 1125.0)
     spike._say("upsert: 2,000 of 10,000 edges")
     assert "[02:05] upsert: 2,000 of 10,000 edges" in capsys.readouterr().out
     assert spike._rate(2000, 1000, 5.0) == "1,000 in 5.0 s, 200 per s"

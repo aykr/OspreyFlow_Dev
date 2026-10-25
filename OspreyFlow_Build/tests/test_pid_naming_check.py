@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from scripts import pid_naming_check as gate
+from tools import pid_naming_check as gate
 
 from demo_fixtures import pid_files, pid_plan, pid_writes
 from demo_fixtures.datasets import PID, SeedDataset

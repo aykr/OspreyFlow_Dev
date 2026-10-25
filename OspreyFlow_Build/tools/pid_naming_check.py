@@ -1,6 +1,7 @@
 """The Prison Intelligence Dataset's naming gate (Brief 1, stage 6).
 
-    python -m scripts.pid_naming_check
+    cd OspreyFlow_Core
+    PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m tools.pid_naming_check
 
 Fails (exit 1, every hit printed) if either of the two names Brief 1 bans (the existing prison
 fixture's, and the film-district word its originator carries) appears, in any case, anywhere in the
@@ -48,6 +49,8 @@ from typing import Any
 
 import yaml
 
+from tools.layout import ROOT
+
 #: Built from pieces on purpose (see the module docstring).
 WORDS = ("h" + "mp", "holly" + "wood")
 PATTERN = re.compile("|".join(re.escape(w) for w in WORDS), re.IGNORECASE)
@@ -72,7 +75,7 @@ class Hit:
 
 
 def repository_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return ROOT
 
 
 def _scan(where: str, text: str) -> list[Hit]:
@@ -250,7 +253,7 @@ def check(
 
 def main(argv: list[str] | None = None) -> int:
     argparse.ArgumentParser(
-        prog="python -m scripts.pid_naming_check", description=__doc__.split("\n\n")[0]
+        prog="python -m tools.pid_naming_check", description=__doc__.split("\n\n")[0]
     ).parse_args(argv)
     sys.path[:0] = [str(repository_root() / "OspreyFlow_Core" / "packages")]
     try:
