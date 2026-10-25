@@ -17141,6 +17141,42 @@ option, after an adversarial review.
     forms can differ by a fraction of a millisecond. The links' forms were not measured: a filtered
     link read also loads its ends. Both stay within the one round trip.
 
+### ADR-124, Amendment 11 (25 October 2026) — U8: history
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after an adversarial review.
+- **Sizes were never stored.** The history table holds no size columns: `list_steps` computed
+  `node_count` and `edge_count` from the stored membership at read time. So removing them from the
+  response, `models.ts` and `HistoryPanel` needs no migration.
+- **The wire gate** forbids `node_count` and `edge_count` on every route. Only `GET .../history` sent
+  them.
+- **Labels.** The ten fixed texts live in `services/api/history_labels.py`. Each of the eleven write
+  sites passes one as a bare constant, `branch` and `branch-by-filter` both passing "Branched".
+  - **Sites outside decision 8's table.** None: every call goes through `_record_history_step`.
+    Restore, link changes and pictures record no step.
+  - **The guard.** A pure test parses `app.py`. It holds the set of sites to the table, and each
+    label to a bare constant with no digit, no braces and no `%`.
+- **"Changed" in both places.** The migration rewrites stored labels, and `list_steps` also returns
+  any label outside the fixed texts as "Changed". The read-time mapping closes a window in a rolling
+  upgrade, where an instance not yet upgraded still writes numbered labels after a new instance's
+  rewrite has run.
+- **The rewrite.** `history.py`'s `RELABEL_SQL` runs on every connect: one idempotent `UPDATE` per
+  pattern, then the "Changed" fallback.
+  - **No escaping needed.** No pattern contains a literal `_` or `%` of its own, so nothing needs
+    escaping. A pure test holds that.
+  - **Its cost.** Twelve unindexed passes over the labels on every connect, even once nothing
+    matches. That is cheap at today's sizes; a one-row marker could gate it later.
+  - **The live Postgres test** (`test_history_relabel.py`) covers:
+    - each pattern;
+    - the fallback;
+    - a second and a third run changing nothing;
+    - every character of each pattern's text replaced by `_`, `%` and another letter, none matching.
+- **ADR-115 E6's reference wording** is the Glass spec's toolbar example. `02_GLASS_FRONTEND.md` now
+  reads "Last change: Expanded, yesterday". Neither ADR-115 nor the welcome panel's passage names a
+  label.
+- **Decision 8's line references** (`app.py` sites, `models.ts:96-97`) are stale. The sites table in
+  `test_history_labels.py` is the current list.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

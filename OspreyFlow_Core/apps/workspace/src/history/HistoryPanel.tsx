@@ -56,11 +56,6 @@ export function HistoryPanel({
         columns={[
           { key: "label", header: "Step", render: (s: HistoryStepSummary) => s.label },
           {
-            key: "counts",
-            header: "Nodes / edges",
-            render: (s: HistoryStepSummary) => `${s.node_count} / ${s.edge_count}`,
-          },
-          {
             key: "restore",
             header: "",
             render: (s: HistoryStepSummary) => (

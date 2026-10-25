@@ -375,6 +375,18 @@ from .history import (
     HistoryStepSummary,
     InvestigationHistoryStore,
 )
+from .history_labels import (
+    ALERT_CANVAS,
+    BRANCHED,
+    EXPANDED,
+    LINKS_AMONG,
+    OPENED_FROM_ALERT,
+    OWNERSHIP,
+    REMOVED,
+    SEEDED,
+    SHARED_CONTACTS,
+    STARTER_QUESTION,
+)
 from .hotlists import HotlistNotFoundError, HotlistStore
 from .identity_admin import (
     DashboardExistsError,
@@ -2727,7 +2739,7 @@ async def branch_investigation(
         history,
         new_investigation.id,
         seq=outcome.delta.seq,
-        label=f"Branched from {investigation.id}",
+        label=BRANCHED,
         principal=principal,
     )
     await audit.record(
@@ -2793,7 +2805,7 @@ async def branch_investigation_by_filter(
         history,
         new_investigation.id,
         seq=outcome.delta.seq,
-        label=f"Branched from {investigation.id}",
+        label=BRANCHED,
         principal=principal,
     )
     await audit.record(
@@ -2865,7 +2877,7 @@ async def seed(
         history,
         investigation.id,
         seq=outcome.delta.seq,
-        label=f"Seeded {len(outcome.delta.nodes)} node(s)",
+        label=SEEDED,
         principal=principal,
     )
     await audit.record(
@@ -2898,9 +2910,7 @@ async def expand(
         history,
         investigation.id,
         seq=outcome.delta.seq,
-        label=(
-            f"Expanded {len(outcome.delta.nodes)} node(s) from {len(body.request.node_ids)} seed(s)"
-        ),
+        label=EXPANDED,
         principal=principal,
     )
     await audit.record(
@@ -2939,12 +2949,7 @@ async def links_among_route(
         history,
         investigation.id,
         seq=outcome.delta.seq,
-        label=(
-            f"Showed {outcome.added} link(s) among the nodes in view"
-            if outcome.degree == 1
-            else f"Showed the routes within {outcome.degree} degrees among the selected nodes: "
-            f"{outcome.added} link(s), {outcome.added_nodes} node(s)"
-        ),
+        label=LINKS_AMONG,
         principal=principal,
     )
     await audit.record(
@@ -3000,7 +3005,7 @@ async def remove_nodes(
         history,
         investigation.id,
         seq=seq,
-        label=f"Removed {len(body.node_ids)} node(s)",
+        label=REMOVED,
         principal=principal,
     )
     await audit.record(
@@ -3858,7 +3863,7 @@ async def explore_starter_run_route(
         history,
         investigation.id,
         seq=outcome.delta.seq,
-        label=f"Ran a starter question: {len(outcome.delta.nodes)} node(s)",
+        label=STARTER_QUESTION,
         principal=principal,
     )
     await audit.record(
@@ -3943,7 +3948,7 @@ async def shared_pair_canvas_route(
         history,
         investigation.id,
         seq=outcome.delta.seq,
-        label=f"Showed two who share contacts: {len(outcome.delta.nodes)} node(s)",
+        label=SHARED_CONTACTS,
         principal=principal,
     )
     await audit.record(
@@ -5435,7 +5440,7 @@ async def jump_alert_route(
         history,
         branch.id,
         seq=outcome.delta.seq,
-        label=f"Opened from alert {alert.id}",
+        label=OPENED_FROM_ALERT,
         principal=principal,
     )
     await audit.record(
@@ -7694,7 +7699,7 @@ async def ownership_canvas(
         history,
         investigation.id,
         seq=outcome.delta.seq,
-        label=f"Showed an ownership structure: {len(outcome.delta.nodes)} node(s)",
+        label=OWNERSHIP,
         principal=principal,
     )
     await audit.record(
@@ -8094,7 +8099,7 @@ async def alert_canvas(
         history,
         investigation.id,
         seq=outcome.delta.seq,
-        label=f"Opened an alert: {alert.typology or 'alert'}",
+        label=ALERT_CANVAS,
         principal=principal,
     )
     await audit.record(

@@ -64,7 +64,7 @@ class _FakeHistory:
                 id="step-1",
                 investigation_id="inv-1",
                 seq=1,
-                label="Seeded 1 node(s)",
+                label="Seeded",
                 created_at=datetime(2026, 1, 1, tzinfo=UTC),
                 created_by="analyst-1",
                 nodes=[],
@@ -78,8 +78,6 @@ class _FakeHistory:
                 id=step.id,
                 label=step.label,
                 created_at=step.created_at,
-                node_count=len(step.nodes),
-                edge_count=len(step.edges),
             )
             for step in self.steps.values()
             if step.investigation_id == investigation_id
@@ -155,10 +153,8 @@ def test_get_history_returns_step_metadata_only(client: TestClient) -> None:
     assert body == [
         {
             "id": "step-1",
-            "label": "Seeded 1 node(s)",
+            "label": "Seeded",
             "created_at": "2026-01-01T00:00:00Z",
-            "node_count": 0,
-            "edge_count": 0,
         }
     ]
     assert "nodes" not in body[0]  # metadata only — never bodies

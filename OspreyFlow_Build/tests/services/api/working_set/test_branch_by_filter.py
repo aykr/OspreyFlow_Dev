@@ -289,7 +289,7 @@ async def test_within_the_cap_the_route_creates_the_case_as_a_branch_is_created(
     (published,) = recorder.published
     assert {n["id"] for n in __import__("json").loads(published[1])["nodes"]} == {"p1", "p2"}
     assert [step["investigation_id"] for step in recorder.steps] == [body["id"]]
-    assert recorder.steps[0]["label"] == f"Branched from {CASE}"  # today's label; U8 fixes it
+    assert recorder.steps[0]["label"] == "Branched"
     assert [c.id for c in investigations.created] == [body["id"]]
 
 

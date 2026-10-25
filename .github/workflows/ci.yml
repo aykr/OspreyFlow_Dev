@@ -491,6 +491,7 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_alerts.py
           ../OspreyFlow_Build/tests/services/api/test_pattern_store.py
           ../OspreyFlow_Build/tests/services/api/test_hotlists.py
+          ../OspreyFlow_Build/tests/services/api/test_history_relabel.py
           ../OspreyFlow_Build/tests/services/api/test_monitors.py
           ../OspreyFlow_Build/tests/services/api/test_evaluation.py
           ../OspreyFlow_Build/tests/geocoder/test_match_live.py
@@ -789,6 +790,7 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/test_change_stream.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_alerts.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_hotlists.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_history_relabel.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_monitors.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_evaluation.py
           --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py

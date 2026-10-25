@@ -43,6 +43,11 @@ FORBIDDEN_KEYS = {
 #: U9 replaces it with a yes or no.
 WITHHELD_KEYS = {"filtered_count", "unreadable_count", "withheld_count"}
 
+#: ADR-124 decision 8: a step of the case's history carries no size. The listing's own counts were
+#: taken over the stored, unfiltered snapshot, so they were a figure for material the reader may
+#: not read. No route's response, at any depth, can carry either name.
+SIZE_KEYS = {"node_count", "edge_count"}
+
 WHEN = datetime(2026, 1, 1, tzinfo=UTC)
 
 

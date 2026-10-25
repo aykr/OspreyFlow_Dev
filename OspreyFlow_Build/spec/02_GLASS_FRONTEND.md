@@ -547,7 +547,7 @@ DESIGN.md §6), in labelled groups: **Select** (the lasso), **Layout** (the layo
 Clustered bubbles, *Arrange* — a re-run icon (ADR-115 E4) — which arranges again with the layout chosen), **Show** — one segmented control of *Communities* (pressed while on),
 *Labels* and *Icons*, followed while Communities is on by what it found and *Collapse all* / *Expand
 all* — and, at the right-hand end, **View** (*Hide selected link*, *Show hidden links (n)*, *Show links among all*, *Clear view*,
-*Add files*), then the case's last change ("Last change: Expanded HALE, Marcus by one hop, yesterday", from
+*Add files*), then the case's last change ("Last change: Expanded, yesterday", a fixed label with no number and no name (ADR-124 decision 8), from
 the history the History drawer lists; hidden below a 1100px window) and *Details* (ADR-115 E4, E6). A menu's panel and *Clear view*'s confirmation are laid over the canvas under their
 button, as overlays with a shadow. The toolbar's controls are quiet buttons at `--fs-12`; a pressed or
 open one is primary text with a 2px underline. Checked in the browser (`keyboard/canvas-look.spec.ts`:

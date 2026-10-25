@@ -109,8 +109,6 @@ export interface HistoryStepSummary {
   id: string;
   label: string;
   created_at: string;
-  node_count: number;
-  edge_count: number;
 }
 
 // `services/api/working_set/models.py`'s `PairwiseExplanation`/`ClusterExplanation` — the

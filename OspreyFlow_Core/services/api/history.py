@@ -57,6 +57,10 @@ from pydantic import BaseModel
 from conduit_common.identity import new_id
 from schemas.domain import Edge, Node
 
+from .history_labels import CHANGED, FIXED_LABELS
+
+_SHOWN_LABELS = FIXED_LABELS | {CHANGED}
+
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS investigation_history (
     id TEXT PRIMARY KEY,
@@ -73,6 +77,39 @@ CREATE INDEX IF NOT EXISTS investigation_history_investigation_id_idx
 """
 
 
+#: Rewrites stored labels to the fixed texts of `history_labels.py` (ADR-124 decision 8). Run on
+#: every start by `connect`, so it is idempotent: a fixed text matches no pattern below (each
+#: pattern has text after the part that varied, which a fixed text lacks), and the last statement
+#: leaves a fixed text alone. One pattern per site that used to write a count, a case id or an
+#: alert's typology into its label. The patterns are plain words and spaces with `%` for the part
+#: that varied; none has a `_` (a single-character wildcard in `LIKE`), and a test holds it so.
+#: Anything matching none of them, such as a label a person's earlier build wrote, is `Changed`.
+RELABEL_SQL = """
+UPDATE investigation_history SET label = 'Branched' WHERE label LIKE 'Branched from %';
+UPDATE investigation_history SET label = 'Seeded' WHERE label LIKE 'Seeded % node(s)';
+UPDATE investigation_history SET label = 'Expanded' WHERE label LIKE 'Expanded % node(s) from %';
+UPDATE investigation_history SET label = 'Showed links among the view'
+    WHERE label LIKE 'Showed % link(s) among the nodes in view';
+UPDATE investigation_history SET label = 'Showed links among the view'
+    WHERE label LIKE 'Showed the routes within %';
+UPDATE investigation_history SET label = 'Removed' WHERE label LIKE 'Removed % node(s)';
+UPDATE investigation_history SET label = 'Ran a starter question'
+    WHERE label LIKE 'Ran a starter question: %';
+UPDATE investigation_history SET label = 'Showed two who share contacts'
+    WHERE label LIKE 'Showed two who share contacts: %';
+UPDATE investigation_history SET label = 'Opened from an alert'
+    WHERE label LIKE 'Opened from alert %';
+UPDATE investigation_history SET label = 'Showed an ownership structure'
+    WHERE label LIKE 'Showed an ownership structure: %';
+UPDATE investigation_history SET label = 'Opened an alert' WHERE label LIKE 'Opened an alert: %';
+UPDATE investigation_history SET label = 'Changed' WHERE label NOT IN (
+    'Branched', 'Seeded', 'Expanded', 'Showed links among the view', 'Removed',
+    'Ran a starter question', 'Showed two who share contacts', 'Opened from an alert',
+    'Showed an ownership structure', 'Opened an alert', 'Changed'
+);
+"""
+
+
 class HistoryStep(BaseModel):
     id: str
     investigation_id: str
@@ -85,19 +122,15 @@ class HistoryStep(BaseModel):
 
 
 class HistoryStepSummary(BaseModel):
-    """`GET /history`'s wire shape — metadata only, never node/edge bodies.
-    The same discipline `03_CONDUIT_MIDDLEWARE.md` §3.2's `notice` op
-    applies to a live delta ("carries a count... never the withheld
-    content") applies to a history listing: a count and a label are safe to
-    disclose to anyone who can already see the investigation; the bodies
-    are not handed over until a specific step is restored, which re-applies
-    the handling filter first."""
+    """`GET /history`'s wire shape — metadata only: no node or edge bodies, and no size either
+    (ADR-124 decision 8). A step's size was counted over the stored snapshot, which is unfiltered,
+    so it was a figure for material the reader may not be entitled to read. The label is fixed text
+    (`history_labels.py`). The bodies are not handed over until a specific step is restored, which
+    re-applies the handling filter first."""
 
     id: str
     label: str
     created_at: datetime
-    node_count: int
-    edge_count: int
 
 
 class HistoryStepNotFoundError(Exception):
@@ -118,7 +151,14 @@ class InvestigationHistoryStore:
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=5)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
-        return cls(pool)
+        store = cls(pool)
+        await store.relabel()
+        return store
+
+    async def relabel(self) -> None:
+        """Rewrite stored labels to the fixed texts (`RELABEL_SQL`). Safe to run again."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(RELABEL_SQL)
 
     async def close(self) -> None:
         await self._pool.close()
@@ -162,14 +202,22 @@ class InvestigationHistoryStore:
     async def list_steps(self, investigation_id: str) -> list[HistoryStepSummary]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, label, created_at, "
-                "jsonb_array_length(nodes) AS node_count, "
-                "jsonb_array_length(edges) AS edge_count "
+                "SELECT id, label, created_at "
                 "FROM investigation_history WHERE investigation_id = $1 "
                 "ORDER BY seq ASC",
                 investigation_id,
             )
-        return [HistoryStepSummary(**dict(row)) for row in rows]
+        # A label that is not fixed text is shown as `Changed`, whatever is stored: in a rolling
+        # upgrade an old instance can still write a numbered label after `relabel` has run.
+        return [
+            HistoryStepSummary(
+                **{
+                    **dict(row),
+                    "label": row["label"] if row["label"] in _SHOWN_LABELS else CHANGED,
+                }
+            )
+            for row in rows
+        ]
 
     async def get_step(self, investigation_id: str, step_id: str) -> HistoryStep:
         async with self._pool.acquire() as conn:

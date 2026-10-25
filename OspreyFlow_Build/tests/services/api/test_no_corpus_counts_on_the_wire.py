@@ -63,6 +63,7 @@ from schemas.domain import Edge, Subgraph, WeightComponents
 
 from .corpus_counts import (
     FORBIDDEN_KEYS,
+    SIZE_KEYS,
     WITHHELD_KEYS,
     build,
     contains_model,
@@ -238,6 +239,27 @@ def test_no_route_can_put_a_withheld_figure_on_the_wire(route: APIRoute) -> None
     not read, which a field held at 0 would still claim was complete. Every route is walked,
     whether or not its response holds an `Edge`."""
     assert _withheld_figures_on(route) == set(), _label(route)
+
+
+@pytest.mark.parametrize("route", _api_routes(), ids=_label)
+def test_no_route_can_put_a_step_size_on_the_wire(route: APIRoute) -> None:
+    """Violation caught (ADR-124 decision 8, rules 3 and 7): a response, at any depth, that can
+    carry `node_count` or `edge_count`. The history listing carried both, counted over a snapshot
+    of the stored material, unfiltered. No route returns either name today (checked by running
+    this walk over the app), so the set is global rather than kept per route."""
+    assert field_names_reachable(_wire_annotation(route)) & SIZE_KEYS == set(), _label(route)
+
+
+class _Sized(BaseModel):
+    id: str
+    node_count: int
+    edge_count: int
+
+
+def test_a_step_size_on_a_response_is_found_by_the_gate() -> None:
+    """Violation caught (rule 15, the gate shown able to fail): the history listing's old shape,
+    a list of steps each with its two sizes, walked by the predicate the per-route case uses."""
+    assert field_names_reachable(list[_Sized]) & SIZE_KEYS == SIZE_KEYS
 
 
 #: `withheld_count` is allowed on exactly these routes (ADR-124 U9 replaces it with a yes or no, and

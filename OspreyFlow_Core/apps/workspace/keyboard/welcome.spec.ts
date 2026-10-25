@@ -7,7 +7,7 @@ import { WELCOME_ACTIONS, assertAllCovered, registerCovered } from "./actionRegi
 test("? opens the panel, never while typing; a step restores by keyboard; Close shuts it", async ({ page }) => {
   await page.route("**/*/v1/investigations/c1/history", (route) =>
     route.fulfill({ status: 200, contentType: "application/json",
-                    body: JSON.stringify([{ id: "s1", label: "Expanded HALE, Marcus by one hop", created_at: new Date().toISOString(), node_count: 5, edge_count: 4 }]) }),  // prettier-ignore
+                    body: JSON.stringify([{ id: "s1", label: "Expanded", created_at: new Date().toISOString() }]) }),  // prettier-ignore
   );
   await page.route("**/*/v1/investigations/c1/history/s1", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ seq: 41, nodes: [], edges: [] }) }),
@@ -21,7 +21,7 @@ test("? opens the panel, never while typing; a step restores by keyboard; Close 
   await expect(page.getByRole("dialog", { name: "Welcome back" })).toBeVisible();
   registerCovered("WELCOME_ACTIONS", "open-the-welcome-panel-with-question-mark");
 
-  const step = page.getByRole("button", { name: /Expanded HALE, Marcus by one hop/ });
+  const step = page.getByRole("button", { name: /Expanded/ });
   await step.focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__WELCOME__?.restored)).toEqual([41]);
