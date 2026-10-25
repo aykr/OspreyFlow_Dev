@@ -17848,3 +17848,14 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   shows a marking derived from a cell, so it must be masked by that row's `row_markings`.
 - **A fixed originator or owning unit has no editor.** The scheme lists no units. A literal unit
   already in a recipe is shown and kept; setting one is done in the recipe or through the draft's API.
+
+### ADR-127, Amendment 4 (25 October 2026) — B2-3: what decision 4 left open
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **"Letters, digits" means ASCII.** `account_ref` accepts `A-Z`, `a-z`, `0-9`, `-` and `/` only, judged
+  before upper-casing, so an accented letter, `ß` (which upper-cases to `SS`) and full-width digits are
+  refused rather than passed through.
+- **"Internal spaces" means any whitespace.** A tab, a newline or a no-break space is removed like a
+  space, never refused.
+- **The profiler does not propose it.** Almost any identifier passes its character set, so its
+  coincidence rate is about one and its evidence about none; a recipe names it explicitly.

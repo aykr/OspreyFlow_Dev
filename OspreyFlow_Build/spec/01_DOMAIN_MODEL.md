@@ -1030,6 +1030,7 @@ Normalisers required at ingest, each a pure function with a golden test file:
 | `geometry_ref` | the same pair, reprojected the same way | a deterministic reference into the analytics store's geometry partition — what a `Location` node actually binds (§7.1) |
 | `address` | free text | structured, with a gazetteer identifier attached where one is configured — UPRN in the UK, a GNIS feature id, TIGER GEOID or county parcel id in the US. The identifier is an alias, never the key |
 | `iban` / `card` | spacing, masking | normalised; card stored as last-four plus a hash, never in full |
+| `account_ref` | a bank or private-cash account reference: case, internal spaces, surrounding whitespace | trimmed, internal whitespace (any Unicode space) removed, upper-cased; an empty value, or a character outside ASCII letters, digits, `-` and `/`, is refused with the rule named and never the value. No check digits and no country logic; an account is an `Endpoint` of kind `account`, not a FIBO `Account` (ADR-127 decision 4; `tests/knowledge_adapters/test_account_ref.py`) |
 
 Three rules that are not optional:
 

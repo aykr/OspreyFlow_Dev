@@ -21,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from .account_ref import account_ref
 from .address import address
 from .coordinates import coordinate_lat, coordinate_lon, geometry_ref, polygon_ref
 from .datetime_adapter import datetime_adapter
@@ -50,6 +51,7 @@ REGISTRY: dict[str, Callable[..., Any]] = {
     "polygon_ref": polygon_ref,
     "grid_ref": grid_ref,
     "postcode": postcode,
+    "account_ref": account_ref,
 }
 
 #: `coordinate_lon`/`coordinate_lat`/`geometry_ref` take an (easting,
@@ -69,6 +71,7 @@ __all__ = [
     "ARITY",
     "REGISTRY",
     "NormalisationError",
+    "account_ref",
     "address",
     "card",
     "coordinate_lat",
