@@ -303,10 +303,11 @@ async def test_a_type_name_that_is_not_a_plain_identifier_is_refused() -> None:
     assert client.sql_sent == []
 
 
-async def test_no_types_means_no_rows_and_no_gremlin() -> None:
+async def test_no_types_means_no_rows_and_only_the_empty_read() -> None:
     adapter, client = _adapter(_Client(types=[]))
     assert await adapter.get_nodes(["n00001"], READER) == []
-    assert client.gremlin_sent == []
+    assert client.sql_sent == []
+    assert len(client.gremlin_sent) == 1 and "limit(0)" in client.gremlin_sent[0]
 
 
 @pytest.mark.parametrize("which", ["types", "lookup"])
@@ -346,20 +347,59 @@ async def test_a_record_id_that_is_not_a_record_id_is_refused_before_it_reaches_
 # --- an empty list of record ids ---------------------------------------------------------------
 
 
-def test_the_gremlin_builders_render_nothing_for_no_record_ids() -> None:
+def test_the_gremlin_builders_never_render_an_empty_id_list_as_every_element() -> None:
     """`g.V([])` may be every vertex (the empty form of `g.V()`), so an empty list is never
-    rendered: the adapter answers `[]` without a Gremlin call."""
+    rendered as an id list: it is a traversal that yields nothing, with the same access step and
+    projection as the one for ids, and no `g.V()`/`g.E()` that reads the whole store."""
     access = AccessFilter(load_uk_le_scheme())
-    assert render_get_nodes_gremlin([], access, READER) is None
-    assert render_get_edges_gremlin([], access, READER) is None
+    has_access = access.gremlin_has_step(READER)
+    nodes = render_get_nodes_gremlin([], access, READER)
+    edges = render_get_edges_gremlin([], access, READER)
+    assert nodes == f"g.V().limit(0).{has_access}.elementMap()"
+    assert edges == (
+        f"g.E().limit(0).{has_access}"
+        f".where(outV().{has_access}).where(inV().{has_access}).elementMap()"
+    )
 
 
-async def test_ids_the_store_does_not_hold_send_no_gremlin_at_all() -> None:
+async def test_ids_the_store_does_not_hold_still_send_the_gremlin_read() -> None:
+    """A guessed id that is absent must cost what a hidden one costs (a hidden id resolves, so
+    its Gremlin read runs and filters it): under `/seed` the round trips would otherwise be a
+    membership test."""
     adapter, client = _adapter(_Client(known=lambda _id: False))
     assert await adapter.get_nodes(["n00001", "n00002"], READER) == []
     assert await adapter.get_edges(["n00001", "n00002"], READER) == []
     assert client.sql_sent  # it looked
-    assert client.gremlin_sent == []
+    assert len(client.gremlin_sent) == 2
+
+
+@pytest.mark.parametrize("kind", ["nodes", "edges"])
+async def test_an_absent_id_and_a_hidden_id_make_the_same_requests(kind: str) -> None:
+    """The stand-in answers a hidden id's Gremlin read with nothing, as the access step does; an
+    absent id has no record at all. The requests each sends must match in number and kind."""
+
+    class Hiding(_Client):
+        async def gremlin(self, query: str, **kw: Any) -> list[dict[str, Any]]:
+            await super().gremlin(query, **kw)
+            return []
+
+    async def run(client: _Client) -> None:
+        adapter, _ = _adapter(client)
+        if kind == "nodes":
+            await adapter.get_nodes(["n00007"], READER)
+        else:
+            await adapter.get_edges(["n00007"], READER)
+
+    hidden, absent = Hiding(known=lambda _id: True), _Client(known=lambda _id: False)
+    await run(hidden)
+    await run(absent)
+    assert hidden.schema_sent == absent.schema_sent
+    assert len(hidden.sql_sent) == len(absent.sql_sent)
+    assert [c for c, _ in hidden.sql_sent] == [c for c, _ in absent.sql_sent]
+    assert len(hidden.gremlin_sent) == len(absent.gremlin_sent) == 1
+    for sent in (hidden.gremlin_sent[0], absent.gremlin_sent[0]):
+        assert sent.startswith("g.V(" if kind == "nodes" else "g.E(")
+    assert "limit(0)" not in hidden.gremlin_sent[0] and "limit(0)" in absent.gremlin_sent[0]
 
 
 def test_the_record_id_lookup_names_one_type_and_binds_the_ids() -> None:

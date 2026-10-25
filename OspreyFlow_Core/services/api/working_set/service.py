@@ -946,23 +946,47 @@ class WorkingSetService:
         edges: Sequence[Edge],
         principal: Principal,
     ) -> ExpansionOutcome:
-        """`POST /seed` (`03_CONDUIT_MIDDLEWARE.md` §3.2) — from a search
-        result or saved subgraph. Unlike `expand`, the input here is
-        caller-supplied `Node`/`Edge` objects, not the output of a
-        `GraphPort` call this service already trusts — so `seed` is the
-        one write path that must itself validate the seeding principal
-        can see what they are handing in, via the same `_project` used on
-        every read. Without this, a principal could write content into a
-        store a *different*, later reader is authorised to open that not
-        even the seeder themselves could legitimately see: a poisoning
-        vector the read-time filter alone does not close, since it only
-        ever narrows what a read discloses, never what a write accepts.
-        Redaction is not deletion here either (`00_ARCHITECTURE.md` §5):
-        anything the seeder submitted but is not entitled to see is
-        silently dropped from what gets stored, and the outcome says nothing of how much
-        (ADR-124 decision 1)."""
-        visible_nodes, visible_edges, _ = self._project(nodes, edges, principal)
-        return await self._add(investigation_id, visible_nodes, visible_edges, principal)
+        """`POST /seed` (`03_CONDUIT_MIDDLEWARE.md` §3.2) — from a search result or saved subgraph,
+        and the one write path every server-side caller of a seed goes through (ADR-124 decision 7).
+
+        **What is stored is what the Vault holds, never what the caller wrote.** Each submitted
+        node id is read through `GraphPort.get_nodes`, and each link id through `get_edges`, for
+        the seeding principal (the case-scoped one, so the case's datasets apply, ADR-099): the
+        Vault's bodies are stored, and a caller's body is used for its id alone. A body forged to
+        look readable is therefore never stored, and a hidden id, a superseded id and an id the
+        Vault does not hold are left out alike, with the same response and the same following
+        snapshot and no error to tell them apart (ids are derived and can be guessed, so a seed
+        must not be a membership test, rule 4).
+
+        **Verify each link.** `get_edges` returns a link only when it and both its ends are
+        readable in the Vault; this keeps it only if each end is also seeded in this request (and
+        returned) or already in the reader's view. A link to a node neither on the canvas nor in
+        the request is dropped, as one to a hidden node is.
+
+        The cap is counted over the reader's view after this filtering (`_add`). The cost is two
+        by-id reads (one of nodes, one of links) and, for links with an end not in the request, one
+        read of the counted index."""
+        node_ids = list(dict.fromkeys(n.id for n in nodes))
+        edge_ids = list(dict.fromkeys(e.id for e in edges))
+        vault_nodes = {n.id: n for n in await self._graph.get_nodes(node_ids, principal)}
+        vault_edges = {e.id: e for e in await self._graph.get_edges(edge_ids, principal)}
+        seeded = [vault_nodes[i] for i in node_ids if i in vault_nodes]
+        wanted_ends = {
+            end for e in vault_edges.values() for end in (e.source, e.target)
+        } - vault_nodes.keys()
+        on_the_canvas: set[NodeId] = set()
+        if wanted_ends:
+            reader = await self._reader_counts(investigation_id, principal)
+            on_the_canvas = await reader.visibly_stored_among(wanted_ends)
+        verified = vault_nodes.keys() | on_the_canvas
+        kept = [
+            vault_edges[i]
+            for i in edge_ids
+            if i in vault_edges
+            and vault_edges[i].source in verified
+            and vault_edges[i].target in verified
+        ]
+        return await self._add(investigation_id, seeded, kept, principal)
 
     async def expand(
         self, investigation_id: str, req: ExpandRequest, principal: Principal

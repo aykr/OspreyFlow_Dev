@@ -81,12 +81,16 @@ def _edge(edge_id: str, source: str, target: str) -> Edge:
     )
 
 
+# What the Vault holds for the seeds below (ADR-124 decision 7: `seed` stores the Vault's bodies,
+# read by id, never the caller's).
+_VAULT = [_node(f"n{i}") for i in range(1, 6)] + [_node("official-1")]
+
 # --- seed ---------------------------------------------------------------
 
 
 async def test_seed_writes_nodes_and_edges_and_reports_seq_one() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), graph_nodes=_VAULT)
     service = WorkingSetService(graph, store, SCHEME)
 
     outcome = await service.seed("inv-1", [_node("n1")], [], PRINCIPAL)
@@ -191,7 +195,7 @@ async def test_a_breach_leaves_the_sequence_counter_untouched() -> None:
 
 async def test_sync_with_no_prior_seq_returns_a_full_snapshot() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), graph_nodes=_VAULT)
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1"), _node("n2")], [], PRINCIPAL)
 
@@ -206,7 +210,7 @@ async def test_sync_with_no_prior_seq_returns_a_full_snapshot() -> None:
 
 async def test_sync_within_the_retained_stream_returns_only_the_missed_deltas() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), graph_nodes=_VAULT)
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1")], [], PRINCIPAL)  # seq 1
     await service.seed("inv-1", [_node("n2")], [], PRINCIPAL)  # seq 2
@@ -225,7 +229,7 @@ async def test_sync_past_a_trimmed_gap_resnapshots_instead_of_patching() -> None
     stream retains must never be served a partial, gapped patch."""
     store = FakeWorkingSetStore()
     store.stream_maxlen = 2  # only the last two deltas survive
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), graph_nodes=_VAULT)
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1")], [], PRINCIPAL)  # seq 1 — acked, then trimmed
     await service.seed("inv-1", [_node("n2")], [], PRINCIPAL)  # seq 2 — trimmed before return
@@ -243,7 +247,7 @@ async def test_sync_past_a_trimmed_gap_resnapshots_instead_of_patching() -> None
 
 async def test_sync_already_caught_up_returns_nothing_to_apply() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), graph_nodes=_VAULT)
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1")], [], PRINCIPAL)  # seq 1
 
@@ -278,7 +282,7 @@ async def test_current_membership_returns_the_full_unfiltered_store_contents() -
     method on this service, precisely so a step can later be re-projected
     for whoever restores it rather than baking in one principal's view."""
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), graph_nodes=_VAULT)
     service = WorkingSetService(graph, store, SCHEME)
     secret_node = _node_with_classification("secret-1", "SECRET")
     await store.add_nodes("inv-1", [_node("n1"), secret_node])
@@ -291,7 +295,7 @@ async def test_current_membership_returns_the_full_unfiltered_store_contents() -
 
 async def test_restore_replaces_membership_and_emits_the_next_monotonic_seq() -> None:
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
+    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]), graph_nodes=_VAULT)
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1")], [], PRINCIPAL)  # seq 1
     await service.seed("inv-1", [_node("n2")], [], PRINCIPAL)  # seq 2 — current membership: n1, n2
@@ -315,7 +319,11 @@ async def test_restore_removes_an_edge_added_after_the_recorded_step_between_per
     survive a restore that only reconciled nodes. Restoring to the step
     (recorded with no edges) must remove it."""
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
+    graph = FakeGraphPort(
+        expand_result=Subgraph(nodes=[], edges=[]),
+        graph_nodes=_VAULT,
+        graph_edges=[_edge("e1", "n1", "n2")],  # the link the later seed reads by id
+    )
     service = WorkingSetService(graph, store, SCHEME)
     await service.seed("inv-1", [_node("n1"), _node("n2")], [], PRINCIPAL)  # seq 1 — the step
 

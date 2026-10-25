@@ -29,6 +29,7 @@ script sends touches an `/v1/analytics/*` route at all.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import socket
 import subprocess
@@ -36,15 +37,22 @@ import sys
 import tempfile
 import time
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 import pytest
 import websockets.sync.client as ws_client
 from cryptography.hazmat.primitives.asymmetric import rsa
-
-from tests.conftest import default_claims, sign_token
 from tools.layout import CORE as _REPO
+
+from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
+from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from conduit_common.identity import new_id
+from ontology.handling import load_uk_le_scheme
+from ontology.loader import load_default_ontology
+from schemas.domain import Handling, NodeWrite, Provenance, ProvenanceState, SourceRef
+from tests.conftest import default_claims, sign_token
 
 
 def _free_port() -> int:
@@ -178,10 +186,13 @@ def test_a_second_process_continues_an_investigation_the_first_was_killed_mid(
         f"{instance_a.base_url}/v1/investigations/{investigation_id}/datasets", headers=headers
     ).json()
 
+    # `seed` stores what the Vault holds, read by id (ADR-124 decision 7), so the two people it
+    # seeds are written to ArcadeDB first, in the case's dataset; the body posted names the id.
+    from_a, from_b = asyncio.run(_write_people(own["id"]))
     seeded_a = httpx.post(
         f"{instance_a.base_url}/v1/investigations/{investigation_id}/seed",
         headers=headers,
-        json={"nodes": [_seed_node("from-a", own["id"])], "edges": []},
+        json={"nodes": [_seed_node(from_a, own["id"])], "edges": []},
     )
     assert seeded_a.status_code == 200, seeded_a.text
     assert seeded_a.json()["delta"]["seq"] == 1
@@ -201,7 +212,7 @@ def test_a_second_process_continues_an_investigation_the_first_was_killed_mid(
     seeded_b = httpx.post(
         f"{instance_b.base_url}/v1/investigations/{investigation_id}/seed",
         headers=headers,
-        json={"nodes": [_seed_node("from-b", own["id"])], "edges": []},
+        json={"nodes": [_seed_node(from_b, own["id"])], "edges": []},
     )
     assert seeded_b.status_code == 200, seeded_b.text
     # The sequence counter lives in Valkey, not in either process's
@@ -212,8 +223,8 @@ def test_a_second_process_continues_an_investigation_the_first_was_killed_mid(
     with ws_client.connect(ws_url, additional_headers=headers) as socket_:
         socket_.send('{"last_acknowledged_seq": null}')
         snapshot = socket_.recv()
-    assert '"from-a"' in snapshot
-    assert '"from-b"' in snapshot
+    assert f'"{from_a}"' in snapshot
+    assert f'"{from_b}"' in snapshot
 
 
 def test_a_failed_second_instance_does_not_orphan_the_first(
@@ -271,6 +282,49 @@ def test_a_failed_second_instance_does_not_orphan_the_first(
         "own constructor's exception propagates -- Popen ran before _wait_until_up could fail, so "
         "nothing outside __init__ itself ever gets a reference to clean it up"
     )
+
+
+async def _write_people(dataset_id: str) -> list[str]:
+    """Two people written to the Vault in `dataset_id`, OFFICIAL, and their ids."""
+    now = datetime.now(UTC)
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    try:
+        graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
+        await graph.apply_schema(load_default_ontology())
+        tx = await graph.begin_transaction()
+        ids = await graph.upsert_nodes(
+            [
+                NodeWrite(
+                    id=new_id(),
+                    type="Person",
+                    properties={
+                        "family_name": f"Statelessnessfixture{new_id()[:8]}",
+                        "given_names": "A",
+                        "date_of_birth": "1990-01-01",
+                    },
+                    provenance=Provenance(
+                        state=ProvenanceState.ASSERTED,
+                        sources=[SourceRef(document_id="fixture", locator="test", excerpt_hash="")],
+                        first_seen=now,
+                    ),
+                    handling=Handling(
+                        classification="OFFICIAL",
+                        handling_code="P",
+                        originator="unit-1",
+                        owning_unit="unit-1",
+                    ),
+                    created_by="test",
+                    created_at=now,
+                    datasets=[dataset_id],
+                )
+                for _ in range(2)
+            ],
+            tx,
+        )
+        await graph.commit_transaction(tx)
+        return list(ids)
+    finally:
+        await client.aclose()
 
 
 def _seed_node(node_id: str, dataset_id: str) -> dict[str, object]:

@@ -681,12 +681,16 @@ async def test_random_service_writes_leave_every_structure_equal_to_the_bodies()
     index equals the bodies."""
     rng = random.Random(7)
     store = FakeWorkingSetStore()
-    service = _service(store)
+    graph = FakeGraphPort(Subgraph(nodes=[], edges=[]))
+    service = WorkingSetService(graph, store, SCHEME)
     for step in range(30):
         nodes: list[Node] = [random_node(rng, f"n{i}") for i in rng.sample(range(8), 3)]
         edges: list[Edge] = [random_edge(rng, f"e{i}") for i in rng.sample(range(10), 3)]
         action = rng.choice(["seed", "remove", "restore"])
         if action == "seed":
+            # The Vault holds what is seeded (`seed` reads it by id and stores its bodies).
+            graph._graph_nodes.update({n.id: n for n in nodes})
+            graph._graph_edges.extend(edges)
             await service.seed(CASE, nodes, edges, SECRET_READER)
         elif action == "remove":
             await service.remove(CASE, [n.id for n in nodes], SECRET_READER)

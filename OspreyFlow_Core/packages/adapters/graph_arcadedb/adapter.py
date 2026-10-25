@@ -630,9 +630,8 @@ class GraphArcadeDBAdapter:
         types = await self._types_with_unique_id("vertex") if chunks else []
         for chunk in chunks:
             rids = await self._record_ids(types, chunk)
+            # Sent even when no id resolved: an absent id must cost what a hidden one costs.
             query = render_get_nodes_gremlin(rids, self._access, principal)
-            if query is None:
-                continue
             for record in await self._client.gremlin(query):
                 node = node_from_element_map(record)
                 found[node.id] = node
@@ -644,9 +643,8 @@ class GraphArcadeDBAdapter:
         types = await self._types_with_unique_id("edge") if chunks else []
         for chunk in chunks:
             rids = await self._record_ids(types, chunk)
+            # Sent even when no id resolved, as above.
             query = render_get_edges_gremlin(rids, self._access, principal)
-            if query is None:
-                continue
             for record in await self._client.gremlin(query):
                 edge = edge_from_element_map(record)
                 found[edge.id] = edge

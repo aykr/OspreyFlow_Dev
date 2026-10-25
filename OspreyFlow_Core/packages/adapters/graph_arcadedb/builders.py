@@ -272,33 +272,37 @@ def render_record_id_lookup_sql(type_name: str) -> str:
 
 def render_get_nodes_gremlin(
     record_ids: Sequence[str], access: AccessFilter, principal: Principal
-) -> str | None:
+) -> str:
     """`GraphPort.get_nodes` (ADR-124 decision 6), the second half: the vertices at `record_ids`
     (resolved from the given ids by `render_record_id_lookup_sql`) read directly, no traversal,
     with the access step on the vertex itself. The step is the one every other read carries, so a
-    hidden, superseded or reverted node gives no record. `None` for no record ids: `g.V([])` may
-    be every vertex, so it is never rendered."""
-    if not record_ids:
-        return None
+    hidden, superseded or reverted node gives no record. For no record ids the query is still
+    rendered, so an absent id costs the same round trips as a hidden one (a hidden id resolves, so
+    its read runs): `g.V([])` may be every vertex, so the empty form is `g.V().limit(0)`, which
+    yields nothing whatever the engine does with an empty id list, and which stops before it reads
+    a vertex."""
     has_access = access.gremlin_has_step(principal)
+    if not record_ids:
+        return f"g.V().limit(0).{has_access}.elementMap()"
     rids = groovy_string_list_literal(list(record_ids))
     return f"g.V({rids}).{has_access}.elementMap()"
 
 
 def render_get_edges_gremlin(
     record_ids: Sequence[str], access: AccessFilter, principal: Principal
-) -> str | None:
+) -> str:
     """`GraphPort.get_edges`: as `render_get_nodes_gremlin`, for links, with the access step on the
     link and on each end. A link whose end the principal may not read is therefore absent, not
-    returned with a hole in it (rule 3), as `render_edges_among_gremlin` refuses it. `None` for no
-    record ids, as there."""
-    if not record_ids:
-        return None
+    returned with a hole in it (rule 3), as `render_edges_among_gremlin` refuses it. For no record
+    ids the empty form is `g.E().limit(0)`, as there."""
     has_access = access.gremlin_has_step(principal)
-    rids = groovy_string_list_literal(list(record_ids))
+    source = (
+        "g.E().limit(0)"
+        if not record_ids
+        else f"g.E({groovy_string_list_literal(list(record_ids))})"
+    )
     return (
-        f"g.E({rids}).{has_access}"
-        f".where(outV().{has_access}).where(inV().{has_access}).elementMap()"
+        f"{source}.{has_access}.where(outV().{has_access}).where(inV().{has_access}).elementMap()"
     )
 
 

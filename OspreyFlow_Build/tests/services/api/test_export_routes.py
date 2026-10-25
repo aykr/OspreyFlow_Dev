@@ -124,6 +124,24 @@ async def _write_node(*, owning_unit: str, sanitisation_code: str | None = None)
         await client.aclose()
 
 
+async def _write_nodes(specs: list[tuple[str, str]]) -> list[str]:
+    """Writes one node to the Vault for each `(owning_unit, classification)`, keeping its handling,
+    and returns their ids. `WorkingSetService.seed` reads what it stores from the Vault by id
+    (ADR-124 decision 7), so a node the test seeds must be written there first."""
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    try:
+        graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
+        await graph.apply_schema(load_default_ontology())
+        tx = await graph.begin_transaction()
+        ids = await graph.upsert_nodes(
+            [_node_write(owning_unit=unit, classification=cls) for unit, cls in specs], tx
+        )
+        await graph.commit_transaction(tx)
+        return list(ids)
+    finally:
+        await client.aclose()
+
+
 async def _write_investigation(principal: Principal) -> str:
     store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
     try:
@@ -155,10 +173,9 @@ def _membership_node(*, owning_unit: str, classification: str = "OFFICIAL") -> N
     )
 
 
-#: `WorkingSetService.seed` itself validates the *seeding* principal can see everything it is
-#: handed — "the one write path that must itself validate the seeding principal can see what
-#: they are handing in" (its own docstring) — so seeding a SECRET node through `PRINCIPAL`
-#: (OFFICIAL) would silently drop it before it was ever stored. `_seed_working_set` below seeds as
+#: `WorkingSetService.seed` reads what it stores from the Vault by id, for the *seeding* principal
+#: (ADR-124 decision 7), so seeding a SECRET node through `PRINCIPAL` (OFFICIAL) would silently
+#: drop it before it was ever stored. `_seed_working_set` below seeds as
 #: a principal cleared for everything the test hands it; the export itself still runs as
 #: `PRINCIPAL`, whose own access is what `withheld_count_for` measures.
 _SEEDER = Principal(id="seeder-1", clearance="SECRET", org_unit=PRINCIPAL.org_unit, roles=["analyst"])
@@ -232,8 +249,16 @@ def test_export_route_ignores_a_client_submitted_withheld_count_and_uses_the_wor
     investigation_id = asyncio.run(_write_investigation(PRINCIPAL))
     node_id = asyncio.run(_write_node(owning_unit=PRINCIPAL.org_unit))
 
-    visible = _membership_node(owning_unit=PRINCIPAL.org_unit)
-    hidden = _membership_node(owning_unit="unit-9", classification="SECRET")
+    # Both are written to the Vault first, with their handling: `seed` stores the Vault's bodies,
+    # read by id for the seeding principal (`_SEEDER`, cleared for SECRET), and uses what is passed
+    # here only for the id (ADR-124 decision 7).
+    visible_id, hidden_id = asyncio.run(
+        _write_nodes([(PRINCIPAL.org_unit, "OFFICIAL"), ("unit-9", "SECRET")])
+    )
+    visible = _membership_node(owning_unit=PRINCIPAL.org_unit).model_copy(update={"id": visible_id})
+    hidden = _membership_node(owning_unit="unit-9", classification="SECRET").model_copy(
+        update={"id": hidden_id}
+    )
     asyncio.run(_seed_working_set(investigation_id, [visible, hidden]))
 
     from services.api.app import app

@@ -17083,6 +17083,64 @@ option, after an adversarial review.
     - a type is chosen and a filtered branch is requested, with the request body asserted;
     - Escape puts the dialog away, and the button brings it back.
 
+### ADR-124, Amendment 10 (25 October 2026) — U7: `/seed` stores what the Vault returns
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after an adversarial review.
+- **The callers.** There are six call sites of `WorkingSetService.seed`, not five. The sixth is the
+  `POST .../seed` route itself, the only one that passes bodies from a client request. The other
+  five build their bodies from graph reads:
+  - the starter questions' run;
+  - the shared-contacts canvas;
+  - the alert jump's branch;
+  - the ownership canvas;
+  - the alert canvas.
+
+  For those five the re-read changes nothing a client controls. It costs one `get_nodes` and one
+  `get_edges` per seed.
+- **What is stored.** Every submitted node id is read through `get_nodes` and every link id through
+  `get_edges`, for the case-scoped seeding principal, and the Vault's bodies are stored. A caller's
+  body is used only for its id. The nodes keep the order they were submitted in.
+- **Verify each link.** A link `get_edges` returns is kept only if each end is seeded in this request
+  and returned by `get_nodes`, or is already in the reader's view. The second case uses batched reads
+  of the counted index, chunked as `visible_among` chunks. They are made only when a returned link
+  has an end outside the request, and a returned link's ends are both readable in the Vault, so
+  whether they run never depends on hidden state.
+- **The cap** is counted after this filtering, on the reader's view.
+- **Tests.**
+  - `working_set/test_seed_verifies_against_the_vault.py` submits forged bodies to the working-set fake,
+    which refuses what the adapter refuses (rule 15). One plant made the fake accept absent ids: with
+    it, a defect seen only through absent ids became invisible to the fake-level cases.
+  - `working_set/test_seed_against_the_vault.py` runs the same against ArcadeDB. That is the rule 4
+    test. Three plants each turned it red:
+    - storing the caller's bodies;
+    - keeping a link with an unverified end;
+    - trusting absent ids.
+- **Live suites that seeded bodies the Vault did not hold** now write them to the Vault first:
+  `test_export_routes.py` and `test_statelessness.py`. Every other caller of `seed` in the tests
+  already used Vault bodies.
+- **Correction to Amendment 2: a hidden id and an absent id cost the same round trips.**
+  - **What Amendment 2 accepted.** The difference between a hidden or superseded id and an absent
+    one in `get_nodes` and `get_edges`, as "microseconds".
+  - **What it actually was.** A chunk whose ids resolved to no record id sent no Gremlin, while a
+    hidden id's chunk sent one. For a `/seed` naming one guessed id, that was a whole extra round
+    trip, so it showed whether that specific id exists. That is the membership test decision 7
+    removes, not decision 12's "hidden activity exists".
+  - **The fix.** Each chunk now always sends its Gremlin read. A chunk with no record ids sends
+    `g.V().limit(0)` (or `g.E().limit(0)`) with the same access step. Not `g.V([])`, which some
+    engines read as every element.
+  - **Measured** on ArcadeDB 26.10.1, in a scratch database of 200,000 vertices: the empty form and a
+    record-id read the access step filters out each took 0.7–0.8 ms at the median over 41 runs, in
+    both orders. That is within about 0.1 ms. An unindexed scan took 75–82 ms, so the empty form
+    does not scan.
+  - **Tests.** A pure test against a recording client in
+    `tests/adapters/graph_arcadedb/test_get_by_id_reads.py` holds the requests for a hidden id and
+    an absent id equal, in number and kind. It was red against the old code, and red under a plant
+    restoring the skip.
+  - **Still there.** The Gremlin text differs between the two, and the server's own time for the two
+    forms can differ by a fraction of a millisecond. The links' forms were not measured: a filtered
+    link read also loads its ends. Both stay within the one round trip.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are
