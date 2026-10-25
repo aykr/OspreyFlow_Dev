@@ -175,6 +175,7 @@ def test_the_stream_route_exists_and_every_delta_model_is_known_to_this_file() -
         "DeltaReplaceEdgeSent",
         "DeltaReproject",
         "DeltaSnapshot",
+        "DeltaViewOverCap",
     }
 
 

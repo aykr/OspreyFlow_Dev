@@ -30,9 +30,9 @@ import json
 import logging
 import os
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dataclasses import fields as dataclass_fields
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -613,12 +613,14 @@ from .watch_routes import (
 from .worker import JobWorker
 from .working_set.models import (
     MAX_NODES,
+    BranchFilter,
     CardinalityPreview,
     ClusterExplanation,
     ClusterNotFoundError,
     DeltaAdd,
     DeltaReplaceEdgeSent,
     DeltaSnapshot,
+    DeltaViewOverCap,
     ExpansionOutcome,
     LimitExceededError,
     LinksAmongOutcome,
@@ -632,7 +634,7 @@ from .working_set.models import (
     lacks_record,
 )
 from .working_set.service import WorkingSetService
-from .working_set.store import ValkeyWorkingSetStore
+from .working_set.store import DELTA_STREAM_MAXLEN, ValkeyWorkingSetStore
 from .ws_ticket import WsTicketResponse, mint_ws_ticket, redeem_ws_ticket
 
 logger = logging.getLogger(__name__)
@@ -2735,6 +2737,72 @@ async def branch_investigation(
         resolved_query={
             "new_investigation_id": new_investigation.id,
             **({"node_ids": list(node_ids)} if node_ids is not None else {}),
+        },
+        result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
+    )
+    return new_investigation
+
+
+class BranchByFilterRequest(BranchFilter):
+    """ADR-124 decision 2, "open a filtered branch": the reader's own view, narrowed to entity
+    types, a date window, or both (`BranchFilter` has the rules). `name` is the new case's name;
+    blank means the default a branch has."""
+
+    name: str | None = None
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/branch-by-filter",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.BRANCH_CASE))],
+)
+async def branch_investigation_by_filter(
+    investigation: InvestigationEditorDep,
+    body: BranchByFilterRequest,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    working_set: WorkingSetDep,
+    history: HistoryDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+    datasets: DatasetsDep,
+) -> Investigation:
+    """Builds, on the server, a new case from the reader's own projected view narrowed by the filter
+    (ADR-124 decision 2), for a reader whose view a colleague's work has pushed past the cap. It is
+    created as `branch` creates one: the reader owns it, it records its origin, it takes its
+    parent's domain packs and datasets, and it records a history step. What it holds is asked first,
+    and before the case exists, so that an empty choice (`NothingToBranchError`, a 422, the same
+    answer for a type only hidden material holds as for one that does not exist) or a result still
+    past the cap (`limit_exceeded`, with the filtered figures, the reader's own) leaves no case
+    behind."""
+    nodes, edges = await working_set.branch_filtered_contents(investigation.id, principal, body)
+    name = f"Branch of {investigation.name or DEFAULT_CASE_NAME}"
+    if body.name is not None and body.name.strip():
+        name = body.name.strip()
+    new_investigation = await investigations.create(
+        principal,
+        name=name,
+        branched_from=investigation.id,
+        domains=investigation.domains_to_inherit(),
+    )
+    await datasets.copy_case(investigation.id, new_investigation.id)
+    outcome = await working_set.branch_add(new_investigation.id, nodes, edges, principal)
+    await publish_delta(valkey, new_investigation.id, outcome.delta)
+    await _record_history_step(
+        working_set,
+        history,
+        new_investigation.id,
+        seq=outcome.delta.seq,
+        label=f"Branched from {investigation.id}",
+        principal=principal,
+    )
+    await audit.record(
+        principal=principal,
+        action="branch_by_filter",
+        investigation_id=investigation.id,
+        resolved_query={
+            "new_investigation_id": new_investigation.id,
+            "filter": body.model_dump(mode="json", exclude={"name"}),
         },
         result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
     )
@@ -9926,12 +9994,66 @@ async def _authenticate_websocket(websocket: WebSocket) -> Principal:
     return principal
 
 
+@dataclass
+class _SocketState:
+    """What one connected socket remembers, in memory and for as long as it is open (ADR-124
+    decision 2): whether its reader has been sent `DeltaViewOverCap` and so is sent nothing more
+    until a resync with no last sequence runs the full-snapshot path again. The server keeps no
+    state for a stuck reader beyond this; a new connection starts clear.
+
+    **During a try-again only**, the forward does not drop what it is holding back: `buffering` is
+    set from the moment the resync starts until it has sent its answer, and the raw messages go to
+    `buffer`, at most `DELTA_STREAM_MAXLEN` of them. Past that `overflowed` is set and the buffer is
+    emptied; the resync then falls back to a fresh catch-up. In the ordinary stuck period nothing is
+    buffered: a try-again snapshot covers it, and a reader who stays stuck holds no memory."""
+
+    stuck: bool = False
+    buffering: bool = False
+    buffer: list[str] = field(default_factory=list)
+    overflowed: bool = False
+
+
+async def _send_all(
+    websocket: WebSocket, state: _SocketState, deltas: Sequence[WorkingSetDeltaSent]
+) -> None:
+    """Sends `deltas`, and marks the socket stuck if one of them is `DeltaViewOverCap`."""
+    for delta in deltas:
+        await websocket.send_text(delta.model_dump_json())
+        if isinstance(delta, DeltaViewOverCap):
+            state.stuck = True
+
+
+async def _forward_one(
+    data: bytes | str,
+    websocket: WebSocket,
+    working_set: WorkingSetService,
+    investigation_id: str,
+    principal: Principal,
+    state: _SocketState,
+) -> bool:
+    """Projects one published message for this socket's reader and sends it, as the live forward
+    does. True if what was sent was `DeltaViewOverCap`."""
+    raw = decode_delta(json.loads(data.decode() if isinstance(data, bytes) else data))
+    if lacks_record(raw):
+        # A removal or replacement from before it carried the record of what it removed: nothing
+        # can be projected from it, and an empty step would leave this canvas unlike a snapshot's.
+        # The reader is sent their own full view, as a reconnect with none is.
+        sent = await working_set.sync(investigation_id, principal, last_acknowledged_seq=None)
+        await _send_all(websocket, state, sent)
+        return any(isinstance(delta, DeltaViewOverCap) for delta in sent)
+    delta = await working_set.project_live(investigation_id, raw, principal)
+    over = await working_set.over_cap_after(investigation_id, delta, principal)
+    await _send_all(websocket, state, [over or delta])
+    return over is not None
+
+
 async def _forward_notifications(
     pubsub: Any,
     websocket: WebSocket,
     working_set: WorkingSetService,
     investigation_id: str,
     principal: Principal,
+    state: _SocketState | None = None,
 ) -> None:
     """Relays a live mutation from `notify.py`'s Pub/Sub channel to this
     one connected principal — re-projected via `WorkingSetService.
@@ -9939,22 +10061,98 @@ async def _forward_notifications(
     principal caused the mutation, who may not be this socket's principal
     (`03_CONDUIT_MIDDLEWARE.md` §4's read-time handling filter applies to
     the live push exactly as much as to reconnect replay)."""
+    state = state or _SocketState()
     async for message in pubsub.listen():
         if message["type"] != "message":
             continue
-        data = message["data"]
-        raw = decode_delta(json.loads(data.decode() if isinstance(data, bytes) else data))
-        if lacks_record(raw):
-            # A removal or replacement from before it carried the record of what it removed:
-            # nothing can be projected from it, and an empty step would leave this canvas unlike a
-            # snapshot's. The reader is sent their own full view, as a reconnect with none is.
-            for snapshot in await working_set.sync(
-                investigation_id, principal, last_acknowledged_seq=None
-            ):
-                await websocket.send_text(snapshot.model_dump_json())
+        if state.stuck:
+            # The reader was told their view is over the cap and is sent nothing more until a
+            # resync with no last sequence (ADR-124 decision 2). During that try-again, and only
+            # then, what arrives is kept (bounded) for the resync to replay after its answer.
+            if state.buffering and not state.overflowed:
+                if len(state.buffer) >= DELTA_STREAM_MAXLEN:
+                    state.overflowed = True
+                    state.buffer.clear()
+                else:
+                    state.buffer.append(message["data"])
             continue
-        delta = await working_set.project_live(investigation_id, raw, principal)
-        await websocket.send_text(delta.model_dump_json())
+        await _forward_one(
+            message["data"], websocket, working_set, investigation_id, principal, state
+        )
+
+
+def _last_seq(deltas: Sequence[WorkingSetDeltaSent], so_far: int) -> int:
+    return max([so_far, *(d.seq for d in deltas if not isinstance(d, DeltaViewOverCap))])
+
+
+async def _try_again(
+    websocket: WebSocket,
+    working_set: WorkingSetService,
+    investigation_id: str,
+    principal: Principal,
+    state: _SocketState,
+) -> None:
+    """A resync with no last sequence ("try again"), in this order:
+
+    1. the socket is held stuck and the forward starts buffering what it would send;
+    2. the full-snapshot path runs (it checks the cap);
+    3. if that gave a snapshot, the catch-up from the snapshot's own sequence runs (it checks the
+       cap too);
+    4. the snapshot and the catch-up are sent;
+    5. if either was `DeltaViewOverCap` the socket stays stuck and the buffer is discarded;
+       otherwise the buffered messages whose sequence is above the last one sent are replayed in
+       order, each projected and recounted as the forward does it, until the buffer is empty (what
+       arrives during the replay is replayed too), and an overflow is answered by a fresh catch-up
+       from the last sequence sent instead;
+    6. only with the buffer empty, in the same step, the socket is freed.
+
+    Nothing the forward would send overtakes the snapshot, and nothing published during the window
+    is lost; a duplicate of what the snapshot already holds is skipped by sequence or harmless."""
+    state.stuck = True
+    state.buffering = True
+    state.overflowed = False
+    state.buffer.clear()
+    deltas = await working_set.sync(investigation_id, principal, last_acknowledged_seq=None)
+    snapshot = deltas[0] if deltas else None
+    if isinstance(snapshot, DeltaSnapshot):
+        caught_up = await working_set.sync(
+            investigation_id, principal, last_acknowledged_seq=snapshot.seq
+        )
+        deltas = [*deltas, *caught_up]
+    await _send_all(websocket, state, deltas)
+    if any(isinstance(delta, DeltaViewOverCap) for delta in deltas):
+        state.buffer.clear()
+        state.buffering = False
+        state.overflowed = False
+        return
+    sent_seq = _last_seq(deltas, -1)
+    while True:
+        if state.overflowed:
+            state.overflowed = False
+            state.buffer.clear()
+            fresh = await working_set.sync(
+                investigation_id, principal, last_acknowledged_seq=sent_seq
+            )
+            await _send_all(websocket, state, fresh)
+            if any(isinstance(delta, DeltaViewOverCap) for delta in fresh):
+                state.buffer.clear()
+                state.buffering = False
+                return
+            sent_seq = _last_seq(fresh, sent_seq)
+            continue
+        if not state.buffer:
+            break
+        data = state.buffer.pop(0)
+        seq = json.loads(data.decode() if isinstance(data, bytes) else data).get("seq", -1)
+        if seq <= sent_seq:
+            continue
+        if await _forward_one(data, websocket, working_set, investigation_id, principal, state):
+            state.buffer.clear()
+            state.buffering = False
+            return
+        sent_seq = max(sent_seq, seq)
+    state.stuck = False
+    state.buffering = False
 
 
 async def _handle_resync_requests(
@@ -9962,13 +10160,19 @@ async def _handle_resync_requests(
     working_set: WorkingSetService,
     investigation_id: str,
     principal: Principal,
+    state: _SocketState | None = None,
 ) -> None:
+    state = state or _SocketState()
     while True:
         payload = await websocket.receive_json()
         last_ack = payload.get("last_acknowledged_seq")
+        if last_ack is None:
+            await _try_again(websocket, working_set, investigation_id, principal, state)
+            continue
+        if state.stuck:
+            continue
         deltas = await working_set.sync(investigation_id, principal, last_acknowledged_seq=last_ack)
-        for delta in deltas:
-            await websocket.send_text(delta.model_dump_json())
+        await _send_all(websocket, state, deltas)
 
 
 @app.websocket("/v1/investigations/{investigation_id}/stream")
@@ -10027,18 +10231,20 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
     initial_deltas: list[WorkingSetDeltaSent] = await working_set.sync(
         investigation_id, principal, last_acknowledged_seq=init.get("last_acknowledged_seq")
     )
-    for delta in initial_deltas:
-        await websocket.send_text(delta.model_dump_json())
+    state = _SocketState()
+    await _send_all(websocket, state, initial_deltas)
 
     pubsub = valkey.pubsub()
     channel = notify_channel(investigation_id)
     await pubsub.subscribe(channel)
     try:
         forward_task = asyncio.create_task(
-            _forward_notifications(pubsub, websocket, working_set, investigation_id, principal)
+            _forward_notifications(
+                pubsub, websocket, working_set, investigation_id, principal, state
+            )
         )
         resync_task = asyncio.create_task(
-            _handle_resync_requests(websocket, working_set, investigation_id, principal)
+            _handle_resync_requests(websocket, working_set, investigation_id, principal, state)
         )
         try:
             await asyncio.wait({forward_task, resync_task}, return_when=asyncio.FIRST_COMPLETED)

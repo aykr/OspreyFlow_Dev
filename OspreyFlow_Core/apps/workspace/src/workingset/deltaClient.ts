@@ -23,7 +23,7 @@
 // checks that invariant on every non-snapshot delta and, on a violation,
 // drops the out-of-order delta and requests an explicit resync over the
 // same socket rather than applying something it cannot place correctly.
-import type { WorkingSetDelta } from "./models";
+import type { DeltaViewOverCap, LimitExceeded, WorkingSetDelta } from "./models";
 
 const DELTA_OPS = new Set(["add", "remove", "replace_edge", "reproject", "snapshot"]);
 
@@ -35,6 +35,19 @@ function isRetiredNotice(value: unknown): value is { op: "notice"; seq: number }
     value !== null &&
     (value as { op?: unknown }).op === "notice" &&
     typeof (value as { seq?: unknown }).seq === "number"
+  );
+}
+
+/** A reader's own view of the case is past a cap (ADR-124 decision 2): sent in place of a snapshot
+ * or a delta, and carrying the sequence number of what it replaces, so it takes no place in this
+ * client's sequence and is never applied as a delta. */
+export function isViewOverCap(value: unknown): value is DeltaViewOverCap {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { op?: unknown }).op === "view_over_cap" &&
+    typeof (value as { seq?: unknown }).seq === "number" &&
+    typeof (value as { would_be?: unknown }).would_be === "object"
   );
 }
 
@@ -63,6 +76,9 @@ export interface SocketLike {
 
 export interface DeltaClientHandlers {
   onDelta: (delta: WorkingSetDelta) => void;
+  /** The reader's own view is past a cap (`view_over_cap`): their figure, for the dialog. The
+   * server then sends nothing more on this connection until `requestResync(null)`. */
+  onViewOverCap?: (wouldBe: LimitExceeded) => void;
   onOpen?: () => void;
   onClose?: (event: { code: number; reason: string }) => void;
   onError?: (error: unknown) => void;
@@ -104,6 +120,12 @@ export function connectDeltaClient(
       return;
     }
     if (isRetiredNotice(parsed)) return; // dropped: it takes no place in the sequence
+    if (isViewOverCap(parsed)) {
+      // Neither advances `lastSeq` nor is checked against it (it carries the number of what it
+      // replaces), and it is never applied as a delta.
+      handlers.onViewOverCap?.(parsed.would_be);
+      return;
+    }
     if (!isWorkingSetDelta(parsed)) {
       handlers.onError?.(new Error(`not a WorkingSetDelta: ${String(event.data)}`));
       return;

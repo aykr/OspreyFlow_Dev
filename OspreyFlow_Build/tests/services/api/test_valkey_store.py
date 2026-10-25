@@ -1172,3 +1172,37 @@ async def test_a_low_cleared_readers_restore_leaves_the_hidden_items_stored_and_
     assert isinstance(final, DeltaSnapshot)
     assert {n.id for n in final.nodes} == {n.id for n in fresh.nodes} == {"pub", "sec"}
     assert {e.id for e in final.edges} == {e.id for e in fresh.edges}
+
+
+async def test_a_view_over_the_cap_is_counted_from_the_real_index_and_not_the_stored_whole(
+    indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-124 decision 2, "a view pushed past the cap", over the real scripts and store: with the
+    node cap at three, `sync`'s full snapshot and its catch-up answer `DeltaViewOverCap` with the
+    reader's own figure (four), the same with and without five stored nodes the reader may not
+    read; a view of three is sent as a snapshot."""
+    from services.api.working_set import service as service_module
+    from services.api.working_set.models import DeltaViewOverCap
+
+    monkeypatch.setattr(service_module, "MAX_NODES", 3)
+    working_store, _, case = indexed_store
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
+    await working_store.add_nodes(case, [index_node(f"n{i}") for i in range(3)])
+    await working_store.add_nodes(case, [index_node(f"h{i}", "SECRET") for i in range(5)])
+    (fits,) = await service.sync(case, OFFICIAL_READER, last_acknowledged_seq=None)
+    assert isinstance(fits, DeltaSnapshot) and len(fits.nodes) == 3
+
+    await working_store.next_seq(case)
+    await working_store.append_delta(case, DeltaAdd(seq=1, nodes=[index_node("n3")]))
+    await working_store.add_nodes(case, [index_node("n3")])
+    (full,) = await service.sync(case, OFFICIAL_READER, last_acknowledged_seq=None)
+    (caught_up,) = await service.sync(case, OFFICIAL_READER, last_acknowledged_seq=0)
+
+    for sent in (full, caught_up):
+        assert isinstance(sent, DeltaViewOverCap)
+        assert (sent.would_be.cap_kind, sent.would_be.cap, sent.would_be.would_be) == (
+            "nodes",
+            3,
+            4,
+        )
+    assert working_store.access_index_rebuilds == 0

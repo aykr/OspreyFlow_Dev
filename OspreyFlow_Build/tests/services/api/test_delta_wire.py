@@ -34,6 +34,8 @@ from services.api.working_set.models import (
     DeltaRemoveSent,
     DeltaReplaceEdge,
     DeltaReplaceEdgeSent,
+    DeltaViewOverCap,
+    LimitExceeded,
     RemovedElement,
 )
 from services.api.working_set.service import WorkingSetService
@@ -260,8 +262,11 @@ async def test_the_live_forward_still_projects_a_replacement_that_has_its_record
     [
         DeltaRemoveSent(seq=1, node_ids=["a"]),
         DeltaReplaceEdgeSent(seq=1, old_edge_id="o", edge=edge("n", "a", "b")),
+        DeltaViewOverCap(
+            seq=1, would_be=LimitExceeded(cap_kind="nodes", cap=50_000, would_be=50_001)
+        ),
     ],
-    ids=["a removal", "a replacement"],
+    ids=["a removal", "a replacement", "a view over the cap"],
 )
 async def test_publish_refuses_the_sent_form_of_a_delta_for_it_has_no_record(sent: object) -> None:
     """Violation caught: a route publishing what it returns (the sent form), from which no reader's

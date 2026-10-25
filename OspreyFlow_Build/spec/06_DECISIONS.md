@@ -16964,6 +16964,125 @@ option, after an adversarial review, except the last bullet, which is the owner'
     not built now, because answering before the stored write changes the order of the response and
     the stream, and that needs its own design.
 
+### ADR-124, Amendment 9 (25 October 2026) — U6b: a view pushed past the cap
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after an adversarial review.
+- **`DeltaViewOverCap`** carries `seq`, `op: "view_over_cap"` and `would_be: LimitExceeded`. That is
+  the same shape a refused expansion uses: the cap breached (nodes checked first), its size, the
+  reader's own figure and the three options.
+  - **Where it lives.** It is a sent type only. `publish` refuses it, as it refuses the sent forms,
+    and the wire gate pins it.
+  - **Its `seq`.** It carries the sequence number of what it replaces: the live delta's own, or the
+    current one for `sync`. The Glass neither advances nor checks its sequence on it. That half is
+    built in U6b's Glass round and tested in `deltaClient`'s tests.
+- **Each path counts the reader's view from the counted access index**, with no body read, before it
+  sends anything:
+  - `sync`'s full snapshot;
+  - `sync`'s catch-up;
+  - the live forward, which recounts only when a projected delta adds something the reader can read.
+- **A stuck socket.** After a `DeltaViewOverCap`, the socket handler marks that connection stuck, in
+  memory, for the life of the connection.
+  - **While stuck.** The forward drops every push, and a resync that names a last sequence sends
+    nothing.
+  - **Try again.** A resync with no last sequence number runs these steps in order:
+    1. The connection stays held, and for the length of the try-again only, the forward keeps what
+       it would have sent in a buffer instead of dropping it. The buffer is bounded at the delta
+       stream's own length.
+    2. The full-snapshot path checks the cap, reads its sequence number, then the bodies.
+    3. If it gave a snapshot, a catch-up from that snapshot's sequence number runs, checking the cap
+       too.
+    4. The answer is sent.
+    5. If any part of it was a `DeltaViewOverCap`, the connection stays held and the buffer is
+       discarded.
+    6. Otherwise the buffer is replayed in order. A message at or below the last sequence number
+       sent is skipped. Each other message is projected and recounted as the forward would, and one
+       that takes the view past the cap holds the connection again. On overflow, the buffer is
+       emptied and a fresh catch-up from the last sequence number sent replaces it.
+    7. Once the buffer is empty, the connection is freed in the same step, with nothing awaited in
+       between.
+
+    So no delta reaches a reader whose view is still past the cap. Nothing the forward takes once
+    the try-again has begun overtakes the snapshot. None published during the try-again is lost,
+    even if the case then goes quiet.
+    - **A delta already in flight.** One the forward was already sending when a try-again began can
+      still arrive either side of the snapshot. It is at or below the snapshot's sequence number, so
+      the Glass applies it or rejects it and resyncs to nothing.
+    - **Outside a try-again,** a held connection buffers nothing.
+    - **A delta sent twice** is harmless.
+    - **The bound** counts messages, not bytes. A message is in effect capped at about 32 MB, where
+      Pub/Sub cuts the subscriber (Amendment 8). So the worst case is large in theory, though in
+      practice the buffer holds what arrives in a few seconds.
+- **`POST /v1/investigations/{id}/branch-by-filter`.** It projects the reader's view, then applies
+  the filter, and computes the branch's contents before any case is created.
+  - **An empty result** gives `NothingToBranchError` (422). A filter naming a type that only hidden
+    material holds gives the same answer as an absent type.
+  - **A result past the cap** gives `limit_exceeded` (409) with the filtered figures, and creates,
+    publishes and records nothing.
+  - **A request must choose something,** types, a window or both, or it is a 422. An empty list of
+    types chooses nothing, so it is the `NothingToBranchError` 422.
+  - **Its history step** records the label `branch` records today; U8 fixes both to "Branched".
+  - **Documented** in `03_CONDUIT_MIDDLEWARE.md` §2.
+- **An undefined handling code in use.** Counting a view judges every signature in use, and the
+  scheme refuses a code it no longer defines. In that case the cap check reports no breach, so each
+  path behaves as before U6b. The full snapshot still fails in projection (Amendment 7's pinned
+  case).
+  - **What it is.** A missed bound in a broken-scheme state, not a disclosure.
+  - **Why it does not refuse.** A refusal would need figures that cannot be computed. Raising would
+    close the socket into the Glass's missing reconnect.
+  - **How it is made visible.** It is logged and counted, as index rebuilds are.
+- **The full snapshot reads its sequence number first.** It then reads the bodies. So a write in
+  between arrives again as the next delta, which is harmless, instead of being labelled as already
+  held and skipped for good. This predates U6b and is corrected here, because "try again" depends on
+  it.
+- **A window-only filter keeps every node,** as decision 2 words it, so it cannot bring a view back
+  under the node cap. The Glass's dialog says so.
+- **The live path's cost** was measured on Valkey with
+  `scripts/bench_reader_view_previews.py --forward --sockets 6 --deltas 100`, at 49,890 nodes and
+  250,000 links. The added recount per delta had a median of 0.9 ms and a worst of 2.9 ms on the
+  slowest socket; over every socket and delta, a median of 0.7 ms and a worst of 2.9 ms.
+- **Tests.**
+  - `working_set/test_view_over_cap.py` covers the three paths, hidden items, the stuck socket, try
+    again, and the recount only on readable adds.
+  - `working_set/test_branch_by_filter.py` covers the filter, the access control, the hidden type
+    against the absent type, the cap, and the parent's packs and datasets, including a reader
+    scoped to the case's datasets. ADR-126 Amendment 1 requires the packs test.
+  - A live Valkey case,
+    `test_valkey_store.py::test_a_view_over_the_cap_is_counted_from_the_real_index_and_not_the_stored_whole`,
+    covers the full snapshot and catch-up with five hidden nodes stored.
+  - Two cases in `test_view_over_cap.py` run the forward and the resync together, with a removal
+    published during try-again. Nothing reaches the socket before the answer.
+- **The Glass.**
+  - **Delivery.** `deltaClient` hands a `view_over_cap` to `onViewOverCap` without touching its
+    sequence number.
+  - **State.** The store keeps the reader's figure until the next snapshot or a case change.
+  - **A snapshot not from the socket.** A restore's response, for one, ends an over-cap state on
+    screen. When it does, the Glass also sends a resync with no last sequence number, so the
+    server's held connection is checked again rather than left held unseen.
+  - **One gate.** The dialog, its put-away state, the button that brings it back, and try again's
+    resync are one component, rendered by both `App.tsx` and the keyboard harness. The keyboard
+    spec therefore exercises the shipped wiring. The over-cap state shows in every view, not only
+    the graph.
+  - **The dialog.** `ViewOverCapDialog` shows the figure in the canvas-limit sentence the Glass
+    already uses ("Too many for the canvas: N nodes against a limit of C"). The limit is the fixed
+    platform figure; no other number appears.
+  - **Open a filtered branch.** It offers entity types from the ontology the Glass holds, never from
+    the case's contents, and a From and To date. It sends `entity_types`, `valid_from` and
+    `valid_to`, as the route takes them. Its outcomes:
+    - a 409 shows the filtered figure and keeps the choice;
+    - a 422 says nothing matched;
+    - while the node cap is breached, a window alone is refused with the reason, before any request.
+  - **Try again** sends a resync with no last sequence number.
+  - **Escape** puts the dialog away behind a button that brings it back, because the server sends
+    nothing more until the reader tries again.
+  - **Its wording,** apart from the reused sentence, is the coordinator's, decided under the owner's
+    instruction.
+  - **Keyboard.** `keyboard/view-over-cap.spec.ts` (rule 13) proves four actions by keyboard alone:
+    - the dialog appears;
+    - try again sends its resync;
+    - a type is chosen and a filtered branch is requested, with the request body asserted;
+    - Escape puts the dialog away, and the button brings it back.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

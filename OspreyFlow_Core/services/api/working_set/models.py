@@ -16,6 +16,7 @@ code, not only in a docstring.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
@@ -69,6 +70,43 @@ class LimitExceededError(Exception):
         self.detail = detail
 
 
+class BranchFilter(BaseModel):
+    """What a reader chooses to narrow their own view to, to branch it when it is past the cap
+    (ADR-124 decision 2, "the filter"): entity types, a date window, or both. Entity types select
+    nodes. The window selects links whose `interval` overlaps it (a link with no interval is kept).
+    A link is kept only when both its ends are kept. Applied to the reader's own projected view
+    and to nothing else, so a type only hidden material holds selects what a type that does not
+    exist selects: nothing."""
+
+    entity_types: list[str] | None = None
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+
+    @model_validator(mode="after")
+    def _a_choice_is_made(self) -> BranchFilter:
+        if self.entity_types is None and self.valid_from is None and self.valid_to is None:
+            raise ValueError("choose entity types, a date window, or both")
+        if self.valid_from and self.valid_to and self.valid_from > self.valid_to:
+            raise ValueError("the window ends before it starts")
+        return self
+
+    def keeps_node(self, node: Node) -> bool:
+        return self.entity_types is None or node.type in self.entity_types
+
+    def keeps_link_in_time(self, edge: Edge) -> bool:
+        """Whether the link's interval overlaps the window; a link with none is kept, as is any
+        link when no window was chosen."""
+        if edge.interval is None or (self.valid_from is None and self.valid_to is None):
+            return True
+        starts_in_time = self.valid_to is None or edge.interval.valid_from <= self.valid_to
+        ends_in_time = (
+            self.valid_from is None
+            or edge.interval.valid_to is None
+            or edge.interval.valid_to >= self.valid_from
+        )
+        return starts_in_time and ends_in_time
+
+
 class NothingToBranchError(Exception):
     """A branch of a chosen set of nodes (ADR-084) found nothing to copy: every id asked for is
     absent, hidden from the branching principal, or the choice was empty. One error for all three,
@@ -81,6 +119,24 @@ class DeltaAdd(BaseModel):
     op: Literal["add"] = "add"
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)
+
+
+class DeltaViewOverCap(BaseModel):
+    """Sent in place of a snapshot or a delta when the reader's own projected view of the case is
+    past a cap (ADR-124 decision 2, "a view pushed past the cap"). A less-cleared colleague's cap
+    counts only their own view, so their ordinary work can push a more-cleared reader's view past
+    the cap; the reader is told, with their own figures (`would_be`, the same typed shape as
+    `limit_exceeded`: which cap, its size, and the reader's figure, with the three options) and
+    nothing about anyone else's view. Nothing further is sent on that socket until a resync with
+    no last sequence runs the full-snapshot path again. `seq` is the sequence number of what it
+    replaces, so a client's sequence check is unmoved.
+
+    Send-only: never stored and never published (`publish_delta` refuses it), so it is not in
+    `WorkingSetDelta`."""
+
+    seq: int
+    op: Literal["view_over_cap"] = "view_over_cap"
+    would_be: LimitExceeded
 
 
 class RemovedElement(BaseModel):
@@ -222,7 +278,8 @@ WorkingSetDeltaSent = Annotated[
     | DeltaRemoveSent
     | DeltaReplaceEdgeSent
     | DeltaReproject
-    | DeltaSnapshot,
+    | DeltaSnapshot
+    | DeltaViewOverCap,
     Field(discriminator="op"),
 ]
 
@@ -371,6 +428,7 @@ class ResolutionOutcome(BaseModel):
 __all__ = [
     "MAX_EDGES",
     "MAX_NODES",
+    "BranchFilter",
     "CardinalityPreview",
     "ClusterExplanation",
     "ClusterNotFoundError",
@@ -381,6 +439,7 @@ __all__ = [
     "DeltaReplaceEdgeSent",
     "DeltaReproject",
     "DeltaSnapshot",
+    "DeltaViewOverCap",
     "EdgeId",
     "decode_delta",
     "lacks_record",

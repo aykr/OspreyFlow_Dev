@@ -23,7 +23,12 @@ from valkey.asyncio import Valkey
 
 from conduit_common.valkey_compat import reply as _reply
 
-from .working_set.models import DeltaRemoveSent, DeltaReplaceEdgeSent, WorkingSetDelta
+from .working_set.models import (
+    DeltaRemoveSent,
+    DeltaReplaceEdgeSent,
+    DeltaViewOverCap,
+    WorkingSetDelta,
+)
 
 
 def notify_channel(investigation_id: str) -> str:
@@ -35,6 +40,6 @@ async def publish_delta(client: Valkey, investigation_id: str, delta: WorkingSet
     own projection decides what its reader is sent of it. The stored and sent forms are separate
     types, so the checker refuses a sent one; the check below is for a caller it does not see,
     since nothing can be projected from a sent form."""
-    if isinstance(delta, DeltaRemoveSent | DeltaReplaceEdgeSent):
+    if isinstance(delta, DeltaRemoveSent | DeltaReplaceEdgeSent | DeltaViewOverCap):
         raise TypeError(f"a sent {type(delta).__name__} has no record to project readers from")
     await _reply(client.publish(notify_channel(investigation_id), delta.model_dump_json()))

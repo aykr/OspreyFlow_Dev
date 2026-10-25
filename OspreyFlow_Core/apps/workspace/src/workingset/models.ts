@@ -77,6 +77,27 @@ export interface DeltaSnapshot {
   withheld?: boolean | null;
 }
 
+/** `LimitExceeded` in `models.py`: a refused request's own answer, and what `DeltaViewOverCap`
+ * carries (ADR-124 decision 2). `would_be` is the reader's own figure for the cap named, never
+ * anyone else's. */
+export interface LimitExceeded {
+  error: "limit_exceeded";
+  cap_kind: "nodes" | "edges";
+  cap: number;
+  would_be: number;
+  options: ["branch", "filter", "promote_to_batch"];
+}
+
+/** Sent in place of a snapshot or a delta when the reader's own view of the case is past a cap
+ * (ADR-124 decision 2, Amendment 9). `seq` is the sequence number of what it replaces: it neither
+ * advances the client's sequence nor trips its gap check. Mirrors `DeltaViewOverCap` in
+ * `models.py`; not part of `WorkingSetDelta`, which is what changes the graph. */
+export interface DeltaViewOverCap {
+  seq: number;
+  op: "view_over_cap";
+  would_be: LimitExceeded;
+}
+
 export type WorkingSetDelta =
   | DeltaAdd
   | DeltaRemove

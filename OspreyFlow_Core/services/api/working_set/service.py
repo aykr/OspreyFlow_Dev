@@ -32,6 +32,7 @@ request adds, so a stored item the reader may not read moves no figure they are 
 from __future__ import annotations
 
 import json
+import logging
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -69,6 +70,7 @@ from .access_index import ABSENT, AccessEntries, AccessSignature
 from .models import (
     MAX_EDGES,
     MAX_NODES,
+    BranchFilter,
     CardinalityPreview,
     ClusterExplanation,
     ClusterNotFoundError,
@@ -79,6 +81,7 @@ from .models import (
     DeltaReplaceEdgeSent,
     DeltaReproject,
     DeltaSnapshot,
+    DeltaViewOverCap,
     ExpansionOutcome,
     LimitExceeded,
     LimitExceededError,
@@ -94,6 +97,8 @@ from .models import (
     WorkingSetDeltaSent,
 )
 from .store import WorkingSetStorage
+
+_log = logging.getLogger(__name__)
 
 
 def _decode_comparison_vector(raw: Any) -> dict[str, Any] | None:
@@ -339,6 +344,10 @@ class WorkingSetService:
         #: Which signatures a reader may read, by (case, epoch, signatures version, access class):
         #: see `_reader_counts`. Per service, never shared between processes or between stores.
         self._readable: OrderedDict[tuple[str, str, int, str], dict[str, bool]] = OrderedDict()
+        #: How many times a reader's view could not be counted against the caps because a
+        #: signature in use carries a handling code the scheme no longer defines (the cap check
+        #: was skipped). Never expected to move; each is also logged.
+        self.uncountable_views = 0
 
     def _project(
         self,
@@ -1353,6 +1362,46 @@ class WorkingSetService:
         _, _, hidden = self._project(nodes, edges, principal)
         return hidden
 
+    async def branch_filtered_contents(
+        self, source_investigation_id: str, principal: Principal, filt: BranchFilter
+    ) -> tuple[list[Node], list[Edge]]:
+        """What a filtered branch of `source_investigation_id` would hold for `principal` (ADR-124
+        decision 2): their own projected view, narrowed by `filt`, and nothing else. The view is
+        projected first and the filter applied to it, so a node or link they may not read is never
+        in the result and a type only hidden material holds selects what an absent type selects.
+        An empty result is `NothingToBranchError`, as for `branch`. A result past a cap is the typed
+        `LimitExceededError` with the filtered figures, which are the reader's own (rule 3). Nothing
+        is written, so the route calls it before it creates the case."""
+        stored_nodes = await self._store.source_fidelity_nodes(source_investigation_id)
+        stored_edges = await self._store.source_fidelity_edges(source_investigation_id)
+        visible_nodes, visible_edges, _ = self._project(
+            list(stored_nodes.values()), list(stored_edges.values()), principal
+        )
+        nodes = [n for n in visible_nodes if filt.keeps_node(n)]
+        kept = {n.id for n in nodes}
+        edges = [
+            e
+            for e in visible_edges
+            if e.source in kept and e.target in kept and filt.keeps_link_in_time(e)
+        ]
+        if not nodes:
+            raise NothingToBranchError
+        breach = _cap_breach(len(nodes), len(edges))
+        if breach is not None:
+            raise LimitExceededError(breach)
+        return nodes, edges
+
+    async def branch_add(
+        self,
+        new_investigation_id: str,
+        nodes: Sequence[Node],
+        edges: Sequence[Edge],
+        principal: Principal,
+    ) -> ExpansionOutcome:
+        """Writes what `branch_filtered_contents` chose into the new case, as `branch` writes its
+        own: cap-checked for the reader, and the new case emptied if a chunk fails part-way."""
+        return await self._add(new_investigation_id, nodes, edges, principal, empty_on_failure=True)
+
     async def restore(
         self,
         investigation_id: str,
@@ -1515,12 +1564,25 @@ class WorkingSetService:
         if last_acknowledged_seq is not None:
             raw_deltas = await self._store.deltas_after(investigation_id, last_acknowledged_seq)
             if raw_deltas is not None:
+                # The reader's own view, counted from the index, before anything is read or sent
+                # (decision 2): past a cap, the deltas are not sent.
+                breach = await self._view_breach(investigation_id, principal)
+                if breach is not None:
+                    seq = await self._store.current_seq(investigation_id)
+                    return [DeltaViewOverCap(seq=seq, would_be=breach)]
                 known = await self._store.source_fidelity_nodes(investigation_id)
                 return [self.project_delta(raw, principal, known) for raw in raw_deltas]
 
+        # The sequence number first, and then the bodies: a write landing between the two reads
+        # leaves a snapshot that holds it or carries a number below it, and the client replays it.
+        # Read the other way round, the snapshot would carry the write's number without its content
+        # and the client would skip that delta for good.
+        seq = await self._store.current_seq(investigation_id)
+        breach = await self._view_breach(investigation_id, principal)
+        if breach is not None:
+            return [DeltaViewOverCap(seq=seq, would_be=breach)]
         nodes = await self._store.source_fidelity_nodes(investigation_id)
         edges = await self._store.source_fidelity_edges(investigation_id)
-        seq = await self._store.current_seq(investigation_id)
         visible_nodes, visible_edges, _ = self._project(
             list(nodes.values()), list(edges.values()), principal
         )
@@ -1534,6 +1596,47 @@ class WorkingSetService:
                 ),
             )
         ]
+
+    async def _view_breach(
+        self, investigation_id: str, principal: Principal
+    ) -> LimitExceeded | None:
+        """The cap `principal`'s own projected view of the case is past, or `None`: counted from
+        the counted access index (Amendment 4), so no body is read and nothing of any other
+        reader's view is in the figure (rule 3)."""
+        try:
+            view = await self._reader_counts(investigation_id, principal)
+        except HandlingSchemeError as error:
+            # A signature in use carries a handling code the scheme no longer defines: the view
+            # cannot be counted. The paths this guards behave as they did before the check (a
+            # projection of a stored element with such a code raises, one of a link with an absent
+            # end does not), and the flag treats the code as withheld (Amendment 7); none of that
+            # is decided here. It is visible, as an index rebuild is: counted, and logged.
+            self.uncountable_views += 1
+            _log.warning(
+                "the view of %s could not be counted against the caps, so the check was skipped "
+                "(%s; %d in this process)",
+                investigation_id,
+                error,
+                self.uncountable_views,
+            )
+            return None
+        return _cap_breach(view.nodes, view.edges)
+
+    async def over_cap_after(
+        self, investigation_id: str, delta: WorkingSetDeltaSent, principal: Principal
+    ) -> DeltaViewOverCap | None:
+        """For the live forward (decision 2): `DeltaViewOverCap` if `delta`, as projected for this
+        reader, adds something they can read and their view is now past a cap, else `None`. The
+        view is recounted only when something readable was added: a removal, a reproject and an
+        addition that projects to nothing cost no read. `delta` carries the sequence number it
+        replaces."""
+        adds = (
+            isinstance(delta, DeltaAdd | DeltaSnapshot) and bool(delta.nodes or delta.edges)
+        ) or isinstance(delta, DeltaReplaceEdgeSent)
+        if not adds:
+            return None
+        breach = await self._view_breach(investigation_id, principal)
+        return None if breach is None else DeltaViewOverCap(seq=delta.seq, would_be=breach)
 
     async def _holds_what_the_reader_may_not_view(
         self, investigation_id: str, principal: Principal

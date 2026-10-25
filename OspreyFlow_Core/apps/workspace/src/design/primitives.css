@@ -700,6 +700,27 @@
 .workspace-welcome__step:hover { background: var(--surface-hover); }
 .workspace-welcome__step .value { font-size: var(--fs-11); color: var(--text-tertiary); }
 .workspace-welcome__keys li { display: grid; grid-template-columns: var(--sp-40) minmax(0, 1fr); align-items: center; gap: var(--sp-8); }
+/* A view pushed past the cap (ADR-124 decision 2): centred over the canvas, a shadow and no hairline, as
+   the welcome panel is; the reader's own figure, two ways out. */
+.view-over-cap {
+  position: fixed; z-index: 20; left: 50%; top: calc(var(--h-canvas-toolbar) + var(--sp-24)); transform: translateX(-50%);
+  width: var(--w-right-panel-max); max-width: calc(100% - var(--sp-16)); box-sizing: border-box;
+  max-height: calc(100vh - var(--h-canvas-toolbar) - var(--sp-24)); overflow-y: auto;
+  padding: var(--sp-16); background: var(--surface-raised); border-radius: var(--r-3); box-shadow: var(--overlay-shadow);
+  font-size: var(--fs-13); line-height: var(--lh-13); color: var(--text-primary);
+}
+.view-over-cap__title { margin: 0 0 var(--sp-8); font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 700; }
+.view-over-cap__figure { margin: 0 0 var(--sp-8); font-weight: 600; }
+.view-over-cap__why, .view-over-cap__hint { margin: 0 0 var(--sp-12); color: var(--text-secondary); }
+.view-over-cap__actions { display: flex; gap: var(--sp-8); flex-wrap: wrap; margin-bottom: var(--sp-12); }
+.view-over-cap__form { display: grid; gap: var(--sp-12); }
+.view-over-cap__types { margin: 0; padding: 0; border: 0; display: grid; gap: var(--sp-4); }
+.view-over-cap__types legend { padding: 0; margin-bottom: var(--sp-4); font-size: var(--fs-12); font-weight: 600; color: var(--text-secondary); }
+.view-over-cap__type { display: flex; align-items: center; gap: var(--sp-8); min-height: var(--h-control-24); }
+.view-over-cap__window { display: flex; gap: var(--sp-12); flex-wrap: wrap; }
+.view-over-cap__window label { display: grid; gap: var(--sp-4); font-size: var(--fs-12); color: var(--text-secondary); }
+.view-over-cap__message { margin: var(--sp-12) 0 0; color: var(--text-primary); font-weight: 600; }
+.view-over-cap__reopen { position: fixed; z-index: 20; left: 50%; top: calc(var(--h-canvas-toolbar) + var(--sp-8)); transform: translateX(-50%); }
 /* ADR-115 E6 (DESIGN.md §5a): below 1100px the toolbar's "Last change" note gives its room back. */
 .canvas-toolbar__last-change { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-tertiary); }
 @media (max-width: 1099px) { .canvas-toolbar__last-change { display: none; } }

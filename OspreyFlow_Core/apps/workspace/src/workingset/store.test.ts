@@ -264,3 +264,53 @@ describe("createWorkingSet", () => {
     expect(store.getState().seq).toBe(2);
   });
 });
+
+// ADR-124 U6b (Amendment 9): the open case's view past the cap.
+describe("the over-cap state of the open case", () => {
+  const wouldBe = {
+    error: "limit_exceeded" as const,
+    cap_kind: "nodes" as const,
+    cap: 50_000,
+    would_be: 50_001,
+    options: ["branch", "filter", "promote_to_batch"] as ["branch", "filter", "promote_to_batch"],
+  };
+
+  it("starts clear, is set with the reader's figure, and leaves the graph and the sequence alone", () => {
+    const { graph, store } = createWorkingSet();
+    store.getState().applyDelta({ seq: 3, op: "add", nodes: [makeNode("n1")], edges: [] });
+    expect(store.getState().viewOverCap).toBeNull();
+
+    store.getState().setViewOverCap(wouldBe);
+
+    expect(store.getState().viewOverCap).toEqual(wouldBe);
+    expect(graph.order).toBe(1);
+    expect(store.getState().seq).toBe(3);
+  });
+
+  it("is cleared by the next snapshot", () => {
+    const { store } = createWorkingSet();
+    store.getState().setViewOverCap(wouldBe);
+
+    store.getState().applyDelta({ seq: 9, op: "snapshot", nodes: [makeNode("n1")], edges: [] });
+
+    expect(store.getState().viewOverCap).toBeNull();
+  });
+
+  it("is not cleared by a delta that is not a snapshot", () => {
+    const { store } = createWorkingSet();
+    store.getState().setViewOverCap(wouldBe);
+
+    store.getState().applyDelta({ seq: 4, op: "add", nodes: [], edges: [] });
+
+    expect(store.getState().viewOverCap).toEqual(wouldBe);
+  });
+
+  it("is cleared when the open case changes", () => {
+    const { store } = createWorkingSet();
+    store.getState().setViewOverCap(wouldBe);
+
+    store.getState().resetCase();
+
+    expect(store.getState().viewOverCap).toBeNull();
+  });
+});

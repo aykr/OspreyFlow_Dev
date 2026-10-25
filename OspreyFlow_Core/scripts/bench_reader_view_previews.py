@@ -22,6 +22,13 @@ and a link from each, through the store's script on Valkey), and then:
                 `WorkingSetService.restore` of its whole membership over itself: each writes tens
                 of thousands of elements, in scripts of at most 1,000, and the figure is the
                 longest single script (how long Valkey is held at once);
+  --forward     what the live forward adds to each pushed delta (ADR-124 decision 2, "the cost
+                on the live path"): a delta that adds a node the reader can read makes the forward
+                recount that reader's projected view against the caps, from the counted index.
+                `--sockets` simulated readers are open at once and each gets each of `--deltas`
+                additions; the figures are the median and the worst of that recount per delta (the
+                slowest socket's, started at once as the sockets' own tasks are), against a case
+                of `--nodes` nodes;
   --expand      `WorkingSetService.expand` end to end for an expansion that returns 500 new nodes
                 (and a link from each): the figures, the choice of asking for the links among
                 them, the cap and the writes to the store and the index. `02_GLASS_FRONTEND.md` §5
@@ -62,7 +69,7 @@ from services.api.working_set.access_index import (
     signature_id,
     signature_of,
 )
-from services.api.working_set.models import MAX_EDGES, MAX_NODES
+from services.api.working_set.models import MAX_EDGES, MAX_NODES, DeltaAdd
 from services.api.working_set.service import WorkingSetService
 from services.api.working_set.store import ValkeyWorkingSetStore
 from valkey.asyncio import Valkey
@@ -223,8 +230,7 @@ class _StubGraph:
         return [
             n
             for n in found
-            if n is not None
-            and principal_may_read(n.handling, n.datasets, principal, self._scheme)
+            if n is not None and principal_may_read(n.handling, n.datasets, principal, self._scheme)
         ]
 
     async def get_edges(self, edge_ids: Sequence[str], principal: Principal) -> list[Edge]:
@@ -298,6 +304,12 @@ async def run(args: argparse.Namespace) -> int:
         store = _MemoryStore()
     case = f"{PREFIX}{uuid.uuid4().hex[:8]}"
     branched = f"{case}-branch"
+    if args.forward:
+        # Each delta adds a node: stay under the node cap, or the recount measured is a refusal's.
+        room = MAX_NODES - args.deltas - 10
+        if args.nodes > room:
+            args.nodes = room
+            print(f"loading {args.nodes:,} nodes, to stay under the cap")
     if args.expand or args.branch or args.restore:
         # The write-cost step adds 500 nodes and 500 links first, and each expansion 500 more; leave
         # room under the caps for all of them, or the first refusal ends the run (it would be the
@@ -375,6 +387,36 @@ async def run(args: argparse.Namespace) -> int:
                 f"({name}, {elements} elements); the most elements in one: "
                 f"{max(run[1] for run in runs)}"
             )
+
+        if args.forward:
+            readers = [
+                READER.model_copy(update={"id": f"bench-reader-{i}"}) for i in range(args.sockets)
+            ]
+            worst_per_delta: list[float] = []
+            every: list[float] = []
+            for step in range(args.deltas):
+                added = make_node(args.nodes + 1 + step + (step % HIDDEN_EVERY == 0))
+                await scoped.add_nodes(case, [added])
+                pushed = DeltaAdd(seq=step + 1, nodes=[added])
+
+                async def recount(reader: Principal, pushed: DeltaAdd = pushed) -> float:
+                    projected = service.project_delta(pushed, reader)
+                    began = time.monotonic()
+                    await service.over_cap_after(case, projected, reader)
+                    return time.monotonic() - began
+
+                took = await asyncio.gather(*(recount(r) for r in readers))
+                every.extend(took)
+                worst_per_delta.append(max(took))
+            print(
+                f"forward recount, {args.sockets} sockets, {args.deltas} deltas on "
+                f"{args.nodes:,} nodes: per delta, median "
+                f"{statistics.median(worst_per_delta) * 1000:,.1f} ms and worst "
+                f"{max(worst_per_delta) * 1000:,.1f} ms (the slowest socket's); over every "
+                f"socket and delta, median {statistics.median(every) * 1000:,.1f} ms and worst "
+                f"{max(every) * 1000:,.1f} ms"
+            )
+            return 0
 
         if args.branch or args.restore:
             # What the working set does in bulk: a branch writes the whole visible case into a new
@@ -498,6 +540,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="time a restore of the whole case, and its longest script",
     )
+    parser.add_argument(
+        "--forward",
+        action="store_true",
+        help="time the live forward's recount of the reader's view per pushed delta",
+    )
+    parser.add_argument("--sockets", type=int, default=6, help="simulated readers for --forward")
+    parser.add_argument("--deltas", type=int, default=100, help="pushed additions for --forward")
     args = parser.parse_args(argv)
     return asyncio.run(run(args))
 

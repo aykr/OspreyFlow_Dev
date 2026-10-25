@@ -617,6 +617,14 @@ export const WELCOME_ACTIONS = defineActionRegistry("WELCOME_ACTIONS", [
   "close-the-welcome-panel",
 ] as const);
 
+// ADR-124 decision 2 (U6b): the dialog a reader is shown when their own view of the case is past a cap.
+export const VIEW_OVER_CAP_ACTIONS = defineActionRegistry("VIEW_OVER_CAP_ACTIONS", [
+  "see-the-over-cap-dialog-when-the-server-says-the-view-is-too-large",
+  "try-again-from-the-over-cap-dialog-by-keyboard",
+  "choose-a-type-and-open-a-filtered-branch-by-keyboard",
+  "put-the-over-cap-dialog-away-with-escape-by-keyboard",
+] as const);
+
 export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
   "change-the-reports-period-by-keyboard",
   "download-the-figures-by-keyboard",

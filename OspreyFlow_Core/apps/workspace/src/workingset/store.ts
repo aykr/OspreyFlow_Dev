@@ -24,6 +24,7 @@ import type {
   DeltaReplaceEdge,
   DeltaReproject,
   DeltaSnapshot,
+  LimitExceeded,
   WorkingSetDelta,
 } from "./models";
 
@@ -89,6 +90,12 @@ export interface WorkingSetStoreState {
    * cluster-collapse sweep reads its `affected_cluster_ids`. The change summary no longer reads
    * it: `ThresholdControl` takes its figures from the answer to its own request. */
   lastReproject: DeltaReproject | null;
+  /** ADR-124 decision 2: the reader's own figure when the server has said their view of the open
+   * case is past a cap, else `null`. Set by `setViewOverCap`; cleared by the next snapshot and
+   * when the case changes. Nothing is applied to the graph while it is set: the server sends no
+   * further delta until the reader tries again. */
+  viewOverCap: LimitExceeded | null;
+  setViewOverCap: (wouldBe: LimitExceeded) => void;
   applyDelta: (delta: WorkingSetDelta) => void;
   /** The open case changed: nothing is known of what the next one withholds. */
   resetCase: () => void;
@@ -215,11 +222,17 @@ export function createWorkingSet(): WorkingSet {
     seq: 0,
     withheld: false,
     lastReproject: null,
+    viewOverCap: null,
+    setViewOverCap: (wouldBe) => set({ viewOverCap: wouldBe }),
     applyDelta: (delta: WorkingSetDelta) => {
       applyDeltaToGraph(graph, delta);
-      set((state) => nextStoreState(state, delta));
+      set((state) => ({
+        ...nextStoreState(state, delta),
+        // A snapshot is the answer to trying again: the view is under the cap now.
+        viewOverCap: delta.op === "snapshot" ? null : state.viewOverCap,
+      }));
     },
-    resetCase: () => set({ withheld: false }),
+    resetCase: () => set({ withheld: false, viewOverCap: null }),
   }));
 
   return { graph, store };

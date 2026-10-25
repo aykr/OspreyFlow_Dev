@@ -123,6 +123,7 @@ import {
   type SocketLike,
 } from "./workingset/deltaClient";
 import { createWorkingSet } from "./workingset/store";
+import { applyRestoredSnapshot, ViewOverCapGate } from "./workingset/ViewOverCapGate";
 
 // **An empty base URL means same-origin, and that is what a rendered
 // deployment builds with** (05_DEPLOYMENT.md §2.6 item 1, owner's decision
@@ -198,6 +199,11 @@ export function App() {
   // Read from the store itself, not copied into this component's own state by a subscription that a
   // change of case tears down: the reset on a new case would then never reach the bar.
   const withheld = useStore(workingSetRef.current.store, (s) => s.withheld);
+  // ADR-124 decision 2: the server says the reader's own view is past a cap, and sends nothing
+  // more until they try again. `ViewOverCapGate` shows the dialog; this holds the live client it
+  // asks to resync, and a restore's own snapshot asks the same (`applyRestoredSnapshot`).
+  const deltaClientRef = useRef<DeltaClient | null>(null);
+  const resyncFromNothing = useCallback(() => deltaClientRef.current?.requestResync(null), []);
   const glassCanvasRef = useRef<GlassCanvasHandle>(null);
   const [groupedCount, setGroupedCount] = useState(0);
   // How many judgements rest on each node, drawn as a small count beside it (ADR-070).
@@ -851,12 +857,17 @@ export function App() {
             new WebSocket(
               `${wsUrl}/v1/investigations/${investigationId}/stream?ticket=${encodeURIComponent(body.ticket)}`,
             ) as unknown as SocketLike,
-          { onDelta: (delta) => workingSet.store.getState().applyDelta(delta) },
+          {
+            onDelta: (delta) => workingSet.store.getState().applyDelta(delta),
+            onViewOverCap: (wouldBe) => workingSet.store.getState().setViewOverCap(wouldBe),
+          },
         );
+        deltaClientRef.current = client;
       });
     return () => {
       cancelled = true;
       client?.close();
+      deltaClientRef.current = null;
       unsubscribe();
     };
   }, [investigationId, bearerToken, handleUnauthenticatedResponse]);
@@ -1349,7 +1360,9 @@ export function App() {
                 bearerToken={bearerToken}
                 investigationId={investigationId}
                 nodeCount={counts.nodes}
-                onRestored={(snapshot) => workingSetRef.current.store.getState().applyDelta(snapshot)}
+                onRestored={(snapshot) =>
+                  applyRestoredSnapshot(workingSetRef.current.store, resyncFromNothing, snapshot)
+                }
                 onClose={() => {
                   setWelcomeOpen(false);
                   if (principal?.sub) setWelcomeDismissed(principal.sub, true);
@@ -1770,6 +1783,17 @@ export function App() {
           groupedCount={groupedCount}
         />
       )}
+      {bearerToken && investigationId && (
+        <ViewOverCapGate
+          store={workingSetRef.current.store}
+          requestResync={resyncFromNothing}
+          entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
+          apiBaseUrl={API_BASE_URL}
+          bearerToken={bearerToken}
+          investigationId={investigationId}
+          onBranchOpened={(id) => openCase(id)}
+        />
+      )}
       <ProposedTypes
         apiBaseUrl={API_BASE_URL}
         bearerToken={bearerToken}
@@ -1861,7 +1885,7 @@ export function App() {
         apiBaseUrl={API_BASE_URL}
         bearerToken={bearerToken}
         onRestored={(snapshot) =>
-          workingSetRef.current.store.getState().applyDelta(snapshot)
+          applyRestoredSnapshot(workingSetRef.current.store, resyncFromNothing, snapshot)
         }
       />
       <ExportPanel
