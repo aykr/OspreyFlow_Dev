@@ -17502,3 +17502,233 @@ delegation of 24 October 2026.
 
   It is recorded in the demo run-sheet.
 
+
+## ADR-127 — What the Ingest Studio needs to load the Prison Intelligence Dataset — ACCEPTED (design)
+
+**Status.** Accepted on 25 October 2026 under the owner's delegation for Brief 2 ("Yes go ahead and
+accept those ADRs"), after an adversarial review. Each decision below is recorded as decided under
+that delegation, and reported to the owner.
+
+**Context.** Brief 2 builds the Studio recipes that load the Prison Intelligence Dataset (PID), thirteen in the brief and seventeen once Brief 1's four unnamed files are counted (decision 12):
+- the case is loaded by the Studio's own recipes, in the data engineer's name;
+- one recipe, the intelligence reports, runs live in chapter 4;
+- a second seized-phone batch fires a hotlist alert in chapter 9;
+- the demo is rehearsed by reverting those two loads.
+
+Stage 0 settled seven spikes with throwaway tests against the real engine, run pure on the
+working-set fakes and DuckDB, and live on ArcadeDB, Postgres and Valkey for S7. Five show the engine
+lacks what the brief assumed, and two more gaps were found on the way: a load cannot be reverted, and
+a link cannot be a span. The spec is silent or wrong on each (rule 11).
+
+| Spike | What the test showed |
+| --- | --- |
+| S1 | A `Document` entity carrying `content` passes Map save and then fails the run: `OntologyError: edge type 'HOLDS' does not permit from='Document'`. The only working shape, a `Person` holding the text, writes a separate content `Document`, and no edge in the row can name it (`engine.py` resolves edge ends only from `refs`). An edge naming an undeclared ref is accepted, then writes nothing, silently. |
+| S2 | `geo_bins` puts all 262 throw-overs in one cell at every allowed precision (8, 10, 12: cells of 0.70° to 0.044°), because the yards lie within 0.002° of each other. The Glass's hotspot panel already ranks events by `cross_filter` on `target_id` (`map/HotspotHistogram.tsx`). Over a real R10 run it gives the four hotspot yards 136 of 262 (36, 35, 35, 30). |
+| S3 | An account reference bound untransformed is accepted at Map save, Verify and run, and stored as written: `SYN-70417`, `syn-70417` and `SYN-70417 ` become three `Endpoint`s. `iban` refuses every row. No account adapter exists. |
+| S4 | `09_INGEST_STUDIO.md` §4 says "a column can carry" handling. The engine cannot: `{field: ...}` for any handling field passes Map save, then fails the whole run with a pydantic `ValidationError` in `engine._handling`. The `S2` row of the real reports file loads unmarked. Brief 1's files carry six handling columns per row on 17 of 18 files. |
+| S5 | A second run of the same 2,000 PIN rows creates no nodes and no link pairs, because the outside number is matched by reference. But it doubles every link's occurrence count (2,000 to 4,000), because same-pair links merge their occurrences, and it returns every analytics event again. De-duplication works only within one file. |
+| S6 | Passes. A visitor (R3) and a payer (R7) are one `Person`, matched on `nino`, in either order. `find_node` is filtered by the caller's access, so a node hidden from the loader is not found and a second is made. |
+| S7 | A hotlist alert fires from the Studio run route, names the rule and the identifier, and names the source file through the matched node's provenance (the B13 precedent), and its jump opens a linked case. But: (a) evaluation sees only the nodes a run **creates** (`created_node_ids`); the coordinator's number already exists after R5, so batch 2 only references it and no alert fires (live: an alert fired only because the run made a second copy of the number); (b) a hotlist typed `07700 900640` never matches the stored `+447700900640`. |
+| Found | The engine writes every link's interval as one instant (`valid_from = valid_to`, `engine.py` 865-867 and 1126-1128), but custody (`HELD_AT`) and cell stays (`PRESENT_AT`) are spans with separate start and end columns (ADR-120 Amendment 9). |
+| Found | A Studio load cannot be reverted. `revert_load` exists but has no caller, no `LoadRecord` is kept durably (`studio_publish.py`, `load_ledger.py`), analytics events carry no load id, and the analytics port cannot remove events. Brief 2's rehearsal reset has nothing to call. |
+
+**Decisions.**
+
+1. **A `Document` entity can hold its own text (S1).**
+   - **Writing it.** In a row template, `content: {kind: document_text, field: <column>}` on a
+     `Document` entity puts the text in the media store and writes `object_ref` and `media_kind:
+     text` on that `Document` itself. It writes no separate content node and no `HOLDS`.
+   - **Linking to it.** Any edge in the same row may then name it by its ref, so one row gives a
+     report `Document` with `MENTIONED_IN` links from up to three named people, a number and its
+     areas.
+   - **What stays.** The holder shape, `content` on a `Device`, `Endpoint`, `Person` or
+     `Organisation` writing a content `Document` held by `HOLDS`, is unchanged.
+   - **Who reads the text.** The reader, Extract and Questions read it as they read any text
+     `Document` (`document_reader.py`).
+2. **An edge naming a ref the row template does not declare is refused (S1).** It is refused at Map
+   save, with the ref named, and again at run. It never writes nothing silently.
+3. **Handling can come from columns, per element (S4).**
+   - **Which fields.** Each of `classification`, `handling_code`, `action_code`,
+     `sanitisation_code`, `originator` and `owning_unit` may be bound `{field: <column>}` in an
+     element's `handling`, as `09_INGEST_STUDIO.md` §4 already says.
+   - **At Map save.** The binding form is checked: a bound field names a column the source has.
+   - **An empty cell.** It takes the element's default for that field. For `action_code` and
+     `sanitisation_code`, that means none.
+   - **Tighten only, in every part.** Every part of a marking has an order (ADR-102 decision 1,
+     `merge_handling`): classification by level, handling codes by dissemination, action and
+     sanitisation codes by strictness. A row whose bound handling is looser than the element's default
+     in any part is rejected with its cause: the test is `merge_handling(bound, default) != bound`.
+   - **Units.** A bound `owning_unit` or `originator` must be one of the units the recipe declares for
+     its source (a new `units` list beside the source's handling, checked at Map save). A row naming any
+     other unit is rejected with its cause. A restricted code admits readers by unit, so a cell must not
+     be able to hand material to an undeclared unit.
+   - **Undefined codes.** A row whose bound code the handling scheme does not define is rejected with
+     its cause.
+4. **A Knowledge Adapter `account_ref` (S3, rule 8).**
+   - **What it does.** It canonicalises a bank or private-cash account reference: it trims, removes
+     internal spaces, and upper-cases. It refuses an empty value, and any character outside letters,
+     digits, `-` and `/`.
+   - **Tests.** It ships with a golden test file.
+   - **The spec.** `01_DOMAIN_MODEL.md` §7's adapter table gains its row.
+   - **What it is not.** An account is an `Endpoint` of kind `account`, not a FIBO `Account` (the
+     PaySim precedent).
+5. **A recipe remembers the rows it has loaded, per case (S5).**
+   - **What is kept.** For a recipe with `deduplicate`, each loaded row's key (its fields
+     canonicalised, then hashed, as `01_DOMAIN_MODEL.md` §7 rule 2 already requires) is kept in
+     Postgres, with the recipe id, the case and the load id. At 1,000,000 rows that is about 100 MB
+     with its index.
+   - **On a later run.** A later run of the same recipe into the same case skips a row whose key is
+     kept, whatever the recipe's version. The load report counts these rows as `rows_already_loaded`.
+     A re-run of the same file therefore creates nothing, adds no occurrence and loads no event.
+   - **A corrected mapping.** A new version does not apply itself to rows already loaded: revert the
+     earlier load (decision 6), which releases its keys, then run the new version.
+   - **Another case.** A different case keeps its own keys, so it gets its own events. Its run also
+     adds occurrences to the graph's shared links where the two cases read the same dataset. That
+     double count is recorded as a limitation with no owner yet; the PID gives each dataset one case.
+   - **No `deduplicate`.** A recipe without it keeps no keys, and loads every row every time, as
+     today.
+6. **A Studio load is kept, and can be reverted (found).**
+   - **The record.** Each run's `LoadRecord` is kept in the run ledger (`recipe_runs`) beside the run.
+     It lists the nodes the load created, the links it created, and, separately, the existing links
+     it merged occurrences into.
+   - **Events.** Every analytics event carries the `load_id` that wrote it.
+   - **The analytics port** gains `retract_load(load_id)`, which removes that load's events. It is
+     written conformance first, on DuckDB and ClickHouse (rule 1).
+   - **The revert.** `python -m scripts.revert_load <load_id> --reverted-by <principal id>` is an
+     operator's module, like the other operational scripts. The given principal is recorded as
+     `reverted_by` in the ledger and the audit trail. It refuses a load already reverted.
+   - **It refuses a load that merged into links it did not create,** naming them. Reverting those
+     links would take back other loads' data, and their occurrence counts cannot be split. The three loads
+     Brief 2's reset reverts create every link they write: the live reports (R9), the report-incident
+     links loaded at the same chapter 4 moment (`pid_report_incidents.csv`; each link ends at a new
+     report `Document`), and the second seized-phone batch (new handsets and SIMs).
+   - **What a revert does.** For a load it may revert:
+     - marks its created nodes and links reverted through `revert_load` (the access step's
+       `has("reverted", false)` then leaves them out of every read);
+     - removes its events through `retract_load`;
+     - releases its row keys (decision 5);
+     - removes its created node and link ids from every working set holding them, through a new
+       working-set service method for a revert. It is not limited by any reader's clearance, because it
+       removes the load's own ids; it finds every case holding them; and it sends each a `DeltaRemove`
+       with `node_ids`, `edge_ids` and the record (ADR-124 decision 4), so every reader is sent the
+       removal projected for them and no canvas or snapshot keeps a reverted element. The existing
+       `remove` is unsuitable: it takes node ids only and removes only what one reader may read.
+7. **A hotlist sees what a run touches, in its canonical form (S7).**
+   - **(a) What evaluation sees.** A run's change-stream entry carries the nodes it references as
+     well as those it creates. This holds for the Studio run route and the scheduled pipeline path
+     (`pipeline_run.py`). So a hotlisted number that a run links to, but did not create, raises an
+     alert. Who may see an alert is unchanged (the evaluation's own access checks).
+   - **No silent cut.** Evaluation reads an entry's nodes in chunks of
+     `MAX_TOUCHED_NODES_PER_EVALUATION` (200) until all are read, instead of stopping at the first 200
+     (rule 2).
+   - **Monitors** read the same entries, so a monitor now also sees nodes a run references. That is
+     the intended reading of "a run touched this node".
+   - **(b) Canonical identifiers.** A hotlist's identifier is canonicalised on entry through the
+     Knowledge Adapter for its kind. A phone number goes through `msisdn`, so `07700 900640` is stored
+     as `+447700900640`, and the form the analyst typed is kept for display.
+   - **Existing hotlists** are canonicalised once, when the store connects (idempotent). Their original
+     text becomes the displayed form. A row the adapter refuses is kept as written, matches as before,
+     and is logged and counted.
+8. **The alert names the source file through provenance (S7).** As B13 does, the alert's matched node
+   names the file it was loaded from, in `provenance.sources[*].document_id`. No `Document` node is
+   written for a plain recipe. The demo script's "the document" is that source file and row.
+9. **Hotspots at one site are counted per yard (S2).**
+   - **No engine change.** The Glass's hotspot panel, a `cross_filter` on `target_id` over link
+     types that end at a `Location`, is the site-scale mechanism. It gives the four hotspot yards 136
+     of 262 over a real R10 run.
+   - **The heat layer.** `geo_bins` keeps its precision ceiling and serves regional scale.
+   - **The brief.** Brief 2's S2 check ("`geo_bins` returns the four hotspot cells") is wrong about
+     the repository, and is restated as that `cross_filter`.
+   - **The point.** A throw-over's event takes the point on its own row (Brief 1 writes each within
+     about 5 m of its yard's centre), as ADR-120 Amendment 7 already has it.
+10. **One principal loads the case (S6).** Because `find_node` is filtered by the loader's access, the
+    seed runs every PID recipe as the one data-engineer principal, scoped to the case's datasets and
+    cleared for everything the case holds. Otherwise a node hidden from a later loader would be made
+    again.
+
+11. **A link can be a span (found).**
+    - **Binding it.** A link may bind `valid_from` and `valid_to` from two columns. An empty `valid_to`
+      means the span is still open.
+    - **Its event.** The link's analytics event is at its `valid_from`. Playback, which lights a link at
+      its first event, suits this.
+    - **A limitation, recorded.** The timeline brush and the cross-filter select events by window, so a
+      span that began before the brushed window and runs through it is dimmed although it was in force.
+      Chapter 7's January to April brush therefore dims the custody and cell-stay links of every stay
+      that began earlier. Events that carry an end, matched by overlap, would fix it; that changes every
+      analytics read path and is its own decision, with no owner yet.
+    - **What stays.** A link bound to one instant keeps `valid_from = valid_to`, as today.
+12. **Brief 1's other load shapes need recipes, not engine changes,** except where marked:
+
+    | Addition (`LOAD_SHAPES`, `ENTITY_SHAPES`) | What it needs |
+    | --- | --- |
+    | Per-row handling on 17 of 18 files, and the SECRET conflict link | decision 3 |
+    | A report naming up to three subjects, a phone and up to three areas | decision 1 (one row, several `MENTIONED_IN`, each gated `when: not_null`) |
+    | Report subjects matched on National Insurance number | recipe (matching on `nino` works, S6) |
+    | A place's second parent (`parent_ref_2`, a zone) | recipe (a second `PART_OF`, gated) |
+    | Places beyond R11's five kinds (zone, hall, place) | recipe (`when` on `place_kind`) |
+    | Custody and cell-stay spans | decision 11 |
+    | A visitor's date of birth | recipe |
+    | A prisoner's `aliases` (`string[]`) | **not settled**: whether a list cell binds needs a check in unit R1, and an amendment if it is an engine change |
+    | The four files Brief 2 does not name (cell stays, conflicts, number owners, report incidents) | recipes; the recipe count rises from thirteen |
+    | The five inferred `PASSES_ITEMS_TO` links and the pictures | not recipes: the seed writes them through the graph port and the picture route (ADR-120 D8; Brief 2 §7.1) |
+
+**What it costs.**
+- **Spans:** decision 11, an engine change.
+- **A working-set revert removal:** decision 6, a new service method.
+- **Evaluation without a cap per entry:** decision 7. R5's run references about 2,500 nodes, evaluated
+  synchronously in the run route.
+- **Engine:** decisions 1 to 3, the content, ref and handling changes.
+- **A new adapter:** decision 4.
+- **Postgres tables:** for decisions 5 and 6.
+- **An analytics port method:** with its conformance cases, on two adapters.
+- **The hotlist store and evaluation:** decision 7.
+
+**Rule 3 holds.**
+- **The handling the reader sees.** Decision 3 tightens or keeps it, never loosens it.
+- **Evaluation.** Decision 7(a) changes which nodes are evaluated, not who sees an alert.
+- **Reverts.** Decision 6's revert marks elements reverted and retracts events; it never deletes graph
+  history.
+
+**Units** (each red first, reviewed, then committed; one writer at a time, rule 14):
+- **B2-1:** decisions 1 and 2, with the S1 spike test as the acceptance test.
+- **B2-2:** decision 3, with the real reports file's `S2` row.
+- **B2-3:** decision 4, the adapter and its golden file.
+- **B2-4:** decision 6, conformance first for `retract_load`.
+- **B2-5:** decision 5.
+- **B2-6:** decision 7.
+- **B2-7:** decision 11.
+- **Then the recipes:**
+  - R1 and R9 by the coordinator;
+  - R2 to R8 and R10 to R13 by the writer, from those templates, and R14 to R17 for the four files the
+    brief does not name (cell stays, conflicts, number owners, report incidents);
+  - then the seed, the reset and the registration (Brief 2 §7).
+
+**Tests that would fail if these were violated (rule 12).**
+- **Decisions 1 and 2:** the S1 spike test's four wanted outcomes, and a template edge naming an
+  undeclared ref refused at save.
+- **Decision 3:** the reports file's row 3 loads as `S2` and its neighbours do not, and a bound
+  classification below the default is rejected.
+- **Decision 4:** the golden file, and three spellings of one account give one `Endpoint`.
+- **Decision 5:** the S5 test's second run adds nothing (occurrences 2,000 stay 2,000), and the report
+  counts `rows_already_loaded`.
+- **Decision 6:** a reverted load's events are gone from `trend` and `cross_filter` on both adapters,
+  and its keys are released, so a re-run loads again.
+- **Decision 3, loosening:** a bound handling code `P` over a default `R` is rejected, a looser action
+  code is rejected, and a bound unit not declared by the recipe is rejected.
+- **Decision 5, scope:** a second case running the same recipe loads its own events, and a re-run into
+  the same case after a new version still skips loaded rows.
+- **Decision 6, merges and working sets:** a load that merged into an earlier load's link is refused;
+  a reverted load's nodes and links, including ones the operator's principal may not read, leave every
+  working set holding them, with a removal delta.
+- **Decision 7:**
+  - the S7 live test with the coordinator's number preloaded in the case's dataset fires an alert;
+  - a hotlist typed in national form matches, and an existing raw-form hotlist row matches after the
+    store connects;
+  - a run referencing more than 200 nodes still raises an alert for a hotlisted node past the
+    two-hundredth.
+- **Decision 8:** the S7 live test finds the source file in the matched node's `provenance.sources`.
+- **Decision 9:** the S2 spike's `cross_filter` test: the four hotspot yards hold 136 of 262 after a
+  real R10 run (it becomes a recipe test).
+- **Decision 10:** a loader not cleared for an existing node makes a second copy, and the seed's one
+  cleared principal makes none.
+- **Decision 11:** a custody row with an empty end loads an open span, and its event is at the start.
