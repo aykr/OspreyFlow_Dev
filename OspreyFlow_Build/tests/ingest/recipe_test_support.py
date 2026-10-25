@@ -113,6 +113,28 @@ class ValidatingGraph:
                 return SimpleNamespace(id=node.id)
         return None
 
+    async def get_nodes(self, node_ids: Sequence[str], principal: Any) -> list[Any]:
+        """The nodes the ids name, committed ones, each once, ordered by id. Models no access
+        filtering (the class docstring says so): `BlindGraph` in
+        `test_load_record_created_and_merged.py` is the one that shows the loader nothing."""
+        known = {n.id for n in self.committed_nodes}
+        return [SimpleNamespace(id=i) for i in sorted(set(node_ids) & known)]
+
+    async def get_edges(self, edge_ids: Sequence[str], principal: Any) -> list[Any]:
+        """The committed links the ids name, each once, ordered by id. Models no access filtering
+        (the class docstring says so); `BlindToEdges` in `test_load_record_created_and_merged.py`
+        is the one that shows the loader nothing."""
+        known = {e.id for e in self.committed_edges}
+        return [SimpleNamespace(id=i) for i in sorted(set(edge_ids) & known)]
+
+    async def existing_node_ids(self, node_ids: Sequence[str]) -> set[str]:
+        """The ids that name a node, committed or open, whoever may read it: the port's internal,
+        unfiltered check (the class docstring says this stand-in models no access filtering, so it
+        is the same answer either way; `BlindGraph` in `test_load_record_created_and_merged.py` is
+        the one that hides nodes from `get_nodes`)."""
+        known = {n.id for n in [*self.committed_nodes, *self.open_nodes]}
+        return set(node_ids) & known
+
     def _type_of(self, node_id: str) -> str | None:
         for node in [*self.committed_nodes, *self.open_nodes]:
             if node.id == node_id:

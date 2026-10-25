@@ -98,6 +98,18 @@ class GraphPort(Protocol):
         is a sequence of characters and would be read as one-character ids."""
         ...
 
+    async def existing_node_ids(self, node_ids: Sequence[NodeId]) -> set[NodeId]:
+        """ADR-127 decision 6. Which of `node_ids` name a node already in the store, **whatever the
+        caller may read**: no principal, no access step. For the recipe engine's write path alone,
+        to tell a node an upsert merges into from one it creates (a content `Document`'s id is the
+        hash of its bytes, so the same text from another load, holder or upload names the same
+        node). It answers what `upsert_nodes` would do, which looks the id up unfiltered, so it
+        includes a node that is reverted or superseded: a write to its id merges into it. A
+        route must never call it, or any caller could ask whether an id exists
+        (`tests/test_unfiltered_node_lookup_confined.py`). Each id once however often given; no ids
+        give the empty set; a bare `str` is a `TypeError`, as for `get_nodes`."""
+        ...
+
     async def get_edges(self, edge_ids: Sequence[EdgeId], principal: Principal) -> list[Edge]:
         """`get_nodes`, for links. A link comes back only when the link *and both its ends* pass
         the access step (rule 3): a readable link to a hidden end is left out as a hidden link is,

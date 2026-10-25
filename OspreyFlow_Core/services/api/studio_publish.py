@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Protocol
 
 import yaml
 from services.ingest.engine import (
@@ -51,7 +53,13 @@ from schemas.ingest import (
     StudioRecipeStatus,
 )
 
-from .rule_evaluation import PreCommitVerdict, RuleGate, alert_handling, held_rows_for
+from .rule_evaluation import (
+    PreCommitVerdict,
+    RuleGate,
+    RuleWrites,
+    alert_handling,
+    held_rows_for,
+)
 from .studio_profile import _read_rows as _read_recipe_rows
 from .studio_profile import connector_for
 
@@ -275,6 +283,27 @@ async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROO
     return relative_path
 
 
+class LoadSink(Protocol):
+    """Where a load tells the run ledger what it has done, as it does it (ADR-127 decision 6): the
+    record when the graph commits, so a failure in anything after still leaves it, and the geometry
+    refs about to be inserted. `services/api/load_records.LedgerSink` writes them to the ledger."""
+
+    async def committed(self, report: LoadReport, *, source: str) -> None: ...
+
+    async def geometries(self, load_id: str, refs: Sequence[str]) -> None: ...
+
+    async def rule_writes(
+        self,
+        load_id: str,
+        *,
+        node_ids: Sequence[str],
+        created_edge_ids: Sequence[str],
+        merged_edge_ids: Sequence[str],
+    ) -> None: ...
+
+    async def uncovered(self, load_id: str) -> None: ...
+
+
 async def run_published_recipe(
     draft: StudioRecipeDraft,
     principal: Principal,
@@ -289,6 +318,7 @@ async def run_published_recipe(
     media: MediaStore | None = None,
     rules: RuleGate | None = None,
     scheme: HandlingScheme | None = None,
+    sink: LoadSink | None = None,
 ) -> LoadReport:
     """§8: "Loader: run a published recipe against a file at or below their
     own clearance" — "a file", not necessarily the one Connect originally
@@ -327,6 +357,7 @@ async def run_published_recipe(
         media=media,
         rules=rules,
         scheme=scheme,
+        sink=sink,
     )
     # The run's events (a call's time, a message's text) go to the analytics store, as every seed's
     # do; they were dropped here, so nothing loaded through the Studio reached the timeline,
@@ -352,11 +383,16 @@ async def run_published_recipe(
                 version=POINT_GEOMETRY_VERSION,
             )
         }
-        await analytics.load_geometries([p for p in points if p.geometry_ref not in held])
+        fresh = [p for p in points if p.geometry_ref not in held]
+        # Recorded before they are inserted (ADR-127 decision 6): a failure between the two leaves
+        # refs that are absent, which a revert removes nothing for, never a point nothing records.
+        if sink is not None and fresh:
+            await sink.geometries(load_id, [p.geometry_ref for p in fresh])
+        await analytics.load_geometries(fresh)
     # ADR-109 ruling 1: the case's post-commit rules, once the load's events can be read with it.
     if rules is not None:
         report.rule_notes.extend(
-            await rules.post_commit(events, load_id=load_id, written=rules.last_written)
+            await post_commit_notes(rules, events, load_id=load_id, sink=sink)
         )
     return report
 
@@ -375,6 +411,7 @@ async def load_with_rules(
     rules: RuleGate | None = None,
     row_numbers: list[int] | None = None,
     scheme: HandlingScheme | None = None,
+    sink: LoadSink | None = None,
 ) -> tuple[LoadReport, list[EventRecord], frozenset[int]]:
     """One load in one graph transaction, judged by the case's pre-commit rules before it commits
     (`06_DECISIONS.md` ADR-109 ruling 1). A hit loads with its alert: the `Alert` node is written
@@ -481,6 +518,12 @@ async def load_with_rules(
         await graph.rollback_transaction(tx)
         raise
     await graph.commit_transaction(tx)
+    if rules is not None:
+        _fold_rule_writes(report, verdict.writes)
+    # The load's record, now: the graph holds it, and everything after (the rules, the events, the
+    # points, the resolution jobs, the change stream) can fail without losing what a revert needs.
+    if sink is not None:
+        await sink.committed(report, source=source)
 
     if rules is not None:
         await rules.after_commit(verdict)
@@ -491,3 +534,45 @@ async def load_with_rules(
         rules.last_written = written
         await rules.record_expiries(written)
     return report, events, skip
+
+
+def _fold_rule_writes(report: LoadReport, writes: RuleWrites) -> None:
+    """What the pre-commit rules wrote into the load's transaction (an `Alert`, its links, what the
+    finding wrote alongside) belongs to the load (ADR-127 decision 6), so its record has it. It is
+    kept in the report's `rule_*` fields, not in `created_node_ids` and `touched_edge_ids`, which
+    the change stream and the enrich stage read as what the recipe wrote: monitors must not see an
+    alert as a new ingest node. A link a rule merged into one this load created is the load's own,
+    not a merge into another load's."""
+    report.rule_node_ids.extend(writes.node_ids)
+    report.rule_created_edge_ids.extend(writes.created_edge_ids)
+    own = {*report.created_edge_ids, *report.rule_created_edge_ids}
+    for edge_id in writes.merged_edge_ids:
+        if edge_id in own or edge_id in report.rule_merged_edge_ids:
+            continue
+        report.rule_merged_edge_ids.append(edge_id)
+
+
+async def post_commit_notes(
+    rules: RuleGate,
+    events: Sequence[EventRecord],
+    *,
+    load_id: str,
+    sink: LoadSink | None,
+) -> list[str]:
+    """The case's post-commit rules, and what they wrote told to the load's record (ADR-127
+    decision 6): an alert raised after the commit is written in a transaction of its own, so it is
+    not in the record the commit made. Best effort as the rules are: whatever was written before a
+    rule failed is still recorded."""
+    writes = RuleWrites()
+    try:
+        return await rules.post_commit(
+            events, load_id=load_id, written=rules.last_written, writes=writes
+        )
+    finally:
+        if sink is not None and writes:
+            await sink.rule_writes(
+                load_id,
+                node_ids=writes.node_ids,
+                created_edge_ids=writes.created_edge_ids,
+                merged_edge_ids=writes.merged_edge_ids,
+            )

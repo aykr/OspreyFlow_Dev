@@ -85,6 +85,7 @@ from .builders import (
     SuggestLocationsBuilder,
     SuggestNodesBuilder,
     render_edges_among_gremlin,
+    render_existing_ids_sql,
     render_get_edges_gremlin,
     render_get_nodes_gremlin,
     render_link_structure_gremlin,
@@ -658,6 +659,20 @@ class GraphArcadeDBAdapter:
                 node = node_from_element_map(record)
                 found[node.id] = node
         return [found[node_id] for node_id in sorted(found)]
+
+    async def existing_node_ids(self, node_ids: Sequence[NodeId]) -> set[NodeId]:
+        found: set[NodeId] = set()
+        chunks = _id_chunks(node_ids)
+        types = await self._types_with_unique_id("vertex") if chunks else []
+        for chunk in chunks:
+            rows = await asyncio.gather(
+                *(
+                    self._client.sql(render_existing_ids_sql(t), params={"ids": chunk})
+                    for t in types
+                )
+            )
+            found.update(str(row["id"]) for result in rows for row in result)
+        return found
 
     async def get_edges(self, edge_ids: Sequence[EdgeId], principal: Principal) -> list[Edge]:
         found: dict[str, Edge] = {}

@@ -19,6 +19,12 @@ export type NodeId = string;
 export type CreatedNodeIds = NodeId[];
 export type EdgeId = string;
 export type TouchedEdgeIds = EdgeId[];
+export type CreatedEdgeIds = EdgeId[];
+export type MergedEdgeIds = EdgeId[];
+export type MergedNodeIds = NodeId[];
+export type RuleNodeIds = NodeId[];
+export type RuleCreatedEdgeIds = EdgeId[];
+export type RuleMergedEdgeIds = EdgeId[];
 export type RowsHeld = number;
 export type RuleNotes = string[];
 
@@ -46,6 +52,12 @@ export interface LoadReport {
   rejections?: Rejections;
   created_node_ids?: CreatedNodeIds;
   touched_edge_ids?: TouchedEdgeIds;
+  created_edge_ids?: CreatedEdgeIds;
+  merged_edge_ids?: MergedEdgeIds;
+  merged_node_ids?: MergedNodeIds;
+  rule_node_ids?: RuleNodeIds;
+  rule_created_edge_ids?: RuleCreatedEdgeIds;
+  rule_merged_edge_ids?: RuleMergedEdgeIds;
   rows_held?: RowsHeld;
   rule_notes?: RuleNotes;
   [k: string]: unknown;

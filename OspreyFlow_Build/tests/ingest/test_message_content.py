@@ -15,6 +15,7 @@ a fake refuses what the real store refuses)."""
 from __future__ import annotations
 
 from collections.abc import Sequence
+from types import SimpleNamespace
 from typing import Any
 
 from services.ingest.engine import run_recipe
@@ -36,6 +37,13 @@ class RecordingGraph:
 
     async def find_node(self, *args: Any, **kwargs: Any) -> None:
         return None
+
+    async def get_nodes(self, node_ids: Sequence[str], principal: Principal) -> list[Any]:
+        known = {n.id for n in self.nodes}
+        return [SimpleNamespace(id=i) for i in sorted(set(node_ids) & known)]
+
+    async def existing_node_ids(self, node_ids: Sequence[str]) -> set[str]:
+        return set(node_ids) & {n.id for n in self.nodes}
 
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: object) -> list[str]:
         for n in nodes:

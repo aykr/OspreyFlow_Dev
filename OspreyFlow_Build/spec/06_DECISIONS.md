@@ -17882,3 +17882,94 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
     released into a case where its load no longer exists.
   - **A load written before events carried `load_id`** is refused: its events cannot be retracted, and
     a revert that removed none would leave them moving every trend.
+
+### ADR-127, Amendment 6 (25 October 2026) — B2-4b: the load record
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **Where it is kept, and when.** A run's load records are kept in the run ledger, in
+  `recipe_runs.load_records`. Each is written when its load's graph transaction commits, before any
+  stage that follows (events, geometries, post-commit rules, resolution jobs, the change stream), so a
+  load that committed has a record even when a later stage or a later branch fails. A plain run has one;
+  a pipeline run has one per branch, under the branch's own `load_id` and with the branch's own source.
+  A release of held rows is a ledger run of its own (trigger `release`), started before the release
+  loads, whose record names `released_from`. A record made before this unit has no `events_stamped`,
+  which reads as false.
+- **Created and merged links.** A link is recorded as created when the store keeps the id the load sent,
+  and as merged when the store returns an earlier link's id. A load's second write to a link it created
+  itself is neither. A `HOLDS` link's id is fixed by its two ends, so the store cannot say which
+  happened: it is recorded as created only when the load also created its holder, otherwise as merged.
+  That errs towards refusing a revert, never towards taking back another load's link.
+- **Created and merged nodes.** A node whose id is fixed by its content (a held content Document,
+  `content:<sha>`, shared with Files-tab uploads) may already exist. Whether it does is asked of
+  `GraphPort.existing_node_ids`, a new port method that ignores the caller's clearance, because a node
+  the loader cannot read must still count as existing: recorded as created only when absent, otherwise
+  as merged (`merged_node_ids`). It names reverted and superseded nodes too, because the adapter's
+  upsert merges into them. It is internal: only the ingest engine may call it
+  (`tests/test_unfiltered_node_lookup_confined.py`). Its answer feeds the record only. The counts a
+  loader is shown, of nodes and of links, come from what the loader can read: a node or link the store
+  merged into counts as created unless the loader can read it, so no count says whether something the
+  loader cannot read exists. Two loaders writing the same new content at once could both record it as created;
+  decision 10's single loader rules that out.
+- **Rule-written elements.** An `Alert`, its `ALERTED_ON` links and the pending elements a typology
+  rule writes for a load, before or after its commit, are recorded in that load's record as created,
+  or as merged where the rule's write merged into an earlier link.
+  They are kept out of the lists the change stream and the enrich stage read. Alert queue rows are in no
+  record.
+- **Geometry points.** The record lists the geometry refs the load inserted that were not already
+  present.
+- **Pipeline branches.** A branch whose extract or enrich stage wrote a node, link or point is marked
+  `uncovered_writes`, because those writes are in no record.
+- **No route returns a record or its id lists.** The ledger routes read `RecipeRun`, which has no record
+  fields (`tests/services/api/test_run_ledger_read_side.py`). The Studio run, pipeline and release
+  routes return counts, not the created, merged or touched id lists, because the store's write path is
+  not access-filtered: a merged link's id would tell the loader that a link they may not read existed.
+- **Decided now for the revert (B2-4c):**
+  - the revert reads the record's id lists, never the `load_id` on stored elements, because a merge
+    rewrites an existing link's `load_id` to the merging load's;
+  - it refuses a record without `events_stamped` (Amendment 5), a record with merged nodes or links, and
+    a branch marked `uncovered_writes`, naming each; a pipeline run's id means every branch, and one
+    branch's id that branch alone;
+  - the alert queue rows of an alert the revert removes are closed with it, so the queue names no
+    reverted alert;
+  - a write onto a reverted node is a fresh create: the adapter clears `reverted` and takes the new
+    body, and `existing_node_ids` then excludes reverted nodes, as `_find_existing_edge` already
+    excludes reverted links. Without this, the reset's revert and re-run of a load holding content
+    would leave the re-run's Document hidden, and record it as merged.
+
+### ADR-102, Amendment 3 (25 October 2026) — a link merges only within one audience
+
+**The owner's ruling** (25 October 2026, choosing option C of five: "go with C"). It overturns the part
+of ADR-102 decision 1 that merged every write of a link into one element.
+- **The two leaks it closes.** A merge kept the first write's owning unit and originator while taking
+  the later write's properties, so a link restricted to one unit could carry another unit's row. And a
+  merge raised a link to the stricter classification, so a reader cleared for the first write saw the
+  link vanish, their path between the two entities lengthen and a degree count drop: a detection
+  through path length and degree, which rule 3 forbids.
+- **The rule.** A write of a link merges into an existing link of the same type between the same two
+  nodes (either way round for an undirected type) only when both are visible to exactly the same
+  principals, judged by every part the access step reads: the same classification, the same handling
+  code, the same set of datasets (ADR-099), and, where the handling code is restricted, the same
+  originator and owning unit (they decide visibility only then). Otherwise the write is stored as a
+  link of its own, and each reader sees only the links their clearance and cases allow. Writes within one audience still merge as before, never lowering the
+  handling (decision 1's order applies to the parts that do not decide the audience).
+- **Where it holds.** In the graph adapter's ordinary and bulk write paths, so it holds however two
+  writes meet: in one load, across loads, from a released held row, or through two declarations of one
+  entity type matched on different fields. It replaces ADR-127 Amendment 2's within-load rejection,
+  which existed only because the store merged across audiences.
+- **What it costs.** A reader cleared for every audience sees two links between one pair, with the
+  occurrences split between them; showing them as one link with both markings is a later Glass unit.
+  Links merged before this amendment stay as they are.
+- **Tests that would fail if it were violated (rule 12),** written in the graph port's conformance suite
+  before the adapter: two writes with one marking make one link with two occurrences; a SECRET write
+  onto an OFFICIAL link makes two links, and the OFFICIAL reader's link, path length, degree and counts
+  are identical before and after; writes under two restricted units make two links, each unit reading
+  only its own; writes in two cases' datasets make two links, each case reading only its own; a reader
+  cleared for both reads both.
+
+### ADR-127, Amendment 7 (25 October 2026) — the owner's ruling on same-pair links
+
+The pending ruling in Amendment 2 ("Pending the owner's ruling, not decided here") is decided by
+ADR-102 Amendment 3 (option C). It is built as unit **B2-4m**, after B2-4b and before B2-4c, because
+it decides which loads merge into others' links and so which a revert can take back. When B2-4m lands,
+Amendment 2's within-load rejection of a later row with a different restricted unit is removed: the
+row is written as a link of its own instead.

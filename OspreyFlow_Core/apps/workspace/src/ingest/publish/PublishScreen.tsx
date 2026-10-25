@@ -10,8 +10,8 @@
 import { useEffect, useState } from "react";
 
 import type {
-  LoadReport,
-  PipelineRunReport,
+  LoadReportView,
+  PipelineRunReportView,
   ScheduleRunView,
   StudioRecipeDraft,
 } from "../../../../../packages/schemas/generated";
@@ -35,8 +35,8 @@ import { choiceOf, cronOf, type ScheduleChoice } from "./scheduleChoice";
 
 /** The run route answers one of two shapes; both carry index signatures in the generated types,
  * so `in` cannot discriminate them — a pipeline run is the one whose `branches` is a real list. */
-function pipelineRunOf(report: LoadReport | PipelineRunReport): PipelineRunReport | null {
-  return Array.isArray((report as PipelineRunReport).branches) ? (report as PipelineRunReport) : null;
+function pipelineRunOf(report: LoadReportView | PipelineRunReportView): PipelineRunReportView | null {
+  return Array.isArray((report as PipelineRunReportView).branches) ? (report as PipelineRunReportView) : null;
 }
 
 export interface PublishScreenProps {
@@ -169,7 +169,7 @@ export function PublishScreen({
   const [runs, setRuns] = useState<ScheduleRunView[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadReport, setLoadReport] = useState<LoadReport | PipelineRunReport | null>(null);
+  const [loadReport, setLoadReport] = useState<LoadReportView | PipelineRunReportView | null>(null);
   const [runSourceLocation, setRunSourceLocation] = useState("");
 
   useEffect(() => {
@@ -491,7 +491,7 @@ export function PublishScreen({
             <li>Load id: {loadReport.load_id}</li>
             <li>Rows read: {loadReport.rows_read}</li>
             {!pipelineRunOf(loadReport) && (
-              <li>Rows deduplicated: {(loadReport as LoadReport).rows_deduplicated}</li>
+              <li>Rows deduplicated: {(loadReport as LoadReportView).rows_deduplicated}</li>
             )}
             <li>Nodes created: {loadReport.nodes_created}</li>
             <li>Nodes referenced: {loadReport.nodes_referenced}</li>

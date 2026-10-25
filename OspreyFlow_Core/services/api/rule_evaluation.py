@@ -428,14 +428,18 @@ async def write_alert_node(
     unseen: Handling | None = None,
     load_id: str | None = None,
     known: Mapping[str, Handling] | None = None,
+    writes: RuleWrites | None = None,
 ) -> str | None:
     """The `Alert` node and its `ALERTED_ON` links, in `tx` — at the highest marking of what it
     references, `inferred`, attributed to the rule (ruling 2; rules 3 and 5) — after anything the
     finding writes alongside (`pending`). `None` when no single marking is safe
     (`alert_handling`): the node is withheld, the queue row still raised."""
+    record = writes if writes is not None else RuleWrites()
     if finding.pending:
-        await graph.upsert_nodes([w for w in finding.pending if isinstance(w, NodeWrite)], tx)
-        await graph.upsert_edges([w for w in finding.pending if isinstance(w, EdgeWrite)], tx)
+        pending_nodes = [w for w in finding.pending if isinstance(w, NodeWrite)]
+        pending_edges = [w for w in finding.pending if isinstance(w, EdgeWrite)]
+        record.node_ids.extend(await graph.upsert_nodes(pending_nodes, tx))
+        record.edges(pending_edges, await graph.upsert_edges(pending_edges, tx))
     marking = alert_handling(
         scheme, await _referent_handlings(graph, scheme, finding, unseen, known or {})
     )
@@ -467,24 +471,23 @@ async def write_alert_node(
         load_id=load_id,
     )
     (node_id,) = await graph.upsert_nodes([node], tx)
-    await graph.upsert_edges(
-        [
-            EdgeWrite(
-                id=new_edge_id(),
-                type="ALERTED_ON",
-                source=node_id,
-                target=target,
-                basis="probabilistic",
-                provenance=provenance,
-                handling=marking,
-                created_by=finding.deployer.id,
-                created_at=now,
-                load_id=load_id,
-            )
-            for target in finding.node_ids
-        ],
-        tx,
-    )
+    record.node_ids.append(node_id)
+    alerted = [
+        EdgeWrite(
+            id=new_edge_id(),
+            type="ALERTED_ON",
+            source=node_id,
+            target=target,
+            basis="probabilistic",
+            provenance=provenance,
+            handling=marking,
+            created_by=finding.deployer.id,
+            created_at=now,
+            load_id=load_id,
+        )
+        for target in finding.node_ids
+    ]
+    record.edges(alerted, await graph.upsert_edges(alerted, tx))
     return node_id
 
 
@@ -514,6 +517,25 @@ def _source_rows(event: EventRecord) -> list[int]:
 
 
 @dataclass
+class RuleWrites:
+    """The graph elements a rule wrote for a load (ADR-127 decision 6): an `Alert` node, its
+    `ALERTED_ON` links and anything the finding writes alongside (`pending`). They belong to the
+    load, so its record lists them. A write that returns another element's id merged into it: a
+    pending link between two parties already linked is the same link."""
+
+    node_ids: list[str] = field(default_factory=list)
+    created_edge_ids: list[str] = field(default_factory=list)
+    merged_edge_ids: list[str] = field(default_factory=list)
+
+    def __bool__(self) -> bool:
+        return bool(self.node_ids or self.created_edge_ids or self.merged_edge_ids)
+
+    def edges(self, written: Sequence[EdgeWrite], returned: Sequence[str]) -> None:
+        for write, edge_id in zip(written, returned, strict=True):
+            (self.created_edge_ids if edge_id == write.id else self.merged_edge_ids).append(edge_id)
+
+
+@dataclass
 class PreCommitVerdict:
     """What the case's pre-commit rules decided about one load, before its commit."""
 
@@ -521,6 +543,8 @@ class PreCommitVerdict:
     #: Rows a failing rule could not judge, by original row number, with the failing rule and why.
     hold: dict[int, tuple[TypologyRule, str]] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    #: What the rules wrote into the load's transaction, for the load's record.
+    writes: RuleWrites = field(default_factory=RuleWrites)
 
 
 @dataclass
@@ -734,6 +758,7 @@ class RuleGate:
                         unseen=unseen,
                         load_id=load_id,
                         known=known,
+                        writes=verdict.writes,
                     )
                 except RuntimeError:
                     # A referent's marking cannot be known: no node rather than a guessed one.
@@ -767,12 +792,17 @@ class RuleGate:
             )
         return alert
 
-    async def raise_committed(self, finding: Finding, *, load_id: str | None = None) -> Alert:
+    async def raise_committed(
+        self, finding: Finding, *, load_id: str | None = None, writes: RuleWrites | None = None
+    ) -> Alert:
         """A finding raised outside any load's transaction (after commit, or by the daily sweep):
-        its node in a transaction of its own, then its queue row."""
+        its node in a transaction of its own, then its queue row. `writes` collects what it wrote,
+        for the record of the load it follows."""
         tx = await self.graph.begin_transaction()
         try:
-            node_id = await write_alert_node(self.graph, self.scheme, finding, tx, load_id=load_id)
+            node_id = await write_alert_node(
+                self.graph, self.scheme, finding, tx, load_id=load_id, writes=writes
+            )
         except Exception:
             await self.graph.rollback_transaction(tx)
             raise
@@ -788,6 +818,7 @@ class RuleGate:
         *,
         load_id: str,
         written: Sequence[NodeWrite | EdgeWrite] = (),
+        writes: RuleWrites | None = None,
     ) -> list[str]:
         """The case's post-commit rules, over the committed load's events and new customers —
         best-effort: a failure is audited and said, never raised into the load (ADR-036/037)."""
@@ -806,7 +837,7 @@ class RuleGate:
                     len(fresh),
                 )
                 for finding in fresh:
-                    await self.raise_committed(finding, load_id=load_id)
+                    await self.raise_committed(finding, load_id=load_id, writes=writes)
                 if fresh:
                     notes.append(f"Rule “{rule.name}” raised {len(fresh)} alert(s).")
             except Exception as exc:  # noqa: BLE001 - best-effort, audited and said

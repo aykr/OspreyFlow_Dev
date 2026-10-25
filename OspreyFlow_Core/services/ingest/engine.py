@@ -761,6 +761,19 @@ class _RunState:
     investigation_scope: str
     created_node_ids: list[NodeId] = field(default_factory=list)
     touched_edge_ids: list[EdgeId] = field(default_factory=list)
+    #: ADR-127 decision 6: `touched_edge_ids` told apart. A link is created when the store kept the
+    #: id the load sent, merged when it returned another's; a second write to a link this load
+    #: created is neither a new link nor a merge into another load's.
+    created_edge_ids: list[EdgeId] = field(default_factory=list)
+    merged_edge_ids: list[EdgeId] = field(default_factory=list)
+    #: Of `merged_edge_ids`, the links `_write_edge` merged into. The count told to the loader
+    #: depends on whether they may read each (`_count_hidden_merges`); a `HOLDS` link is always
+    #: counted at its write and is not among them.
+    merged_link_ids: list[EdgeId] = field(default_factory=list)
+    merged_node_ids: list[NodeId] = field(default_factory=list)
+    created_node_lookup: set[NodeId] = field(default_factory=set)
+    created_edge_lookup: set[EdgeId] = field(default_factory=set)
+    merged_edge_lookup: set[EdgeId] = field(default_factory=set)
     nodes_created: int = 0
     nodes_referenced: int = 0
     edges_created: int = 0
@@ -1119,6 +1132,7 @@ async def _write_entity(
     )
     (node_id,) = await state.graph.upsert_nodes([write], state.tx)
     state.created_node_ids.append(node_id)
+    state.created_node_lookup.add(node_id)
     state.nodes_created += 1
     if state.written is not None:
         state.written.append(write.model_copy(update={"id": node_id}))
@@ -1233,6 +1247,17 @@ async def _write_held_content(
         now=now,
     )
     if document_id not in state.documents_written:
+        # The id is the hash of the bytes, so it is the same for the same text from another holder,
+        # an earlier load or a Files-tab upload, and the upsert merges into a document already
+        # there. Looked up first (ADR-127 decision 6): created only when absent. The check is the
+        # port's internal, unfiltered one: an access-filtered read would show a loader a document
+        # above their clearance as absent, and the record would call another load's node created.
+        existed = document_id in await state.graph.existing_node_ids([document_id])
+        # What the loader is told (the counts) comes only from what they may read: a document they
+        # cannot read counts as created, as in a store without it, or the counts would say that
+        # the content exists somewhere they may not look (rule 3). The unfiltered answer feeds the
+        # record's `merged_node_ids` alone.
+        readable = existed and bool(await state.graph.get_nodes([document_id], state.principal))
         document = NodeWrite(
             id=document_id,
             type="Document",
@@ -1247,8 +1272,15 @@ async def _write_held_content(
         )
         await state.graph.upsert_nodes([document], state.tx)
         state.documents_written.add(document_id)
-        state.created_node_ids.append(document_id)
-        state.nodes_created += 1
+        if existed:
+            state.merged_node_ids.append(document_id)
+        else:
+            state.created_node_ids.append(document_id)
+            state.created_node_lookup.add(document_id)
+        if readable:
+            state.nodes_referenced += 1
+        else:
+            state.nodes_created += 1
     holds = EdgeWrite(
         id=f"{document_id}:held-by:{holder_id}",
         type="HOLDS",
@@ -1267,6 +1299,39 @@ async def _write_held_content(
     # Counted per write: its id is the document's and holder's, so a returned id cannot tell a new
     # HOLDS link from one merged into (unlike `_write_edge` below).
     state.edges_created += 1
+    # The record cannot rest on that id either. A holder this load created has no earlier link, so
+    # the link is its own; any other holder's may already hold this document, and is recorded as
+    # merged so a revert refuses naming it rather than take back another load's link.
+    _note_edge(state, edge_id, created=holder_id in state.created_node_lookup)
+
+
+def _note_edge(
+    state: _RunState, edge_id: EdgeId, *, created: bool, counted_by_readability: bool = False
+) -> None:
+    """Records a link the load wrote as created or merged (ADR-127 decision 6), once each. A write
+    to a link this load already created adds nothing: it is the load's own, not an earlier one's."""
+    if edge_id in state.created_edge_lookup:
+        return
+    if created:
+        state.created_edge_ids.append(edge_id)
+        state.created_edge_lookup.add(edge_id)
+    elif edge_id not in state.merged_edge_lookup:
+        state.merged_edge_ids.append(edge_id)
+        state.merged_edge_lookup.add(edge_id)
+        if counted_by_readability:
+            state.merged_link_ids.append(edge_id)
+
+
+async def _count_hidden_merges(state: _RunState) -> None:
+    """The edge upsert is not access-filtered, so a write between two nodes that a link the loader
+    may not read already joins merges into it, and `edges_created` would not rise: the count would
+    tell the loader the link exists (rule 3). A link merged into counts as created unless the
+    loader can read it, as in a store without it. One `get_edges` for the whole load; the record
+    keeps the true split (`created_edge_ids` and `merged_edge_ids`) whatever is counted."""
+    if not state.merged_link_ids:
+        return
+    readable = {e.id for e in await state.graph.get_edges(state.merged_link_ids, state.principal)}
+    state.edges_created += sum(1 for edge_id in state.merged_link_ids if edge_id not in readable)
 
 
 async def _write_edge(
@@ -1330,6 +1395,7 @@ async def _write_edge(
     )
     (edge_id,) = await state.graph.upsert_edges([write], state.tx)
     state.touched_edge_ids.append(edge_id)
+    _note_edge(state, edge_id, created=edge_id == write.id, counted_by_readability=True)
     if state.written is not None:
         state.written.append(write.model_copy(update={"id": edge_id}))
     # A link is created only when the store kept the id this write was sent. A second call between
@@ -1812,6 +1878,7 @@ async def run_recipe(
                 events=events,
             )
 
+    await _count_hidden_merges(state)
     report = LoadReport(
         load_id=load_id,
         recipe_id=recipe.id,
@@ -1824,5 +1891,8 @@ async def run_recipe(
         rejections=[*rejections, *link_rejections, *state.content_rejections],
         created_node_ids=state.created_node_ids,
         touched_edge_ids=state.touched_edge_ids,
+        created_edge_ids=state.created_edge_ids,
+        merged_edge_ids=state.merged_edge_ids,
+        merged_node_ids=state.merged_node_ids,
     )
     return report, events

@@ -24,7 +24,7 @@ from schemas.ingest import LoadReport, Recipe
 
 from .audit import AuditWriter
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
-from .studio_publish import load_with_rules
+from .studio_publish import LoadSink, load_with_rules, post_commit_notes
 
 
 def _named_nodes(entry: RuleAuditEntry) -> list[str]:
@@ -70,6 +70,7 @@ async def release_held_rows(
     media: MediaStore | None,
     rules: RuleGate,
     load_id: str,
+    sink: LoadSink | None = None,
 ) -> LoadReport:
     """Loads `held` — rows of one load, of this recipe at the version they were held under."""
     if not held:
@@ -95,12 +96,11 @@ async def release_held_rows(
         rules=rules,
         row_numbers=[h.row_index for h in ordered],
         scheme=rules.scheme,
+        sink=sink,
     )
     if analytics is not None and events:
         await analytics.load_events(events)
-    report.rule_notes.extend(
-        await rules.post_commit(events, load_id=load_id, written=rules.last_written)
-    )
+    report.rule_notes.extend(await post_commit_notes(rules, events, load_id=load_id, sink=sink))
     return report
 
 

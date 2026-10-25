@@ -13,6 +13,14 @@ export type EdgeId = string;
 export type TouchedEdgeIds = EdgeId[];
 export type RejectedCount = number;
 export type SupersededAt = string | null;
+export type InvestigationId = string | null;
+export type CreatedEdgeIds = EdgeId[];
+export type MergedEdgeIds = EdgeId[];
+export type MergedNodeIds = NodeId[];
+export type CreatedGeometryRefs = string[];
+export type UncoveredWrites = boolean;
+export type ReleasedFrom = string | null;
+export type EventsStamped = boolean;
 
 /**
  * One execution of a recipe against a source — the persisted form of
@@ -41,6 +49,14 @@ export interface LoadRecord {
   touched_edge_ids?: TouchedEdgeIds;
   rejected_count?: RejectedCount;
   superseded_at?: SupersededAt;
+  investigation_id?: InvestigationId;
+  created_edge_ids?: CreatedEdgeIds;
+  merged_edge_ids?: MergedEdgeIds;
+  merged_node_ids?: MergedNodeIds;
+  created_geometry_refs?: CreatedGeometryRefs;
+  uncovered_writes?: UncoveredWrites;
+  released_from?: ReleasedFrom;
+  events_stamped?: EventsStamped;
   superseded_by?: PrincipalId | null;
   [k: string]: unknown;
 }

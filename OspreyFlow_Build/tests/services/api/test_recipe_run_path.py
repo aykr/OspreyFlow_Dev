@@ -15,6 +15,8 @@ import pytest
 import services.api.app as app_module
 from services.api.app import RecipeRunDeps, run_studio_recipe
 
+from schemas.ingest import LoadReport, LoadReportView
+
 #: The state attribute each run dependency is read from, as the route's own getters read it.
 STATE_NAMES = {
     "recipe_repo_root": "recipes_repo_root",
@@ -35,9 +37,9 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
 ) -> None:
     calls: list[dict[str, Any]] = []
 
-    async def fake_run(deps: RecipeRunDeps, **kwargs: Any) -> str:
+    async def fake_run(deps: RecipeRunDeps, **kwargs: Any) -> LoadReport:
         calls.append({"deps": deps, **kwargs})
-        return "report"
+        return LoadReport(load_id="load-1", recipe_id="r", recipe_version=1, nodes_created=2)
 
     monkeypatch.setattr(app_module, "run_recipe_as", fake_run)
     names = [f.name for f in dataclasses.fields(RecipeRunDeps)]
@@ -65,7 +67,9 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         body=SimpleNamespace(source_location="file.csv"),  # type: ignore[arg-type]
         **route_args,
     )
-    assert result == "report"
+    # The route answers the report as a view: its counts, not the load's id lists (rules 3 and 7).
+    assert isinstance(result, LoadReportView)
+    assert (result.load_id, result.nodes_created) == ("load-1", 2)
     (call,) = calls
     assert call["principal"] is principal and call["recipe"] is recipe
     assert call["investigation_id"] == "case-1" and call["source_location"] == "file.csv"

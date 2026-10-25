@@ -866,6 +866,23 @@ class LoadReport(BaseModel):
     #: supersede without touching another load's contribution).
     created_node_ids: list[NodeId] = Field(default_factory=list)
     touched_edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: ADR-127 decision 6: of `touched_edge_ids`, the links this load wrote new, and the existing
+    #: links it merged occurrences into, kept apart so a revert can tell its own links from another
+    #: load's. A `HOLDS` link from a holder this load did not create is recorded as merged, since
+    #: the port cannot say whether it was new (`engine._write_content`).
+    created_edge_ids: list[EdgeId] = Field(default_factory=list)
+    merged_edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: The nodes this load wrote that already existed (a held content `Document`, whose id is the
+    #: hash of its bytes, may be another load's or a Files-tab upload's), kept out of
+    #: `created_node_ids` so a revert never takes back what another load holds.
+    merged_node_ids: list[NodeId] = Field(default_factory=list)
+    #: What the case's rules wrote into the load (an `Alert`, its `ALERTED_ON` links, what a finding
+    #: writes alongside): the load's, so its record lists them, but held apart from the lists above,
+    #: which the change stream and the enrich stage read as what the recipe wrote. Monitors must not
+    #: see an alert as a new ingest node (ADR-127 decision 6).
+    rule_node_ids: list[NodeId] = Field(default_factory=list)
+    rule_created_edge_ids: list[EdgeId] = Field(default_factory=list)
+    rule_merged_edge_ids: list[EdgeId] = Field(default_factory=list)
     #: ADR-109 ruling 1: rows a pre-commit rule could not judge, held out of the graph for review,
     #: and what the case's pre-commit rules did, in words — never a silent part-load (rule 2).
     rows_held: int = 0
@@ -873,6 +890,25 @@ class LoadReport(BaseModel):
 
 
 # --- The pipeline run report (06_DECISIONS.md ADR-108 phase C) -------------
+
+
+class LoadReportView(BaseModel):
+    """What a route answers for a load: the counts and the words, never the id lists. `LoadReport`
+    keeps `created_node_ids`, `created_edge_ids`, `merged_edge_ids` and the rest for the load's own
+    record; handed to the loader, `merged_edge_ids` would say a link pre-existed whether or not
+    they may read it (rules 3 and 7, ADR-127 decision 6)."""
+
+    load_id: str
+    recipe_id: str
+    recipe_version: int
+    rows_read: int = 0
+    rows_deduplicated: int = 0
+    nodes_created: int = 0
+    nodes_referenced: int = 0
+    edges_created: int = 0
+    rejections: list[RejectionRecord] = Field(default_factory=list)
+    rows_held: int = 0
+    rule_notes: list[str] = Field(default_factory=list)
 
 
 class BranchRunReport(BaseModel):
@@ -936,6 +972,34 @@ class PipelineRunReport(BaseModel):
     created_node_ids: list[NodeId] = Field(default_factory=list)
     touched_edge_ids: list[EdgeId] = Field(default_factory=list)
     #: The branches' held rows and rule notes, summed (ADR-109 ruling 1).
+    rows_held: int = 0
+    rule_notes: list[str] = Field(default_factory=list)
+
+
+class BranchRunReportView(BaseModel):
+    """`BranchRunReport` as a route answers it: the branch's `LoadReportView`."""
+
+    source_id: str
+    source_label: str
+    source_location: str | None = None
+    report: LoadReportView
+
+
+class PipelineRunReportView(BaseModel):
+    """`PipelineRunReport` as a route answers it: counts and words, no id lists, each branch a
+    `LoadReportView` (see `LoadReportView`)."""
+
+    load_id: str
+    recipe_id: str
+    recipe_version: int
+    branches: list[BranchRunReportView] = Field(default_factory=list)
+    extracts: list[ExtractStageReport] = Field(default_factory=list)
+    enriches: list[EnrichStageReport] = Field(default_factory=list)
+    rows_read: int = 0
+    nodes_created: int = 0
+    nodes_referenced: int = 0
+    edges_created: int = 0
+    rejections: list[RejectionRecord] = Field(default_factory=list)
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
 
@@ -1030,6 +1094,24 @@ class LoadRecord(BaseModel):
     touched_edge_ids: list[EdgeId] = Field(default_factory=list)
     rejected_count: int = 0
     superseded_at: datetime | None = None
+    #: ADR-127 decision 6, Amendment 5: what the run ledger keeps beside the run, so a revert needs
+    #: nothing else. The case the load wrote; the links it created, and apart from them the existing
+    #: links it merged occurrences into (a load that merged is refused a revert, naming them); the
+    #: load a release of held rows was released from; and whether its analytics events carry the
+    #: `load_id` (`AnalyticsPort.retract_load` can remove them). A record written before events
+    #: were stamped has none of these keys, and reads as not stamped: a revert refuses it.
+    investigation_id: str | None = None
+    created_edge_ids: list[EdgeId] = Field(default_factory=list)
+    merged_edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: The existing nodes the load wrote again (see `LoadReport.merged_node_ids`), and the geometry
+    #: refs it inserted that were not already present, so a revert can remove exactly those.
+    merged_node_ids: list[NodeId] = Field(default_factory=list)
+    created_geometry_refs: list[str] = Field(default_factory=list)
+    #: True when an extract or enrich stage fed by this load wrote a node, link or point: those are
+    #: in no record, so a revert of the load would leave them, and it refuses (Amendment 6).
+    uncovered_writes: bool = False
+    released_from: str | None = None
+    events_stamped: bool = False
     superseded_by: PrincipalId | None = None
 
 
@@ -1070,6 +1152,9 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     ExtractStageReport,
     EnrichStageReport,
     PipelineRunReport,
+    LoadReportView,
+    BranchRunReportView,
+    PipelineRunReportView,
     VerifyEntityCount,
     VerifyEdgeCount,
     RejectionGroup,

@@ -270,6 +270,13 @@ def render_record_id_lookup_sql(type_name: str) -> str:
     return f"SELECT @rid AS rid FROM `{groovy_identifier(type_name)}` WHERE id IN :ids"
 
 
+def render_existing_ids_sql(type_name: str) -> str:
+    """`GraphPort.existing_node_ids`: the ids, of one stored type, that are held by a node, from the
+    type's unique `id` index (as `render_record_id_lookup_sql` is). No access step and no
+    reverted or superseded filter: it asks what `upsert_nodes`'s own lookup would find."""
+    return f"SELECT id FROM `{groovy_identifier(type_name)}` WHERE id IN :ids"
+
+
 def render_get_nodes_gremlin(
     record_ids: Sequence[str], access: AccessFilter, principal: Principal
 ) -> str:

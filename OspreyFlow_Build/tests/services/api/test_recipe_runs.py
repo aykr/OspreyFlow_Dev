@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from conduit_common.identity import new_id
 from schemas.domain import Handling
-from schemas.ingest import LoadReport, RejectionRecord
+from schemas.ingest import LoadRecord, LoadReport, RejectionRecord
 from services.api.config import PostgresConfig
 from services.api.recipe_runs import RecipeRunStore
 
@@ -144,3 +144,174 @@ async def test_a_refusal_that_does_not_count_is_skipped_over_not_counted(
             failure="x", now=T0 + timedelta(minutes=minute), counts_toward_pause=counts,
         )  # fmt: skip
     assert await runs.refusals_in_a_row(recipe) == 2
+
+
+# --- ADR-127 decision 6, Amendment 5: the load's record, kept beside the run -------------------
+
+
+def _record(load_id: str, recipe: str, **changes: object) -> LoadRecord:
+    return LoadRecord(
+        load_id=load_id, recipe_id=recipe, recipe_version=3, source="private_cash.csv",
+        started_at=T0, completed_at=T0, created_by="analyst-1", investigation_id="case-1",
+        created_node_ids=["n1", "n2"], merged_node_ids=["doc-shared"],
+        created_edge_ids=["e-new"], merged_edge_ids=["e-old"],
+        touched_edge_ids=["e-new", "e-old"], events_stamped=True, **changes,
+    )  # fmt: skip
+
+
+async def _started(runs: RecipeRunStore, recipe: str, trigger: str = "manual") -> str:
+    return await runs.start(
+        recipe_id=recipe, recipe_version=3, investigation_id="case-1", trigger=trigger,  # type: ignore[arg-type]
+        slot=None, run_as="analyst-1", source=SOURCE, now=T0,
+    )  # fmt: skip
+
+
+async def test_a_runs_record_round_trips_with_created_and_merged_kept_apart(
+    runs: RecipeRunStore,
+) -> None:
+    recipe = new_id()
+    run_id = await _started(runs, recipe)
+    load_id = new_id()
+    await runs.add_record(run_id, _record(load_id, recipe))
+    kept = await runs.load_record(load_id)
+    assert kept is not None
+    assert (kept.created_node_ids, kept.merged_node_ids) == (["n1", "n2"], ["doc-shared"])
+    assert (kept.created_edge_ids, kept.merged_edge_ids) == (["e-new"], ["e-old"])
+    assert kept.investigation_id == "case-1" and kept.events_stamped is True
+    assert kept.released_from is None and (kept.recipe_id, kept.recipe_version) == (recipe, 3)
+
+
+async def test_a_record_written_at_the_commit_is_there_when_the_run_then_fails(
+    runs: RecipeRunStore,
+) -> None:
+    """The record is appended to a run that is still `running`; a failure after it leaves it."""
+    recipe = new_id()
+    run_id = await _started(runs, recipe)
+    load_id = new_id()
+    await runs.add_record(run_id, _record(load_id, recipe))
+    await runs.fail(run_id, failure="the analytics store is down", now=T0)
+    assert (await runs.load_record(load_id)) is not None
+    (row,) = await runs.for_recipe(recipe)
+    assert row.outcome == "failed"
+
+
+async def test_a_pipeline_runs_branch_records_are_each_found_by_their_own_load_id(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, base = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _record(f"{base}:s1", recipe))
+    await runs.add_record(run_id, _record(f"{base}:s2", recipe).model_copy(update={"source": "two.csv"}))
+    await runs.finish(
+        run_id, report=LoadReport(load_id=base, recipe_id=recipe, recipe_version=3), now=T0
+    )
+    second = await runs.load_record(f"{base}:s2")
+    assert second is not None and second.source == "two.csv"
+    first = await runs.load_record(f"{base}:s1")
+    assert first is not None and first.source == "private_cash.csv"
+    assert await runs.load_record(base) is None
+
+
+async def test_the_geometry_refs_a_load_inserted_are_added_to_its_own_record_only(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, base = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _record(f"{base}:s1", recipe))
+    await runs.add_record(run_id, _record(f"{base}:s2", recipe))
+    await runs.add_geometries(run_id, f"{base}:s2", ["g1", "g2"])
+    first, second = await runs.load_record(f"{base}:s1"), await runs.load_record(f"{base}:s2")
+    assert first is not None and first.created_geometry_refs == []
+    assert second is not None and second.created_geometry_refs == ["g1", "g2"]
+    assert second.created_edge_ids == ["e-new"], "the rest of the record is as it was"
+
+
+async def test_what_an_alert_after_the_commit_wrote_is_added_to_its_loads_record_only(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, base = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _record(f"{base}:s1", recipe))
+    await runs.add_record(run_id, _record(f"{base}:s2", recipe))
+    await runs.add_rule_writes(
+        run_id, f"{base}:s2", node_ids=["alert-1"], created_edge_ids=["l-new"], merged_edge_ids=["l-old"]
+    )
+    first, second = await runs.load_record(f"{base}:s1"), await runs.load_record(f"{base}:s2")
+    assert first is not None and first.created_node_ids == ["n1", "n2"]
+    assert second is not None
+    assert second.created_node_ids == ["n1", "n2", "alert-1"]
+    assert second.created_edge_ids == ["e-new", "l-new"] and second.merged_edge_ids == ["e-old", "l-old"]
+    assert second.touched_edge_ids == ["e-new", "e-old", "l-new", "l-old"]
+    assert second.source == "private_cash.csv", "the rest of the record is as it was"
+
+
+async def test_a_load_a_stage_wrote_for_is_marked_uncovered_and_the_other_is_not(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, base = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _record(f"{base}:s1", recipe))
+    await runs.add_record(run_id, _record(f"{base}:s2", recipe))
+    await runs.mark_uncovered(run_id, f"{base}:s1")
+    first, second = await runs.load_record(f"{base}:s1"), await runs.load_record(f"{base}:s2")
+    assert first is not None and first.uncovered_writes is True
+    assert second is not None and second.uncovered_writes is False
+
+
+async def test_a_release_keeps_where_it_was_released_from(runs: RecipeRunStore) -> None:
+    recipe = new_id()
+    run_id = await _started(runs, recipe, "release")
+    load_id, original = new_id(), new_id()
+    await runs.add_record(run_id, _record(load_id, recipe, released_from=original))
+    kept = await runs.load_record(load_id)
+    assert kept is not None and kept.released_from == original
+    assert [r.trigger for r in await runs.for_recipe(recipe)] == ["release"]
+
+
+async def test_a_run_with_no_record_has_none_and_an_unknown_load_has_none(
+    runs: RecipeRunStore,
+) -> None:
+    recipe = new_id()
+    run_id = await _started(runs, recipe)
+    load_id = new_id()
+    await runs.finish(
+        run_id, report=LoadReport(load_id=load_id, recipe_id=recipe, recipe_version=3), now=T0
+    )
+    assert await runs.load_record(load_id) is None
+    assert await runs.load_record(new_id()) is None
+
+
+async def test_a_ledger_made_before_records_is_brought_forward_and_keeps_its_runs() -> None:
+    """`CREATE TABLE IF NOT EXISTS` leaves an old `recipe_runs` as it was; connecting must add the
+    column, or every later `finish` fails on it. Run in a schema of its own, so the shared ledger
+    is not touched."""
+    import asyncpg
+    from services.api import recipe_runs as module
+
+    schema = f"mig_{new_id().lower().replace('-', '')[:20]}"
+    dsn = PostgresConfig.from_env().dsn
+    conn = await asyncpg.connect(dsn)
+    try:
+        await conn.execute(f"CREATE SCHEMA {schema}")
+        await conn.execute(f"SET search_path TO {schema}")
+        await conn.execute(module._BOOTSTRAP_SQL.replace(module._ADD_LOAD_RECORDS, ""))
+        columns = {
+            r["column_name"]
+            for r in await conn.fetch(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = $1 AND table_name = 'recipe_runs'", schema,
+            )
+        }  # fmt: skip
+        assert "load_records" not in columns
+        await conn.execute(
+            "INSERT INTO recipe_runs (run_id, recipe_id, recipe_version, investigation_id, "
+            "trigger, run_as, source_handling, started_at, outcome) VALUES "
+            "('old', 'r', 1, 'case-1', 'manual', 'a', $1::jsonb, now(), 'succeeded')",
+            SOURCE.model_dump_json(),
+        )
+        await conn.execute(module._BOOTSTRAP_SQL)
+        await conn.execute(module._BOOTSTRAP_SQL)  # and again: a no-op on a ledger that has it
+        assert await conn.fetchval("SELECT load_records FROM recipe_runs WHERE run_id = 'old'") is None
+    finally:
+        await conn.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
+        await conn.close()

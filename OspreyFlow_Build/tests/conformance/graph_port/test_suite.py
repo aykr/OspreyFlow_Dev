@@ -5223,3 +5223,79 @@ async def test_strip_provenance_references_removes_the_prefix_from_live_and_supe
         # What the link says is unchanged.
         live = await adapter.get_edges([successor_id, picture_id], CLEARED)
         assert {e.id for e in live} == {successor_id, picture_id}
+
+
+# --- existing_node_ids (ADR-127 decision 6): an internal, unfiltered existence check -----------
+#
+# The recipe engine writes a content `Document` under an id that is the hash of its bytes, so the
+# same text from another holder, an earlier load or a Files-tab upload names a node already there,
+# and `upsert_nodes` merges into it. A load's record must say "merged" for that node, whoever the
+# loader is: a loader who may not read it would otherwise find it absent (`get_nodes` is
+# access-filtered) and record it as created, and a revert would then take back another load's node.
+# `existing_node_ids` answers what `upsert_nodes` would do, by id alone. It is for the write path:
+# no route reaches it (`tests/test_unfiltered_node_lookup_confined.py`).
+
+_EXISTING_REASONS = ["clearance", "handling_code", "dataset", "superseded", "reverted"]
+
+
+async def test_existing_node_ids_names_every_node_that_exists_whatever_it_is_marked_or_its_state(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (readable,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        hidden = [await _unreadable_node(adapter, reason) for reason in _EXISTING_REASONS]
+        absent = await _unreadable_node(adapter, "absent")
+        # What a principal cannot read is real: `get_nodes` leaves each of them out.
+        assert [n.id for n in await adapter.get_nodes([*hidden, readable], READER)] == [readable]
+        found = await adapter.existing_node_ids([absent, *hidden, readable])
+        assert found == {readable, *hidden}
+        assert absent not in found
+
+
+async def test_existing_node_ids_is_what_upsert_nodes_would_merge_into(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The adapter's own lookup before an upsert is unfiltered and ignores `reverted` and
+    `superseded_by`, so a write to the id of a reverted or superseded node merges into it (it is
+    updated in place, keeping its flags). `existing_node_ids` includes them for exactly that
+    reason: leaving them out would report a merge as a creation."""
+    async with factory.context() as adapter:
+        ids = [await _unreadable_node(adapter, reason) for reason in _EXISTING_REASONS]
+        before = await adapter.existing_node_ids(ids)
+        assert before == set(ids)
+        for node_id in ids:
+            again = _node("Person", classification="OFFICIAL", datasets=["enron"])
+            again = again.model_copy(update={"id": node_id})
+            tx = await adapter.begin_transaction()
+            assert await adapter.upsert_nodes([again], tx) == [node_id]
+            await adapter.commit_transaction(tx)
+        assert await adapter.existing_node_ids(ids) == before, "no second node under any id"
+
+
+async def test_existing_node_ids_names_a_duplicated_id_once_and_no_ids_nothing(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (a,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        assert await adapter.existing_node_ids([a, a, a]) == {a}
+        assert await adapter.existing_node_ids([]) == set()
+        with pytest.raises(TypeError):
+            await adapter.existing_node_ids(a)  # type: ignore[arg-type]
+
+
+async def test_existing_node_ids_past_one_chunk_names_exactly_the_existing_ones(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        tx = await adapter.begin_transaction()
+        existing = await adapter.upsert_nodes(
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(1050)],
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+        absent = [new_node_id() for _ in range(50)]
+        assert await adapter.existing_node_ids([*absent, *existing]) == set(existing)

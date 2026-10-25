@@ -211,11 +211,13 @@ from schemas.ingest import (
     ConnectorCatalogueEntry,
     DomainPackEntry,
     LoadReport,
+    LoadReportView,
     MapHandlingPreviewRequest,
     MapHandlingPreviewResult,
     MapSampleRow,
     PipelineGraph,
     PipelineRunReport,
+    PipelineRunReportView,
     PublishRecipeInput,
     RowTemplateUpdateInput,
     RunRecipeInput,
@@ -462,6 +464,7 @@ from .link_types import (
     RetireLinkTypeRequest,
     public_ontology,
 )
+from .load_records import LedgerSink, released_from_of, report_view
 from .mapconfig_loader import load_map_config, public_view
 from .media_store import open_media_store
 from .model_routing import ModelEgressRefused, RoutedModel, model_status, routes_from_env
@@ -572,6 +575,7 @@ from .studio_profile import (
 from .studio_publish import _REPO_ROOT as _PUBLISH_REPO_ROOT  # noqa: I001
 from .studio_publish import (
     GitCommitError,
+    LoadSink,
     RecipeNotRunnableError,
     build_recipe,
     load_published_recipe,
@@ -7306,7 +7310,7 @@ async def run_studio_recipe(
     compute: ComputeDep,
     kyc_expiries: KycExpiriesDep,
     recipe_runs: RecipeRunsDep,
-) -> LoadReport | PipelineRunReport:
+) -> LoadReportView | PipelineRunReportView:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
     file; omitted, this repeats against the recipe's own recorded location
@@ -7345,7 +7349,7 @@ async def run_studio_recipe(
     ingest response itself — the load already happened; a failure to also check watches against it
     is a narrower, disclosed problem, not a reason to tell the caller their load failed when it
     didn't."""
-    return await run_recipe_as(
+    report = await run_recipe_as(
         RecipeRunDeps(
             graph=graph,
             ontology=ontology,
@@ -7378,6 +7382,8 @@ async def run_studio_recipe(
         source_location=body.source_location,
         trigger="manual",
     )
+    # Rules 3 and 7: counts and words, never the load's id lists (`report_view`).
+    return report_view(report)
 
 
 @dataclass(frozen=True)
@@ -7488,6 +7494,7 @@ async def run_recipe_as(
     the scheduler both come here, so a scheduled load is judged, published, watched and resolved
     exactly as a manual one, and every run is in the ledger (decision 6) — started before it
     loads, so one that dies with its Conduit shows as never finished rather than as nothing."""
+    started_at = datetime.now(UTC)
     run_id = await deps.recipe_runs.start(
         recipe_id=recipe.recipe_id,
         recipe_version=recipe.version,
@@ -7496,8 +7503,17 @@ async def run_recipe_as(
         slot=slot,
         run_as=principal.id,
         source=resolve_source_handling(recipe),
-        now=datetime.now(UTC),
+        now=started_at,
         source_file=source_file,
+    )
+    # ADR-127 decision 6: each load's record is appended to this row as its graph transaction
+    # commits, so a run that fails after the commit still leaves it.
+    sink = LedgerSink(
+        deps.recipe_runs,
+        run_id,
+        created_by=principal.id,
+        investigation_id=investigation_id,
+        started_at=started_at,
     )
     try:
         report = await _execute_recipe_run(
@@ -7507,6 +7523,7 @@ async def run_recipe_as(
             investigation_id=investigation_id,
             source_location=source_location,
             trigger=trigger,
+            sink=sink,
         )
     except Exception as error:
         await deps.recipe_runs.fail(
@@ -7525,6 +7542,7 @@ async def _execute_recipe_run(
     investigation_id: str,
     source_location: str | None,
     trigger: RunTrigger,
+    sink: LoadSink,
 ) -> LoadReport | PipelineRunReport:
     """The load itself, `run_studio_recipe`'s docstring has what each step is for."""
     load_id = new_id()
@@ -7566,6 +7584,7 @@ async def _execute_recipe_run(
             source_location=source_location,
             online_geocode=deps.online_geocode,
             rules=rules,
+            sink=sink,
         )
         for branch in report.branches:
             await resolution_trigger_module.submit_post_ingest_resolution_jobs(
@@ -7585,6 +7604,7 @@ async def _execute_recipe_run(
             media=deps.media,
             rules=rules,
             scheme=deps.handling_scheme,
+            sink=sink,
         )
         await resolution_trigger_module.submit_post_ingest_resolution_jobs(
             report, recipe.row_template, ontology=deps.ontology, jobs=deps.jobs
@@ -8319,7 +8339,8 @@ async def release_held_rows_route(
     compute: ComputeDep,
     kyc_expiries: KycExpiriesDep,
     patterns_store: PatternsStoreDep,
-) -> LoadReport:
+    recipe_runs: RecipeRunsDep,
+) -> LoadReportView:
     """A reviewer releases named held rows of one load: they are loaded now, under a new load
     id, with their provenance as it would have been. The case's rules judge them again, but a
     failing rule no longer holds them (ruling 1: the release is the human judgement)."""
@@ -8362,17 +8383,48 @@ async def release_held_rows_route(
     )
     assert recipe.git_path is not None
     load_id = new_id()
-    report = await release_held_rows(
-        held,
-        load_published_recipe(recipe, repo_root),
-        principal,
-        graph=graph,
-        ontology=ontology,
-        analytics=analytics,
-        media=media,
-        rules=rules,
-        load_id=load_id,
+    # ADR-127 decision 6 and Amendment 5: a release is a load of its own. Its ledger run starts
+    # before the release, as any run does, and its record is written when the release's graph
+    # transaction commits, kept with the load its rows were held by so that reverting that load can
+    # revert this one first.
+    released_from = released_from_of(held)
+    released_at = datetime.now(UTC)
+    run_id = await recipe_runs.start(
+        recipe_id=recipe.recipe_id,
+        recipe_version=recipe.version,
+        investigation_id=investigation.id,
+        trigger="release",
+        slot=None,
+        run_as=principal.id,
+        source=resolve_source_handling(recipe),
+        now=released_at,
     )
+    try:
+        report = await release_held_rows(
+            held,
+            load_published_recipe(recipe, repo_root),
+            principal,
+            graph=graph,
+            ontology=ontology,
+            analytics=analytics,
+            media=media,
+            rules=rules,
+            load_id=load_id,
+            sink=LedgerSink(
+                recipe_runs,
+                run_id,
+                created_by=principal.id,
+                investigation_id=investigation.id,
+                started_at=released_at,
+                released_from=released_from,
+            ),
+        )
+    except Exception as error:
+        await recipe_runs.fail(
+            run_id, failure=f"{type(error).__name__}: {error}"[:1000], now=datetime.now(UTC)
+        )
+        raise
+    await recipe_runs.finish(run_id, report=report, now=datetime.now(UTC))
     decided = await held_rows.decide_for_reader(
         [h.id for h in held], investigation.id, principal, status="released", reason=body.reason
     )
@@ -8388,7 +8440,7 @@ async def release_held_rows_route(
         },
         result_cardinality=len(decided),
     )
-    return report
+    return report_view(report)
 
 
 @app.post(

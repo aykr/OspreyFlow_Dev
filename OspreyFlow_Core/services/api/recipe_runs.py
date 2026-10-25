@@ -13,6 +13,7 @@ principal; it is never read except through those routes.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Literal, get_args
 
@@ -21,12 +22,18 @@ from pydantic import BaseModel
 
 from conduit_common.identity import new_id
 from schemas.domain import Handling
-from schemas.ingest import LoadReport, PipelineRunReport
+from schemas.ingest import LoadRecord, LoadReport, PipelineRunReport
 
 RunTrigger = Literal["manual", "schedule", "watch", "release"]
 RunOutcome = Literal["running", "succeeded", "failed", "refused", "blocked", "skipped", "missed"]
 NotRunOutcome = Literal["refused", "blocked", "skipped", "missed"]
 _NOT_RUN = frozenset(get_args(NotRunOutcome))
+
+#: ADR-127 decision 6: the `LoadRecord` of each load the run made (a list: a pipeline run made one
+#: per branch), beside the run. A ledger made before it has the table without the column, which
+#: `CREATE TABLE IF NOT EXISTS` leaves so; connecting adds it. Never selected into `RecipeRun`: the
+#: record holds ids of elements some readers may not see, and no route returns it.
+_ADD_LOAD_RECORDS = "ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS load_records JSONB;"
 
 _BOOTSTRAP_SQL = f"""
 CREATE TABLE IF NOT EXISTS recipe_runs (
@@ -57,6 +64,7 @@ ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS counts_toward_pause BOOLEAN NOT
 -- taken once.
 ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS source_file TEXT;
 CREATE INDEX IF NOT EXISTS recipe_runs_recipe_idx ON recipe_runs (recipe_id, started_at DESC);
+{_ADD_LOAD_RECORDS}
 """
 
 _COLUMNS = (
@@ -149,6 +157,86 @@ class RecipeRunStore:
                 report.rows_held,
                 report.load_id,
             )
+
+    async def add_record(self, run_id: str, record: LoadRecord) -> None:
+        """Appends a load's record to its run (ADR-127 decision 6), when the load's graph
+        transaction commits and so before the run can `finish`: a run that fails afterwards still
+        has the record a revert needs. A pipeline run appends one per branch."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE recipe_runs SET load_records = COALESCE(load_records, '[]'::jsonb) "
+                "|| $2::jsonb WHERE run_id = $1",
+                run_id,
+                json.dumps([record.model_dump(mode="json")]),
+            )
+
+    async def add_geometries(self, run_id: str, load_id: str, refs: list[str]) -> None:
+        """Records the geometry refs a load is about to insert, against that load's record."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE recipe_runs SET load_records = ("
+                "SELECT jsonb_agg(CASE WHEN rec->>'load_id' = $2 "
+                "THEN jsonb_set(rec, '{created_geometry_refs}', $3::jsonb) ELSE rec END) "
+                "FROM jsonb_array_elements(load_records) AS rec) "
+                "WHERE run_id = $1 AND load_records IS NOT NULL",
+                run_id,
+                load_id,
+                json.dumps(refs),
+            )
+
+    async def add_rule_writes(
+        self,
+        run_id: str,
+        load_id: str,
+        *,
+        node_ids: list[str],
+        created_edge_ids: list[str],
+        merged_edge_ids: list[str],
+    ) -> None:
+        """Adds what an alert raised after a load's commit wrote to that load's record, in the
+        lists the commit-time record keeps (created and merged apart)."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE recipe_runs SET load_records = ("
+                "SELECT jsonb_agg(CASE WHEN rec->>'load_id' = $2 THEN rec || jsonb_build_object("
+                "'created_node_ids', COALESCE(rec->'created_node_ids', '[]'::jsonb) || $3::jsonb, "
+                "'created_edge_ids', COALESCE(rec->'created_edge_ids', '[]'::jsonb) || $4::jsonb, "
+                "'merged_edge_ids', COALESCE(rec->'merged_edge_ids', '[]'::jsonb) || $5::jsonb, "
+                "'touched_edge_ids', COALESCE(rec->'touched_edge_ids', '[]'::jsonb) "
+                "|| $4::jsonb || $5::jsonb) ELSE rec END) "
+                "FROM jsonb_array_elements(load_records) AS rec) "
+                "WHERE run_id = $1 AND load_records IS NOT NULL",
+                run_id,
+                load_id,
+                json.dumps(node_ids),
+                json.dumps(created_edge_ids),
+                json.dumps(merged_edge_ids),
+            )
+
+    async def mark_uncovered(self, run_id: str, load_id: str) -> None:
+        """Says on a load's record that a stage fed by it wrote elements no record covers."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE recipe_runs SET load_records = ("
+                "SELECT jsonb_agg(CASE WHEN rec->>'load_id' = $2 "
+                "THEN jsonb_set(rec, '{uncovered_writes}', 'true'::jsonb) ELSE rec END) "
+                "FROM jsonb_array_elements(load_records) AS rec) "
+                "WHERE run_id = $1 AND load_records IS NOT NULL",
+                run_id,
+                load_id,
+            )
+
+    async def load_record(self, load_id: str) -> LoadRecord | None:
+        """The record of the load with this id, or `None` for a load the ledger has no record of
+        (one from before records were kept, or one that never finished). For the revert; never read
+        by a route."""
+        async with self._pool.acquire() as conn:
+            kept = await conn.fetchval(
+                "SELECT rec FROM recipe_runs, jsonb_array_elements(load_records) AS rec "
+                "WHERE load_records IS NOT NULL AND rec->>'load_id' = $1 LIMIT 1",
+                load_id,
+            )
+        return None if kept is None else LoadRecord.model_validate_json(kept)
 
     async def fail(self, run_id: str, *, failure: str, now: datetime) -> None:
         async with self._pool.acquire() as conn:

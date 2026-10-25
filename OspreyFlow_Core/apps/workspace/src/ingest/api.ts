@@ -9,12 +9,12 @@
 import type {
   ConnectDraftInput,
   ConnectorCatalogueEntry,
-  LoadReport,
+  LoadReportView,
   MapHandlingPreviewRequest,
   MapHandlingPreviewResult,
   MapSampleRow,
   OntologySchema,
-  PipelineRunReport,
+  PipelineRunReportView,
   PublishRecipeInput,
   RowTemplate,
   SchedulePreview,
@@ -508,7 +508,7 @@ export async function runRecipe(
   /** §8: "run a published recipe against a file" — omit to repeat
    * against the recipe's own recorded location. */
   sourceLocation?: string,
-): Promise<LoadReport | PipelineRunReport> {
+): Promise<LoadReportView | PipelineRunReportView> {
   const response = await fetch(
     `${apiBaseUrl}/v1/investigations/${investigationId}/ingest/recipes/${recipeId}/run`,
     {

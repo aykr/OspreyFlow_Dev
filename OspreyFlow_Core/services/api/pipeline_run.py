@@ -48,7 +48,7 @@ from services.api.review import (
     text_windows,
 )
 from services.api.rule_evaluation import RuleGate
-from services.api.studio_publish import load_published_recipe, run_published_recipe
+from services.api.studio_publish import LoadSink, load_published_recipe, run_published_recipe
 from services.extract.candidates import ExtractionCandidate
 from services.extract.recognised import recognised_candidates
 from services.extract.writer import write_candidate
@@ -182,6 +182,19 @@ def _upstream_sources(graph: PipelineGraph, node_id: str) -> list[str]:
                 seen.add(back)
                 queue.append(back)
     return sorted(sources)
+
+
+async def _mark_uncovered(
+    sink: LoadSink | None, branches: list[BranchRunReport], source_ids: list[str]
+) -> None:
+    """Each branch a stage that wrote something was fed by has a record that does not cover it
+    (ADR-127 decision 6, Amendment 6): said on the record, so a revert refuses the load."""
+    if sink is None:
+        return
+    wanted = set(source_ids)
+    for branch in branches:
+        if branch.source_id in wanted:
+            await sink.uncovered(branch.report.load_id)
 
 
 async def _created_nodes_of_type(
@@ -489,6 +502,7 @@ async def run_published_pipeline(
     source_location: str | None = None,
     online_geocode: OnlineGeocode | None = None,
     rules: RuleGate | None = None,
+    sink: LoadSink | None = None,
 ) -> PipelineRunReport:
     """The whole pipeline, in topological order: branches, then extracts, then enriches.
 
@@ -525,6 +539,7 @@ async def run_published_pipeline(
             media=media,
             rules=rules,
             scheme=scheme,
+            sink=sink,
         )
         report.branches.append(
             BranchRunReport(
@@ -551,6 +566,8 @@ async def run_published_pipeline(
             report.extracts.append(extract_stage)
             report.created_node_ids.extend(written)
             report.nodes_created += len(written)
+            if written:
+                await _mark_uncovered(sink, report.branches, _upstream_sources(pipeline, node.id))
         elif node.kind is PipelineNodeKind.ENRICH:
             enrich_stage, edges = await _run_enrich_stage(
                 node,
@@ -565,6 +582,10 @@ async def run_published_pipeline(
             report.enriches.append(enrich_stage)
             report.touched_edge_ids.extend(edges)
             report.edges_created += len(edges)
+            # Its `SAME_AS` links, and the points an online geocode inserts and the node revisions
+            # it writes, are in no record.
+            if edges or enrich_stage.matched_online:
+                await _mark_uncovered(sink, report.branches, _upstream_sources(pipeline, node.id))
 
     for branch in report.branches:
         report.rows_read += branch.report.rows_read
