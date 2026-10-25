@@ -633,11 +633,11 @@ Run against both scenarios, on both the `local-lite` and `cluster` profiles.
 | Assertion | Why |
 | --- | --- |
 | Every action appears in the audit stream with principal, query and result cardinality | Audit is architecture (`00_ARCHITECTURE.md` §5) |
-| A restricted principal running the same scenario sees fewer entities, is told how many are withheld, and is never told which | Filter at the port, disclose the count, never the content |
+| A restricted principal running the same scenario sees fewer entities, is told only that material is withheld (one standing sentence), and is never told how many or which | Filter at the port, disclose that something is withheld, never a count or the content (ADR-124) |
 | A case sees, counts and finds nothing outside its datasets, through search, suggestions, expansion, paths, the Explore counts and rankings | A dataset is a limit of access, like handling (ADR-099) |
 | Every model-derived node is `inferred` until confirmed; no automatic promotion occurs | `01_DOMAIN_MODEL.md` §2.1 |
 | No filter removes a node from the canvas; all filtering dims | `02_GLASS_FRONTEND.md` §2 |
-| The status bar count of dimmed and withheld items is correct at every step | An analyst must never mistake a partial picture for a complete one |
+| The status bar's count of dimmed items, and its standing sentence when material is withheld, are correct at every step | An analyst must never mistake a partial picture for a complete one, nor learn how much is hidden (ADR-124) |
 | The performance budget holds throughout | `02_GLASS_FRONTEND.md` §5 |
 | Results are identical on both profiles, allowing only floating-point tolerance on iterative metrics | Transportability |
 | Disconnecting the network mid-scenario on `local-lite` changes nothing | Air-gap capability is a claim that must be tested |

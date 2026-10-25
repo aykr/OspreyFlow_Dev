@@ -185,7 +185,7 @@ narrowed.
 │  ├───────────────────────────────────────────────────┤                             │
 │  │ ▸ Timeline ▁▂▅▃▁▆▂  2001-05-14 to 2001-12-03 (34px)│                             │
 ├──┴───────────────────────────────────────────────────┴─────────────────────────────┤
-│ 12,481 nodes  38,902 edges  214 dimmed by filter  6 hidden by handling    Tip …  Next tip │
+│ 12,481 nodes  38,902 edges  214 dimmed by filter  This case holds material you are not cleared to see.  │
 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -236,10 +236,12 @@ set of widgets:
    It holds however the analyst signed in: the deployed Glass gets its token after it opens, so
    the brush's dimming is proven to reach the status bar on that path
    (`App.crossfilter.test.tsx`; found 8 October 2026, when it dimmed nothing there).
-4. **The status bar never lies.** Counts of dimmed and handling-hidden items are always visible. Each
-   count is a pair, its number in mono beside its words in the UI face, with a quiet separator between
-   pairs (ADR-097 step 3).
-   An analyst must never be able to mistake a filtered picture for a complete one.
+4. **The status bar never lies.** The count of dimmed items is always visible, as a pair, its number
+   in mono beside its words in the UI face, pairs set 16px apart with no separator (ADR-115 E4).
+   Material withheld by handling is never counted: when the case holds any, the status bar says so in
+   one standing sentence, "This case holds material you are not cleared to see.", with no number
+   (ADR-124 decision 5). An analyst must never be able to mistake a filtered picture for a complete
+   one, and must never learn from it how much is hidden or where.
 5. **The signed-in principal's own identity is always visible, informationally only.** A button
    at the right-hand end of the top bar reading `<user name> · <clearance>` (e.g.
    `analyst-1 · OFFICIAL`; the subject when the token has no user name). The clearance is never
@@ -1018,7 +1020,7 @@ words (the events counted, and those with no value left out of a sum) and the se
 a bound it says the three choices in words. A saved trend is chosen from the list, deleted, or added
 to a pack. *Packs* lists the case's packs and creates one; the chosen pack shows its marking, its
 versions in words (withdrawn ones with who and why, live ones with *Withdraw version n* and a
-reason), "n items in this pack are withheld from you" when any are — never which — and its items in
+reason), "Some items of this pack are withheld from you." when any are — never how many or which (ADR-113 Amendment 5) — and its items in
 order, each under a banner with its own marking, with *Move up*, *Move down*, *Refresh* (trend
 snapshots only) and *Remove*; *Add an item* adds a saved trend, an assessment or a note with its
 required marking; *Publish*, refused in words while an item is withheld from the publisher; *Show

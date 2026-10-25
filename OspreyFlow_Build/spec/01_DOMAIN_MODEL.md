@@ -694,8 +694,10 @@ The design:
    always honours and no future resolution run may override.
 
 The Glass surfaces τ as a slider with three labelled detents — **Strict (0.99)**, **Balanced
-(0.95)**, **Broad (0.80)** — and shows the delta when it moves: "3 entities merged, 1 split, 47
-nodes affected." Silent re-projection of a network under an analyst is disorienting and
+(0.95)**, **Broad (0.80)** — and shows the analyst who moved it what changed: "3 entities merged,
+1 split, 47 nodes affected." Those figures are counted over the moving analyst's own view and go
+only to them, in the route's response; the reproject delta every other reader receives carries no
+figures (ADR-124 decision 1). Silent re-projection of a network under an analyst is disorienting and
 dangerous; always show what changed.
 
 ### Splink configuration

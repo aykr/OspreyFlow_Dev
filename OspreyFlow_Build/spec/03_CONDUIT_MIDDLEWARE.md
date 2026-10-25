@@ -157,36 +157,41 @@ The delta protocol, client-bound:
 
 ```json
 {"seq": 412, "op": "add",     "nodes": [...], "edges": [...]}
-{"seq": 413, "op": "update",  "nodes": [{"id": "...", "properties": {...}}]}
-{"seq": 414, "op": "remove",  "node_ids": ["..."]}
-{"seq": 415, "op": "reproject", "reason": "resolution_threshold",
- "merged": 3, "split": 1, "affected": 47}
-{"seq": 416, "op": "notice",  "level": "warning",
- "message": "6 nodes withheld by handling policy", "count": 6}
-{"seq": 417, "op": "snapshot", "nodes": [...], "edges": [...], "filtered_count": 6}
+{"seq": 414, "op": "remove",  "node_ids": ["..."], "edge_ids": ["..."]}
+{"seq": 415, "op": "reproject", "reason": "resolution_threshold"}
+{"seq": 417, "op": "snapshot", "nodes": [...], "edges": [...], "withheld": true}
 {"seq": 418, "op": "replace_edge", "old_edge_id": "...", "edge": {...}}
+{"seq": 419, "op": "view_over_cap", "would_be": {...}}
 ```
 
-`replace_edge` (ADR-080) is sent when an analyst changes a link: the client takes the old link out and
-puts the new one in at the same step, so no screen shows both or neither.
+Every delta is projected for its reader before it is sent (ADR-124 decision 4). A delta names only
+what that reader may see: a removal names only ids they may read, a reproject carries no figures,
+and a replacement that would name a hidden link is sent as a removal, an addition, or nothing,
+by ADR-124's four-row table. The stored form of a removal or a replacement carries a record of what
+it removed; the record is never sent. There is no `update` operation and no `notice` operation
+(ADR-124 Amendments 4 and 6).
+
+`replace_edge` (ADR-080) is sent when an analyst changes a link the reader may see on both sides:
+the client takes the old link out and puts the new one in at the same step, so no screen shows both
+or neither.
 
 Sequence numbers are monotonic per investigation. A client that misses a sequence reconnects and
 requests a full snapshot rather than attempting to patch — silent divergence between the
 server's picture and the analyst's is the failure this protocol exists to prevent. `snapshot` is
-that full-state response: the five ops above are this section's own illustrative set, and a
-full-snapshot reconnect path is required even though no shape was given for it in that
-illustrative set — the same way `GraphPort` grew past its own illustrative sketch
-(`00_ARCHITECTURE.md` §2.1). Its `filtered_count` is the same figure `expand`'s response and the
-status bar both carry, computed fresh for whichever principal is reconnecting (§4).
+that full-state response. Only the full snapshot `sync` returns carries `withheld`: true when the
+case holds any node or link whose own handling the reader may not view, judged without datasets;
+every other snapshot and delta carries none (ADR-124 decision 5). The Glass shows it as the one
+standing sentence, "This case holds material you are not cleared to see.", with no number.
 
-The `notice` operation is how withheld items reach the status bar. It carries a count and never
-carries the withheld content, not even its identifiers.
+`view_over_cap` is sent instead of a snapshot or a delta when the reader's own projected view has
+passed the working-set cap, with the reader's own figure only; the stream then sends nothing more on
+that connection until the reader tries again (ADR-124 decision 2, Amendment 9).
 
-Withheld means withheld from this reader by handling, and nothing else. A link whose end has left
-the working set (removing a node leaves its links in the store) is left out of every read and not
-counted. A delta replayed or pushed alone carries only its own nodes, so its links' ends are judged
-against the working set as it stands: a link to a node already on the canvas is sent, and one to a
-node this reader may not see is withheld and counted (9 October 2026; `test_hidden_count.py`).
+Withheld means withheld from this reader by handling, and nothing else. No delta, snapshot or
+response carries a count of what is withheld from the reader (ADR-124 decision 1). What may still
+vary with it is limited to the existence signals ADR-124 decision 12 accepts (the standing sentence
+among them) and the residuals its amendments record. A link whose end has left the working set (removing a node leaves its links
+in the store) is left out of every read.
 
 ### 3.3 Query and analytics
 

@@ -17364,6 +17364,95 @@ Under the owner's ruling of 24 October 2026 ("Filter per reader"), as ADR-124 de
 - **What stays.** Decision 4's new revision with the old one kept and audited, and Amendment 1 item
   1's supersede, are unchanged.
 
+### ADR-048, Amendment 1 (25 October 2026) — the safe partial shape is one bit, not a count
+
+Under the owner's ruling of 24 October 2026 on ADR-124 (option A′). Recorded as ADR-124 decision 14
+requires.
+- **What changes.** ADR-048 names a count as the safe, inert partial-disclosure shape. ADR-124
+  measured that a count tied to a case, a seed or a pack can be differenced, and so points at what
+  it withholds. The safe partial shape is now one bit: that material is withheld, never how much,
+  what or where. Read each passage below with that substitution:
+  - the table row "ADR-045 | An exported artefact | Learns a count of withheld items | Disclosed
+    (count only)", which becomes "Learns that material is withheld | Disclosed (yes or no only)";
+  - "gains nothing actionable from a bare count beyond the one thing they are owed";
+  - "ADR-045's count is a safe partial shape precisely because it discloses a fact (something
+    exists) … the same shape standing rule 3 already accepts for the status bar and the delta
+    protocol's `notice` op". The status bar now shows one standing sentence, and `notice` is retired
+    (ADR-124 decisions 1 and 5);
+  - "in a way 'N items withheld' never claims to be one";
+  - the principle's "(a count, never a referent)", which becomes "(a yes or no, never a referent)";
+  - "An in-session analyst has the working-set status bar and its own 'N hidden by handling'
+    convention", which becomes its standing sentence, "This case holds material you are not cleared
+    to see.";
+  - the test question's "does a count-only, referent-free disclosure exist", which becomes "does a
+    one-bit, referent-free disclosure exist".
+- **What stays.** The principle, the three cases and their outcomes are unchanged. The in-session
+  analyst still carries a standing expectation that a view may be partial, now from the standing
+  sentence.
+
+### ADR-099, Amendment 10 (25 October 2026) — what ADR-124 withdrew from it
+
+Under the owner's ruling of 24 October 2026 on ADR-124 (option A′). Recorded as ADR-124 decision 14
+requires.
+- **Decision 4** says "`expand_candidate_count`, the unfiltered half of `filtered_count`, takes the
+  case's datasets too". Both are withdrawn: `filtered_count` by ADR-124 decision 1, and
+  `expand_candidate_count` by decision 10. What lies outside a case's datasets is still outside its
+  world: the standing sentence's judgement ignores datasets (ADR-124 decision 5).
+- **The steps' step 1** lists `expand_candidate_count` among the store's dataset-aware parts. It is
+  withdrawn.
+- **Amendment 2, item 5** says restoring a history step "re-projects the stored bodies", and that a
+  re-read from the graph was "not built". ADR-124 U6 built it: restore reads a step's members from
+  the Vault through `get_nodes` and `get_edges` for the restorer, so a step recorded before ADR-099
+  restores with the Vault's current bodies and their datasets (ADR-124 decision 6, Amendment 8).
+- **Amendment 7, item 1** reports a past symptom ("the status bar said '285 hidden by handling'"). It
+  is history and stands as written; the figure it names no longer exists.
+
+### ADR-124, Amendment 15 (25 October 2026) — U10b: the close
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after an adversarial review.
+- **The spec** is corrected as decision 14 lists, at today's lines:
+  - `03_CONDUIT_MIDDLEWARE.md` §3.2: the delta protocol, without `update`, `notice` or a withheld count,
+    with per-reader projection, the snapshot's `withheld` and `view_over_cap`. §4 and §6 needed nothing
+    further; §6's manifest was corrected in U9.
+  - `02_GLASS_FRONTEND.md`: the status bar mock-up, principle 4 ("The status bar never lies") and the
+    pack sentence. §10.3 was corrected in U9, and the toolbar example in U8.
+  - `01_DOMAIN_MODEL.md`: the resolution slider's figures go only to the analyst who moved it. §8.2
+    was corrected in U3.
+  - `08_ACCEPTANCE_SCENARIOS.md`: the restricted principal is told only that material is withheld,
+    and the status bar row.
+  - `07_BUILD_PLAN.md`: the Phase 3 exit criterion. It was committed with U10a.
+  - `00_ARCHITECTURE.md` was corrected in U3.
+- **The amendments** decision 14 names:
+  - ADR-045 Amendment 1 (U9);
+  - ADR-048 Amendment 1;
+  - ADR-080 Amendment 3 (U10a);
+  - ADR-099 Amendment 10;
+  - ADR-102 Amendment 2 (U10a);
+  - ADR-113 Amendment 5 (U9b), which decision 14 did not name.
+
+  ADR-115 needs none: its body and amendments name no label, count or withheld figure, and E6's
+  reference wording lives in the Glass spec, corrected in U8.
+- **A citation corrected.** Decision 1 cites `06_DECISIONS.md:5604-5606` for "a field that is always 0
+  claims completeness". Those lines hold ADR-048's general principle, not that sentence; the point is
+  decision 1's own.
+- **Brief 1's live access test**, `test_pid_access_control.py`, ran on ArcadeDB with nothing else on
+  the stack: 16 passed in 24 min 30 s, on 25 October 2026.
+  - **Equal with and without the secret link:** the no-trace comparison; the analyst's own snapshot;
+    the shared case's nodes and links; and the expansion and preview figures.
+  - **What differs in the shared case:** the shared case's snapshot and manifest say `withheld` true in
+    store A and false in B. That is decision 12's accepted existence signal.
+  - **What still shows the comparison works:** the cleared principal's comparison, and weights version
+    1, each still turn it red.
+  - **Brief 1 §5.3 is met** for a case the analyst works alone. In a case shared with a cleared
+    colleague, what remains is decision 12's existence signals, and cluster ids until ADR-125.
+    `PID_ACTUALS.md` (Brief 1 stage 7) records the line.
+- **The published copy and the deployment.** The published copy follows on the owner's next publish.
+  The owner's deployment is not rebuilt (decision 14).
+  - **After a rebuild**, run `python -m scripts.strip_change_provenance` once.
+  - **What else changes on rebuild:** link history from before 8 October 2026 disappears for every
+    reader (Amendment 14), and stored history labels are rewritten (Amendment 11).
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are
