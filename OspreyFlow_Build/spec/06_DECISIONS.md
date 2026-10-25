@@ -17177,6 +17177,21 @@ option, after an adversarial review.
 - **Decision 8's line references** (`app.py` sites, `models.ts:96-97`) are stale. The sites table in
   `test_history_labels.py` is the current list.
 
+### ADR-124, Amendment 12 (25 October 2026) — the owner's ruling on restore's timing
+
+Decided by the owner, 25 October 2026: "Accept it".
+- **What it rules on.** Amendment 8's last bullet left one question open: restore's time grows with
+  hidden material, so a restorer timing restores at moments they choose could estimate roughly how
+  much of the case they cannot see. The options were (a) accept it, (b) pad restore to a fixed time,
+  or (c) answer the restorer before the whole set is written and published.
+- **The ruling.** (a): it is accepted as a residual. Restore is unchanged from U6.
+- **What is accepted.** A coarse estimate of the size of what is hidden in the whole case, by timing,
+  never what or where any item is. Decision 12's list of what A′ accepts is widened by this one
+  channel, for restore only.
+- **What it does not change.** The other timing residuals stay as recorded in Amendments 4 and 6.
+  Amendment 10's correction to Amendment 2, which makes a hidden id and an absent id cost the same
+  round trips, stands: a membership test for a specific guessed id is not accepted by this ruling.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are
