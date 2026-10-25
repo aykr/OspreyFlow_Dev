@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import itertools
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 
 from services.api.rule_evaluation import handling_readable
@@ -24,6 +24,7 @@ from services.api.working_set.access_index import (
     signature_of,
 )
 from services.api.working_set.models import WorkingSetDelta, decode_delta, lacks_record
+from services.api.working_set.store import EdgeRewrite, _refuse_a_move
 
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import (
@@ -82,6 +83,8 @@ class FakeWorkingSetStore:
         #: Set to simulate the capped stream trimming older entries —
         #: `None` means unbounded (the default; most tests don't care).
         self.stream_maxlen: int | None = None
+        #: Called by `rewrite_edges_if_unchanged` between its read and its write, with the case id.
+        self._between_read_and_write: Callable[[str], Awaitable[None]] | None = None
 
     def _n(self, investigation_id: str) -> dict[NodeId, Node]:
         return self._nodes.setdefault(investigation_id, {})
@@ -132,6 +135,29 @@ class FakeWorkingSetStore:
             signature = signature_of(e.handling, e.datasets)
             state.set_edge(e.id, signature_id(signature), signature, e.source, e.target)
         state.written(f"epoch-{next(_EPOCHS)}")
+
+    async def rewrite_edges_if_unchanged(
+        self, investigation_id: str, rewrite: Callable[[Edge], Edge | None]
+    ) -> EdgeRewrite:
+        """The store's conditional rewrite, over this fake's bodies: a link is replaced only if the
+        body in the fake is still the one that was read (equal as a model), so a link a test
+        removes or replaces from `_between_read_and_write` is skipped."""
+        read = dict(self._e(investigation_id))
+        changes: list[tuple[Edge, Edge]] = []
+        for old in read.values():
+            new = rewrite(old)
+            if new is None:
+                continue
+            _refuse_a_move(old, new)
+            changes.append((old, new))
+        if self._between_read_and_write is not None:
+            await self._between_read_and_write(investigation_id)
+        rewritten = 0
+        for old, new in changes:
+            if self._e(investigation_id).get(old.id) == old:
+                self._e(investigation_id)[old.id] = new
+                rewritten += 1
+        return EdgeRewrite(rewritten=rewritten, skipped=len(changes) - rewritten)
 
     async def remove_nodes(self, investigation_id: str, node_ids: Sequence[NodeId]) -> None:
         if not node_ids:
@@ -328,6 +354,29 @@ class FakeGraphPort:
             superseded=edge.id in self._superseded_edge_ids,
             hidden=edge.id in self._hidden_edge_ids,
         )
+
+    async def strip_provenance_references(self, prefix: str) -> int:
+        """The port's one-off rewrite, over every link this fake holds (`graph_edges` and the links
+        `expand_result` returns): the provenance entries whose `document_id` starts with `prefix`
+        are removed, whether or not the link is hidden, superseded or reverted, and the number of
+        links that changed is returned."""
+        changed = 0
+
+        def stripped(edge: Edge) -> Edge:
+            nonlocal changed
+            kept = [s for s in edge.provenance.sources if not s.document_id.startswith(prefix)]
+            if len(kept) == len(edge.provenance.sources):
+                return edge
+            changed += 1
+            return edge.model_copy(
+                update={"provenance": edge.provenance.model_copy(update={"sources": kept})}
+            )
+
+        self._graph_edges = [stripped(e) for e in self._graph_edges]
+        self.expand_result = self.expand_result.model_copy(
+            update={"edges": [stripped(e) for e in self.expand_result.edges]}
+        )
+        return changed
 
     async def get_nodes(self, node_ids: Sequence[NodeId], principal: Principal) -> list[Node]:
         """ADR-124's read by id. Unlike `get_node` above, this finds only what the fake holds and

@@ -1,16 +1,13 @@
 """A picture's removal, without a database (ADR-124 decision 4 and decision 11).
 
-`EntityPictureService.remove` supersedes the picture's link with a successor whose provenance names
-the old link (`manual:remove-picture:{old.id}`), the same shape as a link change's
-(`manual:change:{old.id}`). A reader who may read the successor and not the old link is sent it as
-an addition (row two of decision 4), and with it the old link's id. ADR-124 U10 strips it; until
-then this file pins that it is still there, so that U10 cannot land without removing the marker.
-The service's own behaviour against a real graph is `test_entity_pictures.py`.
-"""
+`EntityPictureService.remove` supersedes the picture's link with a successor. Its provenance used to
+name the old link (`manual:remove-picture:{old.id}`), which row two of decision 4 would send, with
+the old link's id, to a reader who may read the successor and not the old link. Since U10 the
+successor records `manual:remove-picture` with no id and carries no id-bearing entry over from an
+earlier revision. The service's own behaviour against a real graph is `test_entity_pictures.py`."""
 
 from __future__ import annotations
 
-import pytest
 from services.api.document_content import DOCUMENT_TYPE
 from services.api.entity_pictures import DEPICTS, EntityPictureService
 from services.api.working_set.models import DeltaReplaceEdge
@@ -73,16 +70,9 @@ async def test_removing_a_picture_supersedes_its_link_and_records_the_old_one() 
     assert delta.removed is not None and delta.removed.source == "doc-1"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="ADR-124 U10 strips the old link's id from a successor's provenance (decision 11)",
-)
 async def test_a_removed_pictures_successor_names_nothing_of_the_old_link() -> None:
-    """Violation, known and owned by U10: the successor's provenance carries
-    `manual:remove-picture:{old.id}` (`entity_pictures.remove`), so row two of decision 4 sends a
-    reader of the successor the old link's id. Strict: when U10 removes it this passes, and the
-    marker must come off."""
+    """Violation caught (rule 3): the successor's provenance carries the old link's id, so the
+    addition row two sends names a link this reader may not read."""
     delta, _ = await _removed()
 
     assert "picture-1" not in delta.edge.model_dump_json()

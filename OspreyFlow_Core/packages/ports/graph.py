@@ -484,6 +484,20 @@ class GraphPort(Protocol):
         principal-scoped read."""
         ...
 
+    async def strip_provenance_references(self, prefix: str) -> int:
+        """Removes every provenance entry whose `document_id` starts with `prefix` from every link
+        in the Vault, superseded and reverted ones included, and returns how many links changed
+        (ADR-124 decision 11). `scripts/strip_change_provenance.py` is the only caller: it removes
+        the `manual:change:<old id>` and `manual:remove-picture:<old id>` entries that successors
+        written before U10 carry, naming a link a reader of the successor may not be able to read.
+
+        No `principal` argument, like `revert_elements`: it is an operator's one-off write on the
+        stored body, not a read. It changes no claim, only a reference, which is the named
+        exception to ADR-080's "every change is a supersede": nothing is superseded, `audit` is
+        untouched, and the link keeps its other sources. Idempotent: a second call with the same
+        prefix changes nothing and returns 0."""
+        ...
+
 
 SuggestMode = Literal["starts_with", "contains", "exact"]
 

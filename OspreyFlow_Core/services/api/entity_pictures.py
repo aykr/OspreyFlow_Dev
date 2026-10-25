@@ -42,6 +42,7 @@ from schemas.domain import (
     SourceRef,
 )
 
+from .change_provenance import PICTURE_MARKER, without_link_ids
 from .document_content import DOCUMENT_TYPE, UploadRefusedError
 from .email_extraction import _node_from_write
 from .working_set.models import DeltaAdd, DeltaReplaceEdge, DeltaReplaceEdgeSent
@@ -300,12 +301,8 @@ class EntityPictureService:
             provenance=Provenance(
                 state=ProvenanceState.ASSERTED,
                 sources=[
-                    *old.provenance.sources,
-                    SourceRef(
-                        document_id=f"manual:remove-picture:{old.id}",
-                        locator=principal.id,
-                        excerpt_hash="",
-                    ),
+                    *without_link_ids(old.provenance.sources),
+                    SourceRef(document_id=PICTURE_MARKER, locator=principal.id, excerpt_hash=""),
                 ],
                 first_seen=old.provenance.first_seen,
             ),

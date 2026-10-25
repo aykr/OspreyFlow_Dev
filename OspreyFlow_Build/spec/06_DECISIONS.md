@@ -17291,6 +17291,79 @@ option, as ADR-124 unit U9b (declared in ADR-124 Amendment 13), after an adversa
   boolean, at any depth. It was red against the integers. The live `test_packs.py` asserts the
   booleans, including a true history flag from an earlier snapshot hidden from the reader.
 
+### ADR-124, Amendment 14 (25 October 2026) — U10a: link changes
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after an adversarial review.
+- **Link history** returns a revision only when the reader may view both its recorded `before` and
+  `after` handling, judged by handling alone. A revision with an unreadable side is skipped whole,
+  and the walk goes on past it, so older readable revisions still show.
+  - **The walk** is bounded at 1,000 steps (`MAX_WALK`), so a cycle in the store ends it.
+  - **Without a handling scheme** the history shows nothing. The app always passes one.
+  - **A revision recorded before ADR-102 Amendment 1** (8 October 2026) has no recorded handling on
+    its sides, so it is hidden from every reader. Nothing records what those links' marking was;
+    judging them by the link's current marking could show a revision that was more restricted when
+    written. This is a visible change: such early history disappears for everyone. A test pins it.
+  - **Two residuals.** A history's time grows with its hidden revisions, as in Amendment 4. When the
+    walk runs out at its bound with fewer revisions shown than the page holds, `truncated` says so
+    (rule 2), which in a pathological chain implies roughly how many were skipped.
+- **Successor provenance.** A changed link keeps the old link's document sources minus any entry
+  naming an old link, and adds the bare marker `manual:change`. A picture removal adds
+  `manual:remove-picture`. The markers live in `services/api/change_provenance.py`. The two strict
+  expected failures that pinned the old entries now pass, and their markers are gone.
+- **`GraphPort.strip_provenance_references(prefix) -> int`** takes no principal. It scans every link
+  type in pages ordered by `id`, with no access, superseded or reverted step, rewrites only the
+  provenance, and returns how many distinct links changed. A second call returns 0.
+  - **Tested** by a conformance case with a superseded link and both prefixes, which failed live
+    under a plant returning 0. A reserved parameter name (`:after`) failed live on ArcadeDB and was
+    renamed; the pure stand-in now refuses such names too.
+- **`python -m scripts.strip_change_provenance`** runs once per deployment, and the Conduit may keep
+  running while it does.
+  - **What it does.** It strips both prefixes in the Vault, then rewrites each case's stored links in
+    Valkey with a conditional replace: a link is replaced only if its stored body still equals the one
+    read, checked atomically in Lua. A link removed or replaced by the running Conduit in between is
+    never brought back. A rewrite that would change a link's id, ends, handling or datasets is refused
+    before anything is written, so the counted access index is untouched.
+  - **Delta streams.** It deletes a case's delta stream only when a stored delta there names an
+    id-bearing entry, so `deltas_after` finds a gap and the next catch-up is a full snapshot. A
+    socket already connected keeps the bodies it was sent until its next full snapshot.
+  - **Idempotence.** A rerun completes an interrupted run, and a run with nothing left reports 0.
+  - **Tested** live on Valkey: a link removed and one replaced between the read and the write. The
+    test failed under a plant making the Lua replace unconditional.
+- **Rule 4.** The link history's filter is tested: a hidden revision and an absent one give the same
+  response.
+
+### ADR-080, Amendment 3 (25 October 2026) — a successor no longer names the old link, and one in-place exception
+
+Under the owner's ruling of 24 October 2026 on ADR-124 (option A′, "Filter per reader" for link
+changes), as ADR-124 decision 11 and Amendment 14.
+- **Decision 6** says a successor is "sourced `manual:change:<old id>`". It is now sourced with the old
+  link's document sources and the bare marker `manual:change`, with no id: the id of a link a reader
+  may not see would otherwise travel on a link they may see. The lineage lives only in the
+  link-change store, whose history is filtered per reader.
+- **Decision 7's history** ("follows those links back through every earlier version") now returns only
+  the revisions whose before and after the reader may view. A revision with an unreadable side is left
+  out whole, and the walk continues past it.
+- **The named exception to "a change is a supersede, not an edit".**
+  `scripts.strip_change_provenance`, run once per deployment, removes the id-bearing entries from
+  links already written, in place, superseded links included, through
+  `GraphPort.strip_provenance_references`. It changes no claim, only a reference. Every other change
+  remains a supersede.
+
+### ADR-102, Amendment 2 (25 October 2026) — link history is filtered per reader
+
+Under the owner's ruling of 24 October 2026 ("Filter per reader"), as ADR-124 decision 11.
+- **What changes.** Amendment 1 item 2 has the link's history show "Handling: SECRET, C → OFFICIAL,
+  P". That history is now read as the reader: a revision is shown only if the reader may view both
+  its recorded before and after handling, judged by handling alone, so a reader is never shown a
+  marking they may not see. A revision with an unreadable side is left out whole. Item 2's changes
+  "recorded before this", which have no handling, are now hidden from every reader rather than
+  shown saying nothing about it (ADR-124 Amendment 14).
+- **What it concedes.** A gap in the chain, where a shown revision's predecessor is missing, is one of
+  decision 12's accepted signals that hidden activity exists.
+- **What stays.** Decision 4's new revision with the old one kept and audited, and Amendment 1 item
+  1's supersede, are unchanged.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

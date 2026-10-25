@@ -243,3 +243,26 @@ end
 return finish()
 """
 )
+
+#: ARGV from 3: for each link, its id, the body it is expected to hold, and the body to put there.
+#: A link is replaced only if its stored body is still exactly the expected one (a link a running
+#: Conduit removed or replaced since the caller read it is skipped, and is not brought back). The
+#: caller has checked that the new body has the signature and ends of the old, so the entry, the
+#: counts and the adjacency are the same and are not touched. Returns how many were replaced.
+REPLACE_EDGE_BODIES_IF_UNCHANGED = (
+    PRELUDE
+    + r"""
+local replaced = 0
+local i = 3
+while i <= #ARGV do
+  local id, expected, body = ARGV[i], ARGV[i + 1], ARGV[i + 2]
+  i = i + 3
+  if redis.call('HGET', KEYS[2], id) == expected then
+    redis.call('HSET', KEYS[2], id, body)
+    replaced = replaced + 1
+  end
+end
+finish()
+return replaced
+"""
+)

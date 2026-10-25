@@ -71,6 +71,7 @@ from schemas.domain import (
     effective_basis,
 )
 
+from .change_provenance import CHANGE_MARKER, without_link_ids
 from .link_notes import LinkNotFoundError
 from .link_types import LinkTypeService
 from .working_set.models import DeltaReplaceEdge, DeltaReplaceEdgeSent
@@ -81,6 +82,9 @@ MAX_REASON_CHARS = 1000
 
 #: How far back one history read follows a link's changes before it stops and says so.
 MAX_HISTORY = 100
+#: How many revisions the history walk may step over, hidden ones included: a bound on the walk,
+#: not on what is shown, so that a cycle in the store ends it.
+MAX_WALK = 10 * MAX_HISTORY
 
 _RESOLUTION_TYPES = frozenset({SAME_AS, NOT_SAME_AS})
 
@@ -407,11 +411,11 @@ class LinkChangeService:
         replacement_id = new_edge_id()
         provenance = Provenance(
             state=ProvenanceState.ASSERTED,
+            # The old link's document sources, and this change recorded with no id: nothing here
+            # names the old link, whatever an earlier revision wrote (ADR-124 decision 11).
             sources=[
-                *old.provenance.sources,
-                SourceRef(
-                    document_id=f"manual:change:{old.id}", locator=principal.id, excerpt_hash=""
-                ),
+                *without_link_ids(old.provenance.sources),
+                SourceRef(document_id=CHANGE_MARKER, locator=principal.id, excerpt_hash=""),
             ],
             first_seen=old.provenance.first_seen,
         )
@@ -502,20 +506,46 @@ class LinkChangeService:
             )
         return wanted
 
+    def _side_readable(self, side: dict[str, Any], principal: Principal) -> bool:
+        """Whether `principal` may view the handling a revision recorded on one side (`before` or
+        `after`), by handling alone: the store does not record datasets, and link history is reached
+        only from a link in the reader's own case. A side with no scheme to judge it by, no
+        recorded handling, or one the scheme no longer defines, is not readable."""
+        if self._scheme is None:
+            return False
+        recorded = side.get("handling")
+        if not isinstance(recorded, dict):
+            return False
+        try:
+            return principal_may_view(Handling(**recorded), principal, self._scheme)
+        except (HandlingSchemeError, ValueError):
+            return False
+
+    def _readable(self, change: LinkChange, principal: Principal) -> bool:
+        return self._side_readable(change.before, principal) and self._side_readable(
+            change.after, principal
+        )
+
     async def history(
         self, investigation_id: str, edge_id: str, principal: Principal
     ) -> LinkHistoryResponse:
-        """Every change that led to this link, newest first."""
+        """Every change that led to this link that the reader may view, newest first (ADR-124
+        decision 11). A revision whose `before` or `after` the reader may not view is left out
+        whole, and the walk goes on past it, so the response is exactly the response for a history
+        without that revision: no placeholder, no gap, and a `truncated` flag that counts only what
+        the reader may see. The cap bounds what is shown; the walk itself is bounded by
+        `MAX_WALK`, so a cycle in the store ends it."""
         await self._visible(investigation_id, edge_id, principal)
         changes: list[LinkChange] = []
         current = edge_id
-        while len(changes) < MAX_HISTORY:
+        for _ in range(MAX_WALK):
             produced = await self._store.produced(investigation_id, current)
             if produced is None:
                 return LinkHistoryResponse(changes=changes)
-            changes.append(produced)
             current = produced.previous_edge_id
-        return LinkHistoryResponse(
-            changes=changes,
-            truncated=await self._store.produced(investigation_id, current) is not None,
-        )
+            if not self._readable(produced, principal):
+                continue
+            if len(changes) == MAX_HISTORY:
+                return LinkHistoryResponse(changes=changes, truncated=True)
+            changes.append(produced)
+        return LinkHistoryResponse(changes=changes, truncated=True)

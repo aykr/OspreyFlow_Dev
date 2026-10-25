@@ -18,6 +18,7 @@ import logging
 import time
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 import msgpack
@@ -45,7 +46,13 @@ from .access_index import (
     split_triple_key,
     triple_key,
 )
-from .access_scripts import ADD_EDGES, ADD_NODES, REMOVE_EDGES, REMOVE_NODES
+from .access_scripts import (
+    ADD_EDGES,
+    ADD_NODES,
+    REMOVE_EDGES,
+    REMOVE_NODES,
+    REPLACE_EDGE_BODIES_IF_UNCHANGED,
+)
 from .models import WorkingSetDelta, decode_delta, lacks_record
 
 _log = logging.getLogger(__name__)
@@ -65,6 +72,15 @@ IDLE_TTL_SECONDS = 24 * 60 * 60
 #: more than this many deltas gets a gap and resnapshots regardless, so the
 #: approximation costs nothing the protocol doesn't already handle.
 DELTA_STREAM_MAXLEN = 2000
+
+
+@dataclass(frozen=True)
+class EdgeRewrite:
+    """What `rewrite_edges_if_unchanged` did: how many links it replaced, and how many it left
+    because the stored body was no longer the one it had read."""
+
+    rewritten: int
+    skipped: int
 
 
 class WorkingSetStorage(Protocol):
@@ -136,6 +152,18 @@ class WorkingSetStorage(Protocol):
         recorded, between two nodes both still present at that step,
         would otherwise survive a restore to it. This is that direct
         removal path."""
+        ...
+
+    async def rewrite_edges_if_unchanged(
+        self, investigation_id: str, rewrite: Callable[[Edge], Edge | None]
+    ) -> EdgeRewrite:
+        """Reads every stored link, asks `rewrite` for each one's replacement (`None`: leave it),
+        and replaces each link **only if its stored body is still the one read**: a link a running
+        Conduit removed or replaced in between is skipped, never brought back or overwritten, and
+        is counted in `skipped`. A replacement must keep the link's id, ends, handling and datasets
+        (`ValueError` otherwise, before anything is written): the access index is not touched, so
+        it must not need to be. Used by `scripts/strip_change_provenance.py`, which changes only a
+        reference in the provenance."""
         ...
 
     async def node_count(self, investigation_id: str) -> int: ...
@@ -276,6 +304,15 @@ def _epoch_text(raw: bytes | None) -> str:
     return raw.decode() if raw else ""
 
 
+def _refuse_a_move(old: Edge, new: Edge) -> None:
+    """A conditional replacement leaves the access entry, the counts and the adjacency alone, so it
+    may not change what they are made from: the id, the ends, the handling or the datasets."""
+    if (new.id, new.source, new.target) != (old.id, old.source, old.target) or signature_of(
+        new.handling, new.datasets
+    ) != signature_of(old.handling, old.datasets):
+        raise ValueError(f"a rewrite of {old.id} would change its id, ends, handling or datasets")
+
+
 def _chunks(items: Sequence[Any]) -> list[Sequence[Any]]:
     return [items[i : i + _SCRIPT_CHUNK] for i in range(0, len(items), _SCRIPT_CHUNK)]
 
@@ -306,6 +343,9 @@ class ValkeyWorkingSetStore:
         #: Called after each write script, with its name and how many elements it took. Only a
         #: test sets it, to look at the store between chunks.
         self._after_script: Callable[[str, int], Awaitable[None]] | None = None
+        #: Called by `rewrite_edges_if_unchanged` between its read and its write, with the case id.
+        #: Only a test sets it, to land a write of a running Conduit in that gap.
+        self._between_read_and_write: Callable[[str], Awaitable[None]] | None = None
         #: Every write script run: (name, elements, seconds). What the benchmark reads the longest
         #: single script from, and what a test reads the chunk sizes from.
         self.script_runs: list[tuple[str, int, float]] = []
@@ -313,12 +353,12 @@ class ValkeyWorkingSetStore:
 
     async def _run_once(
         self, name: str, source: str, investigation_id: str, args: list[Any], elements: int
-    ) -> None:
+    ) -> Any:
         script = self._scripts.get(name)
         if script is None:
             script = self._scripts[name] = self._client.register_script(source)
         started = time.monotonic()
-        await _reply(
+        reply = await _reply(
             script(
                 keys=_script_keys(investigation_id),
                 args=[IDLE_TTL_SECONDS, uuid.uuid4().hex, *args],
@@ -327,16 +367,17 @@ class ValkeyWorkingSetStore:
         self.script_runs.append((name, elements, time.monotonic() - started))
         if self._after_script is not None:
             await self._after_script(name, elements)
+        return reply
 
     async def _run(
         self, name: str, source: str, investigation_id: str, args: list[Any], elements: int
-    ) -> None:
+    ) -> Any:
         """One write script (`access_scripts.py`): the bodies, the counts, the entries and the
         adjacency in one atomic step, the version counted up, every key's TTL refreshed, so that
         nothing follows it. A script that finds the index damaged stops and says so: the index is
         rebuilt from the bodies, and the chunk runs again (once: a second refusal is raised)."""
         try:
-            await self._run_once(name, source, investigation_id, args, elements)
+            return await self._run_once(name, source, investigation_id, args, elements)
         except ResponseError as error:
             if "access index damaged" not in str(error):
                 raise
@@ -344,7 +385,7 @@ class ValkeyWorkingSetStore:
                 "a write to %s found the access index damaged (%s)", investigation_id, error
             )
             await self._rebuild_access_index(investigation_id)
-            await self._run_once(name, source, investigation_id, args, elements)
+            return await self._run_once(name, source, investigation_id, args, elements)
 
     async def _touch_ttl(self, investigation_id: str) -> None:
         pipe = self._client.pipeline()
@@ -745,6 +786,38 @@ class ValkeyWorkingSetStore:
     async def remove_edges(self, investigation_id: str, edge_ids: Sequence[EdgeId]) -> None:
         for chunk in _chunks(edge_ids):
             await self._run("remove_edges", REMOVE_EDGES, investigation_id, list(chunk), len(chunk))
+
+    async def rewrite_edges_if_unchanged(
+        self, investigation_id: str, rewrite: Callable[[Edge], Edge | None]
+    ) -> EdgeRewrite:
+        """The conditional rewrite (`WorkingSetStorage`): the bodies are read as stored (raw), and
+        each replacement goes in by a script that compares the stored body with the one read, in
+        the same step as the write, so nothing a running Conduit does in between is undone."""
+        raw = await _reply(self._client.hgetall(_edge_key(investigation_id)))
+        changes: list[tuple[bytes, bytes, bytes]] = []
+        for edge_id, blob in raw.items():
+            old = Edge.model_validate(msgpack.unpackb(blob, raw=False))
+            new = rewrite(old)
+            if new is None:
+                continue
+            _refuse_a_move(old, new)
+            packed = msgpack.packb(new.model_dump(mode="json"), use_bin_type=True)
+            changes.append((edge_id, blob, packed))
+        if self._between_read_and_write is not None:
+            await self._between_read_and_write(investigation_id)
+        replaced = 0
+        for chunk in _chunks(changes):
+            args = [part for change in chunk for part in change]
+            replaced += int(
+                await self._run(
+                    "rewrite_edges",
+                    REPLACE_EDGE_BODIES_IF_UNCHANGED,
+                    investigation_id,
+                    args,
+                    len(chunk),
+                )
+            )
+        return EdgeRewrite(rewritten=replaced, skipped=len(changes) - replaced)
 
     async def node_count(self, investigation_id: str) -> int:
         return int(await _reply(self._client.hlen(_node_key(investigation_id))))

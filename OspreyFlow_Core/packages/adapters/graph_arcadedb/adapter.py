@@ -122,6 +122,28 @@ _ID_CHUNK = 1000
 _RECORD_ID = re.compile(r"^#\d+:\d+$")
 
 
+#: How many links `strip_provenance_references` reads at a time.
+_STRIP_PAGE = 500
+
+
+def _without_references(provenance: object, prefix: str) -> dict[str, Any] | None:
+    """`provenance` with every source whose `document_id` starts with `prefix` removed, or `None`
+    when none does (nothing to write). Only `sources` changes."""
+    if not isinstance(provenance, dict):
+        return None
+    sources = provenance.get("sources")
+    if not isinstance(sources, list):
+        return None
+    kept = [
+        s
+        for s in sources
+        if not (isinstance(s, dict) and str(s.get("document_id", "")).startswith(prefix))
+    ]
+    if len(kept) == len(sources):
+        return None
+    return {**provenance, "sources": kept}
+
+
 def _id_chunks(ids: Sequence[str]) -> list[list[str]]:
     """`ids` without repeats, in the order given, in lists of at most `_ID_CHUNK`. No ids give no
     lists, so an empty read sends no query. A bare `str` is refused: it is a sequence of
@@ -1117,6 +1139,43 @@ class GraphArcadeDBAdapter:
                 f'g.E().has("id",within({ids_literal})).property("reverted", true)',
                 session_id=tx,
             )
+
+    # --- one-off provenance rewrite -------------------------------------------
+
+    async def strip_provenance_references(self, prefix: str) -> int:
+        """ADR-124 decision 11: a scan of every link type in the store, by `id` in index order and
+        in pages, with no access step and no superseded or reverted filter (this is not a read for
+        a reader). A link changes only if one of its provenance entries has a `document_id` that
+        starts with `prefix`; the entries are removed from the stored `provenance` and nothing else
+        is written. Each page is read from the id after the last one seen, so a rewrite never moves
+        a record under the cursor."""
+        changed = 0
+        types = await self._types_with_unique_id("edge")
+        for type_name in types:
+            quoted = groovy_identifier(type_name)
+            after = ""
+            rewritten: set[str] = set()
+            while True:
+                rows = await self._client.sql(
+                    f"SELECT id, provenance FROM `{quoted}` WHERE id > :after_id "
+                    f"ORDER BY id LIMIT {_STRIP_PAGE}",
+                    params={"after_id": after},
+                )
+                if not rows:
+                    break
+                for row in rows:
+                    stripped = _without_references(row.get("provenance"), prefix)
+                    if stripped is not None and row["id"] not in rewritten:
+                        rewritten.add(row["id"])
+                        await self._client.sql(
+                            f"UPDATE `{quoted}` SET provenance = :provenance WHERE id = :id",
+                            params={"provenance": stripped, "id": row["id"]},
+                        )
+                        changed += 1
+                after = rows[-1]["id"]
+                if len(rows) < _STRIP_PAGE:
+                    break
+        return changed
 
     # --- supersession --------------------------------------------------------
 

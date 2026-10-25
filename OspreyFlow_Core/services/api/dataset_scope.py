@@ -197,6 +197,11 @@ class DatasetStampingGraph:
         await self._inner.revert_elements(node_ids, edge_ids, tx)
         await self._written()
 
+    async def strip_provenance_references(self, prefix: str) -> int:
+        changed: int = await self._inner.strip_provenance_references(prefix)
+        await self._written()
+        return changed
+
 
 class BulkDatasetStampingGraph(DatasetStampingGraph):
     """The same, over an adapter that is a `BulkGraphLoader`, and so one itself. The method is

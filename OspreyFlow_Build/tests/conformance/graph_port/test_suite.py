@@ -5133,3 +5133,93 @@ async def test_a_same_pair_merge_carries_another_datasets_occurrences_today(
     assert merged.weight == pytest.approx(seven.weight, abs=1e-9)
     assert abs(merged.weight - two.weight) > 1e-3, "and in the weight"
 
+
+# --- strip_provenance_references (ADR-124 decision 11, U10) -------------------------------------
+
+
+async def _sources_of(adapter: Any, edge_type: str, edge_id: str) -> list[str]:
+    """The `document_id` of every provenance entry of every stored record of `edge_id`, superseded
+    ones included: a raw read, because no port read returns a superseded link."""
+    from adapters.graph_arcadedb.naming import physical_type_name
+
+    rows = await adapter._client.sql(
+        f"SELECT provenance FROM {physical_type_name(edge_type)} WHERE id = '{edge_id}'"
+    )
+    return [s["document_id"] for row in rows for s in row["provenance"]["sources"]]
+
+
+def _provenance_with(*documents: str) -> Provenance:
+    return Provenance(
+        state=ProvenanceState.ASSERTED,
+        sources=[
+            SourceRef(document_id=d, locator="p.1", excerpt_hash="a" * 64)
+            for d in ("doc-1", *documents)
+        ],
+        first_seen=datetime.now(UTC),
+    )
+
+
+async def test_strip_provenance_references_removes_the_prefix_from_live_and_superseded_links(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Violation caught: a successor's provenance still names the link it replaced after the
+    one-off strip (`scripts/strip_change_provenance.py`), because the method skipped superseded
+    links (the old link carries the entry its own predecessor left), handled one prefix only, or
+    changed the document sources. Three pairs, so no write merges into another: a link that was
+    changed (and so is itself superseded, carrying a `manual:change:` entry), its live successor
+    (carrying `manual:change:` naming the old link), and a picture link with a
+    `manual:remove-picture:` entry. A bare `manual:change` marker and the document source stay."""
+    async with factory.context() as adapter:
+        (a, b, c, d, e, f), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", family_name=n) for n in "ABCDEF"],
+            [],
+        )
+        old = _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL").model_copy(
+            update={"provenance": _provenance_with("manual:change:first")}
+        )
+        picture = _edge("ASSOCIATE_OF", c, d, classification="OFFICIAL").model_copy(
+            update={
+                "provenance": _provenance_with("manual:remove-picture:old-picture", "manual:change")
+            }
+        )
+        untouched = _edge("ASSOCIATE_OF", e, f, classification="OFFICIAL")
+        _, (old_id, picture_id, untouched_id) = await _write(adapter, [], [old, picture, untouched])
+
+        tx = await adapter.begin_transaction()
+        successor_id = await adapter.supersede_edge(
+            old_id,
+            EdgeWrite(
+                id=new_edge_id(),
+                type="ASSOCIATE_OF",
+                source=a,
+                target=b,
+                provenance=_provenance_with(f"manual:change:{old_id}"),
+                handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
+                created_by="analyst-1",
+                created_at=now_utc(),
+            ),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+        assert "manual:change:first" in await _sources_of(adapter, "ASSOCIATE_OF", old_id)
+        assert f"manual:change:{old_id}" in await _sources_of(adapter, "ASSOCIATE_OF", successor_id)
+
+        assert await adapter.strip_provenance_references("manual:change:") == 2
+        assert await _sources_of(adapter, "ASSOCIATE_OF", old_id) == ["doc-1"], "the superseded one"
+        assert await _sources_of(adapter, "ASSOCIATE_OF", successor_id) == ["doc-1"]
+        assert await _sources_of(adapter, "ASSOCIATE_OF", picture_id) == [
+            "doc-1",
+            "manual:remove-picture:old-picture",
+            "manual:change",
+        ], "the other prefix and the bare marker are not touched by this prefix"
+
+        assert await adapter.strip_provenance_references("manual:remove-picture:") == 1
+        assert await _sources_of(adapter, "ASSOCIATE_OF", picture_id) == ["doc-1", "manual:change"]
+        assert await _sources_of(adapter, "ASSOCIATE_OF", untouched_id) == ["doc-1"]
+
+        assert await adapter.strip_provenance_references("manual:change:") == 0, "a second run"
+        assert await adapter.strip_provenance_references("manual:remove-picture:") == 0
+        # What the link says is unchanged.
+        live = await adapter.get_edges([successor_id, picture_id], CLEARED)
+        assert {e.id for e in live} == {successor_id, picture_id}

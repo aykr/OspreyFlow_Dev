@@ -280,7 +280,10 @@ async def test_the_new_link_is_attributed_to_the_analyst_and_counts_as_a_revisio
     # What the link was built from is kept, with the analyst's change added to it.
     documents = [s.document_id for s in result.edge.provenance.sources]
     assert documents[0] == "doc-1"
-    assert any(d.startswith("manual:change:e1") for d in documents)
+    # Its own change is recorded with no id (ADR-124 decision 11): the lineage is in the link-change
+    # store, where history filters it, and not in a field every reader of the link sees.
+    assert documents == ["doc-1", "manual:change"]
+    assert "e1" not in result.edge.model_dump_json()
     written = graph.superseded[0][1]
     assert written.created_by == ANALYST.id
     assert written.handling == _handling()  # a change never alters the marking
@@ -392,7 +395,7 @@ async def test_the_change_is_recorded_with_who_when_why_and_old_and_new_values()
 
 
 async def test_the_history_follows_a_link_back_through_every_change() -> None:
-    service, _, _, _, _ = await _build()
+    service, _, _ = await _service_with_scheme()
     first = await service.change(
         "inv-1", "e1", ANALYST, LinkChangeRequest(type="FAMILY_OF", reason="First")
     )
@@ -408,7 +411,7 @@ async def test_the_history_follows_a_link_back_through_every_change() -> None:
 
 
 async def test_a_link_nobody_changed_has_an_empty_history() -> None:
-    service, _, _, _, _ = await _build()
+    service, _, _ = await _service_with_scheme()
     assert (await service.history("inv-1", "e1", ANALYST)).changes == []
 
 
@@ -683,16 +686,219 @@ async def test_a_lowered_link_is_sent_to_a_reader_of_the_new_one_as_an_addition(
     assert [e.id for e in sent.edges] == [result.edge.id]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="U10 strips the old link's id from a successor's provenance (decision 11)",
-)
 async def test_a_lowered_link_sent_as_an_addition_names_nothing_of_the_old_link() -> None:
-    """Violation, known and owned by U10: the successor's provenance names `manual:change:{old.id}`
-    and carries the old link's sources (`change`, above), so the addition that row two sends names
-    the old link, which this reader may not read. Strict: when U10 removes it this passes, and the
-    marker must come off."""
+    """Violation caught (rule 3): the successor's provenance names the old link, so the addition
+    that row two sends names a link this reader may not read. Since U10 a change records
+    `manual:change` with no id (ADR-124 decision 11)."""
     _, sent = await _lowered_link_projected_for_a_reader_of_the_new_one()
 
     assert "secret-link" not in sent.model_dump_json()
+
+
+# --- ADR-124 decision 11: link history is filtered per reader, successors name no old link --------
+
+
+async def test_a_second_change_carries_no_id_bearing_entry_from_the_first() -> None:
+    """Violation caught: a chain of changes accumulating `manual:change:<id>` entries, each naming
+    a link an earlier reader may not have read. The first change's own entry is `manual:change`; the
+    second carries no id-bearing entry over, and keeps the link's document sources."""
+    service, _, store, _, _ = await _build()
+    first = await service.change(
+        "inv-1", "e1", ANALYST, LinkChangeRequest(type="FAMILY_OF", reason="First")
+    )
+    # An id-bearing entry written before this change (an old successor) is dropped, not carried.
+    aged = first.edge.provenance.model_copy(
+        update={
+            "sources": [
+                *first.edge.provenance.sources,
+                SourceRef(document_id="manual:change:e0", locator="x", excerpt_hash=""),
+            ]
+        }
+    )
+    await store.remove_edges("inv-1", [first.edge.id])
+    await store.add_edges("inv-1", [first.edge.model_copy(update={"provenance": aged})])
+    second = await service.change(
+        "inv-1",
+        first.edge.id,
+        ANALYST,
+        LinkChangeRequest(properties={"relation": "sister"}, reason="Second"),
+    )
+    documents = [s.document_id for s in second.edge.provenance.sources]
+    assert not [d for d in documents if d.startswith("manual:change:")]
+    assert documents[0] == "doc-1" and documents[-1] == "manual:change"
+    assert "e0" not in second.edge.model_dump_json() and "e1" not in second.edge.model_dump_json()
+
+
+def _revision(
+    n: int, before: str, after: str, *, edge: str | None = None, previous: str | None = None
+) -> LinkChange:
+    return LinkChange(
+        id=f"c{n}",
+        investigation_id="inv-1",
+        edge_id=edge or f"r{n}",
+        previous_edge_id=previous or f"r{n - 1}",
+        changed_by="analyst-9",
+        changed_at=datetime(2026, 2, n, tzinfo=UTC),
+        reason=f"Revision {n}",
+        before={"type": "ASSOCIATE_OF", "handling": _handling(before).model_dump(mode="json")},
+        after={"type": "ASSOCIATE_OF", "handling": _handling(after).model_dump(mode="json")},
+    )
+
+
+async def _history_of(rows: list[LinkChange], link_id: str = "r3") -> list[str]:
+    """The reasons `ANALYST` (OFFICIAL) is shown for the history of `link_id`, newest first."""
+    store = FakeWorkingSetStore()
+    await store.add_nodes("inv-1", [_node("a"), _node("b")])
+    await store.add_edges("inv-1", [_edge(link_id, "a", "b")])
+    graph = SupersedingGraph({link_id})
+    changes = InMemoryChanges()
+    changes.rows = list(rows)
+    service = LinkChangeService(
+        changes,
+        WorkingSetService(graph, store, SCHEME),
+        graph,
+        ONTOLOGY,
+        MovedNotes(),
+        scheme=SCHEME,
+    )
+    response = await service.history("inv-1", link_id, ANALYST)
+    assert response.truncated is False
+    return [c.reason for c in response.changes]
+
+
+async def test_a_revision_with_an_unreadable_side_is_left_out_whole() -> None:
+    """Violation caught (rule 3): the history shows a revision whose `before` (or `after`) was
+    marked above the reader, so the reader reads what the link used to be. Judged on both sides: a
+    revision unreadable on `before` alone, or on `after` alone, is left out; one readable on both
+    stays."""
+    rows = [
+        _revision(3, "OFFICIAL", "OFFICIAL"),
+        _revision(2, "SECRET", "OFFICIAL"),  # was above the reader before
+        _revision(1, "OFFICIAL", "SECRET"),  # went above the reader after
+    ]
+    assert await _history_of(rows) == ["Revision 3"]
+
+
+async def test_a_revision_before_a_hidden_one_is_still_shown() -> None:
+    """The walk goes on past a hidden revision: only the unreadable one is left out."""
+    rows = [
+        _revision(3, "OFFICIAL", "OFFICIAL"),
+        _revision(2, "SECRET", "SECRET"),
+        _revision(1, "OFFICIAL", "OFFICIAL"),
+    ]
+    assert await _history_of(rows) == ["Revision 3", "Revision 1"]
+
+
+async def test_a_hidden_revision_and_an_absent_one_give_the_same_response() -> None:
+    """Violation caught (rule 4): the reader can tell that a hidden revision exists, from a
+    placeholder, a `truncated` flag, a short list that says it is short, or a field that names it.
+    The history with a hidden revision in it is exactly the history without that revision."""
+    visible = _revision(3, "OFFICIAL", "OFFICIAL")
+    hidden = [_revision(2, "SECRET", "OFFICIAL"), _revision(1, "SECRET", "SECRET")]
+    with_hidden = await _history_of([visible, *hidden])
+    without = await _history_of([visible])
+    assert with_hidden == without == ["Revision 3"]
+
+
+async def test_the_whole_response_is_equal_not_only_the_reasons() -> None:
+    store = FakeWorkingSetStore()
+    await store.add_nodes("inv-1", [_node("a"), _node("b")])
+    await store.add_edges("inv-1", [_edge("r3", "a", "b")])
+    graph = SupersedingGraph({"r3"})
+
+    async def respond(rows: list[LinkChange]) -> Any:
+        changes = InMemoryChanges()
+        changes.rows = rows
+        service = LinkChangeService(
+            changes, WorkingSetService(graph, store, SCHEME), graph, ONTOLOGY, MovedNotes(),
+            scheme=SCHEME,
+        )  # fmt: skip
+        return (await service.history("inv-1", "r3", ANALYST)).model_dump_json()
+
+    visible = _revision(3, "OFFICIAL", "OFFICIAL")
+    hidden = [_revision(2, "SECRET", "OFFICIAL"), _revision(1, "SECRET", "SECRET")]
+    assert await respond([visible, *hidden]) == await respond([visible])
+
+
+async def test_a_cleared_reader_is_shown_every_revision() -> None:
+    """The other half: the filter judges the reader, it does not hide the revisions from all."""
+    rows = [
+        _revision(3, "OFFICIAL", "OFFICIAL"),
+        _revision(2, "SECRET", "OFFICIAL"),
+        _revision(1, "SECRET", "SECRET"),
+    ]
+    store = FakeWorkingSetStore()
+    await store.add_nodes("inv-1", [_node("a"), _node("b")])
+    await store.add_edges("inv-1", [_edge("r3", "a", "b")])
+    graph = SupersedingGraph({"r3"})
+    changes = InMemoryChanges()
+    changes.rows = rows
+    service = LinkChangeService(
+        changes, WorkingSetService(graph, store, SCHEME), graph, ONTOLOGY, MovedNotes(),
+        scheme=SCHEME,
+    )  # fmt: skip
+    response = await service.history("inv-1", "r3", CLEARED)
+    assert [c.reason for c in response.changes] == ["Revision 3", "Revision 2", "Revision 1"]
+
+
+async def test_without_the_scheme_a_history_shows_nothing_rather_than_everything() -> None:
+    """No scheme means no way to judge a side: it fails closed."""
+    store = FakeWorkingSetStore()
+    await store.add_nodes("inv-1", [_node("a"), _node("b")])
+    await store.add_edges("inv-1", [_edge("r3", "a", "b")])
+    graph = SupersedingGraph({"r3"})
+    changes = InMemoryChanges()
+    changes.rows = [_revision(3, "OFFICIAL", "OFFICIAL")]
+    service = LinkChangeService(
+        changes, WorkingSetService(graph, store, SCHEME), graph, ONTOLOGY, MovedNotes()
+    )
+    assert (await service.history("inv-1", "r3", ANALYST)).changes == []
+
+
+async def _history_for(rows: list[LinkChange], reader: Principal) -> list[str]:
+    store = FakeWorkingSetStore()
+    await store.add_nodes("inv-1", [_node("a"), _node("b")])
+    await store.add_edges("inv-1", [_edge("r4", "a", "b")])
+    graph = SupersedingGraph({"r4"})
+    changes = InMemoryChanges()
+    changes.rows = list(rows)
+    service = LinkChangeService(
+        changes,
+        WorkingSetService(graph, store, SCHEME),
+        graph,
+        ONTOLOGY,
+        MovedNotes(),
+        scheme=SCHEME,
+    )
+    return [c.reason for c in (await service.history("inv-1", "r4", reader)).changes]
+
+
+def _without_handling(change: LinkChange, *, before: bool, after: bool) -> LinkChange:
+    """The shape of a revision written before ADR-102 Amendment 1 (8 October 2026): nothing
+    recorded what the link's marking was on that side."""
+    return change.model_copy(
+        update={
+            "before": {k: v for k, v in change.before.items() if not (before and k == "handling")},
+            "after": {k: v for k, v in change.after.items() if not (after and k == "handling")},
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [(True, False), (False, True), (True, True)],
+    ids=["before", "after", "both"],
+)
+@pytest.mark.parametrize("reader", [ANALYST, CLEARED], ids=["low", "cleared"])
+async def test_a_revision_with_no_recorded_handling_is_left_out_for_every_reader(
+    before: bool, after: bool, reader: Principal
+) -> None:
+    """Fail closed: nothing records what such a link's marking was, so no reader, a fully cleared
+    one included, is shown the revision. The walk goes on past it to older readable revisions."""
+    rows = [
+        _revision(4, "OFFICIAL", "OFFICIAL"),
+        _without_handling(_revision(3, "OFFICIAL", "OFFICIAL"), before=before, after=after),
+        _revision(2, "OFFICIAL", "OFFICIAL"),
+        _revision(1, "OFFICIAL", "OFFICIAL"),
+    ]
+    assert await _history_for(rows, reader) == ["Revision 4", "Revision 2", "Revision 1"]

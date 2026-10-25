@@ -1206,3 +1206,137 @@ async def test_a_view_over_the_cap_is_counted_from_the_real_index_and_not_the_st
             4,
         )
     assert working_store.access_index_rebuilds == 0
+
+
+async def test_the_strip_script_cleans_links_and_stream_and_a_catch_up_gets_a_snapshot(
+    indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str],
+) -> None:
+    """ADR-124 decision 11, U10, over the real scripts, store and stream (the Vault half is the
+    conformance case). A case holds an old successor naming the link it replaced, and its delta
+    stream holds the replacement that carried it. Before the run a client one step behind is sent
+    the delta; after it, neither the stored link nor the stream names the old link, the counted
+    index is what it was, the same client is sent a full snapshot from the clean copies, and a
+    second run changes nothing and reports 0."""
+    from scripts.strip_change_provenance import strip
+    from services.api.working_set.models import RemovedElement
+
+    working_store, client, case = indexed_store
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
+    successor = index_edge("new", "a", "b")
+    successor = successor.model_copy(
+        update={
+            "provenance": successor.provenance.model_copy(
+                update={
+                    "sources": [
+                        *successor.provenance.sources,
+                        SourceRef(
+                            document_id="manual:change:old", locator="analyst-1", excerpt_hash=""
+                        ),
+                    ]
+                }
+            )
+        }
+    )
+    await working_store.add_nodes(case, [index_node("a"), index_node("b")])
+    await working_store.add_edges(case, [successor])
+    seq = await working_store.next_seq(case)
+    await working_store.append_delta(
+        case,
+        DeltaReplaceEdge(
+            seq=seq,
+            old_edge_id="old",
+            edge=successor,
+            removed=RemovedElement(
+                handling=successor.handling, datasets=[], source="a", target="b"
+            ),
+        ),
+    )
+    counts_before = await working_store.access_counts(case)
+    (before,) = await service.sync(case, OFFICIAL_READER, last_acknowledged_seq=seq - 1)
+    assert "manual:change:old" in before.model_dump_json(), "the fault the script cleans"
+
+    report = await strip(FakeGraphPort(Subgraph(nodes=[], edges=[])), client, working_store)
+
+    assert report.working_set_links >= 1 and report.streams_deleted >= 1
+    stored = await working_store.get_edge(case, "new")
+    assert stored is not None
+    assert [s.document_id for s in stored.provenance.sources] == ["doc-1"]
+    assert await client.exists(f"ws:{case}:deltas") == 0
+    assert await working_store.deltas_after(case, seq - 1) is None, "a gap"
+    (after,) = await service.sync(case, OFFICIAL_READER, last_acknowledged_seq=seq - 1)
+    assert isinstance(after, DeltaSnapshot)
+    assert "old" not in {s.document_id for e in after.edges for s in e.provenance.sources}
+    assert "manual:change:old" not in after.model_dump_json()
+    counts_after = await working_store.access_counts(case)
+    assert (counts_after.signatures, counts_after.node_counts, counts_after.edge_counts) == (
+        counts_before.signatures,
+        counts_before.node_counts,
+        counts_before.edge_counts,
+    )
+    assert working_store.access_index_rebuilds == 0
+
+    again = await strip(FakeGraphPort(Subgraph(nodes=[], edges=[])), client, working_store)
+    assert again.working_set_links == 0 and again.streams_deleted == 0
+
+
+def _with_old_entry(link: Edge) -> Edge:
+    return link.model_copy(
+        update={
+            "provenance": link.provenance.model_copy(
+                update={
+                    "sources": [
+                        *link.provenance.sources,
+                        SourceRef(document_id="manual:change:old", locator="x", excerpt_hash=""),
+                    ]
+                }
+            )
+        }
+    )
+
+
+def _without_old_entry(link: Edge) -> Edge | None:
+    kept = [s for s in link.provenance.sources if not s.document_id.startswith("manual:change:")]
+    if len(kept) == len(link.provenance.sources):
+        return None
+    return link.model_copy(
+        update={"provenance": link.provenance.model_copy(update={"sources": kept})}
+    )
+
+
+async def test_a_conditional_rewrite_does_not_bring_back_a_link_removed_in_between(
+    indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str],
+) -> None:
+    """ADR-124 U10a, over the real script: the links are read, a running Conduit removes one, and
+    the rewrite writes the others. The removed link stays removed (an upsert of what was read would
+    have put it back with no delta), the report says one was skipped, the counted index still
+    equals what the bodies say and was not rebuilt, and a link replaced in between keeps its newer
+    body."""
+    working_store, _, case = indexed_store
+    await working_store.add_nodes(case, [index_node("a"), index_node("b")])
+    await working_store.add_edges(
+        case,
+        [
+            _with_old_entry(index_edge("l1", "a", "b")),
+            _with_old_entry(index_edge("l2", "a", "b")),
+            _with_old_entry(index_edge("l3", "a", "b")),
+            index_edge("l4", "a", "b"),
+        ],
+    )
+    newer = index_edge("l3", "a", "b").model_copy(update={"occurrences": 9})
+
+    async def conduit_acts(c: str) -> None:
+        await working_store.remove_edges(c, ["l2"])
+        await working_store.add_edges(c, [newer])
+
+    working_store._between_read_and_write = conduit_acts
+
+    result = await working_store.rewrite_edges_if_unchanged(case, _without_old_entry)
+
+    assert (result.rewritten, result.skipped) == (1, 2)
+    assert sorted(await working_store.edge_ids(case)) == ["l1", "l3", "l4"]
+    l1 = await working_store.get_edge(case, "l1")
+    assert l1 is not None and [s.document_id for s in l1.provenance.sources] == ["doc-1"]
+    assert await working_store.get_edge(case, "l3") == newer
+    counts = await working_store.access_counts(case)
+    assert sum(counts.edge_counts.values()) == 3
+    assert working_store.access_index_rebuilds == 0
