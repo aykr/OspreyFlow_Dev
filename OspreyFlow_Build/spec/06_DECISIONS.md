@@ -17859,3 +17859,26 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   space, never refused.
 - **The profiler does not propose it.** Almost any identifier passes its character set, so its
   coincidence rate is about one and its evidence about none; a recipe names it explicitly.
+
+### ADR-127, Amendment 5 (25 October 2026) — B2-4a: what decision 6 left open for events
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **`retract_load` removes every event read.** Not only `trend` and `cross_filter`: the histogram,
+  geo bins, first-seen, sightings, the event list, `baseline` and `geocode_events`. The conformance
+  suite compares every read, for every principal, against a store that never held the load's events.
+  It removes no event with no `load_id`, and none of another load; it is idempotent and returns the
+  count, including events no reader present may read.
+- **Existing stores are brought forward on start.** Both adapters add the `load_id` column when it is
+  missing. ClickHouse checks `system.columns` first, so a start on a store that has the column issues
+  no `ALTER` (it still issues `CREATE TABLE IF NOT EXISTS`, as before). Unproven: no multi-replica
+  cluster was available, so nothing shows that a start with one replica down returns promptly. Events
+  written before the column carry none and are never retracted.
+- **For the revert (B2-4b and B2-4c), decided now so the record is kept:**
+  - **Released held rows.** A release loads under its own `load_id`. Reverting a load reverts every
+    unreverted release of its held rows first, newest first, in the same operation, each named in the
+    result and recorded with the same `reverted_by`. The demo reset reverts chapter loads repeatedly,
+    which a refusal would stall.
+  - **Held rows still pending** when their load is reverted are discarded with it, so none can be
+    released into a case where its load no longer exists.
+  - **A load written before events carried `load_id`** is refused: its events cannot be retracted, and
+    a revert that removed none would leave them moving every trend.

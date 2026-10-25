@@ -48,6 +48,10 @@ class EventRecord(BaseModel):
     properties: dict[str, Any] = Field(default_factory=dict)
     investigation_scope: str
     handling: Handling
+    #: The Studio load that wrote this event (ADR-127 decision 6), so a reverted load's events can
+    #: be removed (`AnalyticsPort.retract_load`). `None` for an event from another writer: a seeder,
+    #: a manual edit, or one written before the column existed.
+    load_id: str | None = None
 
     @model_validator(mode="after")
     def _lat_lon_travel_together(self) -> EventRecord:

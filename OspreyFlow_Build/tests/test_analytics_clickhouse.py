@@ -21,12 +21,20 @@ import pytest
 from ulid import ULID
 
 from adapters.analytics_clickhouse.adapter import as_multipolygon
-from adapters.analytics_clickhouse.client import bind
+from adapters.analytics_clickhouse.adapter import AnalyticsClickHouseAdapter
+from adapters.analytics_clickhouse.client import ClickHouseClient, ClickHouseSettings, bind
+from adapters.analytics_clickhouse.schema import (
+    CREATE_EVENTS_TABLE,
+    create_database,
+    create_tables,
+    drop_database,
+)
 from adapters.analytics_clickhouse.testing import clickhouse_adapter
 from adapters.analytics_duckdb.testing import duckdb_adapter
 from ontology.handling import load_uk_le_scheme
 from schemas.analytics import (
     EventFilter,
+    EventListRequest,
     EventRecord,
     GeocodeRequest,
     GeometryKind,
@@ -199,3 +207,46 @@ async def test_the_conduit_opens_clickhouse_when_the_deployment_names_it(
         client = again._ch  # type: ignore[attr-defined]  # noqa: SLF001
         await client.command(f"DROP DATABASE IF EXISTS {database}", database=None)
         await close_again()
+
+
+async def test_a_store_made_before_load_id_is_brought_forward_and_keeps_its_rows() -> None:
+    """`CREATE TABLE IF NOT EXISTS` leaves an old `events` table as it was; `create_tables` must
+    add the column to it, or every later `load_events` fails on it."""
+    database = f"conformance_{str(ULID()).lower()}"
+    client = ClickHouseClient(ClickHouseSettings.from_env(database))
+    await client.command(create_database(database, client.cluster), database=None)
+    try:
+        await client.command(CREATE_EVENTS_TABLE.replace(",\n    load_id Nullable(String)", ""))
+        columns = await client.rows(
+            "SELECT name FROM system.columns WHERE database = ? AND table = 'events'", [database]
+        )
+        assert "load_id" not in {row[0] for row in columns}
+        await client.insert(
+            "events",
+            [
+                {
+                    "event_id": "old", "edge_id": "e1", "edge_type": "COMMUNICATED_WITH",
+                    "source_id": "a", "target_id": "b", "occurred_at": "2026-01-01 12:00:00.000000",
+                    "properties": "{}", "investigation_scope": CASE,
+                    "handling_classification": "OFFICIAL", "handling_code": "P",
+                    "owning_unit": "unit-1", "originator": "unit-1",
+                }
+            ],
+        )  # fmt: skip
+        await create_tables(client)
+        await create_tables(client)  # and again: a no-op on a store that has it
+        adapter = AnalyticsClickHouseAdapter(client, SCHEME)
+        new = _event().model_copy(update={"event_id": "new", "load_id": "load-1"})
+        await adapter.load_events([new])
+        page = await adapter.list_events(
+            EventListRequest(filter=EventFilter(investigation_scope=CASE)), READER
+        )
+        assert {e.event_id: e.load_id for e in page.events} == {"old": None, "new": "load-1"}
+        assert await adapter.retract_load("load-1") == 1
+        page = await adapter.list_events(
+            EventListRequest(filter=EventFilter(investigation_scope=CASE)), READER
+        )
+        assert [e.event_id for e in page.events] == ["old"]
+    finally:
+        await client.command(drop_database(database, client.cluster), database=None)
+        await client.aclose()

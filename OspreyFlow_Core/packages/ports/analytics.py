@@ -111,6 +111,15 @@ class AnalyticsPort(Protocol):
 
     async def load_events(self, records: Sequence[EventRecord]) -> None: ...
 
+    async def retract_load(self, load_id: str) -> int:
+        """Removes every event a load wrote (ADR-127 decision 6) and returns how many. Removes
+        nothing else: another load's events, and events with no `load_id`, stay. Idempotent: a
+        second call, or one for a load that wrote none, removes nothing, returns 0 and raises
+        nothing. Like `load_events` it is a backend write, not principal-scoped, and counts every
+        event of the load whatever its marking; afterwards no read, for any principal, returns or
+        counts a retracted event."""
+        ...
+
     async def load_geometries(self, records: Sequence[GeometryRecord]) -> None: ...
 
     async def get_geometry(

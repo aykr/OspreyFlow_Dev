@@ -53,9 +53,15 @@ CREATE TABLE IF NOT EXISTS events (
     handling_classification VARCHAR,
     handling_code VARCHAR,
     owning_unit VARCHAR,
-    originator VARCHAR
+    originator VARCHAR,
+    load_id VARCHAR
 )
 """
+
+#: A store made before `load_id` existed has the table without it, and `CREATE TABLE IF NOT EXISTS`
+#: leaves it so. Run at every start, after the create, this adds the column to such a store and
+#: does nothing to a store that has it (ADR-127 decision 6).
+ADD_EVENTS_LOAD_ID = "ALTER TABLE events ADD COLUMN IF NOT EXISTS load_id VARCHAR"
 
 #: No `investigation_scope` column — `GeometryRecord`'s own docstring
 #: records why: reference data is versioned as a whole rather than scoped
@@ -92,6 +98,7 @@ CREATE TABLE IF NOT EXISTS geometries (
 
 def create_events_table(con: duckdb.DuckDBPyConnection) -> None:
     con.execute(CREATE_EVENTS_TABLE)
+    con.execute(ADD_EVENTS_LOAD_ID)
 
 
 def create_geometries_table(con: duckdb.DuckDBPyConnection) -> None:

@@ -77,7 +77,7 @@ def _row_to_event(row: tuple[object, ...]) -> EventRecord:
     (
         event_id, edge_id, edge_type, source_id, target_id, occurred_at, duration_s, cell_site,
         lat, lon, direction, properties, investigation_scope, classification, handling_code,
-        owning_unit, originator,
+        owning_unit, originator, load_id,
     ) = row
     raw = properties
     parsed = json.loads(raw) if isinstance(raw, str) else (raw or {})
@@ -101,6 +101,7 @@ def _row_to_event(row: tuple[object, ...]) -> EventRecord:
             owning_unit=cast(str, owning_unit),
             originator=cast(str, originator),
         ),
+        load_id=cast(str | None, load_id),
     )
 
 
@@ -562,7 +563,7 @@ class AnalyticsDuckDBAdapter:
         rows = self._con.execute(
             "SELECT event_id, edge_id, edge_type, source_id, target_id, occurred_at, duration_s, "
             "cell_site, lat, lon, direction, properties, investigation_scope, "
-            "handling_classification, handling_code, owning_unit, originator "
+            "handling_classification, handling_code, owning_unit, originator, load_id "
             f"FROM events WHERE {predicate.where} "
             "ORDER BY occurred_at DESC, event_id DESC LIMIT ? OFFSET ?",
             [*predicate.params, req.limit, req.offset],
@@ -600,7 +601,7 @@ class AnalyticsDuckDBAdapter:
             "INSERT INTO events (event_id, edge_id, edge_type, source_id, target_id, "
             "occurred_at, duration_s, cell_site, lat, lon, direction, properties, "
             "investigation_scope, handling_classification, handling_code, owning_unit, "
-            "originator) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "originator, load_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 [
                     r.event_id,
@@ -620,10 +621,19 @@ class AnalyticsDuckDBAdapter:
                     r.handling.handling_code,
                     r.handling.owning_unit,
                     r.handling.originator,
+                    r.load_id,
                 ]
                 for r in records
             ],
         )
+
+    async def retract_load(self, load_id: str) -> int:
+        """`AnalyticsPort.retract_load`: the rows this load wrote, by its id alone. A row with no
+        `load_id` is `NULL`, which `= ?` never matches, so unattributed events stay."""
+        removed = self._con.execute(
+            "DELETE FROM events WHERE load_id = ? RETURNING event_id", [load_id]
+        ).fetchall()
+        return len(removed)
 
     # --- the geometry reference partition -----------------------------------
 

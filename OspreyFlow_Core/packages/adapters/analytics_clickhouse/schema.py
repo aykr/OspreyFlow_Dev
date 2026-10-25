@@ -45,11 +45,19 @@ CREATE TABLE IF NOT EXISTS events (
     handling_classification String,
     handling_code String,
     owning_unit String,
-    originator String
+    originator String,
+    load_id Nullable(String)
 ) ENGINE = MergeTree
 PARTITION BY (investigation_scope, toYYYYMM(occurred_at))
 ORDER BY (edge_id, occurred_at)
 """
+
+#: A store made before `load_id` existed has `events` without it, and `CREATE TABLE IF NOT EXISTS`
+#: leaves it so. `create_tables` adds the column to such a store, and only to such a store
+#: (ADR-127 decision 6): on a `Replicated` database even a no-op `ALTER` goes through the replicated
+#: DDL queue and can block while a replica is down, and this runs at every start, so
+#: `system.columns` is asked first. On a cluster the change reaches every node.
+ADD_EVENTS_LOAD_ID = "ALTER TABLE events ADD COLUMN IF NOT EXISTS load_id Nullable(String)"
 
 CREATE_GEOMETRIES_TABLE = """
 CREATE TABLE IF NOT EXISTS geometries (
@@ -93,3 +101,10 @@ async def create_tables(client: ClickHouseClient) -> None:
         if client.cluster:
             statement = statement.replace("ENGINE = MergeTree", "ENGINE = ReplicatedMergeTree")
         await client.command(statement)
+    (present,) = await client.rows(
+        "SELECT count() FROM system.columns "
+        "WHERE database = ? AND table = 'events' AND name = 'load_id'",
+        [client.database],
+    )
+    if int(present[0]) == 0:
+        await client.command(ADD_EVENTS_LOAD_ID)

@@ -40,7 +40,7 @@ from schemas.analytics import (
     SightingRequest,
 )
 from schemas.domain import Handling, Interval, Principal
-from ports.analytics import TrendLimitExceeded
+from ports.analytics import AnalyticsPort, TrendLimitExceeded
 from schemas.analytics import TrendInterval, TrendMeasure, TrendRequest, TrendResult
 from tests.conformance.registry import ANALYTICS_PORT_ADAPTERS, AnalyticsAdapterFactory
 
@@ -84,6 +84,7 @@ def _event(
     properties: dict[str, object] | None = None,
     investigation_scope: str = INVESTIGATION,
     edge_id: str = "e1",
+    load_id: str | None = None,
 ) -> EventRecord:
     return EventRecord(
         event_id=str(ULID()),
@@ -98,6 +99,7 @@ def _event(
         direction=direction,
         properties=properties or {},
         investigation_scope=investigation_scope,
+        load_id=load_id,
         handling=_handling(
             classification,
             handling_code=handling_code,
@@ -1578,3 +1580,214 @@ async def test_trend_says_the_handling_it_counted_and_only_what_the_reader_sees(
     assert len(restricted.handlings) == 2, "each distinct handling once"
     assert seen(official) == {("OFFICIAL", "P", "unit-1", "unit-1")}, "a hidden event adds no handling"
     assert ("SECRET", "C", "unit-1", "unit-1") in seen(cleared)
+
+
+# --- retract_load (ADR-127 decision 6) --------------------------------------------------------
+#
+# A Studio load can be reverted, and its events must go with it: an event of a reverted load left in
+# the store would still move a trend, a histogram and a first-seen, for a node the graph no longer
+# holds. Every event a load wrote carries its `load_id`; `retract_load` removes those and nothing
+# else. It is a write, but every read after it must answer as if the load had never been, for every
+# principal, including for an event that principal could not read before.
+
+LOAD_A = "load-a"
+LOAD_B = "load-b"
+
+
+def _a_and_b_and_unattributed() -> list[EventRecord]:
+    """Load A: three events (one on a SECRET marking), load B: two, and one with no load at all.
+    Distinct nodes and links per group, so a first-seen or a sighting says which group it came from;
+    every one carries a position, so a geo bin counts it."""
+    return [
+        _event(occurred_at=_week(0), source_id="a1", target_id="a2", edge_id="ea", load_id=LOAD_A, lat=51.5, lon=-0.12),
+        _event(occurred_at=_week(1), source_id="a1", target_id="a2", edge_id="ea", load_id=LOAD_A, lat=51.5, lon=-0.12),
+        _event(occurred_at=_week(2), source_id="a3", target_id="a4", edge_id="ea2", load_id=LOAD_A, classification="SECRET", lat=51.5, lon=-0.12),
+        _event(occurred_at=_week(3), source_id="b1", target_id="b2", edge_id="eb", load_id=LOAD_B, lat=51.5, lon=-0.12),
+        _event(occurred_at=_week(4), source_id="b1", target_id="b2", edge_id="eb", load_id=LOAD_B, lat=51.5, lon=-0.12),
+        _event(occurred_at=_week(5), source_id="u1", target_id="u2", edge_id="eu", lat=51.5, lon=-0.12),
+    ]  # fmt: skip
+
+
+_HOUR = HistogramRequest(
+    filter=_filter(), bucketing=HistogramBucketing.FIXED_INTERVAL, interval_seconds=3600
+)
+
+
+#: Load A's events fall in the baseline window (days 0-2 of the week), load B's and the unattributed
+#: event in the comparison window (days 3-5), so a retract moves both counts.
+_BASELINE = BaselineRequest(
+    filter=_filter(),
+    baseline_window=Interval(valid_from=_week(0), valid_to=_week(3)),
+    comparison_window=Interval(valid_from=_week(3), valid_to=_week(6)),
+    bucketing=HistogramBucketing.FIXED_INTERVAL,
+    interval_seconds=3600,
+)
+#: One cell around every event's point (51.5, -0.12), so `geocode_events` covers them all.
+_GEOCODE = GeocodeRequest(filter=_filter(), cells={"cell-1": "node-1"})
+
+
+async def _everything_a_reader_can_ask(adapter: object, principal: Principal) -> dict[str, object]:
+    """Every read the suite has that counts or lists events, as plain data, so two stores can be
+    compared whole."""
+    a: AnalyticsPort = adapter  # type: ignore[assignment]
+    return {
+        "histogram": (await a.histogram(_HOUR, principal)).model_dump(),
+        "cross_filter": {
+            name: h.model_dump()
+            for name, h in (
+                await a.cross_filter(
+                    CrossFilterRequest(
+                        filter=_filter(),
+                        dimensions=[
+                            CrossFilterDimension(
+                                name="hour",
+                                bucketing=HistogramBucketing.FIXED_INTERVAL,
+                                interval_seconds=3600,
+                            ),
+                            CrossFilterDimension(
+                                name="kind", bucketing=HistogramBucketing.CATEGORICAL, field="edge_type"
+                            ),
+                        ],
+                    ),
+                    principal,
+                )
+            ).items()
+        },
+        "trend": (await a.trend(TrendRequest(filter=_filter()), principal)).model_dump(),
+        "geo_bins": [b.model_dump() for b in await a.geo_bins(GeoBinRequest(filter=_filter(), precision=4), principal)],
+        "first_seen": (await a.first_seen(FirstSeenRequest(filter=_filter()), principal)).model_dump(),
+        "sightings": [s.model_dump() for s in await a.list_sightings(SightingRequest(filter=_filter()), principal)],
+        "events": (await a.list_events(EventListRequest(filter=_filter(), limit=200), principal)).model_dump(),
+        "baseline": (await a.baseline(_BASELINE, principal)).model_dump(),
+        "geocode": [g.model_dump() for g in await a.geocode_events(_GEOCODE, principal)],
+    }  # fmt: skip
+
+
+async def test_an_event_keeps_the_load_that_wrote_it(factory: AnalyticsAdapterFactory) -> None:
+    async with factory.context(_a_and_b_and_unattributed()) as adapter:
+        page = await adapter.list_events(EventListRequest(filter=_filter(), limit=200), CLEARED)
+    by_load = sorted(str(e.load_id) for e in page.events)
+    assert by_load == sorted([LOAD_A] * 3 + [LOAD_B] * 2 + ["None"])
+
+
+async def test_retract_load_removes_that_loads_events_from_every_read_and_says_how_many(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    async with factory.context(_a_and_b_and_unattributed()) as adapter:
+        assert (await adapter.histogram(_HOUR, CLEARED)).total == 6
+        removed = await adapter.retract_load(LOAD_A)
+        assert removed == 3, "the count includes the event on a marking nobody here may read"
+
+        assert (await adapter.histogram(_HOUR, CLEARED)).total == 3
+        crossed = await adapter.cross_filter(
+            CrossFilterRequest(
+                filter=_filter(),
+                dimensions=[
+                    CrossFilterDimension(
+                        name="hour", bucketing=HistogramBucketing.FIXED_INTERVAL, interval_seconds=3600
+                    )
+                ],
+            ),
+            CLEARED,
+        )
+        assert crossed["hour"].total == 3
+        trend = await adapter.trend(TrendRequest(filter=_filter()), CLEARED)
+        assert trend.events == 3
+        bins = await adapter.geo_bins(GeoBinRequest(filter=_filter(), precision=4), CLEARED)
+        assert sum(b.count for b in bins) == 3
+        first = await adapter.first_seen(FirstSeenRequest(filter=_filter()), CLEARED)
+        assert sorted(first.nodes) == ["b1", "b2", "u1", "u2"]
+        assert sorted(first.edges) == ["eb", "eu"]
+        sightings = await adapter.list_sightings(SightingRequest(filter=_filter()), CLEARED)
+        assert len(sightings) == 3
+        page = await adapter.list_events(EventListRequest(filter=_filter(), limit=200), CLEARED)
+        assert page.total == 3
+        assert LOAD_A not in {e.load_id for e in page.events}
+
+
+async def test_retract_load_leaves_other_loads_and_unattributed_events_untouched(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    events = _a_and_b_and_unattributed()
+    keepers = {e.event_id for e in events if e.load_id != LOAD_A}
+    async with factory.context(events) as adapter:
+        await adapter.retract_load(LOAD_A)
+        page = await adapter.list_events(EventListRequest(filter=_filter(), limit=200), CLEARED)
+        assert {e.event_id for e in page.events} == keepers
+        assert sorted(str(e.load_id) for e in page.events) == ["None", LOAD_B, LOAD_B]
+        # Retracting the other load too leaves exactly the unattributed event.
+        assert await adapter.retract_load(LOAD_B) == 2
+        page = await adapter.list_events(EventListRequest(filter=_filter(), limit=200), CLEARED)
+        assert [e.load_id for e in page.events] == [None]
+
+
+async def test_retract_load_is_idempotent_and_an_unknown_load_removes_nothing(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    async with factory.context(_a_and_b_and_unattributed()) as adapter:
+        assert await adapter.retract_load(LOAD_A) == 3
+        assert await adapter.retract_load(LOAD_A) == 0
+        assert await adapter.retract_load("never-written") == 0
+        assert (await adapter.histogram(_HOUR, CLEARED)).total == 3
+
+
+async def test_retract_load_on_an_empty_store_removes_nothing(factory: AnalyticsAdapterFactory) -> None:
+    async with factory.context([]) as adapter:
+        assert await adapter.retract_load(LOAD_A) == 0
+
+
+async def test_after_a_retract_no_read_for_any_principal_returns_or_counts_a_retracted_event(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Rule 4. A retract is a write, but it must not leave a trace a reader could use: after it,
+    every read, for a principal who could read the retracted events and for ones who could not,
+    answers exactly as a store that never held them. A retracted event on a marking the principal
+    could not see must not count, list, move a first appearance or make a bucket exist."""
+    events = _a_and_b_and_unattributed()
+    survivors = [e for e in events if e.load_id != LOAD_A]
+    receives_r = Principal(id="a-r", clearance="OFFICIAL", org_unit="unit-1", receivable_handling_codes=["R"])
+    principals = [OFFICIAL, CLEARED, receives_r]
+
+    async with factory.context(events) as adapter:
+        await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
+        await adapter.retract_load(LOAD_A)
+        after = {p.id: await _everything_a_reader_can_ask(adapter, p) for p in principals}
+    async with factory.context(survivors) as adapter:
+        await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
+        never = {p.id: await _everything_a_reader_can_ask(adapter, p) for p in principals}
+
+    assert after == never
+
+
+async def test_the_comparison_sees_a_missing_survivor_in_every_read(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Rule 15 for the comparison above: it can only fail for a read it includes, and it includes
+    one only if that read answers differently when a single event is missing. Each read here is
+    shown to, so a retract that left an event visible to any of them would fail the comparison."""
+    events = _a_and_b_and_unattributed()
+    missing_one = [e for e in events if e.load_id != LOAD_A][1:]  # a survivor dropped
+    async with factory.context([e for e in events if e.load_id != LOAD_A]) as adapter:
+        await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
+        whole = await _everything_a_reader_can_ask(adapter, CLEARED)
+    async with factory.context(missing_one) as adapter:
+        await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
+        less = await _everything_a_reader_can_ask(adapter, CLEARED)
+    same = sorted(name for name in whole if whole[name] == less[name])
+    assert same == [], f"these reads do not notice a missing event: {same}"
+
+
+async def test_a_retract_does_not_cross_investigations_it_was_not_asked_about(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """A `load_id` names one load, which writes one case; events of another case with another load
+    stay. (A load id shared across cases is not a state the engine produces.)"""
+    events = [
+        _event(occurred_at=_week(0), load_id=LOAD_A),
+        _event(occurred_at=_week(1), load_id=LOAD_B, investigation_scope="case-2"),
+    ]
+    async with factory.context(events) as adapter:
+        assert await adapter.retract_load(LOAD_A) == 1
+        other = EventFilter(investigation_scope="case-2")
+        page = await adapter.list_events(EventListRequest(filter=other), CLEARED)
+        assert page.total == 1

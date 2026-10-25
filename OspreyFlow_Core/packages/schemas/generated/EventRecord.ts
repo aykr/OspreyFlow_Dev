@@ -18,6 +18,7 @@ export type SanitisationCode = string | null;
 export type OrgUnitId = string;
 export type ReviewDate = string | null;
 export type LegalBasis = string | null;
+export type LoadId = string | null;
 
 /**
  * One row in the analytics store. `edge_id` ties it back to the
@@ -40,6 +41,7 @@ export interface EventRecord {
   properties?: Properties;
   investigation_scope: InvestigationScope;
   handling: Handling;
+  load_id?: LoadId;
   [k: string]: unknown;
 }
 export interface Properties {

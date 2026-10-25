@@ -1364,6 +1364,8 @@ async def _write_edge(
                 properties=event_properties,
                 investigation_scope=state.investigation_scope,
                 handling=handling,
+                # ADR-127 decision 6: so a revert can retract this event with its load.
+                load_id=state.load_id,
             )
         )
 

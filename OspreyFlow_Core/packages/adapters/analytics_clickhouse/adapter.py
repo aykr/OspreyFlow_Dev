@@ -67,7 +67,7 @@ _TOP_LEVEL_FIELDS = frozenset({"edge_type", "source_id", "target_id", "cell_site
 _EVENT_COLUMNS = (
     "event_id, edge_id, edge_type, source_id, target_id, occurred_at, duration_s, cell_site, "
     "lat, lon, direction, properties, investigation_scope, handling_classification, "
-    "handling_code, owning_unit, originator"
+    "handling_code, owning_unit, originator, load_id"
 )
 
 _SYNC = " SETTINGS mutations_sync = 2"
@@ -109,7 +109,7 @@ def _row_to_event(row: Sequence[Any]) -> EventRecord:
     (
         event_id, edge_id, edge_type, source_id, target_id, occurred_at, duration_s, cell_site,
         lat, lon, direction, properties, investigation_scope, classification, handling_code,
-        owning_unit, originator,
+        owning_unit, originator, load_id,
     ) = row
     return EventRecord(
         event_id=event_id,
@@ -131,6 +131,7 @@ def _row_to_event(row: Sequence[Any]) -> EventRecord:
             owning_unit=owning_unit,
             originator=originator,
         ),
+        load_id=load_id,
     )
 
 
@@ -629,10 +630,21 @@ class AnalyticsClickHouseAdapter:
                     "handling_code": r.handling.handling_code,
                     "owning_unit": r.handling.owning_unit,
                     "originator": r.handling.originator,
+                    "load_id": r.load_id,
                 }
                 for r in records
             ],
         )
+
+    async def retract_load(self, load_id: str) -> int:
+        """`AnalyticsPort.retract_load`: the rows this load wrote, by its id alone. A row with no
+        `load_id` is `NULL`, which `= ?` never matches, so unattributed events stay. The mutation
+        is waited for (`_SYNC`), so a read straight after sees none of them."""
+        (row,) = await self._ch.rows("SELECT count() FROM events WHERE load_id = ?", [load_id])
+        removed = int(row[0])
+        if removed:
+            await self._ch.command("ALTER TABLE events DELETE WHERE load_id = ?" + _SYNC, [load_id])
+        return removed
 
     # --- the geometry reference partition -----------------------------------
 

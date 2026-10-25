@@ -56,6 +56,10 @@ def _statements_sent(monkeypatch: pytest.MonkeyPatch, **env: str) -> list[str]:
 
     def answer(request: httpx.Request) -> httpx.Response:
         sent.append(request.content.decode())
+        # A question (`create_tables` asks `system.columns` whether `events.load_id` exists) is
+        # answered as the server does, in JSON: here, that it does not, as on an old store.
+        if request.content.decode().lstrip().startswith("SELECT"):
+            return httpx.Response(200, json={"data": [[0]]})
         return httpx.Response(200, text="")
 
     real = analytics_store.ClickHouseClient
@@ -82,6 +86,9 @@ async def test_a_cluster_makes_its_database_replicated_on_every_node(
     tables = [s for s in sent if s.lstrip().startswith("CREATE TABLE")]
     assert len(tables) == 2
     assert all("ENGINE = ReplicatedMergeTree" in s for s in tables)
+    assert [s for s in sent if s.startswith("ALTER")] == [
+        "ALTER TABLE events ADD COLUMN IF NOT EXISTS load_id Nullable(String)"
+    ]
 
 
 async def test_a_single_server_keeps_plain_tables_in_a_plain_database(
