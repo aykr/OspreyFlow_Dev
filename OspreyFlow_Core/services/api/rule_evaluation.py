@@ -831,6 +831,7 @@ def held_rows_for(
     source: str,
     handling: Handling,
     dataset_id: str | None,
+    row_handling: Callable[[dict[str, str]], Handling] | None = None,
 ) -> list[HeldRow]:
     numbers = list(row_numbers) if row_numbers is not None else list(range(len(rows)))
     position = {n: i for i, n in enumerate(numbers)}
@@ -847,7 +848,7 @@ def held_rows_for(
             row={k: "" if v is None else str(v) for k, v in rows[position[row]].items()},
             rule_id=rule.id,
             reason=reason,
-            handling=handling,
+            handling=row_handling(rows[position[row]]) if row_handling is not None else handling,
             held_at=now,
             dataset_id=dataset_id,
         )

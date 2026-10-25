@@ -72,7 +72,12 @@ from services.ingest.pipeline import (
     pipeline_run_violations,
 )
 from services.ingest.recipe_loader import load_recipe
-from services.ingest.recipe_rules import RecipeRuleError, check_recipe_rules
+from services.ingest.recipe_rules import (
+    RecipeRuleError,
+    check_recipe_rules,
+    handling_bindings,
+    template_elements,
+)
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.transforms import STRUCTURED_PARTS
 from services.resolve.trigger import (
@@ -549,9 +554,12 @@ from .sites import ControlPointQuad, Site, SiteNotFoundError, SiteStore
 from .studio_map import (
     HandlingLoosenedError,
     RowIndexOutOfRangeError,
+    draft_handling_columns,
+    draft_units,
     get_sample_row,
     preview_element_handling,
     resolve_source_handling,
+    source_column_names,
     validate_handling_tightens,
 )
 from .studio_profile import (
@@ -572,6 +580,7 @@ from .studio_publish import (
     write_and_commit_recipe,
 )
 from .studio_recipes import (
+    SourceDeclarationsInvalidError,
     StudioRecipeCannotVersionError,
     StudioRecipeNotADraftError,
     StudioRecipeNotFoundError,
@@ -2117,6 +2126,16 @@ async def _studio_recipe_not_found_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "studio_recipe_not_found"}
+    )
+
+
+@app.exception_handler(SourceDeclarationsInvalidError)
+async def _source_declarations_invalid_handler(
+    request: Request, exc: SourceDeclarationsInvalidError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "source_declarations_invalid", "detail": str(exc)},
     )
 
 
@@ -6864,7 +6883,25 @@ async def update_studio_recipe_row_template(
     for edge in body.row_template.edges:
         validate_handling_tightens(baseline, edge.handling, scheme)
     # ADR-081 step D: refused at save, naming each problem; refused again when it runs.
-    check_recipe_rules(body.row_template, ontology)
+    # ADR-127 decision 3: a marking bound to a column names a column the source has, and a bound
+    # unit needs the source's declared units.
+    binds_handling = any(
+        handling_bindings(e.handling) for e in template_elements(body.row_template)
+    )
+    check_recipe_rules(
+        body.row_template,
+        ontology,
+        source_columns=(
+            source_column_names(recipe)
+            if binds_handling or draft_handling_columns(recipe)
+            else None
+        ),
+        units=draft_units(recipe),
+        defaults_handling=baseline.model_dump(exclude_none=True),
+        scheme=scheme,
+        handling_columns=draft_handling_columns(recipe),
+        declared_columns=draft_handling_columns(recipe),
+    )
     updated = await studio_recipes.update_row_template(
         recipe.recipe_id,
         principal,
@@ -7547,6 +7584,7 @@ async def _execute_recipe_run(
             analytics=deps.analytics,
             media=deps.media,
             rules=rules,
+            scheme=deps.handling_scheme,
         )
         await resolution_trigger_module.submit_post_ingest_resolution_jobs(
             report, recipe.row_template, ontology=deps.ontology, jobs=deps.jobs

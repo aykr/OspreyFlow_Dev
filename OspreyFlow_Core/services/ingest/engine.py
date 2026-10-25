@@ -30,7 +30,7 @@ run at all; it exists for a later one.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -43,7 +43,8 @@ from conduit_common.identity import new_edge_id, new_node_id
 from knowledge_adapters import ARITY
 from knowledge_adapters.datetime_adapter import DatetimeResult
 from knowledge_adapters.errors import NormalisationError
-from ontology.errors import OntologyError
+from ontology.errors import HandlingSchemeError, OntologyError
+from ontology.handling import HandlingScheme, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import GraphPort
 from ports.media import MediaStore
@@ -70,6 +71,7 @@ from schemas.domain import (
     TxId,
 )
 from schemas.ingest import (
+    HANDLING_BINDABLE,
     FieldBinding,
     LoadReport,
     Recipe,
@@ -80,7 +82,14 @@ from schemas.ingest import (
 )
 
 from .pipeline import recipe_packs
-from .recipe_rules import RecipeRuleError, check_recipe_rules, holds_content
+from .recipe_rules import (
+    RecipeRuleError,
+    check_recipe_rules,
+    handling_bindings,
+    holds_content,
+    literal_handling,
+    template_elements,
+)
 from .staging import ObjectStorageConfig, StagedEdge, StagedEntity, StagedRow
 from .staging import read_staged_rows as _read_staged_rows
 from .staging import stage_raw_rows as _stage_raw_rows
@@ -281,6 +290,30 @@ def _coerce_declared_numeric_types(
     return coerced
 
 
+def _coerced_properties(
+    entity: RecipeEntity,
+    properties: dict[str, Any],
+    ontology: OntologySchema,
+    own_text: str | None = None,
+) -> dict[str, Any]:
+    """An entity's resolved properties as `_write_entity` matches and writes them: an own-text
+    Document's `title` defaulted to the text's first words (a bound `title` wins), then the
+    declared numeric types coerced. One function, so what a write matches on and what a check
+    predicts it will match on cannot drift apart."""
+    base = properties
+    if own_text is not None:
+        base = {"title": _first_words(own_text), **base}
+    return _coerce_declared_numeric_types(base, ontology.entity_type(entity.type))
+
+
+def _match_key(entity: RecipeEntity, coerced: Mapping[str, Any]) -> tuple[str, str, str] | None:
+    """The identity an `on_match: reference` entity is looked up by: its type, the field it
+    matches on and that field's coerced value; `None` for an entity that is not matched."""
+    if entity.on_match != "reference" or not entity.match_on:
+        return None
+    return (entity.type, entity.match_on, str(coerced.get(entity.match_on)))
+
+
 def _resolve_properties(
     bindings: Mapping[str, FieldBinding],
     row: Mapping[str, str],
@@ -332,15 +365,346 @@ def _handling(defaults: Mapping[str, Any]) -> Handling:
     return Handling.model_validate(raw)
 
 
-def recipe_handlings(recipe: Recipe) -> list[Handling]:
+def recipe_binds_handling(recipe: Recipe) -> bool:
+    return any(handling_bindings(e.handling) for e in template_elements(recipe.row_template))
+
+
+def _require_scheme_to_judge_bound_handling(recipe: Recipe, scheme: HandlingScheme | None) -> None:
+    """A recipe that binds a marking to a column is judged against the handling scheme row by row;
+    a run given none refuses, rather than loading rows nothing could check (fail closed)."""
+    if scheme is None and recipe_binds_handling(recipe):
+        raise RecipeRuleError(
+            [
+                "This recipe binds a marking to a column, which is judged against the handling "
+                "scheme, and this run has no handling scheme (ADR-127 decision 3)."
+            ]
+        )
+
+
+_PART_LABELS = {
+    "classification": "classification",
+    "handling_code": "handling code",
+    "action_code": "action code",
+    "sanitisation_code": "sanitisation code",
+    "originator": "originator",
+    "owning_unit": "owning unit",
+}
+
+
+def _defined_values(scheme: HandlingScheme, part: str) -> list[str]:
+    return {
+        "classification": list(scheme.classification),
+        "handling_code": list(scheme.handling_codes),
+        "action_code": list(scheme.action_codes),
+        "sanitisation_code": list(scheme.sanitisation_codes),
+    }.get(part, [])
+
+
+def row_handling_override(
+    recipe: Recipe,
+    override: dict[str, Any] | None,
+    row: Mapping[str, str],
+    *,
+    scheme: HandlingScheme | None,
+) -> dict[str, Any] | None:
+    """The element's `handling` for one row, with each bound part read from its column (ADR-127
+    decision 3). No bound part: `override` as it is. Otherwise a plain override (literals and the
+    cells' values), or `RowRejected` with the cause:
+
+    - a bound column the row does not have (the source has no such column);
+    - an empty cell takes the element's default for that part (none, for the action and
+      sanitisation codes, unless the default has one): it is left out of the override;
+    - a code the scheme does not define;
+    - an `originator` or `owning_unit` the recipe does not declare in `defaults.units`;
+    - a part looser than the element's default, by `merge_handling`'s order: the cell may only
+      tighten the marking (ADR-102 decision 1), in every part, not classification alone."""
+    bindings = handling_bindings(override)
+    if not bindings:
+        return override
+    if scheme is None:
+        raise RowRejected("this run has no handling scheme to judge a bound marking against")
+    literal = literal_handling(override) or {}
+    base = _merge_override(recipe.defaults.handling, literal)
+    try:
+        default = _handling(base)
+        # The scheme refuses a default it does not define, as it does a cell's.
+        merge_handling(default, default, scheme)
+    except HandlingSchemeError as exc:
+        raise RowRejected(f"the element's default marking is not valid: {exc}") from exc
+    values: dict[str, str] = {}
+    for part, column in bindings.items():
+        label = _PART_LABELS[part]
+        if column not in row:
+            raise RowRejected(
+                f"{label} is bound to column {column!r}, which this source does not have"
+            )
+        cell = (row[column] or "").strip()
+        if not cell:
+            continue
+        # A reason names the part and the column, never the cell: a rejection is read by people who
+        # may not be cleared for what the cell says (rule 3).
+        if part in ("originator", "owning_unit"):
+            if cell not in recipe.defaults.units:
+                raise RowRejected(
+                    f"column {column!r} gives a {label} the recipe does not declare "
+                    f"(declared: {', '.join(recipe.defaults.units) or 'none'})"
+                )
+        elif cell not in _defined_values(scheme, part):
+            raise RowRejected(
+                f"column {column!r} gives a {label} the handling scheme {scheme.name!r} "
+                "does not define"
+            )
+        values[part] = cell
+    bound = _handling({**base, **values})
+    merged = merge_handling(bound, default, scheme)
+    if merged != bound:
+        for part in ("classification", "handling_code", "action_code", "sanitisation_code"):
+            if getattr(merged, part) != getattr(bound, part):
+                raise RowRejected(
+                    f"column {bindings[part]!r} gives a {_PART_LABELS[part]} looser than the "
+                    "element's default; a column may only tighten a marking"
+                )
+    return {**literal, **values}
+
+
+def _fold_group_handling(
+    recipe: Recipe,
+    resolved: Sequence[_ResolvedEntity | _ResolvedEdge],
+    duplicates: Sequence[Mapping[str, str]],
+    *,
+    scheme: HandlingScheme | None,
+) -> None:
+    """The survivor of a duplicate group stands for every member (`01_DOMAIN_MODEL.md` §7), so its
+    bound marking is no lower than any member's: each member's is resolved as the survivor's was
+    and folded in with `merge_handling`, and a member that fails (an undefined code, an undeclared
+    unit, a loosening) rejects the whole group with its cause. A restricted code that the members
+    give different units cannot be held by one marking, and rejects it too."""
+    for item in resolved:
+        element = item.entity if isinstance(item, _ResolvedEntity) else item.edge
+        if item.properties is None or not handling_bindings(element.handling):
+            continue
+        assert scheme is not None  # the survivor's own resolution refused otherwise
+        merged = _handling(_merge_override(recipe.defaults.handling, item.handling))
+        for member in duplicates:
+            if not _condition_holds(element.when, member):
+                continue
+            override = row_handling_override(recipe, element.handling, member, scheme=scheme)
+            other = _handling(_merge_override(recipe.defaults.handling, override))
+            first = merged
+            merged = merge_handling(merged, other, scheme)
+            dissemination = scheme.handling_codes[merged.handling_code].dissemination
+            if dissemination == "restricted" and (first.owning_unit, first.originator) != (
+                other.owning_unit,
+                other.originator,
+            ):
+                raise RowRejected(
+                    "duplicate rows name different units under a restricted handling code, "
+                    "which one marking cannot hold"
+                )
+        parts = {
+            name: getattr(merged, name)
+            for name in HANDLING_BINDABLE
+            if getattr(merged, name) is not None
+        }
+        item.handling = {**(literal_handling(element.handling) or {}), **parts}
+
+
+def _refuse_unit_conflict(markings: Sequence[Handling], scheme: HandlingScheme) -> None:
+    """One `Handling` holds one unit (ADR-102 decision 2). A row whose elements are marked
+    restricted for different units has no single marking that is safe, so it is refused (ADR-127
+    Amendment 2) rather than held at one element's unit."""
+    restricted = any(
+        scheme.handling_codes[h.handling_code].dissemination == "restricted" for h in markings
+    )
+    if restricted and len({(h.owning_unit, h.originator) for h in markings}) > 1:
+        raise RowRejected(
+            "its elements' markings name different units under a restricted handling code and "
+            "cannot be held as one marking"
+        )
+
+
+def _units_of(marking: Handling) -> tuple[str, str]:
+    return (marking.owning_unit, marking.originator)
+
+
+def _refuse_link_unit_conflicts(
+    recipe: Recipe,
+    staged_rows: Sequence[StagedRow],
+    *,
+    ontology: OntologySchema,
+    scheme: HandlingScheme | None,
+    skip: Collection[int] = (),
+) -> tuple[set[int], list[RejectionRecord]]:
+    """Rows of one load that would write the same link under different units, one of them
+    restricted (ADR-127 Amendment 2). Two rows that name the same two matched nodes write one
+    link: the store keeps the first write's `owning_unit` and `originator`, takes the later
+    properties and counts both, so a link restricted to one unit would carry another unit's row.
+    The second row is rejected whole, before anything of it is written, naming the link type and
+    never a value. The same units, or neither restricted, merge as they always have.
+
+    Judged over the staged rows, so the ordinary run and Verify's dry run share it. Only a link
+    whose two ends are both matched by reference can meet another row's in this load (a created
+    node is new to its row). Rows can differ whether or not a recipe binds a marking: two link
+    elements of one type between the same two entities, exclusive by `when`, with different fixed
+    units, write one link from different rows. Each end's identity is the key `_write_entity`
+    matches on (`_coerced_properties`, `_match_key`), so `007` and `7` are one node here too."""
+    if scheme is None:
+        return set(), []
+    entities = {e.ref: e for e in recipe.row_template.entities}
+    seen: dict[tuple[Any, ...], Handling] = {}
+    rejected: set[int] = set()
+    records: list[RejectionRecord] = []
+
+    def restricted(marking: Handling) -> bool:
+        return scheme.handling_codes[marking.handling_code].dissemination == "restricted"
+
+    for row in staged_rows:
+        if row.row_index in skip:
+            continue
+        present = {e.ref: e for e in row.entities}
+        pending: list[tuple[tuple[Any, ...], Handling]] = []
+        conflicting: str | None = None
+        for edge in row.edges:
+            start, end = present.get(edge.from_ref), present.get(edge.to_ref)
+            start_decl, end_decl = entities.get(edge.from_ref), entities.get(edge.to_ref)
+            if start is None or end is None or start_decl is None or end_decl is None:
+                continue
+            ends = []
+            for end_entity, declared_entity in ((start, start_decl), (end, end_decl)):
+                own_text = (
+                    end_entity.content["value"]
+                    if holds_own_text(declared_entity) and end_entity.content
+                    else None
+                )
+                coerced = _coerced_properties(
+                    declared_entity, end_entity.properties, ontology, own_text
+                )
+                identity = _match_key(declared_entity, coerced)
+                if identity is not None:
+                    ends.append(identity)
+            if len(ends) != 2:
+                continue  # an end that is created is new to its row: no other row writes this link
+            type_def = ontology.edge_type(edge.type)
+            ordered = ends if type_def is None or type_def.directed else sorted(ends)
+            key = (edge.type, *ordered)
+            fixed = next(
+                (
+                    e.handling
+                    for e in recipe.row_template.edges
+                    if (e.type, e.from_ref, e.to_ref) == (edge.type, edge.from_ref, edge.to_ref)
+                ),
+                None,
+            )
+            override = edge.handling if edge.handling is not None else literal_handling(fixed)
+            marking = _handling(_merge_override(recipe.defaults.handling, override))
+            first = seen.get(key)
+            if (
+                first is not None
+                and _units_of(first) != _units_of(marking)
+                and (restricted(first) or restricted(marking))
+            ):
+                conflicting = edge.type
+                break
+            pending.append((key, marking))
+        if conflicting is not None:
+            rejected.add(row.row_index)
+            records.append(
+                RejectionRecord(
+                    row_index=row.row_index,
+                    reason=(
+                        f"link {conflicting!r} between the same two nodes is already written in "
+                        "this load under different units, one of them restricted"
+                    ),
+                    sample="",
+                )
+            )
+            continue
+        for key, marking in pending:
+            first = seen.get(key)
+            seen[key] = marking if first is None else merge_handling(first, marking, scheme)
+    return rejected, records
+
+
+def row_marking(recipe: Recipe, row: Mapping[str, str], scheme: HandlingScheme) -> Handling:
+    """One marking for a whole source row, for a record that holds the row itself (a held row,
+    ADR-109): no lower than any element's marking *this row* resolves to, the strictest taken
+    first. A part that does not resolve gives that element's every possible marking
+    (`recipe_handlings`' own floor), so a row that would have been rejected is held no lower than
+    it could have been. A row whose elements are restricted for different units has no one safe
+    marking: `RowRejected`, with its cause."""
+    markings: list[Handling] = []
+    for element in template_elements(recipe.row_template):
+        if not _condition_holds(element.when, row):
+            continue
+        base = _merge_override(recipe.defaults.handling, literal_handling(element.handling))
+        bindings = handling_bindings(element.handling)
+        if not bindings:
+            markings.append(_handling(base))
+            continue
+        try:
+            override = row_handling_override(recipe, element.handling, row, scheme=scheme)
+            markings.append(_handling(_merge_override(recipe.defaults.handling, override)))
+        except RowRejected:
+            markings.extend(_possible_markings(base, bindings, scheme, recipe.defaults.units))
+    markings = markings or [_handling(recipe.defaults.handling)]
+    _refuse_unit_conflict(markings, scheme)
+    markings.sort(
+        key=lambda h: (
+            scheme.handling_codes[h.handling_code].dissemination == "restricted",
+            scheme.classification.index(h.classification),
+        ),
+        reverse=True,
+    )
+    marking = markings[0]
+    for other in markings[1:]:
+        marking = merge_handling(marking, other, scheme)
+    return marking
+
+
+def _possible_markings(
+    base: Mapping[str, Any],
+    bindings: Mapping[str, str],
+    scheme: HandlingScheme,
+    units: Sequence[str],
+) -> list[Handling]:
+    """Every marking one bound part could give an element: the part set to each value the scheme
+    defines (each declared unit, for a unit), the rest as `base`. The strictest of them is what a
+    row not yet read could be marked, for a marking that may not be lower than any referent's."""
+    found: list[Handling] = []
+    for part in bindings:
+        values = (
+            list(units) if part in ("originator", "owning_unit") else _defined_values(scheme, part)
+        )
+        found.extend(_handling({**base, part: value}) for value in values)
+    return found
+
+
+def _row_override(resolved: Any, element: RecipeEntity | RecipeEdge) -> dict[str, Any] | None:
+    """The `handling` override a write uses: this row's, with its columns read, else the element's
+    own with any column binding left out (`_resolve_row` reads every binding, so none is left)."""
+    return (
+        resolved.handling if resolved.handling is not None else literal_handling(element.handling)
+    )
+
+
+def recipe_handlings(recipe: Recipe, scheme: HandlingScheme | None = None) -> list[Handling]:
     """Every marking this recipe can write: its defaults, and each entity's and link's override
     over them — what a row it has not yet written could carry (ADR-109: a held row's marking, and
-    the stand-in for a node written in a still-open transaction)."""
+    the stand-in for a node written in a still-open transaction). An element with a part bound to
+    a column adds, given the `scheme`, every marking that part could take (ADR-127 decision 3), so
+    a marking built from these is no lower than a row's. Without a scheme a bound part is left at
+    its default: no caller that judges rows has none."""
     defaults = recipe.defaults.handling
-    overrides = [e.handling for e in recipe.row_template.entities] + [
-        e.handling for e in recipe.row_template.edges
-    ]
-    return [_handling(defaults), *(_handling(_merge_override(defaults, o)) for o in overrides if o)]
+    markings = [_handling(defaults)]
+    for element in template_elements(recipe.row_template):
+        if not element.handling:
+            continue
+        base = _merge_override(defaults, literal_handling(element.handling))
+        markings.append(_handling(base))
+        bindings = handling_bindings(element.handling)
+        if bindings and scheme is not None:
+            markings.extend(_possible_markings(base, bindings, scheme, recipe.defaults.units))
+    return markings
 
 
 def _provenance(
@@ -375,7 +739,7 @@ def preview_handling_and_provenance(
     `_merge_override` before validating, the same merge `_write_entity`/
     `_write_edge` apply for a real write."""
     return (
-        _handling(_merge_override(recipe.defaults.handling, handling_override)),
+        _handling(_merge_override(recipe.defaults.handling, literal_handling(handling_override))),
         _provenance(
             _merge_override(recipe.defaults.provenance, provenance_override),
             source=source,
@@ -403,7 +767,7 @@ class _RunState:
     #: Within-load cache so the same value referenced by two rows in one
     #: load resolves to one node without depending on read-your-own-write
     #: visibility from a query issued inside the same open transaction.
-    local_index: dict[tuple[str, str], NodeId] = field(default_factory=dict)
+    local_index: dict[tuple[str, str, str], NodeId] = field(default_factory=dict)
     #: ADR-094: a row whose entity was loaded but whose file was not found; said in the report.
     content_rejections: list[RejectionRecord] = field(default_factory=list)
     #: Documents already written this load, so one file held twice is written once.
@@ -415,14 +779,17 @@ class _RunState:
 
 
 class _ResolvedEntity:
-    __slots__ = ("entity", "properties", "content")
+    __slots__ = ("entity", "properties", "content", "handling")
 
     def __init__(
         self,
         entity: RecipeEntity,
         properties: dict[str, Any] | None,
         content: dict[str, str] | None = None,
+        handling: dict[str, Any] | None = None,
     ) -> None:
+        #: This row's `handling` override, columns read (`row_handling_override`).
+        self.handling = handling
         #: ADR-094: `{"kind", "value"}` when this entity holds content this row.
         self.content = content
         self.entity = entity
@@ -430,7 +797,7 @@ class _ResolvedEntity:
 
 
 class _ResolvedEdge:
-    __slots__ = ("edge", "properties", "instant", "content")
+    __slots__ = ("edge", "properties", "instant", "content", "handling")
 
     def __init__(
         self,
@@ -438,7 +805,10 @@ class _ResolvedEdge:
         properties: dict[str, Any] | None,
         instant: datetime | None,
         content: dict[str, str] | None = None,
+        handling: dict[str, Any] | None = None,
     ) -> None:
+        #: This row's `handling` override, columns read (`row_handling_override`).
+        self.handling = handling
         self.edge = edge
         self.properties = properties  # None means the edge's `when` did not hold this row
         self.instant = instant
@@ -474,9 +844,16 @@ def _resolve_row(
     *,
     connector_defaults: Mapping[str, str | None],
     ontology: OntologySchema | None = None,
+    scheme: HandlingScheme | None = None,
 ) -> tuple[list[_ResolvedEntity], list[_ResolvedEdge]]:
     """Phase 1: pure resolution, no I/O. Raises `RowRejected` for the whole
     row on the first failing binding anywhere in it."""
+    for part, column in recipe.defaults.handling_columns.items():
+        if column not in row:
+            raise RowRejected(
+                f"column {column!r}, declared as the {_PART_LABELS[part]} column, "
+                "is not in this source"
+            )
     entities = []
     for entity in recipe.row_template.entities:
         if not _condition_holds(entity.when, row):
@@ -496,7 +873,8 @@ def _resolve_row(
                 f"{entity.content.field} is empty; a Document holds its own text, so a row with "
                 "none is not loaded"
             )
-        entities.append(_ResolvedEntity(entity, properties, content))
+        handling = row_handling_override(recipe, entity.handling, row, scheme=scheme)
+        entities.append(_ResolvedEntity(entity, properties, content, handling))
 
     edges = []
     for edge in recipe.row_template.edges:
@@ -517,8 +895,21 @@ def _resolve_row(
         content = (
             {"kind": edge.content.kind, "text": text} if edge.content and text.strip() else None
         )
-        edges.append(_ResolvedEdge(edge, properties, instant, content))
+        handling = row_handling_override(recipe, edge.handling, row, scheme=scheme)
+        edges.append(_ResolvedEdge(edge, properties, instant, content, handling))
 
+    if scheme is not None:
+        present: list[Handling] = [
+            _handling(_merge_override(recipe.defaults.handling, _row_override(e, e.entity)))
+            for e in entities
+            if e.properties is not None
+        ]
+        present += [
+            _handling(_merge_override(recipe.defaults.handling, _row_override(e, e.edge)))
+            for e in edges
+            if e.properties is not None
+        ]
+        _refuse_unit_conflict(present or [_handling(recipe.defaults.handling)], scheme)
     return entities, edges
 
 
@@ -547,7 +938,11 @@ def _to_staged_row(
         duplicate_row_indices=duplicate_row_indices,
         entities=[
             StagedEntity(
-                ref=e.entity.ref, type=e.entity.type, properties=e.properties, content=e.content
+                ref=e.entity.ref,
+                type=e.entity.type,
+                properties=e.properties,
+                content=e.content,
+                handling=e.handling,
             )
             for e in resolved_entities
             if e.properties is not None
@@ -560,6 +955,7 @@ def _to_staged_row(
                 properties=e.properties,
                 instant=e.instant,
                 content=e.content,
+                handling=e.handling,
             )
             for e in resolved_edges
             if e.properties is not None
@@ -575,6 +971,7 @@ def resolve_rows(
     source: str,
     ontology: OntologySchema | None = None,
     row_numbers: Sequence[int] | None = None,
+    scheme: HandlingScheme | None = None,
 ) -> tuple[list[StagedRow], list[RejectionRecord], int, int]:
     """Phase 1 of `run_recipe`, extracted so staging sits between
     resolution and load rather than being folded invisibly into one
@@ -627,8 +1024,15 @@ def resolve_rows(
         duplicate_row_indices = [number(p) for p in duplicate_positions]
         try:
             resolved_entities, resolved_edges = _resolve_row(
-                recipe, row, connector_defaults=connector_defaults, ontology=ontology
+                recipe, row, connector_defaults=connector_defaults, ontology=ontology, scheme=scheme
             )
+            if duplicate_positions:
+                _fold_group_handling(
+                    recipe,
+                    [*resolved_entities, *resolved_edges],
+                    [materialized_rows[p] for p in duplicate_positions],
+                    scheme=scheme,
+                )
         except RowRejected as exc:
             rejections.append(
                 RejectionRecord(row_index=row_index, reason=exc.reason, sample=str(dict(row)))
@@ -672,11 +1076,11 @@ async def _write_entity(
         if own_text_media is not None and resolved.content is not None
         else None
     )
-    base = resolved.properties
-    if own_text is not None:
-        base = {"title": _first_words(own_text), **base}
-    properties = _coerce_declared_numeric_types(base, state.ontology.entity_type(entity.type))
-    handling = _handling(_merge_override(state.recipe.defaults.handling, entity.handling))
+    properties = _coerced_properties(entity, resolved.properties, state.ontology, own_text)
+    match_key = _match_key(entity, properties)
+    handling = _handling(
+        _merge_override(state.recipe.defaults.handling, _row_override(resolved, entity))
+    )
     provenance = _provenance(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
@@ -684,18 +1088,16 @@ async def _write_entity(
         now=now,
     )
 
-    if entity.on_match == "reference" and entity.match_on:
-        match_value = str(properties.get(entity.match_on))
-        cache_key = (entity.type, match_value)
-        cached = state.local_index.get(cache_key)
+    if match_key is not None:
+        cached = state.local_index.get(match_key)
         if cached is not None:
             state.nodes_referenced += 1
             return cached
         existing = await state.graph.find_node(
-            entity.type, entity.match_on, match_value, state.principal
+            entity.type, match_key[1], match_key[2], state.principal
         )
         if existing is not None:
-            state.local_index[cache_key] = existing.id
+            state.local_index[match_key] = existing.id
             state.nodes_referenced += 1
             return existing.id
 
@@ -720,9 +1122,8 @@ async def _write_entity(
     state.nodes_created += 1
     if state.written is not None:
         state.written.append(write.model_copy(update={"id": node_id}))
-    if entity.on_match == "reference" and entity.match_on:
-        match_value = str(properties.get(entity.match_on))
-        state.local_index[(entity.type, match_value)] = node_id
+    if match_key is not None:
+        state.local_index[match_key] = node_id
     return node_id
 
 
@@ -822,7 +1223,9 @@ async def _write_held_content(
         title = path.name
     ref = await media.put(data, content_type)
     document_id = f"content:{sha256(ref.encode()).hexdigest()[:32]}"
-    handling = _handling(_merge_override(state.recipe.defaults.handling, entity.handling))
+    handling = _handling(
+        _merge_override(state.recipe.defaults.handling, _row_override(resolved, entity))
+    )
     provenance = _provenance(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
@@ -887,7 +1290,9 @@ async def _write_edge(
     properties = _coerce_declared_numeric_types(
         resolved.properties, state.ontology.edge_type(edge.type)
     )
-    handling = _handling(_merge_override(state.recipe.defaults.handling, edge.handling))
+    handling = _handling(
+        _merge_override(state.recipe.defaults.handling, _row_override(resolved, edge))
+    )
     provenance = _provenance(
         _merge_override(state.recipe.defaults.provenance, edge.provenance),
         source=state.source,
@@ -1048,7 +1453,7 @@ class _DryRunState:
     edges: dict[tuple[str, NodeId, NodeId], Edge] = field(default_factory=dict)
     entities_by_type: dict[str, DryRunEntityCount] = field(default_factory=dict)
     edges_by_type: dict[str, DryRunEdgeCount] = field(default_factory=dict)
-    local_index: dict[tuple[str, str], NodeId] = field(default_factory=dict)
+    local_index: dict[tuple[str, str, str], NodeId] = field(default_factory=dict)
     created_node_ids: set[NodeId] = field(default_factory=set)
 
 
@@ -1059,24 +1464,24 @@ async def _dry_run_entity(
         return None
     entity = resolved.entity
     entity_type_def = state.ontology.entity_type(entity.type)
-    properties = _coerce_declared_numeric_types(resolved.properties, entity_type_def)
+    own_text = resolved.content["value"] if holds_own_text(entity) and resolved.content else None
+    properties = _coerced_properties(entity, resolved.properties, state.ontology, own_text)
+    match_key = _match_key(entity, properties)
     counts = state.entities_by_type.setdefault(entity.type, DryRunEntityCount())
 
-    if entity.on_match == "reference" and entity.match_on:
-        match_value = str(properties.get(entity.match_on))
-        cache_key = (entity.type, match_value)
-        cached = state.local_index.get(cache_key)
+    if match_key is not None:
+        cached = state.local_index.get(match_key)
         if cached is not None:
             counts.referenced += 1
             return cached
         existing = await state.graph.find_node(
-            entity.type, entity.match_on, match_value, state.principal
+            entity.type, match_key[1], match_key[2], state.principal
         )
         if existing is not None:
             # The real node, as-is — its own stored handling/provenance/id,
             # never re-derived. `find_node`'s own access filter is what
             # decided this principal may see it at all.
-            state.local_index[cache_key] = existing.id
+            state.local_index[match_key] = existing.id
             state.nodes[existing.id] = existing
             counts.referenced += 1
             return existing.id
@@ -1092,7 +1497,9 @@ async def _dry_run_entity(
         raise OntologyError(f"{entity.type!r} is not a type in the active ontology")
     validate_properties(entity_type_def, properties)
 
-    handling = _handling(_merge_override(state.recipe.defaults.handling, entity.handling))
+    handling = _handling(
+        _merge_override(state.recipe.defaults.handling, _row_override(resolved, entity))
+    )
     provenance = _provenance(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
@@ -1112,9 +1519,8 @@ async def _dry_run_entity(
     state.nodes[node_id] = node
     state.created_node_ids.add(node_id)
     counts.created += 1
-    if entity.on_match == "reference" and entity.match_on:
-        match_value = str(properties.get(entity.match_on))
-        state.local_index[(entity.type, match_value)] = node_id
+    if match_key is not None:
+        state.local_index[match_key] = node_id
     return node_id
 
 
@@ -1155,7 +1561,9 @@ def _dry_run_edge(
         target_type=state.nodes[target_id].type,
     )
 
-    handling = _handling(_merge_override(state.recipe.defaults.handling, edge.handling))
+    handling = _handling(
+        _merge_override(state.recipe.defaults.handling, _row_override(resolved, edge))
+    )
     provenance = _provenance(
         _merge_override(state.recipe.defaults.provenance, edge.provenance),
         source=state.source,
@@ -1190,14 +1598,16 @@ async def dry_run_recipe(
     ontology: OntologySchema,
     principal: Principal,
     source: str,
+    scheme: HandlingScheme | None = None,
 ) -> DryRunResult:
     """Verify (`09_INGEST_STUDIO.md` §5): the same `resolve_rows()` output
     Map's own preview machinery is built on, simulated instead of loaded.
     `load_id="dry-run"` is never persisted anywhere — `resolve_rows` only
     threads it onto `StagedRow`s that this function itself consumes and
     discards."""
+    _require_scheme_to_judge_bound_handling(recipe, scheme)
     staged_rows, rejections, rows_read, rows_deduplicated = resolve_rows(
-        recipe, rows, load_id="dry-run", source=source, ontology=ontology
+        recipe, rows, load_id="dry-run", source=source, ontology=ontology, scheme=scheme
     )
     state = _DryRunState(
         graph=graph,
@@ -1207,7 +1617,13 @@ async def dry_run_recipe(
         source=source,
         now=datetime.now(UTC),
     )
+    link_rejected, link_rejections = _refuse_link_unit_conflicts(
+        recipe, staged_rows, ontology=ontology, scheme=scheme
+    )
+    rejections = [*rejections, *link_rejections]
     for staged_row in staged_rows:
+        if staged_row.row_index in link_rejected:
+            continue
         refs: dict[str, NodeId] = {}
         for staged_entity in staged_row.entities:
             resolved_entity = _staged_entity_to_resolved(staged_entity, recipe)
@@ -1246,7 +1662,7 @@ async def dry_run_recipe(
 def _staged_entity_to_resolved(staged: StagedEntity, recipe: Recipe) -> _ResolvedEntity:
     entities_by_ref = {e.ref: e for e in recipe.row_template.entities}
     recipe_entity = entities_by_ref[staged.ref]
-    return _ResolvedEntity(recipe_entity, staged.properties, staged.content)
+    return _ResolvedEntity(recipe_entity, staged.properties, staged.content, staged.handling)
 
 
 def _staged_edge_to_resolved(staged: StagedEdge) -> _ResolvedEdge:
@@ -1259,7 +1675,9 @@ def _staged_edge_to_resolved(staged: StagedEdge) -> _ResolvedEdge:
     recipe_edge = RecipeEdge.model_validate(
         {"type": staged.type, "from": staged.from_ref, "to": staged.to_ref}
     )
-    return _ResolvedEdge(recipe_edge, staged.properties, staged.instant, staged.content)
+    return _ResolvedEdge(
+        recipe_edge, staged.properties, staged.instant, staged.content, staged.handling
+    )
 
 
 async def run_recipe(
@@ -1278,6 +1696,7 @@ async def run_recipe(
     skip_row_indices: frozenset[int] = frozenset(),
     row_numbers: Sequence[int] | None = None,
     written: list[NodeWrite | EdgeWrite] | None = None,
+    scheme: HandlingScheme | None = None,
 ) -> tuple[LoadReport, list[EventRecord]]:
     """`skip_row_indices`: rows resolved but not written — those a failing pre-commit rule holds
     (ADR-109 ruling 1); a held row's duplicates go with it, as they share its survivor.
@@ -1293,7 +1712,15 @@ async def run_recipe(
     check_recipe_pins(recipe, ontology)
 
     # ADR-081 step D: refused again at run, before anything is written (Amendment 1 item 7).
-    check_recipe_rules(recipe.row_template, ontology)
+    check_recipe_rules(
+        recipe.row_template,
+        ontology,
+        units=recipe.defaults.units,
+        defaults_handling=recipe.defaults.handling,
+        scheme=scheme,
+        declared_columns=recipe.defaults.handling_columns,
+    )
+    _require_scheme_to_judge_bound_handling(recipe, scheme)
     if holds_content(recipe.row_template) and media is None:
         raise RecipeRuleError(
             [
@@ -1319,6 +1746,7 @@ async def run_recipe(
         source=source,
         ontology=ontology,
         row_numbers=row_numbers,
+        scheme=scheme,
     )
 
     # Stage the normalised rows, then read back — the loop below iterates
@@ -1327,6 +1755,9 @@ async def run_recipe(
     # encoding mismatch) fails here, not silently.
     staged_path = _stage_rows(staged_rows, storage=storage, load_id=load_id)
     loaded_rows = _read_staged_rows(staged_path, storage=storage)
+    link_rejected, link_rejections = _refuse_link_unit_conflicts(
+        recipe, loaded_rows, ontology=ontology, scheme=scheme, skip=skip_row_indices
+    )
 
     state = _RunState(
         graph=graph,
@@ -1342,7 +1773,7 @@ async def run_recipe(
     events: list[EventRecord] = []
 
     for staged_row in loaded_rows:
-        if staged_row.row_index in skip_row_indices:
+        if staged_row.row_index in skip_row_indices or staged_row.row_index in link_rejected:
             continue
         now = datetime.now(UTC)
         refs: dict[str, NodeId] = {}
@@ -1388,7 +1819,7 @@ async def run_recipe(
         nodes_created=state.nodes_created,
         nodes_referenced=state.nodes_referenced,
         edges_created=state.edges_created,
-        rejections=[*rejections, *state.content_rejections],
+        rejections=[*rejections, *link_rejections, *state.content_rejections],
         created_node_ids=state.created_node_ids,
         touched_edge_ids=state.touched_edge_ids,
     )

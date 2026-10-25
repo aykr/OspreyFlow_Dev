@@ -81,7 +81,7 @@ from __future__ import annotations
 import itertools
 import re
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -422,7 +422,14 @@ def profile_source(
     principal: Principal,
     scheme: HandlingScheme,
     sample_size: int = DEFAULT_SAMPLE_SIZE,
+    source_markings: Sequence[Handling] | None = None,
+    unviewable: bool = False,
 ) -> SourceProfile:
+    """`source_markings`: every marking a row of this source may carry, when a recipe binds a
+    marking to a column (ADR-127 decision 3) so the source's own is only the lowest; values are
+    shown to a principal who may view every one, masked to anyone else. Else `source_handling`
+    alone decides. `unviewable`: a row of the sample cannot be judged, so the values are masked
+    for every principal, whatever the markings say."""
     iterator = iter(rows)
     sampled = list(itertools.islice(iterator, sample_size))
     sample_is_whole_source = next(iterator, _SENTINEL) is _SENTINEL
@@ -443,6 +450,7 @@ def profile_source(
         columns=column_profiles,
         anomalies=anomalies,
     )
-    if not principal_may_view(source_handling, principal, scheme):
+    markings = source_markings if source_markings else [source_handling]
+    if unviewable or not all(principal_may_view(m, principal, scheme) for m in markings):
         result = _mask_profile(result)
     return result

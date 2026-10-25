@@ -16,16 +16,29 @@ own `StudioRecipeNotFoundError`/`StudioRecipeNotADraftError` discipline.
 from __future__ import annotations
 
 import csv
+import itertools
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 from services.ingest.connectors.csv_connector import read_csv
-from services.ingest.profiler import profile_source
+from services.ingest.engine import _merge_override, recipe_handlings
+from services.ingest.profiler import DEFAULT_SAMPLE_SIZE, profile_source
+from services.ingest.recipe_rules import handling_bindings, literal_handling, template_elements
 
-from ontology.handling import HandlingScheme
+from ontology.handling import HandlingScheme, principal_may_view
 from schemas.connectors import ConnectorProfile, load_connector_profiles
 from schemas.domain import Handling, Principal
-from schemas.ingest import CONNECTORS_DIR, RecipeConnector, StudioRecipeDraft
+from schemas.ingest import (
+    CONNECTORS_DIR,
+    Recipe,
+    RecipeConnector,
+    RecipeDefaults,
+    RowTemplate,
+    StudioRecipeDraft,
+)
 from schemas.profile import SourceProfile
 
 from .ingest_sources import ingest_root, is_inside
@@ -155,6 +168,133 @@ def _read_rows(recipe: StudioRecipeDraft) -> list[dict[str, str]]:
         raise SourceUnreadableError(str(exc)) from exc
 
 
+def _stub(draft: StudioRecipeDraft) -> Recipe:
+    return Recipe(
+        id=draft.recipe_id,
+        version=draft.version,
+        label=draft.label,
+        connector=RecipeConnector(profile=draft.connector_profile or "generic-csv"),
+        ontology_version=0,
+        defaults=RecipeDefaults.for_source(draft.handling, draft.legal_basis),
+        row_template=draft.row_template or RowTemplate(entities=[]),
+    )
+
+
+@dataclass(frozen=True)
+class RowMarkings:
+    """What a row of the source may carry. `unviewable` says the row cannot be judged (a part with
+    no value it could take, such as a unit column with no units to name): no principal may be shown
+    its values, whatever the markings are and whoever asks. Every reader of this checks it first."""
+
+    markings: list[Handling]
+    unviewable: bool = False
+
+    def readable_by(self, principal: Principal, scheme: HandlingScheme) -> bool:
+        return not self.unviewable and all(
+            principal_may_view(m, principal, scheme) for m in self.markings
+        )
+
+
+def row_markings(
+    draft: StudioRecipeDraft, scheme: HandlingScheme, row: Mapping[str, str] | None
+) -> RowMarkings:
+    """Every marking *this row* of the source may carry (ADR-127 decision 3): the source's own and
+    the recipe's fixed ones, and, for each element that binds parts of a marking to columns, the
+    markings that element's cells give *over its own base* (the source's defaults and its fixed
+    handling, as `row_marking` builds them): the default for an empty cell, the cell's value if
+    the scheme or the units define it, every defined value if they do not (or the column is
+    missing, or `row` is unknown). Columns Connect declared that no element binds yet are judged
+    over the source's defaults. A part with no value it could take (a unit column with no `units`
+    to name) leaves nothing to compare, so the result says `unviewable`. A read of the row's raw
+    values is allowed only to a principal who may view every one of them (rule 3)."""
+    stub = _stub(draft)
+    markings = recipe_handlings(stub)
+    units = stub.defaults.units
+
+    groups: list[tuple[Mapping[str, Any], dict[str, list[str]]]] = []
+    for element in template_elements(stub.row_template):
+        bindings = handling_bindings(element.handling)
+        if bindings:
+            base = _merge_override(stub.defaults.handling, literal_handling(element.handling))
+            groups.append((base, {part: [column] for part, column in bindings.items()}))
+    bound_pairs = {
+        (part, column) for _, parts in groups for part, cols in parts.items() for column in cols
+    }
+    declared_only = {
+        part: [column]
+        for part, column in stub.defaults.handling_columns.items()
+        if (part, column) not in bound_pairs
+    }
+    if declared_only:
+        groups.append((stub.defaults.handling, declared_only))
+    if not groups:
+        return RowMarkings(markings)
+
+    for group_base, columns in groups:
+        base = dict(group_base)
+        parts = sorted(columns)
+        candidates: list[list[str | None]] = []
+        for part in parts:
+            every = (
+                list(units)
+                if part in ("originator", "owning_unit")
+                else _scheme_values(scheme, part)
+            )
+            options: list[str | None] = []
+            for column in columns[part]:
+                cell = ((row or {}).get(column) or "").strip() if row is not None else None
+                if cell is None or column not in (row or {}):
+                    options.extend(every)
+                elif not cell:
+                    options.append(None)
+                elif cell in every:
+                    options.append(cell)
+                else:
+                    options.extend(every)
+            if not options:
+                return RowMarkings(markings, unviewable=True)
+            candidates.append(list(dict.fromkeys(options)))
+        seen: set[tuple[tuple[str, str], ...]] = set()
+        for combo in itertools.product(*candidates):
+            chosen = {part: value for part, value in zip(parts, combo, strict=True) if value}
+            key = tuple(sorted(chosen.items()))
+            if key in seen:
+                continue
+            seen.add(key)
+            markings.append(Handling.model_validate({**_complete(base), **chosen}))
+    return RowMarkings(markings)
+
+
+def _complete(handling: Mapping[str, Any]) -> dict[str, Any]:
+    raw = dict(handling)
+    raw.setdefault("owning_unit", raw.get("originator"))
+    raw.setdefault("handling_code", "P")
+    return raw
+
+
+def _scheme_values(scheme: HandlingScheme, part: str) -> list[str]:
+    return {
+        "classification": list(scheme.classification),
+        "handling_code": list(scheme.handling_codes),
+        "action_code": list(scheme.action_codes),
+        "sanitisation_code": list(scheme.sanitisation_codes),
+    }.get(part, [])
+
+
+def sample_markings(
+    draft: StudioRecipeDraft, scheme: HandlingScheme, rows: Sequence[Mapping[str, str]]
+) -> RowMarkings:
+    """`row_markings` over every row sampled: what a profile of them, which shows column samples
+    drawn from any of them, may reveal. Unviewable if any row is."""
+    found: list[Handling] = []
+    unviewable = False
+    for row in rows:
+        result = row_markings(draft, scheme, row)
+        found.extend(result.markings)
+        unviewable = unviewable or result.unviewable
+    return RowMarkings(found, unviewable)
+
+
 async def profile_recipe_source(
     recipe: StudioRecipeDraft, principal: Principal, scheme: HandlingScheme
 ) -> SourceProfile:
@@ -165,4 +305,12 @@ async def profile_recipe_source(
     except ValidationError as exc:
         raise SourceHandlingIncompleteError(str(exc)) from exc
     rows = _read_rows(recipe)
-    return profile_source(rows, source_handling=source_handling, principal=principal, scheme=scheme)
+    sampled = sample_markings(recipe, scheme, rows[:DEFAULT_SAMPLE_SIZE])
+    return profile_source(
+        rows,
+        source_handling=source_handling,
+        principal=principal,
+        scheme=scheme,
+        source_markings=sampled.markings,
+        unviewable=sampled.unviewable,
+    )

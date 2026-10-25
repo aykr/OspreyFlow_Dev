@@ -16,10 +16,17 @@ from collections.abc import Iterable, Mapping
 
 from knowledge_adapters import REGISTRY
 from knowledge_adapters.errors import NormalisationError
+from ontology.handling import HandlingScheme, merge_handling
 from schemas.analytics import GeometryKind, GeometryRecord
 from schemas.ingest import Recipe
 
-from .engine import RowRejected, _condition_holds, _handling, _merge_override
+from .engine import (
+    RowRejected,
+    _condition_holds,
+    _handling,
+    _merge_override,
+    row_handling_override,
+)
 from .transforms import transform_name_and_part
 
 #: The partition version a load's points are written at. The site grid's cells are at 1, and
@@ -29,7 +36,12 @@ from .transforms import transform_name_and_part
 POINT_GEOMETRY_VERSION = 1
 
 
-def point_geometries(recipe: Recipe, rows: Iterable[Mapping[str, str]]) -> list[GeometryRecord]:
+def point_geometries(
+    recipe: Recipe,
+    rows: Iterable[Mapping[str, str]],
+    *,
+    scheme: HandlingScheme | None = None,
+) -> list[GeometryRecord]:
     """One point per distinct ref a `geometry_ref` binding in `recipe` gives over `rows`, marked
     with its entity's handling. A row whose coordinates do not read gives no point (the engine
     rejects that row), and so does a source with no declared coordinate system."""
@@ -57,9 +69,18 @@ def point_geometries(recipe: Recipe, rows: Iterable[Mapping[str, str]]) -> list[
             try:
                 raw = (row[fields[0]], row[fields[1]])
                 ref = to_ref(raw, source_crs=source_crs)
+                # The row's own marking, columns read, as the node it belongs to carries.
+                override = row_handling_override(recipe, entity.handling, row, scheme=scheme)
+                handling = _handling(_merge_override(recipe.defaults.handling, override))
                 if ref in records:
+                    # A point several rows name is marked no lower than any of them (ADR-102): the
+                    # same place from a SECRET row and an OFFICIAL one is not OFFICIAL.
+                    if scheme is not None:
+                        shared = records[ref]
+                        records[ref] = shared.model_copy(
+                            update={"handling": merge_handling(shared.handling, handling, scheme)}
+                        )
                     continue
-                handling = _handling(_merge_override(recipe.defaults.handling, entity.handling))
                 records[ref] = GeometryRecord(
                     geometry_ref=ref,
                     version=POINT_GEOMETRY_VERSION,

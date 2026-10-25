@@ -29,7 +29,7 @@ from services.ingest.profiler import (
     profile_source,
 )
 
-from ontology.handling import HandlingScheme, principal_may_view
+from ontology.handling import HandlingScheme
 from schemas.domain import Handling, Principal, Provenance
 from schemas.ingest import (
     MapHandlingPreviewRequest,
@@ -44,7 +44,10 @@ from schemas.ingest import (
 from .studio_profile import (
     RecipeNotReadyForProfileError,
     SourceHandlingIncompleteError,
+    SourceUnreadableError,
     require_available_connector,
+    row_markings,
+    sample_markings,
 )
 from .studio_profile import _read_rows as _read_recipe_rows
 
@@ -105,6 +108,10 @@ def validate_handling_tightens(
     if not override or "classification" not in override:
         return
     new_classification = override["classification"]
+    if isinstance(new_classification, dict):
+        # A classification bound to a column (ADR-127 decision 3) is judged per row, at run, with
+        # every other part: it has no single value to compare here.
+        return
     if new_classification == baseline.classification:
         return
     if new_classification not in scheme.classification:
@@ -117,6 +124,27 @@ def validate_handling_tightens(
     override_rank = scheme.classification.index(new_classification)
     if override_rank < baseline_rank:
         raise HandlingLoosenedError(new_classification, baseline.classification)
+
+
+def draft_handling_columns(draft: StudioRecipeDraft) -> dict[str, str]:
+    """The column Connect declared as carrying each part of the marking (ADR-127 decision 3)."""
+    return dict(draft.handling.get("handling_columns") or {})
+
+
+def draft_units(draft: StudioRecipeDraft) -> list[str]:
+    """The units the draft's source declares beside its handling (ADR-127 decision 3)."""
+    return [str(u) for u in draft.handling.get("units", [])]
+
+
+def source_column_names(draft: StudioRecipeDraft) -> list[str] | None:
+    """The source's columns as Map save can know them: the header of the file the draft points at.
+    `None` when the source cannot be read or is empty, in which case a binding to a column is not
+    judged at save (it is, row by row, at run). Used only for a template that binds handling."""
+    try:
+        rows = _read_recipe_rows(draft)
+    except SourceUnreadableError:
+        return None
+    return list(rows[0]) if rows else None
 
 
 def resolve_source_handling(draft: StudioRecipeDraft) -> Handling:
@@ -147,14 +175,20 @@ async def get_sample_row(
         raise RowIndexOutOfRangeError(row_index)
     row = sampled[row_index]
 
-    masked = not principal_may_view(source_handling, principal, scheme)
+    masked = not row_markings(draft, scheme, row).readable_by(principal, scheme)
     values: dict[str, str] = {}
     if masked:
         # Column classifications (free-text vs. structured) come from the
         # same profiler pass Profile itself runs — not a second
         # implementation of that judgement.
+        sample = sample_markings(draft, scheme, sampled)
         profile = profile_source(
-            sampled, source_handling=source_handling, principal=principal, scheme=scheme
+            sampled,
+            source_handling=source_handling,
+            principal=principal,
+            scheme=scheme,
+            source_markings=sample.markings,
+            unviewable=sample.unviewable,
         )
         free_text_columns = {c.name for c in profile.columns if _is_free_text_column(c)}
         for name, value in row.items():
@@ -189,9 +223,7 @@ async def preview_element_handling(
         label=draft.label,
         connector=RecipeConnector(profile=draft.connector_profile or "generic-csv"),
         ontology_version=0,
-        defaults=RecipeDefaults(
-            handling=draft.handling, provenance={}, legal_basis=draft.legal_basis
-        ),
+        defaults=RecipeDefaults.for_source(draft.handling, draft.legal_basis),
         row_template=RowTemplate(entities=[]),
     )
     return preview_handling_and_provenance(

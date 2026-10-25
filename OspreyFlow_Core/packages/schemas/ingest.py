@@ -18,7 +18,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from schemas.domain import Edge, EdgeId, Handling, Node, NodeId, PrincipalId, Provenance
 
@@ -186,6 +186,7 @@ _UNSTRUCTURED_CATALOGUE: tuple[ConnectorCatalogueEntry, ...] = (
     ),
 )
 
+
 #: Where connector profiles live, relative to the repository root — `09_INGEST_STUDIO.md` §2's
 #: own `connectors/`. Overridable so a deployment can ship its own layouts without a rebuild,
 #: which is the other half of "a file rather than a release".
@@ -298,6 +299,31 @@ class PipelineGraph(BaseModel):
     edges: list[PipelineEdge] = Field(default_factory=list)
 
 
+def check_source_declarations(value: dict[str, Any]) -> dict[str, Any]:
+    """What a source's handling declares beside its marking (ADR-127 decision 3), as Connect and a
+    PATCH's merged result are judged: `units` a list of non-empty unit names (stripped), and
+    `handling_columns` a map of parts to column names, which needs `units` if it names a unit
+    part. Anything else is refused with its cause."""
+    value = dict(value)
+    if "units" in value:
+        units = value["units"]
+        if not isinstance(units, list) or any(
+            not isinstance(u, str) or not u.strip() for u in units
+        ):
+            raise ValueError("handling units must be a list of non-empty unit names")
+        value["units"] = [u.strip() for u in units]
+    if "handling_columns" in value:
+        value["handling_columns"] = check_handling_columns(value["handling_columns"])
+        unit_parts = [p for p in ("originator", "owning_unit") if p in value["handling_columns"]]
+        if unit_parts and not value.get("units"):
+            raise ValueError(
+                f"handling_columns declares a column for {' and '.join(unit_parts)} but the "
+                "source lists no units: a cell may name only a unit the source declares in "
+                "units"
+            )
+    return value
+
+
 class ConnectDraftInput(BaseModel):
     """What Connect (§2) actually collects: a connector choice and the
     three mandatory gate answers. Nothing here is optional except
@@ -317,6 +343,12 @@ class ConnectDraftInput(BaseModel):
     handling: dict[str, Any] = Field(default_factory=dict)
     #: §2: "what the legal basis for processing it is".
     legal_basis: str | None = None
+
+    @field_validator("handling")
+    @classmethod
+    def _units_are_names(cls, value: dict[str, Any]) -> dict[str, Any]:
+        """ADR-127 decision 3: refused here, as a 422, not left for the recipe to fail on."""
+        return check_source_declarations(value)
 
 
 class StudioRecipeDraft(BaseModel):
@@ -446,10 +478,109 @@ class RecipeConnector(BaseModel):
     source_crs: str | None = None
 
 
+#: The parts of a marking a column may carry, per element (ADR-127 decision 3,
+#: `09_INGEST_STUDIO.md` §4: "a column can carry either"). `review_date` and `legal_basis` are the
+#: source's, set once at Connect.
+HANDLING_BINDABLE: tuple[str, ...] = (
+    "classification",
+    "handling_code",
+    "action_code",
+    "sanitisation_code",
+    "originator",
+    "owning_unit",
+)
+
+
+class HandlingFieldBinding(BaseModel):
+    """One part of an element's marking read from a source column per row (ADR-127 decision 3):
+    `{field: <column>}`. An empty cell takes the element's default for that part; a cell may only
+    tighten it (`merge_handling`'s order), and a unit must be one the recipe declares."""
+
+    field: str
+
+    model_config = {"extra": "forbid"}
+
+
+def check_handling_override(value: dict[str, Any] | None, *, owner: str) -> dict[str, Any] | None:
+    """An element's `handling` is literal values and, for the six parts a column may carry, a
+    `{field: <column>}` binding. Anything else in a dict's place is refused where the recipe is
+    read, so it cannot reach a run as a pydantic error from `Handling`."""
+    for name, item in (value or {}).items():
+        if not isinstance(item, dict):
+            continue
+        if name not in HANDLING_BINDABLE:
+            raise ValueError(
+                f"{owner} handling {name!r} cannot be bound to a column "
+                f"(a column may carry: {', '.join(HANDLING_BINDABLE)})"
+            )
+        try:
+            HandlingFieldBinding.model_validate(item)
+        except ValidationError as exc:
+            raise ValueError(
+                f"{owner} handling {name!r} is bound as {{field: <column>}} and nothing else"
+            ) from exc
+    return value
+
+
+def check_handling_columns(value: object) -> dict[str, str]:
+    """`handling_columns`: which source column carries each part of a marking, as Connect declares
+    it (ADR-127 decision 3). A part outside the six, or a column that is not a non-empty name, is
+    refused; names are stripped."""
+    if not isinstance(value, dict):
+        raise ValueError("handling_columns must map a handling part to a column name")
+    declared: dict[str, str] = {}
+    for part, column in value.items():
+        if part not in HANDLING_BINDABLE:
+            raise ValueError(
+                f"handling_columns names {part!r}, which a column cannot carry "
+                f"({', '.join(HANDLING_BINDABLE)})"
+            )
+        if not isinstance(column, str) or not column.strip():
+            raise ValueError(f"handling_columns {part!r} must name a non-empty column")
+        declared[part] = column.strip()
+    return declared
+
+
 class RecipeDefaults(BaseModel):
     provenance: dict[str, Any] = Field(default_factory=dict)
     handling: dict[str, Any] = Field(default_factory=dict)
     legal_basis: str | None = None
+    #: ADR-127 decision 3: the units the source's rows may name as `originator` or `owning_unit`
+    #: when an element binds either from a column. Beside the source's handling; empty means none
+    #: may be bound.
+    units: list[str] = Field(default_factory=list)
+    #: Which source column carries each part of a marking, as Connect declares it: a read of the
+    #: source before a template exists (Profile) judges each row by these, and Map save refuses a
+    #: binding to a column not declared for its part.
+    handling_columns: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("handling_columns", mode="before")
+    @classmethod
+    def _columns_are_declared_parts(cls, value: object) -> dict[str, str]:
+        return check_handling_columns(value)
+
+    @classmethod
+    def for_source(cls, handling: dict[str, Any], legal_basis: str | None) -> RecipeDefaults:
+        """The defaults of a draft: its source handling, with the `units` that ride beside it
+        (ADR-127 decision 3) taken out as the recipe's own list, not part of any one marking."""
+        return cls(
+            handling={k: v for k, v in handling.items() if k not in ("units", "handling_columns")},
+            provenance={},
+            legal_basis=legal_basis,
+            units=[str(u) for u in handling.get("units", [])],
+            handling_columns=dict(handling.get("handling_columns") or {}),
+        )
+
+    @field_validator("handling")
+    @classmethod
+    def _defaults_are_not_bound(cls, value: dict[str, Any]) -> dict[str, Any]:
+        for name, item in value.items():
+            if isinstance(item, dict):
+                raise ValueError(
+                    f"defaults handling {name!r} cannot be bound to a column: the defaults are "
+                    "what a bound cell falls back on; bind it on an element's own handling"
+                )
+        return value
 
 
 class FieldBinding(BaseModel):
@@ -524,6 +655,12 @@ class RecipeEntity(BaseModel):
     #: `validate_handling_tightens`), not re-checked per row at run time.
     handling: dict[str, Any] | None = None
     provenance: dict[str, Any] | None = None
+
+    @field_validator("handling")
+    @classmethod
+    def _handling_bindings(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        return check_handling_override(value, owner="entity")
+
     #: ADR-094: content this entity holds (a phone's saved note, photo or video), kept in the media
     #: store and linked to the entity by `HOLDS`.
     content: ContentBinding | None = None
@@ -545,6 +682,11 @@ class RecipeEdge(BaseModel):
     #: Same per-element override as `RecipeEntity.handling`/`.provenance` above.
     handling: dict[str, Any] | None = None
     provenance: dict[str, Any] | None = None
+
+    @field_validator("handling")
+    @classmethod
+    def _handling_bindings(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        return check_handling_override(value, owner="link")
 
     model_config = {"populate_by_name": True}
 
@@ -903,6 +1045,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     RecipeDefaults,
     DeduplicateConfig,
     FieldBinding,
+    HandlingFieldBinding,
     RecipeCondition,
     RecipeEntity,
     TemporalBinding,

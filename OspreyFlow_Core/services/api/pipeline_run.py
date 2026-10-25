@@ -524,6 +524,7 @@ async def run_published_pipeline(
             analytics=analytics,
             media=media,
             rules=rules,
+            scheme=scheme,
         )
         report.branches.append(
             BranchRunReport(

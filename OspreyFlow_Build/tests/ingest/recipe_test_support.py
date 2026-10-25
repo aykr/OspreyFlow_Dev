@@ -73,6 +73,8 @@ class ValidatingGraph:
         self.discarded_edges: list[EdgeWrite] = []
         self.rolled_back = 0
         self.commits = 0
+        self._begun = 0
+        self._rolled_back_txs: set[object] = set()
 
     def _schema(self) -> OntologySchema:
         return self._ontology() if callable(self._ontology) else self._ontology
@@ -86,11 +88,12 @@ class ValidatingGraph:
         return self.committed_edges
 
     async def begin_transaction(self) -> str:
-        return "tx-1"
+        self._begun += 1
+        return f"tx-{self._begun}"
 
     async def commit_transaction(self, tx: object) -> None:
         # A rolled-back session has nothing left to commit; the real store refuses it.
-        if self.rolled_back:
+        if tx in self._rolled_back_txs:
             raise RuntimeError(f"transaction {tx!r} was rolled back and cannot be committed")
         self.commits += 1
         self.committed_nodes.extend(self.open_nodes)
@@ -101,6 +104,7 @@ class ValidatingGraph:
         self.discarded_nodes.extend(self.open_nodes)
         self.discarded_edges.extend(self.open_edges)
         self.open_nodes, self.open_edges = [], []
+        self._rolled_back_txs.add(tx)
         self.rolled_back += 1
 
     async def find_node(self, entity_type: str, field: str, value: str, principal: Any) -> Any:

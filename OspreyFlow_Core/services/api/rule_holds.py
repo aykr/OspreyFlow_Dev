@@ -94,6 +94,7 @@ async def release_held_rows(
         media=media,
         rules=rules,
         row_numbers=[h.row_index for h in ordered],
+        scheme=rules.scheme,
     )
     if analytics is not None and events:
         await analytics.load_events(events)

@@ -108,6 +108,7 @@ export type { RecipeConnector } from "./RecipeConnector";
 export type { RecipeDefaults } from "./RecipeDefaults";
 export type { DeduplicateConfig } from "./DeduplicateConfig";
 export type { FieldBinding } from "./FieldBinding";
+export type { HandlingFieldBinding } from "./HandlingFieldBinding";
 export type { RecipeCondition } from "./RecipeCondition";
 export type { RecipeEntity } from "./RecipeEntity";
 export type { TemporalBinding } from "./TemporalBinding";

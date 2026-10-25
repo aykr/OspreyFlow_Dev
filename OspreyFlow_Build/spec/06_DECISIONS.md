@@ -17752,3 +17752,81 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   simply has no links on that row (R9's second and third subjects); only a reference no entity declares
   is refused.
 
+### ADR-127, Amendment 2 (25 October 2026) — B2-2: what decision 3 left open
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **Where `units` and `handling_columns` live.** On the draft they are in the source's handling; on the
+  published recipe they are `defaults.units` and `defaults.handling_columns`. No Connect screen sets them
+  yet: unit B2-2b adds them to the Glass, and until then they are set through the draft's API.
+- **Bindings are per element only.** A binding in `defaults.handling` is refused: the defaults are what an
+  empty cell falls back on, and decision 3 binds an element's handling.
+- **A bound column the row lacks** rejects the row, naming the column, rather than reading as an empty
+  cell, so a misspelt column cannot load every row at the default.
+- **The Map preview** shows a bound part's default, not a sample row's value; the sample-row preview is
+  B2-2b's.
+- **`validate_handling_tightens`** stays for literal overrides at Map save and skips bindings explicitly;
+  the per-row check covers them.
+- **A run that binds a marking needs the handling scheme.** Every route passes it. A run without one
+  (`services/ingest/__main__.py`, the older demo seeders, `build_local_basemap`, the site grid) refuses a
+  recipe that binds a marking (`RecipeRuleError`); none binds one today, and Brief 2's seed passes the
+  scheme.
+- **Rule 3 for alerts and held rows.**
+  - **Alerts.** The markings the typology rules fold into an alert's marking include every marking a bound
+    part could take (each defined code, each declared unit), so they are never lower than any row's. Where
+    restricted codes among them name different units, the existing rule withholds the alert's node (fails
+    closed).
+  - **Held rows.** A held row is marked by its own row's resolved marking, strictest element first,
+    whether its elements' handling comes from a column or is fixed. A row whose elements name different
+    units under a restricted handling code cannot be held as one marking and is rejected at resolution,
+    with its cause, so it never reaches the hold. A row whose bound cell does not resolve is likewise
+    rejected at resolution. The held markings are computed before the load commits, so a row whose marking
+    cannot be computed is reported as rejected, never held and lost.
+- **Previews.** Verify masks the property values of each simulated node, link and rejected row by its own
+  resolved marking; an element's existence, its marking and the counts by type are shown, the contract
+  `values_masked` already had for a whole source. Profile and the Map sample row show a row's raw cells
+  only to a principal who may view that row's marking, read from the columns Connect declares as carrying
+  handling (`handling_columns`, a part to a column) and from any binding Map has saved, each combined with
+  the base marking of the element that binds it. A part with no possible value makes the row unviewable to
+  every principal (fails closed): the read paths mask it before looking at any marking, whatever the
+  scheme defines. A Map binding must
+  name the column Connect declared for its part, so a draft's first Profile, before Map, already knows
+  which columns carry handling.
+- **A declared column must be bound by every element.** Every entity and link in the template, whatever
+  its `when` or its `on_match`, must bind each part Connect declares a column for;
+  otherwise the recipe is refused at Map save and at run, naming the element and the part, so nothing a
+  row whose column says SECRET writes can load at the default. An entity matched by reference is not
+  exempt: on a miss the row creates it, and its held content and geometry points are written from the row;
+  on a match the node keeps its stored marking, so the binding changes nothing there. A declared
+  `originator` or `owning_unit` column needs `units`, and Connect refuses one without them. A Map binding without a declaration is refused at save. The run does not require a declaration, so a
+  YAML recipe may bind a column it does not declare, but any column it declares must be bound.
+  A cell the scheme does not define widens that row's possible markings to every defined value of its
+  part, so a dirty Profile sample costs more to mask; this was not measured.
+- **Same-pair links within a load.** Two rows that write the same link type between the same two
+  reference-matched nodes merge into one link, which keeps the first write's units and takes the later
+  write's properties. Where the two rows' markings name different units and either is restricted, the
+  later row is rejected, with its cause, so a link restricted to one unit never carries another unit's
+  row. When the run has the handling scheme, this holds whether the units come from columns or from
+  different link elements' fixed handling; a run without the scheme checks neither.
+  A node is identified as the engine matches it (the coerced `match_on` value, under that field's name).
+- **Pending the owner's ruling, not decided here.** The same merge is not checked where the two writes
+  reach one link by another route: from an earlier load (ADR-102's existing rule, units stay the
+  first's), including a held row released into a later load; or through two declarations of one type
+  matched on different fields that resolve to one node. Neither is new to B2-2, but per-row units feed
+  them more often, and closing them needs the graph adapter's merge to refuse a restricted units
+  conflict, which changes every write path.
+- **A rejection reason** names the handling part and the column, never the cell's value.
+- **Duplicates.** A row's duplicates are folded into its marking with `merge_handling`; if any of them fails
+  (an undefined code, an undeclared unit, a loosening, or different units under a restricted code) the
+  whole group is rejected.
+- **Fixed handling.** An element's fixed handling must tighten the source's marking in every part, checked
+  at Map save, and at run when the run has the scheme; a fixed handling that cannot be read against the
+  defaults is refused, not skipped. A fixed unit need not be in `units`, which limits only what a cell can
+  name.
+- **Refused at Map save and at run:** a provenance binding from a column (provenance is set per source and
+  per element, never per row), and a handling key `Handling` does not have.
+- **A referenced entity** keeps its stored marking when it matches; on a miss it is created at the row's
+  bound marking, like anything else the row writes.
+- **`units` and `handling_columns`** are validated at Connect (entries stripped and non-empty; a part
+  `Handling` does not bind is refused) and kept on a later edit of the draft.
+  Shared geometry points merge the markings of the rows that name them.
+

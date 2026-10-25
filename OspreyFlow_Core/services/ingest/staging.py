@@ -155,6 +155,9 @@ class StagedEntity:
     properties: dict[str, Any]
     #: ADR-094: `{"kind": ..., "value": ...}` (the text, or the file's path) when it holds content.
     content: dict[str, str] | None = None
+    #: ADR-127 decision 3: this row's `handling` override with its columns read, when the element
+    #: binds a part of its marking to one.
+    handling: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -166,6 +169,8 @@ class StagedEdge:
     instant: datetime | None = None
     #: ADR-094: `{"kind": ..., "text": ...}` when the recipe marks this link's text.
     content: dict[str, str] | None = None
+    #: As `StagedEntity.handling`.
+    handling: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -240,7 +245,11 @@ def read_staged_rows(path: str, *, storage: ObjectStorageConfig) -> list[StagedR
     for record in table.to_pylist():
         entities = [
             StagedEntity(
-                ref=e["ref"], type=e["type"], properties=e["properties"], content=e.get("content")
+                ref=e["ref"],
+                type=e["type"],
+                properties=e["properties"],
+                content=e.get("content"),
+                handling=e.get("handling"),
             )
             for e in json.loads(record["entities_json"])
         ]
@@ -254,6 +263,7 @@ def read_staged_rows(path: str, *, storage: ObjectStorageConfig) -> list[StagedR
                 if e["instant"]
                 else None,
                 content=e.get("content"),
+                handling=e.get("handling"),
             )
             for e in json.loads(record["edges_json"])
         ]

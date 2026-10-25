@@ -49,6 +49,7 @@ from schemas.ingest import (
     StudioRecipeDraft,
     StudioRecipeStatus,
     UnmappedField,
+    check_source_declarations,
 )
 
 from .dataset_scope import made_in, reach_clause
@@ -213,6 +214,34 @@ def _row_to_draft(row: asyncpg.Record) -> StudioRecipeDraft:
     )
 
 
+_SOURCE_DECLARATIONS = ("units", "handling_columns")
+
+
+class SourceDeclarationsInvalidError(ValueError):
+    """The handling a draft would hold after a PATCH declares what the source cannot support: a
+    unit column with no units, or malformed `units` or `handling_columns` (ADR-127 decision 3)."""
+
+
+def carry_source_declarations(
+    old: dict[str, object], new: dict[str, object] | None
+) -> dict[str, object] | None:
+    """A new handling replaces the old whole, and what the source declares beside its marking
+    (ADR-127 decision 3: the `units` its rows may name, the `handling_columns` that carry each
+    part) rides inside it: a handling that does not mention one keeps the draft's own, so editing
+    the marking in Connect does not silently drop them. An explicit empty value clears it."""
+    if new is None:
+        return new
+    carried = {k: old[k] for k in _SOURCE_DECLARATIONS if k in old and k not in new}
+    merged = {**new, **carried} if carried else new
+    # What was kept is judged as Connect judges a handling: a unit column needs the units a PATCH
+    # may have just emptied. Refused here, before `update_draft` writes anything.
+    try:
+        check_source_declarations(dict(merged))
+    except ValueError as exc:
+        raise SourceDeclarationsInvalidError(str(exc)) from exc
+    return merged
+
+
 class StudioRecipeStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
@@ -326,7 +355,7 @@ class StudioRecipeStore:
                 for k, v in {
                     "connector_profile": connector_profile,
                     "source_location": source_location,
-                    "handling": handling,
+                    "handling": carry_source_declarations(draft.handling, handling),
                     "legal_basis": legal_basis,
                 }.items()
                 if v is not None
@@ -563,9 +592,7 @@ class StudioRecipeStore:
             )
         return [_row_to_draft(r) for r in rows]
 
-    async def retime(
-        self, recipe_id: str, *, cron: str, timezone: str, now: datetime
-    ) -> None:
+    async def retime(self, recipe_id: str, *, cron: str, timezone: str, now: datetime) -> None:
         """A new time for an existing schedule (ADR-110 Amendment 3, point 2: the Admin area's
         *Change schedule*): the owner, the case and the paused state are kept; the time it was set
         moves to now, so slots before the change are not counted as missed."""

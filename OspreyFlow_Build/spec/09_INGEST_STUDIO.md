@@ -408,9 +408,18 @@ result is the same normalisation logic implemented four slightly different ways.
 needs a transform that does not exist, that is a new adapter with a golden test file, written
 once and available to everyone.
 
-**Provenance and handling.** Set per source in stage 1, overridable per element, and a column can
-carry either — a records-management export often has its own classification column. Everything
-loaded structurally is `asserted`; everything derived by a model is `inferred`.
+**Provenance and handling.** Set per source in stage 1 and overridable per element; a column can carry
+the handling — a records-management export often has its own classification column — but not the
+provenance, which is refused at Map save. Stage 1 declares which column carries each handling part
+(`handling_columns`), so Profile masks a row by its own marking before Map exists; a Map binding
+must name the declared column, and every entity and link the recipe writes, one matched by reference
+included, must bind it. A column binds a
+marking per element, part by part (classification, handling, action and sanitisation codes,
+originator, owning unit). A row whose bound marking is looser than the element's default in any part,
+names a code the scheme does not define, or names a unit the recipe does not declare (`units`) is
+rejected with its cause; an empty cell takes the default (ADR-127 decision 3, Amendment 2;
+`tests/ingest/test_handling_from_columns.py`). Everything loaded structurally is `asserted`;
+everything derived by a model is `inferred`.
 
 The engine's `_handling()`/`_provenance()` (`services/ingest/engine.py`) are pure — recipe
 defaults and a row index in, a `Handling`/`Provenance` out, no open transaction required — which

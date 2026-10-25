@@ -23,22 +23,28 @@ import os
 from pathlib import Path
 
 import yaml
-from services.ingest.engine import recipe_handlings, run_recipe
+from services.ingest.engine import (
+    RowRejected,
+    recipe_handlings,
+    row_marking,
+    run_recipe,
+)
 from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
 from services.ingest.pipeline import recipe_packs
 from services.ingest.recipe_loader import load_recipe
 
-from ontology.handling import merge_handling
+from ontology.handling import HandlingScheme, merge_handling
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from ports.media import MediaStore
 from schemas.analytics import EventRecord
-from schemas.domain import EdgeWrite, NodeWrite, OntologySchema, Principal
+from schemas.domain import EdgeWrite, Handling, HeldRow, NodeWrite, OntologySchema, Principal
 from schemas.ingest import (
     LoadReport,
     PipelineGraph,
     Recipe,
     RecipeDefaults,
+    RejectionRecord,
     RowTemplate,
     ScheduleConfig,
     StudioRecipeDraft,
@@ -67,9 +73,7 @@ __all__ = [
 #: from this file (`services/api/studio_publish.py` -> `services/api` ->
 #: `services` -> repo root) — the same `.parents[2]` computation
 #: `services/api/app.py`'s own `_SITE_GRID_RECIPE_PATH` already uses.
-_REPO_ROOT = Path(
-    os.environ.get("OSPREY_RECIPE_REPO_ROOT") or Path(__file__).resolve().parents[2]
-)
+_REPO_ROOT = Path(os.environ.get("OSPREY_RECIPE_REPO_ROOT") or Path(__file__).resolve().parents[2])
 """Where published recipes are committed.
 
 **Round 13bf: the default above is correct on a developer's host and wrong inside a container.**
@@ -163,9 +167,7 @@ def build_recipe(
         connector=connector_for(draft),
         ontology_version=ontology_version,
         pack_versions=pack_versions,
-        defaults=RecipeDefaults(
-            handling=draft.handling, provenance={}, legal_basis=draft.legal_basis
-        ),
+        defaults=RecipeDefaults.for_source(draft.handling, draft.legal_basis),
         row_template=draft.row_template,
         unmapped_fields=draft.unmapped_fields,
         schedule=schedule,
@@ -235,9 +237,7 @@ async def _ensure_repository(repo_root: Path) -> None:
     await _run_git("config", "user.name", "OspreyFlow Ingest Studio", cwd=repo_root)
 
 
-async def write_and_commit_recipe(
-    recipe: Recipe, *, repo_root: Path = _REPO_ROOT
-) -> str:
+async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROOT) -> str:
     """Writes the recipe to `recipes/<id>.yaml` under `repo_root` and
     commits it — §6: "Publishing writes the recipe to version control, not
     only to the database." Returns the git-relative path stored as the
@@ -288,6 +288,7 @@ async def run_published_recipe(
     analytics: AnalyticsPort | None = None,
     media: MediaStore | None = None,
     rules: RuleGate | None = None,
+    scheme: HandlingScheme | None = None,
 ) -> LoadReport:
     """§8: "Loader: run a published recipe against a file at or below their
     own clearance" — "a file", not necessarily the one Connect originally
@@ -308,8 +309,10 @@ async def run_published_recipe(
     assert draft.git_path is not None
     recipe = load_published_recipe(draft, repo_root)
 
-    read_from = draft if source_location is None else draft.model_copy(
-        update={"source_location": source_location}
+    read_from = (
+        draft
+        if source_location is None
+        else draft.model_copy(update={"source_location": source_location})
     )
     rows = list(_read_recipe_rows(read_from))
     report, events, held_rows = await load_with_rules(
@@ -323,6 +326,7 @@ async def run_published_recipe(
         source=read_from.source_location or draft.recipe_id,
         media=media,
         rules=rules,
+        scheme=scheme,
     )
     # The run's events (a call's time, a message's text) go to the analytics store, as every seed's
     # do; they were dropped here, so nothing loaded through the Studio reached the timeline,
@@ -334,7 +338,11 @@ async def run_published_recipe(
     # (9 October 2026). The partition is keyed by ref and insert-only, so a ref already there is
     # not loaded twice.
     # A held row (ADR-109 ruling 1) reached no store, its place included.
-    points = point_geometries(recipe, [r for i, r in enumerate(rows) if i not in held_rows])
+    points = point_geometries(
+        recipe,
+        [r for i, r in enumerate(rows) if i not in held_rows],
+        scheme=scheme or (rules.scheme if rules is not None else None),
+    )
     if analytics is not None and points:
         held = {
             record.geometry_ref
@@ -366,6 +374,7 @@ async def load_with_rules(
     media: MediaStore | None = None,
     rules: RuleGate | None = None,
     row_numbers: list[int] | None = None,
+    scheme: HandlingScheme | None = None,
 ) -> tuple[LoadReport, list[EventRecord], frozenset[int]]:
     """One load in one graph transaction, judged by the case's pre-commit rules before it commits
     (`06_DECISIONS.md` ADR-109 ruling 1). A hit loads with its alert: the `Alert` node is written
@@ -374,8 +383,12 @@ async def load_with_rules(
     runs again without them — a second pass whose remaining rows carry no money movement for a
     typology to judge, so it cannot hold again; if it ever did, the load is refused rather than
     part-loaded silently (rule 2)."""
+    # What a column may bind is judged against the caller's scheme, else the case's rules' own.
+    scheme = scheme or (rules.scheme if rules is not None else None)
     unseen = (
-        alert_handling(rules.scheme, recipe_handlings(recipe)) if rules is not None else None
+        alert_handling(rules.scheme, recipe_handlings(recipe, rules.scheme))
+        if rules is not None
+        else None
     )
     held = PreCommitVerdict()
     skip: frozenset[int] = frozenset()
@@ -397,11 +410,10 @@ async def load_with_rules(
                 skip_row_indices=skip,
                 row_numbers=row_numbers,
                 written=written,
+                scheme=scheme,
             )
             verdict = (
-                await rules.pre_commit(
-                    events, tx, load_id=load_id, unseen=unseen, written=written
-                )
+                await rules.pre_commit(events, tx, load_id=load_id, unseen=unseen, written=written)
                 if rules is not None
                 else PreCommitVerdict()
             )
@@ -417,30 +429,64 @@ async def load_with_rules(
             )
         held = verdict
         skip = frozenset(verdict.hold)
+
+    # Each held row is marked by its own row's resolved marking (ADR-127 decision 3), never by the
+    # recipe's floor, whose units are the first marking's. The markings are settled before the
+    # commit: a row none can be made for (`row_marking` refuses it) is a rejection in the report,
+    # not a held row lost once the load has committed. It was left out of the graph already (it
+    # is among the rows `skip` holds back), so nothing of it is committed.
+    held_rows: list[HeldRow] = []
+    try:
+        if rules is not None and held.hold:
+            rule_scheme = rules.scheme
+            handlings = recipe_handlings(recipe, rule_scheme)
+            floor = handlings[0]
+            for other in handlings[1:]:
+                floor = merge_handling(floor, other, rule_scheme)
+            by_row: dict[int, Handling] = {}
+            numbers = list(row_numbers) if row_numbers is not None else list(range(len(rows)))
+            position = {n: i for i, n in enumerate(numbers)}
+            refused: list[int] = []
+            for number in sorted(held.hold):
+                if number not in position:
+                    continue
+                try:
+                    by_row[number] = row_marking(recipe, rows[position[number]], rule_scheme)
+                except RowRejected as exc:
+                    refused.append(number)
+                    report.rejections.append(
+                        RejectionRecord(row_index=number, reason=exc.reason, sample="")
+                    )
+            by_row_object = {id(rows[position[n]]): marking for n, marking in by_row.items()}
+            held_rows = held_rows_for(
+                PreCommitVerdict(
+                    hold={n: v for n, v in held.hold.items() if n not in refused},
+                    findings=held.findings,
+                    notes=held.notes,
+                ),
+                rows,
+                row_numbers=row_numbers,
+                investigation_id=rules.investigation_id,
+                recipe_id=recipe.id,
+                recipe_version=recipe.version,
+                load_id=load_id,
+                source=source,
+                handling=floor,
+                dataset_id=principal.datasets[0] if principal.datasets else None,
+                row_handling=lambda row: by_row_object[id(row)],
+            )
+    except Exception:
+        # Anything but a refusal (`RowRejected` is handled per row above) leaves the open
+        # transaction rolled back, not abandoned: nothing of this load is committed.
+        await graph.rollback_transaction(tx)
+        raise
     await graph.commit_transaction(tx)
 
     if rules is not None:
         await rules.after_commit(verdict)
-        if held.hold:
-            handlings = recipe_handlings(recipe)
-            marking = handlings[0]
-            for other in handlings[1:]:
-                marking = merge_handling(marking, other, rules.scheme)
-            await rules.hold(
-                held_rows_for(
-                    held,
-                    rows,
-                    row_numbers=row_numbers,
-                    investigation_id=rules.investigation_id,
-                    recipe_id=recipe.id,
-                    recipe_version=recipe.version,
-                    load_id=load_id,
-                    source=source,
-                    handling=marking,
-                    dataset_id=principal.datasets[0] if principal.datasets else None,
-                )
-            )
-        report.rows_held = len(held.hold)
+        if held_rows:
+            await rules.hold(held_rows)
+        report.rows_held = len(held_rows)
         report.rule_notes = [*held.notes, *verdict.notes]
         rules.last_written = written
         await rules.record_expiries(written)

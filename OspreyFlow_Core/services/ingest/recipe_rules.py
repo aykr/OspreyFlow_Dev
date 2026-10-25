@@ -9,12 +9,109 @@ language is involved (rule 8): each rule reads only what the recipe declares.
 
 from __future__ import annotations
 
+from collections.abc import Collection, Mapping
+from typing import Any
+
 from services.ingest.transforms import STRUCTURED_PARTS, transform_name_and_part
 
-from schemas.domain import NOT_SAME_AS, OntologySchema
-from schemas.ingest import RowTemplate
+from ontology.errors import HandlingSchemeError
+from ontology.handling import HandlingScheme, merge_handling
+from schemas.domain import NOT_SAME_AS, Handling, OntologySchema
+from schemas.ingest import RecipeEdge, RecipeEntity, RowTemplate
 
 FILE_KINDS = frozenset({"image_file", "video_file"})
+
+
+def template_elements(template: RowTemplate) -> list[RecipeEntity | RecipeEdge]:
+    """Every entity and link of `template`, entities first."""
+    return [*template.entities, *template.edges]
+
+
+def handling_bindings(override: Mapping[str, Any] | None) -> dict[str, str]:
+    """The parts of an element's `handling` bound to a column (ADR-127 decision 3), as
+    `{part: column}`."""
+    return {
+        name: str(item["field"])
+        for name, item in (override or {}).items()
+        if isinstance(item, dict) and "field" in item
+    }
+
+
+def literal_handling(override: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """`override` without its column bindings: what is fixed for every row."""
+    if override is None:
+        return None
+    return {k: v for k, v in override.items() if not isinstance(v, dict)}
+
+
+def _owner(element: RecipeEntity | RecipeEdge) -> str:
+    return (
+        f"entity {element.ref!r}" if isinstance(element, RecipeEntity) else f"link {element.type!r}"
+    )
+
+
+def handling_baseline_problems(
+    template: RowTemplate,
+    defaults_handling: Mapping[str, Any] | None,
+    scheme: HandlingScheme | None,
+) -> list[str]:
+    """Each element's `handling` and `provenance` as the recipe declares them, before any row:
+
+    - a `handling` key `Handling` does not have (`clasification`) is refused, not dropped;
+    - a column bound in `provenance` is refused (provenance has no per-row source; `_provenance`
+      would fail the whole run on it);
+    - given `defaults_handling` and a `scheme`, the element's literal override over the defaults may
+      only tighten them in every part (`merge_handling`'s order), the check ADR-127 decision 3 makes
+      of a cell, made of the recipe's own fixed values too."""
+    problems: list[str] = []
+    known = set(Handling.model_fields)
+    for element in template_elements(template):
+        owner = _owner(element)
+        for name in element.handling or {}:
+            if name not in known:
+                problems.append(
+                    f"{owner} sets handling {name!r}, which a marking does not have "
+                    f"({', '.join(sorted(known))})."
+                )
+        for name, value in (element.provenance or {}).items():
+            if isinstance(value, dict):
+                problems.append(
+                    f"{owner} binds provenance {name!r} to a column; provenance cannot come from "
+                    "a column, only fixed values (state)."
+                )
+        literal = literal_handling(element.handling)
+        if not literal or defaults_handling is None or scheme is None:
+            continue
+        try:
+            default = Handling.model_validate(_complete_defaults(defaults_handling))
+            bound = Handling.model_validate({**_complete_defaults(defaults_handling), **literal})
+            merged = merge_handling(bound, default, scheme)
+        except HandlingSchemeError as exc:
+            problems.append(f"{owner} sets a handling the scheme does not define: {exc}.")
+            continue
+        except ValueError as exc:
+            problems.append(f"{owner} sets a handling that is not a valid marking: {exc}")
+            continue
+        if merged != bound:
+            for part in ("classification", "handling_code", "action_code", "sanitisation_code"):
+                if getattr(merged, part) != getattr(bound, part):
+                    problems.append(
+                        f"{owner} sets handling {part} {getattr(bound, part)!r}, which is looser "
+                        f"than the source's {getattr(default, part)!r}; an element may only "
+                        "tighten the source's marking."
+                    )
+    return problems
+
+
+def _complete_defaults(defaults_handling: Mapping[str, Any]) -> dict[str, Any]:
+    """The source's marking with the `originator` an old draft may lack filled as `Handling`
+    needs, and `owning_unit` as the engine does (`_handling`)."""
+    raw = dict(defaults_handling)
+    raw.pop("units", None)
+    if raw.get("originator") is not None:
+        raw.setdefault("owning_unit", raw["originator"])
+    raw.setdefault("handling_code", "P")
+    return raw
 
 
 class RecipeRuleError(Exception):
@@ -25,9 +122,81 @@ class RecipeRuleError(Exception):
         self.problems = problems
 
 
-def recipe_rule_violations(template: RowTemplate, ontology: OntologySchema) -> list[str]:
-    """Every problem with `template` against `ontology`, in the recipe's order; empty if none."""
+def recipe_rule_violations(
+    template: RowTemplate,
+    ontology: OntologySchema,
+    *,
+    source_columns: Collection[str] | None = None,
+    units: Collection[str] | None = None,
+    defaults_handling: Mapping[str, Any] | None = None,
+    scheme: HandlingScheme | None = None,
+    handling_columns: Mapping[str, str] | None = None,
+    declared_columns: Mapping[str, str] | None = None,
+) -> list[str]:
+    """Every problem with `template` against `ontology`, in the recipe's order; empty if none.
+
+    `source_columns` (what the source has, when it is known: at Map save, from its header; a run
+    has the rows and checks each) and `units` (the recipe's declared units, `defaults.units`)
+    judge an element's `handling` bound to a column (ADR-127 decision 3): the column must exist,
+    and a bound `originator` or `owning_unit` needs a units list to be checked against.
+
+    `defaults_handling` and `scheme` judge each element's literal handling against the source's own
+    marking in every part (ADR-127 decision 3: tighten only; ADR-102 decision 1), not classification
+    alone. Without a scheme that check is not made. Any element's `handling` key that `Handling`
+    does not have, and a column bound in `provenance`, are refused: neither would be read."""
     problems: list[str] = []
+    problems.extend(handling_baseline_problems(template, defaults_handling, scheme))
+    # A column Connect declares as carrying a part must be bound by some element: else the
+    # source's rows load at the default marking whatever that column says (rule 3). Judged at save
+    # and at run (`declared_columns`); a binding to an undeclared column is refused at save only
+    # (`handling_columns`), since a recipe written before Connect declared anything has none.
+    # Every entity and link must bind it, links and references included: `on_match: reference` is
+    # match-or-create, so on a miss the node is written at its unbound marking, and a held content
+    # Document, its `HOLDS` link and a geometry point are written from the row too. A matched node
+    # keeps its stored marking whether or not it binds, so binding a reference is harmless. An
+    # element with a `when` still has to bind.
+    for declared_part, declared_name in (declared_columns or {}).items():
+        for element in template_elements(template):
+            if handling_bindings(element.handling).get(declared_part) != declared_name:
+                name = element.ref if isinstance(element, RecipeEntity) else element.type
+                problems.append(
+                    f"element {name!r} does not bind {declared_part}, which the source declares "
+                    f"in column {declared_name!r}."
+                )
+    if source_columns is not None:
+        for declared_part, declared_name in (handling_columns or {}).items():
+            if declared_name not in source_columns:
+                problems.append(
+                    f"Connect declares {declared_name!r} as the {declared_part} column, which the "
+                    f"source does not have (its columns: {', '.join(source_columns)})."
+                )
+    for element in template_elements(template):
+        owner = (
+            f"entity {element.ref!r}"
+            if isinstance(element, RecipeEntity)
+            else f"link {element.type!r}"
+        )
+        for bound_part, column in handling_bindings(element.handling).items():
+            if source_columns is not None and column not in source_columns:
+                problems.append(
+                    f"{owner} binds handling {bound_part} to column {column!r}, which the source "
+                    f"does not have (its columns: {', '.join(source_columns)})."
+                )
+            if handling_columns is not None and handling_columns.get(bound_part) != column:
+                declared_column = handling_columns.get(bound_part)
+                problems.append(
+                    f"{owner} binds handling {bound_part} to column {column!r}, but Connect "
+                    + (
+                        f"has declared {declared_column!r} as the column that carries it."
+                        if declared_column
+                        else "has declared no column for it: declare it there first."
+                    )
+                )
+            if bound_part in ("originator", "owning_unit") and not units:
+                problems.append(
+                    f"{owner} binds handling {bound_part} to a column, but the recipe declares no "
+                    "units: a cell may name only a unit the recipe lists (units), so declare them."
+                )
     # ADR-104: a structured transform fills a property through one named part, so a binding that
     # names none (or one the result does not have) is refused here, when the recipe is saved.
     owners = [(entity.ref, entity.properties) for entity in template.entities] + [
@@ -118,7 +287,26 @@ def holds_content(template: RowTemplate) -> bool:
     return any(entity.content is not None for entity in template.entities)
 
 
-def check_recipe_rules(template: RowTemplate, ontology: OntologySchema) -> None:
-    problems = recipe_rule_violations(template, ontology)
+def check_recipe_rules(
+    template: RowTemplate,
+    ontology: OntologySchema,
+    *,
+    source_columns: Collection[str] | None = None,
+    units: Collection[str] | None = None,
+    defaults_handling: Mapping[str, Any] | None = None,
+    scheme: HandlingScheme | None = None,
+    handling_columns: Mapping[str, str] | None = None,
+    declared_columns: Mapping[str, str] | None = None,
+) -> None:
+    problems = recipe_rule_violations(
+        template,
+        ontology,
+        source_columns=source_columns,
+        units=units,
+        defaults_handling=defaults_handling,
+        scheme=scheme,
+        handling_columns=handling_columns,
+        declared_columns=declared_columns,
+    )
     if problems:
         raise RecipeRuleError(problems)

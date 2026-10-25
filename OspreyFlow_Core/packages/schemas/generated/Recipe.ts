@@ -14,6 +14,7 @@ export type PackVersions = {
   [k: string]: number;
 } | null;
 export type LegalBasis = string | null;
+export type Units = string[];
 export type Field = string | null;
 export type Fields = string[] | null;
 export type Transform = string | null;
@@ -94,6 +95,8 @@ export interface RecipeDefaults {
   provenance?: Provenance;
   handling?: Handling;
   legal_basis?: LegalBasis;
+  units?: Units;
+  handling_columns?: HandlingColumns;
   [k: string]: unknown;
 }
 export interface Provenance {
@@ -101,6 +104,9 @@ export interface Provenance {
 }
 export interface Handling {
   [k: string]: unknown;
+}
+export interface HandlingColumns {
+  [k: string]: string;
 }
 export interface DeduplicateConfig {
   key: Key;
