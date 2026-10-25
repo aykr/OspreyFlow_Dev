@@ -818,7 +818,6 @@ def _differences(a: Observation, b: Observation) -> list[str]:
     return out
 
 
-
 # --- No trace of the SECRET link (rule 3) ---------------------------------------------------------
 
 
@@ -887,12 +886,12 @@ async def _shared_case(store: Store, reader: Principal = ANALYST) -> tuple[Any, 
     """One `FakeWorkingSetStore` per store: the cleared principal expands the principal and
     calder_3 into it, then `reader` (the analyst, by default) `sync`s it (the shared-case path: a
     case several people work in) and the export gate's manifest is read for `reader`. Returns the
-    snapshot's nodes and links and the manifest's count."""
+    snapshot's nodes and links, the manifest's count and the snapshot's `withheld`."""
     service, _ = await _view(store, CLEARED)
     (snapshot,) = await service.sync(CASE, reader, last_acknowledged_seq=None)
     assert isinstance(snapshot, DeltaSnapshot)
     manifest = await service.withheld_count_for(CASE, reader)
-    return (*_shape(snapshot.nodes, snapshot.edges), manifest)
+    return (*_shape(snapshot.nodes, snapshot.edges), manifest, snapshot.withheld)
 
 
 async def _shared_previews(
@@ -1000,6 +999,23 @@ async def test_adr124_the_manifest_count_still_differs_until_u9(
     in_b = await _shared_case(store_b)
     print(f"PID-ACCESS shared-case manifest count: A {in_a[2]} B {in_b[2]}", flush=True)
     assert (in_a[2], in_b[2]) == (1, 0)
+
+
+async def test_adr124_the_snapshot_says_withheld_in_the_case_that_holds_the_secret_link(
+    store_a: Store, store_b: Store
+) -> None:
+    """Decision 5 and U2c's text, made true by U5: in the case the cleared principal has worked in,
+    the analyst's full snapshot carries `withheld` true (the one `SECRET` link is stored and above
+    them) and in the case without it, false. It is a yes and never a number. The cleared principal,
+    for whom nothing is above their clearance, is told false in both. The manifest's `(1, 0)`
+    above is untouched until U9."""
+    in_a = await _shared_case(store_a)
+    in_b = await _shared_case(store_b)
+    cleared_a = await _shared_case(store_a, CLEARED)
+    cleared_b = await _shared_case(store_b, CLEARED)
+    print(f"PID-ACCESS shared-case withheld: A {in_a[3]} B {in_b[3]}", flush=True)
+    assert (in_a[3], in_b[3]) == (True, False)
+    assert (cleared_a[3], cleared_b[3]) == (False, False)
 
 
 async def test_the_comparison_can_see_the_secret_link_for_the_cleared_principal(

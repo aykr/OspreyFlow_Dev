@@ -16822,6 +16822,44 @@ option, after an adversarial review.
   picture path's replacement link is stamped with the case's datasets, as `add_written` stamps a
   write, so a case-scoped reader is sent it.
 
+### ADR-124, Amendment 7 (25 October 2026) — U5: how the flag is computed
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after an adversarial review.
+- **From the access index, not the bodies.** `sync`'s full snapshot sets `withheld` from the counted
+  access index (Amendment 4), in one read of its signature table:
+  - the flag is true when any signature that some stored element carries is one the reader may not
+    view;
+  - a link is judged by its own signature, never by its ends' signatures;
+  - a signature folds in datasets, and the judgement ignores them (decision 5).
+
+  Nothing is read per element. A live case on real Valkey holds the flag equal to the judgement over
+  every stored body for six readers through 30 random operations
+  (`test_valkey_store.py::test_the_withheld_flag_from_the_index_equals_the_judgement_over_the_bodies`).
+- **An undefined handling code.** `sync` projects the stored set before it computes the flag, and
+  projection refuses a handling code the scheme no longer defines. So a stored node, or a link with
+  both ends stored, carrying such a code makes `sync` fail for a reader whose classification clears
+  it. That behaviour predates U5, is left as it is, and is pinned by
+  `test_a_stored_node_with_an_undefined_code_makes_sync_raise_today`. The flag's own judgement,
+  reached for a stored link with an absent end, counts such a code as withheld: the sentence shows,
+  and nothing is named (`test_a_link_with_an_absent_end_and_an_undefined_code_sets_the_flag`).
+- **Timing.** The flag's read loops over the distinct signatures in use, and a hidden element's
+  datasets can add one to that set. This is the same kind of residual Amendment 4 accepted, and is
+  negligible next to the full read `sync` already does.
+- **Which snapshots carry it.** The forward's fallback for a record-less entry (Amendment 6) is a
+  full `sync` snapshot, so it carries the flag, as its tests assert. Restore's stored snapshot,
+  catch-up deltas and live deltas carry `None`. Projection clears `withheld` on any stored snapshot,
+  so a stored or replayed snapshot cannot pass on one reader's flag even if a producer stored it.
+  These are tested in `test_withheld_flag.py`.
+- **Decision 6's test is written here and pinned until U6.** A reader below a stored node's marking
+  removes it by id through the route, or restores past it. The test asserts that the stored set, the
+  uncleared reader's flag and view, and the cleared reader's view are unchanged. It fails today on
+  the deletion (`{'pub'} == {'pub', 'sec'}`). It is a strict expected failure naming U6, whose
+  markers U6 removes.
+- **The Brief 1 live test.** In the shared case, the snapshot's `withheld` is true in store A and
+  false in store B for the analyst, and false in both for the cleared principal. The manifest keeps
+  its `(1, 0)` until U9.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

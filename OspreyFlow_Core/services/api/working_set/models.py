@@ -201,6 +201,12 @@ class DeltaSnapshot(BaseModel):
     op: Literal["snapshot"] = "snapshot"
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)
+    #: ADR-124 decision 5, the standing sentence: `True` when the case's stored set holds any node
+    #: or link the reader may not view, `False` when it holds none. Set only in the full snapshot
+    #: that `sync` returns to a reader; `None` on every other delta (stored, replayed, pushed live,
+    #: restore's and a branch's included), and on a stored entry from before the field existed. A
+    #: bool and never a number: nothing here says how many or which.
+    withheld: bool | None = None
 
 
 WorkingSetDelta = Annotated[

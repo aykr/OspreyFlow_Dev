@@ -44,7 +44,8 @@ from services.resolve.projection import DEFAULT_THRESHOLD, compute_clusters, dif
 from valkey.asyncio import Valkey
 
 from conduit_common.identity import new_edge_id, now_utc
-from ontology.handling import HandlingScheme, principal_may_read
+from ontology.errors import HandlingSchemeError
+from ontology.handling import HandlingScheme, principal_may_read, principal_may_view
 from ports.graph import GraphPort
 from schemas.domain import (
     CONNECTIONS_SHOWN,
@@ -370,7 +371,9 @@ class WorkingSetService:
             return delta.model_copy(update={"nodes": nodes, "edges": edges})
         if isinstance(delta, DeltaSnapshot):
             nodes, edges, _ = self._project(delta.nodes, delta.edges, principal)
-            return delta.model_copy(update={"nodes": nodes, "edges": edges})
+            # `withheld` is `sync`'s full snapshot's alone (ADR-124 decision 5): whatever a stored
+            # snapshot carries, replayed or pushed, is not sent.
+            return delta.model_copy(update={"nodes": nodes, "edges": edges, "withheld": None})
         if isinstance(delta, DeltaRemove):
             return self._project_removal(delta, principal, known)
         if isinstance(delta, DeltaReplaceEdge):
@@ -1438,7 +1441,46 @@ class WorkingSetService:
         visible_nodes, visible_edges, _ = self._project(
             list(nodes.values()), list(edges.values()), principal
         )
-        return [DeltaSnapshot(seq=seq, nodes=visible_nodes, edges=visible_edges)]
+        return [
+            DeltaSnapshot(
+                seq=seq,
+                nodes=visible_nodes,
+                edges=visible_edges,
+                withheld=await self._holds_what_the_reader_may_not_view(
+                    investigation_id, principal
+                ),
+            )
+        ]
+
+    async def _holds_what_the_reader_may_not_view(
+        self, investigation_id: str, principal: Principal
+    ) -> bool:
+        """The standing sentence's flag (ADR-124 decision 5): whether the case's stored set holds
+        any node or link whose own stored handling `principal` may not view.
+
+        **From the counted index, at a fixed cost** (Amendment 4): the signatures that some stored
+        node, or some stored link, carries (a count above zero), judged by `principal_may_view`,
+        which is handling alone. A signature folds the element's datasets in with its handling, and
+        the judgement here ignores them: material outside the case's datasets that the reader is
+        cleared for is outside the case's world, not withheld from it (ADR-099). A link counts by
+        its own signature, the first of its triple, and never by its ends: a readable link to a
+        hidden node is not withheld through the link, the node is withheld on its own. A signature
+        whose handling code the scheme no longer defines cannot be judged and counts as withheld.
+        Nothing is read per element."""
+        counts = await self._store.access_counts(investigation_id)
+        in_use = {key for key, n in counts.node_counts.items() if n > 0} | {
+            triple[0] for triple, n in counts.edge_counts.items() if n > 0
+        }
+        for key in in_use:
+            signature = counts.signatures.get(key)
+            if signature is None:
+                return True
+            try:
+                if not principal_may_view(signature.handling(), principal, self._scheme):
+                    return True
+            except HandlingSchemeError:
+                return True
+        return False
 
 
 def _cap_breach(would_be_nodes: int, would_be_edges: int) -> LimitExceeded | None:

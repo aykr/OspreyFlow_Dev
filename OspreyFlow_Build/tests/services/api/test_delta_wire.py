@@ -211,6 +211,7 @@ async def test_the_live_forward_gives_a_socket_a_snapshot_for_a_removal_with_no_
 
     assert [m["op"] for m in sent] == ["snapshot"]
     assert [n["id"] for n in sent[0]["nodes"]] == ["pub"]
+    assert sent[0]["withheld"] is True  # a full snapshot says: the case holds a SECRET node
 
 
 async def test_the_live_forward_gives_a_socket_a_snapshot_for_a_replacement_with_no_record() -> (
@@ -228,6 +229,7 @@ async def test_the_live_forward_gives_a_socket_a_snapshot_for_a_replacement_with
     sent = await _forwarded(service, message, OFFICIAL_READER)
 
     assert [m["op"] for m in sent] == ["snapshot"]
+    assert sent[0]["withheld"] is False  # nothing in this case is above the reader
 
 
 async def test_the_live_forward_still_projects_a_replacement_that_has_its_record() -> None:

@@ -41,6 +41,7 @@ from services.api.working_set.store import ValkeyWorkingSetStore
 from valkey.asyncio import Valkey
 from valkey.exceptions import ResponseError
 
+from ontology.handling import principal_may_view
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -1099,3 +1100,31 @@ async def test_the_removals_record_is_built_from_the_index_in_a_fixed_number_of_
     assert removal.removed is not None and len(removal.removed.nodes) == 500
     assert removal.removed.nodes["n1"].handling.classification == "SECRET"
     assert removal.removed.nodes["n2"].handling.classification == "OFFICIAL"
+
+
+async def test_the_withheld_flag_from_the_index_equals_the_judgement_over_the_bodies(
+    indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str],
+) -> None:
+    """Rule 4, against the real scripts and store (ADR-124 decision 5): after each of thirty random
+    operations, the flag `sync` sets from the counted index (no per-element read) equals the
+    judgement made over every stored body by handling alone, for six readers, three of them scoped
+    to datasets (which play no part) and one to none at all. A flag that moved with datasets, or
+    that missed a link or a node a script counted wrongly, differs here."""
+    working_store, _, case = indexed_store
+    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
+    rng = random.Random(23)
+    seen: set[bool] = set()
+    for step in range(30):
+        kind = await apply_random_operation(working_store, case, rng)
+        elements = [
+            *(await working_store.source_fidelity_nodes(case)).values(),
+            *(await working_store.source_fidelity_edges(case)).values(),
+        ]
+        for name, reader in READERS.items():
+            expected = any(not principal_may_view(e.handling, reader, SCHEME) for e in elements)
+            (snapshot,) = await service.sync(case, reader, last_acknowledged_seq=None)
+            assert isinstance(snapshot, DeltaSnapshot)
+            assert snapshot.withheld is expected, (step, kind, name)
+            seen.add(expected)
+    assert seen == {True, False}, "the run held both answers"
+    assert working_store.access_index_rebuilds == 0  # nothing was mended behind the flag
