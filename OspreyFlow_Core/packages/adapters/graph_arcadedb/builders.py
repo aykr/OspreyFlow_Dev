@@ -271,9 +271,10 @@ def render_record_id_lookup_sql(type_name: str) -> str:
 
 
 def render_existing_ids_sql(type_name: str) -> str:
-    """`GraphPort.existing_node_ids`: the ids, of one stored type, that are held by a node, from the
-    type's unique `id` index (as `render_record_id_lookup_sql` is). No access step and no
-    reverted or superseded filter: it asks what `upsert_nodes`'s own lookup would find."""
+    """The ids, of one stored type (a node's or a link's), that an element already holds, from the
+    type's unique `id` index (as `render_record_id_lookup_sql` is): `GraphPort.existing_node_ids`,
+    and the check that a new link's id is free (`upsert_edges`, the bulk loader). No access step and
+    no reverted or superseded filter: it asks what the unique index would refuse."""
     return f"SELECT id FROM `{groovy_identifier(type_name)}` WHERE id IN :ids"
 
 

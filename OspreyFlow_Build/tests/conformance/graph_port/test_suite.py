@@ -4029,8 +4029,8 @@ async def test_a_line_break_in_a_property_and_in_a_dataset_name_round_trips_thro
 #
 # The third axis, built like the other two: in the traversal, never after it. Each case below is
 # the dataset twin of a handling one above (get_node, degree, path length, match, its count,
-# edges_among), plus what only datasets have: an element in two datasets, the union on a second
-# write, search and suggestions, and an expansion, which must not reach another dataset's
+# edges_among), plus what only datasets have: a node in two datasets, the union on a second write of
+# a node (a link of another dataset is a link of its own, ADR-102 Amendment 3), search and suggestions, and an expansion, which must not reach another dataset's
 # neighbours (what lies outside a case's datasets is not in its world).
 
 
@@ -4063,7 +4063,13 @@ async def test_a_node_written_by_two_datasets_belongs_to_both_and_a_rewrite_neve
         assert await adapter.get_node(first.id, IN_ENRON) is not None
 
 
-async def test_a_link_written_by_two_datasets_belongs_to_both(factory: GraphAdapterFactory) -> None:
+async def test_a_link_written_by_two_datasets_is_two_links_each_case_reads_only_its_own(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-102 Amendment 3 overturns ADR-099's "a link written by two datasets belongs to both": the
+    set of datasets is part of a link's audience, so a write from another dataset is a link of its
+    own. Each case reads only its own link, with only its own dataset on it, and neither carries the
+    other's occurrences. (A node still belongs to every dataset that wrote it, just above.)"""
     async with factory.context() as adapter:
         (a, b), _ = await _write(
             adapter,
@@ -4074,11 +4080,16 @@ async def test_a_link_written_by_two_datasets_belongs_to_both(factory: GraphAdap
             [],
         )
         link = _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["enron"])
-        await _write(adapter, [], [link])
+        _, (enron_id,) = await _write(adapter, [], [link])
         assert await adapter.edges_among([a, b], IN_FIXTURE) == []
-        await _write(adapter, [], [link.model_copy(update={"datasets": ["fixture"]})])
-        (seen,) = await adapter.edges_among([a, b], IN_FIXTURE)
-        assert sorted(seen.datasets) == ["enron", "fixture"]
+        _, (fixture_id,) = await _write(
+            adapter, [], [link.model_copy(update={"id": new_edge_id(), "datasets": ["fixture"]})]
+        )
+        assert fixture_id != enron_id
+        (in_fixture,) = await adapter.edges_among([a, b], IN_FIXTURE)
+        (in_enron,) = await adapter.edges_among([a, b], IN_ENRON)
+        assert (in_fixture.id, in_fixture.datasets) == (fixture_id, ["fixture"])
+        assert (in_enron.id, in_enron.datasets) == (enron_id, ["enron"])
 
 
 async def test_degree_in_one_dataset_matches_a_graph_without_the_other_datasets_neighbour(
@@ -4776,22 +4787,27 @@ async def test_shared_contacts_page_and_say_how_many(factory: GraphAdapterFactor
 # --- ADR-102: a repeated write never lowers handling ----------------------------
 
 
-async def test_a_link_written_again_lower_keeps_its_higher_handling(
+async def test_a_link_written_again_lower_is_a_link_of_its_own(
     factory: GraphAdapterFactory,
 ) -> None:
-    """Writing the same pair again at OFFICIAL once made a SECRET link OFFICIAL: the latest write's
-    handling won. Now the merged link keeps the most restrictive of each part, in either order."""
+    """ADR-102 Amendment 3 replaces decision 1 for links: writing the same pair again at another
+    classification or handling code no longer merges into the first link and raises it (which made
+    the first reader's link vanish); it is a link of its own, and each reader reads the links their
+    clearance allows. Merging within one audience is the case just below this section."""
     async with factory.context() as adapter:
         (a, b), _ = await _write(adapter, [_node("Person", classification="OFFICIAL"),
                                            _node("Person", classification="OFFICIAL")], [])
-        await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="SECRET",
-                                         handling_code="C")])
-        await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")])
+        _, (secret_id,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="SECRET",
+                                                           handling_code="C")])
+        _, (official_id,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")])
+        assert secret_id != official_id
         req = ExpandRequest(node_ids=[a], depth=1)
-        assert (await adapter.expand(req, OFFICIAL)).edges == []
-        (merged,) = (await adapter.expand(req, CLEARED)).edges
-        assert (merged.handling.classification, merged.handling.handling_code) == ("SECRET", "C")
-        assert merged.occurrences == 2
+        (seen,) = (await adapter.expand(req, OFFICIAL)).edges
+        assert (seen.id, seen.handling.classification, seen.occurrences) == (official_id, "OFFICIAL", 1)
+        both = {e.id: e for e in (await adapter.expand(req, CLEARED)).edges}
+        assert set(both) == {secret_id, official_id}
+        assert (both[secret_id].handling.classification, both[secret_id].handling.handling_code) == ("SECRET", "C")
+        assert both[secret_id].occurrences == 1
 
 
 async def test_a_node_written_again_lower_keeps_its_higher_handling(
@@ -4822,10 +4838,11 @@ async def test_a_node_written_again_lower_keeps_its_higher_handling(
 #
 # The paths are how K gets its weight: `upsert_edges`, `supersede_edge` (K is the replacement),
 # `supersede_node` (K is re-pointed and keeps the weight it had) and the bulk loader
-# (`test_bulk_loader.py`). L is written before K is weighed, except in the three cases that raise
-# L's handling after K was weighed (an edge correction, a same-pair merge that raises handling, a
-# node correction): there L is visible when K is weighed and hidden afterwards, which is the
-# route a weight stored once at write would otherwise keep.
+# (`test_bulk_loader.py`). L is written before K is weighed, except in the two cases that raise
+# L's handling after K was weighed (an edge correction, a node correction): there L is visible when
+# K is weighed and hidden afterwards, which is the route a weight stored once at write would
+# otherwise keep. (A third, a same-pair write that raised L, no longer exists: a write of another
+# classification is a link of its own, ADR-102 Amendment 3.)
 
 #: The clock the adapter and the bulk loader read, so recency is equal in both stores.
 PINNED_NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
@@ -4844,7 +4861,9 @@ EVERYTHING = Principal(
 #: handling code, to a node the viewer cannot see, and in a dataset outside the viewer's case.
 HIDING_CASES = ("secret", "restricted", "hidden_node", "other_dataset")
 #: L is visible when K is weighed and raised afterwards.
-RAISING_CASES = ("raised_by_supersede_edge", "raised_by_merge", "raised_by_supersede_node")
+# `raised_by_merge` (a same-pair write that raised an OFFICIAL link to SECRET) is gone: a write of
+# another classification is a link of its own (ADR-102 Amendment 3), so a merge can no longer raise.
+RAISING_CASES = ("raised_by_supersede_edge", "raised_by_supersede_node")
 ALL_CASES = (*HIDING_CASES, *RAISING_CASES)
 K_OCCURRENCES = 3
 L_OCCURRENCES = 12
@@ -5002,12 +5021,6 @@ async def _build_store(
         tx = await adapter.begin_transaction()
         await adapter.supersede_edge(l_id, raised, tx)
         await adapter.commit_transaction(tx)
-    elif with_link and case == "raised_by_merge":
-        await _write(
-            adapter,
-            [],
-            [_link_l("secret", ka, lx).model_copy(update={"occurrences": 1})],
-        )
     elif with_link and case == "raised_by_supersede_node":
         lx_end = await _replace_node(
             adapter, lx, classification="SECRET", value="+441000000003"
@@ -5064,7 +5077,7 @@ async def test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a
 ) -> None:
     """ADR-123 decisions 1 and 2, `01_DOMAIN_MODEL.md` §6.1, rule 3: a link the viewer cannot see
     (above their clearance, under a restricted handling code, to a node they cannot see, in another
-    dataset, or raised after K was weighed by a correction, a merge or a node correction) must not
+    dataset, or raised after K was weighed by an edge correction or a node correction) must not
     move the stored weight of a link they can. Run under the latest weights version; the same cases
     are shown red under version 1 by the test below."""
     without, with_link = await two_store_weights(factory, monkeypatch, case=case, path=path)
@@ -5085,19 +5098,14 @@ async def test_the_two_store_case_is_red_under_weights_version_1(
     assert abs(with_link - without) > 1e-6, (case, path, without, with_link)
 
 
-async def test_a_same_pair_merge_carries_another_datasets_occurrences_today(
+async def test_a_same_pair_write_in_another_dataset_is_a_link_of_its_own(
     factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """ADR-123 decision 4 RECORDS an open route; it does not close it. A write to a pair the store
-    already holds is merged into the stored link whatever dataset wrote it (`_find_existing_edge`
-    does not filter by dataset), so a case reading one dataset sees the occurrences another wrote,
-    in the link's count and so in its weight.
-
-    This asserts today's behaviour. It is the defect logged in `07_BUILD_PLAN.md` as "a same-pair
-    merge carries another dataset's occurrences", for the owner to decide: when that is fixed,
-    this test changes with it (and must then assert the opposite). Here an `enron` write of 5 and a
-    `fixture` write of 2 to one pair give a viewer of `fixture` alone one link of 7, weighed as a
-    link of 7 and not as one of 2."""
+    """ADR-123 decision 4 recorded an open route: a write to a pair the store held merged into the
+    stored link whatever dataset wrote it, so a case reading one dataset saw the occurrences another
+    wrote, in the link's count and its weight. ADR-102 Amendment 3 closes it: an `enron` write of 5
+    and a `fixture` write of 2 to one pair are two links, and a viewer of `fixture` alone reads one
+    link of 2, weighed as a link of 2."""
     _pin_now(monkeypatch)
 
     async def stored_link(writes: list[tuple[list[str], int]]) -> Edge:
@@ -5123,15 +5131,259 @@ async def test_a_same_pair_merge_carries_another_datasets_occurrences_today(
             (seen,) = await adapter.edges_among([a, b], IN_FIXTURE)
             return seen
 
-    merged = await stored_link([(["enron"], 5), (["fixture"], 2)])
-    seven = await stored_link([(["fixture"], 7)])
+    split = await stored_link([(["enron"], 5), (["fixture"], 2)])
     two = await stored_link([(["fixture"], 2)])
 
-    assert merged.datasets == ["enron", "fixture"]
-    assert merged.occurrences == 7, "the viewer of `fixture` alone sees enron's 5 in the count"
-    assert merged.weight_components is not None and merged.weight_components.occurrences == 7
-    assert merged.weight == pytest.approx(seven.weight, abs=1e-9)
-    assert abs(merged.weight - two.weight) > 1e-3, "and in the weight"
+    assert split.datasets == ["fixture"]
+    assert split.occurrences == 2, "the viewer of `fixture` alone sees none of enron's 5"
+    assert split.weight_components is not None and split.weight_components.occurrences == 2
+    assert split.weight == pytest.approx(two.weight, abs=1e-9)
+
+
+# --- ADR-102 Amendment 3: a link merges only within one audience --------------------------------
+#
+# A write of a link merges into an existing link of the same type between the same two nodes (either
+# way round for an undirected type) only when both have one audience: the same classification, the
+# same handling code, the same set of datasets and, under a restricted code, the same originator and
+# owning unit. Otherwise it is a link of its own, with its own id. Before the ruling a merge kept the
+# first write's unit and took the later write's properties (a link restricted to one unit carried
+# another unit's row) and raised the link to the stricter classification (the reader cleared for the
+# first write saw it vanish, their path lengthen and their degree drop: a detection rule 3 forbids).
+# Each case below is one way that would come back; the bulk path has its own in `test_bulk_loader.py`.
+
+UNIT_1 = Principal(
+    id="reader-unit-1", clearance="OFFICIAL", org_unit="unit-1", receivable_handling_codes=["R"]
+)
+UNIT_2 = Principal(
+    id="reader-unit-2", clearance="OFFICIAL", org_unit="unit-2", receivable_handling_codes=["R"]
+)
+IN_BOTH_CASES = Principal(
+    id="analyst-both", clearance="SECRET", org_unit="unit-1", datasets=["enron", "fixture"]
+)
+_AUDIENCE_NODE_DATASETS = ["enron", "fixture"]
+
+
+async def _pair(adapter: GraphPort, node_type: str = "Endpoint") -> tuple[str, str]:
+    (a, b), _ = await _write(
+        adapter,
+        [
+            _node(
+                node_type,
+                classification="OFFICIAL",
+                datasets=_AUDIENCE_NODE_DATASETS,
+                **({"value_normalised": f"+44100000010{n}"} if node_type == "Endpoint" else {}),
+            )
+            for n in (1, 2)
+        ],
+        [],
+    )
+    return a, b
+
+
+def _comm(a: str, b: str, **kwargs: Any) -> EdgeWrite:
+    return _edge("COMMUNICATED_WITH", a, b, **{"classification": "OFFICIAL", **kwargs})
+
+
+async def _links_read_by(adapter: GraphPort, reader: Principal, a: str, b: str) -> list[Edge]:
+    return sorted(await adapter.edges_among([a, b], reader), key=lambda e: e.id)
+
+
+async def test_two_writes_with_one_marking_make_one_link_with_two_occurrences(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        _, (first,) = await _write(adapter, [], [_comm(a, b)])
+        _, (second,) = await _write(adapter, [], [_comm(a, b)])
+        assert first == second
+        (link,) = await _links_read_by(adapter, CLEARED, a, b)
+        assert link.occurrences == 2
+
+
+async def test_a_secret_write_onto_an_official_link_makes_two_links_and_changes_nothing_the_official_reader_sees(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The detection the ruling closes: the OFFICIAL reader's link, the links `expand` and
+    `edges_among` return, the shortest path between the two ends through that link, the degree and
+    every count the port offers are identical before and after the SECRET write, which is a link of
+    its own that a reader cleared for it reads beside the first."""
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        _, (official_id,) = await _write(adapter, [], [_comm(a, b)])
+
+        async def official_view() -> dict[str, Any]:
+            link = await adapter.get_edges([official_id], OFFICIAL)
+            reached = await adapter.expand(ExpandRequest(node_ids=[a], depth=2), OFFICIAL)
+            paths = await adapter.paths(PathRequest(source=a, target=b, max_hops=6, k=5), OFFICIAL)
+            return {
+                "link": [(e.id, e.occurrences, e.weight, e.interval) for e in link],
+                "expand": sorted((e.id, e.occurrences, e.weight) for e in reached.edges),
+                "among": sorted((e.id, e.occurrences) for e in await adapter.edges_among([a, b], OFFICIAL)),
+                "paths": sorted((p.length, tuple(n.id for n in p.nodes), tuple(e.id for e in p.edges)) for p in paths),
+                "stats": (await adapter.neighbourhood_stats(a, OFFICIAL)).model_dump(),
+                "types": (await adapter.type_counts(OFFICIAL)).model_dump(),
+            }
+
+        before = await official_view()
+        _, (secret_id,) = await _write(adapter, [], [_comm(a, b, classification="SECRET")])
+        assert secret_id != official_id
+        assert await official_view() == before
+        assert before["link"][0][1] == 1 and before["stats"]["degree"] == 1
+
+        both = await _links_read_by(adapter, CLEARED, a, b)
+        assert sorted(e.id for e in both) == sorted([official_id, secret_id])
+        assert {e.id: e.occurrences for e in both} == {official_id: 1, secret_id: 1}
+        assert (await adapter.neighbourhood_stats(a, CLEARED)).degree == 2
+
+
+async def test_writes_under_two_restricted_units_make_two_links_each_unit_reads_only_its_own(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        one = _comm(a, b, handling_code="R", owning_unit="unit-1", originator="unit-1")
+        two = _comm(a, b, handling_code="R", owning_unit="unit-2", originator="unit-2")
+        _, (id_one,) = await _write(adapter, [], [one])
+        _, (id_two,) = await _write(adapter, [], [two])
+        assert id_one != id_two
+        assert [e.id for e in await _links_read_by(adapter, UNIT_1, a, b)] == [id_one]
+        assert [e.id for e in await _links_read_by(adapter, UNIT_2, a, b)] == [id_two]
+        # Neither unit's reader finds the other's link by degree or by a path through it.
+        assert (await adapter.neighbourhood_stats(a, UNIT_1)).degree == 1
+        assert (await adapter.neighbourhood_stats(a, UNIT_2)).degree == 1
+        (only,) = await _links_read_by(adapter, UNIT_1, a, b)
+        assert only.occurrences == 1 and only.handling.owning_unit == "unit-1"
+
+
+async def test_the_same_restricted_unit_still_merges(factory: GraphAdapterFactory) -> None:
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        link = _comm(a, b, handling_code="R", owning_unit="unit-1", originator="unit-1")
+        _, (first,) = await _write(adapter, [], [link])
+        _, (second,) = await _write(adapter, [], [link.model_copy(update={"id": new_edge_id()})])
+        assert first == second
+        (merged,) = await _links_read_by(adapter, UNIT_1, a, b)
+        assert merged.occurrences == 2
+
+
+async def test_writes_in_two_datasets_make_two_links_each_case_reads_only_its_own(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        _, (enron,) = await _write(adapter, [], [_comm(a, b, datasets=["enron"])])
+        _, (fixture,) = await _write(adapter, [], [_comm(a, b, datasets=["fixture"])])
+        assert enron != fixture
+        assert [e.id for e in await _links_read_by(adapter, IN_ENRON, a, b)] == [enron]
+        assert [e.id for e in await _links_read_by(adapter, IN_FIXTURE, a, b)] == [fixture]
+        assert (await _links_read_by(adapter, IN_ENRON, a, b))[0].occurrences == 1
+        assert (await adapter.neighbourhood_stats(a, IN_ENRON)).degree == 1
+        # The same two datasets written again merge into their own links.
+        _, (again,) = await _write(adapter, [], [_comm(a, b, datasets=["enron"])])
+        assert again == enron
+        # A reader cleared for both cases reads both links.
+        both = await _links_read_by(adapter, IN_BOTH_CASES, a, b)
+        assert sorted(e.id for e in both) == sorted([enron, fixture])
+        assert {e.id: e.occurrences for e in both} == {enron: 2, fixture: 1}
+
+
+async def test_a_reader_cleared_for_everything_reads_every_audiences_link(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        ids = []
+        for write in (
+            _comm(a, b),
+            _comm(a, b, classification="SECRET"),
+            _comm(a, b, handling_code="C"),
+            _comm(a, b, datasets=["enron"]),
+        ):
+            _, (written,) = await _write(adapter, [], [write])
+            ids.append(written)
+        assert len(set(ids)) == 4
+        assert sorted(e.id for e in await _links_read_by(adapter, CLEARED, a, b)) == sorted(ids)
+
+
+async def test_an_undirected_type_written_reversed_merges_within_an_audience_and_not_across(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter, "Person")
+        _, (first,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")])
+        _, (reversed_same,) = await _write(
+            adapter, [], [_edge("ASSOCIATE_OF", b, a, classification="OFFICIAL")]
+        )
+        assert reversed_same == first
+        _, (reversed_secret,) = await _write(
+            adapter, [], [_edge("ASSOCIATE_OF", b, a, classification="SECRET")]
+        )
+        assert reversed_secret != first
+        links = await _links_read_by(adapter, CLEARED, a, b)
+        assert {e.id: e.occurrences for e in links} == {first: 2, reversed_secret: 1}
+        assert [e.id for e in await _links_read_by(adapter, OFFICIAL, a, b)] == [first]
+
+
+async def test_two_unrestricted_codes_with_different_units_still_merge(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Units decide visibility only under a restricted code, so two writes that differ only in unit
+    under `P`, or under `C`, are seen by the same principals and are one link."""
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        for code in ("P", "C"):
+            _, (first,) = await _write(
+                adapter, [], [_comm(a, b, handling_code=code, owning_unit="unit-1", originator="unit-1")]
+            )
+            _, (second,) = await _write(
+                adapter, [], [_comm(a, b, handling_code=code, owning_unit="unit-2", originator="unit-3")]
+            )
+            assert first == second, code
+        links = await _links_read_by(adapter, CLEARED, a, b)
+        assert sorted(e.occurrences for e in links) == [2, 2], "one link per code, two writes each"
+
+
+async def test_a_fixed_id_write_in_another_audience_is_a_link_of_its_own_under_a_new_id(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Several writers send an id derived from the link's ends (`HOLDS`, a confirmed or email
+    mention, a seeder's pair id), and edge `id` is UNIQUE. A write of another audience that sends
+    an id a link already holds cannot merge into it and cannot create under it: it is a link of its
+    own under a new id, the one the call returns, and each audience reads only its own."""
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        fixed = _comm(a, b).model_copy(update={"id": f"{a}:fixed:{b}"})
+        _, (first,) = await _write(adapter, [], [fixed])
+        assert first == fixed.id
+        secret = fixed.model_copy(
+            update={"handling": fixed.handling.model_copy(update={"classification": "SECRET"})}
+        )
+        _, (second,) = await _write(adapter, [], [secret])
+        assert second != first
+        assert [e.id for e in await _links_read_by(adapter, OFFICIAL, a, b)] == [first]
+        assert sorted(e.id for e in await _links_read_by(adapter, CLEARED, a, b)) == sorted([first, second])
+        # The same audience again still merges and keeps its id.
+        _, (third,) = await _write(adapter, [], [fixed.model_copy(update={"occurrences": 2})])
+        assert third == first
+        (own,) = [e for e in await _links_read_by(adapter, OFFICIAL, a, b)]
+        assert own.occurrences == 3
+
+
+async def test_a_fixed_id_write_after_its_link_was_reverted_is_a_link_of_its_own(
+    factory: GraphAdapterFactory,
+) -> None:
+    """A reverted link is not merged into but keeps its id; the next write of that id is a new link
+    under a new id, not a unique-index failure."""
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        fixed = _comm(a, b).model_copy(update={"id": f"{a}:fixed:{b}"})
+        _, (first,) = await _write(adapter, [], [fixed])
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([], [first], tx)
+        await adapter.commit_transaction(tx)
+        _, (second,) = await _write(adapter, [], [fixed])
+        assert second != first
+        assert [e.id for e in await _links_read_by(adapter, OFFICIAL, a, b)] == [second]
 
 
 # --- strip_provenance_references (ADR-124 decision 11, U10) -------------------------------------
@@ -5299,3 +5551,33 @@ async def test_existing_node_ids_past_one_chunk_names_exactly_the_existing_ones(
         await adapter.commit_transaction(tx)
         absent = [new_node_id() for _ in range(50)]
         assert await adapter.existing_node_ids([*absent, *existing]) == set(existing)
+
+
+async def test_one_link_id_written_under_two_audiences_in_one_transaction_is_two_links(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Two rows of one load can fix the same link id (the engine's HOLDS does). Written in one open
+    transaction under two classifications, they are two links with distinct ids: the second write
+    must find the first's id taken although it is not yet committed, and the transaction commits."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL") for _ in "ab"], []
+        )
+        fixed = new_edge_id()
+        low = _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL").model_copy(
+            update={"id": fixed}
+        )
+        high = _edge("ASSOCIATE_OF", a, b, classification="SECRET").model_copy(
+            update={"id": fixed}
+        )
+        tx = await adapter.begin_transaction()
+        (low_id,) = await adapter.upsert_edges([low], tx)
+        (high_id,) = await adapter.upsert_edges([high], tx)
+        await adapter.commit_transaction(tx)
+        assert low_id == fixed and high_id != fixed
+        assert [e.id for e in await adapter.edges_among([a, b], OFFICIAL)] == [low_id]
+        seen = await adapter.edges_among([a, b], CLEARED)
+        assert sorted(e.id for e in seen) == sorted([low_id, high_id])
+        assert {e.id: e.handling.classification for e in seen} == {
+            low_id: "OFFICIAL", high_id: "SECRET",
+        }

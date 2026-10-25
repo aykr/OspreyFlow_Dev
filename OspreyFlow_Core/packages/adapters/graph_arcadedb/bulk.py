@@ -19,20 +19,21 @@ cannot prove that a Groovy script runs. The spike sends exactly these shapes, fr
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
-from conduit_common.identity import now_utc
+from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
-from ontology.handling import HandlingScheme, merge_handling
+from ontology.handling import HandlingScheme, audience_of, audience_parts, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ontology.weights import WeightRules, load_weight_rules
 from ports.graph import BulkEdgeResult
 from schemas.domain import AuditStub, EdgeWrite, OntologySchema, WeightComponents
 from schemas.merge import AggregatedEdge, aggregate_edge_writes
 
+from .builders import render_existing_ids_sql
 from .client import ArcadeDBClient
 from .gremlin_literals import groovy_identifier
 from .naming import logical_type_name, physical_type_name
@@ -41,6 +42,20 @@ from .weight import compute_weight
 
 #: How many ids go into one batched lookup. Bounded so a script's parameter list stays small.
 LOOKUP_BATCH = 500
+
+
+@dataclass(frozen=True)
+class StoredLink:
+    """A link already in the store, as far as the loader needs it: its ends and every part of its
+    marking the access step reads, so the loader can tell whether a write has its audience."""
+
+    source: str
+    target: str
+    classification: str
+    handling_code: str
+    originator: str
+    owning_unit: str
+    datasets: tuple[str, ...]
 
 
 class BulkTransport(Protocol):
@@ -54,12 +69,18 @@ class BulkTransport(Protocol):
 
     async def edge_type_is_empty(self, label: str) -> bool: ...
 
-    async def stored_pairs(
+    async def stored_links(
         self, label: str, pairs: Sequence[tuple[str, str]], *, directed: bool
-    ) -> set[tuple[str, str]]:
-        """Which of `pairs` already have a live (not reverted) edge of `label`, as stored (source,
-        target). An undirected type's edge may be stored either way round, so it is looked for
-        from either end, as `upsert_edges` does."""
+    ) -> list[StoredLink]:
+        """The live (not reverted) edges of `label` between any of `pairs`, as stored (source,
+        target), each with what decides who may see it (ADR-102 Amendment 3). An undirected type's
+        edge may be stored either way round, so it is looked for from either end, as
+        `upsert_edges` does."""
+        ...
+
+    async def taken_edge_ids(self, label: str, ids: Sequence[str]) -> set[str]:
+        """Which of `ids` an edge of `label` already holds, whatever its state (reverted or
+        superseded included): edge `id` is UNIQUE per type, and an edge keeps its id for good."""
         ...
 
     async def corpus_total(self, label: str) -> int:
@@ -130,6 +151,7 @@ class BulkEdgeLoader:
             edges,
             directed=lambda t: directed_by_type[t],
             handling=lambda old, new: merge_handling(old, new, self._scheme),
+            audience=lambda w: audience_of(w.handling, w.datasets, self._scheme),
         )
 
         # 3. Endpoints exist and fit the type, checked in batches before anything is written.
@@ -157,7 +179,7 @@ class BulkEdgeLoader:
                 baseline_total[label] = 0
                 continue
             baseline_total[label] = await self._transport.corpus_total(label)
-            stored = await self._stored_pairs(label, items, directed=items[0].directed)
+            stored = await self._stored_links(label, items, directed=items[0].directed)
             keep: list[_Planned] = []
             for item in items:
                 if self._pair_stored(item, stored):
@@ -165,6 +187,13 @@ class BulkEdgeLoader:
                 else:
                     keep.append(item)
             to_write[label] = keep
+
+        # 4b. Edge `id` is UNIQUE per type. A writer that fixes its ids (`HOLDS`, a mention, a
+        # seeder's pair id) sends one id for each audience of a pair, and a link of another audience
+        # may already hold it: each such write is a link of its own under a new id, so the store
+        # never refuses a row, and `written` names the ids as stored (ADR-102 Amendment 3).
+        for label, items in to_write.items():
+            await self._mint_ids_where_taken(label, items)
 
         # 5. Weights against the corpus at the end of the load: what was stored plus this call.
         now = now_utc()
@@ -199,6 +228,21 @@ class BulkEdgeLoader:
             written=written, collisions=collisions, received=len(edges), chunks=chunks
         )
 
+    async def _mint_ids_where_taken(self, label: str, items: list[_Planned]) -> None:
+        ids = [i.aggregated.write.id for i in items]
+        taken: set[str] = set()
+        for start in range(0, len(ids), LOOKUP_BATCH):
+            taken |= await self._transport.taken_edge_ids(label, ids[start : start + LOOKUP_BATCH])
+        used: set[str] = set()
+        for item in items:
+            write = item.aggregated.write
+            if write.id in taken or write.id in used:
+                item.aggregated = AggregatedEdge(
+                    write=write.model_copy(update={"id": new_edge_id()}),
+                    writes=item.aggregated.writes,
+                )
+            used.add(item.aggregated.write.id)
+
     async def _check_endpoints(
         self, schema: OntologySchema, aggregated: Sequence[AggregatedEdge]
     ) -> None:
@@ -219,23 +263,37 @@ class BulkEdgeLoader:
                 target_type=logical_type_name(labels[write.target]),
             )
 
-    async def _stored_pairs(
+    async def _stored_links(
         self, label: str, items: Sequence[_Planned], *, directed: bool
-    ) -> set[tuple[str, str]]:
-        found: set[tuple[str, str]] = set()
+    ) -> dict[tuple[str, str], set[Hashable]]:
+        """The audiences of the links stored for these pairs, by pair as stored."""
+        found: dict[tuple[str, str], set[Hashable]] = {}
         pairs = [(i.aggregated.write.source, i.aggregated.write.target) for i in items]
         for start in range(0, len(pairs), LOOKUP_BATCH):
-            found |= await self._transport.stored_pairs(
+            for link in await self._transport.stored_links(
                 label, pairs[start : start + LOOKUP_BATCH], directed=directed
-            )
+            ):
+                audience = audience_parts(
+                    link.classification,
+                    link.handling_code,
+                    link.datasets,
+                    link.originator,
+                    link.owning_unit,
+                    self._scheme,
+                )
+                found.setdefault((link.source, link.target), set()).add(audience)
         return found
 
-    @staticmethod
-    def _pair_stored(item: _Planned, stored: set[tuple[str, str]]) -> bool:
-        pair = (item.aggregated.write.source, item.aggregated.write.target)
-        if pair in stored:
+    def _pair_stored(self, item: _Planned, stored: dict[tuple[str, str], set[Hashable]]) -> bool:
+        """Whether a link of the write's own audience is stored for its pair (ADR-102 Amendment 3):
+        a stored link of another audience is not the write's to merge into, so it is no collision
+        and the write is a link of its own."""
+        write = item.aggregated.write
+        audience = audience_of(write.handling, write.datasets, self._scheme)
+        pair = (write.source, write.target)
+        if audience in stored.get(pair, ()):
             return True
-        return not item.directed and (pair[1], pair[0]) in stored
+        return not item.directed and audience in stored.get((pair[1], pair[0]), ())
 
     async def _rows_for(
         self,
@@ -330,23 +388,56 @@ class GremlinBulkTransport:
         rows = await self._client.gremlin(f'g.E().hasLabel("{label}").limit(1).count()')
         return not rows or int(rows[0].get("result") or 0) == 0
 
-    async def stored_pairs(
+    async def stored_links(
         self, label: str, pairs: Sequence[tuple[str, str]], *, directed: bool
-    ) -> set[tuple[str, str]]:
+    ) -> list[StoredLink]:
         sources = sorted({s for s, _ in pairs})
         targets = sorted({t for _, t in pairs})
         # A directed edge is looked for from its source; an undirected one may have been stored
-        # either way round, so it is looked for from either end (`bothE`, `otherV`).
+        # either way round, so it is looked for from either end (`bothE`, `otherV`). A superseded
+        # link is left out, as `_find_existing_edge` leaves it out: its replacement is the pair's
+        # link. Each link comes back with what decides who may see it (ADR-102 Amendment 3); one
+        # with no `datasets` property reads as having none, and does not drop out of the answer.
         step, other = ("outE", "inV") if directed else ("bothE", "otherV")
         rows = await self._client.gremlin(
             f'g.V().has("id", within(sources)).{step}("{label}").has("reverted", false)'
+            '.hasNot("superseded_by")'
             f'.where({other}().has("id", within(targets)))'
-            '.project("s","t").by(outV().values("id")).by(inV().values("id"))',
+            '.project("s","t","c","h","o","u","d")'
+            '.by(outV().values("id")).by(inV().values("id"))'
+            '.by(values("handling_classification")).by(values("handling_code"))'
+            '.by(values("originator")).by(values("owning_unit"))'
+            '.by(coalesce(values("datasets"), constant("")))',
             params={"sources": sources, "targets": targets},
         )
         wanted = set(pairs)
-        found = {(str(r["s"]), str(r["t"])) for r in rows}
-        return found & (wanted if directed else wanted | {(t, s) for s, t in wanted})
+        allowed = wanted if directed else wanted | {(t, s) for s, t in wanted}
+        links = []
+        for r in rows:
+            if (str(r["s"]), str(r["t"])) not in allowed:
+                continue
+            datasets = r["d"]
+            links.append(
+                StoredLink(
+                    source=str(r["s"]),
+                    target=str(r["t"]),
+                    classification=str(r["c"]),
+                    handling_code=str(r["h"]),
+                    originator=str(r["o"]),
+                    owning_unit=str(r["u"]),
+                    datasets=tuple(
+                        str(d) for d in ([datasets] if isinstance(datasets, str) else datasets) if d
+                    ),
+                )
+            )
+        return links
+
+    async def taken_edge_ids(self, label: str, ids: Sequence[str]) -> set[str]:
+        # Every edge of the type ever written holds its id for good: no `reverted` or
+        # `superseded_by` question, since the unique index asks none. SQL against that index (as
+        # the by-id reads are), not a traversal that may scan the type.
+        rows = await self._client.sql(render_existing_ids_sql(label), params={"ids": list(ids)})
+        return {str(r["id"]) for r in rows}
 
     async def corpus_total(self, label: str) -> int:
         rows = await self._client.gremlin(

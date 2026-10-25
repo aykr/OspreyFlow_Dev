@@ -758,11 +758,13 @@ class WorkingSetService:
 
         tx = await self._graph.begin_transaction()
         try:
-            await self._graph.upsert_edges([edge_write], tx)
+            (stored_id,) = await self._graph.upsert_edges([edge_write], tx)
         except Exception:
             await self._graph.rollback_transaction(tx)
             raise
         await self._graph.commit_transaction(tx)
+        # The link the store holds: a write that merged into a link of its audience is that link.
+        new_edge = new_edge.model_copy(update={"id": stored_id})
 
         entry: ChangeStreamEntry | None = None
         if self._valkey is not None:

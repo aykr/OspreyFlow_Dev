@@ -30,7 +30,7 @@ nothing.
 
 from __future__ import annotations
 
-from ontology.handling import HandlingScheme
+from ontology.handling import HandlingScheme, is_restricted
 from schemas.domain import Principal
 
 from .gremlin_literals import groovy_string_list_literal, groovy_string_literal
@@ -41,9 +41,7 @@ class AccessFilter:
         self._scheme = scheme
         self._rank = {classification: i for i, classification in enumerate(scheme.classification)}
         self._restricted_codes = {
-            code
-            for code, defn in scheme.handling_codes.items()
-            if defn.dissemination == "restricted"
+            code for code in scheme.handling_codes if is_restricted(code, scheme)
         }
         self._non_restricted_codes = [
             code for code in scheme.handling_codes if code not in self._restricted_codes

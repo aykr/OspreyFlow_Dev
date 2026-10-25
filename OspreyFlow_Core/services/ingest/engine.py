@@ -30,7 +30,7 @@ run at all; it exists for a later one.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -44,7 +44,7 @@ from knowledge_adapters import ARITY
 from knowledge_adapters.datetime_adapter import DatetimeResult
 from knowledge_adapters.errors import NormalisationError
 from ontology.errors import HandlingSchemeError, OntologyError
-from ontology.handling import HandlingScheme, merge_handling
+from ontology.handling import HandlingScheme, audience_of, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import GraphPort
 from ports.media import MediaStore
@@ -521,108 +521,6 @@ def _refuse_unit_conflict(markings: Sequence[Handling], scheme: HandlingScheme) 
             "its elements' markings name different units under a restricted handling code and "
             "cannot be held as one marking"
         )
-
-
-def _units_of(marking: Handling) -> tuple[str, str]:
-    return (marking.owning_unit, marking.originator)
-
-
-def _refuse_link_unit_conflicts(
-    recipe: Recipe,
-    staged_rows: Sequence[StagedRow],
-    *,
-    ontology: OntologySchema,
-    scheme: HandlingScheme | None,
-    skip: Collection[int] = (),
-) -> tuple[set[int], list[RejectionRecord]]:
-    """Rows of one load that would write the same link under different units, one of them
-    restricted (ADR-127 Amendment 2). Two rows that name the same two matched nodes write one
-    link: the store keeps the first write's `owning_unit` and `originator`, takes the later
-    properties and counts both, so a link restricted to one unit would carry another unit's row.
-    The second row is rejected whole, before anything of it is written, naming the link type and
-    never a value. The same units, or neither restricted, merge as they always have.
-
-    Judged over the staged rows, so the ordinary run and Verify's dry run share it. Only a link
-    whose two ends are both matched by reference can meet another row's in this load (a created
-    node is new to its row). Rows can differ whether or not a recipe binds a marking: two link
-    elements of one type between the same two entities, exclusive by `when`, with different fixed
-    units, write one link from different rows. Each end's identity is the key `_write_entity`
-    matches on (`_coerced_properties`, `_match_key`), so `007` and `7` are one node here too."""
-    if scheme is None:
-        return set(), []
-    entities = {e.ref: e for e in recipe.row_template.entities}
-    seen: dict[tuple[Any, ...], Handling] = {}
-    rejected: set[int] = set()
-    records: list[RejectionRecord] = []
-
-    def restricted(marking: Handling) -> bool:
-        return scheme.handling_codes[marking.handling_code].dissemination == "restricted"
-
-    for row in staged_rows:
-        if row.row_index in skip:
-            continue
-        present = {e.ref: e for e in row.entities}
-        pending: list[tuple[tuple[Any, ...], Handling]] = []
-        conflicting: str | None = None
-        for edge in row.edges:
-            start, end = present.get(edge.from_ref), present.get(edge.to_ref)
-            start_decl, end_decl = entities.get(edge.from_ref), entities.get(edge.to_ref)
-            if start is None or end is None or start_decl is None or end_decl is None:
-                continue
-            ends = []
-            for end_entity, declared_entity in ((start, start_decl), (end, end_decl)):
-                own_text = (
-                    end_entity.content["value"]
-                    if holds_own_text(declared_entity) and end_entity.content
-                    else None
-                )
-                coerced = _coerced_properties(
-                    declared_entity, end_entity.properties, ontology, own_text
-                )
-                identity = _match_key(declared_entity, coerced)
-                if identity is not None:
-                    ends.append(identity)
-            if len(ends) != 2:
-                continue  # an end that is created is new to its row: no other row writes this link
-            type_def = ontology.edge_type(edge.type)
-            ordered = ends if type_def is None or type_def.directed else sorted(ends)
-            key = (edge.type, *ordered)
-            fixed = next(
-                (
-                    e.handling
-                    for e in recipe.row_template.edges
-                    if (e.type, e.from_ref, e.to_ref) == (edge.type, edge.from_ref, edge.to_ref)
-                ),
-                None,
-            )
-            override = edge.handling if edge.handling is not None else literal_handling(fixed)
-            marking = _handling(_merge_override(recipe.defaults.handling, override))
-            first = seen.get(key)
-            if (
-                first is not None
-                and _units_of(first) != _units_of(marking)
-                and (restricted(first) or restricted(marking))
-            ):
-                conflicting = edge.type
-                break
-            pending.append((key, marking))
-        if conflicting is not None:
-            rejected.add(row.row_index)
-            records.append(
-                RejectionRecord(
-                    row_index=row.row_index,
-                    reason=(
-                        f"link {conflicting!r} between the same two nodes is already written in "
-                        "this load under different units, one of them restricted"
-                    ),
-                    sample="",
-                )
-            )
-            continue
-        for key, marking in pending:
-            first = seen.get(key)
-            seen[key] = marking if first is None else merge_handling(first, marking, scheme)
-    return rejected, records
 
 
 def row_marking(recipe: Recipe, row: Mapping[str, str], scheme: HandlingScheme) -> Handling:
@@ -1301,8 +1199,15 @@ async def _write_held_content(
     state.edges_created += 1
     # The record cannot rest on that id either. A holder this load created has no earlier link, so
     # the link is its own; any other holder's may already hold this document, and is recorded as
-    # merged so a revert refuses naming it rather than take back another load's link.
-    _note_edge(state, edge_id, created=holder_id in state.created_node_lookup)
+    # merged so a revert refuses naming it rather than take back another load's link. One thing the
+    # id does say: the store returns a new id only for a link of its own, when a link of another
+    # audience holds the id sent (ADR-102 Amendment 3), so a returned id that is not the one sent
+    # is the load's own link whoever the holder is.
+    _note_edge(
+        state,
+        edge_id,
+        created=holder_id in state.created_node_lookup or edge_id != holds.id,
+    )
 
 
 def _note_edge(
@@ -1513,12 +1418,12 @@ class _DryRunState:
     ontology: OntologySchema
     source: str
     now: datetime
+    scheme: HandlingScheme | None = None
     nodes: dict[NodeId, Node] = field(default_factory=dict)
-    #: Keyed by (edge type, source id, target id) — same-pair edges merge
-    #: within the sample, mirroring `GraphArcadeDBAdapter.upsert_edges`'s
-    #: real merge-by-endpoint behaviour, so "how many distinct pairs" reads
-    #: the same way here as it would after a real load.
-    edges: dict[tuple[str, NodeId, NodeId], Edge] = field(default_factory=dict)
+    #: Keyed by (edge type, source id, target id, audience) — same-pair edges of one audience merge
+    #: within the sample, mirroring `GraphArcadeDBAdapter.upsert_edges`'s real merge (ADR-102
+    #: Amendment 3), so "how many distinct links" reads the same way here as after a real load.
+    edges: dict[tuple[Any, ...], Edge] = field(default_factory=dict)
     entities_by_type: dict[str, DryRunEntityCount] = field(default_factory=dict)
     edges_by_type: dict[str, DryRunEdgeCount] = field(default_factory=dict)
     local_index: dict[tuple[str, str, str], NodeId] = field(default_factory=dict)
@@ -1609,7 +1514,18 @@ def _dry_run_edge(
 
     edge_type_def = state.ontology.edge_type(edge.type)
     properties = _coerce_declared_numeric_types(resolved.properties, edge_type_def)
-    key = (edge.type, source_id, target_id)
+    handling = _handling(
+        _merge_override(state.recipe.defaults.handling, _row_override(resolved, edge))
+    )
+    # One link per audience (ADR-102 Amendment 3), as a real load makes them. The dry run writes no
+    # datasets, so they are the same for every simulated link. With no scheme no code is known to be
+    # restricted, as `audience_of` reads a code the scheme does not define: the units are left out.
+    audience = (
+        audience_of(handling, (), state.scheme)
+        if state.scheme is not None
+        else (handling.classification, handling.handling_code, (), None, None)
+    )
+    key = (edge.type, source_id, target_id, audience)
     existing = state.edges.get(key)
     if existing is not None:
         existing.occurrences = (existing.occurrences or 1) + 1
@@ -1629,9 +1545,6 @@ def _dry_run_edge(
         target_type=state.nodes[target_id].type,
     )
 
-    handling = _handling(
-        _merge_override(state.recipe.defaults.handling, _row_override(resolved, edge))
-    )
     provenance = _provenance(
         _merge_override(state.recipe.defaults.provenance, edge.provenance),
         source=state.source,
@@ -1684,14 +1597,9 @@ async def dry_run_recipe(
         ontology=ontology,
         source=source,
         now=datetime.now(UTC),
+        scheme=scheme,
     )
-    link_rejected, link_rejections = _refuse_link_unit_conflicts(
-        recipe, staged_rows, ontology=ontology, scheme=scheme
-    )
-    rejections = [*rejections, *link_rejections]
     for staged_row in staged_rows:
-        if staged_row.row_index in link_rejected:
-            continue
         refs: dict[str, NodeId] = {}
         for staged_entity in staged_row.entities:
             resolved_entity = _staged_entity_to_resolved(staged_entity, recipe)
@@ -1823,9 +1731,6 @@ async def run_recipe(
     # encoding mismatch) fails here, not silently.
     staged_path = _stage_rows(staged_rows, storage=storage, load_id=load_id)
     loaded_rows = _read_staged_rows(staged_path, storage=storage)
-    link_rejected, link_rejections = _refuse_link_unit_conflicts(
-        recipe, loaded_rows, ontology=ontology, scheme=scheme, skip=skip_row_indices
-    )
 
     state = _RunState(
         graph=graph,
@@ -1841,7 +1746,7 @@ async def run_recipe(
     events: list[EventRecord] = []
 
     for staged_row in loaded_rows:
-        if staged_row.row_index in skip_row_indices or staged_row.row_index in link_rejected:
+        if staged_row.row_index in skip_row_indices:
             continue
         now = datetime.now(UTC)
         refs: dict[str, NodeId] = {}
@@ -1888,7 +1793,7 @@ async def run_recipe(
         nodes_created=state.nodes_created,
         nodes_referenced=state.nodes_referenced,
         edges_created=state.edges_created,
-        rejections=[*rejections, *link_rejections, *state.content_rejections],
+        rejections=[*rejections, *state.content_rejections],
         created_node_ids=state.created_node_ids,
         touched_edge_ids=state.touched_edge_ids,
         created_edge_ids=state.created_edge_ids,

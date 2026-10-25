@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 
-from ontology.handling import load_uk_le_scheme, merge_handling
+from ontology.handling import audience_of, load_uk_le_scheme, merge_handling
 from schemas.domain import EdgeWrite, Handling, Interval, Provenance, ProvenanceState, SourceRef
 from schemas.merge import aggregate_edge_writes, merge_interval, merge_provenance
 from tests.adapters.graph_arcadedb.edge_store import CountingStore, make_adapter, make_edge
@@ -24,6 +24,10 @@ T0 = datetime(2026, 1, 1, tzinfo=UTC)
 
 def _HANDLING(old: Handling, new: Handling) -> Handling:  # noqa: N802
     return merge_handling(old, new, load_uk_le_scheme())
+
+
+def _AUDIENCE(write: EdgeWrite) -> object:  # noqa: N802
+    return audience_of(write.handling, write.datasets, load_uk_le_scheme())
 
 
 def _with_interval(write: EdgeWrite, start_days: int, end_days: int | None) -> EdgeWrite:
@@ -65,7 +69,7 @@ def test_the_aggregate_is_what_one_at_a_time_upserts_leave_in_the_store() -> Non
     for write in _writes():
         asyncio.run(graph.upsert_edges([write], "tx"))
 
-    for aggregated in aggregate_edge_writes(_writes(), directed=_directed, handling=_HANDLING):
+    for aggregated in aggregate_edge_writes(_writes(), directed=_directed, handling=_HANDLING, audience=_AUDIENCE):
         stored = store.edges[(aggregated.write.source, aggregated.write.target)]
         assert stored["id"] == aggregated.write.id
         assert stored["occurrences"] == aggregated.write.occurrences
@@ -81,7 +85,7 @@ def test_the_aggregate_is_what_one_at_a_time_upserts_leave_in_the_store() -> Non
 
 def test_a_repeated_pair_becomes_one_edge_with_everything_kept() -> None:
     """Catches a pair being dropped, duplicated, or losing a source row."""
-    result = aggregate_edge_writes(_writes(), directed=_directed, handling=_HANDLING)
+    result = aggregate_edge_writes(_writes(), directed=_directed, handling=_HANDLING, audience=_AUDIENCE)
     assert [(r.write.source, r.write.target) for r in result] == [
         ("a", "b"),
         ("c", "d"),
@@ -104,8 +108,8 @@ def test_an_undirected_pair_is_the_same_pair_either_way_round() -> None:
     """Catches `a to b` and `b to a` of an undirected type staying two edges: `upsert_edges` finds
     an undirected edge from either end, so it merges them, and the aggregate must too."""
     writes = [make_edge("a", "b", 1), make_edge("b", "a", 2)]
-    assert len(aggregate_edge_writes(writes, directed=lambda _: False, handling=_HANDLING)) == 1
-    assert len(aggregate_edge_writes(writes, directed=_directed, handling=_HANDLING)) == 2
+    assert len(aggregate_edge_writes(writes, directed=lambda _: False, handling=_HANDLING, audience=_AUDIENCE)) == 1
+    assert len(aggregate_edge_writes(writes, directed=_directed, handling=_HANDLING, audience=_AUDIENCE)) == 2
 
 
 def test_the_first_write_keeps_the_edge_identity_and_the_last_its_own_properties() -> None:
@@ -113,7 +117,7 @@ def test_the_first_write_keeps_the_edge_identity_and_the_last_its_own_properties
     the wrong write's properties (the latest write wins, as in `upsert_edges`)."""
     first = make_edge("a", "b", 1)
     last = make_edge("a", "b", 2).model_copy(update={"properties": {"note": "latest"}})
-    (only,) = aggregate_edge_writes([first, last], directed=_directed, handling=_HANDLING)
+    (only,) = aggregate_edge_writes([first, last], directed=_directed, handling=_HANDLING, audience=_AUDIENCE)
     assert only.write.id == first.id and only.write.created_at == first.created_at
     assert only.write.properties == {"note": "latest"}
 
@@ -143,9 +147,11 @@ def test_merge_interval_widens_and_tolerates_a_missing_one() -> None:
     assert merge_interval(None, None) is None
 
 
-def test_both_paths_keep_the_higher_handling_of_a_repeated_pair() -> None:
-    """ADR-102: a pair written SECRET then OFFICIAL is SECRET on both paths, and the other way
-    round too; the stored handling and the aggregate's agree."""
+def test_both_paths_split_a_repeated_pair_by_audience() -> None:
+    """ADR-102 Amendment 3: a pair written SECRET then OFFICIAL, or the other way round, is two
+    links on both paths (it was one, kept at SECRET, before the ruling): the aggregate and the
+    stored links agree, each with its own classification and its own occurrence."""
+
     def at(classification: str, n: int) -> EdgeWrite:
         write = make_edge("a", "b", n)
         handling = write.handling.model_copy(update={"classification": classification})
@@ -157,10 +163,40 @@ def test_both_paths_keep_the_higher_handling_of_a_repeated_pair() -> None:
         graph = make_adapter(store)
         for write in writes:
             asyncio.run(graph.upsert_edges([write], "tx"))
-        (only,) = aggregate_edge_writes(writes, directed=_directed, handling=_HANDLING)
-        assert only.write.handling.classification == "SECRET"
-        assert store.edges[("a", "b")]["handling"]["classification"] == "SECRET"
-        assert store.edges[("a", "b")]["handling_classification"] == "SECRET"
+        aggregated = aggregate_edge_writes(
+            writes, directed=_directed, handling=_HANDLING, audience=_AUDIENCE
+        )
+        assert [a.write.handling.classification for a in aggregated] == order
+        assert [link["handling_classification"] for link in store.links] == order
+        assert [link["occurrences"] for link in store.links] == [1, 1]
+
+
+def test_the_aggregate_merges_within_an_audience_and_splits_between_them() -> None:
+    """Catches the aggregate keying on the pair alone: two OFFICIAL writes and a SECRET one in
+    between are two links, the OFFICIAL ones merged, in order of first appearance; units split a
+    pair only under a restricted code; reversed writes of an undirected type merge within one
+    audience."""
+
+    def make(n: int, **handling: str) -> EdgeWrite:
+        write = make_edge("a", "b", n)
+        return write.model_copy(
+            update={"handling": write.handling.model_copy(update=handling)}
+        )
+
+    writes = [make(1), make(2, classification="SECRET"), make(3)]
+    result = aggregate_edge_writes(writes, directed=_directed, handling=_HANDLING, audience=_AUDIENCE)
+    assert [(r.write.id, r.write.occurrences, r.writes) for r in result] == [
+        ("edge-1", 2, 2),
+        ("edge-2", 1, 1),
+    ]
+    units = [make(1, handling_code="R", owning_unit="u1"), make(2, handling_code="R", owning_unit="u2")]
+    assert len(aggregate_edge_writes(units, directed=_directed, handling=_HANDLING, audience=_AUDIENCE)) == 2
+    unrestricted = [make(1, owning_unit="u1"), make(2, owning_unit="u2")]
+    assert len(aggregate_edge_writes(unrestricted, directed=_directed, handling=_HANDLING, audience=_AUDIENCE)) == 1
+    reversed_pair = [make(1), make(2).model_copy(update={"source": "b", "target": "a"})]
+    assert len(aggregate_edge_writes(reversed_pair, directed=lambda _: False, handling=_HANDLING, audience=_AUDIENCE)) == 1
+    other_audience = [make(1), make(2, classification="SECRET").model_copy(update={"source": "b", "target": "a"})]
+    assert len(aggregate_edge_writes(other_audience, directed=lambda _: False, handling=_HANDLING, audience=_AUDIENCE)) == 2
 
 
 def _inferred(write: EdgeWrite, amount: float) -> EdgeWrite:
@@ -201,7 +237,7 @@ def test_an_inferred_write_never_lowers_an_asserted_pair_on_either_path() -> Non
     assert stored["occurrences"] == 2
     assert [s["locator"] for s in stored["provenance"]["sources"]] == ["row-1", "run-2"]
 
-    (only,) = aggregate_edge_writes([confirmed, model], directed=_directed, handling=_HANDLING)
+    (only,) = aggregate_edge_writes([confirmed, model], directed=_directed, handling=_HANDLING, audience=_AUDIENCE)
     assert only.write.provenance.state is ProvenanceState.ASSERTED
     assert only.write.provenance.confirmed_by == "analyst-1"
     assert only.write.properties == {"amount": 1.0}
@@ -219,5 +255,5 @@ def test_a_later_inferred_write_over_an_inferred_pair_still_wins() -> None:
     for write in (first, later):
         asyncio.run(graph.upsert_edges([write], "tx"))
     assert store.edges[("a", "b")]["properties"] == {"amount": 0.4}
-    (only,) = aggregate_edge_writes([first, later], directed=_directed, handling=_HANDLING)
+    (only,) = aggregate_edge_writes([first, later], directed=_directed, handling=_HANDLING, audience=_AUDIENCE)
     assert only.write.properties == {"amount": 0.4}

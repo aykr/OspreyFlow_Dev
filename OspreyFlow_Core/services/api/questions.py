@@ -44,6 +44,7 @@ from schemas.model import ExtractionRequest
 
 from .document_reader import DocumentReaderService
 from .email_extraction import _edge_from_write
+from .link_ids import as_stored
 from .review import (
     DocumentNotFoundError,
     ExtractionCandidateNotFoundError,
@@ -512,7 +513,7 @@ class QuestionsService:
         graph = self._graph
         tx = await graph.begin_transaction()
         try:
-            await graph.upsert_edges([mention], tx)
+            (mention,) = as_stored([mention], await graph.upsert_edges([mention], tx))
         except Exception:
             await graph.rollback_transaction(tx)
             raise

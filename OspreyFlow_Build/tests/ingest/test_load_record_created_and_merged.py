@@ -21,11 +21,12 @@ occurrence counts of a merged link cannot be split (Amendment 5). What a mistake
 - the stamp that tells a revert the load's events can be retracted missing
   (`test_the_record_says_its_events_were_stamped`).
 
-The run is `load_with_rules` against the shared graph stand-in (`recipe_test_support.py`), made to
-merge as `upsert_edges` does (`graph_arcadedb/adapter.py`, `_find_existing_edge`): a second write of
-the same type between the same two parties merges into the first link, an undirected type merges a
-write the other way round too, and a reverted or superseded link is not merged into. The stand-in
-alone keeps every write, which would make each merge case here vacuous (rule 15)."""
+The run is `load_with_rules` against the shared merging graph stand-in (`recipe_test_support.py`'s
+`MergingGraph`), which merges as `upsert_edges` does (`graph_arcadedb/adapter.py`,
+`_find_existing_edge`): a second write of the same type between the same two parties merges into the
+first link when both have one audience (ADR-102 Amendment 3), an undirected type merges a write the
+other way round too, and a reverted or superseded link is not merged into. The plain stand-in keeps
+every write, which would make each merge case here vacuous (rule 15)."""
 
 from __future__ import annotations
 
@@ -42,6 +43,7 @@ from ontology.loader import load_default_ontology
 from schemas.domain import EdgeWrite, Principal
 from schemas.ingest import LoadReport, Recipe
 from tests.ingest.recipe_test_support import (  # noqa: F401 (the autouse fixture)
+    MergingGraph,
     ValidatingGraph,
     local_staging,
 )
@@ -49,43 +51,6 @@ from tests.ingest.recipe_test_support import (  # noqa: F401 (the autouse fixtur
 ONTOLOGY = load_default_ontology()
 SCHEME = load_uk_le_scheme()
 LOADER = Principal(id="loader-1", clearance="SECRET", org_unit="unit-1")
-
-
-class MergingGraph(ValidatingGraph):
-    """`ValidatingGraph`, with the real store's merge (`_find_existing_edge`): a link of the same
-    type between the same two parties, in either order for an undirected type, unless it has been
-    reverted or superseded, is merged into; its id comes back, so the caller's own id differs from
-    the one returned. A test marks a link reverted by adding its id to `reverted`."""
-
-    def __init__(self, ontology: Any) -> None:
-        super().__init__(ontology)
-        self.reverted: set[str] = set()
-        self.superseded: set[str] = set()
-
-    async def upsert_edges(self, edges: Any, tx: object) -> list[str]:
-        ids: list[str] = []
-        fresh: list[EdgeWrite] = []
-        for edge in edges:
-            directed = self._schema().edge_type(edge.type).directed  # type: ignore[union-attr]
-            ends = (edge.source, edge.target)
-            existing = next(
-                (
-                    e
-                    for e in [*self.committed_edges, *self.open_edges, *fresh]
-                    if e.type == edge.type
-                    and e.id not in self.reverted
-                    and e.id not in self.superseded
-                    and ((e.source, e.target) == ends or (not directed and (e.target, e.source) == ends))
-                ),
-                None,
-            )
-            if existing is not None:
-                ids.append(existing.id)
-            else:
-                fresh.append(edge)
-                ids.append(edge.id)
-        await super().upsert_edges(fresh, tx)
-        return ids
 
 
 def _endpoint(ref: str, column: str, *, content: bool = False) -> dict[str, Any]:
@@ -418,3 +383,44 @@ async def test_the_counts_say_nothing_of_a_link_the_loader_cannot_read() -> None
         # The first load's A-B link is its first row's: the one the second load merged into.
         assert report.merged_edge_ids == [first.created_edge_ids[0]], "the record keeps the true split"
         assert report.created_edge_ids == []
+
+
+def _at(classification: str) -> Recipe:
+    """The private-cash recipe with every element marked `classification`."""
+    recipe = _recipe()
+    handling = {**recipe.defaults.handling, "classification": classification}
+    return recipe.model_copy(update={"defaults": recipe.defaults.model_copy(update={"handling": handling})})
+
+
+async def test_a_write_of_another_audience_is_recorded_as_created_and_the_same_one_as_merged() -> None:
+    """ADR-102 Amendment 3 and the record: a SECRET write onto an OFFICIAL link is a link of its own
+    and so created, not merged; a second OFFICIAL write still merges into the first and is merged."""
+    graph = MergingGraph(ONTOLOGY)
+    first = await _load(graph, [_row("SYN-1", "SYN-2", 1)], "load-1")
+    secret = await _load(graph, [_row("SYN-1", "SYN-2", 2)], "load-2", recipe=_at("SECRET"))
+    official = await _load(graph, [_row("SYN-1", "SYN-2", 3)], "load-3")
+    (original,) = first.created_edge_ids
+    assert len(secret.created_edge_ids) == 1 and secret.merged_edge_ids == []
+    assert secret.created_edge_ids != [original]
+    assert official.merged_edge_ids == [original] and official.created_edge_ids == []
+    assert len([e for e in graph.committed_edges if e.type == "TRANSACTED"]) == 2
+
+
+async def test_a_content_link_in_another_audience_gets_a_new_id_and_is_recorded_as_created() -> None:
+    """`HOLDS` has an id derived from its two ends. A second load of the same text from the same
+    holder, at another classification, cannot merge into the first load's link (another audience)
+    and cannot create under its id (unique): it is a link of its own under a new id. The holder
+    exists already, so the id alone cannot say the link is new; the id the store returned can: it is
+    not the one sent, so the link is the load's own."""
+    graph = MergingGraph(ONTOLOGY)
+    await _load(graph, [_row("SYN-1", "SYN-2", 1, memo="a note")], "load-1", content=True)
+    second_recipe = _at("SECRET").model_copy(
+        update={"row_template": _recipe(content=True).row_template}
+    )
+    second = await _load(graph, [_row("SYN-1", "SYN-2", 2, memo="a note")], "load-2", recipe=second_recipe)
+    holds = [e for e in graph.committed_edges if e.type == "HOLDS"]
+    assert len(holds) == 2 and len({e.id for e in holds}) == 2
+    held_by_second = [e for e in holds if e.handling.classification == "SECRET"]
+    assert len(held_by_second) == 1
+    assert held_by_second[0].id in second.created_edge_ids
+    assert held_by_second[0].id not in second.merged_edge_ids

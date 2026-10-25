@@ -49,6 +49,7 @@ from schemas.domain import (
 from schemas.model import TranscribeRequest, VisionRequest
 
 from .email_extraction import MENTIONED_IN, _edge_from_write, _node_from_write
+from .link_ids import as_stored
 from .review import (
     CandidateNotPendingError,
     DocumentNotFoundError,
@@ -295,7 +296,10 @@ class DocumentContentService:
 
         ref = reference_for(data, content_type)
         document_id = f"content:{sha256(ref.encode()).hexdigest()[:32]}"
-        edge_ids = [f"{document_id}:held-by:{holder.id}"] if holder else []
+        # A fresh id, not one derived from the ends: a caller who knew the scheme would learn,
+        # from a different id coming back, that another audience's link joins them (rule 3). A
+        # re-upload within one audience still merges into its link by pair.
+        edge_ids = [new_edge_id()] if holder else []
         await self._working_set.ensure_room(investigation_id, [document_id], edge_ids, principal)
 
         await self._media.put(data, content_type)
@@ -336,7 +340,7 @@ class DocumentContentService:
         try:
             await self._graph.upsert_nodes([document], tx)
             if edges:
-                await self._graph.upsert_edges(edges, tx)
+                edges = as_stored(edges, await self._graph.upsert_edges(edges, tx))
         except Exception:
             await self._graph.rollback_transaction(tx)
             raise
@@ -441,7 +445,7 @@ class DocumentContentService:
         )
         tx = await self._graph.begin_transaction()
         try:
-            await self._graph.upsert_edges([mention], tx)
+            (mention,) = as_stored([mention], await self._graph.upsert_edges([mention], tx))
         except Exception:
             await self._graph.rollback_transaction(tx)
             raise

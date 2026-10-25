@@ -8,7 +8,7 @@ configuration change with nothing above this module to touch.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Literal
 
@@ -110,6 +110,52 @@ def _known(
 ) -> None:
     if code is not None and code not in codes:
         raise HandlingSchemeError(f"{kind} {code!r} is not defined in scheme {scheme.name!r}")
+
+
+def is_restricted(code: str, scheme: HandlingScheme) -> bool:
+    """Whether `code` is a restricted handling code in `scheme`: the one place that decides it, for
+    the access step (`graph_arcadedb/access_filter.py`) and for what a link merges into
+    (`audience_of`). A code the scheme does not define is not restricted."""
+    defined = scheme.handling_codes.get(code)
+    return defined is not None and defined.dissemination == "restricted"
+
+
+def audience_of(
+    handling: Handling, datasets: Iterable[str], scheme: HandlingScheme
+) -> tuple[str, str, tuple[str, ...], str | None, str | None]:
+    """The key two link writes share exactly when the same principals see both (ADR-102
+    Amendment 3): every part the access step reads. The classification, the handling code, the set
+    of datasets (ADR-099) and, only where the code is restricted, the originator and the owning
+    unit, which decide visibility only then (`access_filter.py`). The action and sanitisation codes
+    decide no visibility and are not in it. A write merges into an existing link only with an equal
+    key."""
+    return audience_parts(
+        handling.classification,
+        handling.handling_code,
+        datasets,
+        handling.originator,
+        handling.owning_unit,
+        scheme,
+    )
+
+
+def audience_parts(
+    classification: str,
+    handling_code: str,
+    datasets: Iterable[str],
+    originator: str,
+    owning_unit: str,
+    scheme: HandlingScheme,
+) -> tuple[str, str, tuple[str, ...], str | None, str | None]:
+    """`audience_of` from the parts themselves, for a stored link read back as flat properties."""
+    restricted = is_restricted(handling_code, scheme)
+    return (
+        classification,
+        handling_code,
+        tuple(sorted(set(datasets))),
+        originator if restricted else None,
+        owning_unit if restricted else None,
+    )
 
 
 def merge_handling(existing: Handling, incoming: Handling, scheme: HandlingScheme) -> Handling:

@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from adapters.graph_arcadedb.bulk import LOOKUP_BATCH, BulkEdgeLoader
+from adapters.graph_arcadedb.bulk import LOOKUP_BATCH, BulkEdgeLoader, StoredLink
 from adapters.graph_arcadedb.naming import physical_type_name
 from ontology.errors import OntologyError
 from ontology.handling import load_uk_le_scheme
@@ -28,6 +28,7 @@ SCHEMA = load_default_ontology()
 ENDPOINT = physical_type_name("Endpoint")
 PERSON = physical_type_name("Person")
 LABEL = physical_type_name("TRANSACTED")
+ASSOCIATE = physical_type_name("ASSOCIATE_OF")
 KNOWN_LABELS = {LABEL, physical_type_name("ASSOCIATE_OF"), physical_type_name("USES")}
 
 
@@ -57,14 +58,37 @@ class MemoryTransport:
         self.calls.append("edge_type_is_empty")
         return not any(e["label"] == label for e in self.stored)
 
-    async def stored_pairs(
+    async def stored_links(
         self, label: str, pairs: Sequence[tuple[str, str]], *, directed: bool
-    ) -> set[tuple[str, str]]:
-        self.calls.append("stored_pairs")
+    ) -> list[StoredLink]:
+        """The live links of `label` between any of `pairs`, each with what decides who sees it
+        (ADR-102 Amendment 3). A link a test stored by hand without them has `make_edge`'s."""
+        self.calls.append("stored_links")
         self._bounded(pairs)
-        live = {(e["s"], e["t"]) for e in self.stored if e["label"] == label and not e["reverted"]}
         wanted = set(pairs) if directed else set(pairs) | {(t, s) for s, t in pairs}
-        return live & wanted
+        return [
+            StoredLink(
+                source=e["s"],
+                target=e["t"],
+                classification=e.get("classification", "OFFICIAL"),
+                handling_code=e.get("handling_code", "P"),
+                originator=e.get("originator", "u"),
+                owning_unit=e.get("owning_unit", "u"),
+                datasets=tuple(e.get("datasets", ())),
+            )
+            for e in self.stored
+            if e["label"] == label
+            and not e["reverted"]
+            and not e.get("superseded_by")  # as the real query leaves a replaced link out
+            and (e["s"], e["t"]) in wanted
+        ]
+
+    async def taken_edge_ids(self, label: str, ids: Sequence[str]) -> set[str]:
+        """Which of `ids` an edge of `label` already holds, reverted or superseded or not: the
+        unique index holds an id for every edge ever written."""
+        self.calls.append("taken_edge_ids")
+        self._bounded(ids)
+        return {e["id"] for e in self.stored if e["label"] == label and e.get("id") in ids}
 
     @staticmethod
     def _counts(e: Mapping[str, Any], label: str) -> bool:
@@ -113,14 +137,24 @@ class MemoryTransport:
         for row in rows:
             if row["s"] not in self.vertices or row["t"] not in self.vertices:
                 raise AssertionError("an edge written to a vertex that does not exist")
+            held = {e.get("id") for e in self.stored if e["label"] == label}
+            if row["p"]["id"] in held or row["p"]["id"] in {w["p"]["id"] for w in self.written}:
+                # Edge `id` is UNIQUE per type (`schema.py`): the real store refuses the write.
+                raise AssertionError(f"duplicate edge id {row['p']['id']!r}: the unique index refuses")
             self.written.append(dict(row))
             self.stored.append(
                 {
+                    "id": row["p"]["id"],
                     "label": label,
                     "s": row["s"],
                     "t": row["t"],
                     "occurrences": row["p"]["occurrences"],
                     "reverted": False,
+                    "classification": row["p"]["handling_classification"],
+                    "handling_code": row["p"]["handling_code"],
+                    "originator": row["p"]["originator"],
+                    "owning_unit": row["p"]["owning_unit"],
+                    "datasets": row["p"]["datasets"],
                 }
             )
 
@@ -164,17 +198,183 @@ def test_an_empty_call_does_nothing() -> None:
     assert result.written == [] and result.received == 0 and transport.calls == []
 
 
-def test_a_pair_loaded_twice_keeps_the_higher_handling() -> None:
-    """ADR-102: within one load, a pair written SECRET then OFFICIAL is written once, SECRET."""
+def _marked(write: EdgeWrite, **changes: Any) -> EdgeWrite:
+    datasets = changes.pop("datasets", None)
+    update: dict[str, Any] = {"handling": write.handling.model_copy(update=changes)}
+    if datasets is not None:
+        update["datasets"] = datasets
+    return write.model_copy(update=update)
+
+
+def test_a_pair_loaded_twice_in_one_audience_is_one_row() -> None:
     transport = _store("a", "b")
-    first = _edge("a", "b", 1)
-    secret = first.model_copy(
-        update={"handling": first.handling.model_copy(update={"classification": "SECRET"})}
-    )
-    _load(transport, [secret, _edge("a", "b", 2)])
+    _load(transport, [_edge("a", "b", 1), _edge("a", "b", 2)])
     (row,) = transport.written
-    assert row["p"]["handling_classification"] == "SECRET"
-    assert row["p"]["handling"]["classification"] == "SECRET"
+    assert row["p"]["occurrences"] == 2
+
+
+def test_a_pair_loaded_at_two_classifications_is_two_rows_each_its_own() -> None:
+    """ADR-102 Amendment 3: within one load, a pair written SECRET and OFFICIAL is two links, each
+    keeping its own classification and its own occurrence, not one raised to SECRET."""
+    transport = _store("a", "b")
+    _load(
+        transport,
+        [_marked(_edge("a", "b", 1), classification="SECRET"), _edge("a", "b", 2), _edge("a", "b", 3)],
+    )
+    rows = sorted(transport.written, key=lambda r: r["p"]["handling_classification"])
+    assert [(r["p"]["handling_classification"], r["p"]["occurrences"]) for r in rows] == [
+        ("OFFICIAL", 2),
+        ("SECRET", 1),
+    ]
+    assert len({r["p"]["id"] for r in rows}) == 2
+
+
+def test_a_pair_loaded_under_two_restricted_units_is_two_rows_and_under_two_open_units_one() -> None:
+    restricted = _store("a", "b")
+    _load(
+        restricted,
+        [
+            _marked(_edge("a", "b", 1), handling_code="R", owning_unit="u1"),
+            _marked(_edge("a", "b", 2), handling_code="R", owning_unit="u2"),
+        ],
+    )
+    assert len(restricted.written) == 2
+    open_codes = _store("a", "b")
+    _load(
+        open_codes,
+        [
+            _marked(_edge("a", "b", 1), owning_unit="u1"),
+            _marked(_edge("a", "b", 2), owning_unit="u2"),
+        ],
+    )
+    assert len(open_codes.written) == 1
+
+
+def test_a_pair_loaded_in_two_datasets_is_two_rows() -> None:
+    transport = _store("a", "b")
+    _load(
+        transport,
+        [
+            _marked(_edge("a", "b", 1), datasets=["enron"]),
+            _marked(_edge("a", "b", 2), datasets=["fixture"]),
+            _marked(_edge("a", "b", 3), datasets=["enron"]),
+        ],
+    )
+    assert sorted((r["p"]["datasets"], r["p"]["occurrences"]) for r in transport.written) == [
+        (["enron"], 2),
+        (["fixture"], 1),
+    ]
+
+
+def test_a_stored_link_of_another_audience_is_not_a_collision() -> None:
+    """The stored OFFICIAL link is not the SECRET write's to merge into, so the write is a link of
+    its own and not handed back; a write of the stored link's own audience still is."""
+    transport = _store("a", "b")
+    transport.stored.append(
+        {"label": LABEL, "s": "a", "t": "b", "occurrences": 4, "reverted": False}
+    )
+    secret = _marked(_edge("a", "b", 1), classification="SECRET")
+    same = _edge("a", "b", 2)
+    result = _load(transport, [secret, same])
+    assert result.written == [secret.id] and [c.id for c in result.collisions] == [same.id]
+
+
+def test_a_stored_restricted_link_of_another_unit_or_dataset_is_not_a_collision() -> None:
+    transport = _store("a", "b")
+    transport.stored.append(
+        {"label": LABEL, "s": "a", "t": "b", "occurrences": 1, "reverted": False,
+         "handling_code": "R", "owning_unit": "u1", "originator": "u1"}
+    )  # fmt: skip
+    other_unit = _marked(_edge("a", "b", 1), handling_code="R", owning_unit="u2")
+    other_dataset = _marked(_edge("a", "b", 2), handling_code="R", owning_unit="u1", originator="u1", datasets=["x"])
+    same = _marked(_edge("a", "b", 3), handling_code="R", owning_unit="u1", originator="u1")
+    result = _load(transport, [other_unit, other_dataset, same])
+    assert sorted(result.written) == sorted([other_unit.id, other_dataset.id])
+    assert [c.id for c in result.collisions] == [same.id]
+
+
+def test_a_stored_link_in_a_dataset_collides_only_with_a_write_of_that_dataset() -> None:
+    transport = _store("a", "b")
+    transport.stored.append(
+        {"label": LABEL, "s": "a", "t": "b", "occurrences": 1, "reverted": False, "datasets": ["x"]}
+    )
+    same = _marked(_edge("a", "b", 1), datasets=["x"])
+    elsewhere = _marked(_edge("a", "b", 2), datasets=["y"])
+    none = _edge("a", "b", 3)
+    result = _load(transport, [same, elsewhere, none])
+    assert [c.id for c in result.collisions] == [same.id]
+    assert sorted(result.written) == sorted([elsewhere.id, none.id])
+
+
+def test_an_undirected_pair_stored_reversed_collides_only_within_its_audience() -> None:
+    transport = _store("a", "b", label=PERSON)
+    transport.stored.append({"label": ASSOCIATE, "s": "b", "t": "a", "occurrences": 1, "reverted": False})
+    base = _edge("a", "b", 1).model_copy(update={"type": "ASSOCIATE_OF"})
+    secret = _marked(base.model_copy(update={"id": "edge-2"}), classification="SECRET")
+    result = _load(transport, [base, secret])
+    assert [c.id for c in result.collisions] == [base.id] and result.written == [secret.id]
+
+
+def test_a_pair_split_across_every_audience_writes_a_row_and_an_id_for_each() -> None:
+    """The case `test_bulk_one_call_splits_a_pair_by_audience_and_merges_within_one` runs against
+    ArcadeDB, here over the memory transport: nine writes of one pair make seven rows with seven
+    distinct ids and the occurrences 2 (OFFICIAL), 2 (C, two units) and 1 for the rest. Rows that a
+    reader cannot read are still rows: a count of what a reader sees is not a count of what was
+    written, which is how the live case first miscounted."""
+    transport = _store("a", "b")
+    writes = [
+        _edge("a", "b", 1),
+        _marked(_edge("a", "b", 2), classification="SECRET"),
+        _edge("a", "b", 3),
+        _marked(_edge("a", "b", 4), handling_code="R", owning_unit="u1", originator="u1"),
+        _marked(_edge("a", "b", 5), handling_code="R", owning_unit="u2", originator="u2"),
+        _marked(_edge("a", "b", 6), datasets=["enron"]),
+        _marked(_edge("a", "b", 7), datasets=["fixture"]),
+        _marked(_edge("a", "b", 8), handling_code="C", owning_unit="u1"),
+        _marked(_edge("a", "b", 9), handling_code="C", owning_unit="u2"),
+    ]
+    result = _load(transport, writes)
+    assert len(result.written) == 7 and result.collisions == []
+    assert len({r["p"]["id"] for r in transport.written}) == 7
+    assert sorted(r["p"]["occurrences"] for r in transport.written) == [1, 1, 1, 1, 1, 2, 2]
+
+
+def test_two_writes_of_one_fixed_id_in_two_audiences_are_two_links_with_two_ids() -> None:
+    """`HOLDS` and the mention writers send an id derived from their ends. Two audiences of one pair
+    in one call would both keep it, and the unique index would refuse the second row: the second
+    gets a new id, and `written` lists the ids as stored."""
+    transport = _store("a", "b")
+    first = _edge("a", "b", 1).model_copy(update={"id": "doc:held-by:a"})
+    second = _marked(_edge("a", "b", 2).model_copy(update={"id": "doc:held-by:a"}), classification="SECRET")
+    result = _load(transport, [first, second])
+    assert result.collisions == [] and len(result.written) == 2 and len(set(result.written)) == 2
+    assert result.written[0] == "doc:held-by:a" and result.written[1] != "doc:held-by:a"
+    assert sorted(r["p"]["handling_classification"] for r in transport.written) == ["OFFICIAL", "SECRET"]
+
+
+def test_a_fixed_id_a_stored_link_of_another_audience_holds_is_replaced_by_a_new_one() -> None:
+    transport = _store("a", "b")
+    transport.stored.append(
+        {"id": "doc:held-by:a", "label": LABEL, "s": "a", "t": "b", "occurrences": 1, "reverted": False}
+    )
+    secret = _marked(_edge("a", "b", 1).model_copy(update={"id": "doc:held-by:a"}), classification="SECRET")
+    result = _load(transport, [secret])
+    assert result.collisions == [] and len(result.written) == 1
+    assert result.written[0] != "doc:held-by:a" and transport.written[0]["p"]["id"] == result.written[0]
+
+
+def test_a_stored_link_that_was_superseded_is_not_a_collision() -> None:
+    """The ordinary path leaves a superseded link out when it looks for the one to merge into
+    (`_find_existing_edge`); the bulk lookup must too, or a pair whose link was corrected would hand
+    every later write back as a collision to a link no read shows."""
+    transport = _store("a", "b")
+    transport.stored.append(
+        {"id": "old", "label": LABEL, "s": "a", "t": "b", "occurrences": 1, "reverted": False,
+         "superseded_by": "new"}
+    )  # fmt: skip
+    fresh = _edge("a", "b", 1)
+    result = _load(transport, [fresh])
+    assert result.written == [fresh.id] and result.collisions == []
 
 
 # --- the cost: a handful of store calls, not one per edge --------------------
@@ -191,7 +391,7 @@ def test_a_thousand_edges_cost_a_handful_of_store_calls() -> None:
     assert result.chunks == 3 and len(result.written) == 1200 and result.collisions == []
     assert len(transport.calls) <= 20, transport.calls
     assert transport.calls.count("write_chunk") == 3
-    assert "corpus_total" not in transport.calls and "stored_pairs" not in transport.calls
+    assert "corpus_total" not in transport.calls and "stored_links" not in transport.calls
 
 
 # --- weights at the end of the load ------------------------------------------

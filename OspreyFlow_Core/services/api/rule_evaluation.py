@@ -10,8 +10,9 @@ deployer's principal resolved fresh (ADR-036), at the trigger point it declares 
   with its alert (the `Alert` node written in the same graph transaction as the rows), and a rule
   that errors or overruns its budget fails closed, holding the rows it could not judge.
 
-**Where a flow comes from.** Same-pair `TRANSACTED` writes merge into one link (`engine.py`'s
-`_write_edge`), so a single transaction is not a graph edge: it is an event in the analytics store
+**Where a flow comes from.** Same-pair `TRANSACTED` writes of one audience merge into one link
+(`engine.py`'s `_write_edge`; a write of another audience is a link of its own, ADR-102 Amendment
+3), so a single transaction is not a graph edge: it is an event in the analytics store
 (`EventRecord`, carrying its amount, its time and both account node ids). A rule reads flows from
 there, through `AnalyticsPort.list_events` and so with the access step in its `WHERE` clause
 (rule 3); incoming flows a pre-commit rule judges are filtered by `handling_readable`, the same

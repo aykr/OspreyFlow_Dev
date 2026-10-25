@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import asyncio
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
 
 from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
-from ontology.handling import HandlingScheme, merge_handling
+from ontology.handling import HandlingScheme, audience_of, audience_parts, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ontology.weights import WeightRules, load_weight_rules
 from ports.graph import BulkEdgeResult, NodeSuggestions, SubgraphTooLarge, SuggestOptions
@@ -316,7 +316,14 @@ class GraphArcadeDBAdapter:
         return logical_type_name(results[0]["result"])
 
     async def _find_existing_edge(
-        self, type_name: str, source: NodeId, target: NodeId, *, directed: bool, session_id: TxId
+        self,
+        type_name: str,
+        source: NodeId,
+        target: NodeId,
+        *,
+        directed: bool,
+        audience: Hashable,
+        session_id: TxId,
     ) -> dict[str, Any] | None:
         """`01_DOMAIN_MODEL.md` §3: one summarised edge per pair per type.
         A second `upsert_edges` call for the same (type, source, target) —
@@ -327,7 +334,17 @@ class GraphArcadeDBAdapter:
         occurrences onto it. A *superseded* edge is excluded too: its
         replacement is the pair's edge now (`supersede_edge` leaves the old
         one in place for citations), and a write merged into the old one
-        would vanish from every ordinary read."""
+        would vanish from every ordinary read.
+
+        **Only a link of the write's own audience** (ADR-102 Amendment 3): the same classification,
+        handling code, set of datasets and, under a restricted code, units (`audience_of`). A link
+        another audience can see is not this write's to merge into, however it matches by pair, or a
+        reader of the first would see the link vanish and its path and degree move when a stricter
+        write arrived, and a link restricted to one unit would carry another unit's row. The pair's
+        links are all read and the one of this audience, if any, is returned. There is usually at
+        most one, since writes of one audience merge, but `supersede_edge` can put a replacement
+        beside a live link of its audience, so the choice is deterministic: the higher revision,
+        then the later creation, then the greater id, never whichever the store returns first."""
         src_lit = groovy_string_literal(source)
         tgt_lit = groovy_string_literal(target)
         label_lit = groovy_string_literal(type_name)
@@ -338,7 +355,38 @@ class GraphArcadeDBAdapter:
             f'.hasNot("superseded_by").where({other}().has("id",{tgt_lit})).elementMap()'
         )
         results = await self._client.gremlin(query, session_id=session_id)
-        return results[0] if results else None
+        same = [row for row in results if self._stored_audience(row) == audience]
+        if not same:
+            return None
+
+        def newest(row: Mapping[str, Any]) -> tuple[int, datetime, str]:
+            audit = AuditStub.model_validate(row["audit"])
+            return (audit.revision, audit.created_at, str(row["id"]))
+
+        return max(same, key=newest)
+
+    async def _edge_id_taken(self, type_name: str, edge_id: EdgeId, *, session_id: TxId) -> bool:
+        """Whether an edge of this type already holds `edge_id`, whatever its state. Edge `id` is
+        UNIQUE per type (`schema.py`) and a reverted or superseded edge keeps its id, so this asks
+        no `reverted` or `superseded_by` question. Asked of the type's unique `id` index by SQL, as
+        `get_nodes` and `existing_node_ids` are, not by a traversal that may scan the type."""
+        rows = await self._client.sql(
+            render_existing_ids_sql(type_name), params={"ids": [edge_id]}, session_id=session_id
+        )
+        return bool(rows)
+
+    def _stored_audience(self, row: Mapping[str, Any]) -> Hashable:
+        """The audience of a stored link read back as an element map: the same key `audience_of`
+        gives the write. A link with no datasets property has none."""
+        datasets = row.get("datasets") or []
+        return audience_parts(
+            str(row.get("handling_classification")),
+            str(row.get("handling_code")),
+            [datasets] if isinstance(datasets, str) else [str(d) for d in datasets],
+            str(row.get("originator")),
+            str(row.get("owning_unit")),
+            self._scheme,
+        )
 
     async def _sum_occurrences(self, query: str, session_id: TxId) -> int:
         results = await self._client.gremlin(query, session_id=session_id)
@@ -440,7 +488,12 @@ class GraphArcadeDBAdapter:
 
             type_name = groovy_identifier(physical_type_name(write.type))
             existing = await self._find_existing_edge(
-                type_name, write.source, write.target, directed=edge_type.directed, session_id=tx
+                type_name,
+                write.source,
+                write.target,
+                directed=edge_type.directed,
+                audience=audience_of(write.handling, write.datasets, self._scheme),
+                session_id=tx,
             )
 
             if existing is not None:
@@ -463,7 +516,12 @@ class GraphArcadeDBAdapter:
                     }
                 )
             else:
+                # A write of a fixed id (`HOLDS`, a mention, a seeder's pair id) whose id a link of
+                # another audience holds cannot create under it: edge `id` is UNIQUE. It is a link
+                # of its own under a new id, which is what this call returns (ADR-102 Amendment 3).
                 edge_id = write.id
+                if await self._edge_id_taken(type_name, edge_id, session_id=tx):
+                    edge_id = new_edge_id()
                 merged_occurrences = write.occurrences
                 merged_interval = write.interval
                 merged_provenance = write.provenance

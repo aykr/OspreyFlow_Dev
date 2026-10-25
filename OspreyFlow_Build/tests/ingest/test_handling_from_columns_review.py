@@ -47,6 +47,7 @@ from schemas.ingest import (
     StudioRecipeStatus,
 )
 from tests.ingest.recipe_test_support import (  # noqa: F401 (the autouse fixture)
+    MergingGraph,
     ValidatingGraph,
     local_staging,
 )
@@ -1041,24 +1042,33 @@ def _pair_row(code: str, unit: str, a: str = "Ada", d: str = "Dossier") -> dict[
     return {"a": a, "d": d, "handling_code": code, "owning_unit": unit}
 
 
-async def test_a_second_row_for_a_restricted_link_under_another_unit_is_rejected() -> None:
+async def _merging(recipe: Recipe, rows: list[dict[str, str]]) -> tuple[Any, MergingGraph]:
+    """A load into a store that merges as the real one does (ADR-102 Amendment 3)."""
+    return await _run_recipe(recipe, rows, MergingGraph(ONTOLOGY))  # type: ignore[return-value]
+
+
+def _links(graph: MergingGraph) -> list[tuple[str, str]]:
+    return sorted((e.handling.owning_unit, e.handling.handling_code) for e in graph.committed_edges)
+
+
+async def test_a_second_row_for_a_restricted_link_under_another_unit_is_a_link_of_its_own() -> None:
+    """ADR-127 Amendment 2 rejected this row, because the store would have merged it into the first
+    unit's link and shown it to that unit. The store no longer merges across audiences (ADR-102
+    Amendment 3), so the row loads, as a link of its own that only its own unit reads."""
     rows = [
         _pair_row("R", "unit-1"),
         _pair_row("R", "unit-2"),  # the same pair, restricted, another unit
-        _pair_row("R", "unit-2", a="Bea"),  # a different pair: loads
+        _pair_row("R", "unit-2", a="Bea"),  # a different pair
     ]
-    report, graph = await _run_recipe(_pair_recipe(), rows)
-    (rejection,) = report.rejections
-    assert rejection.row_index == 1
-    assert "MENTIONED_IN" in rejection.reason and "different units" in rejection.reason
-    assert "unit-2" not in rejection.reason and "'R'" not in rejection.reason
-    links = sorted(
-        (e.handling.owning_unit, e.handling.handling_code) for e in graph.committed_edges
-    )
-    assert links == [("unit-1", "R"), ("unit-2", "R")]  # the first pair once, and the other pair
+    report, graph = await _merging(_pair_recipe(), rows)
+    assert report.rejections == []
+    assert _links(graph) == [("unit-1", "R"), ("unit-2", "R"), ("unit-2", "R")]
+    ada = [e for e in graph.committed_edges if e.handling.owning_unit == "unit-2"]
+    assert len({e.id for e in ada}) == 2
+    assert len(report.created_edge_ids) == 3 and report.merged_edge_ids == []
 
 
-async def test_a_dry_run_rejects_the_same_row_for_the_same_reason() -> None:
+async def test_a_dry_run_simulates_the_two_links_too() -> None:
     result = await dry_run_recipe(
         _pair_recipe(),
         [_pair_row("R", "unit-1"), _pair_row("R", "unit-2")],
@@ -1068,28 +1078,67 @@ async def test_a_dry_run_rejects_the_same_row_for_the_same_reason() -> None:
         source="s.csv",
         scheme=SCHEME,
     )
-    (rejection,) = result.rejections
-    assert rejection.row_index == 1 and "different units" in rejection.reason
-    # The rejected row is not simulated either: the one link was written once.
-    (link,) = result.edges
-    assert link.occurrences == 1 and link.handling.owning_unit == "unit-1"
+    assert result.rejections == []
+    assert sorted((e.handling.owning_unit, e.occurrences) for e in result.edges) == [
+        ("unit-1", 1),
+        ("unit-2", 1),
+    ]
 
 
-async def test_one_restricted_link_among_two_is_enough_to_reject() -> None:
+async def test_a_dry_run_with_no_scheme_keys_a_link_on_a_form_it_can_hash() -> None:
+    """Without a scheme no code is known to be restricted, which is how `audience_of` reads a code
+    the scheme does not define: the key is the classification and code alone. The recipe binds no
+    marking (a bound one is refused without a scheme), so every simulated link has one audience, and
+    the same pair twice is one link of two occurrences, not a crash on an unhashable `Handling`."""
+    person = _person("a", match_on="family_name", on_match="reference")
+    person["properties"] = {"family_name": {"field": "a"}}
+    doc = _document(match_on="title", on_match="reference")
+    doc["ref"] = "d"
+    doc["properties"] = {"title": {"field": "d"}}
+    recipe = _make([person, doc], [{"type": "MENTIONED_IN", "from": "a", "to": "d"}])
+    result = await dry_run_recipe(
+        recipe,
+        [_pair_row("P", "unit-1"), _pair_row("P", "unit-1"), _pair_row("P", "unit-1", a="Bea")],
+        graph=ValidatingGraph(ONTOLOGY),  # type: ignore[arg-type]
+        ontology=ONTOLOGY,
+        principal=LOADER,
+        source="s.csv",
+    )
+    assert result.rejections == []
+    assert sorted(e.occurrences for e in result.edges) == [1, 2]
+
+
+async def test_a_dry_run_still_merges_within_one_audience() -> None:
+    result = await dry_run_recipe(
+        _pair_recipe(),
+        [_pair_row("R", "unit-1"), _pair_row("R", "unit-1"), _pair_row("P", "unit-1")],
+        graph=ValidatingGraph(ONTOLOGY),  # type: ignore[arg-type]
+        ontology=ONTOLOGY,
+        principal=LOADER,
+        source="s.csv",
+        scheme=SCHEME,
+    )
+    assert sorted((e.handling.handling_code, e.occurrences) for e in result.edges) == [
+        ("P", 1),
+        ("R", 2),
+    ]
+
+
+async def test_one_restricted_link_among_two_is_a_link_of_its_own() -> None:
     rows = [_pair_row("P", "unit-1"), _pair_row("R", "unit-2")]
-    report, graph = await _run_recipe(_pair_recipe(), rows)
-    (rejection,) = report.rejections
-    assert rejection.row_index == 1
-    assert [e.handling.owning_unit for e in graph.committed_edges] == ["unit-1"]
+    report, graph = await _merging(_pair_recipe(), rows)
+    assert report.rejections == []
+    assert _links(graph) == [("unit-1", "P"), ("unit-2", "R")]
 
 
-async def test_the_same_unit_or_no_restriction_merges_as_before() -> None:
+async def test_the_same_audience_merges_as_before() -> None:
     same_unit = [_pair_row("R", "unit-1"), _pair_row("R", "unit-1")]
-    report, graph = await _run_recipe(_pair_recipe(), same_unit)
-    assert report.rejections == [] and len(graph.committed_edges) == 2  # the adapter merges them
+    report, graph = await _merging(_pair_recipe(), same_unit)
+    assert report.rejections == [] and len(graph.committed_edges) == 1
+    assert len(report.created_edge_ids) == 1 and len(report.merged_edge_ids) == 0
     not_restricted = [_pair_row("P", "unit-1"), _pair_row("P", "unit-2")]
-    report, graph = await _run_recipe(_pair_recipe(), not_restricted)
-    assert report.rejections == [] and len(graph.committed_edges) == 2
+    report, graph = await _merging(_pair_recipe(), not_restricted)
+    assert report.rejections == [] and len(graph.committed_edges) == 1  # units decide nothing
 
 
 # --- the link check's gate and its identity key ------------------------------------------
@@ -1127,17 +1176,16 @@ def _fixed_split_recipe() -> Recipe:
     return _make(entities, edges)
 
 
-async def test_a_recipe_that_binds_nothing_still_has_its_links_judged_across_rows() -> None:
+async def test_a_recipe_that_binds_nothing_still_writes_each_units_link() -> None:
     rows = [
         {"flag": "one", "a": "Ada", "d": "Dossier"},
         {"flag": "two", "a": "Ada", "d": "Dossier"},
     ]
     recipe = _fixed_split_recipe()
     assert not any(e.handling and "field" in str(e.handling) for e in recipe.row_template.edges)
-    report, graph = await _run_recipe(recipe, rows)
-    (rejection,) = report.rejections
-    assert rejection.row_index == 1 and "different units" in rejection.reason
-    assert [e.handling.owning_unit for e in graph.committed_edges] == ["unit-1"]
+    report, graph = await _merging(recipe, rows)
+    assert report.rejections == []
+    assert sorted(e.handling.owning_unit for e in graph.committed_edges) == ["unit-1", "unit-2"]
 
 
 def _ontology_with_a_numeric_match_key() -> Any:
@@ -1168,7 +1216,7 @@ def _asset_recipe() -> Recipe:
     return _make([asset, doc], [edge])
 
 
-async def test_two_spellings_of_one_number_reach_one_node_and_the_conflict_is_caught() -> None:
+async def test_two_spellings_of_one_number_reach_one_node_and_each_units_row_is_its_own_link() -> None:
     from services.api.studio_publish import load_with_rules
 
     ontology = _ontology_with_a_numeric_match_key()
@@ -1176,7 +1224,7 @@ async def test_two_spellings_of_one_number_reach_one_node_and_the_conflict_is_ca
         {"s": "007", "d": "Dossier", "handling_code": "R", "owning_unit": "unit-1"},
         {"s": "7", "d": "Dossier", "handling_code": "R", "owning_unit": "unit-2"},
     ]
-    graph = ValidatingGraph(ontology)
+    graph = MergingGraph(ontology)
     report, _events, _held = await load_with_rules(
         _asset_recipe(),
         rows,
@@ -1189,9 +1237,8 @@ async def test_two_spellings_of_one_number_reach_one_node_and_the_conflict_is_ca
         rules=None,
         scheme=SCHEME,
     )
-    (rejection,) = report.rejections
-    assert rejection.row_index == 1 and "different units" in rejection.reason
-    assert [e.handling.owning_unit for e in graph.committed_edges] == ["unit-1"]
+    assert report.rejections == []
+    assert sorted(e.handling.owning_unit for e in graph.committed_edges) == ["unit-1", "unit-2"]
     assets = [n for n in graph.committed_nodes if n.type == "Asset"]
     assert len(assets) == 1  # "007" and "7" are one node
 

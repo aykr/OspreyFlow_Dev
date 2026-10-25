@@ -45,6 +45,7 @@ from schemas.domain import (
 from .change_provenance import PICTURE_MARKER, without_link_ids
 from .document_content import DOCUMENT_TYPE, UploadRefusedError
 from .email_extraction import _node_from_write
+from .link_ids import as_stored
 from .working_set.models import DeltaAdd, DeltaReplaceEdge, DeltaReplaceEdgeSent
 from .working_set.service import WorkingSetService
 
@@ -256,9 +257,10 @@ class EntityPictureService:
         try:
             await self._graph.upsert_nodes([document], tx)
             if before is None:
-                await self._graph.upsert_edges([link], tx)
+                (link,) = as_stored([link], await self._graph.upsert_edges([link], tx))
             else:
-                await self._graph.supersede_edge(before[0].id, link, tx)
+                replaced = await self._graph.supersede_edge(before[0].id, link, tx)
+                (link,) = as_stored([link], [replaced])
         except Exception:
             await self._graph.rollback_transaction(tx)
             raise

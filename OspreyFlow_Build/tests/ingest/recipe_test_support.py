@@ -29,7 +29,9 @@ import pyarrow.fs as pa_fs
 import pytest
 from services.ingest import staging
 
+from conduit_common.identity import new_edge_id
 from ontology.errors import OntologyError
+from ontology.handling import audience_of, load_uk_le_scheme
 from ontology.validation import validate_edge_endpoints, validate_properties
 from schemas.domain import EdgeWrite, NodeWrite, OntologySchema
 
@@ -167,3 +169,56 @@ class ValidatingGraph:
             validate_edge_endpoints(edge_type, source_type=source_type, target_type=target_type)
         self.open_edges.extend(edges)
         return [e.id for e in edges]
+
+
+class MergingGraph(ValidatingGraph):
+    """`ValidatingGraph`, with the real store's link merge (`_find_existing_edge`, ADR-102
+    Amendment 3): a link of the same type between the same two parties, in either order for an
+    undirected type, is merged into when it has the write's audience (`audience_of`: classification,
+    handling code, datasets, and the units under a restricted code), unless it has been reverted or
+    superseded; its id comes back, so the caller's own id differs from the one returned. A write of
+    another audience is a link of its own. A test marks a link reverted by adding its id to
+    `reverted`."""
+
+    def __init__(self, ontology: Any) -> None:
+        super().__init__(ontology)
+        self.reverted: set[str] = set()
+        self.superseded: set[str] = set()
+        self._scheme = load_uk_le_scheme()
+
+    def _audience(self, edge: EdgeWrite) -> object:
+        return audience_of(edge.handling, edge.datasets, self._scheme)
+
+    async def upsert_edges(self, edges: Any, tx: object) -> list[str]:
+        ids: list[str] = []
+        fresh: list[EdgeWrite] = []
+        for edge in edges:
+            directed = self._schema().edge_type(edge.type).directed  # type: ignore[union-attr]
+            ends = (edge.source, edge.target)
+            existing = next(
+                (
+                    e
+                    for e in [*self.committed_edges, *self.open_edges, *fresh]
+                    if e.type == edge.type
+                    and e.id not in self.reverted
+                    and e.id not in self.superseded
+                    and (
+                        (e.source, e.target) == ends
+                        or (not directed and (e.target, e.source) == ends)
+                    )
+                    and self._audience(e) == self._audience(edge)
+                ),
+                None,
+            )
+            if existing is not None:
+                ids.append(existing.id)
+            else:
+                # Edge `id` is UNIQUE (`schema.py`): a link of another audience holding this id
+                # means the write is a link of its own under a new one, which is returned.
+                held = {e.id for e in [*self.committed_edges, *self.open_edges, *fresh]}
+                if edge.id in held:
+                    edge = edge.model_copy(update={"id": new_edge_id()})
+                fresh.append(edge)
+                ids.append(edge.id)
+        await super().upsert_edges(fresh, tx)
+        return ids

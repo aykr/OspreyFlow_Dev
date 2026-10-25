@@ -521,9 +521,10 @@ first write's. Lowering it is an analyst's explicit change to that element, neve
 ### 2.2a Datasets (ADR-099)
 
 Every node and link carries `datasets`, the bodies of data that wrote it (the Enron corpus, Fixture
-Corp, a Studio load's dataset). A write names its own; writing the same element again adds to the list
-and never removes from it, through `upsert_nodes`, `upsert_edges` and the bulk loader alike
-(`schemas.merge.merge_datasets`). A case reads only elements of its datasets, enforced in the store
+Corp, a Studio load's dataset). A write names its own; writing the same node again adds to the list and
+never removes from it (`upsert_nodes`, `schemas.merge.merge_datasets`). A link is different: the set of
+datasets is part of a link's audience, so a write merges into a stored link only when its datasets are
+the same, and a write from another dataset is a link of its own (ADR-102 Amendments 3 and 4). A case reads only elements of its datasets, enforced in the store
 with the two handling axes above: a node, a link and a link's far end outside them are not returned,
 counted, or found by any path, degree or bucket (`tests/conformance/graph_port/test_suite.py`, the
 ADR-099 section; `test_bulk_loader.py`). `Principal.datasets` carries the case's; `None` is unlimited

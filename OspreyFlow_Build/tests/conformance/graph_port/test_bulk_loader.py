@@ -11,6 +11,7 @@ dropped, and weights taken against the corpus at the end of the load.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from ontology.errors import OntologyError
@@ -176,12 +177,13 @@ async def test_repeated_pairs_in_one_call_become_one_edge_with_everything_kept(
         assert edge.audit.revision == 3
 
 
-async def test_a_bulk_link_carries_every_dataset_that_wrote_it(
+async def test_a_bulk_load_of_two_datasets_writes_two_links_each_case_reads_only_its_own(
     factory: GraphAdapterFactory,
 ) -> None:
-    """ADR-099: a pair that recurs in one load across two datasets is one link in both, as two
-    `upsert_edges` calls would leave it; the store reads the list back, and a case of either sees
-    the link while a case of neither does not."""
+    """ADR-102 Amendment 3 overturns ADR-099's "one link in both datasets" for a pair that recurs in
+    one load across two datasets: the set of datasets is part of the audience, so the loader writes
+    two links, as two `upsert_edges` calls would leave them. A case of either reads its own, with
+    only its own dataset on it, and a case of neither reads none."""
     from tests.conformance.graph_port.test_suite import IN_ENRON, IN_FIXTURE
 
     async with factory.context() as adapter:
@@ -200,11 +202,15 @@ async def test_a_bulk_link_carries_every_dataset_that_wrote_it(
             _comm(a, b, row="r1").model_copy(update={"datasets": ["fixture"]}),
             _comm(a, b, row="r2").model_copy(update={"datasets": ["enron"]}),
         ]
-        await loader.bulk_load_edges(writes)
-        (edge,) = await _edges_of(adapter, a)
-        assert edge.datasets == ["enron", "fixture"]
-        assert len(await adapter.edges_among([a, b], IN_FIXTURE)) == 1
-        assert len(await adapter.edges_among([a, b], IN_ENRON)) == 1
+        result = await loader.bulk_load_edges(writes)
+        assert sorted(result.written) == sorted(w.id for w in writes)
+        assert sorted(tuple(e.datasets) for e in await _edges_of(adapter, a)) == [
+            ("enron",),
+            ("fixture",),
+        ]
+        (in_fixture,) = await adapter.edges_among([a, b], IN_FIXTURE)
+        (in_enron,) = await adapter.edges_among([a, b], IN_ENRON)
+        assert in_fixture.datasets == ["fixture"] and in_enron.datasets == ["enron"]
         elsewhere = IN_ENRON.model_copy(update={"datasets": ["paysim"]})
         assert await adapter.edges_among([a, b], elsewhere) == []
 
@@ -552,22 +558,18 @@ async def test_the_bulk_two_store_case_is_red_under_weights_version_1(
     assert abs(with_link - without) > 1e-6, (case, same_call, without, with_link)
 
 
-async def test_a_bulk_load_carries_another_datasets_occurrences_into_a_pair_today(
+async def test_a_bulk_load_does_not_carry_another_datasets_occurrences_into_a_pair(
     factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """ADR-123 decision 4 RECORDS an open route on the bulk path as well as the upsert path
-    (`test_suite.py`'s `test_a_same_pair_merge_carries_another_datasets_occurrences_today`). Two
-    shapes, each giving a viewer of `fixture` alone a link of 7 occurrences, weighed as a link of
-    7 and not as one of 2:
+    """ADR-123 decision 4 recorded an open route on the bulk path as well as the upsert path: a case
+    reading one dataset saw the occurrences another wrote to the same pair, in the link's count and
+    its weight. ADR-102 Amendment 3 closes it. Two shapes, each giving a viewer of `fixture` alone
+    a link of 2 occurrences, weighed as a link of 2:
     - one call holding an `enron` write of 5 and a `fixture` write of 2 to the pair, which the
-      loader aggregates into one link (occurrences added, datasets joined);
+      loader writes as two links;
     - a pair already stored from `enron` (5), and a `fixture` write of 2 bulk-loaded after it,
-      which comes back as a collision, and routed through `upsert_edges` as the engine does it
-      merges into the stored link.
-
-    This asserts today's behaviour. It is the defect logged in `07_BUILD_PLAN.md` as "a same-pair
-    merge carries another dataset's occurrences", for the owner to decide: when that is fixed,
-    this test changes with it and must then assert the opposite."""
+      which is not a collision (the stored link is another audience's) and is written as a link of
+      its own."""
     from tests.conformance.graph_port.test_suite import IN_FIXTURE
 
     _pin_now(monkeypatch)
@@ -592,27 +594,135 @@ async def test_a_bulk_load_carries_another_datasets_occurrences_into_a_pair_toda
                 )
 
             if shape == "one_call":
-                await loader.bulk_load_edges([link(["enron"], 5), link(["fixture"], 2)])
+                result = await loader.bulk_load_edges([link(["enron"], 5), link(["fixture"], 2)])
+                assert len(result.written) == 2 and result.collisions == []
             elif shape == "stored_then_bulk":
                 await _write(adapter, [], [link(["enron"], 5)])
                 result = await loader.bulk_load_edges([link(["fixture"], 2)])
-                assert result.written == [] and len(result.collisions) == 1
-                tx = await adapter.begin_transaction()
-                await adapter.upsert_edges(result.collisions, tx)
-                await adapter.commit_transaction(tx)
-            elif shape == "seven":
-                await loader.bulk_load_edges([link(["fixture"], 7)])
+                assert len(result.written) == 1 and result.collisions == []
             else:
                 await loader.bulk_load_edges([link(["fixture"], 2)])
             (seen,) = await adapter.edges_among([a, b], IN_FIXTURE)
             return seen
 
-    seven = await stored_link("seven")
     two = await stored_link("two")
     for shape in ("one_call", "stored_then_bulk"):
-        merged = await stored_link(shape)
-        assert merged.datasets == ["enron", "fixture"], shape
-        assert merged.occurrences == 7, shape
-        assert merged.weight_components is not None and merged.weight_components.occurrences == 7
-        assert merged.weight == pytest.approx(seven.weight, abs=1e-9), shape
-        assert abs(merged.weight - two.weight) > 1e-3, shape
+        split = await stored_link(shape)
+        assert split.datasets == ["fixture"], shape
+        assert split.occurrences == 2, shape
+        assert split.weight_components is not None and split.weight_components.occurrences == 2
+        assert split.weight == pytest.approx(two.weight, abs=1e-9), shape
+
+
+# --- ADR-102 Amendment 3: the bulk path merges only within one audience ---------------------------
+#
+# The same rule as `upsert_edges` (the cases are in `test_suite.py`): a pair already stored is handed
+# back as a collision only when the stored link has the write's audience; one of another audience is
+# not the write's to merge into, so the write is a link of its own. Within one call, repeated pairs
+# collapse per audience.
+
+
+async def _bulk_links(adapter: GraphPort, a: str, b: str, reader: Any) -> list[Edge]:
+    return sorted(await adapter.edges_among([a, b], reader), key=lambda e: e.id)
+
+
+def _marked(a: str, b: str, **kwargs: Any) -> EdgeWrite:
+    return _edge("COMMUNICATED_WITH", a, b, **{"classification": "OFFICIAL", **kwargs})
+
+
+async def test_bulk_a_stored_link_of_another_classification_is_not_a_collision(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        a, b = await _endpoints(adapter, 2)
+        _, (official,) = await _write(adapter, [], [_marked(a, b)])
+        secret = _marked(a, b, classification="SECRET")
+        same = _marked(a, b)
+        result = await _loader(adapter).bulk_load_edges([secret, same])
+        assert result.written == [secret.id] and [c.id for c in result.collisions] == [same.id]
+        from tests.conformance.graph_port.test_suite import OFFICIAL as official_reader
+
+        assert [e.id for e in await _bulk_links(adapter, a, b, official_reader)] == [official]
+        assert len(await _bulk_links(adapter, a, b, CLEARED)) == 2
+
+
+async def test_bulk_one_call_splits_a_pair_by_audience_and_merges_within_one(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        a, b = await _endpoints(adapter, 2)
+        writes = [
+            _marked(a, b),
+            _marked(a, b, classification="SECRET"),
+            _marked(a, b),
+            _marked(a, b, handling_code="R", owning_unit="unit-1", originator="unit-1"),
+            _marked(a, b, handling_code="R", owning_unit="unit-2", originator="unit-2"),
+            _marked(a, b, datasets=["enron"]),
+            _marked(a, b, datasets=["fixture"]),
+            _marked(a, b, handling_code="C", owning_unit="unit-1"),
+            _marked(a, b, handling_code="C", owning_unit="unit-2"),
+        ]
+        result = await _loader(adapter).bulk_load_edges(writes)
+        # OFFICIAL, SECRET, R/unit-1, R/unit-2, enron, fixture, C: seven links; C merged its units.
+        assert len(result.written) == 7 and result.collisions == []
+        assert len(set(result.written)) == 7, "each link has an id of its own"
+        # A reader reads what their clearance and units allow, so no one reader reads all seven:
+        # CLEARED holds no restricted code, and each unit's reader reads only its own restricted
+        # link. Together they account for every one of the seven.
+        from tests.conformance.graph_port.test_suite import UNIT_1, UNIT_2
+
+        open_links = await _bulk_links(adapter, a, b, CLEARED)
+        assert sorted(e.occurrences for e in open_links) == [1, 1, 1, 2, 2]
+        restricted = {
+            e.id: e.occurrences
+            for reader in (UNIT_1, UNIT_2)
+            for e in await _bulk_links(adapter, a, b, reader)
+            if e.handling.handling_code == "R"
+        }
+        assert sorted(restricted.values()) == [1, 1]
+        assert {e.id for e in open_links} | set(restricted) == set(result.written)
+
+
+async def test_bulk_an_undirected_pair_stored_reversed_collides_only_within_its_audience(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL"), _node("Person", classification="OFFICIAL")], []
+        )
+        _, (stored,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")])
+        same = _edge("ASSOCIATE_OF", b, a, classification="OFFICIAL")
+        secret = _edge("ASSOCIATE_OF", b, a, classification="SECRET")
+        result = await _loader(adapter).bulk_load_edges([same, secret])
+        assert [c.id for c in result.collisions] == [same.id] and result.written == [secret.id]
+        assert stored not in result.written
+
+
+async def test_bulk_a_fixed_id_in_two_audiences_is_two_links_under_two_ids(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Writers that fix a link's id send one id for every audience of a pair, and edge `id` is
+    UNIQUE. In one call, and against a stored link of another audience, the loader gives the second
+    a new id and reports the ids as stored; no row is refused."""
+    async with factory.context() as adapter:
+        a, b = await _endpoints(adapter, 2)
+        fixed = _marked(a, b).model_copy(update={"id": f"{a}:fixed:{b}"})
+        secret = fixed.model_copy(
+            update={"handling": fixed.handling.model_copy(update={"classification": "SECRET"})}
+        )
+        result = await _loader(adapter).bulk_load_edges([fixed, secret])
+        assert result.collisions == [] and len(set(result.written)) == 2
+        assert fixed.id in result.written
+        from tests.conformance.graph_port.test_suite import OFFICIAL as official_reader
+
+        assert [e.id for e in await _bulk_links(adapter, a, b, official_reader)] == [fixed.id]
+
+        # A third audience, against the two stored: one more link, one more id.
+        restricted = fixed.model_copy(
+            update={"handling": fixed.handling.model_copy(
+                update={"handling_code": "R", "owning_unit": "unit-1", "originator": "unit-1"}
+            )}
+        )
+        again = await _loader(adapter).bulk_load_edges([restricted])
+        assert again.collisions == [] and len(again.written) == 1 and again.written[0] != fixed.id
+        assert len(await _bulk_links(adapter, a, b, CLEARED)) == 2, "R is not CLEARED's to read"

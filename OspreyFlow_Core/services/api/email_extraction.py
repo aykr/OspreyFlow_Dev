@@ -50,6 +50,7 @@ from schemas.domain import (
 )
 
 from .event_scope import CaseRecords, link_event_filter
+from .link_ids import as_stored
 from .link_notes import LinkNotFoundError
 from .review import (
     ExtractionCandidateRecord,
@@ -244,11 +245,13 @@ class EmailExtractionService:
             created_by=principal.id,
             created_at=now,
         )
-        # Ids are derived, so a second extraction of the same email writes the same links again
-        # rather than a second pair; `upsert_edges` merges a same-pair write in any case.
+        # Fresh ids, not ones derived from the ends: a caller who knew the scheme would learn, from
+        # a different id coming back, that another audience's link joins them (rule 3). A second
+        # extraction of the same email still writes no second pair: `upsert_edges` merges a write
+        # into the link of its own audience by pair, and returns that link's id.
         edges = [
             EdgeWrite(
-                id=f"{document_id}:mentions:{end}",
+                id=new_edge_id(),
                 type=MENTIONED_IN,
                 source=end,
                 target=document_id,
@@ -282,7 +285,7 @@ class EmailExtractionService:
         tx = await self._graph.begin_transaction()
         try:
             await self._graph.upsert_nodes([node], tx)
-            await self._graph.upsert_edges(edges, tx)
+            edges = as_stored(edges, await self._graph.upsert_edges(edges, tx))
         except Exception:
             await self._graph.rollback_transaction(tx)
             raise
@@ -369,7 +372,7 @@ class EmailExtractionService:
             tx = await self._graph.begin_transaction()
             try:
                 await self._graph.upsert_nodes(nodes, tx)
-                await self._graph.upsert_edges(edges, tx)
+                edges = as_stored(edges, await self._graph.upsert_edges(edges, tx))
             except Exception:
                 await self._graph.rollback_transaction(tx)
                 raise
@@ -448,7 +451,7 @@ class EmailExtractionService:
         )
         tx = await self._graph.begin_transaction()
         try:
-            await self._graph.upsert_edges([mention], tx)
+            (mention,) = as_stored([mention], await self._graph.upsert_edges([mention], tx))
         except Exception:
             await self._graph.rollback_transaction(tx)
             raise

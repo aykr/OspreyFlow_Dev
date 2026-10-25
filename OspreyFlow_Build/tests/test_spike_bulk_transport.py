@@ -85,16 +85,41 @@ class _Client:
             return [{"result": 0}]
         raise AssertionError(f"unexpected query: {query}")
 
+    async def sql(
+        self, query: str, *, params: dict[str, Any] | None = None, session_id: Any = None
+    ) -> list[Any]:
+        """The one statement the id check sends, against the type's unique index: refused if it is
+        anything else, as the store would refuse what it cannot parse."""
+        self.queries.append(query)
+        if self.refuse and self.refuse in query:
+            raise RuntimeError("cannot parse")
+        if not (query.startswith("SELECT id FROM `") and query.endswith("` WHERE id IN :ids")):
+            raise AssertionError(f"unexpected statement: {query}")
+        assert params is not None and isinstance(params["ids"], list)
+        return []
+
 
 def test_a_failing_shape_is_reported_as_a_line_not_a_crash() -> None:
     """Catches a shape that the store refuses being swallowed (reported ok) or aborting the
-    whole run before the other shapes are tried."""
+    whole run before the other shapes are tried. `constant(0)` is in `degrees` alone (the stored
+    links' `coalesce` has `constant("")`), so one shape fails and the other six are tried."""
     nodes, edges = spike.synthetic_writes(20)
-    lines = asyncio.run(spike._shape_checks(_Client(refuse="coalesce"), nodes, edges))  # type: ignore[arg-type]
-    assert len(lines) == 6
+    lines = asyncio.run(spike._shape_checks(_Client(refuse="constant(0)"), nodes, edges))  # type: ignore[arg-type]
+    assert len(lines) == 7
     failed = [line for line in lines if "FAILED" in line]
     assert len(failed) == 1 and "degrees" in failed[0] and "cannot parse" in failed[0]
     assert all("ok" in line for line in lines if "FAILED" not in line)
+
+
+def test_the_taken_id_check_is_one_of_the_shapes_and_fails_alone() -> None:
+    """Catches the id check going unproven: it is a SQL statement, not a traversal, and the spike
+    must send it to the store like the rest."""
+    nodes, edges = spike.synthetic_writes(20)
+    client = _Client(refuse="SELECT id FROM")
+    lines = asyncio.run(spike._shape_checks(client, nodes, edges))  # type: ignore[arg-type]
+    failed = [line for line in lines if "FAILED" in line]
+    assert len(failed) == 1 and "taken_edge_ids" in failed[0]
+    assert any(q.startswith("SELECT id FROM `") for q in client.queries)
 
 
 def test_a_failed_candidate_says_so_instead_of_a_rate() -> None:

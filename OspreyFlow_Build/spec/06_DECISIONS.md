@@ -17973,3 +17973,36 @@ ADR-102 Amendment 3 (option C). It is built as unit **B2-4m**, after B2-4b and b
 it decides which loads merge into others' links and so which a revert can take back. When B2-4m lands,
 Amendment 2's within-load rejection of a later row with a different restricted unit is removed: the
 row is written as a link of its own instead.
+
+### ADR-123, Amendment 1 (25 October 2026) — decision 4's same-pair route is closed
+
+ADR-102 Amendment 3 (the owner's ruling, built in ADR-127 unit B2-4m) closes the route decision 4 left
+open. A write merges into a stored link only within one audience, and a case's datasets are part of the
+audience, so a case reading one dataset can no longer see occurrences, an interval or a weight written
+for another; and a merge can no longer raise a link's classification, handling code or audience (within
+  one audience it may still tighten the action and sanitisation codes, as before). The test list changes accordingly: the
+case of a link "raised … by a same-pair merge that raises its handling" has no route and is removed,
+and the cross-dataset same-pair case that asserted today's behaviour now asserts two links, each case
+reading only its own. The "defect for the owner" logged by this record is resolved by that ruling.
+
+### ADR-102, Amendment 4 (25 October 2026) — what Amendment 3 left open, found building it
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **A link with a fixed id.** Some writers send a link id fixed by its ends (the ingest engine's
+  `HOLDS`, the seeders' pair ids). When that id is already held by a link of another audience, the write
+  is stored as a new link with a fresh id, returned to the writer, on both write paths; before, it would
+  have been refused by the store's unique id. Every caller that shows or records a link's id builds it
+  from the returned id.
+  A user-facing write path (a Files-tab upload held by a node, an extracted email mention) sends a fresh
+  id, never a fixed one: a fresh id coming back in place of a predictable one would tell the caller that
+  another audience's link already joins those ends.
+- **Not re-merged later.** A link whose datasets or marking change afterwards, by a change or a
+  supersession, is never merged with a link it now matches; a later write with its old audience makes a
+  further link. Links merged before Amendment 3 likewise stay merged.
+- **A supersession** writes its replacement by id, outside the merge, so a replacement can stand beside
+  another link of its audience. A later write then merges into one of them chosen the same way every time:
+  the highest revision, then the latest creation, then the greatest id.
+- **What a cleared reader sees.** The number of links between a pair depends on how many audiences,
+  cases included, wrote it. A reader cleared for several sees each; route counts (ADR-116) and the
+  Glass's community weights count them separately until the later Glass unit shows parallel links as
+  one.

@@ -25,7 +25,7 @@ Pure functions over the domain models; nothing here touches a store.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -113,8 +113,12 @@ def aggregate_edge_writes(
     *,
     directed: Callable[[str], bool],
     handling: Callable[[Handling, Handling], Handling],
+    audience: Callable[[EdgeWrite], Hashable],
 ) -> list[AggregatedEdge]:
-    """Collapse repeated pairs by the rule above, in order of each pair's first appearance.
+    """Collapse repeated pairs by the rule above, in order of each pair's first appearance. A pair
+    repeated in another audience is another link (ADR-102 Amendment 3): `audience(write)` is the
+    key two writes share exactly when the same principals see both
+    (`ontology.handling.audience_of`), and only writes with one key collapse.
 
     What the aggregate keeps of which write mirrors what `upsert_edges` leaves in the store: the
     first write's id, endpoints (and so orientation), `created_at` and `created_by`, because the
@@ -124,10 +128,10 @@ def aggregate_edge_writes(
     by `handling(existing, incoming)` (ADR-102, never lowered); occurrences summed; provenance and
     interval merged. `directed(type_name)` says whether a type is directed. `handling` is required,
     so no caller can leave a later write free to lower a link."""
-    order: list[tuple[str, str, str]] = []
-    grouped: dict[tuple[str, str, str], tuple[EdgeWrite, int]] = {}
+    order: list[tuple[Hashable, ...]] = []
+    grouped: dict[tuple[Hashable, ...], tuple[EdgeWrite, int]] = {}
     for write in writes:
-        key = _pair_key(write, directed=directed(write.type))
+        key = (*_pair_key(write, directed=directed(write.type)), audience(write))
         held = grouped.get(key)
         if held is None:
             order.append(key)

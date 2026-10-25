@@ -239,11 +239,13 @@ async def _shape_checks(
     label = groovy_identifier(physical_type_name(EDGE_TYPE))
     ids = [n.id for n in nodes[:5]]
     pairs = [(e.source, e.target) for e in edges[:5]]
+    edge_ids = [e.id for e in edges[:5]]
     checks: list[tuple[str, Callable[[], Awaitable[Any]]]] = [
         ("vertex_labels", lambda: transport.vertex_labels(ids)),
         ("edge_type_is_empty", lambda: transport.edge_type_is_empty(label)),
-        ("stored_pairs (directed)", lambda: transport.stored_pairs(label, pairs, directed=True)),
-        ("stored_pairs (undirected)", lambda: transport.stored_pairs(label, pairs, directed=False)),
+        ("stored_links (directed)", lambda: transport.stored_links(label, pairs, directed=True)),
+        ("stored_links (undirected)", lambda: transport.stored_links(label, pairs, directed=False)),
+        ("taken_edge_ids", lambda: transport.taken_edge_ids(label, edge_ids)),
         ("corpus_total", lambda: transport.corpus_total(label)),
         ("degrees", lambda: transport.degrees(label, ids)),
     ]

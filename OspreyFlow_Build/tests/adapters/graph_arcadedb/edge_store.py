@@ -29,7 +29,11 @@ class CountingStore:
 
     def __init__(self) -> None:
         self.queries: list[str] = []
+        self.sql_sent: list[tuple[str, dict[str, Any]]] = []
+        #: The first link written for each pair; `links` has every link, since a pair may hold
+        #: several (ADR-102 Amendment 3: one link per audience).
         self.edges: dict[tuple[str, str], dict[str, Any]] = {}
+        self.links: list[dict[str, Any]] = []
 
     @staticmethod
     def _counts(edge: dict[str, Any], query: str) -> bool:
@@ -37,6 +41,18 @@ class CountingStore:
         `superseded_by` is left out only if the query says `hasNot("superseded_by")`, so a query
         that forgot the step still counts it (ADR-120 Amendment 5)."""
         return not ('hasNot("superseded_by")' in query and edge.get("superseded_by"))
+
+    async def sql(
+        self, command: str, *, params: dict[str, Any] | None = None, session_id: Any = None
+    ) -> list[dict[str, Any]]:
+        """The one SQL the adapter sends here: which of `ids` a type's unique `id` index holds, so
+        a new link's id is checked by the index and not by a scan of the type."""
+        self.sql_sent.append((command, dict(params or {})))
+        match = re.fullmatch(r"SELECT id FROM `(\w+)` WHERE id IN :ids", command)
+        if match is None or params is None:
+            raise AssertionError(f"unexpected SQL: {command}")
+        held = {link["id"] for link in self.links}
+        return [{"id": i} for i in params["ids"] if i in held]
 
     def corpus_total_queries(self) -> int:
         return sum(1 for q in self.queries if q.startswith("g.V().outE("))
@@ -53,8 +69,16 @@ class CountingStore:
         if ".elementMap()" in query:  # an existing edge for this pair
             quoted = literals(query)  # id, source, label, reverted, superseded_by, id, target
             src, tgt = quoted[1], quoted[-1]
-            found = self.edges.get((src, tgt))
-            return [found] if found else []
+            # As the real store answers it: a link marked reverted or superseded is left out only if
+            # the query says so, so a query that forgot the step would still find it.
+            return [
+                link
+                for link in self.links
+                if (link["_src"], link["_tgt"]) == (src, tgt)
+                and not ('has("reverted",false)' in query and link.get("reverted"))
+                and not ('hasNot("superseded_by")' in query and link.get("superseded_by"))
+            ]
+
         if ".values(" in query and ".sum()" in query:  # one vertex's own weighted degree
             vertex = literals(query)[1]
             # `bothE()` reads a link from a node to itself back twice, so it counts twice here.
@@ -70,11 +94,16 @@ class CountingStore:
         if ".addE(" in query:
             assert params is not None
             record = {key.removeprefix("prop_"): value for key, value in params.items()}
-            self.edges[(params["src"], params["tgt"])] = record
+            if any(link["id"] == record["id"] for link in self.links):
+                # Edge `id` is UNIQUE per type (`schema.py`): the real store refuses the write.
+                raise AssertionError(f"duplicate edge id {record['id']!r}: the unique index refuses")
+            record["_src"], record["_tgt"] = params["src"], params["tgt"]
+            self.links.append(record)
+            self.edges.setdefault((params["src"], params["tgt"]), record)
             return []
         if query.startswith('g.E().has("id"'):  # a merge into an existing edge
             assert params is not None
-            for record in self.edges.values():
+            for record in self.links:
                 if record["id"] == params["prop_id"]:
                     record.update({k.removeprefix("prop_"): v for k, v in params.items()})
             return []
