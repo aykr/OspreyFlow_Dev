@@ -67,7 +67,7 @@ from services.api.working_set.service import WorkingSetService
 from services.api.working_set.store import ValkeyWorkingSetStore
 from valkey.asyncio import Valkey
 
-from ontology.handling import load_uk_le_scheme
+from ontology.handling import load_uk_le_scheme, principal_may_read
 from ontology.loader import load_default_ontology
 from schemas.domain import (
     AuditStub,
@@ -212,6 +212,43 @@ class _StubGraph:
     def __init__(self, nodes: int, neighbours: int = 30, new_nodes: int = 0) -> None:
         self.nodes, self.neighbours, self.new_nodes = nodes, neighbours, new_nodes
         self.calls = 0
+        #: What a restore's by-id reads find (`--restore` fills these with the case's own bodies:
+        #: the Vault holds what the working set holds).
+        self.vault_nodes: dict[str, Node] = {}
+        self.vault_edges: dict[str, Edge] = {}
+        self._scheme = load_uk_le_scheme()
+
+    async def get_nodes(self, node_ids: Sequence[str], principal: Principal) -> list[Node]:
+        found = (self.vault_nodes.get(i) for i in sorted(set(node_ids)))
+        return [
+            n
+            for n in found
+            if n is not None
+            and principal_may_read(n.handling, n.datasets, principal, self._scheme)
+        ]
+
+    async def get_edges(self, edge_ids: Sequence[str], principal: Principal) -> list[Edge]:
+        found = (self.vault_edges.get(i) for i in sorted(set(edge_ids)))
+        return [
+            e
+            for e in found
+            if e is not None
+            and principal_may_read(e.handling, e.datasets, principal, self._scheme)
+            and e.source in self.vault_nodes
+            and e.target in self.vault_nodes
+            and principal_may_read(
+                self.vault_nodes[e.source].handling,
+                self.vault_nodes[e.source].datasets,
+                principal,
+                self._scheme,
+            )
+            and principal_may_read(
+                self.vault_nodes[e.target].handling,
+                self.vault_nodes[e.target].datasets,
+                principal,
+                self._scheme,
+            )
+        ]
 
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph:
         if self.new_nodes:
@@ -354,10 +391,12 @@ async def run(args: argparse.Namespace) -> int:
             else:
                 held_nodes = list((await scoped.source_fidelity_nodes(case)).values())
                 held_edges = list((await scoped.source_fidelity_edges(case)).values())
+                graph.vault_nodes = {n.id: n for n in held_nodes}
+                graph.vault_edges = {e.id: e for e in held_edges}
                 if hasattr(store, "script_runs"):
                     store.script_runs.clear()
                 started = time.monotonic()
-                snapshot = await service.restore(case, held_nodes, held_edges, READER)
+                snapshot = (await service.restore(case, held_nodes, held_edges, READER)).response
                 label = f"restore of the whole case over itself ({len(snapshot.nodes):,} nodes)"
             elapsed = time.monotonic() - started
             print(f"{label}: {elapsed:,.1f} s; {longest_script()}")

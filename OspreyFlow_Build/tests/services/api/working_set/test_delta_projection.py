@@ -58,10 +58,10 @@ async def test_removing_nodes_records_what_each_was() -> None:
     store = FakeWorkingSetStore()
     await store.add_nodes(CASE, [node("pub"), node("sec", "SECRET")])
 
-    delta = await _service(store).remove(CASE, ["pub", "sec", "never-stored"])
+    delta = await _service(store).remove(CASE, ["pub", "sec", "never-stored"], SECRET_READER)
 
     assert isinstance(delta, DeltaRemove)
-    assert delta.node_ids == ["pub", "sec", "never-stored"]
+    assert delta.node_ids == ["pub", "sec"]  # names only what was removed (decision 6)
     assert delta.removed is not None
     assert {i: m.handling.classification for i, m in delta.removed.nodes.items()} == {
         "pub": "OFFICIAL",
@@ -106,7 +106,9 @@ async def test_the_removals_record_is_built_from_the_counted_index_and_reads_no_
         raise AssertionError(f"the record read the body of {node_id}")
 
     store.get_node = no_body_read  # type: ignore[method-assign]
-    delta = await _service(store).remove(CASE, ["pub", "scoped", "sec", "never-stored"])
+    delta = await _service(store).remove(
+        CASE, ["pub", "scoped", "sec", "never-stored"], SECRET_READER
+    )
 
     assert delta.removed is not None
     assert {i: (m.handling.classification, m.datasets) for i, m in delta.removed.nodes.items()} == {
@@ -146,9 +148,9 @@ async def test_a_node_rewritten_between_the_records_two_reads_is_still_in_the_re
     store.access_counts = counts  # type: ignore[method-assign]
     store.access_entries = entries  # type: ignore[method-assign]
 
-    delta = await service.remove(CASE, ["x"])
+    record = await service._record_of_nodes(CASE, ["x"])
 
-    assert delta.removed is not None and "x" in delta.removed.nodes
+    assert "x" in record.nodes
 
 
 async def _removed_hidden_node_projections() -> dict[str, DeltaRemoveSent]:
@@ -157,7 +159,7 @@ async def _removed_hidden_node_projections() -> dict[str, DeltaRemoveSent]:
     store = FakeWorkingSetStore()
     await store.add_nodes(CASE, [node("pub"), node("sec", "SECRET")])
     service = _service(store)
-    delta = await service.remove(CASE, ["pub", "sec"])
+    delta = await service.remove(CASE, ["pub", "sec"], SECRET_READER)
     live = await service.project_live(CASE, delta, OFFICIAL_READER)
     caught_up = await service.sync(CASE, OFFICIAL_READER, last_acknowledged_seq=0)
     sent = {
@@ -184,7 +186,7 @@ async def test_a_removed_node_the_reader_may_read_is_sent_whole_to_a_cleared_rea
     store = FakeWorkingSetStore()
     await store.add_nodes(CASE, [node("pub"), node("sec", "SECRET")])
     service = _service(store)
-    delta = await service.remove(CASE, ["pub", "sec"])
+    delta = await service.remove(CASE, ["pub", "sec"], SECRET_READER)
 
     sent = service.project_delta(delta, SECRET_READER)
 
@@ -197,7 +199,7 @@ async def test_the_record_is_never_sent() -> None:
     store = FakeWorkingSetStore()
     await store.add_nodes(CASE, [node("pub"), node("sec", "SECRET")])
     service = _service(store)
-    delta = await service.remove(CASE, ["pub", "sec"])
+    delta = await service.remove(CASE, ["pub", "sec"], SECRET_READER)
 
     for reader in (OFFICIAL_READER, SECRET_READER):
         sent = service.project_delta(delta, reader)
@@ -211,7 +213,7 @@ async def test_an_id_the_store_never_held_is_sent_to_no_one() -> None:
     store = FakeWorkingSetStore()
     await store.add_nodes(CASE, [node("pub")])
     service = _service(store)
-    delta = await service.remove(CASE, ["pub", "ghost"])
+    delta = await service.remove(CASE, ["pub", "ghost"], SECRET_READER)
 
     for reader in (OFFICIAL_READER, SECRET_READER):
         sent = service.project_delta(delta, reader)
@@ -297,7 +299,7 @@ async def test_a_removal_with_its_record_is_replayed_to_a_reconnect() -> None:
     store = FakeWorkingSetStore()
     await store.add_nodes(CASE, [node("pub"), node("sec", "SECRET")])
     service = _service(store)
-    await service.remove(CASE, ["sec"])
+    await service.remove(CASE, ["sec"], SECRET_READER)
 
     replayed = await store.deltas_after(CASE, 0)
 
@@ -579,7 +581,7 @@ async def test_a_removed_node_in_another_dataset_never_reaches_a_reader_of_the_c
         [_in(["fixture"], node("mine")), _in(["enron"], node("theirs")), _in(BOTH, node("shared"))],  # type: ignore[list-item]
     )
     service = _service(store)
-    delta = await service.remove(CASE, ["mine", "theirs", "shared"])
+    delta = await service.remove(CASE, ["mine", "theirs", "shared"], SECRET_READER)
 
     scoped = await service.project_live(CASE, delta, IN_FIXTURE)
     unscoped = await service.project_live(CASE, delta, OFFICIAL_READER)

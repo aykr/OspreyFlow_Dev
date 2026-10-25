@@ -297,7 +297,7 @@ async def test_restore_replaces_membership_and_emits_the_next_monotonic_seq() ->
     await service.seed("inv-1", [_node("n2")], [], PRINCIPAL)  # seq 2 — current membership: n1, n2
 
     # Restore to a step recorded back when only n1 existed.
-    snapshot = await service.restore("inv-1", [_node("n1")], [], PRINCIPAL)
+    snapshot = (await service.restore("inv-1", [_node("n1")], [], PRINCIPAL)).response
 
     assert isinstance(snapshot, DeltaSnapshot)
     assert snapshot.seq == 3  # continues the sequence, never resets to 1
@@ -333,7 +333,7 @@ async def test_restore_removes_an_edge_added_after_the_recorded_step_between_per
     )  # seq 2
     assert await store.edge_ids("inv-1") == {"e1"}
 
-    snapshot = await service.restore("inv-1", recorded_step_nodes, [], PRINCIPAL)
+    snapshot = (await service.restore("inv-1", recorded_step_nodes, [], PRINCIPAL)).response
 
     assert snapshot.edges == []
     assert await store.edge_ids("inv-1") == set()  # not left behind
@@ -347,17 +347,19 @@ async def test_restore_reprojects_handling_fresh_against_the_requesting_principa
     step later — restore re-projects at request time, it does not reinstate
     whatever was visible when the step was written."""
     store = FakeWorkingSetStore()
-    graph = FakeGraphPort(expand_result=Subgraph(nodes=[], edges=[]))
-    service = WorkingSetService(graph, store, SCHEME)
-
     official_node = _node_with_classification("official-1", "OFFICIAL")
     secret_node = _node_with_classification("secret-1", "SECRET")
+    # The Vault holds both (a restore judges the step's members against it, ADR-124 decision 6).
+    graph = FakeGraphPort(
+        expand_result=Subgraph(nodes=[], edges=[]), graph_nodes=[official_node, secret_node]
+    )
+    service = WorkingSetService(graph, store, SCHEME)
     # The step, as actually recorded (unfiltered — `current_membership`'s
     # own contract): both nodes, regardless of who was viewing when it
     # happened.
     recorded_step_nodes = [official_node, secret_node]
 
-    snapshot = await service.restore("inv-1", recorded_step_nodes, [], PRINCIPAL)
+    snapshot = (await service.restore("inv-1", recorded_step_nodes, [], PRINCIPAL)).response
 
     assert PRINCIPAL.clearance == "OFFICIAL"
     assert {n.id for n in snapshot.nodes} == {"official-1"}  # not secret-1
@@ -367,5 +369,5 @@ async def test_restore_reprojects_handling_fresh_against_the_requesting_principa
     assert await store.node_ids("inv-1") == {"official-1"}
 
     # The same step, restored by a principal who *can* see SECRET, gets both.
-    broader_snapshot = await service.restore("inv-1", recorded_step_nodes, [], CLEARED)
+    broader_snapshot = (await service.restore("inv-1", recorded_step_nodes, [], CLEARED)).response
     assert {n.id for n in broader_snapshot.nodes} == {"official-1", "secret-1"}

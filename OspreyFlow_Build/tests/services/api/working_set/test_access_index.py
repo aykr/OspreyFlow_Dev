@@ -652,14 +652,24 @@ async def test_restore_leaves_every_structure_equal_to_the_bodies() -> None:
     await store.add_edges(
         CASE, [edge("old-edge", "old-1", "keep"), edge("keep-edge", "keep", "old-2")]
     )
-    service = _service(store)
-
-    snapshot = await service.restore(
-        CASE,
-        [node("new-1"), node("new-2"), node("keep", "SECRET")],
-        [edge("new-edge", "new-1", "new-2"), edge("to-raised", "new-1", "keep")],
-        SECRET_READER,
+    vault_nodes = [node("new-1"), node("new-2"), node("keep", "SECRET")]
+    vault_edges = [edge("new-edge", "new-1", "new-2"), edge("to-raised", "new-1", "keep")]
+    service = WorkingSetService(
+        FakeGraphPort(
+            Subgraph(nodes=[], edges=[]), graph_nodes=vault_nodes, graph_edges=vault_edges
+        ),
+        store,
+        SCHEME,
     )
+
+    snapshot = (
+        await service.restore(
+            CASE,
+            [node("new-1"), node("new-2"), node("keep", "SECRET")],
+            [edge("new-edge", "new-1", "new-2"), edge("to-raised", "new-1", "keep")],
+            SECRET_READER,
+        )
+    ).response
 
     assert {n.id for n in snapshot.nodes} == {"new-1", "new-2", "keep"}
     await assert_index_matches_bodies(store, CASE, "after restore")
@@ -679,7 +689,7 @@ async def test_random_service_writes_leave_every_structure_equal_to_the_bodies()
         if action == "seed":
             await service.seed(CASE, nodes, edges, SECRET_READER)
         elif action == "remove":
-            await service.remove(CASE, [n.id for n in nodes])
+            await service.remove(CASE, [n.id for n in nodes], SECRET_READER)
         else:
             await service.restore(CASE, nodes, edges, SECRET_READER)
         await assert_index_matches_bodies(store, CASE, f"step {step} {action}")

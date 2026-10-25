@@ -118,6 +118,9 @@ AUTO_LINKS_MAX_VIEW_NODES = 2_000
 #: a handful of short keys, so the bound is only a bound.
 READABLE_CACHE_SIZE = 256
 
+#: How many ids one membership read of the counted index takes (`_ReaderCounts.visible_among`).
+_MEMBERSHIP_CHUNK = 5_000
+
 
 class _SignaturesRenumbered(Exception):
     """The entries were read at another epoch than the signature table they would be judged by."""
@@ -254,21 +257,45 @@ class _ReaderCounts:
         return len(node_list) - len(visible_nodes), new_edges, entries
 
     async def visibly_stored_among(self, node_ids: Iterable[NodeId]) -> set[NodeId]:
-        """Of the named ids, those the store holds and the reader may read: the membership read
-        of the counted access index, one entry per id asked about (ADR-124 decision 3). An id the
-        store holds but the reader may not read is not in the result, exactly as one it does not
-        hold is not: nothing downstream can tell them apart. A renumbering met between the counts
-        and the entries is handled as `would_add` handles it."""
-        ids = list(dict.fromkeys(node_ids))
+        """Of the named ids, those the store holds and the reader may read: the membership read of
+        the counted access index, one entry per id asked about (ADR-124 decision 3). An id the store
+        holds but the reader may not read is not in the result, exactly as one it does not hold is
+        not: nothing downstream can tell them apart."""
+        nodes, _ = await self.visible_among(node_ids, ())
+        return nodes
+
+    async def visible_among(
+        self, node_ids: Iterable[NodeId], edge_ids: Iterable[EdgeId]
+    ) -> tuple[set[NodeId], set[EdgeId]]:
+        """Of the named node and link ids, those in the reader's view now: a node whose signature
+        they may read, a link whose own and both ends' signatures they may read, an end that is not
+        stored never. Read from the counted index in chunks (`_MEMBERSHIP_CHUNK` ids to a read), so
+        that a restore's whole case is a bounded number of reads and no body. A renumbering met
+        between the counts and the entries is handled as `would_add` handles it."""
+        nodes: set[NodeId] = set()
+        edges: set[EdgeId] = set()
+        node_list = list(dict.fromkeys(node_ids))
+        edge_list = list(dict.fromkeys(edge_ids))
+        for start in range(0, len(node_list), _MEMBERSHIP_CHUNK):
+            chunk = node_list[start : start + _MEMBERSHIP_CHUNK]
+            nodes |= (await self._visible_chunk(chunk, []))[0]
+        for start in range(0, len(edge_list), _MEMBERSHIP_CHUNK):
+            chunk = edge_list[start : start + _MEMBERSHIP_CHUNK]
+            edges |= (await self._visible_chunk([], chunk))[1]
+        return nodes, edges
+
+    async def _visible_chunk(
+        self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId]
+    ) -> tuple[set[NodeId], set[EdgeId]]:
         for attempt in (0, 1):
             try:
-                entries = await self._entries(ids, [])
+                entries = await self._entries(node_ids, edge_ids)
             except _SignaturesRenumbered:
                 if attempt or self.reload is None:
                     raise
                 await self.reload()
             else:
-                return self.visibly_stored(entries)[0]
+                return self.visibly_stored(entries)
         raise AssertionError("unreachable")  # pragma: no cover
 
     async def visible_node_ids(self) -> set[NodeId]:
@@ -279,6 +306,16 @@ class _ReaderCounts:
             for node_id, sig in (await self.store.stored_node_signatures(self.case)).items()
             if self.is_readable(sig)
         }
+
+
+@dataclass(frozen=True)
+class Restored:
+    """What a restore makes: the snapshot that is stored and published, which every reader projects
+    to their own view (ADR-124 decision 6), and the restorer's own response, which is that snapshot
+    projected for the restorer and never the stored whole."""
+
+    published: DeltaSnapshot
+    response: DeltaSnapshot
 
 
 class WorkingSetService:
@@ -423,9 +460,7 @@ class WorkingSetService:
             if body is not None:
                 if not principal_may_read(body.handling, body.datasets, principal, self._scheme):
                     return False
-            elif not self._may_read_element(
-                (removed.nodes if removed else {}).get(end), principal
-            ):
+            elif not self._may_read_element((removed.nodes if removed else {}).get(end), principal):
                 return False
         return True
 
@@ -1324,7 +1359,7 @@ class WorkingSetService:
         nodes: Sequence[Node],
         edges: Sequence[Edge],
         principal: Principal,
-    ) -> DeltaSnapshot:
+    ) -> Restored:
         """`POST /history/{step}` (`03_CONDUIT_MIDDLEWARE.md` §3.1):
         replaces the working set's current membership with a previously
         recorded step's stored bodies, re-projecting the handling filter
@@ -1347,26 +1382,66 @@ class WorkingSetService:
         endpoints intact and would never be excluded by `_project`'s
         endpoint check, so without an explicit `remove_edges` pass it
         would silently survive a restore that is supposed to erase it."""
-        visible_nodes, visible_edges, _ = self._project(nodes, edges, principal)
+        step_node_ids = {n.id for n in nodes}
+        step_edge_ids = {e.id for e in edges}
 
-        existing_node_ids = await self._store.node_ids(investigation_id)
-        stale_node_ids = existing_node_ids - {n.id for n in visible_nodes}
-        existing_edge_ids = await self._store.edge_ids(investigation_id)
-        stale_edge_ids = existing_edge_ids - {e.id for e in visible_edges}
+        # The step's members are judged against the Vault as it is now, for this restorer (the
+        # case's datasets are in `principal`, ADR-099): what comes back is what is stored, the
+        # Vault's current bodies and never the step's recorded ones, so a node raised since is not
+        # written back at its old marking, and a member the restorer may not read is not added.
+        vault_nodes = await self._graph.get_nodes(sorted(step_node_ids), principal)
+        vault_edges = await self._graph.get_edges(sorted(step_edge_ids), principal)
+
+        # The cap, before anything is written (rule 2, decision 2). The restorer's own view after
+        # this restore is the Vault's readable members plus the step members they may read in the
+        # store that the Vault now withholds, which are left stored and stay in it; everything else
+        # in their view is reconciled away, and what is outside it is not counted. Steps record the
+        # whole stored set, which has no ceiling, so this is the restorer's figure and never the
+        # stored whole's (rule 3). On a breach: the typed `limit_exceeded`, and nothing written.
+        reader = await self._reader_counts(investigation_id, principal)
+        vault_node_ids = {n.id for n in vault_nodes}
+        vault_edge_ids = {e.id for e in vault_edges}
+        stored_node_ids = await self._store.node_ids(investigation_id)
+        stored_edge_ids = await self._store.edge_ids(investigation_id)
+        left_nodes, left_edges = await reader.visible_among(
+            (step_node_ids & stored_node_ids) - vault_node_ids,
+            (step_edge_ids & stored_edge_ids) - vault_edge_ids,
+        )
+        breach = _cap_breach(len(vault_node_ids | left_nodes), len(vault_edge_ids | left_edges))
+        if breach is not None:
+            raise LimitExceededError(breach)
 
         # The adds first and the removes last (links before nodes): the writes are chunked and a
         # failure part-way leaves a superset of what the case held, never a loss.
-        await self._store.add_nodes(investigation_id, visible_nodes)
-        await self._store.add_edges(investigation_id, visible_edges)
-        if stale_edge_ids:
-            await self._store.remove_edges(investigation_id, list(stale_edge_ids))
-        if stale_node_ids:
-            await self._store.remove_nodes(investigation_id, list(stale_node_ids))
+        await self._store.add_nodes(investigation_id, vault_nodes)
+        await self._store.add_edges(investigation_id, vault_edges)
 
+        # What the step lacks is reconciled only where it is in the restorer's own view (the test
+        # decision 2 uses); everything else stays stored, a readable link to a hidden end included.
+        # Read after the adds: a member the Vault has declassified is written by them, which can
+        # bring a stored link of theirs into the restorer's view.
+        reader = await self._reader_counts(investigation_id, principal)
+        stale_node_ids, stale_edge_ids = await reader.visible_among(
+            await self._store.node_ids(investigation_id) - step_node_ids,
+            await self._store.edge_ids(investigation_id) - step_edge_ids,
+        )
+        if stale_edge_ids:
+            await self._store.remove_edges(investigation_id, sorted(stale_edge_ids))
+        if stale_node_ids:
+            await self._store.remove_nodes(investigation_id, sorted(stale_node_ids))
+
+        # What is stored and published is the whole stored set, with no flag: every reader,
+        # replaying it or receiving it live, projects it to their own view (`project_delta`), so a
+        # reconnect equals a full snapshot for every reader. The restorer's response is that
+        # snapshot projected for them, never the whole.
+        all_nodes = list((await self._store.source_fidelity_nodes(investigation_id)).values())
+        all_edges = list((await self._store.source_fidelity_edges(investigation_id)).values())
         seq = await self._store.next_seq(investigation_id)
-        snapshot = DeltaSnapshot(seq=seq, nodes=visible_nodes, edges=visible_edges)
+        snapshot = DeltaSnapshot(seq=seq, nodes=all_nodes, edges=all_edges)
         await self._store.append_delta(investigation_id, snapshot)
-        return snapshot
+        response = self.project_delta(snapshot, principal)
+        assert isinstance(response, DeltaSnapshot)
+        return Restored(published=snapshot, response=response)
 
     async def _record_of_nodes(
         self, investigation_id: str, node_ids: Sequence[NodeId]
@@ -1396,7 +1471,9 @@ class WorkingSetService:
                 )
         return record
 
-    async def remove(self, investigation_id: str, node_ids: Sequence[NodeId]) -> DeltaRemove:
+    async def remove(
+        self, investigation_id: str, node_ids: Sequence[NodeId], principal: Principal
+    ) -> DeltaRemove:
         """`DELETE /nodes` — "remove from the working set (not from the
         Vault)" (`03_CONDUIT_MIDDLEWARE.md` §3.2). Removal never breaches a
         cap, so there is no check to run here — only the delta to record.
@@ -1406,10 +1483,16 @@ class WorkingSetService:
         that is what lets every reader be sent only the ids they may read.
         The delta is the stored form, which holds the record; the route publishes it as it is and
         sends nothing of it to anyone (`project_delta`)."""
-        record = await self._record_of_nodes(investigation_id, node_ids)
-        await self._store.remove_nodes(investigation_id, node_ids)
+        # Only ids whose stored body the reader may read are removed (decision 6): a hidden id and
+        # an absent one are ignored alike, with the same response and the same history entry, and
+        # the delta names only what was removed.
+        reader = await self._reader_counts(investigation_id, principal)
+        removable = await reader.visibly_stored_among(node_ids)
+        removed_ids = [i for i in dict.fromkeys(node_ids) if i in removable]
+        record = await self._record_of_nodes(investigation_id, removed_ids)
+        await self._store.remove_nodes(investigation_id, removed_ids)
         seq = await self._store.next_seq(investigation_id)
-        delta = DeltaRemove(seq=seq, node_ids=list(node_ids), removed=record)
+        delta = DeltaRemove(seq=seq, node_ids=removed_ids, removed=record)
         await self._store.append_delta(investigation_id, delta)
         return delta
 

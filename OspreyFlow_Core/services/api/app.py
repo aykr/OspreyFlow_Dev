@@ -2924,7 +2924,7 @@ async def remove_nodes(
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
 ) -> dict[str, int]:
-    delta = await working_set.remove(investigation.id, body.node_ids)
+    delta = await working_set.remove(investigation.id, body.node_ids, principal)
     seq = delta.seq
     await publish_delta(valkey, investigation.id, delta)
     await _record_history_step(
@@ -3483,8 +3483,9 @@ async def restore_history_step(
     # `WorkingSetService.restore` re-projects `step`'s stored (unfiltered)
     # bodies against `principal` fresh — never the visibility `step` was
     # recorded with (`history.py`'s module docstring).
-    snapshot = await working_set.restore(investigation.id, step.nodes, step.edges, principal)
-    await publish_delta(valkey, investigation.id, snapshot)
+    restored = await working_set.restore(investigation.id, step.nodes, step.edges, principal)
+    snapshot = restored.response
+    await publish_delta(valkey, investigation.id, restored.published)
     await audit.record(
         principal=principal,
         action="restore_history_step",

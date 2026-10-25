@@ -932,7 +932,8 @@ async def test_a_restore_that_fails_part_way_has_lost_nothing_it_held(
     held = [index_node(f"n{i}") for i in range(1_500)]
     await working_store.add_nodes(case, held)
     target = [index_node(f"n{i}") for i in range(1_000, 3_500)]
-    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
+    vault = FakeGraphPort(Subgraph(nodes=[], edges=[]), graph_nodes=target)
+    service = WorkingSetService(vault, working_store, SCHEME)
     runs: list[str] = []
 
     async def fail_at_the_second_add(name: str, size: int) -> None:
@@ -953,7 +954,12 @@ async def test_a_restore_adds_before_it_removes_and_removes_links_before_nodes(
     working_store, client, case = indexed_store
     await working_store.add_nodes(case, [index_node("a"), index_node("b"), index_node("c")])
     await working_store.add_edges(case, [index_edge("ab", "a", "b"), index_edge("bc", "b", "c")])
-    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
+    vault = FakeGraphPort(
+        Subgraph(nodes=[], edges=[]),
+        graph_nodes=[index_node("a"), index_node("b")],
+        graph_edges=[index_edge("ab", "a", "b")],
+    )
+    service = WorkingSetService(vault, working_store, SCHEME)
     working_store.script_runs.clear()
 
     await service.restore(
@@ -982,7 +988,7 @@ async def test_a_removal_goes_through_the_stream_with_its_record_and_is_projecte
     working_store, client, case = indexed_store
     service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
     await working_store.add_nodes(case, [index_node("pub"), index_node("sec", "SECRET")])
-    removal = await service.remove(case, ["pub", "sec"])
+    removal = await service.remove(case, ["pub", "sec"], SECRET_READER)
 
     replayed = await working_store.deltas_after(case, 0)
 
@@ -1041,7 +1047,7 @@ async def test_pub_sub_carries_the_record_and_each_socket_projects_it_for_its_ow
     )
     pubsub = client.pubsub()
     await pubsub.subscribe(notify_channel(case))
-    removal = await service.remove(case, ["pub", "sec"])
+    removal = await service.remove(case, ["pub", "sec"], SECRET_READER)
     old = index_edge("old", "c", "b", "SECRET")
     replacement = await service.replace_edge(case, old, index_edge("new", "c", "b"))
 
@@ -1094,7 +1100,7 @@ async def test_the_removals_record_is_built_from_the_index_in_a_fixed_number_of_
     working_store.get_node = counting  # type: ignore[method-assign]
     service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
 
-    removal = await service.remove(case, [n.id for n in nodes])
+    removal = await service.remove(case, [n.id for n in nodes], SECRET_READER)
 
     assert bodies_read == []
     assert removal.removed is not None and len(removal.removed.nodes) == 500
@@ -1128,3 +1134,41 @@ async def test_the_withheld_flag_from_the_index_equals_the_judgement_over_the_bo
             seen.add(expected)
     assert seen == {True, False}, "the run held both answers"
     assert working_store.access_index_rebuilds == 0  # nothing was mended behind the flag
+
+
+async def test_a_low_cleared_readers_restore_leaves_the_hidden_items_stored_and_the_index_equal(
+    indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str],
+) -> None:
+    """Rule 4, over the real scripts and store (ADR-124 decision 6): an OFFICIAL reader restores a
+    step recorded before a cleared colleague's work. The stored set still holds the colleague's
+    node, their link and a readable link to the node, the index equals the bodies, nothing was
+    mended behind it, the cleared reader's catch-up equals a fresh snapshot, and the flag still
+    says the case holds material the restorer may not see. The case's own readable stale items
+    are the only ones removed."""
+    working_store, client, case = indexed_store
+    held = [index_node("pub"), index_node("stale"), index_node("sec", "SECRET")]
+    links = [
+        index_edge("pub-sec", "pub", "sec"),
+        index_edge("secret-link", "pub", "stale", "SECRET"),
+        index_edge("stale-link", "pub", "stale"),
+    ]
+    vault = FakeGraphPort(Subgraph(nodes=[], edges=[]), graph_nodes=held, graph_edges=links)
+    service = WorkingSetService(vault, working_store, SCHEME)
+    await service.seed(case, held, links, SECRET_READER)  # seq 1
+
+    restored = await service.restore(case, [index_node("pub")], [], OFFICIAL_READER)
+
+    assert set(await working_store.node_ids(case)) == {"pub", "sec"}
+    assert set(await working_store.edge_ids(case)) == {"pub-sec", "secret-link"}
+    await assert_index_matches_bodies(working_store, case, "after the restore")
+    assert working_store.access_index_rebuilds == 0
+    assert {n.id for n in restored.response.nodes} == {"pub"}
+    (flag,) = await service.sync(case, OFFICIAL_READER, last_acknowledged_seq=None)
+    assert isinstance(flag, DeltaSnapshot) and flag.withheld is True
+    caught_up = await service.sync(case, SECRET_READER, last_acknowledged_seq=1)
+    (fresh,) = await service.sync(case, SECRET_READER, last_acknowledged_seq=None)
+    assert isinstance(fresh, DeltaSnapshot)
+    final = caught_up[-1]
+    assert isinstance(final, DeltaSnapshot)
+    assert {n.id for n in final.nodes} == {n.id for n in fresh.nodes} == {"pub", "sec"}
+    assert {e.id for e in final.edges} == {e.id for e in fresh.edges}

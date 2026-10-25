@@ -31,11 +31,14 @@ from services.api.app import (
 from services.api.history import HistoryStep, HistoryStepNotFoundError, HistoryStepSummary
 from services.api.investigations import Investigation, InvestigationNotFoundError
 from services.api.working_set.models import DeltaSnapshot
+from services.api.working_set.service import Restored
 
 from schemas.domain import Edge, Node, Principal
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
-OTHER_UNIT_PRINCIPAL = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
+OTHER_UNIT_PRINCIPAL = Principal(
+    id="analyst-2", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"]
+)
 
 
 class _FakeWorkingSet:
@@ -48,9 +51,10 @@ class _FakeWorkingSet:
         nodes: list[Node],
         edges: list[Edge],
         principal: Principal,
-    ) -> DeltaSnapshot:
+    ) -> Restored:
         self.restore_calls.append((investigation_id, "restore", principal))
-        return DeltaSnapshot(seq=7, nodes=nodes, edges=edges)
+        snapshot = DeltaSnapshot(seq=7, nodes=nodes, edges=edges)
+        return Restored(published=snapshot, response=snapshot)
 
 
 class _FakeHistory:

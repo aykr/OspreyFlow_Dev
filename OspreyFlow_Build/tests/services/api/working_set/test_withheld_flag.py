@@ -171,7 +171,9 @@ async def test_a_snapshot_the_service_stores_carries_none() -> None:
     await store.add_nodes(CASE, [node("pub"), node("sec", "SECRET")])
     service = _service(store)
 
-    restored = await service.restore(CASE, [node("pub"), node("sec", "SECRET")], [], SECRET_READER)
+    restored = (
+        await service.restore(CASE, [node("pub"), node("sec", "SECRET")], [], SECRET_READER)
+    ).published
 
     assert restored.withheld is None
     stored = await store.deltas_after(CASE, 0)
@@ -199,7 +201,9 @@ async def test_a_live_delta_projected_for_a_reader_carries_none() -> None:
     store = FakeWorkingSetStore()
     await store.add_nodes(CASE, [node("pub"), node("sec", "SECRET")])
     service = _service(store)
-    restored = await service.restore(CASE, [node("pub"), node("sec", "SECRET")], [], SECRET_READER)
+    restored = (
+        await service.restore(CASE, [node("pub"), node("sec", "SECRET")], [], SECRET_READER)
+    ).published
 
     live = await service.project_live(CASE, restored, OFFICIAL_READER)
 
@@ -368,11 +372,6 @@ async def remove_route() -> AsyncIterator[tuple[TestClient, FakeWorkingSetStore]
         app.dependency_overrides.clear()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="ADR-124 U6: `remove` keeps what the reader may not read (decision 6)",
-)
 async def test_a_reader_removing_a_hidden_nodes_id_leaves_it_stored_and_the_flag_unchanged(
     remove_route: tuple[TestClient, FakeWorkingSetStore],
 ) -> None:
@@ -398,11 +397,6 @@ async def test_a_reader_removing_a_hidden_nodes_id_leaves_it_stored_and_the_flag
     assert own_view == own_view_before == {"pub"}  # the uncleared reader's own view does not move
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="ADR-124 U6: a restore reconciles only what the restorer's view holds (decision 6)",
-)
 async def test_a_restore_past_a_hidden_nodes_id_leaves_it_stored_and_the_flag_unchanged() -> None:
     """Violation, today and owned by U6: a restore removes every stored node the step does not hold,
     including one the restorer may not read, so restoring a step recorded before a cleared

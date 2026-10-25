@@ -16860,6 +16860,110 @@ option, after an adversarial review.
   false in store B for the analyst, and false in both for the cleared principal. The manifest keeps
   its `(1, 0)` until U9.
 
+### ADR-124, Amendment 8 (25 October 2026) — U6: what decision 6 left open, and what restore costs
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, after an adversarial review, except the last bullet, which is the owner's to decide.
+- **`remove` takes node ids only.** The route sends node ids, and only a node whose stored body the
+  reader may read is removed. The client drops the removed node's links from the canvas. The store
+  keeps them, with that end absent (Amendment 4).
+- **The stale-body rule holds by construction.** Restore writes only the Vault's current bodies, read
+  through `get_nodes` and `get_edges` for the restorer, never a step's recorded body. So no revision
+  comparison against stored bodies is made.
+- **A step member the Vault does not return is left as it is.** `get_nodes` and `get_edges` leave out
+  a hidden id, a superseded or reverted one, and an absent one identically (decision 6), so restore
+  cannot tell them apart and must not try. If such a member is stored, it is left stored and
+  untouched. If it is not stored, it is not added. A superseded body left stored is the general
+  staleness gap recorded with ADR-125.
+- **Restore checks the cap for the restorer.** A step records the whole stored set, which has no
+  case-wide ceiling (decision 2), so a cleared restorer's resulting view could pass the cap.
+  - **The check.** Before anything is written, restore counts the restorer's resulting view: the
+    step's members the Vault returns for them, plus the step's members the Vault now withholds that
+    the restorer may read as stored (decision 6 leaves those stored). Stored items outside the step
+    that are in the restorer's view are reconciled away, so they add nothing. Apart from the stale-body
+    case below, the figure can only over-count, and then only by step links the restorer can
+    already read, such as a link whose other end the restore is about to remove.
+  - **A breach.** It refuses with the typed `limit_exceeded` error and its three options (rule 2),
+    giving the restorer's own figures. Nothing is written: no add, no removal, no sequence number,
+    no delta, no publish.
+  - **Hidden items play no part, with one exception.** The figure counts the restorer's view only
+    (rule 3). The exception is a stale stored body. A step link the Vault withholds but the restorer
+    may read as stored, whose end is a stored body hidden from them that the Vault has since
+    declassified, is left out of the figure although the adds bring it into their view. That is
+    decision 13's accepted stale-body disagreement, owned by ADR-125.
+  - **Other readers.** Items kept because the restorer cannot see them can take another reader's
+    view past the cap. That reader is told by U6b's `DeltaViewOverCap`.
+  - **Tests.** These are in `test_restore_and_remove.py`: the refusal leaves the store unchanged, and
+    two cases that differ only in hidden stored items give the same figure and outcome.
+- **The stale set is read after the adds.** A stored link outside the step, whose end the adds make
+  readable, is reconciled for the restorer like any other item in their view.
+- **A crash mid-restore** leaves the adds written, but with no new sequence number and no delta.
+  - **What a client sees.** One reconnecting from the stream sees nothing new until its next full
+    snapshot.
+  - **History.** The window predates U6, which narrows it to the restore's own writes.
+- **What restore costs at the cap** (measured on Valkey with
+  `scripts/bench_reader_view_previews.py --restore` and a stub Vault, 47,500 nodes and 247,500
+  links):
+  - **Time:** 24.5 s for the service call, without the Vault reads or the publish, against 11.3 s
+    before U6, the same in two runs with and without the cap check. The longest of its 292 scripts
+    was 43 ms in one run and 55 ms in the other (43 ms before U6); scripts are chunked at 1,000
+    elements as before.
+  - **One stream entry:** the stored whole snapshot was one entry of 246 MB, written by one `XADD`
+    in 1.7–1.8 s. The route then publishes the same body in one Pub/Sub message.
+  - **What was not measured:** the Vault reads, which a stub replaced. From ADR-124 U1's
+    measurement (about 10–15 ms per 1,000 ids per call through the SQL-then-record-id form), about
+    300 chunks add an estimated 5–15 s on ArcadeDB, not measured end to end.
+- **Pub/Sub cuts a subscriber off at about 31 MB.** Valkey's default `client-output-buffer-limit`
+  for Pub/Sub is `32mb 8mb 60`, and neither the developer stack nor the harness overrides it.
+  - **Measured** on Valkey 8 with one subscriber: an 8 MB message was received, and every message
+    from 31 MB to 246 MB closed the subscriber's connection.
+  - **When it bites.** At the measured 830 bytes per element, any published snapshot of more than
+    about 37,000 elements does this. That is a restore of a large case, and it did so before U6
+    whenever a cleared restorer's view was that large.
+  - **What follows, measured on the Conduit side.** Each socket's forward holds its own
+    subscription, on a default `valkey.asyncio` client, as the app opens it. With a 40 MB publish, the
+    forward's `pubsub.listen()` raised `ConnectionError`. The subscription did not come back, and two
+    later small messages reached no subscriber. The forward ending ends the socket's handler, so the
+    socket closes (read from the code, `app.py`'s socket handler, not measured).
+  - **The Glass has no reconnect.** `connectDeltaClient` forwards `onclose` only to an optional
+    handler, and `App.tsx` passes none. So the canvas silently stops receiving live updates until the
+    case or the token changes.
+    - **Its reach.** This holds for any closed socket, whatever its size or cause, and predates U6.
+    - **Its owner.** It is recorded in the build plan with no owner yet. The fix is a reconnect that
+      fetches a fresh ticket and sends `last_acknowledged_seq`, and its own keyboard and test steps.
+      Read from the code; not measured with a real Glass.
+- **The entry's size is a residual, not new in kind.** Before U6 a fully cleared restorer's stored
+  snapshot was the same size. Decision 6 makes it the whole stored set for every restorer.
+  - **Other limits.** Valkey's default `proto-max-bulk-len` is 512 MB. With synthetic bodies the cap
+    fits under it, but larger property bodies may not. Each such entry also sits in the capped stream
+    under `noeviction`.
+  - **The owner and the fix.** It is recorded in the build plan, with no owner yet, together with the
+    Pub/Sub limit. The fix is to publish a reference to the stored entry, not its body, or to chunk
+    the snapshot. That changes how deltas are stored and sent, and needs its own decision. Raising
+    the Pub/Sub buffer limit instead would let each subscriber hold a copy of the body under
+    `noeviction`.
+- **Restore's time grows with hidden material: pending the owner's ruling.**
+  - **Why.**
+    - The Vault reads run over every step member, hidden ones included.
+    - The view read runs over every stored item outside the step.
+    - The stored whole is serialised, written in one entry, and published before the route answers.
+  - **What a restorer could learn.** By timing restores at moments they choose, they could roughly
+    estimate how much they cannot see. That is a coarsened count of the kind the owner rejected
+    with option C ("any figure that moves with an action the reader chooses can be differenced").
+    So it is outside decision 12, and outside what the coordinator may accept under the delegation.
+  - **Options put to the owner.** Under (a) and (c), the Vault reads over hidden step members still
+    scale with hidden volume:
+    - (a) accept it as a residual;
+    - (b) pad restore to a fixed time;
+    - (c) answer the restorer from their own view, already counted for the cap, before the whole set
+      is read, serialised, written and published. This removes the largest term.
+  - **Until the owner rules, the channel is not accepted.** Committing U6 does not accept it. Under
+    decision 14, the owner's deployment is not rebuilt, and the published copy follows only the
+    owner's next publish. Nothing the owner runs uses this code until they rebuild or publish, and
+    when to do that, before or after ruling, is theirs. Option (c) is
+    not built now, because answering before the stored write changes the order of the response and
+    the stream, and that needs its own design.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

@@ -187,7 +187,7 @@ async def test_the_live_forward_sends_an_uncleared_socket_only_the_removed_ids_i
     store = FakeWorkingSetStore()
     await store.add_nodes(CASE, [node("pub"), node("sec", "SECRET")])
     service = _service(store)
-    message = await _published(await service.remove(CASE, ["pub", "sec"]))
+    message = await _published(await service.remove(CASE, ["pub", "sec"], SECRET_READER))
 
     official = await _forwarded(service, message, OFFICIAL_READER)
     cleared = await _forwarded(service, message, SECRET_READER)
