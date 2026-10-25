@@ -90,7 +90,7 @@ export type Note = string | null;
 export type ReplacedAt = string | null;
 export type ReplacedBy = string | null;
 export type Items = PackItem[];
-export type Withheld = number;
+export type Withheld = boolean;
 export type Marking2 = string | null;
 
 /**

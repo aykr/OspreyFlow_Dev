@@ -6,8 +6,8 @@ assessment's supporting entities, a chosen entity, a note's own marking — and 
 only if they may view each of them (rule 3). Classification alone is not enough: a restricted
 handling code limits a record to its units whatever the reader's clearance. An entity or an
 assessment is also checked again as the reader, against the graph now, so one reclassified since it
-was added is withheld too. A reader is told how many items were withheld, never which: items are
-served in order, without their positions, so a withheld one leaves no gap.
+was added is withheld too. A reader is told only whether some items were withheld, never how many
+or which: items are served in order, without their positions, so a withheld one leaves no gap.
 
 A published version is a copy of the draft's items at that moment, never a view of them: the draft
 can change afterwards and the version does not.
@@ -59,12 +59,11 @@ class PackItemRefused(ValueError):
 
 
 class PackHasWithheldItems(Exception):
-    """Publishing refused: the draft holds items the publisher may not see (a 409, with the
-    count)."""
+    """Publishing refused: the draft holds an item the publisher may not see (a 409 with a yes,
+    never a count)."""
 
-    def __init__(self, withheld: int) -> None:
-        super().__init__(f"{withheld} item(s) in this pack are withheld from you")
-        self.withheld = withheld
+    def __init__(self) -> None:
+        super().__init__("some items in this pack are withheld from you")
 
 
 class StoredPackItem(PackItem):

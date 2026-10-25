@@ -19,10 +19,9 @@ export function formatDay(iso: string): string {
   return Number.isNaN(when.getTime()) ? iso : DAY.format(when);
 }
 
-/** How many items are withheld, said once, never which. */
-export function withheldSentence(n: number): string {
-  return `${plural(n, "item")} in this pack ${n === 1 ? "is" : "are"} withheld from you.`;
-}
+/** That some of the pack's items are withheld from this reader, said once, with no number and never
+ * which (ADR-124 decision 9). */
+export const WITHHELD_ITEMS_SENTENCE = "Some items of this pack are withheld from you.";
 
 export const KIND_LABEL: Record<PackItem["kind"], string> = {
   trend: "Trend",

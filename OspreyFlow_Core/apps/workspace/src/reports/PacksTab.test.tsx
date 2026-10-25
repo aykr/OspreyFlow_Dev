@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// ADR-113 stage 5: the Packs tab — what is withheld is said by number and never shown, order changes
+// ADR-113 stage 5: the Packs tab — what is withheld is said in a sentence with no number and never shown, order changes
 // send exactly the items that were shown, only a trend can be refreshed, a note is never marked for
 // the analyst, a publication refused for withheld items says so, and a withdrawal sends its reason.
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -54,11 +54,11 @@ describe("the pack list", () => {
 });
 
 describe("a pack's items", () => {
-  it("says how many are withheld, and shows nothing for them", async () => {
-    serve(routes(() => null, PACK, { withheld: 2 }));
+  it("says some are withheld, with no number, and shows nothing for them", async () => {
+    serve(routes(() => null, PACK, { withheld: true }));
     place();
     await openPack();
-    expect(screen.getByText("2 items in this pack are withheld from you.")).toBeTruthy();
+    expect(screen.getByText("Some items of this pack are withheld from you.")).toBeTruthy();
     expect(screen.getAllByRole("article")).toHaveLength(3);
     expect(screen.getByRole("article", { name: `Assessment: ${STATEMENT}` }).textContent).toContain("Marked OFFICIAL-SENSITIVE");
   });
@@ -148,11 +148,11 @@ describe("adding an item", () => {
 
 describe("publishing and withdrawing", () => {
   it("says a publication refused for withheld items in words", async () => {
-    serve(routes((c) => (c.method === "POST" && c.path === "packs/p1/publish" ? json(409, { error: "pack_has_withheld_items", withheld: 2 }) : null)));
+    serve(routes((c) => (c.method === "POST" && c.path === "packs/p1/publish" ? json(409, { error: "pack_has_withheld_items", withheld: true }) : null)));
     place();
     await openPack();
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("2 items in this pack are withheld from you, so you cannot publish it.");
+    expect((await screen.findByRole("alert")).textContent).toBe("Some items of this pack are withheld from you, so you cannot publish it.");
   });
 
   it("publishes a pack with nothing withheld and says which version", async () => {
@@ -183,7 +183,7 @@ describe("publishing and withdrawing", () => {
   });
 
   it("shows earlier snapshots with the date each was replaced", async () => {
-    serve(routes((c) => (c.path === "packs/p1/history" ? json(200, { earlier_snapshots: [{ ...TREND_ITEM, id: "old", replaced_at: "2026-10-09T09:00:00Z" }], withheld: 0, versions: [] }) : null)));
+    serve(routes((c) => (c.path === "packs/p1/history" ? json(200, { earlier_snapshots: [{ ...TREND_ITEM, id: "old", replaced_at: "2026-10-09T09:00:00Z" }], withheld: false, versions: [] }) : null)));
     place();
     await openPack();
     fireEvent.click(screen.getByRole("button", { name: "Show history" }));

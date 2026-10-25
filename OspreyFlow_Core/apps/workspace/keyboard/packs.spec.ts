@@ -122,13 +122,13 @@ test("a published pack is exported by keyboard, each page under its own marking"
 });
 
 test("a published pack is read by keyboard, read-only", async ({ page }) => {
-  await serveWorld(page, world({ packs: [PUBLISHED], items: [TREND_ITEM, NOTE_ITEM], withheld: 2 }));
+  await serveWorld(page, world({ packs: [PUBLISHED], items: [TREND_ITEM, NOTE_ITEM], withheld: true }));
   await page.goto("/keyboard/packs-harness.html");
   await openTab(page, 3);
   await page.getByRole("button", { name: /Quarter pack/ }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("article", { name: "Note: Handle with care" })).toBeVisible();
-  await expect(page.getByText("2 items in this pack are withheld from you.")).toBeVisible();
+  await expect(page.getByText("Some items of this pack are withheld from you.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Move down" })).toHaveCount(0);
   registerCovered(REGISTRY, "read-a-published-pack-by-keyboard");
 });

@@ -57,11 +57,11 @@ export interface World {
   trends: Json[];
   packs: (typeof PACK)[];
   items: Json[];
-  withheld: number;
+  withheld: boolean;
 }
 
 export function world(over: Partial<World> = {}): World {
-  return { trends: [], packs: [], items: [], withheld: 0, ...over, packs: (over.packs ?? []).map((p) => ({ ...p })) };
+  return { trends: [], packs: [], items: [], withheld: false, ...over, packs: (over.packs ?? []).map((p) => ({ ...p })) };
 }
 
 /** The Conduit's answer to one call, or null for a route it does not have. */
@@ -109,7 +109,7 @@ export function answer(w: World, call: Call): { status: number; body: unknown } 
   }
   if (method === "POST" && path === "packs/p1/publish") {
     pack().versions = [...pack().versions, { ...LIVE_VERSION, version: pack().versions.length + 1 }];
-    return ok({ pack_id: "p1", title: pack().title, version: pack().versions.length, published_at: LIVE_VERSION.published_at, published_by: "ana", items: w.items, withheld: 0, marking: "SECRET" }, 201);
+    return ok({ pack_id: "p1", title: pack().title, version: pack().versions.length, published_at: LIVE_VERSION.published_at, published_by: "ana", items: w.items, withheld: false, marking: "SECRET" }, 201);
   }
   if (method === "POST" && path === "packs/p1/versions/1/withdraw") {
     pack().versions = pack().versions.map((v) => ({ ...(v as Json), withdrawn_at: "2026-10-05T09:00:00Z", withdrawn_by: "ben", withdrawal_reason: (call.body as Json).reason }));

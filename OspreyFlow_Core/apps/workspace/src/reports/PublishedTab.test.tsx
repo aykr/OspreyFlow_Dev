@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // ADR-113 stage 5: what a Reports Viewer reads — the published packs, each item under its own
-// marking, read-only, with what is withheld from this reader said by number.
+// marking, read-only, with what is withheld from this reader said in a sentence with no number.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 const SUMMARY = { pack_id: "p1", title: "Quarter pack", version: 2, published_at: "2026-10-11T09:00:00Z", published_by: "ana" };
-const PUBLISHED = { ...SUMMARY, investigation_id: "c1", items: [TREND_ITEM, ASSESSMENT_ITEM, NOTE_ITEM], withheld: 3, marking: "SECRET" };
+const PUBLISHED = { ...SUMMARY, investigation_id: "c1", items: [TREND_ITEM, ASSESSMENT_ITEM, NOTE_ITEM], withheld: true, marking: "SECRET" };
 
 function place(canExport = false) {
   serve((c) => (c.path === "published" ? json(200, [SUMMARY]) : c.path === "packs/p1/published" ? json(200, PUBLISHED) : null));
@@ -46,7 +46,7 @@ describe("the Published tab", () => {
   it("shows a chosen pack read-only, with its withheld sentence", async () => {
     place();
     fireEvent.click(await screen.findByRole("button", { name: /Quarter pack/ }));
-    expect(await screen.findByText("3 items in this pack are withheld from you.")).toBeTruthy();
+    expect(await screen.findByText("Some items of this pack are withheld from you.")).toBeTruthy();
     // The pack's own line and the note's banner: two places, each from the server's marking.
     expect(screen.getAllByText("Marked SECRET")).toHaveLength(2);
     expect(screen.getAllByRole("article")).toHaveLength(3);
@@ -64,7 +64,7 @@ describe("the Published tab", () => {
   });
 
   it("says nothing of withholding when nothing is withheld", async () => {
-    serve((c) => (c.path === "published" ? json(200, [SUMMARY]) : json(200, { ...PUBLISHED, withheld: 0 })));
+    serve((c) => (c.path === "published" ? json(200, [SUMMARY]) : json(200, { ...PUBLISHED, withheld: false })));
     render(<PublishedTab api={{ apiBaseUrl: "http://x", bearerToken: "t", investigationId: "c1" }} canExport={false} />);
     fireEvent.click(await screen.findByRole("button", { name: /Quarter pack/ }));
     await screen.findAllByRole("article");

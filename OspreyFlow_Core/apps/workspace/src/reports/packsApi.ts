@@ -10,13 +10,12 @@ import type {
   PackItem,
   PublishedPack,
   PublishedPackSummary,
-  PackWithheldBody,
   ReportPack,
 } from "../../../../packages/schemas/generated";
 import type { BlockedItem } from "../export/api";
 import type { ReportsApi } from "./api";
 import { fieldOf, refusal, send } from "./caseHttp";
-import { withheldSentence } from "./packText";
+import { WITHHELD_ITEMS_SENTENCE } from "./packText";
 
 const enc = encodeURIComponent;
 
@@ -71,8 +70,7 @@ export async function fetchHistory(api: ReportsApi, packId: string): Promise<Pac
 export async function publishPack(api: ReportsApi, packId: string): Promise<PublishedPack> {
   const reply = await send(api, "POST", `packs/${enc(packId)}/publish`);
   if (reply.status === 409 && fieldOf(reply.body, "error") === "pack_has_withheld_items") {
-    const n = (reply.body as PackWithheldBody).withheld;
-    throw new Error(`${withheldSentence(n).replace(/ from you\.$/, " from you, so you cannot publish it.")}`);
+    throw new Error(WITHHELD_ITEMS_SENTENCE.replace(/ from you\.$/, " from you, so you cannot publish it."));
   }
   if (!reply.ok) throw refusal(reply, "publish this pack");
   return reply.body as PublishedPack;

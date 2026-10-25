@@ -9347,7 +9347,7 @@ async def read_pack(
     )
     (named,) = await _named_packs([pack], principal_names)
     return PackDraft(
-        pack=named, items=served, withheld=withheld, marking=highest_marking(served, scheme)
+        pack=named, items=served, withheld=withheld > 0, marking=highest_marking(served, scheme)
     )
 
 
@@ -9513,7 +9513,7 @@ async def reorder_pack(
     return PackDraft(
         pack=named,
         items=served,
-        withheld=withheld,
+        withheld=withheld > 0,
         marking=highest_marking(served, scheme),
     )
 
@@ -9593,7 +9593,7 @@ async def pack_history(
     earlier = await packs.earlier_snapshots(pack.id)
     shown, withheld = await readable(earlier, principal, scheme, graph, investigation.id)
     return PackHistory(
-        earlier_snapshots=[i.served() for i in shown], withheld=withheld, versions=pack.versions
+        earlier_snapshots=[i.served() for i in shown], withheld=withheld > 0, versions=pack.versions
     )
 
 
@@ -9621,7 +9621,7 @@ async def publish_pack(
     if not items:
         raise PackItemRefused("an empty pack has nothing to publish")
     if withheld:
-        raise PackHasWithheldItems(withheld)
+        raise PackHasWithheldItems()
     version = await packs.publish(pack.id, principal)
     await audit.record(
         principal=principal,
@@ -9642,7 +9642,7 @@ async def publish_pack(
             version.published_by
         ),
         items=served,
-        withheld=0,
+        withheld=False,
         marking=highest_marking(served, scheme),
     )
 
@@ -9750,7 +9750,7 @@ async def read_published_pack(
             version.published_by
         ),
         items=served,
-        withheld=withheld,
+        withheld=withheld > 0,
         marking=highest_marking(served, scheme),
     )
 
@@ -9818,9 +9818,7 @@ async def _pack_export_refused(request: Request, exc: PackExportRefused) -> JSON
 
 @app.exception_handler(PackHasWithheldItems)
 async def _pack_withheld(request: Request, exc: PackHasWithheldItems) -> JSONResponse:
-    return JSONResponse(
-        status_code=409, content=PackWithheldBody(withheld=exc.withheld).model_dump()
-    )
+    return JSONResponse(status_code=409, content=PackWithheldBody().model_dump())
 
 
 @app.exception_handler(PackItemRefused)

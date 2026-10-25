@@ -1,7 +1,7 @@
 // The Packs tab (ADR-113 stage 5): assemble a case's report pack from trends, assessments and
 // notes, put the items in order, publish it as an immutable version, withdraw a version, and
 // export it. Items arrive already counted and marked for this reader; what is withheld from them is
-// said once, by number, never which.
+// said once, in a sentence with no number, never which.
 import { useEffect, useState } from "react";
 
 import type { AddPackItem, Judgement, PackDraft, PackHistory, PackVersionSummary, ReportPack, TrendDefinition } from "../../../../packages/schemas/generated";
@@ -9,7 +9,7 @@ import { Button, Input, Select } from "../design/primitives";
 import type { ReportsApi } from "./api";
 import { ExportControl } from "./ExportControl";
 import { PackItemView } from "./PackItemView";
-import { formatDay, withheldSentence } from "./packText";
+import { formatDay, WITHHELD_ITEMS_SENTENCE } from "./packText";
 import {
   addItem,
   createPack,
@@ -235,7 +235,7 @@ export function PacksTab({ api, canExport, print }: PacksTabProps) {
                 ))}
               </ul>
             )}
-            {draft.withheld > 0 && <p style={{ margin: 0 }}>{withheldSentence(draft.withheld)}</p>}
+            {draft.withheld && <p style={{ margin: 0 }}>{WITHHELD_ITEMS_SENTENCE}</p>}
             {draft.items.length === 0 && <p className="label" style={{ margin: 0 }}>This pack has no items you can see yet.</p>}
             {draft.items.map((item, at) => (
               <PackItemView key={item.id} item={item}>
@@ -309,7 +309,7 @@ export function PacksTab({ api, canExport, print }: PacksTabProps) {
                 {history.earlier_snapshots.map((s) => (
                   <PackItemView key={s.id} item={s} replacedNote />
                 ))}
-                {history.withheld > 0 && <p style={{ margin: 0 }}>{withheldSentence(history.withheld)}</p>}
+                {history.withheld && <p style={{ margin: 0 }}>{WITHHELD_ITEMS_SENTENCE}</p>}
               </section>
             )}
             {canExport && live && <ExportControl api={api} packId={draft.pack.id} print={print} />}

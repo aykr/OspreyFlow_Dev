@@ -1,5 +1,5 @@
 // The Published tab (ADR-113 stage 5): what a Reports Viewer reads. A published pack is shown
-// read-only, each item under its own marking, with what is withheld from this reader said by number.
+// read-only, each item under its own marking, with what is withheld from this reader said in a sentence with no number.
 import { useEffect, useState } from "react";
 
 import type { PublishedPack, PublishedPackSummary } from "../../../../packages/schemas/generated";
@@ -7,7 +7,7 @@ import { Button } from "../design/primitives";
 import type { ReportsApi } from "./api";
 import { ExportControl } from "./ExportControl";
 import { PackItemView } from "./PackItemView";
-import { formatDay, withheldSentence } from "./packText";
+import { formatDay, WITHHELD_ITEMS_SENTENCE } from "./packText";
 import { getPublished, listPublished } from "./packsApi";
 
 export interface PublishedTabProps {
@@ -67,7 +67,7 @@ export function PublishedTab({ api, canExport, print }: PublishedTabProps) {
             <h3 style={{ margin: 0 }}>{pack.title}</h3>
             <p className="label" style={{ margin: 0 }}>{`Version ${pack.version}, published ${formatDay(pack.published_at)} by ${pack.published_by_name ?? pack.published_by}`}</p>
             {pack.marking && <p className="label" style={{ margin: 0 }}>{`Marked ${pack.marking}`}</p>}
-            {pack.withheld > 0 && <p style={{ margin: 0 }}>{withheldSentence(pack.withheld)}</p>}
+            {pack.withheld && <p style={{ margin: 0 }}>{WITHHELD_ITEMS_SENTENCE}</p>}
             {pack.items.map((item) => (
               <PackItemView key={item.id} item={item} />
             ))}

@@ -17262,6 +17262,35 @@ ledger).
 - **Why.** A count tied to a case or a pack can be differenced by the reader. ADR-124's context sets
   out the measurements.
 
+### ADR-113, Amendment 5 (25 October 2026) — a pack's reads and its refusal say only whether items are withheld
+
+Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
+option, as ADR-124 unit U9b (declared in ADR-124 Amendment 13), after an adversarial review.
+- **What changes,** each cited by its own words.
+  - **Decision 4:** "the pack says how many items are withheld from them (never which)". It now says
+    whether any item is withheld from them, never how many or which. This covers:
+    - the draft (`PackDraft.withheld`);
+    - the history (`PackHistory.withheld`, over the earlier snapshots a refresh replaced);
+    - a published version (`PublishedPack.withheld`).
+  - **Amendment 1, item 5:** "Publishing is refused (409, with the count)". The 409
+    `pack_has_withheld_items` body now carries `withheld: true` and no number.
+  - **Amendment 2, item 1:** "An item they may not see is withheld and counted, never named … ADR-045's
+    policy decides whether the count is printed". This now reads "withheld and flagged", and the
+    policy decides whether the yes or no is printed. The pack export took this in ADR-124 U9
+    (Amendment 13); this records it against ADR-113's own text.
+  - **The scope is unchanged:** the pack's own items, as `packs.readable` judges them.
+- **A correction to ADR-124 Amendment 13.** It attributes "the withheld count (never which)" to
+  ADR-113 Amendment 1. That rule is decision 4's, in its own words above.
+- **Why.** A count of a pack's items the reader may not see is the same class of figure ADR-124
+  removes from the working set and the export (its decisions 1 and 9). The reader can difference it
+  as the pack is edited. The pack export already took the yes or no in ADR-124 U9.
+- **The Glass** shows "Some items of this pack are withheld from you." when the flag is true, and
+  "Some items of this pack are withheld from you, so you cannot publish it." on the 409. The printed
+  pack cover keeps its own sentence (ADR-124 Amendment 13).
+- **Tests.** The wire gate's pin requires every pack route's `withheld`, and the 409 body's, to be a
+  boolean, at any depth. It was red against the integers. The live `test_packs.py` asserts the
+  booleans, including a true history flag from an earlier snapshot hidden from the reader.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are

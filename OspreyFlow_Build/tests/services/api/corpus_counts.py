@@ -218,3 +218,22 @@ def models_with_field(annotation: Any, field: str, seen: set[type] | None = None
     for inner in typing.get_args(annotation):
         found |= models_with_field(inner, field, seen)
     return found
+
+
+def field_annotations(annotation: Any, field: str, seen: set[type] | None = None) -> list[Any]:
+    """The declared type of `field` on every model reachable from `annotation` that declares it: what
+    a gate needs to pin a name's type where the name itself is allowed."""
+    seen = set() if seen is None else seen
+    found: list[Any] = []
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        if annotation in seen:
+            return found
+        seen.add(annotation)
+        for name, model_field in annotation.model_fields.items():
+            if name == field:
+                found.append(model_field.annotation)
+            found += field_annotations(model_field.annotation, field, seen)
+        return found
+    for inner in typing.get_args(annotation):
+        found += field_annotations(inner, field, seen)
+    return found

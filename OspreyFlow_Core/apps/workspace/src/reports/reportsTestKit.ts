@@ -88,7 +88,7 @@ export const NOTE_ITEM: PackItem = { id: "i3", kind: "note", marking: "SECRET", 
 export const OFFICIAL_ITEM_FOR_EXPORT: PackItem = { id: "n1", kind: "note", marking: "OFFICIAL", added_by: "ana", added_at: "2026-10-01T09:00:00Z", note: "A public matter" };
 
 export function draft(over: Partial<PackDraft> = {}): PackDraft {
-  return { pack: PACK, items: [TREND_ITEM, ASSESSMENT_ITEM, NOTE_ITEM], withheld: 0, marking: "SECRET", ...over };
+  return { pack: PACK, items: [TREND_ITEM, ASSESSMENT_ITEM, NOTE_ITEM], withheld: false, marking: "SECRET", ...over };
 }
 
 export function manifest(items: PackItem[], over: Partial<PackExport> = {}): PackExport {

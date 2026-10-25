@@ -67,6 +67,7 @@ from .corpus_counts import (
     build,
     contains_model,
     edge_with_components,
+    field_annotations,
     field_names_reachable,
     keys_at_any_depth,
 )
@@ -324,6 +325,43 @@ def test_the_pack_export_sends_withheld_as_a_yes_or_no_never_a_number() -> None:
     assert instance is not None
     wire = route.response_field.serialize(instance, mode="json")  # type: ignore[union-attr]
     assert wire["withheld"] is False  # built fields are the type's zero: a bool, not 0
+
+
+def _pack_routes() -> list[APIRoute]:
+    return [r for r in _api_routes() if "/packs/" in r.path or r.path.endswith("/packs")]
+
+
+def test_the_pack_walk_sees_the_pack_routes_that_carry_withheld() -> None:
+    """Violation caught: the walk over the pack routes finds nothing (a renamed path), so the
+    pin below holds over an empty set. The four responses that carry the flag are named."""
+    carrying = {
+        _label(r) for r in _pack_routes() if field_annotations(_wire_annotation(r), "withheld")
+    }
+    assert {
+        "GET /v1/investigations/{investigation_id}/packs/{pack_id}",
+        "PUT /v1/investigations/{investigation_id}/packs/{pack_id}/order",
+        "GET /v1/investigations/{investigation_id}/packs/{pack_id}/history",
+        "POST /v1/investigations/{investigation_id}/packs/{pack_id}/publish",
+        "GET /v1/investigations/{investigation_id}/packs/{pack_id}/published",
+        PACK_EXPORT_ROUTE,
+    } <= carrying
+
+
+@pytest.mark.parametrize("route", _pack_routes(), ids=_label)
+def test_every_pack_route_sends_withheld_as_a_yes_or_no(route: APIRoute) -> None:
+    """Violation caught (ADR-124 decision 9, U9b): a pack response whose `withheld`, anywhere in it,
+    is typed as a number: the draft, the history, a publication, a publish, a reorder or the export.
+    `withheld` is an allowed name for a flag, so the type is what is pinned."""
+    for annotation in field_annotations(_wire_annotation(route), "withheld"):
+        assert _is_a_yes_or_no(annotation), (_label(route), annotation)
+
+
+def test_the_409_pack_body_sends_withheld_as_a_yes_or_no() -> None:
+    """The refusal to publish is not a route's response model (an exception handler sends it), so
+    its model is pinned by name."""
+    from schemas.packs import PackWithheldBody
+
+    assert _is_a_yes_or_no(PackWithheldBody.model_fields["withheld"].annotation)
 
 
 class _CountedExport(BaseModel):

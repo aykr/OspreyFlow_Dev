@@ -2,7 +2,8 @@
 intelligence product — an ordered list of items, each a dated trend snapshot, an assessment as
 written at the time, a chosen entity with a caption, or a note. Each item is marked at the highest
 classification it rests on; a reader who may not view everything an item rests on does not get it,
-and is told how many items were withheld, never which. Publishing freezes an immutable version.
+and is told only whether some were withheld, never how many or which. Publishing freezes an
+immutable version.
 Generated into TypeScript for the Glass's Packs and Published tabs."""
 
 from __future__ import annotations
@@ -117,8 +118,9 @@ class PackDraft(BaseModel):
 
     pack: ReportPack
     items: list[PackItem]
-    #: Items in the draft this reader may not see — how many, never which.
-    withheld: int = Field(ge=0)
+    #: Whether some of the draft's items are ones this reader may not see — a yes or no, never how
+    #: many or which (ADR-124 decision 9).
+    withheld: bool
     #: The highest marking among the items shown.
     marking: str | None = None
 
@@ -127,7 +129,8 @@ class PackHistory(BaseModel):
     """The earlier snapshots a refresh replaced, as this reader may see them, and the versions."""
 
     earlier_snapshots: list[PackItem]
-    withheld: int = Field(ge=0)
+    #: Whether some earlier snapshots are withheld from this reader: a yes or no.
+    withheld: bool
     versions: list[PackVersionSummary]
 
 
@@ -141,7 +144,8 @@ class PublishedPack(BaseModel):
     #: ADR-106: the name, resolved when served and never stored; `None` shows the id.
     published_by_name: str | None = None
     items: list[PackItem]
-    withheld: int = Field(ge=0)
+    #: Whether some of the publication's items are withheld from this reader: a yes or no.
+    withheld: bool
     marking: str | None = None
 
 
@@ -159,7 +163,8 @@ class PackWithheldBody(BaseModel):
     """Publishing refused: the draft holds items the publisher may not see (Amendment 1)."""
 
     error: Literal["pack_has_withheld_items"] = "pack_has_withheld_items"
-    withheld: int
+    #: Always true: the draft holds an item the publisher may not see. Never how many.
+    withheld: bool = True
 
 
 class PackExportRequest(BaseModel):

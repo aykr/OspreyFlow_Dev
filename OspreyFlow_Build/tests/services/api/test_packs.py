@@ -4,7 +4,7 @@ trends and the analytics are fakes.
 
 What a mistake would do, and the case that catches it:
 - a snapshot readable by someone below its marking, or the withheld item's place betrayed —
-  `test_a_snapshot_is_marked_at_the_highest_counted_and_withheld_below_it_with_the_count_shown`;
+  `test_a_snapshot_is_marked_at_the_highest_counted_and_withheld_below_it_with_a_yes_or_no_shown`;
 - a restricted code counted but only the classification checked —
   `test_a_restricted_handling_withholds_a_snapshot_from_a_reader_outside_its_unit`;
 - the published version read from the draft — `test_a_published_version_is_unchanged_after_the_draft_is_edited`;
@@ -278,7 +278,7 @@ def _publish(w: World, pack: str, who: Principal = EDITOR) -> dict[str, Any]:
 # --- marking and withholding ------------------------------------------------------------------------
 
 
-def test_a_snapshot_is_marked_at_the_highest_counted_and_withheld_below_it_with_the_count_shown(world: World) -> None:
+def test_a_snapshot_is_marked_at_the_highest_counted_and_withheld_below_it_with_a_yes_or_no_shown(world: World) -> None:
     pack = _new_pack(world)
     _add(world, pack, kind="note", text="Opening note", classification="OFFICIAL")
     world.analytics.handlings = [
@@ -293,12 +293,37 @@ def test_a_snapshot_is_marked_at_the_highest_counted_and_withheld_below_it_with_
     low = world.as_(READER).get(f"{CASE}/packs/{pack}/published")
     assert low.status_code == 200, low.text
     body = low.json()
-    assert body["withheld"] == 1 and [i["note"] for i in body["items"]] == ["Opening note", "Closing note"]
+    assert body["withheld"] is True and [i["note"] for i in body["items"]] == ["Opening note", "Closing note"]
     assert trend["id"] not in low.text, "never which item"
     assert "position" not in low.text, "no gap that says where it was"
     high = world.as_(CLEARED_READER).get(f"{CASE}/packs/{pack}/published").json()
-    assert high["withheld"] == 0 and high["marking"] == "SECRET" and len(high["items"]) == 3
+    assert high["withheld"] is False and high["marking"] == "SECRET" and len(high["items"]) == 3
     assert "read_published_pack" in world.audit.actions, "every read is audited"
+
+
+def test_the_draft_and_the_history_say_withheld_as_a_yes_or_no(world: World) -> None:
+    """ADR-124 U9b: the draft carries a yes or no, never a number, for a reader who may not see some
+    of the pack's items; false for one who may see them all. The readers are analysts with the
+    `record_assessment` right the draft route needs (`READER` is a Reports Viewer and is refused it:
+    `LOW_EDITOR` is cleared only to OFFICIAL and `VIEWER` to SECRET, each at least a Viewer on the
+    case). The history's flag covers only the pack's *earlier snapshots* (a refresh's replaced trend
+    snapshots), not the draft's items, so with two SECRET notes in the draft and no refresh it is
+    false for both readers; it is a yes or no all the same."""
+    pack = _new_pack(world)
+    _add(world, pack, kind="note", text="Opening note", classification="OFFICIAL")
+    _add(world, pack, kind="note", text="Hidden one", classification="SECRET")
+    _add(world, pack, kind="note", text="Hidden two", classification="SECRET")
+    low = world.as_(LOW_EDITOR).get(f"{CASE}/packs/{pack}")
+    assert low.status_code == 200, low.text
+    assert low.json()["withheld"] is True
+    assert [i["note"] for i in low.json()["items"]] == ["Opening note"]
+    high = world.as_(VIEWER).get(f"{CASE}/packs/{pack}")
+    assert high.status_code == 200, high.text
+    assert high.json()["withheld"] is False
+    for who in (LOW_EDITOR, VIEWER):
+        history = world.as_(who).get(f"{CASE}/packs/{pack}/history")
+        assert history.status_code == 200, history.text
+        assert history.json()["withheld"] is False
 
 
 def test_a_restricted_handling_withholds_a_snapshot_from_a_reader_outside_its_unit(world: World) -> None:
@@ -308,8 +333,8 @@ def test_a_restricted_handling_withholds_a_snapshot_from_a_reader_outside_its_un
     item = _add(world, pack, kind="trend", trend_id="t1")
     assert item["marking"] == "OFFICIAL", "the banner says the classification"
     _publish(world, pack)
-    assert world.as_(OUTSIDER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] == 1
-    assert world.as_(CLEARED_READER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] == 1, \
+    assert world.as_(OUTSIDER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] is True
+    assert world.as_(CLEARED_READER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] is True, \
         "cleared above it, but not a recipient of R"
 
 
@@ -320,9 +345,9 @@ def test_an_entity_item_is_withheld_when_the_reader_cannot_see_it_now(world: Wor
     assert item["entity"] == {"node_id": "n1", "entity_type": "Person", "name": "Ada Okafor",
                               "caption": "The account holder"}  # fmt: skip
     _publish(world, pack)
-    assert world.as_(READER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] == 0
+    assert world.as_(READER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] is False
     world.graph.nodes["n1"] = world.graph.nodes["n1"].model_copy(update={"handling": _handling("SECRET")})
-    assert world.as_(READER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] == 1, \
+    assert world.as_(READER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] is True, \
         "reclassified since it was added: checked again as the reader"
     assert world.as_(EDITOR).post(f"{CASE}/packs/{pack}/items",
                                   json={"kind": "entity", "node_id": "nope", "caption": "x"}).status_code == 404
@@ -340,7 +365,7 @@ def test_an_assessment_is_frozen_as_written(world: World) -> None:
     draft = world.as_(EDITOR).get(f"{CASE}/packs/{pack}").json()
     assert draft["items"][0]["assessment"]["statement"] == "Likely a mule account"
     _publish(world, pack)
-    assert world.as_(READER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] == 1
+    assert world.as_(READER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] is True
 
 
 def test_a_note_is_marked_as_its_author_says_never_above_their_clearance(world: World) -> None:
@@ -390,11 +415,39 @@ def test_a_refreshed_snapshot_keeps_the_old_one_in_history(world: World) -> None
     assert world.as_(EDITOR).post(f"{CASE}/packs/{pack}/items/{note['id']}/refresh").status_code == 422
 
 
+def test_the_history_says_withheld_when_an_earlier_snapshot_is_one_the_reader_may_not_see(
+    world: World,
+) -> None:
+    """ADR-124 U9b: the one case that makes `PackHistory.withheld` true. A trend whose counted
+    events carried a SECRET handling is refreshed by a SECRET editor, so the replaced (earlier)
+    snapshot rests on a handling an OFFICIAL reader may not view. That reader is told only that
+    some are withheld, and the earlier copy is not in the response; a reader cleared for it is told
+    false and is served the copy. Every request is checked for 200 first."""
+    pack = _new_pack(world)
+    world.analytics.handlings = [
+        CountedHandling(classification="SECRET", handling_code="P", owning_unit="unit-1",
+                        originator="unit-1")]  # fmt: skip
+    old = _add(world, pack, kind="trend", trend_id="t1")
+    refreshed = world.as_(EDITOR).post(f"{CASE}/packs/{pack}/items/{old['id']}/refresh")
+    assert refreshed.status_code == 201, refreshed.text
+
+    low = world.as_(LOW_EDITOR).get(f"{CASE}/packs/{pack}/history")
+    assert low.status_code == 200, low.text
+    assert low.json()["withheld"] is True
+    assert low.json()["earlier_snapshots"] == []
+    assert old["id"] not in low.text, "never which"
+
+    high = world.as_(VIEWER).get(f"{CASE}/packs/{pack}/history")
+    assert high.status_code == 200, high.text
+    assert high.json()["withheld"] is False
+    assert [i["id"] for i in high.json()["earlier_snapshots"]] == [old["id"]]
+
+
 def test_a_publisher_cannot_publish_what_they_cannot_see(world: World) -> None:
     pack = _new_pack(world)
     _add(world, pack, kind="note", text="secret", classification="SECRET")
     refused = world.as_(LOW_EDITOR).post(f"{CASE}/packs/{pack}/publish")
-    assert refused.status_code == 409 and refused.json() == {"error": "pack_has_withheld_items", "withheld": 1}
+    assert refused.status_code == 409 and refused.json() == {"error": "pack_has_withheld_items", "withheld": True}
     empty = _new_pack(world)
     assert world.as_(EDITOR).post(f"{CASE}/packs/{empty}/publish").status_code == 422, "nothing to publish"
 
@@ -424,7 +477,7 @@ def test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up(world:
     assert (published["published_by"], published["published_by_name"]) == ("ed", "Edith Editor")
     world.names.asked.clear()
     read = world.as_(READER).get(f"{CASE}/packs/{pack}/published")
-    assert read.json()["published_by_name"] == "Edith Editor" and read.json()["withheld"] == 1
+    assert read.json()["published_by_name"] == "Edith Editor" and read.json()["withheld"] is True
     assert set(world.names.asked) == {"ed"}, "only who the response shows, never a withheld item's author"
     (listed,) = [p for p in world.as_(READER).get(f"{CASE}/published").json() if p["pack_id"] == pack]
     assert listed["published_by_name"] == "Edith Editor"
