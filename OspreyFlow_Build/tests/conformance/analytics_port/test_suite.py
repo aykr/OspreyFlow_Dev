@@ -1791,3 +1791,63 @@ async def test_a_retract_does_not_cross_investigations_it_was_not_asked_about(
         other = EventFilter(investigation_scope="case-2")
         page = await adapter.list_events(EventListRequest(filter=other), CLEARED)
         assert page.total == 1
+
+
+# --- retract_geometries (ADR-127 decision 6, B2-4c): taking back the points a load inserted ----
+#
+# A load records the refs of the points it inserted that were not already there, so a revert can
+# remove exactly those from the geometry partition and leave every other row.
+
+
+async def test_retract_geometries_removes_the_named_refs_at_that_version_and_nothing_else(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    ours = _geometry(geometry_ref="geo-ours", version=1)
+    ours_later = _geometry(geometry_ref="geo-ours", version=2, lon=-0.2)
+    other = _geometry(geometry_ref="geo-other", version=1, lon=-0.3)
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([ours, ours_later, other])
+        assert await adapter.retract_geometries(["geo-ours", "geo-missing"], version=1) == 1
+        assert await adapter.get_geometry("geo-ours", CLEARED, version=1) is None
+        assert await adapter.get_geometry("geo-ours", CLEARED, version=2) == ours_later
+        assert await adapter.get_geometry("geo-other", CLEARED, version=1) == other
+        found = await adapter.get_geometries(["geo-ours", "geo-other"], CLEARED, version=1)
+        assert [g.geometry_ref for g in found] == ["geo-other"]
+
+
+async def test_retract_geometries_is_idempotent_and_takes_no_refs_as_nothing(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([_geometry(geometry_ref="geo-ours")])
+        assert await adapter.retract_geometries([], version=1) == 0
+        assert await adapter.retract_geometries(["geo-ours"], version=1) == 1
+        assert await adapter.retract_geometries(["geo-ours"], version=1) == 0
+        assert await adapter.retract_geometries(["never-written"], version=1) == 0
+
+
+async def test_retract_geometries_counts_and_removes_a_row_no_reader_here_may_read(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Like `retract_load` it is a backend write, whatever the marking: a point above every reader
+    in the test is removed and counted, and none of its detail is left for the cleared reader."""
+    hidden = _geometry(geometry_ref="geo-hidden", classification="SECRET")
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([hidden])
+        assert await adapter.get_geometry("geo-hidden", OFFICIAL) is None
+        assert await adapter.get_geometry("geo-hidden", CLEARED) is not None
+        assert await adapter.retract_geometries(["geo-hidden"], version=1) == 1
+        assert await adapter.get_geometry("geo-hidden", CLEARED) is None
+
+
+async def test_retract_geometries_leaves_a_polygon_of_the_same_ref_at_another_version(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    point = _geometry(geometry_ref="geo-1", version=1)
+    boundary = _boundary(geometry_ref="geo-b", version=2)
+    async with factory.context([]) as adapter:
+        await adapter.load_geometries([point, boundary])
+        assert await adapter.retract_geometries(["geo-1", "geo-b"], version=1) == 1
+        assert [b.geometry_ref for b in await adapter.list_boundaries(CLEARED, version=2)] == [
+            "geo-b"
+        ]

@@ -122,6 +122,15 @@ class AnalyticsPort(Protocol):
 
     async def load_geometries(self, records: Sequence[GeometryRecord]) -> None: ...
 
+    async def retract_geometries(self, geometry_refs: Sequence[str], *, version: int) -> int:
+        """Removes the rows of these refs at this partition version (ADR-127 decision 6: a revert
+        takes back the points its load inserted, which its record lists) and returns how many.
+        Removes nothing else: another ref, and the same ref at another version, stay. Idempotent:
+        a ref already gone, or never written, removes nothing and raises nothing; no refs remove
+        nothing. A backend write, not principal-scoped, like `load_geometries`: it counts and
+        removes a row whatever its marking; afterwards no read, for any principal, returns it."""
+        ...
+
     async def get_geometry(
         self, geometry_ref: str, principal: Principal, *, version: int | None = None
     ) -> GeometryRecord | None: ...

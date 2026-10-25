@@ -11,9 +11,8 @@ docstring: where a load ledger lives durably "is not decided here"). What
 this module returns from a run is the `LoadReport` `run_recipe` already
 produces, attributed with `load_id`/`recipe_id`/`recipe_version` exactly the
 way `StagedRow` already threads those through (`01_DOMAIN_MODEL.md` §2.4) —
-enough for `revert_load` (`services/ingest/revert.py`) to act on later, once
-a durable ledger exists to hand it one (Phase 8's own territory, per
-`revert.py`'s own docstring).
+enough for the revert (`services/ingest/load_revert.py`) to act on; the run
+ledger now keeps each load's record (ADR-127 decision 6).
 """
 
 from __future__ import annotations

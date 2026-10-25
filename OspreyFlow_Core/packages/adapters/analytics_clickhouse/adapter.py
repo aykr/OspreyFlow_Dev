@@ -676,6 +676,26 @@ class AnalyticsClickHouseAdapter:
             ],
         )
 
+    async def retract_geometries(self, geometry_refs: Sequence[str], *, version: int) -> int:
+        """`AnalyticsPort.retract_geometries`: these refs at this version, whatever their marking.
+        Counted first (a mutation reports no count), then deleted; the delete is waited for
+        (`_SYNC`), so a read straight after sees none of them. Unproven here: no ClickHouse was
+        available to run it, so the coordinator's live run is its first."""
+        refs = list(dict.fromkeys(geometry_refs))
+        if not refs:
+            return 0
+        (row,) = await self._ch.rows(
+            "SELECT count() FROM geometries WHERE version = ? AND has(?, geometry_ref)",
+            [version, refs],
+        )
+        removed = int(row[0])
+        if removed:
+            await self._ch.command(
+                "ALTER TABLE geometries DELETE WHERE version = ? AND has(?, geometry_ref)" + _SYNC,
+                [version, refs],
+            )
+        return removed
+
     async def _current_partition_version(self) -> int | None:
         rows = await self._ch.rows("SELECT maxOrNull(version) FROM geometries")
         return None if not rows or rows[0][0] is None else int(rows[0][0])

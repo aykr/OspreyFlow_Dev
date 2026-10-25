@@ -21,17 +21,17 @@ export type CreatedGeometryRefs = string[];
 export type UncoveredWrites = boolean;
 export type ReleasedFrom = string | null;
 export type EventsStamped = boolean;
+export type RevertedAt = string | null;
 
 /**
  * One execution of a recipe against a source — the persisted form of
  * a `LoadReport`. `created_node_ids` is only the nodes this load
  * created, never one it merely referenced; `touched_edge_ids` is every
- * edge it wrote to, created or merged into. This asymmetry is what makes
- * `revert_load` safe: reverting a node this load created can never
- * affect another load, but an edge is shared the moment two loads touch
- * the same pair, which is why `GraphArcadeDBAdapter.revert_elements`
- * only ever sets a flag rather than deleting — the audit trail (and any
- * other load's claim on the same edge) stays intact regardless. Every
+ * edge it wrote to, created or merged into. The revert
+ * (`services/ingest/load_revert.py`) reads the created lists only and refuses a load that
+ * merged: an element a load created can be taken back without affecting another load, but
+ * one it merged into is shared, and `GraphArcadeDBAdapter.revert_elements` only ever sets a
+ * flag rather than deleting, so the audit trail stays intact regardless. Every
  * element also carries `load_id` on its own `AuditStub`, so filtering
  * the graph directly by load or recipe version never needs this ledger
  * at all; the ledger is for load-level operations (revert, history) a
@@ -58,5 +58,7 @@ export interface LoadRecord {
   released_from?: ReleasedFrom;
   events_stamped?: EventsStamped;
   superseded_by?: PrincipalId | null;
+  reverted_at?: RevertedAt;
+  reverted_by?: PrincipalId | null;
   [k: string]: unknown;
 }

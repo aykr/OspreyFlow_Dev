@@ -22,8 +22,8 @@ import pytest
 from services.ingest.connectors.csv_connector import read_csv
 from services.ingest.engine import StaleRecipeError, preview_handling_and_provenance, run_recipe
 from services.ingest.load_ledger import load_record_from_report
+from services.ingest.load_revert import RevertDeps, RevertRefused, revert
 from services.ingest.recipe_loader import load_recipe
-from services.ingest.revert import LoadAlreadyRevertedError, revert_load
 
 from adapters.analytics_duckdb.testing import duckdb_adapter
 from adapters.graph_arcadedb.testing import arcadedb_adapter
@@ -31,6 +31,7 @@ from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.analytics import EventFilter, HistogramBucketing, HistogramRequest
 from schemas.domain import ExpandRequest, Interval, Principal
+from tests.ingest.test_revert_load import Alerts, Audit, Held, Ledger, Steps
 
 FIXTURES = Path(__file__).resolve().parents[1] / "scenarios" / "fixtures"
 
@@ -122,8 +123,9 @@ async def test_cdr_fixture_loads_through_a_hand_written_recipe(tmp_path: Path) -
             )
             assert dst_bucket.count == 1
 
-        # Reverting the load — 09_INGEST_STUDIO.md §6: "A load is a unit."
-        # No osprey CLI; a plain function, tested directly.
+        # Reverting the load — 09_INGEST_STUDIO.md §6: "A load is a unit." The revert reads the
+        # load's record (the ids it created, never the `load_id` stored on an element) and refuses a
+        # load that merged (ADR-127 Amendment 6); the ledger and the audit trail are stand-ins here.
         started_at = datetime.now(UTC)
         record = load_record_from_report(
             report,
@@ -132,27 +134,48 @@ async def test_cdr_fixture_loads_through_a_hand_written_recipe(tmp_path: Path) -
             started_at=started_at,
             now=started_at,
         )
-        revert_tx = await graph.begin_transaction()
-        reverted_record = await revert_load(
-            record, graph=graph, tx=revert_tx, reverted_by="reviewer-1", now=datetime.now(UTC)
-        )
-        await graph.commit_transaction(revert_tx)
+        assert record.merged_edge_ids == [] and record.merged_node_ids == []
+        steps = Steps()
+        async with duckdb_adapter(events, scheme) as analytics:
+            assert all(e.load_id == "load-1" for e in events)
+            deps = RevertDeps(
+                ledger=Ledger(record),
+                graph=graph,
+                analytics=analytics,
+                held_rows=Held(steps),
+                alerts=Alerts(steps),
+                audit=Audit(steps),
+            )
+            result = await revert(
+                "load-1", reverted_by="reviewer-1", deps=deps, now=datetime.now(UTC)
+            )
+            (reverted,) = result.reverted
+            assert (reverted.nodes, reverted.events) == (2, len(events))
+            window = Interval(
+                valid_from=datetime(2026, 1, 1, tzinfo=UTC),
+                valid_to=datetime(2026, 4, 1, tzinfo=UTC),
+            )
+            gone = await analytics.histogram(
+                HistogramRequest(
+                    filter=EventFilter(investigation_scope="case-cdr-fixture", window=window),
+                    bucketing=HistogramBucketing.FIXED_INTERVAL,
+                    interval_seconds=86400,
+                ),
+                CLEARED,
+            )
+            assert gone.total == 0, "the load's events left the timeline with it"
 
-        assert reverted_record.superseded_by == "reviewer-1"
+        assert deps.ledger.records["load-1"].reverted_by == "reviewer-1"  # type: ignore[attr-defined]
         assert await graph.get_node(endpoint.id, CLEARED) is None
         assert (
             await graph.find_node("Endpoint", "value_normalised", "+441621926368", CLEARED)
             is None
         )
 
-        with pytest.raises(LoadAlreadyRevertedError):
-            await revert_load(
-                reverted_record,
-                graph=graph,
-                tx=revert_tx,
-                reverted_by="reviewer-2",
-                now=datetime.now(UTC),
-            )
+        # A second revert is refused, and changes nothing more.
+        with pytest.raises(RevertRefused) as refused:
+            await revert("load-1", reverted_by="reviewer-2", deps=deps, now=datetime.now(UTC))
+        assert [r.reason for r in refused.value.refusals] == ["already_reverted"]
 
 
 async def test_a_stale_recipe_is_blocked_not_silently_run(tmp_path: Path) -> None:

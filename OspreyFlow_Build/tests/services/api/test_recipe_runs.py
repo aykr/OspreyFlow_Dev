@@ -12,11 +12,15 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from conduit_common.identity import new_id
-from schemas.domain import Handling
-from schemas.ingest import LoadRecord, LoadReport, RejectionRecord
+from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
+from services.api.held_rows import HeldRowStore
 from services.api.recipe_runs import RecipeRunStore
+
+from conduit_common.identity import new_id
+from ontology.handling import load_uk_le_scheme
+from schemas.domain import Alert, AlertMode, Handling, HeldRow
+from schemas.ingest import LoadRecord, LoadReport, RejectionRecord
 
 SOURCE = Handling(
     classification="OFFICIAL", handling_code="P", owning_unit="unit-1", originator="unit-1"
@@ -315,3 +319,190 @@ async def test_a_ledger_made_before_records_is_brought_forward_and_keeps_its_run
     finally:
         await conn.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
         await conn.close()
+
+
+# --- ADR-127 Amendments 5 and 6, B2-4c: what the revert asks of the ledger -----------------------
+
+
+async def test_a_pipeline_runs_branches_are_found_by_the_run_prefix_and_not_by_a_longer_id(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, base = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _record(f"{base}:s1", recipe))
+    await runs.add_record(run_id, _record(f"{base}:s2", recipe))
+    await runs.add_record(run_id, _record(f"{base}0:s1", recipe))  # `base` followed by a digit
+    found = await runs.records_with_prefix(f"{base}:")
+    assert sorted(r.load_id for r in found) == [f"{base}:s1", f"{base}:s2"]
+    assert await runs.records_with_prefix(f"{new_id()}:") == []
+
+
+async def test_the_releases_of_a_load_are_found_by_released_from(runs: RecipeRunStore) -> None:
+    recipe, held, other = new_id(), new_id(), new_id()
+    parent = await _started(runs, recipe)
+    await runs.add_record(parent, _record(held, recipe))
+    for i, source in enumerate((held, held, other)):
+        release = await _started(runs, recipe, trigger="release")
+        await runs.add_record(release, _record(f"{held}-rel-{i}", recipe, released_from=source))
+    found = await runs.releases_of(held)
+    assert sorted(r.load_id for r in found) == [f"{held}-rel-0", f"{held}-rel-1"]
+    assert await runs.releases_of(new_id()) == []
+
+
+async def test_a_record_is_marked_reverted_and_its_neighbours_are_not(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, base = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _record(f"{base}:s1", recipe))
+    await runs.add_record(run_id, _record(f"{base}:s2", recipe))
+    at = T0 + timedelta(hours=1)
+    await runs.mark_reverted(f"{base}:s1", reverted_by="operator-1", at=at)
+    first, second = await runs.load_record(f"{base}:s1"), await runs.load_record(f"{base}:s2")
+    assert first is not None and (first.reverted_at, first.reverted_by) == (at, "operator-1")
+    assert second is not None and (second.reverted_at, second.reverted_by) == (None, None)
+    # A revert is not a supersession: a ledger reader must not mistake one for the other.
+    assert (first.superseded_at, first.superseded_by) == (None, None)
+    # The record is otherwise as it was, and the branches keep their order in the row.
+    assert first.created_node_ids == ["n1", "n2"] and first.events_stamped is True
+    assert [r.load_id for r in await runs.records_with_prefix(f"{base}:")] == [
+        f"{base}:s1", f"{base}:s2",
+    ]  # fmt: skip
+
+
+async def test_the_records_that_merged_into_given_elements_are_found_unreverted_only(
+    runs: RecipeRunStore,
+) -> None:
+    """ADR-127 Amendment 6: a revert refuses while an unreverted record outside it lists one of its
+    created nodes or links as merged into. Matched on either list, a reverted record is left out."""
+    recipe = new_id()
+    run_id = await _started(runs, recipe)
+    link, node, other = new_id(), new_id(), new_id()
+
+    def merging(load_id: str, *, nodes: list[str], links: list[str]) -> LoadRecord:
+        return _record(load_id, recipe).model_copy(
+            update={"merged_node_ids": nodes, "merged_edge_ids": links}
+        )
+
+    await runs.add_record(run_id, merging("by-link", nodes=[], links=[link, other]))
+    await runs.add_record(run_id, merging("by-node", nodes=[node], links=[]))
+    await runs.add_record(run_id, merging("by-neither", nodes=[], links=[other]))
+    await runs.add_record(run_id, merging("by-both-but-reverted", nodes=[], links=[link]))
+    await runs.mark_reverted("by-both-but-reverted", reverted_by="operator-1", at=T0)
+    found = await runs.records_merging([node], [link])
+    assert sorted(r.load_id for r in found) == ["by-link", "by-node"]
+    assert await runs.records_merging([], []) == []
+    assert await runs.records_merging([new_id()], [new_id()]) == []
+
+
+async def test_marking_a_load_the_ledger_holds_no_record_of_is_an_error(
+    runs: RecipeRunStore,
+) -> None:
+    with pytest.raises(KeyError):
+        await runs.mark_reverted(new_id(), reverted_by="operator-1", at=T0)
+
+
+# --- the same revert's other two stores (held rows, the alert queue) --------------------------
+#
+# `tests/ingest/test_revert_load.py` proves the revert's logic against fakes that hold to these two
+# methods; these show the SQL does what the fakes say. `discard_for_load` rejects a load's rows
+# still held, leaves rows already released or rejected, touches no other load's and returns 0 the
+# second time. `close_for_elements` closes the alerts that are the load's own or cite a reverted
+# node or link, once, with no disposition, and leaves every other alert, closed ones included.
+
+
+@pytest.fixture
+async def held() -> AsyncIterator[HeldRowStore]:
+    store = await HeldRowStore.connect(PostgresConfig.from_env().dsn, load_uk_le_scheme())
+    try:
+        yield store
+    finally:
+        await store.close()
+
+
+@pytest.fixture
+async def alerts() -> AsyncIterator[AlertStore]:
+    store = await AlertStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        yield store
+    finally:
+        await store.close()
+
+
+def _row(load_id: str, index: int, status: str = "held") -> HeldRow:
+    return HeldRow(
+        id=new_id(), investigation_id="case-1", recipe_id="r", recipe_version=1, load_id=load_id,
+        source="s.csv", row_index=index, row={"a": "1"}, rule_id="rule-1", reason="overran",
+        handling=SOURCE, status=status, held_at=T0,  # type: ignore[arg-type]
+    )  # fmt: skip
+
+
+async def test_the_rows_of_a_reverted_load_still_held_are_rejected_and_no_others(
+    held: HeldRowStore,
+) -> None:
+    load, other = new_id(), new_id()
+    rows = [_row(load, 0), _row(load, 1), _row(load, 2, "released"), _row(other, 0)]
+    await held.hold(rows)
+    assert await held.discard_for_load(load, discarded_by="operator-1", at=T0) == 2
+    assert await held.discard_for_load(load, discarded_by="operator-1", at=T0) == 0
+    pending = await held._pool.fetch(
+        "SELECT load_id, status, decided_by, decision_reason FROM held_rows "
+        "WHERE load_id = ANY($1::text[]) ORDER BY load_id, row_index",
+        [load, other],
+    )
+    by = {(r["load_id"], r["status"]) for r in pending}
+    assert by == {(load, "rejected"), (load, "released"), (other, "held")}
+    rejected = [r for r in pending if r["status"] == "rejected"]
+    assert {r["decided_by"] for r in rejected} == {"operator-1"}
+    assert all(load in r["decision_reason"] for r in rejected)
+
+
+def _alert(node: str | None, status: str = "open", **fields: object) -> Alert:
+    return Alert(
+        id=new_id(), rule_id="rule-1", owner_id="owner-1", mode=AlertMode.NOTIFY_STUB,
+        investigation_id="case-1", created_at=T0, alert_node_id=node, status=status,  # type: ignore[arg-type]
+        **fields,  # type: ignore[arg-type]
+    )  # fmt: skip
+
+
+async def test_the_alerts_resting_on_reverted_elements_are_closed_once_and_no_others(
+    alerts: AlertStore,
+) -> None:
+    """An alert is closed when its own node, a node it cites or a link it cites is one of the
+    reverted ids; one that cites none of them, and one already closed, are left as they were."""
+    own, cited_node, cited_link = new_id(), new_id(), new_id()
+    closed_node, kept_node, kept_link = new_id(), new_id(), new_id()
+    by_own = _alert(own)
+    by_node = _alert(new_id(), referent_node_ids=[cited_node])
+    by_link = _alert(new_id(), edge_ids=[cited_link])
+    theirs = _alert(kept_node, referent_node_ids=[kept_node], edge_ids=[kept_link])
+    done = _alert(closed_node, "closed")
+    plain = _alert(None)  # no node, nothing cited
+    for alert in (by_own, by_node, by_link, theirs, done, plain):
+        await alerts.save(alert)
+    closed = await alerts.close_for_elements(
+        [own, cited_node, closed_node, new_id()], [cited_link, new_id()],
+        closed_by="operator-1", at=T0, reason="load x was reverted",
+    )  # fmt: skip
+    assert closed == 3, "its own, one citing a node, one citing a link; the closed one not again"
+    again = await alerts.close_for_elements(
+        [own], [cited_link], closed_by="operator-1", at=T0, reason="x"
+    )
+    assert again == 0
+    nothing = await alerts.close_for_elements([], [], closed_by="o", at=T0, reason="x")
+    assert nothing == 0
+    ids = [a.id for a in (by_own, by_node, by_link, theirs, done, plain)]
+    rows = {
+        r["id"]: r
+        for r in await alerts._pool.fetch(
+            "SELECT id, status, decided_by, disposition, disposition_reason FROM alerts "
+            "WHERE id = ANY($1::text[])",
+            ids,
+        )
+    }
+    for alert in (by_own, by_node, by_link):
+        assert rows[alert.id]["status"] == "closed" and rows[alert.id]["decided_by"] == "operator-1"
+        assert rows[alert.id]["disposition"] is None
+        assert rows[alert.id]["disposition_reason"] == "load x was reverted"
+    assert rows[theirs.id]["status"] == "open" and rows[plain.id]["status"] == "open"
+    assert rows[done.id]["decided_by"] is None, "a closed alert keeps who closed it"

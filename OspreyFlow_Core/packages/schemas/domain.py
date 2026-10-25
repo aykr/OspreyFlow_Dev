@@ -304,8 +304,8 @@ class AuditStub(BaseModel):
     recipe_version: int | None = None
     #: A universal axis, not principal-dependent: a reverted element is
     #: invisible to every read, any clearance, the same way a `SECRET`
-    #: record is invisible to an unauthorised one — `services/ingest`'s
-    #: `revert_load` is the only writer, via `GraphPort.revert_elements`
+    #: record is invisible to an unauthorised one — `services/ingest/load_revert.py`
+    #: is the only writer, via `GraphPort.revert_elements`
     #: (Phase 2; `01_DOMAIN_MODEL.md` §2.4).
     reverted: bool = False
 

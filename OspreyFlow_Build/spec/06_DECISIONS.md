@@ -18006,3 +18006,48 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   cases included, wrote it. A reader cleared for several sees each; route counts (ADR-116) and the
   Glass's community weights count them separately until the later Glass unit shows parallel links as
   one.
+
+### ADR-127, Amendment 8 (25 October 2026) — B2-4c1: the revert
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **The command.** `python -m scripts.revert_load <load_id> --reverted-by <principal id>`, an operator's
+  module (`services/ingest/load_revert.py` holds the logic). A pipeline run's id means every branch;
+  a branch's id that branch. Exit 0 reverted, 1 refused with nothing changed, 2 stopped part way.
+- **What it refuses, judged for every record in the plan before anything changes:** no record; a record
+  without `events_stamped`; merged nodes or links, except merges into elements another record of the same
+  plan created; `uncovered_writes`; a load already reverted; a later load, outside the plan and not
+  reverted, that merged into one of the plan's created nodes or links; and a live link, not created by
+  the plan, that touches a node the plan created (a later load that referenced it). Each is named by a
+  count, never an id. The revert's checks use internal, unfiltered port methods confined to it, as
+  `existing_node_ids` is confined to the engine: `live_edges_touching` for the resting links,
+  `stored_writes` for the rewritten-node check and the rerun rule, and `live_nodes_naming_geometry` for
+  the points; the later-load merge is read from the ledger (`records_merging`).
+- **The cascade.** Releases of the load's held rows are reverted first, newest first, in the same plan.
+- **What it does, each step idempotent and the ledger marked last,** so a rerun after a failure
+  completes it: marks the created nodes and links reverted, by type through the unique index (an id held
+  by two types of one kind stops the revert, fail-closed, and it cannot complete until the duplicate id is
+  resolved, which the id scheme makes very unlikely); retracts the load's events; removes the geometry points it
+  inserted that no live node outside the plan still names (a shared point stays); discards its pending
+  held rows; closes the alerts it wrote and alerts citing its created nodes or links; writes an audit
+  entry; and marks the record `reverted_by` and `reverted_at`. A created node is reverted only when its
+  stored `load_id` is one of the plan's own: on a first attempt, a created node another writer has
+  since rewritten (another load, or a writer with no load, such as a Files-tab upload into the same
+  content Document) is a refusal by count; only on a rerun, when an earlier attempt has already
+  reverted some of the plan's nodes, is such a node left alone and named.
+- **A write onto a reverted node** clears only `reverted` and takes the new body. A node that is also
+  superseded stays superseded, so reads follow its successor and no older revision comes back; it is
+  recorded as merged. This replaces Amendment 6's "`existing_node_ids` then excludes reverted nodes":
+  it excludes a node that is reverted and not superseded, and names one that is both.
+- **Known, recorded:**
+  - an alert of another load citing events this load wrote stays listed until opened, when it answers
+    not found; it is stale, not a leak;
+  - open working sets and snapshots keep reverted elements until unit B2-4c2, so the demo reset must not
+    use the revert before that unit lands;
+  - the operator's `--clearance` for `--show-ids` is self-declared, so the id filter is a courtesy, and
+    the script must never be offered through the Conduit;
+  - the script does not tell the Conduit's caches of the revert (the explore cache, the dataset
+    stamping's written set); they over-count or remember ids but hold nothing hidden from their reader.
+    B2-4c2 must invalidate them with the working sets before the reset relies on the revert;
+  - analysts' notes and link changes on a link the revert hides stay keyed to that link, orphaned.
+- **Superseded by this unit:** the ingest service's earlier `revert_load`, which reverted merged links, is
+  deleted.

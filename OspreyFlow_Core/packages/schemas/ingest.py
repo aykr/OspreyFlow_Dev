@@ -6,7 +6,7 @@
 `09_INGEST_STUDIO.md` §6 shows — the studio (Phase 5a) will be an editor for
 this same file, not a second format. `LoadRecord` is the ledger entry one
 execution of a recipe against one source produces: what it created, so
-`services/ingest`'s `revert_load` can supersede a whole load as a unit
+`services/ingest/load_revert.py` can revert a whole load as a unit
 without re-deriving what belongs to it.
 """
 
@@ -1072,12 +1072,11 @@ class LoadRecord(BaseModel):
     """One execution of a recipe against a source — the persisted form of
     a `LoadReport`. `created_node_ids` is only the nodes this load
     created, never one it merely referenced; `touched_edge_ids` is every
-    edge it wrote to, created or merged into. This asymmetry is what makes
-    `revert_load` safe: reverting a node this load created can never
-    affect another load, but an edge is shared the moment two loads touch
-    the same pair, which is why `GraphArcadeDBAdapter.revert_elements`
-    only ever sets a flag rather than deleting — the audit trail (and any
-    other load's claim on the same edge) stays intact regardless. Every
+    edge it wrote to, created or merged into. The revert
+    (`services/ingest/load_revert.py`) reads the created lists only and refuses a load that
+    merged: an element a load created can be taken back without affecting another load, but
+    one it merged into is shared, and `GraphArcadeDBAdapter.revert_elements` only ever sets a
+    flag rather than deleting, so the audit trail stays intact regardless. Every
     element also carries `load_id` on its own `AuditStub`, so filtering
     the graph directly by load or recipe version never needs this ledger
     at all; the ledger is for load-level operations (revert, history) a
@@ -1113,6 +1112,12 @@ class LoadRecord(BaseModel):
     released_from: str | None = None
     events_stamped: bool = False
     superseded_by: PrincipalId | None = None
+    #: Who reverted the load and when (ADR-127 decision 6, `services/ingest/load_revert.py`):
+    #: written last by a revert, so a record with `reverted_at` is one whose revert finished. Apart
+    #: from `superseded_*`, which say a record was replaced and which a revert never writes. A
+    #: record from before has neither, and reads as not reverted.
+    reverted_at: datetime | None = None
+    reverted_by: PrincipalId | None = None
 
 
 ALL_MODELS: tuple[type[BaseModel], ...] = (

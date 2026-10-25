@@ -27,7 +27,14 @@ from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, audience_of, audience_parts, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ontology.weights import WeightRules, load_weight_rules
-from ports.graph import BulkEdgeResult, NodeSuggestions, SubgraphTooLarge, SuggestOptions
+from ports.graph import (
+    AmbiguousElementId,
+    BulkEdgeResult,
+    NodeSuggestions,
+    StoredNode,
+    SubgraphTooLarge,
+    SuggestOptions,
+)
 from schemas.compute import LinkStructure, StructureEdge, StructureNode
 from schemas.domain import (
     AuditStub,
@@ -89,6 +96,7 @@ from .builders import (
     render_get_edges_gremlin,
     render_get_nodes_gremlin,
     render_link_structure_gremlin,
+    render_live_node_ids_sql,
     render_recent_loads_gremlin,
     render_recently_confirmed_gremlin,
     render_record_id_lookup_sql,
@@ -251,7 +259,12 @@ class GraphArcadeDBAdapter:
 
             node_id = write.id
             existing = await self._find_existing_node(node_id, session_id=tx)
-            if existing is not None:
+            # A reverted node is not merged into (ADR-127 Amendment 6): its body, marking and
+            # datasets were taken back with its load, so none of them may carry into the write.
+            # The write is a fresh create under the same id, which `UPDATE` below clears of
+            # `reverted` because the new audit is `reverted = false`.
+            replaces_reverted = existing is not None and existing.get("reverted") is True
+            if existing is not None and not replaces_reverted:
                 existing_audit = AuditStub.model_validate(existing["audit"])
                 audit = existing_audit.model_copy(
                     update={
@@ -274,6 +287,13 @@ class GraphArcadeDBAdapter:
                     load_id=write.load_id,
                     recipe_id=write.recipe_id,
                     recipe_version=write.recipe_version,
+                    # Only `reverted` is cleared: a node superseded as well stays the old revision,
+                    # so reads keep following its successor (the stored property is left as it is).
+                    superseded_by=(
+                        existing.get("superseded_by")
+                        if existing is not None and replaces_reverted
+                        else None
+                    ),
                 )
                 merged_provenance = write.provenance
                 merged_properties = write.properties
@@ -293,7 +313,7 @@ class GraphArcadeDBAdapter:
             )
             type_name = groovy_identifier(physical_type_name(write.type))
             set_clause = ", ".join(f"{key} = :{key}" for key in props)
-            if existing is not None:
+            if existing is not None:  # live (merged above) or reverted (replaced whole)
                 await self._client.sql(
                     f"UPDATE {type_name} SET {set_clause} WHERE id = :id",
                     params=props,
@@ -725,7 +745,7 @@ class GraphArcadeDBAdapter:
         for chunk in chunks:
             rows = await asyncio.gather(
                 *(
-                    self._client.sql(render_existing_ids_sql(t), params={"ids": chunk})
+                    self._client.sql(render_live_node_ids_sql(t), params={"ids": chunk})
                     for t in types
                 )
             )
@@ -1200,18 +1220,126 @@ class GraphArcadeDBAdapter:
     async def revert_elements(
         self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], tx: TxId
     ) -> None:
-        if node_ids:
-            ids_literal = groovy_string_list_literal(list(node_ids))
-            await self._client.gremlin(
-                f'g.V().has("id",within({ids_literal})).property("reverted", true)',
+        # Resolved first, written after: an id two types of one kind hold cannot be told apart (a
+        # load's record keeps no types), and the call is refused before any of it is written.
+        # Nodes are looked up among the vertex types only and links among the edge types only, so
+        # a node id that is also a link's id reverts the node alone. Each id is found through its
+        # type's unique `id` index and set by SQL on that type, in chunks (`has("id", within(...))`
+        # scans the store, and `g.E()` matches a link of any type). Setting the flag again on an
+        # element is harmless, which is what lets a rerun repeat a chunk.
+        plan = [
+            *[("node", t, ids) for t, ids in await self._holders("vertex", node_ids, tx)],
+            *[("link", t, ids) for t, ids in await self._holders("edge", edge_ids, tx)],
+        ]
+        for _, type_name, ids in plan:
+            await self._client.sql(
+                f"UPDATE `{groovy_identifier(type_name)}` SET reverted = true WHERE id IN :ids",
+                params={"ids": ids},
                 session_id=tx,
             )
-        if edge_ids:
-            ids_literal = groovy_string_list_literal(list(edge_ids))
-            await self._client.gremlin(
-                f'g.E().has("id",within({ids_literal})).property("reverted", true)',
-                session_id=tx,
+
+    async def _holders(
+        self, kind: str, ids: Sequence[str], tx: TxId | None = None
+    ) -> list[tuple[str, list[str]]]:
+        """For `ids`, the stored types of `kind` ("vertex" or "edge") that hold them, as (type, ids)
+        in chunks of the adapter's size, each type's ids found from its unique `id` index. An id
+        held by two types raises `AmbiguousElementId`, naming how many, never which."""
+        chunks = _id_chunks(ids)
+        if not chunks:
+            return []
+        types = await self._types_with_unique_id(kind)
+        held: dict[str, list[str]] = {}
+        owner: dict[str, str] = {}
+        ambiguous: set[str] = set()
+        for chunk in chunks:
+            found = await asyncio.gather(
+                *(
+                    self._client.sql(
+                        render_existing_ids_sql(t), params={"ids": chunk}, session_id=tx
+                    )
+                    for t in types
+                )
             )
+            for type_name, rows in zip(types, found, strict=True):
+                for row in rows:
+                    node_id = str(row["id"])
+                    if node_id in owner and owner[node_id] != type_name:
+                        ambiguous.add(node_id)
+                    owner[node_id] = type_name
+                    held.setdefault(type_name, []).append(node_id)
+        if ambiguous:
+            raise AmbiguousElementId("node" if kind == "vertex" else "link", len(ambiguous))
+        return [
+            (type_name, chunk)
+            for type_name, found_ids in held.items()
+            for chunk in _id_chunks(found_ids)
+        ]
+
+    async def live_edges_touching(self, node_ids: Sequence[NodeId]) -> set[EdgeId]:
+        found: set[EdgeId] = set()
+        types = None
+        for chunk in _id_chunks(node_ids):
+            types = types if types is not None else await self._types_with_unique_id("vertex")
+            rids = await self._record_ids(types, chunk)
+            if not rids:
+                continue
+            # By record id, not by `has("id", ...)`: the node is read from its index, and only its
+            # own links are walked. Live links only: neither reverted nor superseded, as every read.
+            ids_literal = groovy_string_list_literal(rids)
+            rows = await self._client.gremlin(
+                f'g.V({ids_literal}).bothE().has("reverted",false).hasNot("superseded_by").values("id")'
+            )
+            found.update(str(row["result"]) for row in rows)
+        return found
+
+    async def live_nodes_naming_geometry(
+        self, geometry_refs: Sequence[str]
+    ) -> dict[str, set[NodeId]]:
+        named: dict[str, set[NodeId]] = {}
+        chunks = _id_chunks(geometry_refs)
+        types = await self._types_with_unique_id("vertex") if chunks else []
+        for chunk in chunks:
+            # `geometry_ref` is an unindexed property, held in the node's `properties` map, so this
+            # reads each vertex type's own rows: an operator's lookup at revert, not a read path.
+            results = await asyncio.gather(
+                *(
+                    self._client.sql(
+                        f"SELECT id, properties.geometry_ref AS ref "
+                        f"FROM `{groovy_identifier(t)}` WHERE properties.geometry_ref IN :refs "
+                        "AND (reverted = false OR reverted IS NULL) AND superseded_by IS NULL",
+                        params={"refs": chunk},
+                    )
+                    for t in types
+                )
+            )
+            for rows in results:
+                for row in rows:
+                    named.setdefault(str(row["ref"]), set()).add(str(row["id"]))
+        return named
+
+    async def stored_writes(self, node_ids: Sequence[NodeId]) -> dict[NodeId, StoredNode]:
+        found: dict[NodeId, StoredNode] = {}
+        chunks = _id_chunks(node_ids)
+        types = await self._types_with_unique_id("vertex") if chunks else []
+        for chunk in chunks:
+            results = await asyncio.gather(
+                *(
+                    self._client.sql(
+                        f"SELECT id, audit.load_id AS load_id, reverted "
+                        f"FROM `{groovy_identifier(t)}` WHERE id IN :ids",
+                        params={"ids": chunk},
+                    )
+                    for t in types
+                )
+            )
+            for rows in results:
+                for row in rows:
+                    load_id = row.get("load_id")
+                    found[str(row["id"])] = StoredNode(
+                        load_id=None if load_id is None else str(load_id),
+                        reverted=row.get("reverted") is True,
+                    )
+        return found
 
     # --- one-off provenance rewrite -------------------------------------------
 

@@ -248,6 +248,28 @@ def test_a_record_with_no_stamp_marker_reads_as_not_stamped() -> None:
     )
     assert old.events_stamped is False
     assert old.released_from is None and old.merged_edge_ids == []
+    # Nor was it ever reverted: the two fields a revert writes read as absent, and a record that was
+    # superseded under the old name is not read as reverted.
+    assert (old.reverted_at, old.reverted_by) == (None, None)
+
+
+def test_a_revert_is_not_a_supersession_in_the_record() -> None:
+    from schemas.ingest import LoadRecord
+
+    record = LoadRecord.model_validate(
+        {
+            "load_id": "x",
+            "recipe_id": "r",
+            "recipe_version": 1,
+            "source": "s",
+            "started_at": "2026-01-01T00:00:00Z",
+            "created_by": "loader-1",
+            "reverted_at": "2026-02-01T00:00:00Z",
+            "reverted_by": "operator-1",
+        }
+    )
+    assert record.reverted_by == "operator-1" and record.reverted_at is not None
+    assert (record.superseded_at, record.superseded_by) == (None, None)
 
 
 async def test_a_content_document_that_already_exists_is_recorded_as_merged_not_created() -> None:

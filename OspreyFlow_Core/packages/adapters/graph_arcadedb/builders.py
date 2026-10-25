@@ -278,6 +278,18 @@ def render_existing_ids_sql(type_name: str) -> str:
     return f"SELECT id FROM `{groovy_identifier(type_name)}` WHERE id IN :ids"
 
 
+def render_live_node_ids_sql(type_name: str) -> str:
+    """`render_existing_ids_sql` for nodes, leaving out a node that is reverted and nothing else
+    (`existing_node_ids`). A write onto a reverted node is a fresh create (ADR-127 Amendment 6),
+    so for the load about to record what it created, a reverted node is absent. A superseded node
+    is named, reverted or not, because a write to it still merges: it stays superseded, so the
+    load records it as merged. Still the type's unique `id` index."""
+    return (
+        f"SELECT id FROM `{groovy_identifier(type_name)}` WHERE id IN :ids "
+        "AND (reverted = false OR reverted IS NULL OR superseded_by IS NOT NULL)"
+    )
+
+
 def render_get_nodes_gremlin(
     record_ids: Sequence[str], access: AccessFilter, principal: Principal
 ) -> str:

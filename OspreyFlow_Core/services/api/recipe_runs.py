@@ -14,6 +14,7 @@ principal; it is never read except through those routes.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Literal, get_args
 
@@ -237,6 +238,73 @@ class RecipeRunStore:
                 load_id,
             )
         return None if kept is None else LoadRecord.model_validate_json(kept)
+
+    async def records_with_prefix(self, prefix: str) -> list[LoadRecord]:
+        """The records whose load id starts with `prefix`, oldest first: a pipeline run's branches
+        are `<run>:<source node>`, so `"<run>:"` finds every one of that run and no other (`run1:`
+        does not match `run10:`). For the revert."""
+        async with self._pool.acquire() as conn:
+            kept = await conn.fetch(
+                "SELECT rec FROM recipe_runs, jsonb_array_elements(load_records) AS rec "
+                "WHERE load_records IS NOT NULL AND starts_with(rec->>'load_id', $1) "
+                "ORDER BY started_at, rec->>'load_id'",
+                prefix,
+            )
+        return [LoadRecord.model_validate_json(r["rec"]) for r in kept]
+
+    async def releases_of(self, load_id: str) -> list[LoadRecord]:
+        """The records of the releases of held rows that were held by `load_id`, reverted or not.
+        For the revert's cascade."""
+        async with self._pool.acquire() as conn:
+            kept = await conn.fetch(
+                "SELECT rec FROM recipe_runs, jsonb_array_elements(load_records) AS rec "
+                "WHERE load_records IS NOT NULL AND rec->>'released_from' = $1 "
+                "ORDER BY started_at, rec->>'load_id'",
+                load_id,
+            )
+        return [LoadRecord.model_validate_json(r["rec"]) for r in kept]
+
+    async def records_merging(
+        self, node_ids: Sequence[str], edge_ids: Sequence[str]
+    ) -> list[LoadRecord]:
+        """The unreverted records that list one of these nodes in `merged_node_ids` or one of these
+        links in `merged_edge_ids` (the jsonb `?|` operator: any element equal to any of the ids).
+        For the revert, which refuses while a later load merged into what it would take back."""
+        if not node_ids and not edge_ids:
+            return []
+        async with self._pool.acquire() as conn:
+            kept = await conn.fetch(
+                "SELECT rec FROM recipe_runs, jsonb_array_elements(load_records) AS rec "
+                "WHERE load_records IS NOT NULL AND rec->>'reverted_at' IS NULL AND ("
+                "COALESCE(rec->'merged_node_ids', '[]'::jsonb) ?| $1::text[] "
+                "OR COALESCE(rec->'merged_edge_ids', '[]'::jsonb) ?| $2::text[]) "
+                "ORDER BY started_at, rec->>'load_id'",
+                list(node_ids),
+                list(edge_ids),
+            )
+        return [LoadRecord.model_validate_json(r["rec"]) for r in kept]
+
+    async def mark_reverted(self, load_id: str, *, reverted_by: str, at: datetime) -> None:
+        """Marks the load's record reverted (`reverted_at`, `reverted_by`), in the run row that
+        holds it; the other records of that row are kept as they are. A load the ledger holds no
+        record of is an error, never a quiet no-op: a revert that thought it had marked one would
+        be refused nothing on its rerun. Marking a record already marked marks it again, with the
+        later time."""
+        async with self._pool.acquire() as conn:
+            marked = await conn.execute(
+                "UPDATE recipe_runs SET load_records = ("
+                "SELECT jsonb_agg(CASE WHEN rec->>'load_id' = $1 THEN rec || "
+                "jsonb_build_object('reverted_at', $2::text, 'reverted_by', $3::text) "
+                "ELSE rec END ORDER BY ord) "
+                "FROM jsonb_array_elements(load_records) WITH ORDINALITY AS t(rec, ord)) "
+                "WHERE load_records IS NOT NULL AND EXISTS ("
+                "SELECT 1 FROM jsonb_array_elements(load_records) AS r WHERE r->>'load_id' = $1)",
+                load_id,
+                at.isoformat(),
+                reverted_by,
+            )
+        if marked == "UPDATE 0":
+            raise KeyError(f"the ledger holds no record of load {load_id!r}")
 
     async def fail(self, run_id: str, *, failure: str, now: datetime) -> None:
         async with self._pool.acquire() as conn:

@@ -4,6 +4,11 @@ called it would let any caller ask whether an id exists, which the access step e
 (rules 3 and 4): a hidden node's existence would be readable by id. So the engine's write path is
 the only caller, and this fails for any other.
 
+The revert (B2-4c, `services/ingest/load_revert.py`) has three more of the same kind, each answering
+whatever the caller may read, and each confined to that one module: `live_edges_touching` (does a
+live link outside the load rest on a node it created), `live_nodes_naming_geometry` (does a live node
+still name a point it inserted) and `stored_writes` (which load last wrote a node, and is it reverted).
+
 The scan covers every Python module under `services/`, `scripts/` and `packages/`, except the port
 and the graph adapters, which define it. It flags an attribute access named `existing_node_ids` and
 also any string equal to the name, which is how `getattr(graph, "existing_node_ids")` or
@@ -16,7 +21,14 @@ import ast
 from pathlib import Path
 
 CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
-ALLOWED = {"services/ingest/engine.py"}
+#: Each unfiltered internal lookup, and the one module that may use it.
+CONFINED = {
+    "existing_node_ids": {"services/ingest/engine.py"},
+    "live_edges_touching": {"services/ingest/load_revert.py"},
+    "live_nodes_naming_geometry": {"services/ingest/load_revert.py"},
+    "stored_writes": {"services/ingest/load_revert.py"},
+}
+ALLOWED = CONFINED["existing_node_ids"]
 NAME = "existing_node_ids"
 #: Where the method is defined, so where its name is not a use.
 DEFINERS = ("packages/ports", "packages/adapters/graph_")
@@ -26,8 +38,8 @@ def _skipped(relative: str) -> bool:
     return relative.startswith(DEFINERS)
 
 
-def callers(root: Path, relative_to: Path) -> set[str]:
-    """The files under `root` that name `existing_node_ids`: as an attribute, or as a string."""
+def callers(root: Path, relative_to: Path, name: str = NAME) -> set[str]:
+    """The files under `root` that name `name`: as an attribute, or as a string."""
     found: set[str] = set()
     for path in sorted(root.rglob("*.py")):
         if ".venv" in path.parts or "node_modules" in path.parts:
@@ -37,8 +49,8 @@ def callers(root: Path, relative_to: Path) -> set[str]:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if (isinstance(node, ast.Attribute) and node.attr == NAME) or (
-                isinstance(node, ast.Constant) and node.value == NAME
+            if (isinstance(node, ast.Attribute) and node.attr == name) or (
+                isinstance(node, ast.Constant) and node.value == name
             ):
                 found.add(relative)
                 break
@@ -53,6 +65,33 @@ def test_only_the_engines_write_path_names_the_unfiltered_lookup() -> None:
         if f not in ALLOWED
     }
     assert offenders == set(), f"these name GraphPort.existing_node_ids: {sorted(offenders)}"
+
+
+def test_only_the_reverts_module_names_its_unfiltered_lookups() -> None:
+    for name, allowed in CONFINED.items():
+        offenders = {
+            f
+            for root in (CORE / "services", CORE / "scripts", CORE / "packages")
+            for f in callers(root, CORE, name)
+            if f not in allowed
+        }
+        assert offenders == set(), f"these name GraphPort.{name}: {sorted(offenders)}"
+
+
+def test_the_module_each_lookup_is_confined_to_does_call_it() -> None:
+    for name, allowed in CONFINED.items():
+        if name == NAME:
+            continue
+        assert callers(CORE / "services", CORE, name) == allowed, name
+
+
+def test_the_check_flags_each_confined_lookup_outside_its_module(tmp_path: Path) -> None:
+    for name in CONFINED:
+        (tmp_path / f"{name}.py").write_text(
+            f"async def route(g, ids):\n    return await g.{name}(ids)\n"
+        )
+    for name in CONFINED:
+        assert callers(tmp_path, tmp_path, name) == {f"{name}.py"}
 
 
 def test_the_engine_does_call_it() -> None:

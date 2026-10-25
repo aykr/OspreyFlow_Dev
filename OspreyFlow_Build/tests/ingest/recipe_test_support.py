@@ -33,6 +33,7 @@ from conduit_common.identity import new_edge_id
 from ontology.errors import OntologyError
 from ontology.handling import audience_of, load_uk_le_scheme
 from ontology.validation import validate_edge_endpoints, validate_properties
+from ports.graph import StoredNode
 from schemas.domain import EdgeWrite, NodeWrite, OntologySchema
 
 
@@ -183,6 +184,7 @@ class MergingGraph(ValidatingGraph):
     def __init__(self, ontology: Any) -> None:
         super().__init__(ontology)
         self.reverted: set[str] = set()
+        self.reverted_calls: list[tuple[list[str], list[str]]] = []
         self.superseded: set[str] = set()
         self._scheme = load_uk_le_scheme()
 
@@ -222,3 +224,65 @@ class MergingGraph(ValidatingGraph):
                 ids.append(edge.id)
         await super().upsert_edges(fresh, tx)
         return ids
+
+    # --- the revert (ADR-127 Amendment 6), as the adapter does it ---------------------------
+
+    async def revert_elements(self, node_ids: Any, edge_ids: Any, tx: object) -> None:
+        """Marks the named nodes and links reverted, by id and nothing else (`reverted` holds the
+        ids of both, which never collide). Idempotent, as setting the flag again is."""
+        self.reverted_calls.append((list(node_ids), list(edge_ids)))
+        self.reverted.update(node_ids)
+        self.reverted.update(edge_ids)
+
+    async def existing_node_ids(self, node_ids: Sequence[str]) -> set[str]:
+        """A reverted node is left out: a write onto it is a fresh create."""
+        return await super().existing_node_ids(node_ids) - self.reverted
+
+    async def get_nodes(self, node_ids: Sequence[str], principal: Any) -> list[Any]:
+        return [n for n in await super().get_nodes(node_ids, principal) if n.id not in self.reverted]
+
+    async def get_edges(self, edge_ids: Sequence[str], principal: Any) -> list[Any]:
+        return [e for e in await super().get_edges(edge_ids, principal) if e.id not in self.reverted]
+
+    async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: object) -> list[str]:
+        """A write onto a reverted node replaces it: the node is live again with the write's body
+        alone, and the reverted body is not kept (the adapter's `replaces_reverted`)."""
+        for node in nodes:
+            if node.id in self.reverted:
+                self.reverted.discard(node.id)
+                self.committed_nodes = [n for n in self.committed_nodes if n.id != node.id]
+        return await super().upsert_nodes(nodes, tx)
+
+    async def live_edges_touching(self, node_ids: Sequence[str]) -> set[str]:
+        """The live links (not reverted, not superseded) at either end, whoever may read them."""
+        wanted = set(node_ids)
+        return {
+            e.id
+            for e in [*self.committed_edges, *self.open_edges]
+            if (e.source in wanted or e.target in wanted)
+            and e.id not in self.reverted
+            and e.id not in self.superseded
+        }
+
+    async def live_nodes_naming_geometry(
+        self, geometry_refs: Sequence[str]
+    ) -> dict[str, set[str]]:
+        named: dict[str, set[str]] = {}
+        for node in [*self.committed_nodes, *self.open_nodes]:
+            ref = node.properties.get("geometry_ref")
+            if ref in set(geometry_refs) and node.id not in self.reverted:
+                named.setdefault(str(ref), set()).add(node.id)
+        return named
+
+    async def stored_writes(self, node_ids: Sequence[str]) -> dict[str, Any]:
+        """The load each node was last written by, and whether it is reverted: a later write of the
+        same id wins."""
+        found: dict[str, Any] = {}
+        for node in [*self.committed_nodes, *self.open_nodes]:
+            if node.id in set(node_ids):
+                found[node.id] = StoredNode(load_id=node.load_id, reverted=node.id in self.reverted)
+        return found
+
+    @property
+    def live_nodes(self) -> dict[str, NodeWrite]:
+        return {i: n for i, n in self.nodes.items() if i not in self.reverted}

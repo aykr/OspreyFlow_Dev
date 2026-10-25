@@ -197,6 +197,23 @@ class HeldRowStore:
             raise HeldRowNotFoundError(held_id)
         return _row_to_held(row)
 
+    async def discard_for_load(self, load_id: str, *, discarded_by: str, at: datetime) -> int:
+        """Rejects the rows of a load that are still held, because the load was reverted and a row
+        released into a case where its load no longer exists would be one nothing could explain
+        (ADR-127 Amendment 5). Not scoped to a reader: it removes the load's own rows, as the revert
+        removes its own elements. Rows already released or rejected are left as decided. Idempotent:
+        a second call finds none still held and returns 0."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "UPDATE held_rows SET status = 'rejected', decided_by = $2, decided_at = $3, "
+                "decision_reason = $4 WHERE load_id = $1 AND status = 'held' RETURNING id",
+                load_id,
+                discarded_by,
+                at,
+                f"load {load_id} was reverted",
+            )
+        return len(rows)
+
     async def decide_for_reader(
         self,
         held_ids: Sequence[str],

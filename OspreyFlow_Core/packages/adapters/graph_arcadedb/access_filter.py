@@ -87,8 +87,8 @@ class AccessFilter:
 
     def gremlin_has_step(self, principal: Principal, *, include_superseded: bool = False) -> str:
         """Both handling axes, plus two more that are not
-        principal-dependent at all: a reverted element (`services/ingest`'s
-        `revert_load`, `01_DOMAIN_MODEL.md` §2.4) is invisible to every
+        principal-dependent at all: a reverted element (`services/ingest/load_revert.py`,
+        `01_DOMAIN_MODEL.md` §2.4) is invisible to every
         read regardless of clearance, and a superseded node — the old
         revision a correction has replaced (`supersede_node`, same §2.4) —
         is invisible by default too, since "excluded from reads by

@@ -665,6 +665,18 @@ class AnalyticsDuckDBAdapter:
             ],
         )
 
+    async def retract_geometries(self, geometry_refs: Sequence[str], *, version: int) -> int:
+        """`AnalyticsPort.retract_geometries`: these refs at this version, whatever the marking."""
+        if not geometry_refs:
+            return 0
+        placeholders = ",".join("?" for _ in geometry_refs)
+        removed = self._con.execute(
+            f"DELETE FROM geometries WHERE version = ? AND geometry_ref IN ({placeholders}) "
+            "RETURNING geometry_ref",
+            [version, *geometry_refs],
+        ).fetchall()
+        return len(removed)
+
     def _current_partition_version(self) -> int | None:
         row = self._con.execute("SELECT MAX(version) FROM geometries").fetchone()
         return None if row is None or row[0] is None else int(row[0])

@@ -206,3 +206,80 @@ async def test_a_held_row_is_stored_at_its_rows_marking_and_hidden_from_an_offic
         secret_row = next(h for h in held if h.row_index == 1)
         with pytest.raises(HeldRowNotFoundError):
             await stores["held"].get_authorized(secret_row.id, case, ANALYST)
+
+
+async def test_the_resets_revert_then_rerun_of_a_content_load_is_readable_and_created() -> None:
+    """ADR-127 Amendment 6 against the real store. The demo reset reverts a load that wrote a
+    content `Document` (`content:<sha>`) and runs it again. In the store the revert hides the node,
+    the rerun's write replaces it (it is live again, with the rerun's body), and
+    `existing_node_ids` leaves it out, so the rerun records it as created and a second revert would
+    take it back. The ledger and the analytics store are the stand-ins of `test_revert_load.py`."""
+    from datetime import UTC, datetime
+
+    from services.api.studio_publish import load_with_rules
+    from services.ingest.load_ledger import load_record_from_report
+    from services.ingest.load_revert import RevertDeps, revert
+
+    from adapters.media_objectstore.testing import InMemoryMediaStore
+    from tests.ingest.test_load_record_created_and_merged import _recipe as content_recipe
+    from tests.ingest.test_revert_load import (
+        Alerts,
+        Analytics,
+        Audit,
+        Held,
+        Ledger,
+        Steps,
+    )
+
+    now = datetime(2026, 10, 25, tzinfo=UTC)
+    reader = Principal(id="reader-s", clearance="SECRET", org_unit=LOADER.org_unit)
+
+    async def load(graph: Any, load_id: str, day: int) -> Any:
+        report, _events, _held = await load_with_rules(
+            content_recipe(content=True),
+            [
+                {
+                    "payer": f"SYN-{load_id}-1",
+                    "payee": f"SYN-{load_id}-2",
+                    "paid_at": f"2026-03-0{day}T09:00:00+00:00",
+                    "memo": "the same note both times",
+                }
+            ],
+            LOADER,
+            graph=graph,
+            ontology=ONTOLOGY,
+            load_id=load_id,
+            investigation_scope="case-1",
+            source="private_cash.csv",
+            media=InMemoryMediaStore(),
+            rules=None,
+            scheme=SCHEME,
+        )
+        assert report.rejections == [], report.rejections
+        return report
+
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        first = await load(graph, new_id(), 1)
+        (document,) = [i for i in first.created_node_ids if i.startswith("content:")]
+        assert [n.id for n in await graph.get_nodes([document], reader)] == [document]
+
+        record = load_record_from_report(
+            first, source="private_cash.csv", created_by=LOADER.id, started_at=now, now=now
+        )
+        steps = Steps()
+        deps = RevertDeps(
+            ledger=Ledger(record),
+            graph=graph,  # type: ignore[arg-type]
+            analytics=Analytics(steps),  # type: ignore[arg-type]
+            held_rows=Held(steps),
+            alerts=Alerts(steps),
+            audit=Audit(steps),
+        )
+        await revert(record.load_id, reverted_by="operator-1", deps=deps, now=now)
+        assert await graph.get_nodes([document], reader) == [], "hidden by the revert"
+        assert await graph.existing_node_ids([document]) == set()
+
+        second = await load(graph, new_id(), 2)
+        assert document in second.created_node_ids and document not in second.merged_node_ids
+        assert [n.id for n in await graph.get_nodes([document], reader)] == [document]
+        assert second.merged_edge_ids == [], "the reverted links were not merged into"

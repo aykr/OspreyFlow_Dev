@@ -26,7 +26,7 @@ import pytest
 
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.errors import OntologyError
-from ports.graph import GraphPort, SubgraphTooLarge, SuggestOptions
+from ports.graph import AmbiguousElementId, GraphPort, StoredNode, SubgraphTooLarge, SuggestOptions
 from schemas.domain import (
     Edge,
     EdgeWrite,
@@ -5487,7 +5487,9 @@ async def test_strip_provenance_references_removes_the_prefix_from_live_and_supe
 # `existing_node_ids` answers what `upsert_nodes` would do, by id alone. It is for the write path:
 # no route reaches it (`tests/test_unfiltered_node_lookup_confined.py`).
 
-_EXISTING_REASONS = ["clearance", "handling_code", "dataset", "superseded", "reverted"]
+#: A reverted node is not here: a write to its id is a fresh create (ADR-127 Amendment 6), so it is
+#: not one `existing_node_ids` names (the cases at the end of this block).
+_EXISTING_REASONS = ["clearance", "handling_code", "dataset", "superseded"]
 
 
 async def test_existing_node_ids_names_every_node_that_exists_whatever_it_is_marked_or_its_state(
@@ -5509,10 +5511,10 @@ async def test_existing_node_ids_names_every_node_that_exists_whatever_it_is_mar
 async def test_existing_node_ids_is_what_upsert_nodes_would_merge_into(
     factory: GraphAdapterFactory,
 ) -> None:
-    """The adapter's own lookup before an upsert is unfiltered and ignores `reverted` and
-    `superseded_by`, so a write to the id of a reverted or superseded node merges into it (it is
-    updated in place, keeping its flags). `existing_node_ids` includes them for exactly that
-    reason: leaving them out would report a merge as a creation."""
+    """The adapter's own lookup before an upsert is unfiltered and ignores `superseded_by`, so a
+    write to the id of a superseded node merges into it (it is updated in place, keeping its
+    flag). `existing_node_ids` includes it for exactly that reason: leaving it out would report a
+    merge as a creation. A reverted node is the other way round (below)."""
     async with factory.context() as adapter:
         ids = [await _unreadable_node(adapter, reason) for reason in _EXISTING_REASONS]
         before = await adapter.existing_node_ids(ids)
@@ -5581,3 +5583,301 @@ async def test_one_link_id_written_under_two_audiences_in_one_transaction_is_two
         assert {e.id: e.handling.classification for e in seen} == {
             low_id: "OFFICIAL", high_id: "SECRET",
         }
+
+
+async def test_a_write_onto_a_reverted_node_is_a_fresh_create_readable_with_the_new_body(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-127 Amendment 6: a load run again after its revert writes the same ids. The reverted
+    node is not merged into: it is live again with the new write's body, marking and datasets, none
+    of the reverted node's (a raised classification would otherwise outlive the revert and hide the
+    rerun's node from the reader the rerun was written for). `existing_node_ids` reports it absent
+    before the write, so the load records it as created, and present after."""
+    async with factory.context() as adapter:
+        first = _node("Person", classification="SECRET", datasets=["fixture"], family_name="Old")
+        (node_id,), _ = await _write(adapter, [first], [])
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([node_id], [], tx)
+        await adapter.commit_transaction(tx)
+        assert await adapter.get_node(node_id, CLEARED) is None
+        assert await adapter.existing_node_ids([node_id]) == set(), "absent before the rerun"
+
+        again = _node("Person", classification="OFFICIAL", datasets=["enron"], family_name="New")
+        await _write(adapter, [again.model_copy(update={"id": node_id})], [])
+
+        read = await adapter.get_node(node_id, READER)
+        assert read is not None, "readable by the reader the rerun was written for"
+        assert read.properties["family_name"] == "New"
+        assert read.handling.classification == "OFFICIAL"
+        assert read.datasets == ["enron"]
+        assert await adapter.get_node(node_id, IN_FIXTURE) is None, "not the reverted dataset"
+        assert await adapter.existing_node_ids([node_id]) == {node_id}
+
+
+async def test_a_revert_takes_the_nodes_and_links_out_of_every_read_for_every_reader(
+    factory: GraphAdapterFactory,
+) -> None:
+    """A revert by the ids a record lists leaves its elements out of each read, including for a
+    reader who read them before and one cleared for everything: `get_nodes`, `get_edges`,
+    `expand` and `edges_among`. Nothing is deleted, so the id can still be written again."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "ab"],
+            [],
+        )
+        written = _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["enron"])
+        _, (link,) = await _write(adapter, [], [written])
+        assert [n.id for n in await adapter.get_nodes([a, b], READER)] == sorted([a, b])
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([a], [link], tx)
+        await adapter.commit_transaction(tx)
+        for reader in (READER, CLEARED, EVERYTHING):
+            assert [n.id for n in await adapter.get_nodes([a, b], reader)] == [b], reader.id
+            assert await adapter.get_edges([link], reader) == []
+            assert await adapter.edges_among([a, b], reader) == []
+            reached = await adapter.expand(ExpandRequest(node_ids=[b], depth=1), reader)
+            assert link not in {e.id for e in reached.edges}
+            assert a not in {n.id for n in reached.nodes}
+        # Run again with the ids it listed: the same call changes nothing more (a rerun after a
+        # failure part-way is safe).
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([a], [link], tx)
+        await adapter.commit_transaction(tx)
+        assert await adapter.get_edges([link], EVERYTHING) == []
+
+
+async def test_a_node_reverted_and_superseded_stays_superseded_when_written_again(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-127 Amendment 6: a write onto a reverted node clears `reverted` and nothing else. A node
+    that is also superseded stays superseded, so reads follow its successor as before and there are
+    never two live revisions; `existing_node_ids` still names it, so a load writing it records it as
+    merged and a revert of that load refuses rather than taking back the successor's predecessor."""
+    async with factory.context() as adapter:
+        node_id = await _unreadable_node(adapter, "superseded")
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([node_id], [], tx)
+        await adapter.commit_transaction(tx)
+        assert await adapter.existing_node_ids([node_id]) == {node_id}, "superseded: it exists"
+        again = _node("Person", classification="OFFICIAL", datasets=["enron"], family_name="New")
+        await _write(adapter, [again.model_copy(update={"id": node_id})], [])
+        assert await adapter.get_node(node_id, READER) is None, "still the old revision"
+        assert await adapter.existing_node_ids([node_id]) == {node_id}
+
+
+async def test_a_superseded_nodes_live_successor_is_the_only_live_revision_after_a_rewrite(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (old,), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["enron"], family_name="Old")],
+            [],
+        )
+        tx = await adapter.begin_transaction()
+        successor = await adapter.supersede_node(
+            old,
+            _node("Person", classification="OFFICIAL", datasets=["enron"], family_name="Next"),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([old], [], tx)
+        await adapter.commit_transaction(tx)
+        again = _node("Person", classification="OFFICIAL", datasets=["enron"], family_name="New")
+        await _write(adapter, [again.model_copy(update={"id": old})], [])
+        read = await adapter.get_nodes([old, successor], READER)
+        assert [n.id for n in read] == [successor], "never two live revisions"
+        assert read[0].properties["family_name"] == "Next", "the successor is as it was"
+
+
+# --- the revert's unfiltered lookups (ADR-127 Amendment 6, B2-4c) --------------------------------
+#
+# Three internal methods, each answering whatever the caller may read and each confined to the
+# revert (`tests/test_unfiltered_node_lookup_confined.py`): do live links outside a load rest on the
+# nodes it created, does a live node still name a point it inserted, and was a node written again by
+# a later load. They count what no reader's count may.
+
+
+async def test_live_edges_touching_names_every_live_link_at_a_node_whatever_the_reader_may_read(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (a, b, c, d), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "abcd"],
+            [],
+        )
+        _, (ab, bc, ac, bd) = await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["enron"]),
+                _edge("ASSOCIATE_OF", b, c, classification="SECRET", datasets=["fixture"]),
+                _edge("ASSOCIATE_OF", a, c, classification="OFFICIAL", datasets=["enron"]),
+                _edge("ASSOCIATE_OF", b, d, classification="OFFICIAL", datasets=["enron"]),
+            ],
+        )
+        assert await adapter.edges_among([a, b, c], READER) != [], "a reader reads some"
+        hidden = {e.id for e in await adapter.get_edges([bc], READER)}
+        assert hidden == set(), "and not the SECRET one in another dataset"
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([], [ac], tx)
+        await adapter.supersede_edge(
+            bd,
+            _edge("ASSOCIATE_OF", b, d, classification="OFFICIAL", datasets=["enron"]),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+        touching_b = await adapter.live_edges_touching([b])
+        assert bc in touching_b and ab in touching_b, "the SECRET link too: it is unfiltered"
+        assert ac not in await adapter.live_edges_touching([a, c]), "a reverted link is not live"
+        assert bd not in touching_b, "nor is a superseded one; its replacement is"
+        assert len(touching_b) == 3  # ab, bc and bd's replacement
+        assert await adapter.live_edges_touching([d]) == touching_b - {ab, bc}
+        assert await adapter.live_edges_touching([new_node_id()]) == set()
+        assert await adapter.live_edges_touching([]) == set()
+        with pytest.raises(TypeError):
+            await adapter.live_edges_touching(a)  # type: ignore[arg-type]
+
+
+async def test_live_edges_touching_past_one_chunk_names_every_link(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        hub_nodes = [
+            _node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(1003)
+        ]
+        ids, _ = await _write(adapter, hub_nodes, [])
+        links = [
+            _edge("ASSOCIATE_OF", ids[0], other, classification="OFFICIAL", datasets=["enron"])
+            for other in ids[1:]
+        ]
+        _, link_ids = await _write(adapter, [], links)
+        assert await adapter.live_edges_touching(ids[1:]) == set(link_ids)
+
+
+def _where(ref: str, classification: str = "OFFICIAL", dataset: str = "enron") -> NodeWrite:
+    return _node("Location", classification=classification, datasets=[dataset], geometry_ref=ref)
+
+
+async def test_live_nodes_naming_geometry_names_live_nodes_whoever_may_read_them(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (shared, secret, reverted, superseded, other), _ = await _write(
+            adapter,
+            [
+                _where("g-1"),
+                _where("g-1", "SECRET", "fixture"),
+                _where("g-2"),
+                _where("g-3"),
+                _where("g-4"),
+            ],
+            [],
+        )
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([reverted], [], tx)
+        await adapter.supersede_node(
+            superseded,
+            _where("g-3"),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+        found = await adapter.live_nodes_naming_geometry(["g-1", "g-2", "g-3", "g-5"])
+        assert found["g-1"] == {shared, secret}, "the SECRET one too: it is unfiltered"
+        assert "g-2" not in found, "its only node is reverted"
+        assert len(found["g-3"]) == 1 and superseded not in found["g-3"], "its live revision"
+        assert "g-5" not in found and other not in {n for ids in found.values() for n in ids}
+        assert await adapter.live_nodes_naming_geometry([]) == {}
+        with pytest.raises(TypeError):
+            await adapter.live_nodes_naming_geometry("g-1")  # type: ignore[arg-type]
+
+
+async def test_stored_writes_says_which_load_last_wrote_each_node_and_whether_it_is_reverted(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Whatever a reader may read and whatever the node's state. A node merged into by a write with
+    no load (a Files-tab upload) reads as written by `None`; the revert refuses to take such a node
+    back on a first attempt."""
+    async with factory.context() as adapter:
+        (first, hidden, loose), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", datasets=["enron"], load_id="load-1"),
+                _node("Person", classification="SECRET", datasets=["fixture"], load_id="load-1"),
+                _node("Person", classification="OFFICIAL", datasets=["enron"], load_id="load-1"),
+            ],
+            [],
+        )
+        again = _node("Person", classification="OFFICIAL", datasets=["enron"], load_id="load-2")
+        await _write(adapter, [again.model_copy(update={"id": first})], [])
+        upload = _node("Person", classification="OFFICIAL", datasets=["enron"])
+        await _write(adapter, [upload.model_copy(update={"id": loose})], [])
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([hidden], [], tx)
+        await adapter.commit_transaction(tx)
+        found = await adapter.stored_writes([first, hidden, loose, new_node_id()])
+        assert found == {
+            first: StoredNode(load_id="load-2", reverted=False),
+            hidden: StoredNode(load_id="load-1", reverted=True),
+            loose: StoredNode(load_id=None, reverted=False),
+        }
+        assert await adapter.stored_writes([]) == {}
+        with pytest.raises(TypeError):
+            await adapter.stored_writes(first)  # type: ignore[arg-type]
+
+
+async def test_a_revert_by_id_touches_only_the_kind_it_was_given_and_refuses_an_ambiguous_id(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Ids are unique per type, not across the store. A node id that is also a link's id is
+    reverted as a node alone; an id held by two types of one kind cannot be told apart and the call
+    is refused, changing nothing (the record keeps no types)."""
+    async with factory.context() as adapter:
+        people = [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "ab"]
+        (a, b), _ = await _write(adapter, people, [])
+        shared = new_edge_id()
+        first = _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["enron"])
+        second = _edge("FAMILY_OF", a, b, classification="OFFICIAL", datasets=["enron"])
+        await _write(
+            adapter,
+            [],
+            [first.model_copy(update={"id": shared}), second.model_copy(update={"id": shared})],
+        )
+        node_as_link = _node("Person", classification="OFFICIAL", datasets=["enron"])
+        (same_as_edge,), _ = await _write(
+            adapter, [node_as_link.model_copy(update={"id": shared})], []
+        )
+        assert same_as_edge == shared
+
+        async def held_per_type() -> dict[str, list[str]]:
+            """What each link type holds under the shared id, read one type at a time: `get_edges`
+            answers an id once, whichever type holds it (the port says which copy it returns is not
+            chosen), so it cannot show two links of one id. `edges_among` lists, and narrows to a
+            type. A reverted link is not read, so a link listed here is not reverted."""
+            return {
+                kind: [
+                    e.id
+                    for e in await adapter.edges_among([a, b], EVERYTHING, edge_types=[kind])
+                    if e.id == shared
+                ]
+                for kind in ("ASSOCIATE_OF", "FAMILY_OF")
+            }
+
+        both = {"ASSOCIATE_OF": [shared], "FAMILY_OF": [shared]}
+        assert await held_per_type() == both, "before: each type holds its link, live"
+        assert [n.id for n in await adapter.get_nodes([shared], EVERYTHING)] == [shared]
+
+        tx = await adapter.begin_transaction()
+        with pytest.raises(AmbiguousElementId):
+            await adapter.revert_elements([], [shared], tx)
+        await adapter.rollback_transaction(tx)
+        assert await held_per_type() == both, "after the refusal: nothing was changed"
+
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([shared], [], tx)  # as a node: the one Person
+        await adapter.commit_transaction(tx)
+        assert await adapter.get_nodes([shared], EVERYTHING) == []
+        assert await held_per_type() == both, "the links are untouched by a node revert"

@@ -284,6 +284,42 @@ class AlertStore:
         return _row_to_alert(row)
 
 
+    async def close_for_elements(
+        self,
+        node_ids: Sequence[str],
+        edge_ids: Sequence[str],
+        *,
+        closed_by: str,
+        at: datetime,
+        reason: str,
+    ) -> int:
+        """Closes every alert not already closed that is one of a reverted load's own (its `Alert`
+        node is in `node_ids`) or that cites a node in `node_ids` or a link in `edge_ids`, so the
+        queue names nothing that rests on a reverted element (ADR-127 Amendment 6). The queue's own
+        read leaves out an alert whose cited node is hidden but checks no link, so one citing only a
+        reverted link would stay listed. No disposition: it was neither confirmed nor dismissed by a
+        member, it was taken back, and the reason says so. Not scoped to a reader or a case, as the
+        revert removes its own elements. Idempotent: a closed alert is not touched again, so a
+        second call returns 0. An alert citing a transaction the load wrote is not found by this,
+        since an alert names events by id and the load's event ids are not in its record."""
+        if not node_ids and not edge_ids:
+            return 0
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "UPDATE alerts SET status = 'closed', assignee = NULL, decided_by = $3, "
+                "decided_at = $4, disposition_reason = $5 WHERE status <> 'closed' AND ("
+                "alert_node_id = ANY($1::text[]) "
+                "OR COALESCE(NULLIF(referent_node_ids, ''), '[]')::jsonb ?| $1::text[] "
+                "OR COALESCE(NULLIF(edge_ids, ''), '[]')::jsonb ?| $2::text[]) RETURNING id",
+                list(node_ids),
+                list(edge_ids),
+                closed_by,
+                at,
+                reason,
+            )
+        return len(rows)
+
+
 class AlertTriageConflict(Exception):
     """The alert was not in a state that allows this (someone else claimed or closed it)."""
 

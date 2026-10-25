@@ -56,6 +56,26 @@ class SubgraphTooLarge(Exception):
         self.edges = edges
 
 
+@dataclass(frozen=True)
+class StoredNode:
+    """What `GraphPort.stored_writes` says of one node: the load that last wrote it (`None` for a
+    write outside a load, a Files-tab upload for one) and whether it is reverted."""
+
+    load_id: str | None
+    reverted: bool
+
+
+class AmbiguousElementId(Exception):
+    """`GraphPort.revert_elements` was given an id that two stored types of one kind both hold.
+    Ids are unique per type, not across the store, and a load's record keeps no types, so the call
+    cannot tell which element it meant; it is refused whole and changes nothing."""
+
+    def __init__(self, kind: str, count: int) -> None:
+        super().__init__(f"{count} {kind} id(s) are held by more than one stored type")
+        self.kind = kind
+        self.count = count
+
+
 class GraphPort(Protocol):
     #: Query dialects this adapter can render — `{"gremlin"}`,
     #: `{"gremlin", "opencypher"}`, `{"gql"}` — ADR-003's amendment. The
@@ -103,8 +123,10 @@ class GraphPort(Protocol):
         caller may read**: no principal, no access step. For the recipe engine's write path alone,
         to tell a node an upsert merges into from one it creates (a content `Document`'s id is the
         hash of its bytes, so the same text from another load, holder or upload names the same
-        node). It answers what `upsert_nodes` would do, which looks the id up unfiltered, so it
-        includes a node that is reverted or superseded: a write to its id merges into it. A
+        node). It answers what `upsert_nodes` would do: a write to a superseded node's id merges
+        into it, so it is named; a write to a reverted node's id is a fresh create (ADR-127
+        Amendment 6), so a reverted node is not, unless it is also superseded: it stays superseded,
+        a write merges, and it is named. A
         route must never call it, or any caller could ask whether an id exists
         (`tests/test_unfiltered_node_lookup_confined.py`). Each id once however often given; no ids
         give the empty set; a bare `str` is a `TypeError`, as for `get_nodes`."""
@@ -486,14 +508,50 @@ class GraphPort(Protocol):
         self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], tx: TxId
     ) -> None:
         """Marks existing elements reverted (`AuditStub.reverted`,
-        `01_DOMAIN_MODEL.md` §2.4) — `services/ingest`'s `revert_load` is
+        `01_DOMAIN_MODEL.md` §2.4) — `services/ingest/load_revert.py` is
         the only caller. A reverted element is invisible to every read
         method afterwards, any principal, the same way a hidden record is
         invisible to an unauthorised one; it is never actually deleted, so
         the audit trail stays intact. No `principal` argument, matching
         `upsert_nodes`/`upsert_edges` — this is a backend write attributed
         by the caller's own audit trail (the load ledger), not a
-        principal-scoped read."""
+        principal-scoped read.
+
+        Each id is resolved to its stored type through that type's unique `id` index, nodes among
+        the vertex types and links among the edge types only, and set reverted by SQL on that
+        type, in chunks. An id held by two types of one kind raises `AmbiguousElementId` before
+        anything is written. Setting the flag again changes nothing, so a rerun is safe."""
+        ...
+
+    async def live_edges_touching(self, node_ids: Sequence[NodeId]) -> set[EdgeId]:
+        """ADR-127 Amendment 6. The ids of the live links (neither reverted nor superseded) with
+        one of `node_ids` at either end, **whatever the caller may read**: no principal, no access
+        step. For the revert alone, to tell whether a link outside the load being reverted rests on
+        a node the load created (a later load may only have referenced the node, which its record
+        keeps as a count). A route must never call it
+        (`tests/test_unfiltered_node_lookup_confined.py`). Each id once however often given; no ids
+        give the empty set; a bare `str` is a `TypeError`."""
+        ...
+
+    async def live_nodes_naming_geometry(
+        self, geometry_refs: Sequence[str]
+    ) -> dict[str, set[NodeId]]:
+        """As `live_edges_touching`, for the geometry partition: for each of `geometry_refs` that a
+        live node (neither reverted nor superseded) names in its `geometry_ref`, the ids of those
+        nodes, whatever the caller may read. A ref no live node names is absent from the answer.
+        For the revert alone, so a point a later load's `Location` still names is not removed. No
+        refs give `{}`; a bare `str` is a `TypeError`."""
+        ...
+
+    async def stored_writes(self, node_ids: Sequence[NodeId]) -> dict[NodeId, StoredNode]:
+        """As `live_edges_touching`, for the last write to each node: its stored `audit.load_id`
+        (`None` for a write outside a load) and whether it is reverted, whatever the caller may
+        read and whatever the node's state (a superseded node is answered too). An id no node
+        holds is absent. A write onto an existing node rewrites the load (a merge, even one by
+        another load or by an upload, and a fresh create over a reverted node), so this is how the
+        revert tells that a node it created has since been written by someone else, and whether an
+        earlier attempt already reverted it. For the revert alone. No ids give `{}`; a bare `str`
+        is a `TypeError`."""
         ...
 
     async def strip_provenance_references(self, prefix: str) -> int:
