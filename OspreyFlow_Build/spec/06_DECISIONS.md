@@ -17453,6 +17453,20 @@ option, after an adversarial review.
   - **What else changes on rebuild:** link history from before 8 October 2026 disappears for every
     reader (Amendment 14), and stored history labels are rewritten (Amendment 11).
 
+### ADR-120, Amendment 14 (25 October 2026) — two errata found writing PID_ACTUALS.md (Brief 1 stage 7)
+
+Found by the coordinator and an adversarial reviewer checking `PID_ACTUALS.md` against the code. Under
+the owner's delegation of 24 October 2026.
+- **Amendment 8, decision 4: the scale case's size.** It says the scale case "holds about 9,500 nodes
+  and 30,000 links". The plan holds 7,176 nodes (a plan run) and exactly 30,000 links (asserted). The
+  conclusion stands, and is stronger: no expand in it can breach the 50,000-node cap.
+  `test_pid_plan.py::test_scale_volumes` asserts fewer than 50,000 nodes.
+- **Amendment 8, decision 10: the payer's account.** It fixes the payer's account as `SYN-00417`. The
+  code writes `SYN-70417`, deliberately: every bank account the plan writes sits in `SYN-70000` to
+  `SYN-79999`, and 70417 is reserved so the background draws cannot take it (`pid_plan.py`). The
+  payer's account is therefore `SYN-70417`. The found account, `SYN-00988`, is unchanged: it appears
+  only in report text and is on no entity.
+
 ### ADR-126, Amendment 1 (24 October 2026) — an erratum to decision 6, and one operational step
 
 - **Erratum.** Decision 6 and the D3 test bullet say that `TRANSACTED`, `USES` and `DEPICTS` are
