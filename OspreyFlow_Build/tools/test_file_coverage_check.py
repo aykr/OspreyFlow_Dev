@@ -111,6 +111,12 @@ LIVE_SERVICE_MARKERS: frozenset[str] = frozenset(
         "ValkeyWorkingSetStore",
         "Valkey",
         "asyncpg",
+        # The conformance registry's list of live graph adapters: each factory opens a real
+        # adapter per test (`tests/conformance/registry.py`), so a test parametrised over it
+        # reaches ArcadeDB without ever importing a client. Found by a CI test job that failed on
+        # every push for two such files; `GraphAdapterFactory`, the type, opens nothing and is
+        # not a marker.
+        "GRAPH_PORT_ADAPTERS",
     }
 )
 

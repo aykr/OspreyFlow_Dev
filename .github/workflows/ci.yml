@@ -506,6 +506,8 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py
           ../OspreyFlow_Build/tests/services/api/test_tile_cache.py
           ../OspreyFlow_Build/tests/services/api/working_set/test_compute_access_control.py
+          ../OspreyFlow_Build/tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py
+          ../OspreyFlow_Build/tests/services/api/working_set/test_seed_against_the_vault.py
           ../OspreyFlow_Build/tests/services/api/working_set/test_link_weight_on_the_wire.py
           ../OspreyFlow_Build/tests/services/api/working_set/test_explain_cluster_access_control.py
           ../OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution_access_control.py
@@ -804,6 +806,8 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_tile_cache.py
           --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_compute_access_control.py
+          --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py
+          --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_seed_against_the_vault.py
           --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_link_weight_on_the_wire.py
           --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_explain_cluster_access_control.py
           --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution_access_control.py

@@ -189,6 +189,31 @@ def test_classification_recognises_a_real_postgres_from_env_call_but_not_a_bare_
     assert is_live_service_file(real_call) is True
 
 
+def test_classification_recognises_a_test_that_reaches_arcadedb_through_the_registry() -> None:
+    """The miss behind a CI test job that failed on every push (ADR-124 U7 and
+    `test_no_corpus_count_reveals_a_secret_link.py`): both reach ArcadeDB only through
+    `GRAPH_PORT_ADAPTERS`, whose factories open a real adapter per test, and neither imports
+    `ArcadeDBClient` or any other marker. The planted source takes the shape the real files import
+    it in, with and without the neighbouring `GraphAdapterFactory`."""
+    plain = "from tests.conformance.registry import GRAPH_PORT_ADAPTERS\n"
+    with_factory = (
+        "from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory\n"
+    )
+    relative = "from ...conformance.registry import GRAPH_PORT_ADAPTERS as ADAPTERS\n"
+    assert is_live_service_file(plain) is True
+    assert is_live_service_file(with_factory) is True
+    assert is_live_service_file(relative) is True
+
+
+def test_a_registry_type_import_or_a_docstring_naming_the_list_is_not_live() -> None:
+    """Precision: importing the factory's type alone opens nothing, and a docstring that names
+    `GRAPH_PORT_ADAPTERS` (`tests/schemas/test_placeholder_lifecycle.py` does) is not an import."""
+    type_only = "from tests.conformance.registry import GraphAdapterFactory\n"
+    named = '"""`GRAPH_PORT_ADAPTERS` is non-empty from Phase 1 on."""\nimport json\n'
+    assert is_live_service_file(type_only) is False
+    assert is_live_service_file(named) is False
+
+
 def test_a_docstring_naming_a_marker_to_explain_its_own_absence_is_not_misclassified() -> None:
     """The `working_set/test_service.py` false positive this gate's own first real run found: a
     module docstring stating the file does *not* use `ValkeyWorkingSetStore` must not trip the
