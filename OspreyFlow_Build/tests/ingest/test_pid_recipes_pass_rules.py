@@ -11,6 +11,10 @@ joins by one line. What a mistake would do, and the case that catches it:
   (`test_the_recipe_passes_the_recipe_rules`);
 - a recipe pinned to another ontology or pack version than the deployment carries, which a run
   refuses as stale (`test_the_recipe_is_pinned_to_the_ontology_and_pack_the_deployment_carries`);
+- a recipe whose pins are not the ones a publish would stamp, which the seed refuses
+  (`test_the_recipe_is_pinned_to_the_ontology_and_pack_the_deployment_carries`);
+- a recipe with no legal basis, so a row of it is not `ready_for_profile`
+  (`test_the_recipe_declares_its_legal_basis`);
 - a probabilistic link written as if a source recorded it
   (`test_the_recipe_writes_no_probabilistic_type_and_no_resolution_link`);
 - a `deduplicate` key naming a column the file lacks, or none at all
@@ -31,7 +35,7 @@ from typing import Any
 
 import pytest
 import yaml
-from services.api.studio_publish import serialise_recipe
+from services.api.studio_publish import pack_versions_for, serialise_recipe
 from services.ingest.engine import check_recipe_pins
 from services.ingest.recipe_rules import (
     deduplicate_problems,
@@ -95,6 +99,7 @@ def _carries_handling(source: str) -> bool:
     return bool(held)
 
 
+REPORTS_RECIPE = "pid_intel_reports_recipe.yaml"
 PID_UNITS = {"fenwick-moor-security", "regional-intel-unit"}
 RESOLUTION_LINKS = {"SAME_AS", "NOT_SAME_AS"}
 
@@ -127,10 +132,22 @@ def test_the_recipe_is_pinned_to_the_ontology_and_pack_the_deployment_carries(
 ) -> None:
     recipe = load(file)
     assert recipe.ontology_version == 16 == ONTOLOGY.version
-    assert recipe.pack_versions == {"niem": ONTOLOGY.packs["niem"]}
+    # Exactly what a Studio publish would stamp (ADR-127 Amendment 25): a pack the recipe neither
+    # names nor writes a type of is not pinned, so a pack's version change flags only what it affects.
+    # R9's file is the exception, open with the coordinator: it writes core types only, but its
+    # draft's pipeline names NIEM 3, which is what a publish of that draft stamps.
+    if file != REPORTS_RECIPE:
+        assert recipe.pack_versions == pack_versions_for(
+            recipe.pipeline, recipe.row_template, ONTOLOGY
+        )
     check_recipe_pins(
         recipe, ONTOLOGY
     )  # raises StaleRecipeError if the pins are not the ones carried
+
+
+@pytest.mark.parametrize(("file", "source"), PID_RECIPES)
+def test_the_recipe_declares_its_legal_basis(file: str, source: str) -> None:
+    assert load(file).defaults.legal_basis == "Synthetic demonstration data"
 
 
 @pytest.mark.parametrize(("file", "source"), PID_RECIPES)

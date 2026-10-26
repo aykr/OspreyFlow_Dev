@@ -30,6 +30,7 @@ from typing import Any
 
 import pytest
 import services.api.app as app_module
+import services.api.recipe_run as run_module
 from services.api.load_records import LedgerSink, released_from_of, report_view
 from services.api.pipeline_run import run_published_pipeline
 from services.api.rule_evaluation import PreCommitVerdict, held_rows_for
@@ -91,6 +92,7 @@ class Ledger:
         self.rule_writes: list[tuple[str, dict[str, Any]]] = []
         self.uncovered: list[str] = []
         self.failed: list[str] = []
+        self.failed_markings: list[Any] = []
         self.finished = 0
 
     async def start(self, **kwargs: Any) -> str:
@@ -134,9 +136,12 @@ class Ledger:
         self.calls.append("finish")
         self.finished += 1
 
-    async def fail(self, run_id: str, *, failure: str, now: datetime) -> None:
+    async def fail(
+        self, run_id: str, *, failure: str, now: datetime, markings: Sequence[Any] = ()
+    ) -> None:
         self.calls.append("fail")
         self.failed.append(failure)
+        self.failed_markings = list(markings)
 
 
 def _sink(ledger: Ledger, **kwargs: Any) -> LedgerSink:
@@ -434,10 +439,10 @@ async def test_a_run_that_fails_after_the_commit_keeps_its_record_and_is_marked_
         await sink.committed(_report("load-1"), source="one.csv")
         raise RuntimeError("a post-commit stage failed")
 
-    monkeypatch.setattr(app_module, "_execute_recipe_run", execute)
+    monkeypatch.setattr(run_module, "_execute_recipe_run", execute)
     recipe = _draft(_recipe(), Path("one.csv"), handling=SOURCE.model_dump())
     with pytest.raises(RuntimeError, match="post-commit"):
-        await app_module.run_recipe_as(
+        await run_module.run_recipe_as(
             deps,  # type: ignore[arg-type]
             principal=LOADER,
             recipe=recipe,
@@ -498,13 +503,14 @@ async def test_the_run_route_answers_a_view_with_no_id_from_the_loads_lists(
 
 
 def test_the_view_keeps_every_count_and_each_branchs_own_numbers() -> None:
-    view = report_view(_report("load-1"))
+    view = report_view(_report("load-1"), LOADER, SCHEME)
     assert (view.rows_read, view.nodes_created, view.edges_created) == (3, 1, 1)
     pipeline = report_view(
         PipelineRunReport(
             load_id="run", recipe_id="r", recipe_version=2, rows_read=7,
             branches=[BranchRunReport(source_id="s", source_label="One", report=_report("run:s"))],
-        )
+        ),
+        LOADER, SCHEME,
     )  # fmt: skip
     assert pipeline.rows_read == 7 and pipeline.branches[0].report.load_id == "run:s"
     assert pipeline.branches[0].report.nodes_created == 1
@@ -767,11 +773,11 @@ async def test_the_change_stream_entry_does_not_carry_a_rules_alert(
     async def rules(*args: Any, **kwargs: Any) -> Any:
         return None
 
-    monkeypatch.setattr(app_module, "ChangeStreamWriter", Writer)
-    monkeypatch.setattr(app_module, "run_published_recipe", run_published)
-    monkeypatch.setattr(app_module, "_rule_gate", rules)
-    monkeypatch.setattr(app_module, "_evaluate_watches_best_effort", nothing)
-    monkeypatch.setattr(app_module.resolution_trigger_module, "submit_post_ingest_resolution_jobs", nothing)
+    monkeypatch.setattr(run_module, "ChangeStreamWriter", Writer)
+    monkeypatch.setattr(run_module, "run_published_recipe", run_published)
+    monkeypatch.setattr(run_module, "_rule_gate", rules)
+    monkeypatch.setattr(run_module, "_evaluate_watches_best_effort", nothing)
+    monkeypatch.setattr(run_module.resolution_trigger_module, "submit_post_ingest_resolution_jobs", nothing)
     deps = SimpleNamespace(
         handling_scheme=SCHEME, valkey=object(), audit=_Audit(), graph=1, ontology=1, analytics=1,
         media=1, recipe_repo_root=1, jobs=1, config=1, hotlists_store=1, monitors_store=1,
@@ -779,7 +785,7 @@ async def test_the_change_stream_entry_does_not_carry_a_rules_alert(
         recogniser_for=1, online_geocode=1, typology_rules=1, held_rows=1, screening_lists=1,
         compute=1, kyc_expiries=1, recipe_runs=1,
     )  # fmt: skip
-    await app_module._execute_recipe_run(
+    await run_module._execute_recipe_run(
         deps,  # type: ignore[arg-type]
         principal=LOADER,
         recipe=_published_recipe(),
@@ -790,3 +796,26 @@ async def test_the_change_stream_entry_does_not_carry_a_rules_alert(
     )
     assert published["node_ids"] == ["n-recipe"]
     assert published["edge_ids"] == ["e-recipe"]
+
+
+async def test_a_failed_run_stores_the_markings_of_the_loads_that_committed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Amendment 26: a run that fails after a branch committed SECRET rows has counts that include
+    them; the ledger keeps the markings it reached, so the listing withholds them."""
+    ledger = Ledger()
+    deps = SimpleNamespace(recipe_runs=ledger)
+    secret = Handling(classification="SECRET", handling_code="P", originator="u", owning_unit="u")
+
+    async def execute(deps: Any, *, sink: Any, **kwargs: Any) -> Any:
+        await sink.committed(_report("load-1").model_copy(update={"markings": [secret]}), source="a.csv")
+        raise RuntimeError("a later stage failed")
+
+    monkeypatch.setattr(run_module, "_execute_recipe_run", execute)
+    recipe = _draft(_recipe(), Path("one.csv"), handling=SOURCE.model_dump())
+    with pytest.raises(RuntimeError):
+        await run_module.run_recipe_as(
+            deps, principal=LOADER, recipe=recipe, investigation_id="case-1",  # type: ignore[arg-type]
+            source_location=None, trigger="manual",
+        )  # fmt: skip
+    assert ledger.failed_markings == [secret]

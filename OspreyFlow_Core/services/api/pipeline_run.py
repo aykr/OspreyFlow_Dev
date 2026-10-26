@@ -53,6 +53,7 @@ from services.extract.candidates import ExtractionCandidate
 from services.extract.recognised import recognised_candidates
 from services.extract.writer import write_candidate
 from services.geocoder.match import match_place_mention
+from services.ingest.engine import distinct_markings
 from services.ingest.geometries import POINT_GEOMETRY_VERSION
 from services.ingest.pipeline import (
     SUPPORTED_EXTRACT_LIBRARIES,
@@ -302,6 +303,9 @@ async def _run_extract_stage(
             continue
         text = (await media.get(document.properties["object_ref"])).decode("utf-8")
         handling = override if override is not None else document.handling
+        # Rule 3, ADR-127 Amendment 26: what the stage read is at the document's marking and what
+        # it wrote at `handling` (the override where there is one): the counts include both.
+        report.markings = distinct_markings(report.markings, [document.handling, handling])
         try:
             if output == "inferred_graph":
                 found: list[ExtractionCandidate] = []
@@ -599,6 +603,13 @@ async def run_published_pipeline(
         report.created_node_ids.extend(branch.report.created_node_ids)
         report.referenced_node_ids.extend(branch.report.referenced_node_ids)
         report.touched_edge_ids.extend(branch.report.touched_edge_ids)
+    # Rule 3, ADR-127 Amendment 23: the counts above are the branches' together, so a reader must
+    # be able to view every marking any branch wrote at to be shown them.
+    # An extract stage's counts are in it too, at what it read and what it wrote (its override
+    # included), which may be above every branch's.
+    report.markings = distinct_markings(
+        *(b.report.markings for b in report.branches), *(e.markings for e in report.extracts)
+    )
     # A node one branch referenced and another created is the second's own: named once, as created.
     created = set(report.created_node_ids)
     report.referenced_node_ids = [

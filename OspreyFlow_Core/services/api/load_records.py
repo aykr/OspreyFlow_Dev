@@ -21,14 +21,17 @@ its id lists (`report_view`)."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import Protocol, overload
 
+from services.ingest.engine import distinct_markings
 from services.ingest.load_ledger import load_record_from_report
 
-from schemas.domain import HeldRow
+from ontology.errors import HandlingSchemeError
+from ontology.handling import HandlingScheme, principal_may_view
+from schemas.domain import Handling, HeldRow, Principal
 from schemas.ingest import (
     BranchRunReportView,
     LoadRecord,
@@ -36,6 +39,7 @@ from schemas.ingest import (
     LoadReportView,
     PipelineRunReport,
     PipelineRunReportView,
+    RejectionRecord,
 )
 
 
@@ -91,8 +95,11 @@ class LedgerSink:
         self._investigation_id = investigation_id
         self._started_at = started_at
         self._released_from = released_from
+        self.markings: list[Handling] = []
 
     async def committed(self, report: LoadReport, *, source: str) -> None:
+        # The markings of what has committed so far, for a run that then fails (Amendment 26).
+        self.markings = distinct_markings(self.markings, report.markings)
         # The record and the keys of the rows this load wrote go in together, in one transaction of
         # the ledger, after the graph's commit (ADR-127 decision 5): never a key for a row that did
         # not load, and never a record without the keys of the rows it loaded.
@@ -154,36 +161,104 @@ def released_from_of(held: Sequence[HeldRow]) -> str:
     return next(iter(originals))
 
 
-def _load_view(report: LoadReport) -> LoadReportView:
-    fields = set(LoadReportView.model_fields)
-    return LoadReportView.model_validate(report.model_dump(include=fields))
+def _load_view(report: LoadReport, reader: Principal, scheme: HandlingScheme) -> LoadReportView:
+    fields = set(LoadReportView.model_fields) - {"rejections"}
+    view = LoadReportView.model_validate(report.model_dump(include=fields))
+    view.rejections = _readable_rejections(report.rejections, reader, scheme)
+    return view
+
+
+def may_see_counts(markings: Iterable[Handling], reader: Principal, scheme: HandlingScheme) -> bool:
+    """Whether `reader` may view every one of `markings` (rule 3, ADR-127 Amendment 23): a count of
+    what a load wrote includes each row it wrote, so it is shown only to a reader who may view the
+    marking of each (a higher classification, or a restricted code of another unit, withholds
+    it)."""
+    try:
+        return all(principal_may_view(m, reader, scheme) for m in markings)
+    except HandlingSchemeError:
+        # A stored marking the scheme does not know cannot be shown to be viewable: that run's
+        # counts are withheld, and the listing it is in carries on (ADR-127 Amendment 26).
+        return False
+
+
+#: What stands in for a rejected row's `sample` where the reader may not read the row's marking.
+SAMPLE_WITHHELD = (
+    "withheld: the row is above your clearance or restricted to another unit "
+    "(its row number and cause are shown)"
+)
+
+
+def _readable_rejections(
+    rejections: Sequence[RejectionRecord], reader: Principal, scheme: HandlingScheme
+) -> list[RejectionRecord]:
+    """A rejection keeps its row number and its cause, and its `sample` (the whole row) only where
+    the reader may view the row's marking (rule 3, ADR-127 Amendment 26). The marking itself is
+    never returned. A rejection with no marking holds nothing of the row."""
+    shown: list[RejectionRecord] = []
+    for rejection in rejections:
+        marking = rejection.marking
+        # An unresolvable row is masked for everyone: a stand-in marking judged by unit could be
+        # held by a unit an administrator creates.
+        if rejection.sample_unreadable or (
+            marking is not None and not may_see_counts([marking], reader, scheme)
+        ):
+            rejection = rejection.model_copy(update={"sample": SAMPLE_WITHHELD})
+        shown.append(rejection.model_copy(update={"marking": None, "sample_unreadable": False}))
+    return shown
 
 
 @overload
-def report_view(report: LoadReport) -> LoadReportView: ...
+def report_view(
+    report: LoadReport, reader: Principal, scheme: HandlingScheme
+) -> LoadReportView: ...
 
 
 @overload
-def report_view(report: PipelineRunReport) -> PipelineRunReportView: ...
+def report_view(
+    report: PipelineRunReport, reader: Principal, scheme: HandlingScheme
+) -> PipelineRunReportView: ...
 
 
 def report_view(
-    report: LoadReport | PipelineRunReport,
+    report: LoadReport | PipelineRunReport, reader: Principal, scheme: HandlingScheme
 ) -> LoadReportView | PipelineRunReportView:
-    """A report as a route answers it: its counts and words, and none of the id lists (rules 3 and
-    7). A link an earlier load wrote, listed as merged into, would be told to the loader whether or
-    not they may read it."""
+    """A report as a route answers `reader`: its counts and words, and none of the id lists (rules 3
+    and 7). A link an earlier load wrote, listed as merged into, would be told to the loader whether
+    or not they may read it.
+
+    **And no count at all** where the reader may not view every marking the load's rows were
+    written at (`report.markings`; a pipeline's is the union over its branches): `withheld` is set,
+    every count is zero and the lists are empty, as the ledger's own view does (rule 3, ADR-127
+    Amendment 23). The ids and the name of the recipe and load are not counts and stay."""
+    withheld = not may_see_counts(report.markings, reader, scheme)
     if isinstance(report, LoadReport):
-        return _load_view(report)
-    data = report.model_dump(include=set(PipelineRunReportView.model_fields) - {"branches"})
+        if withheld:
+            return LoadReportView(
+                load_id=report.load_id,
+                recipe_id=report.recipe_id,
+                recipe_version=report.recipe_version,
+                withheld=True,
+            )
+        return _load_view(report, reader, scheme)
+    if withheld:
+        return PipelineRunReportView(
+            load_id=report.load_id,
+            recipe_id=report.recipe_id,
+            recipe_version=report.recipe_version,
+            withheld=True,
+        )
+    data = report.model_dump(
+        include=set(PipelineRunReportView.model_fields) - {"branches", "rejections"}
+    )
     return PipelineRunReportView(
         **data,
+        rejections=_readable_rejections(report.rejections, reader, scheme),
         branches=[
             BranchRunReportView(
                 source_id=b.source_id,
                 source_label=b.source_label,
                 source_location=b.source_location,
-                report=_load_view(b.report),
+                report=_load_view(b.report, reader, scheme),
             )
             for b in report.branches
         ],

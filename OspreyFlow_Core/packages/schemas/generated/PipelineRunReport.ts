@@ -18,6 +18,14 @@ export type EdgesCreated = number;
 export type RowIndex = number;
 export type Reason = string;
 export type Sample = string;
+export type Classification = string;
+export type HandlingCode = string;
+export type ActionCode = string | null;
+export type SanitisationCode = string | null;
+export type OrgUnitId = string;
+export type ReviewDate = string | null;
+export type LegalBasis = string | null;
+export type SampleUnreadable = boolean;
 export type Rejections = RejectionRecord[];
 export type KeptRowKeys = string[];
 export type RowKeyFingerprint = string | null;
@@ -34,6 +42,7 @@ export type RuleCreatedEdgeIds = EdgeId[];
 export type RuleMergedEdgeIds = EdgeId[];
 export type RowsHeld = number;
 export type RuleNotes = string[];
+export type Markings = Handling[];
 export type Branches = BranchRunReport[];
 export type NodeId1 = string;
 export type Library = string;
@@ -44,6 +53,7 @@ export type NodesWrittenInferred = number;
 export type HandlingOverridden = number;
 export type OverrideReason = string | null;
 export type Refusals = string[];
+export type Markings1 = Handling[];
 export type Extracts = ExtractStageReport[];
 export type NodeId2 = string;
 export type Geocoder = string;
@@ -64,6 +74,7 @@ export type ReferencedNodeIds1 = NodeId[];
 export type TouchedEdgeIds1 = EdgeId[];
 export type RowsHeld1 = number;
 export type RuleNotes1 = string[];
+export type Markings2 = Handling[];
 
 /**
  * A whole pipeline's run (ADR-108 phase C): every branch's `LoadReport`, every extract and
@@ -88,6 +99,7 @@ export interface PipelineRunReport {
   touched_edge_ids?: TouchedEdgeIds1;
   rows_held?: RowsHeld1;
   rule_notes?: RuleNotes1;
+  markings?: Markings2;
   [k: string]: unknown;
 }
 /**
@@ -126,6 +138,7 @@ export interface LoadReport {
   rule_merged_edge_ids?: RuleMergedEdgeIds;
   rows_held?: RowsHeld;
   rule_notes?: RuleNotes;
+  markings?: Markings;
   [k: string]: unknown;
 }
 /**
@@ -136,6 +149,19 @@ export interface RejectionRecord {
   row_index: RowIndex;
   reason: Reason;
   sample: Sample;
+  marking?: Handling | null;
+  sample_unreadable?: SampleUnreadable;
+  [k: string]: unknown;
+}
+export interface Handling {
+  classification: Classification;
+  handling_code: HandlingCode;
+  action_code?: ActionCode;
+  sanitisation_code?: SanitisationCode;
+  originator: OrgUnitId;
+  owning_unit: OrgUnitId;
+  review_date?: ReviewDate;
+  legal_basis?: LegalBasis;
   [k: string]: unknown;
 }
 /**
@@ -153,6 +179,7 @@ export interface ExtractStageReport {
   handling_overridden?: HandlingOverridden;
   override_reason?: OverrideReason;
   refusals?: Refusals;
+  markings?: Markings1;
   [k: string]: unknown;
 }
 /**

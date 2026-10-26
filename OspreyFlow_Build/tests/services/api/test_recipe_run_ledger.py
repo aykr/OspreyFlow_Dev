@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 import services.api.app as app_module
+import services.api.recipe_run as run_module
 from services.api.config import PostgresConfig
 from services.api.recipe_runs import RecipeRunStore
 
@@ -52,12 +53,12 @@ async def _run(
             raise outcome
         return outcome.model_copy(update={"recipe_id": recipe_id})
 
-    monkeypatch.setattr(app_module, "_execute_recipe_run", execute)
-    monkeypatch.setattr(app_module, "resolve_source_handling", lambda recipe: SOURCE)
+    monkeypatch.setattr(run_module, "_execute_recipe_run", execute)
+    monkeypatch.setattr(run_module, "resolve_source_handling", lambda recipe: SOURCE)
     recipe = SimpleNamespace(recipe_id=recipe_id, version=2)
     result: Any
     try:
-        result = await app_module.run_recipe_as(
+        result = await run_module.run_recipe_as(
             _deps(runs),
             principal=LOADER,
             recipe=recipe,  # type: ignore[arg-type]

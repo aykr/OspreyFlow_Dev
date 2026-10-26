@@ -18,9 +18,18 @@ export type EdgesCreated = number;
 export type RowIndex = number;
 export type Reason = string;
 export type Sample = string;
+export type Classification = string;
+export type HandlingCode = string;
+export type ActionCode = string | null;
+export type SanitisationCode = string | null;
+export type OrgUnitId = string;
+export type ReviewDate = string | null;
+export type LegalBasis = string | null;
+export type SampleUnreadable = boolean;
 export type Rejections = RejectionRecord[];
 export type RowsHeld = number;
 export type RuleNotes = string[];
+export type Withheld = boolean;
 export type Branches = BranchRunReportView[];
 export type NodeId = string;
 export type Library = string;
@@ -31,6 +40,7 @@ export type NodesWrittenInferred = number;
 export type HandlingOverridden = number;
 export type OverrideReason = string | null;
 export type Refusals = string[];
+export type Markings = Handling[];
 export type Extracts = ExtractStageReport[];
 export type NodeId1 = string;
 export type Geocoder = string;
@@ -48,6 +58,7 @@ export type EdgesCreated1 = number;
 export type Rejections1 = RejectionRecord[];
 export type RowsHeld1 = number;
 export type RuleNotes1 = string[];
+export type Withheld1 = boolean;
 
 /**
  * `PipelineRunReport` as a route answers it: counts and words, no id lists, each branch a
@@ -68,6 +79,7 @@ export interface PipelineRunReportView {
   rejections?: Rejections1;
   rows_held?: RowsHeld1;
   rule_notes?: RuleNotes1;
+  withheld?: Withheld1;
   [k: string]: unknown;
 }
 /**
@@ -99,6 +111,7 @@ export interface LoadReportView {
   rejections?: Rejections;
   rows_held?: RowsHeld;
   rule_notes?: RuleNotes;
+  withheld?: Withheld;
   [k: string]: unknown;
 }
 /**
@@ -109,6 +122,19 @@ export interface RejectionRecord {
   row_index: RowIndex;
   reason: Reason;
   sample: Sample;
+  marking?: Handling | null;
+  sample_unreadable?: SampleUnreadable;
+  [k: string]: unknown;
+}
+export interface Handling {
+  classification: Classification;
+  handling_code: HandlingCode;
+  action_code?: ActionCode;
+  sanitisation_code?: SanitisationCode;
+  originator: OrgUnitId;
+  owning_unit: OrgUnitId;
+  review_date?: ReviewDate;
+  legal_basis?: LegalBasis;
   [k: string]: unknown;
 }
 /**
@@ -126,6 +152,7 @@ export interface ExtractStageReport {
   handling_overridden?: HandlingOverridden;
   override_reason?: OverrideReason;
   refusals?: Refusals;
+  markings?: Markings;
   [k: string]: unknown;
 }
 /**

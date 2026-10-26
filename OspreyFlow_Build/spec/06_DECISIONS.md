@@ -18841,3 +18841,79 @@ Decided by the coordinator under the owner's delegation for Brief 2.
   - **When it runs.** After R9, at the chapter-4 moment (Amendment 17).
   - **Its golden test.** It loads in `SEED_ORDER` with R9 and asserts the 589 links and every marking
     against `pid_plan`. A re-run creates nothing.
+
+### ADR-127, Amendment 25 (26 October 2026) — B2-10a as built: the recipes' pins and legal basis, withheld counts on screen, R9's restored pipeline
+
+Decided by the coordinator under the owner's delegation for Brief 2, from B2-10a's build and its live run.
+- **Pins as a publish would give them.**
+  - **The finding.** Seven committed recipes pin `{niem: 3}` but write only core types, so
+    `pack_versions_for` gives them `{}`: `pid-family-and-associates`, `pid-nomis-cell-stays`,
+    `pid-number-owners`, `pid-pin-calls`, `pid-prisoner-money`, `pid-seized-comms`, `pid-soc-nominals`.
+    Amendment 23's refusal of pins that differ from `pack_versions_for` would refuse all seven. A Studio
+    publish would have stamped `{}`, and a NIEM version change would flag them stale for nothing.
+  - **The fix.** Their files are corrected to `{}`. The refusal stands. The shared recipe gate asserts
+    each recipe's pins equal `pack_versions_for`, not a fixed `{niem: 3}`.
+- **Every recipe declares its legal basis.**
+  - **The finding.** None of the seventeen recipes declared one. Connect requires it, and a row without
+    it is not `ready_for_profile`, a state a Studio publish never reaches. The live store test caught it.
+  - **The fix.** Every PID recipe's defaults declare "Synthetic demonstration data", the pictures' basis
+    (Amendment 23). The shared gate asserts it.
+- **A withheld count says so on screen.** A run answer and a ledger view now carry `withheld`. The Glass
+  shows "counts withheld" with the reason wherever it would show a run's counts: the publish screen's
+  run report, Data feeds' last run and the schedule panel. It never shows zeros (ADR-124 option A′:
+  withheld counts disclose that they withhold).
+- **R9's restored draft carries the seed's starting pipeline.** `restore_to_draft` takes the pipeline to
+  write, rather than copying the previous version's, which a fallback publish leaves without one. The
+  seed passes R9's starting pipeline: a `domain_model` node for NIEM 3 and one source at the reports
+  file through `generic-csv`.
+- **Recorded.**
+  - The engine records the marking of every element a row resolves, references included. That
+    withholds more, never less.
+  - The seed's check also refuses a recipe whose `ontology_version` is not the loaded ontology's, as a
+    run would.
+
+### ADR-127, Amendment 26 (26 October 2026) — B2-10a corrected: every row read is marked, and no rejected row's content reaches a reader who cannot read it
+
+Found by an adversarial review of B2-10a. Decided by the coordinator under the owner's delegation for
+Brief 2.
+- **Every row read is marked, not only every element written.**
+  - **The defect.** Amendment 23 marked a run by the markings its rows were written at. Rows rejected,
+    held by a rule, or already loaded wrote nothing, yet were counted in `rows_read`, `rows_rejected`,
+    `rows_held` and `rows_already_loaded`. A re-run of R15 recorded no marking, so an OFFICIAL reader saw
+    a count including the SECRET row.
+  - **The rule.** The engine records the marking of every row it reads, resolved from the row's handling
+    columns over the source's defaults. A row whose marking cannot be resolved records the most
+    restrictive marking the source's declared units and the scheme allow, so it withholds rather than
+    discloses.
+  - **Pipelines.** A pipeline run's markings are the union over its branches and every marking its
+    extract stages wrote (their `handling_override` included). Its `extracts[]` counts are withheld on the
+    same rule.
+- **A rejected row's content is masked (pre-existing; found here).** A rejection's `sample` holds the
+  whole row. It was returned by the run route and the release route to the loader, whatever the row's
+  marking, ever since rows could carry their own marking (decision 3). A rejection whose row's marking
+  the reader cannot read keeps its row number and its cause, but its `sample` is withheld, and says so.
+  A row whose marking cannot be resolved has its sample withheld from every reader, whatever their unit:
+  no unit name can unlock it.
+- **Unfinished runs.** A failed run stores the markings it had reached. A running run, and a row written
+  before the column existed, read as the source's marking alone.
+- **One unreadable marking.** A stored marking the scheme does not know withholds that run's counts. It
+  does not fail the listing.
+- **"The same content" means the whole row.** The seed method compares `pack_versions`,
+  `ontology_version`, `dataset_id`, `owning_unit`, `git_path` and `status` as well as the content. It
+  refuses any difference by name, refuses a recipe with no `legal_basis`, and refuses to enter a second
+  published version of a recipe. It returns the version it entered.
+- **Deferred to B2-10c, the seed script.**
+  - "Not run twice" and the R17 guard (Amendment 23, "The runs").
+  - `test_pid_secret_link_leaves_no_trace`: it needs the whole seeded case, so it is written with the
+    seed and run live.
+- **Tests that would fail (rule 12).**
+  - A re-run of R15 as an OFFICIAL reader withholds its counts.
+  - A rejected SECRET row's sample is withheld from an OFFICIAL loader on the run route and on the
+    release route.
+  - A pipeline whose extract wrote above the branches' markings withholds.
+  - A failed run that committed a SECRET branch withholds.
+  - A stored unknown marking withholds that run and lists the rest.
+  - A reseed over a row with stale pins is refused by name.
+  - An unresolvable row's sample is withheld from every reader, the highest-cleared included.
+- **Not a test.** The engine also records a marking at each element write. Every row read is already
+  marked from its template, so those records add nothing, and no test can show one missing.

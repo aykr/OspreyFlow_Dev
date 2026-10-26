@@ -33,7 +33,6 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from dataclasses import fields as dataclass_fields
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, cast
@@ -88,13 +87,9 @@ from services.resolve.trigger import (
 )
 from valkey.asyncio import Valkey
 
-from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
-from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
-from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from adapters.model_litellm.errors import ExtractionFailedError, ModelUnavailableError
-from adapters.recognise_stanza import RecogniserConfig, RecogniseStanzaAdapter
 from conduit_common.identity import new_edge_id, new_id, now_utc
 from geo.bilinear import ControlPoint
 from geo.image_dimensions import (
@@ -105,8 +100,8 @@ from geo.image_dimensions import (
 from geo.wkb import polygon_wkb
 from knowledge_adapters import ARITY, REGISTRY
 from ontology.errors import OntologyError
-from ontology.handling import HandlingScheme, load_uk_le_scheme, principal_may_view
-from ontology.packs import load_deployment_ontology, pack_catalogue
+from ontology.handling import HandlingScheme, principal_may_view
+from ontology.packs import pack_catalogue
 from ontology.yardstick import Yardstick, load_phia_yardstick
 from ports.analytics import AnalyticsPort, TrendLimitExceeded
 from ports.compute import ComputePort
@@ -212,13 +207,11 @@ from schemas.ingest import (
     ConnectorCatalogueEntry,
     DeduplicateConfig,
     DomainPackEntry,
-    LoadReport,
     LoadReportView,
     MapHandlingPreviewRequest,
     MapHandlingPreviewResult,
     MapSampleRow,
     PipelineGraph,
-    PipelineRunReport,
     PipelineRunReportView,
     PublishRecipeInput,
     RowTemplateUpdateInput,
@@ -273,7 +266,6 @@ from . import review as review_module
 from . import risk as risk_module
 from . import search as search_module
 from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict
-from .analytics_store import open_analytics
 from .assessments import (
     AssumptionListResponse,
     AssumptionNotFoundError,
@@ -297,8 +289,6 @@ from .assessments import (
 )
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
-from .cache import CachedQuery
-from .change_stream import ChangeStreamEntry, ChangeStreamWriter, touched_node_ids
 from .compute_routes import (
     JOB_TYPE_COMPUTE_METRIC,
     ComputeMetricAccepted,
@@ -308,12 +298,10 @@ from .compute_routes import (
 )
 from .config import ApiConfig, DeploymentModels
 from .dataset_scope import (
-    DatasetStampingGraph,
     UnknownDatasetError,
     made_in,
     outside_any_case,
     scope_to_case,
-    stamping,
 )
 from .datasets import (
     CaseDatasetsRequest,
@@ -322,7 +310,6 @@ from .datasets import (
     DatasetRefusedError,
     DatasetStore,
     InMemoryDatasetStore,
-    PostgresDatasetStore,
 )
 from .document_content import (
     UPLOAD_CONTENT_EXTENSIONS,
@@ -358,10 +345,8 @@ from .entity_pictures import (
     PictureNotFoundError,
     PictureSetResponse,
 )
-from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .event_scope import visible_ancestors, with_inherited
 from .explore import (
-    EXPLORE_TTL_SECONDS,
     ExploreService,
     StarterNotOffered,
     TooManyMatches,
@@ -466,9 +451,8 @@ from .link_types import (
     RetireLinkTypeRequest,
     public_ontology,
 )
-from .load_records import LedgerSink, released_from_of, report_view
+from .load_records import LedgerSink, may_see_counts, released_from_of, report_view
 from .mapconfig_loader import load_map_config, public_view
-from .media_store import open_media_store
 from .model_routing import ModelEgressRefused, RoutedModel, model_status, routes_from_env
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
@@ -501,9 +485,6 @@ from .patterns import (
 from .pipeline_run import (
     OnlineGeocode,
     RecogniserFor,
-    online_geocode_from_env,
-    recogniser_for_deployment,
-    run_published_pipeline,
 )
 from .principal_names import PrincipalNameDirectory
 from .questions import (
@@ -515,7 +496,14 @@ from .questions import (
     QuestionsService,
     QuestionsTooLargeError,
 )
-from .recipe_runs import RecipeRun, RecipeRunStore, RunTrigger
+from .recipe_run import (
+    RecipeRunDeps,
+    _evaluate_watches_best_effort,
+    _owner_resolver,
+    _rule_gate,
+    run_recipe_as,
+)
+from .recipe_runs import RecipeRun, RecipeRunStore
 from .release_notice import read_update_notice
 from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
@@ -535,6 +523,7 @@ from .review import (
 from .risk import NeighbourhoodTooLarge
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .rule_holds import ReleaseRefused, readable_rule_audit, release_held_rows
+from .run_resources import RECIPES_REPO_ROOT, build_run_resources
 from .scheduler import (
     DEFAULT_TIMEZONE,
     ScheduleExecutor,
@@ -574,15 +563,12 @@ from .studio_profile import (
     SourceUnreadableError,
     profile_recipe_source,
 )
-from .studio_publish import _REPO_ROOT as _PUBLISH_REPO_ROOT  # noqa: I001
 from .studio_publish import (
     GitCommitError,
-    LoadSink,
     RecipeNotRunnableError,
     build_recipe,
     load_published_recipe,
     pack_versions_for,
-    run_published_recipe,
     write_and_commit_recipe,
 )
 from .studio_recipes import (
@@ -671,34 +657,35 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = ApiConfig.from_env()
 
-    arcadedb_client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
-    await arcadedb_client.create_database_if_absent()
-    handling_scheme = load_uk_le_scheme()
+    # ADR-127 Amendment 23: what a recipe run is built from (the stamping graph and its hooks, the
+    # stores a run writes, analytics, media, jobs, the principal resolver) is built by the one
+    # function the seed calls too, never a copy of it here.
+    resources = await build_run_resources(config)
+    handling_scheme = resources.handling_scheme
+    ontology = resources.ontology
+    graph = resources.graph
+    valkey = resources.valkey
+    audit = resources.audit
+    patterns_store = resources.patterns_store
+    hotlists_store = resources.hotlists_store
+    monitors_store = resources.monitors_store
+    alerts_store = resources.alerts_store
+    typology_rules = resources.typology_rules
+    held_rows = resources.held_rows
+    screening_lists = resources.screening_lists
+    kyc_expiries = resources.kyc_expiries
+    recipe_runs = resources.recipe_runs
+    extraction_candidates = resources.extraction_candidates
+    datasets_store = resources.datasets_store
+    analytics = resources.analytics
+    media = resources.media
+    recogniser = resources.recogniser
+    compute = resources.compute
+    jobs = resources.jobs
     yardstick = load_phia_yardstick()
-    ontology = load_deployment_ontology()
-    # ADR-099: the services write through `DatasetStampingGraph`, so whatever the Conduit writes
-    # for a case belongs to the case's dataset (`dataset_scope.py`).
-    graph: GraphPort = cast(
-        GraphPort, stamping(GraphArcadeDBAdapter(arcadedb_client, handling_scheme))
-    )
-    await graph.apply_schema(ontology)
-
-    valkey = Valkey(**config.valkey.client_kwargs())
-    audit = await AuditWriter.connect(config.postgres.dsn)
     investigations = await InvestigationStore.connect(config.postgres.dsn)
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
-    patterns_store = await PatternStore.connect(config.postgres.dsn)
-    hotlists_store = await HotlistStore.connect(config.postgres.dsn)
-    monitors_store = await MonitorStore.connect(config.postgres.dsn)
-    alerts_store = await AlertStore.connect(config.postgres.dsn)
-    # ADR-109: each case's typology rules, and the rows a failing pre-commit rule holds.
-    typology_rules = await TypologyRuleStore.connect(config.postgres.dsn)
-    held_rows = await HeldRowStore.connect(config.postgres.dsn, handling_scheme)
-    screening_lists = await ScreeningListStore.connect(config.postgres.dsn)
-    kyc_expiries = await KycExpiryStore.connect(config.postgres.dsn)
-    # ADR-110 decision 6: the run ledger.
-    recipe_runs = await RecipeRunStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
     link_notes_store = await LinkNoteStore.connect(config.postgres.dsn)
     link_changes_store = await LinkChangeStore.connect(config.postgres.dsn)
@@ -713,13 +700,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     trend_store = await TrendStore.connect(config.postgres.dsn)
     pack_store = await PackStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
-    extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
-    # ADR-099: the datasets of each unit and of each case.
-    datasets_store = await PostgresDatasetStore.connect(config.postgres.dsn)
     app.state.datasets = datasets_store
-    # ADR-099 Amendment 6: no write names a dataset the registry does not hold.
-    cast(DatasetStampingGraph, graph).check_against(datasets_store)
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
     # `embed_model` is the only model this adapter needs fixed at construction — `extract()`'s own
     # model is caller-supplied per call (`ExtractionRequest.model`, ADR-005), never this adapter's
@@ -744,7 +726,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # committed file under the recipe repository root a publish writes to), and flags a recipe
     # whose pinned packs are no longer the ones this process composes.
     flagged_at_start = await reconcile_recipe_pins(
-        studio_recipes, ontology, recipe_reader(_RECIPES_REPO_ROOT)
+        studio_recipes, ontology, recipe_reader(resources.recipe_repo_root)
     )
     if flagged_at_start:
         logger.warning(
@@ -753,23 +735,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             ", ".join(flagged_at_start),
         )
 
-    # The store `components.analytics_engine` names (ADR-114 decision 9): a DuckDB file on a
-    # single machine, ClickHouse where Conduits are replicated. `analytics_store.py` refuses any
-    # other name rather than falling back.
-    analytics, close_analytics = await open_analytics(
-        config.analytics_engine,
-        duckdb_path=config.analytics_db_path,
-        handling_scheme=handling_scheme,
-    )
-
     app.state.config = config
     app.state.graph = graph
     app.state.ontology = ontology
     app.state.valkey = valkey
-    # ADR-100 Amendment 3: the Explore panel's figures, kept per access class, cleared on a write.
-    explore_cache = CachedQuery(valkey, prefix="explore", ttl_seconds=EXPLORE_TTL_SECONDS)
-    app.state.explore_cache = explore_cache
-    cast(DatasetStampingGraph, graph).after_write(explore_cache.invalidate_prefix)
+    # ADR-100 Amendment 3: the Explore panel's figures, kept per access class, cleared on a write
+    # (the hook is on the graph, in `build_run_resources`).
+    app.state.explore_cache = resources.explore_cache
     app.state.working_set = WorkingSetService(
         graph, ValkeyWorkingSetStore(valkey), handling_scheme, valkey=valkey
     )
@@ -804,14 +776,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         scheme=handling_scheme,
     )
     app.state.link_events = LinkEventsService(app.state.working_set, analytics, investigations)
-    # ADR-094: where a content item's file is kept; never the graph.
-    media = open_media_store()
-    # ADR-098 decision 2: the fast recogniser, the `ner` sidecar.
-    recogniser = RecogniseStanzaAdapter(RecogniserConfig.from_env())
     # ADR-108 phase C: the pipeline runner's recogniser lookup and the online geocoding
     # allow-list (`OSPREY_ONLINE_GEOCODER`), both deployment-level wiring, not per-request.
-    app.state.pipeline_recogniser_for = recogniser_for_deployment(recogniser)
-    app.state.online_geocode = online_geocode_from_env()
+    app.state.pipeline_recogniser_for = resources.recogniser_for
+    app.state.online_geocode = resources.online_geocode
     app.state.media = media
     app.state.document_reader = DocumentReaderService(
         app.state.working_set, analytics, graph, extraction_candidates, investigations, media
@@ -864,20 +832,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.studio_recipes = studio_recipes
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
-    app.state.recipes_repo_root = _RECIPES_REPO_ROOT
+    app.state.recipes_repo_root = resources.recipe_repo_root
     app.state.handling_scheme = handling_scheme
     app.state.yardstick = yardstick
     app.state.site_image_storage = site_image_storage_config()
     app.state.tile_cache_storage = tile_cache_storage_config()
     app.state.analytics = analytics
-    # `06_DECISIONS.md` ADR-029/Phase 7 Stage 3: Tier 2 only, registered here — Tier 1
-    # (`graphology`, a Node harness, conformance-only) and Tier 3 (Phase 8a's `cluster` profile,
-    # ADR-028) have no Conduit-side adapter to construct yet. Stateless,
-    # same shape as `ComputeRustworkxAdapter`'s
-    # own `tests/conformance/registry.py` factory — no client, no lifecycle to close.
-    compute: ComputePort = ComputeRustworkxAdapter()
+    # `06_DECISIONS.md` ADR-029/Phase 7 Stage 3: Tier 2 only (built in `build_run_resources`) —
+    # Tier 1 (`graphology`, a Node harness, conformance-only) and Tier 3 (Phase 8a's `cluster`
+    # profile, ADR-028) have no Conduit-side adapter to construct yet.
     app.state.compute = compute
-    jobs = JobQueue(valkey)
     app.state.jobs = jobs
     # `06_DECISIONS.md` ADR-025: this system's first job-queue worker,
     # generalised by `job_type` rather than resolution-specific — closes
@@ -903,7 +867,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     job_worker.register(JOB_TYPE_PATTERN_MATCH, run_pattern_match_job)
     app.state.job_worker = job_worker
-    app.state.principal_resolver = PrincipalResolver(config)
+    app.state.principal_resolver = resources.principal_resolver
     # ADR-106: display names for principal ids, resolved when a read is served.
     app.state.principal_names = PrincipalNameDirectory(config)
     # ADR-112: the Admin area's people and dashboards, through the Conduit's own account.
@@ -947,21 +911,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         sweep_task.cancel()
         schedule_task.cancel()
-        await arcadedb_client.aclose()
-        await valkey.aclose()
-        await audit.close()
         await investigations.close()
         await history.close()
         await sites.close()
-        await patterns_store.close()
-        await hotlists_store.close()
-        await monitors_store.close()
-        await alerts_store.close()
-        await typology_rules.close()
-        await held_rows.close()
-        await screening_lists.close()
-        await kyc_expiries.close()
-        await recipe_runs.close()
         await judgements_store.close()
         await link_notes_store.close()
         await link_changes_store.close()
@@ -973,18 +925,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await trend_store.close()
         await pack_store.close()
         await studio_recipes.close()
-        await extraction_candidates.close()
         await questions_store.close()
         await app.state.principal_names.aclose()
         await app.state.identity_admin.aclose()
         if app.state.superset_embedder is not None:
             await app.state.superset_embedder.aclose()
-        await datasets_store.close()
         # A closed store must not outlive the app that held it (a test app is started again).
         app.state.datasets = None
         await litellm_client.aclose()
-        await app.state.principal_resolver.aclose()
-        await close_analytics()
+        await resources.close()
 
 
 app = FastAPI(title="OspreyFlow Conduit", lifespan=lifespan)
@@ -6172,7 +6121,7 @@ _SITE_GRID_GEOMETRY_VERSION = 1
 #: fix looked applied, returned 200, and still wrote the record into the image's own code
 #: directory where the next rebuild discards it. Exactly the defect this round exists to remove,
 #: found one layer further in than the grep that started it.
-_RECIPES_REPO_ROOT = _PUBLISH_REPO_ROOT
+_RECIPES_REPO_ROOT = RECIPES_REPO_ROOT
 
 
 class ControlPointsRequest(BaseModel):
@@ -7452,55 +7401,9 @@ async def run_studio_recipe(
         source_location=body.source_location,
         trigger="manual",
     )
-    # Rules 3 and 7: counts and words, never the load's id lists (`report_view`).
-    return report_view(report)
-
-
-@dataclass(frozen=True)
-class RecipeRunDeps:
-    """What a recipe run needs, the same whichever path started it (ADR-110 decision 1)."""
-
-    graph: GraphPort
-    ontology: OntologySchema
-    analytics: AnalyticsPort
-    media: MediaStore
-    recipe_repo_root: Path
-    audit: AuditWriter
-    jobs: JobQueue
-    valkey: Valkey
-    handling_scheme: HandlingScheme
-    config: ApiConfig
-    hotlists_store: HotlistStore
-    monitors_store: MonitorStore
-    patterns_store: PatternStore
-    alerts_store: AlertStore
-    principal_resolver: PrincipalResolver
-    extraction_candidates: ExtractionCandidateStore
-    recogniser_for: RecogniserFor
-    online_geocode: OnlineGeocode | None
-    typology_rules: TypologyRuleStore
-    held_rows: HeldRowStore
-    screening_lists: ScreeningListStore
-    compute: ComputePort
-    kyc_expiries: KycExpiryStore
-    recipe_runs: RecipeRunStore
-
-    @classmethod
-    def from_state(cls, state: Any) -> RecipeRunDeps:
-        """The scheduler's way in: the application's state, read where the route's getters read
-        it, so the two paths cannot be handed different stores."""
-        return cls(
-            **{
-                f.name: getattr(state, _RUN_DEP_STATE_NAMES.get(f.name, f.name))
-                for f in dataclass_fields(cls)
-            }
-        )
-
-
-_RUN_DEP_STATE_NAMES = {
-    "recipe_repo_root": "recipes_repo_root",
-    "recogniser_for": "pipeline_recogniser_for",
-}
+    # Rules 3 and 7: counts and words, never the load's id lists, and no count at all where the
+    # loader may not view every marking the rows were written at (`report_view`).
+    return report_view(report, principal, handling_scheme)
 
 
 def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
@@ -7546,230 +7449,6 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
         run=run,
         notify=notify,
         watch_files=watch_files,
-    )
-
-
-async def run_recipe_as(
-    deps: RecipeRunDeps,
-    *,
-    principal: Principal,
-    recipe: StudioRecipeDraft,
-    investigation_id: str,
-    source_location: str | None,
-    trigger: RunTrigger,
-    slot: datetime | None = None,
-    source_file: str | None = None,
-) -> LoadReport | PipelineRunReport:
-    """One run of a published recipe as `principal` (ADR-110 decision 1): the route's *Run now* and
-    the scheduler both come here, so a scheduled load is judged, published, watched and resolved
-    exactly as a manual one, and every run is in the ledger (decision 6) — started before it
-    loads, so one that dies with its Conduit shows as never finished rather than as nothing."""
-    started_at = datetime.now(UTC)
-    run_id = await deps.recipe_runs.start(
-        recipe_id=recipe.recipe_id,
-        recipe_version=recipe.version,
-        investigation_id=investigation_id,
-        trigger=trigger,
-        slot=slot,
-        run_as=principal.id,
-        source=resolve_source_handling(recipe),
-        now=started_at,
-        source_file=source_file,
-    )
-    # ADR-127 decision 6: each load's record is appended to this row as its graph transaction
-    # commits, so a run that fails after the commit still leaves it.
-    sink = LedgerSink(
-        deps.recipe_runs,
-        run_id,
-        created_by=principal.id,
-        investigation_id=investigation_id,
-        started_at=started_at,
-    )
-    try:
-        report = await _execute_recipe_run(
-            deps,
-            principal=principal,
-            recipe=recipe,
-            investigation_id=investigation_id,
-            source_location=source_location,
-            trigger=trigger,
-            sink=sink,
-        )
-    except Exception as error:
-        await deps.recipe_runs.fail(
-            run_id, failure=f"{type(error).__name__}: {error}"[:1000], now=datetime.now(UTC)
-        )
-        raise
-    await deps.recipe_runs.finish(run_id, report=report, now=datetime.now(UTC))
-    return report
-
-
-async def _execute_recipe_run(
-    deps: RecipeRunDeps,
-    *,
-    principal: Principal,
-    recipe: StudioRecipeDraft,
-    investigation_id: str,
-    source_location: str | None,
-    trigger: RunTrigger,
-    sink: LoadSink,
-) -> LoadReport | PipelineRunReport:
-    """The load itself, `run_studio_recipe`'s docstring has what each step is for."""
-    load_id = new_id()
-    # ADR-109 ruling 1: the case's typology rules judge this load, at the point each declares.
-    rules = await _rule_gate(
-        investigation_id,
-        loader=principal,
-        graph=deps.graph,
-        analytics=deps.analytics,
-        scheme=deps.handling_scheme,
-        typology_rules=deps.typology_rules,
-        held_rows=deps.held_rows,
-        alerts_store=deps.alerts_store,
-        audit=deps.audit,
-        valkey=deps.valkey,
-        principal_resolver=deps.principal_resolver,
-        screening=deps.screening_lists,
-        compute=deps.compute,
-        expiries=deps.kyc_expiries,
-        patterns=deps.patterns_store,
-    )
-    report: LoadReport | PipelineRunReport
-    if recipe.pipeline is not None:
-        # ADR-108 phase C: a recipe holding a pipeline graph runs through the pipeline runner —
-        # branches, extract stages, enrich stages — never silently as its first branch alone.
-        report = await run_published_pipeline(
-            recipe,
-            principal,
-            graph=deps.graph,
-            ontology=deps.ontology,
-            scheme=deps.handling_scheme,
-            load_id=load_id,
-            investigation_scope=investigation_id,
-            repo_root=deps.recipe_repo_root,
-            recogniser_for=deps.recogniser_for,
-            candidates=deps.extraction_candidates,
-            analytics=deps.analytics,
-            media=deps.media,
-            source_location=source_location,
-            online_geocode=deps.online_geocode,
-            rules=rules,
-            sink=sink,
-        )
-        for branch in report.branches:
-            await resolution_trigger_module.submit_post_ingest_resolution_jobs(
-                branch.report, recipe.row_template, ontology=deps.ontology, jobs=deps.jobs
-            )
-    else:
-        report = await run_published_recipe(
-            recipe,
-            principal,
-            graph=deps.graph,
-            ontology=deps.ontology,
-            load_id=load_id,
-            investigation_scope=investigation_id,
-            source_location=source_location,
-            repo_root=deps.recipe_repo_root,
-            analytics=deps.analytics,
-            media=deps.media,
-            rules=rules,
-            scheme=deps.handling_scheme,
-            sink=sink,
-        )
-        await resolution_trigger_module.submit_post_ingest_resolution_jobs(
-            report, recipe.row_template, ontology=deps.ontology, jobs=deps.jobs
-        )
-    entry = await ChangeStreamWriter(deps.valkey).publish(
-        "ingest",
-        # ADR-127 decision 7(a): the nodes the run matched by reference as well as those it created.
-        node_ids=touched_node_ids(report),
-        edge_ids=report.touched_edge_ids,
-        investigation_id=investigation_id,
-    )
-    if entry is not None:
-        await _evaluate_watches_best_effort(
-            entry,
-            principal=principal,
-            graph=deps.graph,
-            handling_scheme=deps.handling_scheme,
-            config=deps.config,
-            hotlists_store=deps.hotlists_store,
-            monitors_store=deps.monitors_store,
-            patterns_store=deps.patterns_store,
-            alerts_store=deps.alerts_store,
-            audit=deps.audit,
-            valkey=deps.valkey,
-            investigation_id=investigation_id,
-            action_on_failure="watch_evaluation_failed",
-            error_context={"load_id": load_id},
-            principal_resolver=deps.principal_resolver,
-        )
-    await deps.audit.record(
-        principal=principal,
-        action="run_studio_recipe",
-        investigation_id=investigation_id,
-        resolved_query={"recipe_id": recipe.recipe_id, "load_id": load_id, "trigger": trigger},
-        result_cardinality=report.nodes_created + report.edges_created,
-    )
-    return report
-
-
-def _owner_resolver(
-    principal: Principal, principal_resolver: PrincipalResolver
-) -> Callable[[str], Awaitable[Principal | None]]:
-    """An owner's principal, resolved fresh (ADR-036, ADR-043): the requester's own at once, any
-    other through Token Exchange, never cached."""
-
-    async def resolve(owner_id: str) -> Principal | None:
-        if owner_id == principal.id:
-            return principal
-        return await principal_resolver.resolve_for_owner(owner_id)
-
-    return resolve
-
-
-async def _rule_gate(
-    investigation_id: str,
-    *,
-    loader: Principal,
-    graph: GraphPort,
-    analytics: AnalyticsPort,
-    scheme: HandlingScheme,
-    typology_rules: TypologyRuleStore,
-    held_rows: HeldRowStore,
-    alerts_store: AlertStore,
-    audit: AuditWriter,
-    valkey: Valkey,
-    principal_resolver: PrincipalResolver,
-    screening: ScreeningListStore,
-    compute: ComputePort,
-    expiries: KycExpiryStore | None,
-    patterns: PatternStore,
-    fail_closed: bool = True,
-) -> RuleGate | None:
-    """The case's active typology rules for one load (ADR-109), or `None` when it has none.
-    What the KYC and pattern typologies read is required, never defaulted: a route that left it
-    out once held every row it loaded, failing closed on a store the deployment had."""
-    rules = await typology_rules.list_active_for_case(investigation_id)
-    if not rules:
-        return None
-    return RuleGate(
-        rules=rules,
-        investigation_id=investigation_id,
-        graph=graph,
-        analytics=analytics,
-        scheme=scheme,
-        alert_store=alerts_store,
-        audit=audit,
-        valkey=valkey,
-        principal_for_owner=_owner_resolver(loader, principal_resolver),
-        loader=loader,
-        held_store=held_rows,
-        fail_closed=fail_closed,
-        screening=screening,
-        compute=compute,
-        expiries=expiries,
-        patterns=patterns,
     )
 
 
@@ -8470,6 +8149,14 @@ async def release_held_rows_route(
         source=resolve_source_handling(recipe),
         now=released_at,
     )
+    sink = LedgerSink(
+        recipe_runs,
+        run_id,
+        created_by=principal.id,
+        investigation_id=investigation.id,
+        started_at=released_at,
+        released_from=released_from,
+    )
     try:
         report = await release_held_rows(
             held,
@@ -8481,18 +8168,14 @@ async def release_held_rows_route(
             media=media,
             rules=rules,
             load_id=load_id,
-            sink=LedgerSink(
-                recipe_runs,
-                run_id,
-                created_by=principal.id,
-                investigation_id=investigation.id,
-                started_at=released_at,
-                released_from=released_from,
-            ),
+            sink=sink,
         )
     except Exception as error:
         await recipe_runs.fail(
-            run_id, failure=f"{type(error).__name__}: {error}"[:1000], now=datetime.now(UTC)
+            run_id,
+            failure=f"{type(error).__name__}: {error}"[:1000],
+            now=datetime.now(UTC),
+            markings=sink.markings,
         )
         raise
     await recipe_runs.finish(run_id, report=report, now=datetime.now(UTC))
@@ -8511,7 +8194,7 @@ async def release_held_rows_route(
         },
         result_cardinality=len(decided),
     )
-    return report_view(report)
+    return report_view(report, principal, handling_scheme)
 
 
 @app.post(
@@ -8544,74 +8227,6 @@ async def reject_held_rows(
         result_cardinality=len(decided),
     )
     return decided
-
-
-async def _evaluate_watches_best_effort(
-    entry: ChangeStreamEntry,
-    *,
-    principal: Principal,
-    graph: GraphPort,
-    handling_scheme: HandlingScheme,
-    config: ApiConfig,
-    hotlists_store: HotlistStore,
-    monitors_store: MonitorStore,
-    patterns_store: PatternStore,
-    alerts_store: AlertStore,
-    audit: AuditWriter,
-    valkey: Valkey,
-    investigation_id: str,
-    action_on_failure: str,
-    principal_resolver: PrincipalResolver,
-    error_context: dict[str, Any] | None = None,
-) -> None:
-    """Shared by every producer route wired to synchronous evaluation this stage
-    (`run_studio_recipe`, `link_resolution_route`) — the identical `principal_for_owner` and the
-    identical best-effort failure containment, factored out rather than duplicated a second time
-    verbatim. A failure here is caught and audited, never allowed to fail the caller's own
-    already-succeeded primary operation.
-
-    **`principal_for_owner`, `06_DECISIONS.md` ADR-043 (Phase 8 Stage 1).** The requester's own id
-    resolves instantly, with no network call — no exchange is needed to learn what this route
-    already knows. Any other owner goes through `principal_resolver.resolve_for_owner` (OAuth2
-    Token Exchange) — a real, live, per-call resolution, never cached (ADR-036's own "resolved
-    fresh" requirement, ADR-043's own freshness argument): a revoked or otherwise-unreachable
-    owner resolves to `None` on this call and the next, with nothing here holding onto whatever a
-    prior call once returned."""
-
-    _principal_for_owner = _owner_resolver(principal, principal_resolver)
-
-    try:
-        await evaluate_hotlists_for_entry(
-            entry,
-            graph=graph,
-            scheme=handling_scheme,
-            hotlist_store=hotlists_store,
-            alert_store=alerts_store,
-            audit=audit,
-            valkey=valkey,
-            principal_for_owner=_principal_for_owner,
-            policy=config.hotlist_alert_policy,
-        )
-        await evaluate_monitors_for_entry(
-            entry,
-            graph=graph,
-            monitor_store=monitors_store,
-            pattern_store=patterns_store,
-            alert_store=alerts_store,
-            audit=audit,
-            valkey=valkey,
-            principal_for_owner=_principal_for_owner,
-        )
-    except Exception as exc:  # noqa: BLE001 - a best-effort side channel, see this function's
-        # own docstring: must never fail the caller's own already-succeeded primary operation.
-        # Audited, not silently swallowed.
-        await audit.record(
-            principal=principal,
-            action=action_on_failure,
-            investigation_id=investigation_id,
-            resolved_query={**(error_context or {}), "error": str(exc)},
-            result_cardinality=0,
-        )
 
 
 # --- the delta stream --------------------------------------------------------
@@ -8887,7 +8502,10 @@ def _schedule_run_view(
         run_as=run.run_as,
         failure=run.failure if run.outcome not in ("failed", "succeeded", "running") else None,
     )
-    if not principal_may_view(run.source, reader, scheme):
+    # Rule 3, ADR-127 Amendment 23: the counts include every row the run wrote, at every marking it
+    # recorded, so each is judged beside the source's own (a run written before the column records
+    # the source alone).
+    if not may_see_counts([run.source, *run.markings], reader, scheme):
         return view.model_copy(update={"withheld": True})
     return view.model_copy(
         update={

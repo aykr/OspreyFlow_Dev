@@ -208,8 +208,9 @@ def test_the_route_publishes_created_and_referenced_nodes_to_the_change_stream()
     """Rule 12: the sentence is about the route, so the test reads the route. `run_studio_recipe`
     publishes the entry the watches are evaluated against; its `node_ids` must come from
     `touched_node_ids(report)`, not from `report.created_node_ids` alone. (The route needs the whole
-    dev stack to run, which `test_phase7_stage6c_watch_routes.py`'s two S7 cases do.)"""
-    tree = ast.parse((CORE / "services/api/app.py").read_text())
+    dev stack to run, which `test_phase7_stage6c_watch_routes.py`'s two S7 cases do.) The publish is
+    in `services/api/recipe_run.py` since the run path moved there (ADR-127 Amendment 23)."""
+    tree = ast.parse((CORE / "services/api/recipe_run.py").read_text())
     published: list[ast.Call] = []
     for node in ast.walk(tree):
         if (
@@ -234,12 +235,12 @@ def test_no_route_answer_carries_the_referenced_ids() -> None:
     load = LoadReport(
         load_id="l", recipe_id="r", recipe_version=1, referenced_node_ids=["secret-node-id"]
     )
-    assert "secret-node-id" not in report_view(load).model_dump_json()
+    assert "secret-node-id" not in report_view(load, LOADER, SCHEME).model_dump_json()
     pipeline = PipelineRunReport(
         load_id="l", recipe_id="r", recipe_version=1, referenced_node_ids=["secret-node-id"],
         branches=[],
     )  # fmt: skip
-    assert "secret-node-id" not in report_view(pipeline).model_dump_json()
+    assert "secret-node-id" not in report_view(pipeline, LOADER, SCHEME).model_dump_json()
 
 
 # --- decision 8: the alert names the source file through the matched node's provenance ----------

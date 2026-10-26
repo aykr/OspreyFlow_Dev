@@ -66,7 +66,13 @@ def _group_rejections(rejections: list[RejectionRecord]) -> list[RejectionGroup]
     for rejection in rejections:
         by_reason[rejection.reason].append(rejection)
     return [
-        RejectionGroup(reason=reason, count=len(records), samples=records[:_MAX_SAMPLES_PER_REASON])
+        RejectionGroup(
+            reason=reason,
+            count=len(records),
+            samples=[
+                r.model_copy(update={"marking": None}) for r in records[:_MAX_SAMPLES_PER_REASON]
+            ],
+        )
         for reason, records in by_reason.items()
     ]
 

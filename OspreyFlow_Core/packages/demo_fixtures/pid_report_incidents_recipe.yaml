@@ -14,6 +14,7 @@ ontology_version: 16
 pack_versions: {niem: 3}
 
 defaults:
+  legal_basis: Synthetic demonstration data
   provenance: {state: asserted}
   handling:
     classification: OFFICIAL

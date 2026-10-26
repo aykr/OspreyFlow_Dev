@@ -458,6 +458,16 @@ def _merge_override(
     return merged
 
 
+def distinct_markings(*groups: Iterable[Handling]) -> list[Handling]:
+    """Every marking in `groups`, each once, in the order first met (rule 3, ADR-127 Amendment 23):
+    the union a pipeline run reports over its branches' `LoadReport.markings`."""
+    seen: dict[str, Handling] = {}
+    for group in groups:
+        for marking in group:
+            seen.setdefault(marking.model_dump_json(), marking)
+    return list(seen.values())
+
+
 def _handling(defaults: Mapping[str, Any]) -> Handling:
     raw = dict(defaults)
     originator = raw.get("originator")
@@ -624,6 +634,38 @@ def _refuse_unit_conflict(markings: Sequence[Handling], scheme: HandlingScheme) 
             "its elements' markings name different units under a restricted handling code and "
             "cannot be held as one marking"
         )
+
+
+#: The unit a row's marking is put in when it cannot be resolved and only one marking can be named:
+#: no principal belongs to it.
+UNRESOLVED_UNIT = "unresolved-marking"
+
+
+def most_restrictive_markings(recipe: Recipe, scheme: HandlingScheme) -> list[Handling]:
+    """The most restrictive marking the source's declared units and the scheme allow, one for each
+    unit (a `Handling` holds one unit): the highest classification, and a restricted handling code
+    where the scheme has one. A row whose own marking cannot be resolved is recorded at these, so
+    that it withholds from a reader who may not view every one of them (rule 3, ADR-127
+    Amendment 26): from a reader of any one unit, and from a reader of none."""
+    units = list(dict.fromkeys([*recipe.defaults.units, *_default_units(recipe)]))
+    restricted = [
+        name for name, code in scheme.handling_codes.items() if code.dissemination == "restricted"
+    ]
+    code = restricted[0] if restricted else list(scheme.handling_codes)[-1]
+    return [
+        Handling(
+            classification=scheme.classification[-1],
+            handling_code=code,
+            originator=unit,
+            owning_unit=unit,
+        )
+        for unit in units
+    ]
+
+
+def _default_units(recipe: Recipe) -> list[str]:
+    declared = recipe.defaults.handling
+    return [str(declared[k]) for k in ("owning_unit", "originator") if declared.get(k)]
 
 
 def row_marking(recipe: Recipe, row: Mapping[str, str], scheme: HandlingScheme) -> Handling:
@@ -823,6 +865,9 @@ class _RunState:
     nodes_created: int = 0
     nodes_referenced: int = 0
     edges_created: int = 0
+    #: Rule 3, ADR-127 Amendment 23: every distinct marking a row's element was written at, in the
+    #: order first met (`LoadReport.markings`), by the marking's own JSON.
+    markings: dict[str, Handling] = field(default_factory=dict)
     #: Within-load cache so the same value referenced by two rows in one
     #: load resolves to one node without depending on read-your-own-write
     #: visibility from a query issued inside the same open transaction.
@@ -1097,6 +1142,11 @@ class Resolved:
     rows_read: int
     rows_deduplicated: int
     rows_already_loaded: int = 0
+    #: Rule 3, ADR-127 Amendment 26: the marking of every row read (`row_marking` over the source's
+    #: defaults), each distinct one once: rejected, held and already-loaded rows included, since
+    #: the counts are of all of them. A row whose marking cannot be resolved is at
+    #: `most_restrictive_markings`.
+    markings: list[Handling] = field(default_factory=list)
 
 
 def row_group_keys(recipe: Recipe, rows: Sequence[Mapping[str, str]]) -> list[str | None]:
@@ -1239,6 +1289,8 @@ def resolve_rows_keyed(
     def number(position: int) -> int:
         return row_numbers[position] if row_numbers is not None else position
 
+    markings = _row_markings(recipe, materialized_rows, scheme)
+
     staged_rows: list[StagedRow] = []
     rejections: list[RejectionRecord] = []
     for key in group_order:
@@ -1259,7 +1311,13 @@ def resolve_rows_keyed(
                 )
         except RowRejected as exc:
             rejections.append(
-                RejectionRecord(row_index=row_index, reason=exc.reason, sample=str(dict(row)))
+                RejectionRecord(
+                    row_index=row_index,
+                    reason=exc.reason,
+                    sample=str(dict(row)),
+                    marking=_one_row_marking(recipe, row, scheme),
+                    sample_unreadable=_marking_unresolvable(recipe, row, scheme),
+                )
             )
             continue
         staged_rows.append(
@@ -1276,7 +1334,74 @@ def resolve_rows_keyed(
             )
         )
 
-    return Resolved(staged_rows, rejections, rows_read, rows_deduplicated, rows_already_loaded)
+    return Resolved(
+        staged_rows, rejections, rows_read, rows_deduplicated, rows_already_loaded, markings
+    )
+
+
+def _one_row_marking(
+    recipe: Recipe, row: Mapping[str, str], scheme: HandlingScheme | None
+) -> Handling:
+    """The marking a rejection's `sample` (the whole row) is held at. Without a scheme (the CLI and
+    the seeders, which bind no marking) it is the recipe's default. Where the row's own cannot be
+    resolved it is the highest classification under a restricted code, in a unit no principal holds,
+    so no reader may read the sample (rule 3, ADR-127 Amendment 26)."""
+    if scheme is None:
+        return _handling(recipe.defaults.handling)
+    try:
+        return row_marking(recipe, row, scheme)
+    except (RowRejected, HandlingSchemeError):
+        unreadable = most_restrictive_markings(recipe, scheme)[0]
+        return unreadable.model_copy(
+            update={"originator": UNRESOLVED_UNIT, "owning_unit": UNRESOLVED_UNIT}
+        )
+
+
+def _marking_unresolvable(
+    recipe: Recipe, row: Mapping[str, str], scheme: HandlingScheme | None
+) -> bool:
+    """Whether the row's own marking cannot be resolved: its sample is then read by no one."""
+    if scheme is None:
+        return False
+    try:
+        row_marking(recipe, row, scheme)
+    except (RowRejected, HandlingSchemeError):
+        return True
+    return False
+
+
+def _row_markings(
+    recipe: Recipe, rows: Sequence[Mapping[str, str]], scheme: HandlingScheme | None
+) -> list[Handling]:
+    """Every distinct marking over `rows` (see `Resolved.markings`). A row's marking depends only
+    on the columns its handling bindings and its `when` conditions read, so each distinct
+    combination of those is resolved once, not once per row of a million."""
+    columns: set[str] = set()
+    for element in template_elements(recipe.row_template):
+        columns.update(handling_bindings(element.handling).values())
+        if element.when is not None:
+            columns.add(element.when.field)
+    ordered = sorted(columns)
+    seen: dict[tuple[str | None, ...], list[Handling]] = {}
+    found: dict[str, Handling] = {}
+    for row in rows:
+        key = tuple(row.get(c) for c in ordered)
+        if key not in seen:
+            seen[key] = _resolve_markings(recipe, row, scheme)
+        for marking in seen[key]:
+            found.setdefault(marking.model_dump_json(), marking)
+    return list(found.values())
+
+
+def _resolve_markings(
+    recipe: Recipe, row: Mapping[str, str], scheme: HandlingScheme | None
+) -> list[Handling]:
+    if scheme is None:
+        return recipe_handlings(recipe)
+    try:
+        return [row_marking(recipe, row, scheme)]
+    except (RowRejected, HandlingSchemeError):
+        return most_restrictive_markings(recipe, scheme)
 
 
 def _note_referenced(state: _RunState, node_id: NodeId) -> None:
@@ -1315,6 +1440,7 @@ async def _write_entity(
     handling = _handling(
         _merge_override(state.recipe.defaults.handling, _row_override(resolved, entity))
     )
+    state.markings.setdefault(handling.model_dump_json(), handling)
     provenance = _provenance(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
@@ -1466,6 +1592,7 @@ async def _write_held_content(
     handling = _handling(
         _merge_override(state.recipe.defaults.handling, _row_override(resolved, entity))
     )
+    state.markings.setdefault(handling.model_dump_json(), handling)
     provenance = _provenance(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
@@ -1593,6 +1720,7 @@ async def _write_edge(
     handling = _handling(
         _merge_override(state.recipe.defaults.handling, _row_override(resolved, edge))
     )
+    state.markings.setdefault(handling.model_dump_json(), handling)
     provenance = _provenance(
         _merge_override(state.recipe.defaults.provenance, edge.provenance),
         source=state.source,
@@ -2296,5 +2424,6 @@ async def run_recipe(
         created_edge_ids=state.created_edge_ids,
         merged_edge_ids=state.merged_edge_ids,
         merged_node_ids=state.merged_node_ids,
+        markings=distinct_markings(resolved.markings, state.markings.values()),
     )
     return report, events

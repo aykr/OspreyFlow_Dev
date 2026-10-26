@@ -676,7 +676,7 @@ def test_a_pipeline_recipe_runs_through_the_pipeline_runner(
             branches=[branch("source"), branch("source-b")],
         )
 
-    monkeypatch.setattr(app_module, "run_published_pipeline", fake_runner)
+    monkeypatch.setattr("services.api.recipe_run.run_published_pipeline", fake_runner)
 
     response = run_client.post(f"{CASE}/ingest/recipes/recipe-1/run", json={})
 

@@ -4,6 +4,7 @@
 // marking are listed; the server filters them in its own query.
 import { useCallback, useEffect, useState } from "react";
 import type { HeldRow } from "../../../../packages/schemas/generated";
+import { COUNTS_WITHHELD_REASON } from "../admin/Schedules";
 import { Button } from "../design/primitives";
 import type { AccessLevel } from "../investigation/cases";
 import { listHeldRows, rejectHeldRows, releaseHeldRows, type AlertsApi } from "./api";
@@ -78,7 +79,11 @@ export function HeldRowsPanel(props: HeldRowsPanelProps) {
                     onClick={() =>
                       void releaseHeldRows(props, first.recipe_id, ids, reason.trim() || null)
                         .then((report) => {
-                          setSaid(`Released and loaded: ${report.edges_created} link(s) made. ${report.rule_notes.join(" ")}`.trim());
+                          setSaid(
+                            report.withheld
+                              ? `Released and loaded. Counts withheld — ${COUNTS_WITHHELD_REASON}.`
+                              : `Released and loaded: ${report.edges_created} link(s) made. ${report.rule_notes.join(" ")}`.trim(),
+                          );
                           reload();
                         })
                         .catch((e: Error) => setProblem(e.message))

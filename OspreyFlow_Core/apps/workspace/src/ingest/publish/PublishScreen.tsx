@@ -15,7 +15,7 @@ import type {
   ScheduleRunView,
   StudioRecipeDraft,
 } from "../../../../../packages/schemas/generated";
-import { runInWords, triggerInWords } from "../../admin/Schedules";
+import { COUNTS_WITHHELD_REASON, runInWords, triggerInWords } from "../../admin/Schedules";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Panel } from "../../design/primitives/Panel";
@@ -486,7 +486,16 @@ export function PublishScreen({
         </p>
       )}
 
-      {loadReport && (
+      {loadReport && loadReport.withheld && (
+        <Panel title="Load result">
+          <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
+            <li>Load id: {loadReport.load_id}</li>
+            <li>Counts withheld — {COUNTS_WITHHELD_REASON}</li>
+          </ul>
+        </Panel>
+      )}
+
+      {loadReport && !loadReport.withheld && (
         <Panel title="Load result">
           <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
             <li>Load id: {loadReport.load_id}</li>

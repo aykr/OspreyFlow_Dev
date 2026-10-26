@@ -476,7 +476,7 @@ def test_no_route_answer_carries_the_keys() -> None:
         rows_already_loaded=2,
         kept_row_keys=["abc", "def"],
     )
-    view = report_view(report)
+    view = report_view(report, LOADER, SCHEME)
     assert view.rows_already_loaded == 2
     assert "kept_row_keys" not in view.model_dump()
     assert "abc" not in view.model_dump_json()

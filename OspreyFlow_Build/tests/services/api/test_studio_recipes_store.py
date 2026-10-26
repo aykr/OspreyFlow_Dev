@@ -6,10 +6,28 @@ route-level fakes. `spec/09_INGEST_STUDIO.md` §2, §6."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import asyncpg
 import pytest
+from services.api.config import PostgresConfig
+from services.api.studio_recipes import (
+    SeededRecipeAnotherPublished,
+    SeededRecipeContentDiffers,
+    StudioRecipeCannotVersionError,
+    StudioRecipeNotADraftError,
+    StudioRecipeNotFoundError,
+    StudioRecipeNotVerifiedError,
+    StudioRecipeStore,
+)
+from services.ingest.engine import StaleRecipeError
+from services.ingest.recipe_loader import load_recipe
+
+from conduit_common.identity import new_id
+from ontology.handling import load_uk_le_scheme
+from ontology.loader import load_default_ontology
+from ontology.packs import load_deployment_ontology
 from schemas.domain import Principal
 from schemas.ingest import (
     PipelineEdge,
@@ -23,16 +41,6 @@ from schemas.ingest import (
     StudioRecipeStatus,
     UnmappedField,
 )
-from services.api.config import PostgresConfig
-from services.api.studio_recipes import (
-    StudioRecipeCannotVersionError,
-    StudioRecipeNotADraftError,
-    StudioRecipeNotFoundError,
-    StudioRecipeNotVerifiedError,
-    StudioRecipeStore,
-)
-
-from ontology.loader import load_default_ontology
 
 AUTHOR = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["source_author"])
 OTHER_UNIT_AUTHOR = Principal(
@@ -1281,3 +1289,336 @@ async def test_a_deduplicate_is_kept_on_a_new_version(store: StudioRecipeStore) 
         published.recipe_id, AUTHOR, now=datetime(2026, 1, 3, tzinfo=UTC)
     )
     assert new_version.deduplicate == _dedupe(), "as `units` and `handling_columns` are kept"
+
+
+# --- ADR-127 Amendment 23, B2-10a: the two methods the Prison Intelligence seed uses --------------
+# (`enter_published_for_seed`, `restore_to_draft`); the refusals that run before any write are in
+# `test_studio_recipes_seed_refusals.py` (pure). Live: the rows, the status flips and the
+# transaction are the subject. What a mistake would do, and the case that catches it:
+#
+# Entering a committed recipe as published:
+# - the id or the version not kept (`test_the_recipe_is_entered_published_keeping_its_id_and_version`);
+# - the content not the file's (`test_the_content_is_the_files_and_reads_back_as_it_runs`);
+# - a schedule set, so the scheduler runs it on its own
+#   (`test_no_schedule_is_set_and_the_recipe_feeds_its_dataset`);
+# - the same content entered again changing the row, or refused
+#   (`test_the_same_content_again_leaves_the_row_as_it_was`);
+# - different content at the same version overwriting the row, or accepted silently
+#   (`test_different_content_at_the_same_version_is_refused_by_name_and_the_row_is_kept`);
+# - a refused recipe leaving a row behind (`test_a_refused_recipe_leaves_no_row`).
+#
+# Restoring a recipe to a draft:
+# - the draft not at the next version, not in the unit `verify`, or still mapped
+#   (`test_the_restored_draft_is_unmapped_at_the_next_version_in_the_unit`);
+# - the previous version left published, so `feeding` still lists the recipe
+#   (`test_after_a_restore_feeding_lists_none_and_the_drafts_list_has_exactly_one`);
+# - the previous version superseded in a transaction of its own, so a failure between the two leaves
+#   a recipe that is superseded with no draft
+#   (`test_a_restore_that_fails_leaves_the_previous_version_as_it_was`);
+# - a restore that only works for a published version
+#   (`test_a_flagged_version_and_a_draft_are_restored_too`).
+
+SEED_FIXTURES = Path(__file__).resolve().parents[4] / "OspreyFlow_Core/packages/demo_fixtures"
+SEED_ONTOLOGY = load_deployment_ontology()
+SEED_SCHEME = load_uk_le_scheme()
+SEED_NOW = datetime(2026, 10, 26, 9, tzinfo=UTC)
+SEED_LOCATION = "uploaded/prison-intelligence/pid_conflicts.csv"
+
+
+def fresh_recipe() -> Recipe:
+    """The committed R15, under an id of its own so each case has its own row."""
+    return load_recipe(SEED_FIXTURES / "pid_conflicts_recipe.yaml").model_copy(update={"id": new_id()})
+
+
+def reader_of(dataset: str, unit: str = "verify") -> Principal:
+    return Principal(
+        id="pid-seed-worker", clearance="SECRET", org_unit=unit, roles=["data_engineer"],
+        datasets=[dataset],
+    )  # fmt: skip
+
+
+async def enter(
+    store: StudioRecipeStore, rec: Recipe, *, dataset: str = "prison-intelligence", now: datetime = SEED_NOW
+):  # type: ignore[no-untyped-def]
+    return await store.enter_published_for_seed(
+        rec, source_location=SEED_LOCATION, git_path=f"recipes/{rec.id}.yaml", dataset_id=dataset,
+        owning_unit="verify", published_by="pid-seed-worker", now=now, ontology=SEED_ONTOLOGY,
+        scheme=SEED_SCHEME,
+    )
+
+
+# --- entering a committed recipe as published ---------------------------------------------------
+
+
+async def test_the_recipe_is_entered_published_keeping_its_id_and_version(
+    store: StudioRecipeStore,
+) -> None:
+    rec = fresh_recipe()
+    entered = await enter(store, rec)
+    assert (entered.recipe_id, entered.version) == (rec.id, rec.version)
+    assert entered.status is StudioRecipeStatus.PUBLISHED
+    assert entered.dataset_id == "prison-intelligence" and entered.owning_unit == "verify"
+    assert entered.git_path == f"recipes/{rec.id}.yaml"
+    assert entered.ontology_version == SEED_ONTOLOGY.version == rec.ontology_version
+    assert entered.pack_versions == rec.pack_versions == {"niem": SEED_ONTOLOGY.packs["niem"]}
+    assert entered.published_by == "pid-seed-worker" and entered.published_at == SEED_NOW
+    assert entered.verified_at == SEED_NOW and entered.label == rec.label
+    assert (await store.get(rec.id)) == entered
+
+
+async def test_the_content_is_the_files_and_reads_back_as_it_runs(store: StudioRecipeStore) -> None:
+    rec = fresh_recipe()
+    entered = await enter(store, rec)
+    assert entered.connector_profile == rec.connector.profile
+    assert entered.source_location == SEED_LOCATION
+    assert entered.legal_basis == rec.defaults.legal_basis
+    assert entered.row_template == rec.row_template
+    assert entered.unmapped_fields == rec.unmapped_fields
+    assert entered.deduplicate == rec.deduplicate and entered.deduplicate is not None
+    assert entered.pipeline is None
+    expected_handling = {
+        **rec.defaults.handling,
+        "units": rec.defaults.units,
+        "handling_columns": rec.defaults.handling_columns,
+    }
+    assert entered.handling == expected_handling
+    assert entered.ready_for_profile is True
+
+
+async def test_no_schedule_is_set_and_the_recipe_feeds_its_dataset(store: StudioRecipeStore) -> None:
+    rec = fresh_recipe()
+    entered = await enter(store, rec)
+    assert (entered.schedule_cron, entered.schedule_watch, entered.schedule_owner) == (None,) * 3
+    assert entered.schedule_case is None and entered.schedule_paused is False
+    assert rec.id not in [r.recipe_id for r in await store.scheduled()]
+    fed = [r.recipe_id for r in await store.feeding(["prison-intelligence"])]
+    assert fed.count(rec.id) == 1
+    assert rec.id not in [r.recipe_id for r in await store.feeding(["another-dataset"])]
+
+
+async def test_the_same_content_again_leaves_the_row_as_it_was(store: StudioRecipeStore) -> None:
+    rec = fresh_recipe()
+    first = await enter(store, rec)
+    again = await enter(store, rec, now=SEED_NOW + timedelta(days=1))
+    assert again == first
+    assert again.published_at == SEED_NOW, "the row was not rewritten"
+    async with store._pool.acquire() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM studio_recipes WHERE recipe_id = $1", rec.id) == 1
+
+
+async def test_different_content_at_the_same_version_is_refused_by_name_and_the_row_is_kept(
+    store: StudioRecipeStore,
+) -> None:
+    rec = fresh_recipe()
+    first = await enter(store, rec)
+    changed = rec.model_copy(update={"label": "A different label"})
+    with pytest.raises(SeededRecipeContentDiffers) as refused:
+        await enter(store, changed)
+    assert rec.id in str(refused.value) and str(rec.version) in str(refused.value)
+    # a different source file is different content too
+    with pytest.raises(SeededRecipeContentDiffers):
+        await store.enter_published_for_seed(
+            rec, source_location="uploaded/prison-intelligence/elsewhere.csv",
+            git_path=f"recipes/{rec.id}.yaml", dataset_id="prison-intelligence",
+            owning_unit="verify", published_by="pid-seed-worker", now=SEED_NOW, ontology=SEED_ONTOLOGY,
+            scheme=SEED_SCHEME,
+        )  # fmt: skip
+    # and so is a different duplicate key
+    with pytest.raises(SeededRecipeContentDiffers):
+        await enter(store, rec.model_copy(update={"deduplicate": None}))
+    assert (await store.get(rec.id)) == first
+
+
+async def test_a_refused_recipe_leaves_no_row(store: StudioRecipeStore) -> None:
+    rec = fresh_recipe().model_copy(update={"pack_versions": {"niem": 0}})
+    with pytest.raises(StaleRecipeError):
+        await enter(store, rec)
+    with pytest.raises(StudioRecipeNotFoundError):
+        await store.get(rec.id)
+
+
+# --- restoring a recipe to a draft ---------------------------------------------------------------
+
+
+def starting_pipeline(location: str = SEED_LOCATION) -> PipelineGraph:
+    """R9's starting pipeline as the seed writes it (ADR-127 Amendment 25): a `domain_model` node
+    for NIEM and one source at the reports file through `generic-csv`."""
+    return PipelineGraph(
+        nodes=[
+            PipelineNode(
+                id="domain", kind=PipelineNodeKind.DOMAIN_MODEL, label="Domain model",
+                config={"pack": "niem"},
+            ),
+            PipelineNode(
+                id="source", kind=PipelineNodeKind.SOURCE, label="Intelligence reports",
+                config={"connector_profile": "generic-csv", "source_location": location},
+            ),
+        ],
+        edges=[PipelineEdge(source="domain", target="source")],
+    )
+
+
+async def test_the_restored_draft_is_unmapped_at_the_next_version_in_the_unit(
+    store: StudioRecipeStore,
+) -> None:
+    rec = fresh_recipe()
+    published = await enter(store, rec)
+    assert published.row_template is not None and published.deduplicate is not None
+    draft = await store.restore_to_draft(rec.id, created_by="pid-seed-worker", owning_unit="verify", now=SEED_NOW,
+        pipeline=starting_pipeline())
+    assert (draft.recipe_id, draft.version) == (rec.id, rec.version + 1)
+    assert draft.status is StudioRecipeStatus.DRAFT and draft.owning_unit == "verify"
+    assert draft.row_template is None and draft.unmapped_fields == [] and draft.deduplicate is None
+    assert draft.verified_at is None and draft.git_path is None and draft.published_at is None
+    assert draft.created_by == "pid-seed-worker"
+    # what Connect holds is kept: the source, the connector, the marking and its declarations
+    assert draft.connector_profile == published.connector_profile
+    assert draft.source_location == published.source_location
+    assert draft.handling == published.handling and draft.legal_basis == published.legal_basis
+    assert draft.dataset_id == "prison-intelligence"
+    assert (await store.get(rec.id)) == draft
+    # the pipeline is the one the caller gave, whatever the previous version held (this one, entered
+    # from a file, held none)
+    assert published.pipeline is None
+    assert draft.pipeline == starting_pipeline()
+
+
+async def test_the_restored_draft_holds_exactly_the_pipeline_it_is_given(
+    store: StudioRecipeStore,
+) -> None:
+    """A second restore, over a draft that holds another pipeline, replaces it whole: it is never
+    copied forward from the version before."""
+    rec = fresh_recipe()
+    await enter(store, rec)
+    other = starting_pipeline("uploaded/prison-intelligence/elsewhere.csv")
+    first = await store.restore_to_draft(
+        rec.id, created_by="w", owning_unit="verify", now=SEED_NOW, pipeline=other
+    )
+    assert first.pipeline == other
+    second = await store.restore_to_draft(
+        rec.id, created_by="w", owning_unit="verify", now=SEED_NOW, pipeline=starting_pipeline()
+    )
+    assert second.pipeline == starting_pipeline() and second.pipeline != other
+
+
+async def test_after_a_restore_feeding_lists_none_and_the_drafts_list_has_exactly_one(
+    store: StudioRecipeStore,
+) -> None:
+    rec = fresh_recipe()
+    await enter(store, rec)
+    assert [r.recipe_id for r in await store.feeding(["prison-intelligence"])].count(rec.id) == 1
+    await store.restore_to_draft(rec.id, created_by="pid-seed-worker", owning_unit="verify", now=SEED_NOW,
+        pipeline=starting_pipeline())
+    assert rec.id not in [r.recipe_id for r in await store.feeding(["prison-intelligence"])]
+    drafts = [d for d in await store.list_drafts(reader_of("prison-intelligence")) if d.recipe_id == rec.id]
+    assert len(drafts) == 1 and drafts[0].version == rec.version + 1
+    async with store._pool.acquire() as conn:
+        statuses = {
+            r["version"]: r["status"]
+            for r in await conn.fetch("SELECT version, status FROM studio_recipes WHERE recipe_id = $1", rec.id)
+        }
+    assert statuses == {rec.version: "superseded", rec.version + 1: "draft"}
+
+
+async def test_a_restore_that_fails_leaves_the_previous_version_as_it_was(
+    store: StudioRecipeStore,
+) -> None:
+    """The draft's insert fails (a unit the table refuses): the previous version's flip to
+    superseded was in the same transaction, so it is rolled back and the recipe still feeds."""
+    rec = fresh_recipe()
+    await enter(store, rec)
+    with pytest.raises(asyncpg.PostgresError):
+        await store.restore_to_draft(
+            rec.id, created_by="pid-seed-worker", owning_unit=None, now=SEED_NOW,  # type: ignore[arg-type]
+            pipeline=starting_pipeline(),
+        )
+    current = await store.get(rec.id)
+    assert (current.version, current.status) == (rec.version, StudioRecipeStatus.PUBLISHED)
+    assert [r.recipe_id for r in await store.feeding(["prison-intelligence"])].count(rec.id) == 1
+
+
+async def test_a_flagged_version_and_a_draft_are_restored_too(store: StudioRecipeStore) -> None:
+    flagged = fresh_recipe()
+    await enter(store, flagged)
+    async with store._pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE studio_recipes SET status = 'flagged' WHERE recipe_id = $1", flagged.id
+        )
+    again = await store.restore_to_draft(flagged.id, created_by="w", owning_unit="verify", now=SEED_NOW,
+        pipeline=starting_pipeline())
+    assert again.version == 2 and again.status is StudioRecipeStatus.DRAFT
+    # a draft restored: the draft is superseded, and a fresh one stands, so there is exactly one
+    twice = await store.restore_to_draft(flagged.id, created_by="w", owning_unit="verify", now=SEED_NOW,
+        pipeline=starting_pipeline())
+    assert twice.version == 3 and twice.status is StudioRecipeStatus.DRAFT
+    drafts = [d for d in await store.list_drafts(reader_of("prison-intelligence")) if d.recipe_id == flagged.id]
+    assert [d.version for d in drafts] == [3]
+    async with store._pool.acquire() as conn:
+        statuses = {
+            r["version"]: r["status"]
+            for r in await conn.fetch("SELECT version, status FROM studio_recipes WHERE recipe_id = $1", flagged.id)
+        }
+    assert statuses == {1: "superseded", 2: "superseded", 3: "draft"}
+
+
+async def test_restoring_a_recipe_that_does_not_exist_is_refused(store: StudioRecipeStore) -> None:
+    with pytest.raises(StudioRecipeNotFoundError):
+        await store.restore_to_draft(new_id(), created_by="w", owning_unit="verify", now=SEED_NOW,
+        pipeline=starting_pipeline())
+
+
+# --- Amendment 26: "the same content" is the whole row ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("column", "stale", "named"),
+    [
+        ("pack_versions", "'{\"niem\": 2}'::jsonb", "pack_versions"),
+        ("ontology_version", "15", "ontology_version"),
+        ("dataset_id", "'another-dataset'", "dataset_id"),
+        ("owning_unit", "'another-unit'", "owning_unit"),
+        ("git_path", "'recipes/elsewhere.yaml'", "git_path"),
+        ("status", "'flagged'", "status"),
+    ],
+)
+async def test_a_reseed_over_a_row_that_differs_in_any_column_is_refused_by_name(
+    store: StudioRecipeStore, column: str, stale: str, named: str
+) -> None:
+    rec = fresh_recipe()
+    await enter(store, rec)
+    async with store._pool.acquire() as conn:
+        await conn.execute(f"UPDATE studio_recipes SET {column} = {stale} WHERE recipe_id = $1", rec.id)
+        before = await conn.fetchrow("SELECT * FROM studio_recipes WHERE recipe_id = $1", rec.id)
+    with pytest.raises(SeededRecipeContentDiffers) as refused:
+        await enter(store, rec)
+    assert named in str(refused.value) and rec.id in str(refused.value)
+    async with store._pool.acquire() as conn:
+        assert await conn.fetchrow("SELECT * FROM studio_recipes WHERE recipe_id = $1", rec.id) == before
+
+
+async def test_a_second_published_version_of_a_recipe_is_refused(store: StudioRecipeStore) -> None:
+    rec = fresh_recipe()
+    await enter(store, rec)
+    with pytest.raises(SeededRecipeAnotherPublished) as refused:
+        await enter(store, rec.model_copy(update={"version": 2}))
+    assert rec.id in str(refused.value)
+    async with store._pool.acquire() as conn:
+        count = await conn.fetchval("SELECT count(*) FROM studio_recipes WHERE recipe_id = $1", rec.id)
+    assert count == 1
+
+
+async def test_entering_returns_the_version_entered_and_not_the_latest(
+    store: StudioRecipeStore,
+) -> None:
+    rec = fresh_recipe()
+    await enter(store, rec)
+    async with store._pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO studio_recipes (recipe_id, version, label, status, content, owning_unit, "
+            "created_by, created_at, dataset_id) SELECT recipe_id, 2, label, 'draft', content, "
+            "owning_unit, created_by, created_at, dataset_id FROM studio_recipes "
+            "WHERE recipe_id = $1 AND version = 1",
+            rec.id,
+        )
+    again = await enter(store, rec)
+    assert again.version == rec.version == 1 and again.status is StudioRecipeStatus.PUBLISHED

@@ -32,10 +32,16 @@ const OUTCOME: Record<ScheduleRunView["outcome"], string> = {
 const when = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" }) : "—";
 
+/** Why a run's counts are not shown (rule 3, ADR-127 Amendment 25; ADR-124 option A′: a withheld
+ * count says that it withholds, and never shows a zero). A count of what a run loaded includes every
+ * row it wrote, at each marking it wrote them at. */
+export const COUNTS_WITHHELD_REASON =
+  "some of what it loaded is above your clearance or restricted to another unit";
+
 /** One run in words: its outcome, then its counts, or why there are none. */
 export function runInWords(run: ScheduleRunView): string {
   const outcome = OUTCOME[run.outcome];
-  if (run.withheld) return `${outcome}: counts withheld — the source is above your clearance`;
+  if (run.withheld) return `${outcome}: counts withheld — ${COUNTS_WITHHELD_REASON}`;
   if (run.rows_read !== null && run.rows_read !== undefined) {
     return (
       `${outcome}: ${run.rows_read} rows read, ${run.nodes_created ?? 0} created, ` +

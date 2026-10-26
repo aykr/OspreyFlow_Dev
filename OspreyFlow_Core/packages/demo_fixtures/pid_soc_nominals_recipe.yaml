@@ -10,9 +10,10 @@ label: "Serious and organised crime nominals. One row per prisoner per group the
 connector:
   profile: generic-csv
 ontology_version: 16
-pack_versions: {niem: 3}
+pack_versions: {}
 
 defaults:
+  legal_basis: Synthetic demonstration data
   provenance: {state: asserted}
   handling:
     classification: OFFICIAL

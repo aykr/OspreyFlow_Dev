@@ -44,7 +44,7 @@ describe("the Data feeds tab", () => {
     serve((c) => (c.path === "data-feeds" ? json(200, FEEDS) : null));
     render(<DataFeedsTab api={API} />);
     const row = (await screen.findByText("Informant returns")).closest("tr")!;
-    expect(within(row).getByText(/counts withheld/)).toBeTruthy();
+    expect(within(row).getByText(/counts withheld — some of what it loaded is above your clearance or restricted to another unit/)).toBeTruthy();
     expect(within(row).queryByText(/rows read/)).toBeNull();
   });
 

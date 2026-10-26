@@ -17,9 +17,10 @@ label: "PIN phone contacts (BT PIN). One row per call a prisoner made on their P
 connector:
   profile: pin-calls-csv
 ontology_version: 16
-pack_versions: {niem: 3}
+pack_versions: {}
 
 defaults:
+  legal_basis: Synthetic demonstration data
   provenance: {state: asserted}
   handling:
     classification: OFFICIAL

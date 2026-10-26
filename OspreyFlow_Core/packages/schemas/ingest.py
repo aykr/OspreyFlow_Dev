@@ -867,6 +867,14 @@ class RejectionRecord(BaseModel):
     row_index: int
     reason: str
     sample: str
+    #: Rule 3, ADR-127 Amendment 26: the marking of the rejected row, which `sample` (the whole
+    #: row) is held at. A route answers a reader who cannot view it with the sample withheld
+    #: (`load_records.report_view`), and never returns the marking itself. `None` where nothing of
+    #: the row is in `sample`.
+    marking: Handling | None = None
+    #: Set where the row's marking could not be resolved: `sample` is then withheld from every
+    #: reader, whatever their clearance, codes or unit (no unit is one nobody may hold).
+    sample_unreadable: bool = False
 
 
 class LoadReport(BaseModel):
@@ -925,6 +933,12 @@ class LoadReport(BaseModel):
     #: and what the case's pre-commit rules did, in words — never a silent part-load (rule 2).
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
+    #: Rule 3, ADR-127 Amendment 23: every distinct marking this load's rows were written at (each
+    #: element the engine resolved for a row, once), in the order first met. A count of what the
+    #: load wrote includes rows at each of them, so a reader who may not view one of them is shown
+    #: none of the counts (`services/api/load_records.report_view`, `_schedule_run_view`). Kept in
+    #: the run ledger beside the run; never in a route's answer.
+    markings: list[Handling] = Field(default_factory=list)
 
 
 # --- The pipeline run report (06_DECISIONS.md ADR-108 phase C) -------------
@@ -948,6 +962,10 @@ class LoadReportView(BaseModel):
     rejections: list[RejectionRecord] = Field(default_factory=list)
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
+    #: Rule 3, ADR-127 Amendment 23: set where the reader may not view every marking the load's
+    #: rows were written at. Every count above is then zero and the lists empty: a count of what a
+    #: load wrote is a read.
+    withheld: bool = False
 
 
 class BranchRunReport(BaseModel):
@@ -977,6 +995,9 @@ class ExtractStageReport(BaseModel):
     handling_overridden: int = 0
     override_reason: str | None = None
     refusals: list[str] = Field(default_factory=list)
+    #: Rule 3, ADR-127 Amendment 26: the marking of each document the stage read and of what it
+    #: wrote (the `handling_override` where it has one), once each: the counts include them.
+    markings: list[Handling] = Field(default_factory=list)
 
 
 class EnrichStageReport(BaseModel):
@@ -1016,6 +1037,8 @@ class PipelineRunReport(BaseModel):
     #: The branches' held rows and rule notes, summed (ADR-109 ruling 1).
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
+    #: The union of the branches' `markings`, each once (rule 3, ADR-127 Amendment 23).
+    markings: list[Handling] = Field(default_factory=list)
 
 
 class BranchRunReportView(BaseModel):
@@ -1045,6 +1068,9 @@ class PipelineRunReportView(BaseModel):
     rejections: list[RejectionRecord] = Field(default_factory=list)
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
+    #: As `LoadReportView.withheld`: the reader may not view every marking the run's rows were
+    #: written at, so the counts are zero and the branches and stages are left out.
+    withheld: bool = False
 
 
 # --- Verify (09_INGEST_STUDIO.md §5) --------------------------------------

@@ -119,7 +119,7 @@ export const rejectHeldRows = (a: AlertsApi, ids: string[], reason: string) =>
   call<HeldRow[]>(caseUrl(a.apiBaseUrl, a.investigationId, "held-rows/reject"), a.bearerToken, "Rejecting the rows", { method: "POST", body: { ids, reason } });
 
 export const releaseHeldRows = (a: AlertsApi, recipeId: string, ids: string[], reason: string | null) =>
-  call<{ edges_created: number; nodes_created: number; rule_notes: string[] }>(
+  call<{ edges_created: number; nodes_created: number; rule_notes: string[]; withheld?: boolean }>(
     caseUrl(a.apiBaseUrl, a.investigationId, `ingest/recipes/${encodeURIComponent(recipeId)}/held-rows/release`),
     a.bearerToken,
     "Releasing the rows",

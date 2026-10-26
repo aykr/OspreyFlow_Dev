@@ -91,7 +91,7 @@ describe("Schedules and runs", () => {
     serve();
     place(["operate_schedules"]);
     const row = (await screen.findByText("Informant returns")).closest("tr")!;
-    expect(within(row).getByText(/Failed: counts withheld — the source is above your clearance/)).toBeTruthy();
+    expect(within(row).getByText(/Failed: counts withheld — some of what it loaded is above your clearance or restricted to another unit/)).toBeTruthy();
     expect(within(row).queryByText(/rows read/)).toBeNull();
   });
 

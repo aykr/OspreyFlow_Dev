@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Literal, get_args
 
 import asyncpg
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from services.ingest.engine import RowKeyRunInProgress
 
 from conduit_common.identity import new_id
@@ -38,6 +38,15 @@ _NOT_RUN = frozenset(get_args(NotRunOutcome))
 #: `CREATE TABLE IF NOT EXISTS` leaves so; connecting adds it. Never selected into `RecipeRun`: the
 #: record holds ids of elements some readers may not see, and no route returns it.
 _ADD_LOAD_RECORDS = "ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS load_records JSONB;"
+
+#: Rule 3, ADR-127 Amendment 23: every distinct marking the run's rows were written at
+#: (`LoadReport.markings`), set when the run finishes. A run's counts include rows above the
+#: source's own marking, so the routes that show them withhold them from a reader who may not view
+#: one of these. NULL for a run written before the column existed, and for one that has not
+#: finished or has failed: both read as the source's marking alone (`RecipeRun`). A ledger made
+#: before it has the table without the column, which `CREATE TABLE IF NOT EXISTS` leaves so;
+#: connecting adds it.
+_ADD_ROW_MARKINGS = "ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS row_markings JSONB;"
 
 #: ADR-127 decision 5: the rows a recipe has loaded into a case, by the key of each (its fields
 #: canonicalised, then hashed: `engine.dedup_key`), with the load that kept it. The primary key is
@@ -101,13 +110,14 @@ ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS counts_toward_pause BOOLEAN NOT
 ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS source_file TEXT;
 CREATE INDEX IF NOT EXISTS recipe_runs_recipe_idx ON recipe_runs (recipe_id, started_at DESC);
 {_ADD_LOAD_RECORDS}
+{_ADD_ROW_MARKINGS}
 {_LOADED_ROW_KEYS}
 """
 
 _COLUMNS = (
     "run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source_handling, "
     "started_at, finished_at, outcome, rows_read, nodes_created, nodes_referenced, edges_created, "
-    "rows_rejected, rows_held, load_id, failure, source_file"
+    "rows_rejected, rows_held, load_id, failure, source_file, row_markings"
 )
 
 
@@ -133,11 +143,27 @@ class RecipeRun(BaseModel):
     failure: str | None
     #: For a folder watch's run (trigger `watch`): the file's name, size and modification time.
     source_file: str | None = None
+    #: Rule 3, ADR-127 Amendment 23: every marking the run's rows were written at. A run with none
+    #: recorded (written before the column, or still running, or failed) reads as the source's
+    #: marking alone, as it did before the column existed; a finished run that wrote no row has an
+    #: empty list (the view still judges the source). Markings, never ids.
+    markings: list[Handling] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _none_recorded_reads_as_the_source(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("markings") is None and "source" in data:
+            return {**data, "markings": [data["source"]]}
+        return data
 
 
 def _row(record: asyncpg.Record) -> RecipeRun:
     data = dict(record)
     data["source"] = Handling.model_validate_json(data.pop("source_handling"))
+    raw = data.pop("row_markings")
+    # asyncpg hands JSONB back as text unless a codec is set, and this pool sets none.
+    recorded = json.loads(raw) if isinstance(raw, str) else raw
+    data["markings"] = None if recorded is None else [Handling.model_validate(m) for m in recorded]
     return RecipeRun.model_validate(data)
 
 
@@ -184,7 +210,8 @@ class RecipeRunStore:
             await conn.execute(
                 "UPDATE recipe_runs SET outcome = 'succeeded', finished_at = $2, rows_read = $3, "
                 "nodes_created = $4, nodes_referenced = $5, edges_created = $6, "
-                "rows_rejected = $7, rows_held = $8, load_id = $9 WHERE run_id = $1",
+                "rows_rejected = $7, rows_held = $8, load_id = $9, row_markings = $10::jsonb "
+                "WHERE run_id = $1",
                 run_id,
                 now,
                 report.rows_read,
@@ -194,6 +221,7 @@ class RecipeRunStore:
                 len(report.rejections),
                 report.rows_held,
                 report.load_id,
+                json.dumps([m.model_dump(mode="json") for m in report.markings]),
             )
 
     async def add_record(
@@ -463,14 +491,26 @@ class RecipeRunStore:
         if marked == "UPDATE 0":
             raise KeyError(f"the ledger holds no record of load {load_id!r}")
 
-    async def fail(self, run_id: str, *, failure: str, now: datetime) -> None:
+    async def fail(
+        self,
+        run_id: str,
+        *,
+        failure: str,
+        now: datetime,
+        markings: Sequence[Handling] = (),
+    ) -> None:
+        """Marks the run failed. `markings` are those of the loads that committed before it failed
+        (the sink sees each committed report), which the run's counts include; none committed
+        stores none, and the run reads as the source's marking alone, as a running run does
+        (ADR-127 Amendment 26)."""
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "UPDATE recipe_runs SET outcome = 'failed', finished_at = $2, failure = $3 "
-                "WHERE run_id = $1",
+                "UPDATE recipe_runs SET outcome = 'failed', finished_at = $2, failure = $3, "
+                "row_markings = $4::jsonb WHERE run_id = $1",
                 run_id,
                 now,
                 failure,
+                json.dumps([m.model_dump(mode="json") for m in markings]) if markings else None,
             )
 
     async def record_not_run(

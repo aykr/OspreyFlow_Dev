@@ -5,6 +5,14 @@ export type Count = number;
 export type RowIndex = number;
 export type Reason1 = string;
 export type Sample = string;
+export type Classification = string;
+export type HandlingCode = string;
+export type ActionCode = string | null;
+export type SanitisationCode = string | null;
+export type OrgUnitId = string;
+export type ReviewDate = string | null;
+export type LegalBasis = string | null;
+export type SampleUnreadable = boolean;
 export type Samples = RejectionRecord[];
 
 /**
@@ -28,5 +36,18 @@ export interface RejectionRecord {
   row_index: RowIndex;
   reason: Reason1;
   sample: Sample;
+  marking?: Handling | null;
+  sample_unreadable?: SampleUnreadable;
+  [k: string]: unknown;
+}
+export interface Handling {
+  classification: Classification;
+  handling_code: HandlingCode;
+  action_code?: ActionCode;
+  sanitisation_code?: SanitisationCode;
+  originator: OrgUnitId;
+  owning_unit: OrgUnitId;
+  review_date?: ReviewDate;
+  legal_basis?: LegalBasis;
   [k: string]: unknown;
 }

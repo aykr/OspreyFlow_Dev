@@ -110,4 +110,29 @@ describe("PublishScreen", () => {
     const rules = screen.getByRole("list", { name: "What the case's rules did" });
     expect(rules.textContent).toContain("could not judge 2 row(s)");
   });
+
+  // Rule 3, ADR-127 Amendment 25 (ADR-124 option A′): a run whose rows include a marking the
+  // loader may not view comes back `withheld`, with every count zero. Drawn as zeros it would read
+  // as a load that made nothing; it says it withholds instead.
+  it("says counts are withheld, with the reason, and draws no zero, for a withheld run", async () => {
+    serve({ load_id: "L9", recipe_id: "r1", recipe_version: 2, withheld: true, rows_read: 0,
+            nodes_created: 0, nodes_referenced: 0, edges_created: 0, rejections: [], rows_held: 0,
+            rule_notes: [] });  // prettier-ignore
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
+    expect(await screen.findByText(/Counts withheld — .*above your clearance.*another unit/)).toBeTruthy();
+    expect(screen.getByText("Load id: L9")).toBeTruthy();
+    expect(screen.queryByText(/Rows read/)).toBeNull();
+    expect(screen.queryByText(/Nodes created/)).toBeNull();
+    expect(screen.queryByText(/Edges created/)).toBeNull();
+  });
+
+  it("withholds a withheld pipeline run's branches too", async () => {
+    serve({ ...PIPELINE_RUN, withheld: true, rows_read: 0, nodes_created: 0, branches: [], extracts: [], enriches: [] });
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
+    expect(await screen.findByText(/Counts withheld/)).toBeTruthy();
+    expect(screen.queryByRole("list", { name: "Pipeline stages" })).toBeNull();
+    expect(screen.queryByText(/Rows read/)).toBeNull();
+  });
 });

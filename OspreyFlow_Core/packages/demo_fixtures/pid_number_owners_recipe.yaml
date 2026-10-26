@@ -10,9 +10,10 @@ label: "Number owners. One row per visitor and the outside number they own."
 connector:
   profile: generic-csv
 ontology_version: 16
-pack_versions: {niem: 3}
+pack_versions: {}
 
 defaults:
+  legal_basis: Synthetic demonstration data
   provenance: {state: asserted}
   handling:
     classification: OFFICIAL

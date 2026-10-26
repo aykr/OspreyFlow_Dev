@@ -787,3 +787,116 @@ async def test_more_runs_of_distinct_recipes_than_the_pool_has_connections_all_c
     assert len(set(loads)) == count
     for load_id in loads:
         assert await runs.load_record(load_id) is not None
+
+
+# --- ADR-127 Amendment 23, B2-10a: the markings a run's rows were written at (rule 3) -----------------
+
+SECRET_ROW = Handling(
+    classification="SECRET", handling_code="P", owning_unit="unit-1", originator="unit-1"
+)
+
+
+async def test_a_runs_markings_are_kept_with_it_and_read_back(runs: RecipeRunStore) -> None:
+    recipe = new_id()
+    run_id = await _started(runs, recipe)
+    report = LoadReport(
+        load_id="load-m", recipe_id=recipe, recipe_version=3, rows_read=5, edges_created=5,
+        markings=[SOURCE, SECRET_ROW],
+    )  # fmt: skip
+    await runs.finish(run_id, report=report, now=T0)
+    (row,) = await runs.for_recipe(recipe)
+    assert row.markings == [SOURCE, SECRET_ROW]
+    assert row.source == SOURCE
+
+
+async def test_a_pipeline_runs_union_of_markings_is_kept(runs: RecipeRunStore) -> None:
+    from schemas.ingest import PipelineRunReport
+
+    recipe = new_id()
+    run_id = await _started(runs, recipe)
+    report = PipelineRunReport(
+        load_id="run-m", recipe_id=recipe, recipe_version=3, markings=[SOURCE, SECRET_ROW]
+    )
+    await runs.finish(run_id, report=report, now=T0)
+    (row,) = await runs.for_recipe(recipe)
+    assert row.markings == [SOURCE, SECRET_ROW]
+
+
+async def test_a_run_that_has_not_finished_or_failed_reads_as_the_sources_alone(
+    runs: RecipeRunStore,
+) -> None:
+    started, failed = new_id(), new_id()
+    await _started(runs, started)
+    run_id = await _started(runs, failed)
+    await runs.fail(run_id, failure="the file is missing", now=T0)
+    for recipe in (started, failed):
+        (row,) = await runs.for_recipe(recipe)
+        assert row.markings == [SOURCE], recipe
+
+
+async def test_a_run_that_wrote_no_row_keeps_no_marking_and_is_judged_by_its_source(
+    runs: RecipeRunStore,
+) -> None:
+    recipe = new_id()
+    run_id = await _started(runs, recipe)
+    await runs.finish(
+        run_id, report=LoadReport(load_id="load-0", recipe_id=recipe, recipe_version=3), now=T0
+    )
+    (row,) = await runs.for_recipe(recipe)
+    assert row.markings == []
+
+
+async def test_a_ledger_made_before_the_markings_column_is_brought_forward_and_reads_as_the_source(
+) -> None:
+    """A run written before the column existed has none recorded: it reads as the source's marking
+    alone, as before. Run in a schema of its own, so the shared ledger is not touched."""
+    import asyncpg
+    from services.api import recipe_runs as module
+
+    schema = f"mig_{new_id().lower().replace('-', '')[:20]}"
+    dsn = PostgresConfig.from_env().dsn
+    conn = await asyncpg.connect(dsn)
+    pool = None
+    try:
+        await conn.execute(f"CREATE SCHEMA {schema}")
+        await conn.execute(f"SET search_path TO {schema}")
+        await conn.execute(module._BOOTSTRAP_SQL.replace(module._ADD_ROW_MARKINGS, ""))
+        columns = {
+            r["column_name"]
+            for r in await conn.fetch(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = $1 AND table_name = 'recipe_runs'", schema,
+            )
+        }  # fmt: skip
+        assert "row_markings" not in columns
+        await conn.execute(
+            "INSERT INTO recipe_runs (run_id, recipe_id, recipe_version, investigation_id, "
+            "trigger, run_as, source_handling, started_at, outcome, rows_read) VALUES "
+            "('old', 'r-old', 1, 'case-1', 'manual', 'a', $1::jsonb, now(), 'succeeded', 9)",
+            SOURCE.model_dump_json(),
+        )
+        await conn.execute(module._BOOTSTRAP_SQL)
+        await conn.execute(module._BOOTSTRAP_SQL)  # and again: a no-op on a ledger that has it
+        pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=1,
+                                         server_settings={"search_path": schema})  # fmt: skip
+        old = RecipeRunStore(pool, dsn)
+        (row,) = await old.for_recipe("r-old")
+        assert row.markings == [SOURCE] and row.rows_read == 9
+        new_run = await old.start(
+            recipe_id="r-new", recipe_version=1, investigation_id="case-1", trigger="manual",
+            slot=None, run_as="a", source=SOURCE, now=T0,
+        )  # fmt: skip
+        await old.finish(
+            new_run,
+            report=LoadReport(load_id="l", recipe_id="r-new", recipe_version=1,
+                              markings=[SOURCE, SECRET_ROW]),  # fmt: skip
+            now=T0,
+        )
+        (row,) = await old.for_recipe("r-new")
+        assert row.markings == [SOURCE, SECRET_ROW]
+    finally:
+        if pool is not None:
+            await pool.close()
+        await conn.execute("SET search_path TO public")
+        await conn.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
+        await conn.close()
