@@ -82,6 +82,7 @@ from schemas.ingest import (
     RecipeEntity,
     RejectionRecord,
 )
+from schemas.merge import merge_interval
 
 from .pipeline import recipe_packs
 from .recipe_rules import (
@@ -382,6 +383,47 @@ def _resolve_temporal_instant(
     if isinstance(value, datetime):
         return value
     raise RowRejected("temporal binding did not resolve to a datetime")
+
+
+def _binding_columns(binding: FieldBinding) -> str:
+    """The source column(s) a binding reads, for a message that names columns and never values."""
+    if binding.field:
+        return binding.field
+    if binding.fields:
+        return ", ".join(binding.fields)
+    return "its time"
+
+
+def _resolve_span_end(
+    binding: FieldBinding,
+    row: Mapping[str, str],
+    *,
+    connector_defaults: Mapping[str, str | None] | None = None,
+) -> datetime | None:
+    """The end of a span (ADR-127 decision 11), read as the start is (the connector's date order
+    and the zone): `None` for an empty cell, which is a span still open. Any other cell that does
+    not read as a time rejects the row, naming the column."""
+    if binding.field is not None and not (row.get(binding.field) or "").strip():
+        return None
+    try:
+        return _resolve_temporal_instant(binding, row, connector_defaults=connector_defaults)
+    except RowRejected as exc:
+        raise RowRejected(
+            f"the end of the span ({_binding_columns(binding)}) did not resolve to a time"
+        ) from exc
+
+
+def edge_interval(
+    instant: datetime | None, valid_to: datetime | None, span: bool
+) -> Interval | None:
+    """A link's `Interval` from what its row resolved to: none for a link with no time; the start
+    and the end for a closed span; the start alone for a span still open (`valid_to=None`, never
+    the start repeated); and the instant for both ends of a link bound to one time."""
+    if instant is None:
+        return None
+    if span:
+        return Interval(valid_from=instant, valid_to=valid_to)
+    return Interval(valid_from=instant, valid_to=instant)
 
 
 def _merge_override(
@@ -756,7 +798,7 @@ class _ResolvedEntity:
 
 
 class _ResolvedEdge:
-    __slots__ = ("edge", "properties", "instant", "content", "handling")
+    __slots__ = ("edge", "properties", "instant", "valid_to", "span", "content", "handling")
 
     def __init__(
         self,
@@ -765,12 +807,17 @@ class _ResolvedEdge:
         instant: datetime | None,
         content: dict[str, str] | None = None,
         handling: dict[str, Any] | None = None,
+        valid_to: datetime | None = None,
+        span: bool = False,
     ) -> None:
         #: This row's `handling` override, columns read (`row_handling_override`).
         self.handling = handling
         self.edge = edge
         self.properties = properties  # None means the edge's `when` did not hold this row
         self.instant = instant
+        #: ADR-127 decision 11: the end of a span (`None` when open), and whether one was bound.
+        self.valid_to = valid_to
+        self.span = span
         #: ADR-094: `{"kind", "text"}` when the recipe marks this link's text and the row has some.
         self.content = content
 
@@ -850,12 +897,28 @@ def _resolve_row(
             if edge.temporal
             else None
         )
+        span = edge.temporal is not None and edge.temporal.valid_to is not None
+        valid_to = (
+            _resolve_span_end(
+                edge.temporal.valid_to, row, connector_defaults=connector_defaults
+            )
+            if edge.temporal is not None and edge.temporal.valid_to is not None
+            else None
+        )
+        if instant is not None and valid_to is not None and valid_to < instant:
+            assert edge.temporal is not None and edge.temporal.valid_to is not None
+            raise RowRejected(
+                f"the span ends ({_binding_columns(edge.temporal.valid_to)}) before it starts "
+                f"({_binding_columns(edge.temporal.at)})"
+            )
         text = row.get(edge.content.field, "") if edge.content else ""
         content = (
             {"kind": edge.content.kind, "text": text} if edge.content and text.strip() else None
         )
         handling = row_handling_override(recipe, edge.handling, row, scheme=scheme)
-        edges.append(_ResolvedEdge(edge, properties, instant, content, handling))
+        edges.append(
+            _ResolvedEdge(edge, properties, instant, content, handling, valid_to, span)
+        )
 
     if scheme is not None:
         present: list[Handling] = [
@@ -915,6 +978,8 @@ def _to_staged_row(
                 to_ref=e.edge.to_ref,
                 properties=e.properties,
                 instant=e.instant,
+                valid_to=e.valid_to,
+                span=e.span,
                 content=e.content,
                 handling=e.handling,
             )
@@ -1478,11 +1543,7 @@ async def _write_edge(
         provenance.sources.append(
             SourceRef(document_id=state.source, locator=f"row {duplicate_index}", excerpt_hash="")
         )
-    interval = (
-        Interval(valid_from=resolved.instant, valid_to=resolved.instant)
-        if resolved.instant
-        else None
-    )
+    interval = edge_interval(resolved.instant, resolved.valid_to, resolved.span)
 
     write = EdgeWrite(
         id=new_edge_id(),
@@ -1734,6 +1795,11 @@ def _dry_run_edge(
     existing = state.edges.get(key)
     if existing is not None:
         existing.occurrences = (existing.occurrences or 1) + 1
+        # As the real load merges them (ADR-127 decision 11): the earliest start and the latest end,
+        # and open if either is.
+        existing.interval = merge_interval(
+            existing.interval, edge_interval(resolved.instant, resolved.valid_to, resolved.span)
+        )
         return
 
     # Same real-load parity as `_dry_run_entity`'s own check —
@@ -1756,11 +1822,7 @@ def _dry_run_edge(
         row_index=row_index,
         now=state.now,
     )
-    interval = (
-        Interval(valid_from=resolved.instant, valid_to=resolved.instant)
-        if resolved.instant
-        else None
-    )
+    interval = edge_interval(resolved.instant, resolved.valid_to, resolved.span)
     state.edges[key] = Edge(
         id=new_edge_id(),
         type=edge.type,
@@ -1871,7 +1933,13 @@ def _staged_edge_to_resolved(staged: StagedEdge) -> _ResolvedEdge:
         {"type": staged.type, "from": staged.from_ref, "to": staged.to_ref}
     )
     return _ResolvedEdge(
-        recipe_edge, staged.properties, staged.instant, staged.content, staged.handling
+        recipe_edge,
+        staged.properties,
+        staged.instant,
+        staged.content,
+        staged.handling,
+        staged.valid_to,
+        staged.span,
     )
 
 

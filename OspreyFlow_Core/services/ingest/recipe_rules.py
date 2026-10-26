@@ -301,6 +301,28 @@ def recipe_rule_violations(
                         f"{entity.ref!r} is a Document that holds its own text, which sets "
                         f"{name!r} itself; it cannot be bound to a column."
                     )
+    # ADR-127 decision 11: the end of a span is one column of the source (an empty cell is a span
+    # still open), so a value, a map or several columns have no meaning there.
+    for edge in template.edges:
+        span_end = edge.temporal.valid_to if edge.temporal is not None else None
+        if span_end is None:
+            continue
+        one_column = (
+            span_end.field is not None
+            and not span_end.fields
+            and span_end.literal is None
+            and not span_end.map
+        )
+        if not one_column:
+            problems.append(
+                f"{edge.type!r} binds the end of its span (valid_to) to something other than one "
+                "column of the source: name the column that holds it."
+            )
+        elif source_columns is not None and span_end.field not in source_columns:
+            problems.append(
+                f"{edge.type!r} binds the end of its span (valid_to) to column {span_end.field!r}, "
+                f"which the source does not have (its columns: {', '.join(source_columns)})."
+            )
     for edge in template.edges:
         type_def = ontology.edge_type(edge.type)
         if type_def is None:

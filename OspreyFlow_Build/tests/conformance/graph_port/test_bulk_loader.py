@@ -120,6 +120,34 @@ async def test_a_bulk_edge_reads_back_like_an_upserted_one(factory: GraphAdapter
         assert from_bulk.weight_components.occurrences == 3
 
 
+async def test_a_bulk_open_span_reads_back_open_like_an_upserted_one(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-127 decision 11 on the bulk path: a link with no end (a span still running) is stored
+    without one and reads back with `valid_to` of `None`, as the ordinary path reads it, and a
+    repeated pair with an open write among its closed ones aggregates to open."""
+    async with factory.context() as adapter:
+        loader = _loader(adapter)
+        a, b, c, d, e, f = await _endpoints(adapter, 6)
+        open_span = Interval(valid_from=T0, valid_to=None)
+        closed = Interval(valid_from=T0 - timedelta(days=2), valid_to=T0 + timedelta(minutes=5))
+        bulk = _comm(a, b, occurrences=1).model_copy(update={"interval": open_span})
+        upserted = _comm(c, d, occurrences=1).model_copy(update={"interval": open_span})
+        await loader.bulk_load_edges([bulk])
+        await _write(adapter, [], [upserted])
+        (from_bulk,) = await _edges_of(adapter, a)
+        (from_upsert,) = await _edges_of(adapter, c)
+        assert from_bulk.interval == from_upsert.interval == open_span
+
+        pair = [
+            _comm(e, f, occurrences=1).model_copy(update={"interval": closed}),
+            _comm(e, f, occurrences=1).model_copy(update={"interval": open_span}),
+        ]
+        await loader.bulk_load_edges(pair)
+        (merged,) = await _edges_of(adapter, e)
+        assert merged.interval == Interval(valid_from=T0 - timedelta(days=2), valid_to=None)
+
+
 async def test_an_empty_call_does_nothing(factory: GraphAdapterFactory) -> None:
     async with factory.context() as adapter:
         result = await _loader(adapter).bulk_load_edges([])

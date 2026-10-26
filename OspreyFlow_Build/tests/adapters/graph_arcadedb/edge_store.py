@@ -24,6 +24,26 @@ EDGE_TYPE = "TRANSACTED"
 NODE_TYPE = "Endpoint"
 
 
+#: Words ArcadeDB's SQL grammar reserves, which cannot name a bound parameter (`:after` is refused with
+#: "no viable alternative"): a fake of the store must refuse them too (rule 15), or a statement the
+#: real store rejects passes here.
+RESERVED_PARAMETER_NAMES = frozenset(
+    {
+        "after", "before", "from", "to", "order", "limit", "select", "where", "set", "update",
+        "insert", "into", "delete", "remove", "and", "or", "not", "in", "by", "skip", "as", "is",
+        "null", "true", "false",
+    }
+)  # fmt: skip
+
+
+def refuse_reserved_parameters(command: str) -> None:
+    for name in re.findall(r"(?<![\w:]):(\w+)", command):
+        if name.lower() in RESERVED_PARAMETER_NAMES:
+            raise AssertionError(
+                f"ArcadeDB refuses `:{name}` as a parameter name (a reserved word): {command}"
+            )
+
+
 class CountingStore:
     """In-memory stand-in for the part of ArcadeDB the weight path reads and writes."""
 
@@ -45,9 +65,18 @@ class CountingStore:
     async def sql(
         self, command: str, *, params: dict[str, Any] | None = None, session_id: Any = None
     ) -> list[dict[str, Any]]:
-        """The one SQL the adapter sends here: which of `ids` a type's unique `id` index holds, so
-        a new link's id is checked by the index and not by a scan of the type."""
+        """The SQL the adapter sends here: which of `ids` a type's unique `id` index holds, so a new
+        link's id is checked by the index and not by a scan of the type; and the removal of a
+        link's flattened `valid_to` when a merge leaves its span open (ADR-127 decision 11)."""
         self.sql_sent.append((command, dict(params or {})))
+        refuse_reserved_parameters(command)
+        removal = re.fullmatch(r"UPDATE `(\w+)` REMOVE valid_to WHERE id = :id", command)
+        if removal is not None and params is not None:
+            # The one removal the adapter makes: a link's flattened end, found by its unique id.
+            for link in self.links:
+                if link["id"] == params["id"]:
+                    link.pop("valid_to", None)
+            return []
         match = re.fullmatch(r"SELECT id FROM `(\w+)` WHERE id IN :ids", command)
         if match is None or params is None:
             raise AssertionError(f"unexpected SQL: {command}")

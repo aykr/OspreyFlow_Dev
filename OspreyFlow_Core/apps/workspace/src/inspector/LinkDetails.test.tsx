@@ -60,7 +60,7 @@ describe("LinkDetails", () => {
     expect(screen.getByText("1")).toBeTruthy();
   });
 
-  it("shows the dates, and 'present' when the link is still open", () => {
+  it("shows the dates, and '(open)' when the link is still running", () => {
     const { rerender } = render(<LinkDetails edge={link()} {...ends} directed />);
     expect(document.body.textContent).toContain("2001-05-01");
     expect(document.body.textContent).toContain("2001-06-30");
@@ -71,7 +71,7 @@ describe("LinkDetails", () => {
         directed
       />,
     );
-    expect(document.body.textContent).toMatch(/present/);
+    expect(document.body.textContent).toContain("from 2001-05-01 (open)");
   });
 
   it("says when there are no dates", () => {
@@ -123,5 +123,25 @@ describe("LinkDetails and the basis", () => {
   it("shows no basis row for a type that has none", () => {
     render(<LinkDetails edge={link()} {...ends} directed typeBasis={null} />);
     expect(screen.queryByText("Basis")).toBeNull();
+  });
+
+  it("says a span still running is open, from when it began", () => {
+    render(
+      <LinkDetails
+        edge={link({ interval: { valid_from: "2026-03-01T09:00:00Z", valid_to: null } })}
+        {...ends}
+        directed
+      />,
+    );
+    expect(screen.getByText("from 2026-03-01T09:00:00Z (open)")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("present");
+  });
+
+  it("shows a closed span with both ends, and a link with no dates as such", () => {
+    render(<LinkDetails edge={link()} {...ends} directed />);
+    expect(screen.getByText("2001-05-01 – 2001-06-30")).toBeTruthy();
+    cleanup();
+    render(<LinkDetails edge={link({ interval: null })} {...ends} directed />);
+    expect(screen.getByText("No dates recorded")).toBeTruthy();
   });
 });

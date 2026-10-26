@@ -310,6 +310,47 @@ async def test_edge_properties_and_distinct_interval_round_trip_exactly(
         assert edge.interval == Interval(valid_from=start, valid_to=end)
 
 
+async def test_an_open_span_reads_back_open_and_stays_open_when_a_closed_one_is_merged_in(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-127 decision 11: a link with no end is a span still running. It reads back with
+    `valid_to` of `None`, not the start repeated; written again within one audience with a closed
+    span, in either order, it stays open from the earlier start; and an instant (its end is its
+    start) merged with a closed span is closed. Catches a missing end read as the start, which
+    merged an open span into a closed one."""
+    async with factory.context() as adapter:
+        points = [
+            _node("Endpoint", classification="OFFICIAL", value_normalised=f"+44{n}")
+            for n in ("1010101010", "2020202020", "3030303030", "4040404040")
+        ]
+        (a, b, c, d), _ = await _write(adapter, points, [])
+        day = lambda n: datetime(2026, 3, n, 9, 0, tzinfo=UTC)  # noqa: E731
+        open_from_3 = Interval(valid_from=day(3), valid_to=None)
+        closed = Interval(valid_from=day(1), valid_to=day(9))
+
+        async def only_edge_of(node: str) -> Interval | None:
+            subgraph = await adapter.expand(ExpandRequest(node_ids=[node], depth=1), CLEARED)
+            (edge,) = subgraph.edges
+            return edge.interval
+
+        await _write(
+            adapter, [], [_edge("COMMUNICATED_WITH", a, b, classification="OFFICIAL", interval=open_from_3)]
+        )
+        assert await only_edge_of(a) == open_from_3
+        await _write(
+            adapter, [], [_edge("COMMUNICATED_WITH", a, b, classification="OFFICIAL", interval=closed)]
+        )
+        assert await only_edge_of(a) == Interval(valid_from=day(1), valid_to=None)
+
+        await _write(
+            adapter, [], [_edge("COMMUNICATED_WITH", c, d, classification="OFFICIAL", interval=closed)]
+        )
+        await _write(
+            adapter, [], [_edge("COMMUNICATED_WITH", c, d, classification="OFFICIAL", interval=open_from_3)]
+        )
+        assert await only_edge_of(c) == Interval(valid_from=day(1), valid_to=None)
+
+
 async def test_action_code_and_sanitisation_code_never_gate_a_read(
     factory: GraphAdapterFactory,
 ) -> None:

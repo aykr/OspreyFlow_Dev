@@ -157,3 +157,38 @@ async def test_the_same_run_unpinned_is_refused_by_the_pin_check_not_the_rule() 
     so the pin is what lets the first case reach the rule it is about."""
     with pytest.raises(StaleRecipeError, match="not pinned"):
         await _run_naming_passes_items_to(None)
+
+
+# --- ADR-127 decision 11: a link's span end is one column of the source, checked at Map save ------
+
+
+def _span_template(valid_to: dict[str, object]) -> RowTemplate:
+    template = _template("ASSOCIATE_OF")
+    edge = RecipeEdge.model_validate(
+        {
+            "type": "ASSOCIATE_OF",
+            "from": "a",
+            "to": "b",
+            "temporal": {"at": {"field": "start"}, "valid_to": valid_to},
+        }
+    )
+    return template.model_copy(update={"edges": [edge]})
+
+
+def test_a_span_end_bound_to_a_source_column_is_accepted() -> None:
+    template = _span_template({"field": "end", "transform": "datetime"})
+    assert (
+        recipe_rule_violations(template, ONTOLOGY, source_columns=["name", "start", "end"]) == []
+    )
+
+
+def test_a_span_end_naming_a_column_the_source_lacks_is_refused_by_name() -> None:
+    template = _span_template({"field": "ended"})
+    (problem,) = recipe_rule_violations(template, ONTOLOGY, source_columns=["name", "start", "end"])
+    assert "ended" in problem and "end" in problem and "source" in problem
+
+
+def test_a_span_end_must_be_one_column_not_a_value_or_several() -> None:
+    for binding in ({"literal": "2026-01-01"}, {"fields": ["a", "b"], "transform": "datetime"}, {}):
+        (problem,) = recipe_rule_violations(_span_template(binding), ONTOLOGY)
+        assert "end" in problem and "one column" in problem, (binding, problem)

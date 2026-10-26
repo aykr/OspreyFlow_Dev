@@ -47,7 +47,7 @@ describe("describeChange", () => {
         },
       ),
     );
-    expect(lines).toEqual(["Records behind it: 3 → 7", "Dates: none → 2026-03-01 – present"]);
+    expect(lines).toEqual(["Records behind it: 3 → 7", "Dates: none → from 2026-03-01 (open)"]);
   });
 
   it("reads a list property as one comma-separated value", () => {

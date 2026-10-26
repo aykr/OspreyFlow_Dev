@@ -603,6 +603,16 @@ class GraphArcadeDBAdapter:
                 edge_lit = groovy_string_literal(edge_id)
                 command = f'g.E().has("id",{edge_lit}){property_steps}'
                 await self._client.gremlin(command, params=bound_params, session_id=tx)
+                if merged_interval is not None and merged_interval.valid_to is None:
+                    # ADR-127 decision 11: a merge that leaves the span open writes no flattened
+                    # `valid_to`, so the closed write's own would stay, a wrong end for the next
+                    # reader. Removed by SQL on the type, through its unique `id` index, in the same
+                    # transaction as the update above.
+                    await self._client.sql(
+                        f"UPDATE `{type_name}` REMOVE valid_to WHERE id = :id",
+                        params={"id": edge_id},
+                        session_id=tx,
+                    )
             else:
                 command = (
                     f'g.V().has("id", src).as("__src")'

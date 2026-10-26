@@ -48,7 +48,7 @@ def _writes() -> list[EdgeWrite]:
     a_b_2 = _with_interval(make_edge("a", "b", 2), 1, 9)
     other = make_edge("c", "d", 3)
     b_a = make_edge("b", "a", 4)
-    a_b_3 = _with_interval(make_edge("a", "b", 5), 3, None).model_copy(update={"occurrences": 4})
+    a_b_3 = _with_interval(make_edge("a", "b", 5), 3, 3).model_copy(update={"occurrences": 4})
     return [a_b_1, other, a_b_2, b_a, a_b_3, make_edge("e", "f", 6)]
 
 
@@ -145,6 +145,78 @@ def test_merge_interval_widens_and_tolerates_a_missing_one() -> None:
     assert merge_interval(early, None) == early
     assert merge_interval(None, late) == late
     assert merge_interval(None, None) is None
+
+
+def test_an_open_end_stays_open_when_merged_and_an_instant_is_not_open() -> None:
+    """ADR-127 decision 11: `valid_to=None` is a span still running, and it is not an instant. A
+    merge keeps the earliest start and the latest end, and a pair with an open end in either write
+    is open. Before the decision a missing end was read as the start, which merged an open span with
+    a closed one into a closed one and lost the fact that it was still running."""
+    closed = Interval(valid_from=T0 + timedelta(days=5), valid_to=T0 + timedelta(days=6))
+    open_ = Interval(valid_from=T0 + timedelta(days=1), valid_to=None)
+    expected = Interval(valid_from=T0 + timedelta(days=1), valid_to=None)
+    assert merge_interval(open_, closed) == expected
+    assert merge_interval(closed, open_) == expected
+    assert merge_interval(open_, open_) == open_
+    # An open span that starts later than a closed one still makes the pair open, from the earlier.
+    later_open = Interval(valid_from=T0 + timedelta(days=8), valid_to=None)
+    assert merge_interval(closed, later_open) == Interval(
+        valid_from=T0 + timedelta(days=5), valid_to=None
+    )
+    # An instant (an end equal to its start) merged with a closed span is closed, not open.
+    instant = Interval(valid_from=T0 + timedelta(days=2), valid_to=T0 + timedelta(days=2))
+    assert merge_interval(instant, closed) == Interval(
+        valid_from=T0 + timedelta(days=2), valid_to=T0 + timedelta(days=6)
+    )
+
+
+def test_both_paths_leave_an_open_and_a_closed_span_open() -> None:
+    """The ordinary path (`upsert_edges`, one write at a time) and the bulk aggregate end with the
+    same stored interval, in either order: open."""
+    open_ = _with_interval(make_edge("a", "b", 1), 3, None)
+    closed = _with_interval(make_edge("a", "b", 2), 1, 9)
+    for order in ([open_, closed], [closed, open_]):
+        store = CountingStore()
+        graph = make_adapter(store)
+        for write in order:
+            asyncio.run(graph.upsert_edges([write], "tx"))
+        (aggregated,) = aggregate_edge_writes(
+            order, directed=_directed, handling=_HANDLING, audience=_AUDIENCE
+        )
+        expected = Interval(valid_from=T0 + timedelta(days=1), valid_to=None)
+        assert aggregated.write.interval == expected
+        assert store.edges[("a", "b")]["interval"] == expected.model_dump(mode="json")
+
+
+def test_a_merge_that_leaves_the_span_open_removes_the_stale_flattened_end() -> None:
+    """ADR-127 decision 11, the ordinary path: a link is stored with its interval nested and its
+    ends flattened (`valid_from`, `valid_to`), the flattened end only when there is one. A closed
+    link merged with an open write reads open from its nested interval; the flattened `valid_to`
+    the first write left must go in the same update, or the store holds a wrong end for the next
+    reader. Nothing is removed when the merge stays closed, and a fresh open link never has one."""
+    closed = _with_interval(make_edge("a", "b", 1), 1, 9)
+    open_ = _with_interval(make_edge("a", "b", 2), 3, None)
+    store = CountingStore()
+    graph = make_adapter(store)
+    asyncio.run(graph.upsert_edges([closed], "tx"))
+    (link,) = store.links
+    assert "valid_to" in link
+    asyncio.run(graph.upsert_edges([open_], "tx"))
+    (link,) = store.links
+    assert "valid_to" not in link, "the closed write's end is left behind on an open link"
+    assert link["interval"] == Interval(valid_from=T0 + timedelta(days=1)).model_dump(mode="json")
+    assert link["valid_from"] is not None
+
+    # A merge that stays closed keeps the end (and sends no removal), and a fresh open one has none.
+    kept = CountingStore()
+    both_closed = make_adapter(kept)
+    asyncio.run(both_closed.upsert_edges([closed], "tx"))
+    asyncio.run(both_closed.upsert_edges([_with_interval(make_edge("a", "b", 3), 2, 5)], "tx"))
+    assert "valid_to" in kept.links[0]
+    assert not any("REMOVE" in command for command, _ in kept.sql_sent)
+    fresh = CountingStore()
+    asyncio.run(make_adapter(fresh).upsert_edges([_with_interval(make_edge("c", "d", 4), 1, None)], "tx"))
+    assert "valid_to" not in fresh.links[0]
 
 
 def test_both_paths_split_a_repeated_pair_by_audience() -> None:

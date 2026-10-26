@@ -151,3 +151,22 @@ describe("a link's text column", () => {
     expect(unmappedFieldNames(["sent_at", "text"], template, new Set())).not.toContain("text");
   });
 });
+
+describe("boundFieldNames: a span's end", () => {
+  it("counts the column that holds when a link ended as mapped", () => {
+    const template = {
+      entities: [],
+      edges: [
+        {
+          type: "COMMUNICATED_WITH",
+          from: "a",
+          to: "b",
+          temporal: { at: { field: "started" }, valid_to: { field: "ended" } },
+        },
+      ],
+    } as unknown as RowTemplate;
+    const names = boundFieldNames(template);
+    expect(names.has("started")).toBe(true);
+    expect(names.has("ended")).toBe(true);
+  });
+});

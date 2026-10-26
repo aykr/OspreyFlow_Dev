@@ -18170,3 +18170,33 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   that raised the alert. The alert is not also taught to name its triggering load: the alert's owner may
   not be the person who ran it, and that source is not theirs to see. The demo script's "the document"
   must be read as the file that loaded the number; recorded as an open item for the script.
+
+### ADR-127, Amendment 13 (26 October 2026) — B2-7: what decision 11 left open
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **The binding.** A link's time binding may name an end (`valid_to`) beside its start, from one source
+  column. The end is read like the start (the connector's date order, the time zone, UTC). An empty or
+  blank end cell means the span is still open, stored as no end; a cell that does not read as a time,
+  or an end before the start, rejects the row, naming the columns and never the values.
+- **The model already allowed it.** `Interval.valid_to` may be absent, and the weight's recency and the
+  working set's windows already read an absent end as "still in force". The merge did not: it read a
+  missing end as the start. It now reads it as open, so a merge keeps the earliest start, the latest end,
+  and stays open if either side is open, on both write paths. A merge that leaves a span open also
+  removes the stored link's flattened end. Writers that meant an instant by leaving the end out (the
+  PaySim fixture) now write the start as the end. Verify's dry run merges a repeated pair's spans as the
+  load does.
+- **Links already stored with no end** are not all instants. Brief 1's Prison Intelligence Dataset
+  writer stores current custody and presence (`HELD_AT`, `PRESENT_AT`, `PASSES_ITEMS_TO`) as open spans
+  on purpose (ADR-120 Amendment 9), and an analyst's link change could already record an open end; both
+  read correctly as open from this unit on, and the merge now keeps them open. Only the PaySim seeder
+  meant an instant by leaving the end out. An operator module closes exactly those PaySim `TRANSACTED`
+  links, once, after a deployment seeded earlier is rebuilt with this unit, and touches nothing else.
+- **The graph's time-window filter** reads a link's start only, as the timeline brush does, so an open
+  span that began before a window is not in a windowed expand although it was in force; this is the
+  limitation decision 11 records, for the graph window as well as the brush.
+- **The event** of a span, open or closed, is at its start; an instant link is unchanged.
+- **The Glass** shows an open span as "from … (open)". The Map inspector binds the end ("When it
+  ended", from a column).
+- **A gap, recorded, owned by unit B2-7b.** The Map's link controls, this one and the existing ones,
+  cannot be reached by keyboard: the canvas offers no keyboard path to select or create a link. B2-7b
+  adds a keyboard-selectable link list in Map, with keyboard steps for its link controls (rule 13).

@@ -167,6 +167,10 @@ class StagedEdge:
     to_ref: str
     properties: dict[str, Any]
     instant: datetime | None = None
+    #: ADR-127 decision 11: the end of a span, and whether the recipe bound one. `span` with no
+    #: `valid_to` is a span still open (an empty end cell); no `span` is one instant.
+    valid_to: datetime | None = None
+    span: bool = False
     #: ADR-094: `{"kind": ..., "text": ...}` when the recipe marks this link's text.
     content: dict[str, str] | None = None
     #: As `StagedEntity.handling`.
@@ -218,7 +222,11 @@ def _rows_to_table(rows: Sequence[StagedRow]) -> pa.Table:
             "edges_json": [
                 json.dumps(
                     [
-                        {**asdict(e), "instant": e.instant.isoformat() if e.instant else None}
+                        {
+                            **asdict(e),
+                            "instant": e.instant.isoformat() if e.instant else None,
+                            "valid_to": e.valid_to.isoformat() if e.valid_to else None,
+                        }
                         for e in r.edges
                     ]
                 )
@@ -267,6 +275,10 @@ def read_staged_rows(path: str, *, storage: ObjectStorageConfig) -> list[StagedR
                 instant=datetime.fromisoformat(e["instant"]).astimezone(UTC)
                 if e["instant"]
                 else None,
+                valid_to=datetime.fromisoformat(e["valid_to"]).astimezone(UTC)
+                if e.get("valid_to")
+                else None,
+                span=bool(e.get("span", False)),
                 content=e.get("content"),
                 handling=e.get("handling"),
             )

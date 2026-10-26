@@ -554,8 +554,89 @@ export function ElementInspector({
                 binding={edge.temporal.at}
                 sourceFieldNames={sourceFieldNames}
                 transforms={transforms}
-                onChange={(at) => onChangeEdge({ ...edge, temporal: { at } })}
+                onChange={(at) => onChangeEdge({ ...edge, temporal: { ...edge.temporal, at } })}
               />
+            )}
+          </div>
+        )}
+
+        {edgeTypeDef?.temporal && edge.temporal && (
+          // ADR-127 decision 11: a link can be a span. Its end is one column of the source; an
+          // empty cell in it is a span still running. With none recorded the link is one moment.
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}>
+            <label htmlFor="edge-temporal-end-mode">When it ended</label>
+            <Select
+              id="edge-temporal-end-mode"
+              value={edge.temporal.valid_to ? "column" : ""}
+              onChange={(e) => {
+                const start = { ...edge.temporal! };
+                delete start.valid_to;
+                onChangeEdge({
+                  ...edge,
+                  temporal:
+                    e.target.value === "column"
+                      ? {
+                          ...start,
+                          valid_to: {
+                            field: sourceFieldNames[0] ?? "",
+                            ...(transforms.some((t) => t.name === "datetime")
+                              ? { transform: "datetime" }
+                              : {}),
+                          },
+                        }
+                      : start,
+                });
+              }}
+            >
+              <option value="">Not recorded (one moment)</option>
+              <option value="column">From a column</option>
+            </Select>
+            {edge.temporal.valid_to && (
+              <>
+                <Select
+                  aria-label="Column holding when it ended"
+                  value={edge.temporal.valid_to.field ?? ""}
+                  onChange={(e) =>
+                    onChangeEdge({
+                      ...edge,
+                      temporal: { ...edge.temporal!, valid_to: { ...edge.temporal!.valid_to!, field: e.target.value } },
+                    })
+                  }
+                >
+                  {sourceFieldNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  aria-label="Transform for when it ended"
+                  value={edge.temporal.valid_to.transform ?? ""}
+                  onChange={(e) => {
+                    const rest = { ...edge.temporal!.valid_to! };
+                    delete rest.transform;
+                    onChangeEdge({
+                      ...edge,
+                      temporal: {
+                        ...edge.temporal!,
+                        valid_to: e.target.value ? { ...rest, transform: e.target.value } : rest,
+                      },
+                    });
+                  }}
+                >
+                  <option value="">No transform</option>
+                  {transforms
+                    .filter((t) => t.arity <= 1 && (t.parts ?? []).length === 0)
+                    .map((t) => (
+                      <option key={t.name} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))}
+                </Select>
+                <span style={{ color: "var(--text-tertiary)" }}>
+                  An empty cell means it is still going.
+                </span>
+              </>
             )}
           </div>
         )}

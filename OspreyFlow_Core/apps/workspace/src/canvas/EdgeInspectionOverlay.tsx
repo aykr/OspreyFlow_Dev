@@ -1,4 +1,5 @@
 import type { Edge } from "../../../../packages/schemas/generated";
+import { intervalText } from "../inspector/intervalText";
 import { Popover } from "../design/primitives/Popover";
 import { linkTypeName } from "./linkLabel";
 
@@ -31,10 +32,7 @@ export function EdgeInspectionOverlay({ x, y, edge, onClose }: EdgeInspectionOve
         </div>
         <div>Occurrences: <span className="value">{edge.occurrences ?? 1}</span></div>
         {edge.interval && (
-          <div className="value">
-            {edge.interval.valid_from}
-            {edge.interval.valid_to ? ` – ${edge.interval.valid_to}` : " – present"}
-          </div>
+          <div className="value">{intervalText(edge.interval)}</div>
         )}
         <div>Provenance: {edge.provenance.state}</div>
         <div>

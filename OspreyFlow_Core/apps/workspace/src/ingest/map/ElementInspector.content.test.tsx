@@ -21,12 +21,12 @@ const ONTOLOGY = {
   ],
 } as unknown as OntologySchema;
 
-function mount(edge: RecipeEdge, onChangeEdge = vi.fn()) {
+function mount(edge: RecipeEdge, onChangeEdge = vi.fn(), transforms: unknown[] = []) {
   render(
     <ElementInspector
       selection={{ kind: "edge", edge, index: 0, fromType: "Endpoint", toType: "Endpoint" } as never}
       ontology={ONTOLOGY}
-      transforms={[]}
+      transforms={transforms as never}
       sourceFieldNames={["sender", "recipient", "sent_at", "text"]}
       baselineClassification="OFFICIAL"
       classificationOrder={["OFFICIAL"]}
@@ -200,5 +200,86 @@ describe("ElementInspector: when a link occurred (found building the AML deck, 1
     const again = mount({ type: "COMMUNICATED_WITH", from: "a", to: "b", temporal: { at: { field: "sent_at" } } });
     fireEvent.change(screen.getByLabelText("When it occurred"), { target: { value: "" } });
     expect(again).toHaveBeenLastCalledWith(expect.objectContaining({ temporal: null, content: null }));
+  });
+});
+
+
+// --- ADR-127 decision 11: a link's span ----------------------------------------------------------
+
+const TIMED: RecipeEdge = {
+  type: "COMMUNICATED_WITH",
+  from: "a",
+  to: "b",
+  temporal: { at: { field: "sent_at", transform: "datetime" } },
+};
+const DATETIME = [{ name: "datetime", arity: 1 }];
+
+describe("ElementInspector: when a link ended", () => {
+  it("offers an end only to a link that has a time, and starts with none recorded", () => {
+    mount({ type: "COMMUNICATED_WITH", from: "a", to: "b" });
+    expect(screen.queryByLabelText("When it ended")).toBeNull();
+    cleanup();
+    mount(TIMED);
+    expect((screen.getByLabelText("When it ended") as HTMLSelectElement).value).toBe("");
+  });
+
+  it("binds the end to a column, with the datetime transform when the catalogue has it", () => {
+    const onChangeEdge = mount(TIMED, vi.fn(), DATETIME);
+    fireEvent.change(screen.getByLabelText("When it ended"), { target: { value: "column" } });
+    expect(onChangeEdge).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        temporal: {
+          at: { field: "sent_at", transform: "datetime" },
+          valid_to: { field: "sender", transform: "datetime" },
+        },
+      }),
+    );
+  });
+
+  it("changes the end's column and its transform, and says an empty cell means still open", () => {
+    const edge: RecipeEdge = {
+      ...TIMED,
+      temporal: { at: { field: "sent_at", transform: "datetime" }, valid_to: { field: "sender", transform: "datetime" } },
+    };
+    const onChangeEdge = mount(edge, vi.fn(), DATETIME);
+    expect(screen.getByText(/an empty cell means it is still going/i)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Column holding when it ended"), { target: { value: "recipient" } });
+    expect(onChangeEdge).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        temporal: {
+          at: { field: "sent_at", transform: "datetime" },
+          valid_to: { field: "recipient", transform: "datetime" },
+        },
+      }),
+    );
+    // The inspector is controlled by the edge it is given, so each change is read against it.
+    fireEvent.change(screen.getByLabelText("Transform for when it ended"), { target: { value: "" } });
+    expect(onChangeEdge).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        temporal: { at: { field: "sent_at", transform: "datetime" }, valid_to: { field: "sender" } },
+      }),
+    );
+  });
+
+  it("clears the end back to one moment", () => {
+    const edge: RecipeEdge = { ...TIMED, temporal: { at: { field: "sent_at" }, valid_to: { field: "sender" } } };
+    const onChangeEdge = mount(edge, vi.fn(), DATETIME);
+    fireEvent.change(screen.getByLabelText("When it ended"), { target: { value: "" } });
+    expect(onChangeEdge).toHaveBeenLastCalledWith(expect.objectContaining({ temporal: { at: { field: "sent_at" } } }));
+  });
+
+  it("keeps the end when the start's binding is edited", () => {
+    const edge: RecipeEdge = { ...TIMED, temporal: { at: { field: "sent_at" }, valid_to: { field: "sender" } } };
+    const onChangeEdge = mount(edge, vi.fn(), DATETIME);
+    // The start's own editor is the first binding editor on the link; change its transform.
+    const [startTransform] = screen.getAllByRole("combobox").filter(
+      (el) => Array.from((el as HTMLSelectElement).options).some((o) => o.text === "No transform") && el.getAttribute("aria-label") === null,
+    );
+    fireEvent.change(startTransform!, { target: { value: "datetime" } });
+    expect(onChangeEdge).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        temporal: { at: { field: "sent_at", transform: "datetime" }, valid_to: { field: "sender" } },
+      }),
+    );
   });
 });

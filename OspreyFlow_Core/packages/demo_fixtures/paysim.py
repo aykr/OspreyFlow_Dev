@@ -204,7 +204,9 @@ def build_graph_writes(
                 source=account_node_id(row.origin),
                 target=account_node_id(row.destination),
                 properties={"amount": row.amount, "transaction_type": row.type},
-                interval=Interval(valid_from=step_timestamp(row.step)),
+                interval=Interval(
+                    valid_from=step_timestamp(row.step), valid_to=step_timestamp(row.step)
+                ),
                 provenance=_provenance(row.index),
                 handling=handling,
                 created_by=created_by,

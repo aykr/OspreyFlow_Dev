@@ -7,6 +7,7 @@
 // must never differ only in case.
 import type { LinkChangeRecord, LinkSnapshot } from "./linkChangeApi";
 import { linkTypeName } from "../canvas/linkLabel";
+import { intervalText } from "./intervalText";
 
 function show(value: unknown): string {
   if (value === undefined || value === null || value === "") return "(none)";
@@ -16,7 +17,7 @@ function show(value: unknown): string {
 
 function dates(interval: LinkSnapshot["interval"]): string {
   if (!interval) return "none";
-  return `${interval.valid_from.slice(0, 10)} – ${interval.valid_to ? interval.valid_to.slice(0, 10) : "present"}`;
+  return intervalText(interval, { dateOnly: true });
 }
 
 function marking(h: NonNullable<LinkSnapshot["handling"]>): string {

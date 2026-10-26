@@ -81,15 +81,17 @@ def merge_datasets(existing: Sequence[str] | None, incoming: Sequence[str]) -> l
 
 def merge_interval(existing: Interval | None, incoming: Interval | None) -> Interval | None:
     """The union of the two: the earliest start and the latest end. A missing interval never
-    erases a present one."""
+    erases a present one. An end of `None` is a span still open (ADR-127 decision 11), not an
+    instant: an interval open at either end is open in the union, from the earlier start. (An
+    instant carries its start as its end, so it merges as the closed interval it is.)"""
     if existing is None:
         return incoming
     if incoming is None:
         return existing
     valid_from = min(existing.valid_from, incoming.valid_from)
-    existing_to = existing.valid_to or existing.valid_from
-    incoming_to = incoming.valid_to or incoming.valid_from
-    return Interval(valid_from=valid_from, valid_to=max(existing_to, incoming_to))
+    if existing.valid_to is None or incoming.valid_to is None:
+        return Interval(valid_from=valid_from, valid_to=None)
+    return Interval(valid_from=valid_from, valid_to=max(existing.valid_to, incoming.valid_to))
 
 
 @dataclass(frozen=True)
