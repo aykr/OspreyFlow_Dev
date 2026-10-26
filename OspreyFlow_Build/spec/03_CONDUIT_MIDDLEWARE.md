@@ -894,11 +894,10 @@ recovery path work. Skipping it is the most expensive shortcut available in this
 - **load** — batched writes through `GraphPort` and `AnalyticsPort` in one logical transaction
   per document.
 
-  > **Spec and code disagreed here, and ADR-058 (accepted in its Amendment 1) settles which way.** The engine writes one element per
-  > `GraphPort` call today (`services/ingest/engine.py`), not batches. Proposed: a publish aggregates its resolved
-  > elements and writes them through the bulk-load capability by default, falling back to `upsert_*` only for elements
-  > that collide with what is already stored. One transaction per document stays unachievable at 10^5 elements; a failed
-  > bulk load is reverted and re-run (ADR-058 D6).
+  > **A run writes each link once, in one transaction (ADR-058 Amendment 11; ADR-127 Amendment 19).** The engine
+  > combines a run's writes per link and writes them through `upsert_edges` inside the run's one graph transaction,
+  > so ADR-109's pre-commit rules can judge the load whole and roll it back. ADR-058 D2's bulk-load capability, which
+  > commits per chunk and is reverted and re-run on failure (D6), stays the seeds' path (ADR-058 Amendment 10).
 - **index** — full text and embeddings into OpenSearch.
 
 **Geospatial reference data uses the same pipeline with two differences.** Gazetteers, boundary

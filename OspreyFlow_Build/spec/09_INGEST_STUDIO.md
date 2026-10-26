@@ -705,11 +705,11 @@ editor; the repository is the record.
   unified CLI. It supersedes everything the load created, leaving the audit trail intact.
   Reverting a load is not yet reachable from the Admin area; it is a function call today, and gets
   its own screen there (the `revert_loads` right, ADR-112, already names who may).
-- **Written in bulk (ADR-058, accepted in its Amendment 1).** A publish is to aggregate its resolved rows and write
-  nodes then edges through the bulk-load capability in chunks, falling back to `upsert_*` only for what collides with
-  stored data; `upsert_*` stays the path for low-volume and interactive writes. The seeds load in bulk (Amendment 10);
-  the Studio's engine does not yet, and still writes one element per call, which at 234,000 links (the Enron
-  measurement) is hours.
+- **Written once per link (ADR-058 Amendment 11; ADR-127 Amendment 19).** A run combines its rows' writes in
+  the engine, one per link, and writes them through `upsert_edges` inside the run's one graph transaction, so
+  ADR-109's pre-commit rules can still judge the load whole and roll it back. ADR-058 D2's bulk-load capability,
+  which commits per chunk, stays the seeds' path (ADR-058 Amendment 10). A run without a handling scheme writes
+  each link as it is held.
 
 ### The recipe registry, and how "flags the affected recipes" (above) actually happens
 

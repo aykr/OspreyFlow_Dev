@@ -18360,3 +18360,113 @@ decided by the coordinator under the owner's delegation for Brief 2, after an ad
   and not superseded, as `render_live_node_ids_sql` does (Amendment 8). No recipe test needed it; it
   closes an older gap between the stand-in and the adapter. Its test compares the stand-in with the
   real adapter's rendering, as the file's other cases do, not with hand-written sets.
+
+### ADR-127, Amendment 19 (26 October 2026) — B2-9: a run writes each link once, however many rows carry it
+
+Asked for by the owner on 26 October 2026 ("run it as a batch … as long as the metadata is generated for
+Ingest Studio … prioritise speed over the live testing"). Where it departs from ADR-058 D2, it rests on
+the owner's ruling of the same day ("Amend D2", ADR-058 Amendment 11). The rest was decided by the
+coordinator under the owner's delegation for Brief 2, after an adversarial review of the design.
+- **The cost found.** `run_recipe` writes the graph once per link per row: `_write_edge`, and the `HOLDS`
+  write, call `upsert_edges([write])`, each a merge into a stored link (`services/ingest/engine.py`). Each
+  of R5's 1,000,000 rows writes a `USES` and a `COMMUNICATED_WITH` link: about two million merges into
+  3,547 links (Amendment 18). At ADR-058's measured 0.15 to 0.33 s per write, that is several days, for
+  the seed and for every rehearsal reset.
+- **The decision: a run combines its own writes before it writes them.**
+  - **What is unchanged.** The engine still reads, binds, transforms, checks and keys every row as now,
+    and still finds each node matched on a key once per run.
+  - **Validation.** Each link write is validated as it is held, as the adapter validates each write
+    (`validate_properties` and the end and type checks), so a refusal names the row whose write was
+    refused. A refusal fails the run, as a store refusal does today (the run is one transaction).
+  - **The buffer.** It lives in the run's `_RunState`. Its key is `aggregate_edge_writes`' own: the type,
+    the pair (unordered for an undirected type), and `audience_of` under the deployment's handling scheme,
+    the one the graph adapter judges with. A later write is combined into the held one through
+    `aggregate_edge_writes` incrementally, as it is held, so no per-row write is kept beyond `written`.
+    `aggregate_edge_writes` therefore sums each write's own count of writes (`writes`, below), starting
+    from the first write's, rather than counting list items, and `AggregatedEdge.writes` is that sum, so
+    folding three writes pairwise gives 3, on this path, the bulk loader's and the recipe stand-in's.
+    Datasets are not in the key, because dataset stamping gives every write of one run one dataset.
+  - **The flush.** The buffer is written with `upsert_edges` in chunks, in the order each link was first
+    held, at the end of `run_recipe`'s row loop. That is before `_count_hidden_merges` and before the report
+    is built, so `run_recipe` returns only stored ids. It is inside the run's one graph transaction, so a
+    load that pre-commit rules roll back (ADR-109 ruling 1) discards it with the transaction.
+  - **Ids after the flush.** Each event, each `written` entry (one per row, as now) and each
+    created-or-merged note takes the stored id of its own link at the flush. A buffered `HOLDS` write
+    counts toward `edges_created` once per held write, as now, and is recorded created or merged at the
+    flush by today's rule, applied to the id returned for its link. `touched_edge_ids` names each
+    link once, in the order first touched, so the load record (Amendment 6) and the change-stream entry
+    (Amendment 12) name each link once rather than once per row. They say which links a load touched, not
+    how often; for R5 that is 3,547 ids, not two million.
+  - **The revision.** `audit.revision` counts the writes merged into a link (`schemas/merge.py`). A
+    combined write carries its count of writes to the adapter, so the revision, and ADR-102 Amendment
+    4's choice among a pair's links, are what the per-row path leaves. The port change:
+    - `EdgeWrite` gains `writes: int = 1`, regenerated to TypeScript;
+    - `upsert_edges` stores a new link at revision `writes` and adds `writes` to a stored link's
+      revision on a merge (it gives 1 and adds 1 today); `supersede_edge` and every other writer refuse
+      a write whose `writes` is not 1;
+    - the conformance cases come first (rule 1), in `tests/conformance/graph_port/test_suite.py` and
+      `test_bulk_loader.py`: a create with `writes` N holds revision N, and a merge holds the stored
+      revision plus N;
+    - the recipe stand-in `MergingGraph` adds `writes` to its revision, so it counts as the adapter does
+      and refuses what the adapter refuses (rule 15).
+  - **A run with no handling scheme does not combine.** It flushes each write as it is held (a flush
+    size of one): one `EdgeWrite` per row's link, as today, though its `touched_edge_ids` still name each
+    link once. The CLI, the site grid, the seeders and the basemap builder pass no scheme. Without a
+    scheme the audience cannot tell a restricted code's units apart, and combining would merge what ADR-102
+    Amendment 3 keeps apart.
+- **What a combined run leaves, against the per-row path.**
+  - **The same:** every node, every link's occurrences, interval (open spans, Amendment 13), properties,
+    provenance, datasets, handling and revision; every event, kept row key, load record and report count;
+    the first row's marking (Amendment 18). The revert reverses it as now.
+  - **Different:**
+    - `weight` and `weight_components` are a snapshot taken when a link is written, as ADR-058 D4 accepts
+      for bulk; they are compared as counts, not floats.
+    - A property stored flat at the top level of a link follows the last row: a key that only an earlier
+      row wrote (an optional binding, Amendment 15) is not left behind at the top level. It is left behind
+      on the per-row path, where nothing removes it but `valid_to`.
+- **Where it applies.** Every `run_recipe` call given a handling scheme: Studio runs, pipeline branches
+  and scheduled runs, which go through `run_published_recipe`. Pipeline extract and enrich stages write
+  outside it. Verify's dry run keeps its own preview of merges, unchanged here.
+- **Recorded, not fixed here.**
+  - Verify's `_dry_run_edge` is a partial third copy of the combining rule. It keeps the first row's
+    properties, merges no handling, and keeps the two directions of an undirected pair apart. A shared
+    combiner should serve both; it has a build-plan row.
+  - A revert marks links reverted and never deletes them, so each rehearsal reset leaves 3,547 more
+    reverted links that some reads walk past before filtering.
+- **No rate quoted.** The full R5 run is timed once on the throwaway stack, with the combine time
+  measured apart from the store time, and the ids stored twice counted by scan and by traversal
+  (ADR-056 Amendment 19). These go in `INGEST_ACTUALS.md`. No slide quotes a rate until it is measured on
+  the demo machine.
+- **Tests that would fail (rule 12).** The per-row reference is the same code with a test-only flush
+  size of one, not a second path.
+  - **Equivalence.** The same rows, combined and per row, leave every stored field identical, the
+    differences above excepted and stated. Run through the recipe tests' stand-in and through
+    `GraphArcadeDBAdapter.upsert_edges` (the `CountingStore` harness), and once on a real ArcadeDB. The
+    cases include R5's slice, R6 in the seed's order, a merge into a link stored by an earlier load, and
+    an asserted link written again with inferred writes.
+  - **The cost.** Across all its `upsert_edges` calls, R5's full file sends exactly 3,547 `EdgeWrite`s.
+    It runs as a slow test outside `make ci`.
+  - **Ids.** Each event's `edge_id` is the id of the link between its own `source_id` and `target_id` at
+    its own handling's audience, equal to the per-row run's mapping.
+  - **The store (rules 3 and 4, real ArcadeDB).** A pair written at OFFICIAL and at SECRET leaves two
+    links, and a principal without SECRET sees one, counting only the OFFICIAL rows. Two rows of one
+    classification under a restricted code with different owning units leave two links, and each unit
+    reads only its own.
+  - **A refused write.** A write the adapter would refuse, planted on a row that is neither its link's
+    first nor its last, fails the run, writes nothing, and the error names that row.
+  - **No scheme.** A run without a handling scheme sends one `EdgeWrite` per row's link.
+  - **The revision.** A link combined from N writes holds the revision the per-row path gives it.
+
+### ADR-058, Amendment 11 (26 October 2026) — D2 amended: a Studio run combines in the engine and writes in its one transaction
+
+**The owner's ruling of 26 October 2026 ("Amend D2").** D2 ("bulk for every Ingest Studio publish") and
+staging step 4 are amended for the Studio's engine.
+- **The amended rule.** A Studio run combines its writes in the engine, one per link, and writes them
+  through `upsert_edges` inside the run's one graph transaction (ADR-127 Amendment 19).
+- **Why.** ADR-109's pre-commit rules judge a load whole and roll it back, which needs the load in one
+  transaction. The bulk loader commits per chunk (D6), so a Studio run through it could not be rolled
+  back.
+- **The bulk loader is unchanged.** It stays the seeds' path (Amendment 10), with its per-chunk commits;
+  the seeds keep their own check for ids stored twice.
+- **The spec text that follows.** `03_CONDUIT_MIDDLEWARE.md` §5.1's ADR-058 note and `09_INGEST_STUDIO.md`
+  §6 ("Written in bulk") are amended to match.
