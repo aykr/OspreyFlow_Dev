@@ -18499,3 +18499,64 @@ Found by the coordinator diagnosing a CI failure, and decided under the owner's 
   - **Pure:** the task sends no keep-alive within 3 seconds of a real call, and none after commit or
     rollback.
   - **Order:** B2-9a is built before B2-9's combining, which depends on it.
+
+### ADR-127, Amendment 21 (26 October 2026) — B2-9a corrected: the keep-alive is bounded, serialised and cleaned up
+
+Found by an adversarial review of the B2-9a build before commit. Decided by the coordinator under the
+owner's delegation for Brief 2.
+- **The keep-alive lives in `ArcadeDBClient`,** not `GraphArcadeDBAdapter` as Amendment 20 says, so it also
+  covers the bulk loader's per-chunk transactions.
+- **Bounded.**
+  - **The defect.** Unbounded, the keep-alive kept an abandoned transaction open for the life of the
+    process. That is one the code never commits or rolls back, such as a cancelled request: every
+    Conduit rollback guard caught `Exception`, so `CancelledError` skipped it. Before Amendment 20,
+    ArcadeDB expired such a transaction within 10 seconds.
+  - **The fix.** The client records the last real call apart from the last keep-alive. It stops keeping
+    a session alive once no real call has used it for `MAX_KEEPALIVE_IDLE`, 30 minutes by default and
+    configurable. It then logs a warning naming the session's age, and ArcadeDB expires the session as
+    before. Thirty minutes is above any gap measured in a run (the R5 combine, about 145 s in the pure run).
+- **Rolled back on cancellation.** The Studio load (`studio_publish.load_with_rules`, both passes) and the
+  revert (`load_revert`) roll back on `BaseException`, so a cancelled load is rolled back. The remaining
+  Conduit transaction guards that catch only `Exception` are listed in a build-plan row with no owner yet;
+  the bound above limits what each can hold.
+- **Serialised.** One `asyncio.Lock` per session is held by every real call and by the keep-alive, so the
+  two never share a session at once. Commit and rollback wait for a keep-alive already sent rather than
+  cancelling it.
+- **Cleaned up.** A session's bookkeeping is removed after its commit or rollback has been sent, not
+  before, so nothing re-adds it. A retried commit's replacement session stops its keep-alive in a `finally`.
+- **`writes` is at least 1.** `EdgeWrite.writes` is `Field(ge=1)`. Amendment 19's "every other writer refuse a
+  write whose `writes` is not 1" is corrected: `upsert_edges` and the bulk loader take any `writes` of at
+  least 1; `supersede_edge` and every other writer refuse anything but 1.
+- **Tests that would fail (rule 12).**
+  - **The bound.** A session with no real call past the bound gets no further keep-alive.
+  - **Cancellation.** A `load_with_rules` cancelled between begin and commit rolls back.
+  - **The lock.** No keep-alive is sent while a real call holds the session, and no real call starts
+    while a keep-alive is in flight.
+  - **Cleanup.** After commit and after rollback, the client holds no entry for the session in any of
+    its maps.
+  - **Retry.** A retried commit's replacement session stops its keep-alive however the replay fails.
+  - **Pre-commit rollback.** A combined run whose pre-commit rules hold rows, then a second pass, leaves
+    no write of the first pass.
+  - **Live equivalence.** The live equivalence test's rows carry a time, a property and an event.
+- **Recorded, not fixed here.** Combining is quadratic in a link's rows, because `merge_provenance`
+  rebuilds its seen-set on each fold. That is about 145 s for R5 in the pure run, whose busiest links
+  carry about 1,000 rows. An append-only fold is the shared combiner's work (build-plan row).
+
+### ADR-114, Amendment 28 (26 October 2026) — the marketing site is published on the product repository's `gh-pages` branch
+
+**The owner's ruling of 26 October 2026 ("gh-pages branch").**
+- **The conflict.** The marketing site (`marketing_site/` in the developer repository) names Solirius
+  Reply. The packaging rules keep authorship identifiers, "Solirius" among them, out of the product, and
+  the product export (`tools/publish_user_repo.py`) refuses any file carrying one.
+- **The decision.** The site is published to the product repository (`aykr/OspreyFlow`, public since
+  Amendment 27) on a branch of its own, `gh-pages`, which shares no history with `main`. GitHub Pages
+  serves that branch.
+- **How it is published.** `marketing_site/publish_pages.sh` publishes it, apart from the product export:
+  - `main`, the product, still comes only from the export and stays free of the identifiers. The export's
+    `rsync --delete` touches only the `main` checkout and never the site branch.
+  - Only what Pages serves is published: `index.html`, `intro-video.html`, `.nojekyll` and an optional
+    `CNAME`. The video file stays in the developer repository.
+  - The script refuses a personal identifier or a local path in the site's files. It allows the company's
+    name, which the site carries on purpose.
+- **The packaging rules' scope is unchanged.** They still govern the product: the bundle, the images
+  and `main`.
