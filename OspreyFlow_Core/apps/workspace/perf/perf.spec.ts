@@ -71,6 +71,8 @@ test("50k/250k fixture reaches a first interactive frame within the CI software-
 });
 
 test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", async ({ page }) => {
+  // Loading may take up to 90 s and the sweep up to 20 s, past the config's 120 s.
+  test.setTimeout(180_000);
   // `PERF_CPU_THROTTLE=2` runs the page at about the speed of a CI runner (CI measured 1.9 times
   // slower than the owner's machine, 20 October 2026), so a regression CI would catch can be shown
   // red locally before the gate is trusted (CLAUDE.md rule 15). Unset in CI.
@@ -123,12 +125,18 @@ test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", asy
     };
     raf = requestAnimationFrame(loop);
 
-    // Simulate a pan+zoom sweep over ~2s: dispatch synthetic wheel/mouse
-    // events directly (no real OS input available inside `page.evaluate`).
+    // Simulate a pan+zoom sweep: dispatch synthetic wheel/mouse events directly (no real OS input
+    // available inside `page.evaluate`). The sweep runs for at least 2 s and until eight frames have
+    // finished, up to 20 s. A fixed 2 s finished two or three frames at CI's ~2 s a frame, so the
+    // average was the elapsed time over 2 or 3 and the gate passed or failed on which (every
+    // failure from 25 to 26 October 2026 was a two-frame sweep, docs-only commits among them, at
+    // 3,124 to 3,421 ms; three-frame sweeps read 1,327 to 2,324 ms). A page stalled for the whole
+    // sweep still finishes few frames in 20 s and fails.
     const el = document.elementFromPoint(cx, cy);
-    const deadline = performance.now() + 2000;
+    const minimumUntil = performance.now() + 2000;
+    const cap = performance.now() + 20_000;
     let angle = 0;
-    while (performance.now() < deadline) {
+    while (performance.now() < cap && (performance.now() < minimumUntil || samples.length < 8)) {
       angle += 0.2;
       el?.dispatchEvent(
         new WheelEvent("wheel", {
