@@ -145,11 +145,37 @@ def _checkout_mounts(repo_root: Path, code: Sequence[tuple[Path, str]] = ()) -> 
         f"{repo_root}/packages:/app/packages:ro",
         "-v",
         f"{repo_root}/services:/app/services:ro",
+        # The connector layouts the recipes read (the call recipe's, the profile a publish builds
+        # its recipe from): the image holds only the copy it was built with (ADR-127 Amendment 34).
+        "-v",
+        f"{repo_root}/connectors:/app/connectors:ro",
     ]
     # A caller's own code folder, read-only too, at the place its modules are imported from.
     for host, container in code:
         mounts += ["-v", f"{host}:{container}:ro"]
     return mounts
+
+
+RESOLUTION_SWITCH = "OSPREY_POST_INGEST_RESOLUTION"
+
+
+def _switch_args(directory: Path) -> list[str]:
+    """The deployment's rendered `OSPREY_POST_INGEST_RESOLUTION`, passed into the one-shot so the
+    seed judges the switch the Conduit runs with (ADR-127 Amendment 34). A deployment rendered
+    before the setting existed runs with it on, the default, and is told so."""
+    value = "on"
+    env = directory / "deployment.env"
+    if env.is_file():
+        for line in env.read_text(encoding="utf-8").splitlines():
+            if line.startswith(f"{RESOLUTION_SWITCH}="):
+                value = line.partition("=")[2].strip() or "on"
+    return ["-e", f"{RESOLUTION_SWITCH}={value}"]
+
+
+def _run_as_args(subs: Mapping[str, str]) -> list[str]:
+    """The demo engineer's sign-in subject, the id the Conduit knows him by, where the identity
+    provider has him; a local stack without one takes his username, and the seed says so."""
+    return ["--run-as", subs[DEMO_ENGINEER_SUBJECT]] if DEMO_ENGINEER_SUBJECT in subs else []
 
 
 def _run(argv: Sequence[str]) -> str:
@@ -359,6 +385,7 @@ def seed_internal(
             repo_root,
             directory,
             run,
+            lookup_subs(directory),
             "--release-batch-2"
             if release_batch_2
             else "--check"
@@ -418,6 +445,7 @@ def seed_internal(
         "--entrypoint",
         "python",
         *mounts,
+        *_switch_args(directory),
         "api",
         "-m",
         spec.script,
@@ -425,6 +453,7 @@ def seed_internal(
         spec.case_name,
         "--org-unit",
         DEMO_UNIT,
+        *(_run_as_args(subs) if spec.rehearsal else []),
         "--grant",
         f"{subs[DEMO_ADMIN_SUBJECT]}=author",
         "--grant",
@@ -512,6 +541,7 @@ def _mid_demo(
     repo_root: Path,
     directory: Path,
     run: Callable[[Sequence[str]], str],
+    subs: Mapping[str, str],
     flag: str,
     code_mounts: Sequence[tuple[Path, str]] = (),
 ) -> list[str]:
@@ -530,16 +560,14 @@ def _mid_demo(
         "--entrypoint",
         "python",
         *_checkout_mounts(repo_root, code_mounts),
-        # The connector layouts the recipes read (the call recipe's, and the profile the fallback
-        # builds its recipe from): the image holds only the copy it was built with (Amendment 30).
-        "-v",
-        f"{repo_root}/connectors:/app/connectors:ro",
+        *_switch_args(directory),
         "api",
         "-m",
         spec.script,
         flag,
         "--org-unit",
         DEMO_UNIT,
+        *_run_as_args(subs),
     ]
     if flag == "--check":
         # It reads the case, so it is told which (it makes none, and shares none).

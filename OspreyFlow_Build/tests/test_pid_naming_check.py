@@ -263,10 +263,10 @@ def test_a_word_in_the_folder_the_worker_or_a_printed_phrase_is_reported(
     from scripts import seed_pid
 
     monkeypatch.setattr(seed_pid, "FOLDER", f"prison-intelligence-{BANNED}")
-    monkeypatch.setattr(seed_pid, "ENGINEER_ID", f"pid-{OTHER}-worker")
+    monkeypatch.setattr(seed_pid, "ENGINEER_USERNAME", f"pid-{OTHER}-worker")
     monkeypatch.setattr(seed_pid, "CANNOT_UNDO", ("What the reset cannot undo:", f"  - the {BANNED}"))
     where = {h.where for h in gate.scan_seed()}
-    assert "seed constant FOLDER" in where and "seed constant ENGINEER_ID" in where
+    assert "seed constant FOLDER" in where and "seed constant ENGINEER_USERNAME" in where
     assert any(w.startswith("seed printed line") for w in where)
 
 

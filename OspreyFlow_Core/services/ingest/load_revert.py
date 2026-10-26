@@ -403,8 +403,9 @@ async def revert(
 
 async def links_resting_on(records: Sequence[LoadRecord], graph: GraphPort) -> frozenset[str]:
     """The live links outside `records` that touch a node they created (ADR-127 Amendment 23, "The
-    reset"): what `revert` would refuse one load at a time as `rests_on_by_live_links`, asked once
-    of the whole set, so the Prison Intelligence reset can refuse before it reverts anything. A link
+    reset"): what `revert` refuses a load for as `rests_on_by_live_links`, asked for the links
+    themselves, so a reset that a revert refuses can say which of them the engineer can read when a
+    revert refuses (it no longer asks before reverting: Amendment 32). A link
     one of the records created is theirs, however it touches the nodes. Whatever the caller may
     read, as `live_edges_touching` answers: for an operator's tool, never a route. No node to ask
     about asks the graph nothing."""

@@ -2,8 +2,11 @@
 script quotes, read by the demo analyst, and Amendment 7's circle (ADR-120 D4 to D9 and
 Amendments 7 to 12 and 16; ADR-123; Brief 1 stage 5 unit 5c).
 
-ADR-120 Amendment 16 made the dataset OFFICIAL throughout, so this module no longer compares a
-store holding a `SECRET` link with one that does not: there is no such link. Its other cases stay.
+**Renamed from `test_pid_access_control.py` (ADR-127 Amendment 34).** ADR-120 Amendment 16 made the
+dataset OFFICIAL throughout, so nothing in it is above OFFICIAL and this module no longer tests
+access: it tests the demo numbers over the real adapter. Its remaining cases are the "other access
+cases" that Amendment 16 kept. The product's own access suites cover every read path (rule 4). The
+second principal below (cleared to `SECRET`) is kept to show a reading does not depend on clearance.
 
 **Live, and slow.** Every store is a fresh database loaded from the plan itself (`pid_writes`
 through `scripts.seed_support.write_graph`, `method="bulk"`, chunks of 100), with the composed

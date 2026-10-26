@@ -19169,3 +19169,48 @@ Decided by the coordinator under the owner's delegation for Brief 2, from B2-10c
   loaded, so the seed reports these two checks as not run. `python -m scripts.seed_pid --check` runs every
   demo-number check for the moment the stored loads reach. The operator runs it after a chapter-4
   rehearsal.
+
+### ADR-127, Amendment 34 (26 October 2026) — Brief 2's consolidated review: the switch enforced, the restore completed, loads in the engineer's own id
+
+Found by the one adversarial review the owner ruled for the end of Brief 2 (Amendment 31). Decided by the
+coordinator under the owner's delegation.
+- **The resolution switch is checked, not assumed.**
+  - **The defect.** Amendment 33 left the operator to set `components.post_ingest_resolution: false`,
+    but nothing told them or checked it, and a build-plan row wrongly said it was set.
+  - **What the seed reports.** `seed_internal` passes the deployment's rendered
+    `OSPREY_POST_INGEST_RESOLUTION` into the seed's container. The seed and `--check` print a warning
+    when it is on, naming the `osprey.yaml` line and the re-render step.
+  - **What refuses.** `--release-batch-2` and `--reset-live` refuse while it is on, since a live run would
+    then make every reset refuse.
+  - **Where it is written.** `INGEST_ACTUALS.md`'s "Before the demo".
+- **The live reset test uses the deployment's own path.** Its chapter-4 and chapter-9 runs use the
+  deployment's real job queue and its configured switch, set off as the pack requires. A second case,
+  with the switch on, shows that a resolution job is enqueued, so the test can fail for the reason
+  Amendment 33 names.
+- **The restore restores the demo.** A backup does not hold the ingest folder, a host bind mount.
+  `restore_steps()` therefore ends with `--reset-live`, which removes the released batch 2 and rewrites
+  the reports file. The test checks the steps' order and content, not that a constant equals itself.
+- **Loads in the engineer's own id.** The seed takes the principal id to load as (`--run-as`).
+  `seed_internal` passes the engineer persona's Keycloak subject, the id it already looks up to grant the
+  case, so runs, records, recipe rows, audit entries and inferred links carry the id the engineer signs
+  in as. Run against a local stack without Keycloak, the seed takes the username, and says so.
+- **An interrupted seed is recoverable.** A stage whose latest run failed while its load record stands
+  is reported as interrupted, with the full `python -m scripts.revert_load <load id> --reverted-by <id>`
+  command. After that revert a reseed loads the stage again.
+- **Smaller corrections.**
+  - **Containers.** The seed's and the reset's container mount `connectors/`.
+  - **The fallback.** It checks the row against the file before writing anything. Its `mark_verified` is
+    recorded in its audit entry as the operator's attestation, since no Verify ran.
+  - **Errors.** `RowKeyDefinitionChanged` and `RowKeyRunInProgress` join the named refusals.
+  - **Totals.** Every shortened list the seed prints gives its total.
+  - **Unreadable links.** A reset refusal counts only the links the engineer can read, with no count of
+    the rest.
+  - **Wording.** The stale wording is corrected (the reset's docstring, the test's name,
+    `links_resting_on`, and `DEMO_GUIDE.md`'s marking line).
+  - **Threads.** A cancelled run's worker-thread staging may still finish writing its staging object. That
+    is recorded, harmless (the load is not committed), and not fixed.
+- **Brief 1's access test, as it now stands.** With nothing above OFFICIAL in the dataset,
+  `tests/services/api/test_pid_access_control.py` no longer tests access. Its remaining cases test the demo
+  numbers over the real adapter. Its docstring says so, and ADR-120 Amendment 16's "its other access cases
+  stay" reads as that. Its filename is kept, since the CI workflow and five cited records name it. The product's own access suites still cover every read
+  path.

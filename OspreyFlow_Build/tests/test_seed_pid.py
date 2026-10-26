@@ -173,6 +173,16 @@ PLAN = pid_plan.build_plan("demo")
 CASE = "case-pid"
 
 
+SWITCH = "OSPREY_POST_INGEST_RESOLUTION"
+
+
+@pytest.fixture(autouse=True)
+def _the_demo_deployment_has_resolution_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The deployment the pack requires (Amendments 33 and 34). The cases about the switch being on
+    set it themselves."""
+    monkeypatch.setenv(SWITCH, "off")
+
+
 @cache
 def _persona() -> Principal:
     """The loader as the seed scopes it to the case: the demo data engineer, OFFICIAL."""
@@ -182,7 +192,7 @@ def _persona() -> Principal:
 def _record(load_id: str, recipe: str, source: str, version: int = 1) -> LoadRecord:
     return LoadRecord(
         load_id=load_id, recipe_id=recipe, recipe_version=version, source=source, started_at=NOW,
-        created_by=seed_pid.ENGINEER_ID, investigation_id=CASE,
+        created_by=seed_pid.ENGINEER_USERNAME, investigation_id=CASE,
     )  # fmt: skip
 
 
@@ -318,8 +328,13 @@ def test_the_loader_is_the_demo_data_engineer_and_not_secret_cleared() -> None:
     from harness.realm import DEMO_ENGINEER_SUBJECT
 
     loader = seed_pid.engineer("verify")
-    assert seed_pid.ENGINEER_ID == DEMO_ENGINEER_SUBJECT == "osprey-demo-engineer"
-    assert loader.id == DEMO_ENGINEER_SUBJECT and loader.org_unit == "verify"
+    assert seed_pid.ENGINEER_USERNAME == DEMO_ENGINEER_SUBJECT == "osprey-demo-engineer"
+    assert loader.id == DEMO_ENGINEER_SUBJECT, "with no --run-as, the username"
+    assert loader.org_unit == "verify"
+    signed_in = seed_pid.engineer("verify", "kc-sub-1234")
+    assert signed_in.id == "kc-sub-1234" and signed_in.roles == loader.roles, (
+        "the id he signs in as"
+    )
     assert loader.clearance == "OFFICIAL", "Amendment 31 withdrew the SECRET-cleared worker"
     held = rights_for(loader.roles)
     assert DATA_ENGINEER <= held, "the data engineer's rights"
@@ -419,7 +434,7 @@ async def _enter(root: Path, calls: _Calls, **overrides: Any) -> dict[str, Any]:
     args: dict[str, Any] = {
         "repo_root": root / "repo", "ontology": ONTOLOGY, "scheme": SCHEME, "commit": commit,
         "compare": compare, "enter": enter, "enter_draft": enter_draft, "check": check, "now": NOW,
-        "worker_unit": "verify", "published_by": seed_pid.ENGINEER_ID,
+        "worker_unit": "verify", "published_by": seed_pid.ENGINEER_USERNAME,
     }  # fmt: skip
     args.update(overrides)
     return await seed_pid.enter_recipes(root, **args)
@@ -449,7 +464,7 @@ async def test_each_recipe_but_the_reports_is_checked_compared_copied_then_enter
         assert kw["source_location"] == _source(root, first_stage.file)
         assert kw["git_path"] == f"recipes/{recipe_id}.yaml"
         assert kw["dataset_id"] == "prison-intelligence" and kw["owning_unit"] == "verify"
-        assert kw["published_by"] == seed_pid.ENGINEER_ID and kw["now"] == NOW
+        assert kw["published_by"] == seed_pid.ENGINEER_USERNAME and kw["now"] == NOW
         assert kw["ontology"] is ONTOLOGY and kw["scheme"] is SCHEME
         (compared,) = [d for n, d in calls.log if n == "compare" and d[0] == recipe_id]
         # the comparison is made about the very row `enter` writes
@@ -508,7 +523,7 @@ async def test_the_reports_recipe_is_entered_as_the_draft_and_never_as_published
     assert recipe_id == "pid-intel-reports"
     assert kw["source_location"] == _source(root, pid_files.REPORTS)
     assert kw["dataset_id"] == "prison-intelligence" and kw["owning_unit"] == "verify"
-    assert kw["created_by"] == seed_pid.ENGINEER_ID
+    assert kw["created_by"] == seed_pid.ENGINEER_USERNAME
     assert kw["pipeline"] == seed_pid.starting_pipeline(_source(root, pid_files.REPORTS))
 
 
@@ -1660,7 +1675,9 @@ async def test_a_reset_reverts_newest_first_then_restores_the_draft_and_the_file
     assert (seed_pid.listed_folder(_root(tmp_path)) / "incoming" / pid_files.BATCH_2).exists()
 
 
-async def test_a_revert_refused_stops_names_it_and_says_to_reseed(tmp_path: Path) -> None:
+async def test_a_revert_refused_stops_names_it_and_gives_the_restore_procedure(
+    tmp_path: Path,
+) -> None:
     world, said = _ResetWorld(_loads(), refuse_at="01E", resting={"same-as-1", "hidden-link"}), []
     _seed_folder(_root(tmp_path), extra=["a_correction.csv"])
     code = await seed_pid.reset_live(**_reset_args(tmp_path, world, said))
@@ -1671,7 +1688,10 @@ async def test_a_revert_refused_stops_names_it_and_says_to_reseed(tmp_path: Path
     assert "restore-draft" not in world.log and "rewrite-reports" not in world.log
     assert "draft-asked" not in world.log
     text = "\n".join(said)
-    assert "01E" in text and "2 live link(s)" in text, "the refusal is named, with its count"
+    assert "01E" in text and "1 live link(s) you can read" in text, "named, readable links only"
+    assert "2 live link(s)" not in text and "hidden-link" not in text and "more" not in text, (
+        "no count of the links the engineer cannot read (Amendment 34)"
+    )
     assert "reverted: 01G, 01F:source" in text
     assert seed_pid.BACKUP_COMMAND in text and seed_pid.RESTORE_COMMAND in text, (
         "the whole restore procedure, the commands to the character"
@@ -1683,37 +1703,66 @@ async def test_a_revert_refused_stops_names_it_and_says_to_reseed(tmp_path: Path
     assert (seed_pid.listed_folder(_root(tmp_path)) / pid_files.BATCH_2).exists()
 
 
-def test_the_restore_procedure_is_the_deployments_own_commands() -> None:
-    """Amendment 33: a stuck rehearsal is restored from a backup taken after seeding. The commands
-    are `ospreyflow backup` and `ospreyflow restore <set> --yes` (`harness.backup`, whose set the
-    verb names in its own output, and `harness.restore`, which is a dry run without `--yes` and
-    refuses a store that is not empty)."""
-    assert seed_pid.BACKUP_COMMAND == "ospreyflow backup"
+def test_the_restore_procedure_restores_the_demo_in_order_and_ends_with_the_reset() -> None:
+    """Amendment 34: a backup holds the stores and not the ingest folder (a host bind mount), so the
+    procedure is: take the backup after seeding; to restore, empty the volumes, bring the stack back
+    up, restore the set, and then run the reset, which removes a released batch 2 and rewrites the
+    reports file."""
+    steps = list(seed_pid.restore_steps())
+    text = "\n".join(steps)
+    where = {
+        name: next(i for i, line in enumerate(steps) if needle in line)
+        for name, needle in {
+            "backup": seed_pid.BACKUP_COMMAND,
+            "empty": "empty the deployment's volumes",
+            "restore": seed_pid.RESTORE_COMMAND,
+            "reset": "--reset-live",
+        }.items()
+    }
+    assert where["backup"] < where["empty"] < where["restore"] < where["reset"]
+    assert where["reset"] == max(
+        i for i, line in enumerate(steps) if line.strip()[:2] in {"1.", "2.", "3.", "4."}
+    ), "the reset is the last numbered step"
+    reset_line = steps[where["reset"]]
     assert (
-        seed_pid.RESTORE_COMMAND
-        == "ospreyflow restore <the folder ospreyflow backup printed> --yes"
+        "python -m scripts.seed_internal prison-intelligence --reset-live --stop-api" in reset_line
     )
-    steps = "\n".join(seed_pid.restore_steps())
-    assert seed_pid.BACKUP_COMMAND in steps and seed_pid.RESTORE_COMMAND in steps
-    assert "empty" in steps.lower(), "the restore refuses a store that is not empty"
-    assert "reseed" not in steps.lower()
+    assert "ingest folder" in text and "batch 2" in text and "reports file" in text, (
+        "it says why: the backup does not hold the ingest folder"
+    )
+    assert "ospreyflow restore" in steps[where["restore"]] and "--yes" in steps[where["restore"]]
+    assert "reseed" not in text.lower()
 
 
-async def test_a_refusal_prints_counts_and_link_types_only_with_show_ids(tmp_path: Path) -> None:
+async def test_a_refusal_prints_a_count_of_readable_links_and_types_and_ids_only_with_show_ids(
+    tmp_path: Path,
+) -> None:
     quiet, shown = [], []
     for said, show in ((quiet, False), (shown, True)):
         world = _ResetWorld(_loads(), refuse_at="01E", resting={"same-as-1", "hidden-link"})
         _seed_folder(_root(tmp_path))
         code = await seed_pid.reset_live(**_reset_args(tmp_path, world, said, show_ids=show))
         assert code == 1
-        assert ("links-asked" in world.log) is show, "the edge read is the operator's, on request"
+        assert "links-asked" in world.log, "the readable count needs the read, shown or not"
     text = "\n".join(quiet)
+    assert "1 live link(s) you can read" in text
     assert "same-as-1" not in text and "SAME_AS" not in text and "hidden-link" not in text
     assert "--show-ids" in text, "it says how to see them"
     text = "\n".join(shown)
     assert "same-as-1" in text and "SAME_AS" in text, "the readable link, by type and id"
-    assert "hidden-link" not in text, "one the persona cannot read is a count"
-    assert "1 more" in text or "1 not shown" in text
+    assert "hidden-link" not in text and "not shown" not in text and "more" not in text
+
+
+async def test_a_long_list_of_readable_links_says_its_total(tmp_path: Path) -> None:
+    said: list[str] = []
+    many = {f"link-{i:03d}" for i in range(seed_pid.LISTED + 7)}
+    world = _ResetWorld(_loads(), refuse_at="01E", resting=many)
+    _seed_folder(_root(tmp_path))
+    await seed_pid.reset_live(**_reset_args(tmp_path, world, said, show_ids=True))
+    text = "\n".join(said)
+    assert f"{len(many)} live link(s) you can read" in text
+    assert f"showing {seed_pid.LISTED} of {len(many)}" in text
+    assert text.count("SAME_AS link-") == seed_pid.LISTED
 
 
 async def test_only_a_refusal_about_links_has_links_to_show(tmp_path: Path) -> None:
@@ -2007,10 +2056,9 @@ async def test_the_fallback_publishes_the_file_as_a_route_would(tmp_path: Path) 
     assert publish["ontology_version"] == ONTOLOGY.version and publish["pack_versions"] == pins
     audit = dict(log)["audit"]
     assert audit["action"] == "publish_studio_recipe" and audit["principal"] is _persona()
-    assert audit["resolved_query"] == {
-        "recipe_id": "pid-intel-reports",
-        "git_path": "recipes/pid-intel-reports.yaml",
-    }
+    query = audit["resolved_query"]
+    assert query["recipe_id"] == "pid-intel-reports"
+    assert query["git_path"] == "recipes/pid-intel-reports.yaml"
     assert audit["result_cardinality"] == 1
 
 
@@ -2261,7 +2309,7 @@ async def test_the_seed_runs_end_to_end_over_fakes_and_prints_its_checks(
     assert "Take a backup now" in out and seed_pid.BACKUP_COMMAND in out, "advice, with the command"
     assert seed_pid.RESTORE_COMMAND in out
     assert "check FAILED" not in out and "at the seed moment" in out
-    assert f"as {seed_pid.ENGINEER_ID}" in out
+    assert f"as {seed_pid.ENGINEER_USERNAME}" in out
 
 
 async def test_a_failed_demo_number_makes_the_seed_exit_non_zero(
@@ -2344,7 +2392,7 @@ async def test_the_seed_writes_the_plans_graph_port_links_inferred_and_a_second_
     for edge in stored:
         assert edge.provenance.state is ProvenanceState.INFERRED
         assert edge.provenance.extracted_by and edge.provenance.extraction_confidence is not None
-        assert edge.audit.created_by == seed_pid.ENGINEER_ID
+        assert edge.audit.created_by == seed_pid.ENGINEER_USERNAME
         assert edge.handling.classification == "OFFICIAL"
     second = await _seed_the_inferred(graph)
     assert (second.written, second.present) == (0, len(planned))
@@ -2427,6 +2475,299 @@ def test_the_reset_chooses_no_load_that_holds_an_inferred_link() -> None:
         seed_pid.incidents_recipe_id(),
         seed_pid.comms_recipe_id(),
     }
+
+
+# --- the resolution switch, checked (Amendment 34) ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(None, True), ("", True), ("on", True), ("ON", True), ("off", False), (" Off ", False)],
+)
+def test_the_switch_is_read_as_the_conduit_reads_it(value: str | None, expected: bool) -> None:
+    environ = {} if value is None else {SWITCH: value}
+    assert seed_pid.resolution_is_on(environ) is expected
+
+
+def test_a_switch_the_conduit_would_refuse_is_refused() -> None:
+    with pytest.raises(seed_pid.SeedRefusal, match=SWITCH):
+        seed_pid.resolution_is_on({SWITCH: "maybe"})
+
+
+def test_the_warning_names_the_osprey_yaml_line_and_the_re_render() -> None:
+    text = "\n".join(seed_pid.resolution_warning())
+    assert "components.post_ingest_resolution: false" in text
+    assert "ospreyflow install" in text and "restart" in text.lower()
+    assert "SAME_AS" in text
+
+
+def test_release_and_reset_refuse_while_resolution_is_on_and_go_on_when_it_is_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _root(tmp_path)
+    _seed_folder(root, batch_two=False)
+    monkeypatch.setenv(SWITCH, "on")
+    assert seed_pid.main(["--release-batch-2", "--ingest-root", str(root)]) == 1
+    err = capsys.readouterr().err
+    assert "components.post_ingest_resolution: false" in err and "SeedRefusal" in err
+    assert not (seed_pid.listed_folder(root) / pid_files.BATCH_2).exists(), "nothing released"
+    monkeypatch.setenv(SWITCH, "off")
+    assert seed_pid.main(["--release-batch-2", "--ingest-root", str(root)]) == 0
+
+
+async def test_the_reset_refuses_while_resolution_is_on_before_it_opens_anything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(SWITCH, "on")
+    args = seed_pid.parse_args(["--reset-live", "--case-name", "X"])
+    with pytest.raises(seed_pid.SeedRefusal, match="components.post_ingest_resolution"):
+        await seed_pid._reset(args, _root(tmp_path))  # would fail on a missing config otherwise
+
+
+async def test_the_seed_and_check_warn_while_resolution_is_on_and_say_nothing_when_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for value, warned in (("on", True), ("off", False)):
+        monkeypatch.setenv(SWITCH, value)
+        resources, registry, _ = _wire_the_seed(
+            monkeypatch, tmp_path, PlanGraph(PLAN, "seed"), _RunLedger()
+        )
+        code = await seed_pid._seed_into(
+            _seed_args(), _root(tmp_path), resources, registry, tmp_path / "repo",
+            seed_pid.engineer(),
+        )  # fmt: skip
+        assert code == 0, "a warning, not a failure"
+        assert ("components.post_ingest_resolution: false" in capsys.readouterr().out) is warned
+    code = await seed_pid.check_case(
+        graph=PlanGraph(PLAN, "seed"), ledger=_RunLedger(), principal=_persona(), plan=PLAN,
+        case_id=CASE, say=print, resolution_on=True,
+    )  # fmt: skip
+    assert code == 0 and "components.post_ingest_resolution: false" in capsys.readouterr().out
+
+
+# --- loads in the engineer's own id (Amendment 34) -----------------------------------------
+
+
+def test_run_as_is_an_argument_and_the_username_is_the_default_and_says_so() -> None:
+    assert seed_pid.parse_args(["--case-name", "X", "--grant", "a=author"]).run_as is None
+    args = seed_pid.parse_args(["--case-name", "X", "--grant", "a=author", "--run-as", "kc-1"])
+    assert args.run_as == "kc-1"
+    assert "kc-1" in seed_pid.run_as_line("kc-1")
+    local = seed_pid.run_as_line(seed_pid.ENGINEER_USERNAME, given=False)
+    assert "username" in local and seed_pid.ENGINEER_USERNAME in local
+
+
+async def test_every_write_of_the_seed_carries_the_id_it_was_told_to_run_as(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The run's principal, the recipe rows' published_by and created_by, the picture principal and
+    the inferred links' creator: one id, the engineer's, never the username when told another."""
+    graph = PlanGraph(PLAN, "seed")
+    graph.drop_edges("PASSES_ITEMS_TO")
+    resources, registry, log = _wire_the_seed(monkeypatch, tmp_path, graph, _RunLedger())
+    seen: dict[str, set[str]] = {"runs": set(), "pictures": set(), "published_by": set()}
+    real_enter = registry.enter_published_for_seed
+
+    async def enter(recipe: Recipe, **kw: Any) -> Any:
+        seen["published_by"].add(kw["published_by"])
+        return await real_enter(recipe, **kw)
+
+    async def draft(recipe: Recipe, **kw: Any) -> Any:
+        seen["published_by"].add(kw["created_by"])
+        return SimpleNamespace(recipe_id=recipe.id, version=1)
+
+    registry.enter_published_for_seed = enter  # type: ignore[method-assign]
+    registry.enter_draft_for_seed = draft  # type: ignore[method-assign]
+
+    async def run_recipe_as(
+        deps: Any, *, principal: Principal, recipe: Any, **kw: Any
+    ) -> LoadReport:
+        seen["runs"].add(principal.id)
+        return LoadReport(load_id="l", recipe_id=recipe.recipe_id, recipe_version=1, rows_read=10)
+
+    class Pictures:
+        def __init__(self, *a: Any, **k: Any) -> None: ...
+
+        async def attach_for_seed(
+            self, case: str, node: str, principal: Principal, **kw: Any
+        ) -> bool:
+            seen["pictures"].add(principal.id)
+            return True
+
+    monkeypatch.setattr(seed_pid, "run_recipe_as", run_recipe_as)
+    monkeypatch.setattr(seed_pid, "EntityPictureService", Pictures)
+    code = await seed_pid._seed_into(
+        _seed_args(), _root(tmp_path), resources, registry, tmp_path / "repo",
+        seed_pid.engineer("verify", "kc-sub-1234"),
+    )  # fmt: skip
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert seen == {
+        "runs": {"kc-sub-1234"},
+        "pictures": {"kc-sub-1234"},
+        "published_by": {"kc-sub-1234"},
+    }
+    assert [e.audit.created_by for e in graph.edges if e.type == "PASSES_ITEMS_TO"] == [
+        "kc-sub-1234"
+    ] * len([1 for e in graph.edges if e.type == "PASSES_ITEMS_TO"])
+    assert "kc-sub-1234" in out
+
+
+async def test_the_reset_reverts_and_restores_the_draft_as_the_id_it_runs_as(
+    tmp_path: Path,
+) -> None:
+    reverted_by: list[str] = []
+    world, said = _ResetWorld(_loads()), []
+
+    async def revert(load_id: str, *, reverted_by: str, deps: Any, now: datetime) -> Any:
+        seen.append(reverted_by)
+        return RevertResult()
+
+    seen = reverted_by
+    _seed_folder(_root(tmp_path))
+    args = _reset_args(tmp_path, world, said) | {
+        "revert": revert,
+        "worker": seed_pid.engineer("verify", "kc-sub-1234"),
+    }
+    assert await seed_pid.reset_live(**args) == 0
+    assert set(reverted_by) == {"kc-sub-1234"} and len(reverted_by) == 5
+
+
+# --- an interrupted stage (Amendment 34) ---------------------------------------------------
+
+
+def test_a_latest_run_that_failed_over_a_standing_load_is_interrupted_not_missing() -> None:
+    record = _record("L1", "r", "/x.csv")
+    failed = _run_row("L2", "r", read=0, outcome="failed")
+    failed.failure = "ArcadeDBError: Remote transaction session not found or expired"
+    found = seed_pid.pick_standing_run([failed], record)
+    assert isinstance(found, seed_pid.Interrupted)
+    assert found.load_id == "L1" and "session not found" in found.failure
+    # a failed run in another case, or an older failure under a newer success, is not one
+    other = _run_row("L2", "r", read=0, outcome="failed", case="another-case")
+    assert seed_pid.pick_standing_run([other], record) is None
+    newer = _run_row("L1", "r", read=10)
+    assert seed_pid.pick_standing_run([newer, failed], record) == seed_pid.StandingRun(10, 0, 0)
+
+
+async def test_an_interrupted_stage_is_reported_with_the_revert_command_and_fails_the_checks(
+    tmp_path: Path,
+) -> None:
+    root = _root(tmp_path)
+    resolved = _resolved(root)
+    loaded = [_record(f"L{i}", r.recipe_id, r.source, r.version) for i, r in enumerate(resolved)]
+
+    async def standing_of(record: LoadRecord) -> Any:
+        if record.load_id == "L11":
+            return seed_pid.Interrupted(record.load_id, "ArcadeDBError: session expired")
+        return seed_pid.StandingRun(rows_read=10, rejected=0, held=0)
+
+    results = await seed_pid.run_stages(resolved, loaded, run=_Runner(), standing_of=standing_of)
+    summary = "\n".join(seed_pid.summary_lines(results, run_as="kc-sub-1234"))
+    line = next(x for x in summary.splitlines() if resolved[11].stage.file in x)
+    assert "INTERRUPTED" in line and "session expired" in line
+    assert "python -m scripts.revert_load L11 --reverted-by kc-sub-1234" in line
+    lines, ok = seed_pid.check_lines(results, {r.stage.file: 10 for r in resolved})
+    assert not ok and sum("FAILED" in x for x in lines) == 1
+    # after that revert the ledger no longer lists the load, and a reseed loads the stage again
+    after = [r for r in loaded if r.load_id != "L11"]
+    runner = _Runner()
+    again = await seed_pid.run_stages(resolved, after, run=runner, standing_of=standing_of)
+    assert runner.ran == [resolved[11].stage.file]
+    assert [r.skipped for r in again].count(False) == 1
+
+
+# --- the fallback checks before it writes, and says what it attested (Amendment 34) ---------------
+
+
+async def test_the_fallback_refuses_a_draft_that_is_not_the_seeds_before_any_write(
+    tmp_path: Path,
+) -> None:
+    log: list[tuple[str, Any]] = []
+    store = _FakeRecipeStore(_draft_row(3, dataset_id="another-dataset"), log)
+    with pytest.raises(seed_pid.SeedRefusal, match="another-dataset"):
+        await seed_pid.publish_reports_fallback(
+            store,
+            _persona(),
+            **_fallback_kwargs(log, tmp_path),  # type: ignore[arg-type]
+        )
+    assert log == [], "nothing was written, committed, verified or audited"
+    log = []
+    store = _FakeRecipeStore(_draft_row(3, label="An engineer's own label"), log)
+    with pytest.raises(seed_pid.SeedRefusal, match="label"):
+        await seed_pid.publish_reports_fallback(
+            store,
+            _persona(),
+            **_fallback_kwargs(log, tmp_path),  # type: ignore[arg-type]
+        )
+    assert log == []
+
+
+async def test_the_fallbacks_audit_entry_records_the_verify_it_did_not_run(tmp_path: Path) -> None:
+    log: list[tuple[str, Any]] = []
+    store = _FakeRecipeStore(_draft_row(3), log)
+    await seed_pid.publish_reports_fallback(
+        store,
+        _persona(),
+        **_fallback_kwargs(log, tmp_path),  # type: ignore[arg-type]
+    )
+    query = dict(log)["audit"]["resolved_query"]
+    assert query["recipe_id"] == "pid-intel-reports" and query["git_path"]
+    assert query["verified_by"] == "operator's attestation"
+    assert "no Verify" in query["verified_note"]
+
+
+# --- the refusals the engine can give, and the lists that say their totals ------------------------
+
+
+@pytest.mark.parametrize("name", ["RowKeyDefinitionChanged", "RowKeyRunInProgress"])
+def test_the_engines_row_key_refusals_are_named_refusals(
+    name: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from services.ingest import engine
+
+    refusal = getattr(engine, name)
+    assert refusal in seed_pid.REFUSALS
+
+    async def raising(*a: Any, **k: Any) -> int:
+        raise refusal("the keys were made under another definition")
+
+    monkeypatch.setattr(seed_pid, "_seed", raising)
+    assert seed_pid.main(["--case-name", "X", "--grant", "a=author"]) == 1
+    assert name in capsys.readouterr().err
+
+
+async def test_every_shortened_list_gives_its_total() -> None:
+    fake = _Pictures(missing={seed_pid.identity_of(PLAN, k)[2] for k in PLAN.picture_subjects[:9]})
+    summary = await seed_pid.seed_pictures(_plan_of(12), find=fake.find, attach=fake.attach)
+    text = "\n".join(seed_pid.picture_lines(summary, 12))
+    assert "9 subject(s) no reference found" in text and "first 5 of 9" in text
+    refused = seed_pid.PictureSummary(
+        refused=[(f"k{i}", "UploadRefusedError: no") for i in range(8)]
+    )
+    text = "\n".join(seed_pid.picture_lines(refused, 8))
+    assert "first 5 of 8" in text and text.count("refused k") == 5
+    missing = seed_pid.InferredSummary(missing=[f"PASSES_ITEMS_TO a{i} -> b" for i in range(7)])
+    text = "\n".join(seed_pid.inferred_lines(missing))
+    assert "first 5 of 7" in text
+
+
+def test_the_stale_wording_is_corrected() -> None:
+    doc = seed_pid.reset_live.__doc__ or ""
+    assert "reseed" not in doc.lower() and "restore" in doc.lower()
+    from services.ingest import load_revert
+
+    links = load_revert.links_resting_on.__doc__ or ""
+    assert (
+        "before it reverts anything" not in links
+        and "so the Prison Intelligence reset" not in links
+    )
+    guide = (Path(seed_pid.__file__).resolve().parents[1] / "DEMO_GUIDE.md").read_text(
+        encoding="utf-8"
+    )
+    row = next(x for x in guide.splitlines() if x.startswith("| **Prison Intelligence Dataset"))
+    assert "each source with its own marking" not in row
+    assert "OFFICIAL" in row and "post_ingest_resolution" in row, "now OFFICIAL, and the switch"
 
 
 # --- `--check`: the demo numbers for the moment the stored loads reach (Amendment 33) -----------

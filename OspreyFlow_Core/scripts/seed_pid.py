@@ -129,7 +129,7 @@ from services.api.studio_recipes import (
 from services.api.working_set.service import WorkingSetService
 from services.api.working_set.store import ValkeyWorkingSetStore
 from services.extract.writer import NodeNotFoundError
-from services.ingest.engine import StaleRecipeError
+from services.ingest.engine import RowKeyDefinitionChanged, RowKeyRunInProgress, StaleRecipeError
 from services.ingest.load_revert import (
     RevertIncomplete,
     RevertRefused,
@@ -165,9 +165,15 @@ from schemas.rights import Right
 #: The dataset's own folder under the ingest root's `uploaded/`, and the dataset it holds.
 FOLDER = PID.id
 INCOMING = "incoming"
-#: The demo data engineer's subject (`harness.realm.DEMO_ENGINEER_SUBJECT`, held equal by a test).
-#: The loads, the reset's reverts and the fallback's publication are all attributed to it.
-ENGINEER_ID = "osprey-demo-engineer"
+#: The demo data engineer's username (`harness.realm.DEMO_ENGINEER_SUBJECT`, held equal by a test).
+#: A deployment's Conduit knows him by his Keycloak subject, which `seed_internal` passes as
+#: `--run-as`; with none (a local stack without Keycloak) the seed loads as this, and says so
+#: (Amendment 34).
+ENGINEER_USERNAME = "osprey-demo-engineer"
+#: How many items of a long list are printed, always with the total (Amendment 34).
+LISTED = 20
+#: The deployment's switch for queued resolution (ADR-127 Amendment 33), as the Conduit reads it.
+RESOLUTION_SWITCH = "OSPREY_POST_INGEST_RESOLUTION"
 #: The demo unit the demo accounts and the seeded case share (`scripts.seed_internal.DEMO_UNIT`).
 WORKER_UNIT = "verify"
 LEGAL_BASIS = "Synthetic demonstration data"
@@ -182,7 +188,9 @@ RESTORE_COMMAND = "ospreyflow restore <the folder ospreyflow backup printed> --y
 
 
 def restore_steps() -> tuple[str, ...]:
-    """The restore procedure as lines, built from the two commands as they stand."""
+    """The restore procedure as lines. A backup holds the stores and not the ingest folder (a host
+    bind mount), so a restore ends with the reset, which removes a released batch 2 and rewrites
+    the reports file (Amendment 34)."""
     return (
         "To get back to the seeded state, restore the backup taken after seeding:",
         f"  1. Take it once the seed has finished, before anything is rehearsed: {BACKUP_COMMAND}",
@@ -190,6 +198,47 @@ def restore_steps() -> tuple[str, ...]:
         "restore refuses a store that is not empty; deploy/RUNBOOK.md has the steps).",
         f"  3. Then: {RESTORE_COMMAND}",
         "     (Without --yes it is a dry run that shows what it would restore.)",
+        "  4. Then put the files right: python -m scripts.seed_internal prison-intelligence "
+        "--reset-live --stop-api",
+        "     (A backup does not hold the ingest folder, so a released batch 2 and an edited "
+        "reports file survive a restore until the reset removes and rewrites them.)",
+    )
+
+
+def resolution_is_on(environ: Mapping[str, str] = os.environ) -> bool:
+    """The switch as the Conduit reads it (`services.api.config`): unset or empty is on; `on` and
+    `off` in any case; anything else is refused by name."""
+    raw = environ.get(RESOLUTION_SWITCH)
+    value = (raw or "on").strip().lower() or "on"
+    if value not in ("on", "off"):
+        raise SeedRefusal(f"{RESOLUTION_SWITCH} must be 'on' or 'off', not {raw!r}")
+    return value == "on"
+
+
+def resolution_warning() -> list[str]:
+    """What an operator is told while the switch is on (Amendment 34)."""
+    return [
+        f"warning: {RESOLUTION_SWITCH} is on in this deployment: a live run of the reports recipe "
+        "queues resolution, whose worker writes SAME_AS links onto the people it made, and every "
+        "rehearsal reset then refuses.",
+        "  Set `components.post_ingest_resolution: false` in osprey.yaml, re-render the deployment "
+        "(`ospreyflow install`) and restart the Conduit.",
+    ]
+
+
+def require_resolution_off(environ: Mapping[str, str] = os.environ) -> None:
+    """`--release-batch-2` and `--reset-live` refuse while the switch is on (Amendment 34): a live
+    run would then make every reset refuse."""
+    if resolution_is_on(environ):
+        raise SeedRefusal("\n".join(resolution_warning()))
+
+
+def run_as_line(run_as: str, *, given: bool = True) -> str:
+    if given:
+        return f"Loading as {run_as} (--run-as)."
+    return (
+        f"Loading as {run_as}, the demo engineer's username: no --run-as was given, so this is a "
+        "local stack without his sign-in subject."
     )
 
 
@@ -230,6 +279,8 @@ REFUSALS: tuple[type[Exception], ...] = (
     RecipeNotRunnableError,
     GitCommitError,
     DatasetRefusedError,
+    RowKeyDefinitionChanged,
+    RowKeyRunInProgress,
 )
 
 
@@ -293,11 +344,17 @@ def stages_to_run() -> tuple[SeedStage, ...]:
     return seed_stages("seed")
 
 
-def engineer(unit: str = WORKER_UNIT) -> Principal:
-    """The demo data engineer, `osprey-demo-engineer`: OFFICIAL, in the demo unit, holding the
-    `data_engineer` role's rights and no more (Amendment 31). Not scoped to a case: the seed scopes
-    it before any write (`seed_all`)."""
-    return Principal(id=ENGINEER_ID, clearance="OFFICIAL", org_unit=unit, roles=["data_engineer"])
+def engineer(unit: str = WORKER_UNIT, run_as: str | None = None) -> Principal:
+    """The demo data engineer: OFFICIAL, in the demo unit, holding the `data_engineer` role's
+    rights and no more (Amendment 31), under the id he signs in as (`run_as`, his Keycloak
+    subject) or, with none, his username (Amendment 34). Not scoped to a case: the seed scopes it
+    before any write (`seed_all`)."""
+    return Principal(
+        id=run_as or ENGINEER_USERNAME,
+        clearance="OFFICIAL",
+        org_unit=unit,
+        roles=["data_engineer"],
+    )
 
 
 def with_edit_graph(principal: Principal) -> Principal:
@@ -546,6 +603,15 @@ class StandingRun:
 
 
 @dataclass(frozen=True)
+class Interrupted:
+    """A stage whose load record stands and whose latest run failed (a run that failed after its
+    transaction committed): not a finished load, and not nothing."""
+
+    load_id: str
+    failure: str
+
+
+@dataclass(frozen=True)
 class StageResult:
     resolved: Resolved
     skipped: bool
@@ -554,9 +620,11 @@ class StageResult:
     #: For a stage not run because its load stands: what the run that made that load read, or None
     #: when no such run can be found in the ledger.
     standing: StandingRun | None = None
+    #: A standing load whose latest run failed (`Interrupted`).
+    interrupted: Interrupted | None = None
 
 
-def pick_standing_run(runs: Sequence[Any], record: LoadRecord) -> StandingRun | None:
+def pick_standing_run(runs: Sequence[Any], record: LoadRecord) -> StandingRun | Interrupted | None:
     """The finished run of the case that made `record`, among a recipe's runs (newest first): found
     by its load id (a pipeline run's branch records carry the run's id as a prefix)."""
     for run in runs:
@@ -568,6 +636,20 @@ def pick_standing_run(runs: Sequence[Any], record: LoadRecord) -> StandingRun | 
             and (record.load_id == run.load_id or record.load_id.startswith(f"{run.load_id}:"))
         ):
             return StandingRun(run.rows_read or 0, run.rows_rejected or 0, run.rows_held or 0)
+    # No finished run made it: if the recipe's latest run in the case failed, the load is what that
+    # run committed before it died, and the stage is interrupted (Amendment 34).
+    latest = next(
+        (
+            r
+            for r in runs
+            if r.recipe_id == record.recipe_id and r.investigation_id == record.investigation_id
+        ),
+        None,
+    )
+    if latest is not None and latest.outcome == "failed":
+        return Interrupted(
+            record.load_id, str(getattr(latest, "failure", None) or "no reason recorded")
+        )
     return None
 
 
@@ -604,7 +686,7 @@ async def run_stages(
     *,
     run: Callable[[Resolved], Awaitable[LoadReport | PipelineRunReport]],
     clock: Callable[[], float] = time.perf_counter,
-    standing_of: Callable[[LoadRecord], Awaitable[StandingRun | None]] | None = None,
+    standing_of: Callable[[LoadRecord], Awaitable[StandingRun | Interrupted | None]] | None = None,
 ) -> list[StageResult]:
     """Runs each stage in the order given, unless the ledger holds its load (a record of the same
     recipe, version and source). The one place a stage is run, so the R17 guard cannot be skipped by
@@ -617,7 +699,10 @@ async def run_stages(
         if key in standing:
             record = next(r for r in loaded if (r.recipe_id, r.recipe_version, r.source) == key)
             made = await standing_of(record) if standing_of is not None else None
-            results.append(StageResult(item, True, None, 0.0, made))
+            if isinstance(made, Interrupted):
+                results.append(StageResult(item, True, None, 0.0, None, made))
+            else:
+                results.append(StageResult(item, True, None, 0.0, made))
             continue
         check_r17_guard(item.recipe_id, [recipe for recipe, _, _ in standing])
         started = clock()
@@ -669,12 +754,20 @@ def _counts(result: StageResult) -> tuple[int, int, int] | None:
     return None
 
 
-def summary_lines(results: Sequence[StageResult]) -> list[str]:
+def summary_lines(results: Sequence[StageResult], *, run_as: str = ENGINEER_USERNAME) -> list[str]:
     """A line for each stage: what it read and made, or that its load stands and what the run that
     made it read."""
     lines: list[str] = []
     for r in results:
         label = f"{r.resolved.recipe_id}: {r.resolved.stage.file}"
+        if r.interrupted is not None:
+            lines.append(
+                f"{label}: INTERRUPTED: its latest run failed ({r.interrupted.failure}) after load "
+                f"{r.interrupted.load_id} was committed. Revert it with `python -m "
+                f"scripts.revert_load {r.interrupted.load_id} --reverted-by {run_as}`, then seed "
+                "again: the stage is loaded afresh."
+            )
+            continue
         if r.skipped or r.report is None:
             if r.standing is not None:
                 lines.append(
@@ -710,6 +803,13 @@ def check_lines(
     ok = True
     for r in results:
         file = r.resolved.stage.file
+        if r.interrupted is not None:
+            ok = False
+            lines.append(
+                f"check FAILED: {file} was interrupted (its latest run failed after load "
+                f"{r.interrupted.load_id} was committed), so it is not a whole load"
+            )
+            continue
         counts = _counts(r)
         if counts is None:
             ok = False
@@ -805,9 +905,14 @@ def picture_lines(summary: PictureSummary, subjects: int) -> list[str]:
         "already had a picture history and were left alone"
     ]
     if summary.missing:
-        lines.append(f"{len(summary.missing)} subject(s) no reference found: {summary.missing[:5]}")
+        lines.append(
+            f"{len(summary.missing)} subject(s) no reference found (first "
+            f"{min(5, len(summary.missing))} of {len(summary.missing)}): {summary.missing[:5]}"
+        )
     for key, why in summary.refused[:5]:
         lines.append(f"refused {key}: {why}")
+    if len(summary.refused) > 5:
+        lines.append(f"  (first 5 of {len(summary.refused)} refusals)")
     lines.append(f"check {'ok' if summary.ok else 'FAILED'}: every picture subject was found")
     return lines
 
@@ -854,6 +959,7 @@ def inferred_links(
 async def seed_inferred_links(
     plan: pid_plan.Plan,
     *,
+    run_as: str = ENGINEER_USERNAME,
     find: Callable[[str, str, str], Awaitable[Any]],
     present: Callable[[str, str, str], Awaitable[bool]],
     write: Callable[[Sequence[Any]], Awaitable[None]],
@@ -879,7 +985,7 @@ async def seed_inferred_links(
             else:
                 pending.append(
                     edge.model_copy(
-                        update={"source": ends[0], "target": ends[1], "created_by": ENGINEER_ID}
+                        update={"source": ends[0], "target": ends[1], "created_by": run_as}
                     )
                 )
     if pending:
@@ -895,6 +1001,8 @@ def inferred_lines(summary: InferredSummary) -> list[str]:
     ]
     for name in summary.missing[:5]:
         lines.append(f"no stored end for {name}")
+    if summary.missing:
+        lines.append(f"  (first {min(5, len(summary.missing))} of {len(summary.missing)} links)")
     lines.append(f"check {'ok' if summary.ok else 'FAILED'}: every inferred link's ends were found")
     return lines
 
@@ -1494,21 +1602,32 @@ def is_starting_draft(row: Any, source_location: str, owning_unit: str) -> bool:
 
 async def _say_resting_links(
     load: LoadRecord,
+    refusal: Any,
     *,
     ledger: _LedgerWithRecords,
     graph: _Graph,
     worker: Principal,
+    show_ids: bool,
     say: Callable[[str], None],
 ) -> None:
-    """The live links outside a load that rest on its nodes, by type and id: for the operator who
-    asked (`--show-ids`), as the persona may read them; one it may not read is a count."""
+    """A refusal because live links outside a load rest on its nodes, in the engineer's own terms
+    (Amendment 34): the links he can read, counted, and by type and id when he asked
+    (`--show-ids`). The refusal's own count includes links he may not read, so it is not printed,
+    and nothing says how many are left out."""
     record = await ledger.load_record(load.load_id)
     resting = await links_resting_on([record], graph) if record is not None else frozenset()  # type: ignore[arg-type]
     readable = await graph.get_edges(sorted(resting), worker) if resting else []
-    for edge in readable:
-        say(f"  {edge.type} {edge.id}")
-    if len(resting) > len(readable):
-        say(f"  and {len(resting) - len(readable)} more, not shown")
+    say(
+        f"load {refusal.load_id!r} cannot be reverted: {len(readable)} live link(s) you can read, "
+        "outside it, rest on nodes it created"
+    )
+    if show_ids:
+        for edge in readable[:LISTED]:
+            say(f"  {edge.type} {edge.id}")
+        if len(readable) > LISTED:
+            say(f"  (showing {LISTED} of {len(readable)})")
+    else:
+        say("(Run with --show-ids to list them by type and id.)")
 
 
 async def reset_live(
@@ -1529,8 +1648,9 @@ async def reset_live(
 ) -> int:
     """The rehearsal reset (Amendment 23, "The reset", as Amendment 32 simplified it). Reverts each
     chosen load, newest first. Exit 0 reset; 1 a revert was refused (it stops, names the refusal by
-    its counts, and says to reseed, with the draft and the files as they were); 2 a revert stopped
-    part way (run it again). Only a complete run restores R9's draft and the files."""
+    its counts, and gives the restore procedure, with the draft and the files as they were); 2 a
+    revert stopped part way (run it again). Only a complete run restores R9's draft and the
+    files."""
     found = await ledger.unreverted_loads(
         case_id, [incidents_recipe_id(), reports_recipe_id(), comms_recipe_id()]
     )
@@ -1538,14 +1658,21 @@ async def reset_live(
     done: list[str] = []
     for load in chosen:
         try:
-            await revert(load.load_id, reverted_by=ENGINEER_ID, deps=deps, now=now)
+            await revert(load.load_id, reverted_by=worker.id, deps=deps, now=now)
         except RevertRefused as refused:
             for refusal in refused.refusals:
-                say(refusal.words())
-            if show_ids and any(r.reason == "rests_on_by_live_links" for r in refused.refusals):
-                await _say_resting_links(load, ledger=ledger, graph=graph, worker=worker, say=say)
-            elif not show_ids:
-                say("(Run with --show-ids to list the links by type and id.)")
+                if refusal.reason == "rests_on_by_live_links":
+                    await _say_resting_links(
+                        load,
+                        refusal,
+                        ledger=ledger,
+                        graph=graph,
+                        worker=worker,
+                        show_ids=show_ids,
+                        say=say,
+                    )
+                else:
+                    say(refusal.words())
             say(
                 f"Stopped at {load.load_id}; reverted: {', '.join(done) or 'none'}. The draft and "
                 "the files are as they were. The reset cannot go on past a revert that refuses, "
@@ -1669,6 +1796,38 @@ async def publish_reports_fallback(
     committed = (FIXTURES / reports_recipe_file()).read_text(encoding="utf-8")
     text = with_version(committed, draft.version)
     recipe = Recipe.model_validate(yaml.safe_load(text))
+    # Before any write (Amendment 34): the row must be the seed's own, and what the writes below
+    # would leave must be the committed file's.
+    foreign = [
+        name
+        for name, got, wanted in (
+            ("dataset_id", draft.dataset_id, FOLDER),
+            ("label", draft.label, recipe.label),
+        )
+        if got != wanted
+    ]
+    if foreign:
+        raise SeedRefusal(
+            f"the draft of {recipe_id} is not the one the seed made: its "
+            f"{', '.join(f'{n} is {getattr(draft, n)!r}' for n in foreign)}, so nothing was written"
+        )
+    fields = connect_fields(recipe)
+    would_leave = draft.model_copy(
+        update={
+            "connector_profile": fields["connector_profile"],
+            "handling": fields["handling"],
+            "legal_basis": fields["legal_basis"],
+            "deduplicate": recipe.deduplicate,
+            "row_template": recipe.row_template,
+            "unmapped_fields": list(recipe.unmapped_fields),
+        }
+    )
+    differing_before = row_differences(would_leave, recipe)
+    if differing_before:
+        raise SeedRefusal(
+            f"the writes would leave {recipe_id} differing from the committed file in "
+            f"{', '.join(differing_before)}, so nothing was written"
+        )
     check_seeded_recipe(recipe.model_copy(update={"pipeline": draft.pipeline}), ontology, scheme)
     if draft.pipeline is not None:
         unrunnable = pipeline_run_violations(draft.pipeline)
@@ -1677,7 +1836,6 @@ async def publish_reports_fallback(
                 "the pipeline cannot be published, as the route refuses it: "
                 f"{'; '.join(unrunnable)}"
             )
-    fields = connect_fields(recipe)
     await store.update_draft(
         recipe_id,
         principal,
@@ -1725,7 +1883,13 @@ async def publish_reports_fallback(
     await audit.record(
         principal=principal,
         action="publish_studio_recipe",
-        resolved_query={"recipe_id": recipe_id, "git_path": git_path},
+        resolved_query={
+            "recipe_id": recipe_id,
+            "git_path": git_path,
+            # `mark_verified` above is the operator's say-so: no Verify ran (Amendment 34).
+            "verified_by": "operator's attestation",
+            "verified_note": "no Verify ran; the committed file is what the golden test ran",
+        },
         result_cardinality=1,
     )
     return cast(StudioRecipeDraft, published)
@@ -1744,6 +1908,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", WORKER_UNIT))
     parser.add_argument(
         "--ingest-root", type=Path, default=None, help="Default: OSPREY_INGEST_ROOT."
+    )
+    parser.add_argument(
+        "--run-as",
+        default=None,
+        help="The principal id to load as: the demo engineer's sign-in subject. Default: his "
+        "username, which a local stack without a sign-in has.",
     )
     parser.add_argument(
         "--show-ids",
@@ -1801,7 +1971,7 @@ async def _seed(args: argparse.Namespace, root: Path) -> int:
     try:
         # Before the case is made and before a file is written (Amendment 30).
         agree_on_repository(repo_root, resources.recipe_repo_root)
-        base = engineer(args.org_unit)
+        base = engineer(args.org_unit, args.run_as)
         await _find_case(config.postgres.dsn, args, base)  # refuses two cases of one name
         store = await StudioRecipeStore.connect(config.postgres.dsn)
         try:
@@ -1820,6 +1990,10 @@ async def _seed_into(
     repo_root: Path,
     base: Principal,
 ) -> int:
+    print(run_as_line(base.id, given=args.run_as is not None))
+    if resolution_is_on():
+        for line in resolution_warning():
+            print(line)
     case_id = await scope_for(args, seeder=base, dataset=PID)
     plan = pid_plan.build_plan("demo")
     print(f"Writing the files into {listed_folder(root)} ...", flush=True)
@@ -1848,12 +2022,12 @@ async def _seed_into(
                 check=check_seeded_recipe,
                 now=datetime.now(UTC),
                 worker_unit=args.org_unit,
-                published_by=ENGINEER_ID,
+                published_by=base.id,
             )
         )
         print(f"  {len(entered)} recipe(s) in the registry: the reports recipe is the draft.")
 
-    async def standing_of(record: LoadRecord) -> StandingRun | None:
+    async def standing_of(record: LoadRecord) -> StandingRun | Interrupted | None:
         runs = await resources.recipe_runs.for_recipe(record.recipe_id, limit=500)
         return pick_standing_run(runs, record)
 
@@ -1898,7 +2072,7 @@ async def _seed_into(
 
         inferred.append(
             await seed_inferred_links(
-                plan, find=find, present=present, write=write, now=datetime.now(UTC)
+                plan, run_as=base.id, find=find, present=present, write=write, now=datetime.now(UTC)
             )
         )
         return results
@@ -1938,7 +2112,7 @@ async def _seed_into(
         base, scope=scope, enter_recipes=recipes, run=run, pictures=pictures, checks=checks
     )
     draft = await store.get(reports_recipe_id())
-    for line in summary_lines(results):
+    for line in summary_lines(results, run_as=base.id):
         print(line)
     for line in measurement_lines(
         results,
@@ -1974,6 +2148,7 @@ async def check_case(
     plan: pid_plan.Plan,
     case_id: str,
     say: Callable[[str], None],
+    resolution_on: bool = False,
 ) -> int:
     """Every demo number for the moment the case's stored loads reach (`moment_of`), as `principal`,
     loading nothing. 0 when every number held (one not run is not a failure), 1 when one failed."""
@@ -1981,6 +2156,9 @@ async def check_case(
         case_id, [incidents_recipe_id(), reports_recipe_id(), comms_recipe_id()]
     )
     moment = moment_of(standing)
+    if resolution_on:
+        for line in resolution_warning():
+            say(line)
     say(f"The demo numbers, at the {moment} moment, as {principal.id}:")
     lines, ok = demo_check_lines(await run_demo_checks(graph, principal, plan, moment))
     for line in lines:
@@ -1992,7 +2170,7 @@ async def _check(args: argparse.Namespace) -> int:
     """`--check`: reads the graph, the dataset store and the run ledger, and opens nothing else.
     Not `build_run_resources`, which opens DuckDB (one writer), so this runs with the Conduit up."""
     config = ApiConfig.from_env()
-    base = engineer(args.org_unit)
+    base = engineer(args.org_unit, args.run_as)
     case_id = await _find_case(config.postgres.dsn, args, base)
     if case_id is None:
         raise SeedRefusal("there is no such case to check")
@@ -2009,6 +2187,7 @@ async def _check(args: argparse.Namespace) -> int:
             plan=pid_plan.build_plan("demo"),
             case_id=case_id,
             say=print,
+            resolution_on=resolution_is_on(),
         )
     finally:
         await ledger.close()
@@ -2017,8 +2196,9 @@ async def _check(args: argparse.Namespace) -> int:
 
 
 async def _reset(args: argparse.Namespace, root: Path) -> int:
+    require_resolution_off()
     config = ApiConfig.from_env()
-    base = engineer(args.org_unit)
+    base = engineer(args.org_unit, args.run_as)
     case_id = await _find_case(config.postgres.dsn, args, base)
     if case_id is None:
         print("There is no such case, so there is nothing to reset.")
@@ -2055,7 +2235,7 @@ async def _reset(args: argparse.Namespace, root: Path) -> int:
             try:
                 await store.restore_to_draft(
                     reports_recipe_id(),
-                    created_by=ENGINEER_ID,
+                    created_by=base.id,
                     owning_unit=args.org_unit,
                     now=datetime.now(UTC),
                     pipeline=pipeline,
@@ -2066,7 +2246,7 @@ async def _reset(args: argparse.Namespace, root: Path) -> int:
                     source_location=source,
                     dataset_id=FOLDER,
                     owning_unit=args.org_unit,
-                    created_by=ENGINEER_ID,
+                    created_by=base.id,
                     now=datetime.now(UTC),
                     pipeline=pipeline,
                 )
@@ -2098,7 +2278,7 @@ async def _fallback(args: argparse.Namespace) -> int:
     store = await StudioRecipeStore.connect(dsn)
     audit = await AuditWriter.connect(dsn)
     try:
-        principal = engineer(args.org_unit).model_copy(update={"datasets": [FOLDER]})
+        principal = engineer(args.org_unit, args.run_as).model_copy(update={"datasets": [FOLDER]})
         published = await publish_reports_fallback(
             store,
             principal,
@@ -2125,6 +2305,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     root = args.ingest_root or ingest_root()
     try:
         if args.mode == "release":
+            require_resolution_off()
             print(release_batch_2(root))
             return 0
         if args.mode == "reset":

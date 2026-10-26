@@ -387,7 +387,7 @@ def scan_seed() -> list[Hit]:
 
     hits: list[Hit] = []
     for name in (
-        "FOLDER", "INCOMING", "ENGINEER_ID", "WORKER_UNIT", "LEGAL_BASIS", "BACKUP_COMMAND",
+        "FOLDER", "INCOMING", "ENGINEER_USERNAME", "WORKER_UNIT", "LEGAL_BASIS", "BACKUP_COMMAND",
         "RESTORE_COMMAND", "FALLBACK_SKIPS",
     ):  # fmt: skip
         hits += _scan(f"seed constant {name}", str(getattr(seed_pid, name)))

@@ -141,11 +141,18 @@ def test_the_engineer_edits_and_the_report_viewer_reads_each_seeded_case_where_t
     subs = {**SUBS, DEMO_ENGINEER_SUBJECT: "sub-eng-333", DEMO_REPORT_VIEWER_SUBJECT: "sub-rv-444"}
     call = _seed_call(_run_and_return(repo, subs=subs))
     grants = sorted(call[i + 1] for i, a in enumerate(call) if a == "--grant")
-    assert grants == ["sub-admin-111=author", "sub-analyst-222=editor", "sub-eng-333=editor", "sub-rv-444=viewer"]
+    assert grants == [
+        "sub-admin-111=author",
+        "sub-analyst-222=editor",
+        "sub-eng-333=editor",
+        "sub-rv-444=viewer",
+    ]
     (repo.parent / "OspreyFlow_Data" / "Enron_Mails").mkdir(parents=True, exist_ok=True)
     real = _seed_call(_run_and_return(repo, subs=subs, dataset="enron"))
     real_grants = sorted(real[i + 1] for i, a in enumerate(real) if a == "--grant")
-    assert real_grants == ["sub-admin-111=author", "sub-analyst-222=editor"], "a real dataset goes to no further persona"
+    assert real_grants == ["sub-admin-111=author", "sub-analyst-222=editor"], (
+        "a real dataset goes to no further persona"
+    )
 
 
 def test_it_refuses_when_the_conduit_is_running_and_says_which_flag_to_use(repo: Path) -> None:
@@ -1024,7 +1031,9 @@ def test_check_is_a_one_shot_that_leaves_the_conduit_running_and_names_the_case(
         "prison-intelligence", repo, run=runner, lookup_subs=lambda d: {},
         api_running=lambda c: True, check=True,
     )  # fmt: skip
-    verbs = [next((a for a in c if a in {"stop", "run", "up", "restart"}), None) for c in runner.calls]
+    verbs = [
+        next((a for a in c if a in {"stop", "run", "up", "restart"}), None) for c in runner.calls
+    ]
     assert verbs == ["run"], "one one-shot, and the Conduit left as it was"
     call = _seed_call(runner)
     assert call[call.index("-m") + 1] == "scripts.seed_pid" and "--check" in call
@@ -1055,3 +1064,59 @@ def test_the_command_line_accepts_check(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
     assert seed_internal.main(["prison-intelligence", "--check"]) == 0
     assert seen["check"] is True and seen["reset_live"] is False and seen["stop_api"] is False
+
+
+# --- the switch, the engineer's own id and the connectors reach every container (Amendment 34) ----
+
+
+ENGINEER = "osprey-demo-engineer"
+SWITCH = "OSPREY_POST_INGEST_RESOLUTION"
+
+
+def _env_args(call: list[str]) -> list[str]:
+    return [call[i + 1] for i, a in enumerate(call) if a == "-e"]
+
+
+def _all_steps(repo: Path, runner: Runner, subs: dict[str, str]) -> dict[str, list[str]]:
+    """The one-shot of each kind of step: the seed, the reset and the three mid-demo commands."""
+    steps = {
+        "seed": {},
+        "reset": {"reset_live": True},
+        "release": {"release_batch_2": True},
+        "fallback": {"publish_reports_fallback": True},
+        "check": {"check": True},
+    }
+    calls: dict[str, list[str]] = {}
+    for name, kwargs in steps.items():
+        runner.calls.clear()
+        seed_internal.seed_internal(
+            "prison-intelligence", repo, run=runner, lookup_subs=lambda d: subs,
+            api_running=lambda c: False, **kwargs,  # type: ignore[arg-type]
+        )  # fmt: skip
+        calls[name] = _seed_call(runner)
+    return calls
+
+
+@pytest.mark.parametrize(("rendered", "passed"), [("off", "off"), ("on", "on"), (None, "on")])
+def test_the_deployments_rendered_switch_is_passed_into_every_one_shot(
+    repo: Path, rendered: str | None, passed: str
+) -> None:
+    env = repo / "deploy" / "generated" / "local-lite" / "deployment.env"
+    text = "OSPREY_KEYCLOAK_PORT=8081\n" + (f"{SWITCH}={rendered}\n" if rendered else "")
+    env.write_text(text, encoding="utf-8")
+    for name, call in _all_steps(repo, Runner(), SUBS).items():
+        assert f"{SWITCH}={passed}" in _env_args(call), name
+
+
+def test_the_engineers_sign_in_subject_is_passed_as_run_as_where_it_is_known(repo: Path) -> None:
+    known = {**SUBS, ENGINEER: "kc-engineer-333"}
+    for name, call in _all_steps(repo, Runner(), known).items():
+        assert call[call.index("--run-as") + 1] == "kc-engineer-333", name
+    for name, call in _all_steps(repo, Runner(), SUBS).items():
+        assert "--run-as" not in call, f"{name}: a local stack takes the username, and says so"
+
+
+def test_the_connector_layouts_are_mounted_into_every_one_shot_once(repo: Path) -> None:
+    for name, call in _all_steps(repo, Runner(), SUBS).items():
+        mounts = [call[i + 1] for i, a in enumerate(call) if a == "-v"]
+        assert mounts.count(f"{repo}/connectors:/app/connectors:ro") == 1, name

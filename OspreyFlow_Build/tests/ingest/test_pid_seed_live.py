@@ -1,5 +1,5 @@
 """The Prison Intelligence seed against the real stores (ADR-127 Amendment 23; Amendment 32 trimmed
-the live cases to these three).
+the live cases to three; Amendment 34 added a fourth, the switch on).
 
 **Live, slow, and outside `make ci`.** Every case reads the real ArcadeDB, Postgres, Valkey and
 DuckDB of the throwaway stack (`ARCADEDB_*`, `POSTGRES_*`, `VALKEY_*`, `ANALYTICS_DB_PATH`), seeds
@@ -29,6 +29,11 @@ What each case would catch:
   with it a link an analyst made that rests on nothing the reset reverts. The rehearsal runs the
   reports recipe twice, since a rehearsal that is run twice leaves two loads to revert; **R9
   published live runs through the pipeline path** (`PipelineRunReport`, not a plain load);
+- **`test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job`** (Amendment 34): the
+  other half of Amendment 33. With the deployment's switch on, a live run of the reports recipe
+  through the deployment's real job queue enqueues a `Person` resolution job. The reset test below
+  runs its chapter-4 and chapter-9 loads through the same queue with the switch off and asserts none
+  was enqueued, so it can fail for the reason Amendment 33 names;
 - **`test_the_demo_analyst_fetches_one_picture_through_the_picture_route`**: a picture the seed
   attached that the demo analyst, cleared to OFFICIAL and in the case, cannot fetch (Brief 2
   section 7.1 4a). It calls the route's own function, `entity_picture_file_route`, with the real
@@ -45,6 +50,7 @@ checks.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import os
 import re
 import subprocess
@@ -70,6 +76,7 @@ from services.api.studio_publish import commit_recipe_file
 from services.api.studio_recipes import StudioRecipeStore
 from services.api.working_set.service import WorkingSetService
 from services.api.working_set.store import ValkeyWorkingSetStore
+from services.resolve.trigger import JOB_TYPE_RESOLVE_ENTITY_TYPE
 
 from conduit_common.identity import new_edge_id
 from demo_fixtures import pid_files, pid_plan, pid_writes
@@ -109,6 +116,8 @@ def _environment() -> dict[str, str]:
     env["OSPREY_INGEST_ROOT"] = str(INGEST)
     env["OSPREY_RECIPE_REPO_ROOT"] = str(RECIPES)
     env.setdefault("OIDC_JWKS_URL", "http://localhost:9/jwks")
+    # The deployment the pack requires: the seed's reset and release refuse while it is on.
+    env["OSPREY_POST_INGEST_RESOLUTION"] = "off"
     env["PYTHONPATH"] = os.pathsep.join([str(CORE), str(CORE / "packages")])
     return env
 
@@ -146,11 +155,12 @@ class Live:
 
 
 @asynccontextmanager
-async def opened() -> AsyncIterator[Live]:
+async def opened(*, resolution: bool = False) -> AsyncIterator[Live]:
     """The stores, as the seed opens them (closed again on exit, so the subprocess can take
-    DuckDB's lock)."""
+    DuckDB's lock), with the deployment's post-ingest resolution switch as given: off, as the pack
+    requires, unless a case says otherwise."""
     os.environ.setdefault("OIDC_JWKS_URL", "http://localhost:9/jwks")
-    config = ApiConfig.from_env()
+    config = dataclasses.replace(ApiConfig.from_env(), post_ingest_resolution=resolution)
     resources = await build_run_resources(config)
     resources.recipe_repo_root = RECIPES
     store = await StudioRecipeStore.connect(config.postgres.dsn)
@@ -306,7 +316,11 @@ async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> N
             commit=commit_recipe_file, audit=live.resources.audit, now=datetime.now(UTC),
         )  # fmt: skip
         assert published.status is StudioRecipeStatus.PUBLISHED and published.pipeline is not None
-        deps = seed_pid.without_post_ingest_resolution(live.resources.run_deps())
+        # The deployment's own path: its real job queue and its configured switch (off).
+        deps = live.resources.run_deps()
+        assert deps.config.post_ingest_resolution is False
+        queue = live.resources.jobs.stream_key(JOB_TYPE_RESOLVE_ENTITY_TYPE)
+        queued_before = await live.resources.valkey.xlen(queue)
         rows = {
             reports_id: published,
             seed_pid.incidents_recipe_id(): await live.store.get(seed_pid.incidents_recipe_id()),
@@ -334,6 +348,9 @@ async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> N
         seed_pid.release_batch_2(INGEST)
         loaded = await seed_pid.loaded_so_far(live.resources.recipe_runs, live.case_id, stages)
         await seed_pid.run_stages(stages[2:], loaded, run=run)
+        assert await live.resources.valkey.xlen(queue) == queued_before, (
+            "with the switch off the rehearsal's loads enqueued no resolution job"
+        )
         rehearsed = await snapshot(live)
         assert rehearsed["nodes"] != start["nodes"] or rehearsed["links"] != start["links"]
         assert len(rehearsed["loads"]) > len(start["loads"]) + 3, "two reports loads, R17, batch 2"
@@ -369,6 +386,34 @@ async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> N
     assert not (listed / pid_files.BATCH_2).exists(), "batch 2 is out of the listing again"
     assert (listed / "incoming" / pid_files.BATCH_2).is_file()
     assert (listed / pid_files.REPORTS).read_bytes() == start_reports
+
+
+async def test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job(seeded: str) -> None:
+    ontology, scheme = load_deployment_ontology(), load_uk_le_scheme()
+    async with opened(resolution=True) as live:
+        deps = live.resources.run_deps()
+        assert deps.config.post_ingest_resolution is True
+        queue = live.resources.jobs.stream_key(JOB_TYPE_RESOLVE_ENTITY_TYPE)
+        before = await live.resources.valkey.xlen(queue)
+        published = await seed_pid.publish_reports_fallback(
+            live.store,
+            live.persona.model_copy(update={"datasets": [PID.id]}),
+            ontology=ontology, scheme=scheme, repo_root=RECIPES, commit=commit_recipe_file,
+            audit=live.resources.audit, now=datetime.now(UTC),
+        )  # fmt: skip
+        report = await run_recipe_as(
+            deps, principal=live.persona, recipe=published, investigation_id=live.case_id,
+            source_location=seed_pid.source_of(INGEST, pid_files.REPORTS), trigger="manual",
+        )  # fmt: skip
+        assert isinstance(report, PipelineRunReport) and report.nodes_created > 0
+        after = await live.resources.valkey.xlen(queue)
+        assert after > before, "a resolution job was enqueued: the switch is what stops it"
+        entries = await live.resources.valkey.xrevrange(queue, count=after - before)
+        for entry_id, _fields in entries:  # leave the queue as it was: nothing here is to resolve
+            await live.resources.valkey.xdel(queue, entry_id)
+    # the reports load is reverted, and the draft restored, by the reset
+    done = run_seed("--reset-live")
+    assert done.returncode == 0, _said(done)
 
 
 async def test_the_demo_analyst_fetches_one_picture_through_the_picture_route(seeded: str) -> None:
