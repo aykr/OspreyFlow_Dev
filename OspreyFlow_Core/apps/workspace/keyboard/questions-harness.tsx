@@ -7,15 +7,44 @@ import { createRoot } from "react-dom/client";
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { Drawer } from "../src/design/primitives/Drawer";
+import { bringFactIntoView, type FactCanvas } from "../src/questions/graphFacts";
 import { QuestionsPanel } from "../src/questions/QuestionsPanel";
 
 declare global {
   interface Window {
-    __QUESTIONS__?: { deltas: unknown[]; opened: string | null; closed?: number };
+    __QUESTIONS__?: {
+      deltas: unknown[];
+      opened: string | null;
+      closed?: number;
+      /** What the canvas was told by a chosen `[G-n]`: the same `bringFactIntoView` `App.tsx` calls,
+       * against a canvas that records. */
+      canvas: { selectedLink: string | null; selectedNodes: string[]; centred: string | null };
+      /** What the last question asked about, as the panel sent it. */
+      scope?: unknown;
+    };
   }
 }
 
-window.__QUESTIONS__ = { deltas: [], opened: null, closed: 0 };
+window.__QUESTIONS__ = {
+  deltas: [],
+  opened: null,
+  closed: 0,
+  canvas: { selectedLink: null, selectedNodes: [], centred: null },
+};
+
+const canvas: FactCanvas = {
+  highlightNodes: (ids) => {
+    window.__QUESTIONS__!.canvas.selectedNodes = [...ids];
+    window.__QUESTIONS__!.canvas.selectedLink = null;
+  },
+  selectLink: (id) => {
+    window.__QUESTIONS__!.canvas.selectedLink = id;
+    window.__QUESTIONS__!.canvas.selectedNodes = [];
+  },
+  centreOn: (id) => {
+    window.__QUESTIONS__!.canvas.centred = id;
+  },
+};
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
@@ -31,6 +60,8 @@ createRoot(container).render(
     onOpenDocument={(id) => {
       window.__QUESTIONS__!.opened = id;
     }}
+    selection={{ nodeIds: ["n-dana"], linkIds: [] }}
+    onSelectFacts={(citation) => bringFactIntoView(canvas, citation)}
     />
   </Drawer>,
 );

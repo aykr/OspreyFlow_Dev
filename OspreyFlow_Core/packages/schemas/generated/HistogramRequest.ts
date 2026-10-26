@@ -67,5 +67,6 @@ export interface ValueFilters {
 export interface InheritedEvents {
   scopes?: Scopes;
   edge_ids?: EdgeIds1;
+  window?: Interval | null;
   [k: string]: unknown;
 }

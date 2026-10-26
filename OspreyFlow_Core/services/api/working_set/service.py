@@ -34,7 +34,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -1278,6 +1278,42 @@ class WorkingSetService:
         # The hidden count is 0 on purpose: a figure here would tell the asker how many of the
         # ids they named exist but are hidden from them.
         return visible_nodes, visible_edges, 0
+
+    async def branch_lit_contents(
+        self,
+        source_investigation_id: str,
+        principal: Principal,
+        node_ids: Sequence[NodeId],
+        lit_edge_ids: Collection[EdgeId],
+    ) -> tuple[list[Node], list[Edge]]:
+        """What a branch of what is lit would hold for `principal` (ADR-128 decision 2): the lit
+        links and the nodes they touch, and nothing else, so the branch's own timeline lies inside
+        the window. `lit_edge_ids` is the analytics port's answer for the window, already filtered
+        for `principal` in its own query; it is intersected here with the links `principal` may see
+        in the source case, so a link they may not see, or one this case does not hold, lights
+        nothing. A node is kept only where `node_ids` names it and a lit link touches it, so an id
+        they may not see, a made-up one, and a real one no lit link touches are all simply absent,
+        and `NothingToBranchError` is the same whatever the reason. A link is kept only when both
+        its ends are kept. A slice past the cap is the typed `LimitExceededError` with the slice's
+        own figures, which are the reader's (rule 3). Nothing is written, so the route calls it
+        before it creates the case."""
+        stored_nodes = await self._store.source_fidelity_nodes(source_investigation_id)
+        stored_edges = await self._store.source_fidelity_edges(source_investigation_id)
+        visible_nodes, visible_edges, _ = self._project(
+            list(stored_nodes.values()), list(stored_edges.values()), principal
+        )
+        lit_links = [e for e in visible_edges if e.id in lit_edge_ids]
+        touched = {end for e in lit_links for end in (e.source, e.target)}
+        named = set(node_ids)
+        kept = {n.id for n in visible_nodes if n.id in touched and n.id in named}
+        nodes = [n for n in visible_nodes if n.id in kept]
+        edges = [e for e in lit_links if e.source in kept and e.target in kept]
+        if not nodes:
+            raise NothingToBranchError
+        breach = _cap_breach(len(nodes), len(edges))
+        if breach is not None:
+            raise LimitExceededError(breach)
+        return nodes, edges
 
     async def branch(
         self,

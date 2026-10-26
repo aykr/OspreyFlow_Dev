@@ -22,8 +22,20 @@ const ANSWER = {
   created_at: "2026-10-07T10:00:00Z",
 };
 
-async function serve(page: Page, history: unknown[] = []) {
+// ADR-129: an answer that cites two graph facts; the Glass maps a number to ids from the payload.
+const FACT_ANSWER = {
+  ...ANSWER,
+  id: "q2",
+  answer: "Rohan is tied to Dana [G-1]; Dana called Callum [G-2].",
+  graph_citations: [
+    { number: 1, label: "[G-1]", node_ids: ["n-rohan", "n-dana"], link_ids: ["l-assoc"] },
+    { number: 2, label: "[G-2]", node_ids: ["n-dana", "n-callum"], link_ids: ["l-called"] },
+  ],
+};
+
+async function serve(page: Page, history: unknown[] = [], answer: unknown = ANSWER) {
   const asked: string[] = [];
+  const scopes: unknown[] = [];
   const decided: string[] = [];
   await page.route("**/*/v1/investigations/b1/questions**", async (route) => {
     const request = route.request();
@@ -32,15 +44,17 @@ async function serve(page: Page, history: unknown[] = []) {
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
     if (request.method() === "GET") return json(200, history);
     if (url.endsWith("/questions")) {
-      asked.push((request.postDataJSON() as { question: string }).question);
-      return json(200, ANSWER);
+      const posted = request.postDataJSON() as { question: string };
+      asked.push(posted.question);
+      scopes.push(posted);
+      return json(200, answer);
     }
     decided.push(url.split("/questions/")[1]!);
     if (url.endsWith("/accept")) return json(200, { node_id: "n9", delta: { seq: 2, op: "add", nodes: [], edges: [] } });
     return json(200, { rejected: true });
   });
   await page.goto("/keyboard/questions-harness.html");
-  return { asked, decided };
+  return { asked, decided, scopes };
 }
 
 test("Ctrl+Enter in the question asks it, and the answer joins the conversation", async ({ page }) => {
@@ -102,6 +116,25 @@ test("a proposal is rejected by keyboard, and nothing reaches the view", async (
   await expect(page.getByText("Rejected")).toBeVisible();
   expect(await page.evaluate(() => window.__QUESTIONS__?.deltas.length)).toBe(0);
   registerCovered(REGISTRY, "reject-a-proposal-by-keyboard");
+});
+
+test("asking, then choosing a [G-n] from the answer by keyboard selects what it stands for and brings it into view", async ({ page }) => {
+  // ADR-129 decision 1: ask (the selection goes with the question), Tab to a cited fact, Enter.
+  const { scopes } = await serve(page, [], FACT_ANSWER);
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("Who is connected to Dana?");
+  await page.keyboard.press("Control+Enter");
+  const fact = page.getByRole("button", { name: "Select [G-2] on the canvas" });
+  await expect(fact).toBeVisible();
+  expect(scopes).toEqual([
+    { question: "Who is connected to Dana?", selected_node_ids: ["n-dana"], selected_link_ids: [] },
+  ]);
+  await fact.focus();
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(() => page.evaluate(() => window.__QUESTIONS__?.canvas))
+    .toEqual({ selectedLink: "l-called", selectedNodes: [], centred: "n-dana" });
+  registerCovered(REGISTRY, "select-a-graph-fact-from-an-answer-by-keyboard");
 });
 
 test("every registered questions action has its own proving test case above", () => {

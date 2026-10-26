@@ -91,8 +91,8 @@ def _graph() -> _Graph:
     return _Graph(
         ("Person", "prison_number", "Z1234ZZ", _person("p1", prison_number="Z1234ZZ")),
         ("Person", "nino", "QQ123456A", _person("p2", nino="QQ123456A")),
-        ("Endpoint", "value_normalised", "+447700900640",
-         _endpoint("e1", "+447700900640", "msisdn")),
+        ("Endpoint", "value_normalised", "+447700900123",
+         _endpoint("e1", "+447700900123", "msisdn")),
         ("Endpoint", "value_normalised", "SYN-70417", _endpoint("e2", "SYN-70417", "account")),
         # An endpoint of another kind holding a value an account reference reads as.
         ("Endpoint", "value_normalised", "PIN-Z2345ZZ", _endpoint("e3", "PIN-Z2345ZZ", "handle")),
@@ -101,24 +101,24 @@ def _graph() -> _Graph:
 
 async def test_mixed_kinds_resolve_through_the_access_filtered_lookup() -> None:
     graph = _graph()
-    typed = ["Z1234ZZ, QQ123456A\n07700900640 SYN-70417", "Z9999ZZ", "hello"]
+    typed = ["Z1234ZZ, QQ123456A\n07700900123 SYN-70417", "Z9999ZZ", "hello"]
     result = await resolve_identifiers(graph, typed, ANALYST)
     assert result.counts == IdentifierCounts(read=6, found=4, matched_nothing=2, repeated=0)
     assert [n.id for n in result.nodes] == ["p1", "p2", "e1", "e2"]
     assert ("Person", "prison_number", "Z1234ZZ") in graph.calls
     assert ("Person", "nino", "QQ123456A") in graph.calls
-    assert ("Endpoint", "value_normalised", "+447700900640") in graph.calls
+    assert ("Endpoint", "value_normalised", "+447700900123") in graph.calls
     assert ("Endpoint", "value_normalised", "SYN-70417") in graph.calls
 
 
 async def test_three_spellings_of_one_number_count_once() -> None:
     graph = _graph()
     result = await resolve_identifiers(
-        graph, ["+447700900640\n07700 900640\n0044 7700 900640"], ANALYST
+        graph, ["+447700900123\n07700 900123\n0044 7700 900123"], ANALYST
     )
     assert [n.id for n in result.nodes] == ["e1"]
     assert result.counts == IdentifierCounts(read=3, found=3, matched_nothing=0, repeated=2)
-    assert graph.calls == [("Endpoint", "value_normalised", "+447700900640")]
+    assert graph.calls == [("Endpoint", "value_normalised", "+447700900123")]
 
 
 async def test_a_repeated_identifier_adds_one_node() -> None:
@@ -151,7 +151,7 @@ async def test_an_endpoint_of_another_kind_is_not_a_match() -> None:
 async def test_a_hidden_identifier_and_a_made_up_one_give_the_same_counts_and_work() -> None:
     """The graph holds a person at `Z5555ZZ` the principal may not see, so it answers `None` for it,
     as for `Z6666ZZ`, which nobody holds: same shape, same figure, same single lookup each."""
-    around = ["Z1234ZZ", "07700 900640"]
+    around = ["Z1234ZZ", "07700 900123"]
     hidden_graph, made_up_graph = _graph(), _graph()
     hidden = await resolve_identifiers(hidden_graph, [*around, "Z5555ZZ"], ANALYST)
     made_up = await resolve_identifiers(made_up_graph, [*around, "Z6666ZZ"], ANALYST)

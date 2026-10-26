@@ -541,6 +541,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `components` | section | — | Which stores the deployment runs, and where their data lives. |
 | `components.graph_store` | `arcadedb` \| `janusgraph` | `arcadedb` | The graph store. |
 | `components.analytics_engine` | `duckdb` \| `clickhouse` | `duckdb` | Where events are counted: DuckDB inside the Conduit, or ClickHouse shared by several. |
+| `components.post_ingest_resolution` | bool | true | Whether a load queues entity resolution afterwards (`OSPREY_POST_INGEST_RESOLUTION`). False for a demonstration whose people must not gain automatic `SAME_AS` links; an analyst's own Resolve now still works. |
 | `components.search` | `opensearch` \| `postgres-fulltext` | `opensearch` | Search; postgres-fulltext is the lighter variant. |
 | `components.storage` | section | — | Folders: inside the containers, and on the host for ingest and tiles. |
 | `components.storage.data` | str | `/var/lib/osprey/data` | Where the deployment keeps its data inside the containers. |

@@ -63,8 +63,8 @@ class _Graph:
     def __init__(self) -> None:
         self.visible = {
             ("Person", "prison_number", "Z1234ZZ"): _person("p1", prison_number="Z1234ZZ"),
-            ("Endpoint", "value_normalised", "+447700900640"):
-                _endpoint("e1", "+447700900640", "msisdn"),
+            ("Endpoint", "value_normalised", "+447700900123"):
+                _endpoint("e1", "+447700900123", "msisdn"),
         }
         self.calls: list[tuple[str, str, str, Principal]] = []
 
@@ -158,7 +158,7 @@ def rig() -> Any:
 
 
 def test_a_count_adds_nothing_and_confirm_adds(rig: Rig) -> None:
-    typed = ["Z1234ZZ, 07700 900640\nZ9999ZZ z1234zz"]
+    typed = ["Z1234ZZ, 07700 900123\nZ9999ZZ z1234zz"]
     counted = rig.post(typed)
     assert counted.status_code == 200
     assert counted.json() == {
@@ -211,7 +211,7 @@ def test_a_list_naming_a_hidden_person_is_answered_as_one_naming_a_made_up_one(r
 
 
 def test_the_audit_entry_holds_counts_and_never_an_identifier(rig: Rig) -> None:
-    rig.post(["Z1234ZZ, 07700 900640, Z9999ZZ"], confirm=True, with_links=True)
+    rig.post(["Z1234ZZ, 07700 900123, Z9999ZZ"], confirm=True, with_links=True)
     entry = rig.audit.records[-1]
     assert entry["action"] == "add_by_identifiers"
     assert entry["investigation_id"] == "case-e"
@@ -221,7 +221,7 @@ def test_the_audit_entry_holds_counts_and_never_an_identifier(rig: Rig) -> None:
     }  # fmt: skip
     assert entry["result_cardinality"] == 2
     text = repr(entry)
-    for typed in ("Z1234ZZ", "07700", "900640", "Z9999ZZ", "447700900640"):
+    for typed in ("Z1234ZZ", "07700", "900640", "Z9999ZZ", "447700900123"):
         assert typed not in text
 
 

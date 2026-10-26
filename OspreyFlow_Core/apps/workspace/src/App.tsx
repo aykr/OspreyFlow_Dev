@@ -86,6 +86,7 @@ import { CaseBrief } from "./investigation/CaseBrief";
 import type { AttachmentKind } from "./investigation/briefApi";
 import { placeOf, revealPanel } from "./investigation/openAttachment";
 import { caseIsOpenable, openCase } from "./investigation/cases";
+import { bringFactIntoView } from "./questions/graphFacts";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { ExplorePanel } from "./explore/ExplorePanel";
 import type { BusyDay, RankedLink } from "./explore/exploreApi";
@@ -1790,6 +1791,15 @@ export function App() {
               crossCaseInvestigationScope={crossCaseScope || undefined}
               onCrossCaseScopeChange={setCrossCaseScope}
               onPlaybackFractionChange={setPlaybackFraction}
+              // ADR-128 decision 2 (B3): offered only while the canvas is the view on screen.
+              onSelectLit={
+                view === "graph"
+                  ? () => {
+                      const lit = crossFilterStore.store.getState().window;
+                      if (lit) void glassCanvasRef.current?.selectLit(lit);
+                    }
+                  : undefined
+              }
             />
           </div>
         </BottomPanelFrame>
@@ -1863,6 +1873,17 @@ export function App() {
           onOpenDocument={(id) => {
             setReaderFallback(undefined);
             setReaderDocumentId(id);
+          }}
+          // ADR-129: the graph facts asked about are what is selected and one link around it, and
+          // inside the timeline window when one is set; a `[G-n]` chosen in an answer selects what
+          // it stands for on the canvas and brings it into view.
+          selection={{
+            nodeIds: selectedNodeIds,
+            linkIds: selectedLink ? [selectedLink.id] : [],
+          }}
+          getTimelineWindow={() => crossFilterRef.current?.store.getState().window ?? null}
+          onSelectFacts={(citation) => {
+            if (glassCanvasRef.current) bringFactIntoView(glassCanvasRef.current, citation);
           }}
         />
       </Drawer>

@@ -376,6 +376,7 @@
   border-radius: var(--r-panel); font-size: var(--fs-12); line-height: var(--lh-12); white-space: nowrap;
 }
 .selection-bar__count { margin-right: var(--sp-8); color: var(--surface-app); font-weight: 600; font-variant-numeric: tabular-nums; }
+.selection-bar__note { margin-right: var(--sp-8); color: var(--surface-app); }
 .selection-bar .btn {
   font-size: var(--fs-12); line-height: var(--lh-12); padding: var(--sp-4) var(--sp-8);
   background: transparent; border-color: var(--n8); color: var(--surface-app);

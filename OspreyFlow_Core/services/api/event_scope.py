@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from schemas.analytics import EventFilter, InheritedEvents
-from schemas.domain import Principal
+from schemas.domain import Interval, Principal
 
 from .investigations import (
     AccessLevel,
@@ -59,11 +59,17 @@ async def visible_ancestors(
 
 
 def with_inherited(
-    event_filter: EventFilter, ancestors: Sequence[str], edge_ids: Sequence[str]
+    event_filter: EventFilter,
+    ancestors: Sequence[str],
+    edge_ids: Sequence[str],
+    *,
+    window: Interval | None,
 ) -> EventFilter:
-    """`event_filter` for the case alone, widened to `ancestors`' events on `edge_ids`."""
+    """`event_filter` for the case alone, widened to `ancestors`' events on `edge_ids`. `window` is
+    the case's own `branch_window` (ADR-128 decision 2): a branch made from what is lit reads its
+    ancestors' events only inside it. Required, with no default, so a reader cannot forget it."""
     inherited = (
-        InheritedEvents(scopes=list(ancestors), edge_ids=list(edge_ids))
+        InheritedEvents(scopes=list(ancestors), edge_ids=list(edge_ids), window=window)
         if ancestors and edge_ids
         else None
     )
@@ -79,10 +85,10 @@ async def link_event_filter(
     """The events behind one link the caller can see in the case: the case's own and, on a
     branch, its visible parents' on that link."""
     if investigations is None:
-        return with_inherited(event_filter, [], [])
+        return with_inherited(event_filter, [], [], window=None)
     try:
         case = await investigations.get(event_filter.investigation_scope)
     except InvestigationNotFoundError:
-        return with_inherited(event_filter, [], [])
+        return with_inherited(event_filter, [], [], window=None)
     ancestors = await visible_ancestors(investigations, case, principal)
-    return with_inherited(event_filter, ancestors, [edge_id])
+    return with_inherited(event_filter, ancestors, [edge_id], window=case.branch_window)

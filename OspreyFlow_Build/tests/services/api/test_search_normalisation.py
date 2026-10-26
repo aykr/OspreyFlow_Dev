@@ -1,5 +1,5 @@
 """The single search box reads a phone number or an account reference the same way a list does
-(ADR-128 decision 1, B2; script VERIFY item 1): `07700 900640` finds `+447700900640`.
+(ADR-128 decision 1, B2; script VERIFY item 1): `07700 900123` finds `+447700900123`.
 
 The scout of 26 October 2026 found `search.py` passed the typed text to the graph unchanged, so a
 number written the way a person writes it found nothing. What a mistake would do, and the case that
@@ -25,7 +25,7 @@ from schemas.domain import Node, Principal
 from tests.services.api.test_search_route import _node
 
 ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
-CANONICAL = "+447700900640"
+CANONICAL = "+447700900123"
 
 
 class _Graph:
@@ -56,14 +56,14 @@ class _Graph:
 
 async def test_a_phone_number_written_nationally_finds_the_canonical_endpoint() -> None:
     graph = _Graph()
-    result = await search(graph, SearchRequest(query="07700 900640"), ANALYST)  # type: ignore[arg-type]
+    result = await search(graph, SearchRequest(query="07700 900123"), ANALYST)  # type: ignore[arg-type]
     assert [n.id for n in result.nodes] == ["endpoint-1"]
 
 
 async def test_the_typed_text_is_still_asked_first() -> None:
     graph = _Graph()
-    await search(graph, SearchRequest(query="07700 900640"), ANALYST)  # type: ignore[arg-type]
-    assert [q for q, _ in graph.searched] == ["07700 900640", CANONICAL]
+    await search(graph, SearchRequest(query="07700 900123"), ANALYST)  # type: ignore[arg-type]
+    assert [q for q, _ in graph.searched] == ["07700 900123", CANONICAL]
 
 
 async def test_other_text_is_asked_once_exactly_as_typed() -> None:
@@ -82,16 +82,16 @@ async def test_an_account_reference_in_another_case_is_asked_in_its_canonical_fo
 
 async def test_a_node_both_asks_find_is_named_once() -> None:
     graph = _Graph()
-    graph.also["07700 900640"] = [_node("endpoint-1")]
-    result = await search(graph, SearchRequest(query="07700 900640"), ANALYST)  # type: ignore[arg-type]
+    graph.also["07700 900123"] = [_node("endpoint-1")]
+    result = await search(graph, SearchRequest(query="07700 900123"), ANALYST)  # type: ignore[arg-type]
     assert [n.id for n in result.nodes] == ["endpoint-1"]
 
 
 async def test_the_suggestions_normalise_the_same_way() -> None:
     graph = _Graph()
-    result = await suggest(graph, SuggestRequest(query="07700 900640"), ANALYST)  # type: ignore[arg-type]
+    result = await suggest(graph, SuggestRequest(query="07700 900123"), ANALYST)  # type: ignore[arg-type]
     assert [n.id for n in result.nodes] == ["endpoint-1"]
-    assert [q for q, _ in graph.suggested] == ["07700 900640", CANONICAL]
+    assert [q for q, _ in graph.suggested] == ["07700 900123", CANONICAL]
 
 
 async def test_suggestions_for_other_text_are_asked_once_as_typed() -> None:
@@ -103,16 +103,16 @@ async def test_suggestions_for_other_text_are_asked_once_as_typed() -> None:
 
 async def test_a_merged_list_is_cut_to_the_limit() -> None:
     graph = _Graph()
-    graph.also["07700 900640"] = [_node("a"), _node("b")]
-    result = await search(graph, SearchRequest(query="07700 900640", limit=2), ANALYST)  # type: ignore[arg-type]
+    graph.also["07700 900123"] = [_node("a"), _node("b")]
+    result = await search(graph, SearchRequest(query="07700 900123", limit=2), ANALYST)  # type: ignore[arg-type]
     assert [n.id for n in result.nodes] == ["a", "b"]
 
 
 async def test_suggestions_cut_to_the_limit_say_more_match() -> None:
     graph = _Graph()
-    graph.suggest_also["07700 900640"] = NodeSuggestions(nodes=[_node("a")], more=False)
+    graph.suggest_also["07700 900123"] = NodeSuggestions(nodes=[_node("a")], more=False)
     result = await suggest(
-        graph, SuggestRequest(query="07700 900640", limit=1), ANALYST  # type: ignore[arg-type]
+        graph, SuggestRequest(query="07700 900123", limit=1), ANALYST  # type: ignore[arg-type]
     )
     assert [n.id for n in result.nodes] == ["a"]
     assert result.more is True

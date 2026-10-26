@@ -153,6 +153,11 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   // row as Remove selected and Clear view, so it is reached by Tab like them.
   "branch-selected-opens-a-new-tab",
   "branch-selected-from-a-selected-nodes-menu",
+  // 26 October 2026 (ADR-128 decision 2, B3): a window set by Set exact dates lights part of the
+  // canvas; Select what is lit replaces the selection with it, Branch selected then opens a tab holding
+  // only that slice, and one undo gives the earlier selection back.
+  "select-what-is-lit-then-branch-selected-by-keyboard",
+  "undo-select-what-is-lit-by-keyboard",
   "layout-menu-chooses-layout",
   "layout-menu-chooses-force-directed-tree",
   "layout-menu-chooses-clustered-bubbles-and-what-they-group-by",
@@ -562,6 +567,8 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   "reject-a-proposal-by-keyboard",
   // The drawer's visible Close (the owner, 9 October 2026).
   "close-the-questions-drawer-by-keyboard",
+  // ADR-129 decision 1: a cited graph fact selects what it stands for and brings it into view.
+  "select-a-graph-fact-from-an-answer-by-keyboard",
 ] as const);
 
 /** Files added straight to a case (ADR-094 step 3): from the strip over the canvas, standing alone,

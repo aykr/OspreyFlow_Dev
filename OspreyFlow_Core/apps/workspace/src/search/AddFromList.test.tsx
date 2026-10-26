@@ -66,12 +66,12 @@ describe("the count comes first", () => {
   it("counts what was pasted, says the four figures, and adds nothing", async () => {
     const { sent } = stub(normal);
     const { onApplyDelta } = mount();
-    paste("Z1234ZZ\n07700 900640");
+    paste("Z1234ZZ\n07700 900123");
     press("Count");
     expect((await screen.findByRole("status")).textContent).toBe(
       "40 identifiers read. 38 found. 2 matched nothing you can see. 1 repeated.",
     );
-    expect(sent).toEqual([{ identifiers: ["Z1234ZZ\n07700 900640"], confirm: false, with_links: false }]);
+    expect(sent).toEqual([{ identifiers: ["Z1234ZZ\n07700 900123"], confirm: false, with_links: false }]);
     expect(onApplyDelta).not.toHaveBeenCalled();
   });
 

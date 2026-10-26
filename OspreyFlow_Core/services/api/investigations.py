@@ -30,7 +30,7 @@ import asyncpg
 from pydantic import BaseModel, Field, field_validator
 
 from conduit_common.identity import new_id
-from schemas.domain import DomainPack, Principal
+from schemas.domain import DomainPack, Interval, Principal
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +89,14 @@ CREATE TABLE IF NOT EXISTS investigation_tab_state (
 #: constraint change; an unknown value is refused on the way in and dropped on the way out.
 _DOMAIN_SQL = "ALTER TABLE investigations ADD COLUMN IF NOT EXISTS domains TEXT[]"
 
+#: ADR-128 decision 2 (B3). A branch made from what is lit records its window, and the events it
+#: inherits from its parents are held to it. NULL for every case that has none, which is every
+#: case from before the change. Run on every start, as the domains column is.
+_BRANCH_WINDOW_SQL = """
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS branch_valid_from TIMESTAMPTZ;
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS branch_valid_to TIMESTAMPTZ;
+"""
+
 _MIGRATE_EXISTING_SQL = """
 UPDATE investigations SET unit_level = 'viewer';
 INSERT INTO investigation_grants (investigation_id, account_id, level)
@@ -97,7 +105,8 @@ INSERT INTO investigation_grants (investigation_id, account_id, level)
 
 _LEVEL_SQL = (
     "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
-    "i.branched_from, i.domains, g.level AS grant_level, i.unit_level "
+    "i.branched_from, i.branch_valid_from, i.branch_valid_to, i.domains, "
+    "g.level AS grant_level, i.unit_level "
     "FROM investigations i "
     "LEFT JOIN investigation_grants g "
     "ON g.investigation_id = i.id AND g.account_id = $3 "
@@ -148,6 +157,9 @@ class Investigation(BaseModel):
     #: wire (`exclude`): it is for a branch, which inherits the stored value exactly, so a branch of
     #: a never-chosen case is never chosen too. See `domains_to_inherit`.
     domains_chosen: bool = Field(default=False, exclude=True)
+    #: ADR-128 decision 2: the window a branch made from what is lit was made with, both ends
+    #: included; its inherited events are held to it. `None` for every other case. Not on the wire.
+    branch_window: Interval | None = Field(default=None, exclude=True)
 
     def domains_to_inherit(self) -> list[DomainPack] | None:
         """What a branch of this case is created with: the stored value, NULL (None) included, not
@@ -178,10 +190,16 @@ def _known_domains(stored: Sequence[str] | None, investigation_id: str) -> list[
 
 
 def _domain_fields(row: asyncpg.Record) -> dict[str, object]:
-    """The `domains` and `domains_chosen` fields of a case row, from the stored column."""
+    """The `domains`, `domains_chosen` and `branch_window` fields of a case row, as stored."""
+    window = (
+        Interval(valid_from=row["branch_valid_from"], valid_to=row["branch_valid_to"])
+        if row["branch_valid_from"] is not None
+        else None
+    )
     return {
         "domains": _known_domains(row["domains"], row["id"]),
         "domains_chosen": row["domains"] is not None,
+        "branch_window": window,
     }
 
 
@@ -228,6 +246,7 @@ class InvestigationStore:
                 await conn.execute(_ACCESS_SQL)
                 await conn.execute(_TAB_SQL)
                 await conn.execute(_DOMAIN_SQL)
+                await conn.execute(_BRANCH_WINDOW_SQL)
                 if first_time:
                     await conn.execute(_MIGRATE_EXISTING_SQL)
         return cls(pool)
@@ -242,6 +261,7 @@ class InvestigationStore:
         name: str,
         branched_from: str | None = None,
         domains: Sequence[str] | None = None,
+        branch_window: Interval | None = None,
     ) -> Investigation:
         """`owning_unit` is always the *acting* principal's own `org_unit`
         — for a branch, that is the branching principal, never inherited
@@ -265,12 +285,14 @@ class InvestigationStore:
             branched_from=branched_from,
             domains=chosen or [],
             domains_chosen=chosen is not None,
+            branch_window=branch_window,
         )
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 "INSERT INTO investigations "
-                "(id, name, created_at, created_by, owning_unit, branched_from, domains) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                "(id, name, created_at, created_by, owning_unit, branched_from, domains, "
+                "branch_valid_from, branch_valid_to) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
                 investigation.id,
                 investigation.name,
                 investigation.created_at,
@@ -278,6 +300,8 @@ class InvestigationStore:
                 investigation.owning_unit,
                 investigation.branched_from,
                 chosen,
+                branch_window.valid_from if branch_window else None,
+                branch_window.valid_to if branch_window else None,
             )
             await conn.execute(
                 "INSERT INTO investigation_grants (investigation_id, account_id, level) "
@@ -295,7 +319,8 @@ class InvestigationStore:
         `get_authorized` is what every route actually uses."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, name, created_at, created_by, owning_unit, branched_from, domains "
+                "SELECT id, name, created_at, created_by, owning_unit, branched_from, "
+                "branch_valid_from, branch_valid_to, domains "
                 "FROM investigations WHERE id = $1 AND removed_at IS NULL",
                 investigation_id,
             )
@@ -350,7 +375,8 @@ class InvestigationStore:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
-                "i.branched_from, i.domains, g.level AS grant_level, i.unit_level "
+                "i.branched_from, i.branch_valid_from, i.branch_valid_to, i.domains, "
+                "g.level AS grant_level, i.unit_level "
                 "FROM investigations i "
                 "LEFT JOIN investigation_grants g "
                 "ON g.investigation_id = i.id AND g.account_id = $3 "
@@ -449,7 +475,8 @@ class InvestigationStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
-                "i.branched_from, i.domains, g.level AS grant_level, i.unit_level "
+                "i.branched_from, i.branch_valid_from, i.branch_valid_to, i.domains, "
+                "g.level AS grant_level, i.unit_level "
                 "FROM investigations i "
                 "LEFT JOIN investigation_grants g "
                 "ON g.investigation_id = i.id AND g.account_id = $2 "
@@ -639,7 +666,8 @@ class InvestigationStore:
         administrator finds nothing."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, name, created_at, created_by, owning_unit, branched_from, domains "
+                "SELECT id, name, created_at, created_by, owning_unit, branched_from, "
+                "branch_valid_from, branch_valid_to, domains "
                 "FROM investigations WHERE id = $1 AND owning_unit = $2 AND removed_at IS NULL",
                 investigation_id,
                 principal.org_unit,

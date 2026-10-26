@@ -15,7 +15,9 @@ import { applyTheme } from "../src/theme/theme";
 import "../src/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { SelectionList } from "../src/inspector/SelectionList";
+import { createCrossFilterStore } from "../src/crossfilter/store";
 import { OntologyRegistry } from "../src/ontology/schema";
+import { Timeline } from "../src/timeline/Timeline";
 import { createWorkingSet } from "../src/workingset/store";
 import type { OntologySchema, Node, Edge } from "../../../packages/schemas/generated";
 
@@ -336,6 +338,12 @@ workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges })
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
+// `?fixture=lit` is ADR-128's (B3, select what is lit): the chain above with the real timeline under
+// it, so a keyboard walkthrough can set a window by Set exact dates, run Select what is lit, and
+// branch what it selected, as App does. The timeline's own reads are answered by the spec.
+const wantsLit = new URLSearchParams(window.location.search).get("fixture") === "lit";
+const litStore = createCrossFilterStore("http://keyboard-test.invalid", "unused", "keyboard-fixture");
+
 // `?judged=n1:2,n2:1` gives those nodes that many judgements, for the count drawn beside a node
 // (ADR-070).
 // `?degrees=n0:0,n1:1` marks those nodes with their degree from From (ADR-116), as Find connections does.
@@ -408,7 +416,11 @@ createRoot(container).render(
         window.__KEYBOARD__!.selectedEdge = edge ? edge.id : null;
       }}
       getEventsWindow={() =>
-        wantsEmails ? { validFrom: "2001-05-01T00:00:00Z", validTo: "2001-05-31T00:00:00Z" } : null
+        wantsLit
+          ? litStore.store.getState().window
+          : wantsEmails
+            ? { validFrom: "2001-05-01T00:00:00Z", validTo: "2001-05-31T00:00:00Z" }
+            : null
       }
       onOpenDocument={(nodeId) => {
         window.__KEYBOARD__!.openedDocument = nodeId;
@@ -433,6 +445,22 @@ createRoot(container).render(
         before Phase 7 Stage 4, since the canvas's own onKeyDown used to intercept every Tab
         press regardless. */}
     <button id="after-canvas" data-harness-only="">After canvas</button>
+    {wantsLit && (
+      <div style={{ width: 900, height: 260 }}>
+        <Timeline
+          apiBaseUrl="http://keyboard-test.invalid"
+          bearerToken="unused"
+          investigationScope="keyboard-fixture"
+          crossFilterStore={litStore}
+          getNodeIds={() => workingSet.graph.nodes()}
+          getEdgeIds={() => workingSet.graph.edges()}
+          onSelectLit={() => {
+            const window = litStore.store.getState().window;
+            if (window) void canvasHandle.current?.selectLit(window);
+          }}
+        />
+      </div>
+    )}
     <HarnessSelectionList />
   </>,
 );

@@ -105,6 +105,9 @@ export interface TimelineProps {
    * timeline's own bar offers an `Overlay another case` button that reveals the box (it was a
    * separate row above the timeline that was always showing). */
   onCrossCaseScopeChange?: (investigationId: string) => void;
+  /** ADR-128 decision 2 (B3): turns what the window lights into the canvas's selection. Offered with
+   * a window set, beside Play; absent where there is no canvas to select on. */
+  onSelectLit?: () => void;
 }
 
 export function Timeline({
@@ -117,6 +120,7 @@ export function Timeline({
   crossCaseInvestigationScope,
   onPlaybackFractionChange,
   onCrossCaseScopeChange,
+  onSelectLit,
 }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
@@ -555,6 +559,16 @@ export function Timeline({
             }}
           >
             Clear filter
+          </Button>
+        )}
+        {hasEvents && activeWindow && onSelectLit && (
+          // ADR-128 decision 2: a link is lit when it has an event in the window, ends included; a
+          // node when a lit link touches it. Undated links are never lit, and the title says so.
+          <Button
+            onClick={onSelectLit}
+            title="Select every node with a link that has an event in the window. Undated links are not included."
+          >
+            Select what is lit
           </Button>
         )}
         {hasEvents && activeWindow && (

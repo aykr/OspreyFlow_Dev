@@ -56,7 +56,7 @@ from services.api.investigations import (
 )
 from services.api.working_set.models import DeltaAdd, ExpansionOutcome
 
-from schemas.domain import Alert, AlertMode, Principal
+from schemas.domain import Alert, AlertMode, Interval, Principal
 
 ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 BOB = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
@@ -533,11 +533,37 @@ def _row(domains: list[str] | None, **extra: object) -> dict[str, object]:
         "created_by": "alice",
         "owning_unit": "unit-1",
         "branched_from": None,
+        "branch_valid_from": None,
+        "branch_valid_to": None,
         "domains": domains,
         "grant_level": "author",
         "unit_level": None,
         **extra,
     }
+
+
+def test_a_row_reads_the_window_a_branch_was_made_with_or_none() -> None:
+    """ADR-128 decision 2: the two stored columns are the branch's window, both ends or neither
+    start; an open end stays open."""
+    held = InvestigationStore._parse_level_row(
+        _row(
+            None,
+            branched_from="parent",
+            branch_valid_from=datetime(2026, 1, 5, tzinfo=UTC),
+            branch_valid_to=datetime(2026, 4, 30, tzinfo=UTC),
+        )
+    )
+    open_ended = InvestigationStore._parse_level_row(
+        _row(None, branch_valid_from=datetime(2026, 1, 5, tzinfo=UTC))
+    )
+    none = InvestigationStore._parse_level_row(_row(None))
+
+    assert held is not None and open_ended is not None and none is not None
+    assert held[0].branch_window == Interval(
+        valid_from=datetime(2026, 1, 5, tzinfo=UTC), valid_to=datetime(2026, 4, 30, tzinfo=UTC)
+    )
+    assert open_ended[0].branch_window == Interval(valid_from=datetime(2026, 1, 5, tzinfo=UTC))
+    assert none[0].branch_window is None
 
 
 def test_a_row_with_null_reads_as_the_empty_list() -> None:

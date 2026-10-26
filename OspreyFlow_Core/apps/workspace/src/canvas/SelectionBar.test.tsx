@@ -132,3 +132,29 @@ describe("the selection bar's actions", () => {
     expect(clear.querySelector("kbd")?.textContent).toBe("Esc");
   });
 });
+
+// ADR-128 decision 2 (B3): after Select what is lit the bar says what was lit and that undated links
+// are not included, and offers one undo, which gives back the selection that was there before.
+describe("the selection bar after Select what is lit", () => {
+  it("says what was lit and offers one undo while the lit selection stands", () => {
+    const undo = vi.fn();
+    render(
+      <SelectionBar
+        count={4}
+        litNote="Lit 5 Jan – 30 Apr 2026: undated links are not included"
+        onUndoLit={undo}
+        onRemove={() => undefined}
+        onClear={() => undefined}
+      />,
+    );
+    expect(screen.getByText(/undated links are not included/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Undo select what is lit" }));
+    expect(undo).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers neither the note nor the undo otherwise", () => {
+    render(<SelectionBar count={4} onRemove={() => undefined} onClear={() => undefined} />);
+    expect(screen.queryByText(/undated links are not included/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Undo select what is lit" })).toBeNull();
+  });
+});

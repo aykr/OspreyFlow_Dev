@@ -8,6 +8,7 @@ import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 
 import asyncpg
 import pytest
@@ -19,7 +20,7 @@ from services.api.investigations import (
     InvestigationStore,
 )
 
-from schemas.domain import Principal
+from schemas.domain import Interval, Principal
 
 AUTHOR = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1")
 COLLEAGUE = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1")
@@ -354,6 +355,51 @@ async def test_a_case_branched_from_a_removed_case_keeps_working(
     await store.remove(source.id, by=AUTHOR)
 
     assert (await store.get_authorized(branch.id, AUTHOR, need=AccessLevel.AUTHOR)).id == branch.id
+
+
+# --- ADR-128 decision 2: the window a branch made from what is lit was made with ----------------
+# Live (Postgres). The route tests use a stand-in store; these show the window is stored with the
+# case and comes back from every read that builds a case, and that a database from before the
+# change gains the columns on start with its cases reading no window.
+
+
+async def test_a_branchs_window_is_stored_and_read_back_by_every_read(
+    store: InvestigationStore,
+) -> None:
+    window = Interval(
+        valid_from=datetime(2026, 1, 5, tzinfo=UTC), valid_to=datetime(2026, 4, 30, tzinfo=UTC)
+    )
+    source = await store.create(AUTHOR, name="Source")
+    held = await store.create(AUTHOR, name="Lit", branched_from=source.id, branch_window=window)
+    plain = await store.create(AUTHOR, name="Plain", branched_from=source.id)
+
+    assert held.branch_window == window
+    assert (await store.get(held.id)).branch_window == window
+    assert (await store.get_authorized(held.id, AUTHOR, need=AccessLevel.VIEWER)).branch_window == (
+        window
+    )
+    listed = {c.id: c.branch_window for c, _ in await store.list_for(AUTHOR)}
+    assert listed[held.id] == window
+    assert listed[plain.id] is None and listed[source.id] is None
+
+
+async def test_a_database_from_before_the_window_gains_the_columns_and_reads_none(
+    schema: str,
+) -> None:
+    dsn = f"{PostgresConfig.from_env().dsn}?search_path={schema}"
+    first = await InvestigationStore.connect(dsn)
+    case = await first.create(AUTHOR, name="Old")
+    await first.close()
+    conn = await asyncpg.connect(dsn=dsn)
+    await conn.execute("ALTER TABLE investigations DROP COLUMN branch_valid_from")
+    await conn.execute("ALTER TABLE investigations DROP COLUMN branch_valid_to")
+    await conn.close()
+
+    reopened = await InvestigationStore.connect(dsn)
+    try:
+        assert (await reopened.get(case.id)).branch_window is None
+    finally:
+        await reopened.close()
 
 
 # --- ADR-084: which case tabs an account has closed -----------------------------------------------

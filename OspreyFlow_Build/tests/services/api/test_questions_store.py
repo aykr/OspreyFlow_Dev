@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from services.api.config import PostgresConfig
-from services.api.questions import PostgresQuestionStore, QuestionEntry
+from services.api.questions import GraphCitation, PostgresQuestionStore, QuestionEntry
 
 from conduit_common.identity import new_id
 
@@ -33,6 +33,13 @@ def _entry(case: str, at: datetime, question: str) -> QuestionEntry:
         unplaced=1,
         model="local-model",
         created_at=at,
+        graph_node_ids=["node-1", "node-2"],
+        graph_link_ids=["link-1"],
+        graph_citations=[
+            GraphCitation(
+                number=1, label="[G-1]", node_ids=["node-1", "node-2"], link_ids=["link-1"]
+            )
+        ],
     )
 
 
@@ -47,3 +54,21 @@ async def test_a_question_round_trips_whole_and_cases_are_kept_apart(store) -> N
     listed = await store.list_for_case(case)
     assert [e.question for e in listed] == ["first", "second"]
     assert listed[0] == first
+
+
+async def test_a_question_stored_before_graph_facts_reads_back_with_none(store) -> None:
+    """ADR-129: the three columns were added to a table that may already hold rows. A row written
+    without them (the INSERT of an earlier build) reads back whole, with no graph facts."""
+    case = new_id()
+    async with store._pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO case_questions (id, investigation_id, author, question, answer, "
+            "document_ids, read_ids, candidate_ids, unplaced, model, created_at) "
+            "VALUES ($1, $2, 'analyst-1', 'old', 'An old answer.', '[]', '[]', '[]', 0, "
+            "'local-model', now())",
+            new_id(),
+            case,
+        )
+    (listed,) = await store.list_for_case(case)
+    assert listed.question == "old"
+    assert (listed.graph_node_ids, listed.graph_link_ids, listed.graph_citations) == ([], [], [])

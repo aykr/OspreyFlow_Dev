@@ -63,6 +63,57 @@ describe("branchSelection", () => {
     expect(result.ok).toBe(false);
   });
 
+  // ADR-128 decision 2 (B3): after Select what is lit, with the window still set, the window goes
+  // with the selection and the server derives the slice from it.
+  it("sends the window with the nodes when one is given, and not otherwise", async () => {
+    const fetcher = reply(201, { id: "b-1", name: "5 Jan – 30 Apr 2026, selected" });
+    await branchSelection(fetcher, {
+      ...base,
+      nodeIds: ["a", "b"],
+      name: "5 Jan – 30 Apr 2026, selected",
+      window: { validFrom: "2026-01-05T00:00:00Z", validTo: "2026-05-01T00:00:00Z" },
+    });
+    const [, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(JSON.parse(init.body)).toEqual({
+      node_ids: ["a", "b"],
+      name: "5 Jan – 30 Apr 2026, selected",
+      window: { valid_from: "2026-01-05T00:00:00Z", valid_to: "2026-05-01T00:00:00Z" },
+    });
+  });
+
+  it("sends a window with no end as an open end", async () => {
+    const fetcher = reply(201, { id: "b-1", name: "x" });
+    await branchSelection(fetcher, {
+      ...base,
+      nodeIds: ["a"],
+      window: { validFrom: "2026-01-05T00:00:00Z", validTo: null },
+    });
+    const [, init] = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(JSON.parse(init.body).window).toEqual({
+      valid_from: "2026-01-05T00:00:00Z",
+      valid_to: null,
+    });
+  });
+
+  it("says what a slice over the working-set cap came to, and that no tab was made", async () => {
+    const result = await branchSelection(
+      reply(409, {
+        error: "limit_exceeded",
+        cap_kind: "nodes",
+        cap: 50000,
+        would_be: 61234,
+        options: ["branch", "filter", "promote_to_batch"],
+      }),
+      { ...base, nodeIds: ["a"], window: { validFrom: "2026-01-05T00:00:00Z", validTo: null } },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("61,234");
+      expect(result.message).toContain("50,000");
+      expect(result.message).toMatch(/no tab was made/i);
+    }
+  });
+
   it("reports a network failure instead of throwing", async () => {
     const failing = vi.fn(async () => {
       throw new Error("offline");

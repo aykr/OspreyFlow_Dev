@@ -74,7 +74,7 @@ unauthenticated one is the one an attacker gets.
 ```
 POST   /v1/investigations                      create; optional `domains`, the case's domain packs (ADR-126); NULL until chosen
 GET    /v1/investigations/{id}                 metadata, not the working set
-POST   /v1/investigations/{id}/branch          fork the working set (or a chosen set of its nodes) into a new investigation
+POST   /v1/investigations/{id}/branch          fork the working set (or a chosen set of its nodes) into a new investigation; with an optional `window` (ADR-128 decision 2, Amendment 2), which needs `node_ids`, the server derives the lit links for the principal (one event in the window, ends included; undated never), carries only them and the named nodes they touch (a hidden id ignored as a made-up one), and records the window so the events the branch inherits stay inside it
 POST   /v1/investigations/{id}/branch-by-filter  a new case from the caller's own view, narrowed by entity types and/or a date window (ADR-124 decision 2)
 PUT    /v1/investigations/{id}/tab             open or close this case's tab, for the caller only
 GET    /v1/investigations/{id}/history         addressable step history

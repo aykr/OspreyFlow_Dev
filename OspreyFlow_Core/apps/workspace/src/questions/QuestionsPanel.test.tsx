@@ -33,6 +33,17 @@ const ANSWERED: QuestionAnswer = {
   created_at: "2026-10-07T10:00:00Z",
 };
 
+const WITH_FACTS: QuestionAnswer = {
+  ...ANSWERED,
+  id: "q2",
+  answer: "Rohan is tied to Dana [G-1]; Dana called Callum [G-2].",
+  graph_citations: [
+    { number: 1, label: "[G-1]", node_ids: ["n-rohan", "n-dana"], link_ids: ["l-assoc"] },
+    { number: 2, label: "[G-2]", node_ids: ["n-dana", "n-callum"], link_ids: ["l-called"] },
+  ],
+  unplaced: 0,
+};
+
 function serve(routes: Record<string, (init?: RequestInit) => Response>) {
   const calls: { url: string; init?: RequestInit }[] = [];
   vi.stubGlobal(
@@ -50,9 +61,20 @@ function serve(routes: Record<string, (init?: RequestInit) => Response>) {
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
-function mount(onDelta = vi.fn(), onOpenDocument = vi.fn()) {
+function mount(
+  onDelta = vi.fn(),
+  onOpenDocument = vi.fn(),
+  extra: Partial<React.ComponentProps<typeof QuestionsPanel>> = {},
+) {
   render(
-    <QuestionsPanel apiBaseUrl="http://api" bearerToken="t" investigationId="b1" onDelta={onDelta} onOpenDocument={onOpenDocument} />,
+    <QuestionsPanel
+      apiBaseUrl="http://api"
+      bearerToken="t"
+      investigationId="b1"
+      onDelta={onDelta}
+      onOpenDocument={onOpenDocument}
+      {...extra}
+    />,
   );
   return { onDelta, onOpenDocument };
 }
@@ -65,7 +87,7 @@ describe("QuestionsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Dabhol" }));
     expect(onOpenDocument).toHaveBeenCalledWith("email:ev-1");
     expect(screen.getByRole("button", { name: "Accept Person · Dana Mercer" })).toBeTruthy();
-    expect(screen.getByText(/1 proposal was left out/)).toBeTruthy();
+    expect(screen.getByText(/1 item was left out/)).toBeTruthy();
   });
 
   it("asks, and adds the answer to the conversation", async () => {
@@ -79,21 +101,78 @@ describe("QuestionsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
     expect(await screen.findByText("Dana Mercer wrote about it [1].")).toBeTruthy();
     const posted = calls.find((c) => c.init?.method === "POST")!;
-    expect(JSON.parse(String(posted.init!.body))).toEqual({ question: "Who wrote about the plant?" });
+    expect(JSON.parse(String(posted.init!.body))).toEqual({
+      question: "Who wrote about the plant?",
+      selected_node_ids: [],
+      selected_link_ids: [],
+    });
   });
 
-  it("says in words why documents too long to read at once were refused, and keeps the question", async () => {
+  it("sends what is selected on the canvas and the timeline window, so the brief is those and one link around them", async () => {
+    const calls = serve({
+      "GET /questions": () => json(200, []),
+      "POST /questions": () => json(200, ANSWERED),
+    });
+    mount(vi.fn(), vi.fn(), {
+      selection: { nodeIds: ["n-dana"], linkIds: ["l-called"] },
+      getTimelineWindow: () => ({ validFrom: "2026-01-01T00:00:00Z", validTo: null }),
+    });
+    await screen.findByText("No questions asked in this case yet.");
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("Dana Mercer wrote about it [1].");
+    const posted = calls.find((c) => c.init?.method === "POST")!;
+    expect(JSON.parse(String(posted.init!.body))).toEqual({
+      question: "Who?",
+      selected_node_ids: ["n-dana"],
+      selected_link_ids: ["l-called"],
+      window: { valid_from: "2026-01-01T00:00:00Z", valid_to: null },
+    });
+  });
+
+  it("shows each [G-n] the payload holds as a button, once, and selecting one hands its ids to the canvas", async () => {
+    serve({ "GET /questions": () => json(200, [WITH_FACTS]) });
+    const onSelectFacts = vi.fn();
+    mount(vi.fn(), vi.fn(), { onSelectFacts });
+    fireEvent.click(await screen.findByRole("button", { name: "Select [G-2] on the canvas" }));
+    expect(onSelectFacts).toHaveBeenCalledWith({
+      number: 2,
+      label: "[G-2]",
+      node_ids: ["n-dana", "n-callum"],
+      link_ids: ["l-called"],
+    });
+    expect(screen.getAllByRole("button", { name: /Select \[G-\d+\] on the canvas/ })).toHaveLength(2);
+  });
+
+  it("leaves a [G-n] the payload does not hold as plain words, not a button", async () => {
+    serve({ "GET /questions": () => json(200, [{ ...WITH_FACTS, graph_citations: [] }]) });
+    mount();
+    expect(await screen.findByText(/\[G-1\]/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Select \[G-/ })).toBeNull();
+  });
+
+  it("says in words why a question too long to read at once was refused, with the three ways out, and keeps it", async () => {
     serve({
       "GET /questions": () => json(200, []),
-      "POST /questions": () => json(413, { error: "documents_too_large", would_be: 120000, limit: 80000 }),
+      "POST /questions": () =>
+        json(409, {
+          error: "limit_exceeded",
+          cap_kind: "characters",
+          cap: 80000,
+          would_be: 120000,
+          documents_chars: 70000,
+          evidence_brief_chars: 50000,
+          options: ["narrow_selection", "narrow_timeline_window", "branch"],
+        }),
     });
     mount();
     await screen.findByText("No questions asked in this case yet.");
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Anything?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
     expect((await screen.findByRole("alert")).textContent).toBe(
-      "These documents come to 120,000 characters, more than the model can read at once (80,000). " +
-        "Remove some from the view and ask again.",
+      "This question comes to 120,000 characters, more than the model can read at once (80,000): " +
+        "the documents are 70,000 and the graph facts 50,000. Nothing was sent. " +
+        "Narrow the selection, narrow the timeline window, or branch the case, then ask again.",
     );
     expect((screen.getByLabelText("Your question") as HTMLTextAreaElement).value).toBe("Anything?");
   });

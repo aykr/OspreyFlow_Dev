@@ -108,6 +108,10 @@ import {
 import { fetchWouldAdd } from "./expansionPreview";
 import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
 import { branchSelection } from "./branchNodes";
+import { fetchFirstSeen } from "../analytics/api";
+import { litTabName, UNDATED_NOT_INCLUDED } from "../crossfilter/lit";
+import { readLit } from "../crossfilter/selectLit";
+import type { TimeWindow } from "../crossfilter/store";
 import { removeFromWorkingSet } from "./removeNodes";
 import { ViewActions } from "./ViewActions";
 import { settleLayout, type LayoutNode } from "./forceLayout";
@@ -344,6 +348,11 @@ export interface GlassCanvasHandle {
    * large, exactly as a double-click expansion is (ADR-070: choosing a search result draws three
    * steps out). A no-op if `nodeId` is not in the view. */
   expandFrom: (nodeId: string, depth: number) => void;
+  /** ADR-128 decision 2 (B3): replaces the selection with every node `window` lights (a link with an
+   * event inside it, ends included; a node a lit link touches; undated links not included), read
+   * from the view this canvas holds. One undo gives the previous selection back. A window that
+   * lights nothing leaves the selection as it was and says so. */
+  selectLit: (window: TimeWindow) => Promise<void>;
   /** Phase 8 Stage 4h: the chart artefact's own real capture path
    * (`02_GLASS_FRONTEND.md` §10.1/§10.3) — delegates to `captureChartImage`
    * (`export/chartExport.ts`), which renders the live Sigma instance to a PNG via
@@ -595,6 +604,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       message: string;
       tone?: "error" | "notice";
     } | null>(null);
+    // ADR-128 decision 2 (B3): what Select what is lit selected, the window it used, and the
+    // selection it replaced. Kept so that Branch selected can send the window, and so that one undo
+    // can give the previous selection back; both lapse the moment the selection is anything else.
+    const [lit, setLit] = useState<{
+      window: TimeWindow;
+      nodeIds: ReadonlySet<string>;
+      previous: readonly string[];
+    } | null>(null);
+    const selectLitRef = useRef<((window: TimeWindow) => Promise<void>) | null>(null);
     // Read by `refreshNodeVisualState` (called from many unrelated call sites — hover, selection,
     // dimming) without threading a new parameter through every one of them; written only by the
     // effect below, keyed on `pathResult` itself. A ref, not state, because nothing here needs a
@@ -1867,6 +1885,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const { x, y } = shown;
           redrawWhenCameraStops(sigma, sigma.getCamera().animate({ x, y }, { duration: 200 }));
         },
+        selectLit: (window: TimeWindow) => selectLitRef.current?.(window) ?? Promise.resolve(),
         deselect: (nodeId: string) => {
           setSelected((prev) => {
             if (!prev.has(nodeId)) return prev;
@@ -3009,6 +3028,51 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       selectLink(null);
     }
 
+    // ADR-128 decision 2 (B3): the selection is read from the view this canvas holds, never from ids
+    // the server offered, and replaces whatever was selected (one undo).
+    async function selectWhatIsLit(window: TimeWindow): Promise<void> {
+      const links = graph.mapEdges((id, _attrs, source, target) => ({ id, source, target }));
+      const read = await readLit(
+        (filter) => fetchFirstSeen(apiBaseUrl, bearerToken, { filter }),
+        investigationId,
+        window,
+        links,
+      );
+      const rect = containerRef.current?.getBoundingClientRect();
+      const at = { x: (rect?.left ?? 0) + 40, y: (rect?.top ?? 0) + 40 };
+      if (!read.ok) {
+        setActionError({ ...at, message: read.message });
+        return;
+      }
+      if (read.lit.nodeIds.length === 0) {
+        setActionError({
+          ...at,
+          message: `Nothing is lit in this window (${UNDATED_NOT_INCLUDED}). The selection is unchanged.`,
+          tone: "notice",
+        });
+        return;
+      }
+      const present = read.lit.nodeIds.filter((id) => graph.hasNode(id));
+      setLit({ window: read.window, nodeIds: new Set(present), previous: Array.from(selected) });
+      setSelected(new Set(present));
+      onSelectionChange?.(present);
+    }
+    selectLitRef.current = selectWhatIsLit;
+
+    // The lit selection stands while the selection is exactly what it chose.
+    const litStands =
+      lit !== null &&
+      lit.nodeIds.size === selected.size &&
+      Array.from(selected).every((id) => lit.nodeIds.has(id));
+
+    function undoSelectLit(): void {
+      if (!lit || !litStands) return;
+      const back = lit.previous.filter((id) => graph.hasNode(id));
+      setSelected(new Set(back));
+      onSelectionChange?.(back);
+      setLit(null);
+    }
+
     // Sends the selected nodes to a case of their own (ADR-084). A Group Node stands for every
     // member of its group, so choosing one chooses all of them; the stand-in's own id is not a
     // real node and is never sent. The view is not changed: the original case stays as it was.
@@ -3026,13 +3090,31 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       return Array.from(chosen);
     }
 
-    async function branchSelected(name?: string): Promise<{ id: string; name: string } | null> {
+    async function branchSelected(
+      name?: string,
+      opts: { lit?: boolean } = {},
+    ): Promise<{ id: string; name: string } | null> {
+      const nodeIds = chosenForBranch();
+      // ADR-128 decision 2: right after Select what is lit, with the window still set and the
+      // selection still within what was lit, the window goes with the selection and the server
+      // derives the slice (the lit links and their nodes). Any other branch is as it always was.
+      const now = getEventsWindow?.() ?? null;
+      const withWindow =
+        opts.lit !== false &&
+        lit !== null &&
+        now !== null &&
+        now.validFrom === lit.window.validFrom &&
+        now.validTo === lit.window.validTo &&
+        nodeIds.every((id) => lit.nodeIds.has(id))
+          ? lit.window
+          : undefined;
       const result = await branchSelection(fetch, {
         apiBaseUrl,
         bearerToken,
         investigationId,
-        nodeIds: chosenForBranch(),
-        name,
+        nodeIds,
+        name: name ?? (withWindow ? litTabName(withWindow) : undefined),
+        window: withWindow,
       });
       if (!result.ok) {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -3061,7 +3143,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
 
     async function askAboutSelected(): Promise<void> {
       const n = selectedDocumentCount;
-      const made = await branchSelected(`Questions on ${n} document${n === 1 ? "" : "s"}`);
+      const made = await branchSelected(`Questions on ${n} document${n === 1 ? "" : "s"}`, {
+        lit: false,
+      });
       if (made) onAskAboutDocuments?.(made.id, made.name);
     }
 
@@ -3408,6 +3492,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           }
           onAsk={onAskAboutDocuments ? () => void askAboutSelected() : undefined}
           documentCount={selectedDocumentCount}
+          litNote={
+            litStands && lit
+              ? `Lit in ${litTabName(lit.window).replace(/, selected$/, "")}: ${UNDATED_NOT_INCLUDED}`
+              : undefined
+          }
+          onUndoLit={litStands ? undoSelectLit : undefined}
           onLinksAmong={(degree) => void linksAmongOnCanvas(Array.from(selected), degree)}
           onRemove={() => void removeNodeIds(Array.from(selected))}
           onClear={() => {

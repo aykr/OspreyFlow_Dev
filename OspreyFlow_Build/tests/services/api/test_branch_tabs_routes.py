@@ -26,6 +26,7 @@ import pytest
 from fastapi.testclient import TestClient
 from services.api.app import (
     app,
+    get_analytics,
     get_audit,
     get_history,
     get_investigations,
@@ -44,6 +45,7 @@ from schemas.domain import (
     AuditStub,
     Edge,
     Handling,
+    Interval,
     Node,
     Principal,
     Provenance,
@@ -163,6 +165,7 @@ class _FakeInvestigations:
         name: str,
         branched_from: str | None = None,
         domains: list[str] | None = None,
+        branch_window: Interval | None = None,
     ) -> Investigation:
         self.asked_domains.append(None if domains is None else list(domains))
         case = self.add(
@@ -172,6 +175,7 @@ class _FakeInvestigations:
             branched_from=branched_from,
             domains=domains,
         )
+        case.branch_window = branch_window
         self.created.append(case)
         return case
 
@@ -203,6 +207,13 @@ class _FakeInvestigations:
             marks.discard(investigation_id)
 
 
+class _NoAnalytics:
+    """A branch with no window asks analytics nothing (ADR-128 decision 2): any call fails."""
+
+    def __getattr__(self, name: str) -> object:
+        raise AssertionError(f"a branch with no window asked analytics for {name}")
+
+
 @pytest.fixture
 def client() -> TestClient:
     working_set = _FakeWorkingSet()
@@ -211,6 +222,7 @@ def client() -> TestClient:
     app.dependency_overrides[get_principal] = lambda: ALICE
     app.dependency_overrides[get_working_set] = lambda: working_set
     app.dependency_overrides[get_audit] = lambda: audit
+    app.dependency_overrides[get_analytics] = lambda: _NoAnalytics()
     app.dependency_overrides[get_investigations] = lambda: investigations
     app.dependency_overrides[get_history] = lambda: _FakeHistory()
     app.dependency_overrides[get_valkey] = lambda: _FakeValkey()

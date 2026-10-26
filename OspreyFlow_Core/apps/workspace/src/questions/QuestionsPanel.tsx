@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 
 import { candidateLabel, candidateSource, type EmailCandidate } from "../inspector/linkEventsApi";
+import { splitAnswer, type GraphCitation } from "./graphFacts";
 import {
   acceptProposal,
   askQuestion,
@@ -20,6 +21,13 @@ export interface QuestionsPanelProps {
   /** An accepted proposal's change to the view. */
   onDelta: (delta: unknown) => void;
   onOpenDocument?: (documentId: string) => void;
+  /** What is selected on the canvas now (ADR-129): the graph facts asked about are these and one
+   * link around them; nothing selected is the whole view. */
+  selection?: { nodeIds: string[]; linkIds: string[] };
+  /** The timeline window now, if one is set: only links and events inside it are in the facts. */
+  getTimelineWindow?: () => { validFrom: string; validTo: string | null } | null;
+  /** A `[G-n]` was chosen: the canvas selects what it stands for and brings it into view. */
+  onSelectFacts?: (citation: GraphCitation) => void;
 }
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
@@ -36,6 +44,9 @@ export function QuestionsPanel({
   investigationId,
   onDelta,
   onOpenDocument,
+  selection,
+  getTimelineWindow,
+  onSelectFacts,
 }: QuestionsPanelProps) {
   const [entries, setEntries] = useState<QuestionAnswer[] | null>(null);
   const [question, setQuestion] = useState("");
@@ -63,7 +74,11 @@ export function QuestionsPanel({
     setAsking(true);
     setProblem(null);
     try {
-      const answered = await askQuestion(apiBaseUrl, bearerToken, investigationId, text);
+      const answered = await askQuestion(apiBaseUrl, bearerToken, investigationId, text, {
+        nodeIds: selection?.nodeIds ?? [],
+        linkIds: selection?.linkIds ?? [],
+        window: getTimelineWindow?.() ?? null,
+      });
       setEntries((prev) => [...(prev ?? []), answered]);
       setQuestion("");
     } catch (err) {
@@ -104,8 +119,9 @@ export function QuestionsPanel({
   return (
     <section aria-label="Questions to the model" style={{ display: "grid", gap: "var(--sp-12)" }}>
       <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
-        The model reads the documents in this case that you can see, whole, and answers from them
-        only. What it proposes is a suggestion until you accept it.
+        The model reads the documents in this case that you can see, whole, and the links around
+        what you have selected (the whole view when nothing is). What it proposes is a suggestion
+        until you accept it.
       </p>
       {entries === null && <p style={{ margin: 0 }}>Loading the questions…</p>}
       {entries !== null && entries.length === 0 && (
@@ -119,7 +135,7 @@ export function QuestionsPanel({
               <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
                 {entry.author_name ?? entry.author} · {WHEN.format(new Date(entry.created_at))} UTC
               </p>
-              <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{entry.answer || "The model gave no answer."}</p>
+              <AnswerText entry={entry} onSelectFacts={onSelectFacts} />
               {entry.citations.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)", alignItems: "center" }}>
                   <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Draws on</span>
@@ -177,8 +193,8 @@ export function QuestionsPanel({
               {entry.unplaced > 0 && (
                 <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
                   {entry.unplaced === 1
-                    ? "1 proposal was left out: its words are not in the document the model named."
-                    : `${entry.unplaced} proposals were left out: their words are not in the documents the model named.`}
+                    ? "1 item was left out: it is not in the documents or graph facts the model was given."
+                    : `${entry.unplaced} items were left out: they are not in the documents or graph facts the model was given.`}
                 </p>
               )}
             </li>
@@ -227,5 +243,45 @@ export function QuestionsPanel({
         </p>
       )}
     </section>
+  );
+}
+
+/** The answer, with each `[G-n]` the Conduit returned as a button that selects what it stands for.
+ * A fact the words do not mark follows the answer, so every citation is reachable once. */
+function AnswerText({
+  entry,
+  onSelectFacts,
+}: {
+  entry: QuestionAnswer;
+  onSelectFacts?: (citation: GraphCitation) => void;
+}) {
+  const { parts, unmarked } = splitAnswer(entry.answer, entry.graph_citations ?? []);
+  const factButton = (citation: GraphCitation) => (
+    <button
+      key={citation.number}
+      type="button"
+      className="btn btn--quiet"
+      disabled={!onSelectFacts}
+      aria-label={`Select ${citation.label} on the canvas`}
+      onClick={() => onSelectFacts?.(citation)}
+    >
+      {citation.label}
+    </button>
+  );
+  return (
+    <>
+      <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+        {entry.answer === "" && "The model gave no answer."}
+        {parts.map((part, i) =>
+          part.kind === "text" ? <span key={`t${i}`}>{part.text}</span> : factButton(part.citation),
+        )}
+      </p>
+      {unmarked.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)", alignItems: "center" }}>
+          <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Graph facts</span>
+          {unmarked.map(factButton)}
+        </div>
+      )}
+    </>
   );
 }

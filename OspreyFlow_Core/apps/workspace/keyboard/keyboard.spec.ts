@@ -1140,6 +1140,178 @@ test("a selected node's own menu offers Branch selected for the whole selection 
   registerCovered("CANVAS_ACTIONS", "branch-selected-from-a-selected-nodes-menu");
 });
 
+// --- Select what is lit (ADR-128 decision 2, B3) ----------------------------------------------
+//
+// `harness.tsx?fixture=lit` puts the real timeline under the chain n0—n1—n2—n3—n4. The spec answers
+// the timeline's two reads: the density strip, and which links have an event in the window (e0 and
+// e1 do; e2 and e3 have none, as an undated link has none). Every step is a key: the window by Set
+// exact dates, the selection by Select what is lit, the branch by Branch selected.
+
+const LIT_HISTOGRAM = {
+  bucketing: "fixed_interval",
+  buckets: [{ start: "2026-01-01T00:00:00Z", end: "2026-01-02T00:00:00Z", count: 1 }],
+  total: 1,
+};
+
+async function stubTheTimelineReads(page: Page, lit: Record<string, string>): Promise<void> {
+  await page.route("**/*/v1/analytics/histogram", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(LIT_HISTOGRAM) });
+  });
+  await page.route("**/*/v1/analytics/first-seen", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ nodes: {}, edges: lit }),
+    });
+  });
+}
+
+async function shiftTabTo(page: Page, control: Locator, limit = 24): Promise<void> {
+  for (let presses = 0; presses < limit; presses++) {
+    if (await control.evaluate((el) => el === document.activeElement).catch(() => false)) return;
+    await page.keyboard.press("Shift+Tab");
+  }
+  await expect(control).toBeFocused();
+}
+
+/** Sets the window by keyboard alone: the timeline's overflow menu, Set exact dates, then the two
+ * boxes, each committed by leaving it. Leaves focus on the end box. */
+async function setExactDatesByKeyboard(page: Page, from: string, to: string): Promise<void> {
+  await expect(page.getByRole("button", { name: "More timeline options" })).toBeVisible();
+  await tabTo(page, page.getByRole("button", { name: "More timeline options" }), 60);
+  await page.keyboard.press("Enter");
+  await tabTo(page, page.getByRole("button", { name: "Set exact dates" }), 6);
+  await page.keyboard.press("Enter");
+  await tabTo(page, page.getByLabel("Brush window start"), 6);
+  await page.keyboard.type(from);
+  await page.keyboard.press("Tab"); // leaving the box commits it
+  await page.keyboard.type(to);
+  await expect(page.getByLabel("Brush window end")).toBeFocused();
+}
+
+async function selectWhatIsLitByKeyboard(page: Page): Promise<void> {
+  await page.keyboard.press("Tab"); // leaving the end box commits the window
+  await shiftTabTo(page, page.getByRole("button", { name: "Select what is lit" }), 12);
+  await page.keyboard.press("Enter");
+}
+
+const LIT_LINKS = { e0: "2026-02-01T10:00:00Z", e1: "2026-03-01T10:00:00Z" };
+
+test("Set exact dates, Select what is lit, then Branch selected opens a tab holding the lit slice", async ({
+  page,
+}) => {
+  await stubTheTimelineReads(page, LIT_LINKS);
+  let body: { node_ids: string[]; name?: string; window?: unknown } | null = null;
+  await page.route("**/*/investigations/*/branch", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ id: "branch-lit-1", name: "5 Jan – 30 Apr 2026, selected" }),
+    });
+  });
+  await page.goto("/keyboard/harness.html?fixture=lit");
+  await setExactDatesByKeyboard(page, "2026-01-05T00:00:00Z", "2026-05-01T00:00:00Z");
+  await selectWhatIsLitByKeyboard(page);
+
+  // The lit nodes are the ones a lit link touches; n3 and n4 are joined only by links with no event
+  // in the window, and n5 by none, so they are not selected.
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection.slice().sort()))
+    .toEqual(["n0", "n1", "n2"]);
+  await expect(page.getByRole("toolbar", { name: "Selection" })).toContainText(
+    "undated links are not included",
+  );
+
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabTo(page, page.getByRole("button", { name: "Branch to a new case" }));
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => body).not.toBeNull();
+  expect(body!.node_ids.slice().sort()).toEqual(["n0", "n1", "n2"]);
+  expect(body!.name).toBe("5 Jan – 30 Apr 2026, selected");
+  expect(body!.window).toEqual({
+    valid_from: "2026-01-05T00:00:00Z",
+    valid_to: "2026-05-01T00:00:00Z",
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __KEYBOARD__?: { branchedTo?: string | null } }).__KEYBOARD__
+            ?.branchedTo,
+      ),
+    )
+    .toBe("branch-lit-1");
+  registerCovered("CANVAS_ACTIONS", "select-what-is-lit-then-branch-selected-by-keyboard");
+});
+
+test("Undo select what is lit gives back the selection that was there before, once", async ({ page }) => {
+  await stubTheTimelineReads(page, LIT_LINKS);
+  await page.goto("/keyboard/harness.html?fixture=lit");
+  await page.getByRole("application", { name: "Network canvas" }).focus(); // n0 selected
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
+  await setExactDatesByKeyboard(page, "2026-01-05T00:00:00Z", "2026-05-01T00:00:00Z");
+  await selectWhatIsLitByKeyboard(page);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection.slice().sort()))
+    .toEqual(["n0", "n1", "n2"]);
+
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabTo(page, page.getByRole("button", { name: "Undo select what is lit" }));
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
+  // One level: with the earlier selection back, there is nothing further to undo.
+  await expect(page.getByRole("button", { name: "Undo select what is lit" })).toHaveCount(0);
+  registerCovered("CANVAS_ACTIONS", "undo-select-what-is-lit-by-keyboard");
+});
+
+test("a window that lights nothing says so and leaves the selection as it was", async ({ page }) => {
+  await stubTheTimelineReads(page, {});
+  await page.goto("/keyboard/harness.html?fixture=lit");
+  await page.getByRole("application", { name: "Network canvas" }).focus(); // n0 selected
+  await setExactDatesByKeyboard(page, "2026-01-05T00:00:00Z", "2026-05-01T00:00:00Z");
+  await selectWhatIsLitByKeyboard(page);
+
+  await expect(page.getByRole("dialog")).toContainText("Nothing is lit in this window");
+  await expect(page.getByRole("dialog")).toContainText("undated links are not included");
+  expect(await page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
+});
+
+test("a window changed after Select what is lit is not sent: the branch is a plain one", async ({ page }) => {
+  await stubTheTimelineReads(page, LIT_LINKS);
+  let body: { node_ids: string[]; name?: string; window?: unknown } | null = null;
+  await page.route("**/*/investigations/*/branch", async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ id: "branch-lit-2", name: "Branch" }),
+    });
+  });
+  await page.goto("/keyboard/harness.html?fixture=lit");
+  await setExactDatesByKeyboard(page, "2026-01-05T00:00:00Z", "2026-05-01T00:00:00Z");
+  await selectWhatIsLitByKeyboard(page);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection.slice().sort()))
+    .toEqual(["n0", "n1", "n2"]);
+  // The window moves on, so what was lit no longer describes it.
+  await page.getByLabel("Brush window end").focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.type("2026-04-01T00:00:00Z");
+  await page.keyboard.press("Tab");
+
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabTo(page, page.getByRole("button", { name: "Branch to a new case" }));
+  await page.keyboard.press("Enter");
+
+  await expect.poll(() => body).not.toBeNull();
+  expect(body!.node_ids.slice().sort()).toEqual(["n0", "n1", "n2"]);
+  expect(body!.window).toBeUndefined();
+  expect(body!.name).toBeUndefined();
+});
+
 test("Branch selected says so when nothing could be branched, and opens no tab", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   await page.route("**/*/investigations/*/branch", async (route) => {

@@ -191,12 +191,23 @@ class AnalyticsClickHouseAdapter:
             # ADR-084 Amendment 2: a branch's parents' events, on the links the branch holds only.
             scopes = ",".join("?" for _ in inherited.scopes)
             edges = ",".join("?" for _ in inherited.edge_ids)
+            # ADR-128 decision 2: a branch made from what is lit reads its parents' events inside
+            # its window only, ends included; its own events are not held to it.
+            held = ""
+            held_params: list[object] = []
+            if inherited.window is not None:
+                held = " AND occurred_at >= ?"
+                held_params.append(inherited.window.valid_from)
+                if inherited.window.valid_to is not None:
+                    held += " AND occurred_at <= ?"
+                    held_params.append(inherited.window.valid_to)
             clauses = [
                 f"(investigation_scope = ? OR (investigation_scope IN ({scopes}) "
-                f"AND edge_id IN ({edges})))"
+                f"AND edge_id IN ({edges}){held}))"
             ]
             params.extend(inherited.scopes)
             params.extend(inherited.edge_ids)
+            params.extend(held_params)
         if event_filter.window is not None:
             clauses.append("occurred_at >= ?")
             params.append(event_filter.window.valid_from)

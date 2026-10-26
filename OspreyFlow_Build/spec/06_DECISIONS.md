@@ -19464,3 +19464,51 @@ Decided by the coordinator under the owner's delegation for Brief 3.
     among the added nodes and the nodes already on the canvas, in the same seed.
   - **The search box** asks `suggest` (prefix), which, like `search`, now also asks the canonical form of
     a phone number or account reference.
+
+### ADR-128, Amendment 2 (26 October 2026) — what building B3 settled
+
+Decided by the coordinator under the owner's delegation for Brief 3.
+- **A windowed branch keeps its window.**
+  - **The finding.** A branch reads its parents' events on the links it holds (ADR-084 Amendment 2), with
+    no time bound. So a lit link with events outside the window would have widened the branch's
+    timeline beyond it, against Brief 3's acceptance ("its timeline starting and ending inside the
+    window").
+  - **The decision.** A branch made with a window records that window, and every read of its inherited
+    events (timeline, first-seen, the analytics routes) is limited to it, both ends included. A branch
+    made without a window is unchanged.
+- **The request.**
+  - A `window` travels with a selection: a window without node ids is a 422, and so is one that runs
+    backwards.
+  - The Glass sends it only while the selection is still within what was lit and the window is
+    unchanged; otherwise the branch is a plain one.
+- **The tab's name.** The brush's end is the end of its last day (midnight at the start of the next), so
+  "through 30 April" sends `1 May 00:00`. The name reads a midnight end as the day before, so it says "30
+  Apr".
+- **Undo.** No selection undo existed. "One undo" is one level, scoped to the lit selection: an "Undo
+  select what is lit" control in the selection bar, offered while the selection is exactly the lit set.
+- **When nothing is lit,** the window leaves the selection unchanged and says so.
+- **Over the cap,** the server answers with the typed limit and its three options. The Glass states the
+  figures and "Narrow the window or select fewer nodes. No tab was made."
+
+### ADR-129, Amendment 1 (26 October 2026) — what building E1 settled
+
+Decided by the coordinator under the owner's delegation for Brief 3.
+- **The over-budget refusal is a 409**, as `limit_exceeded` is everywhere else. Its body names the
+  characters of the documents and of the evidence brief, the cap, and the three options.
+- **The request carries the scope.** `AskRequest` gains the selected node and link ids and an optional
+  timeline `window`, which keeps links by interval overlap and events inside it. A selection that resolves
+  to nothing, hidden or absent alike, gives an empty brief, not the whole view.
+- **Events per month** are counted on the links in scope through `AnalyticsPort.trend` (with a branch's
+  inherited events), and never asked when no link is in scope. So events on a hidden link never reach the
+  count. An entity event with no link is not counted.
+- **Handling** is the existing `shared_handling` over the documents and every brief element.
+- **A question needs at least one readable document,** as today.
+- **The facts' wording.**
+  - A Document node is an entity, and its links are facts.
+  - "Direct or inferred" follows the link's provenance (asserted, inferred, unresolved).
+  - A dataset's label is shown only for datasets in the case's own list.
+  - An unnamed node is called by its type, never by a piece of its id.
+- **Selecting a link fact** selects the link and centres on its first end, since the canvas cannot select
+  a link and its ends together.
+- **A kept answer** records the elements of its brief. It is hidden from a reader who can no longer see
+  one of them, as an answer read from a hidden document is.

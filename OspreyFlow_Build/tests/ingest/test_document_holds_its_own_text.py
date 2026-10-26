@@ -51,6 +51,7 @@ from tests.services.api.test_email_extraction import (
     RecordingAnalytics,
     WritingGraph,
 )
+from tests.services.api.test_questions_graph_facts import TrendAnalytics
 from tests.services.api.working_set.fakes import FakeWorkingSetStore
 from tests.services.api.working_set.test_visible_link import SCHEME
 
@@ -517,6 +518,7 @@ async def test_a_referenced_document_keeps_its_object_ref_and_the_media_store_ga
 
 
 async def test_questions_reads_an_own_text_documents_text(reports: list[dict[str, str]]) -> None:
+    from services.api.datasets import InMemoryDatasetStore
     from services.api.questions import InMemoryQuestionStore, QuestionsService
 
     graph, media = await _load_reports(reports)
@@ -541,6 +543,9 @@ async def test_questions_reads_an_own_text_documents_text(reports: list[dict[str
         candidates,  # type: ignore[arg-type]
         InMemoryQuestionStore(),
         default_model="local-model",
+        analytics=TrendAnalytics([]),  # type: ignore[arg-type]
+        datasets=InMemoryDatasetStore(),
+        investigations=None,
     )
     await service.ask("case-1", "Who is named?", ANALYST)
     (request,) = model.requests

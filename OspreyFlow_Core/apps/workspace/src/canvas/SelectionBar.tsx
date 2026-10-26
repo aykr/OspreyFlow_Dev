@@ -22,6 +22,12 @@ export interface SelectionBarProps {
    * the selection holds at least one Document (`documentCount`). */
   onAsk?: () => void;
   documentCount?: number;
+  /** ADR-128 decision 2: what Select what is lit did, said while its selection stands, with the
+   * words "undated links are not included". Absent: the selection did not come from it. */
+  litNote?: string;
+  /** Gives back the selection that was there before Select what is lit, once. Offered with
+   * `litNote`. */
+  onUndoLit?: () => void;
   onRemove: () => void;
   onClear: () => void;
 }
@@ -35,6 +41,8 @@ export function SelectionBar({
   onLinksAmong,
   onAsk,
   documentCount = 0,
+  litNote,
+  onUndoLit,
   onRemove,
   onClear,
 }: SelectionBarProps) {
@@ -57,6 +65,16 @@ export function SelectionBar({
       <span className="selection-bar__count" role="status">
         {COUNT.format(count)} selected
       </span>
+      {litNote && (
+        <span className="selection-bar__note" title={litNote}>
+          {litNote}
+        </span>
+      )}
+      {litNote && onUndoLit && (
+        <button type="button" className="btn btn--quiet" onClick={onUndoLit}>
+          Undo select what is lit
+        </button>
+      )}
       {onExpand && (
         // ADR-115 E4 (review items 2 and 5): the bar's one primary action, in brass.
         <button type="button" className="btn btn--primary" onClick={onExpand}>

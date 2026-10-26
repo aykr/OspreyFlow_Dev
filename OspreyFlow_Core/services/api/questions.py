@@ -13,6 +13,14 @@ question writes findings; Viewer to read the conversation). What the model reads
 above the analyst is never sent to the model and a citation of its number is not an answer about it
 (rule 3). Documents that together are longer than the model can read at once are refused by name
 and size, never cut and answered from in part (rule 2).
+
+**Graph facts (`06_DECISIONS.md` ADR-129 decision 1).** With the documents the model is given an
+evidence brief (`evidence_brief.py`): the analyst's selection and one link around it, or the whole
+view with no selection, from the same projection, as the analyst. It cites a fact as `[G-n]`; the
+answer carries the node and link ids each stands for, for the Glass, and the model never sees an id.
+The brief and the documents share one budget, and past it the question is refused with the typed
+`limit_exceeded` and its three options, never trimmed. A `[G-n]` the brief does not hold is dropped
+from the answer and counted unplaced.
 """
 
 from __future__ import annotations
@@ -21,19 +29,24 @@ import hashlib
 import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import asyncpg
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from services.extract.candidates import ExtractionCandidate
 from services.extract.recognised import properties_for
 
 from conduit_common.identity import new_edge_id, new_id
+from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from ports.model import ModelPort
+from schemas.analytics import EventFilter, TrendInterval, TrendRequest
 from schemas.domain import (
+    Edge,
     EdgeWrite,
     Handling,
+    Interval,
+    Node,
     OntologySchema,
     Principal,
     Provenance,
@@ -42,8 +55,18 @@ from schemas.domain import (
 )
 from schemas.model import ExtractionRequest
 
+from .datasets import DatasetStore
 from .document_reader import DocumentReaderService
 from .email_extraction import _edge_from_write
+from .event_scope import CaseRecords, visible_ancestors, with_inherited
+from .evidence_brief import (
+    EvidenceBrief,
+    cited_numbers,
+    scope_of,
+    strip_unheld,
+    write_brief,
+)
+from .investigations import InvestigationNotFoundError
 from .link_ids import as_stored
 from .review import (
     DocumentNotFoundError,
@@ -53,13 +76,18 @@ from .review import (
     accept_candidate,
     reject_candidate,
 )
-from .working_set.models import DeltaAdd
+from .working_set.models import BranchFilter, DeltaAdd
 from .working_set.service import WorkingSetService
 
 #: How much document text one question may send the model: the extraction model is served with a
 #: 32,768-token context (ADR-095), which also holds the instructions, the question and the answer.
 QUESTIONS_MAX_CHARS = 80_000
 MAX_QUESTION_CHARS = 2_000
+#: The furthest back the brief's events per month reach: a hundred years, so the trend's own
+#: default bound (104 periods) never refuses a question that is otherwise within the budget.
+MAX_BRIEF_MONTHS = 1200
+#: How many ids a selection may name: the Glass sends the nodes selected on the canvas.
+MAX_SELECTION = 2_000
 MENTIONED_IN = "MENTIONED_IN"
 DOCUMENT_TYPE = "Document"
 PROPOSABLE_TYPES = ("Person", "Organisation", "Location", "Endpoint")
@@ -73,6 +101,15 @@ _INSTRUCTIONS = (
     "name it. Describe patterns (who wrote to whom, when, about what) in the answer."
 )
 
+#: Added to the instructions only when there are graph facts to read.
+_GRAPH_INSTRUCTIONS = (
+    "Below the documents are graph facts about the case: the entities in scope, the links among "
+    "them as numbered facts [G-n], and the events per month. Use them as well as the documents. "
+    "Say which facts your answer draws on by their numbers, in the answer as [G-n] and in "
+    "`graph_cited`. Cite only numbers that are listed; do not invent one. A fact is not a "
+    "document: do not give a document number for it."
+)
+
 
 def _schema() -> dict[str, Any]:
     return {
@@ -80,6 +117,7 @@ def _schema() -> dict[str, Any]:
         "properties": {
             "answer": {"type": "string"},
             "cited": {"type": "array", "items": {"type": "integer"}},
+            "graph_cited": {"type": "array", "items": {"type": "integer"}},
             "entities": {
                 "type": "array",
                 "items": {
@@ -106,6 +144,16 @@ class Citation(BaseModel):
     title: str | None = None
 
 
+class GraphCitation(BaseModel):
+    """A `[G-n]` the answer cites and the ids it stands for, so the Glass can select them and bring
+    them into view. The model is never given these ids (rule 7)."""
+
+    number: int
+    label: str
+    node_ids: list[str]
+    link_ids: list[str]
+
+
 class QuestionEntry(BaseModel):
     """One question and its answer, as kept with the case."""
 
@@ -122,6 +170,11 @@ class QuestionEntry(BaseModel):
     unplaced: int = 0
     model: str
     created_at: datetime
+    #: Every node and link the evidence brief was drawn from, held like `read_ids`: a reader who
+    #: may not see one of them is not shown the entry (rule 3).
+    graph_node_ids: list[str] = Field(default_factory=list)
+    graph_link_ids: list[str] = Field(default_factory=list)
+    graph_citations: list[GraphCitation] = Field(default_factory=list)
 
 
 class QuestionAnswer(BaseModel):
@@ -136,8 +189,11 @@ class QuestionAnswer(BaseModel):
     answer: str
     citations: list[Citation]
     candidates: list[ExtractionCandidateRecord]
+    #: Proposals and graph citations left out: the words are not in the document named, or the
+    #: fact is not in the brief.
     unplaced: int
     created_at: datetime
+    graph_citations: list[GraphCitation] = Field(default_factory=list)
 
 
 class QuestionAccepted(BaseModel):
@@ -147,6 +203,24 @@ class QuestionAccepted(BaseModel):
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+    #: What the analyst has selected on the canvas: the evidence brief is these and one link around
+    #: them. Nothing selected is the whole view. An id the analyst may not see selects nothing, as
+    #: one that does not exist does.
+    selected_node_ids: list[str] = Field(default_factory=list, max_length=MAX_SELECTION)
+    selected_link_ids: list[str] = Field(default_factory=list, max_length=MAX_SELECTION)
+    #: The timeline window, when one is set: only links whose interval overlaps it, and only events
+    #: inside it, are in the brief ("narrow the timeline window" is one of the limit's options).
+    window: Interval | None = None
+
+    @model_validator(mode="after")
+    def _window_runs_forward(self) -> AskRequest:
+        if (
+            self.window is not None
+            and self.window.valid_to is not None
+            and self.window.valid_from > self.window.valid_to
+        ):
+            raise ValueError("the window ends before it starts")
+        return self
 
 
 def shared_handling(handlings: Sequence[Handling]) -> Handling | None:
@@ -161,13 +235,61 @@ class NoDocumentsError(Exception):
     """The case holds no Document the analyst can see, so there is nothing to ask about."""
 
 
-class QuestionsTooLargeError(Exception):
-    """The documents together are longer than the model can read at once (rule 2: never cut)."""
+QuestionsOption = Literal["narrow_selection", "narrow_timeline_window", "branch"]
+_QUESTIONS_OPTIONS: tuple[QuestionsOption, ...] = (
+    "narrow_selection",
+    "narrow_timeline_window",
+    "branch",
+)
 
-    def __init__(self, would_be: int, limit: int) -> None:
+
+class QuestionsLimitExceeded(BaseModel):
+    """What a question past the budget is answered with (`06_DECISIONS.md` ADR-129 decision 1): the
+    typed `limit_exceeded` and its three options, never a trimmed brief or a cut document (rule 2).
+    The two figures name what is large; both are of what the reader may see, so the refusal says
+    nothing about what they may not."""
+
+    error: Literal["limit_exceeded"] = "limit_exceeded"
+    cap_kind: Literal["characters"] = "characters"
+    cap: int
+    would_be: int
+    documents_chars: int
+    evidence_brief_chars: int
+    options: list[QuestionsOption] = Field(default_factory=lambda: list(_QUESTIONS_OPTIONS))
+
+
+class QuestionsTooLargeError(Exception):
+    """The documents and the evidence brief together are longer than the model can read at once
+    (rule 2: never cut)."""
+
+    def __init__(
+        self, would_be: int, limit: int, *, documents_chars: int = 0, brief_chars: int = 0
+    ) -> None:
         super().__init__(f"{would_be} characters against a limit of {limit}")
         self.would_be = would_be
         self.limit = limit
+        self.documents_chars = documents_chars
+        self.brief_chars = brief_chars
+
+    def body(self) -> QuestionsLimitExceeded:
+        return QuestionsLimitExceeded(
+            cap=self.limit,
+            would_be=self.would_be,
+            documents_chars=self.documents_chars,
+            evidence_brief_chars=self.brief_chars,
+        )
+
+
+def _fits(documents_chars: int, brief_chars: int) -> None:
+    """One budget for the documents and the evidence brief together (rule 2). Read at the call, so
+    a test can lower it."""
+    if documents_chars + brief_chars > QUESTIONS_MAX_CHARS:
+        raise QuestionsTooLargeError(
+            documents_chars + brief_chars,
+            QUESTIONS_MAX_CHARS,
+            documents_chars=documents_chars,
+            brief_chars=brief_chars,
+        )
 
 
 class QuestionStore(Protocol):
@@ -206,6 +328,9 @@ CREATE TABLE IF NOT EXISTS case_questions (
     created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS case_questions_case_idx ON case_questions (investigation_id, created_at);
+ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS graph_node_ids JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS graph_link_ids JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS graph_citations JSONB NOT NULL DEFAULT '[]';
 """
 
 
@@ -230,8 +355,9 @@ class PostgresQuestionStore:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO case_questions (id, investigation_id, author, question, answer, "
-                "document_ids, read_ids, candidate_ids, unplaced, model, created_at) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+                "document_ids, read_ids, candidate_ids, unplaced, model, created_at, "
+                "graph_node_ids, graph_link_ids, graph_citations) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
                 entry.id,
                 entry.investigation_id,
                 entry.author,
@@ -243,6 +369,9 @@ class PostgresQuestionStore:
                 entry.unplaced,
                 entry.model,
                 entry.created_at,
+                json.dumps(entry.graph_node_ids),
+                json.dumps(entry.graph_link_ids),
+                json.dumps([c.model_dump() for c in entry.graph_citations]),
             )
 
     async def list_for_case(self, investigation_id: str) -> list[QuestionEntry]:
@@ -258,6 +387,9 @@ class PostgresQuestionStore:
                     "document_ids": json.loads(row["document_ids"]),
                     "read_ids": json.loads(row["read_ids"]),
                     "candidate_ids": json.loads(row["candidate_ids"]),
+                    "graph_node_ids": json.loads(row["graph_node_ids"]),
+                    "graph_link_ids": json.loads(row["graph_link_ids"]),
+                    "graph_citations": json.loads(row["graph_citations"]),
                 }
             )
             for row in rows
@@ -284,6 +416,9 @@ class QuestionsService:
         store: QuestionStore,
         *,
         default_model: str,
+        analytics: AnalyticsPort,
+        datasets: DatasetStore,
+        investigations: CaseRecords | None,
     ) -> None:
         self._working_set = working_set
         self._reader = reader
@@ -293,13 +428,15 @@ class QuestionsService:
         self._candidates = candidates
         self._store = store
         self._default_model = default_model
+        self._analytics = analytics
+        self._datasets = datasets
+        self._investigations = investigations
 
     async def _documents(
-        self, investigation_id: str, principal: Principal
+        self, investigation_id: str, principal: Principal, nodes: Sequence[Node]
     ) -> list[tuple[str, str | None, str, Handling]]:
-        """`(id, title, text, handling)` of every Document in the case's view the analyst can
-        see."""
-        nodes, _ = await self._working_set.visible_membership(investigation_id, principal)
+        """`(id, title, text, handling)` of every Document among `nodes`, the case's view as the
+        analyst may see it."""
         found: list[tuple[str, str | None, str, Handling]] = []
         for node in sorted(
             (n for n in nodes if n.type == DOCUMENT_TYPE),
@@ -310,35 +447,155 @@ class QuestionsService:
                 found.append((node.id, view.title, view.text, node.handling))
         return found
 
+    async def _events_per_month(
+        self,
+        investigation_id: str,
+        principal: Principal,
+        link_ids: Sequence[str],
+        window: Interval | None,
+    ) -> tuple[list[tuple[str, int]], list[Handling]]:
+        """The events on the links in scope, counted per month as the analyst: an event they may
+        not see moves no figure (the store applies the access filter in its own query). Asked only
+        by link, never by node: an event on a link the analyst may not see is not theirs to count,
+        and an empty list of links would not restrict the store at all, so no link, no question."""
+        if not link_ids:
+            return [], []
+        base = EventFilter(
+            investigation_scope=investigation_id, edge_ids=list(link_ids), window=window
+        )
+        ancestors: list[str] = []
+        branch_window: Interval | None = None
+        if self._investigations is not None:
+            try:
+                case = await self._investigations.get(investigation_id)
+            except InvestigationNotFoundError:
+                case = None
+            if case is not None:
+                ancestors = await visible_ancestors(self._investigations, case, principal)
+                branch_window = case.branch_window
+        trend = await self._analytics.trend(
+            TrendRequest(
+                filter=with_inherited(base, ancestors, link_ids, window=branch_window),
+                interval=TrendInterval.MONTH,
+                max_periods=MAX_BRIEF_MONTHS,
+            ),
+            principal,
+        )
+        months = [
+            (point.period_start.strftime("%Y-%m"), int(point.value))
+            for point in sorted(trend.points, key=lambda p: p.period_start)
+            if point.value
+        ]
+        handlings = [
+            Handling(
+                classification=h.classification,
+                handling_code=h.handling_code,
+                originator=h.originator,
+                owning_unit=h.owning_unit,
+            )
+            for h in trend.handlings
+        ]
+        return months, handlings
+
+    async def _evidence_brief(
+        self,
+        investigation_id: str,
+        principal: Principal,
+        nodes: Sequence[Node],
+        edges: Sequence[Edge],
+        selected_node_ids: Sequence[str],
+        selected_link_ids: Sequence[str],
+        window: Interval | None,
+        documents_chars: int,
+    ) -> EvidenceBrief:
+        """The brief for what `principal` selected, from their own view, refused whole when it and
+        the documents do not fit together (rule 2). The cap is checked before the events are read,
+        so the links the events are asked over are only ever as many as the budget allows."""
+        scope = scope_of(
+            nodes,
+            edges,
+            selected_node_ids=selected_node_ids,
+            selected_link_ids=selected_link_ids,
+            window=(
+                BranchFilter(valid_from=window.valid_from, valid_to=window.valid_to)
+                if window is not None
+                else None
+            ),
+        )
+        labels = {d.id: d.name for d in await self._datasets.of_case(investigation_id)}
+        brief = write_brief(scope, labels)
+        _fits(documents_chars, len(brief.text))
+        months, event_handlings = await self._events_per_month(
+            investigation_id, principal, brief.link_ids, window
+        )
+        if months:
+            brief = write_brief(scope, labels, months, event_handlings)
+            _fits(documents_chars, len(brief.text))
+        return brief
+
     async def ask(
-        self, investigation_id: str, question: str, principal: Principal
+        self,
+        investigation_id: str,
+        question: str,
+        principal: Principal,
+        *,
+        selected_node_ids: Sequence[str] = (),
+        selected_link_ids: Sequence[str] = (),
+        window: Interval | None = None,
     ) -> QuestionAnswer:
-        documents = await self._documents(investigation_id, principal)
+        nodes, edges = await self._working_set.visible_membership(investigation_id, principal)
+        documents = await self._documents(investigation_id, principal, nodes)
         if not documents:
             raise NoDocumentsError(investigation_id)
-        total = sum(len(text) for _, _, text, _ in documents)
-        if total > QUESTIONS_MAX_CHARS:
-            raise QuestionsTooLargeError(total, QUESTIONS_MAX_CHARS)
+        documents_chars = sum(len(text) for _, _, text, _ in documents)
+        brief = await self._evidence_brief(
+            investigation_id,
+            principal,
+            nodes,
+            edges,
+            selected_node_ids,
+            selected_link_ids,
+            window,
+            documents_chars,
+        )
         numbered = "\n\n".join(
             f"Document {i}: {title or '(no title)'}\n{text}"
             for i, (_, title, text, _) in enumerate(documents, start=1)
         )
+        graph_section = f"{_GRAPH_INSTRUCTIONS}\n\n{brief.text}\n\n" if brief.text else ""
         result = await self._model.extract(
             ExtractionRequest(
                 document_id=f"questions:{investigation_id}",
-                text=f"{_INSTRUCTIONS}\n\n{numbered}\n\nQuestion: {question}",
+                text=f"{_INSTRUCTIONS}\n\n{numbered}\n\n{graph_section}Question: {question}",
                 json_schema=_schema(),
                 model=self._default_model,
-                handling=shared_handling([h for _, _, _, h in documents]),
+                handling=shared_handling([h for _, _, _, h in documents] + list(brief.handlings)),
             )
         )
         data = result.data
         answer = str(data.get("answer") or "").strip()
-        cited_numbers = [n for n in data.get("cited") or [] if isinstance(n, int)]
-        cited = [documents[n - 1][0] for n in cited_numbers if 1 <= n <= len(documents)]
+        document_numbers = [n for n in data.get("cited") or [] if isinstance(n, int)]
+        cited = [documents[n - 1][0] for n in document_numbers if 1 <= n <= len(documents)]
+
+        # A fact the brief does not hold is one the model invented: dropped, in the words and in
+        # the list, and counted with the proposals left out.
+        listed = data.get("graph_cited")
+        asked_for = cited_numbers(answer, listed if isinstance(listed, list) else [])
+        held = {f.number: f for f in brief.facts}
+        graph_citations = [
+            GraphCitation(
+                number=n,
+                label=held[n].label,
+                node_ids=list(held[n].node_ids),
+                link_ids=list(held[n].link_ids),
+            )
+            for n in sorted(asked_for)
+            if n in held
+        ]
+        answer = strip_unheld(answer, set(held))
 
         proposals: list[ExtractionCandidate] = []
-        unplaced = 0
+        unplaced = len(asked_for) - len(graph_citations)
         for item in data.get("entities") or []:
             if not isinstance(item, dict) or item.get("type") not in PROPOSABLE_TYPES:
                 unplaced += 1
@@ -392,6 +649,9 @@ class QuestionsService:
             unplaced=unplaced,
             model=result.model,
             created_at=datetime.now(UTC),
+            graph_node_ids=list(brief.node_ids),
+            graph_link_ids=list(brief.link_ids),
+            graph_citations=graph_citations,
         )
         await self._store.add(entry)
         titles = {d: t for d, t, _, _ in documents}
@@ -404,6 +664,7 @@ class QuestionsService:
             candidates=records,
             unplaced=unplaced,
             created_at=entry.created_at,
+            graph_citations=graph_citations,
         )
 
     async def _handling_of(
@@ -419,8 +680,23 @@ class QuestionsService:
         see, with the proposals their unit owns, each in its present state. An answer read from a
         Document above them is left out, without a word to say so (rule 3)."""
         out: list[QuestionAnswer] = []
-        for entry in await self._store.list_for_case(investigation_id):
+        entries = await self._store.list_for_case(investigation_id)
+        seen_nodes: set[str] = set()
+        seen_links: set[str] = set()
+        if any(e.graph_node_ids or e.graph_link_ids for e in entries):
+            # One read of the reader's own view, not one per element a brief was drawn from.
+            visible_nodes, visible_links = await self._working_set.visible_membership(
+                investigation_id, principal
+            )
+            seen_nodes = {n.id for n in visible_nodes}
+            seen_links = {e.id for e in visible_links}
+        for entry in entries:
             if not await self._sees_all(investigation_id, entry.read_ids, principal):
+                continue
+            if not (
+                seen_nodes.issuperset(entry.graph_node_ids)
+                and seen_links.issuperset(entry.graph_link_ids)
+            ):
                 continue
             citations = []
             for document_id in entry.document_ids:
@@ -450,6 +726,7 @@ class QuestionsService:
                     candidates=records,
                     unplaced=entry.unplaced,
                     created_at=entry.created_at,
+                    graph_citations=entry.graph_citations,
                 )
             )
         return out
@@ -534,11 +811,13 @@ class QuestionsService:
 __all__: Sequence[str] = (
     "AskRequest",
     "Citation",
+    "GraphCitation",
     "InMemoryQuestionStore",
     "NoDocumentsError",
     "PostgresQuestionStore",
     "QuestionAccepted",
     "QuestionAnswer",
+    "QuestionsLimitExceeded",
     "QuestionsService",
     "QuestionsTooLargeError",
 )

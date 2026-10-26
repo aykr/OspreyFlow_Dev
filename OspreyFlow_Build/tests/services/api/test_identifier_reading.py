@@ -38,15 +38,15 @@ def test_each_string_of_the_list_is_split_the_same_way() -> None:
 
 
 def test_a_number_written_with_spaces_is_one_identifier() -> None:
-    assert split_identifiers(["+44 7700 900640\n07700 900641, QQ 12 34 56 A"]) == [
-        "+44 7700 900640",
+    assert split_identifiers(["+44 7700 900123\n07700 900641, QQ 12 34 56 A"]) == [
+        "+44 7700 900123",
         "07700 900641",
         "QQ 12 34 56 A",
     ]
 
 
 def test_numbers_separated_only_by_a_space_are_split() -> None:
-    assert split_identifiers(["07700900640 07700900641"]) == ["07700900640", "07700900641"]
+    assert split_identifiers(["07700900123 07700900641"]) == ["07700900123", "07700900641"]
 
 
 def test_quotes_a_csv_cell_may_carry_are_dropped() -> None:
@@ -63,9 +63,9 @@ def test_quotes_a_csv_cell_may_carry_are_dropped() -> None:
         ("SYN-70417", "account", "SYN-70417"),
         ("syn-70417", "account", "SYN-70417"),
         ("PC-Z1234ZZ", "account", "PC-Z1234ZZ"),
-        ("07700 900640", "msisdn", "+447700900640"),
-        ("+44 7700 900640", "msisdn", "+447700900640"),
-        ("447700900640", "msisdn", "+447700900640"),
+        ("07700 900123", "msisdn", "+447700900123"),
+        ("+44 7700 900123", "msisdn", "+447700900123"),
+        ("447700900123", "msisdn", "+447700900123"),
     ],
 )
 def test_the_kind_is_told_from_the_shape_and_normalised_by_its_adapter(
@@ -80,7 +80,7 @@ def test_anything_else_matches_nothing(typed: str) -> None:
 
 
 def test_three_spellings_of_one_number_read_as_one_identifier() -> None:
-    keys = {read_identifier(t).key for t in ("+447700900640", "07700 900640", "0044 7700 900640")}
+    keys = {read_identifier(t).key for t in ("+447700900123", "07700 900123", "0044 7700 900123")}
     assert len(keys) == 1
 
 
@@ -89,8 +89,8 @@ def test_a_prison_number_and_an_account_of_the_same_letters_stay_apart() -> None
 
 
 def test_the_search_box_normalises_a_phone_number() -> None:
-    assert search_alternative("07700 900640") == "+447700900640"
-    assert search_alternative("0044 7700 900640") == "+447700900640"
+    assert search_alternative("07700 900123") == "+447700900123"
+    assert search_alternative("0044 7700 900123") == "+447700900123"
 
 
 def test_the_search_box_normalises_an_account_reference() -> None:
@@ -98,7 +98,7 @@ def test_the_search_box_normalises_an_account_reference() -> None:
 
 
 @pytest.mark.parametrize(
-    "typed", ["+447700900640", "SYN-70417", "AB123456C", "Z1234ZZ", "alpha", "Smith", "12", ""]
+    "typed", ["+447700900123", "SYN-70417", "AB123456C", "Z1234ZZ", "alpha", "Smith", "12", ""]
 )
 def test_the_search_box_leaves_other_text_as_typed(typed: str) -> None:
     assert search_alternative(typed) is None

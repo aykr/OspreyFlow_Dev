@@ -70,23 +70,38 @@ def _h(classification: str, unit: str = "unit-1", code: str = "P") -> Handling:
     )
 
 
+def _with_one_secret_row() -> list[dict[str, str]]:
+    """R15's file as written, with its first row's handling columns set to SECRET (the owner dropped
+    the plan's own covert link, ADR-120 Amendment 16, so the rule-3 behaviour is tested over a marking
+    these tests plant: ADR-127 Amendment 31). Built here; the fixtures are untouched."""
+    rows = [dict(r) for r in rows_of(FILE)]
+    rows[0] = {**rows[0], "classification": "SECRET"}
+    return rows
+
+
+def _marks(rows: list[dict[str, str]]) -> set[tuple[Any, ...]]:
+    return {row_marking(r) for r in rows}
+
+
 async def test_r15s_report_names_every_marking_its_rows_were_written_at() -> None:
     graph, store, _ = await loaded(*BEFORE)
-    report, _events = await load(graph, FILE, Sink(store, CASE))
+    rows = _with_one_secret_row()
+    report, _events = await load(graph, FILE, Sink(store, CASE), rows=rows)
     assert report.rejections == []
-    written = {row_marking(row) for row in rows_of(FILE)}
-    assert {m[0] for m in written} == {"OFFICIAL", "SECRET"}, "the file has its one SECRET link"
+    written = _marks(rows)
+    assert {m[0] for m in written} == {"OFFICIAL", "SECRET"}, "the planted SECRET row"
     assert {marking(h) for h in report.markings} == written
     assert report.edges_created > 0
 
 
 async def test_a_marking_is_named_once_and_only_where_a_row_was_written() -> None:
     graph, store, _ = await loaded(*BEFORE)
-    report, _events = await load(graph, FILE, Sink(store, CASE))
+    rows = _with_one_secret_row()
+    report, _events = await load(graph, FILE, Sink(store, CASE), rows=rows)
     keys = [marking(h) for h in report.markings]
     assert len(keys) == len(set(keys)), "each distinct marking once"
-    second, _ = await load(graph, FILE, Sink(store, CASE), "load-2")
-    assert second.rows_already_loaded == len(rows_of(FILE))
+    second, _ = await load(graph, FILE, Sink(store, CASE), "load-2", rows=rows)
+    assert second.rows_already_loaded == len(rows)
     # Amendment 26: every row read is marked, written or not. A re-run wrote nothing, yet its counts
     # (`rows_read`, `rows_already_loaded`) include the SECRET row, so it names the same markings.
     assert {marking(h) for h in second.markings} == {marking(h) for h in report.markings}
@@ -99,7 +114,7 @@ def _broken(row: dict[str, str]) -> dict[str, str]:
 
 async def test_a_rejected_row_is_marked_too() -> None:
     graph, store, _ = await loaded(*BEFORE)
-    rows = list(rows_of(FILE))
+    rows = _with_one_secret_row()
     secret = next(r for r in rows if row_marking(r)[0] == "SECRET")
     official = next(r for r in rows if row_marking(r)[0] == "OFFICIAL")
     report, _events = await load(graph, FILE, Sink(store, CASE), rows=[official, _broken(secret)])
@@ -110,7 +125,7 @@ async def test_a_rejected_row_is_marked_too() -> None:
 
 async def test_a_rejection_carries_the_marking_of_its_row() -> None:
     graph, store, _ = await loaded(*BEFORE)
-    secret = next(r for r in rows_of(FILE) if row_marking(r)[0] == "SECRET")
+    secret = next(r for r in _with_one_secret_row() if row_marking(r)[0] == "SECRET")
     report, _events = await load(graph, FILE, Sink(store, CASE), rows=[_broken(secret)])
     (rejection,) = report.rejections
     assert rejection.marking is not None and rejection.marking.classification == "SECRET"
@@ -120,14 +135,15 @@ def test_every_row_read_is_marked_even_when_the_case_already_holds_it() -> None:
     from services.ingest.engine import row_group_keys, resolve_rows_keyed
 
     recipe = recipe_for(FILE)
-    rows = list(rows_of(FILE))
+    rows = _with_one_secret_row()
     keys = [k for k in row_group_keys(recipe, rows) if k is not None]
     done = resolve_rows_keyed(
         recipe, rows, load_id="l", source=FILE, ontology=ONTOLOGY, scheme=SCHEME,
         already_loaded=frozenset(keys),
     )  # fmt: skip
     assert done.rows_already_loaded == len(rows) and done.staged_rows == []
-    assert {marking(h) for h in done.markings} == {row_marking(r) for r in rows}
+    assert {marking(h) for h in done.markings} == _marks(rows)
+    assert any(h.classification == "SECRET" for h in done.markings)
 
 
 def test_a_row_whose_marking_cannot_be_resolved_records_the_most_restrictive_one(

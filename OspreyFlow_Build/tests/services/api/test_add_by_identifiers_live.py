@@ -92,14 +92,14 @@ async def test_a_person_the_reader_may_not_see_answers_as_a_made_up_one() -> Non
 async def test_each_kind_resolves_to_its_node_and_a_pin_is_not_an_account() -> None:
     async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
         person = _person(prison_number="Z1111ZZ", nino="QQ111111A")
-        number = _endpoint("+447700900640", "msisdn")
+        number = _endpoint("+447700900123", "msisdn")
         account = _endpoint("SYN-70417", "account")
         pin = _endpoint("PIN-Z1111ZZ", "handle")
         tx = await graph.begin_transaction()
         await graph.upsert_nodes([person, number, account, pin], tx)
         await graph.commit_transaction(tx)
 
-        typed = ["Z1111ZZ\nQQ 11 11 11 A\n07700 900640\n+44 7700 900640\nsyn-70417\nPIN-Z1111ZZ"]
+        typed = ["Z1111ZZ\nQQ 11 11 11 A\n07700 900123\n+44 7700 900123\nsyn-70417\nPIN-Z1111ZZ"]
         result = await resolve_identifiers(graph, typed, READER)
         assert result.counts == IdentifierCounts(read=6, found=5, matched_nothing=1, repeated=1)
         assert {n.id for n in result.nodes} == {person.id, number.id, account.id}

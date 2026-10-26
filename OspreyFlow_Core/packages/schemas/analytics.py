@@ -168,6 +168,11 @@ class InheritedEvents(BaseModel):
 
     scopes: list[str] = Field(default_factory=list)
     edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: ADR-128 decision 2: a branch made from what is lit records its window, and reads the
+    #: parent's events only inside it, both ends included, so its timeline starts and ends inside
+    #: the window. `None`: every inherited event, as before. Applies to the inherited events only;
+    #: the branch's own are never held to it.
+    window: Interval | None = None
 
 
 class EventFilter(BaseModel):

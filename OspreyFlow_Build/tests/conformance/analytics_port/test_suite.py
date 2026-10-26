@@ -803,6 +803,36 @@ async def test_inherited_events_obey_every_other_predicate(
         assert (await adapter.histogram(windowed, CLEARED)).total == 2
 
 
+async def test_inherited_events_are_held_to_the_branchs_window_ends_included(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """ADR-128 decision 2: a branch made from what is lit records its window, and the parent's
+    events it reads are only those inside it, both ends included. The branch's own events are not
+    held to it, and a branch with no window reads every inherited event, as before."""
+    start = datetime(2026, 1, 5, tzinfo=UTC)
+    end = datetime(2026, 4, 30, tzinfo=UTC)
+    events = [
+        _event(occurred_at=datetime(2026, 1, 4, tzinfo=UTC), edge_id="ab", investigation_scope="parent"),
+        _event(occurred_at=start, edge_id="ab", investigation_scope="parent"),
+        _event(occurred_at=datetime(2026, 3, 1, tzinfo=UTC), edge_id="ab", investigation_scope="parent"),
+        _event(occurred_at=end, edge_id="ab", investigation_scope="parent"),
+        _event(occurred_at=datetime(2026, 5, 1, tzinfo=UTC), edge_id="ab", investigation_scope="parent"),
+        _event(occurred_at=datetime(2026, 12, 1, tzinfo=UTC), edge_id="own"),
+    ]
+    held = InheritedEvents(
+        scopes=["parent"], edge_ids=["ab"], window=Interval(valid_from=start, valid_to=end)
+    )
+    plain = _inherited(["parent"], ["ab"])
+    async with factory.context(events) as adapter:
+        windowed = HistogramRequest(filter=_filter(inherited=held), interval_seconds=3600)
+        # Three of the parent's five (start, mid, end) and the branch's own, outside the window.
+        assert (await adapter.histogram(windowed, CLEARED)).total == 4
+        unwindowed = HistogramRequest(filter=_filter(inherited=plain), interval_seconds=3600)
+        assert (await adapter.histogram(unwindowed, CLEARED)).total == 6
+        first = await adapter.first_seen(FirstSeenRequest(filter=_filter(inherited=held)), CLEARED)
+        assert first.edges["ab"] == start
+
+
 async def test_unauthorised_inherited_event_matches_a_corpus_without_it(
     factory: AnalyticsAdapterFactory,
 ) -> None:
@@ -1498,6 +1528,31 @@ async def test_trend_counts_per_month(factory: AnalyticsAdapterFactory) -> None:
     async with factory.context(events) as adapter:
         result = await adapter.trend(TrendRequest(filter=_filter(), interval=TrendInterval.MONTH), OFFICIAL)
     assert [p.period_start.date().isoformat() for p in result.points] == ["2026-01-01", "2026-02-01"]
+
+
+async def test_trend_over_the_links_named_counts_only_events_on_them_and_a_hidden_one_moves_nothing(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """ADR-129: a question's evidence brief counts events per month on the links in its scope, and
+    only asks by link, because an event on a link the reader may not see is not theirs to count.
+    The fake the question's tests use refuses what this refuses (rule 15): an event on a link
+    outside the list counts for nothing, and an event the reader may not see, on a link in the
+    list, moves no figure."""
+    visible = [
+        _event(occurred_at=_week(0), edge_id="ab"),
+        _event(occurred_at=_week(1), edge_id="ab"),
+    ]
+    elsewhere = _event(occurred_at=_week(2), edge_id="bc", source_id="b", target_id="c")
+    hidden = _event(occurred_at=_week(3), edge_id="ab", classification="SECRET")
+    req = TrendRequest(filter=_filter(edge_ids=["ab"]), interval=TrendInterval.MONTH)
+    async with factory.context(visible) as adapter:
+        before = await adapter.trend(req, OFFICIAL)
+    async with factory.context([*visible, elsewhere, hidden]) as adapter:
+        after = await adapter.trend(req, OFFICIAL)
+        cleared = await adapter.trend(req, CLEARED)
+    assert before.events == 2
+    assert after == before, "an event on another link, or one above the reader, moves nothing"
+    assert cleared.events == 3
 
 
 async def test_unauthorised_event_moves_no_trend_point_total_or_classification(

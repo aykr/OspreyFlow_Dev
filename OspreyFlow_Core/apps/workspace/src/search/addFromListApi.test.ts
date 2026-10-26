@@ -37,8 +37,8 @@ describe("the count, in words", () => {
 
 describe("what a file gives", () => {
   it("takes a .csv's first column, a quoted cell unquoted and kept whole", () => {
-    const csv = 'identifier,name\nZ1234ZZ,Smith\n"07700 900640",x\r\nQQ123456A\n';
-    expect(listFromFile("cohort.csv", csv)).toBe("identifier\nZ1234ZZ\n07700 900640\nQQ123456A");
+    const csv = 'identifier,name\nZ1234ZZ,Smith\n"07700 900123",x\r\nQQ123456A\n';
+    expect(listFromFile("cohort.csv", csv)).toBe("identifier\nZ1234ZZ\n07700 900123\nQQ123456A");
   });
 
   it("takes a .txt whole, since its lines are the list", () => {
@@ -53,13 +53,13 @@ describe("what a file gives", () => {
 describe("the count request", () => {
   it("asks for the count alone, with the typed text as it is", async () => {
     const mock = stub(200, { counts: COUNTS, added: null });
-    const counts = await countIdentifiers("http://api", "tok", "case 1", "Z1234ZZ\n07700 900640");
+    const counts = await countIdentifiers("http://api", "tok", "case 1", "Z1234ZZ\n07700 900123");
     expect(counts).toEqual(COUNTS);
     const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("http://api/v1/investigations/case%201/working-set/add-by-identifiers");
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toEqual({
-      identifiers: ["Z1234ZZ\n07700 900640"],
+      identifiers: ["Z1234ZZ\n07700 900123"],
       confirm: false,
       with_links: false,
     });

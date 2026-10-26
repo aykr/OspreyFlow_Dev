@@ -251,7 +251,9 @@ class DocumentReaderService:
             ancestors = await visible_ancestors(self._investigations, case, principal)
             if ancestors:
                 _, edges = await self._working_set.current_membership(investigation_id)
-                event_filter = with_inherited(own, ancestors, [e.id for e in edges])
+                event_filter = with_inherited(
+                    own, ancestors, [e.id for e in edges], window=case.branch_window
+                )
         page = await self._analytics.list_events(
             EventListRequest(filter=event_filter, offset=0, limit=1), principal
         )

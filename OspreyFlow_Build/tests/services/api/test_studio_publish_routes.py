@@ -645,7 +645,6 @@ def test_a_pipeline_recipe_runs_through_the_pipeline_runner(
         app_module.get_media,
         app_module.get_jobs,
         app_module.get_valkey,
-        app_module.get_config,
         app_module.get_hotlists_store,
         app_module.get_monitors_store,
         app_module.get_patterns_store,
@@ -654,6 +653,10 @@ def test_a_pipeline_recipe_runs_through_the_pipeline_runner(
         app_module.get_extraction_candidates,
     ):
         app.dependency_overrides[getter] = lambda: object()
+    # The run reads one setting, whether a load queues post-ingest resolution (ADR-127 Amendment 33).
+    from types import SimpleNamespace
+
+    app.dependency_overrides[app_module.get_config] = lambda: SimpleNamespace(post_ingest_resolution=True)
     app.dependency_overrides[app_module.get_pipeline_recogniser_for] = lambda: (lambda name: None)
     app.dependency_overrides[app_module.get_online_geocode] = lambda: None
 

@@ -15,6 +15,7 @@ here would do, and the case that catches it:
 from __future__ import annotations
 
 import pytest
+from services.api.datasets import InMemoryDatasetStore
 from services.api.document_reader import DocumentReaderService
 from services.api.email_extraction import email_document_id
 from services.api.questions import (
@@ -38,6 +39,7 @@ from .test_email_extraction import (
     WritingGraph,
     _event,
 )
+from .test_questions_graph_facts import TrendAnalytics
 from .working_set.fakes import FakeWorkingSetStore
 from .working_set.test_visible_link import SCHEME, edge, node
 
@@ -94,6 +96,9 @@ async def _service(
         candidates,  # type: ignore[arg-type]
         InMemoryQuestionStore(),
         default_model="local-model",
+        analytics=TrendAnalytics([]),  # type: ignore[arg-type]
+        datasets=InMemoryDatasetStore(),
+        investigations=None,
     )
     return service, model, candidates, graph, working
 

@@ -856,6 +856,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         extraction_candidates,
         questions_store,
         default_model=models.extraction,
+        analytics=analytics,
+        datasets=datasets_store,
+        investigations=investigations,
     )
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
@@ -2074,11 +2077,10 @@ async def _no_documents_handler(request: Request, exc: NoDocumentsError) -> JSON
 async def _questions_too_large_handler(
     request: Request, exc: QuestionsTooLargeError
 ) -> JSONResponse:
-    """Rule 2: documents longer than the model reads at once are refused, never cut."""
-    return JSONResponse(
-        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-        content={"error": "documents_too_large", "would_be": exc.would_be, "limit": exc.limit},
-    )
+    """Rule 2 (ADR-129 decision 1): the documents and the evidence brief, together longer than the
+    model reads at once, are refused with the typed `limit_exceeded` and its three options, never
+    cut. It was a 413 `documents_too_large` without the options."""
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=exc.body().model_dump())
 
 
 @app.exception_handler(RecogniserUnavailableError)
@@ -2767,6 +2769,18 @@ async def get_investigation(
     return investigation
 
 
+def _narrowed(parent: Interval | None, asked: Interval | None) -> Interval | None:
+    """The window a new branch records: the one asked for, held inside the parent branch's own
+    (both ends included; an end of `None` runs on without end). Neither: none."""
+    if parent is None or asked is None:
+        return parent if asked is None else asked
+    ends = [t for t in (parent.valid_to, asked.valid_to) if t is not None]
+    return Interval(
+        valid_from=max(parent.valid_from, asked.valid_from),
+        valid_to=min(ends) if ends else None,
+    )
+
+
 class BranchRequest(BaseModel):
     """ADR-084. `node_ids` absent: fork the whole working set, as the cap breach's "branch" option
     always did. Present: fork only those nodes and the links between them (an empty list is a
@@ -2774,6 +2788,21 @@ class BranchRequest(BaseModel):
 
     node_ids: list[NodeId] | None = Field(default=None, max_length=50_000)
     name: str | None = None
+    #: ADR-128 decision 2 (B3, select what is lit): the brushed window, both ends inside it. With
+    #: it, the branch holds only the links with an event in the window and the nodes they touch,
+    #: derived here on the server and kept only where `node_ids` names a node. It needs a choice of
+    #: nodes: the Glass sends the window with the lit selection, never alone.
+    window: Interval | None = None
+
+    @model_validator(mode="after")
+    def _a_window_comes_with_a_choice_and_runs_forwards(self) -> BranchRequest:
+        if self.window is None:
+            return self
+        if self.node_ids is None:
+            raise ValueError("a window is sent with the nodes chosen, not alone")
+        if self.window.valid_to is not None and self.window.valid_from > self.window.valid_to:
+            raise ValueError("the window ends before it starts")
+        return self
 
 
 @app.post(
@@ -2790,6 +2819,7 @@ async def branch_investigation(
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
     datasets: DatasetsDep,
+    analytics: AnalyticsDep,
     body: BranchRequest | None = None,
 ) -> Investigation:
     # `03_CONDUIT_MIDDLEWARE.md` §3.1: "fork the working set into a new
@@ -2798,27 +2828,67 @@ async def branch_investigation(
     # principal against the *source* investigation's `owning_unit`; the
     # new investigation gets its own, from this principal, not inherited.
     node_ids = body.node_ids if body is not None else None
+    window = body.window if body is not None else None
     source_name = investigation.name or DEFAULT_CASE_NAME
     # ADR-097 (design review item 3): a branch is named for what it is, not for a selection.
     name = f"Branch of {source_name}"
-    if node_ids is not None:
+    lit_nodes: list[Node] = []
+    lit_links: list[Edge] = []
+    if window is not None:
+        # ADR-128 decision 2: what is lit is derived here, never taken from the request. The links
+        # with an event in the window come from the analytics port in its own access-filtered query
+        # for this principal, and the working set's own projection decides which of them, and which
+        # of the named nodes, this principal may see. Asked first, and before the case exists, so
+        # that an empty slice (`NothingToBranchError`) or one past the cap (`LimitExceededError`)
+        # leaves no case behind.
+        assert node_ids is not None  # `BranchRequest` refuses a window without a choice
+        lit = await analytics.first_seen(
+            FirstSeenRequest(
+                filter=await _case_event_filter(
+                    EventFilter(investigation_scope=investigation.id, window=window),
+                    principal,
+                    investigations,
+                    audit,
+                    working_set,
+                )
+            ),
+            principal,
+        )
+        lit_nodes, lit_links = await working_set.branch_lit_contents(
+            investigation.id, principal, node_ids, lit.edges.keys()
+        )
+        name = (
+            f"Branch of {source_name} ({len(lit_nodes)} lit "
+            f"{'node' if len(lit_nodes) == 1 else 'nodes'})"
+        )
+    elif node_ids is not None:
         # Asked first, and before the case exists, so that a choice with nothing visible in it
         # (`NothingToBranchError`, a 422) leaves no empty case behind.
         chosen, _, _ = await working_set.branch_contents(investigation.id, principal, node_ids)
         name = f"Branch of {source_name} ({len(chosen)} {'node' if len(chosen) == 1 else 'nodes'})"
     if body is not None and body.name is not None and body.name.strip():
         name = body.name.strip()
+    # ADR-128 decision 2: a branch made from what is lit records its window, so its timeline holds
+    # only the events inside it; a branch of a windowed case keeps that window (intersected with its
+    # own, if it has one), so it does not widen again. A branch of an ordinary case records none.
+    held_window = _narrowed(investigation.branch_window, window)
     new_investigation = await investigations.create(
         principal,
         name=name,
         branched_from=investigation.id,
         domains=investigation.domains_to_inherit(),
+        **({"branch_window": held_window} if held_window is not None else {}),
     )
     # ADR-099: a branch reads what its parent reads.
     await datasets.copy_case(investigation.id, new_investigation.id)
-    outcome = await working_set.branch(
-        investigation.id, new_investigation.id, principal, node_ids=node_ids
-    )
+    if window is not None:
+        outcome = await working_set.branch_add(
+            new_investigation.id, lit_nodes, lit_links, principal
+        )
+    else:
+        outcome = await working_set.branch(
+            investigation.id, new_investigation.id, principal, node_ids=node_ids
+        )
     await publish_delta(valkey, new_investigation.id, outcome.delta)
     await _record_history_step(
         working_set,
@@ -2835,6 +2905,7 @@ async def branch_investigation(
         resolved_query={
             "new_investigation_id": new_investigation.id,
             **({"node_ids": list(node_ids)} if node_ids is not None else {}),
+            **({"window": window.model_dump(mode="json")} if window is not None else {}),
         },
         result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
     )
@@ -5090,9 +5161,17 @@ async def ask_question_route(
     questions: QuestionsDep,
     audit: AuditDep,
 ) -> QuestionAnswer:
-    """Asks the model about the case's Documents the analyst can see (ADR-098 decision 4). What it
-    proposes is pending until a person accepts it."""
-    answer = await questions.ask(investigation.id, body.question, principal)
+    """Asks the model about the case's Documents and graph facts the analyst can see (ADR-098
+    decision 4, ADR-129 decision 1): the selection and one link around it, or the whole view. What
+    it proposes is pending until a person accepts it."""
+    answer = await questions.ask(
+        investigation.id,
+        body.question,
+        principal,
+        selected_node_ids=body.selected_node_ids,
+        selected_link_ids=body.selected_link_ids,
+        window=body.window,
+    )
     await audit.record(
         principal=principal,
         action="ask_question",
@@ -6294,9 +6373,11 @@ async def _case_event_filter(
     )
     ancestors = await visible_ancestors(investigations, case, principal)
     if not ancestors:
-        return with_inherited(event_filter, [], [])
+        return with_inherited(event_filter, [], [], window=None)
     _nodes, edges = await working_set.current_membership(case.id)
-    return with_inherited(event_filter, ancestors, [e.id for e in edges])
+    return with_inherited(
+        event_filter, ancestors, [e.id for e in edges], window=case.branch_window
+    )
 
 
 class GeometriesRequest(BaseModel):

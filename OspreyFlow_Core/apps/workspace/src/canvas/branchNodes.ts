@@ -1,3 +1,5 @@
+import type { TimeWindow } from "../crossfilter/store";
+
 export interface BranchRequest {
   apiBaseUrl: string;
   bearerToken: string;
@@ -5,6 +7,9 @@ export interface BranchRequest {
   nodeIds: string[];
   /** The new case's name (ADR-098 decision 4); absent, the Conduit's default. */
   name?: string;
+  /** ADR-128 decision 2: the window Select what is lit lit, sent with the selection so that the
+   * server derives the slice from it and carries only the lit links and their nodes. */
+  window?: TimeWindow;
 }
 
 export type BranchResult =
@@ -34,13 +39,34 @@ export async function branchSelection(
           Authorization: `Bearer ${req.bearerToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(
-          req.name ? { node_ids: req.nodeIds, name: req.name } : { node_ids: req.nodeIds },
-        ),
+        body: JSON.stringify({
+          node_ids: req.nodeIds,
+          ...(req.name ? { name: req.name } : {}),
+          ...(req.window
+            ? { window: { valid_from: req.window.validFrom, valid_to: req.window.validTo } }
+            : {}),
+        }),
       },
     );
     if (response.status === 422) {
       return { ok: false, message: "None of the selected nodes could be branched." };
+    }
+    if (response.status === 409) {
+      // The typed `limit_exceeded` (rule 2): the slice is over the working-set cap, said with its
+      // own figures, and nothing was cut to fit.
+      const limit = (await response.json().catch(() => ({}))) as {
+        cap?: unknown;
+        would_be?: unknown;
+      };
+      const figures = new Intl.NumberFormat("en-GB");
+      const said =
+        typeof limit.cap === "number" && typeof limit.would_be === "number"
+          ? `This would hold ${figures.format(limit.would_be)}, over the working-set cap of ${figures.format(limit.cap)}. `
+          : "This is over the working-set cap. ";
+      return {
+        ok: false,
+        message: `${said}Narrow the window or select fewer nodes. No tab was made.`,
+      };
     }
     if (response.status === 403) {
       return {

@@ -3,6 +3,9 @@
 // the case's view the analyst can see) and what the reader sees of the conversation; nothing here
 // widens either.
 import type { EmailCandidate } from "../inspector/linkEventsApi";
+import type { GraphCitation } from "./graphFacts";
+
+export type { GraphCitation };
 
 export interface Citation {
   document_id: string;
@@ -19,7 +22,11 @@ export interface QuestionAnswer {
   answer: string;
   citations: Citation[];
   candidates: EmailCandidate[];
-  /** Proposals whose words the model gave are not in the document it named: left out, counted. */
+  /** The `[G-n]` facts the answer cites, each with the ids it stands for (ADR-129); the Glass maps
+   * a number to ids from here and nowhere else. Absent on an answer kept before graph facts. */
+  graph_citations?: GraphCitation[];
+  /** Proposals whose words are not in the document the model named, and citations of a fact it was
+   * never given: left out, counted. */
   unplaced: number;
   created_at: string;
 }
@@ -57,27 +64,47 @@ export async function listQuestions(
   return (await response.json()) as QuestionAnswer[];
 }
 
+/** What the question is asked about (ADR-129): the nodes and links selected on the canvas, which the
+ * evidence brief is built from with one link around them (none selected: the whole view), and the
+ * timeline window, when one is set. */
+export interface AskScope {
+  nodeIds: string[];
+  linkIds: string[];
+  window?: { validFrom: string; validTo: string | null } | null;
+}
+
 /** What a refused question says, in words: never a bare status. */
 export async function askQuestion(
   apiBaseUrl: string,
   bearerToken: string,
   investigationId: string,
   question: string,
+  scope: AskScope = { nodeIds: [], linkIds: [] },
 ): Promise<QuestionAnswer> {
   const response = await send(questionsUrl(apiBaseUrl, investigationId), bearerToken, {
     method: "POST",
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({
+      question,
+      selected_node_ids: scope.nodeIds,
+      selected_link_ids: scope.linkIds,
+      ...(scope.window
+        ? { window: { valid_from: scope.window.validFrom, valid_to: scope.window.validTo } }
+        : {}),
+    }),
   });
   if (response.ok) return (await response.json()) as QuestionAnswer;
   const body = await detailOf(response);
   if (response.status === 403) throw new Error("Asking needs Editor access to this case.");
-  if (response.status === 413) {
+  if (response.status === 409 && body.error === "limit_exceeded") {
     const count = new Intl.NumberFormat("en-GB");
-    const wouldBe = typeof body.would_be === "number" ? count.format(body.would_be) : "more";
-    const limit = typeof body.limit === "number" ? count.format(body.limit) : "the limit";
+    const figure = (value: unknown, otherwise: string) =>
+      typeof value === "number" ? count.format(value) : otherwise;
     throw new Error(
-      `These documents come to ${wouldBe} characters, more than the model can read at once ` +
-        `(${limit}). Remove some from the view and ask again.`,
+      `This question comes to ${figure(body.would_be, "more")} characters, more than the model ` +
+        `can read at once (${figure(body.cap, "the limit")}): the documents are ` +
+        `${figure(body.documents_chars, "some")} and the graph facts ` +
+        `${figure(body.evidence_brief_chars, "some")}. Nothing was sent. ` +
+        "Narrow the selection, narrow the timeline window, or branch the case, then ask again.",
     );
   }
   if (response.status === 422 && body.error === "no_documents") {
