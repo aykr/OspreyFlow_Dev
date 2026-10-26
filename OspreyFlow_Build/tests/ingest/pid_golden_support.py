@@ -17,6 +17,7 @@ a link of its own.
 from __future__ import annotations
 
 import csv
+import re
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -64,6 +65,8 @@ RECIPE_OF = {
     "pid_seized_comms_batch2.csv": "pid_seized_comms_recipe.yaml",
     "pid_prisoner_money.csv": "pid_prisoner_money_recipe.yaml",
     "pid_throwover_log.csv": "pid_throwover_log_recipe.yaml",
+    "pid_intel_reports.csv": "pid_intel_reports_recipe.yaml",
+    "pid_report_incidents.csv": "pid_report_incidents_recipe.yaml",
 }
 
 
@@ -120,6 +123,7 @@ async def load(
     load_id: str | None = None,
     rows: list[dict[str, str]] | None = None,
     recipe: Recipe | None = None,
+    media: InMemoryMediaStore | None = None,
 ) -> tuple[Any, list[Any]]:
     report, events, _held = await load_with_rules(
         recipe or recipe_for(file),
@@ -130,7 +134,7 @@ async def load(
         load_id=load_id or f"load-{file}",
         investigation_scope=CASE,
         source=file,
-        media=InMemoryMediaStore(),
+        media=media if media is not None else InMemoryMediaStore(),
         rules=None,
         scheme=SCHEME,
         sink=sink,  # type: ignore[arg-type]
@@ -305,8 +309,9 @@ def replay(*steps: str | Step) -> Replay:
 
 _IDENTIFIERS = (
     "prison_number", "nino", "site_ref", "establishment_ref", "org_ref", "incident_ref", "imei",
-    "value_normalised",
+    "value_normalised", "message_id",
 )  # fmt: skip
+_IR = re.compile(r"IR \d+")
 
 
 def _identity(entity: pid_plan.PlanEntity) -> tuple[str, str, str]:
@@ -316,6 +321,12 @@ def _identity(entity: pid_plan.PlanEntity) -> tuple[str, str, str]:
         if name in entity.properties:
             value = str(entity.properties[name])
             return (entity.entity_type, name, value[:14] if name == "imei" else value)
+    if entity.key in PLAN.report_texts:
+        # A report has no identifying property of its own: the store names it by `message_id`, the
+        # reference its text begins with (ADR-127 Amendment 17).
+        found = _IR.match(PLAN.report_texts[entity.key])
+        assert found is not None, entity.key
+        return (entity.entity_type, "message_id", found.group())
     raise AssertionError(f"{entity.key} holds no identifying property")
 
 

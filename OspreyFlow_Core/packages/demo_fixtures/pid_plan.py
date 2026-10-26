@@ -2253,10 +2253,10 @@ _LINK_ROWS: tuple[tuple[Any, ...], ...] = (
     _link("CO_DEFENDANT_OF", _P, _P, "pid_codefendants.csv", "R8",
           ("nomis_id_a", "nomis_id_b"), props=frozenset({"case_ref"})),
     *(
-        _link("MENTIONED_IN", kind, _DOC, _REPORTS, "R9", (f"subject_{i}", "report_ref"),
+        _link("MENTIONED_IN", kind, _DOC, _REPORTS, "R9", (f"subject_{i}{suffix}", "report_ref"),
               extra=(f"subject_{i}_role",), moment="chapter4",
               addition=(_SUBJECT if kind == _P else _NAMED) if i == 1 else None)
-        for kind in (_P, _N)
+        for kind, suffix in ((_P, ""), (_N, "_nino"))
         for i in (1, 2, 3)
     ),
     _link("MENTIONED_IN", "Endpoint:msisdn", _DOC, _REPORTS, "R9",
@@ -2352,8 +2352,8 @@ _ENTITY_ROWS: tuple[tuple[Any, ...], ...] = (
             '"Mo") beside the NINO.'),
     _entity(_N, {*_PERSON, "nino"}, _REPORTS, "R9", "nino", moment="chapter4", addition=_NAMED,
             names={"family_name": None, "given_names": None, "date_of_birth": None,
-                   "aliases": None, "nino": "subject_1"},
-            key_col="subject_1", more=_SUBJECT_NAMES),
+                   "aliases": None, "nino": "subject_1_nino"},
+            key_col="subject_1_nino", more=_SUBJECT_NAMES),
     _entity("Establishment",
             {"name", "establishment_ref", "niu_area", "soct_region", "security_category"},
             _ESTATE, "R11", "establishment_ref", names={"establishment_ref": "place_ref"},
@@ -2740,7 +2740,10 @@ class _PlanIndex:
             if lk.link_type == "MENTIONED_IN" and lk.target in self.reports:
                 kind = ents[lk.source].entity_type
                 if kind == "Person":
-                    column = f"subject_{people[lk.target] + 1}"
+                    # A prisoner is named by prison number in `subject_N`; an outside person by
+                    # NINO in `subject_N_nino`, `subject_N` left empty (ADR-120 Amendment 15).
+                    suffix = "" if self.label[lk.source] == _P else "_nino"
+                    column = f"subject_{people[lk.target] + 1}{suffix}"
                     people[lk.target] += 1
                 elif kind == "Location":
                     n = places[lk.target]

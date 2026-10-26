@@ -79,9 +79,13 @@ def _held_at() -> list[Any]:
     return [lk for lk in PLAN.links if lk.link_type == "HELD_AT"]
 
 
+#: The loads before R1, in the seed's order (`test_pid_seed_order` reads it).
+BEFORE = ("pid_establishment_plan.csv",)
+
+
 async def _graph() -> MergingGraph:
     """The establishments, made first as the seed makes them: by R11, the committed recipe."""
-    graph, _store, _reports = await load_in_seed_order("pid_establishment_plan.csv")
+    graph, _store, _reports = await load_in_seed_order(*BEFORE)
     return graph
 
 

@@ -37,6 +37,10 @@ byte for byte and 40 repeating an earlier call with a new `sequence` above the m
 after its original. `duration_s` is seeded between 20 and 1,800 and redrawn where two calls of one
 link would share their start and duration, so no two distinct calls share Brief 2's key.
 
+**A report's subjects** (ADR-120 Amendment 15): `subject_1` to `subject_3` hold prison numbers only.
+An outside subject's National Insurance number is written in `subject_N_nino` for the same slot,
+that row's `subject_N` left empty, and the names and date of birth sit in `subject_N_*` beside it.
+
 **The reports file's two teaching rows** (Brief 2 section 5), in the same positions every run: row
 17 (`PID_TEACHING_REPORT`) carries the number `07700 900 6O3` in `phone_mentioned` and names it
 in its text, and every row carries two letters in `reviewer_initials`, row 101 three.
@@ -55,7 +59,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import pid_writes
 from .pid_plan import (
@@ -63,6 +67,7 @@ from .pid_plan import (
     LOAD_SHAPES,
     PID_TEACHING_BAD_NUMBER,
     PID_TEACHING_REPORT,
+    Moment,
     Plan,
     PlanEntity,
     PlanRow,
@@ -90,6 +95,49 @@ _PSEUDO = frozenset({"graph port", "picture route"})
 #: The column of each file that names an outside number, written in the plan's own form.
 _NUMBER_COLUMNS = {BATCH_1: "other_number", BATCH_2: "other_number", OWNERS: "number"}
 _IR = re.compile(r"IR \d+")
+
+
+
+class SeedStage(NamedTuple):
+    """One load of the seed: a source file, the recipe that reads it and the moment it loads at
+    (`pid_plan.Moment`: "seed" before the analyst begins, "chapter4" and "chapter9" live)."""
+
+    file: str
+    recipe: str
+    moment: Moment
+
+
+#: The order the seed loads every source file, each with its recipe (ADR-127 Amendment 23): R11, R1,
+#: R14, R2, R3, R4, R16, R12, R13, R8, R15, R5, R7, R6 batch 1, R10; then at the chapter-4 moment R9
+#: and R17; then at chapter 9 R6 batch 2. Batch 1 and batch 2 are separate stages of one recipe. The
+#: seed, and a test that loads a recipe's references, load in this order or a subsequence of it.
+SEED_ORDER: tuple[SeedStage, ...] = (
+    SeedStage("pid_establishment_plan.csv", "pid_establishment_plan_recipe.yaml", "seed"),
+    SeedStage("pid_nomis_prisoners.csv", "pid_nomis_prisoners_recipe.yaml", "seed"),
+    SeedStage("pid_nomis_cell_stays.csv", "pid_nomis_cell_stays_recipe.yaml", "seed"),
+    SeedStage("pid_nomis_cell_shares.csv", "pid_nomis_cell_shares_recipe.yaml", "seed"),
+    SeedStage("pid_nomis_visits.csv", "pid_nomis_visits_recipe.yaml", "seed"),
+    SeedStage("pid_nomis_incidents.csv", "pid_nomis_incidents_recipe.yaml", "seed"),
+    SeedStage("pid_number_owners.csv", "pid_number_owners_recipe.yaml", "seed"),
+    SeedStage("pid_soc_nominals.csv", "pid_soc_nominals_recipe.yaml", "seed"),
+    SeedStage("pid_family_and_associates.csv", "pid_family_and_associates_recipe.yaml", "seed"),
+    SeedStage("pid_codefendants.csv", "pid_codefendants_recipe.yaml", "seed"),
+    SeedStage("pid_conflicts.csv", "pid_conflicts_recipe.yaml", "seed"),
+    SeedStage(CALLS, "pid_pin_calls_recipe.yaml", "seed"),
+    SeedStage("pid_prisoner_money.csv", "pid_prisoner_money_recipe.yaml", "seed"),
+    SeedStage(BATCH_1, "pid_seized_comms_recipe.yaml", "seed"),
+    SeedStage("pid_throwover_log.csv", "pid_throwover_log_recipe.yaml", "seed"),
+    SeedStage(REPORTS, "pid_intel_reports_recipe.yaml", "chapter4"),
+    SeedStage(REPORT_INCIDENTS, "pid_report_incidents_recipe.yaml", "chapter4"),
+    SeedStage(BATCH_2, "pid_seized_comms_recipe.yaml", "chapter9"),
+)
+
+
+def seed_stages(*moments: Moment) -> tuple[SeedStage, ...]:
+    """The stages of `SEED_ORDER` at the given moments, in order: `seed_stages("seed")` is the
+    seed's own part, before the analyst begins."""
+    return tuple(stage for stage in SEED_ORDER if stage.moment in moments)
+
 
 #: The columns added after the shapes' own: Brief 2 names each, and no shape holds it.
 EXTRAS: dict[str, tuple[str, ...]] = {
@@ -239,7 +287,11 @@ def _report_cells(ctx: _Context, row: PlanRow, report: PlanEntity, number: int) 
         if extra:
             raise ValueError(f"{key} has properties the reports file has no column for: {extra}")
         slot = next(
-            (i for i in (1, 2, 3) if row.values.get(f"subject_{i}") == outsider.properties["nino"]),
+            (
+                i
+                for i in (1, 2, 3)
+                if row.values.get(f"subject_{i}_nino") == outsider.properties["nino"]
+            ),
             None,
         )
         if slot is None:

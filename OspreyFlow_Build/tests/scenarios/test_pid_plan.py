@@ -353,7 +353,11 @@ class View:
             ):
                 n = seen[lk.target]
                 seen[lk.target] += 1
-                out[lk.key] = f"subject_{n + 1}"
+                # A prisoner is named by prison number in `subject_N`; an outside person by NINO in
+                # `subject_N_nino` (ADR-120 Amendment 15). N is the person's place among the
+                # report's people either way.
+                suffix = "" if "prison_number" in self.ent[lk.source].properties else "_nino"
+                out[lk.key] = f"subject_{n + 1}{suffix}"
         return out
 
     @cached_property
@@ -3300,7 +3304,8 @@ def test_a_report_is_one_row_with_up_to_three_subjects_and_up_to_three_areas(dem
     for name in ("subject_1_role", "subject_2_role", "subject_3_role"):
         assert name in columns, name
         assert {r.values[name] for r in rows} == {""}, "the plan holds no role for a subject"
-    for name in ("subject_1", "subject_2", "subject_3", "area_ref", "area_ref_2", "area_ref_3",
+    for name in ("subject_1", "subject_2", "subject_3", "subject_1_nino", "subject_2_nino",
+                 "subject_3_nino", "area_ref", "area_ref_2", "area_ref_3",
                  "phone_mentioned", *HANDLING_COLUMNS):  # fmt: skip
         assert name in columns, name
     assert not {"incident_ref", "incident_refs"} & set(columns), (
@@ -3313,8 +3318,21 @@ def test_a_report_is_one_row_with_up_to_three_subjects_and_up_to_three_areas(dem
         report = row.entities[0]
         subjects = [_identifier(demo, k) for k in people.get(report, [])]
         places = [_identifier(demo, k) for k in areas.get(report, [])]
+        # A prisoner's number is in `subject_N`, an outside person's NINO in `subject_N_nino`, and
+        # the other cell of the slot is empty (ADR-120 Amendment 15).
+        want_plain = [
+            "" if "prison_number" not in demo.ent[k].properties else _identifier(demo, k)
+            for k in people.get(report, [])
+        ]
+        want_nino = [
+            _identifier(demo, k) if "prison_number" not in demo.ent[k].properties else ""
+            for k in people.get(report, [])
+        ]
+        assert subjects == [a or b for a, b in zip(want_plain, want_nino, strict=True)], report
         got = [row.values[f"subject_{i}"] for i in (1, 2, 3)]
-        assert got == subjects + [""] * (3 - len(subjects)), report
+        assert got == want_plain + [""] * (3 - len(subjects)), report
+        got_nino = [row.values[f"subject_{i}_nino"] for i in (1, 2, 3)]
+        assert got_nino == want_nino + [""] * (3 - len(subjects)), report
         got_areas = [row.values[c] for c in ("area_ref", "area_ref_2", "area_ref_3")]
         assert got_areas == places + [""] * (3 - len(places)), report
     # The person and place links of the report ride on its one row.
@@ -4546,7 +4564,8 @@ BRIEF_2_RECIPE_NAMES: dict[str, frozenset[str]] = {
                     "transaction_type".split()),
     "R8": frozenset("case_ref nomis_id_a nomis_id_b".split()),
     "R9": frozenset("report_ref submitted_at area_ref category subject_1 subject_1_role "
-                    "subject_2 subject_2_role subject_3 subject_3_role handling_code action_code "
+                    "subject_2 subject_2_role subject_3 subject_3_role subject_1_nino "
+                    "subject_2_nino subject_3_nino handling_code action_code "
                     "sanitisation_code report_text".split()),
     "R10": frozenset("incident_ref occurred_at yard_ref item_type recovered".split()),
     "R11": frozenset("place_ref place_kind name parent_ref parent_kind lon lat adjoins_ref "

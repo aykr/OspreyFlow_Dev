@@ -152,8 +152,8 @@ BRIEF_2_ENTITY_COLUMNS: dict[str, frozenset[str]] = {
     ),
     REPORTS: frozenset(
         "report_ref submitted_at area_ref category subject_1 subject_1_role subject_2 "
-        "subject_2_role subject_3 subject_3_role report_text reviewer_initials phone_mentioned "
-        "area_ref_2 area_ref_3".split()
+        "subject_2_role subject_3 subject_3_role subject_1_nino subject_2_nino subject_3_nino "
+        "report_text reviewer_initials phone_mentioned area_ref_2 area_ref_3".split()
     ),
     THROW_OVERS: frozenset("incident_ref occurred_at yard_ref item_type recovered".split()),
     ESTATE: frozenset(
@@ -414,8 +414,10 @@ def _reports(row: dict[str, str]) -> Entities:
         )
     ]
     for i in (1, 2, 3):
-        nino = row[f"subject_{i}"]
-        if NINO.fullmatch(nino):
+        assert not NINO.fullmatch(row[f"subject_{i}"]), "subject_N holds prison numbers only"
+        nino = row[f"subject_{i}_nino"]
+        if nino:
+            assert NINO.fullmatch(nino), nino
             props = {
                 "nino": nino, "family_name": row[f"subject_{i}_family_name"],
                 "given_names": row[f"subject_{i}_given_names"],
@@ -969,7 +971,7 @@ ENTITY_COLUMN_NAMES: dict[tuple[str, str], dict[str, str | None]] = {
     (REPORTS, "Document"): {"sent_at": "submitted_at", "document_kind": "category",
                             "media_kind": None},
     (REPORTS, "Person:named"): {"family_name": None, "given_names": None, "aliases": None,
-                                "date_of_birth": None, "nino": "subject_1"},
+                                "date_of_birth": None, "nino": "subject_1_nino"},
     ("pid_soc_nominals.csv", "Organisation"): {"org_ref": "group_ref", "name": "group_name"},
     (THROW_OVERS, "Incident:throw_over"): {"category": None, "item": "item_type"},
 }  # fmt: skip
@@ -1466,7 +1468,19 @@ def test_the_reports_file_is_one_row_per_report_with_two_teaching_rows(
     header = _header(demo_out.path(REPORTS))
     assert {"subject_1_role", "subject_2_role", "subject_3_role"} <= set(header)
     assert all(not r[f"subject_{i}_role"] for r in rows for i in (1, 2, 3))
-    assert all(r["subject_3"] == "" or r["subject_2"] != "" for r in rows)
+    # ADR-120 Amendment 15: `subject_N` holds prison numbers only; an outside subject's NINO is in
+    # `subject_N_nino` and that row's `subject_N` is empty, so a slot is one or the other.
+    for r in rows:
+        for i in (1, 2, 3):
+            assert not (r[f"subject_{i}"] and r[f"subject_{i}_nino"]), (r["report_ref"], i)
+            assert not NINO.fullmatch(r[f"subject_{i}"]), (r["report_ref"], i)
+            assert not r[f"subject_{i}_nino"] or NINO.fullmatch(r[f"subject_{i}_nino"])
+        filled = [bool(r[f"subject_{i}"] or r[f"subject_{i}_nino"]) for i in (1, 2, 3)]
+        assert filled == sorted(filled, reverse=True), "slots fill from the first"
+    outside = [r for r in rows if any(r[f"subject_{i}_nino"] for i in (1, 2, 3))]
+    assert len(outside) == 1, "one report names an outside subject"
+    assert any(outside[0][f"subject_{i}_nino"] and outside[0][f"subject_{i}_family_name"]
+               for i in (1, 2, 3))  # fmt: skip
 
 
 def test_the_teaching_number_is_refused_with_its_cause_and_the_corrected_one_accepted() -> None:

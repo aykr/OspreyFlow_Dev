@@ -18627,3 +18627,217 @@ Decided by the coordinator under the owner's delegation for Brief 2.
   - The file as written rejects row 17 alone, naming `phone_mentioned` and the cause.
   - A re-run creates nothing.
   - A prisoner slot never makes a `Person` from a National Insurance number.
+
+### ADR-127, Amendment 23 (26 October 2026) — B2-10: the seed, the rehearsal reset and the registration (Brief 2 §7)
+
+Decided by the coordinator under the owner's delegation for Brief 2, on a scout's map of the code and an
+adversarial review of a first draft (eleven defects fixed before it was written down).
+- **Prerequisite.** R17 (`pid-report-incidents`: 589 `MENTIONED_IN` from an `Incident`, found on
+  `incident_ref`, to a report `Document`, found on `message_id`) is built, with its golden test, before
+  this unit.
+- **The load order is one constant.** `demo_fixtures.pid_files.SEED_ORDER` names every source file in
+  the order the seed loads it, each with its recipe:
+  - R11, R1, R14, R2, R3, R4, R16, R12, R13, R8, R15, R5, R7, R6 batch 1, R10;
+  - then, at the chapter-4 moment, R9 and R17;
+  - then, at chapter 9, R6 batch 2.
+
+  The seed and `tests/ingest/pid_golden_support.replay` both import it. Each golden test's `BEFORE`
+  is derived from it: either the full prefix, or a subset that a test shows writes no element the
+  file also writes. Only then are Amendment 18's markings the seed's. A test fails if a golden test
+  loads out of that order, or omits a file that writes one of its elements first.
+- **The entry.** `python -m scripts.seed_pid`, through `scripts.seed_internal prison-intelligence` and
+  `ospreyflow demo add prison-intelligence`, with the Conduit stopped (DuckDB's lock), as the other seeds
+  run.
+- **Who loads.** A seed worker, `pid-seed-worker`, holding the `data_engineer` role's rights and the
+  `EDIT_GRAPH` right, in the demo unit `verify`, cleared to SECRET.
+  - **Scoped to the case.** Before any write, the worker is `scope_to_case(worker, case_id, …)`, as the
+    scheduler's `check_case` does, so every node, link and picture is stamped `prison-intelligence`, and
+    a reference finds only that dataset's nodes.
+  - **Why not the persona.** The persona `osprey-demo-engineer` is cleared to OFFICIAL, and R15 writes
+    one SECRET link. This departs from Brief 2 §7.1's "as the data engineer principal". The demo's live
+    runs (chapters 4 and 9) are still the persona's own.
+- **The case.** `case_seed.case_from_arguments` with `PID`: the case "Prison Intelligence Dataset
+  (synthetic demo)", reading `prison-intelligence`, domains `["niem"]`, and the demo grants
+  `seed_internal` gives.
+- **The files.** Written by `pid_files.write_files` into `<ingest root>/uploaded/prison-intelligence/`,
+  the dataset's own folder and the one folder the `api` container may write.
+  - **Rewriting.** A second seed rewrites them byte for byte.
+  - **What the listing shows.** `manifest.json` is not written into the listed folder. Batch 2 is
+    written to `incoming/` beneath it, which the listing does not show.
+  - **Releasing batch 2.** `docker compose exec api python -m scripts.seed_pid --release-batch-2` copies
+    batch 2 into the listed folder for chapter 9, with the Conduit still running, since it is a file
+    copy. The reset removes it again.
+- **The recipes.** Each committed `pid_*_recipe.yaml` except `pid_intel_reports_recipe.yaml` is copied
+  byte for byte to `recipes/<id>.yaml` in the recipe repository (`OSPREY_RECIPE_REPO_ROOT`) and committed
+  there, as `write_and_commit_recipe` does. A new `StudioRecipeStore` method for seeds then enters it as
+  published, keeping its id.
+  - **What it writes.**
+    - `content` from the YAML: `connector_profile`; `source_location` (the file's path under the
+      dataset folder); `handling` (defaults, `units` and `handling_columns`); `legal_basis`;
+      `row_template`; `unmapped_fields`; `deduplicate`.
+    - The columns `ontology_version`, `pack_versions`, `published_by`, `published_at`, `verified_at`,
+      `dataset_id` (`prison-intelligence`), `owning_unit` (`verify`) and `git_path`, the relative path.
+      No schedule is set.
+  - **What it refuses first.** A YAML that fails `check_recipe_rules`, `validate_handling_tightens` or
+    `check_recipe_pins` against the loaded ontology, or whose pins differ from `pack_versions_for`.
+  - **A row already there.** A row already present at that version with the same content is left as
+    it is. One with different content is refused by name.
+  - **Confined.** No route may call the method, and a confinement test names its one caller. Its tests
+    run against real Postgres.
+- **R9's draft.** `pid-intel-reports`, version 1, entered as a draft:
+  - a `domain_model` node for NIEM 3, one source at the reports file through `generic-csv`;
+  - `handling` defaults, `units` and `handling_columns`, and `legal_basis`, all from the YAML;
+  - no `row_template`, `unmapped_fields` or `deduplicate`, so Map is not done. Profile is computed on
+    request and has no stored state.
+
+  The committed, fully mapped YAML is Brief 2 §5's "version 1 in the repository" and its fallback.
+  `docker compose exec api python -m scripts.seed_pid --publish-reports-fallback` publishes it in place
+  of a live mapping that went wrong:
+  - **No stop.** The Conduit keeps running, since only Postgres and the recipe repository are written.
+  - **The version.** It is published at the draft row's version, with the YAML's other content
+    unchanged.
+
+  A test shows that neither this command nor `--release-batch-2` stops the Conduit. Published with its `domain_model` node, R9 runs through `run_published_pipeline`, and a
+  test runs it there.
+- **The runs.** Each file of `SEED_ORDER` before the chapter-4 moment is run through the route's own code.
+  - **The move.** `run_recipe_as` moves out of `app.py` into a module of its own, with `_execute_recipe_run`,
+    `_rule_gate`, `_owner_resolver`, `_evaluate_watches_best_effort` and `RecipeRunDeps` (with
+    `from_state`). The module never imports `services.api.app`, and a test imports it without the app.
+  - **The dependencies.** The seed builds `RecipeRunDeps` through constructors it shares with the
+    lifespan, rather than copied. They include the stamping graph's `check_against` and its
+    `after_write` hook to the cache.
+  - **What the seed bypasses.** The route's own checks stay in the route: the runnable recipe's clearance
+    check, the `LOADER` role, case Editor, `RUN_PIPELINES`. The seed passes none of them. The scheduler
+    does check its owner's case Editor level; the seed does not.
+  - **Not run twice.** A file is not run again when the ledger holds an unreverted load record for its
+    recipe, version, case and `source`. So a second seed adds nothing and does not re-read a million
+    rows.
+  - **A reference that finds nothing is not refused.** The engine makes a bare node holding only the
+    matched property and links to it (R17's golden test shows it). So R17 run before R9 would make 589
+    empty report `Document`s. `--reset-live` and every seed path refuse to run R17 unless the case holds
+    an unreverted R9 load, with a test. The demo script notes that in chapter 4 R9 is run before R17.
+- **The pictures (Brief 2 §7.1 4a).**
+  - **The split.** `EntityPictureService.set` is split.
+    - **The shared core** holds the refusals: of a marking the caller could not read, and of a
+      `DEPICTS` target of the wrong type. It also supersedes the subject's current picture as `_current`
+      finds it, and writes the content-addressed `Document`, the media file, the `DEPICTS` link and the
+      route's `set_entity_picture` audit entry.
+    - **The route** adds only the working-set lookup, `ensure_room`, the working-set add and
+      `publish_delta`.
+  - **The seed's path.** The seed finds each subject in the graph by reference, as the worker scoped to
+    the case, and calls the core. The analyst's working set is untouched.
+  - **Marking.** A picture takes its subject's classification and handling code, and the worker's unit,
+    as the route sets it. A test asserts that no picture subject carries an action or sanitisation code
+    (the route keeps neither) and that every PID element's code is `P`, so readers are unchanged.
+  - **Legal basis.** "Synthetic demonstration data".
+  - **Not attached twice.** A subject already showing a picture of the same name is skipped, judged by
+    the subject and the picture's name rather than its bytes.
+- **The reset.** `python -m scripts.seed_internal prison-intelligence --reset-live --stop-api` passes
+  `--reset-live` through to `scripts.seed_pid`. `seed_internal` gains the flag, and a test shows it is
+  passed through.
+  - **Which loads.** Every unreverted load record in the case of R17 and of R9, and every R6 record
+    whose `source` is `pid_seized_comms_batch2.csv` anywhere under the dataset's folder, whether in
+    `incoming/` or in the listed folder.
+  - **In what order.** Newest first across all of them, by `load_id`, through `load_revert.revert` with
+    `RevertDeps` built by the construction `scripts.revert_load` uses, factored out and shared.
+  - **What it checks first.** It lists the live links outside those loads that rest on their nodes
+    (resolution `SAME_AS`, links an analyst made), and refuses with that list and the operator's next
+    step, reverting nothing.
+  - **R9 back to its starting state.** A new store method writes a draft at the next version, unit
+    `verify`, with `row_template`, `unmapped_fields` and `deduplicate` cleared.
+    - **In the same transaction**, it sets R9's previous latest version, whatever its status, to
+      `superseded`.
+    - **Any status.** It works whether that version is published, flagged or a draft.
+    - **The test.** Afterwards, `feeding()` lists no R9 and `list_drafts` lists exactly one.
+  - **Files.** It rewrites the reports file, removes batch 2 from the listed folder, and removes from
+    the folder every file the seed did not write (a corrected upload), naming each.
+  - **What it cannot undo, said in its report.** Reverted runs stay in the ledger, so Data feeds shows
+    a rehearsal run as R17's or R6's last run. Also unaffected:
+    - alerts and the cases they opened;
+    - review-queue findings;
+    - the contents of working sets;
+    - hotlists and saved patterns;
+    - R9's climbing version number and its commits in the recipe repository.
+
+    Nothing is deleted by hand, and no run time is faked.
+- **Counts the reader cannot see (rule 3).**
+  - **The defect.** A run's counts include rows above the source's own marking. R15's include its
+    SECRET link, and Data feeds showed them to any reader of the source.
+  - **The fix.**
+    - **What the engine reports.** Every distinct marking its rows were written at, as a `LoadReport`
+      field. A pipeline run reports the union over its branches.
+    - **Where it is stored.** `recipe_runs` keeps them in a new column. A row written before the column
+      existed reads as the source's marking alone.
+    - **Who sees counts.** `_schedule_run_view` and the run route's own `report_view` withhold a run's
+      counts from a reader for whom `principal_may_view` fails on any of those markings. That covers a
+      restricted code of another unit as well as a higher classification. `_schedule_run_view` is the one
+      place ledger counts are shown: a recipe's runs, the schedule panel and Data feeds.
+  - **The test.** `test_pid_secret_link_leaves_no_trace` compares the demo analyst's Data feeds and
+    run-ledger views with those of a case that has no SECRET link. An access-control test of the view
+    itself fails without the change (rule 4).
+- **The profile and sample rows (rule 4).** Profiling `pid_conflicts.csv`, or reading a Map sample row,
+  as an OFFICIAL persona must not show the SECRET row. A test shows it; if the code shows the row, this
+  unit fixes it.
+- **The registration.**
+  - **The pack.** A `DemoManifest` (`prison-intelligence`, shipped, seed, `scripts.seed_pid`) whose paths
+    list the PID code, the seventeen YAMLs and `connectors/pin-calls-csv.yaml`. A `_Description` titled
+    "Prison Intelligence Dataset (synthetic)", whose `shows` line uses none of the older demo's wording.
+  - **The commands.** `PACK_KEYS` and `seed_internal.DATASETS` gain it.
+  - **The guide.** A `DEMO_GUIDE.md` row, and `tools/demo_guide_check.py` covers it.
+  - **Tests.** The two exact-set tests change with it, and a misspelt distribution for the PID is
+    `internal`. The naming gate covers `seed_pid`, its printed lines and the folder and case names,
+    shown red first.
+  - **The older pack is untouched.** The report says where it is listed: `ospreyflow demo list`, and
+    whether the demo accounts' case picker shows it.
+- **Not built here.** `--scale` (Brief 2 §7.1 step 1's second case). It needs its own folder and recipe
+  rows, since a recipe row holds one dataset. It has a build-plan row.
+- **What it prints.** Counts per recipe, R5's time and peak memory, and Brief 2 §8's checks that run
+  without the Conduit.
+  - **The picture fetch-back.** A demo analyst fetching one picture through the route needs the
+    Conduit, so it is a live test, not a printed check.
+  - **Measurements.** R5's time and memory are taken only with nothing else using the stack (rule 14).
+- **Tests that would fail (rule 12).**
+  - **Pure.**
+    - The seed's order equals the replay's.
+    - A file with an unreverted record is not run again; a reverted one is.
+    - The store method keeps the id and the dataset, refuses a YAML the rules refuse, and refuses
+      different content at the same version.
+    - R9 is a draft with no row template.
+    - The reset chooses every unreverted R9 and R17 record and only batch 2's R6 records, newest first,
+      and refuses when an outside link rests on them.
+    - `--reset-live` passes through `seed_internal`.
+    - A picture already shown by name is not re-attached.
+    - No picture subject has an action or sanitisation code.
+    - The run module imports without the app.
+  - **Live (real stores, slow, outside `make ci`).**
+    - A second seed adds no node, link, run or picture.
+    - Every element the seed wrote carries `prison-intelligence`.
+    - One recipe loaded as unit `verify` gives the replay's markings.
+    - The demo analyst fetches one picture through the route.
+    - Data feeds lists the published recipes with their last runs, and withholds R15's counts from an
+      OFFICIAL reader.
+    - The reset after a full chapter-4 and chapter-9 rehearsal restores the starting state.
+    - R9 published live runs through the pipeline path.
+
+### ADR-127, Amendment 24 (26 October 2026) — R9 as built, and recipe R17
+
+Decided by the coordinator under the owner's delegation for Brief 2.
+- **Three corrections to Amendment 22, found building R9.**
+  - **`media_kind`.** It is not bound: a `Document` holding its own text sets it, and the recipe rules
+    refuse a binding of it. Each loaded report's `media_kind` is still `text`.
+  - **`sent_at`.** It is bound from `submitted_at` with no transform, as R4 binds `occurred_at`; the
+    stored value is the plan's ISO date-time. Bound through `datetime`, every row is rejected ("not a
+    valid datetime"), because the transform returns a result object that the property check refuses.
+    That is a defect in the engine, recorded with a build-plan row.
+  - **`family_name`.** An outside subject's `family_name` is bound as required, since `Person` requires
+    it and the rules refuse `optional` on a required property. `given_names` and `date_of_birth` stay
+    optional. On this file the behaviour is the same.
+- **R17, `pid-report-incidents`.**
+  - **What it writes.** Each of the 589 rows finds an `Incident` by reference on `incident_ref` (made
+    by R4 or R10) and a report `Document` by reference on `message_id` (made by R9), and writes the
+    incident `MENTIONED_IN` the report.
+  - **Its key and marking.** The duplicate key is the pair. Every element binds the six handling
+    columns.
+  - **When it runs.** After R9, at the chapter-4 moment (Amendment 17).
+  - **Its golden test.** It loads in `SEED_ORDER` with R9 and asserts the 589 links and every marking
+    against `pid_plan`. A re-run creates nothing.

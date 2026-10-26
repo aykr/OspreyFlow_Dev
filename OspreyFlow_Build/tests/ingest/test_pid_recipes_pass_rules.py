@@ -67,6 +67,8 @@ PID_RECIPES = [
     ("pid_seized_comms_recipe.yaml", "pid_seized_comms_batch1.csv"),
     ("pid_prisoner_money_recipe.yaml", "pid_prisoner_money.csv"),
     ("pid_throwover_log_recipe.yaml", "pid_throwover_log.csv"),
+    ("pid_intel_reports_recipe.yaml", "pid_intel_reports.csv"),
+    ("pid_report_incidents_recipe.yaml", "pid_report_incidents.csv"),
 ]
 
 
