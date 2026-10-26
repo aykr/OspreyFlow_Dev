@@ -1,17 +1,17 @@
 #!/bin/sh
-# Publish the marketing site to the product repository's `gh-pages` branch (ADR-114 Amendment 28).
+# Publish the marketing site to the product repository's `gh-pages` branch (ADR-114 Amendments 28 and 29).
 #
 # The site names Solirius Reply, which the packaging rules keep out of the product, so it never goes through the
 # product export (`make publish-user-repo`) and never reaches `main`. It goes on a branch of its own,
 # which GitHub Pages serves. Only what Pages needs is published: `deploy/index.html`,
 # `deploy/intro-video.html`, `deploy/.nojekyll` and, if present, `deploy/CNAME`.
 #
-#   sh marketing_site/publish_pages.sh           # commit to gh-pages locally, then print the push
-#   sh marketing_site/publish_pages.sh --push    # and push it
+#   sh OspreyFlow_Build/marketing_site/publish_pages.sh           # commit locally, print the push
+#   sh OspreyFlow_Build/marketing_site/publish_pages.sh --push    # and push it
 set -eu
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-DEV="$(cd "$HERE/.." && pwd)"
+DEV="$(cd "$HERE/../.." && pwd)"
 PRODUCT="$(cd "$DEV/.." && pwd)/OspreyFlow_user_repo"
 DEPLOY="$HERE/deploy"
 BRANCH=gh-pages

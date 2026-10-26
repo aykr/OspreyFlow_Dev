@@ -18560,3 +18560,13 @@ owner's delegation for Brief 2.
     name, which the site carries on purpose.
 - **The packaging rules' scope is unchanged.** They still govern the product: the bundle, the images
   and `main`.
+
+### ADR-114, Amendment 29 (26 October 2026) — the marketing site lives in `OspreyFlow_Build/marketing_site/`
+
+- **The correction.** Amendment 28 placed the site at `marketing_site/` in the root of the developer
+  repository. ADR-054's layout keeps the root to the product, build and data folders, and
+  `tests/test_layout.py::test_no_product_folder_is_left_at_the_root` failed in CI on `443eef7`. The site
+  therefore moves to `OspreyFlow_Build/marketing_site/`. The build folder is never exported, which is also
+  what the site needs, since it names the company.
+- **The command.** The site is published with `sh OspreyFlow_Build/marketing_site/publish_pages.sh --push`.
+- **What does not change.** Everything else in Amendment 28 stands.
