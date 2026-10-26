@@ -1,0 +1,21 @@
+# A prison PIN phone call log: one row per call a prisoner made on their PIN account, as the
+# telephony supplier's monthly export writes it.
+#
+# `09_INGEST_STUDIO.md` §2: "Connectors are **profiles**, following the same pattern as map
+# providers (ADR-016): a validated YAML file in `connectors/`, so adding a new carrier's CDR
+# layout is a file rather than a release." This is the layout added for the Prison Intelligence
+# Dataset (ADR-127, Brief 2 section 3.1), and like the seizure record it needs no Python at all.
+#
+# **No `date_order`, deliberately.** The export is machine-produced and writes every call start as
+# an ISO-8601 instant with its offset (`2025-09-01T00:00:00+00:00`), so there is no day-month
+# ambiguity to resolve and no default to get wrong. The CDR layout beside it declares `dmy` because
+# a carrier's export writes `12/01/2026`; declaring an order here would state something untrue of
+# this layout, as it would for the seizure record.
+id: pin-calls-csv
+label: PIN phone call log (CSV, ISO-8601 instants)
+group: Communications
+structured: true
+reader: csv
+delimiter: ","
+encoding: utf-8
+header_rows: 1

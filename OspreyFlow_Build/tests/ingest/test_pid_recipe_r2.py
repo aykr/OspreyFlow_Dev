@@ -19,11 +19,12 @@ from collections import defaultdict
 from typing import Any
 
 import pytest
-from demo_fixtures.pid_plan import _end_of, _start_of
+from demo_fixtures import pid_plan
 
 from tests.ingest.pid_golden_support import (
     CASE,
     PLAN,
+    assert_exact_instants,
     keys_in,
     load,
     loaded,
@@ -91,13 +92,8 @@ async def test_a_pairs_events_are_its_weeks_from_the_first_to_the_last(
         weeks = sorted(by_pair[_pair(_number(lk.source), _number(lk.target))])
         assert len(weeks) == lk.occurrences, lk.key
         assert len(set(weeks)) == len(weeks), f"{lk.key}: a week twice"
-        # A pair shared for one week has its row at midday of that day; more weeks run from the
-        # start of the first day to a row on the last.
-        assert _start_of(lk.first_seen) <= weeks[0], lk.key
-        if lk.occurrences > 1:
-            assert weeks[0] == _start_of(lk.first_seen), lk.key
-        assert weeks[-1] <= _end_of(lk.last_seen), lk.key
-        assert weeks[-1].date() == _end_of(lk.last_seen).date(), lk.key
+        # The plan's own instants for the link, exactly (not a bound on them).
+        assert_exact_instants(lk, weeks)
 
 
 async def test_every_link_has_the_plans_occurrences_interval_and_cell(
@@ -127,8 +123,9 @@ async def test_every_link_has_the_plans_occurrences_interval_and_cell(
         assert edge.interval is not None
         assert edge.interval.valid_from == min(instants[pair]), lk.key
         assert edge.interval.valid_to == max(instants[pair]), lk.key
-        assert edge.interval.valid_from >= _start_of(lk.first_seen), lk.key
-        assert edge.interval.valid_to.date() == _end_of(lk.last_seen).date(), lk.key  # type: ignore[union-attr]
+        planned_instants = pid_plan.link_instants(PLAN, lk)
+        assert edge.interval.valid_from == min(planned_instants), lk.key
+        assert edge.interval.valid_to == max(planned_instants), lk.key
         assert cells[pair] == {str(lk.properties["cell"])}, f"{lk.key}: the cell varies across rows"
         assert edge.properties == dict(lk.properties), lk.key
 

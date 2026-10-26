@@ -17,6 +17,11 @@ joins by one line. What a mistake would do, and the case that catches it:
   (`test_the_recipe_deduplicates_on_columns_the_file_has`);
 - an element that leaves a declared handling column unbound, so its rows load at the default marking
   whatever the cell says, which is rule 3 (`test_every_element_binds_every_declared_handling_part`);
+- a file holding some of the six handling columns and not all, which would pass for the exempt
+  file of none (`test_a_file_holds_all_six_handling_columns_or_none`);
+- an element of an exempt file (no handling columns) that the plan marks other than at the recipe's
+  defaults, which is the marking the file's elements take
+  (`test_the_declared_units_cover_every_unit_the_file_holds`);
 - the old demo's name in a recipe, or a unit that is not the PID's (`test_the_recipe_names_nothing_of_the_older_demo`)."""
 
 from __future__ import annotations
@@ -37,7 +42,8 @@ from services.ingest.recipe_rules import (
 from demo_fixtures import pid_files, pid_plan
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
-from schemas.ingest import Recipe
+from schemas.connectors import load_connector_profiles
+from schemas.ingest import CONNECTORS_DIR, Recipe
 from tools.pid_naming_check import scan_recipes
 
 FIXTURES = Path(__file__).resolve().parents[3] / "OspreyFlow_Core/packages/demo_fixtures"
@@ -57,12 +63,37 @@ PID_RECIPES = [
     ("pid_codefendants_recipe.yaml", "pid_codefendants.csv"),
     ("pid_conflicts_recipe.yaml", "pid_conflicts.csv"),
     ("pid_number_owners_recipe.yaml", "pid_number_owners.csv"),
+    ("pid_pin_calls_recipe.yaml", "pid_pin_calls.csv"),
+    ("pid_seized_comms_recipe.yaml", "pid_seized_comms_batch1.csv"),
+    ("pid_prisoner_money_recipe.yaml", "pid_prisoner_money.csv"),
+    ("pid_throwover_log_recipe.yaml", "pid_throwover_log.csv"),
 ]
-PID_UNITS = {"fenwick-moor-security", "regional-intel-unit"}
+
+
 HANDLING_PARTS = (
     "classification", "handling_code", "action_code", "sanitisation_code", "originator",
     "owning_unit",
 )  # fmt: skip
+
+
+def _handling_held(source: str) -> set[str]:
+    """Which of the six handling columns the file's header holds."""
+    return set(pid_files.header_for(source)) & set(HANDLING_PARTS)
+
+
+def _carries_handling(source: str) -> bool:
+    """Whether the file holds the six handling columns. A file with none is exempt from binding
+    them (the throw-over log: its recipe declares none and binds none, so every element takes the
+    recipe's defaults). A file with some and not all is neither: it fails here, so no check below
+    can take it for exempt (ADR-127 Amendment 18)."""
+    held = _handling_held(source)
+    assert held in (set(), set(HANDLING_PARTS)), (
+        f"{source} holds some of the six handling columns but not all: {sorted(held)}"
+    )
+    return bool(held)
+
+
+PID_UNITS = {"fenwick-moor-security", "regional-intel-unit"}
 RESOLUTION_LINKS = {"SAME_AS", "NOT_SAME_AS"}
 
 
@@ -95,7 +126,9 @@ def test_the_recipe_is_pinned_to_the_ontology_and_pack_the_deployment_carries(
     recipe = load(file)
     assert recipe.ontology_version == 16 == ONTOLOGY.version
     assert recipe.pack_versions == {"niem": ONTOLOGY.packs["niem"]}
-    check_recipe_pins(recipe, ONTOLOGY)  # raises StaleRecipeError if the pins are not the ones carried
+    check_recipe_pins(
+        recipe, ONTOLOGY
+    )  # raises StaleRecipeError if the pins are not the ones carried
 
 
 @pytest.mark.parametrize(("file", "source"), PID_RECIPES)
@@ -117,8 +150,20 @@ def test_the_recipe_deduplicates_on_columns_the_file_has(file: str, source: str)
 
 
 @pytest.mark.parametrize(("file", "source"), PID_RECIPES)
+def test_a_file_holds_all_six_handling_columns_or_none(file: str, source: str) -> None:
+    """The exemption from binding the handling columns is for a file with none of them. A file with
+    some but not all is a defect in the file or the recipe, not an exemption."""
+    assert _handling_held(source) in (set(), set(HANDLING_PARTS)), sorted(_handling_held(source))
+
+
+@pytest.mark.parametrize(("file", "source"), PID_RECIPES)
 def test_every_element_binds_every_declared_handling_part(file: str, source: str) -> None:
     recipe = load(file)
+    if not _carries_handling(source):
+        assert recipe.defaults.handling_columns == {}, "declares columns the file does not have"
+        for element in template_elements(recipe.row_template):
+            assert not any(isinstance(v, dict) for v in (element.handling or {}).values())
+        return
     assert set(recipe.defaults.handling_columns) == set(HANDLING_PARTS)
     for element in template_elements(recipe.row_template):
         bound = {k: v for k, v in (element.handling or {}).items() if isinstance(v, dict)}
@@ -137,6 +182,26 @@ def test_the_recipe_names_nothing_of_the_older_demo(file: str, source: str) -> N
     assert recipe.defaults.handling["originator"] in PID_UNITS
     assert recipe.defaults.handling["owning_unit"] in PID_UNITS
     assert recipe.label[:1].isupper() and not recipe.label.isupper()
+
+
+@pytest.mark.parametrize(("file", "source"), PID_RECIPES)
+def test_the_recipe_names_a_connector_profile_the_deployment_carries(
+    file: str, source: str
+) -> None:
+    """The profile a recipe names must be a file in `connectors/`: a name no file answers to is
+    `connector_not_available` at the first run."""
+    assert load(file).connector.profile in load_connector_profiles(CONNECTORS_DIR)
+
+
+def test_the_pin_calls_layout_is_a_profile_file_with_iso_instants_and_no_date_order() -> None:
+    """ADR-127 / Brief 2 section 3.1: a new layout is a file. ISO-8601 instants carry their offset,
+    so the profile declares no `date_order` (as the seizure profile), and no source CRS."""
+    profile = load_connector_profiles(CONNECTORS_DIR)["pin-calls-csv"]
+    assert (profile.reader, profile.delimiter, profile.header_rows) == ("csv", ",", 1)
+    assert profile.date_order is None and profile.source_crs is None
+    assert profile.available and profile.structured
+    assert load("pid_pin_calls_recipe.yaml").connector.profile == "pin-calls-csv"
+    assert not any(p.suffix == ".py" for p in CONNECTORS_DIR.iterdir()), "a profile needs no Python"
 
 
 @pytest.mark.parametrize(("file", "source"), PID_RECIPES)
@@ -200,13 +265,50 @@ def test_every_source_column_is_accounted_for(file: str, source: str) -> None:
 def test_the_declared_units_cover_every_unit_the_file_holds(
     file: str, source: str, written: Path
 ) -> None:
+    """A file with the handling columns: every unit its rows name is a unit the recipe declares. A
+    file with none: every element the plan writes from it is at the recipe's defaults."""
     import csv
 
     with (written / source).open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
-    held = {r[c] for r in rows for c in ("originator", "owning_unit") if r[c]}
     recipe = load(file)
-    assert held and held <= set(recipe.defaults.units), held - set(recipe.defaults.units)
+    if _carries_handling(source):
+        held = {r[c] for r in rows for c in ("originator", "owning_unit") if r[c]}
+        assert held and held <= set(recipe.defaults.units), held - set(recipe.defaults.units)
+        return
+    # No handling columns: every element the plan writes from the file must be at the recipe's
+    # defaults, since that is the marking every element of the file takes.
+    declared = recipe.defaults.handling
+    default = (
+        declared["classification"],
+        declared["handling_code"],
+        None,
+        None,
+        declared["originator"],
+        declared["owning_unit"],
+    )
+    plan = pid_plan.build_plan("demo")
+
+    def mark(handling: Any) -> tuple[Any, ...]:
+        return (
+            handling.classification,
+            handling.handling_code,
+            handling.action_code,
+            handling.sanitisation_code,
+            handling.originator,
+            handling.owning_unit,
+        )
+
+    entity_keys: dict[str, None] = {}
+    link_keys: dict[str, None] = {}
+    for row in pid_plan.rows_for(plan, source):
+        entity_keys.update(dict.fromkeys(row.entities))
+        link_keys.update(dict.fromkeys(row.links))
+    assert entity_keys, "the plan writes nothing from the file, so this proves nothing"
+    assert {mark(plan.entity(k).handling) for k in entity_keys} == {default}
+    by_key = {lk.key: lk for lk in plan.links}
+    assert {mark(by_key[k].handling) for k in link_keys} == {default}
+    assert {declared["originator"], declared["owning_unit"]} <= set(recipe.defaults.units)
 
 
 def test_the_list_names_every_pid_recipe_file() -> None:

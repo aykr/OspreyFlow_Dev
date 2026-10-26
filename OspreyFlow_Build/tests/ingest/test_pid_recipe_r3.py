@@ -19,11 +19,11 @@ from collections import defaultdict
 from typing import Any
 
 import pytest
-from demo_fixtures.pid_plan import _end_of, _start_of
 
 from tests.ingest.pid_golden_support import (
     CASE,
     PLAN,
+    assert_exact_instants,
     keys_in,
     load,
     loaded,
@@ -147,11 +147,7 @@ async def test_a_pairs_events_are_its_visits_from_the_first_to_the_last(
         )
         visited = sorted(by_pair[key])
         assert len(visited) == lk.occurrences, lk.key
-        assert _start_of(lk.first_seen) <= visited[0], lk.key
-        if lk.occurrences > 1:
-            assert visited[0] == _start_of(lk.first_seen), lk.key
-        assert visited[-1] <= _end_of(lk.last_seen), lk.key
-        assert visited[-1].date() == _end_of(lk.last_seen).date(), lk.key
+        assert_exact_instants(lk, visited)
         interval = {(names[e.source], names[e.target]): e.interval for e in graph.committed_edges if e.type == "VISITED"}[key]
         assert interval is not None
         assert (interval.valid_from, interval.valid_to) == (visited[0], visited[-1]), lk.key

@@ -1,0 +1,66 @@
+# The Prison Intelligence Dataset (ADR-127 decision 12, R10): the throw-over incident log, one row per
+# reported throw-over. The incident is made once, keyed by `incident_ref` (the key R17 finds it by to
+# link a report to it), with its name, its category (always `throw_over`), the item and the time. The
+# yard is found by reference (R11 made it) and the incident `OCCURRED_AT` it at `occurred_at`. The
+# link carries the yard's latitude and longitude, its yard number and the item type, because an event
+# takes its position from its link and Trends splits by the properties a link declares (ADR-120
+# Amendment 7): without them the hotspot cells, the cyclical view and the Trends report show nothing.
+# This file's header has no handling columns, so the recipe declares none and binds none: every
+# element takes the marking in `defaults`. `recovered` is empty in every row. Run after R11.
+id: pid-throwover-log
+version: 1
+label: "Throw-over incidents (incident log). One row per reported throw-over."
+connector:
+  profile: generic-csv
+ontology_version: 16
+pack_versions: {niem: 3}
+
+defaults:
+  provenance: {state: asserted}
+  handling:
+    classification: OFFICIAL
+    handling_code: P
+    originator: fenwick-moor-security
+    owning_unit: fenwick-moor-security
+  units: [fenwick-moor-security, regional-intel-unit]
+
+deduplicate:
+  key:
+    - {field: incident_ref}
+
+row_template:
+  entities:
+    - ref: incident
+      pole_class: event
+      type: Incident
+      match_on: incident_ref
+      on_match: reference
+      properties:
+        incident_ref: {field: incident_ref}
+        category: {literal: throw_over}
+        name: {field: name}
+        item: {field: item_type}
+        occurred_at: {field: occurred_at}
+    - ref: yard
+      pole_class: location
+      type: Location
+      match_on: site_ref
+      on_match: reference
+      properties:
+        site_ref: {field: yard_ref}
+  edges:
+    - type: OCCURRED_AT
+      from: incident
+      to: yard
+      temporal:
+        at: {field: occurred_at, transform: datetime}
+      properties:
+        lat: {field: lat}
+        lon: {field: lon}
+        yard: {field: yard}
+        item_type: {field: item_type}
+
+unmapped_fields:
+  - field: recovered
+    action: ignore
+    note: "Empty in every row, and the plan holds no value for it. Bind it when the log records what was recovered."

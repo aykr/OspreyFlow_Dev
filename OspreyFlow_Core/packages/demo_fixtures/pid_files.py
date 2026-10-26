@@ -381,6 +381,23 @@ def _digest(path: Path) -> tuple[int, str]:
     return size, sha.hexdigest()
 
 
+def ordered_rows(plan: Plan, file: str) -> Iterator[PlanRow]:
+    """The plan's rows of a file in the order the writer writes them, so a test that replays what a
+    load does with them (which row first names an element) replays the file's own order."""
+    plan_rows = rows_for(plan, file)
+    if file == ESTATE:
+        # A place a later row names as a parent (the zone: `parent_ref_2`) is written before every
+        # row that names it, so a recipe that references it finds it with its name and point rather
+        # than making it bare and leaving its own row to find that (ADR-127 decision 12, R11).
+        planned = list(plan_rows)
+        named = {r.values.get("parent_ref_2") for r in planned} - {None, ""}
+        return iter(
+            [r for r in planned if r.values.get("place_ref") in named]
+            + [r for r in planned if r.values.get("place_ref") not in named]
+        )
+    return plan_rows
+
+
 def _csv_rows(
     ctx: _Context, file: str, header: list[str], planted: dict[str, Any]
 ) -> Iterator[list[str]]:
@@ -388,18 +405,7 @@ def _csv_rows(
         yield from _call_rows(ctx, header, planted)
         return
     refs: list[str] = []
-    plan_rows = rows_for(ctx.plan, file)
-    if file == ESTATE:
-        # A place a later row names as a parent (the zone: `parent_ref_2`) is written before every
-        # row that names it, so a recipe that references it finds it with its name and point rather
-        # than making it bare and leaving its own row to find that (ADR-127 decision 12, R11).
-        planned = list(plan_rows)
-        named = {r.values.get("parent_ref_2") for r in planned} - {None, ""}
-        plan_rows = iter(
-            [r for r in planned if r.values.get("place_ref") in named]
-            + [r for r in planned if r.values.get("place_ref") not in named]
-        )
-    for number, row in enumerate(plan_rows, start=1):
+    for number, row in enumerate(ordered_rows(ctx.plan, file), start=1):
         values = {**row.values, **_entity_cells(ctx, file, row), **_extras(file, ctx, row, number)}
         if file == REPORT_INCIDENTS:
             values["report_ref"] = ctx.ir_of[row.values["report_ref"]]
@@ -480,4 +486,11 @@ def write_files(plan: Plan, out_dir: Path) -> WriteReport:
     return WriteReport(plan.profile, plan.seed, tuple(files), tuple(pictures), planted, text)
 
 
-__all__ = ["FileRecord", "WriteReport", "header_for", "output_name", "write_files"]
+__all__ = [
+    "FileRecord",
+    "WriteReport",
+    "header_for",
+    "ordered_rows",
+    "output_name",
+    "write_files",
+]

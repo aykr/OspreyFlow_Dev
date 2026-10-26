@@ -296,8 +296,10 @@ class MergingGraph(ValidatingGraph):
         self.reverted.update(edge_ids)
 
     async def existing_node_ids(self, node_ids: Sequence[str]) -> set[str]:
-        """A reverted node is left out: a write onto it is a fresh create."""
-        return await super().existing_node_ids(node_ids) - self.reverted
+        """A node that is reverted and not superseded is left out: a write onto it is a fresh
+        create. One that is also superseded is still named, because a write to it still merges
+        (the adapter's `render_live_node_ids_sql`, ADR-127 Amendment 8)."""
+        return await super().existing_node_ids(node_ids) - (self.reverted - self.superseded)
 
     async def get_nodes(self, node_ids: Sequence[str], principal: Any) -> list[Any]:
         return [

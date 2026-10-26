@@ -18279,3 +18279,84 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   keeps it a link of its own, so no OFFICIAL row of the pair can carry it.
 - **R16** finds an owner by National Insurance number and a number's `Endpoint` by its normalised form,
   so a number written nationally or internationally is one `Endpoint`.
+
+### ADR-127, Amendment 18 (26 October 2026) — recipes R5, R6, R7 and R10; a shared element's marking is its first row's
+
+The marking rule is **the owner's ruling of 26 October 2026** ("go ahead with option C"). The rest was
+decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **A shared element's loaded marking is that of the row that first creates it (owner's ruling).**
+  - **The difference.** Brief 1's file writer gives a row one marking: its link's, which `pid_plan`
+    makes regional when either end is regional. A recipe binds the six handling columns on every
+    element (Amendment 2), so an element several rows name is created with the marking of the first
+    row, in the seed's load order, that names it (as an entity or as either end of a link). Later rows
+    find a node by reference and do not re-mark it. A later row of the same link merges into it within
+    one audience (ADR-102 Amendment 3), keeping the first row's units, since `merge_handling` changes
+    no unit under `P`. A row of another classification, or another unit under a restricted code, makes
+    a separate link; none of R5, R6, R7 or R10 does, and the replay models it. Where the first row's
+    marking is not the plan's own marking for the element, the loaded case and the plan differ.
+  - **Which elements.** Measured over the full files in the seed's order:
+    - R5: 278 of 1,909 nodes and 39 of 3,547 links;
+    - R6: 6 of 18 nodes and 6 of 43 links. Batch 2's two nodes are the chapter-9 handset and its SIM;
+    - R7: 3 of 341 nodes and 3 of 614 links (the relay cash accounts and their `USES`);
+    - R10: none.
+  - **What it changes.** Only `originator` and `owning_unit`. Classification and handling code are the
+    same in both markings (`OFFICIAL`, `P`), so no reader's view changes. `P` is `permitted` in
+    `uk-le.yaml`, and the access filter checks a unit only for a `restricted` code
+    (`graph_arcadedb/access_filter.py`, `analytics_duckdb/access_filter.py`). Brief 1 §5.8's Access
+    and Handling rows hold unchanged. A statement that every loaded element carries the plan's own
+    marking does not hold; the loaded marking is the one this decision gives.
+  - **Rejected:** making each element's first row carry the plan's marking by load order (not shown to
+    cover every element), and per-element marking columns in Brief 1's files (every recipe reworked).
+  - **The test.** Each recipe's golden test derives every element's expected marking from the plan's
+    rows replayed in the seed's load order, through the store's own merge rule, and asserts it. It does
+    not pin a hand-written list. A recipe or writer change that re-marks an element, or loads it in
+    another order, fails it.
+- **A handset's IMEI is stored as its 14-digit body.** The `imei` adapter drops the Luhn check digit
+  (`01_DOMAIN_MODEL.md` §7), while the plan and the files hold 15 digits. The stored form stands.
+  Anything that finds a loaded `Device` by the plan's IMEI (the seed's picture step, the loaded-case
+  test) passes it through `imei` first. R6's golden test compares the stored value with the plan's
+  15-digit value cut to 14, not with the plan's value run through the same adapter, so an adapter
+  that stored 15 digits would fail it.
+- **R5, PIN calls.**
+  - **Columns not written.** `duration_s` and `direction` are not written onto the link, because the
+    plan's call links carry no properties and a pair's one link cannot hold a per-call value.
+    `duration_s` is in the duplicate key, so two calls between the same pair at the same second are
+    two calls. `sequence` is left out of the key, so a repeat of a call under a new sequence number
+    folds into the call it repeats.
+  - **Key canonicalisation, narrower than Brief 2 R5 asks.** The number is read through `msisdn` and
+    the instant through `datetime`. `pin_account` and `duration_s` enter the key as the cell writes
+    them: no Knowledge Adapter reads an integer, and `account_ref`, the only one that upper-cases, also
+    strips and refuses characters. No transform is added for the demo (rule 8; the owner's speed
+    preference of 26 October 2026). The key is sound for this file because Brief 1's writer writes
+    each in one form; `test_the_file_writes_pin_accounts_and_durations_in_one_form` fails if it stops.
+    A source that writes them several ways needs those adapters first.
+  - **The layout.** The calls are read through a new connector profile, `connectors/pin-calls-csv.yaml`,
+    a file with no Python. It declares no `date_order` because every instant carries its offset.
+  - **No rate quoted.** No rate is quoted until it is measured on the demo machine (S5).
+- **R6, seized communications.** One recipe loads both batches; batch 2 is in the plan folder's
+  `incoming/`.
+  - **Columns not written.** `kind` and `duration_s` are not written onto the link, for R5's reason.
+    `kind` is in the key, so a call and a text at the same instant are two communications.
+  - **The test.** R6's golden test loads in the seed's order: R16, then R5, then R6. Of R5 it loads
+    every row that calls one of the 26 numbers R6 names (all 25 of batch 1's and the coordinator's),
+    not the whole million, since the stand-in holds every event in memory. Those rows are the only R5
+    rows that can mark an element R6 touches.
+  - **Chapter 9 (decision 7(a)).** The coordinator's number is in batch 2's `referenced_node_ids`, and
+    the test asserts it.
+- **R7, prisoner money.** The payer is found on `nino`, so they are R3's visitor. Every account is an
+  `account` `Endpoint` through `account_ref`. The payer's account is `SYN-70417`; the found account
+  `SYN-00988` is on no entity (ADR-120 Amendment 14).
+- **R10, the throw-over log.**
+  - **Marking.** The file has no handling columns, so the recipe declares none and binds none, and
+    every element takes `defaults`, which equal the plan's marking for every R10 element.
+  - **The pass-rules gate.** It exempts a file only when it has none of the six columns. A file with
+    some of them fails. For an exempt file, the gate asserts that every element the plan writes from it
+    is at the recipe's defaults.
+  - **`recovered`.** This is the column ADR-120 left to this brief to settle. It is unmapped: it is
+    empty in every row and the plan holds no value for it.
+  - **The hotspot check.** Decision 9's 136 of 262 is asserted by counting the loaded events by their
+    `target_id`, the yard node, which is what `cross_filter` groups by.
+- **The recipe tests' stand-in.** `MergingGraph.existing_node_ids` leaves out a node that is reverted
+  and not superseded, as `render_live_node_ids_sql` does (Amendment 8). No recipe test needed it; it
+  closes an older gap between the stand-in and the adapter. Its test compares the stand-in with the
+  real adapter's rendering, as the file's other cases do, not with hand-written sets.

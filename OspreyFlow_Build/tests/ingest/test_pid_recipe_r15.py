@@ -22,7 +22,6 @@ from collections import defaultdict
 from typing import Any
 
 import pytest
-from demo_fixtures.pid_plan import _end_of, _start_of
 
 from ontology.handling import principal_may_view
 from schemas.domain import Principal
@@ -30,6 +29,7 @@ from tests.ingest.pid_golden_support import (
     CASE,
     PLAN,
     SCHEME,
+    assert_exact_instants,
     keys_in,
     load,
     loaded,
@@ -117,10 +117,7 @@ async def test_a_pairs_events_are_its_sightings_from_the_first_to_the_last(
         pair = _pair(_number(lk.source), _number(lk.target))
         seen = sorted(by_pair[pair])
         assert len(seen) == lk.occurrences, lk.key
-        assert _start_of(lk.first_seen) <= seen[0], lk.key
-        if lk.occurrences > 1:
-            assert seen[0] == _start_of(lk.first_seen), lk.key
-        assert seen[-1].date() == _end_of(lk.last_seen).date(), lk.key
+        assert_exact_instants(lk, seen)
         edge = stored[pair]
         assert edge.occurrences == lk.occurrences, lk.key
         assert edge.interval is not None
