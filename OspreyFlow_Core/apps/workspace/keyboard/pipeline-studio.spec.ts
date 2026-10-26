@@ -152,7 +152,7 @@ async function serve(page: Page, declared: Record<string, unknown> = {}, options
     if (url.endsWith("/v1/ingest/transforms"))
       return json(
         200,
-        ["datetime", "msisdn"].map((name) => ({ name, arity: 1 })),
+        ["datetime", "msisdn", "split"].map((name) => ({ name, arity: 1 })),
       );
     if (url.endsWith("/ingest/recipes/r1/verify") && method === "POST") return json(200, options.verify ?? {});
     if (url.endsWith("/ingest/recipes/r1/run") && method === "POST") return json(200, options.run ?? {});
@@ -856,6 +856,28 @@ test("a literal is set as a property's binding in Map by keyboard, and the save 
   const entities = served.templates[0]!.row_template.entities as { properties: Record<string, unknown> }[];
   expect(entities[0]!.properties).toEqual({ endpoint_kind: { literal: "phone" } });
   registerCovered(REGISTRY, "set-a-literal-on-a-map-binding-by-keyboard");
+});
+
+test("a property's binding is split and marked optional in Map by keyboard, and the save carries both", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 1: a (Endpoint)");
+  await page.getByLabel("Add a property").focus();
+  await page.keyboard.type("value");
+  await page.getByLabel("Transform", { exact: true }).focus();
+  await page.keyboard.type("split");
+  await expect(page.getByLabel("Transform", { exact: true })).toHaveValue("split");
+  const optional = page.getByLabel("Optional: leave the property out when its cell is empty");
+  await optional.focus();
+  await page.keyboard.press(" ");
+  await expect(optional).toBeChecked();
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  const entities = served.templates[0]!.row_template.entities as { properties: Record<string, unknown> }[];
+  expect(entities[0]!.properties).toEqual({
+    value_normalised: { field: "started", transform: "split", optional: true },
+  });
+  registerCovered(REGISTRY, "split-and-mark-a-map-binding-optional-by-keyboard");
 });
 
 test("every registered pipeline-studio action has its own proving test case above", () => {

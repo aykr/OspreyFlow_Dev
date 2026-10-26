@@ -11,6 +11,7 @@ export type Transform = string | null;
 export type Map = {
   [k: string]: string;
 } | null;
+export type Optional = boolean | null;
 export type Kind = "message_text" | "document_text" | "image_file" | "video_file";
 export type Field2 = string;
 export type Handling = {
@@ -73,6 +74,7 @@ export interface FieldBinding {
   literal?: unknown;
   transform?: Transform;
   map?: Map;
+  optional?: Optional;
   [k: string]: unknown;
 }
 export interface Properties {

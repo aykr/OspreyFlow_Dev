@@ -11,12 +11,17 @@ from __future__ import annotations
 
 import pytest
 from services.ingest.engine import StaleRecipeError, run_recipe
-from services.ingest.recipe_rules import RecipeRuleError, recipe_rule_violations
+from services.ingest.recipe_rules import (
+    RecipeRuleError,
+    deduplicate_problems,
+    recipe_rule_violations,
+)
 
 from ontology.loader import load_default_ontology
 from ontology.packs import load_deployment_ontology
 from schemas.domain import EdgeTypeDef, Principal
 from schemas.ingest import (
+    DeduplicateConfig,
     FieldBinding,
     Recipe,
     RecipeConnector,
@@ -192,3 +197,100 @@ def test_a_span_end_must_be_one_column_not_a_value_or_several() -> None:
     for binding in ({"literal": "2026-01-01"}, {"fields": ["a", "b"], "transform": "datetime"}, {}):
         (problem,) = recipe_rule_violations(_span_template(binding), ONTOLOGY)
         assert "end" in problem and "one column" in problem, (binding, problem)
+
+
+# --- ADR-127 Amendment 15: `optional` only on a property the ontology does not require -------------
+
+
+def _optional_template(entity_type: str, prop: str, *, match_on: str | None = None) -> RowTemplate:
+    return RowTemplate.model_validate(
+        {
+            "entities": [
+                {
+                    "ref": "a",
+                    "pole_class": "person",
+                    "type": entity_type,
+                    "match_on": match_on,
+                    "on_match": "reference" if match_on else "create",
+                    "properties": {prop: {"field": "x", "optional": True}},
+                }
+            ],
+            "edges": [],
+        }
+    )
+
+
+def test_optional_on_a_property_the_ontology_does_not_require_is_accepted() -> None:
+    assert recipe_rule_violations(_optional_template("Person", "aliases"), ONTOLOGY) == []
+
+
+def test_optional_on_a_required_property_is_refused_naming_the_entity_and_the_property() -> None:
+    (problem,) = recipe_rule_violations(_optional_template("Person", "family_name"), ONTOLOGY)
+    assert "family_name" in problem and "required" in problem and "'a'" in problem
+
+
+def test_optional_on_the_property_an_entity_is_matched_on_is_refused() -> None:
+    template = _optional_template("Person", "prison_number", match_on="prison_number")
+    problems = recipe_rule_violations(template, ONTOLOGY)
+    assert any("prison_number" in p and "matched on" in p for p in problems), problems
+
+
+def test_optional_on_a_link_property_follows_the_same_rule() -> None:
+    template = RowTemplate.model_validate(
+        {
+            "entities": [
+                {"ref": "a", "pole_class": "person", "type": "Person", "properties": {}},
+                {"ref": "b", "pole_class": "person", "type": "Person", "properties": {}},
+            ],
+            "edges": [
+                {
+                    "type": "ASSOCIATE_OF",
+                    "from": "a",
+                    "to": "b",
+                    "properties": {"nonesuch": {"field": "x", "optional": True}},
+                }
+            ],
+        }
+    )
+    # A property the type does not declare is not required, so `optional` is not what is wrong.
+    assert not any("optional" in p for p in recipe_rule_violations(template, ONTOLOGY))
+
+
+def test_optional_is_refused_on_a_time_binding() -> None:
+    template = _span_template({"field": "end", "optional": True})
+    problems = recipe_rule_violations(template, ONTOLOGY, source_columns=["name", "start", "end"])
+    assert any("optional" in p and "property" in p for p in problems), problems
+
+
+# --- ADR-127 Amendment 15: a list-valued transform is no key ---------------------------------------
+
+
+def test_a_list_valued_transform_on_a_deduplicate_key_part_is_refused() -> None:
+    config = DeduplicateConfig.model_validate({"key": [{"field": "aliases", "transform": "split"}]})
+    (problem,) = deduplicate_problems(config, ["aliases"])
+    assert "deduplicate key 1" in problem and "list" in problem and "split" in problem
+    plain = DeduplicateConfig.model_validate({"key": [{"field": "aliases", "transform": "msisdn"}]})
+    assert deduplicate_problems(plain, ["aliases"]) == []
+
+
+def test_a_list_valued_transform_on_an_entitys_match_on_binding_is_refused() -> None:
+    template = RowTemplate.model_validate(
+        {
+            "entities": [
+                {
+                    "ref": "a",
+                    "pole_class": "person",
+                    "type": "Person",
+                    "match_on": "aliases",
+                    "on_match": "reference",
+                    "properties": {"aliases": {"field": "x", "transform": "split"}},
+                }
+            ],
+            "edges": [],
+        }
+    )
+    problems = recipe_rule_violations(template, ONTOLOGY)
+    assert any("aliases" in p and "matched on" in p and "list" in p for p in problems), problems
+    ok = template.model_copy(deep=True)
+    ok.entities[0].properties["aliases"].transform = None
+    assert not any("matched on" in p for p in recipe_rule_violations(ok, ONTOLOGY))

@@ -18221,3 +18221,20 @@ closes the gap Amendment 13 recorded.
   controls are the keyboard route to a binding.
 - **Accessible names** were missing on several inspector controls (the POLE class, match-on, a link's
   type, the condition editor's three controls) and are given.
+
+### ADR-127, Amendment 15 (26 October 2026) — a list from a column, and an optional binding
+
+Decided by the coordinator under the owner's delegation for Brief 2: decision 12 left a prisoner's
+`aliases` (`string[]`) unsettled until unit R1 checked it. R1 found that it does not bind: a cell is a
+string, no transform makes a list, and an empty bound cell rejects the row, so binding `aliases` would
+reject almost every prisoner. Built as engine unit B2-8.
+- **A Knowledge Adapter `split`** turns a delimited cell (by default `|`, the PID file's) into a list of
+  strings, each trimmed, empty and repeated parts dropped, order kept, with a golden file (rule 8). The
+  engine accepts a list only for a `string[]` property, and a list-valued transform is refused on a
+  deduplicate key part and on the property an entity is matched on.
+- **An optional binding.** A field binding may say `optional: true`: an empty cell (every cell of a
+  several-column binding empty) then leaves the property out instead of rejecting the row; a value the
+  adapter refuses, or a partly filled set of cells, still rejects it. It is opt-in, so no existing
+  recipe changes. Map save refuses it on a property the ontology requires, on the property an entity is
+  matched on, on a time or end binding, and on a deduplicate key part; handling bindings cannot carry it.
+- R1 binds `aliases` through `split`, optional, so the principal's nickname is on the loaded case.

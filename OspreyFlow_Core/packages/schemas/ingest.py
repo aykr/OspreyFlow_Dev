@@ -611,6 +611,11 @@ class FieldBinding(BaseModel):
     literal: Any | None = None
     transform: str | None = None
     map: dict[str, str] | None = None
+    #: ADR-127 Amendment 15: on a property's binding, an empty cell leaves the property out of the
+    #: node instead of rejecting the row. `None` (and `False`) is the default: an empty bound cell
+    #: rejects the row, as it always has. A property the ontology requires, the one an entity is
+    #: matched on, and a time or key binding cannot be optional (refused where the recipe is saved).
+    optional: bool | None = None
 
 
 class DeduplicateConfig(BaseModel):

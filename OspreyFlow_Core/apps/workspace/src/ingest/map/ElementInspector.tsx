@@ -404,6 +404,7 @@ export function ElementInspector({
                     transforms={transforms}
                     onChange={(next) => setProperty(name, next)}
                     onRemove={() => setProperty(name, null)}
+                    allowOptional
                   />
                 </div>
               ))}
@@ -711,6 +712,7 @@ export function ElementInspector({
                   transforms={transforms}
                   onChange={(next) => setEdgeProperty(name, next)}
                   onRemove={() => setEdgeProperty(name, null)}
+                  allowOptional
                 />
               </div>
             ))}

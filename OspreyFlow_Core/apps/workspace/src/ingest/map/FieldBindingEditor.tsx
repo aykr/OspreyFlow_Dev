@@ -6,6 +6,7 @@ import type { DragEvent } from "react";
 
 import type { FieldBinding, TransformDescriptor } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
+import { Checkbox } from "../../design/primitives/Checkbox";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
 import { arityForTransform } from "./rowTemplate";
@@ -16,6 +17,9 @@ export interface FieldBindingEditorProps {
   transforms: TransformDescriptor[];
   onChange: (binding: FieldBinding) => void;
   onRemove?: () => void;
+  /** ADR-127 Amendment 15: offer "optional" (leave the property out when its cell is empty). Only
+   * a property's binding has a property to leave out: a time binding does not. */
+  allowOptional?: boolean;
 }
 
 type Kind = "field" | "literal" | "map";
@@ -32,6 +36,7 @@ export function FieldBindingEditor({
   transforms,
   onChange,
   onRemove,
+  allowOptional = false,
 }: FieldBindingEditorProps) {
   const kind = kindOf(binding);
   const arity = arityForTransform(transforms, binding.transform);
@@ -43,13 +48,19 @@ export function FieldBindingEditor({
     else onChange({ field: sourceFieldNames[0] });
   }
 
+  const keptOptional = binding.optional ? { optional: true } : {};
+
   function setTransform(name: string) {
     const nextArity = arityForTransform(transforms, name || null);
     if (nextArity > 1) {
       const nextFields = Array.from({ length: nextArity }, (_, i) => fields[i] ?? sourceFieldNames[0] ?? "");
-      onChange({ fields: nextFields, transform: name || undefined });
+      onChange({ fields: nextFields, transform: name || undefined, ...keptOptional });
     } else {
-      onChange({ field: fields[0] ?? sourceFieldNames[0] ?? "", transform: name || undefined });
+      onChange({
+        field: fields[0] ?? sourceFieldNames[0] ?? "",
+        transform: name || undefined,
+        ...keptOptional,
+      });
     }
   }
 
@@ -142,6 +153,21 @@ export function FieldBindingEditor({
             )}
           </Select>
         </>
+      )}
+
+      {allowOptional && kind !== "literal" && (
+        <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-4, 4px)" }}>
+          <Checkbox
+            checked={binding.optional === true}
+            onChange={(e) => {
+              const next = { ...binding };
+              if (e.target.checked) next.optional = true;
+              else delete next.optional;
+              onChange(next);
+            }}
+          />
+          Optional: leave the property out when its cell is empty
+        </label>
       )}
 
       {kind === "map" && (

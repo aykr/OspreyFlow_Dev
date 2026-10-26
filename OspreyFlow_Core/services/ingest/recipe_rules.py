@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
-from services.ingest.transforms import STRUCTURED_PARTS, transform_name_and_part
+from services.ingest.transforms import STRUCTURED_PARTS, gives_a_list, transform_name_and_part
 
 from knowledge_adapters import ARITY
 from ontology.errors import HandlingSchemeError
@@ -21,6 +21,18 @@ from schemas.domain import NOT_SAME_AS, Handling, OntologySchema
 from schemas.ingest import DeduplicateConfig, RecipeEdge, RecipeEntity, RowTemplate
 
 FILE_KINDS = frozenset({"image_file", "video_file"})
+
+
+def deduplicate_list_problems(config: DeduplicateConfig) -> list[str]:
+    """A key part bound through an adapter whose output is a list (`split`): a key part is one
+    value. Judged at save with the rest (`deduplicate_problems`) and again at run, which has no
+    header to judge columns by."""
+    return [
+        f"deduplicate key {position}: transform {binding.transform!r} gives a list, and a key part "
+        "is one value"
+        for position, binding in enumerate(config.key, start=1)
+        if gives_a_list(binding.transform)
+    ]
 
 
 def deduplicate_problems(
@@ -33,10 +45,14 @@ def deduplicate_problems(
     at run), and a multi-column binding with no transform or the wrong number of columns (the
     engine's `fields` rule, `ARITY`). The same shapes `dedup_key` resolves, so what passes here is
     what a run can key."""
-    problems: list[str] = []
+    problems: list[str] = deduplicate_list_problems(config)
     named_any = False
     known = set(source_columns) if source_columns is not None else None
     for position, binding in enumerate(config.key, start=1):
+        if binding.optional:
+            problems.append(
+                f"deduplicate key {position}: `optional` applies to a property binding only"
+            )
         columns = list(binding.fields or ([binding.field] if binding.field else []))
         if not columns and binding.literal is None:
             problems.append(f"deduplicate key {position} names no source column")
@@ -301,6 +317,50 @@ def recipe_rule_violations(
                         f"{entity.ref!r} is a Document that holds its own text, which sets "
                         f"{name!r} itself; it cannot be bound to a column."
                     )
+    # ADR-127 Amendment 15: `optional` leaves a property out when its cell is empty, so it is
+    # only for a property the ontology does not require, and not the one an entity is matched on
+    # (no match key, no match); a time binding has no property to leave out.
+    for entity in template.entities:
+        entity_def = ontology.entity_type(entity.type)
+        required = {p.name for p in entity_def.properties if p.required} if entity_def else set()
+        for prop, binding in entity.properties.items():
+            if not binding.optional:
+                continue
+            if prop in required:
+                problems.append(
+                    f"entity {entity.ref!r} marks {prop!r} optional, but {entity.type} requires "
+                    f"it: a required property cannot be left out."
+                )
+            elif prop == entity.match_on:
+                problems.append(
+                    f"entity {entity.ref!r} marks {prop!r} optional, but it is the property the "
+                    "entity is matched on: with no value there is nothing to match."
+                )
+    for entity in template.entities:
+        matched = entity.properties.get(entity.match_on) if entity.match_on else None
+        if matched is not None and gives_a_list(matched.transform):
+            problems.append(
+                f"entity {entity.ref!r} is matched on {entity.match_on!r}, bound through "
+                f"{matched.transform!r}, which gives a list: an entity is matched on one value."
+            )
+    for edge in template.edges:
+        edge_def = ontology.edge_type(edge.type)
+        required = {p.name for p in edge_def.properties if p.required} if edge_def else set()
+        for prop, binding in edge.properties.items():
+            if binding.optional and prop in required:
+                problems.append(
+                    f"{edge.type!r} marks {prop!r} optional, but the type requires it: a required "
+                    "property cannot be left out."
+                )
+        for label, time_binding in (
+            ("time", edge.temporal.at if edge.temporal else None),
+            ("end", edge.temporal.valid_to if edge.temporal else None),
+        ):
+            if time_binding is not None and time_binding.optional:
+                problems.append(
+                    f"{edge.type!r} marks its {label} optional: `optional` applies to a property "
+                    "binding only."
+                )
     # ADR-127 decision 11: the end of a span is one column of the source (an empty cell is a span
     # still open), so a value, a map or several columns have no meaning there.
     for edge in template.edges:

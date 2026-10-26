@@ -88,6 +88,7 @@ from .pipeline import recipe_packs
 from .recipe_rules import (
     RecipeRuleError,
     check_recipe_rules,
+    deduplicate_list_problems,
     handling_bindings,
     holds_content,
     literal_handling,
@@ -365,10 +366,26 @@ def _resolve_properties(
     *,
     connector_defaults: Mapping[str, str | None] | None = None,
 ) -> dict[str, Any]:
-    return {
-        name: _resolve_binding(binding, row, connector_defaults=connector_defaults)
-        for name, binding in bindings.items()
-    }
+    resolved: dict[str, Any] = {}
+    for name, binding in bindings.items():
+        if binding.optional and _binding_cells_empty(binding, row):
+            continue  # ADR-127 Amendment 15: an empty cell leaves the property out
+        value = _resolve_binding(binding, row, connector_defaults=connector_defaults)
+        if binding.optional and isinstance(value, list) and not value:
+            continue  # a cell of only separators: nothing was said, so nothing is written
+        resolved[name] = value
+    return resolved
+
+
+def _binding_cells_empty(binding: FieldBinding, row: Mapping[str, str]) -> bool:
+    """Whether every cell a binding reads is empty, which an `optional` binding leaves out: a blank
+    cell counts as empty. A literal reads no cell. A set of columns with only some blank is not
+    empty: it goes to the adapter, which refuses it (a place with half a position says so)."""
+    if binding.literal is not None:
+        return False
+    names = binding.fields if binding.fields is not None else [binding.field]
+    cells = [name for name in names if name is not None]
+    return bool(cells) and all(not (row.get(name) or "").strip() for name in cells)
 
 
 def _resolve_temporal_instant(
@@ -1988,6 +2005,10 @@ async def run_recipe(
         scheme=scheme,
         declared_columns=recipe.defaults.handling_columns,
     )
+    if recipe.deduplicate is not None:
+        key_problems = deduplicate_list_problems(recipe.deduplicate)
+        if key_problems:
+            raise RecipeRuleError(key_problems)
     _require_scheme_to_judge_bound_handling(recipe, scheme)
     if holds_content(recipe.row_template) and media is None:
         raise RecipeRuleError(

@@ -28,6 +28,7 @@ export type Transform = string | null;
 export type Map = {
   [k: string]: string;
 } | null;
+export type Optional = boolean | null;
 export type Handling1 = {
   [k: string]: unknown;
 } | null;
@@ -176,6 +177,7 @@ export interface FieldBinding {
   literal?: unknown;
   transform?: Transform;
   map?: Map;
+  optional?: Optional;
   [k: string]: unknown;
 }
 /**

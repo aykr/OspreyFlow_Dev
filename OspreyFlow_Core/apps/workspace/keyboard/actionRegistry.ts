@@ -494,6 +494,7 @@ export const PIPELINE_STUDIO_ACTIONS = defineActionRegistry("PIPELINE_STUDIO_ACT
   "change-a-map-links-type-by-keyboard",
   "choose-a-transform-on-a-map-binding-by-keyboard",
   "set-a-literal-on-a-map-binding-by-keyboard",
+  "split-and-mark-a-map-binding-optional-by-keyboard",
 ] as const);
 
 /** The Alerts place (ADR-109 phase B): the case team's queue, an alert's explanation and its

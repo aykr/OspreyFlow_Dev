@@ -6,6 +6,7 @@ export type Transform = string | null;
 export type Map = {
   [k: string]: string;
 } | null;
+export type Optional = boolean | null;
 
 /**
  * A link's time. `at` is its start, or its only instant; `valid_to`, when bound, makes it a
@@ -39,5 +40,6 @@ export interface FieldBinding {
   literal?: unknown;
   transform?: Transform;
   map?: Map;
+  optional?: Optional;
   [k: string]: unknown;
 }

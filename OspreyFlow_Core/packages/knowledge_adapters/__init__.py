@@ -34,6 +34,7 @@ from .imsi import imsi
 from .msisdn import msisdn
 from .person_name import person_name
 from .postcode import postcode
+from .split import split
 
 REGISTRY: dict[str, Callable[..., Any]] = {
     "msisdn": msisdn,
@@ -52,6 +53,7 @@ REGISTRY: dict[str, Callable[..., Any]] = {
     "grid_ref": grid_ref,
     "postcode": postcode,
     "account_ref": account_ref,
+    "split": split,
 }
 
 #: `coordinate_lon`/`coordinate_lat`/`geometry_ref` take an (easting,
@@ -87,4 +89,5 @@ __all__ = [
     "msisdn",
     "person_name",
     "postcode",
+    "split",
 ]

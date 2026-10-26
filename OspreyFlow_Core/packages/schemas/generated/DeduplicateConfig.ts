@@ -6,6 +6,7 @@ export type Transform = string | null;
 export type Map = {
   [k: string]: string;
 } | null;
+export type Optional = boolean | null;
 export type Key = FieldBinding[];
 
 export interface DeduplicateConfig {
@@ -33,5 +34,6 @@ export interface FieldBinding {
   literal?: unknown;
   transform?: Transform;
   map?: Map;
+  optional?: Optional;
   [k: string]: unknown;
 }

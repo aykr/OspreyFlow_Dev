@@ -11,10 +11,11 @@ import { FieldBindingEditor } from "./FieldBindingEditor";
 
 afterEach(cleanup);
 
-function mount(binding: FieldBinding) {
+function mount(binding: FieldBinding, allowOptional = false) {
   const onChange = vi.fn();
   render(
     <FieldBindingEditor
+      allowOptional={allowOptional}
       binding={binding}
       sourceFieldNames={["started", "ended"]}
       transforms={[
@@ -46,5 +47,38 @@ describe("FieldBindingEditor: its controls are named", () => {
     expect((screen.getByLabelText("Source column") as HTMLSelectElement).value).toBe("started");
     fireEvent.change(screen.getByLabelText("Transform"), { target: { value: "msisdn" } });
     expect(onChange).toHaveBeenLastCalledWith({ field: "started", transform: "msisdn" });
+  });
+});
+
+// --- ADR-127 Amendment 15: a property's binding may be optional --------------------------------
+
+describe("FieldBindingEditor: optional", () => {
+  const label = "Optional: leave the property out when its cell is empty";
+
+  it("offers the choice only where a property is bound", () => {
+    mount({ field: "started" });
+    expect(screen.queryByLabelText(label)).toBeNull();
+    cleanup();
+    mount({ field: "started" }, true);
+    expect((screen.getByLabelText(label) as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("marks the binding optional, and takes the mark off by removing it, not by writing false", () => {
+    const onChange = mount({ field: "aliases", transform: "split" }, true);
+    fireEvent.click(screen.getByLabelText(label));
+    expect(onChange).toHaveBeenLastCalledWith({ field: "aliases", transform: "split", optional: true });
+    cleanup();
+    const again = mount({ field: "aliases", transform: "split", optional: true }, true);
+    expect((screen.getByLabelText(label) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByLabelText(label));
+    expect(again).toHaveBeenLastCalledWith({ field: "aliases", transform: "split" });
+  });
+
+  it("keeps the mark when the transform or the column is changed", () => {
+    const onChange = mount({ field: "started", optional: true }, true);
+    fireEvent.change(screen.getByLabelText("Transform"), { target: { value: "msisdn" } });
+    expect(onChange).toHaveBeenLastCalledWith({ field: "started", transform: "msisdn", optional: true });
+    fireEvent.change(screen.getByLabelText("Source column"), { target: { value: "ended" } });
+    expect(onChange).toHaveBeenLastCalledWith({ field: "ended", optional: true });
   });
 });
