@@ -18258,3 +18258,24 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   occurrences, widens its interval and takes the later write's properties, through the same shared rule
   the adapter uses, and every recipe's golden test asserts those against the plan
   (`tests/ingest/test_merging_graph_merges_as_the_adapter_does.py`).
+
+### ADR-127, Amendment 17 (26 October 2026) — recipes R12, R13, R8, R15 and R16; how a report is keyed
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **A report Document is found by its reference in `message_id`.** The report-incidents file names a
+  report by `report_ref` ("IR 0125"), and a `Document` has no identifier property of its own, so a
+  recipe has nothing to find a report by. R9 binds the existing `Document.message_id` to `report_ref`,
+  and R17 matches the report on `message_id`; no ontology change. R17 runs after R9 and R10 at the
+  chapter-4 moment, since a reference that found nothing would make an empty report. This widens
+  `message_id` from an email's own message id to "the reference the source gives the document"; only
+  email extraction writes it otherwise, nothing reads documents by it, and the loader's datasets keep a
+  report's reference from ever meeting an email's id.
+- **R12's `role`** is left unmapped, with its reason: `MEMBER_OF` has no properties in the ontology and
+  the column is empty in every row.
+- **R13** writes `FAMILY_OF` or `ASSOCIATE_OF` by the row's `kind`, each gated by a `when`, and binds
+  `relation` on `FAMILY_OF` only.
+- **R15** carries the dataset's one SECRET link (a conflict known from a covert source), marked SECRET
+  and owned by the regional unit from its own row's columns; the audience rule (ADR-102 Amendment 3)
+  keeps it a link of its own, so no OFFICIAL row of the pair can carry it.
+- **R16** finds an owner by National Insurance number and a number's `Endpoint` by its normalised form,
+  so a number written nationally or internationally is one `Endpoint`.

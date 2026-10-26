@@ -107,3 +107,61 @@ def test_a_write_of_another_audience_is_a_link_of_its_own() -> None:
         return len(graph.committed_edges)
 
     assert asyncio.run(go()) == 2
+
+
+# --- the adapter checks every write before it looks for a link to merge into, and chooses
+# deterministically among the links a pair holds (ADR-102 Amendment 4) ------------------------------
+
+import pytest  # noqa: E402
+from ontology.errors import OntologyError  # noqa: E402
+
+
+def test_a_later_write_the_adapter_would_refuse_is_refused_before_any_merge() -> None:
+    """The adapter validates the type, the properties and the ends of every write first, then looks
+    for the link to merge into. A second write of a repeated pair with an undeclared property is
+    refused by the adapter, so it is by the stand-in, and the link it would have merged into is
+    left as it was."""
+    first = make_edge("a", "b", 1)
+    bad = make_edge("a", "b", 2).model_copy(update={"properties": {"not_declared": 1}})
+
+    store = CountingStore()
+    adapter = make_adapter(store)
+    asyncio.run(adapter.upsert_edges([first], "tx"))
+    with pytest.raises(OntologyError):
+        asyncio.run(adapter.upsert_edges([bad], "tx"))
+
+    async def go() -> int:
+        graph = MergingGraph(ONTOLOGY)
+        graph._type_of = lambda _id: "Endpoint"  # type: ignore[method-assign]
+        tx = await graph.begin_transaction()
+        await graph.upsert_edges([first], tx)
+        with pytest.raises(OntologyError):
+            await graph.upsert_edges([bad], tx)
+        return graph.open_edges[0].occurrences
+
+    assert asyncio.run(go()) == 1, "the refused write added no occurrence"
+
+
+def test_a_pair_holding_two_links_of_one_audience_is_merged_into_the_one_the_adapter_picks() -> None:
+    """The higher revision, then the later creation, then the greater id: never the first held."""
+    older = make_edge("a", "b", 1)
+    newer = make_edge("a", "b", 2).model_copy(update={"created_at": older.created_at + timedelta(days=1)})
+    greater = make_edge("a", "b", 3).model_copy(update={"id": "edge-zz", "created_at": older.created_at})
+
+    async def merged_into(held: list, revisions: dict[str, int]) -> str:  # type: ignore[type-arg]
+        graph = MergingGraph(ONTOLOGY)
+        graph._type_of = lambda _id: "Endpoint"  # type: ignore[method-assign]
+        graph.committed_edges.extend(held)
+        graph._revision.update(revisions)
+        tx = await graph.begin_transaction()
+        (chosen,) = await graph.upsert_edges([make_edge("a", "b", 9)], tx)
+        return chosen
+
+    # The higher revision wins over a later creation.
+    assert asyncio.run(merged_into([older, newer], {older.id: 3, newer.id: 1})) == older.id
+    # At one revision, the later creation.
+    assert asyncio.run(merged_into([older, newer], {})) == newer.id
+    # At one revision and one creation, the greater id.
+    twin = older.model_copy(update={"id": "edge-zz"})
+    assert asyncio.run(merged_into([older, twin], {})) == "edge-zz"
+    assert greater.id == "edge-zz"

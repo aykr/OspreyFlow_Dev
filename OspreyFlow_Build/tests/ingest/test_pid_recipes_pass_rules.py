@@ -52,6 +52,11 @@ PID_RECIPES = [
     ("pid_nomis_cell_shares_recipe.yaml", "pid_nomis_cell_shares.csv"),
     ("pid_nomis_visits_recipe.yaml", "pid_nomis_visits.csv"),
     ("pid_nomis_incidents_recipe.yaml", "pid_nomis_incidents.csv"),
+    ("pid_soc_nominals_recipe.yaml", "pid_soc_nominals.csv"),
+    ("pid_family_and_associates_recipe.yaml", "pid_family_and_associates.csv"),
+    ("pid_codefendants_recipe.yaml", "pid_codefendants.csv"),
+    ("pid_conflicts_recipe.yaml", "pid_conflicts.csv"),
+    ("pid_number_owners_recipe.yaml", "pid_number_owners.csv"),
 ]
 PID_UNITS = {"fenwick-moor-security", "regional-intel-unit"}
 HANDLING_PARTS = (

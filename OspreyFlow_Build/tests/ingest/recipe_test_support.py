@@ -155,20 +155,25 @@ class ValidatingGraph:
         self.open_nodes.extend(nodes)
         return [n.id for n in nodes]
 
-    async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: object) -> list[str]:
+    def _validate_edge(self, edge: EdgeWrite) -> None:
+        """What `upsert_edges` refuses before anything else: a type the ontology lacks, an undeclared
+        property, an end that does not exist, an end the type does not allow."""
         ontology = self._schema()
+        edge_type = ontology.edge_type(edge.type)
+        if edge_type is None:
+            raise OntologyError(f"{edge.type!r} is not a type in the active ontology")
+        validate_properties(edge_type, edge.properties)
+        source_type = self._type_of(edge.source)
+        target_type = self._type_of(edge.target)
+        if source_type is None:
+            raise OntologyError(f"edge source {edge.source!r} does not exist")
+        if target_type is None:
+            raise OntologyError(f"edge target {edge.target!r} does not exist")
+        validate_edge_endpoints(edge_type, source_type=source_type, target_type=target_type)
+
+    async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: object) -> list[str]:
         for edge in edges:
-            edge_type = ontology.edge_type(edge.type)
-            if edge_type is None:
-                raise OntologyError(f"{edge.type!r} is not a type in the active ontology")
-            validate_properties(edge_type, edge.properties)
-            source_type = self._type_of(edge.source)
-            target_type = self._type_of(edge.target)
-            if source_type is None:
-                raise OntologyError(f"edge source {edge.source!r} does not exist")
-            if target_type is None:
-                raise OntologyError(f"edge target {edge.target!r} does not exist")
-            validate_edge_endpoints(edge_type, source_type=source_type, target_type=target_type)
+            self._validate_edge(edge)
         self.open_edges.extend(edges)
         return [e.id for e in edges]
 
@@ -198,16 +203,27 @@ class MergingGraph(ValidatingGraph):
         self._scheme = load_uk_le_scheme()
         #: What each merge replaced, so a rollback puts it back: (the list, its index, the link).
         self._replaced: list[tuple[list[EdgeWrite], int, EdgeWrite]] = []
+        #: The revision of each link (1 when made, one more for each write merged into it), which the
+        #: adapter keeps in `audit.revision` and chooses among a pair's links by.
+        self._revision: dict[str, int] = {}
+        self._revisions_before: list[tuple[str, int | None]] = []
 
     async def commit_transaction(self, tx: object) -> None:
         await super().commit_transaction(tx)
         self._replaced = []
+        self._revisions_before = []
 
     async def rollback_transaction(self, tx: object) -> None:
         await super().rollback_transaction(tx)
         for held, index, before in reversed(self._replaced):
             held[index] = before
+        for link_id, previous in reversed(self._revisions_before):
+            if previous is None:
+                self._revision.pop(link_id, None)
+            else:
+                self._revision[link_id] = previous
         self._replaced = []
+        self._revisions_before = []
 
     def _merged(self, existing: EdgeWrite, edge: EdgeWrite, fresh: list[EdgeWrite]) -> None:
         """Replace `existing` where it is held by what the adapter would leave stored."""
@@ -218,6 +234,8 @@ class MergingGraph(ValidatingGraph):
             audience=self._audience,  # type: ignore[arg-type]
         )
         (aggregated,) = merged
+        self._revisions_before.append((existing.id, self._revision.get(existing.id)))
+        self._revision[existing.id] = self._revision.get(existing.id, 1) + 1
         for held in (self.committed_edges, self.open_edges, fresh):
             for index, link in enumerate(held):
                 if link is existing:
@@ -232,22 +250,27 @@ class MergingGraph(ValidatingGraph):
         ids: list[str] = []
         fresh: list[EdgeWrite] = []
         for edge in edges:
+            # As the adapter: every write is validated first, whether or not it merges.
+            self._validate_edge(edge)
             directed = self._schema().edge_type(edge.type).directed  # type: ignore[union-attr]
             ends = (edge.source, edge.target)
-            existing = next(
-                (
-                    e
-                    for e in [*self.committed_edges, *self.open_edges, *fresh]
-                    if e.type == edge.type
-                    and e.id not in self.reverted
-                    and e.id not in self.superseded
-                    and (
-                        (e.source, e.target) == ends
-                        or (not directed and (e.target, e.source) == ends)
-                    )
-                    and self._audience(e) == self._audience(edge)
-                ),
-                None,
+            same = [
+                e
+                for e in [*self.committed_edges, *self.open_edges, *fresh]
+                if e.type == edge.type
+                and e.id not in self.reverted
+                and e.id not in self.superseded
+                and (
+                    (e.source, e.target) == ends or (not directed and (e.target, e.source) == ends)
+                )
+                and self._audience(e) == self._audience(edge)
+            ]
+            # The adapter's deterministic choice among a pair's links of one audience (ADR-102
+            # Amendment 4): the higher revision, then the later creation, then the greater id.
+            existing = (
+                max(same, key=lambda e: (self._revision.get(e.id, 1), e.created_at, e.id))
+                if same
+                else None
             )
             if existing is not None:
                 self._merged(existing, edge, fresh)
@@ -277,10 +300,14 @@ class MergingGraph(ValidatingGraph):
         return await super().existing_node_ids(node_ids) - self.reverted
 
     async def get_nodes(self, node_ids: Sequence[str], principal: Any) -> list[Any]:
-        return [n for n in await super().get_nodes(node_ids, principal) if n.id not in self.reverted]
+        return [
+            n for n in await super().get_nodes(node_ids, principal) if n.id not in self.reverted
+        ]
 
     async def get_edges(self, edge_ids: Sequence[str], principal: Any) -> list[Any]:
-        return [e for e in await super().get_edges(edge_ids, principal) if e.id not in self.reverted]
+        return [
+            e for e in await super().get_edges(edge_ids, principal) if e.id not in self.reverted
+        ]
 
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: object) -> list[str]:
         """A write onto a reverted node replaces it: the node is live again with the write's body
@@ -302,9 +329,7 @@ class MergingGraph(ValidatingGraph):
             and e.id not in self.superseded
         }
 
-    async def live_nodes_naming_geometry(
-        self, geometry_refs: Sequence[str]
-    ) -> dict[str, set[str]]:
+    async def live_nodes_naming_geometry(self, geometry_refs: Sequence[str]) -> dict[str, set[str]]:
         named: dict[str, set[str]] = {}
         for node in [*self.committed_nodes, *self.open_nodes]:
             ref = node.properties.get("geometry_ref")
