@@ -18470,3 +18470,32 @@ staging step 4 are amended for the Studio's engine.
   the seeds keep their own check for ids stored twice.
 - **The spec text that follows.** `03_CONDUIT_MIDDLEWARE.md` §5.1's ADR-058 note and `09_INGEST_STUDIO.md`
   §6 ("Written in bulk") are amended to match.
+
+### ADR-127, Amendment 20 (26 October 2026) — B2-9a: an open graph transaction is kept alive
+
+Found by the coordinator diagnosing a CI failure, and decided under the owner's delegation for Brief 2.
+- **The finding.** ArcadeDB 26.10.1, on its default settings (CI, the throwaway stack and every
+  deployment), expires an HTTP transaction session left idle for between 5 and 10 seconds. Measured on
+  the throwaway stack: a session used after 0 or 5 seconds idle answered 200, and after 10, 15, 20, 40 or
+  70 seconds answered 404 "Remote transaction session not found or expired".
+- **What it explains.** CI run 40301006536 (`ebdec85`, a commit that changed no Python) failed one test
+  of 1,975: `tests/ingest/test_typology_rules.py::test_a_rule_never_fires_on_events_its_deployer_cannot_read`,
+  with that 404. A Studio load holds one graph transaction through the run, the analytics write and the
+  pre-commit rules (ADR-109 ruling 1). On a slow runner, a gap between graph calls in that span most
+  likely passed the limit.
+- **Why it matters beyond the test.** Today's per-row path keeps the session alive only by writing
+  continually. The engine stages the whole file to object storage after the transaction opens. Amendment
+  19's run combines rows with no graph call for minutes at a million rows. Either can outlast the limit,
+  and the load fails at its next graph call.
+- **The decision.** `GraphArcadeDBAdapter` keeps each transaction it opens alive. While the transaction is
+  open, a background task sends the session a no-op read whenever 3 seconds have passed since the
+  session's last call. The task stops at commit, at rollback, and when the adapter closes. A keep-alive
+  that fails stops the task and leaves the transaction's next real call to report the expiry, as now. No
+  deployment's ArcadeDB configuration changes.
+- **Tests that would fail (rule 12).**
+  - **Live, real ArcadeDB:** a transaction left idle for 20 seconds, then written and committed,
+    succeeds and the write is stored.
+  - **Planted (rule 15):** with the keep-alive disabled, the same test fails with the 404.
+  - **Pure:** the task sends no keep-alive within 3 seconds of a real call, and none after commit or
+    rollback.
+  - **Order:** B2-9a is built before B2-9's combining, which depends on it.
