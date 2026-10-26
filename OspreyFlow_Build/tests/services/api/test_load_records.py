@@ -22,6 +22,7 @@ their collaborators replaced, as `test_recipe_run_path.py` does."""
 from __future__ import annotations
 
 import csv
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -86,6 +87,7 @@ class Ledger:
         self.started: list[dict[str, Any]] = []
         self.records: list[LoadRecord] = []
         self.geometries: dict[str, list[str]] = {}
+        self.row_keys: dict[str, list[str]] = {}
         self.rule_writes: list[tuple[str, dict[str, Any]]] = []
         self.uncovered: list[str] = []
         self.failed: list[str] = []
@@ -96,10 +98,25 @@ class Ledger:
         self.started.append(kwargs)
         return "run-1"
 
-    async def add_record(self, run_id: str, record: LoadRecord) -> None:
+    async def add_record(
+        self,
+        run_id: str,
+        record: LoadRecord,
+        *,
+        row_keys: Sequence[str] = (),
+        row_key_fingerprint: str = "",
+    ) -> None:
+        """As `RecipeRunStore.add_record` (decision 5): the keys of the rows the load wrote come
+        with the record, which is how the real store keeps them in one transaction."""
         assert run_id == "run-1"
         self.calls.append(f"record:{record.load_id}")
         self.records.append(record)
+        self.row_keys[record.load_id] = list(row_keys)
+
+    async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:
+        """As `RecipeRunStore.fingerprints`: no keys kept for the (recipe, case), so none to
+        refuse over. A read, not one of the writes `calls` orders."""
+        return {}
 
     async def add_geometries(self, run_id: str, load_id: str, refs: list[str]) -> None:
         self.calls.append(f"geometries:{load_id}")
@@ -219,6 +236,9 @@ async def test_the_record_is_written_at_the_graph_commit_and_before_anything_aft
     seen: list[tuple[int, str]] = []
 
     class Sink:
+        async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:
+            return {}
+
         async def committed(self, report: LoadReport, *, source: str) -> None:
             seen.append((graph.commits, report.load_id))
 

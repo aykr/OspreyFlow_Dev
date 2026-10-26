@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 
-from services.ingest.engine import dry_run_recipe
+from services.ingest.engine import RowKeys, dry_run_recipe
 from services.ingest.profiler import DEFAULT_SAMPLE_SIZE, _shape_mask
 
 from ontology.handling import HandlingScheme, principal_may_view
@@ -88,7 +88,13 @@ async def run_verify(
     scheme: HandlingScheme,
     graph: GraphPort,
     ontology: OntologySchema,
+    *,
+    row_keys: RowKeys | None = None,
+    investigation_id: str | None = None,
 ) -> VerifyReport:
+    """`row_keys` and `investigation_id` (ADR-127 decision 5): given the store of loaded rows and
+    the case, the dry run counts the rows the run would skip by the draft's own `deduplicate`, as
+    the run counts them, and writes nothing (it only asks the store which keys the case kept)."""
     if not draft.ready_for_profile:
         raise RecipeNotReadyForProfileError(draft.recipe_id)
     if draft.row_template is None:
@@ -115,6 +121,7 @@ async def run_verify(
         ontology_version=ontology.version,
         defaults=RecipeDefaults.for_source(draft.handling, draft.legal_basis),
         row_template=draft.row_template,
+        deduplicate=draft.deduplicate,
     )
 
     result = await dry_run_recipe(
@@ -125,6 +132,8 @@ async def run_verify(
         principal=principal,
         source=draft.source_location or draft.recipe_id,
         scheme=scheme,
+        row_keys=row_keys,
+        investigation_scope=investigation_id,
     )
 
     # Each simulated node and link is masked by its own resolved marking (ADR-127 decision 3: the
@@ -178,6 +187,7 @@ async def run_verify(
     return VerifyReport(
         rows_read=result.rows_read,
         rows_deduplicated=result.rows_deduplicated,
+        rows_already_loaded=result.rows_already_loaded,
         sample_is_whole_source=sample_is_whole_source,
         values_masked=values_masked,
         entities_by_type={

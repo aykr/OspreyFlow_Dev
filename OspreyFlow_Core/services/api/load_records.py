@@ -22,6 +22,7 @@ its id lists (`report_view`)."""
 from __future__ import annotations
 
 from collections.abc import Sequence
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import Protocol, overload
 
@@ -39,7 +40,20 @@ from schemas.ingest import (
 
 
 class _RunLedger(Protocol):
-    async def add_record(self, run_id: str, record: LoadRecord) -> None: ...
+    async def add_record(
+        self,
+        run_id: str,
+        record: LoadRecord,
+        *,
+        row_keys: Sequence[str] = (),
+        row_key_fingerprint: str = "",
+    ) -> None: ...
+
+    async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]: ...
+
+    def hold_row_keys(self, recipe_id: str, case: str) -> AbstractAsyncContextManager[None]: ...
+
+    async def kept_row_keys(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]: ...
 
     async def add_geometries(self, run_id: str, load_id: str, refs: list[str]) -> None: ...
 
@@ -79,6 +93,9 @@ class LedgerSink:
         self._released_from = released_from
 
     async def committed(self, report: LoadReport, *, source: str) -> None:
+        # The record and the keys of the rows this load wrote go in together, in one transaction of
+        # the ledger, after the graph's commit (ADR-127 decision 5): never a key for a row that did
+        # not load, and never a record without the keys of the rows it loaded.
         await self._ledger.add_record(
             self._run_id,
             load_record_from_report(
@@ -90,7 +107,18 @@ class LedgerSink:
                 investigation_id=self._investigation_id,
                 released_from=self._released_from,
             ),
+            row_keys=report.kept_row_keys,
+            row_key_fingerprint=report.row_key_fingerprint or "",
         )
+
+    async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
+        return await self._ledger.kept_row_keys(recipe_id, case, keys)
+
+    async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:
+        return await self._ledger.fingerprints(recipe_id, case)
+
+    def hold_row_keys(self, recipe_id: str, case: str) -> AbstractAsyncContextManager[None]:
+        return self._ledger.hold_row_keys(recipe_id, case)
 
     async def geometries(self, load_id: str, refs: Sequence[str]) -> None:
         await self._ledger.add_geometries(self._run_id, load_id, list(refs))

@@ -54,7 +54,8 @@ newest first, with the same `reverted_by`. A release that was reverted already i
    alert citing a reverted node by itself, but not one citing only a reverted link;
 7. the Conduit's kept results cleared (`invalidate_caches`: keys in the shared Valkey, so every
    instance at once), after everything that changes what they were counted over;
-8. its row keys released: **the hook B2-5 (decision 5) supplies** (`RevertDeps.release_row_keys`);
+8. its row keys released (decision 5: `RevertLedger.release_row_keys`, by its load id), so a rerun
+   of its rows loads them again;
 9. the audit entry (counts only, no element id);
 10. the working-set removal again (`working_sets_again`), last before the mark: a Conduit left
     running can add back an element it read before the graph step, and this finds only that;
@@ -220,6 +221,11 @@ class RevertLedger(Protocol):
         """The unreverted records that list one of these nodes or links as merged into."""
         ...
 
+    async def release_row_keys(self, load_ids: Sequence[str]) -> int:
+        """Releases the row keys these loads kept (ADR-127 decision 5), so a rerun of their rows
+        loads them again. Idempotent: a second call releases none."""
+        ...
+
     async def mark_reverted(self, load_id: str, *, reverted_by: str, at: datetime) -> None: ...
 
 
@@ -286,11 +292,6 @@ class RevertDeps:
     #: `services/api/cache.py`): they are in the shared Valkey, so a process outside the Conduit
     #: clears them for all of it.
     invalidate_caches: Callable[[], Awaitable[None]]
-    #: Decision 5's row keys (B2-5): releasing a reverted load's keys so a rerun loads its rows
-    #: again.
-    #: Nothing supplies it yet; when B2-5 does, it is called after the stores above and before the
-    #: audit entry and the ledger mark, so a failure there is rerun like any other step.
-    release_row_keys: Callable[[LoadRecord], Awaitable[None]] | None = None
 
 
 def _is_reverted(record: LoadRecord) -> bool:
@@ -568,8 +569,8 @@ async def _revert_one(
         await deps.invalidate_caches()
 
     async def row_keys() -> None:
-        if deps.release_row_keys is not None:
-            await deps.release_row_keys(record)
+        # The keys this load kept for its case: by load id, idempotent (a rerun releases none).
+        await deps.ledger.release_row_keys([record.load_id])
 
     async def audit() -> None:
         await deps.audit.record(

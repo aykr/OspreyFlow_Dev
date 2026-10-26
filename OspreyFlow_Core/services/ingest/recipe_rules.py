@@ -9,17 +9,65 @@ language is involved (rule 8): each rule reads only what the recipe declares.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
 from services.ingest.transforms import STRUCTURED_PARTS, transform_name_and_part
 
+from knowledge_adapters import ARITY
 from ontology.errors import HandlingSchemeError
 from ontology.handling import HandlingScheme, merge_handling
 from schemas.domain import NOT_SAME_AS, Handling, OntologySchema
-from schemas.ingest import RecipeEdge, RecipeEntity, RowTemplate
+from schemas.ingest import DeduplicateConfig, RecipeEdge, RecipeEntity, RowTemplate
 
 FILE_KINDS = frozenset({"image_file", "video_file"})
+
+
+def deduplicate_problems(
+    config: DeduplicateConfig, source_columns: Sequence[str] | None
+) -> list[str]:
+    """What a `deduplicate` (ADR-127 decision 5) declares that the source cannot support, each in
+    words: a key that names no source column (a literal alone puts every row in one group, which
+    loads one row of the file), a column the source does not have (when its columns are known: the
+    header of the file, `None` when it cannot be read, in which case a column is judged row by row
+    at run), and a multi-column binding with no transform or the wrong number of columns (the
+    engine's `fields` rule, `ARITY`). The same shapes `dedup_key` resolves, so what passes here is
+    what a run can key."""
+    problems: list[str] = []
+    named_any = False
+    known = set(source_columns) if source_columns is not None else None
+    for position, binding in enumerate(config.key, start=1):
+        columns = list(binding.fields or ([binding.field] if binding.field else []))
+        if not columns and binding.literal is None:
+            problems.append(f"deduplicate key {position} names no source column")
+            continue
+        if columns:
+            named_any = True
+        if binding.fields is not None:
+            if binding.transform is None:
+                problems.append(
+                    f"deduplicate key {position}: a `fields` binding must declare a `transform`"
+                )
+            elif ARITY.get(binding.transform) is None:
+                problems.append(
+                    f"deduplicate key {position}: transform {binding.transform!r} does not "
+                    "support a multi-field `fields` binding"
+                )
+            elif len(binding.fields) != ARITY[binding.transform]:
+                problems.append(
+                    f"deduplicate key {position}: transform {binding.transform!r} takes "
+                    f"{ARITY[binding.transform]} field(s), got {len(binding.fields)}"
+                )
+        if known is not None:
+            for column in columns:
+                if column not in known:
+                    problems.append(
+                        f"deduplicate key {position} names {column!r}, which is not a column of "
+                        "the source"
+                    )
+    if config.key and not named_any:
+        problems.append("deduplicate key names no source column (a literal alone keys nothing)")
+    return problems
 
 
 def template_elements(template: RowTemplate) -> list[RecipeEntity | RecipeEdge]:

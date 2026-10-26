@@ -51,6 +51,7 @@ export type Field3 = string;
 export type Action = "ignore";
 export type Note = string | null;
 export type UnmappedFields = UnmappedField[];
+export type Key = FieldBinding[];
 export type VerifiedAt = string | null;
 export type OntologyVersion = number | null;
 export type PackVersions = {
@@ -101,6 +102,7 @@ export interface StudioRecipeDraft {
   ready_for_profile: ReadyForProfile;
   row_template?: RowTemplate | null;
   unmapped_fields?: UnmappedFields;
+  deduplicate?: DeduplicateConfig | null;
   verified_at?: VerifiedAt;
   ontology_version?: OntologyVersion;
   pack_versions?: PackVersions;
@@ -210,6 +212,10 @@ export interface UnmappedField {
   field: Field3;
   action?: Action;
   note?: Note;
+  [k: string]: unknown;
+}
+export interface DeduplicateConfig {
+  key: Key;
   [k: string]: unknown;
 }
 /**

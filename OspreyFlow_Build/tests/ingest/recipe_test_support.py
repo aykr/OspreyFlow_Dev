@@ -113,7 +113,7 @@ class ValidatingGraph:
     async def find_node(self, entity_type: str, field: str, value: str, principal: Any) -> Any:
         for node in [*self.committed_nodes, *self.open_nodes]:
             if node.type == entity_type and str(node.properties.get(field)) == value:
-                return SimpleNamespace(id=node.id)
+                return SimpleNamespace(id=node.id, type=node.type)
         return None
 
     async def get_nodes(self, node_ids: Sequence[str], principal: Any) -> list[Any]:

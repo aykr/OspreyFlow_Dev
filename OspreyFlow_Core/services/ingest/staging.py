@@ -190,6 +190,10 @@ class StagedRow:
     duplicate_row_indices: list[int] = field(default_factory=list)
     entities: list[StagedEntity] = field(default_factory=list)
     edges: list[StagedEdge] = field(default_factory=list)
+    #: ADR-127 decision 5: the row's deduplication key (canonicalised, then hashed), when the recipe
+    #: has `deduplicate` and the row's key resolved; `None` otherwise. What is kept for the case
+    #: once the row has loaded.
+    row_key: str | None = None
 
 
 def _json_default(value: object) -> object:
@@ -207,6 +211,7 @@ def _rows_to_table(rows: Sequence[StagedRow]) -> pa.Table:
             "source": [r.source for r in rows],
             "row_index": [r.row_index for r in rows],
             "duplicate_row_indices": [json.dumps(r.duplicate_row_indices) for r in rows],
+            "row_key": [r.row_key for r in rows],
             "entities_json": [
                 json.dumps([asdict(e) for e in r.entities], default=_json_default) for r in rows
             ],
@@ -277,6 +282,7 @@ def read_staged_rows(path: str, *, storage: ObjectStorageConfig) -> list[StagedR
                 duplicate_row_indices=json.loads(record["duplicate_row_indices"]),
                 entities=entities,
                 edges=edges,
+                row_key=record.get("row_key"),
             )
         )
     return rows

@@ -30,12 +30,13 @@ run at all; it exists for a later one.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Protocol
 
 from ulid import ULID
 
@@ -72,6 +73,7 @@ from schemas.domain import (
 )
 from schemas.ingest import (
     HANDLING_BINDABLE,
+    DeduplicateConfig,
     FieldBinding,
     LoadReport,
     Recipe,
@@ -94,7 +96,7 @@ from .staging import ObjectStorageConfig, StagedEdge, StagedEntity, StagedRow
 from .staging import read_staged_rows as _read_staged_rows
 from .staging import stage_raw_rows as _stage_raw_rows
 from .staging import stage_rows as _stage_rows
-from .transforms import apply_transform
+from .transforms import apply_transform, connector_params_in_use
 
 
 class RowRejected(Exception):
@@ -168,7 +170,7 @@ def dedup_key(
     the normal per-row resolution reject it with the same underlying
     error, rather than this function inventing a second rejection path.
     """
-    parts: list[str] = []
+    parts: list[str | None] = []
     for binding in key_bindings:
         try:
             value = _resolve_binding(binding, row, connector_defaults=connector_defaults)
@@ -176,8 +178,50 @@ def dedup_key(
             return None
         if isinstance(value, DatetimeResult):
             value = value.utc.replace(microsecond=0).isoformat()
-        parts.append(str(value))
-    return sha256("|".join(parts).encode("utf-8")).hexdigest()
+        parts.append(None if value is None else str(value))
+    return encode_key_parts(parts)
+
+
+def encode_key_parts(parts: Sequence[str | None]) -> str | None:
+    """The key of a row from its canonicalised parts (ADR-127 decision 5): the hash of a JSON list
+    of the parts, in the order the definition names them, with fixed separators and no ASCII
+    escaping. A separator join made `("a|b", "c")` and `("a", "b|c")` one key, and an absent part
+    the text `"None"`; a JSON list is unambiguous for any text. A row with an absent or empty part
+    has **no key** (`None`): it loads every time and keeps none, as a part that does not resolve
+    does. Only a part with nothing in it is empty: a space is a part."""
+    if any(part is None or part == "" for part in parts):
+        return None
+    encoded = json.dumps(list(parts), ensure_ascii=False, separators=(",", ":"))
+    return sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def dedup_fingerprint(
+    config: DeduplicateConfig, connector_defaults: Mapping[str, str | None] | None = None
+) -> str:
+    """A hash of what makes a key a key: the definition's bindings, in order, each with its fields,
+    transform and map and nothing it leaves unset, **and the connector settings that feed its
+    canonicalisation** (`connector_defaults`: the connector's `date_order` and `source_crs`, as
+    `dedup_key` receives them). A binding records only the settings its own transform takes and
+    does not name itself, so a CRS never changes a date key; one with no transform records none.
+    Kept with every row key, so a run whose definition differs from the one that made the case's
+    kept keys is refused (a new version, or a connector changed under it, must not apply itself to
+    rows already loaded), while a new version that left both as they were has the same fingerprint
+    and still skips."""
+    defaults = connector_defaults or {}
+    normalised: list[dict[str, object]] = []
+    for binding in config.key:
+        entry: dict[str, object] = dict(binding.model_dump(exclude_none=True))
+        if binding.transform is not None:
+            used = {
+                param: defaults.get(param)
+                for param in connector_params_in_use(binding.transform)
+                if defaults.get(param) is not None
+            }
+            if used:
+                entry["connector"] = used
+        normalised.append(entry)
+    encoded = json.dumps(normalised, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def _condition_holds(condition: RecipeCondition | None, row: Mapping[str, str]) -> bool:
@@ -834,6 +878,7 @@ def _to_staged_row(
     source: str,
     row_index: int,
     duplicate_row_indices: list[int],
+    row_key: str | None = None,
 ) -> StagedRow:
     """A conditional entity/edge whose `when` did not hold this row
     (`properties is None`) is simply omitted — the load step processes
@@ -847,6 +892,7 @@ def _to_staged_row(
         source=source,
         row_index=row_index,
         duplicate_row_indices=duplicate_row_indices,
+        row_key=row_key,
         entities=[
             StagedEntity(
                 ref=e.entity.ref,
@@ -874,6 +920,115 @@ def _to_staged_row(
     )
 
 
+class RowKeys(Protocol):
+    """What a run asks of the store of loaded rows (ADR-127 decision 5): which of these row keys the
+    case already kept for the recipe. `RecipeRunStore.kept_row_keys` and a `LoadSink` answer it."""
+
+    async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]: ...
+
+    async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:
+        """The definitions of `deduplicate` the case's kept keys for this recipe were made under
+        (`dedup_fingerprint`), each with how many loads kept keys under it."""
+        ...
+
+
+class RowKeyDefinitionChanged(Exception):
+    """A run's `deduplicate` is not the one the case's kept keys were made under (ADR-127 decision
+    5: a new version must not apply itself to rows already loaded). A key made by another
+    definition says nothing of this one's rows, so the run is refused before anything is written;
+    the keys go when the loads that kept them are reverted. `loads` is how many to revert, a count
+    and never an id: this message is routed."""
+
+    def __init__(self, loads: int) -> None:
+        super().__init__(
+            "this recipe's `deduplicate` has changed since rows were loaded into this case: "
+            f"revert the {loads} load(s) that kept keys under the earlier definition, then run it "
+            "again"
+        )
+        self.loads = loads
+
+
+class RowKeyRunInProgress(Exception):
+    """Another run of this recipe into this case holds the lock that serialises them (ADR-127
+    decision 5) and did not finish within the short wait. Refused before anything is written:
+    run it again once the other has finished, when its rows are kept and this run skips them."""
+
+    def __init__(self, recipe_id: str) -> None:
+        super().__init__(
+            "another run of this recipe into this case is in progress; run it again when it "
+            "has finished"
+        )
+        self.recipe_id = recipe_id
+
+
+@dataclass
+class Resolved:
+    """`resolve_rows`'s answer with what decision 5 adds: the rows a case had already loaded."""
+
+    staged_rows: list[StagedRow]
+    rejections: list[RejectionRecord]
+    rows_read: int
+    rows_deduplicated: int
+    rows_already_loaded: int = 0
+
+
+def row_group_keys(recipe: Recipe, rows: Sequence[Mapping[str, str]]) -> list[str | None]:
+    """Each row's deduplication key, by `dedup_key` (canonicalised, then hashed: the one
+    canonicalisation `01_DOMAIN_MODEL.md` §7 rule 2 describes), or `None` for a row whose key
+    fields did not resolve, and for every row of a recipe with no `deduplicate`."""
+    if recipe.deduplicate is None:
+        return [None] * len(rows)
+    defaults = connector_key_defaults(recipe)
+    return [dedup_key(row, recipe.deduplicate.key, connector_defaults=defaults) for row in rows]
+
+
+def connector_key_defaults(recipe: Recipe) -> Mapping[str, str | None]:
+    """The connector settings that reach a key part's transform: what `dedup_key` resolves with and
+    what `dedup_fingerprint` records."""
+    return {
+        "date_order": recipe.connector.date_order,
+        "source_crs": recipe.connector.source_crs,
+    }
+
+
+def recipe_fingerprint(recipe: Recipe) -> str | None:
+    """The fingerprint of the recipe's `deduplicate` under its own connector, or `None` without."""
+    if recipe.deduplicate is None:
+        return None
+    return dedup_fingerprint(recipe.deduplicate, connector_key_defaults(recipe))
+
+
+async def kept_among(
+    recipe: Recipe,
+    rows: Sequence[Mapping[str, str]],
+    row_keys: RowKeys | None,
+    case: str | None,
+) -> frozenset[str]:
+    """The keys among `rows` that `case` has already kept for `recipe`: asked of the store, and only
+    when the recipe has `deduplicate`. No store or no case is nothing kept (a run outside a case
+    keeps no keys and skips no row). Keys the case kept under another definition of `deduplicate`
+    (or the same one under other connector settings) refuse the run (`RowKeyDefinitionChanged`),
+    **a recipe with no `deduplicate` included**: removing it would reload every row the case
+    holds, so it is asked too, and refused while any key is kept for (recipe, case)."""
+    if row_keys is None or case is None:
+        return frozenset()
+    if recipe.deduplicate is None:
+        held = await row_keys.fingerprints(recipe.id, case)
+        if held:
+            raise RowKeyDefinitionChanged(sum(held.values()))
+        return frozenset()
+    mine = dedup_fingerprint(recipe.deduplicate, connector_key_defaults(recipe))
+    others = {
+        fingerprint: loads
+        for fingerprint, loads in (await row_keys.fingerprints(recipe.id, case)).items()
+        if fingerprint != mine
+    }
+    if others:
+        raise RowKeyDefinitionChanged(sum(others.values()))
+    keys = sorted({k for k in row_group_keys(recipe, rows) if k is not None})
+    return frozenset(await row_keys.kept(recipe.id, case, keys)) if keys else frozenset()
+
+
 def resolve_rows(
     recipe: Recipe,
     rows: Iterable[Mapping[str, str]],
@@ -884,6 +1039,31 @@ def resolve_rows(
     row_numbers: Sequence[int] | None = None,
     scheme: HandlingScheme | None = None,
 ) -> tuple[list[StagedRow], list[RejectionRecord], int, int]:
+    """`resolve_rows_keyed` with no rows already loaded, as its callers had it before decision 5:
+    `(staged_rows, rejections, rows_read, rows_deduplicated)`."""
+    done = resolve_rows_keyed(
+        recipe,
+        rows,
+        load_id=load_id,
+        source=source,
+        ontology=ontology,
+        row_numbers=row_numbers,
+        scheme=scheme,
+    )
+    return done.staged_rows, done.rejections, done.rows_read, done.rows_deduplicated
+
+
+def resolve_rows_keyed(
+    recipe: Recipe,
+    rows: Iterable[Mapping[str, str]],
+    *,
+    load_id: str,
+    source: str,
+    ontology: OntologySchema | None = None,
+    row_numbers: Sequence[int] | None = None,
+    scheme: HandlingScheme | None = None,
+    already_loaded: frozenset[str] = frozenset(),
+) -> Resolved:
     """Phase 1 of `run_recipe`, extracted so staging sits between
     resolution and load rather than being folded invisibly into one
     function. Returns `(staged_rows, rejections, rows_read,
@@ -891,11 +1071,14 @@ def resolve_rows(
     storage: `run_recipe` is the only caller that writes anything.
 
     `row_numbers`, when given, is each row's number in the source it was first read from — a held
-    row released later (ADR-109 ruling 1) keeps the provenance locator it would have had."""
-    connector_defaults: Mapping[str, str | None] = {
-        "date_order": recipe.connector.date_order,
-        "source_crs": recipe.connector.source_crs,
-    }
+    row released later (ADR-109 ruling 1) keeps the provenance locator it would have had.
+
+    `already_loaded` (ADR-127 decision 5): the keys the case has kept for the recipe. A group of
+    rows with such a key is left out whole, whatever the recipe's version, and each of its rows is
+    counted in `rows_already_loaded`; `rows_deduplicated` then counts only the duplicates folded
+    among the groups that are loaded. Each staged row carries its group's key, for the case to keep
+    once the row has loaded."""
+    connector_defaults = connector_key_defaults(recipe)
     dedup_fields = recipe.deduplicate.key if recipe.deduplicate else None
 
     # Materialised once and pre-grouped by dedup key, so the survivor of
@@ -921,7 +1104,10 @@ def resolve_rows(
             groups[key] = []
             group_order.append(key)
         groups[key].append(row_index)
-    rows_deduplicated = rows_read - len(group_order)
+    skipped = [key for key in group_order if key in already_loaded]
+    rows_already_loaded = sum(len(groups[key]) for key in skipped)
+    group_order = [key for key in group_order if key not in already_loaded]
+    rows_deduplicated = (rows_read - rows_already_loaded) - len(group_order)
 
     def number(position: int) -> int:
         return row_numbers[position] if row_numbers is not None else position
@@ -959,10 +1145,11 @@ def resolve_rows(
                 source=source,
                 row_index=row_index,
                 duplicate_row_indices=duplicate_row_indices,
+                row_key=None if key.startswith("__unkeyed_") else key,
             )
         )
 
-    return staged_rows, rejections, rows_read, rows_deduplicated
+    return Resolved(staged_rows, rejections, rows_read, rows_deduplicated, rows_already_loaded)
 
 
 async def _write_entity(
@@ -1408,6 +1595,9 @@ class DryRunResult:
     #: own access filter (not this set) is what already decided this
     #: principal may see that particular node at all.
     created_node_ids: frozenset[NodeId]
+    #: ADR-127 decision 5: the rows of the sample the case already kept a key for, which a run
+    #: would skip: counted as the run counts them.
+    rows_already_loaded: int = 0
 
 
 @dataclass
@@ -1580,6 +1770,8 @@ async def dry_run_recipe(
     principal: Principal,
     source: str,
     scheme: HandlingScheme | None = None,
+    row_keys: RowKeys | None = None,
+    investigation_scope: str | None = None,
 ) -> DryRunResult:
     """Verify (`09_INGEST_STUDIO.md` §5): the same `resolve_rows()` output
     Map's own preview machinery is built on, simulated instead of loaded.
@@ -1587,9 +1779,20 @@ async def dry_run_recipe(
     threads it onto `StagedRow`s that this function itself consumes and
     discards."""
     _require_scheme_to_judge_bound_handling(recipe, scheme)
-    staged_rows, rejections, rows_read, rows_deduplicated = resolve_rows(
-        recipe, rows, load_id="dry-run", source=source, ontology=ontology, scheme=scheme
+    sample = list(rows)
+    # Judged as the run judges (ADR-127 decision 5), by asking the store and writing nothing.
+    already = await kept_among(recipe, sample, row_keys, investigation_scope)
+    resolved = resolve_rows_keyed(
+        recipe,
+        sample,
+        load_id="dry-run",
+        source=source,
+        ontology=ontology,
+        scheme=scheme,
+        already_loaded=already,
     )
+    staged_rows, rejections = resolved.staged_rows, resolved.rejections
+    rows_read, rows_deduplicated = resolved.rows_read, resolved.rows_deduplicated
     state = _DryRunState(
         graph=graph,
         principal=principal,
@@ -1626,6 +1829,7 @@ async def dry_run_recipe(
     return DryRunResult(
         rows_read=rows_read,
         rows_deduplicated=rows_deduplicated,
+        rows_already_loaded=resolved.rows_already_loaded,
         entities_by_type=state.entities_by_type,
         edges_by_type=state.edges_by_type,
         rejections=rejections,
@@ -1673,8 +1877,13 @@ async def run_recipe(
     row_numbers: Sequence[int] | None = None,
     written: list[NodeWrite | EdgeWrite] | None = None,
     scheme: HandlingScheme | None = None,
+    row_keys: RowKeys | None = None,
 ) -> tuple[LoadReport, list[EventRecord]]:
-    """`skip_row_indices`: rows resolved but not written — those a failing pre-commit rule holds
+    """`row_keys` (ADR-127 decision 5): the store of loaded rows. A recipe with `deduplicate` skips
+    a row whose key the case (`investigation_scope`) already kept, whatever the recipe's version,
+    and the report counts it in `rows_already_loaded`; the keys of the rows this load wrote are in
+    `LoadReport.kept_row_keys`, for the caller to keep in the transaction that records the load.
+    `skip_row_indices`: rows resolved but not written — those a failing pre-commit rule holds
     (ADR-109 ruling 1); a held row's duplicates go with it, as they share its survivor.
     `row_numbers` as `resolve_rows` takes it. `written`, when given, receives every node this load
     created and every link it wrote (ADR-109 phase F)."""
@@ -1712,10 +1921,12 @@ async def run_recipe(
     # re-upload; staging only the post-transform rows, this module's
     # original shape, was a defect, not a design choice.
     materialized_rows = list(rows)
+    # Before anything is staged or written: a run under a changed `deduplicate` is refused whole.
+    already = await kept_among(recipe, materialized_rows, row_keys, investigation_scope)
     storage = storage or ObjectStorageConfig.from_env()
     _stage_raw_rows(materialized_rows, storage=storage, load_id=load_id, source=source)
 
-    staged_rows, rejections, rows_read, rows_deduplicated = resolve_rows(
+    resolved = resolve_rows_keyed(
         recipe,
         materialized_rows,
         load_id=load_id,
@@ -1723,7 +1934,10 @@ async def run_recipe(
         ontology=ontology,
         row_numbers=row_numbers,
         scheme=scheme,
+        already_loaded=already,
     )
+    staged_rows, rejections = resolved.staged_rows, resolved.rejections
+    rows_read, rows_deduplicated = resolved.rows_read, resolved.rows_deduplicated
 
     # Stage the normalised rows, then read back — the loop below iterates
     # `loaded_rows`, not `staged_rows`, so a bug that only shows up after a
@@ -1790,6 +2004,17 @@ async def run_recipe(
         recipe_version=recipe.version,
         rows_read=rows_read,
         rows_deduplicated=rows_deduplicated,
+        rows_already_loaded=resolved.rows_already_loaded,
+        row_key_fingerprint=recipe_fingerprint(recipe),
+        # The groups this load wrote: not a held row (`skip_row_indices`), not a rejected one, not
+        # one already loaded; each key once.
+        kept_row_keys=list(
+            dict.fromkeys(
+                r.row_key
+                for r in loaded_rows
+                if r.row_key is not None and r.row_index not in skip_row_indices
+            )
+        ),
         nodes_created=state.nodes_created,
         nodes_referenced=state.nodes_referenced,
         edges_created=state.edges_created,

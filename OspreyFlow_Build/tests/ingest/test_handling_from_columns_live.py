@@ -287,3 +287,70 @@ async def test_the_resets_revert_then_rerun_of_a_content_load_is_readable_and_cr
         assert document in second.created_node_ids and document not in second.merged_node_ids
         assert [n.id for n in await graph.get_nodes([document], reader)] == [document]
         assert second.merged_edge_ids == [], "the reverted links were not merged into"
+
+
+async def test_two_overlapping_runs_into_one_case_load_once_against_the_real_ledger() -> None:
+    """ADR-127 decision 5 with the real ledger (Postgres) and the shared graph stand-in: the second
+    run waits at the advisory lock until the first has written its record and keys, then finds
+    them, loads nothing, and every key is attributed to the first load."""
+    import asyncio
+    from datetime import UTC, datetime
+
+    from services.api.load_records import LedgerSink
+    from services.api.recipe_runs import RecipeRunStore
+    from services.api.studio_publish import load_with_rules
+
+    from adapters.media_objectstore.testing import InMemoryMediaStore
+    from conduit_common.identity import new_id
+    from schemas.domain import Handling
+    from tests.ingest.recipe_test_support import MergingGraph
+    from tests.ingest.test_row_keys import ROWS, _recipe
+
+    recipe = _recipe().model_copy(update={"id": f"overlap-{new_id()}"})
+    case = f"case-{new_id()}"
+    ledger = await RecipeRunStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        graph = MergingGraph(ONTOLOGY)
+        source = Handling(
+            classification="OFFICIAL", handling_code="P", originator="unit-1", owning_unit="unit-1"
+        )
+
+        async def run(load_id: str) -> Any:
+            run_id = await ledger.start(
+                recipe_id=recipe.id, recipe_version=recipe.version, investigation_id=case,
+                trigger="manual", slot=None, run_as="loader-1", source=source,
+                now=datetime.now(UTC),
+            )  # fmt: skip
+            sink = LedgerSink(
+                ledger, run_id, created_by="loader-1", investigation_id=case,
+                started_at=datetime.now(UTC),
+            )  # fmt: skip
+            report, events, _ = await load_with_rules(
+                recipe,
+                [dict(r) for r in ROWS],
+                LOADER,
+                graph=graph,  # type: ignore[arg-type]
+                ontology=ONTOLOGY,
+                load_id=load_id,
+                investigation_scope=case,
+                source="s.csv",
+                media=InMemoryMediaStore(),
+                rules=None,
+                scheme=SCHEME,
+                sink=sink,
+            )
+            return report, events
+
+        first_id, second_id = new_id(), new_id()
+        one, two = await asyncio.gather(run(first_id), run(second_id))
+        loaded = sorted((one, two), key=lambda r: r[0].rows_already_loaded)
+        winner, loser = loaded
+        assert winner[0].rows_already_loaded == 0 and len(winner[1]) == 3
+        assert loser[0].rows_already_loaded == 3 and loser[1] == []
+        rows = await ledger._pool.fetch(
+            "SELECT DISTINCT load_id FROM loaded_row_keys WHERE recipe_id = $1", recipe.id
+        )
+        assert [r["load_id"] for r in rows] == [winner[0].load_id]
+    finally:
+        await ledger._pool.execute("DELETE FROM loaded_row_keys WHERE recipe_id = $1", recipe.id)
+        await ledger.close()

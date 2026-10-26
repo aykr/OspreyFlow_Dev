@@ -5,6 +5,7 @@ export type RecipeId = string;
 export type RecipeVersion = number;
 export type RowsRead = number;
 export type RowsDeduplicated = number;
+export type RowsAlreadyLoaded = number;
 export type NodesCreated = number;
 export type NodesReferenced = number;
 export type EdgesCreated = number;
@@ -27,6 +28,7 @@ export interface LoadReportView {
   recipe_version: RecipeVersion;
   rows_read?: RowsRead;
   rows_deduplicated?: RowsDeduplicated;
+  rows_already_loaded?: RowsAlreadyLoaded;
   nodes_created?: NodesCreated;
   nodes_referenced?: NodesReferenced;
   edges_created?: EdgesCreated;

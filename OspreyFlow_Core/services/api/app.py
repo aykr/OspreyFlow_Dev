@@ -65,7 +65,7 @@ from services.extract.writer import (
     retract_node,
 )
 from services.ingest.connectors.geo.site_grid import site_grid_rows
-from services.ingest.engine import run_recipe
+from services.ingest.engine import RowKeyDefinitionChanged, RowKeyRunInProgress, run_recipe
 from services.ingest.pipeline import (
     pipeline_from_recipe,
     pipeline_rule_violations,
@@ -75,6 +75,7 @@ from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import (
     RecipeRuleError,
     check_recipe_rules,
+    deduplicate_problems,
     handling_bindings,
     template_elements,
 )
@@ -209,6 +210,7 @@ from schemas.ingest import (
     CONNECTOR_CATALOGUE,
     ConnectDraftInput,
     ConnectorCatalogueEntry,
+    DeduplicateConfig,
     DomainPackEntry,
     LoadReport,
     LoadReportView,
@@ -1725,6 +1727,28 @@ async def _upload_refused_handler(request: Request, exc: UploadRefusedError) -> 
 async def _recipe_rule_handler(request: Request, exc: RecipeRuleError) -> JSONResponse:
     """A recipe declares what the ingest rules refuse (ADR-081 step D); each problem is named."""
     return JSONResponse(status_code=422, content={"error": "recipe_rule", "problems": exc.problems})
+
+
+@app.exception_handler(RowKeyDefinitionChanged)
+async def _row_key_definition_changed_handler(
+    request: Request, exc: RowKeyDefinitionChanged
+) -> JSONResponse:
+    """ADR-127 decision 5: the recipe's `deduplicate` is not the one this case's kept keys were made
+    under. The cause is in words, with how many loads to revert and never which."""
+    return JSONResponse(
+        status_code=409,
+        content={"error": "deduplicate_changed", "loads": exc.loads, "message": str(exc)},
+    )
+
+
+@app.exception_handler(RowKeyRunInProgress)
+async def _row_key_run_in_progress_handler(
+    request: Request, exc: RowKeyRunInProgress
+) -> JSONResponse:
+    """ADR-127 decision 5: another run of this recipe into this case is still loading."""
+    return JSONResponse(
+        status_code=409, content={"error": "run_in_progress", "message": str(exc)}
+    )
 
 
 @app.exception_handler(NotDocumentsError)
@@ -6660,6 +6684,8 @@ async def create_studio_recipe_draft(
     Connect's "pick a connector, point at the data" plus the three
     mandatory gate answers, which may still be incomplete
     (`StudioRecipeDraft.ready_for_profile` reports that, §2)."""
+    # ADR-127 decision 5: judged by shape at creation (no draft to read the source through yet).
+    _check_deduplicate(body.deduplicate, None)
     draft = await studio_recipes.create_draft(
         principal,
         label=body.label,
@@ -6667,6 +6693,7 @@ async def create_studio_recipe_draft(
         source_location=body.source_location,
         handling=_with_default_classification(body.handling, scheme),
         legal_basis=body.legal_basis,
+        deduplicate=body.deduplicate,
     )
     await audit.record(
         principal=principal,
@@ -6675,6 +6702,17 @@ async def create_studio_recipe_draft(
         result_cardinality=1,
     )
     return draft
+
+
+def _check_deduplicate(config: DeduplicateConfig | None, columns: list[str] | None) -> None:
+    """A `deduplicate` the source cannot support is refused at save, in words (422): see
+    `recipe_rules.deduplicate_problems`. An absent one, and one with an empty `key` (which clears
+    it), need no judging."""
+    if config is None or not config.key:
+        return
+    problems = deduplicate_problems(config, columns)
+    if problems:
+        raise RecipeRuleError(problems)
 
 
 @app.patch(
@@ -6693,7 +6731,26 @@ async def update_studio_recipe_draft(
     """Edits Connect's own fields on a draft still in progress — changing
     connector, source location, handling marking or legal basis before
     moving on. Rejects (409, via `StudioRecipeNotADraftError`) once the
-    recipe has left `draft` status."""
+    recipe has left `draft` status.
+
+    `deduplicate` (ADR-127 decision 5) is judged against the columns of the source it will be read
+    from (the body's location, else the draft's): each key names a source column, as a run reads
+    it. Absent leaves the draft's own; an empty `key` clears it."""
+    if body.deduplicate is not None and body.deduplicate.key:
+        location = body.source_location or recipe.source_location
+        _check_deduplicate(
+            body.deduplicate,
+            source_column_names(
+                recipe.model_copy(
+                    update={
+                        "source_location": location,
+                        "connector_profile": body.connector_profile,
+                    }
+                )
+            )
+            if location
+            else None,
+        )
     updated = await studio_recipes.update_draft(
         recipe.recipe_id,
         principal,
@@ -6702,6 +6759,7 @@ async def update_studio_recipe_draft(
         source_location=body.source_location,
         handling=_with_default_classification(body.handling, scheme),
         legal_basis=body.legal_basis,
+        deduplicate=body.deduplicate,
     )
     await audit.record(
         principal=principal,
@@ -6992,6 +7050,7 @@ async def verify_studio_recipe(
     ontology: OntologyDep,
     studio_recipes: StudioRecipesDep,
     audit: AuditDep,
+    recipe_runs: RecipeRunsDep,
 ) -> VerifyReport:
     """§5: the dry run. No persistent write of any kind happens here — no
     Parquet staging, no `GraphPort` write, no transaction — but an
@@ -7002,7 +7061,18 @@ async def verify_studio_recipe(
     material they could not otherwise see": an access-filtered miss reads
     as `None`, exactly like any other read, so it shows as "would create"
     rather than leaking that a higher-classification match exists."""
-    report = await run_verify(recipe, principal, scheme, graph, ontology)
+    # ADR-127 decision 5: the dry run counts the rows the case already kept as the run would count
+    # them, by the draft's own `deduplicate`, asking the store of loaded rows (this case's keys
+    # only) and writing nothing.
+    report = await run_verify(
+        recipe,
+        principal,
+        scheme,
+        graph,
+        ontology,
+        row_keys=recipe_runs,
+        investigation_id=investigation.id,
+    )
     # §5: "Verify must pass before publish" — recorded here, against a
     # *completed* run (rejections included, per §5's own "a run with
     # rejections can be published"), so `publish` below can gate on this

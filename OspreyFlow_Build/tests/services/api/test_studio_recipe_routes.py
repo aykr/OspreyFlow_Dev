@@ -591,3 +591,105 @@ def test_publish_refuses_what_the_runner_cannot_run_yet(client: TestClient) -> N
     body = response.json()
     assert body["error"] == "pipeline_not_runnable"
     assert any("whisper" in problem for problem in body["problems"])
+
+
+# --- ADR-127 decision 5 (B2-5): a Studio draft carries `deduplicate` ------------------------------
+
+
+def _dedupe_draft(tmp_path: Path) -> StudioRecipeDraft:
+    return _ready_draft(
+        tmp_path,
+        source_location=_write_csv(
+            tmp_path, [{"payer": "a", "payee": "b", "paid_at": "2026-03-01T09:00:00+00:00"}]
+        ),
+    )
+
+
+_PATCH_BODY = {
+    "label": "Carrier A — CDR",
+    "connector_profile": "generic-csv",
+    "handling": {
+        "classification": "OFFICIAL",
+        "handling_code": "P",
+        "originator": "unit-1",
+        "owning_unit": "unit-1",
+    },
+    "legal_basis": "RIPA s22 acquisition — authorisation 2026/0114",
+}
+_URL = "/v1/investigations/inv-1/ingest/recipes/recipe-1"
+
+
+def test_patch_saves_a_deduplicate_whose_fields_are_source_columns(
+    client: TestClient, tmp_path: Path
+) -> None:
+    from schemas.ingest import DeduplicateConfig, FieldBinding
+
+    client.studio_recipes.draft = _dedupe_draft(tmp_path)  # type: ignore[attr-defined]
+    key = [{"field": "payer"}, {"field": "payee"}, {"field": "paid_at", "transform": "datetime"}]
+
+    response = client.patch(_URL, json={**_PATCH_BODY, "deduplicate": {"key": key}})
+
+    assert response.status_code == 200, response.text
+    saved = client.studio_recipes.update_calls[-1]["deduplicate"]  # type: ignore[attr-defined]
+    assert saved == DeduplicateConfig(
+        key=[
+            FieldBinding(field="payer"),
+            FieldBinding(field="payee"),
+            FieldBinding(field="paid_at", transform="datetime"),
+        ]
+    )
+    assert response.json()["deduplicate"]["key"][0]["field"] == "payer"
+
+
+def test_patch_without_a_deduplicate_leaves_the_drafts_own_alone(
+    client: TestClient, tmp_path: Path
+) -> None:
+    client.studio_recipes.draft = _dedupe_draft(tmp_path)  # type: ignore[attr-defined]
+    response = client.patch(_URL, json=_PATCH_BODY)
+    assert response.status_code == 200
+    assert client.studio_recipes.update_calls[-1]["deduplicate"] is None  # type: ignore[attr-defined]
+
+
+def test_patch_with_an_empty_key_clears_the_deduplicate(client: TestClient, tmp_path: Path) -> None:
+    client.studio_recipes.draft = _dedupe_draft(tmp_path)  # type: ignore[attr-defined]
+    response = client.patch(_URL, json={**_PATCH_BODY, "deduplicate": {"key": []}})
+    assert response.status_code == 200
+    saved = client.studio_recipes.update_calls[-1]["deduplicate"]  # type: ignore[attr-defined]
+    assert saved is not None and saved.key == [], "the store reads an empty key as clearing it"
+
+
+@pytest.mark.parametrize(
+    ("key", "named"),
+    [
+        ([{"field": "no_such_column"}], "no_such_column"),
+        ([{"fields": ["payer", "ghost"], "transform": "coordinate_pair"}], "ghost"),
+        ([{"literal": "x"}], "names no source column"),
+        ([{"fields": ["payer", "payee"]}], "must declare a `transform`"),
+    ],
+    ids=[
+        "unknown column",
+        "unknown column in fields",
+        "a literal alone",
+        "fields with no transform",
+    ],
+)
+def test_patch_refuses_a_deduplicate_the_source_cannot_support_in_words(
+    client: TestClient, tmp_path: Path, key: list[dict[str, object]], named: str
+) -> None:
+    client.studio_recipes.draft = _dedupe_draft(tmp_path)  # type: ignore[attr-defined]
+    response = client.patch(_URL, json={**_PATCH_BODY, "deduplicate": {"key": key}})
+    assert response.status_code == 422
+    assert named in " ".join(response.json()["problems"])
+    assert client.studio_recipes.update_calls == []  # type: ignore[attr-defined]
+
+
+def test_patch_judges_the_deduplicate_by_the_columns_when_the_source_cannot_be_read(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """No source to read is no column to judge against (as `source_column_names` has it for a
+    marking bound to a column): the shape is still checked, a column is judged at run."""
+    client.studio_recipes.draft = _ready_draft(tmp_path, source_location=str(tmp_path / "gone.csv"))  # type: ignore[attr-defined]
+    ok = client.patch(_URL, json={**_PATCH_BODY, "deduplicate": {"key": [{"field": "x"}]}})
+    assert ok.status_code == 200
+    bad = client.patch(_URL, json={**_PATCH_BODY, "deduplicate": {"key": [{"literal": "x"}]}})
+    assert bad.status_code == 422

@@ -536,3 +536,254 @@ async def test_alerts_citing_events_are_listed_open_and_closed_by_id(alerts: Ale
     assert row["disposition_reason"] == "r"
     other = await alerts._pool.fetchrow("SELECT status FROM alerts WHERE id = $1", cites_other)
     assert other["status"] == "open"
+
+
+# --- ADR-127 decision 5, B2-5: the rows a recipe has loaded into a case --------------------------
+#
+# Each case here makes its own recipe, case, load ids and keys (`new_id()`), because this ledger is
+# a real database that outlives the run: a record is found by load id across every run
+# (`load_record`), and a release frees every key of a load id, so fixed ids from one case would
+# find or free another's (a first version of these used `load-a` throughout, and the record of an
+# earlier case answered "is the record gone?").
+
+
+def _keyed(load_id: str, recipe: str, case: str) -> LoadRecord:
+    return _record(load_id, recipe).model_copy(
+        update={"investigation_id": case, "merged_node_ids": [], "merged_edge_ids": []}
+    )
+
+
+async def test_the_keys_of_a_load_are_kept_for_its_recipe_and_case_and_read_back(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, other_recipe, case, other_case = new_id(), new_id(), new_id(), new_id()
+    k1, k2, k3 = new_id(), new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _keyed(new_id(), recipe, case), row_keys=[k1, k2, k2])
+    assert await runs.kept_row_keys(recipe, case, [k1, k2, k3]) == {k1, k2}
+    # Rule 3: per recipe and per case. Another case, or another recipe, keeps its own.
+    assert await runs.kept_row_keys(recipe, other_case, [k1, k2]) == set()
+    assert await runs.kept_row_keys(other_recipe, case, [k1, k2]) == set()
+    assert await runs.kept_row_keys(recipe, case, []) == set()
+    assert await runs.kept(recipe, case, [k1]) == {k1}, "the engine's `RowKeys` question"
+
+
+async def test_a_key_already_kept_is_left_as_it_was_and_a_new_version_reads_the_same_keys(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, case, first, second = new_id(), new_id(), new_id(), new_id()
+    k1, k2 = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _keyed(first, recipe, case), row_keys=[k1])
+    await runs.add_record(run_id, _keyed(second, recipe, case), row_keys=[k1, k2])
+    rows = await runs._pool.fetch(
+        "SELECT row_key, load_id FROM loaded_row_keys WHERE recipe_id = $1", recipe
+    )
+    assert {(r["row_key"], r["load_id"]) for r in rows} == {(k1, first), (k2, second)}
+    # The key is of the recipe and the case, not of a version: asked by id alone.
+    assert await runs.kept_row_keys(recipe, case, [k1, k2]) == {k1, k2}
+
+
+async def test_the_record_and_its_keys_land_together_or_neither(runs: RecipeRunStore) -> None:
+    """One transaction (`add_record`): a key the column refuses (a NUL byte, which Postgres text
+    cannot hold) fails the second statement, and the first (the record's append) and the keys
+    before it in the same batch go with it. Read from the run's own row, not by load id across the
+    ledger, so no other run's record can answer."""
+    recipe, case, load, good = new_id(), new_id(), new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    with pytest.raises(Exception):  # noqa: B017 (asyncpg's own error, whichever it names)
+        await runs.add_record(
+            run_id, _keyed(load, recipe, case), row_keys=[good, "bad\x00key"]
+        )
+    on_the_run = await runs._pool.fetchval(
+        "SELECT load_records FROM recipe_runs WHERE run_id = $1", run_id
+    )
+    assert on_the_run is None, "the record was not appended"
+    assert await runs.load_record(load) is None
+    assert await runs.kept_row_keys(recipe, case, [good]) == set(), "nor the key before the bad one"
+    # And the run is not poisoned: the same call, without the bad key, lands whole.
+    await runs.add_record(run_id, _keyed(load, recipe, case), row_keys=[good])
+    assert await runs.load_record(load) is not None
+    assert await runs.kept_row_keys(recipe, case, [good]) == {good}
+
+
+async def test_releasing_a_loads_keys_frees_exactly_its_own_and_a_second_release_frees_none(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, case = new_id(), new_id()
+    load_a, load_b, load_c = new_id(), new_id(), new_id()
+    k1, k2, k3 = new_id(), new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _keyed(load_a, recipe, case), row_keys=[k1, k2])
+    await runs.add_record(run_id, _keyed(load_b, recipe, case), row_keys=[k3])
+    assert await runs.release_row_keys([load_a]) == 2
+    assert await runs.release_row_keys([load_a]) == 0
+    assert await runs.release_row_keys([]) == 0
+    assert await runs.kept_row_keys(recipe, case, [k1, k2, k3]) == {k3}
+    # Released, a rerun may keep them again.
+    await runs.add_record(run_id, _keyed(load_c, recipe, case), row_keys=[k1])
+    assert await runs.kept_row_keys(recipe, case, [k1]) == {k1}
+
+
+async def test_the_key_table_is_indexed_for_the_lookup_and_for_the_release(
+    runs: RecipeRunStore,
+) -> None:
+    """The primary key is the lookup (`row_key = ANY(...)` for one recipe and case) and the index on
+    `load_id` is what a revert releases by: neither is a scan of a million-row table."""
+    rows = await runs._pool.fetch(
+        "SELECT indexdef FROM pg_indexes WHERE tablename = 'loaded_row_keys'"
+    )
+    definitions = " ".join(r["indexdef"] for r in rows)
+    assert "(recipe_id, investigation_id, row_key)" in definitions
+    assert "(load_id)" in definitions
+
+
+# --- ADR-127 decision 5: the definition that made a key, and the lock that serialises runs ------
+
+
+async def test_each_key_is_kept_with_the_fingerprint_of_the_definition_that_made_it(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, case = new_id(), new_id()
+    old, new = new_id(), new_id()
+    first, second, third = new_id(), new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(
+        run_id, _keyed(first, recipe, case), row_keys=[new_id()], row_key_fingerprint=old
+    )
+    await runs.add_record(
+        run_id, _keyed(second, recipe, case), row_keys=[new_id()], row_key_fingerprint=old
+    )
+    await runs.add_record(
+        run_id, _keyed(third, recipe, case), row_keys=[new_id()], row_key_fingerprint=new
+    )
+    # How many loads kept keys under each: what a refusal names (a count, never an id).
+    assert await runs.fingerprints(recipe, case) == {old: 2, new: 1}
+    # Per recipe and case: another case sees none of it.
+    assert await runs.fingerprints(recipe, new_id()) == {}
+    # A revert releases a load's keys, and with them its place in the count.
+    await runs.release_row_keys([first, second])
+    assert await runs.fingerprints(recipe, case) == {new: 1}
+
+
+async def test_a_load_that_kept_no_keys_leaves_no_fingerprint(runs: RecipeRunStore) -> None:
+    recipe, case = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(
+        run_id, _keyed(new_id(), recipe, case), row_keys=[], row_key_fingerprint=new_id()
+    )
+    assert await runs.fingerprints(recipe, case) == {}
+
+
+async def test_a_second_holder_of_the_lock_is_refused_after_a_short_wait_and_not_before_it_is_free(
+    runs: RecipeRunStore,
+) -> None:
+    import asyncio
+
+    from services.ingest.engine import RowKeyRunInProgress
+
+    recipe, case = new_id(), new_id()
+    async with runs.hold_row_keys(recipe, case):
+        with pytest.raises(RowKeyRunInProgress):
+            async with runs.hold_row_keys(recipe, case, wait_seconds=0.3):
+                raise AssertionError("two runs held one recipe in one case")
+        # Another recipe, or another case, is not held up.
+        async with runs.hold_row_keys(new_id(), case, wait_seconds=0.3):
+            pass
+        async with runs.hold_row_keys(recipe, new_id(), wait_seconds=0.3):
+            pass
+    # Released: the next holder takes it at once.
+    async with runs.hold_row_keys(recipe, case, wait_seconds=0.3):
+        pass
+
+    # A waiter that the holder lets go of inside its wait takes the lock then.
+    async def hold_briefly() -> None:
+        async with runs.hold_row_keys(recipe, case):
+            await asyncio.sleep(0.5)
+
+    holder = asyncio.create_task(hold_briefly())
+    await asyncio.sleep(0.1)
+    async with runs.hold_row_keys(recipe, case, wait_seconds=5.0):
+        pass
+    await holder
+
+
+async def test_the_lock_is_released_when_the_holder_fails_or_is_cancelled(
+    runs: RecipeRunStore,
+) -> None:
+    import asyncio
+
+    recipe, case = new_id(), new_id()
+    with pytest.raises(RuntimeError):
+        async with runs.hold_row_keys(recipe, case):
+            raise RuntimeError("the load failed")
+    async with runs.hold_row_keys(recipe, case, wait_seconds=0.3):
+        pass
+
+    entered = asyncio.Event()
+
+    async def hold_forever() -> None:
+        async with runs.hold_row_keys(recipe, case):
+            entered.set()
+            await asyncio.sleep(60)
+
+    task = asyncio.create_task(hold_forever())
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    async with runs.hold_row_keys(recipe, case, wait_seconds=2.0):
+        pass
+
+
+async def test_the_lock_is_held_on_a_connection_of_its_own_until_released(
+    runs: RecipeRunStore,
+) -> None:
+    """Session-level, so it outlives any one statement and ends with the session: while held, the
+    server shows it, and it is gone when the block ends."""
+    recipe, case = new_id(), new_id()
+    count = "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND granted"
+    before = await runs._pool.fetchval(count)
+    async with runs.hold_row_keys(recipe, case):
+        assert await runs._pool.fetchval(count) == before + 1
+    assert await runs._pool.fetchval(count) == before
+
+
+async def test_more_runs_of_distinct_recipes_than_the_pool_has_connections_all_complete(
+    runs: RecipeRunStore,
+) -> None:
+    """Each running load holds the row-key lock for its whole run and then needs the pool to write
+    its record. A lock that took a pooled connection would, with every connection held by a lock,
+    leave every run waiting for the connection to write with: a deadlock. Six runs against a pool
+    of four must all finish and keep their records."""
+    import asyncio
+
+    pool_max = runs._pool.get_max_size()
+    count = pool_max + 2
+    case = new_id()
+    recipes = [new_id() for _ in range(count)]
+    all_holding = asyncio.Event()
+    holding = 0
+
+    async def one_run(recipe: str) -> str:
+        nonlocal holding
+        async with runs.hold_row_keys(recipe, case, wait_seconds=5.0):
+            holding += 1
+            if holding == count:
+                all_holding.set()
+            # Every run is inside its lock before any writes: the worst case for the pool.
+            await all_holding.wait()
+            load_id = new_id()
+            run_id = await _started(runs, recipe)
+            await runs.add_record(
+                run_id,
+                _keyed(load_id, recipe, case),
+                row_keys=[f"k-{load_id}"],
+                row_key_fingerprint="fp",
+            )
+            return load_id
+
+    loads = await asyncio.wait_for(asyncio.gather(*(one_run(r) for r in recipes)), timeout=20)
+    assert len(set(loads)) == count
+    for load_id in loads:
+        assert await runs.load_record(load_id) is not None

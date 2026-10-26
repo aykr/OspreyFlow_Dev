@@ -18083,3 +18083,41 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   may use the revert now, with the Conduit stopped on a DuckDB deployment. This amendment closes
   Amendment 8's working-set, cache and stale-alert limits; its others (the self-declared clearance,
   orphaned notes on reverted links) stand.
+
+### ADR-127, Amendment 10 (26 October 2026) — B2-5: what decision 5 left open
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **Where keys are kept.** In Postgres, `loaded_row_keys` (recipe, case, row key, load, and a fingerprint
+  of the `deduplicate` definition that made the key), keyed by (recipe, case, row key). A load's keys are
+  written after its graph commit, in one transaction with its load record, so no key is ever kept for a
+  row that did not load. A crash between the graph commit and that transaction leaves rows loaded with
+  neither record nor keys: a rerun loads them again, the first load cannot be reverted, and its run
+  stays `running` in the ledger, which is the operator's signal. The stores offer no two-store commit
+  that would close it.
+- **The key** canonicalises each field through its own adapter and hashes an unambiguous encoding of the
+  parts. A row with an empty or unresolved key part is unkeyed: it loads every time and keeps no key.
+- **A changed key definition.** A run whose key definition differs from the one that made the keys kept
+  for its recipe and case is refused, naming how many loads to revert first; so is a run whose recipe no
+  longer has `deduplicate` while keys are kept. The definition is the `deduplicate` key and every
+  connector setting that feeds a key part's canonicalisation (the date order, the source CRS). A new
+  version that leaves it unchanged still skips the rows already loaded (decision 5). A Knowledge Adapter
+  whose canonical output changes in an upgrade, or with its configuration, changes keys without changing
+  the definition: its deduplicating loads must be reverted before the upgraded adapter is used, and its
+  golden file shows such a change when it is made. No adapter reads configuration today; when gazetteer
+  matching gives the `address` adapter one, it joins the definition.
+- **One run at a time** of a recipe in a case, serialised by a Postgres session advisory lock held from
+  the key check to the record, so two overlapping runs cannot load the same rows twice. A second run
+  waits up to 30 seconds, then is refused as already running. The lock is held on a connection of its
+  own, outside the ledger's pool, so concurrent runs cannot exhaust the pool and deadlock; Postgres must
+  therefore allow one connection per concurrent deduplicating run, and a transaction-mode connection
+  pooler in front of Postgres would break the lock, as would a server `idle_session_timeout`, which must
+  stay off. A scheduled run refused as already running is recorded as failed, so it never counts toward
+  pausing its schedule (it ends a streak of refusals, as any failure does).
+- **Held rows** keep no key until their release loads them, under the release's load id; the revert
+  releases a load's keys, its releases' included (Amendment 8's `row_keys` step).
+- **Studio drafts carry `deduplicate`,** validated at save against the source's columns, kept through
+  publish and new versions, and used by Verify, which reports `rows_already_loaded` as a run would. The
+  Glass control, and showing the count on the Publish and Verify screens, are unit B2-5b; until then a
+  Studio-built recipe is given its key through the draft's API.
+- **Recorded:** a row loaded with a "content not found" rejection keeps its key, so a re-run after the
+  file arrives does not attach it; a revert and re-run does.

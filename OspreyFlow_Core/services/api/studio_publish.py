@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import Sequence
+from contextlib import AbstractAsyncContextManager, AsyncExitStack
 from pathlib import Path
 from typing import Protocol
 
@@ -181,6 +182,9 @@ def build_recipe(
         # ADR-108 phase C: the published YAML carries the topology the runner executes, so a run
         # is provably against what was published. `None` for a v1 draft — its YAML is unchanged.
         pipeline=draft.pipeline,
+        # ADR-127 decision 5: what makes a row the same row again, into the committed file, so a
+        # run keeps and checks the keys of the rows it loads.
+        deduplicate=draft.deduplicate,
     )
 
 
@@ -289,6 +293,22 @@ class LoadSink(Protocol):
 
     async def committed(self, report: LoadReport, *, source: str) -> None: ...
 
+    async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
+        """Which of these row keys the case already kept for the recipe (ADR-127 decision 5): asked
+        only for a recipe with `deduplicate`."""
+        ...
+
+    async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:
+        """The definitions of `deduplicate` the case's kept keys were made under, each with how
+        many loads kept keys under it: a run whose own differs is refused."""
+        ...
+
+    def hold_row_keys(self, recipe_id: str, case: str) -> AbstractAsyncContextManager[None]:
+        """Serialises runs of one recipe into one case (ADR-127 decision 5): held from the check of
+        the kept keys to the write of the load's record and keys. A second holder waits a short
+        while and is then refused (`RowKeyRunInProgress`)."""
+        ...
+
     async def geometries(self, load_id: str, refs: Sequence[str]) -> None: ...
 
     async def rule_writes(
@@ -390,9 +410,7 @@ async def run_published_recipe(
         await analytics.load_geometries(fresh)
     # ADR-109 ruling 1: the case's post-commit rules, once the load's events can be read with it.
     if rules is not None:
-        report.rule_notes.extend(
-            await post_commit_notes(rules, events, load_id=load_id, sink=sink)
-        )
+        report.rule_notes.extend(await post_commit_notes(rules, events, load_id=load_id, sink=sink))
     return report
 
 
@@ -419,110 +437,127 @@ async def load_with_rules(
     runs again without them — a second pass whose remaining rows carry no money movement for a
     typology to judge, so it cannot hold again; if it ever did, the load is refused rather than
     part-loaded silently (rule 2)."""
-    # What a column may bind is judged against the caller's scheme, else the case's rules' own.
-    scheme = scheme or (rules.scheme if rules is not None else None)
-    unseen = (
-        alert_handling(rules.scheme, recipe_handlings(recipe, rules.scheme))
-        if rules is not None
-        else None
-    )
-    held = PreCommitVerdict()
-    skip: frozenset[int] = frozenset()
-    while True:
-        written: list[NodeWrite | EdgeWrite] = []
-        tx = await graph.begin_transaction()
+    # ADR-127 decision 5: runs of one recipe into one case are serialised from the check of the kept
+    # keys (in `run_recipe`) to the write of the load's record and keys (`sink.committed`), so two
+    # overlapping runs cannot both find a row's key absent and both load it. Only a recipe with
+    # `deduplicate` takes the lock; it is released when the record is written, or on any failure.
+    locks = AsyncExitStack()
+    try:
+        if sink is not None and recipe.deduplicate is not None:
+            await locks.enter_async_context(sink.hold_row_keys(recipe.id, investigation_scope))
+        # What a column may bind is judged against the caller's scheme, else the case's rules' own.
+        scheme = scheme or (rules.scheme if rules is not None else None)
+        unseen = (
+            alert_handling(rules.scheme, recipe_handlings(recipe, rules.scheme))
+            if rules is not None
+            else None
+        )
+        held = PreCommitVerdict()
+        skip: frozenset[int] = frozenset()
+        while True:
+            written: list[NodeWrite | EdgeWrite] = []
+            tx = await graph.begin_transaction()
+            try:
+                report, events = await run_recipe(
+                    recipe,
+                    rows,
+                    graph=graph,
+                    ontology=ontology,
+                    tx=tx,
+                    principal=principal,
+                    load_id=load_id,
+                    investigation_scope=investigation_scope,
+                    source=source,
+                    media=media,
+                    skip_row_indices=skip,
+                    row_numbers=row_numbers,
+                    written=written,
+                    scheme=scheme,
+                    # The store of loaded rows is the ledger's, reached through the sink (ADR-127
+                    # decision 5). A recipe without `deduplicate` is asked too, for the one question
+                    # of whether the case holds keys it would reload (it keeps none itself).
+                    row_keys=sink,
+                )
+                verdict = (
+                    await rules.pre_commit(
+                        events, tx, load_id=load_id, unseen=unseen, written=written
+                    )
+                    if rules is not None
+                    else PreCommitVerdict()
+                )
+            except Exception:
+                await graph.rollback_transaction(tx)
+                raise
+            if not verdict.hold:
+                break
+            await graph.rollback_transaction(tx)
+            if skip:
+                raise RuntimeError(
+                    "rows were still unjudged after holding the first ones — nothing was loaded"
+                )
+            held = verdict
+            skip = frozenset(verdict.hold)
+
+        # Each held row is marked by its own row's resolved marking (ADR-127 decision 3), never
+        # by the recipe's floor, whose units are the first marking's. The markings are settled
+        # before the commit: a row none can be made for (`row_marking` refuses it) is a rejection
+        # in the report, not a held row lost once the load has committed. It was left out of the
+        # graph already (it is among the rows `skip` holds back), so nothing of it is committed.
+        held_rows: list[HeldRow] = []
         try:
-            report, events = await run_recipe(
-                recipe,
-                rows,
-                graph=graph,
-                ontology=ontology,
-                tx=tx,
-                principal=principal,
-                load_id=load_id,
-                investigation_scope=investigation_scope,
-                source=source,
-                media=media,
-                skip_row_indices=skip,
-                row_numbers=row_numbers,
-                written=written,
-                scheme=scheme,
-            )
-            verdict = (
-                await rules.pre_commit(events, tx, load_id=load_id, unseen=unseen, written=written)
-                if rules is not None
-                else PreCommitVerdict()
-            )
+            if rules is not None and held.hold:
+                rule_scheme = rules.scheme
+                handlings = recipe_handlings(recipe, rule_scheme)
+                floor = handlings[0]
+                for other in handlings[1:]:
+                    floor = merge_handling(floor, other, rule_scheme)
+                by_row: dict[int, Handling] = {}
+                numbers = list(row_numbers) if row_numbers is not None else list(range(len(rows)))
+                position = {n: i for i, n in enumerate(numbers)}
+                refused: list[int] = []
+                for number in sorted(held.hold):
+                    if number not in position:
+                        continue
+                    try:
+                        by_row[number] = row_marking(recipe, rows[position[number]], rule_scheme)
+                    except RowRejected as exc:
+                        refused.append(number)
+                        report.rejections.append(
+                            RejectionRecord(row_index=number, reason=exc.reason, sample="")
+                        )
+                by_row_object = {id(rows[position[n]]): marking for n, marking in by_row.items()}
+                held_rows = held_rows_for(
+                    PreCommitVerdict(
+                        hold={n: v for n, v in held.hold.items() if n not in refused},
+                        findings=held.findings,
+                        notes=held.notes,
+                    ),
+                    rows,
+                    row_numbers=row_numbers,
+                    investigation_id=rules.investigation_id,
+                    recipe_id=recipe.id,
+                    recipe_version=recipe.version,
+                    load_id=load_id,
+                    source=source,
+                    handling=floor,
+                    dataset_id=principal.datasets[0] if principal.datasets else None,
+                    row_handling=lambda row: by_row_object[id(row)],
+                )
         except Exception:
+            # Anything but a refusal (`RowRejected` is handled per row above) leaves the open
+            # transaction rolled back, not abandoned: nothing of this load is committed.
             await graph.rollback_transaction(tx)
             raise
-        if not verdict.hold:
-            break
-        await graph.rollback_transaction(tx)
-        if skip:
-            raise RuntimeError(
-                "rows were still unjudged after holding the first ones — nothing was loaded"
-            )
-        held = verdict
-        skip = frozenset(verdict.hold)
-
-    # Each held row is marked by its own row's resolved marking (ADR-127 decision 3), never by the
-    # recipe's floor, whose units are the first marking's. The markings are settled before the
-    # commit: a row none can be made for (`row_marking` refuses it) is a rejection in the report,
-    # not a held row lost once the load has committed. It was left out of the graph already (it
-    # is among the rows `skip` holds back), so nothing of it is committed.
-    held_rows: list[HeldRow] = []
-    try:
-        if rules is not None and held.hold:
-            rule_scheme = rules.scheme
-            handlings = recipe_handlings(recipe, rule_scheme)
-            floor = handlings[0]
-            for other in handlings[1:]:
-                floor = merge_handling(floor, other, rule_scheme)
-            by_row: dict[int, Handling] = {}
-            numbers = list(row_numbers) if row_numbers is not None else list(range(len(rows)))
-            position = {n: i for i, n in enumerate(numbers)}
-            refused: list[int] = []
-            for number in sorted(held.hold):
-                if number not in position:
-                    continue
-                try:
-                    by_row[number] = row_marking(recipe, rows[position[number]], rule_scheme)
-                except RowRejected as exc:
-                    refused.append(number)
-                    report.rejections.append(
-                        RejectionRecord(row_index=number, reason=exc.reason, sample="")
-                    )
-            by_row_object = {id(rows[position[n]]): marking for n, marking in by_row.items()}
-            held_rows = held_rows_for(
-                PreCommitVerdict(
-                    hold={n: v for n, v in held.hold.items() if n not in refused},
-                    findings=held.findings,
-                    notes=held.notes,
-                ),
-                rows,
-                row_numbers=row_numbers,
-                investigation_id=rules.investigation_id,
-                recipe_id=recipe.id,
-                recipe_version=recipe.version,
-                load_id=load_id,
-                source=source,
-                handling=floor,
-                dataset_id=principal.datasets[0] if principal.datasets else None,
-                row_handling=lambda row: by_row_object[id(row)],
-            )
-    except Exception:
-        # Anything but a refusal (`RowRejected` is handled per row above) leaves the open
-        # transaction rolled back, not abandoned: nothing of this load is committed.
-        await graph.rollback_transaction(tx)
-        raise
-    await graph.commit_transaction(tx)
-    if rules is not None:
-        _fold_rule_writes(report, verdict.writes)
-    # The load's record, now: the graph holds it, and everything after (the rules, the events, the
-    # points, the resolution jobs, the change stream) can fail without losing what a revert needs.
-    if sink is not None:
-        await sink.committed(report, source=source)
+        await graph.commit_transaction(tx)
+        if rules is not None:
+            _fold_rule_writes(report, verdict.writes)
+        # The load's record, now: the graph holds it, and everything after (the rules, the events,
+        # the points, the resolution jobs, the change stream) can fail without losing what a revert
+        # needs.
+        if sink is not None:
+            await sink.committed(report, source=source)
+    finally:
+        await locks.aclose()
 
     if rules is not None:
         await rules.after_commit(verdict)

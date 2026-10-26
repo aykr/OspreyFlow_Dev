@@ -43,6 +43,7 @@ from services.ingest.recipe_loader import load_recipe
 from conduit_common.identity import new_id
 from schemas.domain import OntologySchema, Principal
 from schemas.ingest import (
+    DeduplicateConfig,
     PipelineGraph,
     Recipe,
     RowTemplate,
@@ -139,6 +140,9 @@ def _content_json(draft: StudioRecipeDraft, **overrides: object) -> str:
         else None,
         "unmapped_fields": [f.model_dump() for f in draft.unmapped_fields],
         "pipeline": draft.pipeline.model_dump(by_alias=True) if draft.pipeline else None,
+        # ADR-127 decision 5: what makes a row the same row again, kept with the rest of the
+        # content so every writer carries it and a new version keeps it.
+        "deduplicate": draft.deduplicate.model_dump() if draft.deduplicate else None,
     }
     whole.update(overrides)
     return json.dumps(whole)
@@ -195,6 +199,9 @@ def _row_to_draft(row: asyncpg.Record) -> StudioRecipeDraft:
         ],
         pipeline=PipelineGraph.model_validate(content["pipeline"])
         if content.get("pipeline")
+        else None,
+        deduplicate=DeduplicateConfig.model_validate(content["deduplicate"])
+        if content.get("deduplicate")
         else None,
         verified_at=data["verified_at"],
         ontology_version=data["ontology_version"],
@@ -267,6 +274,7 @@ class StudioRecipeStore:
         source_location: str | None,
         handling: dict[str, object],
         legal_basis: str | None,
+        deduplicate: DeduplicateConfig | None = None,
     ) -> StudioRecipeDraft:
         recipe_id = new_id()
         content = json.dumps(
@@ -275,6 +283,9 @@ class StudioRecipeStore:
                 "source_location": source_location,
                 "handling": handling,
                 "legal_basis": legal_basis,
+                "deduplicate": deduplicate.model_dump()
+                if deduplicate and deduplicate.key
+                else None,
             }
         )
         created_at = datetime.now(UTC)
@@ -344,23 +355,26 @@ class StudioRecipeStore:
         source_location: str | None = None,
         handling: dict[str, object] | None = None,
         legal_basis: str | None = None,
+        deduplicate: DeduplicateConfig | None = None,
     ) -> StudioRecipeDraft:
+        """`deduplicate` (ADR-127 decision 5): `None` leaves the draft's own, a config replaces it,
+        and one with an empty `key` clears it (the draft then keeps no keys)."""
         draft = await self.get_authorized(recipe_id, principal)
         if draft.status is not StudioRecipeStatus.DRAFT:
             raise StudioRecipeNotADraftError(recipe_id)
-        content = _content_json(
-            draft,
-            **{
-                k: v
-                for k, v in {
-                    "connector_profile": connector_profile,
-                    "source_location": source_location,
-                    "handling": carry_source_declarations(draft.handling, handling),
-                    "legal_basis": legal_basis,
-                }.items()
-                if v is not None
-            },
-        )
+        overrides: dict[str, object] = {
+            k: v
+            for k, v in {
+                "connector_profile": connector_profile,
+                "source_location": source_location,
+                "handling": carry_source_declarations(draft.handling, handling),
+                "legal_basis": legal_basis,
+            }.items()
+            if v is not None
+        }
+        if deduplicate is not None:
+            overrides["deduplicate"] = deduplicate.model_dump() if deduplicate.key else None
+        content = _content_json(draft, **overrides)
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE studio_recipes SET label = $1, content = $2, verified_at = NULL "

@@ -343,6 +343,10 @@ class ConnectDraftInput(BaseModel):
     handling: dict[str, Any] = Field(default_factory=dict)
     #: §2: "what the legal basis for processing it is".
     legal_basis: str | None = None
+    #: ADR-127 decision 5: the fields that make a source row the same row again, as a recipe's
+    #: `deduplicate` takes them. Absent leaves the draft's own as it is; an empty `key` clears it.
+    #: Judged at save against the source's columns (`services/ingest/recipe_rules.py`).
+    deduplicate: DeduplicateConfig | None = None
 
     @field_validator("handling")
     @classmethod
@@ -391,6 +395,10 @@ class StudioRecipeDraft(BaseModel):
     #: the Glass's own component state.
     row_template: RowTemplate | None = None
     unmapped_fields: list[UnmappedField] = Field(default_factory=list)
+    #: ADR-127 decision 5: what makes a source row the same row again, carried through Publish into
+    #: the committed recipe and kept on a new version. `None` keeps no keys and loads every row
+    #: every time.
+    deduplicate: DeduplicateConfig | None = None
     #: Publish's own state (§6) — every field below is `None` while
     #: `status='draft'`. `verified_at` is set by a *successful* run of
     #: `POST .../verify` (`services/api/studio_verify.py`'s `run_verify`
@@ -856,10 +864,24 @@ class LoadReport(BaseModel):
     recipe_version: int
     rows_read: int = 0
     rows_deduplicated: int = 0
+    #: ADR-127 decision 5: of `rows_read`, the rows a recipe with `deduplicate` did not load because
+    #: this case already kept their key (whatever the recipe's version): a count of the loader's
+    #: own source rows, never of anything another case holds. Rows folded into a survivor of the
+    #: same file are `rows_deduplicated`, and not these.
+    rows_already_loaded: int = 0
     nodes_created: int = 0
     nodes_referenced: int = 0
     edges_created: int = 0
     rejections: list[RejectionRecord] = Field(default_factory=list)
+    #: The keys (canonicalised, then hashed) of the groups of rows this load wrote, for a recipe
+    #: with `deduplicate`: kept for the case, with the load, in the transaction that records it
+    #: (`RecipeRunStore.add_record`). A row held, rejected or already loaded has none. Hashes of the
+    #: loader's own source rows, held for the ledger alone: never in `LoadReportView`.
+    kept_row_keys: list[str] = Field(default_factory=list)
+    #: A hash of the `deduplicate` definition the keys above were made under (`dedup_fingerprint`),
+    #: kept with them: a run under another definition is refused while keys under this one are
+    #: kept for the case. `None` for a recipe without `deduplicate`.
+    row_key_fingerprint: str | None = None
     #: Only the nodes THIS load created — never a node it merely
     #: referenced, and never an edge it only extended (§9.1, when this
     #: becomes a `LoadRecord`, records only what revert may safely
@@ -903,6 +925,7 @@ class LoadReportView(BaseModel):
     recipe_version: int
     rows_read: int = 0
     rows_deduplicated: int = 0
+    rows_already_loaded: int = 0
     nodes_created: int = 0
     nodes_referenced: int = 0
     edges_created: int = 0
@@ -965,6 +988,7 @@ class PipelineRunReport(BaseModel):
     extracts: list[ExtractStageReport] = Field(default_factory=list)
     enriches: list[EnrichStageReport] = Field(default_factory=list)
     rows_read: int = 0
+    rows_already_loaded: int = 0
     nodes_created: int = 0
     nodes_referenced: int = 0
     edges_created: int = 0
@@ -996,6 +1020,7 @@ class PipelineRunReportView(BaseModel):
     extracts: list[ExtractStageReport] = Field(default_factory=list)
     enriches: list[EnrichStageReport] = Field(default_factory=list)
     rows_read: int = 0
+    rows_already_loaded: int = 0
     nodes_created: int = 0
     nodes_referenced: int = 0
     edges_created: int = 0
@@ -1046,6 +1071,9 @@ class VerifyReport(BaseModel):
 
     rows_read: int
     rows_deduplicated: int
+    #: ADR-127 decision 5: of the sample, the rows a run would skip because the case already kept
+    #: their key. Judged exactly as the run judges, and nothing is written.
+    rows_already_loaded: int = 0
     #: §3's own sample-size rule ("10,000 rows or the whole file, whichever
     #: is smaller"), restated here the same way `SourceProfile` states it —
     #: `False` means the source has more rows than this dry run covered.

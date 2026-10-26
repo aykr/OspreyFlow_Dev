@@ -13,13 +13,16 @@ principal; it is never read except through those routes.
 
 from __future__ import annotations
 
+import asyncio
 import json
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Literal, get_args
 
 import asyncpg
 from pydantic import BaseModel
+from services.ingest.engine import RowKeyRunInProgress
 
 from conduit_common.identity import new_id
 from schemas.domain import Handling
@@ -35,6 +38,38 @@ _NOT_RUN = frozenset(get_args(NotRunOutcome))
 #: `CREATE TABLE IF NOT EXISTS` leaves so; connecting adds it. Never selected into `RecipeRun`: the
 #: record holds ids of elements some readers may not see, and no route returns it.
 _ADD_LOAD_RECORDS = "ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS load_records JSONB;"
+
+#: ADR-127 decision 5: the rows a recipe has loaded into a case, by the key of each (its fields
+#: canonicalised, then hashed: `engine.dedup_key`), with the load that kept it. The primary key is
+#: the lookup a run makes (`row_key = ANY(...)` for one recipe and case) and the guard against a key
+#: kept twice; the index on `load_id` is what a revert releases a load's keys by. Nothing here names
+#: a row's content, only a hash of its key fields.
+_LOADED_ROW_KEYS = """
+CREATE TABLE IF NOT EXISTS loaded_row_keys (
+    recipe_id TEXT NOT NULL,
+    investigation_id TEXT NOT NULL,
+    row_key TEXT NOT NULL,
+    load_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (recipe_id, investigation_id, row_key)
+);
+-- The definition of `deduplicate` that made each key (`engine.dedup_fingerprint`): a run under
+-- another definition is refused while keys under this one are kept for its case. A table made
+-- before it gets '' (no known definition), which no run's fingerprint equals.
+ALTER TABLE loaded_row_keys ADD COLUMN IF NOT EXISTS fingerprint TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS loaded_row_keys_load_idx ON loaded_row_keys (load_id);
+CREATE INDEX IF NOT EXISTS loaded_row_keys_fingerprint_idx
+    ON loaded_row_keys (recipe_id, investigation_id, fingerprint, load_id);
+"""
+
+#: How long a second run of one recipe into one case waits for the first before it is refused, and
+#: how often it asks (ADR-127 decision 5).
+ROW_KEY_LOCK_WAIT_SECONDS = 30.0
+_LOCK_POLL_SECONDS = 0.2
+
+#: A lookup or an insert sends this many keys at a time, so a million-row file is a hundred
+#: round trips, none of them an unbounded statement.
+_KEY_CHUNK = 10_000
 
 _BOOTSTRAP_SQL = f"""
 CREATE TABLE IF NOT EXISTS recipe_runs (
@@ -66,6 +101,7 @@ ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS counts_toward_pause BOOLEAN NOT
 ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS source_file TEXT;
 CREATE INDEX IF NOT EXISTS recipe_runs_recipe_idx ON recipe_runs (recipe_id, started_at DESC);
 {_ADD_LOAD_RECORDS}
+{_LOADED_ROW_KEYS}
 """
 
 _COLUMNS = (
@@ -106,15 +142,16 @@ def _row(record: asyncpg.Record) -> RecipeRun:
 
 
 class RecipeRunStore:
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, dsn: str) -> None:
         self._pool = pool
+        self._dsn = dsn
 
     @classmethod
     async def connect(cls, dsn: str) -> RecipeRunStore:
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
-        return cls(pool)
+        return cls(pool, dsn)
 
     async def close(self) -> None:
         await self._pool.close()
@@ -159,17 +196,137 @@ class RecipeRunStore:
                 report.load_id,
             )
 
-    async def add_record(self, run_id: str, record: LoadRecord) -> None:
+    async def add_record(
+        self,
+        run_id: str,
+        record: LoadRecord,
+        *,
+        row_keys: Sequence[str] = (),
+        row_key_fingerprint: str = "",
+    ) -> None:
         """Appends a load's record to its run (ADR-127 decision 6), when the load's graph
         transaction commits and so before the run can `finish`: a run that fails afterwards still
-        has the record a revert needs. A pipeline run appends one per branch."""
-        async with self._pool.acquire() as conn:
+        has the record a revert needs. A pipeline run appends one per branch.
+
+        `row_keys` (decision 5) are kept for the record's recipe and case, with its load, **in the
+        same transaction**: both land or neither does. The graph has committed already, so a crash
+        between the two stores leaves rows loaded with neither (the run row stays `running`), and
+        never a key for a row that did not load, nor a record whose keys were lost. A key already
+        kept is left as it was."""
+        async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 "UPDATE recipe_runs SET load_records = COALESCE(load_records, '[]'::jsonb) "
                 "|| $2::jsonb WHERE run_id = $1",
                 run_id,
                 json.dumps([record.model_dump(mode="json")]),
             )
+            keys = list(dict.fromkeys(row_keys))
+            for start in range(0, len(keys), _KEY_CHUNK):
+                await conn.execute(
+                    "INSERT INTO loaded_row_keys "
+                    "(recipe_id, investigation_id, row_key, load_id, fingerprint) "
+                    "SELECT $1, $2, k, $4, $5 FROM unnest($3::text[]) AS k "
+                    "ON CONFLICT (recipe_id, investigation_id, row_key) DO NOTHING",
+                    record.recipe_id,
+                    record.investigation_id or "",
+                    keys[start : start + _KEY_CHUNK],
+                    record.load_id,
+                    row_key_fingerprint,
+                )
+
+    async def kept_row_keys(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
+        """Which of `keys` the case has kept for the recipe, whatever version and whichever load:
+        by the primary key, in chunks. Another case's keys are not this case's (rule 3)."""
+        kept: set[str] = set()
+        unique = list(dict.fromkeys(keys))
+        async with self._pool.acquire() as conn:
+            for start in range(0, len(unique), _KEY_CHUNK):
+                rows = await conn.fetch(
+                    "SELECT row_key FROM loaded_row_keys WHERE recipe_id = $1 "
+                    "AND investigation_id = $2 AND row_key = ANY($3::text[])",
+                    recipe_id,
+                    case,
+                    unique[start : start + _KEY_CHUNK],
+                )
+                kept.update(r["row_key"] for r in rows)
+        return kept
+
+    async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:
+        """The definitions of `deduplicate` this recipe's kept keys in the case were made under,
+        each with how many loads kept keys under it: a run whose own differs is refused, naming
+        that count (`engine.RowKeyDefinitionChanged`). Read from the index on
+        (recipe, case, fingerprint, load): one entry per kept key of the case, grouped, which at a
+        million keys is a scan of that index and not of the table. Unmeasured."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT fingerprint, count(DISTINCT load_id) AS loads FROM loaded_row_keys "
+                "WHERE recipe_id = $1 AND investigation_id = $2 GROUP BY fingerprint",
+                recipe_id,
+                case,
+            )
+        return {r["fingerprint"]: int(r["loads"]) for r in rows}
+
+    @asynccontextmanager
+    async def hold_row_keys(
+        self, recipe_id: str, case: str, *, wait_seconds: float = ROW_KEY_LOCK_WAIT_SECONDS
+    ) -> AsyncIterator[None]:
+        """Serialises the runs of one recipe into one case (ADR-127 decision 5), from the check of
+        the kept keys to the write of the load's record and keys: two overlapping runs would both
+        find the keys absent and both load.
+
+        A Postgres **advisory lock** on (recipe, case), taken on a connection of its own that stays
+        out of the pool for as long as it is held (`asyncpg.connect` with the store's DSN, closed in
+        `finally`): the lock belongs to that session, so it is released when the block ends, when it
+        fails, and when the process dies (the session ends). It must not take a pooled connection:
+        every running load holds one for its whole run, and `add_record` and the ledger's other
+        calls need the pool, so as many runs as the pool has connections would deadlock.
+
+        Another holder is waited for up to `wait_seconds` and then refused
+        (`RowKeyRunInProgress`), so a request is never held open for a long load. Holds one server
+        connection per running load, outside the pool's limit, and needs session-level locks: a
+        transaction-mode connection pooler in front of Postgres would break it."""
+        loop = asyncio.get_running_loop()
+        conn = await asyncpg.connect(dsn=self._dsn)
+        taken = False
+        try:
+            deadline = loop.time() + wait_seconds
+            while True:
+                taken = bool(
+                    await conn.fetchval(
+                        "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2))",
+                        recipe_id,
+                        case,
+                    )
+                )
+                if taken:
+                    break
+                if loop.time() >= deadline:
+                    raise RowKeyRunInProgress(recipe_id)
+                await asyncio.sleep(_LOCK_POLL_SECONDS)
+            yield
+        finally:
+            try:
+                if taken:
+                    await conn.execute(
+                        "SELECT pg_advisory_unlock(hashtext($1), hashtext($2))", recipe_id, case
+                    )
+            finally:
+                await conn.close()
+
+    async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
+        """`engine.RowKeys`: this store is the one a dry run asks, as a `LoadSink` is for a run."""
+        return await self.kept_row_keys(recipe_id, case, keys)
+
+    async def release_row_keys(self, load_ids: Sequence[str]) -> int:
+        """Releases every key these loads kept, so a rerun of their rows loads again (a revert,
+        decision 6). By load id; idempotent: a second call finds none and returns 0."""
+        if not load_ids:
+            return 0
+        async with self._pool.acquire() as conn:
+            status = await conn.execute(
+                "DELETE FROM loaded_row_keys WHERE load_id = ANY($1::text[])", list(load_ids)
+            )
+        return int(status.split()[-1])
 
     async def add_geometries(self, run_id: str, load_id: str, refs: list[str]) -> None:
         """Records the geometry refs a load is about to insert, against that load's record."""

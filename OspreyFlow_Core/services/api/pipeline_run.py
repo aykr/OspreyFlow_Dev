@@ -589,6 +589,7 @@ async def run_published_pipeline(
 
     for branch in report.branches:
         report.rows_read += branch.report.rows_read
+        report.rows_already_loaded += branch.report.rows_already_loaded
         report.nodes_created += branch.report.nodes_created
         report.nodes_referenced += branch.report.nodes_referenced
         report.edges_created += branch.report.edges_created

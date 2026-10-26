@@ -1217,3 +1217,67 @@ async def test_a_pin_stored_as_a_decimal_one_is_flagged_at_start_up(
             "SELECT pack_versions::text FROM studio_recipes WHERE recipe_id = $1", row.recipe_id
         )
     assert stored == '{"fibo": 1.0}'
+
+
+# --- ADR-127 decision 5 (B2-5): a draft carries `deduplicate` ------------------------------------
+
+
+def _dedupe() -> object:
+    from schemas.ingest import DeduplicateConfig, FieldBinding
+
+    return DeduplicateConfig(key=[FieldBinding(field="a_party"), FieldBinding(field="b_party")])
+
+
+async def test_a_deduplicate_is_saved_with_the_draft_read_back_and_left_alone_by_other_edits(
+    store: StudioRecipeStore,
+) -> None:
+    draft = await store.create_draft(
+        AUTHOR, label="x", connector_profile="generic-csv", source_location=None, handling={},
+        legal_basis=None, deduplicate=_dedupe(),  # type: ignore[arg-type]
+    )  # fmt: skip
+    assert draft.deduplicate == _dedupe()
+    # Another edit (a new label) leaves it: `None` is "unchanged".
+    again = await store.update_draft(draft.recipe_id, AUTHOR, label="renamed")
+    assert again.deduplicate == _dedupe()
+    # Map's save carries it too (it rewrites the row template's half of the content).
+    from schemas.ingest import RowTemplate
+
+    after_map = await store.update_row_template(
+        draft.recipe_id, AUTHOR, row_template=RowTemplate(entities=[]), unmapped_fields=[]
+    )
+    assert after_map.deduplicate == _dedupe()
+
+
+async def test_a_deduplicate_is_replaced_and_an_empty_key_clears_it(
+    store: StudioRecipeStore,
+) -> None:
+    from schemas.ingest import DeduplicateConfig, FieldBinding
+
+    draft = await store.create_draft(
+        AUTHOR, label="x", connector_profile="generic-csv", source_location=None, handling={},
+        legal_basis=None,
+    )  # fmt: skip
+    assert draft.deduplicate is None
+    changed = DeduplicateConfig(key=[FieldBinding(field="seq")])
+    assert (
+        await store.update_draft(draft.recipe_id, AUTHOR, deduplicate=changed)
+    ).deduplicate == changed
+    cleared = await store.update_draft(
+        draft.recipe_id, AUTHOR, deduplicate=DeduplicateConfig(key=[])
+    )
+    assert cleared.deduplicate is None
+
+
+async def test_a_deduplicate_is_kept_on_a_new_version(store: StudioRecipeStore) -> None:
+    draft = await _verified_draft(store, deduplicate=_dedupe())
+    assert draft.deduplicate == _dedupe()
+    published = await store.publish(
+        draft.recipe_id, AUTHOR, ontology_version=3, pack_versions={},
+        git_path="recipes/some-id.yaml", schedule_cron=None, schedule_watch=None,
+        now=datetime(2026, 1, 2, tzinfo=UTC),
+    )  # fmt: skip
+    assert published.deduplicate == _dedupe()
+    new_version = await store.create_new_version(
+        published.recipe_id, AUTHOR, now=datetime(2026, 1, 3, tzinfo=UTC)
+    )
+    assert new_version.deduplicate == _dedupe(), "as `units` and `handling_columns` are kept"

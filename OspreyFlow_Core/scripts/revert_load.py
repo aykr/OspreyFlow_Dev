@@ -25,7 +25,8 @@ clearance and a unit there is nothing to read as, and `--show-ids` is refused be
 publishes each case's removal so every Conduit instance projects it for its connected readers,
 takes them out of the stored history steps, closes the alerts that cite its events, and clears the
 Conduit's kept results (`cache:*` in the same Valkey, so every instance at once). It needs the
-Valkey the Conduit uses (`VALKEY_*`).
+Valkey the Conduit uses (`VALKEY_*`). It also releases the row keys each load kept for its case
+(ADR-127 decision 5), so a rerun of the file loads those rows again.
 
 **Quiesce the Conduit.** Run a revert with the Conduit quiet. With the DuckDB engine that is
 required, since the analytics file belongs to one process. With ClickHouse it is advised: a Conduit

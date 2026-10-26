@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from services.api.app import app, get_graph, get_ontology
+from services.api.app import app, get_graph, get_ontology, get_recipe_runs
 
 from ontology.loader import load_default_ontology
 from schemas.domain import Node, Principal
@@ -49,14 +49,40 @@ class _FakeGraphPort:
         return self.find_node_result
 
 
+class _FakeRunKeys:
+    """The ledger's one question Verify asks (ADR-127 decision 5): which row keys the case already
+    kept for the recipe. Records what it was asked, and answers from `kept`."""
+
+    def __init__(self) -> None:
+        self.already: set[str] = set()
+        #: The definitions the case's kept keys were made under, with how many loads each.
+        self.made_under: dict[str, int] = {}
+        self.asked: list[tuple[str, str, list[str]]] = []
+
+    async def kept_row_keys(self, recipe_id: str, case: str, keys: list[str]) -> set[str]:
+        self.asked.append((recipe_id, case, list(keys)))
+        return {k for k in keys if k in self.already}
+
+    async def kept(self, recipe_id: str, case: str, keys: list[str]) -> set[str]:
+        return await self.kept_row_keys(recipe_id, case, keys)
+
+    async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:
+        return dict(self.made_under)
+
+
 @pytest.fixture
 def graph_client(client: TestClient) -> TestClient:
     """`client` (imported above) already overrides principal/store/audit/
-    scheme; this adds the two dependencies only Verify's route needs."""
+    scheme; this adds the dependencies only Verify's route needs: a graph, the ontology and the run
+    ledger (which the real app's lifespan always sets: `test_the_lifespan_always_builds_the_run_
+    ledger_before_it_serves`)."""
     fake_graph = _FakeGraphPort()
+    fake_runs = _FakeRunKeys()
     app.dependency_overrides[get_graph] = lambda: fake_graph
     app.dependency_overrides[get_ontology] = lambda: load_default_ontology()
+    app.dependency_overrides[get_recipe_runs] = lambda: fake_runs
     client.fake_graph = fake_graph  # type: ignore[attr-defined]
+    client.fake_runs = fake_runs  # type: ignore[attr-defined]
     return client
 
 
@@ -193,3 +219,96 @@ def test_rejections_are_grouped_by_cause_not_by_value(
     # A cleared principal still sees each rejected row as it was read.
     samples = " ".join(s["sample"] for s in body["rejections"][0]["samples"])
     assert "07ABC 123456" in samples and "07XYZ 654321" in samples
+
+
+def test_the_lifespan_always_builds_the_run_ledger_before_it_serves() -> None:
+    """Verify (and the run routes) take the ledger from `app.state.recipe_runs`. The lifespan
+    connects it and sets it as plain statements of its own body, under no `if` and no profile
+    check, so every deployment (lite included) has one before the first request is served."""
+    import ast
+
+    source = (
+        Path(__file__).resolve().parents[4] / "OspreyFlow_Core/services/api/app.py"
+    ).read_text(encoding="utf-8")
+    lifespan = next(
+        n
+        for n in ast.parse(source).body
+        if isinstance(n, ast.AsyncFunctionDef) and n.name == "lifespan"
+    )
+    connected = [
+        n
+        for n in lifespan.body
+        if isinstance(n, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "recipe_runs" for t in n.targets)
+    ]
+    assigned = [
+        n
+        for n in lifespan.body
+        if isinstance(n, ast.Assign)
+        and any(isinstance(t, ast.Attribute) and t.attr == "recipe_runs" for t in n.targets)
+    ]
+    assert len(connected) == 1 and len(assigned) == 1
+
+
+def test_verify_counts_the_rows_the_case_already_kept_for_the_drafts_own_deduplicate(
+    graph_client: TestClient, tmp_path: Path
+) -> None:
+    from services.ingest.engine import dedup_key
+
+    from schemas.ingest import DeduplicateConfig
+
+    rows = [
+        {"a_party": "07960112334", "duration": "42"},
+        {"a_party": "07960112335", "duration": "43"},
+        {"a_party": "07960112336", "duration": "44"},
+    ]
+    dedupe = DeduplicateConfig(key=[FieldBinding(field="a_party")])
+    graph_client.studio_recipes.draft = _ready_draft(  # type: ignore[attr-defined]
+        tmp_path,
+        source_location=_write_csv(tmp_path, rows),
+        row_template=_create_only_row_template(),
+        deduplicate=dedupe,
+    )
+    keys = [dedup_key(r, dedupe.key) for r in rows]
+    graph_client.fake_runs.already = {keys[0], keys[1]}  # type: ignore[attr-defined]
+
+    response = graph_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/verify")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["rows_read"], body["rows_already_loaded"]) == (3, 2)
+    (asked,) = graph_client.fake_runs.asked  # type: ignore[attr-defined]
+    assert asked[0] == "recipe-1" and asked[1] == "inv-1", "this recipe, this case: no other"
+    assert body["entities_by_type"]["Endpoint"]["created"] == 1, "only the new row is simulated"
+
+
+def test_verify_of_a_draft_with_no_deduplicate_asks_the_ledger_nothing(
+    graph_client: TestClient, tmp_path: Path
+) -> None:
+    graph_client.studio_recipes.draft = _ready_draft(  # type: ignore[attr-defined]
+        tmp_path, row_template=_create_only_row_template()
+    )
+    response = graph_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/verify")
+    assert response.status_code == 200 and response.json()["rows_already_loaded"] == 0
+    assert graph_client.fake_runs.asked == []  # type: ignore[attr-defined]
+
+
+def test_verify_is_refused_in_words_when_the_drafts_deduplicate_is_not_the_one_the_keys_were_made_under(
+    graph_client: TestClient, tmp_path: Path
+) -> None:
+    from schemas.ingest import DeduplicateConfig
+
+    graph_client.studio_recipes.draft = _ready_draft(  # type: ignore[attr-defined]
+        tmp_path,
+        row_template=_create_only_row_template(),
+        deduplicate=DeduplicateConfig(key=[FieldBinding(field="a_party")]),
+    )
+    graph_client.fake_runs.made_under = {"an-earlier-definition": 3}  # type: ignore[attr-defined]
+
+    response = graph_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/verify")
+
+    assert response.status_code == 409
+    body = response.json()
+    assert (body["error"], body["loads"]) == ("deduplicate_changed", 3)
+    assert "3 load(s)" in body["message"] and "an-earlier-definition" not in response.text
+    assert graph_client.studio_recipes.draft.verified_at is None  # type: ignore[attr-defined]

@@ -97,6 +97,8 @@ class Ledger:
     def __init__(self, *records: LoadRecord) -> None:
         self.records = {r.load_id: r for r in records}
         self.marked: list[tuple[str, str, datetime]] = []
+        self.released: list[str] = []
+        self.on_release: Callable[[str], None] | None = None
 
     async def load_record(self, load_id: str) -> LoadRecord | None:
         return self.records.get(load_id)
@@ -116,6 +118,15 @@ class Ledger:
             if r.reverted_at is None
             and (nodes & set(r.merged_node_ids) or links & set(r.merged_edge_ids))
         ]
+
+    async def release_row_keys(self, load_ids: Any) -> int:
+        """The keys these loads kept, released (decision 5); the count, which a rerun repeats as 0."""
+        if self.on_release is not None:
+            for load_id in load_ids:
+                self.on_release(load_id)
+        fresh = [i for i in load_ids if i not in self.released]
+        self.released.extend(fresh)
+        return len(fresh)
 
     async def mark_reverted(self, load_id: str, *, reverted_by: str, at: datetime) -> None:
         if load_id not in self.records:
@@ -343,16 +354,12 @@ class World:
         self.alerts = Alerts(self.steps)
         self.audit = Audit(self.steps)
         self.working_sets = WorkingSets(self.steps)
-        self.row_keys: list[str] = []
+        self.ledger.on_release = lambda load_id: self.steps.hit("row_keys", load_id)
         self.cache_clears = 0
 
         async def invalidate_caches() -> None:
             self.steps.hit("caches")
             self.cache_clears += 1
-
-        async def release_row_keys(record: LoadRecord) -> None:
-            self.steps.hit("row_keys", record.load_id)
-            self.row_keys.append(record.load_id)
 
         self.deps = RevertDeps(
             ledger=self.ledger,
@@ -363,7 +370,6 @@ class World:
             audit=self.audit,
             working_sets=self.working_sets,
             invalidate_caches=invalidate_caches,
-            release_row_keys=release_row_keys,
         )
 
     async def revert(self, load_id: str):  # type: ignore[no-untyped-def]
@@ -638,20 +644,24 @@ async def test_a_failure_in_the_graph_step_rolls_the_transaction_back_and_marks_
 async def test_the_row_key_hook_is_called_after_the_stores_and_before_the_ledger_is_marked() -> (
     None
 ):
-    """B2-5 (decision 5) supplies it; until then the call site is a hook that does nothing."""
+    """Decision 5: the keys the load kept are released, by its load id, through the ledger (the
+    store of loaded rows is the ledger's), so a rerun of its rows loads again."""
     world = World(_record("load-1"))
     await world.revert("load-1")
-    assert world.row_keys == ["load-1"]
+    assert world.ledger.released == ["load-1"]
     steps = [s[0] for s in world.steps.log]
     assert steps.index("row_keys") > steps.index("alerts")
-    bare = World(_record("load-1"))
-    bare.deps = RevertDeps(
-        ledger=bare.ledger, graph=bare.graph, analytics=bare.analytics,  # type: ignore[arg-type]
-        held_rows=bare.held, alerts=bare.alerts, audit=bare.audit,
-        working_sets=bare.working_sets, invalidate_caches=no_caches,
-    )  # fmt: skip
-    await revert("load-1", reverted_by=OPERATOR, deps=bare.deps, now=NOW)
-    assert bare.ledger.records["load-1"].reverted_by == OPERATOR
+    assert steps.index("row_keys") > steps.index("graph"), "after the load's elements are gone"
+
+
+async def test_every_record_in_the_plan_has_its_keys_released_and_a_rerun_releases_none() -> None:
+    parent = _record("load-1")
+    release = _record("rel-1", released_from="load-1", started_at=T0 + timedelta(minutes=5))
+    world = World(parent, release)
+    await world.revert("load-1")
+    assert world.ledger.released == ["rel-1", "load-1"]
+    # A rerun of the same call releases none: the ledger reports a second release as zero.
+    assert await world.ledger.release_row_keys(["load-1", "rel-1"]) == 0
 
 
 # --- against the stand-ins that model what the stores do ----------------------------------------

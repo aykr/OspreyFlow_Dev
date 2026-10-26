@@ -2,6 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type RowsRead = number;
 export type RowsDeduplicated = number;
+export type RowsAlreadyLoaded = number;
 export type SampleIsWholeSource = boolean;
 export type ValuesMasked = boolean;
 export type Created = number;
@@ -73,6 +74,7 @@ export type Edges = Edge[];
 export interface VerifyReport {
   rows_read: RowsRead;
   rows_deduplicated: RowsDeduplicated;
+  rows_already_loaded?: RowsAlreadyLoaded;
   sample_is_whole_source: SampleIsWholeSource;
   values_masked: ValuesMasked;
   entities_by_type?: EntitiesByType;

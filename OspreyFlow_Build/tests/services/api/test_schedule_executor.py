@@ -32,6 +32,7 @@ from services.api.folder_watch import WatchedFile
 from services.api.investigations import AccessLevel, InsufficientAccessError
 from services.api.recipe_runs import RecipeRunStore
 from services.api.scheduler import ScheduleExecutor, ScheduleRunRefused
+from services.ingest.engine import RowKeyRunInProgress
 from valkey.asyncio import Valkey
 
 SCHEME = load_uk_le_scheme()
@@ -403,6 +404,26 @@ async def test_an_identity_provider_outage_is_refused_but_never_pauses_the_sched
     edges.owner = PrincipalRevoked("disabled")
     await executor.tick(FIRST_SLOT + timedelta(days=7))
     assert "three refused runs in a row" in recipes.paused[recipe.recipe_id]
+
+
+async def test_a_run_refused_as_in_progress_is_never_a_refusal_and_never_pauses_the_schedule(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-127 decision 5: a scheduled run that finds another run of the recipe into the case
+    still going is refused (`RowKeyRunInProgress`), which says nothing about the owner. It is
+    recorded as a failed run, never as `refused`, so no number of them is three refusals (ADR-110
+    Amendment 3), and the owner is told in words."""
+    recipe = _recipe()
+    recipes = _Recipes([recipe])
+    edges = _Edges(fail_run=RowKeyRunInProgress(recipe.recipe_id))
+    executor = _executor(recipes, edges, runs, valkey)
+    for day in range(5):
+        await executor.tick(FIRST_SLOT + timedelta(days=day))
+    assert recipe.recipe_id not in recipes.paused
+    outcomes = [o for o, _ in await _outcomes(runs, recipe)]
+    assert outcomes == ["failed"] * 5 and "refused" not in outcomes
+    assert all("in progress" in words for _, _, words in edges.notices)
+    assert await runs.refusals_in_a_row(recipe.recipe_id) == 0
 
 
 async def test_a_refused_run_tells_its_owner_in_words(runs: RecipeRunStore, valkey: Valkey) -> None:
