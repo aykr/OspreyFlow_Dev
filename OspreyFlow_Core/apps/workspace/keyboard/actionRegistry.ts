@@ -473,6 +473,27 @@ export const PIPELINE_STUDIO_ACTIONS = defineActionRegistry("PIPELINE_STUDIO_ACT
   "clear-the-deduplicate-key-by-keyboard",
   "read-rows-already-loaded-on-a-run-report-by-keyboard",
   "read-rows-already-loaded-in-verify-by-keyboard",
+  // ADR-127 Amendment 13 (B2-7b): the links of the row template in Map, reached by keys alone.
+  "select-a-map-link-by-keyboard",
+  "create-a-map-link-by-keyboard",
+  "bind-a-map-links-time-by-keyboard",
+  "bind-a-map-links-end-by-keyboard",
+  "mark-a-map-links-text-by-keyboard",
+  "bind-a-map-links-handling-to-a-column-by-keyboard",
+  "delete-a-map-link-by-keyboard",
+  // The entities of the row template, the same way.
+  "select-a-map-entity-by-keyboard",
+  "rename-a-map-entity-by-keyboard",
+  "change-a-map-entitys-binding-by-keyboard",
+  "delete-a-map-entity-by-keyboard",
+  "change-a-map-entitys-pole-class-and-type-by-keyboard",
+  "set-a-map-entitys-match-by-keyboard",
+  "mark-a-map-entitys-content-by-keyboard",
+  "mark-a-map-documents-own-text-by-keyboard",
+  "make-a-map-entity-conditional-by-keyboard",
+  "change-a-map-links-type-by-keyboard",
+  "choose-a-transform-on-a-map-binding-by-keyboard",
+  "set-a-literal-on-a-map-binding-by-keyboard",
 ] as const);
 
 /** The Alerts place (ADR-109 phase B): the case team's queue, an alert's explanation and its

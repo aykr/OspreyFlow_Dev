@@ -5,14 +5,30 @@
 // catalogue; owns the in-progress `RowTemplate`/`unmapped_fields` draft
 // state locally until "Save draft" persists it.
 //
-// **Disclosed simplification.** §4's keyboard path ("select both and press
-// Enter") is not wired end-to-end here — binding a field is drag-and-drop
-// only (a source field chip onto a property's binding editor). Every other
-// action in this screen (adding an element, changing a type, editing a
-// binding, saving) is a plain focusable control reachable by Tab, so
-// nothing is keyboard-*inaccessible*; only this one specific shortcut path
-// is deferred, the same way `GlassCanvas.tsx` discloses its own curved-edge
-// gap rather than silently shipping a partial version of the spec.
+// **What a keyboard reaches.** The canvas itself is mouse-only, so beside it are two lists: the
+// entities (`EntityList`) and the links (`LinkList`) of the row template, each element a button (Tab,
+// the arrow keys, Home and End move between them; Enter or Space chooses one into the inspector), and
+// a form in the link list that makes a link from two entities and a type (ADR-127 Amendment 13).
+// `keyboard/pipeline-studio.spec.ts` proves, by keys alone and each ending in the saved row
+// template's PUT:
+//
+// - an entity: added ("+ entity", inside the handling step), chosen from the list, renamed (its
+//   links follow), its POLE class and type changed, match-on and on-match set, a property added and
+//   bound to a column, a transform chosen on a binding, a literal set as a binding, content marked
+//   (an image, and a Document's own text), made conditional, its handling bound to the declared
+//   column, and deleted (with the links it ends);
+// - a link: chosen from the list, made from two entities and a type, its type changed, its time and
+//   when it ended bound to columns, its text column marked, its handling bound to the declared
+//   column, and deleted.
+//
+// What the spec does not prove by keyboard is named here, not implied: a value map on a binding
+// (the binding editor's own named controls, reached the same way, with no step of their own yet).
+//
+// **Disclosed simplification, still deferred.** §4's keyboard shortcut ("select both and press
+// Enter" to bind a source field to a property) is not wired: a field is bound by drag-and-drop (a
+// source field chip onto a property's binding editor) or, by keyboard, through the binding editor's
+// own column select. This is the one specific shortcut path left, the same way `GlassCanvas.tsx`
+// discloses its own curved-edge gap rather than silently shipping a partial version of the spec.
 import { useEffect, useState } from "react";
 
 import type {
@@ -41,6 +57,8 @@ import {
   type HandlingScheme,
 } from "../api";
 import { ElementInspector, type ElementSelection } from "./ElementInspector";
+import { EntityList } from "./EntityList";
+import { LinkList } from "./LinkList";
 import { MapCanvas, type MapSelection } from "./MapCanvas";
 import { SourceFieldsPanel } from "./SourceFieldsPanel";
 import { edgeTypesForEndpoints, entityTypesForPole, findEdge, findEntity, nextEntityRef, unmappedFieldNames, updateEntityByRef, boundFieldNames as boundFieldNamesOf } from "./rowTemplate";
@@ -222,6 +240,14 @@ export function MapScreen({
     setSelection({ kind: "entity", ref });
   }
 
+  // One way to make a link, for the canvas (two clicks) and the list's form (two selects): appended
+  // to the template and selected, so the inspector opens on it.
+  function addEdge(from: string, to: string, type: string) {
+    const edge: RecipeEdge = { type, from, to, properties: {} };
+    setTemplate((t) => ({ ...t, edges: [...(t.edges ?? []), edge] }));
+    setSelection({ kind: "edge", index: (template.edges ?? []).length });
+  }
+
   function handleCanvasSelect(sel: MapSelection) {
     if (linking && sel?.kind === "entity") {
       if (!linkFromRef) {
@@ -236,9 +262,7 @@ export function MapScreen({
             ? edgeTypesForEndpoints(ontologySchema, fromEntity.type, toEntity.type)[0]?.name
             : undefined;
         if (edgeType) {
-          const edge: RecipeEdge = { type: edgeType, from: linkFromRef, to: sel.ref, properties: {} };
-          setTemplate((t) => ({ ...t, edges: [...(t.edges ?? []), edge] }));
-          setSelection({ kind: "edge", index: (template.edges ?? []).length });
+          addEdge(linkFromRef, sel.ref, edgeType);
         } else {
           setSaveError("No ontology edge type connects these two entity types.");
         }
@@ -341,6 +365,20 @@ export function MapScreen({
               {linking ? "click two entities…" : "+ link"}
             </Button>
           </div>
+          {/* ADR-127 Amendment 13: the links, and a form to make one, for a keyboard (the canvas is
+              reached by a pointer alone). */}
+          <EntityList
+            entities={template.entities}
+            selectedRef={selection?.kind === "entity" ? selection.ref : null}
+            onSelect={(ref) => setSelection({ kind: "entity", ref })}
+          />
+          <LinkList
+            template={template}
+            ontology={ontologySchema}
+            selectedIndex={selection?.kind === "edge" ? selection.index : null}
+            onSelect={(index) => setSelection({ kind: "edge", index })}
+            onAdd={addEdge}
+          />
           <div style={{ flex: 1, minHeight: 0 }}>
             <MapCanvas
               template={template}

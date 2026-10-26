@@ -34,6 +34,10 @@ const PROFILE = {
   sample_is_whole_source: true,
   values_masked: false,
   columns: [
+    // ADR-127 Amendment 13: a link's time, its end and its text are columns of their own.
+    ...["started", "ended", "text"].map((name) => ({
+      name, sample_size: 1, null_count: 0, distinct_count: 1, inferred_type: "string", type_confidence: 1,
+    })),
     { name: "marking", sample_size: 1, null_count: 0, distinct_count: 1, inferred_type: "string", type_confidence: 1 },
     { name: "id", sample_size: 1, null_count: 0, distinct_count: 1, inferred_type: "string", type_confidence: 1 },
   ],
@@ -42,16 +46,34 @@ const PROFILE = {
 
 const ONTOLOGY = {
   version: 1,
-  entity_types: [{ name: "Endpoint", pole_class: "object", channel: "ochre", shape: "circle", properties: [] }],
-  edge_types: [],
+  entity_types: [
+    {
+      name: "Endpoint",
+      pole_class: "object",
+      channel: "ochre",
+      shape: "circle",
+      properties: [
+        { name: "value_normalised", type: "string" },
+        { name: "endpoint_kind", type: "string" },
+      ],
+    },
+    { name: "Device", pole_class: "object", channel: "ochre", shape: "circle", properties: [] },
+    { name: "Document", pole_class: "object", channel: "violet", shape: "page", properties: [] },
+    { name: "Person", pole_class: "person", channel: "cyan", shape: "circle", properties: [] },
+  ],
+  edge_types: [
+    { name: "COMMUNICATED_WITH", from: ["Endpoint"], to: ["Endpoint"], temporal: true, basis: "direct" },
+    { name: "PAIRED_WITH", from: ["Endpoint"], to: ["Endpoint"], basis: "direct" },
+  ],
 };
 
 function draft(
   pipeline: unknown,
   handling: Record<string, unknown> = {},
-  extra: { status?: string; deduplicate?: unknown } = {},
+  extra: { status?: string; deduplicate?: unknown; rowTemplate?: unknown } = {},
 ) {
   return {
+    ...(extra.rowTemplate === undefined ? {} : { row_template: extra.rowTemplate }),
     recipe_id: "r1",
     version: 1,
     status: extra.status ?? "draft",
@@ -77,6 +99,8 @@ interface ServeOptions {
   deduplicate?: unknown;
   /** A published recipe with no pipeline opens at Publish, where it is run. */
   published?: boolean;
+  /** The draft's saved row template (Map's own state). */
+  rowTemplate?: unknown;
   /** What `POST …/verify` and `POST …/run` answer. */
   verify?: unknown;
   run?: unknown;
@@ -85,7 +109,27 @@ interface ServeOptions {
 async function serve(page: Page, declared: Record<string, unknown> = {}, options: ServeOptions = {}) {
   const puts: unknown[] = [];
   const patches: { handling: Record<string, unknown>; deduplicate?: { key: Record<string, unknown>[] } }[] = [];
-  const templates: { row_template: { entities: { handling?: Record<string, unknown> }[] } }[] = [];
+  const templates: {
+    row_template: {
+      entities: {
+        handling?: Record<string, unknown>;
+        pole_class?: string;
+        type?: string;
+        match_on?: string | null;
+        on_match?: string;
+        content?: { kind: string; field: string };
+        when?: Record<string, unknown>;
+      }[];
+      edges?: {
+        type: string;
+        from: string;
+        to: string;
+        temporal?: { at: Record<string, unknown>; valid_to?: Record<string, unknown> };
+        content?: { kind: string; field: string };
+        handling?: Record<string, unknown>;
+      }[];
+    };
+  }[] = [];
   await page.route("**/*/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url()).pathname;
@@ -105,7 +149,11 @@ async function serve(page: Page, declared: Record<string, unknown> = {}, options
       });
     if (url.endsWith("/ingest/recipes/r1/profile")) return json(200, PROFILE);
     if (url.endsWith("/v1/ontology")) return json(200, ONTOLOGY);
-    if (url.endsWith("/v1/ingest/transforms")) return json(200, [{ name: "datetime", arity: 1 }]);
+    if (url.endsWith("/v1/ingest/transforms"))
+      return json(
+        200,
+        ["datetime", "msisdn"].map((name) => ({ name, arity: 1 })),
+      );
     if (url.endsWith("/ingest/recipes/r1/verify") && method === "POST") return json(200, options.verify ?? {});
     if (url.endsWith("/ingest/recipes/r1/run") && method === "POST") return json(200, options.run ?? {});
     if (url.endsWith("/ingest/recipes/r1/row-template") && method === "PUT") {
@@ -121,7 +169,11 @@ async function serve(page: Page, declared: Record<string, unknown> = {}, options
     }
     const status = options.published ? "published" : "draft";
     const shown = (pipeline: unknown) =>
-      draft(pipeline, declared, { status, deduplicate: options.deduplicate });
+      draft(pipeline, declared, {
+        status,
+        deduplicate: options.deduplicate,
+        rowTemplate: options.rowTemplate,
+      });
     if (url.endsWith("/ingest/recipes/r1") && method === "GET") return json(200, shown(options.published ? null : CHAIN));
     if (url.endsWith("/ingest/recipes/r1") && method === "PATCH") {
       const sent = request.postDataJSON();
@@ -365,7 +417,9 @@ test("the deduplicate key is saved from Connect by keyboard, and the PATCH carri
   await page.keyboard.type("payer");
   await page.keyboard.press("Enter");
   const transform = page.getByLabel("Transform for payer");
-  await expect(transform.locator("option")).toHaveCount(2);
+  // The catalogue is read after the screen is up: wait for the transform this step picks to be
+  // offered, not for a number of options, which grows with the catalogue.
+  await expect(transform.locator('option[value="datetime"]')).toHaveCount(1);
   await transform.focus();
   await page.keyboard.type("datetime");
   await page.getByRole("button", { name: "Save", exact: true }).focus();
@@ -420,6 +474,388 @@ test("verify says by keyboard how many rows the case already holds", async ({ pa
   await page.keyboard.press("Enter");
   await expect(page.getByText("40 rows already loaded into this case, would be skipped")).toBeVisible();
   registerCovered(REGISTRY, "read-rows-already-loaded-in-verify-by-keyboard");
+});
+
+// --- ADR-127 Amendment 13: the links of the row template, by keyboard ---------------------------------
+
+const TWO_ENDPOINTS = [
+  { ref: "a", pole_class: "object", type: "Endpoint", on_match: "create", properties: {} },
+  { ref: "b", pole_class: "object", type: "Endpoint", on_match: "create", properties: {} },
+];
+const ONE_LINK = {
+  entities: TWO_ENDPOINTS,
+  edges: [{ type: "COMMUNICATED_WITH", from: "a", to: "b", properties: {} }],
+};
+
+async function openMap(page: Page) {
+  await openPipeline(page);
+  await page.getByRole("button", { name: "Map: Map" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Open map editor" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("list", { name: "Links" }).or(page.getByText("No links yet."))).toBeVisible();
+}
+
+async function selectTheLink(page: Page) {
+  await page.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("When it occurred")).toBeVisible();
+}
+
+async function saveTheTemplate(page: Page) {
+  await page.getByRole("button", { name: "Save draft" }).focus();
+  await page.keyboard.press("Enter");
+}
+
+test("a link of the row template is chosen from the list in Map by keyboard", async ({ page }) => {
+  await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  const link = page.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" });
+  await link.focus();
+  await page.keyboard.press("Enter");
+  await expect(link).toHaveAttribute("aria-pressed", "true");
+  // The inspector is open on it: its time control is there.
+  await expect(page.getByLabel("When it occurred")).toBeVisible();
+  registerCovered(REGISTRY, "select-a-map-link-by-keyboard");
+});
+
+test("a link is made in Map by keyboard, from its two ends and its type, and the save carries it", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: { entities: TWO_ENDPOINTS, edges: [] } });
+  await openMap(page);
+  const from = page.getByLabel("From entity");
+  await from.focus();
+  await page.keyboard.type("a");
+  const to = page.getByLabel("To entity");
+  await to.focus();
+  await page.keyboard.type("b");
+  await page.getByLabel("Link type").focus();
+  await page.keyboard.type("COMM");
+  await page.getByRole("button", { name: "Add link" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.edges).toEqual([
+    { type: "COMMUNICATED_WITH", from: "a", to: "b", properties: {} },
+  ]);
+  registerCovered(REGISTRY, "create-a-map-link-by-keyboard");
+});
+
+test("a link's time is bound to a column in Map by keyboard, and the save carries it", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheLink(page);
+  await page.getByLabel("When it occurred").focus();
+  await page.keyboard.type("From");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.edges![0]!.temporal).toEqual({ at: { field: "started" } });
+  registerCovered(REGISTRY, "bind-a-map-links-time-by-keyboard");
+});
+
+test("when a link ended is bound to a column in Map by keyboard, and the save carries it", async ({ page }) => {
+  const served = await serve(page, {}, {
+    rowTemplate: {
+      entities: TWO_ENDPOINTS,
+      edges: [{ type: "COMMUNICATED_WITH", from: "a", to: "b", temporal: { at: { field: "started" } }, properties: {} }],
+    },
+  });
+  await openMap(page);
+  await selectTheLink(page);
+  await page.getByLabel("When it ended").focus();
+  await page.keyboard.type("From");
+  const column = page.getByLabel("Column holding when it ended");
+  await column.focus();
+  await page.keyboard.type("en");
+  await expect(column).toHaveValue("ended");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.edges![0]!.temporal).toEqual({
+    at: { field: "started" },
+    valid_to: { field: "ended", transform: "datetime" },
+  });
+  registerCovered(REGISTRY, "bind-a-map-links-end-by-keyboard");
+});
+
+test("the column holding a link's text is marked in Map by keyboard, and the save carries it", async ({ page }) => {
+  const served = await serve(page, {}, {
+    rowTemplate: {
+      entities: TWO_ENDPOINTS,
+      edges: [{ type: "COMMUNICATED_WITH", from: "a", to: "b", temporal: { at: { field: "started" } }, properties: {} }],
+    },
+  });
+  await openMap(page);
+  await selectTheLink(page);
+  await page.getByLabel("Text the model can read").focus();
+  await page.keyboard.type("Message");
+  const column = page.getByLabel("Column holding the text");
+  await column.focus();
+  await page.keyboard.type("text");
+  await expect(column).toHaveValue("text");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.edges![0]!.content).toEqual({ kind: "message_text", field: "text" });
+  registerCovered(REGISTRY, "mark-a-map-links-text-by-keyboard");
+});
+
+test("a link's classification is bound to the declared column in Map by keyboard, and the save carries it", async ({ page }) => {
+  const served = await serve(
+    page,
+    { classification: "OFFICIAL", handling_columns: { classification: "marking" } },
+    { rowTemplate: ONE_LINK },
+  );
+  await openMap(page);
+  await selectTheLink(page);
+  await page.getByLabel("Override handling for this element").focus();
+  await page.keyboard.press(" ");
+  const part = page.getByLabel("Classification for this element");
+  await part.focus();
+  await page.keyboard.type("From");
+  await expect(part.locator("option:checked")).toHaveText("From column marking");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.edges![0]!.handling).toEqual({ classification: { field: "marking" } });
+  registerCovered(REGISTRY, "bind-a-map-links-handling-to-a-column-by-keyboard");
+});
+
+// --- ADR-127 Amendment 13: the entities of the row template, by keyboard ------------------------------
+
+async function selectTheEntity(page: Page, name: string) {
+  await page.getByRole("button", { name }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Entity ref")).toBeVisible();
+}
+
+test("an entity of the row template is chosen from the list in Map by keyboard", async ({ page }) => {
+  await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  const entity = page.getByRole("button", { name: "Entity 2: b (Endpoint)" });
+  await entity.focus();
+  await page.keyboard.press("Enter");
+  await expect(entity).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Entity ref")).toHaveValue("b");
+  registerCovered(REGISTRY, "select-a-map-entity-by-keyboard");
+});
+
+test("an entity is renamed in Map by keyboard, and the save carries its links with it", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 1: a (Endpoint)");
+  await page.getByLabel("Entity ref").focus();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type("payer");
+  await expect(page.getByRole("button", { name: "Entity 1: payer (Endpoint)" })).toBeVisible();
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  const saved = served.templates[0]!.row_template;
+  expect((saved.entities as { ref: string }[]).map((e) => e.ref)).toEqual(["payer", "b"]);
+  expect(saved.edges![0]).toMatchObject({ from: "payer", to: "b" });
+  registerCovered(REGISTRY, "rename-a-map-entity-by-keyboard");
+});
+
+test("a binding of an entity is added and changed in Map by keyboard, and the save carries it", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 1: a (Endpoint)");
+  await page.getByLabel("Add a property").focus();
+  await page.keyboard.type("value");
+  const column = page.getByLabel("Source column");
+  await expect(column).toBeVisible();
+  await column.focus();
+  await page.keyboard.type("en");
+  await expect(column).toHaveValue("ended");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  const entities = served.templates[0]!.row_template.entities as { properties: Record<string, unknown> }[];
+  expect(entities[0]!.properties).toEqual({ value_normalised: { field: "ended" } });
+  registerCovered(REGISTRY, "change-a-map-entitys-binding-by-keyboard");
+});
+
+test("an entity is deleted in Map by keyboard, and the save drops it and the links it ends", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 1: a (Endpoint)");
+  await page.getByRole("button", { name: "Delete element" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Entity 1: a (Endpoint)" })).toHaveCount(0);
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  const saved = served.templates[0]!.row_template;
+  expect((saved.entities as { ref: string }[]).map((e) => e.ref)).toEqual(["b"]);
+  expect(saved.edges).toEqual([]);
+  registerCovered(REGISTRY, "delete-a-map-entity-by-keyboard");
+});
+
+test("a link is deleted in Map by keyboard, and the save keeps its entities", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheLink(page);
+  await page.getByRole("button", { name: "Delete element" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" })).toHaveCount(0);
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  const saved = served.templates[0]!.row_template;
+  expect(saved.edges).toEqual([]);
+  expect(saved.entities).toHaveLength(2);
+  registerCovered(REGISTRY, "delete-a-map-link-by-keyboard");
+});
+
+// --- the remaining controls on an existing element, by keyboard -----------------------------------------
+
+const WITH_DOCUMENT = {
+  entities: [
+    ...TWO_ENDPOINTS,
+    { ref: "d", pole_class: "object", type: "Document", on_match: "create", properties: {} },
+  ],
+  edges: ONE_LINK.edges,
+};
+
+test("an entity's type and POLE class are changed in Map by keyboard, and the save carries both", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 1: a (Endpoint)");
+  await page.getByLabel("Entity type").focus();
+  await page.keyboard.type("Dev");
+  await expect(page.getByLabel("Entity type")).toHaveValue("Device");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.entities[0]).toMatchObject({ pole_class: "object", type: "Device" });
+  await page.getByLabel("POLE class").focus();
+  await page.keyboard.type("person");
+  await expect(page.getByLabel("POLE class")).toHaveValue("person");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(2);
+  expect(served.templates[1]!.row_template.entities[0]).toMatchObject({ pole_class: "person", type: "Person" });
+  registerCovered(REGISTRY, "change-a-map-entitys-pole-class-and-type-by-keyboard");
+});
+
+test("an entity's match-on and on-match are set in Map by keyboard, and the save carries both", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 1: a (Endpoint)");
+  await page.getByLabel("Match on").focus();
+  await page.keyboard.type("value_normalised");
+  const reference = page.getByRole("radio", { name: "reference existing" });
+  await reference.focus();
+  await page.keyboard.press(" ");
+  await expect(reference).toBeChecked();
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.entities[0]).toMatchObject({
+    match_on: "value_normalised",
+    on_match: "reference",
+  });
+  registerCovered(REGISTRY, "set-a-map-entitys-match-by-keyboard");
+});
+
+test("the content an entity holds is marked in Map by keyboard, and the save carries it", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 1: a (Endpoint)");
+  await page.getByLabel("Content this holds").focus();
+  await page.keyboard.type("Image");
+  const column = page.getByLabel("Column holding it");
+  await column.focus();
+  await page.keyboard.type("en");
+  await expect(column).toHaveValue("ended");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.entities[0]!.content).toEqual({ kind: "image_file", field: "ended" });
+  registerCovered(REGISTRY, "mark-a-map-entitys-content-by-keyboard");
+});
+
+test("a Document's own text is marked in Map by keyboard, and the save carries it", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: WITH_DOCUMENT });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 3: d (Document)");
+  await page.getByLabel("Its own text").focus();
+  await page.keyboard.type("Document");
+  const column = page.getByLabel("Column holding its text");
+  await column.focus();
+  await page.keyboard.type("text");
+  await expect(column).toHaveValue("text");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.entities[2]!.content).toEqual({ kind: "document_text", field: "text" });
+  registerCovered(REGISTRY, "mark-a-map-documents-own-text-by-keyboard");
+});
+
+test("an entity is made conditional in Map by keyboard, and the save carries its condition", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 1: a (Endpoint)");
+  await page.getByLabel("Conditional element").focus();
+  await page.keyboard.press(" ");
+  await page.getByLabel("Condition column").focus();
+  await page.keyboard.type("en");
+  await expect(page.getByLabel("Condition column")).toHaveValue("ended");
+  await page.getByLabel("Condition test").focus();
+  await page.keyboard.type("eq");
+  await expect(page.getByLabel("Condition test")).toHaveValue("equals");
+  await page.getByLabel("Condition value").focus();
+  await page.keyboard.type("x");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.entities[0]!.when).toEqual({ field: "ended", equals: "x" });
+  registerCovered(REGISTRY, "make-a-map-entity-conditional-by-keyboard");
+});
+
+test("a link's type is changed in Map by keyboard, and the save carries it", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheLink(page);
+  await page.getByLabel("Link type for this link").focus();
+  await page.keyboard.type("PAIRED");
+  await expect(page.getByLabel("Link type for this link")).toHaveValue("PAIRED_WITH");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  expect(served.templates[0]!.row_template.edges![0]!.type).toBe("PAIRED_WITH");
+  registerCovered(REGISTRY, "change-a-map-links-type-by-keyboard");
+});
+
+test("a transform is chosen on an existing property binding in Map by keyboard, and the save carries it", async ({ page }) => {
+  const served = await serve(page, {}, {
+    rowTemplate: {
+      entities: [
+        { ...TWO_ENDPOINTS[0], properties: { value_normalised: { field: "started" } } },
+        TWO_ENDPOINTS[1],
+      ],
+      edges: ONE_LINK.edges,
+    },
+  });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 1: a (Endpoint)");
+  await page.getByLabel("Transform", { exact: true }).focus();
+  await page.keyboard.type("msisdn");
+  await expect(page.getByLabel("Transform", { exact: true })).toHaveValue("msisdn");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  const entities = served.templates[0]!.row_template.entities as { properties: Record<string, unknown> }[];
+  expect(entities[0]!.properties).toEqual({ value_normalised: { field: "started", transform: "msisdn" } });
+  registerCovered(REGISTRY, "choose-a-transform-on-a-map-binding-by-keyboard");
+});
+
+test("a literal is set as a property's binding in Map by keyboard, and the save carries it", async ({ page }) => {
+  const served = await serve(page, {}, { rowTemplate: ONE_LINK });
+  await openMap(page);
+  await selectTheEntity(page, "Entity 1: a (Endpoint)");
+  await page.getByLabel("Add a property").focus();
+  await page.keyboard.type("endpoint_kind");
+  await page.getByLabel("Binding kind").focus();
+  await page.keyboard.type("Literal");
+  await expect(page.getByLabel("Binding kind")).toHaveValue("literal");
+  await page.getByLabel("Literal value").focus();
+  await page.keyboard.type("phone");
+  await saveTheTemplate(page);
+  await expect.poll(() => served.templates.length).toBe(1);
+  const entities = served.templates[0]!.row_template.entities as { properties: Record<string, unknown> }[];
+  expect(entities[0]!.properties).toEqual({ endpoint_kind: { literal: "phone" } });
+  registerCovered(REGISTRY, "set-a-literal-on-a-map-binding-by-keyboard");
 });
 
 test("every registered pipeline-studio action has its own proving test case above", () => {

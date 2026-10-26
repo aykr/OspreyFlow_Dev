@@ -271,11 +271,9 @@ describe("ElementInspector: when a link ended", () => {
   it("keeps the end when the start's binding is edited", () => {
     const edge: RecipeEdge = { ...TIMED, temporal: { at: { field: "sent_at" }, valid_to: { field: "sender" } } };
     const onChangeEdge = mount(edge, vi.fn(), DATETIME);
-    // The start's own editor is the first binding editor on the link; change its transform.
-    const [startTransform] = screen.getAllByRole("combobox").filter(
-      (el) => Array.from((el as HTMLSelectElement).options).some((o) => o.text === "No transform") && el.getAttribute("aria-label") === null,
-    );
-    fireEvent.change(startTransform!, { target: { value: "datetime" } });
+    // The start's own editor: its transform select is the one named exactly "Transform".
+    const startTransform = screen.getByLabelText("Transform");
+    fireEvent.change(startTransform, { target: { value: "datetime" } });
     expect(onChangeEdge).toHaveBeenLastCalledWith(
       expect.objectContaining({
         temporal: { at: { field: "sent_at", transform: "datetime" }, valid_to: { field: "sender" } },

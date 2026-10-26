@@ -81,6 +81,7 @@ function ConditionEditor({
       {condition && (
         <div style={{ display: "flex", gap: "var(--sp-4, 4px)", alignItems: "center" }}>
           <Select
+            aria-label="Condition column"
             value={condition.field}
             onChange={(e) => onChange({ ...condition, field: e.target.value })}
           >
@@ -91,6 +92,7 @@ function ConditionEditor({
             ))}
           </Select>
           <Select
+            aria-label="Condition test"
             value={condition.equals !== undefined && condition.equals !== null ? "equals" : (condition.is ?? "not_null")}
             onChange={(e) => {
               const v = e.target.value;
@@ -104,6 +106,7 @@ function ConditionEditor({
           </Select>
           {condition.equals !== undefined && condition.equals !== null && (
             <Input
+              aria-label="Condition value"
               value={String(condition.equals)}
               onChange={(e) => onChange({ field: condition.field, equals: e.target.value })}
             />
@@ -330,6 +333,7 @@ export function ElementInspector({
           <div>
             <label>Ref</label>
             <Input
+              aria-label="Entity ref"
               value={entity.ref}
               onChange={(e) => onChangeEntity({ ...entity, ref: e.target.value })}
             />
@@ -338,6 +342,7 @@ export function ElementInspector({
           <div>
             <label>POLE class</label>
             <Select
+              aria-label="POLE class"
               value={entity.pole_class}
               onChange={(e) => {
                 const pole = e.target.value;
@@ -355,7 +360,11 @@ export function ElementInspector({
 
           <div>
             <label>Type</label>
-            <Select value={entity.type} onChange={(e) => onChangeEntity({ ...entity, type: e.target.value })}>
+            <Select
+              aria-label="Entity type"
+              value={entity.type}
+              onChange={(e) => onChangeEntity({ ...entity, type: e.target.value })}
+            >
               {concreteTypes.map((t) => (
                 <option key={t.name} value={t.name}>
                   {t.name}
@@ -367,6 +376,7 @@ export function ElementInspector({
           <div>
             <label>Match on</label>
             <Input
+              aria-label="Match on"
               value={entity.match_on ?? ""}
               placeholder="e.g. value_normalised"
               onChange={(e) => onChangeEntity({ ...entity, match_on: e.target.value || null })}
@@ -398,6 +408,7 @@ export function ElementInspector({
                 </div>
               ))}
               <Select
+                aria-label="Add a property"
                 value=""
                 onChange={(e) => {
                   if (e.target.value) setProperty(e.target.value, { field: sourceFieldNames[0] });
@@ -520,7 +531,11 @@ export function ElementInspector({
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-16, 16px)" }}>
         <div>
           <label>Type</label>
-          <Select value={edge.type} onChange={(e) => onChangeEdge({ ...edge, type: e.target.value })}>
+          <Select
+            aria-label="Link type for this link"
+            value={edge.type}
+            onChange={(e) => onChangeEdge({ ...edge, type: e.target.value })}
+          >
             {validTypes.map((t) => (
               <option key={t.name} value={t.name}>
                 {t.name}

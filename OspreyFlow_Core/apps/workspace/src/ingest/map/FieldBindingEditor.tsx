@@ -77,7 +77,7 @@ export function FieldBindingEditor({
       style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4, 4px)" }}
     >
       <div style={{ display: "flex", gap: "var(--sp-4, 4px)", alignItems: "center" }}>
-        <Select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+        <Select aria-label="Binding kind" value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
           <option value="field">Field</option>
           <option value="literal">Literal</option>
           <option value="map">Value map</option>
@@ -91,6 +91,7 @@ export function FieldBindingEditor({
 
       {kind === "literal" && (
         <Input
+          aria-label="Literal value"
           value={typeof binding.literal === "string" ? binding.literal : String(binding.literal ?? "")}
           onChange={(e) => onChange({ literal: e.target.value })}
           placeholder="Literal value"
@@ -101,7 +102,12 @@ export function FieldBindingEditor({
         <>
           <div style={{ display: "flex", gap: "var(--sp-4, 4px)", flexWrap: "wrap" }}>
             {Array.from({ length: Math.max(arity, 1) }, (_, i) => (
-              <Select key={i} value={fields[i] ?? ""} onChange={(e) => setFieldAt(i, e.target.value)}>
+              <Select
+                key={i}
+                aria-label={arity > 1 ? `Source column ${i + 1}` : "Source column"}
+                value={fields[i] ?? ""}
+                onChange={(e) => setFieldAt(i, e.target.value)}
+              >
                 <option value="" disabled>
                   {arity > 1 ? `column ${i + 1} of ${arity}` : "choose a field"}
                 </option>
@@ -113,7 +119,11 @@ export function FieldBindingEditor({
               </Select>
             ))}
           </div>
-          <Select value={binding.transform ?? ""} onChange={(e) => setTransform(e.target.value)}>
+          <Select
+            aria-label="Transform"
+            value={binding.transform ?? ""}
+            onChange={(e) => setTransform(e.target.value)}
+          >
             <option value="">No transform</option>
             {/* ADR-104: a structured transform is offered once per part, never bare. */}
             {transforms.flatMap((t) =>

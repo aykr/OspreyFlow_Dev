@@ -18200,3 +18200,24 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
 - **A gap, recorded, owned by unit B2-7b.** The Map's link controls, this one and the existing ones,
   cannot be reached by keyboard: the canvas offers no keyboard path to select or create a link. B2-7b
   adds a keyboard-selectable link list in Map, with keyboard steps for its link controls (rule 13).
+
+### ADR-127, Amendment 14 (26 October 2026) — B2-7b: Map is reachable by keyboard
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review. It
+closes the gap Amendment 13 recorded.
+- **Two lists beside the Map canvas,** one of the row template's entities and one of its links, each
+  element a named button reached by Tab and moved through with the arrow keys, Home and End; choosing one
+  opens it in the inspector. A form beside the link list makes a link by keyboard: its two ends from the
+  template's entities and a type from those the ontology allows between them, refusing a link that joins
+  an entity to itself. The canvas's mouse path is unchanged. Every element is listed, with no cut; each
+  list scrolls in its own region.
+- **What `pipeline-studio.spec.ts` proves by keyboard, each step ending in the saved template:** an
+  entity added, chosen, renamed, retyped (its POLE class and type), bound (a property from a column, with
+  a transform, or a literal), matched (match-on, and on-match as a reference), given content (a file, or a
+  Document's own text), made conditional, given handling, and deleted with its links; a link added,
+  chosen, retyped, timed (its start and its end), given text, given handling, and deleted.
+- **Not proven by keyboard:** a value map on a binding, and the "select both and press Enter" binding
+  shortcut `09_INGEST_STUDIO.md` §4 describes, which stays deferred; the binding editor's own named
+  controls are the keyboard route to a binding.
+- **Accessible names** were missing on several inspector controls (the POLE class, match-on, a link's
+  type, the condition editor's three controls) and are given.
