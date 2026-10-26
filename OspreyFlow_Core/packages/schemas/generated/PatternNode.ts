@@ -8,5 +8,9 @@ export interface PatternNode {
   var: Var;
   entity_type?: EntityType;
   node_id?: NodeId;
+  where?: Where;
   [k: string]: unknown;
+}
+export interface Where {
+  [k: string]: string;
 }

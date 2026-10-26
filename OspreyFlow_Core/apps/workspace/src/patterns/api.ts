@@ -17,6 +17,21 @@ export interface PatternRunAccepted {
   job_id?: string | null;
 }
 
+/** ADR-121: a condition the ontology refuses comes back as a typed 422
+ * (`pattern_condition_refused`, with its reason in words); the analyst is shown those words. Any
+ * other failure keeps the status-only message it always had. */
+async function failure(response: Response, fallback: string): Promise<Error> {
+  try {
+    const body = (await response.json()) as { error?: unknown; detail?: unknown };
+    if (body.error === "pattern_condition_refused" && typeof body.detail === "string") {
+      return new Error(body.detail);
+    }
+  } catch {
+    // Not JSON: the status is all there is to say.
+  }
+  return new Error(fallback);
+}
+
 function caseUrl(apiBaseUrl: string, investigationId: string): string {
   return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}`;
 }
@@ -33,7 +48,7 @@ export async function fetchPatternPreview(
     body: JSON.stringify(pattern),
   });
   if (!response.ok) {
-    throw new Error(`POST /v1/patterns/preview failed: ${response.status}`);
+    throw await failure(response, `POST /v1/patterns/preview failed: ${response.status}`);
   }
   return (await response.json()) as PatternPreview;
 }
@@ -50,7 +65,7 @@ export async function runPattern(
     body: JSON.stringify(pattern),
   });
   if (!response.ok) {
-    throw new Error(`POST /v1/patterns/run failed: ${response.status}`);
+    throw await failure(response, `POST /v1/patterns/run failed: ${response.status}`);
   }
   return (await response.json()) as PatternRunAccepted;
 }
@@ -68,7 +83,7 @@ export async function savePattern(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`POST .../patterns/save failed: ${response.status}`);
+    throw await failure(response, `POST .../patterns/save failed: ${response.status}`);
   }
   return (await response.json()) as SavedPattern;
 }

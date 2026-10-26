@@ -1180,6 +1180,307 @@ async def test_match_intersection_never_leaks_a_hidden_common_endpoint(
         assert hidden in {n.id for n in cleared_result.nodes}
 
 
+# --- pattern match: a condition on a node's property (ADR-121, Brief 3 B8) ------------------
+#
+# The default ontology stands in for the prison pack's `Establishment.niu_area`:
+# `Person.family_name` and `Endpoint.value_normalised` are indexed text properties,
+# `Person.list_name` is a text property that is not indexed, and `Person.date_of_birth` is
+# `sensitivity: high`.
+
+
+def _uses(where: dict[str, str], *, person_where: dict[str, str] | None = None) -> PatternQuery:
+    return PatternQuery(
+        nodes=[
+            PatternNode(var="p", entity_type="Person", where=person_where or {}),
+            PatternNode(var="e", entity_type="Endpoint", where=where),
+        ],
+        edges=[PatternEdge(edge_type="USES", from_var="p", to_var="e")],
+    )
+
+
+async def _what_a_reader_gets(
+    adapter: GraphPort, pattern: PatternQuery, reader: Principal
+) -> tuple[list[tuple[str, object, object]], int]:
+    """The whole observation: every node the match returns (its type and the two properties these
+    cases set) and the count, with no id, since two stores do not share ids."""
+    nodes = (await adapter.match(pattern, reader)).nodes
+    # Sorted on the text of each triple: a `None` in one position is not orderable with a string.
+    seen = sorted(
+        (
+            (n.type, n.properties.get("family_name"), n.properties.get("value_normalised"))
+            for n in nodes
+        ),
+        key=repr,
+    )
+    return seen, await adapter.match_count(pattern, reader, ceiling=1000)
+
+
+async def test_match_where_returns_only_the_nodes_the_condition_matches(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-121: the condition narrows the match exactly, in `match` and in `match_count`, on a node
+    reached by a link and on the root, and a condition nothing meets matches nothing."""
+    async with factory.context() as adapter:
+        smith1 = _node("Person", classification="OFFICIAL", family_name="Smith")
+        smith2 = _node("Person", classification="OFFICIAL", family_name="Smith")
+        jones = _node("Person", classification="OFFICIAL", family_name="Jones")
+        north = _node("Endpoint", classification="OFFICIAL", value_normalised="+441000000001")
+        south = _node("Endpoint", classification="OFFICIAL", value_normalised="+441000000002")
+        await _write(adapter, [smith1, smith2, jones, north, south], [])
+        await _write(adapter, [], [
+            _edge("USES", smith1.id, north.id, classification="OFFICIAL"),
+            _edge("USES", jones.id, north.id, classification="OFFICIAL"),
+            _edge("USES", smith2.id, south.id, classification="OFFICIAL"),
+        ])
+
+        at_north = _uses({"value_normalised": "+441000000001"})
+        found = {n.id for n in (await adapter.match(at_north, CLEARED)).nodes}
+        assert found == {smith1.id, jones.id, north.id}
+        assert await adapter.match_count(at_north, CLEARED, ceiling=100) == 3
+
+        # Both ends conditioned: `Smith`, at north, is one person and one endpoint.
+        both = _uses({"value_normalised": "+441000000001"}, person_where={"family_name": "Smith"})
+        found = {n.id for n in (await adapter.match(both, CLEARED)).nodes}
+        assert found == {smith1.id, north.id}
+        assert await adapter.match_count(both, CLEARED, ceiling=100) == 2
+
+        # The unconditioned pattern still finds all five: the condition is what narrowed it.
+        everyone = _uses({})
+        assert await adapter.match_count(everyone, CLEARED, ceiling=100) == 5
+
+        # A pattern of one node, conditioned on the root.
+        smiths = PatternQuery(
+            nodes=[PatternNode(var="p", entity_type="Person", where={"family_name": "Smith"})],
+            edges=[],
+        )
+        found = {n.id for n in (await adapter.match(smiths, CLEARED)).nodes}
+        assert found == {smith1.id, smith2.id}
+        assert await adapter.match_count(smiths, CLEARED, ceiling=100) == 2
+
+        # Walked backwards (the conditioned node drawn first, its person reached by the link).
+        backwards = PatternQuery(
+            nodes=[
+                PatternNode(var="e", entity_type="Endpoint",
+                            where={"value_normalised": "+441000000002"}),
+                PatternNode(var="p", entity_type="Person"),
+            ],
+            edges=[PatternEdge(edge_type="USES", from_var="p", to_var="e")],
+        )  # fmt: skip
+        assert {n.id for n in (await adapter.match(backwards, CLEARED)).nodes} == {
+            smith2.id, south.id
+        }
+
+        # Nothing meets it: no node and a count of zero, not an error.
+        nowhere = _uses({"value_normalised": "+449999999999"})
+        assert (await adapter.match(nowhere, CLEARED)).nodes == []
+        assert await adapter.match_count(nowhere, CLEARED, ceiling=100) == 0
+
+
+async def test_match_where_on_a_pinned_diamond_narrows_the_convergence_node(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The second compile path (`_render_matched`) carries the condition too."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(adapter, [
+            _node("Person", classification="OFFICIAL"), _node("Person", classification="OFFICIAL")
+        ], [])
+        (x1, x2), _ = await _write(adapter, [
+            _node("Endpoint", classification="OFFICIAL", value_normalised="+441000000001"),
+            _node("Endpoint", classification="OFFICIAL", value_normalised="+441000000002"),
+        ], [])
+        await _write(adapter, [], [
+            _edge("USES", who, where, classification="OFFICIAL")
+            for who in (a, b) for where in (x1, x2)
+        ])
+
+        def diamond(value: str) -> PatternQuery:
+            return PatternQuery(
+                nodes=[
+                    PatternNode(var="a", entity_type="Person", node_id=a),
+                    PatternNode(var="b", entity_type="Person", node_id=b),
+                    PatternNode(var="e", entity_type="Endpoint", where={"value_normalised": value}),
+                ],
+                edges=[PatternEdge(edge_type="USES", from_var="a", to_var="e"),
+                       PatternEdge(edge_type="USES", from_var="b", to_var="e")],
+            )  # fmt: skip
+
+        assert {n.id for n in (await adapter.match(diamond("+441000000002"), CLEARED)).nodes} == {
+            a, x2
+        }
+        assert await adapter.match_count(diamond("+441000000002"), CLEARED, ceiling=100) == 2
+        assert await adapter.match_count(diamond("+449999999999"), CLEARED, ceiling=100) == 0
+
+
+async def test_match_where_leaves_no_trace_of_a_node_the_reader_cannot_see(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Rules 3 and 4 for ADR-121: a condition is no way to find a node the reader cannot see. The
+    same visible world is built in two stores; one also holds nodes and links above the reader's
+    clearance that the condition would meet. Every observation an OFFICIAL reader makes, in `match`
+    and in `match_count`, is identical to the store where those never existed, whether the hidden
+    thing is the node the condition is on, a node on the other side of the link, or the link."""
+    secret_value = "+449000000001"
+    shared_value = "+441000000001"
+
+    async def build(adapter: GraphPort, *, with_hidden: bool) -> None:
+        smith = _node("Person", classification="OFFICIAL", family_name="Smith")
+        shared = _node("Endpoint", classification="OFFICIAL", value_normalised=shared_value)
+        await _write(adapter, [smith, shared], [])
+        await _write(adapter, [], [_edge("USES", smith.id, shared.id, classification="OFFICIAL")])
+        if not with_hidden:
+            return
+        # A hidden endpoint holding the very value a visible one holds, and one holding a value
+        # nothing visible holds; a hidden person; and a hidden link between visible nodes.
+        hidden_same = _node("Endpoint", classification="SECRET", value_normalised=shared_value)
+        hidden_only = _node("Endpoint", classification="SECRET", value_normalised=secret_value)
+        hidden_person = _node("Person", classification="SECRET", family_name="Smith")
+        visible_smith = _node("Person", classification="OFFICIAL", family_name="Smith")
+        await _write(adapter, [hidden_same, hidden_only, hidden_person, visible_smith], [])
+        await _write(adapter, [], [
+            _edge("USES", visible_smith.id, hidden_same.id, classification="OFFICIAL"),
+            _edge("USES", visible_smith.id, hidden_only.id, classification="OFFICIAL"),
+            _edge("USES", hidden_person.id, shared.id, classification="OFFICIAL"),
+            _edge("USES", visible_smith.id, shared.id, classification="SECRET"),
+        ])
+
+    patterns = [
+        _uses({"value_normalised": shared_value}),
+        _uses({"value_normalised": secret_value}),
+        _uses({"value_normalised": shared_value}, person_where={"family_name": "Smith"}),
+        _uses({}, person_where={"family_name": "Smith"}),
+        PatternQuery(
+            nodes=[PatternNode(var="e", entity_type="Endpoint",
+                               where={"value_normalised": secret_value})],
+            edges=[],
+        ),  # fmt: skip
+    ]
+    async with factory.context() as adapter:
+        await build(adapter, with_hidden=False)
+        never_existed = [await _what_a_reader_gets(adapter, p, OFFICIAL) for p in patterns]
+    async with factory.context() as adapter:
+        await build(adapter, with_hidden=True)
+        observed = [await _what_a_reader_gets(adapter, p, OFFICIAL) for p in patterns]
+        assert observed == never_existed
+        # The hidden-only value meets nothing for this reader, as in a store without it.
+        assert observed[1] == ([], 0) and observed[4] == ([], 0)
+        # The filter is real, not a condition that matches nothing for anyone.
+        cleared_secret = await _what_a_reader_gets(adapter, patterns[1], CLEARED)
+        assert cleared_secret[1] == 2 and cleared_secret != observed[1]
+        cleared_shared = await _what_a_reader_gets(adapter, patterns[0], CLEARED)
+        assert cleared_shared[1] > observed[0][1]
+
+
+async def test_match_where_in_one_dataset_matches_a_graph_without_the_other_datasets_node(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-099 reaches the condition as it reaches every step: a node of another dataset is not
+    found, nor counted, by a case reading only its own."""
+    async def build(adapter: GraphPort, *, with_other: bool) -> None:
+        mine = _node("Endpoint", classification="OFFICIAL", value_normalised="+441000000001",
+                     datasets=["fixture"])  # fmt: skip
+        person = _node("Person", classification="OFFICIAL", datasets=["fixture"])
+        await _write(adapter, [mine, person], [])
+        await _write(adapter, [], [
+            _edge("USES", person.id, mine.id, classification="OFFICIAL", datasets=["fixture"])
+        ])
+        if with_other:
+            theirs = _node("Endpoint", classification="OFFICIAL", value_normalised="+441000000001",
+                           datasets=["enron"])  # fmt: skip
+            other = _node("Person", classification="OFFICIAL", datasets=["enron"])
+            await _write(adapter, [theirs, other], [])
+            await _write(adapter, [], [
+                _edge("USES", other.id, theirs.id, classification="OFFICIAL", datasets=["enron"])
+            ])
+
+    pattern = _uses({"value_normalised": "+441000000001"})
+    async with factory.context() as adapter:
+        await build(adapter, with_other=False)
+        without = await _what_a_reader_gets(adapter, pattern, IN_FIXTURE)
+    async with factory.context() as adapter:
+        await build(adapter, with_other=True)
+        assert await _what_a_reader_gets(adapter, pattern, IN_FIXTURE) == without
+        assert without[1] == 2
+        assert (await _what_a_reader_gets(adapter, pattern, IN_NOTHING))[1] == 0
+
+
+@pytest.mark.parametrize(
+    ("where", "entity_type", "reason", "name"),
+    [
+        ({"list_name": "x"}, "Person", "not_indexed", "list_name"),
+        ({"date_of_birth": "1990-01-01"}, "Person", "sensitive", "date_of_birth"),
+        ({"no_such_property": "x"}, "Person", "unknown_property", "no_such_property"),
+    ],
+    ids=["not_indexed", "sensitivity_high", "unknown_property"],
+)
+async def test_match_where_refuses_a_condition_the_ontology_does_not_allow_by_name(
+    factory: GraphAdapterFactory, where: dict[str, str], entity_type: str, reason: str, name: str
+) -> None:
+    """ADR-121: refused by name (not silently ignored, which would widen the match), in `match` and
+    in `match_count`, whatever the principal's clearance."""
+    from ontology.pattern_where import PatternConditionRefused
+
+    async with factory.context() as adapter:
+        pattern = PatternQuery(
+            nodes=[PatternNode(var="p", entity_type=entity_type, where=where)], edges=[]
+        )
+        for reader in (OFFICIAL, CLEARED):
+            with pytest.raises(PatternConditionRefused) as in_match:
+                await adapter.match(pattern, reader)
+            with pytest.raises(PatternConditionRefused) as in_count:
+                await adapter.match_count(pattern, reader, ceiling=10)
+            for refused in (in_match.value, in_count.value):
+                assert refused.reason == reason and refused.property_name == name
+                assert name in str(refused)
+
+
+async def test_match_where_refuses_a_sensitive_property_that_is_also_indexed(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The sensitivity refusal for its own sake: `given_names` is indexed (so allowed today), and
+    once the ontology marks it `sensitivity: high` it is refused by name, though nothing else about
+    it changed."""
+    from ontology.loader import load_default_ontology
+    from ontology.pattern_where import PatternConditionRefused
+
+    ontology = load_default_ontology()
+    pattern = PatternQuery(
+        nodes=[PatternNode(var="p", entity_type="Person", where={"given_names": "Ada"})], edges=[]
+    )
+    async with factory.context() as adapter:
+        assert await adapter.match_count(pattern, CLEARED, ceiling=10) == 0  # allowed: indexed
+        person = ontology.entity_type("Person")
+        assert person is not None
+        marked = person.model_copy(update={"properties": [
+            p.model_copy(update={"sensitivity": "high"}) if p.name == "given_names" else p
+            for p in person.properties
+        ]})
+        widened = ontology.model_copy(update={
+            "version": ontology.version + 1,
+            "entity_types": [marked if e.name == "Person" else e for e in ontology.entity_types],
+        })
+        await adapter.apply_schema(widened)
+        with pytest.raises(PatternConditionRefused) as refused:
+            await adapter.match_count(pattern, CLEARED, ceiling=10)
+        assert refused.value.reason == "sensitive" and refused.value.property_name == "given_names"
+        with pytest.raises(PatternConditionRefused):
+            await adapter.match(pattern, CLEARED)
+
+
+def test_a_condition_that_is_not_equality_on_one_text_value_cannot_be_drawn_at_all(
+    factory: GraphAdapterFactory,
+) -> None:
+    """More than three entries, a range, several values and a negation are not shapes `where` can
+    take, so they cannot reach any adapter (ADR-121: equality only, at most three entries)."""
+    from pydantic import ValidationError
+
+    four = {"family_name": "a", "given_names": "b", "list_name": "c", "aliases": "d"}
+    with pytest.raises(ValidationError):
+        PatternNode(var="p", entity_type="Person", where=four)
+    for shape in ({"$gt": "a"}, {"not": "a"}, ["a", "b"], 3, None):
+        with pytest.raises(ValidationError):
+            PatternNode.model_validate({"var": "p", "where": {"family_name": shape}})
+
+
 # --- pattern match: cardinality estimate ------------------------------------
 
 

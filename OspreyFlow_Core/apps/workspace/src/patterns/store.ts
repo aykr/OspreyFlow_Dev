@@ -10,7 +10,16 @@
 // with no incoming pattern edge; the primary root is the first unpinned root (or `nodes[0]` if
 // every root happens to be pinned already, matching the compiler's own tie-break); every other
 // root must carry a `pinnedNodeId`.
-import type { PatternEdge, PatternNode, PatternQuery } from "../../../../packages/schemas/generated";
+import type {
+  OntologySchema,
+  PatternEdge,
+  PatternNode,
+  PatternQuery,
+  PropertyDef,
+} from "../../../../packages/schemas/generated";
+
+/** ADR-121: the most conditions one node may carry (`PATTERN_WHERE_MAX` in `schemas/domain.py`). */
+export const MAX_CONDITIONS = 3;
 
 export interface PatternNodeState {
   var: string;
@@ -18,6 +27,8 @@ export interface PatternNodeState {
   pinnedNodeId: string | null;
   /** Display label for a pinned node (`"Person · n42"`) — `null` for an ordinary variable. */
   pinnedLabel: string | null;
+  /** ADR-121: property name to the one value it must equal; empty for none. */
+  where: Record<string, string>;
 }
 
 export interface PatternEdgeState {
@@ -55,7 +66,10 @@ export function addVariableNode(
   const nodeVar = nextVarName(state);
   return {
     ...state,
-    nodes: [...state.nodes, { var: nodeVar, entityType, pinnedNodeId: null, pinnedLabel: null }],
+    nodes: [
+      ...state.nodes,
+      { var: nodeVar, entityType, pinnedNodeId: null, pinnedLabel: null, where: {} },
+    ],
   };
 }
 
@@ -70,7 +84,7 @@ export function pinNode(
     ...state,
     nodes: [
       ...state.nodes,
-      { var: nodeVar, entityType, pinnedNodeId: nodeId, pinnedLabel: label },
+      { var: nodeVar, entityType, pinnedNodeId: nodeId, pinnedLabel: label, where: {} },
     ],
   };
 }
@@ -91,6 +105,52 @@ export function removeElement(state: PatternBuilderState, nodeVar: string): Patt
   return {
     nodes: state.nodes.filter((n) => n.var !== nodeVar),
     edges: state.edges.filter((e) => e.fromVar !== nodeVar && e.toVar !== nodeVar),
+  };
+}
+
+/** The properties of a type a condition may name (ADR-121): indexed, text (a string or an enum:
+ * the value is one string), and not `sensitivity: high`. The server checks the same rule and
+ * refuses by name; this only keeps the field from offering what would be refused. */
+export function conditionableProperties(schema: OntologySchema, entityType: string): PropertyDef[] {
+  const type = schema.entity_types.find((t) => t.name === entityType);
+  return (type?.properties ?? []).filter(
+    (p) => p.indexed === true && p.sensitivity !== "high" && (p.type === "string" || p.type === "enum"),
+  );
+}
+
+/** Sets a node's condition on one property to one value. An empty value is not a condition and
+ * changes nothing; a property already held takes the new value; a fourth property is not added. */
+export function addCondition(
+  state: PatternBuilderState,
+  nodeVar: string,
+  property: string,
+  value: string,
+): PatternBuilderState {
+  const trimmed = value.trim();
+  if (!property || trimmed === "") return state;
+  return {
+    ...state,
+    nodes: state.nodes.map((n) => {
+      if (n.var !== nodeVar) return n;
+      if (!(property in n.where) && Object.keys(n.where).length >= MAX_CONDITIONS) return n;
+      return { ...n, where: { ...n.where, [property]: trimmed } };
+    }),
+  };
+}
+
+export function removeCondition(
+  state: PatternBuilderState,
+  nodeVar: string,
+  property: string,
+): PatternBuilderState {
+  return {
+    ...state,
+    nodes: state.nodes.map((n) => {
+      if (n.var !== nodeVar) return n;
+      const rest = { ...n.where };
+      delete rest[property];
+      return { ...n, where: rest };
+    }),
   };
 }
 
@@ -145,6 +205,8 @@ export function toPatternQuery(state: PatternBuilderState, limit = 1000): Patter
     var: n.var,
     entity_type: n.entityType,
     node_id: n.pinnedNodeId,
+    // Sent only when there is one, so a pattern with no condition is the pattern it always was.
+    ...(Object.keys(n.where).length > 0 ? { where: { ...n.where } } : {}),
   }));
   const edges: PatternEdge[] = state.edges.map((e) => ({
     edge_type: e.edgeType,
@@ -166,6 +228,7 @@ export function fromPatternQuery(definition: PatternQuery): PatternBuilderState 
       entityType: n.entity_type ?? "",
       pinnedNodeId: n.node_id ?? null,
       pinnedLabel: n.node_id ? `${n.entity_type} · ${n.node_id}` : null,
+      where: { ...(n.where ?? {}) },
     })),
     edges: definition.edges.map((e) => ({
       edgeType: e.edge_type,

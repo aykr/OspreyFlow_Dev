@@ -546,6 +546,18 @@ def _pin(node: PatternNode) -> str:
     return f'.has("id",{groovy_string_literal(node.node_id)})' if node.node_id else ""
 
 
+def _where(node: PatternNode) -> str:
+    """ADR-121: each condition of a node as a `has(property, value)` step, in property order so a
+    pattern compiles the same way every time. Placed wherever `_pin` is, beside the node's access
+    step (rule 3): the same traverser the access filter keeps or drops, so a condition on a node
+    the reader cannot see finds nothing and counts nothing. The ontology's say on which properties
+    may be named is `ontology.pattern_where`'s, checked by the adapter before this compiles."""
+    return "".join(
+        f".has({groovy_string_literal(name)},{groovy_string_literal(value)})"
+        for name, value in sorted(node.where.items())
+    )
+
+
 def _could_be_one(a: PatternNode | None, b: PatternNode | None) -> bool:
     """Whether two variables could bind the same node, and so need telling apart: not when both
     name a type and the types differ, which keeps a chain across types exactly as it compiled."""
@@ -639,6 +651,7 @@ class MatchBuilder:
             physical_first = physical_type_name(first.entity_type)
             steps.append(f".hasLabel({groovy_string_literal(physical_first)})")
         steps.append(_pin(first))
+        steps.append(_where(first))
         steps.append(f".{has_access}")
         steps.append(f".as({groovy_string_literal(first.var)})")
 
@@ -654,6 +667,7 @@ class MatchBuilder:
                 )
             if node:
                 steps.append(_pin(node))
+                steps.append(_where(node))
             steps.extend(
                 f".where(neq({groovy_string_literal(earlier)}))"
                 for earlier in bound
@@ -814,6 +828,7 @@ class MatchBuilder:
             )
         if primary.node_id:
             steps.append(f'.has("id",{groovy_string_literal(primary.node_id)})')
+        steps.append(_where(primary))
         steps.append(f".{has_access}")
         steps.append(f".as({groovy_string_literal(primary.var)})")
         for edge in primary_chain:
@@ -828,6 +843,8 @@ class MatchBuilder:
                 steps.append(
                     f".hasLabel({groovy_string_literal(physical_type_name(to_node.entity_type))})"
                 )
+            if to_node:
+                steps.append(_where(to_node))
             steps.append(f".as({groovy_string_literal(edge.to_var)})")
 
         for root in secondary_roots:
@@ -856,6 +873,7 @@ class MatchBuilder:
                 reverse_steps.append(".outV()")
                 reverse_steps.append(f".{has_access}")
             reverse_steps.append(f'.has("id",{groovy_string_literal(root.node_id)})')
+            reverse_steps.append(_where(root))
             steps.append(f".select({groovy_string_literal(join_var)})")
             steps.append(f".where(__{''.join(reverse_steps)})")
 

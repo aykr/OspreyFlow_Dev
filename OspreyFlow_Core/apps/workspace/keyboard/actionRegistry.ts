@@ -224,6 +224,10 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
   "load-saved-pattern",
   // ADR-096: the panel's parts fold; a folded one opens by Enter on its header.
   "open-a-folded-part-by-keyboard",
+  // ADR-121: a value field on a node adds a condition (equality on an indexed property) that
+  // Preview and Run send, and its own control removes it.
+  "add-condition-to-pattern-node",
+  "remove-condition-from-pattern-node",
 ] as const);
 
 /**
@@ -404,6 +408,21 @@ export const CASE_DATASETS_ACTIONS = defineActionRegistry("CASE_DATASETS_ACTIONS
   "change-a-cases-domain-models-by-keyboard",
 ] as const);
 
+/** The case's brief (ADR-128 decision 3): the Cases drawer's Brief section, each edit its Author makes
+ * and the opening of an attachment by anyone who reads the case. `keyboard/case-brief.spec.ts`. */
+export const CASE_BRIEF_ACTIONS = defineActionRegistry("CASE_BRIEF_ACTIONS", [
+  "set-the-priority-requirement-by-keyboard",
+  "add-a-requirement-by-keyboard",
+  "edit-a-requirement-by-keyboard",
+  "escape-cancels-an-edit-and-returns-focus",
+  "mark-a-requirement-answered-and-reopen-it-by-keyboard",
+  "attach-a-trend-by-keyboard",
+  "open-an-attachment-by-keyboard",
+  "detach-an-attachment-by-keyboard",
+  "remove-a-requirement-after-confirming-by-keyboard",
+  "a-reader-reaches-an-attachment-and-is-offered-no-edit",
+] as const);
+
 /** Who can open a case (ADR-052 §9): its Author gives and removes levels. `keyboard/case-access.spec.ts`. */
 export const CASE_ACCESS_ACTIONS = defineActionRegistry("CASE_ACCESS_ACTIONS", [
   "give-an-account-access-by-keyboard",
@@ -439,6 +458,12 @@ export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [
   // ADR-100 Amendment 9: the link budget on a ranked node.
   "add-a-node-with-its-busiest-links-by-keyboard",
   "add-a-node-with-all-its-links-by-keyboard",
+  // ADR-128 decision 1 (B2): add many from a pasted or chosen list, counted first, then confirmed.
+  "paste-a-list-count-it-and-confirm-the-add-by-keyboard",
+  "add-a-list-with-all-its-links-by-keyboard",
+  "cancel-a-counted-list-by-keyboard",
+  "escape-cancels-a-pasted-list-by-keyboard",
+  "choose-a-list-file-by-keyboard",
 ] as const);
 
 /** The case's questions to the model (ADR-098 decision 4): asked, answered with what it draws on,
@@ -598,6 +623,8 @@ export const INSPECTOR_ACTIONS = defineActionRegistry("INSPECTOR_ACTIONS", [
  * `keyboard/shell.spec.ts`. */
 export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "slash-moves-focus-to-search",
+  // ADR-128 decision 1 (B2): the search box's own "Add many from a list", opened, counted and cancelled.
+  "add-many-from-the-search-box-by-keyboard",
   "rail-entries-by-keyboard",
   "rail-shows-and-hides-names-by-keyboard",
   // ADR-111: the view switch, Reports included — never proved by keyboard before it.

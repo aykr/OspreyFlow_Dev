@@ -69,7 +69,9 @@ export function WorkspaceWelcome({ apiBaseUrl, bearerToken, investigationId, nod
       .then((body) => {
         if (cancelled) return;
         const all = Array.isArray(body) ? (body as HistoryStepSummary[]) : [];
-        setSteps([...all].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, 3));
+        // Only a step that can be restored is a place to pick up from (a brief edit, ADR-128, is not).
+        const restorable = all.filter((step) => step.restorable !== false);
+        setSteps([...restorable].sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, 3));
       })
       .catch(() => !cancelled && setSteps([]));
     return () => {

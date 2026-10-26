@@ -26,6 +26,8 @@ SITES = {
     "branch_investigation": "Branched",
     "branch_investigation_by_filter": "Branched",
     "seed": "Seeded",
+    # ADR-128 decision 1: a list of identifiers added to the canvas, as a seed.
+    "add_by_identifiers_route": "Seeded",
     "expand": "Expanded",
     "links_among_route": "Showed links among the view",
     "remove_nodes": "Removed",
@@ -34,6 +36,9 @@ SITES = {
     "jump_alert_route": "Opened from an alert",
     "ownership_canvas": "Showed an ownership structure",
     "alert_canvas": "Opened an alert",
+    # ADR-128 decision 3: an edit to the case brief. Recorded through a helper of its own so the five
+    # edit routes name one label; the step holds no canvas snapshot (`history_labels.NOT_RESTORABLE`).
+    "_record_brief_edit": "Edited the brief",
 }
 
 
@@ -196,3 +201,46 @@ async def test_list_steps_returns_a_label_that_is_not_fixed_as_changed() -> None
         "Changed",
     ]
     assert [s.id for s in listed] == [f"s{i}" for i in range(len(stored))]
+
+
+def test_the_brief_edit_label_is_a_fixed_text_and_a_stored_one_survives_the_relabel() -> None:
+    """Violation caught: a label added to `history_labels` but not to the rewrite's `NOT IN` list,
+    which would turn every stored "Edited the brief" into "Changed" at the next start. The live
+    half is `test_history_relabel.py`."""
+    assert history_labels.BRIEF_EDITED == "Edited the brief"
+    assert history_labels.BRIEF_EDITED in history_labels.FIXED_LABELS
+    assert f"'{history_labels.BRIEF_EDITED}'" in RELABEL_SQL
+
+
+def test_every_fixed_label_is_in_the_relabels_keep_list() -> None:
+    """The class of the defect above, for every label: the rewrite keeps each fixed text."""
+    keep = RELABEL_SQL[RELABEL_SQL.index("NOT IN (") :]
+    missing = [t for t in sorted(history_labels.FIXED_LABELS) if f"'{t}'" not in keep]
+    assert missing == []
+
+
+def test_only_the_brief_edit_is_not_restorable() -> None:
+    """A step that holds no canvas snapshot must not be restorable: restoring it would empty the
+    canvas. Every other label holds the membership at that moment and is."""
+    assert history_labels.NOT_RESTORABLE == {history_labels.BRIEF_EDITED}
+    assert history_labels.NOT_RESTORABLE < history_labels.FIXED_LABELS
+
+
+async def test_list_steps_marks_a_brief_edit_as_not_restorable_and_the_rest_restorable() -> None:
+    from datetime import UTC, datetime
+
+    from services.api.history import InvestigationHistoryStore
+
+    when = datetime(2026, 1, 1, tzinfo=UTC)
+    rows = [
+        {"id": "a", "label": "Seeded", "created_at": when},
+        {"id": "b", "label": "Edited the brief", "created_at": when},
+        {"id": "c", "label": "Changed", "created_at": when},
+    ]
+    store = InvestigationHistoryStore(_Pool(rows))  # type: ignore[arg-type]
+    listed = await store.list_steps("case-1")
+    assert [(s.label, s.restorable) for s in listed] == [
+        ("Seeded", True),
+        ("Edited the brief", False),
+        ("Changed", True),
+    ]

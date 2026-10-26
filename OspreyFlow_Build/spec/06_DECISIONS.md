@@ -19214,3 +19214,253 @@ coordinator under the owner's delegation.
   numbers over the real adapter. Its docstring says so, and ADR-120 Amendment 16's "its other access cases
   stay" reads as that. Its filename is kept, since the CI workflow and five cited records name it. The product's own access suites still cover every read
   path.
+
+### ADR-128 — Brief 3's analysis screens: add many, select what is lit, the case brief, icons by value
+
+**Status:** Accepted (26 October 2026), by the coordinator under the owner's delegation for Brief 3 ("keep
+brief 2 setting and get started with brief 3": no stop per step, one consolidated review at the end).
+**Context:** Brief 3 Part A (`OspreyFlow_presentations/prison_intelligence_demo/claude_code_briefs/
+03_ANALYSIS_SCREENS_AND_FEATURE_GAPS_BRIEF.md`): items B2, B3, B6 and B7. B8 is ADR-121; E1 and E3 have
+their own ADR. A scout of the code (26 October 2026) found four places the brief is wrong about the
+repository, corrected below.
+
+**Decision 1 (B2): add many from a list.**
+- **The route.** One route, `POST /v1/investigations/{id}/working-set/add-by-identifiers`, with
+  `confirm: false` (count only) or `true` (add). It takes the typed strings, up to 5,000; more is refused
+  with the typed limit, stating 5,000, never truncated.
+- **Reading each identifier.** Each is split from a line, a comma or a space. Its kind is told from its
+  shape:
+  - a prison number becomes `Person.prison_number`;
+  - a National Insurance number becomes `Person.nino`;
+  - an account reference is read through `account_ref`;
+  - anything else that `msisdn` accepts is a number;
+  - anything else matches nothing.
+
+  Each is normalised by the same Knowledge Adapter its recipe uses, then found through the
+  access-filtered `find_node`.
+- **The count.** It gives four figures: read, found, matched nothing you can see, repeated. An identifier
+  that does not exist and one the analyst may not see fall in the same figure. The answer, the audit
+  entry (counts only) and the work done are the same for both, since every identifier takes one lookup
+  either way.
+- **The add.** It goes through the working set's own add, so a list past the cap gets the typed
+  `limit_exceeded` with its three options. The default adds the nodes without their links, and "Show
+  links among all" then draws them. "Add with all links" is the alternative.
+- **The Glass** offers it from the search box and "Where to start": a paste box or a `.txt`/`.csv` file
+  (first column), a count, then a confirm. It never sees a source identifier, only counts and node ids it
+  may hold.
+- **The single search box.** It normalises a phone number or account reference the same way before
+  searching, so `07700 900640` finds `+447700900640` (VERIFY item 1). The scout found search passed the
+  typed text unchanged.
+- **The cohort list.** Brief 1's generator writes `pid_cohort_list.txt`: 40 identifiers of mixed kinds,
+  38 that resolve, 2 that do not (one made up, one in the right shape but absent), and one repeated.
+- **Corrected from the brief.** The search route is `POST /v1/investigations/{id}/search`, not
+  `/v1/search`. Hotlists already normalise; search did not.
+
+**Decision 2 (B3): select what is lit.**
+- **Definitions.**
+  - **A link is lit** when at least one of its events falls inside the brushed window, ends included.
+  - **Undated links are never lit.** There is no "include or exclude undated links" setting, contrary to
+    the brief, and today the brush dims them. The action says "undated links are not included".
+  - **A node is lit** when a lit link touches it.
+- **Select what is lit** replaces the selection with the lit nodes, from the access-filtered view the
+  canvas already holds; one undo restores the previous selection.
+- **Branch selected, after Select what is lit with the window still set,** sends the window with the
+  selection.
+  - **On the server.** The branch route gains an optional `window`, and the server re-derives the slice:
+    the lit links in the source case's access-filtered view, and the nodes they touch, kept only where
+    the request names them.
+  - **What it carries.** Only the lit links and their nodes (the brief's recommendation), so the branch's
+    timeline starts and ends inside the window.
+  - **No smuggling.** A node id the analyst cannot see, or one that does not exist, is ignored the same
+    way.
+  - **The cap.** A slice over it gets the typed limit and its three options.
+  - **The tab** is named from the window.
+- **Keyboard.** The keyboard path to a window is "Set exact dates", so the keyboard case uses it. The
+  brief's `timeline-brush.spec.ts` is pointer-only and outside the keyboard registry.
+
+**Decision 3 (B6): the case brief.**
+- **What it holds.** A Brief section in the case's own summary panel: one priority information
+  requirement (text), and up to twenty information requirements. Each has text, a status (open or
+  answered) and optional attachments: a saved trend, a saved pattern, an assessment, or a canvas view.
+- **Storage.** It is stored per case in Postgres, audited like other case edits, and shown in the History
+  panel.
+- **Who.** The Author edits; anyone who may read the case reads.
+- **Rule 3.** An attachment the reader may not read is left out entirely, with no title, no
+  placeholder and no count, so its existence is not revealed.
+- **Rule 5.** No model path sets a status: only a person's request through the route does.
+- **The PID's brief.** The seed writes it: the priority requirement from the script's chapter 1, and four
+  requirements, one per clause (who orchestrates the throw-overs; where and when the packages arrive; how
+  they are organised; what can be done to disrupt them). It is written as the case's author.
+- **No fall-back.** The brief's pinned-note fall-back is not built, since B6 itself is.
+
+**Decision 4 (B7): icons by property value.**
+- **Where the rule lives.** The ontology declares it, per enum value: an entity type may name one enum
+  property and map some of its values to glyphs.
+- **Precedence.** The entity's own picture, then the analyst's per-type choice, then the value icon, then
+  the type icon. A node without the property, or with an unmapped value, draws the type icon.
+- **Values mapped.**
+  - `Endpoint.endpoint_kind`: `msisdn` to a phone, `handle` to a PIN keypad, `account` to an account.
+  - `Incident.category`: `throw_over`, `assault`, `disorder`, `find`.
+- **New glyphs.** Six new glyphs join ADR-079's twenty, each drawn for the project (no licence): phone,
+  keypad, account, parcel over a wall, clash, magnifier.
+- **Location.** It gains no kind property, which would need a core ontology change and flag every
+  recipe. The brief's "Location by kind" is out.
+- **Shape, colour, budget.** Shape and colour stay the type's. Icons draw only from the neighbourhood
+  zoom band (ADR-115), and past 10,000 nodes nodes are dots (ADR-119), so the perf budget (rule 10) is
+  run.
+- **Legend.** The legend and the Inspector say which icon means what.
+- **Corrected from the brief.** The value is `throw_over`, and a PIN account is `endpoint_kind:
+  handle`.
+
+**Tests that would fail (rule 12).**
+- **B2.**
+  - A list naming a person the analyst may not see gives the same text and counts as one naming a
+    made-up person.
+  - Three spellings of one number count once.
+  - 5,001 identifiers are refused by name.
+  - Over the cap gives the typed limit.
+  - The keyboard case: paste, confirm, cancel.
+- **B3.**
+  - A link on the window's edge is lit; an undated link is not.
+  - The branch holds exactly the lit links and their nodes.
+  - A branch naming a hidden node id equals one naming a made-up id.
+  - The keyboard case: set dates, Select what is lit, Branch selected, the new tab.
+- **B6.**
+  - An attachment the reader may not read leaves no trace (compare with a brief without it).
+  - A non-Author's edit is refused.
+  - History shows each edit.
+  - The keyboard case: add, edit, mark answered, open an attachment.
+- **B7.**
+  - A value icon is drawn for its value only.
+  - A node without the property draws the type icon.
+  - The precedence order holds.
+  - The keyboard case reaches a value icon's legend entry.
+  - The perf run passes.
+
+### ADR-129 — Questions: graph facts in an answer (E1) and ask to search (E3)
+
+**Status:** Accepted (26 October 2026), by the coordinator under the owner's delegation for Brief 3.
+**Context:** Brief 3 B4 (`03_ANALYSIS_SCREENS_AND_FEATURE_GAPS_BRIEF.md`). The Questions module reads only
+documents (ADR-095, ADR-098). "Evidence brief" here means the model's input of graph facts; the case brief
+of ADR-128 is a different thing, and the code keeps the two names apart.
+
+**Decision 1 (E1): the evidence brief.**
+- **Scope.** The current selection and its one-hop neighbourhood, read from the case's access-filtered
+  view (the working set's own projection, as `visible_membership` reads documents). With no selection, it
+  is the whole view.
+- **What it holds.** It is numbered and plain:
+  - every entity in scope (type, display name);
+  - every link among them as a fact `[G-n]` (type, the two ends by their display names, first and last
+    date, occurrences, the source dataset's label, direct or inferred);
+  - the events per month over the scope.
+
+  Path facts are not built; a question about a connection is answered from the links in scope.
+- **What the model never sees.** Node ids, link ids, Gremlin or a source identifier (rule 7). The answer
+  payload returns, for each `[G-n]` cited, the node and link ids it stands for, and the Glass selects
+  them and brings them into view.
+- **One budget.** The evidence brief and the documents share `QUESTIONS_MAX_CHARS`. Over it, the question
+  is refused by name and size with the typed `limit_exceeded` and its three options: narrow the
+  selection, narrow the timeline window, or branch. Nothing is ever trimmed (rule 2). Today's documents
+  refusal (413 `documents_too_large`, without the options) becomes the same typed limit.
+- **Handling.** The request's handling is the most restrictive of the documents' and the brief's
+  elements, as the documents' is today.
+- **Citations.** A `[G-n]` the brief does not hold is dropped from the answer and counted as unplaced, as
+  an unplaced entity is today.
+- **Proposals.** Entities proposed from an answer join the review queue as `inferred` (rule 5).
+- **Tests that would fail (rule 12).**
+  - With a recording fake `ModelPort`, the prompt for an analyst who may not see an item is
+    byte-for-byte the prompt over a copy of the case without it.
+  - An invented `[G-99]` is dropped and counted unplaced.
+  - An over-budget case is refused with the typed limit.
+  - A proposal from a graph-fact answer is `inferred`.
+  - The keyboard case: ask, then select a `[G-n]` and see it selected on the canvas.
+
+**Decision 2 (E3): ask to search.**
+- **Where.** In the query builder, where a pattern is drawn and previewed: an Ask to search box above the
+  pattern.
+- **What the model is given.** Only the case's vocabulary and the analyst's question:
+  - the entity types;
+  - the link types with their ends and direction;
+  - the indexed property names and their enum values (ADR-121's `where`).
+
+  It returns a `PatternQuery` under constrained decoding against that schema.
+- **Validation.** The Conduit validates the result against the ontology, the pattern schema and ADR-121's
+  rules. Any unknown type, link, property or value, or any construct the query builder cannot draw
+  (absence, ranges), is refused, and the panel says it could not express the question.
+- **References.** "The principal" or "the selected person" are opaque placeholders (`$selected_1` …),
+  resolved by the Conduit to the analyst's current selection, and only to nodes the analyst may see.
+- **What the analyst sees before anything runs.** The proposed pattern drawn in the query builder, a
+  one-line explanation, and a match count from the existing preview route. Running uses the existing run
+  route (rules 3 and 4). The model never writes Gremlin and never runs anything.
+- **Said plainly.** A local 7B model will sometimes propose a wrong pattern. The design contains that by
+  showing the pattern and its count before anything runs, by restricting the model to the case's
+  vocabulary, and by measuring it on a golden set.
+- **The golden set (rule 15).**
+  - **The cases.** `tests/golden/cases/pid_ask_to_search.*` holds Brief 3's twenty questions, seventeen
+    answerable and three to refuse; question 20 is a refusal, since absence is not supported.
+  - **Scoring.** Recall of the expected pattern's types, links and constraints, by a pattern scorer added
+    to the harness.
+  - **Red first.** The gate is shown red against a planted wrong pattern of the shape the code emits.
+  - **The floor.** A recall floor is set from the first measured run and recorded in `baseline.json`.
+- **Proposals.** A proposed pattern is not a fact, and running it changes nothing (rule 5).
+- **Tests that would fail (rule 12).**
+  - An unknown type in the model's output is refused.
+  - A placeholder never resolves to a node the analyst cannot see.
+  - The golden set falls below its floor on the planted wrong pattern.
+  - The keyboard case: type the question, move to the pattern, preview, run.
+
+### ADR-121, Amendment 1 (26 October 2026) — what the build settled
+
+Decided by the coordinator under the owner's delegation for Brief 3, building B8.
+- **The condition's value.** It is one string, `where: dict[str, str]`. A condition is allowed only on a
+  `string` or `enum` property. An `integer`, `date`, `boolean` or list property is refused as
+  `unsupported_type`, and a number, list or range value fails validation.
+- **Where the refusal lives.** It is shared, in `ontology.pattern_where`. The preview, run and save routes
+  apply it, returning a typed 422 before anything is counted, and a refused pattern is never stored. The
+  adapter's `match` and `match_count` apply it too, so monitors and rules are covered as well.
+- **Typology rules** store a pattern's id and read its whole saved definition, so they carry `where`
+  unchanged.
+- **The value field** offers only the properties `/v1/ontology` marks `indexed`, not `sensitivity: high`,
+  and of text type.
+
+### ADR-128, Amendment 1 (26 October 2026) — what building B2 and B6 settled
+
+Decided by the coordinator under the owner's delegation for Brief 3.
+- **B6, History.**
+  - **The conflict.** History is a list of canvas snapshots with Restore, and a brief edit is not a canvas
+    state.
+  - **What is recorded.** An edit to the priority, a requirement's text or status, an add or a remove
+    writes one step, "Edited the brief". The step holds no nodes or links, is listed `restorable: false`,
+    and is refused by the restore route (409 `step_not_restorable`).
+  - **What is not.** Attaching and detaching write no step, only an audit record. A step is shown to every
+    reader, so one for an attachment a reader may not read would reveal that something hidden changed.
+    Decision 3's "History shows each edit" reads as each edit of text, status, add or remove.
+- **B6, smaller choices.**
+  - **A canvas view** is a case (a tab, as decision 2 calls a branch), titled by its name. The code has no
+    other saved-view object.
+  - **Limits.** At most ten attachments per requirement, and 2,000 characters of text, each refused by
+    name.
+  - **"Author"** is `AccessLevel.AUTHOR` with the `share_case` right, as the case's datasets already use.
+  - **Opening an attachment** goes to where it lives: a view opens as a case, a trend opens Reports on its
+    Trends tab, and a pattern or assessment focuses its panel.
+  - **The seed** writes the brief with an audit record and no History step, since a seed is not an
+    analyst's edit.
+  - **A branch** does not inherit the brief.
+- **B2, smaller choices.**
+  - **Counts.** `found` counts every identifier that resolved, repeats included; matched-nothing is
+    read − found; repeated counts identifiers that name what an earlier one did. That is the reading
+    under which the brief's 40/38/2/1 holds.
+  - **Shapes.**
+    - An account reference is text with no space, holding at least one letter and one digit, that
+      `account_ref` accepts.
+    - A NINO is `[A-Z]{2}\d{6}[A-D]`.
+  - **Splitting.** A piece is split at a line break or comma, then at spaces, unless it reads whole as one
+    identifier. So `+44 7700 900640` is one number.
+  - **Kinds.** A number must be an `Endpoint` of kind `msisdn`, an account one of kind `account`. A PIN
+    (`handle`) holding the same text matches nothing.
+  - **The refusal** is HTTP 413 `too_many_identifiers` with the cap 5,000, for the count as well as the
+    add.
+  - **"Add with all links"** did not exist in the Glass, contrary to the brief. It is built: the links
+    among the added nodes and the nodes already on the canvas, in the same seed.
+  - **The search box** asks `suggest` (prefix), which, like `search`, now also asks the canonical form of
+    a phone number or account reference.

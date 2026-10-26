@@ -58,11 +58,13 @@ export function HistoryPanel({
           {
             key: "restore",
             header: "",
-            render: (s: HistoryStepSummary) => (
-              <button type="button" className="btn" onClick={() => void restore(s.id)}>
-                Restore
-              </button>
-            ),
+            // A step with no canvas snapshot (a brief edit, ADR-128) is listed and has no Restore.
+            render: (s: HistoryStepSummary) =>
+              s.restorable === false ? null : (
+                <button type="button" className="btn" onClick={() => void restore(s.id)}>
+                  Restore
+                </button>
+              ),
           },
         ]}
         rows={steps}

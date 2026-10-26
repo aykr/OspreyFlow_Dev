@@ -21,6 +21,11 @@ SHARED_CONTACTS = "Showed two who share contacts"
 OPENED_FROM_ALERT = "Opened from an alert"
 OWNERSHIP = "Showed an ownership structure"
 ALERT_CANVAS = "Opened an alert"
+#: ADR-128 decision 3: an edit to the case brief (its priority, a requirement's text or status, a
+#: requirement added or removed). One text for all of them: it says that the brief changed, never
+#: what it said. An attach or a detach is not a step (`case_brief.py`: a step is shown to every
+#: reader, and one for an attachment the reader may not read would be a trace of it).
+BRIEF_EDITED = "Edited the brief"
 
 CHANGED = "Changed"
 
@@ -37,5 +42,10 @@ FIXED_LABELS = frozenset(
         OPENED_FROM_ALERT,
         OWNERSHIP,
         ALERT_CANVAS,
+        BRIEF_EDITED,
     }
 )
+
+#: Steps that hold no canvas snapshot, so restoring one would replace the canvas with nothing. The
+#: listing marks them `restorable: false` and the restore route refuses them.
+NOT_RESTORABLE = frozenset({BRIEF_EDITED})

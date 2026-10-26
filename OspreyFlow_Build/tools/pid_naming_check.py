@@ -27,7 +27,8 @@ Exit 2 when it cannot find the PID at all, since a check over nothing proves not
 
 (d) *The seed and its registration* (ADR-127 Amendment 23). `scripts/seed_pid.py` is a PID file, so
     (a) reads it. What it prints is built at run time from the recipes' ids and the files' names, so
-    its printed lines (the run's, the checks', the pictures', the reset's and the mid-demo commands')
+    its printed lines (the run's, the checks', the pictures', the brief's, the reset's and the
+    mid-demo commands')
     are produced from real inputs and scanned; so are the folder, the worker and the other names it
     holds. The registration is read too: the pack's manifest, its description, the seed's entry in
     `seed_internal` and the command's pack key, and the lines of `DEMO_GUIDE.md` that name the
@@ -291,6 +292,26 @@ def seed_lines() -> list[str]:
         seed_pid.PictureSummary(attached=5, skipped=2, missing=["principal"],
                                 refused=[("brother", "UploadRefusedError: refused")]), 8,
     )  # fmt: skip
+    # ADR-128: the brief step's lines (written, left alone, failed) and the refusal of a persona who
+    # is not the case's Author, each from the real function, and the brief's own texts.
+    for summary in (
+        seed_pid.BriefSummary(written=True, requirements=4, ok=True),
+        seed_pid.BriefSummary(written=False, requirements=4, ok=True),
+        seed_pid.BriefSummary(written=False, requirements=0, ok=False),
+    ):
+        lines += seed_pid.brief_lines(summary, seed_pid.ENGINEER_USERNAME)
+
+    class NotTheAuthor:
+        async def get_authorized(self, *args: Any, **kwargs: Any) -> None:
+            from services.api.investigations import InvestigationNotFoundError
+
+            raise InvestigationNotFoundError("c")
+
+    try:
+        asyncio.run(seed_pid.require_author(NotTheAuthor(), "c", seed_pid.engineer()))
+    except seed_pid.SeedRefusal as refusal:
+        lines.append(str(refusal))
+    lines += [seed_pid.BRIEF_PRIORITY, *seed_pid.BRIEF_REQUIREMENTS]
 
     class Empty:
         """A store that holds nothing: every demo number fails and says what it could not find."""
@@ -388,7 +409,7 @@ def scan_seed() -> list[Hit]:
     hits: list[Hit] = []
     for name in (
         "FOLDER", "INCOMING", "ENGINEER_USERNAME", "WORKER_UNIT", "LEGAL_BASIS", "BACKUP_COMMAND",
-        "RESTORE_COMMAND", "FALLBACK_SKIPS",
+        "RESTORE_COMMAND", "FALLBACK_SKIPS", "BRIEF_PRIORITY", "BRIEF_REQUIREMENTS",
     ):  # fmt: skip
         hits += _scan(f"seed constant {name}", str(getattr(seed_pid, name)))
     for line in seed_lines():

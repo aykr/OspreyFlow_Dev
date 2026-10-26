@@ -62,3 +62,33 @@ it("lists each step by its label and Restore, with no size column (ADR-124 decis
   expect(dialog.queryByText("41 / 52")).toBeNull();
   expect(dialog.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Step", ""]);
 });
+
+it("lists a step that holds no canvas snapshot with no Restore (ADR-128: an edit to the case brief)", async () => {
+  // Restoring a brief edit would replace the canvas with nothing, so the server marks it not
+  // restorable and the panel offers it no button; it is still listed, by its label.
+  vi.stubGlobal(
+    "fetch",
+    async () =>
+      new Response(
+        JSON.stringify([
+          { id: "s1", label: "Seeded", created_at: "2026-10-12T16:42:00Z", restorable: true },
+          { id: "s2", label: "Edited the brief", created_at: "2026-10-12T16:50:00Z", restorable: false },
+          { id: "s3", label: "Expanded", created_at: "2026-10-12T16:55:00Z" },
+        ]),
+      ),
+  );
+  render(
+    <HistoryPanel
+      open
+      onClose={() => undefined}
+      investigationId="inv-1"
+      apiBaseUrl="http://test.invalid"
+      bearerToken="unused"
+      onRestored={() => undefined}
+    />,
+  );
+  const dialog = within(await screen.findByRole("dialog"));
+  expect(await dialog.findByText("Edited the brief")).toBeTruthy();
+  const rows = dialog.getAllByRole("row").slice(1);
+  expect(rows.map((r) => within(r).queryAllByRole("button").length)).toEqual([1, 0, 1]);
+});

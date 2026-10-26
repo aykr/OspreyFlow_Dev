@@ -32,7 +32,15 @@ const SUGGESTIONS = Array.from({ length: 10 }, (_, i) => ({
   type: "Endpoint",
   properties: { value_normalised: `person${i}@enron.com` },
 }));
-window.fetch = (async (url: string) => {
+// ADR-128 decision 1 (B2): what "Add many from a list" sent, for `shell.spec.ts` to read back.
+const addMany: string[] = [];
+(window as unknown as { __ADD_MANY__: string[] }).__ADD_MANY__ = addMany;
+window.fetch = (async (url: string, init?: RequestInit) => {
+  if (String(url).endsWith("/working-set/add-by-identifiers")) {
+    addMany.push(String(init?.body ?? ""));
+    const counts = { read: 2, found: 1, matched_nothing: 1, repeated: 0 };
+    return { ok: true, status: 200, json: async () => ({ counts, added: null }) };
+  }
   const body = String(url).endsWith("/suggest") ? { nodes: SUGGESTIONS, more: true } : CASES;
   return { ok: true, status: 200, json: async () => body };
 }) as unknown as typeof fetch;
@@ -61,7 +69,7 @@ createRoot(container).render(
         />
       }
       search={
-        <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" investigationId="inv-1" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} />
+        <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" investigationId="inv-1" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} onApplyDelta={() => undefined} />
       }
       views={[
         { id: "graph", label: "Graph", pressed: true, onSelect: () => window.__TOPBAR__!.views.push("graph") },

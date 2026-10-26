@@ -91,6 +91,7 @@ import yaml
 from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
 from scripts.revert_load import build_revert_deps
 from services.api.audit import AuditWriter
+from services.api.case_brief import CaseBriefService, CaseBriefStore
 from services.api.config import ApiConfig, PostgresConfig
 from services.api.dataset_scope import scope_to_case
 from services.api.datasets import DatasetRefusedError, PostgresDatasetStore
@@ -98,7 +99,12 @@ from services.api.document_content import UploadRefusedError
 from services.api.entity_pictures import EntityPictureService
 from services.api.history import InvestigationHistoryStore
 from services.api.ingest_sources import UPLOAD_SUBDIR, ingest_root
-from services.api.investigations import InvestigationStore
+from services.api.investigations import (
+    AccessLevel,
+    InsufficientAccessError,
+    InvestigationNotFoundError,
+    InvestigationStore,
+)
 from services.api.jobs import JobQueue
 from services.api.recipe_run import RecipeRunDeps, run_recipe_as
 from services.api.recipe_runs import RecipeRunStore
@@ -1007,6 +1013,95 @@ def inferred_lines(summary: InferredSummary) -> list[str]:
     return lines
 
 
+# --- the case brief (ADR-128 decision 3): the priority requirement and its four ------------------
+#
+# Script chapter 1: "who is orchestrating throw overs, where and when do packages arrive, how are
+# they organised, and what can be done to disrupt them", with the four information requirements
+# shown as the case's brief. One requirement per clause, in the script's order. Written whole, in
+# one step, as the case's Author, only when the case holds no brief: a second seed writes nothing,
+# and an analyst's own brief is never overwritten. Every requirement is written open: the seed marks
+# nothing answered (rule 5), and attaches nothing (the saved trend, pattern and assessment it would
+# attach are the analyst's, made in the demo).
+
+BRIEF_PRIORITY = (
+    "Who is orchestrating the throw-overs, where and when do the packages arrive, how are they "
+    "organised, and what can be done to disrupt them?"
+)
+BRIEF_REQUIREMENTS = (
+    "Who is orchestrating the throw-overs?",
+    "Where and when do the packages arrive?",
+    "How are the throw-overs organised?",
+    "What can be done to disrupt them?",
+)
+
+
+class _CaseLevels(Protocol):
+    async def get_authorized(
+        self, investigation_id: str, principal: Principal, *, need: AccessLevel
+    ) -> Any: ...
+
+
+async def require_author(cases: _CaseLevels, case_id: str, principal: Principal) -> None:
+    """The brief is its case's Author's to write. The case the seed makes is made by the persona,
+    who is its Author; a seed pointed at a case the persona does not author is refused by name
+    before anything is written, not written through the store as someone with no standing."""
+    try:
+        await cases.get_authorized(case_id, principal, need=AccessLevel.AUTHOR)
+    except (InvestigationNotFoundError, InsufficientAccessError) as error:
+        raise SeedRefusal(
+            f"{principal.id} is not the Author of case {case_id}, so the brief is not written: "
+            "give that account the Author level, or run the seed as the case's Author."
+        ) from error
+
+
+@dataclass
+class BriefSummary:
+    #: The step wrote the brief now (False: the case already held one).
+    written: bool = False
+    #: How many requirements the brief read back holds.
+    requirements: int = 0
+    #: The brief read back holds a priority requirement and at least one requirement.
+    ok: bool = False
+
+
+class _BriefWriter(Protocol):
+    async def seed_if_empty(
+        self, investigation_id: str, principal: Principal, priority: str, requirements: list[str]
+    ) -> bool: ...
+
+    async def read(self, investigation_id: str, principal: Principal) -> Any: ...
+
+
+async def seed_brief(service: _BriefWriter, case_id: str, author: Principal) -> BriefSummary:
+    """Writes the PID's brief when the case has none, then reads it back as the author: what is
+    reported is what the store holds, not what the write returned."""
+    written = await service.seed_if_empty(case_id, author, BRIEF_PRIORITY, list(BRIEF_REQUIREMENTS))
+    held = await service.read(case_id, author)
+    return BriefSummary(
+        written=written,
+        requirements=len(held.requirements),
+        ok=bool(held.priority) and len(held.requirements) > 0,
+    )
+
+
+def brief_lines(summary: BriefSummary, author_id: str) -> list[str]:
+    if summary.written:
+        said = (
+            f"case brief: the priority requirement and {summary.requirements} information "
+            f"requirements written, as {author_id}, all open"
+        )
+    else:
+        said = (
+            f"case brief: the case already holds a brief ({summary.requirements} information "
+            "requirements), left alone"
+        )
+    return [
+        said,
+        f"check {'ok' if summary.ok else 'FAILED'}: the case holds a brief with a priority "
+        "requirement and information requirements",
+    ]
+
+
 # --- the demo numbers (Amendment 32) -------------------------------------------------------------
 #
 # Brief 2 section 8 and Brief 1 section 5.8's table (without its Access row, ADR-120 Amendment 16),
@@ -1505,9 +1600,10 @@ def demo_check_lines(results: Sequence[CheckResult]) -> tuple[list[str], bool]:
     return lines, all(r.ok for r in results)
 
 
-def exit_code(*, files_ok: bool, pictures_ok: bool, demo_ok: bool) -> int:
-    """0 only when every file was read whole, every picture found and every demo number held."""
-    return 0 if files_ok and pictures_ok and demo_ok else 1
+def exit_code(*, files_ok: bool, pictures_ok: bool, demo_ok: bool, brief_ok: bool = True) -> int:
+    """0 only when every file was read whole, every picture found, every demo number held and the
+    case's brief is there."""
+    return 0 if files_ok and pictures_ok and demo_ok and brief_ok else 1
 
 
 # --- the seed ------------------------------------------------------------------------------------
@@ -1982,6 +2078,33 @@ async def _seed(args: argparse.Namespace, root: Path) -> int:
         await resources.close()
 
 
+async def _require_author_of(case_id: str, persona: Principal) -> None:
+    cases = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        await require_author(cases, case_id, persona)
+    finally:
+        await cases.close()
+
+
+async def _seed_brief_into(case_id: str, author: Principal, audit: AuditWriter) -> BriefSummary:
+    """Writes the brief through the case brief service as the case's Author, which `_seed_into` has
+    confirmed, and audits the write when it was made (as another case edit is)."""
+    store = await CaseBriefStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        summary = await seed_brief(CaseBriefService(store, {}), case_id, author)
+    finally:
+        await store.close()
+    if summary.written:
+        await audit.record(
+            principal=author,
+            action="case_brief_seed",
+            investigation_id=case_id,
+            resolved_query={},
+            result_cardinality=summary.requirements,
+        )
+    return summary
+
+
 async def _seed_into(
     args: argparse.Namespace,
     root: Path,
@@ -1995,6 +2118,9 @@ async def _seed_into(
         for line in resolution_warning():
             print(line)
     case_id = await scope_for(args, seeder=base, dataset=PID)
+    # ADR-128: the brief is written as the case's Author, so a persona that is not is refused here,
+    # before a file is written, and not after the loads.
+    await _require_author_of(case_id, base)
     plan = pid_plan.build_plan("demo")
     print(f"Writing the files into {listed_folder(root)} ...", flush=True)
     rows = await asyncio.to_thread(write_listed_files, plan, root)
@@ -2111,6 +2237,7 @@ async def _seed_into(
     _, results, summary, (moment, numbers) = await seed_all(
         base, scope=scope, enter_recipes=recipes, run=run, pictures=pictures, checks=checks
     )
+    brief = await _seed_brief_into(case_id, base, resources.audit)
     draft = await store.get(reports_recipe_id())
     for line in summary_lines(results, run_as=base.id):
         print(line)
@@ -2123,6 +2250,8 @@ async def _seed_into(
     for line in picture_lines(summary, len(plan.picture_subjects)):
         print(line)
     for line in inferred_lines(inferred[0]):
+        print(line)
+    for line in brief_lines(brief, base.id):
         print(line)
     file_lines, files_ok = check_lines(results, rows)
     for line in file_lines:
@@ -2137,7 +2266,12 @@ async def _seed_into(
     )
     print(f"Take a backup now, before anything is rehearsed: {BACKUP_COMMAND}")
     print(f"If a rehearsal reset ever refuses, restore it with: {RESTORE_COMMAND}")
-    return exit_code(files_ok=files_ok, pictures_ok=summary.ok and inferred[0].ok, demo_ok=demo_ok)
+    return exit_code(
+        files_ok=files_ok,
+        pictures_ok=summary.ok and inferred[0].ok,
+        demo_ok=demo_ok,
+        brief_ok=brief.ok,
+    )
 
 
 async def check_case(

@@ -518,6 +518,7 @@ jobs:
           ../OspreyFlow_Build/tests/test_case_seed.py
           ../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py
           ../OspreyFlow_Build/tests/services/api/test_link_notes_store.py
+          ../OspreyFlow_Build/tests/services/api/test_case_brief_store.py
           ../OspreyFlow_Build/tests/services/api/test_link_type_store.py
           ../OspreyFlow_Build/tests/services/api/test_link_changes_store.py
           ../OspreyFlow_Build/tests/services/api/test_entity_pictures.py
@@ -544,6 +545,7 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_report_freshness.py
           ../OspreyFlow_Build/tests/services/api/test_reports.py
           ../OspreyFlow_Build/tests/services/api/test_route_rights.py
+          ../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_live.py
           ../OspreyFlow_Build/tests/services/api/test_starter_run.py
           ../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py
           ../OspreyFlow_Build/tests/services/api/test_trend_store.py
@@ -819,6 +821,7 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/test_case_seed.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_link_notes_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_case_brief_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_link_type_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_entity_pictures.py
@@ -854,6 +857,7 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/test_report_freshness.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_reports.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_route_rights.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_live.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_starter_run.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_trend_store.py

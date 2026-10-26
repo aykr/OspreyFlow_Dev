@@ -999,6 +999,36 @@ class WorkingSetService:
         ]
         return await self._add(investigation_id, seeded, kept, principal)
 
+    async def add_by_identifiers(
+        self,
+        investigation_id: str,
+        nodes: Sequence[Node],
+        principal: Principal,
+        *,
+        with_links: bool = False,
+    ) -> ExpansionOutcome:
+        """ADR-128 decision 1 (B2): the nodes `add_by_identifiers.resolve_identifiers` found, added
+        through `seed`, so the Vault is read again for each, the cap is counted over the reader's
+        view and a breach is the typed `LimitExceededError` with nothing added (rule 2).
+
+        **By default no links**: the nodes alone, and "Show links among all" draws them.
+        **`with_links`** brings every link among the added nodes and the nodes already on the
+        canvas, in the same single add, so a breach by the links leaves the nodes out too. Past
+        `AUTO_LINKS_MAX_VIEW_NODES` the canvas cannot be named to the graph in one ask (`expand`'s
+        own limit), so only the links among the added nodes themselves come with them; the outcome
+        says `added` either way, since each is every link among what was named."""
+        if not with_links:
+            return await self.seed(investigation_id, nodes, [], principal)
+        view = await self._reader_counts(investigation_id, principal)
+        new_ids = {n.id for n in nodes}
+        new_count, _, _ = await view.would_add(new_ids, ())
+        wanted = set(new_ids)
+        if view.nodes + new_count <= AUTO_LINKS_MAX_VIEW_NODES:
+            wanted |= await view.visible_node_ids()
+        among = await self._graph.edges_among(sorted(wanted), principal)
+        outcome = await self.seed(investigation_id, nodes, among, principal)
+        return outcome.model_copy(update={"links_among": "added"})
+
     async def expand(
         self, investigation_id: str, req: ExpandRequest, principal: Principal
     ) -> ExpansionOutcome:

@@ -10,6 +10,7 @@ import { AccordionSection } from "../design/primitives/AccordionSection";
 import { nodeLabel } from "../canvas/nodeAttributes";
 import { linkCaption, linkTypeName, type NamedType } from "../canvas/linkLabel";
 import { eventsNoun } from "../inspector/linkEventsApi";
+import { AddFromList } from "../search/AddFromList";
 import type { WorkingSetDelta } from "../workingset/models";
 import {
   loadBusiestDays,
@@ -652,6 +653,25 @@ export function ExplorePanel(props: ExplorePanelProps) {
         )}
         </>,
       )}
+      {props.onApplyDelta &&
+        fold(
+          "addmany",
+          "Add many from a list",
+          // ADR-128 decision 1 (B2): a pasted or uploaded list, counted, then confirmed.
+          <AddFromList
+            apiBaseUrl={apiBaseUrl}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            onApplyDelta={props.onApplyDelta}
+            onClose={() =>
+              setOpenFolds((current) => {
+                const next = new Set(current);
+                next.delete("addmany");
+                return next;
+              })
+            }
+          />,
+        )}
       {counts && entities.length > 0 && (
         <>
           {fold("top", "Most connected", <Ranking {...ranking} first={TOP} />)}

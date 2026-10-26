@@ -25,8 +25,10 @@ from typing import Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from ports.graph import GraphPort, SuggestOptions
+from ports.graph import GraphPort, NodeSuggestions, SuggestOptions
 from schemas.domain import Node, Principal
+
+from .identifier_reading import search_alternative
 
 #: A prefix shorter than this is not worth a scan of every suggestable type (ADR-059). Two, by the
 #: owner's ruling of 3 October 2026 (ADR-074); it had been three.
@@ -42,8 +44,21 @@ class SearchResponse(BaseModel):
     nodes: list[Node]
 
 
+def _merged(first: list[Node], second: list[Node]) -> list[Node]:
+    """`first`, then what `second` adds, each node once."""
+    seen = {n.id for n in first}
+    return [*first, *(n for n in second if n.id not in seen)]
+
+
 async def search(graph: GraphPort, request: SearchRequest, principal: Principal) -> SearchResponse:
+    """The typed text is asked as it always was. ADR-128 decision 1 (B2): a phone number or account
+    reference written another way is asked in its canonical form too, so `07700 900640` finds
+    `+447700900640`; the typed text first, and nothing else changes for any other text."""
     nodes = await graph.search_nodes(request.query, principal, limit=request.limit)
+    alternative = search_alternative(request.query)
+    if alternative is not None:
+        more = await graph.search_nodes(alternative, principal, limit=request.limit)
+        nodes = _merged(nodes, more)[: request.limit]
     return SearchResponse(nodes=nodes)
 
 
@@ -84,6 +99,17 @@ async def suggest(
         found = await graph.suggest_nodes(
             request.query, principal, limit=request.limit, options=options
         )
+        alternative = search_alternative(request.query)
+        if alternative is not None:
+            # ADR-128 decision 1: the canonical form of a number or account reference, as `search`.
+            extra = await graph.suggest_nodes(
+                alternative, principal, limit=request.limit, options=options
+            )
+            merged = _merged(found.nodes, extra.nodes)
+            found = NodeSuggestions(
+                nodes=merged[: request.limit],
+                more=found.more or extra.more or len(merged) > request.limit,
+            )
     except ValueError as exc:  # an entity type the ontology does not have: the caller's mistake
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return SuggestResponse(nodes=found.nodes, more=found.more)

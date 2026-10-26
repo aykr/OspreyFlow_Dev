@@ -58,7 +58,7 @@ from pydantic import BaseModel
 from conduit_common.identity import new_id
 from schemas.domain import Edge, Node
 
-from .history_labels import CHANGED, FIXED_LABELS
+from .history_labels import CHANGED, FIXED_LABELS, NOT_RESTORABLE
 
 _SHOWN_LABELS = FIXED_LABELS | {CHANGED}
 
@@ -106,7 +106,7 @@ UPDATE investigation_history SET label = 'Opened an alert' WHERE label LIKE 'Ope
 UPDATE investigation_history SET label = 'Changed' WHERE label NOT IN (
     'Branched', 'Seeded', 'Expanded', 'Showed links among the view', 'Removed',
     'Ran a starter question', 'Showed two who share contacts', 'Opened from an alert',
-    'Showed an ownership structure', 'Opened an alert', 'Changed'
+    'Showed an ownership structure', 'Opened an alert', 'Edited the brief', 'Changed'
 );
 """
 
@@ -132,6 +132,9 @@ class HistoryStepSummary(BaseModel):
     id: str
     label: str
     created_at: datetime
+    #: False for a step that holds no canvas snapshot (ADR-128: an edit to the case brief). The
+    #: Glass offers no Restore for it and the restore route refuses it.
+    restorable: bool = True
 
 
 class HistoryStepNotFoundError(Exception):
@@ -240,20 +243,30 @@ class InvestigationHistoryStore:
             rows = await conn.fetch(
                 "SELECT id, label, created_at "
                 "FROM investigation_history WHERE investigation_id = $1 "
-                "ORDER BY seq ASC",
+                "ORDER BY seq ASC, created_at ASC",
                 investigation_id,
             )
         # A label that is not fixed text is shown as `Changed`, whatever is stored: in a rolling
         # upgrade an old instance can still write a numbered label after `relabel` has run.
+        shown = [row["label"] if row["label"] in _SHOWN_LABELS else CHANGED for row in rows]
         return [
             HistoryStepSummary(
-                **{
-                    **dict(row),
-                    "label": row["label"] if row["label"] in _SHOWN_LABELS else CHANGED,
-                }
+                **{**dict(row), "label": label, "restorable": label not in NOT_RESTORABLE}
             )
-            for row in rows
+            for row, label in zip(rows, shown, strict=True)
         ]
+
+    async def last_seq(self, investigation_id: str) -> int:
+        """The sequence number of the case's latest step, 0 for a case with none. A step that is
+        not a canvas change (a brief edit) takes it, so the working set's own sequence, which the
+        change stream's clients count, is not moved by it."""
+        async with self._pool.acquire() as conn:
+            latest = await conn.fetchval(
+                "SELECT COALESCE(MAX(seq), 0) FROM investigation_history "
+                "WHERE investigation_id = $1",
+                investigation_id,
+            )
+        return int(latest)
 
     async def get_step(self, investigation_id: str, step_id: str) -> HistoryStep:
         async with self._pool.acquire() as conn:

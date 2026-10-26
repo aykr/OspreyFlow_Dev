@@ -53,6 +53,25 @@ describe("the workspace's welcome panel", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("does not offer a step that holds no canvas snapshot to pick up from (ADR-128: a brief edit)", async () => {
+    const steps = [
+      { id: "s0", label: "Edited the brief", created_at: "2026-10-13T08:00:00Z", restorable: false },
+      ...STEPS,
+    ];
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(steps))));
+    render(
+      <WorkspaceWelcome apiBaseUrl="http://api" bearerToken="t" investigationId="c1" nodeCount={25}
+                        onRestored={vi.fn()} onClose={vi.fn()} now={new Date("2026-10-13T09:00:00Z")} />,  // prettier-ignore
+    );
+    const list = within(await screen.findByRole("list", { name: "Pick up where you left off" }));
+    expect(list.getAllByRole("button").map((b) => b.textContent)).toEqual([
+      expect.stringContaining("Expanded"),
+      expect.stringContaining("Branched"),
+      expect.stringContaining("Showed links among the view"),
+    ]);
+    expect(screen.queryByText("Edited the brief")).toBeNull();
+  });
+
   it("lists the keys worth knowing, each a key the Glass has, in key caps", () => {
     shown();
     const keys = within(screen.getByRole("list", { name: "Keys worth knowing" }));

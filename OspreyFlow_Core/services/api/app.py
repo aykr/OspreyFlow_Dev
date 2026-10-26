@@ -102,6 +102,7 @@ from knowledge_adapters import ARITY, REGISTRY
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, principal_may_view
 from ontology.packs import pack_catalogue
+from ontology.pattern_where import PatternConditionRefused, check_pattern_conditions
 from ontology.yardstick import Yardstick, load_phia_yardstick
 from ports.analytics import AnalyticsPort, TrendLimitExceeded
 from ports.compute import ComputePort
@@ -265,6 +266,13 @@ from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import risk as risk_module
 from . import search as search_module
+from .add_by_identifiers import (
+    MAX_IDENTIFIERS,
+    AddByIdentifiersRequest,
+    AddByIdentifiersResponse,
+    TooManyIdentifiersError,
+    resolve_identifiers,
+)
 from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict
 from .assessments import (
     AssumptionListResponse,
@@ -289,6 +297,17 @@ from .assessments import (
 )
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
+from .case_brief import (
+    AttachmentKind,
+    BriefAttachmentBody,
+    BriefStatusBody,
+    BriefTextBody,
+    CaseBrief,
+    CaseBriefError,
+    CaseBriefService,
+    CaseBriefStore,
+)
+from .case_brief_resolvers import title_resolvers
 from .compute_routes import (
     JOB_TYPE_COMPUTE_METRIC,
     ComputeMetricAccepted,
@@ -372,8 +391,10 @@ from .history import (
 from .history_labels import (
     ALERT_CANVAS,
     BRANCHED,
+    BRIEF_EDITED,
     EXPANDED,
     LINKS_AMONG,
+    NOT_RESTORABLE,
     OPENED_FROM_ALERT,
     OWNERSHIP,
     REMOVED,
@@ -688,6 +709,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     sites = await SiteStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
     link_notes_store = await LinkNoteStore.connect(config.postgres.dsn)
+    # ADR-128 decision 3: each case's brief (its information requirements).
+    case_brief_store = await CaseBriefStore.connect(config.postgres.dsn)
     link_changes_store = await LinkChangeStore.connect(config.postgres.dsn)
     link_type_store = await LinkTypeProposalStore.connect(config.postgres.dsn)
     suppression_marks = await SuppressionMarkStore.connect(config.postgres.dsn)
@@ -760,6 +783,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.recipe_runs = recipe_runs
     app.state.judgements_store = judgements_store
     app.state.link_notes = LinkNoteService(link_notes_store, app.state.working_set)
+    # ADR-128 decision 3, rule 3: an attachment is shown to a reader only with the title its own
+    # store gives that reader (`case_brief_resolvers.py`); each kind keeps its own access rule.
+    app.state.case_brief = CaseBriefService(
+        case_brief_store,
+        title_resolvers(
+            trends=trend_store,
+            patterns=patterns_store,
+            judgements=judgements_store,
+            graph=graph,
+            investigations=investigations,
+        ),
+    )
     # ADR-090: the ontology in force is `default.yaml` plus every proposal, composed here and after
     # each proposal and decision, in place, so every service holding `ontology` sees it.
     app.state.link_types = LinkTypeService(
@@ -916,6 +951,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await sites.close()
         await judgements_store.close()
         await link_notes_store.close()
+        await case_brief_store.close()
         await link_changes_store.close()
         await link_type_store.close()
         await gaps_store.close()
@@ -1171,6 +1207,10 @@ def get_link_notes(request: Request) -> LinkNoteService:
     return request.app.state.link_notes  # type: ignore[no-any-return]
 
 
+def get_case_brief(request: Request) -> CaseBriefService:
+    return request.app.state.case_brief  # type: ignore[no-any-return]
+
+
 PrincipalDep = Annotated[Principal, Depends(get_principal)]
 PrincipalResolverDep = Annotated[PrincipalResolver, Depends(get_principal_resolver)]
 SitesDep = Annotated[SiteStore, Depends(get_sites)]
@@ -1201,6 +1241,7 @@ def get_superset_embedder(request: Request) -> SupersetEmbedder | None:
 
 SupersetEmbedderDep = Annotated[SupersetEmbedder | None, Depends(get_superset_embedder)]
 LinkNotesDep = Annotated[LinkNoteService, Depends(get_link_notes)]
+CaseBriefDep = Annotated[CaseBriefService, Depends(get_case_brief)]
 
 
 def get_document_content(request: Request) -> DocumentContentService:
@@ -1573,6 +1614,26 @@ async def _limit_exceeded_handler(request: Request, exc: LimitExceededError) -> 
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=exc.detail.model_dump())
 
 
+@app.exception_handler(TooManyIdentifiersError)
+async def _too_many_identifiers_handler(
+    request: Request, exc: TooManyIdentifiersError
+) -> JSONResponse:
+    """ADR-128 decision 1: more than 5,000 identifiers is refused by name, with the figure, never
+    cut to the first 5,000 (rule 2)."""
+    return JSONResponse(
+        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+        content={
+            "error": "too_many_identifiers",
+            "cap": MAX_IDENTIFIERS,
+            "received": exc.received,
+            "message": (
+                f"{exc.received:,} identifiers were given; one request reads at most "
+                f"{MAX_IDENTIFIERS:,}. Nothing was added. Split the list and add it in parts."
+            ),
+        },
+    )
+
+
 @app.exception_handler(NothingToBranchError)
 async def _nothing_to_branch_handler(request: Request, exc: NothingToBranchError) -> JSONResponse:
     """One answer whether the chosen nodes are hidden from the caller or do not exist (ADR-084)."""
@@ -1799,6 +1860,16 @@ async def _resolution_link_handler(request: Request, exc: ResolutionLinkError) -
     )
 
 
+@app.exception_handler(CaseBriefError)
+async def _case_brief_error_handler(request: Request, exc: CaseBriefError) -> JSONResponse:
+    """ADR-128 decision 3: each refusal of the brief carries its own status and code and a sentence
+    the Glass shows as given. An attachment that does not exist and one the person may not read are
+    one refusal, in one body (`AttachmentNotFoundError`)."""
+    return JSONResponse(
+        status_code=exc.status_code, content={"error": exc.error, "detail": str(exc)}
+    )
+
+
 @app.exception_handler(NoteNotFoundError)
 async def _note_not_found_handler(request: Request, exc: NoteNotFoundError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "note_not_found"})
@@ -2005,7 +2076,7 @@ async def _questions_too_large_handler(
 ) -> JSONResponse:
     """Rule 2: documents longer than the model reads at once are refused, never cut."""
     return JSONResponse(
-        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
         content={"error": "documents_too_large", "would_be": exc.would_be, "limit": exc.limit},
     )
 
@@ -2192,6 +2263,25 @@ async def _ontology_error_handler(request: Request, exc: OntologyError) -> JSONR
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"error": "ontology_violation", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(PatternConditionRefused)
+async def _pattern_condition_refused_handler(
+    request: Request, exc: PatternConditionRefused
+) -> JSONResponse:
+    """ADR-121: a condition on a pattern node the ontology does not allow (an unindexed or
+    `sensitivity: high` property, one the type does not declare) is refused by name, typed, before
+    anything is counted, run or saved; never a bare 500 and never quietly dropped."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": "pattern_condition_refused",
+            "detail": exc.detail,
+            "var": exc.var,
+            "property": exc.property_name,
+            "reason": exc.reason,
+        },
     )
 
 
@@ -2818,21 +2908,47 @@ async def branch_investigation_by_filter(
 
 
 async def _record_history_step(
-    working_set: WorkingSetService,
+    working_set: WorkingSetService | None,
     history: InvestigationHistoryStore,
     investigation_id: str,
     *,
     seq: int,
     label: str,
     principal: Principal,
+    snapshot: bool = True,
 ) -> HistoryStep:
     """Called after every mutation that changes working-set membership
     (the "named-step history with restore" capability) — full
     current membership, not just the mutation's own delta, so the step is
-    independently restorable (`history.py`'s module docstring)."""
-    nodes, edges = await working_set.current_membership(investigation_id)
+    independently restorable (`history.py`'s module docstring).
+
+    `snapshot=False` is for a step that is not a state of the canvas (ADR-128: an edit to the case
+    brief): no working set is read, the step holds no nodes or links, and its label is in
+    `NOT_RESTORABLE`, so it is listed and never restored."""
+    nodes: list[Node] = []
+    edges: list[Edge] = []
+    if snapshot:
+        assert working_set is not None
+        nodes, edges = await working_set.current_membership(investigation_id)
     return await history.record_step(
         investigation_id, seq=seq, label=label, created_by=principal.id, nodes=nodes, edges=edges
+    )
+
+
+async def _record_brief_edit(
+    history: InvestigationHistoryStore, investigation_id: str, principal: Principal
+) -> None:
+    """One History step for an edit to the case brief (ADR-128 decision 3): fixed text, no snapshot.
+    It takes the case's latest sequence number rather than a new one, so the change stream's own
+    count, which its clients hold, is not moved by something that is not a canvas change."""
+    await _record_history_step(
+        None,
+        history,
+        investigation_id,
+        seq=await history.last_seq(investigation_id),
+        label=BRIEF_EDITED,
+        principal=principal,
+        snapshot=False,
     )
 
 
@@ -2978,6 +3094,74 @@ async def expand_preview(
         result_cardinality=preview.candidate_node_count + preview.candidate_edge_count,
     )
     return preview
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/working-set/add-by-identifiers",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def add_by_identifiers_route(
+    investigation: InvestigationEditorDep,
+    body: AddByIdentifiersRequest,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    working_set: WorkingSetDep,
+    history: HistoryDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> AddByIdentifiersResponse:
+    """ADR-128 decision 1 (B2): a pasted or uploaded list of identifiers, counted (`confirm: false`)
+    or added (`true`). Each is read by shape, normalised by its Knowledge Adapter and found through
+    the access-filtered `find_node`; the count is read, found, matched nothing you can see,
+    repeated. An identifier that does not exist and one the analyst may not see are one figure, one
+    lookup and one audit entry (counts only), so the route is not a membership test (rule 3). The
+    add goes through the working set's own `seed`, so past the cap it is the typed
+    `limit_exceeded` and nothing is added. More than 5,000 identifiers is refused by name, never
+    truncated. Editor, since it adds to the case's working set."""
+    try:
+        resolution = await resolve_identifiers(graph, body.identifiers, principal)
+    except TooManyIdentifiersError as exc:
+        await audit.record(
+            principal=principal,
+            action="add_by_identifiers",
+            investigation_id=investigation.id,
+            resolved_query={
+                "read": exc.received,
+                "refused": True,
+                "cap": MAX_IDENTIFIERS,
+                "confirm": body.confirm,
+                "with_links": body.with_links,
+            },
+            result_cardinality=0,
+        )
+        raise
+    counts = resolution.counts
+    outcome = None
+    if body.confirm:
+        outcome = await working_set.add_by_identifiers(
+            investigation.id, resolution.nodes, principal, with_links=body.with_links
+        )
+        await publish_delta(valkey, investigation.id, outcome.delta)
+        await _record_history_step(
+            working_set,
+            history,
+            investigation.id,
+            seq=outcome.delta.seq,
+            label=SEEDED,
+            principal=principal,
+        )
+    await audit.record(
+        principal=principal,
+        action="add_by_identifiers",
+        investigation_id=investigation.id,
+        resolved_query={
+            **counts.model_dump(),
+            "confirm": body.confirm,
+            "with_links": body.with_links,
+        },
+        result_cardinality=len(resolution.nodes),
+    )
+    return AddByIdentifiersResponse(counts=counts, added=outcome)
 
 
 @app.delete(
@@ -3549,6 +3733,11 @@ async def restore_history_step(
     valkey: Annotated[Valkey, Depends(get_valkey)],
 ) -> DeltaSnapshot:
     step = await history.get_step(investigation.id, step_id)
+    if step.label in NOT_RESTORABLE:
+        # ADR-128: a brief edit holds no canvas snapshot; restoring it would empty the canvas.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail={"error": "step_not_restorable"}
+        )
     # `WorkingSetService.restore` re-projects `step`'s stored (unfiltered)
     # bodies against `principal` fresh — never the visibility `step` was
     # recorded with (`history.py`'s module docstring).
@@ -3990,7 +4179,9 @@ async def patterns_preview_route(
     principal: PrincipalDep,
     graph: GraphDep,
     audit: AuditDep,
+    ontology: OntologyDep,
 ) -> PatternPreview:
+    check_pattern_conditions(pattern, ontology)
     preview = await preview_pattern(pattern, graph=graph, principal=principal)
     await audit.record(
         principal=principal,
@@ -4012,7 +4203,9 @@ async def patterns_run_route(
     graph: GraphDep,
     jobs: JobsDep,
     audit: AuditDep,
+    ontology: OntologyDep,
 ) -> PatternRunAccepted:
+    check_pattern_conditions(pattern, ontology)
     accepted = await run_pattern(pattern, graph=graph, principal=principal, jobs=jobs)
     await audit.record(
         principal=principal,
@@ -4041,11 +4234,16 @@ async def patterns_save_route(
     principal: PrincipalDep,
     patterns_store: PatternsStoreDep,
     audit: AuditDep,
+    ontology: OntologyDep,
 ) -> SavedPattern:
-    """A `pattern_id` the caller does not own raises `PatternStore`'s own `PatternNotFoundError`
+    """A condition the ontology refuses is refused here, before it is stored (ADR-121): a rule that
+    replays the saved pattern later must not hold what no route would run.
+
+    A `pattern_id` the caller does not own raises `PatternStore`'s own `PatternNotFoundError`
     (mapped to 404 by `_pattern_not_found_handler`) — the same existence-leak collapse
     `get_authorized_investigation` already uses, here inside `PatternStore.save` itself rather
     than a separate route-level gate, since save and the ownership check are one operation."""
+    check_pattern_conditions(body.definition, ontology)
     saved = await patterns_store.save(
         principal,
         pattern_id=body.pattern_id,
@@ -5060,6 +5258,207 @@ async def reject_email_candidate_route(
         result_cardinality=1,
     )
     return RejectedResponse()
+
+
+# --- the case brief (ADR-128 decision 3) --------------------------------------------------------
+#
+# Read at Viewer, every edit at Author (the case's own level, and the `share_case` right the Author
+# role holds, as the case's datasets and domain models are). The service's own docstring has the
+# rules: rule 3 (an attachment the reader may not read is not there at all), rule 5 (only
+# `set_brief_requirement_status_route` sets a status), rule 2 (a limit is refused by name).
+# Each edit is audited by id, never by text, and is a History step except an attach or a detach: a
+# step is shown to every reader, and one for an attachment they may not read would be a trace of it.
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/brief",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def get_case_brief_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    case_brief: CaseBriefDep,
+) -> CaseBrief:
+    """The brief as this reader may read it. Not audited, like the other case reads here."""
+    return await case_brief.read(investigation.id, principal)
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/brief/priority",
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
+async def set_brief_priority_route(
+    investigation: InvestigationAuthorDep,
+    body: BriefTextBody,
+    principal: PrincipalDep,
+    case_brief: CaseBriefDep,
+    history: HistoryDep,
+    audit: AuditDep,
+) -> CaseBrief:
+    brief = await case_brief.set_priority(investigation.id, principal, body.text)
+    await audit.record(
+        principal=principal,
+        action="case_brief_set_priority",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=1,
+    )
+    await _record_brief_edit(history, investigation.id, principal)
+    return brief
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/brief/requirements",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
+async def add_brief_requirement_route(
+    investigation: InvestigationAuthorDep,
+    body: BriefTextBody,
+    principal: PrincipalDep,
+    case_brief: CaseBriefDep,
+    history: HistoryDep,
+    audit: AuditDep,
+) -> CaseBrief:
+    brief = await case_brief.add_requirement(investigation.id, principal, body.text)
+    await audit.record(
+        principal=principal,
+        action="case_brief_add_requirement",
+        investigation_id=investigation.id,
+        resolved_query={"requirement_id": brief.requirements[-1].id},
+        result_cardinality=1,
+    )
+    await _record_brief_edit(history, investigation.id, principal)
+    return brief
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/brief/requirements/{requirement_id}",
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
+async def edit_brief_requirement_route(
+    investigation: InvestigationAuthorDep,
+    requirement_id: str,
+    body: BriefTextBody,
+    principal: PrincipalDep,
+    case_brief: CaseBriefDep,
+    history: HistoryDep,
+    audit: AuditDep,
+) -> CaseBrief:
+    brief = await case_brief.edit_requirement(
+        investigation.id, requirement_id, principal, body.text
+    )
+    await audit.record(
+        principal=principal,
+        action="case_brief_edit_requirement",
+        investigation_id=investigation.id,
+        resolved_query={"requirement_id": requirement_id},
+        result_cardinality=1,
+    )
+    await _record_brief_edit(history, investigation.id, principal)
+    return brief
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/brief/requirements/{requirement_id}",
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
+async def remove_brief_requirement_route(
+    investigation: InvestigationAuthorDep,
+    requirement_id: str,
+    principal: PrincipalDep,
+    case_brief: CaseBriefDep,
+    history: HistoryDep,
+    audit: AuditDep,
+) -> CaseBrief:
+    brief = await case_brief.remove_requirement(investigation.id, requirement_id, principal)
+    await audit.record(
+        principal=principal,
+        action="case_brief_remove_requirement",
+        investigation_id=investigation.id,
+        resolved_query={"requirement_id": requirement_id},
+        result_cardinality=1,
+    )
+    await _record_brief_edit(history, investigation.id, principal)
+    return brief
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/brief/requirements/{requirement_id}/status",
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
+async def set_brief_requirement_status_route(
+    investigation: InvestigationAuthorDep,
+    requirement_id: str,
+    body: BriefStatusBody,
+    principal: PrincipalDep,
+    case_brief: CaseBriefDep,
+    history: HistoryDep,
+    audit: AuditDep,
+) -> CaseBrief:
+    """Rule 5: the one route that marks a requirement answered, and it is a person's request. No
+    model path reaches it or the transition under it (`test_case_brief_status.py`)."""
+    brief = await case_brief.set_status(investigation.id, requirement_id, principal, body.status)
+    await audit.record(
+        principal=principal,
+        action="case_brief_set_status",
+        investigation_id=investigation.id,
+        resolved_query={"requirement_id": requirement_id, "status": body.status},
+        result_cardinality=1,
+    )
+    await _record_brief_edit(history, investigation.id, principal)
+    return brief
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/brief/requirements/{requirement_id}/attachments",
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
+async def attach_to_brief_requirement_route(
+    investigation: InvestigationAuthorDep,
+    requirement_id: str,
+    body: BriefAttachmentBody,
+    principal: PrincipalDep,
+    case_brief: CaseBriefDep,
+    audit: AuditDep,
+) -> CaseBrief:
+    """No History step (see above): the audit records it, which no reader sees."""
+    brief = await case_brief.attach(investigation.id, requirement_id, principal, body.kind, body.id)
+    await audit.record(
+        principal=principal,
+        action="case_brief_attach",
+        investigation_id=investigation.id,
+        resolved_query={"requirement_id": requirement_id, "kind": body.kind, "id": body.id},
+        result_cardinality=1,
+    )
+    return brief
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/brief/requirements/{requirement_id}"
+    "/attachments/{kind}/{attachment_id}",
+    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+)
+async def detach_from_brief_requirement_route(
+    investigation: InvestigationAuthorDep,
+    requirement_id: str,
+    kind: AttachmentKind,
+    attachment_id: str,
+    principal: PrincipalDep,
+    case_brief: CaseBriefDep,
+    audit: AuditDep,
+) -> CaseBrief:
+    brief = await case_brief.detach(
+        investigation.id, requirement_id, principal, kind, attachment_id
+    )
+    await audit.record(
+        principal=principal,
+        action="case_brief_detach",
+        investigation_id=investigation.id,
+        resolved_query={"requirement_id": requirement_id, "kind": kind, "id": attachment_id},
+        result_cardinality=1,
+    )
+    return brief
 
 
 @app.get(

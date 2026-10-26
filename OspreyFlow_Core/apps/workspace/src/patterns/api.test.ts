@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SavedPattern } from "../../../../packages/schemas/generated";
-import { listPatterns, loadPattern, savePattern } from "./api";
+import { fetchPatternPreview, listPatterns, loadPattern, runPattern, savePattern } from "./api";
 
 // `savePattern`/`listPatterns`/`loadPattern` are otherwise-thin `fetch` wrappers (`site/api.ts`'s
 // own `api.test.ts` leaves those untested elsewhere in this codebase) — but their `!response.ok`
@@ -103,3 +103,38 @@ describe("ADR-099 Amendment 3: saved patterns are asked of the case", () => {
   });
 });
 
+
+// ADR-121: a condition the ontology refuses comes back typed (422, `pattern_condition_refused`);
+// the analyst is shown the words, not "failed: 422".
+describe("a refused pattern condition", () => {
+  const REFUSAL = {
+    error: "pattern_condition_refused",
+    detail: "Person.date_of_birth is marked sensitivity: high, so a pattern cannot match on it",
+    var: "a",
+    property: "date_of_birth",
+    reason: "sensitive",
+  };
+  const PATTERN = { nodes: [], edges: [], limit: 1000 };
+
+  it.each([
+    ["preview", () => fetchPatternPreview("http://x", "tok", "inv-1", PATTERN)],
+    ["run", () => runPattern("http://x", "tok", "inv-1", PATTERN)],
+    [
+      "save",
+      () => savePattern("http://x", "tok", "inv-1", { pattern_id: null, name: "n", definition: PATTERN }),
+    ],
+  ])("is shown by its own words on %s", async (_route, call) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 422, json: async () => REFUSAL }));
+    await expect(call()).rejects.toThrow(REFUSAL.detail);
+  });
+
+  it("falls back to the status when the body is not a typed refusal", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 422, json: async () => ({ detail: [{ msg: "x" }] }) }),
+    );
+    await expect(fetchPatternPreview("http://x", "tok", "inv-1", PATTERN)).rejects.toThrow(
+      "POST /v1/patterns/preview failed: 422",
+    );
+  });
+});

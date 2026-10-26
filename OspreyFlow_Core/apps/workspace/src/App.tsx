@@ -82,6 +82,9 @@ import { CaseSwitcher } from "./investigation/CaseSwitcher";
 import { CaseTree } from "./investigation/CaseTree";
 import { CaseAccessPanel } from "./investigation/CaseAccessPanel";
 import { CaseSettings } from "./investigation/CaseSettings";
+import { CaseBrief } from "./investigation/CaseBrief";
+import type { AttachmentKind } from "./investigation/briefApi";
+import { placeOf, revealPanel } from "./investigation/openAttachment";
 import { caseIsOpenable, openCase } from "./investigation/cases";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { ExplorePanel } from "./explore/ExplorePanel";
@@ -539,6 +542,9 @@ export function App() {
   useHelpKey(openWelcome);
   // ADR-097 Amendment 1: the case and its branches, reached from the rail.
   const [casesOpen, setCasesOpen] = useState(false);
+  // ADR-128 decision 3: opening a saved trend from the case brief starts the Reports view on Trends;
+  // the count re-mounts the place so a second open starts there again.
+  const [reportsStart, setReportsStart] = useState<{ tab?: "trends"; opened: number }>({ opened: 0 });
   // ADR-098 decision 4: the case's questions to the model, open at once in a case branched for them.
   const [questionsOpen, setQuestionsOpen] = useState(handoff.view === "questions");
   // ADR-100: where to start in a case's data, from the rail (and over an empty canvas).
@@ -623,6 +629,21 @@ export function App() {
   }, [investigationId, bearerToken, rights, view]);
   // Which application is open, and (so the switch can go back to it) the Glass view last open.
   const app = view === "ingest" ? "ingest" : "glass";
+  // ADR-128 decision 3: an attachment of the case brief opens where the thing lives (`openAttachment.ts`).
+  const openBriefAttachment = (kind: AttachmentKind, id: string) => {
+    const place = placeOf(kind, id);
+    setCasesOpen(false);
+    if (place.place === "case") {
+      openCase(id);
+    } else if (place.place === "reports") {
+      setReportsStart((now) => ({ tab: place.tab, opened: now.opened + 1 }));
+      setView("reports");
+    } else {
+      setView("graph");
+      // The side panels are on the page once the graph view is drawn: reveal one on the next tick.
+      window.setTimeout(() => revealPanel(place.panel), 0);
+    }
+  };
   const lastGlassView = useRef<"graph" | "map" | "reports" | "admin" | "dashboards" | "dossier" | "watches" | "alerts" | "ownership">("graph");
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
@@ -1131,6 +1152,7 @@ export function App() {
               bearerToken={bearerToken}
               investigationId={investigationId}
               entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
+              onApplyDelta={applyStarterDelta}
               screenNodes={() => {
                 const graph = workingSetRef.current.graph;
                 return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
@@ -1332,7 +1354,7 @@ export function App() {
           />
         )}
         {view === "reports" && (
-          <ReportsPlace apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} rights={rights} />
+          <ReportsPlace key={reportsStart.opened} initialTab={reportsStart.tab} apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} rights={rights} />
         )}
         {view === "dashboards" && (
           <div style={{ flex: 1, display: "flex", padding: "var(--sp-16)", minHeight: 0 }}>
@@ -1865,6 +1887,15 @@ export function App() {
           >
             Browse all cases
           </Button>
+          {/* ADR-128 decision 3: the case's brief, read by anyone who may read the case and edited by
+              its Author; an attachment opens where the thing lives. */}
+          <CaseBrief
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            rights={rights}
+            onOpenAttachment={openBriefAttachment}
+          />
           {/* ADR-099, ADR-126: what the open case reads and its domain models, changed by its Author
               (who holds `share_case`); the listing is read once for both. */}
           <CaseSettings

@@ -2272,6 +2272,20 @@ def _wire_the_seed(
             log.append(("picture", Right.EDIT_GRAPH in rights_for(principal.roles)))
             return True
 
+    # ADR-128: the brief step's own stores (Postgres) are replaced; its logic is `test_seed_pid_brief.py`.
+    brief_outcome: list[seed_pid.BriefSummary] = [
+        seed_pid.BriefSummary(written=True, requirements=4, ok=True)
+    ]
+
+    async def require_author_of(case_id: str, persona: Principal) -> None:
+        log.append(("author", persona.id))
+
+    async def seed_brief_into(case_id: str, author: Principal, audit: Any) -> seed_pid.BriefSummary:
+        log.append(("brief", author.id))
+        return brief_outcome[0]
+
+    monkeypatch.setattr(seed_pid, "_require_author_of", require_author_of)
+    monkeypatch.setattr(seed_pid, "_seed_brief_into", seed_brief_into)
     monkeypatch.setattr(seed_pid, "scope_for", scope_for)
     monkeypatch.setattr(seed_pid, "scope_to_case", scope_to_case)
     monkeypatch.setattr(seed_pid, "write_listed_files", lambda plan, root: files)
@@ -2284,6 +2298,7 @@ def _wire_the_seed(
     resources = SimpleNamespace(
         ontology=ONTOLOGY, handling_scheme=SCHEME, datasets_store=None, recipe_runs=ledger,
         graph=graph, valkey=None, media=None, audit=None, run_deps=lambda: _deps_with(queue),
+        brief_outcome=brief_outcome,
     )  # fmt: skip
     return resources, _Registry(log), log
 
@@ -2310,6 +2325,60 @@ async def test_the_seed_runs_end_to_end_over_fakes_and_prints_its_checks(
     assert seed_pid.RESTORE_COMMAND in out
     assert "check FAILED" not in out and "at the seed moment" in out
     assert f"as {seed_pid.ENGINEER_USERNAME}" in out
+
+
+async def test_the_seed_confirms_the_author_before_any_write_then_writes_the_brief_and_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR-128 decision 3: the brief is written as the case's author. The author is confirmed first
+    (before a recipe is committed or a file run) and the brief is written once the loads are in."""
+    resources, registry, log = _wire_the_seed(
+        monkeypatch, tmp_path, PlanGraph(PLAN, "seed"), _RunLedger()
+    )
+    code = await seed_pid._seed_into(
+        _seed_args(), _root(tmp_path), resources, registry, tmp_path / "repo", seed_pid.engineer()
+    )
+    out = capsys.readouterr().out
+    names = [n for n, _ in log]
+    assert code == 0, out
+    assert names.count("author") == 1 and names.count("brief") == 1
+    assert names.index("author") < names.index("commit") < names.index("run") < names.index("brief")
+    assert dict(log)["brief"] == seed_pid.ENGINEER_USERNAME == dict(log)["author"]
+    assert "case brief: the priority requirement and 4 information requirements written" in out
+    assert "check ok: the case holds a brief" in out
+
+
+async def test_a_brief_that_is_not_there_makes_the_seed_exit_non_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    resources, registry, _ = _wire_the_seed(
+        monkeypatch, tmp_path, PlanGraph(PLAN, "seed"), _RunLedger()
+    )
+    resources.brief_outcome[0] = seed_pid.BriefSummary(written=True, requirements=0, ok=False)
+    code = await seed_pid._seed_into(
+        _seed_args(), _root(tmp_path), resources, registry, tmp_path / "repo", seed_pid.engineer()
+    )
+    out = capsys.readouterr().out
+    assert code == 1 and "check FAILED: the case holds a brief" in out
+    assert "check ok: J2" in out, "the others are still said"
+
+
+async def test_a_persona_who_is_not_the_author_stops_the_seed_before_a_recipe_or_a_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    resources, registry, log = _wire_the_seed(
+        monkeypatch, tmp_path, PlanGraph(PLAN, "seed"), _RunLedger()
+    )
+
+    async def not_the_author(case_id: str, persona: Principal) -> None:
+        raise seed_pid.SeedRefusal(f"{persona.id} is not the Author of case {case_id}")
+
+    monkeypatch.setattr(seed_pid, "_require_author_of", not_the_author)
+    with pytest.raises(seed_pid.SeedRefusal):
+        await seed_pid._seed_into(
+            _seed_args(), _root(tmp_path), resources, registry, tmp_path / "repo", seed_pid.engineer()
+        )
+    assert [n for n, _ in log if n in {"commit", "run", "compare", "enter", "draft", "brief"}] == []
 
 
 async def test_a_failed_demo_number_makes_the_seed_exit_non_zero(

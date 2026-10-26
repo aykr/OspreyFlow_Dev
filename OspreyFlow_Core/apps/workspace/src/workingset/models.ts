@@ -109,6 +109,9 @@ export interface HistoryStepSummary {
   id: string;
   label: string;
   created_at: string;
+  /** `false` for a step that holds no canvas snapshot (ADR-128: an edit to the case brief): it is
+   * listed and never restored. Absent is restorable, as every step was before the field. */
+  restorable?: boolean;
 }
 
 // `services/api/working_set/models.py`'s `PairwiseExplanation`/`ClusterExplanation` — the

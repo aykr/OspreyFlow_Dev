@@ -20,7 +20,7 @@ import { PublishedTab } from "./PublishedTab";
 import { ReportsView } from "./ReportsView";
 import { TrendsTab } from "./TrendsTab";
 
-type TabId = "figures" | "trends" | "packs" | "published" | "feeds" | "dashboards";
+export type TabId = "figures" | "trends" | "packs" | "published" | "feeds" | "dashboards";
 
 export interface ReportsPlaceProps {
   apiBaseUrl: string;
@@ -32,10 +32,13 @@ export interface ReportsPlaceProps {
   rights?: Rights;
   /** Receives an exported pack's print document; the default prints it from a hidden frame. */
   print?: (html: string) => void;
+  /** The tab to open on (ADR-128: a case brief's saved-trend attachment opens Trends). Figures when
+   * left out, and Figures when the tab is one the person's rights do not offer. */
+  initialTab?: TabId;
 }
 
-export function ReportsPlace({ embed, rights = null, print, ...props }: ReportsPlaceProps) {
-  const [tab, setTab] = useState<TabId>("figures");
+export function ReportsPlace({ embed, rights = null, print, initialTab = "figures", ...props }: ReportsPlaceProps) {
+  const [tab, setTab] = useState<TabId>(initialTab);
   const api = { apiBaseUrl: props.apiBaseUrl, bearerToken: props.bearerToken, investigationId: props.investigationId };
   const tabs: { id: TabId; label: string }[] = [
     { id: "figures", label: "Figures" },

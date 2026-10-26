@@ -8,8 +8,11 @@ plan's rows do not carry. The files are written under `out_dir`, never anywhere 
 - `incoming/` holds the chapter 9 seized-comms batch (Brief 2 R6: loaded by the demo, not the seed);
   the scale profile's files are prefixed `scale_`; a file the plan has no rows for is not written;
 - `pictures/` holds one PNG per picture subject (`pid_writes.picture_writes`);
+- `pid_cohort_list.txt` (demo profile only) holds the 40 identifiers the add-many scene pastes
+  (`cohort_list`, ADR-128 decision 1), one a line, no header;
 - `manifest.json` holds rows, bytes and SHA-256 per file and the planted counts, as written, and
-  their 1-based row positions. It carries no timestamp. Byte-identical means on one interpreter and
+  their 1-based row positions; the list is in its own `lists` section (lines, bytes, SHA-256), not
+  among the CSV `files`. It carries no timestamp. Byte-identical means on one interpreter and
   one `zlib` runtime, which the manifest records.
 
 Files are written with `csv.writer`, UTF-8, `\\n` line ends and one header row.
@@ -72,6 +75,7 @@ from .pid_plan import (
     Plan,
     PlanEntity,
     PlanRow,
+    bulk_list,
     cell_text,
     entity_shape,
     file_header,
@@ -86,6 +90,7 @@ BATCH_2 = "pid_seized_comms_batch2.csv"
 OWNERS = "pid_number_owners.csv"
 ESTATE = "pid_establishment_plan.csv"
 MANIFEST = "manifest.json"
+COHORT_LIST = "pid_cohort_list.txt"
 #: Distinct calls written in each of the three international forms; and the planted duplicates.
 FORM_COUNT = 10_000
 EXACT_DUPLICATES = 40
@@ -96,6 +101,19 @@ _PSEUDO = frozenset({"graph port", "picture route"})
 #: The column of each file that names an outside number, written in the plan's own form.
 _NUMBER_COLUMNS = {BATCH_1: "other_number", BATCH_2: "other_number", OWNERS: "number"}
 _IR = re.compile(r"IR \d+")
+#: The cohort list's makeup (ADR-128 decision 1): how many identifiers of each kind that resolve,
+#: the right-shaped one no plan holds, and the one made up. 24 + 4 + 5 + 4 = 37 distinct entities;
+#: the repeat makes 38 that resolve, and the two that do not make 40.
+COHORT_PRISON_NUMBERS = 24
+COHORT_NINOS = 4
+COHORT_ACCOUNTS = 5
+COHORT_NUMBERS = 4
+#: Outside both profiles' prison numbers (`pid_plan._Pool`: 1000 to 2999 and 5000 to 7999).
+COHORT_ABSENT = "Z9001ZZ"
+#: Text that reads as no kind of identifier.
+COHORT_MADE_UP = "NOBODY"
+COHORT_ABSENT_AT = 9
+COHORT_MADE_UP_AT = 22
 
 
 
@@ -169,6 +187,8 @@ class WriteReport:
     planted: dict[str, Any]
     #: The text of `manifest.json`.
     manifest: str
+    #: The plain-text lists written beside the CSVs; `rows` is the lines, one identifier each.
+    lists: tuple[FileRecord, ...] = ()
 
 
 def output_name(profile: str, file: str) -> str:
@@ -183,6 +203,45 @@ def header_for(file: str) -> list[str]:
     handling = [c for c in shaped if c in HANDLING_COLUMNS]
     plain = [c for c in shaped if c not in HANDLING_COLUMNS]
     return [*plain, *(c for c in EXTRAS.get(file, ()) if c not in plain), *handling]
+
+
+def cohort_list(plan: Plan) -> list[str]:
+    """The 40 identifiers the add-many scene pastes (ADR-128 decision 1; script J3), from the plan
+    alone and the same every time. Mixed kinds, in turn: prison numbers of prisoners on landing F2
+    (`pid_plan.bulk_list`), National Insurance numbers, private-cash and bank accounts, and outside
+    numbers written as the plan writes them, each the first of its kind in plan order. Then two that
+    do not resolve, one right-shaped and in no plan (`COHORT_ABSENT`) and one made up
+    (`COHORT_MADE_UP`), and, last, the first number again in its international form: one that
+    resolves, repeated. 38 of the 40 resolve (37 distinct entities), 2 do not, 1 is repeated.
+
+    Empty for the scale profile, which has no scene to paste it into."""
+    if plan.profile != "demo":
+        return []
+    people = [plan.entity(key) for key in bulk_list(plan)]
+    prisoners = [str(p.properties["prison_number"]) for p in people][:COHORT_PRISON_NUMBERS]
+    ninos = [
+        str(e.properties["nino"])
+        for e in plan.entities
+        if e.entity_type == "Person" and "nino" in e.properties
+    ][:COHORT_NINOS]
+    endpoints = [e for e in plan.entities if e.entity_type == "Endpoint"]
+    accounts = [
+        str(e.properties["value_normalised"])
+        for e in endpoints
+        if e.properties.get("endpoint_kind") == "account"
+    ][:COHORT_ACCOUNTS]
+    numbers = [e for e in endpoints if e.properties.get("endpoint_kind") == "msisdn"][
+        :COHORT_NUMBERS
+    ]
+    kinds = [prisoners, ninos, accounts, [str(e.properties["value_raw"]) for e in numbers]]
+    out: list[str] = []
+    for turn in range(max(len(k) for k in kinds)):
+        out.extend(k[turn] for k in kinds if turn < len(k))
+    out.insert(COHORT_ABSENT_AT, COHORT_ABSENT)
+    out.insert(COHORT_MADE_UP_AT, COHORT_MADE_UP)
+    national = str(numbers[0].properties["value_normalised"]).removeprefix("+44")
+    out.append(f"+44 {national[:4]} {national[4:]}")
+    return out
 
 
 def _unit(seed: int, *parts: object) -> random.Random:
@@ -489,7 +548,13 @@ def _write_csv(path: Path, header: list[str], rows: Iterator[list[str]]) -> int:
     return count
 
 
-def _manifest(plan: Plan, files: list[FileRecord], pictures: list[FileRecord], planted: Any) -> str:
+def _manifest(
+    plan: Plan,
+    files: list[FileRecord],
+    pictures: list[FileRecord],
+    lists: list[FileRecord],
+    planted: Any,
+) -> str:
     body = {
         "profile": plan.profile,
         "seed": plan.seed,
@@ -504,6 +569,10 @@ def _manifest(plan: Plan, files: list[FileRecord], pictures: list[FileRecord], p
         "row_positions": "1-based data rows of the file, the header row excluded",
         "files": {f.name: {"rows": f.rows, "bytes": f.bytes, "sha256": f.sha256} for f in files},
         "pictures": {p.name: {"bytes": p.bytes, "sha256": p.sha256} for p in pictures},
+        "lists": {
+            entry.name: {"lines": entry.rows, "bytes": entry.bytes, "sha256": entry.sha256}
+            for entry in lists
+        },
         "planted": planted,
     }
     return json.dumps(body, indent=2, sort_keys=True) + "\n"
@@ -533,15 +602,26 @@ def write_files(plan: Plan, out_dir: Path) -> WriteReport:
         path.write_bytes(data)
         sha = hashlib.sha256(data).hexdigest()
         pictures.append(FileRecord(f"pictures/{picture_name}", None, len(data), sha))
+    lists: list[FileRecord] = []
+    cohort = cohort_list(plan)
+    if cohort:
+        path = out_dir / COHORT_LIST
+        path.write_text("".join(f"{line}\n" for line in cohort), encoding="utf-8", newline="\n")
+        size, sha = _digest(path)
+        lists.append(FileRecord(COHORT_LIST, len(cohort), size, sha))
     files.sort(key=lambda f: f.name)
-    text = _manifest(plan, files, pictures, planted)
+    text = _manifest(plan, files, pictures, lists, planted)
     (out_dir / MANIFEST).write_text(text, encoding="utf-8")
-    return WriteReport(plan.profile, plan.seed, tuple(files), tuple(pictures), planted, text)
+    return WriteReport(
+        plan.profile, plan.seed, tuple(files), tuple(pictures), planted, text, tuple(lists)
+    )
 
 
 __all__ = [
+    "COHORT_LIST",
     "FileRecord",
     "WriteReport",
+    "cohort_list",
     "header_for",
     "ordered_rows",
     "output_name",

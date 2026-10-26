@@ -4,9 +4,10 @@
 
 `--out` is required and must be outside the git working tree: the files, about 100,000 call rows
 among them, are never committed (the naming rule and rule 9), so a path inside the repository is
-refused before anything is written. It writes the CSV files, `pictures/` and `manifest.json` (rows,
-bytes and SHA-256 per file, and the planted counts and row positions; no timestamps), then, for a
-profile with pictures, `contact_sheet.png`, and prints a table of what it wrote.
+refused before anything is written. It writes the CSV files, `pictures/`, for the demo profile
+`pid_cohort_list.txt` (the 40 identifiers the add-many scene pastes, ADR-128), and `manifest.json`
+(rows, bytes and SHA-256 per file, and the planted counts and row positions; no timestamps), then,
+for a profile with pictures, `contact_sheet.png`, and prints a table of what it wrote.
 
 Plain generation: no store, no network.
 """
@@ -84,6 +85,10 @@ def _table(report: pid_files.WriteReport) -> str:
     lines = [f"{'file':<{width}}  {'rows':>10}  {'bytes':>12}  sha256"]
     for f in report.files:
         lines.append(f"{f.name:<{width}}  {f.rows:>10,}  {f.bytes:>12,}  {f.sha256}")
+    for entry in report.lists:
+        lines.append(
+            f"{entry.name:<{width}}  {entry.rows:>7,} lines  {entry.bytes:>12,}  {entry.sha256}"
+        )
     if report.pictures:
         total = sum(p.bytes for p in report.pictures)
         lines.append(f"pictures/ ({len(report.pictures):,} pictures)  {total:,} bytes")

@@ -19,6 +19,29 @@ test("/ outside a text field moves focus to search", async ({ page }) => {
   registerCovered(REGISTRY, "slash-moves-focus-to-search");
 });
 
+// ADR-128 decision 1 (B2): the search box's own "Add many from a list", opened, counted and cancelled.
+test("add many from a list is opened from the search box, counted and cancelled, by keyboard", async ({ page }) => {
+  // The harness's own `fetch` answers the count and records what was sent (a route would not see it).
+  await page.goto("/keyboard/top-bar-harness.html");
+  await page.getByRole("button", { name: "Add many from a list" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("group", { name: "Add many from a list" })).toBeVisible();
+  await page.getByRole("textbox", { name: /identifiers/i }).focus();
+  await page.keyboard.type("Z1234ZZ, Z9999ZZ");
+  await page.getByRole("button", { name: "Count" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "2 identifiers read." })).toHaveText(
+    "2 identifiers read. 1 found. 1 matched nothing you can see. 0 repeated.",
+  );
+  await page.getByRole("button", { name: "Cancel" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("group", { name: "Add many from a list" })).toBeHidden();
+  const asked = await page.evaluate(() => (window as unknown as { __ADD_MANY__: string[] }).__ADD_MANY__);
+  expect(asked).toHaveLength(1);
+  expect(JSON.parse(asked[0]!)).toEqual({ identifiers: ["Z1234ZZ, Z9999ZZ"], confirm: false, with_links: false });
+  registerCovered(REGISTRY, "add-many-from-the-search-box-by-keyboard");
+});
+
 // DESIGN.md v0.3 §5a (ADR-115 decision 9): the strip 20, the workspace's top bar 44, the rail 48 with
 // 36px buttons.
 test("the marking strip and the top bar take 20 and 44 pixels, and the rail 48 with 36px buttons", async ({ page }) => {

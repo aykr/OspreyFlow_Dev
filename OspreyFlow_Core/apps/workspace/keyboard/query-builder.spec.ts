@@ -257,6 +257,55 @@ test("Load replaces the builder's own pattern with a previously saved one, reach
   registerCovered("QUERY_BUILDER_ACTIONS", "load-saved-pattern");
 });
 
+test("a condition is added to a node by keyboard, sent by Preview, and removed again", async ({ page }) => {
+  // ADR-121 (rule 13). The value field sits on the node; the property it offers is the one indexed,
+  // non-sensitive text property the harness's Person declares.
+  const previewBodies: { nodes: { where?: Record<string, string> }[] }[] = [];
+  await page.route("**/*/v1/investigations/*/patterns/preview", async (route) => {
+    previewBodies.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ estimated_count: 2, is_floor: false }),
+    });
+  });
+
+  await page.goto("/keyboard/query-builder-harness.html");
+  await openPart(page, "Add to the pattern");
+  await tabToButtonNamed(page, "Add variable");
+  await page.keyboard.press("Enter");
+
+  const property = page.getByRole("combobox", { name: "Condition property on a" });
+  await expect(property.locator("option")).toHaveText(["family_name"]);
+
+  const value = page.getByRole("textbox", { name: "Condition value on a" });
+  await value.focus();
+  await page.keyboard.type("Smith");
+  await tabToButtonNamed(page, "Add condition");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("family_name = Smith")).toBeVisible();
+  registerCovered("QUERY_BUILDER_ACTIONS", "add-condition-to-pattern-node");
+
+  // Typing in the value field is not Delete on the node: the node is still there.
+  await value.focus();
+  await page.keyboard.press("Backspace");
+  await expect(page.getByRole("group", { name: /Pattern node a: Person/ })).toBeVisible();
+
+  await tabToButtonNamed(page, "Preview");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("~2 matches")).toBeVisible();
+  expect(previewBodies[0]?.nodes[0]?.where).toEqual({ family_name: "Smith" });
+
+  // The condition's own Remove button comes before the property select and the value field.
+  await value.focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("button", { name: "Remove condition family_name on a" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("family_name = Smith")).toHaveCount(0);
+  registerCovered("QUERY_BUILDER_ACTIONS", "remove-condition-from-pattern-node");
+});
+
 test("every registered query-builder action has its own proving test case above", () => {
   assertAllCovered("QUERY_BUILDER_ACTIONS", QUERY_BUILDER_ACTIONS);
 });

@@ -155,6 +155,8 @@ def test_get_history_returns_step_metadata_only(client: TestClient) -> None:
             "id": "step-1",
             "label": "Seeded",
             "created_at": "2026-01-01T00:00:00Z",
+            # ADR-128: False for a step that holds no canvas snapshot (an edit to the case brief).
+            "restorable": True,
         }
     ]
     assert "nodes" not in body[0]  # metadata only — never bodies

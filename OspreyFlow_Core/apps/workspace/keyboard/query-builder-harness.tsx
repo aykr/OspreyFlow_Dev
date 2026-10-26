@@ -18,7 +18,20 @@ import type { OntologySchema } from "../../../packages/schemas/generated";
 const SCHEMA: OntologySchema = {
   version: 1,
   entity_types: [
-    { name: "Person", pole_class: "person", channel: "indigo", shape: "circle", identifiers: [] },
+    {
+      name: "Person",
+      pole_class: "person",
+      channel: "indigo",
+      shape: "circle",
+      identifiers: [],
+      // ADR-121: one property a condition may name, and two it may not (sensitivity: high, and not
+      // indexed), so the field offers exactly one.
+      properties: [
+        { name: "family_name", type: "string", indexed: true },
+        { name: "date_of_birth", type: "date", sensitivity: "high" },
+        { name: "list_name", type: "string" },
+      ],
+    },
     { name: "Endpoint", pole_class: "thing", channel: "teal", shape: "square", identifiers: [] },
   ],
   edge_types: [{ name: "USES", from: ["Person"], to: ["Endpoint"], directed: true }],

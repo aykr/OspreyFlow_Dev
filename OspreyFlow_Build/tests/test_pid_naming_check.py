@@ -240,6 +240,35 @@ def test_the_seeds_printed_lines_are_produced_from_real_inputs_and_scanned() -> 
     assert len(lines) > 40
 
 
+def test_the_brief_steps_lines_and_texts_are_among_the_seeds_scanned_lines() -> None:
+    """ADR-128: the seed prints the brief's lines (written, left alone, failed, and the refusal of a
+    persona who is not the Author) and stores its texts; each is built from the real seed's own
+    functions and constants and scanned."""
+    from scripts import seed_pid
+
+    text = "\n".join(gate.seed_lines())
+    assert "case brief: the priority requirement and 4 information requirements written" in text
+    assert "case brief: the case already holds a brief" in text
+    assert "check FAILED: the case holds a brief" in text
+    assert "is not the Author of case" in text, "the refusal of a persona who is not the Author"
+    assert seed_pid.BRIEF_PRIORITY in text
+    assert all(requirement in text for requirement in seed_pid.BRIEF_REQUIREMENTS)
+
+
+def test_a_word_in_the_brief_the_seed_writes_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rule 15: the scan of the brief's texts is shown able to fail. A banned word in the priority
+    requirement, in a requirement, or in the line the step prints is reported."""
+    from scripts import seed_pid
+
+    monkeypatch.setattr(seed_pid, "BRIEF_PRIORITY", f"Who is behind the {BANNED}?")
+    monkeypatch.setattr(
+        seed_pid, "BRIEF_REQUIREMENTS", (f"A {BANNED} requirement?", "Where and when?")
+    )
+    hits = gate.scan_seed()
+    assert {h.where for h in hits} >= {"seed constant BRIEF_PRIORITY", "seed constant BRIEF_REQUIREMENTS"}
+    assert any(h.where == "seed printed line" and BANNED in h.text for h in hits)
+
+
 def test_a_word_in_a_recipe_id_the_seed_prints_is_reported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

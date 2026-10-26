@@ -2149,14 +2149,18 @@ def _verify_manifest(written: Written) -> dict[str, Any]:
         for p in written.out.rglob("*")
         if p.is_file() and p.name != "manifest.json"
     )
-    assert sorted([*manifest["files"], *manifest["pictures"]]) == on_disk
-    for name, record in {**manifest["files"], **manifest["pictures"]}.items():
+    lists = manifest["lists"]  # ADR-128 decision 1: the cohort list, plain lines and no header
+    assert sorted([*manifest["files"], *manifest["pictures"], *lists]) == on_disk
+    for name, record in {**manifest["files"], **manifest["pictures"], **lists}.items():
         data = (written.out / name).read_bytes()
         assert record["bytes"] == len(data), name
         assert record["sha256"] == hashlib.sha256(data).hexdigest(), name
         if name in manifest["files"]:
             with (written.out / name).open(newline="", encoding="utf-8") as handle:
                 assert record["rows"] == sum(1 for _ in csv.reader(handle)) - 1, name
+        elif name in lists:
+            assert record["lines"] == len(data.decode("utf-8").splitlines()), name
+            assert "rows" not in record, name
         else:
             assert "rows" not in record, name
     return manifest  # type: ignore[no-any-return]

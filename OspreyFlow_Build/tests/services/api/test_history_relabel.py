@@ -140,6 +140,30 @@ async def test_a_fixed_label_is_left_alone(store: InvestigationHistoryStore) -> 
     assert await _labels(store, ids) == fixed
 
 
+async def test_a_stored_brief_edit_is_left_alone_and_listed_as_not_restorable(
+    store: InvestigationHistoryStore,
+) -> None:
+    """ADR-128: the label the case brief's edits carry is in the rewrite's keep list, so the next
+    start does not turn it into `Changed`; the listing marks it not restorable, and last_seq and the
+    listing's order give a brief step that takes the latest step's sequence its place after it."""
+    case = f"brief-case-{datetime.now(UTC).timestamp()}"
+    seeded = await store.record_step(
+        case, seq=4, label="Seeded", created_by="analyst-1", nodes=[], edges=[]
+    )
+    edited = await store.record_step(
+        case, seq=await store.last_seq(case), label="Edited the brief",
+        created_by="analyst-1", nodes=[], edges=[],
+    )  # fmt: skip
+    await store.relabel()
+    assert await store.last_seq(case) == 4
+    assert await store.last_seq(f"no-steps-{case}") == 0
+    listed = await store.list_steps(case)
+    assert [(s.id, s.label, s.restorable) for s in listed] == [
+        (seeded.id, "Seeded", True),
+        (edited.id, "Edited the brief", False),
+    ]
+
+
 @pytest.mark.parametrize(("literal", "sample"), PATTERN_SAMPLES)
 async def test_a_label_with_another_character_where_a_pattern_has_text_does_not_match(
     store: InvestigationHistoryStore, literal: str, sample: str

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Node } from "../../../../packages/schemas/generated";
 import { Combobox } from "../design/primitives/Combobox";
+import type { WorkingSetDelta } from "../workingset/models";
+import { AddFromList } from "./AddFromList";
 import { SearchFilters } from "./SearchFilters";
 import {
   DEFAULT_SEARCH_OPTIONS,
@@ -27,6 +29,9 @@ export interface GlobalSearchProps {
   /** Whether / takes the analyst to this box. Only the top bar's should: every box listening would
    * leave / with whichever was drawn last. */
   slashFocuses?: boolean;
+  /** Draws what "Add many from a list" added (ADR-128 decision 1). With none, the box has no such
+   * button: a box nothing can draw for (the From and To of Find connections) offers nothing new. */
+  onApplyDelta?: (delta: WorkingSetDelta) => void;
 }
 
 /** A prefix shorter than this is not worth asking about; the Conduit refuses it too (ADR-059, ADR-074). */
@@ -54,6 +59,7 @@ export function GlobalSearch({
   screenNodes,
   label = "Search entities, identifiers, documents",
   slashFocuses = true,
+  onApplyDelta,
 }: GlobalSearchProps) {
   const [results, setResults] = useState<Node[]>([]);
   const [query, setQuery] = useState("");
@@ -63,6 +69,7 @@ export function GlobalSearch({
   const latest = useRef(0);
   const [options, setOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const filterCount = activeFilterCount(options);
   const onScreen = options.onScreenOnly;
 
@@ -178,7 +185,7 @@ export function GlobalSearch({
   }, [slashFocuses]);
 
   return (
-    <div className="global-search" ref={rootRef}>
+    <div className="global-search" ref={rootRef} data-add={onApplyDelta ? "true" : undefined}>
       <div className="global-search__field">
         <Combobox
           aria-label={label}
@@ -191,6 +198,20 @@ export function GlobalSearch({
             if (node) onSelect(node);
           }}
         />
+        {onApplyDelta && (
+          <button
+            type="button"
+            className="global-search__filters global-search__add"
+            aria-expanded={addOpen}
+            aria-label="Add many from a list"
+            title="Add many from a list"
+            onClick={() => setAddOpen((open) => !open)}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M2 4h9M2 8h9M2 12h6M13 9v5M10.5 11.5h5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
         <button
           type="button"
           className="global-search__filters"
@@ -207,6 +228,17 @@ export function GlobalSearch({
         </button>
       </div>
       {filtersOpen && <SearchFilters options={options} entityTypes={entityTypes} onChange={setOptions} />}
+      {onApplyDelta && addOpen && (
+        <div className="global-search__add-panel">
+          <AddFromList
+            apiBaseUrl={apiBaseUrl}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            onApplyDelta={onApplyDelta}
+            onClose={() => setAddOpen(false)}
+          />
+        </div>
+      )}
       {status && (
         <div role="status" className="global-search__status" data-faded={nudge && faded ? "true" : undefined}>
           {status}

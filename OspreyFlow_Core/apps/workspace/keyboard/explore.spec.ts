@@ -237,6 +237,102 @@ test("a node with all its links hands over to the canvas's expand, by keyboard",
   registerCovered(REGISTRY, "add-a-node-with-all-its-links-by-keyboard");
 });
 
+// ADR-128 decision 1 (B2): add many from a list, counted before anything is added. The route is
+// intercepted at the transport; what was asked is read back, and the deltas the harness was handed are
+// on `window.__EXPLORE__`.
+const COUNTS = { read: 40, found: 38, matched_nothing: 2, repeated: 1 };
+const COUNT_SENTENCE = "40 identifiers read. 38 found. 2 matched nothing you can see. 1 repeated.";
+
+async function serveAddMany(page: Page) {
+  const asked: { identifiers: string[]; confirm: boolean; with_links: boolean }[] = [];
+  await page.route("**/*/v1/investigations/c1/working-set/add-by-identifiers", async (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}") as (typeof asked)[number];
+    asked.push(body);
+    const added = body.confirm
+      ? { delta: { op: "add", seq: 11, nodes: [node("a", "Person"), node("b", "Person")], edges: [] }, links_among: body.with_links ? "added" : "not_asked" }
+      : null;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ counts: COUNTS, added }) });
+  });
+  return asked;
+}
+
+async function pasteAndCount(page: Page) {
+  await openFold(page, "Add many from a list");
+  const list = page.getByRole("textbox", { name: /identifiers/i });
+  await list.focus();
+  await page.keyboard.type("Z1234ZZ 07700900640");
+  await page.getByRole("button", { name: "Count" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(COUNT_SENTENCE)).toBeVisible();
+}
+
+test("a pasted list is counted, then added without its links, by keyboard", async ({ page }) => {
+  await serve(page);
+  const asked = await serveAddMany(page);
+  await pasteAndCount(page);
+  // Nothing is drawn until the analyst confirms.
+  expect(await page.evaluate(() => window.__EXPLORE__?.deltas)).toEqual([]);
+  expect(asked).toEqual([{ identifiers: ["Z1234ZZ 07700900640"], confirm: false, with_links: false }]);
+  await page.getByRole("button", { name: "Add", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.deltas)).toEqual([11]);
+  expect(asked[1]).toEqual({ identifiers: ["Z1234ZZ 07700900640"], confirm: true, with_links: false });
+  await expect(page.getByText("2 added.")).toBeVisible();
+  registerCovered(REGISTRY, "paste-a-list-count-it-and-confirm-the-add-by-keyboard");
+});
+
+test("a counted list is added with all its links, by keyboard", async ({ page }) => {
+  await serve(page);
+  const asked = await serveAddMany(page);
+  await pasteAndCount(page);
+  await page.getByRole("button", { name: "Add with all links" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.deltas)).toEqual([11]);
+  expect(asked[1]).toMatchObject({ confirm: true, with_links: true });
+  registerCovered(REGISTRY, "add-a-list-with-all-its-links-by-keyboard");
+});
+
+test("a counted list is cancelled by keyboard and nothing is added", async ({ page }) => {
+  await serve(page);
+  const asked = await serveAddMany(page);
+  await pasteAndCount(page);
+  await page.getByRole("button", { name: "Cancel" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("textbox", { name: /identifiers/i })).toBeHidden();
+  expect(asked).toHaveLength(1);
+  expect(await page.evaluate(() => window.__EXPLORE__?.deltas)).toEqual([]);
+  // Opened again, the box is empty: the cancelled list is not kept.
+  await openFold(page, "Add many from a list");
+  await expect(page.getByRole("textbox", { name: /identifiers/i })).toHaveValue("");
+  registerCovered(REGISTRY, "cancel-a-counted-list-by-keyboard");
+});
+
+test("Escape cancels a pasted list by keyboard", async ({ page }) => {
+  await serve(page);
+  const asked = await serveAddMany(page);
+  await openFold(page, "Add many from a list");
+  await page.getByRole("textbox", { name: /identifiers/i }).focus();
+  await page.keyboard.type("Z1234ZZ");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("textbox", { name: /identifiers/i })).toBeHidden();
+  expect(asked).toEqual([]);
+  expect(await page.evaluate(() => window.__EXPLORE__?.deltas)).toEqual([]);
+  registerCovered(REGISTRY, "escape-cancels-a-pasted-list-by-keyboard");
+});
+
+test("a list file is chosen by keyboard and read into the box", async ({ page }) => {
+  await serve(page);
+  await serveAddMany(page);
+  await openFold(page, "Add many from a list");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByLabel(/\.txt or \.csv file/).focus();
+  await page.keyboard.press("Enter");
+  await (await chooser).setFiles({ name: "cohort.csv", mimeType: "text/csv", buffer: Buffer.from("id,name\nZ1234ZZ,Smith\nZ2345ZZ,Jones\n") });
+  await expect(page.getByRole("textbox", { name: /identifiers/i })).toHaveValue("id\nZ1234ZZ\nZ2345ZZ");
+  await expect(page.getByText("Read cohort.csv. Count it to see what it holds.")).toBeVisible();
+  registerCovered(REGISTRY, "choose-a-list-file-by-keyboard");
+});
+
 test("every registered explore action has its own proving test case above", () => {
   assertAllCovered("EXPLORE_ACTIONS", EXPLORE_ACTIONS);
 });

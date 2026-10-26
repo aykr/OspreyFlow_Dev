@@ -17,7 +17,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Final, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # --- Scalar identifiers -------------------------------------------------
 #
@@ -570,6 +570,10 @@ class Connections(BaseModel):
     searched_to: int
 
 
+#: ADR-121: the most conditions one pattern node may carry.
+PATTERN_WHERE_MAX = 3
+
+
 class PatternNode(BaseModel):
     var: str
     entity_type: str | None = None
@@ -582,6 +586,23 @@ class PatternNode(BaseModel):
     #: cannot introduce a genuinely independent second enumeration, so there is no general join to
     #: fall back to.
     node_id: str | None = None
+    #: ADR-121: a condition on the node's own properties — each entry a property of `entity_type`
+    #: and the one text value it must equal. Equality only, at most three entries; the property
+    #: must be one the ontology marks `indexed` and not `sensitivity: high` (checked against the
+    #: ontology by `ontology.pattern_where.check_pattern_conditions`, at the route and again in the
+    #: adapter, since an ontology is not something this model can see). A value is one string: a
+    #: range, several values or a negation are not shapes it can take. Compiled by the adapter into
+    #: a `has(property, value)` step beside the node's access steps (rule 3).
+    where: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("where")
+    @classmethod
+    def _at_most_three_conditions(cls, value: dict[str, str]) -> dict[str, str]:
+        if len(value) > PATTERN_WHERE_MAX:
+            raise ValueError(
+                f"a pattern node may carry at most {PATTERN_WHERE_MAX} conditions, got {len(value)}"
+            )
+        return value
 
 
 class PatternEdge(BaseModel):

@@ -318,7 +318,7 @@ class _Recorder:
         return object()
 
     async def get_step(self, investigation_id: str, step_id: str) -> object:
-        return SimpleNamespace(nodes=self.step_nodes, edges=self.step_edges)
+        return SimpleNamespace(label="Seeded", nodes=self.step_nodes, edges=self.step_edges)
 
     async def record(self, **kwargs: object) -> None:
         return None

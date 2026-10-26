@@ -41,12 +41,16 @@ import {
   type PatternRunAccepted,
 } from "./api";
 import {
+  addCondition,
   addEdge,
   addVariableNode,
+  conditionableProperties,
   createEmptyPattern,
   fromPatternQuery,
   isPatternRunnable,
+  MAX_CONDITIONS,
   pinNode,
+  removeCondition,
   removeElement,
   toPatternQuery,
   unpinnedSecondaryRoots,
@@ -73,6 +77,10 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
   const [preview, setPreview] = useState<PatternPreview | null>(null);
   const [runResult, setRunResult] = useState<PatternRunAccepted | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // ADR-121: what each node's value field holds, and which property its select has chosen, until
+  // "Add condition" is pressed.
+  const [conditionValues, setConditionValues] = useState<Record<string, string>>({});
+  const [conditionProperties, setConditionProperties] = useState<Record<string, string>>({});
 
   const [patternName, setPatternName] = useState("");
   const [currentPatternId, setCurrentPatternId] = useState<string | null>(null);
@@ -119,6 +127,18 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
   function handleConnect(): void {
     if (!connectFrom || !connectTo || !connectEdgeType) return;
     setPattern((p) => addEdge(p, connectEdgeType, connectFrom, connectTo));
+    resetResults();
+  }
+
+  function handleAddCondition(nodeVar: string, property: string): void {
+    const value = conditionValues[nodeVar] ?? "";
+    setPattern((p) => addCondition(p, nodeVar, property, value));
+    setConditionValues((v) => ({ ...v, [nodeVar]: "" }));
+    resetResults();
+  }
+
+  function handleRemoveCondition(nodeVar: string, property: string): void {
+    setPattern((p) => removeCondition(p, nodeVar, property));
     resetResults();
   }
 
@@ -215,6 +235,9 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
         >
           {pattern.nodes.map((n) => {
             const needsPinning = flaggedVars.has(n.var);
+            const offered = conditionableProperties(schema, n.entityType);
+            const held = Object.entries(n.where);
+            const chosen = conditionProperties[n.var] ?? offered[0]?.name ?? "";
             return (
               <li key={n.var}>
                 <div
@@ -237,6 +260,56 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
                     </span>
                   )}
                 </div>
+                {/* ADR-121: kept outside the group above, whose Delete/Backspace removes the node:
+                    typing in the value field must never reach that handler. */}
+                {held.length > 0 && (
+                  <ul role="list" aria-label={`Conditions on ${n.var}`} style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                    {held.map(([property, value]) => (
+                      <li key={property} style={{ display: "flex", gap: "var(--sp-4)", alignItems: "center" }}>
+                        <span>{`${property} = ${value}`}</span>
+                        <Button
+                          type="button"
+                          onClick={() => handleRemoveCondition(n.var, property)}
+                          aria-label={`Remove condition ${property} on ${n.var}`}
+                        >
+                          Remove
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {offered.length > 0 && held.length < MAX_CONDITIONS && (
+                  <div
+                    role="group"
+                    aria-label={`Add a condition to ${n.var}`}
+                    style={{ display: "flex", gap: "var(--sp-4)" }}
+                  >
+                    <Select
+                      aria-label={`Condition property on ${n.var}`}
+                      value={chosen}
+                      onChange={(e) => setConditionProperties((c) => ({ ...c, [n.var]: e.target.value }))}
+                    >
+                      {offered.map((p) => (
+                        <option key={p.name} value={p.name}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <Input
+                      aria-label={`Condition value on ${n.var}`}
+                      value={conditionValues[n.var] ?? ""}
+                      onChange={(e) => setConditionValues((v) => ({ ...v, [n.var]: e.target.value }))}
+                      placeholder="equals…"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => handleAddCondition(n.var, chosen)}
+                      aria-label={`Add condition on ${n.var}`}
+                    >
+                      Add condition
+                    </Button>
+                  </div>
+                )}
               </li>
             );
           })}

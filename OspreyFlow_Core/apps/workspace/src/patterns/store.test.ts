@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import type { OntologySchema } from "../../../../packages/schemas/generated";
 import {
+  addCondition,
   addEdge,
   addVariableNode,
+  conditionableProperties,
   createEmptyPattern,
   fromPatternQuery,
   isPatternRunnable,
+  MAX_CONDITIONS,
   pinNode,
+  removeCondition,
   removeElement,
   toPatternQuery,
   unpinnedSecondaryRoots,
@@ -134,5 +139,95 @@ describe("fromPatternQuery", () => {
       limit: 1000,
     });
     expect(loaded.nodes[0]?.entityType).toBe("");
+  });
+});
+
+// ADR-121: a condition on a pattern node's property — equality, one value, at most three, on an
+// indexed property the ontology does not mark sensitivity: high.
+const CONDITION_SCHEMA = {
+  version: 1,
+  entity_types: [
+    {
+      name: "Establishment",
+      pole_class: "place",
+      channel: "teal",
+      shape: "square",
+      identifiers: [],
+      properties: [
+        { name: "niu_area", type: "string", indexed: true },
+        { name: "regime", type: "enum", indexed: true, values: ["open", "closed"] },
+        { name: "secret_code", type: "string", indexed: true, sensitivity: "high" },
+        { name: "note", type: "string" },
+        { name: "capacity", type: "integer", indexed: true },
+        { name: "tags", type: "string[]", indexed: true },
+      ],
+    },
+  ],
+  edge_types: [],
+} as unknown as OntologySchema;
+
+describe("conditionableProperties", () => {
+  it("offers only indexed text properties that are not sensitivity: high", () => {
+    expect(conditionableProperties(CONDITION_SCHEMA, "Establishment").map((p) => p.name)).toEqual([
+      "niu_area",
+      "regime",
+    ]);
+  });
+
+  it("offers nothing for a type the ontology does not hold", () => {
+    expect(conditionableProperties(CONDITION_SCHEMA, "Nowhere")).toEqual([]);
+  });
+});
+
+describe("conditions on a pattern node", () => {
+  function withEstablishment() {
+    return addVariableNode(createEmptyPattern(), "Establishment");
+  }
+
+  it("a new node carries none", () => {
+    expect(withEstablishment().nodes[0]?.where).toEqual({});
+  });
+
+  it("carries a condition through to PatternNode.where, and omits the field when there is none", () => {
+    const state = addCondition(withEstablishment(), "a", "niu_area", "North");
+    expect(toPatternQuery(state).nodes[0]?.where).toEqual({ niu_area: "North" });
+    expect("where" in (toPatternQuery(withEstablishment()).nodes[0] ?? {})).toBe(false);
+  });
+
+  it("round-trips through a saved pattern", () => {
+    let state = addCondition(withEstablishment(), "a", "niu_area", "North");
+    state = addCondition(state, "a", "regime", "open");
+    expect(fromPatternQuery(toPatternQuery(state))).toEqual(state);
+  });
+
+  it("setting the same property again replaces its value, never adds a second entry", () => {
+    let state = addCondition(withEstablishment(), "a", "niu_area", "North");
+    state = addCondition(state, "a", "niu_area", "South");
+    expect(state.nodes[0]?.where).toEqual({ niu_area: "South" });
+  });
+
+  it("trims the value and ignores an empty one", () => {
+    let state = addCondition(withEstablishment(), "a", "niu_area", "  North ");
+    expect(state.nodes[0]?.where).toEqual({ niu_area: "North" });
+    state = addCondition(state, "a", "regime", "   ");
+    expect(state.nodes[0]?.where).toEqual({ niu_area: "North" });
+  });
+
+  it(`stops at ${MAX_CONDITIONS} entries: a fourth property is not added`, () => {
+    let state = withEstablishment();
+    for (const name of ["p1", "p2", "p3", "p4"]) state = addCondition(state, "a", name, "x");
+    expect(Object.keys(state.nodes[0]?.where ?? {})).toEqual(["p1", "p2", "p3"]);
+    // Changing a value already held is still allowed at the limit.
+    state = addCondition(state, "a", "p2", "y");
+    expect(state.nodes[0]?.where).toEqual({ p1: "x", p2: "y", p3: "x" });
+  });
+
+  it("removes one condition and leaves the others and every other node alone", () => {
+    let state = addVariableNode(withEstablishment(), "Person");
+    state = addCondition(state, "a", "niu_area", "North");
+    state = addCondition(state, "a", "regime", "open");
+    state = removeCondition(state, "a", "niu_area");
+    expect(state.nodes[0]?.where).toEqual({ regime: "open" });
+    expect(state.nodes[1]?.where).toEqual({});
   });
 });

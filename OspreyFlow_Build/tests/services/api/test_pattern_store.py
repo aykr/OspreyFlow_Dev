@@ -145,3 +145,30 @@ async def test_a_new_version_stays_in_its_patterns_dataset(store: PatternStore) 
     both = OWNER.model_copy(update={"datasets": ["enron", "fixture-corp"]})
     again = await store.save(both, pattern_id=saved.pattern_id, name="v2", definition=_pattern())
     assert again.version == 2 and again.dataset_id == "fixture-corp"
+
+
+async def test_a_saved_pattern_keeps_its_node_conditions_through_the_store(
+    store: PatternStore,
+) -> None:
+    """ADR-121: the condition is part of what is saved, read back and versioned; a store that
+    dropped it would have a rule or a monitor replay the pattern unfiltered."""
+    pattern = PatternQuery(
+        nodes=[
+            PatternNode(var="p", entity_type="Person", where={"family_name": "Smith"}),
+            PatternNode(var="e", entity_type="Endpoint", where={"value_normalised": "+441"}),
+        ],
+        edges=[PatternEdge(edge_type="USES", from_var="p", to_var="e")],
+    )
+    saved = await store.save(OWNER, pattern_id=None, name="Smiths", definition=pattern)
+    loaded = await store.get_authorized(saved.pattern_id, OWNER)
+    assert loaded.definition == pattern
+    assert [n.where for n in loaded.definition.nodes] == [
+        {"family_name": "Smith"},
+        {"value_normalised": "+441"},
+    ]
+    narrower = pattern.model_copy(update={"nodes": [pattern.nodes[0], PatternNode(var="e")]})
+    second = await store.save(
+        OWNER, pattern_id=saved.pattern_id, name="Smiths", definition=narrower
+    )
+    assert (await store.get_authorized(saved.pattern_id, OWNER, version=1)).definition == pattern
+    assert second.definition.nodes[1].where == {}

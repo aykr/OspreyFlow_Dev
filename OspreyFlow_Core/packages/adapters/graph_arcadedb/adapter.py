@@ -25,6 +25,7 @@ from typing import Any
 from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, audience_of, audience_parts, merge_handling
+from ontology.pattern_where import check_pattern_conditions
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ontology.weights import WeightRules, load_weight_rules
 from ports.graph import (
@@ -999,7 +1000,16 @@ class GraphArcadeDBAdapter:
             )
         return paths
 
+    def _check_conditions(self, pattern: PatternQuery) -> None:
+        """ADR-121: a condition the applied ontology refuses (an unindexed or `sensitivity: high`
+        property, an unknown one) raises `PatternConditionRefused`, by name, before anything is
+        compiled: the route checks first to tell the analyst, and this holds for every other caller
+        of the port (a monitor, a typology rule) all the same."""
+        if any(node.where for node in pattern.nodes):
+            check_pattern_conditions(pattern, self._require_schema())
+
     async def match(self, pattern: PatternQuery, principal: Principal) -> Subgraph:
+        self._check_conditions(pattern)
         query = MatchBuilder(pattern).render_gremlin(self._access, principal)
         results = await self._client.gremlin(query)
         # One element map per node, each once (`MatchBuilder._nodes_tail`).
@@ -1009,6 +1019,7 @@ class GraphArcadeDBAdapter:
     async def match_count(
         self, pattern: PatternQuery, principal: Principal, *, ceiling: int
     ) -> int:
+        self._check_conditions(pattern)
         query = MatchBuilder(pattern).render_count_gremlin(self._access, principal, ceiling=ceiling)
         results = await self._client.gremlin(query)
         if not results:

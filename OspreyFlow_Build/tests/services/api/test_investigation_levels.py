@@ -66,6 +66,15 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/links/{edge_id}/notes"): E,
     ("PUT", P + "/links/{edge_id}/notes/{note_id}"): E,
     ("DELETE", P + "/links/{edge_id}/notes/{note_id}"): E,
+    # The case brief (ADR-128 decision 3): anyone who may read the case reads it; its Author edits.
+    ("GET", P + "/brief"): V,
+    ("PUT", P + "/brief/priority"): A,
+    ("POST", P + "/brief/requirements"): A,
+    ("PUT", P + "/brief/requirements/{requirement_id}"): A,
+    ("DELETE", P + "/brief/requirements/{requirement_id}"): A,
+    ("PUT", P + "/brief/requirements/{requirement_id}/status"): A,
+    ("POST", P + "/brief/requirements/{requirement_id}/attachments"): A,
+    ("DELETE", P + "/brief/requirements/{requirement_id}/attachments/{kind}/{attachment_id}"): A,
     # Changing a link (ADR-080) changes the case; reading a link's history is a read of it.
     ("POST", P + "/links/{edge_id}/change"): E,
     # ADR-090: the types a link may take here is a read; proposing one and withdrawing it change
@@ -94,6 +103,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/links/{edge_id}/events/{event_id}/candidates/{candidate_id}/reject"): E,
     # ADR-098: adds links to the case's working set.
     ("POST", P + "/links-among"): E,
+    # ADR-128 decision 1 (B2): adds a list's nodes to the case's working set.
+    ("POST", P + "/working-set/add-by-identifiers"): E,
     # ADR-098 decision 5: writes the marked entity into the case.
     ("POST", P + "/documents/{document_id}/designations"): E,
     # ADR-099: what a case reads is the Author's to change.
