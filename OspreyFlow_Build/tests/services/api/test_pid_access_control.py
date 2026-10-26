@@ -1,6 +1,9 @@
-"""The Prison Intelligence Dataset against a real ArcadeDB (the throwaway one): what the demo
-analyst can and cannot see of the one `SECRET` link, and the figures the script quotes (ADR-120 D4
-to D9 and Amendments 7 to 12; ADR-123; Brief 1 stage 5 unit 5c).
+"""The Prison Intelligence Dataset against a real ArcadeDB (the throwaway one): the figures the
+script quotes, read by the demo analyst, and Amendment 7's circle (ADR-120 D4 to D9 and
+Amendments 7 to 12 and 16; ADR-123; Brief 1 stage 5 unit 5c).
+
+ADR-120 Amendment 16 made the dataset OFFICIAL throughout, so this module no longer compares a
+store holding a `SECRET` link with one that does not: there is no such link. Its other cases stay.
 
 **Live, and slow.** Every store is a fresh database loaded from the plan itself (`pid_writes`
 through `scripts.seed_support.write_graph`, `method="bulk"`, chunks of 100), with the composed
@@ -15,9 +18,7 @@ which is most of this module's time.
 
 The stores:
 
-- **A** chapter 4 with the `SECRET` link; **B** chapter 4 without it; **C** the seed moment with it.
-  Pictures are loaded into each (see `PICTURE_STORES`).
-- **A1 / B1** as A and B under weights version 1, with no pictures.
+- **A** chapter 4; **C** the seed moment. Pictures are loaded into each (see `PICTURE_STORES`).
 - **P1 to P3** only the Amendment 7 circle's links and their end nodes (`pid_writes.circle_writes`),
   at chapter 4, with no pictures, each under one planted wrong rule: `TRANSACTED` heavy 60,
   `SHARED_CELL_WITH` heavy 1, `COMMUNICATED_WITH` heavy 4,000. A planted rule is version 3 with one
@@ -25,27 +26,14 @@ The stores:
   as the conformance suite does for a version. From weights version 2 a link's weight depends on
   the link alone, so its stored weight in a circle-only store is what a full load gives it.
 
-Two principals read: the **analyst** (`OFFICIAL`, no restricted codes, both datasets) and the
-**cleared** one (`SECRET`, otherwise the same).
+Two principals read: the **analyst** (`OFFICIAL`, no restricted codes, both datasets) and a
+**cleared** one (`SECRET`, otherwise the same); with nothing above `OFFICIAL` in the dataset they
+read the same figures.
 
-What each test proves, and what shows it red:
+What each test proves:
 
-- **No trace** (rule 3, Amendment 13): for the analyst, A and B are identical in every reading the
-  Glass shows over the link's two ends (`_observe` lists them: expands, statistics, degrees, the
-  busiest links, links among, link structure, shared contacts, recent loads, type counts, routes,
-  the path search and connections, the service's expand and per-type previews, a pattern's preview
-  and run, links among at degrees 1 to 3, the shared pair's canvas, search, suggest and the
-  starter questions, the export manifest, the centralities and the communities). There is no
-  withheld count left to differ (`filtered_count` was removed, ADR-124 U2c), and the previews'
-  candidate counts, which were counted over the stored set, are equal for the analyst in A and B,
-  in a case the cleared principal has worked in too. The export manifest carries a yes or no
-  (`withheld`, U9) that is true in A and false in B for the analyst in a shared case, pinned by
-  `test_adr124_the_manifest_says_withheld_in_the_case_that_holds_the_secret_link`. *Red twice:* the
-  same comparison for the cleared principal finds exactly the readings in `CLEARED_DIFFERS`, and
-  under weights version 1 (A1 against B1) only the readings that carry a weight differ.
 - **J1, J2, J5, J7** and the **229** reports, the **inferred** `PASSES_ITEMS_TO` links: the figures
-  the script quotes, each from the store, with the analyst's and the cleared principal's where they
-  differ.
+  the script quotes, each from the store.
 - **Amendment 7's circle** at three points (as stored; recomputed by the store's own
   `compute_weight` from the stored components, under the version their `parameter_set` names, at
   the cut-off 30 April 2026 23:59:59 UTC; the same with every dated end far in the past) in A and
@@ -69,7 +57,7 @@ import time
 from collections import Counter
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AsyncExitStack
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from datetime import time as clock_time
 from typing import Any
@@ -82,11 +70,7 @@ from services.api.connections import find_connections
 from services.api.dataset_scope import stamping
 from services.api.datasets import Dataset, InMemoryDatasetStore
 from services.api.entity_pictures import DEPICTS, EntityPictureService
-from services.api.explore import ExploreService, TooManyMatches
-from services.api.link_types import public_ontology
-from services.api.patterns import preview_pattern, run_pattern
-from services.api.search import SearchRequest, SuggestRequest, search, suggest
-from services.api.working_set.models import MAX_EDGES, MAX_NODES, DeltaSnapshot
+from services.api.search import SearchRequest, search
 from services.api.working_set.service import WorkingSetService
 
 from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
@@ -99,7 +83,7 @@ from demo_fixtures.pid_plan import Moment, node_id
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
 from ontology.weights import WeightRules, load_weight_history, load_weight_rules
-from schemas.compute import CentralityRequest, CommunityRequest
+from schemas.compute import CentralityRequest
 from schemas.domain import (
     AuditStub,
     Connections,
@@ -108,13 +92,9 @@ from schemas.domain import (
     ExpandRequest,
     Node,
     NodeWrite,
-    PathRequest,
-    PatternEdge,
-    PatternNode,
     PatternQuery,
     Principal,
     ProvenanceState,
-    RoutesAtLength,
     Subgraph,
 )
 from tests.scenarios.test_pid_plan import View
@@ -126,8 +106,6 @@ pytestmark = pytest.mark.asyncio(loop_scope="module")
 ONTOLOGY = load_deployment_ontology()
 SCHEME = load_uk_le_scheme()
 HISTORY = load_weight_history()
-#: Every link type of the ontology the Glass can expand by.
-LINK_TYPES = tuple(e.name for e in public_ontology(ONTOLOGY).edge_types if not e.system)
 
 #: The load day: what `now_utc` returns while a store is written.
 PINNED_NOW = datetime(2026, 5, 1, 9, 0, tzinfo=UTC)
@@ -138,14 +116,12 @@ CUT_OFF_INSTANT = datetime.combine(pid_plan.CUT_OFF, clock_time(23, 59, 59), tzi
 FAR_PAST = datetime(1900, 1, 1, tzinfo=UTC)
 POINTS = ("as stored", "at the cut-off", "with every end far in the past")
 
-#: The stores that get the plan's pictures through the picture route (Amendment 13 decision 4): the
-#: cases with and without the `SECRET` link both carry them, so they differ only by the link, and C
-#: carries them for J1. About 1,600 each, which is the largest part of the module's time. The stores
-#: that exist for one comparison (A1, B1, P1 to P3) carry none.
-PICTURE_STORES = frozenset({"A", "B", "C"})
+#: The stores that get the plan's pictures through the picture route (Amendment 13 decision 4): A
+#: and C carry them, for J1 and the circle. About 1,600 each, which is the largest part of the
+#: module's time. The stores that exist for one comparison (P1 to P3) carry none.
+PICTURE_STORES = frozenset({"A", "C"})
 
 CASE = "pid-case"
-PAGE = 1_000
 #: Routes asked for at one length. Far above any the case has; a store whose answer says `more`
 #: fails the comparison loudly rather than compare a cut-off list.
 ROUTE_LIMIT = 1_000
@@ -162,7 +138,6 @@ PRINCIPAL = node_id("principal")
 COORDINATOR = node_id("number:coordinator")
 RELAY_4 = node_id("relay_4")
 UNCONNECTED = node_id("unconnected")
-CALDER_3 = node_id("calder_3")
 
 #: The three planted wrong rules (ADR-123 decision 6), each with the reason it must turn the circle
 #: red: what it moves, and the place it pushes past its threshold.
@@ -201,7 +176,6 @@ class Store:
     nodes: int
     plan: Any
     seconds: float
-    observed: dict[str, Observation] = field(default_factory=dict)
 
 
 def _chosen_rules(weights: int | WeightRules | None) -> WeightRules:
@@ -284,7 +258,6 @@ async def _open(
     name: str,
     moment: Moment,
     *,
-    secret: bool = True,
     weights: int | WeightRules | None = None,
     circle_only: bool = False,
 ) -> Store:
@@ -303,8 +276,6 @@ async def _open(
         graph = await stack.enter_async_context(arcadedb_adapter(ONTOLOGY, SCHEME))
         make = pid_writes.circle_writes if circle_only else pid_writes.writes
         nodes, edges = make(plan, moment, dataset=PID.id, created_at=PINNED_NOW)
-        if not secret:
-            edges = [e for e in edges if e.handling.classification != "SECRET"]
         await write_graph(
             graph, nodes, edges, chunk=100, nouns=("nodes", "links"),
             progress=lambda line: None, method="bulk",
@@ -337,27 +308,9 @@ async def store_a(plan: Any) -> AsyncIterator[Store]:
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
-async def store_b(plan: Any) -> AsyncIterator[Store]:
-    async with AsyncExitStack() as stack:
-        yield await _open(stack, plan, "B", "chapter4", secret=False)
-
-
-@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def store_c(plan: Any) -> AsyncIterator[Store]:
     async with AsyncExitStack() as stack:
         yield await _open(stack, plan, "C", "seed")
-
-
-@pytest_asyncio.fixture(loop_scope="module")
-async def store_a1(plan: Any) -> AsyncIterator[Store]:
-    async with AsyncExitStack() as stack:
-        yield await _open(stack, plan, "A1", "chapter4", weights=1)
-
-
-@pytest_asyncio.fixture(loop_scope="module")
-async def store_b1(plan: Any) -> AsyncIterator[Store]:
-    async with AsyncExitStack() as stack:
-        yield await _open(stack, plan, "B1", "chapter4", secret=False, weights=1)
 
 
 @pytest_asyncio.fixture(loop_scope="module")
@@ -386,698 +339,13 @@ async def store_p3(plan: Any) -> AsyncIterator[Store]:
         )  # fmt: skip
 
 
-# --- What a principal reads: the comparison the no-trace test makes -------------------------------
+# --- Reading the stores -----------------------------------------------------------------------
 
 Triple = tuple[str, str, str]
-
-#: Page sizes. Links are paged larger: each page sorts every link the principal can see.
-PAGE_LINKS = 2_000
-
-#: Amendment 13 decisions 2 and 3: for the `SECRET`-cleared principal the two cases differ in
-#: exactly these readings. The set is stated from reasoning over the code and the plan, offline,
-#: before any run; a run that disagrees is investigated, never copied in. The one link joins the
-#: principal and calder_3, and is the only link between them (the plan's only `SECRET` element;
-#: every other handling is the default `P`, so nothing else gates a read). Entry by entry:
-#: - principal_links, calder_links, stats, edges_among, link_structure, link_weights, paths: the
-#:   link is one of each end's links, listed, counted, or (paths) a length-1 route.
-#: - most_connected, busiest_global, busiest_around, type_counts, recent_loads: each counts or
-#:   lists the link (a degree of each end +1, the totals +1, the load's links +1).
-#: - conflict_weights: the cleared reader's `IN_CONFLICT_WITH` links are three, the analyst's two.
-#: - betweenness: the working set holds both ends and, for the cleared reader, a direct link, so the
-#:   pair no longer routes through est:fenwick-moor and its betweenness drops.
-#: - service_expand, expand_preview: the principal's and calder_3's delta carries the link, and the
-#:   view `_view` built already holds it for the cleared reader, so every preview's
-#:   `candidate_edge_count` (the view's edges plus the new ones) is one higher in A, whatever the
-#:   link type asked for.
-#: - path_search: within two hops the analyst's case has one route (via est:fenwick-moor, two
-#:   `HELD_AT` links) and the cleared reader's A has two (that one and the direct link), both under
-#:   `k` 10, so nothing is cut and the routes themselves differ.
-#: - connections: the fewest degrees are 1 for the cleared reader and 2 for the analyst's case.
-#: - pattern_preview, pattern_run: the one-edge pattern from the principal matches his `IN_CONFLICT`
-#:   targets, and `matched_count` is `len(subgraph.nodes)` (`patterns.py`), the principal included:
-#:   4 in A against 3 in B, so the count and the nodes differ.
-#: - links_among_1, _2, _3: over the two-node view the cleared reader's degree-1 call adds the link
-#:   (1 against 0), and at degrees 2 and 3 the first length with a route is 1 in A (the direct link,
-#:   no node added) and 2 in B (est:fenwick-moor and two `HELD_AT` links, one node added). The
-#:   degree-3 outcome equals the degree-2 one in each case, because the search stops at the first
-#:   length. The two share one neighbour (est:fenwick-moor, one route of two links), under
-#:   `CONNECTIONS_SHOWN`, so `more_routes_pairs` is 0 throughout.
-#: - shared_pair: the pair's canvas puts `edges_among` the two on the canvas: the link in A.
-#: - centrality_degree, centrality_weighted_degree, centrality_pagerank: one more edge between two
-#:   nodes of the working set moves every one (degrees +1, weights +w, the random walk).
-#: - centrality_eigenvector, centrality_clustering_coefficient: GUESS that they move (the extra edge
-#:   closes a triangle through est:fenwick-moor, which changes clustering, and moves the leading
-#:   eigenvector); the graph holds odd cycles (principal, brother, establishment), so the
-#:   eigenvector iteration should converge, and the analyst's reading is asserted not an error.
-#: Not in the set, and why:
-#: - shared_contacts: the walk lists b, where b has an `IN_CONFLICT_WITH` into a node the principal
-#:   conflicts with (calder_1 and calder_2, and calder_3 for the cleared reader), and b is not the
-#:   principal. The plan stores no such link from anyone else, so the list is empty in every case:
-#:   the reading is vacuous, red under neither the cleared principal nor weights version 1.
-#: - starter: the offered questions, and their order (busiest link types first), are the same in
-#:   both: `IN_CONFLICT_WITH` ranks about fifteenth with 96 or 97 links and no neighbour ties. Total
-#:   159 either way, and none of the six offered questions walks `IN_CONFLICT_WITH`; the chains
-#:   over `COMMUNICATED_WITH` or `USES` match more than the run limit and are refused alike, and the
-#:   one small chain (`USES` person to device, `PRESENT_AT` location) holds neither end.
-#: - communities: GUESS that Louvain (seeded) gives one partition either way.
-#: - expand_nodes (both ends are seeds, so both are in every union), weights (version 3: from the
-#:   link alone), search and suggest (a name, not a link), export_withheld (over the reader's own
-#:   view, 0 in both).
-CLEARED_DIFFERS = frozenset(
-    {
-        "principal_links", "calder_links", "stats", "most_connected", "busiest_global",
-        "busiest_around", "edges_among", "link_structure", "link_weights",
-        "recent_loads", "type_counts", "paths", "conflict_weights", "betweenness",
-        "service_expand", "expand_preview", "path_search", "connections", "pattern_preview",
-        "pattern_run", "links_among_1", "links_among_2", "links_among_3", "shared_pair",
-        "centrality_degree", "centrality_weighted_degree", "centrality_pagerank",
-        "centrality_eigenvector", "centrality_clustering_coefficient",
-    }
-)  # fmt: skip
-#: The readings that carry a link's weight: under weights version 1 these may differ, and only
-#: these.
-WEIGHT_READINGS = frozenset(
-    {"weights", "conflict_weights", "link_weights", "centrality_weighted_degree"}
-)
-
-
-@dataclass(frozen=True)
-class Observation:
-    """Everything the no-trace comparison reads for one principal in one store (Amendment 13
-    decision 2 and the coordinator's list of what the Glass shows). Each reading is comparable by
-    `==`. Links are by (type, source id, target id): a link's own id is random in a store the route
-    wrote to, and a node's id is the plan's derived one (a picture Document's is its content's),
-    the same in every store.
-
-    `weights` is every link any reading met, by triple, compared over the links both principals
-    met."""
-
-    readings: dict[str, Any]
-    weights: dict[Triple, float]
 
 
 def _triple(edge: Edge) -> Triple:
     return (edge.type, edge.source, edge.target)
-
-
-async def _ranking(graph: Any, principal: Principal) -> tuple[int, dict[str, int]]:
-    """Every node's degree, `most_connected` paged to `total` (never a first page taken for all)."""
-    degrees: dict[str, int] = {}
-    offset = 0
-    while True:
-        page = await graph.most_connected(principal, limit=PAGE, offset=offset)
-        for ranked in page.nodes:
-            degrees[ranked.node.id] = ranked.degree
-        offset += len(page.nodes)
-        if not page.nodes or offset >= page.total:
-            assert len(degrees) == page.total, (
-                f"{len(degrees)} nodes read of {page.total} ranked: a page was lost"
-            )
-            return page.total, degrees
-
-
-async def _busiest_links(graph: Any, principal: Principal, **where: Any) -> tuple[int, list[Any]]:
-    """The ranked links, paged to `total`."""
-    found: list[Any] = []
-    offset = 0
-    while True:
-        page = await graph.busiest_links(principal, limit=PAGE_LINKS, offset=offset, **where)
-        found.extend(page.links)
-        offset += len(page.links)
-        if not page.links or offset >= page.total:
-            assert len(found) == page.total, "a page of ranked links was lost"
-            return page.total, found
-
-
-def _ranked(found: tuple[int, list[Any]]) -> tuple[int, tuple[tuple[Triple, int], ...]]:
-    total, links = found
-    return total, tuple(sorted((_triple(r.edge), r.edge.occurrences) for r in links))
-
-
-def _routes(found: RoutesAtLength) -> frozenset[tuple[tuple[str, ...], tuple[str, ...]]]:
-    assert not found.more, f"more than {ROUTE_LIMIT} routes at length {found.length}"
-    return frozenset(
-        (tuple(n.id for n in p.nodes), tuple(e.type for e in p.edges)) for p in found.paths
-    )
-
-
-def _route_set(paths: Sequence[Any]) -> frozenset[tuple[tuple[str, ...], tuple[str, ...]]]:
-    return frozenset((tuple(n.id for n in p.nodes), tuple(e.type for e in p.edges)) for p in paths)
-
-
-def _shape(nodes: Sequence[Node], edges: Sequence[Edge]) -> tuple[frozenset[Any], frozenset[Any]]:
-    """A set of nodes and links as the comparison reads them: ids and types, and triples."""
-    return frozenset((n.id, n.type) for n in nodes), frozenset(_triple(e) for e in edges)
-
-
-class _NoJobs:
-    """`run_pattern` hands a pattern at its limit to a job; a one-edge pattern pinned to one
-    person never reaches it, and a test that did would say so."""
-
-    async def submit(self, job_type: str, payload: dict[str, Any]) -> str:
-        raise AssertionError("the pattern should have run in the request")
-
-
-async def _view(store: Store, principal: Principal) -> tuple[WorkingSetService, dict[str, Any]]:
-    """A working set holding the principal and calder_3, built as the Glass builds it: by the real
-    `WorkingSetService.expand` of each, one after the other."""
-    service = WorkingSetService(store.graph, FakeWorkingSetStore(), SCHEME)
-    outcomes = {}
-    for seed in (PRINCIPAL, CALDER_3):
-        outcomes[seed] = await service.expand(
-            CASE, ExpandRequest(node_ids=[seed], depth=1), principal
-        )
-    return service, outcomes
-
-
-async def _two_node_view(store: Store, principal: Principal) -> WorkingSetService:
-    """A working set holding the principal and calder_3 and nothing else, as the Glass would after
-    two searches: seeded through the service, not expanded, so the links among them are the only
-    thing `links_among` can add at degree 1."""
-    service = WorkingSetService(store.graph, FakeWorkingSetStore(), SCHEME)
-    nodes = [await store.graph.get_node(i, principal) for i in (PRINCIPAL, CALDER_3)]
-    assert all(n is not None for n in nodes), "both ends are visible to both readers"
-    await service.seed(CASE, [n for n in nodes if n is not None], [], principal)
-    return service
-
-
-async def _observe(store: Store, principal: Principal) -> Observation:
-    """The no-trace comparison's readings, once per store and principal."""
-    if principal.id in store.observed:
-        return store.observed[principal.id]
-    started = time.monotonic()
-    graph = store.graph
-    readings: dict[str, Any] = {}
-    weights: dict[Triple, float] = {}
-
-    def note(edges: Sequence[Edge]) -> None:
-        weights.update({_triple(e): e.weight for e in edges})
-
-    # The graph's own depth-1 expands, statistics and the case-wide counts.
-    expands = {}
-    for seed in (PRINCIPAL, CALDER_3):
-        found = await graph.expand(ExpandRequest(node_ids=[seed], depth=1), principal)
-        assert len(found.edges) == len({e.id for e in found.edges})
-        assert len(found.edges) == len({_triple(e) for e in found.edges}), (
-            "two links of one type and pair"
-        )
-        note(found.edges)
-        expands[seed] = found
-    readings["expand_nodes"] = frozenset((n.id, n.type) for f in expands.values() for n in f.nodes)
-    readings["principal_links"] = _shape([], expands[PRINCIPAL].edges)[1]
-    readings["calder_links"] = _shape([], expands[CALDER_3].edges)[1]
-    stats = [await graph.neighbourhood_stats(seed, principal) for seed in (PRINCIPAL, CALDER_3)]
-    readings["stats"] = tuple((s.degree, tuple(sorted(s.degree_by_type.items()))) for s in stats)
-    counts = await graph.type_counts(principal)
-    readings["type_counts"] = (
-        tuple(sorted(counts.nodes.items())),
-        tuple(sorted(counts.edges.items())),
-    )
-    readings["most_connected"] = await _ranking(graph, principal)
-    readings["busiest_global"] = _ranked(await _busiest_links(graph, principal))
-    readings["busiest_around"] = _ranked(await _busiest_links(graph, principal, node_id=PRINCIPAL))
-    conflicts = await _busiest_links(graph, principal, edge_type="IN_CONFLICT_WITH")
-    readings["conflict_weights"] = {_triple(r.edge): r.edge.weight for r in conflicts[1]}
-    readings["edges_among"] = frozenset(
-        _triple(e) for e in await graph.edges_among([PRINCIPAL, CALDER_3], principal)
-    )
-    structure = await graph.link_structure(principal, max_nodes=MAX_NODES, max_edges=MAX_EDGES)
-    readings["link_structure"] = (
-        frozenset((n.id, n.type) for n in structure.nodes),
-        tuple(sorted((e.source, e.target) for e in structure.edges)),
-    )
-    readings["link_weights"] = tuple(
-        sorted((e.source, e.target, e.weight) for e in structure.edges)
-    )
-    shared = await graph.shared_contacts(
-        PRINCIPAL, principal, edge_type="IN_CONFLICT_WITH", min_shared=1, limit=PAGE
-    )
-    readings["shared_contacts"] = (
-        shared.total,
-        tuple(sorted((c.node.id, c.shared) for c in shared.contacts)),
-    )
-    loads = await graph.recent_loads(principal, limit=PAGE)
-    # `latest` is left out: the picture route stamps its Documents with the wall clock.
-    readings["recent_loads"] = (
-        loads.total,
-        tuple(
-            sorted(
-                (
-                    load.load_id or "", load.recipe_id or "", load.recipe_version or 0,
-                    load.nodes, load.links,
-                )
-                for load in loads.loads
-            )
-        ),
-    )  # fmt: skip
-    readings["paths"] = {
-        length: _routes(
-            await graph.paths_at_length(PRINCIPAL, CALDER_3, length, ROUTE_LIMIT, principal)
-        )
-        for length in (1, 2, 3)
-    }
-    # Every centrality the compute adapter offers, and the communities, over a working set that
-    # holds both ends: the two expansions' nodes, and the links among them as `narrow_to_visible`
-    # leaves them. Nodes and links are sorted, so the two stores are given the same graph in the
-    # same order (Louvain and the eigenvector iteration are sensitive to it).
-    held = sorted({n.id for f in expands.values() for n in f.nodes})
-    assert PRINCIPAL in held and CALDER_3 in held
-    visible = await narrow_to_visible(graph, held, principal)
-    held_graph = Subgraph(
-        nodes=sorted(visible.nodes.values(), key=lambda n: n.id),
-        edges=sorted(
-            {e.id: e for e in visible.edges}.values(), key=lambda e: (*_triple(e), e.weight)
-        ),
-    )
-    compute = ComputeRustworkxAdapter()
-    readings["betweenness"] = await compute.centrality(
-        CentralityRequest(subgraph=held_graph, metric="betweenness")
-    )
-    for metric in (
-        "degree", "weighted_degree", "pagerank", "eigenvector", "clustering_coefficient",
-    ):  # fmt: skip
-        try:
-            readings[f"centrality_{metric}"] = await compute.centrality(
-                CentralityRequest(subgraph=held_graph, metric=metric)
-            )
-        except Exception as error:  # an iteration that does not converge is a reading too
-            readings[f"centrality_{metric}"] = f"error: {type(error).__name__}"
-    if principal.id == ANALYST.id:
-        # A reading both cases share as an error would make their equality pass for nothing.
-        for name, value in readings.items():
-            assert not isinstance(value, str), (name, value)
-    groups: dict[Any, set[str]] = {}
-    for member, label in (await compute.communities(CommunityRequest(subgraph=held_graph))).items():
-        groups.setdefault(label, set()).add(member)
-    readings["communities"] = frozenset(frozenset(g) for g in groups.values())
-
-    # The service the routes call: the real `WorkingSetService.expand` of each end (its delta and
-    # `links_among` flag), and `expand_preview` for every link type the ontology has, from each end.
-    service, outcomes = await _view(store, principal)
-    # The export gate's withheld manifest over the working set the service just built.
-    readings["export_withheld"] = await service.withheld_for(CASE, principal)
-    readings["service_expand"] = {
-        seed: (*_shape(o.delta.nodes, o.delta.edges), o.links_among) for seed, o in outcomes.items()
-    }
-    for seed, outcome in outcomes.items():
-        note(outcome.delta.edges)
-    previews: dict[tuple[str, str | None], Any] = {}
-    for seed in (PRINCIPAL, CALDER_3):
-        for link_type in (None, *LINK_TYPES):
-            request = ExpandRequest(
-                node_ids=[seed], depth=1, edge_types=None if link_type is None else [link_type]
-            )
-            preview = await service.expand_preview(CASE, request, principal)
-            previews[(seed, link_type)] = (
-                preview.candidate_node_count,
-                preview.candidate_edge_count,
-                preview.would_breach,
-            )
-    readings["expand_preview"] = previews
-
-    # `/paths` (bounded to two hops) and `/connections`, principal to calder_3.
-    found_paths = await graph.paths(
-        PathRequest(source=PRINCIPAL, target=CALDER_3, max_hops=2, k=10), principal
-    )
-    for path in found_paths:
-        note(path.edges)
-    # At most two routes exist within two hops, under `k`, so none is cut and the routes
-    # themselves are compared.
-    assert len(found_paths) < 10
-    readings["path_search"] = _route_set(found_paths)
-    connection = await find_connections(
-        graph, ConnectionsRequest(source=PRINCIPAL, target=CALDER_3), principal
-    )
-    for path in connection.paths:
-        note(path.edges)
-    readings["connections"] = (
-        connection.degree,
-        connection.searched_to,
-        connection.more,
-        _route_set(connection.paths),
-    )
-
-    # `/patterns/preview` and `/patterns/run`: a one-edge `IN_CONFLICT_WITH` pattern pinned to the
-    # principal.
-    pattern = PatternQuery(
-        nodes=[
-            PatternNode(var="a", entity_type="Person", node_id=PRINCIPAL),
-            PatternNode(var="b", entity_type="Person"),
-        ],
-        edges=[PatternEdge(edge_type="IN_CONFLICT_WITH", from_var="a", to_var="b")],
-        limit=100,
-    )
-    preview_of = await preview_pattern(pattern, graph=graph, principal=principal)
-    readings["pattern_preview"] = (preview_of.estimated_count, preview_of.is_floor)
-    ran = await run_pattern(pattern, graph=graph, principal=principal, jobs=_NoJobs())  # type: ignore[arg-type]
-    assert ran.mode == "sync" and ran.subgraph is not None
-    readings["pattern_run"] = (ran.matched_count, frozenset(n.id for n in ran.subgraph.nodes))
-
-    # `links_among` at degrees 1, 2 and 3 over a view of the two ends alone, through the service
-    # (its counts are readings too).
-    for degree in (1, 2, 3):
-        again = await _two_node_view(store, principal)
-        among = await again.links_among(
-            CASE, principal, node_ids=[PRINCIPAL, CALDER_3], degree=degree
-        )
-        note(among.delta.edges)
-        readings[f"links_among_{degree}"] = (
-            among.added, among.added_nodes, among.unconnected_pairs, among.more_routes_pairs,
-            *_shape(among.delta.nodes, among.delta.edges),
-        )  # fmt: skip
-
-    # The shared-contacts canvas for the principal and calder_3.
-    explore = ExploreService(graph, None)
-    pair_nodes, pair_edges = await explore.shared_pair(
-        principal, PRINCIPAL, CALDER_3, edge_type="IN_CONFLICT_WITH"
-    )
-    note(pair_edges)
-    readings["shared_pair"] = _shape(pair_nodes, pair_edges)
-
-    # `/search` and `/suggest` for calder_3's name (and the identifier search matches).
-    person = store.plan.entity("calder_3").properties
-    name, number = str(person["family_name"]), str(person["prison_number"])
-    readings["search"] = {}
-    for query in (name, number):
-        hits = await search(graph, SearchRequest(query=query, limit=100), principal)
-        readings["search"][query] = sorted(n.id for n in hits.nodes)
-    suggested = await suggest(
-        graph, SuggestRequest(query=name, mode="exact", ignore_case=True, limit=25), principal
-    )
-    readings["suggest"] = (sorted(n.id for n in suggested.nodes), suggested.more)
-
-    # The starter questions on offer, and what each puts on the canvas.
-    ontology = public_ontology(ONTOLOGY)
-    offered = await explore.starter_questions(principal, ontology)
-    ran_questions: dict[str, Any] = {}
-    for question in offered.questions:
-        try:
-            nodes, edges = await explore.run_starter(principal, ontology, question.id)
-            ran_questions[question.id] = _shape(nodes, edges)
-        except TooManyMatches as refused:
-            ran_questions[question.id] = f"too many matches: {refused}"
-    readings["starter"] = (offered.total, tuple(q.id for q in offered.questions), ran_questions)
-
-    observed = Observation(readings=readings, weights=weights)
-    store.observed[principal.id] = observed
-    print(
-        f"PID-ACCESS observed {store.name} as {principal.id}: {time.monotonic() - started:,.0f} s",
-        flush=True,
-    )
-    return observed
-
-
-def _same_reading(name: str, left: Any, right: Any) -> bool:
-    """Whether two stores' readings agree. A centrality reading (betweenness and the other
-    centralities) is a node -> float map, compared by identical keys and `math.isclose` per node
-    (`rel_tol=1e-9`, `abs_tol=1e-12`), not by `==`: rustworkx's `betweenness_centrality` runs in
-    parallel above its `parallel_threshold` (default 50), and its float sums then vary from run to
-    run by about 5e-17. Measured on one fixed 800-node graph: 19 of 19 repeat runs differed, and
-    with `parallel_threshold=10**9` none of 19 did. That is not a leak. The cleared principal's real
-    differences here are structural (an extra edge between two nodes moves a score by orders of
-    magnitude more than the tolerance), so they still register. Everything else is compared by
-    `==`."""
-    if name == "betweenness" or name.startswith("centrality_"):
-        if isinstance(left, dict) and isinstance(right, dict):
-            return left.keys() == right.keys() and all(
-                math.isclose(left[k], right[k], rel_tol=1e-9, abs_tol=1e-12) for k in left
-            )
-    return bool(left == right)
-
-
-def _differences(a: Observation, b: Observation) -> list[str]:
-    """The readings that differ, by name. Weights are compared over
-    the links both principals met, so that a link only one of them met is a difference of the
-    links, not of the weights."""
-    assert a.readings.keys() == b.readings.keys()
-    common = a.weights.keys() & b.weights.keys()
-    out = [
-        name for name in a.readings if not _same_reading(name, a.readings[name], b.readings[name])
-    ]
-    if {k: a.weights[k] for k in common} != {k: b.weights[k] for k in common}:
-        out.append("weights")
-    return out
-
-
-# --- No trace of the SECRET link (rule 3) ---------------------------------------------------------
-
-
-async def test_the_analyst_sees_no_trace_of_the_secret_link(store_a: Store, store_b: Store) -> None:
-    """A holds the one `SECRET` link and B does not, and both carry the same pictures. For the
-    `OFFICIAL` analyst every reading the Glass shows over this link's two ends is identical
-    (Amendment 13 decision 2, widened): the depth-1 expands (nodes, links, weights) and
-    neighbourhood statistics of the principal and calder_3; every node's degree; the busiest
-    links, globally and around the principal, with their totals; the links among the two; the link
-    structure; the shared contacts over `IN_CONFLICT_WITH`; the recent loads; the counts by type;
-    the routes at lengths 1 to 3, the bounded path search and the connections; every
-    `IN_CONFLICT_WITH` weight; betweenness and the other centralities over a working set holding
-    both; the service's expand and its per-link-type previews; a one-edge pattern's preview and
-    run; the links among at degrees 1, 2 and 3; and the shared pair's canvas. Everything but the
-    expansion's withheld count and the status bar's, which are pinned below as a defect
-    (ADR-124, accepted, option A′), not an allowance.
-
-    **Readings neither proof can redden** (Amendment 13 decision 3): they are compared here, but
-    neither the cleared principal nor weights version 1 changes them, so equality is no evidence
-    the analyst is protected. `shared_contacts` (empty in every case: nobody but the principal
-    has an `IN_CONFLICT_WITH` into his conflicts), `starter`, `communities` (a guess),
-    `expand_nodes`, `search`, `suggest` and `export_withheld`.
-
-    **Not covered, by design:** the Dossier (it renders the spans of an email's accepted
-    extraction candidates, which this case does not have); the Reports view, history step
-    summaries and hotlist or monitor alerts (the coordinator's list); ownership, KYC and risk walk
-    other link types; histogram, cross-filter, geobins, first-seen, sightings, busiest-days and
-    trends are Brief 2's, once its recipes load the events (this store loads none, Amendment 9
-    decision 4)."""
-    in_a = await _observe(store_a, ANALYST)
-    in_b = await _observe(store_b, ANALYST)
-    assert _differences(in_a, in_b) == []
-    # The comparison read something: the principal's star, a ranking of every node, routes, the
-    # visible conflict links, and a service expand that brought the star.
-    assert len(in_a.readings["principal_links"]) == pid_plan.PRINCIPAL_LINK_COUNT
-    total, degrees = in_a.readings["most_connected"]
-    assert total == store_a.nodes + len(store_a.pictures)
-    assert degrees[PRINCIPAL] == len(in_a.readings["principal_links"])
-    routes = in_a.readings["paths"]
-    assert routes[1] == frozenset(), "no direct link to calder_3 is visible"
-    assert any(routes[length] for length in (2, 3)), "routes to calder_3 exist to compare"
-    assert in_a.readings["conflict_weights"] and in_a.readings["edges_among"] == frozenset()
-    assert in_a.readings["service_expand"][PRINCIPAL][1] >= in_a.readings["principal_links"]
-    assert in_a.readings["busiest_global"][0] == sum(dict(in_a.readings["type_counts"][1]).values())
-    assert len(in_a.readings["expand_preview"]) == 2 * (1 + len(LINK_TYPES))
-
-
-async def test_the_analysts_own_snapshot_is_the_same_with_and_without_the_link(
-    store_a: Store, store_b: Store
-) -> None:
-    """The `sync` projection (what the WebSocket and a reconnect send) of the analyst's own working
-    set, after the service expanded both ends for the analyst: the same nodes and links. It carries
-    no count of what is withheld (`filtered_count` was removed, ADR-124 U2c); the shared-case
-    manifest's yes or no is pinned below."""
-    snapshots = {}
-    for store in (store_a, store_b):
-        service, _ = await _view(store, ANALYST)
-        (snapshot,) = await service.sync(CASE, ANALYST, last_acknowledged_seq=None)
-        assert isinstance(snapshot, DeltaSnapshot)
-        assert "filtered_count" not in snapshot.model_dump()
-        snapshots[store.name] = _shape(snapshot.nodes, snapshot.edges)
-    assert snapshots["A"] == snapshots["B"]
-
-
-async def _shared_case(store: Store, reader: Principal = ANALYST) -> tuple[Any, ...]:
-    """One `FakeWorkingSetStore` per store: the cleared principal expands the principal and
-    calder_3 into it, then `reader` (the analyst, by default) `sync`s it (the shared-case path: a
-    case several people work in) and the export gate's manifest is read for `reader`. Returns the
-    snapshot's nodes and links, the manifest's `withheld` and the snapshot's `withheld`."""
-    service, _ = await _view(store, CLEARED)
-    (snapshot,) = await service.sync(CASE, reader, last_acknowledged_seq=None)
-    assert isinstance(snapshot, DeltaSnapshot)
-    manifest = await service.withheld_for(CASE, reader)
-    return (*_shape(snapshot.nodes, snapshot.edges), manifest, snapshot.withheld)
-
-
-async def _shared_previews(
-    store: Store, reader: Principal = ANALYST
-) -> dict[tuple[str, str | None], tuple[int, int, Any]]:
-    """The previews `reader` is shown in the shared case: for each end and every link type, the
-    candidate counts and any breach, over a working set the cleared principal built (ADR-124
-    decision 2: counted over `reader`'s own view of it)."""
-    service, _ = await _view(store, CLEARED)
-    previews = {}
-    for seed in (PRINCIPAL, CALDER_3):
-        for link_type in (None, *LINK_TYPES):
-            request = ExpandRequest(
-                node_ids=[seed], depth=1, edge_types=None if link_type is None else [link_type]
-            )
-            preview = await service.expand_preview(CASE, request, reader)
-            previews[(seed, link_type)] = (
-                preview.candidate_node_count,
-                preview.candidate_edge_count,
-                preview.would_breach,
-            )
-    return previews
-
-
-async def test_the_analysts_snapshot_of_a_shared_case_has_the_same_nodes_and_links(
-    store_a: Store, store_b: Store
-) -> None:
-    """The cleared principal put the `SECRET` link in the working set; the analyst's snapshot of it
-    holds the same nodes and links as in the case without the link. Shown red: the cleared
-    principal's snapshot of the same two working sets differs by exactly the `SECRET` link."""
-    in_a = await _shared_case(store_a)
-    in_b = await _shared_case(store_b)
-    assert in_a[:2] == in_b[:2]
-    assert in_a[0], "the snapshot holds nodes to compare"
-    cleared_a = await _shared_case(store_a, CLEARED)
-    cleared_b = await _shared_case(store_b, CLEARED)
-    assert cleared_a[0] == cleared_b[0]
-    assert cleared_a[1] - cleared_b[1] == {("IN_CONFLICT_WITH", PRINCIPAL, CALDER_3)}
-    assert cleared_b[1] - cleared_a[1] == frozenset()
-
-
-async def test_the_expansion_and_preview_figures_are_the_same_with_and_without_the_link(
-    store_a: Store, store_b: Store
-) -> None:
-    """ADR-124 decision 1, rewritten from the defect test
-    `test_adr124_defect_the_expansion_count_leaks_the_secret_link`, which pinned the leak: the
-    withheld count of an expansion or a preview was 1 with the `SECRET` link and 0 without, in six
-    readings, and so located the link by its type and its two ends.
-    There is no such count now: neither an expansion's outcome nor a preview has a field for one,
-    and the previews' candidate counts, which were counted over the stored set, are equal for the
-    analyst in A and B.
-
-    **In the analyst's own case and in a case the cleared principal worked in.** In the first the
-    analyst's expansions put nothing above them in the store, so equality is not yet a proof; the
-    second is: the cleared principal's expansions put the `SECRET` link in A's store, and the
-    analyst's preview of every type from each end is counted over their own view of it (a link
-    counts only when it and both its ends are readable). *Shown red:* the cleared principal's
-    previews of the same two stores differ by exactly that link."""
-    from services.api.working_set.models import CardinalityPreview, ExpansionOutcome
-
-    assert "filtered_count" not in ExpansionOutcome.model_fields
-    assert "filtered_count" not in CardinalityPreview.model_fields
-
-    in_a = await _observe(store_a, ANALYST)
-    in_b = await _observe(store_b, ANALYST)
-    assert in_a.readings["expand_preview"] == in_b.readings["expand_preview"]
-    assert len(in_a.readings["expand_preview"]) == 2 * (1 + len(LINK_TYPES))
-
-    shared_a = await _shared_previews(store_a)
-    shared_b = await _shared_previews(store_b)
-    assert shared_a == shared_b
-    assert any(counts[1] > 0 for counts in shared_a.values()), "the previews counted links"
-
-    cleared_a = await _shared_previews(store_a, CLEARED)
-    cleared_b = await _shared_previews(store_b, CLEARED)
-    for seed in (PRINCIPAL, CALDER_3):
-        for link_type in (None, *LINK_TYPES):
-            nodes_a, edges_a, _ = cleared_a[(seed, link_type)]
-            nodes_b, edges_b, _ = cleared_b[(seed, link_type)]
-            # The cleared reader's view holds the `SECRET` link whatever type is asked about, so
-            # every preview of theirs counts it, and nothing else differs.
-            assert nodes_a == nodes_b, (seed, link_type)
-            assert edges_a - edges_b == 1, (seed, link_type)
-
-
-async def test_adr124_the_manifest_says_withheld_in_the_case_that_holds_the_secret_link(
-    store_a: Store, store_b: Store
-) -> None:
-    """Decision 9: the export manifest's `withheld` is true for the analyst in the case the cleared
-    principal has worked in with the `SECRET` link present (A), and false in the case without it
-    (B). It is a yes and never a number: U9 replaced the count, which was `(1, 0)` here until then.
-    In a case shared with a cleared colleague, A′ deliberately tells the analyst that material is
-    withheld, never what or where, so Brief 1 section 5.3 is met only in a case the analyst works
-    alone.
-
-    **Expected, reasoned before any run.** `withheld_for` reads the counted access index, which
-    judges every stored element by its own handling. The cleared principal's expansions put the
-    `SECRET` link in A's store and nothing above `OFFICIAL` in B's. Only classification and a
-    restricted handling code gate a read (`ontology/handling.py`, `principal_may_view`), every
-    handling code the plan gives is the default `P` (`PlanHandling` in `pid_plan.py`), and the one
-    `SECRET` element is the link; calder_3 is readable. So: true in A, false in B."""
-    in_a = await _shared_case(store_a)
-    in_b = await _shared_case(store_b)
-    print(f"PID-ACCESS shared-case manifest withheld: A {in_a[2]} B {in_b[2]}", flush=True)
-    assert (in_a[2], in_b[2]) == (True, False)
-    cleared_a = await _shared_case(store_a, CLEARED)
-    cleared_b = await _shared_case(store_b, CLEARED)
-    assert (cleared_a[2], cleared_b[2]) == (False, False)
-
-
-async def test_adr124_the_snapshot_says_withheld_in_the_case_that_holds_the_secret_link(
-    store_a: Store, store_b: Store
-) -> None:
-    """Decision 5 and U2c's text, made true by U5: in the case the cleared principal has worked in,
-    the analyst's full snapshot carries `withheld` true (the one `SECRET` link is stored and above
-    them) and in the case without it, false. It is a yes and never a number. The cleared principal,
-    for whom nothing is above their clearance, is told false in both. The manifest's `withheld`
-    above says the same of the manifest."""
-    in_a = await _shared_case(store_a)
-    in_b = await _shared_case(store_b)
-    cleared_a = await _shared_case(store_a, CLEARED)
-    cleared_b = await _shared_case(store_b, CLEARED)
-    print(f"PID-ACCESS shared-case withheld: A {in_a[3]} B {in_b[3]}", flush=True)
-    assert (in_a[3], in_b[3]) == (True, False)
-    assert (cleared_a[3], cleared_b[3]) == (False, False)
-
-
-async def test_the_comparison_can_see_the_secret_link_for_the_cleared_principal(
-    store_a: Store, store_b: Store
-) -> None:
-    """Shown red (rule 15): the same comparison, run for a principal cleared to `SECRET`, finds
-    the difference, in exactly the readings of `CLEARED_DIFFERS` (Amendment 13 decision 3; stated
-    from reasoning, and a run that disagrees is investigated, not copied in). If it found none,
-    the test above would prove nothing about the analyst."""
-    in_a = await _observe(store_a, CLEARED)
-    in_b = await _observe(store_b, CLEARED)
-    differing = set(_differences(in_a, in_b))
-    print(
-        f"PID-ACCESS the cleared principal's A against B differ in: {sorted(differing)}",
-        flush=True,
-    )
-    assert differing == CLEARED_DIFFERS, (
-        sorted(differing - CLEARED_DIFFERS),
-        sorted(CLEARED_DIFFERS - differing),
-    )
-    # The difference is the one link: calder_3 is one link away only for A's cleared reader.
-    link = ("IN_CONFLICT_WITH", PRINCIPAL, CALDER_3)
-    ra, rb = in_a.readings, in_b.readings
-    assert ra["principal_links"] - rb["principal_links"] == {link}
-    assert ra["calder_links"] - rb["calder_links"] == {link}
-    assert rb["principal_links"] - ra["principal_links"] == frozenset()
-    assert ra["edges_among"] == {link} and rb["edges_among"] == frozenset()
-    assert ra["paths"][1] and not rb["paths"][1]
-    assert ra["stats"][0][0] == rb["stats"][0][0] + 1
-    assert ra["stats"][1][0] == rb["stats"][1][0] + 1
-    assert ra["most_connected"][1][PRINCIPAL] == rb["most_connected"][1][PRINCIPAL] + 1
-    assert ra["most_connected"][1][CALDER_3] == rb["most_connected"][1][CALDER_3] + 1
-    assert ra["busiest_global"][0] == rb["busiest_global"][0] + 1
-    assert ra["busiest_around"][0] == rb["busiest_around"][0] + 1
-    assert ra["connections"][0] == 1 and rb["connections"][0] == 2
-
-
-async def test_under_weights_version_1_the_analysts_link_weights_show_the_secret_link(
-    store_a1: Store, store_b1: Store
-) -> None:
-    """Shown red (rule 15, ADR-123): under weights version 1, whose mutual-information term counts
-    links the reader cannot see, the analyst's own links weigh differently with the `SECRET` link
-    present, and only the readings that carry a weight differ. Under version 3 (the first test)
-    nothing does."""
-    in_a1 = await _observe(store_a1, ANALYST)
-    in_b1 = await _observe(store_b1, ANALYST)
-    differing = set(_differences(in_a1, in_b1))
-    assert differing <= WEIGHT_READINGS, sorted(differing)
-    assert {"weights", "conflict_weights"} <= differing, sorted(differing)
-    moved = {
-        link: (in_a1.weights[link], in_b1.weights[link])
-        for link in in_a1.weights.keys() & in_b1.weights.keys()
-        if in_a1.weights[link] != in_b1.weights[link]
-    }
-    print(
-        f"PID-ACCESS version 1: {len(moved)} of the analyst's weights move, e.g. "
-        f"{sorted(moved.values())[:3]}",
-        flush=True,
-    )
-    assert all(link[0] == "IN_CONFLICT_WITH" for link in moved), moved
 
 
 # --- J1: the principal's star ---------------------------------------------------------------------
@@ -1113,18 +381,17 @@ async def _all_depicts(store: Store) -> list[Any]:
 
 async def _j1(store: Store, expected: int, by_type: dict[str, int]) -> None:
     stars: dict[str, Subgraph] = {}
-    for principal, extra in ((ANALYST, 0), (CLEARED, 1)):
+    for principal in (ANALYST, CLEARED):  # nothing is above OFFICIAL, so the two read the same
         star = await store.graph.expand(ExpandRequest(node_ids=[PRINCIPAL], depth=1), principal)
         assert len(star.edges) == len({e.id for e in star.edges})
         stars[principal.id] = star
         # The count "With all links" shows, and the degree the best-connected list gives him.
-        assert len(star.edges) == expected + extra, (store.name, principal.id)
-        assert await _degree_by_ranking(store, principal, PRINCIPAL) == expected + extra, (
+        assert len(star.edges) == expected, (store.name, principal.id)
+        assert await _degree_by_ranking(store, principal, PRINCIPAL) == expected, (
             store.name,
             principal.id,
         )
-        want = Counter(by_type) + Counter({"IN_CONFLICT_WITH": extra})
-        assert Counter(e.type for e in star.edges) == want, (store.name, principal.id)
+        assert Counter(e.type for e in star.edges) == Counter(by_type), (store.name, principal.id)
     # The real `DEPICTS` among them: his one picture, a link from the image Document the route made.
     star = stars[ANALYST.id]
     (depicts,) = [e for e in star.edges if e.type == "DEPICTS"]
@@ -1152,13 +419,11 @@ async def _j1(store: Store, expected: int, by_type: dict[str, int]) -> None:
     assert set(sources) == set(store.pictures.values())
 
 
-async def test_j1_the_principals_star_is_49_for_the_analyst_and_50_cleared_in_a_and_45_and_46_in_c(
+async def test_j1_the_principals_star_is_49_in_a_and_45_in_c_for_the_analyst_and_the_cleared(
     store_a: Store, store_c: Store
 ) -> None:
     """J1: the depth-1 expand's link count (what "With all links" shows) and the principal's
     `most_connected` degree agree, with his real picture link among them."""
-    assert pid_plan.PRINCIPAL_LINK_COUNT_SECRET == pid_plan.PRINCIPAL_LINK_COUNT + 1
-    assert pid_plan.PRINCIPAL_LINK_COUNT_ACT1_SECRET == pid_plan.PRINCIPAL_LINK_COUNT_ACT1 + 1
     await _j1(store_a, pid_plan.PRINCIPAL_LINK_COUNT, dict(pid_plan.PRINCIPAL_LINKS_BY_TYPE))
     await _j1(
         store_c,

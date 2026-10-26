@@ -72,7 +72,9 @@ def test_every_shipped_pack_is_listed_with_its_licence_and_credit_and_no_interna
     response = _packs(client)
     assert response.status_code == 200, response.text
     listed = {p["id"]: p for p in response.json()}
-    assert set(listed) == {"hmp", "fixture-corp", "operation-ledger", "paysim", "enron"}
+    assert set(listed) == {
+        "hmp", "fixture-corp", "operation-ledger", "paysim", "enron", "prison-intelligence",
+    }  # fmt: skip
     # ADR-114 Amendment 23 point 4: the real one says so wherever it is listed; no other does.
     assert {pack_id for pack_id, p in listed.items() if p["real_data"]} == {"enron"}
     assert listed["paysim"]["licence"] == "CC-BY-SA-4.0" and "Lopez-Rojas" in listed["paysim"]["attribution"]

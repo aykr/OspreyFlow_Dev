@@ -900,3 +900,36 @@ async def test_a_ledger_made_before_the_markings_column_is_brought_forward_and_r
         await conn.execute("SET search_path TO public")
         await conn.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
         await conn.close()
+
+
+# --- `unreverted_loads` (ADR-127 Amendment 23: "not run twice", and the reset's choice) -------
+
+
+async def test_the_unreverted_loads_of_a_case_are_its_own_newest_first_without_id_lists(
+    runs: RecipeRunStore,
+) -> None:
+    """Against the real ledger: another case's load, another recipe's, and a reverted one are left
+    out; what comes back is the case's, newest load id first, and carries no ids."""
+    recipe, other_recipe = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    ids = sorted(new_id() for _ in range(3))
+    for load_id in ids:
+        await runs.add_record(run_id, _record(load_id, recipe))
+    await runs.mark_reverted(ids[1], reverted_by="operator-1", at=T0)
+    elsewhere = await runs.start(
+        recipe_id=recipe, recipe_version=3, investigation_id="case-2", trigger="manual",
+        slot=None, run_as="analyst-1", source=SOURCE, now=T0,
+    )  # fmt: skip
+    await runs.add_record(
+        elsewhere, _record(new_id(), recipe).model_copy(update={"investigation_id": "case-2"})
+    )
+    other = await _started(runs, other_recipe)
+    await runs.add_record(other, _record(new_id(), other_recipe))
+    found = await runs.unreverted_loads("case-1", [recipe])
+    assert [r.load_id for r in found] == [ids[2], ids[0]]
+    assert all(r.created_node_ids == [] and r.merged_edge_ids == [] for r in found)
+    assert all(r.source == "private_cash.csv" and r.recipe_version == 3 for r in found)
+    both = await runs.unreverted_loads("case-1", [recipe, other_recipe])
+    assert len(both) == 3
+    assert await runs.unreverted_loads("case-1", []) == []
+    assert await runs.unreverted_loads("no-such-case", [recipe]) == []

@@ -72,7 +72,8 @@ from valkey.asyncio import Valkey
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from ontology.handling import load_uk_le_scheme
+from ontology.handling import HandlingScheme, load_uk_le_scheme
+from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.domain import Principal
 
@@ -192,6 +193,40 @@ async def run(
     return 0
 
 
+def build_revert_deps(
+    *,
+    scheme: HandlingScheme,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    ledger: RecipeRunStore,
+    held_rows: HeldRowStore,
+    alerts: AlertStore,
+    audit: AuditWriter,
+    history: InvestigationHistoryStore,
+    valkey: Valkey,
+) -> RevertDeps:
+    """The revert's collaborators over stores already opened (ADR-127 Amendment 23: one
+    construction, shared by this script and by the Prison Intelligence seed's reset, never copied).
+    It opens nothing. From outside the Conduit, as `strip_change_provenance` reaches the working
+    sets: the store on Valkey, the removal published on each case's channel, the stored history,
+    and the kept results, which are keys in the same Valkey."""
+    working_sets = WorkingSetReverter(
+        WorkingSetService(graph, ValkeyWorkingSetStore(valkey), scheme, valkey=valkey),
+        valkey,
+        history,
+    )
+    return RevertDeps(
+        ledger=ledger,
+        graph=graph,
+        analytics=analytics,
+        held_rows=held_rows,
+        alerts=alerts,
+        audit=audit,
+        working_sets=working_sets,
+        invalidate_caches=lambda: invalidate_every_cache(valkey),
+    )
+
+
 async def _main(args: argparse.Namespace) -> int:
     if args.show_ids and viewer_from(args) is None:
         print("--show-ids needs a principal to read as: give --clearance and --org-unit.")
@@ -216,23 +251,16 @@ async def _main(args: argparse.Namespace) -> int:
     valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
     try:
         graph = GraphArcadeDBAdapter(client, scheme)
-        # From outside the Conduit, as `strip_change_provenance` reaches the working sets: the
-        # store on Valkey, the removal published on each case's channel, the stored history, and
-        # the kept results, which are keys in the same Valkey.
-        working_sets = WorkingSetReverter(
-            WorkingSetService(graph, ValkeyWorkingSetStore(valkey), scheme, valkey=valkey),
-            valkey,
-            history,
-        )
-        deps = RevertDeps(
-            ledger=ledger,
+        deps = build_revert_deps(
+            scheme=scheme,
             graph=graph,
             analytics=analytics,
+            ledger=ledger,
             held_rows=held,
             alerts=alerts,
             audit=audit,
-            working_sets=working_sets,
-            invalidate_caches=lambda: invalidate_every_cache(valkey),
+            history=history,
+            valkey=valkey,
         )
         return await run(
             args.load_id,

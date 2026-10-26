@@ -3,13 +3,14 @@ the `pin-calls-csv` layout (ISO-8601 instants with their offset, no `date_order`
 R1, R3 and R16 as the seed does, so a number a visitor owns is the one node. Every expectation comes
 from `pid_plan`.
 
-**The demo profile's file holds 1,000,080 rows**, too many for the graph stand-in to load in a test
-(a million events held in memory), so this test loads a slice of it (`pin_calls_slice`): every row
-of every link (one PIN account to one number) that holds a planted duplicate, that ends at the
-coordinator's number, or that ends at one of the first three numbers the file writes in other forms;
+**The demo profile's file holds about 100,000 rows** (ADR-120 Amendment 17; 100,080 with the
+planted duplicates). This test loads a slice of it (`pin_calls_slice`), which keeps the case quick:
+every row of every link (one PIN account to one number) that holds a planted duplicate, that ends
+at the coordinator's number, or that ends at one of the first three numbers the file writes in
+other forms;
 plus, for each number in the slice, the link its first row sits on (so the raw form kept is the
 plan's). A slice holds each link whole, so the plan's own counts for those links are exact. The
-slice's size is asserted against the plan, not typed. The million-row run is the coordinator's, on a
+slice's size is asserted against the plan, not typed. The whole-file run is the coordinator's, on a
 quiet stack.
 
 **What the layout does not do (Amendment 18).** The duplicate key is the PIN account, the number
@@ -129,7 +130,8 @@ async def test_the_slice_is_whole_links_and_its_size_is_the_plans(calls: dict[st
     assert {pin_link_of(r) for r in _slice()} == set(planned)
     planted = pid_files.EXACT_DUPLICATES + pid_files.SEQUENCE_DUPLICATES
     assert len(_slice()) == sum(lk.occurrences for lk in planned.values()) + planted
-    assert len(_slice()) > 20_000, "a slice big enough to hold every planted row"
+    by_call = Counter(pin_call_of(r) for r in _slice())
+    assert sum(n - 1 for n in by_call.values()) == planted, "the slice holds every planted row"
     assert len(planned) >= 77
 
 

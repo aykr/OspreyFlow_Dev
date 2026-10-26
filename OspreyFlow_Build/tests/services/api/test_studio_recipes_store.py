@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import asyncpg
 import pytest
@@ -1332,7 +1333,7 @@ def fresh_recipe() -> Recipe:
 
 def reader_of(dataset: str, unit: str = "verify") -> Principal:
     return Principal(
-        id="pid-seed-worker", clearance="SECRET", org_unit=unit, roles=["data_engineer"],
+        id="osprey-demo-engineer", clearance="OFFICIAL", org_unit=unit, roles=["data_engineer"],
         datasets=[dataset],
     )  # fmt: skip
 
@@ -1342,7 +1343,7 @@ async def enter(
 ):  # type: ignore[no-untyped-def]
     return await store.enter_published_for_seed(
         rec, source_location=SEED_LOCATION, git_path=f"recipes/{rec.id}.yaml", dataset_id=dataset,
-        owning_unit="verify", published_by="pid-seed-worker", now=now, ontology=SEED_ONTOLOGY,
+        owning_unit="verify", published_by="osprey-demo-engineer", now=now, ontology=SEED_ONTOLOGY,
         scheme=SEED_SCHEME,
     )
 
@@ -1361,7 +1362,7 @@ async def test_the_recipe_is_entered_published_keeping_its_id_and_version(
     assert entered.git_path == f"recipes/{rec.id}.yaml"
     assert entered.ontology_version == SEED_ONTOLOGY.version == rec.ontology_version
     assert entered.pack_versions == rec.pack_versions == {"niem": SEED_ONTOLOGY.packs["niem"]}
-    assert entered.published_by == "pid-seed-worker" and entered.published_at == SEED_NOW
+    assert entered.published_by == "osprey-demo-engineer" and entered.published_at == SEED_NOW
     assert entered.verified_at == SEED_NOW and entered.label == rec.label
     assert (await store.get(rec.id)) == entered
 
@@ -1420,7 +1421,7 @@ async def test_different_content_at_the_same_version_is_refused_by_name_and_the_
         await store.enter_published_for_seed(
             rec, source_location="uploaded/prison-intelligence/elsewhere.csv",
             git_path=f"recipes/{rec.id}.yaml", dataset_id="prison-intelligence",
-            owning_unit="verify", published_by="pid-seed-worker", now=SEED_NOW, ontology=SEED_ONTOLOGY,
+            owning_unit="verify", published_by="osprey-demo-engineer", now=SEED_NOW, ontology=SEED_ONTOLOGY,
             scheme=SEED_SCHEME,
         )  # fmt: skip
     # and so is a different duplicate key
@@ -1464,13 +1465,13 @@ async def test_the_restored_draft_is_unmapped_at_the_next_version_in_the_unit(
     rec = fresh_recipe()
     published = await enter(store, rec)
     assert published.row_template is not None and published.deduplicate is not None
-    draft = await store.restore_to_draft(rec.id, created_by="pid-seed-worker", owning_unit="verify", now=SEED_NOW,
+    draft = await store.restore_to_draft(rec.id, created_by="osprey-demo-engineer", owning_unit="verify", now=SEED_NOW,
         pipeline=starting_pipeline())
     assert (draft.recipe_id, draft.version) == (rec.id, rec.version + 1)
     assert draft.status is StudioRecipeStatus.DRAFT and draft.owning_unit == "verify"
     assert draft.row_template is None and draft.unmapped_fields == [] and draft.deduplicate is None
     assert draft.verified_at is None and draft.git_path is None and draft.published_at is None
-    assert draft.created_by == "pid-seed-worker"
+    assert draft.created_by == "osprey-demo-engineer"
     # what Connect holds is kept: the source, the connector, the marking and its declarations
     assert draft.connector_profile == published.connector_profile
     assert draft.source_location == published.source_location
@@ -1507,7 +1508,7 @@ async def test_after_a_restore_feeding_lists_none_and_the_drafts_list_has_exactl
     rec = fresh_recipe()
     await enter(store, rec)
     assert [r.recipe_id for r in await store.feeding(["prison-intelligence"])].count(rec.id) == 1
-    await store.restore_to_draft(rec.id, created_by="pid-seed-worker", owning_unit="verify", now=SEED_NOW,
+    await store.restore_to_draft(rec.id, created_by="osprey-demo-engineer", owning_unit="verify", now=SEED_NOW,
         pipeline=starting_pipeline())
     assert rec.id not in [r.recipe_id for r in await store.feeding(["prison-intelligence"])]
     drafts = [d for d in await store.list_drafts(reader_of("prison-intelligence")) if d.recipe_id == rec.id]
@@ -1529,7 +1530,7 @@ async def test_a_restore_that_fails_leaves_the_previous_version_as_it_was(
     await enter(store, rec)
     with pytest.raises(asyncpg.PostgresError):
         await store.restore_to_draft(
-            rec.id, created_by="pid-seed-worker", owning_unit=None, now=SEED_NOW,  # type: ignore[arg-type]
+            rec.id, created_by="osprey-demo-engineer", owning_unit=None, now=SEED_NOW,  # type: ignore[arg-type]
             pipeline=starting_pipeline(),
         )
     current = await store.get(rec.id)
@@ -1622,3 +1623,133 @@ async def test_entering_returns_the_version_entered_and_not_the_latest(
         )
     again = await enter(store, rec)
     assert again.version == rec.version == 1 and again.status is StudioRecipeStatus.PUBLISHED
+
+
+# --- `check_seeded_row`: the comparison on its own (ADR-127 Amendment 30) -------------------------
+# The seed makes it before it commits a recipe's file, so a committed file never differs from its row.
+# It reads, refuses by name exactly as `enter_published_for_seed` does, and writes nothing.
+
+
+async def compare(store: StudioRecipeStore, rec: Recipe, **changes: str) -> None:
+    arguments = {
+        "source_location": SEED_LOCATION, "git_path": f"recipes/{rec.id}.yaml",
+        "dataset_id": "prison-intelligence", "owning_unit": "verify",
+    } | changes  # fmt: skip
+    await store.check_seeded_row(rec, **arguments)
+
+
+async def test_the_comparison_passes_for_no_row_and_for_the_same_row_and_writes_nothing(
+    store: StudioRecipeStore,
+) -> None:
+    rec = fresh_recipe()
+    await compare(store, rec)  # no row yet
+    with pytest.raises(StudioRecipeNotFoundError):
+        await store.get(rec.id)
+    first = await enter(store, rec)
+    await compare(store, rec)  # the row it would write
+    assert (await store.get(rec.id)) == first
+    async with store._pool.acquire() as conn:
+        assert (
+            await conn.fetchval("SELECT count(*) FROM studio_recipes WHERE recipe_id = $1", rec.id)
+            == 1
+        )
+
+
+@pytest.mark.parametrize(
+    ("change", "named"),
+    [
+        ({"source_location": "uploaded/prison-intelligence/elsewhere.csv"}, "content"),
+        ({"git_path": "recipes/elsewhere.yaml"}, "git_path"),
+        ({"owning_unit": "another-unit"}, "owning_unit"),
+        ({"dataset_id": "another-dataset"}, "dataset_id"),
+    ],
+)
+async def test_the_comparison_refuses_a_row_that_differs_by_name_and_leaves_it_as_it_is(
+    store: StudioRecipeStore, change: dict[str, str], named: str
+) -> None:
+    rec = fresh_recipe()
+    first = await enter(store, rec)
+    with pytest.raises(SeededRecipeContentDiffers) as refused:
+        await compare(store, rec, **change)
+    assert named in str(refused.value) and rec.id in str(refused.value)
+    assert (await store.get(rec.id)) == first
+
+
+async def test_the_comparison_refuses_what_entering_refuses(store: StudioRecipeStore) -> None:
+    rec = fresh_recipe()
+    await enter(store, rec)
+    with pytest.raises(SeededRecipeContentDiffers):
+        await compare(store, rec.model_copy(update={"label": "A different label"}))
+    with pytest.raises(SeededRecipeAnotherPublished):
+        await compare(store, rec.model_copy(update={"version": 2}))
+    # whatever the comparison refuses, entering refuses too, and what it passes, entering writes
+    with pytest.raises(SeededRecipeContentDiffers):
+        await enter(store, rec.model_copy(update={"label": "A different label"}))
+    with pytest.raises(SeededRecipeAnotherPublished):
+        await enter(store, rec.model_copy(update={"version": 2}))
+    async with store._pool.acquire() as conn:
+        assert (
+            await conn.fetchval("SELECT count(*) FROM studio_recipes WHERE recipe_id = $1", rec.id)
+            == 1
+        )
+
+
+# --- `enter_draft_for_seed`: R9's first draft (ADR-127 Amendment 23, "R9's draft") ----------------
+# The refusals and the "left as it is" case are pure (`test_studio_recipes_seed_refusals.py`); live,
+# the row itself, what `feeding` and `list_drafts` then say, and the restore that follows it.
+
+
+def reports_recipe() -> Recipe:
+    """The committed reports recipe, under an id of its own so each case has its own row."""
+    return load_recipe(SEED_FIXTURES / "pid_intel_reports_recipe.yaml").model_copy(
+        update={"id": new_id()}
+    )
+
+
+async def test_the_first_draft_is_an_unmapped_draft_that_the_drafts_list_has_and_feeding_has_not(
+    store: StudioRecipeStore,
+) -> None:
+    rec = reports_recipe()
+    draft = await store.enter_draft_for_seed(
+        rec, source_location=SEED_LOCATION, dataset_id="prison-intelligence",
+        owning_unit="verify", created_by="osprey-demo-engineer", now=SEED_NOW,
+        pipeline=starting_pipeline(),
+    )  # fmt: skip
+    assert (draft.recipe_id, draft.version, draft.status) == (
+        rec.id, rec.version, StudioRecipeStatus.DRAFT,
+    )  # fmt: skip
+    assert draft.row_template is None and draft.unmapped_fields == [] and draft.deduplicate is None
+    assert draft.pipeline == starting_pipeline() and draft.ready_for_profile
+    assert draft.dataset_id == "prison-intelligence" and draft.owning_unit == "verify"
+    assert rec.id not in [r.recipe_id for r in await store.feeding(["prison-intelligence"])]
+    drafts = [
+        d for d in await store.list_drafts(reader_of("prison-intelligence")) if d.recipe_id == rec.id
+    ]
+    assert len(drafts) == 1
+    assert await store.get(rec.id) == draft
+
+
+async def test_a_second_entry_leaves_the_row_and_a_restore_then_follows_it(
+    store: StudioRecipeStore,
+) -> None:
+    rec = reports_recipe()
+
+    async def once() -> Any:
+        return await store.enter_draft_for_seed(
+            rec, source_location=SEED_LOCATION, dataset_id="prison-intelligence",
+            owning_unit="verify", created_by="osprey-demo-engineer", now=SEED_NOW,
+            pipeline=starting_pipeline(),
+        )  # fmt: skip
+
+    first = await once()
+    again = await once()
+    assert again == first
+    async with store._pool.acquire() as conn:
+        rows = await conn.fetch("SELECT version FROM studio_recipes WHERE recipe_id = $1", rec.id)
+    assert [r["version"] for r in rows] == [rec.version]
+    restored = await store.restore_to_draft(
+        rec.id, created_by="osprey-demo-engineer", owning_unit="verify", now=SEED_NOW,
+        pipeline=starting_pipeline(),
+    )
+    assert restored.version == rec.version + 1
+    assert (await once()).version == rec.version + 1, "a reseed after a reset leaves the restore"

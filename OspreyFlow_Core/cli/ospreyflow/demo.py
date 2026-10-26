@@ -24,6 +24,7 @@ PACK_KEYS = {
     "operation-ledger": "ledger",
     "paysim": "paysim",
     "enron": "enron",
+    "prison-intelligence": "prison-intelligence",
 }
 #: PaySim's source page. A test holds this to the pack's own `source_page`.
 PAYSIM_SOURCE_PAGE = "https://www.kaggle.com/datasets/ealaxi/paysim1"

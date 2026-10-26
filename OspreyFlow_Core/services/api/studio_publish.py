@@ -263,10 +263,25 @@ async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROO
     instance's own checkout would never see this commit. Pushing to a
     shared remote (or routing every instance through one writable
     git-backed service) is real, undesigned work this phase does not do."""
-    relative_path = recipe_git_relative_path(recipe.id)
+    return await commit_recipe_file(
+        recipe.id, serialise_recipe(recipe).encode("utf-8"), version=recipe.version,
+        repo_root=repo_root,
+    )  # fmt: skip
+
+
+async def commit_recipe_file(
+    recipe_id: str, data: bytes, *, version: int, repo_root: Path = _REPO_ROOT
+) -> str:
+    """The commit half of `write_and_commit_recipe`, for a file that is to be exactly `data`:
+    writes it to `recipes/<recipe_id>.yaml` under `repo_root` and commits it as `ingest: publish
+    <id> v<version>`, and returns the git-relative path. The Prison Intelligence seed copies each
+    committed recipe here byte for byte (ADR-127 Amendment 23), which `serialise_recipe` would not
+    keep (it drops comments and reorders). A commit with nothing changed is not an error; every
+    other non-zero exit is."""
+    relative_path = recipe_git_relative_path(recipe_id)
     absolute_path = repo_root / relative_path
     absolute_path.parent.mkdir(parents=True, exist_ok=True)
-    absolute_path.write_text(serialise_recipe(recipe))
+    absolute_path.write_bytes(data)
 
     await _ensure_repository(repo_root)
 
@@ -277,7 +292,7 @@ async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROO
     code, output = await _run_git(
         "commit",
         "-m",
-        f"ingest: publish {recipe.id} v{recipe.version}",
+        f"ingest: publish {recipe_id} v{version}",
         "--",
         relative_path,
         cwd=repo_root,
@@ -364,7 +379,9 @@ async def run_published_recipe(
         if source_location is None
         else draft.model_copy(update={"source_location": source_location})
     )
-    rows = list(_read_recipe_rows(read_from))
+    # The whole file, read and parsed in a worker thread (ADR-127 Amendment 29): held on the event
+    # loop it starves the keep-alive of the transaction the run opens next.
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
     report, events, held_rows = await load_with_rules(
         recipe,
         rows,
@@ -389,10 +406,12 @@ async def run_published_recipe(
     # (9 October 2026). The partition is keyed by ref and insert-only, so a ref already there is
     # not loaded twice.
     # A held row (ADR-109 ruling 1) reached no store, its place included.
-    points = point_geometries(
-        recipe,
-        [r for i, r in enumerate(rows) if i not in held_rows],
-        scheme=scheme or (rules.scheme if rules is not None else None),
+    points = await asyncio.to_thread(
+        lambda: point_geometries(
+            recipe,
+            [r for i, r in enumerate(rows) if i not in held_rows],
+            scheme=scheme or (rules.scheme if rules is not None else None),
+        )
     )
     if analytics is not None and points:
         held = {

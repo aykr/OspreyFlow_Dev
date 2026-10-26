@@ -14,7 +14,7 @@ group of tests guards:
   properties): the demo's chapters 2 and 3 would show a different pattern from the one claimed;
 - the report selection (229 by one pattern, 68 used, the F2 illicit-item reports, a real selection,
   short extractable text): chapter 5's figures and the Questions module's 80,000-character ceiling;
-- handling (one SECRET link, 12 `S2`, 20 `A1`, two units): the access-control scenes and the
+- handling (every element OFFICIAL, 12 `S2`, 20 `A1`, two units): the access-control scenes and the
   export gate;
 - the script's own numbers, each at the two moments the demo shows it (the seed alone, Act 1, and
   after chapter 4 has loaded the reports): J1's links, J2's four PIN accounts, J5's two degrees by
@@ -289,7 +289,7 @@ class View:
 
     @cached_property
     def visible(self) -> list[Any]:
-        """What the demo analyst sees once chapter 4 has loaded the reports (no SECRET link)."""
+        """What the demo analyst sees once chapter 4 has loaded the reports."""
         return self.at("chapter4")
 
     def at(self, moment: Any, *, cleared: bool = False) -> list[Any]:
@@ -1003,27 +1003,27 @@ def _custody(view: View) -> dict[str, str]:
     return {k: v[0] for k, v in open_at.items()}
 
 
-def test_handling_one_secret_link_12_s2_20_a1_and_only_two_units(demo: View, scale: View) -> None:
-    for view, secrets in ((demo, 1), (scale, 0)):
+def test_handling_every_element_is_official_12_s2_20_a1_and_only_two_units(
+    demo: View, scale: View
+) -> None:
+    """ADR-120 Amendment 16: the dataset is OFFICIAL throughout, and the covert-source conflict
+    that was its one SECRET link is not in it."""
+    for view in (demo, scale):
         items: list[Any] = [*view.plan.entities, *view.all_links]
-        above = [i for i in items if i.handling.classification != "OFFICIAL"]
-        assert len(above) == secrets
+        assert {i.handling.classification for i in items} == {"OFFICIAL"}
         assert all(i.handling.handling_code == "P" for i in items)
         units = {u for i in items for u in (i.handling.originator, i.handling.owning_unit)}
         assert units == {"fenwick-moor-security", "regional-intel-unit"}, "two units, both profiles"
         everything = pid_plan.links_at(view.plan, "chapter9", secret_cleared=True)
         analyst = pid_plan.links_at(view.plan, "chapter9", secret_cleared=False)
-        assert len(everything) == len(view.all_links)
-        assert len(analyst) == len(view.all_links) - secrets
-    (secret,) = [
-        i for i in [*demo.plan.entities, *demo.all_links] if i.handling.classification != "OFFICIAL"
-    ]
-    assert secret.handling.classification == "SECRET"
-    assert (secret.link_type, secret.source, secret.target) == (
-        "IN_CONFLICT_WITH", "principal", "calder_3",
-    )  # fmt: skip
-    assert secret.properties["reason"] == "covert source"
-    assert secret.handling.originator == secret.handling.owning_unit == "regional-intel-unit"
+        assert len(everything) == len(analyst) == len(view.all_links)
+    assert not [lk for lk in demo.all_links if lk.properties.get("reason") == "covert source"]
+    assert not [
+        lk
+        for lk in demo.all_links
+        if lk.link_type == "IN_CONFLICT_WITH"
+        and {lk.source, lk.target} == {"principal", "calder_3"}
+    ], "the principal and calder_3 share no recorded conflict"
     # Reports: 12 consult-originator, 20 covert-development, disjoint, across all 350.
     s2 = {r for r in demo.reports if demo.ent[r].handling.sanitisation_code == "S2"}
     a1 = {r for r in demo.reports if demo.ent[r].handling.action_code == "A1"}
@@ -1090,7 +1090,7 @@ def _degree(links: Iterable[Any], key: str = "principal") -> int:
     return sum((lk.source == key) + (lk.target == key) for lk in links)
 
 
-def test_j1_the_principal_has_49_links_as_the_analyst_and_50_cleared_to_secret(
+def test_j1_the_principal_has_49_links_after_chapter_4_and_45_in_act_1(
     demo: View,
 ) -> None:
     after_chapter_4 = {
@@ -1100,29 +1100,21 @@ def test_j1_the_principal_has_49_links_as_the_analyst_and_50_cleared_to_secret(
     }  # fmt: skip
     act_1 = {k: v for k, v in after_chapter_4.items() if k != "MENTIONED_IN"}
     assert sum(after_chapter_4.values()) == 49 and sum(act_1.values()) == 45
-    assert pid_plan.PRINCIPAL_LINK_COUNT == 49 and pid_plan.PRINCIPAL_LINK_COUNT_SECRET == 50
+    assert pid_plan.PRINCIPAL_LINK_COUNT == 49
     assert pid_plan.PRINCIPAL_LINK_COUNT_ACT1 == 45
-    assert pid_plan.PRINCIPAL_LINK_COUNT_ACT1_SECRET == 46
     assert Counter(pid_plan.PRINCIPAL_LINKS_BY_TYPE) == Counter(after_chapter_4)
-    for moment, counts, plain, secret in (
-        ("seed", act_1, 45, 46),
-        ("chapter4", after_chapter_4, 49, 50),
-    ):
+    for moment, counts, plain in (("seed", act_1, 45), ("chapter4", after_chapter_4, 49)):
         analyst = pid_plan.links_at(demo.plan, moment, secret_cleared=False)  # type: ignore[arg-type]
         cleared = pid_plan.links_at(demo.plan, moment, secret_cleared=True)  # type: ignore[arg-type]
         assert _degree(analyst) == plain, moment
-        assert _degree(cleared) == secret, moment
+        assert _degree(cleared) == plain, moment  # nothing is above OFFICIAL
         touching = [lk for lk in analyst if "principal" in (lk.source, lk.target)]
         assert Counter(lk.link_type for lk in touching) == Counter(counts), moment
         # His picture link is among them, because "With all links" returns and counts it.
         assert any(
             lk.link_type == "DEPICTS" and lk.source == "picture:principal" for lk in touching
         )
-        # The one more is the SECRET link.
-        extra = [
-            lk for lk in cleared if "principal" in (lk.source, lk.target) and lk not in analyst
-        ]
-        assert [(lk.link_type, lk.target) for lk in extra] == [("IN_CONFLICT_WITH", "calder_3")]
+        assert cleared == analyst, moment
     # What chapter 4 adds to the principal's star is exactly his four reports.
     seed_keys = {lk.key for lk in demo.at("seed")}
     added = [lk for lk in demo.at("chapter4") if lk.key not in seed_keys]
@@ -1349,7 +1341,7 @@ def test_j5_principal_and_relay_4_are_two_degrees_apart_by_6_routes(demo: View) 
 
 def test_j5_the_unconnected_prisoner_has_no_route(demo: View) -> None:
     assert "unconnected" in demo.ent
-    for everything in (False, True):  # the analyst's view, then the view cleared to SECRET
+    for everything in (False, True):  # the analyst's view, then the cleared view (the same)
         reach = demo.component("unconnected", everything=everything)
         assert "principal" not in reach
         assert "relay_4" not in reach
@@ -2234,7 +2226,9 @@ def test_demo_volumes(demo: View) -> None:
         assert parents[wing] - {demo.site[ZONE_REF]} == {"est:fenwick-moor"}
     # The call file: exactly the rows, the numbers and the PIN accounts the brief states.
     calls = demo.plan.calls
-    assert sum(sum(c.weekly) for c in calls) == pid_plan.CALL_ROWS == 1_000_000
+    assert sum(sum(c.weekly) for c in calls) == pid_plan.CALL_ROWS
+    # ADR-120 Amendment 17: about 100,000 calls, not a million.
+    assert 90_000 <= pid_plan.CALL_ROWS <= 110_000
     assert len({c.number for c in calls}) == pid_plan.CALLED_NUMBERS == 1_500
     pins = {c.pin for c in calls}
     assert len(pins) == pid_plan.PIN_ACCOUNTS == 1_000
@@ -2886,8 +2880,6 @@ def test_every_link_takes_the_regional_unit_when_either_end_has_it(demo: View, s
     for view in (demo, scale):
         stale = []
         for link in view.all_links:
-            if link.handling.classification == "SECRET":
-                continue
             ends = (view.ent[link.source].handling, view.ent[link.target].handling)
             want = regional if any(h.owning_unit == "regional-intel-unit" for h in ends) else local
             if link.handling != want:
@@ -2944,10 +2936,10 @@ ONE_DATE_EXEMPT = frozenset({"HELD_AT", "PRESENT_AT", "PASSES_ITEMS_TO"})
 #: carried link's count and dates, the teaching link, the scale profile's PIN accounts).
 DEMO_DIGESTS = (
     "23e7e6552600fc5e99e9f59b10a87ed358cc414eff6809977378511cb17e4606",
-    "8f7e4bab9ed10ebfabb870fd7bc97b9bb97fca0ae204052ed23871b385651d6b",
-    "d4c51d252a335657ee785de34abc2bc9ea7ca241f47c216ac2efbd446e57fe83",
+    "dc3864344a1f6bd82d2e9db709d428455befce3a23e38b5e7ed662f9ab7a4fa8",
+    "e8b5f2d39459b766f1347df67dd7859b3aa421491ca1b6a60a4bb21a3ff8fb08",
     "c3d31315269e7b31d1d8ca1940f2507f0f14587f20c0a7e4b0f6b67397f6b979",
-    "ada7d692d898778388291975f68b5bb407b7f5eb54664be2d0949b7e484701a8",
+    "b7eea34b904aa6550f8716915d9335d7234b9b8f5e0bdf9d941490ef5f236d51",
     "2877c05f1a20a7bc854c851b57b3c3ce5abf59216ef7abbf57d76ab021e17a88",
 )
 SCALE_DIGESTS = (
@@ -2966,6 +2958,16 @@ SCALE_DIGESTS = (
 # The entity digest leaves out `geometry_ref`; the scale digests leave out the PIN accounts, the
 # groups and their memberships. The demo's digests 0 to 3 and 5 are the values first pinned from
 # the same commit before the groups ruling; digest 4 changed only because it now compares days.
+# ADR-120 Amendment 17 (the call file cut to about 100,000 rows): demo digests 1 and 2 now leave out
+# the count and dates of the call file's links (`_from_call_volume`), which the cut changes, and
+# were re-pinned. The re-pin is proved: the changed `_digests` over the plan as it stood before the
+# cut (`pid_plan.py` at HEAD) and over the plan after it gave the same six demo digests and the same
+# six scale digests, and digests 0, 3, 4 and 5 are the values pinned above, unchanged.
+# ADR-120 Amendment 16 (the covert-source conflict removed): demo digests 1 and 4 were re-pinned,
+# the only two that count a one-occurrence link by type and ends or by day. The re-pin is proved:
+# the same `_digests` over the plan as it stood with that link, the link filtered out, gave the six
+# values now pinned, which differ from the earlier ones only at 1 and 4. The scale digests did not
+# move.
 
 
 def _derived(text: str) -> str:
@@ -3243,7 +3245,7 @@ def test_the_mixed_files_carry_the_six_handling_columns_on_every_shape(
 ) -> None:
     assert pid_plan.HANDLING_COLUMNS == HANDLING_COLUMNS
     assert pid_plan.mixed_files(demo.plan) | pid_plan.mixed_files(scale.plan) == mixed
-    assert "pid_conflicts.csv" in mixed, "the one SECRET link makes the conflicts file mixed"
+    assert "pid_conflicts.csv" in mixed, "the regional establishments make the conflicts file mixed"
     wanted = set(HANDLING_COLUMNS)
     seen_files: set[str] = set()
     every_shape: list[Any] = [*pid_plan.LOAD_SHAPES, *pid_plan.ENTITY_SHAPES]
@@ -3828,7 +3830,8 @@ def test_rows_carry_the_files_columns_and_every_shapes_cells(
         assert (columns[-6:] == HANDLING_COLUMNS) == (file in mixed), file
     assert demo_scan.problems == [] and scale_scan.problems == []
     assert all(demo_scan.rows[f] > 0 for f in FILES), {f: demo_scan.rows[f] for f in FILES}
-    assert demo_scan.rows["pid_pin_calls.csv"] == pid_plan.CALL_ROWS == 1_000_000
+    assert demo_scan.rows["pid_pin_calls.csv"] == pid_plan.CALL_ROWS
+    assert 90_000 <= pid_plan.CALL_ROWS <= 110_000, "ADR-120 Amendment 17: about 100,000 calls"
     assert scale_scan.rows["pid_pin_calls.csv"] == 0, "the scale profile has no call file"
     assert scale_scan.rows[REPORTS_FILE] == 0 and scale_scan.rows[REPORT_INCIDENTS_FILE] == 0
     # Shown able to fail, on the scale profile (small): a row missing a column, a property cell
@@ -4163,12 +4166,23 @@ def _digest(rows: Iterable[object]) -> str:
     return hashlib.sha256("\n".join(sorted(repr(r) for r in rows)).encode()).hexdigest()
 
 
+def _from_call_volume(lk: pid_plan.PlanLink) -> bool:
+    """A link whose count and dates are the PIN-call file's volume: one PIN account's calls to one
+    number, and a prisoner's use of his PIN account (which counts the same calls). ADR-120
+    Amendment 17 cut that volume, so these are digested by type and ends alone; every other link
+    keeps its count and its dates in the digest."""
+    return (lk.link_type == "COMMUNICATED_WITH" and lk.source.startswith("pin:")) or (
+        lk.link_type == "USES" and lk.target.startswith("pin:")
+    )
+
+
 def _digests(view: View, *, skip_associations: bool) -> tuple[str, ...]:
     """Entities (without `geometry_ref`), then the links the background drew: by type, ends and
     occurrences; those with more than one occurrence by their dates too; and the carried links by
-    type and ends. Left out: the teaching link, a scale PIN `USES`, the scale top-up and, in the
-    scale profile, the groups and their memberships (ADR-120 Amendment 11 decision 1: a group takes
-    one establishment's handling); and, for a carried link, its count and dates, which Amendment 9
+    type and ends. Left out: the teaching link, a scale PIN `USES`, the count and dates of the call
+    file's links (`_from_call_volume`), the scale top-up and, in the scale profile, the groups and
+    their memberships (ADR-120 Amendment 11 decision 1: a group takes one establishment's
+    handling); and, for a carried link, its count and dates, which Amendment 9
     gives it. A one-occurrence link's date is compared by its day, since a participant's role takes
     the incident's date-time where it had the day."""
     entities = _digest(
@@ -4201,11 +4215,16 @@ def _digests(view: View, *, skip_associations: bool) -> tuple[str, ...]:
     own = [lk for lk in kept if lk.key not in carried]
     return (
         entities,
-        _digest((lk.link_type, lk.source, lk.target, lk.occurrences) for lk in own),
+        _digest(
+            (lk.link_type, lk.source, lk.target, None if _from_call_volume(lk) else lk.occurrences)
+            for lk in own
+        ),
         _digest(
             (lk.link_type, lk.source, lk.target, repr(lk.first_seen), repr(lk.last_seen))
             for lk in own
-            if lk.occurrences > 1 and lk.link_type not in ONE_DATE_EXEMPT
+            if lk.occurrences > 1
+            and lk.link_type not in ONE_DATE_EXEMPT
+            and not _from_call_volume(lk)
         ),
         _digest((lk.link_type, lk.source, lk.target) for lk in kept if lk.key in carried),
         # One-occurrence links keep the date they were drawn first (the other draw is set aside).

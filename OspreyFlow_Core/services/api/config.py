@@ -114,6 +114,15 @@ class PostgresConfig:
 DEFAULT_SUPERSEDE_JOB_DEGREE_THRESHOLD = 500
 
 
+def _on_or_off(name: str, raw: str | None) -> bool:
+    """`on` or `off`, in any case; unset or empty is `on`. Anything else is refused by name, since a
+    typo must not leave a switch the operator meant to turn off turned on."""
+    value = (raw or "on").strip().lower() or "on"
+    if value not in ("on", "off"):
+        raise ValueError(f"{name} must be 'on' or 'off', not {raw!r}")
+    return value == "on"
+
+
 @dataclass(frozen=True)
 class ApiConfig:
     valkey: ValkeyConfig
@@ -172,6 +181,10 @@ class ApiConfig:
     #: `components.analytics_engine` (ADR-114 decision 9): `duckdb` or `clickhouse`, opened by
     #: `services/api/analytics_store.py`, which refuses anything else.
     analytics_engine: str = "duckdb"
+    #: `OSPREY_POST_INGEST_RESOLUTION` (ADR-127 Amendment 33): `on` (the default) enqueues a
+    #: resolution job after a load that made a node of a resolvable type (ADR-025's hook); `off`
+    #: enqueues none. An analyst's own "Resolve now" is unaffected.
+    post_ingest_resolution: bool = True
 
     @classmethod
     def from_env(cls) -> ApiConfig:
@@ -207,6 +220,9 @@ class ApiConfig:
             osprey_config_path=os.environ.get("OSPREY_CONFIG_PATH", "osprey.yaml"),
             analytics_db_path=os.environ.get("ANALYTICS_DB_PATH", DEFAULT_ANALYTICS_DB_PATH),
             analytics_engine=os.environ.get("OSPREY_ANALYTICS_ENGINE", "duckdb"),
+            post_ingest_resolution=_on_or_off(
+                "OSPREY_POST_INGEST_RESOLUTION", os.environ.get("OSPREY_POST_INGEST_RESOLUTION")
+            ),
             hotlist_alert_policy=disclosure_policy_from_value(
                 os.environ.get("HOTLIST_ALERT_POLICY")
             ),

@@ -67,7 +67,7 @@ def offline_store() -> StudioRecipeStore:
 async def enter(rec: Recipe) -> Any:
     return await offline_store().enter_published_for_seed(
         rec, source_location="uploaded/prison-intelligence/x.csv", git_path="recipes/x.yaml",
-        dataset_id="prison-intelligence", owning_unit="verify", published_by="pid-seed-worker",
+        dataset_id="prison-intelligence", owning_unit="verify", published_by="osprey-demo-engineer",
         now=NOW, ontology=ONTOLOGY, scheme=SCHEME,
     )  # fmt: skip
 
@@ -308,3 +308,120 @@ def test_a_row_that_is_what_entering_writes_differs_in_nothing() -> None:
 )
 def test_a_row_stale_in_any_one_column_is_named(column: str, stale: Any) -> None:
     assert _differences({**_row_as_entered(), column: stale}) == [column]
+
+
+# --- `enter_draft_for_seed`: R9's first draft (ADR-127 Amendment 23, "R9's draft") -------------------
+# A recipe the seed has not entered has no row for `restore_to_draft` to restore from, so the first
+# seed writes R9's draft itself, once, keeping its id and version, and leaves any row there alone.
+# Pure: a connection stand-in holds the rows. The rows, the transaction and what `feeding` and
+# `list_drafts` then list are proved live in `test_studio_recipes_store.py`.
+
+SOURCE = "/ingest/uploaded/prison-intelligence/pid_intel_reports.csv"
+
+
+class _DraftConn:
+    """Holds `studio_recipes` rows as the store's own statements write them."""
+
+    def __init__(self, rows: list[dict[str, Any]] | None = None) -> None:
+        self.rows = rows or []
+        self.executed: list[tuple[str, tuple[Any, ...]]] = []
+
+    def transaction(self) -> _Tx:
+        return _Tx()
+
+    async def execute(self, sql: str, *args: Any) -> None:
+        self.executed.append((sql, args))
+        if sql.startswith("INSERT"):
+            keys = ("recipe_id", "version", "label", "status", "content", "owning_unit",
+                    "created_by", "created_at", "dataset_id")  # fmt: skip
+            self.rows.append(
+                {
+                    "verified_at": None, "ontology_version": None, "pack_versions": None,
+                    "git_path": None, "published_by": None, "published_at": None,
+                    "schedule_cron": None, "schedule_watch": None, **dict(zip(keys, args)),
+                }  # fmt: skip
+            )
+
+    async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
+        mine = [r for r in self.rows if r["recipe_id"] == args[0]]
+        return max(mine, key=lambda r: r["version"]) if mine else None
+
+
+def _draft_store(conn: _DraftConn) -> StudioRecipeStore:
+    return StudioRecipeStore(_RestorePool(conn))  # type: ignore[arg-type, call-overload]
+
+
+async def _enter_draft(store: StudioRecipeStore, rec: Recipe | None = None) -> Any:
+    return await store.enter_draft_for_seed(  # type: ignore[attr-defined]
+        rec or recipe("pid_intel_reports_recipe.yaml"), source_location=SOURCE,
+        dataset_id="prison-intelligence", owning_unit="verify", created_by="osprey-demo-engineer",
+        now=NOW, pipeline=_starting(),
+    )  # fmt: skip
+
+
+async def test_the_first_entry_writes_the_draft_at_the_recipes_own_id_and_version() -> None:
+    import json
+
+    conn = _DraftConn()
+    draft = await _enter_draft(_draft_store(conn))
+    (insert,) = [a for sql, a in conn.executed if sql.startswith("INSERT")]
+    assert (insert[0], insert[1], insert[3]) == ("pid-intel-reports", 1, "draft")
+    assert insert[5:7] == ("verify", "osprey-demo-engineer") and insert[8] == "prison-intelligence"
+    content = json.loads(insert[4])
+    assert content["row_template"] is None and content["unmapped_fields"] == []
+    assert content["deduplicate"] is None
+    assert content["pipeline"] == _starting().model_dump(by_alias=True)
+    assert content["connector_profile"] == "generic-csv" and content["source_location"] == SOURCE
+    assert content["legal_basis"] == "Synthetic demonstration data"
+    assert content["handling"]["units"] and content["handling"]["handling_columns"]
+    assert content["handling"]["classification"] == "OFFICIAL"
+    assert (draft.recipe_id, draft.version, draft.status.value) == ("pid-intel-reports", 1, "draft")
+    assert draft.row_template is None and draft.ready_for_profile
+    assert draft.published_at is None and draft.verified_at is None and draft.git_path is None
+
+
+async def test_a_row_already_there_is_left_exactly_as_it_is_whatever_its_status() -> None:
+    """A second seed, or one after the rehearsal's reset, must not write over what the engineer did
+    or what the reset restored."""
+    for status in ("draft", "published", "flagged", "superseded"):
+        entered = await _enter_draft(_draft_store(_DraftConn()))
+        row = {
+            "recipe_id": "pid-intel-reports", "version": 7, "status": status, "label": "Mapped",
+            "content": "{}", "owning_unit": "verify", "created_by": "someone",
+            "created_at": NOW, "dataset_id": "prison-intelligence", "verified_at": NOW,
+            "ontology_version": 16, "pack_versions": None, "git_path": None, "published_by": None,
+            "published_at": None, "schedule_cron": None, "schedule_watch": None,
+        }  # fmt: skip
+        conn = _DraftConn([row])
+        again = await _enter_draft(_draft_store(conn))
+        assert [sql for sql, _ in conn.executed if sql.startswith(("INSERT", "UPDATE"))] == []
+        assert (again.version, again.status.value, again.label) == (7, status, "Mapped")
+        assert entered.version == 1
+
+
+async def test_a_recipe_with_no_legal_basis_is_refused_before_the_database() -> None:
+    rec = recipe("pid_intel_reports_recipe.yaml").model_copy(deep=True)
+    rec.defaults.legal_basis = "  "
+    with pytest.raises(SeededRecipeNoLegalBasis):
+        await _enter_draft(offline_store(), rec)
+
+
+async def test_columns_for_a_unit_with_no_units_declared_are_refused_before_the_database() -> None:
+    rec = recipe("pid_intel_reports_recipe.yaml").model_copy(deep=True)
+    rec.defaults.units = []
+    with pytest.raises(ValueError, match="units"):
+        await _enter_draft(offline_store(), rec)
+
+
+async def test_a_recipe_that_passes_reaches_the_database_for_the_draft_too() -> None:
+    """The control for the two refusals above."""
+    with pytest.raises(AttributeError):
+        await _enter_draft(offline_store())
+
+
+def test_the_draft_takes_its_pipeline_as_a_required_keyword() -> None:
+    import inspect
+
+    parameter = inspect.signature(StudioRecipeStore.enter_draft_for_seed).parameters  # type: ignore[attr-defined]
+    assert parameter["pipeline"].default is inspect.Parameter.empty
+    assert parameter["pipeline"].kind is inspect.Parameter.KEYWORD_ONLY

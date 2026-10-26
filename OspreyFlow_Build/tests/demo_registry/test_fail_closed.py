@@ -42,9 +42,9 @@ def test_a_correctly_spelled_shipped_manifest_is_included() -> None:
 
 
 def test_the_real_registry_holds_exactly_the_datasets_it_is_known_to_hold() -> None:
-    """Checked directly, not assumed. Five shipped demos (`hmp`, `fixture-corp`,
-    `operation-ledger`, and `paysim` and `enron` as downloads, ADR-114 Amendments 1 and 23) and no
-    internal one, here or in the developer repository's list (the Enron corpus left it for the
+    """Checked directly, not assumed. Six shipped demos (`hmp`, `fixture-corp`,
+    `operation-ledger`, `prison-intelligence` (ADR-127 Amendment 23), and `paysim` and `enron` as
+    downloads, ADR-114 Amendments 1 and 23) and no internal one, here or in the developer repository's list (the Enron corpus left it for the
     product with Amendment 23). Adding a dataset must change this test, so a registry entry can never
     appear unnoticed."""
     assert {m.id for m in shipped_manifests(REGISTRY)} == {
@@ -53,6 +53,7 @@ def test_the_real_registry_holds_exactly_the_datasets_it_is_known_to_hold() -> N
         "operation-ledger",
         "paysim",
         "enron",
+        "prison-intelligence",
     }
     assert {m.id for m in internal_manifests(REGISTRY)} == set()
     from internal_demos.registry import ALL
@@ -84,3 +85,30 @@ def test_a_misspelled_or_missing_delivery_is_not_seeded_and_its_data_is_refused(
     )
     assert seeded.is_seeded is True
     assert packaging_gate.find_internal_demo_data([path], registry=(seeded,)) == []
+
+
+def test_a_misspelled_distribution_for_the_prison_intelligence_pack_is_internal() -> None:
+    """ADR-127 Amendment 23, "The registration": the PID's own manifest fails closed as every other
+    does. Each misspelling is made of the real manifest, in its real shape, so what is refused is the
+    manifest the registry holds and not a stand-in: it is not shipped, it is not offered as a pack,
+    and the packaging gate refuses its files."""
+    import dataclasses
+
+    import pytest
+    from scripts import demo_packs
+
+    real = next(m for m in REGISTRY if m.id == "prison-intelligence")
+    assert real.is_shipped and real.is_seeded
+    for bad in ("Shipped", "SHIPPED", "shiped", "public", ""):
+        misspelt = dataclasses.replace(real, distribution=bad)
+        assert misspelt.is_shipped is False, bad
+        registry = tuple(misspelt if m.id == real.id else m for m in REGISTRY)
+        assert misspelt in internal_manifests(registry)
+        assert "prison-intelligence" not in [p.id for p in demo_packs.packs(registry)]
+        with pytest.raises(demo_packs.PackRefused):
+            demo_packs.pack("prison-intelligence", registry)
+        assert packaging_gate.find_internal_demo_data(list(real.paths), registry=registry) == list(
+            real.paths
+        ), bad
+    from_dict = DemoManifest.from_dict({"id": "prison-intelligence", "seed_module": real.seed_module})
+    assert from_dict.is_shipped is False

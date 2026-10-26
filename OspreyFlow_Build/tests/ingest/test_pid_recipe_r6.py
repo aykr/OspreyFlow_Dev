@@ -2,9 +2,9 @@
 on Brief 1's real files. One recipe serves both: batch 1 is loaded by the seed, batch 2 sits
 unloaded until chapter 9. Loaded in the seed's order (ADR-127 Amendment 18): R11, R1, R3, R16 and R5,
 then R6. R5's load is the rows of its file that call a number R6 names (every row to each of them,
-so the first row that names each is the seed's), not all million: the stand-in cannot hold them, and
-the rest of the file touches nothing R6 does. So the coordinator's number, which batch 2's SIM talks
-to, is already a node, and a number R5 would have made first is the one R5 made. Every expectation
+so the first row that names each is the seed's), not the whole call file: the rest of the file touches nothing R6 does. So the coordinator's
+number, which batch 2's SIM talks to, is already a node, and a number R5 would have made first is
+the one R5 made. Every expectation
 comes from `pid_plan`. What a mistake would do, and the case that catches it:
 
 - a handset or SIM made twice, or not through `imei` / `imsi`, or a handset or SIM missing, or a

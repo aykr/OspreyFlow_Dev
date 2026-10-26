@@ -30,7 +30,10 @@ run at all; it exists for a later one.
 
 from __future__ import annotations
 
+import asyncio
+import functools
 import json
+import time
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -797,6 +800,12 @@ def preview_handling_and_provenance(
 #: transaction.
 FLUSH_CHUNK = 500
 
+#: ADR-127 Amendment 29: the row loop gives the event loop a turn when this many seconds have passed
+#: since its last. The clock is read for every row, not every few: a row can itself take tens of
+#: milliseconds, so a count of rows bounds nothing, and a clock read is about 50 ns against a row's
+#: hundreds of microseconds. What is never done is a sleep per row.
+YIELD_SECONDS = 0.2
+
 #: Test-only (ADR-127 Amendment 19, "the per-row reference is the same code with a flush size of
 #: one"). A test sets this to 1 to make a run with a handling scheme flush each write as it is held,
 #: which is what a run without a scheme does. Never set outside a test.
@@ -1202,8 +1211,14 @@ async def kept_among(
     }
     if others:
         raise RowKeyDefinitionChanged(sum(others.values()))
-    keys = sorted({k for k in row_group_keys(recipe, rows) if k is not None})
+    # Over every row of the file, so off the event loop (Amendment 29): the keep-alive of the run's
+    # open transaction turns only while the loop does.
+    keys = await asyncio.to_thread(_sorted_keys, recipe, rows)
     return frozenset(await row_keys.kept(recipe.id, case, keys)) if keys else frozenset()
+
+
+def _sorted_keys(recipe: Recipe, rows: Sequence[Mapping[str, str]]) -> list[str]:
+    return sorted({k for k in row_group_keys(recipe, rows) if k is not None})
 
 
 def resolve_rows(
@@ -2315,21 +2330,29 @@ async def run_recipe(
     # it makes re-resolution and schema migration possible without a
     # re-upload; staging only the post-transform rows, this module's
     # original shape, was a defect, not a design choice.
-    materialized_rows = list(rows)
+    # Every step below that works over all the rows runs in a worker thread (ADR-127 Amendment 29):
+    # the keep-alive of the run's open transaction is an asyncio task, and a million rows held on
+    # the loop for minutes starve it until the session expires.
+    materialized_rows = await asyncio.to_thread(list, rows)
     # Before anything is staged or written: a run under a changed `deduplicate` is refused whole.
     already = await kept_among(recipe, materialized_rows, row_keys, investigation_scope)
     storage = storage or ObjectStorageConfig.from_env()
-    _stage_raw_rows(materialized_rows, storage=storage, load_id=load_id, source=source)
+    await asyncio.to_thread(
+        _stage_raw_rows, materialized_rows, storage=storage, load_id=load_id, source=source
+    )
 
-    resolved = resolve_rows_keyed(
-        recipe,
-        materialized_rows,
-        load_id=load_id,
-        source=source,
-        ontology=ontology,
-        row_numbers=row_numbers,
-        scheme=scheme,
-        already_loaded=already,
+    resolved = await asyncio.to_thread(
+        functools.partial(
+            resolve_rows_keyed,
+            recipe,
+            materialized_rows,
+            load_id=load_id,
+            source=source,
+            ontology=ontology,
+            row_numbers=row_numbers,
+            scheme=scheme,
+            already_loaded=already,
+        )
     )
     staged_rows, rejections = resolved.staged_rows, resolved.rejections
     rows_read, rows_deduplicated = resolved.rows_read, resolved.rows_deduplicated
@@ -2338,8 +2361,10 @@ async def run_recipe(
     # `loaded_rows`, not `staged_rows`, so a bug that only shows up after a
     # real Parquet round trip (a type MinIO/Arrow cannot represent, an
     # encoding mismatch) fails here, not silently.
-    staged_path = _stage_rows(staged_rows, storage=storage, load_id=load_id)
-    loaded_rows = _read_staged_rows(staged_path, storage=storage)
+    staged_path = await asyncio.to_thread(
+        _stage_rows, staged_rows, storage=storage, load_id=load_id
+    )
+    loaded_rows = await asyncio.to_thread(_read_staged_rows, staged_path, storage=storage)
 
     state = _RunState(
         graph=graph,
@@ -2355,7 +2380,14 @@ async def run_recipe(
     )
     events: list[EventRecord] = []
 
+    yielded = time.monotonic()
     for staged_row in loaded_rows:
+        # The loop is given back at least every `YIELD_SECONDS` (Amendment 29): with its references
+        # cached a row seldom awaits, and a task that never gets a turn (the transaction's
+        # keep-alive) is as good as dead.
+        if time.monotonic() - yielded >= YIELD_SECONDS:
+            await asyncio.sleep(0)
+            yielded = time.monotonic()
         if staged_row.row_index in skip_row_indices:
             continue
         now = datetime.now(UTC)

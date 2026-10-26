@@ -109,3 +109,44 @@ async def test_post_ingest_hook_submits_nothing_for_a_recipe_with_no_row_templat
 
     assert job_ids == []
     assert jobs.submitted == []
+
+
+# --- ADR-127 Amendment 33: automatic resolution can be turned off --------------------------------
+# `OSPREY_POST_INGEST_RESOLUTION` (on by default) reaches the hook as `enabled`. Off: nothing is
+# enqueued, however many people a load made. An analyst's own "Resolve now" is untouched.
+
+
+async def test_post_ingest_hook_submits_nothing_when_resolution_is_off() -> None:
+    ontology = load_default_ontology()
+    jobs = _FakeJobQueue()
+
+    job_ids = await submit_post_ingest_resolution_jobs(
+        _load_report(nodes_created=5),
+        _row_template("Person", "Endpoint"),
+        ontology=ontology,
+        jobs=jobs,  # type: ignore[arg-type]
+        enabled=False,
+    )
+
+    assert job_ids == [] and jobs.submitted == []
+
+
+async def test_post_ingest_hook_submits_the_same_jobs_as_before_when_resolution_is_on() -> None:
+    ontology = load_default_ontology()
+    for extra in ({}, {"enabled": True}):
+        jobs = _FakeJobQueue()
+        job_ids = await submit_post_ingest_resolution_jobs(
+            _load_report(nodes_created=2),
+            _row_template("Person", "Endpoint"),
+            ontology=ontology,
+            jobs=jobs,  # type: ignore[arg-type]
+            **extra,
+        )
+        assert job_ids == ["job-1"]
+        assert jobs.submitted == [(JOB_TYPE_RESOLVE_ENTITY_TYPE, {"entity_type": "Person"})]
+
+
+async def test_resolve_now_still_enqueues_whatever_the_setting() -> None:
+    jobs = _FakeJobQueue()
+    accepted = await resolve_now("Person", ontology=load_default_ontology(), jobs=jobs)  # type: ignore[arg-type]
+    assert accepted.job_id == "job-1" and len(jobs.submitted) == 1

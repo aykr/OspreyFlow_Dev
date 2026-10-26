@@ -25,6 +25,14 @@ Exit 2 when it cannot find the PID at all, since a check over nothing proves not
     source starts `pid-` (id, name, source, case name, domains), and every string of each PID
     recipe, which carries the recipe id, label and the originator and unit it stamps.
 
+(d) *The seed and its registration* (ADR-127 Amendment 23). `scripts/seed_pid.py` is a PID file, so
+    (a) reads it. What it prints is built at run time from the recipes' ids and the files' names, so
+    its printed lines (the run's, the checks', the pictures', the reset's and the mid-demo commands')
+    are produced from real inputs and scanned; so are the folder, the worker and the other names it
+    holds. The registration is read too: the pack's manifest, its description, the seed's entry in
+    `seed_internal` and the command's pack key, and the lines of `DEMO_GUIDE.md` that name the
+    dataset.
+
 **A bare substring counts, case-insensitively.** The brief says "matches", the client reads file
 names and job lists, and an innocent word that happens to contain the letters would still show them
 in a list. If a real PID file ever hits one innocently, the answer is to say so, not to loosen this.
@@ -235,8 +243,194 @@ class NothingToCheck(Exception):
     """The PID could not be found: a check over nothing proves nothing."""
 
 
+# --- (d) the seed and its registration ----------------------------------------------------------
+
+
+def seed_lines() -> list[str]:
+    """What `scripts.seed_pid` prints, produced from real inputs: every stage of the load order with
+    the recipe id its committed file declares, the run's summary (a standing load's included),
+    R5's measurements, the checks, the pictures', the demo numbers (each one failing, over an empty
+    store, so the lines are built from the plan's own keys and values), the reset's (refused by a
+    revert, with and without `--show-ids`, and carried out, with a file to remove) and the release
+    of batch 2."""
+    import asyncio
+    import tempfile
+    from types import SimpleNamespace
+
+    from scripts import seed_pid
+    from services.ingest.load_revert import Refusal, RevertRefused
+
+    from demo_fixtures import pid_files as files
+    from demo_fixtures import pid_plan
+    from schemas.domain import Subgraph
+    from schemas.ingest import LoadRecord, LoadReport
+
+    root = Path("/ingest")
+    stages = [seed_pid.resolve(stage, root) for stage in files.SEED_ORDER]
+    results = [
+        seed_pid.StageResult(
+            stage,
+            skipped=index % 3 == 0 and stage.stage.file != files.CALLS,
+            report=None
+            if index % 3 == 0 and stage.stage.file != files.CALLS
+            else LoadReport(
+                load_id="l", recipe_id=stage.recipe_id, recipe_version=stage.version,
+                rows_read=7, nodes_created=2, edges_created=1,
+            ),
+            seconds=1.5,
+            standing=seed_pid.StandingRun(rows_read=7, rejected=1, held=0)
+            if index % 3 == 0 and stage.stage.file != files.CALLS and index % 2 == 0
+            else None,
+        )
+        for index, stage in enumerate(stages)
+    ]  # fmt: skip
+    lines = seed_pid.summary_lines(results)
+    lines += seed_pid.measurement_lines(results, peak_before_mb=100.0, peak_after_mb=200.0)
+    lines += seed_pid.check_lines(results, {s.stage.file: 7 for s in stages})[0]
+    lines += seed_pid.picture_lines(
+        seed_pid.PictureSummary(attached=5, skipped=2, missing=["principal"],
+                                refused=[("brother", "UploadRefusedError: refused")]), 8,
+    )  # fmt: skip
+
+    class Empty:
+        """A store that holds nothing: every demo number fails and says what it could not find."""
+
+        async def find_node(self, *args: Any) -> None:
+            return None
+
+        async def search_nodes(self, *args: Any, **kwargs: Any) -> list[Any]:
+            return []
+
+        async def expand(self, *args: Any) -> Subgraph:
+            return Subgraph(nodes=[], edges=[])
+
+        async def match(self, *args: Any) -> Subgraph:
+            return Subgraph(nodes=[], edges=[])
+
+        async def match_count(self, *args: Any, **kwargs: Any) -> int:
+            return 0
+
+    plan = pid_plan.build_plan("demo")
+    for moment in ("seed", "chapter4"):
+        numbers = asyncio.run(
+            seed_pid.run_demo_checks(Empty(), seed_pid.engineer(), plan, moment)  # type: ignore[arg-type]
+        )
+        lines += seed_pid.demo_check_lines(numbers)[0]
+
+    def record(load_id: str, recipe: str, source: str) -> LoadRecord:
+        return LoadRecord(
+            load_id=load_id, recipe_id=recipe, recipe_version=1, source=source,
+            started_at=datetime(2026, 10, 26, tzinfo=UTC), created_by="w", created_node_ids=["n"],
+        )  # fmt: skip
+
+    class World:
+        def __init__(self, resting: set[str]) -> None:
+            self.resting = resting
+
+        async def unreverted_loads(self, case: str, recipe_ids: Any) -> list[LoadRecord]:
+            return [
+                record("02", seed_pid.incidents_recipe_id(), seed_pid.source_of(root, files.REPORT_INCIDENTS)),
+                record("01", seed_pid.reports_recipe_id(), seed_pid.source_of(root, files.REPORTS)),
+            ]  # fmt: skip
+
+        async def load_record(self, load_id: str) -> LoadRecord | None:
+            return record(load_id, seed_pid.reports_recipe_id(), "x")
+
+        async def live_edges_touching(self, node_ids: Any) -> set[str]:
+            return set(self.resting)
+
+        async def get_edges(self, ids: Any, principal: Any) -> list[Any]:
+            return [SimpleNamespace(id=i, type="SAME_AS") for i in sorted(ids)]
+
+        async def revert(self, load_id: str, **kwargs: Any) -> None:
+            return None
+
+        async def refuse(self, load_id: str, **kwargs: Any) -> None:
+            raise RevertRefused([Refusal(load_id, "rests_on_by_live_links", 1)])
+
+    async def nothing() -> None:
+        return None
+
+    async def not_at_its_start() -> bool:
+        return False
+
+    with tempfile.TemporaryDirectory() as folder:
+        scratch = Path(folder)
+        listed = seed_pid.listed_folder(scratch)
+        (listed / seed_pid.INCOMING).mkdir(parents=True)
+        (listed / "a_corrected_upload.csv").write_text("x", encoding="utf-8")
+        (listed / files.BATCH_2).write_text("x", encoding="utf-8")
+        (listed / seed_pid.INCOMING / files.BATCH_2).write_text("x", encoding="utf-8")
+        for resting, refusing, show in (
+            ({"same-as-1"}, True, False), ({"same-as-1"}, True, True), (set(), False, False),
+        ):  # fmt: skip
+            world = World(resting)
+            asyncio.run(
+                seed_pid.reset_live(
+                    case_id="c", root=scratch, ledger=world, graph=world,
+                    worker=seed_pid.engineer(),
+                    revert=world.refuse if refusing else world.revert, deps=None,
+                    now=datetime(2026, 10, 26, tzinfo=UTC), restore_draft=nothing,
+                    draft_is_starting=not_at_its_start, rewrite_reports=lambda: None,
+                    say=lines.append, show_ids=show,
+                )  # fmt: skip
+            )
+        lines.append(seed_pid.release_batch_2(scratch).replace(str(scratch), "<root>"))
+        lines.append(seed_pid.release_batch_2(scratch).replace(str(scratch), "<root>"))
+    return lines
+
+
+def scan_seed() -> list[Hit]:
+    """The seed's own names (the folder, the loader, the unit, the legal basis and the two
+    sentences it prints whole) and every line it prints, from `seed_lines`."""
+    from scripts import seed_pid
+
+    hits: list[Hit] = []
+    for name in (
+        "FOLDER", "INCOMING", "ENGINEER_ID", "WORKER_UNIT", "LEGAL_BASIS", "BACKUP_COMMAND",
+        "RESTORE_COMMAND", "FALLBACK_SKIPS",
+    ):  # fmt: skip
+        hits += _scan(f"seed constant {name}", str(getattr(seed_pid, name)))
+    for line in seed_lines():
+        hits += _scan("seed printed line", line)
+    return hits
+
+
+def scan_registration(guide: Path | None = None) -> list[Hit]:
+    """The pack's registration: its manifest, its description, the seed's entry in `seed_internal`,
+    the command's pack key, and the lines of the demo guide that name the dataset."""
+    from ospreyflow import demo as command
+    from scripts import demo_packs, demo_registry, seed_internal
+
+    pack_id = "prison-intelligence"
+    hits: list[Hit] = []
+    manifest = next(m for m in demo_registry.REGISTRY if m.id == pack_id)
+    for field in dataclasses.fields(manifest):
+        for _where, text in _strings(getattr(manifest, field.name)):
+            hits += _scan(f"registered manifest {pack_id}.{field.name}", text)
+    description = demo_packs._DESCRIPTIONS[pack_id]
+    for field in dataclasses.fields(description):
+        for _where, text in _strings(getattr(description, field.name)):
+            hits += _scan(f"registered pack {pack_id}.{field.name}", text)
+    seed = seed_internal.DATASETS[pack_id]
+    for field in dataclasses.fields(seed):
+        for _where, text in _strings(getattr(seed, field.name)):
+            hits += _scan(f"registered seed {pack_id}.{field.name}", text)
+    hits += _scan(f"registered pack key {pack_id}", command.PACK_KEYS[pack_id])
+    path = guide or (repository_root() / "OspreyFlow_Core" / "DEMO_GUIDE.md")
+    if path.is_file():
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "Prison Intelligence Dataset" in line and PATTERN.search(line):
+                hits.append(Hit(f"demo guide:{number}", line))
+    return hits
+
+
 def check(
-    root: Path | None = None, *, generated: bool = True, plan: Any | None = None
+    root: Path | None = None,
+    *,
+    generated: bool = True,
+    plan: Any | None = None,
+    seed: bool = True,
 ) -> list[Hit]:
     root = root or repository_root()
     paths = pid_files(root)
@@ -248,6 +442,8 @@ def check(
     hits = scan_files(root, paths) + scan_registry(datasets) + scan_recipes(paths)
     if generated:
         hits += scan_generated(plan)
+    if seed:
+        hits += scan_seed() + scan_registration()
     return hits
 
 
@@ -255,7 +451,8 @@ def main(argv: list[str] | None = None) -> int:
     argparse.ArgumentParser(
         prog="python -m tools.pid_naming_check", description=__doc__.split("\n\n")[0]
     ).parse_args(argv)
-    sys.path[:0] = [str(repository_root() / "OspreyFlow_Core" / "packages")]
+    core = repository_root() / "OspreyFlow_Core"
+    sys.path[:0] = [str(core / "packages"), str(core / "cli"), str(core)]
     try:
         hits = check()
     except NothingToCheck as error:
@@ -268,7 +465,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(
         f"pid-naming-check: {len(pid_files(repository_root()))} PID file(s), "
-        f"{len(pid_datasets())} registered dataset(s) and the generated demo output: no hit."
+        f"{len(pid_datasets())} registered dataset(s), the seed's names and printed lines, its "
+        "registration and the generated demo output: no hit."
     )
     return 0
 

@@ -18961,3 +18961,211 @@ delegation for Brief 2.
   - **No scheme.** A service built without a scheme refuses on both paths.
   - **Wiring.** The lifespan gives the service `app.state.audit` and the scheme, not merely keywords of
     those names.
+
+### ADR-127, Amendment 28 (26 October 2026) — B2-10c as built, and how the SECRET link's absence is tested
+
+Decided by the coordinator under the owner's delegation for Brief 2.
+- **Where the code could not follow Amendment 23's wording, the smallest change was taken.**
+  - **R9's first draft.** `create_draft` cannot keep a fixed id, and `restore_to_draft` needs a row. So a
+    third confined method, `enter_draft_for_seed`, writes version 1 as a draft with the starting pipeline.
+    A row already present, at any version or status, is left exactly as it is. The reset uses
+    `restore_to_draft`, and this method only when no row exists.
+  - **Byte for byte.** `write_and_commit_recipe` re-serialises, losing the committed files' comments. Its
+    commit half is now `commit_recipe_file`, which both it and the seed use.
+  - **The outside-links precheck** is `load_revert.links_resting_on`, so the unfiltered edge read stays
+    confined to the revert module.
+  - **The mid-demo commands** run as a one-shot `docker compose run --rm --no-deps` with the checkout
+    mounted, rather than `exec` in the running container, whose image may hold older code. Neither stops
+    the Conduit.
+  - **The recipe repository is never defaulted.** The seed refuses unless `OSPREY_RECIPE_REPO_ROOT` is set
+    and equals the repository the runs read, so it can never commit inside the checkout.
+  - **The R17 guard** sits in the one function that runs a stage. The reset never runs R17, so the guard
+    has nothing to refuse there.
+- **How "the SECRET link leaves no trace" is tested** (Brief 2 §8, Amendment 26).
+  - **The obstacle.** A seeded case has no seeded twin without the SECRET link, since a recipe row holds
+    one dataset (the deferred `--scale` case meets the same limit).
+  - **The comparison.** The test compares the demo analyst's readings of the seeded case at the seed
+    moment with those of a SECRET-free store written by Brief 1's plan writer. The readings are: canvas
+    expand, counts, paths, degrees, and the analytics routes (histogram, cross-filter, geobins,
+    first-seen, sightings, busiest days, trends). The comparison reuses Brief 1's live access test's
+    machinery.
+  - **Data feeds and the run ledger** have no twin. They are covered by R15's counts being withheld from
+    an OFFICIAL reader, and by a rejected or held SECRET row's counts and sample being withheld.
+  - **When.** Written and run in Brief 2's step of remaining tests and gates.
+
+### ADR-127, Amendment 29 (26 October 2026) — B2-9b: a run never holds the event loop long enough to lose its transaction
+
+Found by the coordinator in the first real seed run, and decided under the owner's delegation for Brief 2.
+- **The finding.** The seed loaded eleven stages, R11 to R15, and then R5's million rows failed after
+  about four minutes with ArcadeDB's 404 "Remote transaction session not found or expired" (the run
+  ledger records the eleven successes and the one failure).
+  - **Why the keep-alive did not save it.** The keep-alive (Amendments 20 and 21) is an asyncio task.
+    It runs only when the event loop gets a turn. A million-row run spends long synchronous stretches
+    reading the file, staging it, computing keys, and in a row loop that seldom awaits once its
+    references are cached, so the loop never turns and the session expires within 5 to 10 seconds.
+  - **Why no test saw it.** The keep-alive's own tests idle with real sleeps, which yield.
+  - **Memory.** The run had reached 8.2 GB resident, a 17 GB peak footprint.
+- **The rule.**
+  - **The row loop yields.** No step of a run holds the event loop for more than about a second: the
+    row loop gives way to the loop (`await asyncio.sleep(0)`) at least every 200 ms.
+  - **Large synchronous steps move off the loop.** Reading and parsing the whole file, writing and
+    reading the staging file, and computing the row keys each run in a worker thread
+    (`asyncio.to_thread`), so the keep-alive turns while they work.
+- **Tests that would fail (rule 12).**
+  - **A loop monitor.** A task sampling the loop every 100 ms records its longest stall during a full R5
+    run on the recipe tests' stand-in. The test fails if any stall exceeds 2 seconds. It is planted red
+    with the yields removed.
+  - **Live.** A run whose rows take 20 seconds of synchronous work in total, with no graph call between,
+    commits on the real ArcadeDB.
+  - **The real check.** The seed's full live run completes R5.
+
+### ADR-127, Amendment 30 (26 October 2026) — B2-10c corrected, from its adversarial review
+
+Decided by the coordinator under the owner's delegation for Brief 2.
+- **Nothing is committed before the store agrees.** For each recipe the seed runs the same comparison
+  `enter_published_for_seed` makes before it writes the recipe repository. A row that differs is refused
+  by name with nothing committed, so a committed file never differs from its published row.
+- **The reset judges every chosen load before reverting any.** Every refusal the revert can give
+  (`rests_on_by_live_links`, `superseded_by_a_correction`, `rewritten_by_another_writer`,
+  `merged_into_by_later_load`, a release's cascade, and the record refusals) is judged for every chosen
+  record against the state before any revert. If any would refuse, nothing is reverted, and the report
+  names each. A rehearsal can therefore never be left half reset.
+- **The R9 fallback is a publish the route would make.** `--publish-reports-fallback` publishes the
+  committed R9 file as the row's content, its Connect fields included, so the row and the committed file
+  agree. It writes the `publish_studio_recipe` audit entry, applies `pipeline_run_violations`, and
+  commits the recipe with its pipeline as `build_recipe` does (ADR-108 phase C). It skips only the
+  route's role, case-Editor and Verify checks, and says so.
+- **The operator.** The seed's operator is taken to be cleared to SECRET: the seed loads as a SECRET
+  worker and prints per-recipe counts, R15's SECRET link included. A reset refusal prints counts.
+  Link types and ids are printed only with `--show-ids`, as `scripts.revert_load` does.
+- **Resolution's links.** After a load, the run enqueues post-ingest resolution jobs. If the Conduit's
+  worker later writes `SAME_AS` links that rest on R9's or batch 2's nodes, every rehearsal reset would
+  refuse. B2-10c finds out whether it does, on the real stack. If it does, the seed's datasets run no
+  post-ingest resolution, and a test shows none is enqueued. If it does not, a test shows that too.
+- **Deferred, with an owner.** These need the Conduit's routes over the seeded stores, so they are
+  written in Brief 2's step of remaining tests and gates, by the coordinator:
+  - the demo analyst fetching one picture through the route (Brief 2 §7.1 4a);
+  - Data feeds listing the recipes and withholding R15's counts from an OFFICIAL reader;
+  - `test_pid_secret_link_leaves_no_trace` (Amendment 28).
+
+  Until the last passes, `DEMO_GUIDE.md` does not claim the "same answer with or without the secret
+  link".
+- **Smaller corrections.**
+  - **Confinement.** `links_resting_on` and `unreverted_loads` are confined to the seed by test.
+  - **Containers.** The mid-demo one-shot mounts `connectors/` too.
+  - **Errors.** Every refusal the seed can meet is printed by name, with a non-zero exit, rather than a
+    traceback.
+  - **A reseed reports standing loads.** A second seed reports each standing load's held, rejected and
+    short-read rows and fails its checks as the first would, so a reseed cannot hide a failed first seed.
+  - **The reset leaves a starting draft alone.** It writes no new R9 version when R9 is already at its
+    starting draft and nothing was reverted.
+  - **Ordering.** The repository agreement is checked before any file or case is written.
+  - **Ambiguity refused.** Two cases of the same name are refused.
+  - **The live test.** It matches the attached-picture count exactly, and snapshots the registry rows and
+    the recipe repository's commit count.
+  - **The guide check** looks for the dataset's own table row, not the name anywhere.
+
+### ADR-120, Amendment 16 (26 October 2026) — the Prison Intelligence Dataset is OFFICIAL throughout
+
+**The owner's ruling of 26 October 2026** ("Make it OFFICIAL-only"; "for this demo I had expected all
+data to be marked as official and not secret").
+- **The change.** The dataset's one SECRET element, the conflict between two prisoners known from a
+  covert source (Brief 1 §5.8's Access row; R15), is removed from the plan and from the conflicts file.
+  Every remaining element is OFFICIAL with handling code `P`.
+- **Why removed rather than reclassified (owner's ruling, "Drop the link").** Marked OFFICIAL, the link
+  became visible to the demo analyst and moved demo numbers. J1 would have read 46 and 50, not 45 and 49.
+  At the seed moment, J7's ranking would have put the establishment second, ahead of the relays.
+  Removed, every number the script and `PID_ACTUALS.md` quote holds unchanged, since they were computed
+  with the link hidden.
+- **What goes.**
+  - Brief 1 §5.8's Access acceptance ("a SECRET-cleared principal sees the SECRET link; the demo analyst
+    sees no trace of it").
+  - The plan's SECRET marking and the tests that assert it.
+  - The SECRET-specific comparisons of Brief 1's live access test. Its other access cases stay.
+- **What stays.** Every product access-control rule: the product still serves mixed classifications,
+  and this dataset simply holds none. `links_at`'s `secret_cleared` parameter is kept for its callers,
+  with no effect on this plan.
+
+### ADR-127, Amendment 31 (26 October 2026) — Brief 2 with an OFFICIAL dataset, and one review at the end
+
+**The owner's rulings of 26 October 2026** ("Make it OFFICIAL-only"; "One review at the end").
+- **The seed loads as the data engineer.** With no SECRET row (ADR-120 Amendment 16), the seed's loads run
+  as the persona `osprey-demo-engineer` (OFFICIAL, unit `verify`), scoped to the case, as Brief 2 §7.1
+  says. Amendment 23's SECRET-cleared seed worker is withdrawn.
+  - **Pictures.** The data engineer's role holds no `EDIT_GRAPH`, so the seed attaches pictures through
+    the service's seed path as that principal, with `EDIT_GRAPH` granted to it within the seed alone.
+  - **Recorded.** No deployment role changes.
+- **Withdrawn, with nothing to test.**
+  - `test_pid_secret_link_leaves_no_trace` (Amendments 26 and 28).
+  - The live test that Data feeds withholds R15's counts from an OFFICIAL reader.
+  - The operator-is-SECRET-cleared note (Amendment 30).
+
+  The general rule-3 behaviour built in B2-10a (every row's marking recorded, withheld counts, masked
+  rejection samples) stays, with its own tests over synthetic markings.
+- **Still built.** The picture fetch-back through the route as the demo analyst (Brief 2 §7.1 4a).
+- **Reviews.** For the rest of Brief 2, each unit is committed locally once its own tests pass, and one
+  adversarial review of everything since `ce1c2f9` follows the loaded dataset. Its findings are fixed, and
+  then the work is pushed. This changes the run plan's per-hand-back review for Brief 2 only.
+
+### ADR-120, Amendment 17 (26 October 2026) — the PIN-call file holds about 100,000 calls
+
+**The owner's ruling of 26 October 2026** ("100k PIN calls, not 1M"; "speed is of essence").
+- **The change.** Brief 1 D5's background call volume falls from about 1,000,000 rows to about 100,000.
+  The cast's calls, the coordinator's included, are planned apart from the background and are unchanged,
+  so J2, J7 and every demo number the plan states hold as before. The plan's tests assert the new volume.
+- **Why.** The million-row load needed about 8 GB of memory and most of the seed's time. That is a risk on a
+  demo machine, and it showed nothing the demo needs. The engine work it prompted (ADR-127 Amendments 19 to
+  21 and 29) stays.
+
+### ADR-127, Amendment 32 (26 October 2026) — Brief 2's remaining steps, trimmed for the demo
+
+**The owner's rulings of 26 October 2026** ("Trim the tests step", "Simpler reset", "Short
+INGEST_ACTUALS").
+- **The tests step.** Brief 2 §8's demo-number checks (J1, J2, Ch2, Ch3, Ch5, Ch6, Ch11 and the
+  handling row) run once inside the seed as its printed checks; a failed check fails the seed. The live
+  tests are three: a second seed adds nothing; a rehearsal reset restores the starting state; the demo
+  analyst fetches one picture through the route. Amendment 23's and 30's other live tests are withdrawn.
+- **The reset.**
+  - **What it does.** `--reset-live` reverts every unreverted load of R17, R9 and R6's batch 2, newest
+    first, then restores R9's draft and the files.
+  - **On a refusal.** If any revert refuses, it stops, names the refusal, and says to reseed the case.
+  - **Withdrawn.** Amendment 30's precheck of every refusal before any revert.
+- **`INGEST_ACTUALS.md`** holds the recipe list with real counts and times, the seed, reset and mid-demo
+  commands in full, where each VERIFY item landed, what the demo script must change, and what the brief
+  got wrong. The spike narrative stays in this ADR.
+
+### ADR-127, Amendment 33 (26 October 2026) — automatic resolution can be turned off, and a stuck rehearsal is restored from a backup
+
+Decided by the coordinator under the owner's delegation for Brief 2, from B2-10c's reading of the code.
+- **The finding.**
+  - **What a run queues.** Every Studio run that creates a node of a type with a `resolution:` block
+    (`Person`, in the shipped ontology) enqueues a `resolve_entity_type` job (ADR-025's post-ingest hook).
+  - **What the worker writes.** The Conduit's worker resolves every `Person` in the corpus, blocking on
+    the family name's soundex and the birth year, and writes a `SAME_AS` link for every candidate pair,
+    with no score floor (the threshold applies at query time).
+  - **What that does to the demo.**
+    - A live chapter-4 run of R9 makes one `Person`, the man arrested outside. The worker would then
+      write about 39 `SAME_AS` links resting on him (39 other people share his birth year), and every
+      rehearsal reset would refuse.
+    - The same worker after the seed would add `SAME_AS` links around the principal, which can move J1.
+    - The seed suppresses its own runs' jobs (B2-10c); the engineer's live runs do not.
+- **The decision: a deployment setting.** `OSPREY_POST_INGEST_RESOLUTION` is `on` by default, which is
+  today's behaviour, unchanged. When it is `off`, `submit_post_ingest_resolution_jobs` enqueues nothing.
+  - **The demo.** The demo deployment of the Prison Intelligence pack sets it `off`; the install or the
+    pack's own setting writes it.
+  - **Resolving on cue.** An analyst's own "Resolve now" still works, so a scene that shows resolution
+    runs it on cue.
+  - **Tests.** A test shows nothing is enqueued when the setting is off, and a test shows the jobs as
+    today when it is on.
+- **A stuck rehearsal is restored, not reseeded.**
+  - **The finding.** A seed skips standing loads, so reseeding cannot clear a case whose loads have links
+    resting on them.
+  - **The procedure.** After seeding, the operator takes `ospreyflow backup`. When `--reset-live` refuses,
+    its message gives the full `ospreyflow restore` command for that backup, in place of "reseed the
+    case".
+  - **Where it is written.** `INGEST_ACTUALS.md` and the demo script's "Before the demo" carry the
+    procedure.
+- **Ch5 and the handling row are checked after chapter 4.** At the seed moment the reports are not
+  loaded, so the seed reports these two checks as not run. `python -m scripts.seed_pid --check` runs every
+  demo-number check for the moment the stored loads reach. The operator runs it after a chapter-4
+  rehearsal.

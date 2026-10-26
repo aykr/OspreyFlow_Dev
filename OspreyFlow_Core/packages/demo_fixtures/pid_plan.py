@@ -13,7 +13,7 @@ plan's own entities and links.
 Two profiles share one generator (ADR-120 D6):
 
 - `demo` ("prison-intelligence"): three establishments, 1,000 prisoners, the cast of the script,
-  350 intelligence reports, 262 throw-overs, a million PIN calls over 1,500 outside numbers,
+  350 intelligence reports, 262 throw-overs, about 100,000 PIN calls over 1,500 outside numbers,
   pictures, and about 13,000 links the analyst can see;
 - `scale` ("prison-intelligence-scale"): six establishments, 3,000 prisoners, exactly 30,000
   links, and none of the above (no cast, no reports, no calls, no pictures, no throw-overs).
@@ -103,11 +103,10 @@ F2_ILLICIT_NAMED_MORE_THAN_ONCE = 3
 REPORTS_TOTAL = 350
 
 #: The principal's links as the analyst sees them, after chapter 4 (49) and in Act 1, before any
-#: report is loaded (45); a principal cleared to SECRET sees one more of each.
+#: report is loaded (45). The dataset is OFFICIAL throughout (ADR-120 Amendment 16), so a principal
+#: cleared above OFFICIAL sees the same.
 PRINCIPAL_LINK_COUNT = 49
-PRINCIPAL_LINK_COUNT_SECRET = 50
 PRINCIPAL_LINK_COUNT_ACT1 = 45
-PRINCIPAL_LINK_COUNT_ACT1_SECRET = 46
 PRINCIPAL_LINKS_BY_TYPE: Mapping[str, int] = {
     "DEPICTS": 1, "HELD_AT": 1, "MEMBER_OF": 1, "FAMILY_OF": 1, "CO_DEFENDANT_OF": 2, "USES": 2,
     "PRESENT_AT": 5, "MENTIONED_IN": 4, "VISITED": 12, "SHARED_CELL_WITH": 7,
@@ -129,7 +128,12 @@ PID_TEACHING_REPORT = "report:0017"
 PID_TEACHING_NUMBER = "+447700900603"
 BULK_LIST_SIZE = 40
 CALL_WEEKS = 35  # w/c Monday 1 September 2025 to the week holding the cut-off
-CALL_ROWS = 1_000_000
+CALL_ROWS = 100_000
+#: The volume the background's shape is drawn at (ADR-120 Amendment 17). The background was drawn
+#: at a million calls before the owner cut it to `CALL_ROWS`; every draw is still made at that
+#: volume, so every later draw of the plan (the visitors, the reports, the pictures) stays exactly
+#: where it was and only the call file shrinks. The weeks are then scaled down without a draw.
+_CALL_DRAW_ROWS = 1_000_000
 CALLED_NUMBERS = 1_500
 PIN_ACCOUNTS = 1_000
 DEMO_PRISONERS = 1_000
@@ -227,14 +231,15 @@ class Plan:
         return self._entity_index[key]
 
     def links_of(self, key: str) -> tuple[PlanLink, ...]:
-        """Every link touching the key, a `SECRET` one and every moment's included."""
+        """Every link touching the key, every moment's included."""
         return self._link_index.get(key, ())
 
 
 def links_at(plan: Plan, moment: Moment, *, secret_cleared: bool) -> tuple[PlanLink, ...]:
     """The links loaded by the end of a moment ("seed", then "chapter4", then "chapter9" each
-    include the one before), less the one `SECRET` link unless the principal is cleared to it; the
-    demo analyst is cleared only to `OFFICIAL`."""
+    include the one before), less any `SECRET` link unless the principal is cleared to it. The plan
+    holds none (ADR-120 Amendment 16), so `secret_cleared` changes nothing; it is kept for its
+    callers."""
     rank = _MOMENT_ORDER[moment]
     return tuple(
         lk
@@ -607,7 +612,6 @@ _UNIDENTIFIED_CALLS = tuple(1 if w in _UNIDENTIFIED_WEEKS else 0 for w in range(
 
 LOCAL = PlanHandling()
 REGIONAL = PlanHandling(originator=REGIONAL_UNIT, owning_unit=REGIONAL_UNIT)
-_SECRET = PlanHandling(classification="SECRET", originator=REGIONAL_UNIT, owning_unit=REGIONAL_UNIT)
 
 
 class _Build:
@@ -644,15 +648,13 @@ class _Build:
 
     def finish(self) -> None:
         """Count the carried links, then give every link the regional unit if either of its ends
-        has it, now that the last entity's handling is set (Amendment 8, decision 11); the one
-        SECRET link keeps its own."""
+        has it, now that the last entity's handling is set (Amendment 8, decision 11)."""
         self.carry()
         out = []
         for lk in self.links:
-            if lk.handling.classification != "SECRET":
-                ends = (self.ents[lk.source].handling, self.ents[lk.target].handling)
-                regional = any(h.owning_unit == REGIONAL_UNIT for h in ends)
-                lk = replace(lk, handling=REGIONAL if regional else LOCAL)
+            ends = (self.ents[lk.source].handling, self.ents[lk.target].handling)
+            regional = any(h.owning_unit == REGIONAL_UNIT for h in ends)
+            lk = replace(lk, handling=REGIONAL if regional else LOCAL)
             out.append(lk)
         self.links = out
 
@@ -1201,10 +1203,6 @@ def _add_cast(
             "IN_CONFLICT_WITH", "principal", who, occ=n, first=first, last=last,
             props={"reason": reason},
         )  # fmt: skip
-    b.link(
-        "IN_CONFLICT_WITH", "principal", "calder_3", occ=1, first=date(2025, 6, 2),
-        last=date(2025, 6, 2), props={"reason": "covert source"}, handling=_SECRET,
-    )  # fmt: skip
 
     # Calls and money: the coordinator's four callers, the number nobody owns, the one payer.
     for who, weekly in (
@@ -1737,6 +1735,65 @@ def _outside_numbers() -> list[tuple[str, str]]:
     return sorted(out, key=lambda n: n[1])
 
 
+def _apportion(weights: Sequence[int], target: int) -> list[int]:
+    """Each pair's share of `target` calls by weight, never under 25, summing to exactly `target`.
+    All integers."""
+    total_weight = sum(weights)
+    totals = [max(25, target * w // total_weight) for w in weights]
+    diff = target - sum(totals)
+    i = 0
+    while diff:
+        step = 1 if diff > 0 else -1
+        if step > 0 or totals[i % len(totals)] > 25:
+            totals[i % len(totals)] += step
+            diff -= step
+        i += 1
+    return totals
+
+
+def _scale_weeks(weekly: Sequence[int], total: int) -> list[int]:
+    """`weekly`'s shape at `total` calls: the largest-remainder method, ties to the earlier week,
+    so a quiet week stays quiet and the weeks add up to exactly `total`. No draw is made."""
+    base = sum(weekly)
+    out = [total * n // base for n in weekly]
+    order = sorted(range(len(weekly)), key=lambda w: (-(total * weekly[w] % base), w))
+    for w in order[: total - sum(out)]:
+        out[w] += 1
+    return out
+
+
+def _keep_order(
+    pairs: Sequence[tuple[str, str]], drawn: Sequence[int], kept: Sequence[int]
+) -> list[int]:
+    """`kept`'s totals, dealt so that each PIN account's numbers rank exactly as they did at the
+    `drawn` volume (most called first, ties to the lower number) and no two of them tie. The
+    visitors take the most called free number (`_Owners`), so a ranking that moved when the volume
+    fell would move who owns what, and every draw after it. Only the PIN account's own numbers
+    are ordered; the total is unchanged, the strict gaps being paid for by the busiest pairs."""
+    groups: dict[str, list[int]] = {}
+    for i, (pin, _number) in enumerate(pairs):
+        groups.setdefault(pin, []).append(i)
+    out = list(kept)
+    below: dict[int, int] = {}
+    for members in groups.values():
+        order = sorted(members, key=lambda i: (-drawn[i], pairs[i][1]))
+        for i, value in zip(order, sorted((kept[i] for i in members), reverse=True), strict=True):
+            out[i] = value
+        for k in range(len(order) - 2, -1, -1):
+            out[order[k]] = max(out[order[k]], out[order[k + 1]] + 1)
+        for k in range(len(order) - 1):
+            below[order[k]] = order[k + 1]
+    surplus = sum(out) - sum(kept)
+    i = 0
+    while surplus:
+        room = out[i] - (out[below[i]] + 1 if i in below else 25)
+        if room > 0 and out[i] > 25:
+            out[i] -= 1
+            surplus -= 1
+        i = (i + 1) % len(out)
+    return out
+
+
 def _bg_calls(
     b: _Build,
     rng: random.Random,
@@ -1757,19 +1814,11 @@ def _bg_calls(
             for _ in range(rng.choice((0, 1, 1, 2))):
                 seen.add((pin, rng.choice(order)))
         pairs += sorted(seen)
-    target = CALL_ROWS - sum(sum(c.weekly) for c in calls)
+    cast_rows = sum(sum(c.weekly) for c in calls)
     weights = [rng.randint(1, 40) ** 2 for _ in pairs]
-    total_weight = sum(weights)
-    totals = [max(25, target * w // total_weight) for w in weights]
-    diff = target - sum(totals)
-    i = 0
-    while diff:
-        step = 1 if diff > 0 else -1
-        if step > 0 or totals[i % len(totals)] > 25:
-            totals[i % len(totals)] += step
-            diff -= step
-        i += 1
-    for (pin, number), total in zip(pairs, totals, strict=True):
+    drawn = _apportion(weights, _CALL_DRAW_ROWS - cast_rows)
+    kept = _keep_order(pairs, drawn, _apportion(weights, CALL_ROWS - cast_rows))
+    for (pin, number), total, keep in zip(pairs, drawn, kept, strict=True):
         start = 0 if rng.randrange(5) < 3 else rng.randrange(1, 26)
         end = _LAST_WEEK if rng.randrange(5) < 4 else rng.randrange(start + 4, _LAST_WEEK)
         shares = [0] * CALL_WEEKS
@@ -1779,6 +1828,7 @@ def _bg_calls(
         weekly = [total * x // norm for x in shares]
         for _ in range(total - sum(weekly)):
             weekly[rng.randrange(start, end + 1)] += 1
+        weekly = _scale_weeks(weekly, keep)
         _call_link(b, calls, pin, number, tuple(weekly))
     called: dict[str, Counter[str]] = {}
     for c in calls:
@@ -2121,7 +2171,7 @@ HANDLING_COLUMNS = (
     "owning_unit",
 )  # fmt: skip
 #: The files whose rows carry more than one handling (Fenwick Moor's and the other
-#: establishments', a report with a covert-development code, the one SECRET link): the plan test
+#: establishments', a report with a covert-development code): the plan test
 #: derives the list from the plan (`mixed_files`) and fails if this one is wrong.
 _COLUMN_FILES = frozenset(
     {
@@ -2219,8 +2269,8 @@ _LINK_ROWS: tuple[tuple[Any, ...], ...] = (
           props=frozenset({"role"}), extra=("occurred_at",)),
     _link("IN_CONFLICT_WITH", _P, _P, "pid_conflicts.csv", _NEW_CONFLICTS,
           ("nomis_id_a", "nomis_id_b"), props=frozenset({"reason"}), extra=_AT,
-          addition="Brief 2 must add a conflicts file with a per-row classification column for "
-          "the one SECRET link, besides the originator and owning unit."),
+          addition="Brief 2 must add a conflicts file with the originator and owning-unit "
+          "columns."),
     *(
         _link("OCCURRED_AT", "Incident:other", f"Location:{kind}", _INCIDENTS, "R4",
               ("incident_ref", "area_ref"), extra=("occurred_at",))

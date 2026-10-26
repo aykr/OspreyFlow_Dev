@@ -780,7 +780,8 @@ async def test_the_change_stream_entry_does_not_carry_a_rules_alert(
     monkeypatch.setattr(run_module.resolution_trigger_module, "submit_post_ingest_resolution_jobs", nothing)
     deps = SimpleNamespace(
         handling_scheme=SCHEME, valkey=object(), audit=_Audit(), graph=1, ontology=1, analytics=1,
-        media=1, recipe_repo_root=1, jobs=1, config=1, hotlists_store=1, monitors_store=1,
+        media=1, recipe_repo_root=1, jobs=1, config=SimpleNamespace(post_ingest_resolution=True),
+        hotlists_store=1, monitors_store=1,
         patterns_store=1, alerts_store=1, principal_resolver=1, extraction_candidates=1,
         recogniser_for=1, online_geocode=1, typology_rules=1, held_rows=1, screening_lists=1,
         compute=1, kyc_expiries=1, recipe_runs=1,

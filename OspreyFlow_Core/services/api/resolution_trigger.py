@@ -59,6 +59,7 @@ async def submit_post_ingest_resolution_jobs(
     *,
     ontology: OntologySchema,
     jobs: JobQueue,
+    enabled: bool = True,
 ) -> list[str]:
     """`06_DECISIONS.md` ADR-025's post-ingest hook — the real caller
     `resolve_entity_type`/`write_same_as_edges`/`detect_conflicts`/
@@ -81,7 +82,9 @@ async def submit_post_ingest_resolution_jobs(
     not an exact "what did this specific run touch" — `run_resolution_for_
     entity_type`'s own `list_nodes` pass is what actually does the precise
     work; this only decides which types are worth asking it about."""
-    if report.nodes_created == 0 or row_template is None:
+    # ADR-127 Amendment 33: the deployment's `OSPREY_POST_INGEST_RESOLUTION`, passed in by the run
+    # (`ApiConfig.post_ingest_resolution`); off enqueues nothing. "Resolve now" does not come here.
+    if not enabled or report.nodes_created == 0 or row_template is None:
         return []
     touched_types = {entity.type for entity in row_template.entities}
     job_ids: list[str] = []

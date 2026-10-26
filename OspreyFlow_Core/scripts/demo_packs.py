@@ -120,6 +120,14 @@ _DESCRIPTIONS: dict[str, _Description] = {
         ),
         real_data=True,
     ),
+    # ADR-127 Amendment 23, "The registration": the shows line shares no wording with the older
+    # prison pack's, which stays as it is.
+    "prison-intelligence": _Description(
+        "Prison Intelligence Dataset (synthetic)",
+        "A fictional category C jail's records as an intelligence team receives them, loaded "
+        "through the Ingest Studio from source files, each source with its own marking.",
+        "Prison Intelligence Dataset (synthetic demo)",
+    ),
 }
 
 

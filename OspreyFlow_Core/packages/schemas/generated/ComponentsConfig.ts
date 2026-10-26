@@ -9,6 +9,10 @@ export type GraphStore = "arcadedb" | "janusgraph";
  */
 export type AnalyticsEngine = "duckdb" | "clickhouse";
 /**
+ * Default: true. Whether a load queues entity resolution afterwards (`OSPREY_POST_INGEST_RESOLUTION`). False for a demonstration whose people must not gain automatic `SAME_AS` links; an analyst's own Resolve now still works.
+ */
+export type PostIngestResolution = boolean;
+/**
  * Default: opensearch. Search; postgres-fulltext is the lighter variant.
  */
 export type SearchBackend = "opensearch" | "postgres-fulltext";
@@ -44,6 +48,7 @@ export type SourcePath = string | null;
 export interface ComponentsConfig {
   graph_store?: GraphStore;
   analytics_engine?: AnalyticsEngine;
+  post_ingest_resolution?: PostIngestResolution;
   search?: SearchBackend;
   storage?: StorageRoots;
   source_path?: SourcePath;

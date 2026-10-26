@@ -247,18 +247,39 @@ def test_the_working_sets_and_the_alerts_citing_events_are_reported_in_counts() 
 
 def test_the_script_reaches_the_working_sets_the_history_and_the_caches_directly() -> None:
     """It runs outside the Conduit, so it builds the working-set reach itself: the store on Valkey,
-    the stored history, and the cache clear, all handed to the revert (`RevertDeps`)."""
+    the stored history, and the cache clear, all handed to the revert (`RevertDeps`). That
+    construction is `build_revert_deps`, which the Prison Intelligence seed's reset shares
+    (ADR-127 Amendment 23: factored out, not copied)."""
     import inspect
 
-    source = inspect.getsource(script._main)
+    source = inspect.getsource(script.build_revert_deps)
     for needed in (
         "ValkeyWorkingSetStore",
-        "InvestigationHistoryStore",
         "WorkingSetReverter",
         "invalidate_every_cache",
     ):
         assert needed in source, needed
     assert "working_sets=" in source and "invalidate_caches=" in source
+    assert "InvestigationHistoryStore" in inspect.getsource(script._main)
+    assert "build_revert_deps(" in inspect.getsource(script._main), "the script uses its own"
+
+
+def test_the_shared_construction_hands_every_store_it_is_given_to_the_revert() -> None:
+    """`build_revert_deps` wires what it is given and opens nothing of its own: each store lands in
+    its own field, and the cache clear and the working-set reach are built over the Valkey given."""
+    marks = {
+        name: object()
+        for name in ("graph", "analytics", "ledger", "held_rows", "alerts", "audit", "history")
+    }
+    valkey = SimpleNamespace(marker="valkey")
+    deps = script.build_revert_deps(
+        scheme=object(), valkey=valkey, **marks  # type: ignore[arg-type]
+    )
+    assert deps.graph is marks["graph"] and deps.analytics is marks["analytics"]
+    assert deps.ledger is marks["ledger"] and deps.held_rows is marks["held_rows"]
+    assert deps.alerts is marks["alerts"] and deps.audit is marks["audit"]
+    assert type(deps.working_sets).__name__ == "WorkingSetReverter"
+    assert callable(deps.invalidate_caches)
 
 
 def test_the_script_says_a_revert_should_run_with_the_conduit_quiet() -> None:

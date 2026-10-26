@@ -1166,6 +1166,9 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_STATE_DIR={STATE_CONTAINER_PATH}",
         f"OSPREY_GRAPH_STORE={config.components.graph_store.value}",
         f"OSPREY_ANALYTICS_ENGINE={config.components.analytics_engine.value}",
+        # ADR-127 Amendment 33: whether a load queues entity resolution afterwards.
+        "OSPREY_POST_INGEST_RESOLUTION="
+        + ("on" if config.components.post_ingest_resolution else "off"),
         f"OSPREY_SEARCH_BACKEND={config.components.search.value}",
         f"OSPREY_DATA_ROOT={config.components.storage.data}",
         f"OSPREY_STAGING_ROOT={config.components.storage.staging}",

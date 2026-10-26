@@ -34,10 +34,11 @@ What each group of tests guards:
 - **The manifest and the script**: rows, bytes and SHA-256 per file, no timestamps, two runs
   byte-identical, and the script's refusal of a path inside the repository.
 
-Limits, stated: the demo profile's file is written once per module (about a million rows), and the
-round trip reads it with the engine's `dedup_key` (a few tens of seconds); `link_instants` and the
-plan's `rows_for` are the plan's own and are proved in `test_pid_plan.py`, so this file takes them
-as the reference and proves the files and writes against them. Byte-identical means on one
+Limits, stated: the demo profile's file is written once per module (about 100,000 call
+rows), and the round trip reads it with the engine's `dedup_key` (a few tens of seconds);
+`link_instants` and the plan's `rows_for` are the plan's own and are proved in `test_pid_plan.py`,
+so this file takes them as the reference and proves the files and writes against them.
+Byte-identical means on one
 interpreter and one `zlib` build, which the manifest records.
 """
 
@@ -108,7 +109,7 @@ ABSENT: dict[str, set[str]] = {
         "pid_throwover_log.csv",
     },
 }  # fmt: skip
-CALL_ROWS = 1_000_000
+CALL_ROWS = pid_plan.CALL_ROWS  # about 100,000 (ADR-120 Amendment 17)
 FORM_COUNT = 10_000  # distinct calls in each of the three international forms
 EXACT_DUPLICATES = 40
 SEQUENCE_DUPLICATES = 40
@@ -874,7 +875,7 @@ def test_reading_every_file_reconstructs_the_demo_plan_at_each_moment(
     assert all(not s.rejected for s in demo_read.stats.values()), {
         f: s.rejected for f, s in demo_read.stats.items() if s.rejected
     }
-    # The reader read a file for every shape the demo has, the call file's million rows included.
+    # The reader read a file for every shape the demo has, the call file's 100,000 rows included.
     assert set(demo_read.stats) == set(_all_files())
     assert demo_read.stats[CALLS].distinct == CALL_ROWS
 
@@ -894,7 +895,7 @@ def test_the_round_trip_goes_red_for_one_call_row_dropped(
     counts once (the call link and the prisoner's `USES` of his PIN account that rides on it)."""
     only = frozenset({CALLS})
     assert _compare(demo_read, demo, "seed", files=only) == []
-    dropped = 123_456
+    dropped = pid_plan.CALL_ROWS // 8  # a row well inside the file, whatever its volume
     reader = Reader()
     rows = (r for n, r in enumerate(demo_out.rows(CALLS), start=1) if n != dropped)
     reader.read(CALLS, rows)
@@ -1285,6 +1286,7 @@ def test_the_call_file_has_exactly_the_planted_mess_at_the_recorded_positions(
     stats = demo_read.stats[CALLS]
     assert stats.rows == call_scan.rows == CALL_ROWS + EXACT_DUPLICATES + SEQUENCE_DUPLICATES
     assert stats.distinct == CALL_ROWS
+    assert 90_000 <= CALL_ROWS <= 110_000, "ADR-120 Amendment 17: about 100,000 calls"
     assert CALL_ROWS == sum(
         lk.occurrences
         for lk in demo.links
@@ -1869,9 +1871,10 @@ def test_the_writes_are_the_plan_at_each_moment_with_derived_ids(
     # What the picture route writes is left to it: no image Document, no DEPICTS link.
     assert not [n for n in nodes if n.properties.get("media_kind") == "image"]
     assert not [e for e in edges if e.type == "DEPICTS"]
-    # The one SECRET link is written (the stores that leave it out do so themselves).
-    secret = [e for e in edges if e.handling.classification == "SECRET"]
-    assert len(secret) == 1 and secret[0].type == "IN_CONFLICT_WITH"
+    # ADR-120 Amendment 16: nothing written is above OFFICIAL, and the covert-source conflict is
+    # not among the links.
+    assert {w.handling.classification for w in (*nodes, *edges)} == {"OFFICIAL"}
+    assert not [e for e in edges if e.properties.get("reason") == "covert source"]
 
 
 def test_the_scale_writes_are_exactly_30000_links(scale: Any) -> None:
@@ -2090,9 +2093,10 @@ def test_the_circle_is_the_principals_payment_and_call_circle_as_the_analyst_see
     assert ("USES", "payer", "account:payer") in ends
     for relay in ("relay_1", "relay_2", "relay_3"):
         assert ("COMMUNICATED_WITH", f"pin:{relay}", "number:coordinator") in ends
-    # As the demo analyst sees it: the one SECRET link is not in it.
+    # The principal and calder_3 share no recorded conflict (ADR-120 Amendment 16), and nothing in
+    # the circle is above OFFICIAL.
     assert ("IN_CONFLICT_WITH", "principal", "calder_3") not in ends
-    assert not [lk for lk in links if lk.handling.classification == "SECRET"]
+    assert not [lk for lk in links if lk.handling.classification != "OFFICIAL"]
     # Every link touches the centre, and every visible link that touches it is there.
     assert all(lk.source in _CENTRE or lk.target in _CENTRE for lk in links)
     visible = pid_plan.links_at(demo, moment, secret_cleared=False)

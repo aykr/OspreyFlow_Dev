@@ -30,8 +30,9 @@ exception is the reports file's teaching row.
 every file that names a report; the plan's key is never written. Rows stay in plan-key order.
 
 **The call file's mess** (Brief 2 section 3.4), drawn from `Random(seed)` and so the same on every
-run. Over the 1,000,000 distinct calls: exactly 10,000 each in `+44 7700 900123`,
-`0044 7700 900123` and `447700900123` form (every outside number appears in all three, and its first
+run. Over the 100,000 distinct calls (`pid_plan.CALL_ROWS`, ADR-120 Amendment 17): exactly 10,000
+each in `+44 7700 900123`, `0044 7700 900123` and `447700900123` form (every outside number appears
+in all three, and its first
 row is always the plan's own national form), the rest national; then 40 rows copying an earlier row
 byte for byte and 40 repeating an earlier call with a new `sequence` above the maximum, each placed
 after its original. `duration_s` is seeded between 20 and 1,800 and redrawn where two calls of one

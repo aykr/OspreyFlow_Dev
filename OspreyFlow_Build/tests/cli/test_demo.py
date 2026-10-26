@@ -57,10 +57,19 @@ def test_each_pack_maps_to_its_seed_key(rig: Rig, tmp_path: Path) -> None:
         "operation-ledger": "ledger",
         "paysim": "paysim",
         "enron": "enron",
+        "prison-intelligence": "prison-intelligence",
     }
     assert rig("demo", "add", "operation-ledger") == 0
     (argv,) = _seed_calls(rig)
     assert argv[argv.index("scripts.seed_internal") + 1 :] == ["ledger", "--stop-api"]
+
+
+def test_the_prison_intelligence_pack_is_added_by_its_own_seed_key(rig: Rig) -> None:
+    """ADR-127 Amendment 23, "The registration": `ospreyflow demo add prison-intelligence` seeds the
+    new pack, with the Conduit stopped as the other seeds run, and only it."""
+    assert rig("demo", "add", "prison-intelligence") == 0
+    (argv,) = _seed_calls(rig)
+    assert argv[argv.index("scripts.seed_internal") + 1 :] == ["prison-intelligence", "--stop-api"]
 
 
 def test_an_unknown_pack_is_refused_with_the_list(

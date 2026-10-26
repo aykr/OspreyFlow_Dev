@@ -132,8 +132,8 @@ def _provenance(
 def writes(
     plan: Plan, moment: Moment, *, dataset: str, created_at: datetime
 ) -> tuple[list[NodeWrite], list[EdgeWrite]]:
-    """Every node and link the plan holds by the end of `moment`, the one `SECRET` link included
-    (a store that leaves it out does so itself). `ValueError` for a dataset that is not one of the
+    """Every node and link the plan holds by the end of `moment`, every link included.
+    `ValueError` for a dataset that is not one of the
     two the generator writes."""
     sources = _sources()
     if dataset not in sources:
@@ -213,7 +213,7 @@ _EXCHANGES = ("COMMUNICATED_WITH", "TRANSACTED")
 
 def circle_links(plan: Plan, moment: Moment) -> tuple[frozenset[str], tuple[PlanLink, ...]]:
     """The principal's payment and call circle as the demo analyst sees it at a moment (ADR-120
-    Amendment 7 decision 2, `SECRET` link excluded): the centre keys, and every visible link that
+    Amendment 7 decision 2): the centre keys, and every visible link that
     touches one. The centre is the principal, each endpoint he uses (his PIN account and his
     private-cash account) and each endpoint those exchange calls or money with. The links are the
     plan's, his picture link included. `KeyError` for a plan with no principal."""

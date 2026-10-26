@@ -103,9 +103,9 @@ def keys_in(file: str) -> tuple[list[str], list[str]]:
 
 @dataclass(frozen=True)
 class Step:
-    """One load of the seed's order: a whole file, or (for the million-row call file) the rows of it
-    a test loads, with the predicate that selects the plan's own rows for the same ones, so a replay
-    sees what the load saw."""
+    """One load of the seed's order: a whole file, or (for the call file, about 100,000 rows) the
+    rows of it a test loads, with the predicate that selects the plan's own rows for the same ones,
+    so a replay sees what the load saw."""
 
     file: str
     rows: tuple[dict[str, str], ...] | None = None
@@ -404,8 +404,9 @@ def is_national(raw: str) -> bool:
 
 @lru_cache(maxsize=1)
 def pin_calls_slice() -> tuple[tuple[dict[str, str], ...], frozenset[str]]:
-    """A slice of the demo profile's million-row call file, and the plan's link keys it holds whole:
-    every row of every link (one PIN account to one number) that holds a planted duplicate, that
+    """A slice of the demo profile's call file (about 100,000 rows), and the plan's link keys it
+    holds whole: every row of every link (one PIN account to one number) that holds a planted
+    duplicate, that
     ends at the coordinator's number, or that ends at one of the first three numbers the file writes
     in other forms; plus, for each number in the slice, the link its first row sits on (so the raw
     form kept is the plan's)."""

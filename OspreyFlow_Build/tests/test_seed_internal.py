@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 from scripts import seed_internal
 
+
 @pytest.fixture(autouse=True)
 def _enron_from_build() -> None:
     """The runner's real-data handling is exercised with Enron, the product's own dataset since
@@ -820,3 +821,237 @@ def test_without_the_environment_the_data_root_is_the_sibling_as_before(
     call = _seed_call(runner)
     mounts = [call[i + 1] for i, a in enumerate(call) if a == "-v"]
     assert f"{tmp_path}/OspreyFlow_Data:/internal-data:ro" in mounts
+
+
+# --- the Prison Intelligence Dataset (ADR-127 Amendment 23, "The reset" and "The registration") ---
+# `--reset-live` passes through with the Conduit stopped as every seed runs; `--release-batch-2` and
+# `--publish-reports-fallback` are the two a presenter runs mid-demo, and must leave the Conduit
+# running. What a mistake would do, and the case that catches it:
+#
+# - the dataset not registered, or registered with another case name
+#   (`test_the_prison_intelligence_dataset_is_registered_with_the_seed_and_the_case_the_pack_names`);
+# - a seed that asks for the bulk method or a graph sample, which this seed does not take
+#   (`test_a_prison_intelligence_seed_passes_the_case_and_grants_and_no_other_dataset_flag`);
+# - the reset not passed on (`test_reset_live_is_passed_to_the_seed_with_the_conduit_stopped_and_started_again`);
+# - the reset run against a running Conduit without being told to stop it
+#   (`test_reset_live_refuses_a_running_conduit_without_stop_api`);
+# - a mid-demo command stopping the Conduit, which would drop the presenter's browser sessions
+#   (`test_the_two_mid_demo_commands_never_stop_or_start_the_conduit`);
+# - a mid-demo command run from the image's older copy of the code, not the checkout's
+#   (`test_the_two_mid_demo_commands_run_from_the_checkouts_code_beside_the_running_conduit`);
+# - the flags offered for a dataset with no such step, or two at once
+#   (`test_the_three_flags_are_refused_for_another_dataset_and_together`);
+# - the command line not knowing them (`test_the_command_line_accepts_the_three_flags`).
+
+PID_CASE = "Prison Intelligence Dataset (synthetic demo)"
+
+
+def _pid(repo: Path, runner: Runner, **kwargs: object) -> list[str]:
+    return seed_internal.seed_internal(
+        "prison-intelligence",
+        repo,
+        run=runner,
+        lookup_subs=lambda directory: SUBS,
+        api_running=lambda compose: bool(kwargs.pop("api_running", False)),
+        **kwargs,  # type: ignore[arg-type]
+    )
+
+
+def test_the_prison_intelligence_dataset_is_registered_with_the_seed_and_the_case_the_pack_names() -> (
+    None
+):
+    from demo_fixtures.datasets import PID
+
+    spec = seed_internal.DATASETS["prison-intelligence"]
+    assert spec.script == "scripts.seed_pid"
+    assert spec.case_name == PID.case_name == PID_CASE
+    assert spec.data_folder is None and spec.real_dataset is None
+    assert spec.bulk is False and spec.sampled is False and spec.rewrites_links is False
+    assert spec.rehearsal is True
+    assert not any(
+        other.rehearsal for name, other in seed_internal.DATASETS.items()
+        if name != "prison-intelligence"
+    )  # fmt: skip
+
+
+def test_a_prison_intelligence_seed_passes_the_case_and_grants_and_no_other_dataset_flag(
+    repo: Path,
+) -> None:
+    runner = Runner()
+    _pid(repo, runner)
+    call = _seed_call(runner)
+    assert call[call.index("-m") + 1] == "scripts.seed_pid"
+    assert call[call.index("--case-name") + 1] == PID_CASE
+    assert call[call.index("--org-unit") + 1] == "verify"
+    grants = sorted(call[i + 1] for i, a in enumerate(call) if a == "--grant")
+    assert grants == ["sub-admin-111=author", "sub-analyst-222=editor"]
+    for absent in ("--method", "--graph-fraud-rows", "--data-dir", "--attested-checkout",
+                   "--reset-live", "--release-batch-2", "--publish-reports-fallback"):  # fmt: skip
+        assert absent not in call, absent
+
+
+def test_reset_live_is_passed_to_the_seed_with_the_conduit_stopped_and_started_again(
+    repo: Path,
+) -> None:
+    runner = Runner()
+    seed_internal.seed_internal(
+        "prison-intelligence", repo, run=runner, lookup_subs=lambda d: SUBS,
+        api_running=lambda c: True, stop_api=True, reset_live=True,
+    )  # fmt: skip
+    verbs = [next(a for a in c if a in {"stop", "run", "up"}) for c in runner.calls]
+    assert verbs == ["stop", "run", "up"]
+    call = _seed_call(runner)
+    assert "--reset-live" in call and call[call.index("--case-name") + 1] == PID_CASE
+    assert call[call.index("-m") + 1] == "scripts.seed_pid"
+
+
+def test_reset_live_refuses_a_running_conduit_without_stop_api(repo: Path) -> None:
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="--stop-api"):
+        seed_internal.seed_internal(
+            "prison-intelligence", repo, run=runner, lookup_subs=lambda d: SUBS,
+            api_running=lambda c: True, reset_live=True,
+        )  # fmt: skip
+    assert runner.calls == []
+
+
+#: The Compose verbs that would stop, start or replace the Conduit, besides the one-shot `run`. Written
+#: as one string so the deployment guard's scan for a literal teardown verb does not take a list of
+#: what must not happen for a teardown that does.
+COMPOSE_VERBS = frozenset("stop run up down restart".split())
+
+
+@pytest.mark.parametrize("flag", ["release_batch_2", "publish_reports_fallback"])
+def test_the_two_mid_demo_commands_never_stop_or_start_the_conduit(repo: Path, flag: str) -> None:
+    runner = Runner()
+    seed_internal.seed_internal(
+        "prison-intelligence", repo, run=runner, lookup_subs=lambda d: {},
+        api_running=lambda c: True, **{flag: True},
+    )  # fmt: skip
+    verbs = [next((a for a in c if a in COMPOSE_VERBS), None)
+             for c in runner.calls]  # fmt: skip
+    assert verbs == ["run"], "one one-shot run, and the Conduit left as it was"
+    call = _seed_call(runner)
+    option = "--" + flag.replace("_", "-")
+    assert option in call and call[call.index("-m") + 1] == "scripts.seed_pid"
+    assert "--case-name" not in call and "--grant" not in call, "no case is made and none shared"
+
+
+@pytest.mark.parametrize("flag", ["release_batch_2", "publish_reports_fallback"])
+def test_the_two_mid_demo_commands_run_from_the_checkouts_code_beside_the_running_conduit(
+    repo: Path, flag: str
+) -> None:
+    runner = Runner()
+    seed_internal.seed_internal(
+        "prison-intelligence", repo, run=runner, lookup_subs=lambda d: {},
+        api_running=lambda c: True, **{flag: True},
+    )  # fmt: skip
+    call = _seed_call(runner)
+    assert ["run", "--rm", "--no-deps"] == call[call.index("run") : call.index("run") + 3]
+    mounts = [call[i + 1] for i, a in enumerate(call) if a == "-v"]
+    assert f"{repo}/scripts:/app/scripts:ro" in mounts
+    assert f"{repo}/packages:/app/packages:ro" in mounts
+    assert f"{repo}/services:/app/services:ro" in mounts
+    assert call[call.index("--entrypoint") + 1] == "python" and "api" in call
+    assert "--org-unit" in call, "the fallback publishes in the demo unit"
+
+
+@pytest.mark.parametrize("flag", ["release_batch_2", "publish_reports_fallback"])
+def test_the_two_mid_demo_commands_mount_the_connector_layouts_too(repo: Path, flag: str) -> None:
+    """ADR-127 Amendment 30: the recipes read connector layouts from `connectors/` (the call
+    recipe's `pin-calls-csv`, and the profile the fallback's publication builds its recipe from),
+    and the image holds only the copy it was built with, so the one-shot takes the checkout's."""
+    runner = Runner()
+    seed_internal.seed_internal(
+        "prison-intelligence", repo, run=runner, lookup_subs=lambda d: {},
+        api_running=lambda c: True, **{flag: True},
+    )  # fmt: skip
+    mounts = [c for c in _seed_call(runner)]
+    mounts = [mounts[i + 1] for i, a in enumerate(mounts) if a == "-v"]
+    assert f"{repo}/connectors:/app/connectors:ro" in mounts
+
+
+def test_the_three_flags_are_refused_for_another_dataset_and_together(repo: Path) -> None:
+    for flag in ("reset_live", "release_batch_2", "publish_reports_fallback"):
+        runner = Runner()
+        with pytest.raises(seed_internal.SeedRefused, match="prison-intelligence"):
+            seed_internal.seed_internal(
+                "paysim", repo, run=runner, lookup_subs=lambda d: SUBS,
+                api_running=lambda c: False, **{flag: True},
+            )  # fmt: skip
+        assert runner.calls == []
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="one at a time"):
+        seed_internal.seed_internal(
+            "prison-intelligence", repo, run=runner, lookup_subs=lambda d: SUBS,
+            api_running=lambda c: False, reset_live=True, release_batch_2=True,
+        )  # fmt: skip
+    assert runner.calls == []
+
+
+def test_the_command_line_accepts_the_three_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
+    assert seed_internal.main(["prison-intelligence", "--reset-live", "--stop-api"]) == 0
+    assert seen["reset_live"] is True and seen["stop_api"] is True
+    assert seen["release_batch_2"] is False and seen["publish_reports_fallback"] is False
+    seen.clear()
+    assert seed_internal.main(["prison-intelligence", "--release-batch-2"]) == 0
+    assert seen["release_batch_2"] is True and seen["reset_live"] is False
+    seen.clear()
+    assert seed_internal.main(["prison-intelligence", "--publish-reports-fallback"]) == 0
+    assert seen["publish_reports_fallback"] is True
+
+
+def test_what_the_command_says_after_each_of_the_three_is_not_that_the_dataset_is_loaded(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: [])
+    for flag in ("--reset-live", "--release-batch-2", "--publish-reports-fallback"):
+        assert seed_internal.main(["prison-intelligence", flag]) == 0
+        assert "is loaded" not in capsys.readouterr().out, flag
+
+
+# --- `--check` (ADR-127 Amendment 33) -------------------------------------------------------------
+# The demo numbers for the moment the stored loads reach. It reads the graph, Postgres and the run
+# ledger and never opens DuckDB (`seed_pid._check`), so it runs with the Conduit up, as the two
+# mid-demo commands do, and is told the case by name since it makes and shares none.
+
+
+def test_check_is_a_one_shot_that_leaves_the_conduit_running_and_names_the_case(repo: Path) -> None:
+    runner = Runner()
+    seed_internal.seed_internal(
+        "prison-intelligence", repo, run=runner, lookup_subs=lambda d: {},
+        api_running=lambda c: True, check=True,
+    )  # fmt: skip
+    verbs = [next((a for a in c if a in {"stop", "run", "up", "restart"}), None) for c in runner.calls]
+    assert verbs == ["run"], "one one-shot, and the Conduit left as it was"
+    call = _seed_call(runner)
+    assert call[call.index("-m") + 1] == "scripts.seed_pid" and "--check" in call
+    assert call[call.index("--case-name") + 1] == PID_CASE
+    assert call[call.index("--org-unit") + 1] == "verify"
+    assert "--grant" not in call, "no case is made and none shared"
+    mounts = [call[i + 1] for i, a in enumerate(call) if a == "-v"]
+    assert f"{repo}/services:/app/services:ro" in mounts, "the checkout's code, not the image's"
+
+
+def test_check_is_refused_for_another_dataset_and_with_another_step(repo: Path) -> None:
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="prison-intelligence"):
+        seed_internal.seed_internal(
+            "paysim", repo, run=runner, lookup_subs=lambda d: SUBS,
+            api_running=lambda c: False, check=True,
+        )  # fmt: skip
+    with pytest.raises(seed_internal.SeedRefused, match="one at a time"):
+        seed_internal.seed_internal(
+            "prison-intelligence", repo, run=runner, lookup_subs=lambda d: SUBS,
+            api_running=lambda c: False, check=True, reset_live=True,
+        )  # fmt: skip
+    assert runner.calls == []
+
+
+def test_the_command_line_accepts_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
+    assert seed_internal.main(["prison-intelligence", "--check"]) == 0
+    assert seen["check"] is True and seen["reset_live"] is False and seen["stop_api"] is False

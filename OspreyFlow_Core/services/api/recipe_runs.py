@@ -71,6 +71,17 @@ CREATE INDEX IF NOT EXISTS loaded_row_keys_fingerprint_idx
     ON loaded_row_keys (recipe_id, investigation_id, fingerprint, load_id);
 """
 
+#: The record's own id lists: what `unreverted_loads` leaves out, since it answers a question about
+#: a load, not about its elements.
+_ID_LISTS = (
+    "created_node_ids",
+    "touched_edge_ids",
+    "created_edge_ids",
+    "merged_edge_ids",
+    "merged_node_ids",
+    "created_geometry_refs",
+)
+
 #: How long a second run of one recipe into one case waits for the first before it is refused, and
 #: how often it asks (ADR-127 decision 5).
 ROW_KEY_LOCK_WAIT_SECONDS = 30.0
@@ -434,6 +445,28 @@ class RecipeRunStore:
                 "WHERE load_records IS NOT NULL AND starts_with(rec->>'load_id', $1) "
                 "ORDER BY started_at, rec->>'load_id'",
                 prefix,
+            )
+        return [LoadRecord.model_validate_json(r["rec"]) for r in kept]
+
+    async def unreverted_loads(self, case: str, recipe_ids: Sequence[str]) -> list[LoadRecord]:
+        """The case's loads of these recipes whose record is not reverted, newest first (by load
+        id, a ULID), **without their id lists** (ADR-127 Amendment 23, "The runs" and "The reset"):
+        a yes or no about a file ("is it loaded already?") and the order a reset reverts in, neither
+        of which needs the ids of a million-row file's elements, which a revert reads for itself
+        (`load_record`). For the Prison Intelligence seed; never read by a route. A pipeline run's
+        branches are each a record. No recipe gives no loads, without asking the ledger."""
+        if not recipe_ids:
+            return []
+        async with self._pool.acquire() as conn:
+            kept = await conn.fetch(
+                "SELECT rec - $3::text[] AS rec FROM recipe_runs, "
+                "jsonb_array_elements(load_records) AS rec "
+                "WHERE load_records IS NOT NULL AND investigation_id = $1 "
+                "AND recipe_id = ANY($2::text[]) AND rec->>'reverted_at' IS NULL "
+                "ORDER BY rec->>'load_id' DESC",
+                case,
+                list(recipe_ids),
+                list(_ID_LISTS),
             )
         return [LoadRecord.model_validate_json(r["rec"]) for r in kept]
 

@@ -161,6 +161,14 @@ class ComponentsConfig(BaseModel):
             "shared by several."
         ),
     )
+    post_ingest_resolution: bool = Field(
+        default=True,
+        description=(
+            "Default: true. Whether a load queues entity resolution afterwards "
+            "(`OSPREY_POST_INGEST_RESOLUTION`). False for a demonstration whose people must not "
+            "gain automatic `SAME_AS` links; an analyst's own Resolve now still works."
+        ),
+    )
     search: SearchBackend = Field(
         default=SearchBackend.OPENSEARCH,
         description="Default: opensearch. Search; postgres-fulltext is the lighter variant.",

@@ -1,8 +1,8 @@
 # The Prison Intelligence Dataset (ADR-127 decision 12, R15): which prisoners are in conflict, one row
-# per sighting, so a link's occurrences are the sightings and its interval the first and last. One
-# link in the file is SECRET (a covert source's report), at a marking of its own: every element takes
-# its whole marking from the six handling columns, so that row loads as SECRET whatever the default
-# says. Both people are found by reference; run after R1. Copies R1's template.
+# per sighting, so a link's occurrences are the sightings and its interval the first and last. Every
+# row is OFFICIAL (ADR-120 Amendment 16 removed the one conflict known from a covert source): every
+# element still takes its whole marking from the six handling columns. Both people are found by
+# reference; run after R1. Copies R1's template.
 id: pid-nomis-conflicts
 version: 1
 label: "Conflicts (NOMIS). One row per sighting of a conflict between two prisoners."

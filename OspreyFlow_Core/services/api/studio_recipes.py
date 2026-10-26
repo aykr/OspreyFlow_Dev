@@ -249,6 +249,59 @@ def _seeded_content(recipe: Recipe, source_location: str | None) -> dict[str, ob
     }
 
 
+async def _existing_seeded_row(
+    conn: asyncpg.Connection,
+    recipe: Recipe,
+    content: dict[str, object],
+    *,
+    dataset_id: str,
+    owning_unit: str,
+    git_path: str,
+) -> asyncpg.Record | None:
+    """The row a seed would meet entering `recipe`, or None when there is none; refuses, naming each
+    column, a row at that version that differs from what entering would write
+    (`SeededRecipeContentDiffers`), and a second published version of a recipe that has a live one
+    (`SeededRecipeAnotherPublished`). One definition of "the same row", for
+    `enter_published_for_seed` and for `check_seeded_row`, which the seed makes before it commits
+    the recipe file (ADR-127 Amendment 30), so a committed file never differs from its row."""
+    existing = await conn.fetchrow(
+        "SELECT * FROM studio_recipes WHERE recipe_id = $1 AND version = $2",
+        recipe.id,
+        recipe.version,
+    )
+    if existing is not None:
+        differing = _seeded_row_differences(
+            existing,
+            label=recipe.label,
+            content=content,
+            pack_versions=recipe.pack_versions or {},
+            ontology_version=recipe.ontology_version,
+            dataset_id=dataset_id,
+            owning_unit=owning_unit,
+            git_path=git_path,
+        )
+        if differing:
+            raise SeededRecipeContentDiffers(
+                f"recipe {recipe.id!r} v{recipe.version} is already in the registry and "
+                f"differs in {', '.join(differing)}; it is left as it is, and a changed "
+                "file needs a new version"
+            )
+        return existing
+    live = await conn.fetchval(
+        "SELECT version FROM studio_recipes WHERE recipe_id = $1 AND version <> $2 "
+        "AND status = ANY($3::text[]) LIMIT 1",
+        recipe.id,
+        recipe.version,
+        [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
+    )
+    if live is not None:
+        raise SeededRecipeAnotherPublished(
+            f"recipe {recipe.id!r} already has version {live} published; a recipe has "
+            f"one live version, so v{recipe.version} is not entered"
+        )
+    return None
+
+
 def _content_json(draft: StudioRecipeDraft, **overrides: object) -> str:
     """The draft's one content document, every sibling field carried — the rule `update_draft`'s
     row-template comment states, now in one place so no writer can forget a field (ADR-108 phase B:
@@ -842,41 +895,15 @@ class StudioRecipeStore:
         async with self._pool.acquire() as conn, conn.transaction():
             # One writer per recipe at a time, so two seeds cannot both find it absent.
             await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", recipe.id)
-            existing = await conn.fetchrow(
-                "SELECT * FROM studio_recipes WHERE recipe_id = $1 AND version = $2",
-                recipe.id,
-                recipe.version,
+            existing = await _existing_seeded_row(
+                conn,
+                recipe,
+                content,
+                dataset_id=dataset_id,
+                owning_unit=owning_unit,
+                git_path=git_path,
             )
-            if existing is not None:
-                differing = _seeded_row_differences(
-                    existing,
-                    label=recipe.label,
-                    content=content,
-                    pack_versions=recipe.pack_versions or {},
-                    ontology_version=recipe.ontology_version,
-                    dataset_id=dataset_id,
-                    owning_unit=owning_unit,
-                    git_path=git_path,
-                )
-                if differing:
-                    raise SeededRecipeContentDiffers(
-                        f"recipe {recipe.id!r} v{recipe.version} is already in the registry and "
-                        f"differs in {', '.join(differing)}; it is left as it is, and a changed "
-                        "file needs a new version"
-                    )
-            else:
-                live = await conn.fetchval(
-                    "SELECT version FROM studio_recipes WHERE recipe_id = $1 AND version <> $2 "
-                    "AND status = ANY($3::text[]) LIMIT 1",
-                    recipe.id,
-                    recipe.version,
-                    [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
-                )
-                if live is not None:
-                    raise SeededRecipeAnotherPublished(
-                        f"recipe {recipe.id!r} already has version {live} published; a recipe has "
-                        f"one live version, so v{recipe.version} is not entered"
-                    )
+            if existing is None:
                 await conn.execute(
                     "INSERT INTO studio_recipes (recipe_id, version, ontology_version, label, "
                     "status, content, git_path, owning_unit, created_by, published_by, created_at, "
@@ -903,6 +930,100 @@ class StudioRecipeStore:
             )
         assert row is not None
         # The version just entered, not `get`'s latest: a later draft of the recipe may exist.
+        return _row_to_draft(row)
+
+    async def check_seeded_row(
+        self,
+        recipe: Recipe,
+        *,
+        source_location: str,
+        git_path: str,
+        dataset_id: str,
+        owning_unit: str,
+    ) -> None:
+        """The comparison `enter_published_for_seed` makes with the row it would meet, made on its
+        own and writing nothing (ADR-127 Amendment 30): the Prison Intelligence seed asks it before
+        it commits the recipe's file to the recipe repository, so that a row that differs is refused
+        by name with nothing committed and a committed file never differs from its published row.
+        Raises `SeededRecipeContentDiffers` or `SeededRecipeAnotherPublished` exactly as entering
+        would; a recipe with no row yet passes. Reads only, so it takes no lock and is no gate a
+        route could pass through: it enters nothing."""
+        content = _seeded_content(recipe, source_location)
+        async with self._pool.acquire() as conn:
+            await _existing_seeded_row(
+                conn,
+                recipe,
+                content,
+                dataset_id=dataset_id,
+                owning_unit=owning_unit,
+                git_path=git_path,
+            )
+
+    async def enter_draft_for_seed(
+        self,
+        recipe: Recipe,
+        *,
+        source_location: str,
+        dataset_id: str,
+        owning_unit: str,
+        created_by: str,
+        now: datetime,
+        pipeline: PipelineGraph,
+    ) -> StudioRecipeDraft:
+        """R9's first draft (ADR-127 Amendment 23, "R9's draft"): a draft at the recipe's own id and
+        version, in `owning_unit`, holding what Connect holds (the connector, the source, the
+        marking and its declarations, the legal basis, the dataset) from the committed file, the
+        `pipeline` given, and **no** `row_template`, `unmapped_fields` or `deduplicate`, so Map is
+        not done. Not verified, not published, no path.
+
+        For the first seed only: `restore_to_draft` needs a row to restore from, and a recipe the
+        seed has never entered has none. **A row of that id already there, at any version and in
+        any status, is left exactly as it is** and returned (the latest): a second seed, or one
+        after the rehearsal's reset, must not write over what an engineer did or what the reset
+        restored. **Confined** like `enter_published_for_seed`: it skips the author's gates, and
+        the one caller is the Prison Intelligence seed's own module.
+
+        Refuses first, writing nothing: a recipe with no legal basis (`SeededRecipeNoLegalBasis`),
+        and a declaration the source cannot hold (`check_source_declarations`)."""
+        if not (recipe.defaults.legal_basis or "").strip():
+            raise SeededRecipeNoLegalBasis(
+                f"recipe {recipe.id!r} v{recipe.version} declares no legal basis in its defaults"
+            )
+        content = _seeded_content(recipe, source_location)
+        check_source_declarations(dict(content["handling"]))  # type: ignore[call-overload]
+        content.update(
+            row_template=None,
+            unmapped_fields=[],
+            deduplicate=None,
+            pipeline=pipeline.model_dump(by_alias=True),
+        )
+        async with self._pool.acquire() as conn, conn.transaction():
+            await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", recipe.id)
+            row = await conn.fetchrow(
+                "SELECT * FROM studio_recipes WHERE recipe_id = $1 ORDER BY version DESC LIMIT 1",
+                recipe.id,
+            )
+            if row is None:
+                await conn.execute(
+                    "INSERT INTO studio_recipes (recipe_id, version, label, status, content, "
+                    "owning_unit, created_by, created_at, dataset_id) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                    recipe.id,
+                    recipe.version,
+                    recipe.label,
+                    StudioRecipeStatus.DRAFT.value,
+                    json.dumps(content),
+                    owning_unit,
+                    created_by,
+                    now,
+                    dataset_id,
+                )
+                row = await conn.fetchrow(
+                    "SELECT * FROM studio_recipes WHERE recipe_id = $1 "
+                    "ORDER BY version DESC LIMIT 1",
+                    recipe.id,
+                )
+        assert row is not None
         return _row_to_draft(row)
 
     async def restore_to_draft(

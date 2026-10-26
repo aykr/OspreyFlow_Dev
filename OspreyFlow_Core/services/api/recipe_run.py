@@ -216,7 +216,11 @@ async def _execute_recipe_run(
         )
         for branch in report.branches:
             await resolution_trigger_module.submit_post_ingest_resolution_jobs(
-                branch.report, recipe.row_template, ontology=deps.ontology, jobs=deps.jobs
+                branch.report,
+                recipe.row_template,
+                ontology=deps.ontology,
+                jobs=deps.jobs,
+                enabled=deps.config.post_ingest_resolution,
             )
     else:
         report = await run_published_recipe(
@@ -235,7 +239,11 @@ async def _execute_recipe_run(
             sink=sink,
         )
         await resolution_trigger_module.submit_post_ingest_resolution_jobs(
-            report, recipe.row_template, ontology=deps.ontology, jobs=deps.jobs
+            report,
+            recipe.row_template,
+            ontology=deps.ontology,
+            jobs=deps.jobs,
+            enabled=deps.config.post_ingest_resolution,
         )
     entry = await ChangeStreamWriter(deps.valkey).publish(
         "ingest",

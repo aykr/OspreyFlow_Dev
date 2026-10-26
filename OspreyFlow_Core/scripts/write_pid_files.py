@@ -2,11 +2,11 @@
 
     python -m scripts.write_pid_files --out DIR [--profile demo|scale]
 
-`--out` is required and must be outside the git working tree: the files, a million call rows among
-them, are never committed (the naming rule and rule 9), so a path inside the repository is refused
-before anything is written. It writes the CSV files, `pictures/` and `manifest.json` (rows, bytes
-and SHA-256 per file, and the planted counts and row positions; no timestamps), then, for a profile
-with pictures, `contact_sheet.png`, and prints a table of what it wrote.
+`--out` is required and must be outside the git working tree: the files, about 100,000 call rows
+among them, are never committed (the naming rule and rule 9), so a path inside the repository is
+refused before anything is written. It writes the CSV files, `pictures/` and `manifest.json` (rows,
+bytes and SHA-256 per file, and the planted counts and row positions; no timestamps), then, for a
+profile with pictures, `contact_sheet.png`, and prints a table of what it wrote.
 
 Plain generation: no store, no network.
 """

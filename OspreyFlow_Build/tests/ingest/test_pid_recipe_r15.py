@@ -1,18 +1,18 @@
 """R15, `pid-nomis-conflicts` (ADR-127 decision 12): which prisoners are in conflict, one row per
 sighting, on Brief 1's real file, loaded after R11 and R1. Every expectation comes from `pid_plan`.
-One link is SECRET (a covert source's report), at a marking of its own in the file's columns; the
-rest are OFFICIAL. The graph stand-in does not filter a read by access (the adapter does, and its
-own tests prove it), so the access case below holds the stored link's marking to the plan's and
-asks the same pure predicate the adapter compiles into its traversal (`principal_may_view`) what an
-OFFICIAL-cleared principal and a SECRET-cleared one may see. It is not a test of the adapter's
-filter. What a mistake would do, and the case that catches it:
+Every link is OFFICIAL (ADR-120 Amendment 16 removed the one conflict known from a covert source,
+which was SECRET). The graph stand-in does not filter a read by access (the adapter does, and its
+own tests prove it), so the access case below holds each stored link's marking to the plan's and
+asks the same pure predicate the adapter compiles into its traversal (`principal_may_view`) whether
+an OFFICIAL-cleared principal may see it. It is not a test of the adapter's filter. What a mistake
+would do, and the case that catches it:
 
 - a pair not linked, or linked twice, or with the wrong reason
   (`test_every_pair_is_one_in_conflict_with_link_with_its_reason`);
 - a sighting lost, so the occurrences are not the plan's
   (`test_a_pairs_events_are_its_sightings_from_the_first_to_the_last`);
-- the SECRET link loaded at the default marking, so an OFFICIAL reader could see it
-  (`test_the_secret_link_is_secret_and_an_official_reader_cannot_see_it`);
+- a link loaded above OFFICIAL, so the demo analyst could not see it, or the removed covert-source
+  link back in the file (`test_every_link_is_official_and_the_demo_analyst_sees_every_one`);
 - a link at a marking other than the plan's (`test_every_link_carries_the_plans_marking`);
 - a re-run adding anything (`test_a_second_run_creates_nothing`)."""
 
@@ -125,36 +125,23 @@ async def test_a_pairs_events_are_its_sightings_from_the_first_to_the_last(
         assert edge.interval.valid_to == seen[-1], lk.key
 
 
-async def test_the_secret_link_is_secret_and_an_official_reader_cannot_see_it(
+async def test_every_link_is_official_and_the_demo_analyst_sees_every_one(
     conflicts: tuple[MergingGraph, KeyStore, Any, list[Any]],
 ) -> None:
     graph, _store, _report, _events = conflicts
     stored = _stored(graph)
-    secret = [lk for lk in _planned() if lk.handling.classification == "SECRET"]
-    assert len(secret) == 1, "the plan has the one SECRET conflict link"
-    lk = secret[0]
-    edge = stored[_pair(_number(lk.source), _number(lk.target))]
-    assert marking(edge.handling) == (
-        "SECRET",
-        "P",
-        None,
-        None,
-        "regional-intel-unit",
-        "regional-intel-unit",
-    )
-    assert marking(edge.handling) == marking(lk.handling)
+    planned = _planned()
+    assert planned and len(stored) == len(planned)
+    assert {lk.handling.classification for lk in planned} == {"OFFICIAL"}
+    assert "covert source" not in {lk.properties["reason"] for lk in planned}
+    assert "covert source" not in {row["reason"] for row in rows_of(FILE)}
     official = Principal(
         id="analyst-official", clearance="OFFICIAL", org_unit="fenwick-moor-security",
         receivable_handling_codes=["P", "C"],
     )  # fmt: skip
-    secret_reader = Principal(
-        id="analyst-secret", clearance="SECRET", org_unit="fenwick-moor-security",
-        receivable_handling_codes=["P", "C"],
-    )  # fmt: skip
-    assert not principal_may_view(edge.handling, official, SCHEME)
-    assert principal_may_view(edge.handling, secret_reader, SCHEME)
-    others = [e for p, e in stored.items() if e is not edge]
-    assert others and all(principal_may_view(e.handling, official, SCHEME) for e in others)
+    for pair, edge in stored.items():
+        assert edge.handling.classification == "OFFICIAL", pair
+        assert principal_may_view(edge.handling, official, SCHEME), pair
 
 
 async def test_every_link_carries_the_plans_marking(
@@ -167,7 +154,7 @@ async def test_every_link_carries_the_plans_marking(
         edge = stored[_pair(_number(lk.source), _number(lk.target))]
         assert marking(edge.handling) == marking(lk.handling), lk.key
         classes.add(edge.handling.classification)
-    assert classes == {"OFFICIAL", "SECRET"}
+    assert classes == {"OFFICIAL"}
 
 
 async def test_a_second_run_creates_nothing(

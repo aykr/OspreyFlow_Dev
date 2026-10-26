@@ -9,7 +9,8 @@ same demos and are kept in sync by hand; this check fails when a demo is missing
 carries no distribution class there.
 
 Deliberately weak, not a line-level cross-reference: a registry entry is "documented" if both its
-own name and its own distribution class appear anywhere in the guide's text. Strong enough to catch
+own name and its own distribution class appear anywhere in the guide's text (an entry in
+`TABLE_ROW_ENTRIES` must have a table row of its own holding both). Strong enough to catch
 the failure this gate exists for (a demo entirely missing from the guide, or documented with no
 distribution class at all); not strong enough to catch a distribution class attached to the wrong
 demo — the same class of gap `authorized_query_check.py`'s own docstring discloses for its own
@@ -34,22 +35,42 @@ DEMO_REGISTRY: tuple[tuple[str, str], ...] = (
     ("Extraction and entity resolution", "shipped"),
     ('Scenario C — "Fixture Corp"', "shipped"),
     ("Operation Ledger", "shipped"),
+    ("Prison Intelligence Dataset", "shipped"),
     ("PaySim", "shipped"),
     ("The real Enron email corpus", "internal"),
     ("VAST Challenge dataset", "internal"),
 )
 
+#: Entries held to the stronger rule: the guide must have a table row of its own naming the demo and
+#: carrying its class (ADR-127 Amendment 30). The looser rule below passes a demo named in a
+#: sentence while some other row holds the class marker, which is how the Prison Intelligence
+#: Dataset could have lost its row and still passed.
+TABLE_ROW_ENTRIES: frozenset[str] = frozenset({"Prison Intelligence Dataset"})
+
+
+def _has_table_row(guide_text: str, name: str, marker: str) -> bool:
+    """Whether one line of the guide's table (it starts with `|`) holds the name and the marker."""
+    return any(
+        line.lstrip().startswith("|") and name in line and marker in line
+        for line in guide_text.splitlines()
+    )
+
 
 def find_undocumented(
-    guide_text: str, registry: tuple[tuple[str, str], ...] = DEMO_REGISTRY
+    guide_text: str,
+    registry: tuple[tuple[str, str], ...] = DEMO_REGISTRY,
+    table_rows: frozenset[str] = TABLE_ROW_ENTRIES,
 ) -> list[str]:
     """Returns a name for every registry entry missing its own name, or its own distribution
     class marker (`` `shipped` ``/`` `internal` ``), anywhere in `guide_text` — empty when the
-    guide is in sync."""
+    guide is in sync. An entry in `table_rows` must have both in one table row of its own."""
     missing = []
     for name, distribution_class in registry:
         marker = f"`{distribution_class}`"
-        if name not in guide_text or marker not in guide_text:
+        if name in table_rows:
+            if not _has_table_row(guide_text, name, marker):
+                missing.append(name)
+        elif name not in guide_text or marker not in guide_text:
             missing.append(name)
     return missing
 

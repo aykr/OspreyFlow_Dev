@@ -20,6 +20,7 @@ Import both into a test module with `# noqa: F401` on the fixture.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
@@ -175,6 +176,10 @@ class ValidatingGraph:
 
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: object) -> list[str]:
         for edge in edges:
+            # A real adapter awaits the store for every write, so the loop gets a turn between
+            # them; the stand-in's linear scans over a million nodes must not hold it either
+            # (ADR-127 Amendment 29: a stall here is the stand-in's, not the run's).
+            await asyncio.sleep(0)
             self._validate_edge(edge)
         self.open_edges.extend(edges)
         return [e.id for e in edges]
@@ -255,6 +260,7 @@ class MergingGraph(ValidatingGraph):
         ids: list[str] = []
         fresh: list[EdgeWrite] = []
         for edge in edges:
+            await asyncio.sleep(0)  # as above: a real write awaits the store
             # As the adapter: every write is validated first, whether or not it merges.
             self._validate_edge(edge)
             directed = self._schema().edge_type(edge.type).directed  # type: ignore[union-attr]

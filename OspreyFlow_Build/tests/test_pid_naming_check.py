@@ -197,6 +197,144 @@ def test_a_picture_s_bytes_are_not_scanned_for_the_words(tmp_path: Path) -> None
     assert gate.check(root, generated=False) == []
 
 
+# --- the seed, its printed lines, the folder and case names, and the registration ----------------
+# ADR-127 Amendment 23 ("The registration"): `scripts/seed_pid.py` is a PID file the scan reads by
+# its name, and what it prints is built at run time from the recipes' ids and the files' names, so
+# its printed lines are produced from real inputs and scanned too; so are the folder, the worker and
+# the registered names (the pack, its description, the seed's dataset entry and the command's key).
+
+
+def test_the_seed_script_is_a_pid_file_the_gate_reads_and_a_word_planted_in_it_is_reported(
+    tmp_path: Path,
+) -> None:
+    found = {str(p.relative_to(ROOT)) for p in gate.pid_files(ROOT)}
+    assert "OspreyFlow_Core/scripts/seed_pid.py" in found
+    root = _tree(tmp_path)
+    shutil.copy(CORE / "scripts/seed_pid.py", root / "OspreyFlow_Core/scripts/seed_pid.py")
+    assert gate.check(root, generated=False, seed=False) == []
+    target = root / "OspreyFlow_Core/scripts/seed_pid.py"
+    text = target.read_text()
+    marker = '    print(f"Writing the files into {listed_folder(root)} ...", flush=True)'
+    assert marker in text
+    target.write_text(text.replace(marker, marker.replace("Writing", f"Writing {BANNED}"), 1))
+    hits = gate.check(root, generated=False, seed=False)
+    assert len(hits) == 1 and hits[0].where.startswith("OspreyFlow_Core/scripts/seed_pid.py:")
+
+
+def seed_pid_reseed() -> str:
+    from scripts import seed_pid
+
+    return seed_pid.RESTORE_COMMAND
+
+
+def test_the_seeds_printed_lines_are_produced_from_real_inputs_and_scanned() -> None:
+    lines = gate.seed_lines()
+    text = "\n".join(lines)
+    assert "pid-pin-calls" in text and "already loaded" in text, "the run's lines"
+    assert "What the reset cannot undo" in text, "the reset's"
+    assert "pictures:" in text and "check ok" in text
+    assert "removed" in text and "restored the reports recipe" in text
+    assert "check FAILED: J1" in text and "check not run: Ch5" in text, "the demo numbers'"
+    assert seed_pid_reseed() in text and "SAME_AS" in text, "a refused reset, with --show-ids too"
+    assert "its run: 7 rows read" in text, "a standing load's"
+    assert len(lines) > 40
+
+
+def test_a_word_in_a_recipe_id_the_seed_prints_is_reported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import seed_pid
+
+    real = seed_pid._recipe
+
+    def planted(recipe_file: str):  # type: ignore[no-untyped-def]
+        recipe = real(recipe_file)
+        return recipe.model_copy(update={"id": recipe.id + f"-{BANNED}"})
+
+    monkeypatch.setattr(seed_pid, "_recipe", planted)
+    hits = gate.scan_seed()
+    assert hits and all(BANNED in h.text for h in hits)
+    assert any(h.where.startswith("seed printed line") for h in hits)
+
+
+def test_a_word_in_the_folder_the_worker_or_a_printed_phrase_is_reported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import seed_pid
+
+    monkeypatch.setattr(seed_pid, "FOLDER", f"prison-intelligence-{BANNED}")
+    monkeypatch.setattr(seed_pid, "ENGINEER_ID", f"pid-{OTHER}-worker")
+    monkeypatch.setattr(seed_pid, "CANNOT_UNDO", ("What the reset cannot undo:", f"  - the {BANNED}"))
+    where = {h.where for h in gate.scan_seed()}
+    assert "seed constant FOLDER" in where and "seed constant ENGINEER_ID" in where
+    assert any(w.startswith("seed printed line") for w in where)
+
+
+def test_a_word_in_the_reseed_command_or_a_demo_number_line_is_reported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-127 Amendment 32: the reset prints the reseed command whole, and each demo number prints
+    what it could not find, built from the plan's own keys and values: both are scanned."""
+    from scripts import seed_pid
+
+    monkeypatch.setattr(seed_pid, "RESTORE_COMMAND", f"ospreyflow restore {BANNED} --yes")
+    where = {h.where for h in gate.scan_seed()}
+    assert "seed constant RESTORE_COMMAND" in where and "seed printed line" in where
+    monkeypatch.undo()
+    real = seed_pid.identity_of
+    monkeypatch.setattr(
+        seed_pid, "identity_of", lambda plan, key: (*real(plan, key)[:2], f"{BANNED}-{key}")
+    )
+    hits = gate.scan_seed()
+    assert hits and all(h.where == "seed printed line" and BANNED in h.text for h in hits)
+    assert any("check FAILED" in h.text for h in hits)
+
+
+def test_a_word_in_the_registration_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ospreyflow import demo as command
+    from scripts import demo_packs, demo_registry, seed_internal
+
+    real_manifest = next(m for m in demo_registry.REGISTRY if m.id == "prison-intelligence")
+    planted_registry = tuple(
+        dataclasses.replace(m, seed_module=f"scripts.seed_{BANNED}") if m is real_manifest else m
+        for m in demo_registry.REGISTRY
+    )
+    monkeypatch.setattr(demo_registry, "REGISTRY", planted_registry)
+    description = demo_packs._DESCRIPTIONS["prison-intelligence"]
+    monkeypatch.setitem(
+        demo_packs._DESCRIPTIONS, "prison-intelligence",
+        dataclasses.replace(description, shows=f"Seen on the {OTHER} landing."),
+    )  # fmt: skip
+    entry = seed_internal.DATASETS["prison-intelligence"]
+    monkeypatch.setitem(
+        seed_internal.DATASETS, "prison-intelligence",
+        dataclasses.replace(entry, case_name=f"The {BANNED} case"),
+    )  # fmt: skip
+    monkeypatch.setitem(command.PACK_KEYS, "prison-intelligence", f"pid-{BANNED}")
+    where = {h.where for h in gate.scan_registration()}
+    assert where == {
+        "registered manifest prison-intelligence.seed_module",
+        "registered pack prison-intelligence.shows",
+        "registered seed prison-intelligence.case_name",
+        "registered pack key prison-intelligence",
+    }
+
+
+def test_a_word_in_the_demo_guides_row_for_the_dataset_is_reported(tmp_path: Path) -> None:
+    guide = tmp_path / "DEMO_GUIDE.md"
+    real = (CORE / "DEMO_GUIDE.md").read_text(encoding="utf-8")
+    assert gate.scan_registration(CORE / "DEMO_GUIDE.md") == []
+    row = next(line for line in real.splitlines() if "Prison Intelligence Dataset" in line)
+    guide.write_text(real.replace(row, row + f" Shown on the {BANNED} wing."), encoding="utf-8")
+    hits = gate.scan_registration(guide)
+    assert len(hits) == 1 and hits[0].where.startswith("demo guide:")
+
+
+def test_the_registration_the_gate_reads_is_the_real_one_and_clean() -> None:
+    assert gate.scan_registration() == []
+    assert gate.scan_seed() == []
+
+
 # --- green: the real tree ------------------------------------------------------------------------
 
 
