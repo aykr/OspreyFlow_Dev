@@ -265,8 +265,11 @@ def _chain(extract_config: dict | None = None, *, enrich_config: dict | None = N
 
 
 async def _run(published, graph, *, git_repo: Path, candidates=None, media=None,
-               analytics=None, online_geocode=None, load_id: str = "pipeline-load-1"):
-    ontology = load_default_ontology()
+               analytics=None, online_geocode=None, load_id: str = "pipeline-load-1",
+               ontology=None):
+    # The engine is given the ontology the graph adapter judges with, as the Conduit gives both the
+    # deployment's (ADR-127 Amendment 19: each write is validated as it is held).
+    ontology = ontology if ontology is not None else load_default_ontology()
     return await run_published_pipeline(
         published,
         LOADER,
@@ -702,7 +705,7 @@ async def test_a_fibo_pipeline_loads_accounts_the_bare_core_refuses(
             )
 
     async with arcadedb_adapter(deployed, scheme) as graph:
-        report = await _run(published, graph, git_repo=git_repo)
+        report = await _run(published, graph, git_repo=git_repo, ontology=deployed)
         assert report.rows_read == 2
         assert report.nodes_created == 3  # the three distinct accounts
         assert report.edges_created == 2

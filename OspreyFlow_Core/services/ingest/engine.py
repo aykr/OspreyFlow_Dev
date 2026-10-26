@@ -31,7 +31,7 @@ run at all; it exists for a later one.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -82,7 +82,7 @@ from schemas.ingest import (
     RecipeEntity,
     RejectionRecord,
 )
-from schemas.merge import merge_interval
+from schemas.merge import aggregate_edge_writes, edge_write_key, merge_interval
 
 from .pipeline import recipe_packs
 from .recipe_rules import (
@@ -750,6 +750,36 @@ def preview_handling_and_provenance(
     )
 
 
+#: ADR-127 Amendment 19: how many links one `upsert_edges` call carries when a run flushes the links
+#: it combined. The chunking bounds one call, not the run: every chunk is in the run's one
+#: transaction.
+FLUSH_CHUNK = 500
+
+#: Test-only (ADR-127 Amendment 19, "the per-row reference is the same code with a flush size of
+#: one"). A test sets this to 1 to make a run with a handling scheme flush each write as it is held,
+#: which is what a run without a scheme does. Never set outside a test.
+_FORCE_FLUSH_SIZE: int | None = None
+
+
+@dataclass
+class _HeldLink:
+    """One link the run has combined and not yet written (ADR-127 Amendment 19): the combined
+    write, and whatever must be told the stored id once the flush has it."""
+
+    write: EdgeWrite
+    #: Whether the loader's count of created links waits on their being able to read it
+    #: (`_count_hidden_merges`): a plain link does, a `HOLDS` link is counted at its write.
+    counted_by_readability: bool
+    #: A `HOLDS` link only: whether its holder was created by this load when it was held, which
+    #: makes the link the load's own whatever the store returns (see `_write_held_content`).
+    holder_created: bool | None = None
+    #: The slots of `_RunState.written` holding one row's write of this link, whose id is the
+    #: stored one once flushed.
+    written_slots: list[int] = field(default_factory=list)
+    #: The events of the rows that wrote this link, whose `edge_id` is the stored id once flushed.
+    events: list[EventRecord] = field(default_factory=list)
+
+
 @dataclass
 class _RunState:
     graph: GraphPort
@@ -760,6 +790,17 @@ class _RunState:
     ontology: OntologySchema
     source: str
     investigation_scope: str
+    #: The handling scheme the graph adapter judges audiences with. `None` (the CLI, the site grid,
+    #: the seeders, the basemap builder) means the run does not combine: it flushes each write as it
+    #: is held, because without a scheme a restricted code's units cannot be told apart.
+    scheme: HandlingScheme | None = None
+    #: ADR-127 Amendment 19: the links held and not yet written, by `edge_write_key`, in the order
+    #: each was first held.
+    held_links: dict[tuple[Hashable, ...], _HeldLink] = field(default_factory=dict)
+    #: Each node this run wrote or matched, by its type, so a held write is checked as the adapter
+    #: checks it (its ends allow the type) without a store read.
+    node_types: dict[NodeId, str] = field(default_factory=dict)
+    touched_edge_lookup: set[EdgeId] = field(default_factory=set)
     created_node_ids: list[NodeId] = field(default_factory=list)
     touched_edge_ids: list[EdgeId] = field(default_factory=list)
     #: ADR-127 decision 6: `touched_edge_ids` told apart. A link is created when the store kept the
@@ -1286,6 +1327,7 @@ async def _write_entity(
         if cached is not None:
             state.nodes_referenced += 1
             _note_referenced(state, cached)
+            state.node_types[cached] = entity.type
             return cached
         existing = await state.graph.find_node(
             entity.type, match_key[1], match_key[2], state.principal
@@ -1294,6 +1336,7 @@ async def _write_entity(
             state.local_index[match_key] = existing.id
             state.nodes_referenced += 1
             _note_referenced(state, existing.id)
+            state.node_types[existing.id] = entity.type
             return existing.id
 
     if own_text is not None and own_text_media is not None:
@@ -1315,6 +1358,7 @@ async def _write_entity(
     (node_id,) = await state.graph.upsert_nodes([write], state.tx)
     state.created_node_ids.append(node_id)
     state.created_node_lookup.add(node_id)
+    state.node_types[node_id] = entity.type
     state.nodes_created += 1
     if state.written is not None:
         state.written.append(write.model_copy(update={"id": node_id}))
@@ -1453,6 +1497,7 @@ async def _write_held_content(
             recipe_version=state.recipe.version,
         )
         await state.graph.upsert_nodes([document], state.tx)
+        state.node_types[document_id] = "Document"
         state.documents_written.add(document_id)
         if existed:
             state.merged_node_ids.append(document_id)
@@ -1476,21 +1521,22 @@ async def _write_held_content(
         recipe_id=state.recipe.id,
         recipe_version=state.recipe.version,
     )
-    (edge_id,) = await state.graph.upsert_edges([holds], state.tx)
-    state.touched_edge_ids.append(edge_id)
-    # Counted per write: its id is the document's and holder's, so a returned id cannot tell a new
-    # HOLDS link from one merged into (unlike `_write_edge` below).
+    # Counted per held write: its id is the document's and holder's, so a returned id cannot tell a
+    # new HOLDS link from one merged into (unlike `_write_edge` below).
     state.edges_created += 1
     # The record cannot rest on that id either. A holder this load created has no earlier link, so
     # the link is its own; any other holder's may already hold this document, and is recorded as
     # merged so a revert refuses naming it rather than take back another load's link. One thing the
     # id does say: the store returns a new id only for a link of its own, when a link of another
     # audience holds the id sent (ADR-102 Amendment 3), so a returned id that is not the one sent
-    # is the load's own link whoever the holder is.
-    _note_edge(
+    # is the load's own link whoever the holder is. Both are settled at the flush
+    # (`_settle_link`), with the holder's state as it is now.
+    await _hold_edge(
         state,
-        edge_id,
-        created=holder_id in state.created_node_lookup or edge_id != holds.id,
+        holds,
+        row_index=row_index,
+        counted_by_readability=False,
+        holder_created=holder_id in state.created_node_lookup,
     )
 
 
@@ -1578,17 +1624,7 @@ async def _write_edge(
         recipe_id=state.recipe.id,
         recipe_version=state.recipe.version,
     )
-    (edge_id,) = await state.graph.upsert_edges([write], state.tx)
-    state.touched_edge_ids.append(edge_id)
-    _note_edge(state, edge_id, created=edge_id == write.id, counted_by_readability=True)
-    if state.written is not None:
-        state.written.append(write.model_copy(update={"id": edge_id}))
-    # A link is created only when the store kept the id this write was sent. A second call between
-    # the same two parties merges into the link already there, and `upsert_edges` returns that
-    # link's id: counting every write said "236 edges created" for 141 links (9 October 2026).
-    if edge_id == write.id:
-        state.edges_created += 1
-
+    event: EventRecord | None = None
     if resolved.instant is not None:
         # The event's own properties carry the full set of source rows it
         # summarises — the surviving event's provenance chain, same as the
@@ -1599,26 +1635,153 @@ async def _write_edge(
             # ADR-094: the link's text, where the reader and extraction read an email's.
             **_content_properties(resolved.content),
         }
-        events.append(
-            EventRecord(
-                event_id=str(ULID()),
-                edge_id=edge_id,
-                edge_type=edge.type,
-                source_id=source_id,
-                target_id=target_id,
-                occurred_at=resolved.instant,
-                duration_s=_as_float(properties.get("duration_s")),
-                cell_site=_as_str(properties.get("cell_site")),
-                lat=_as_float(properties.get("lat")),
-                lon=_as_float(properties.get("lon")),
-                direction=_as_str(properties.get("direction")),
-                properties=event_properties,
-                investigation_scope=state.investigation_scope,
-                handling=handling,
-                # ADR-127 decision 6: so a revert can retract this event with its load.
-                load_id=state.load_id,
-            )
+        event = EventRecord(
+            event_id=str(ULID()),
+            # This row's own write's id, until the flush gives the link's stored one.
+            edge_id=write.id,
+            edge_type=edge.type,
+            source_id=source_id,
+            target_id=target_id,
+            occurred_at=resolved.instant,
+            duration_s=_as_float(properties.get("duration_s")),
+            cell_site=_as_str(properties.get("cell_site")),
+            lat=_as_float(properties.get("lat")),
+            lon=_as_float(properties.get("lon")),
+            direction=_as_str(properties.get("direction")),
+            properties=event_properties,
+            investigation_scope=state.investigation_scope,
+            handling=handling,
+            # ADR-127 decision 6: so a revert can retract this event with its load.
+            load_id=state.load_id,
         )
+        events.append(event)
+    # Held, not written: the run combines its writes to one per link and writes them at the end of
+    # its rows (ADR-127 Amendment 19). The event, and this row's entry in `written`, take the
+    # stored id of their link then.
+    await _hold_edge(
+        state,
+        write,
+        row_index=row_index,
+        counted_by_readability=True,
+        event=event,
+        record_written=True,
+    )
+
+
+def _refuse_held_write(state: _RunState, write: EdgeWrite, *, row_index: int) -> None:
+    """What `GraphArcadeDBAdapter.upsert_edges` refuses before it writes, checked as the write is
+    held so the refusal names the row (ADR-127 Amendment 19): a type the ontology lacks, a property
+    it does not allow, an end its type does not allow. An end this run never wrote or matched is the
+    flush's to refuse, as the adapter does."""
+    try:
+        edge_type = state.ontology.edge_type(write.type)
+        if edge_type is None:
+            raise OntologyError(f"{write.type!r} is not a type in the active ontology")
+        validate_properties(edge_type, write.properties)
+        source_type = state.node_types.get(write.source)
+        target_type = state.node_types.get(write.target)
+        if source_type is not None and target_type is not None:
+            validate_edge_endpoints(edge_type, source_type=source_type, target_type=target_type)
+    except OntologyError as error:
+        raise OntologyError(f"row {row_index}: {error}") from error
+
+
+async def _hold_edge(
+    state: _RunState,
+    write: EdgeWrite,
+    *,
+    row_index: int,
+    counted_by_readability: bool,
+    holder_created: bool | None = None,
+    event: EventRecord | None = None,
+    record_written: bool = False,
+) -> None:
+    """Hold one row's link write (ADR-127 Amendment 19). It is checked as the adapter would check
+    it, then combined into the write already held for its link (`aggregate_edge_writes`, keyed as it
+    keys: the type, the pair and the audience under the handling scheme), or held as that link's
+    first. A run with no scheme, or a test's flush size of one, flushes at once, so nothing is
+    combined and each write is its own."""
+    _refuse_held_write(state, write, row_index=row_index)
+    scheme = state.scheme
+
+    def directed(name: str) -> bool:
+        edge_type = state.ontology.edge_type(name)
+        return bool(edge_type.directed) if edge_type is not None else True
+
+    def audience(edge: EdgeWrite) -> Hashable:
+        # With no scheme nothing is combined (each write is flushed as it is held), so no audience
+        # is read: the key is never compared with another's.
+        return audience_of(edge.handling, edge.datasets, scheme) if scheme is not None else ()
+
+    def handling(old: Handling, new: Handling) -> Handling:
+        assert scheme is not None  # a run with no scheme flushes each write, so never folds
+        return merge_handling(old, new, scheme)
+
+    key = edge_write_key(write, directed=directed, audience=audience)
+    held = state.held_links.get(key)
+    if held is None:
+        held = _HeldLink(
+            write=write,
+            counted_by_readability=counted_by_readability,
+            holder_created=holder_created,
+        )
+        state.held_links[key] = held
+    else:
+        (folded,) = aggregate_edge_writes(
+            [held.write, write], directed=directed, handling=handling, audience=audience
+        )
+        held.write = folded.write
+    if event is not None:
+        held.events.append(event)
+    if record_written and state.written is not None:
+        held.written_slots.append(len(state.written))
+        state.written.append(write)
+    if scheme is None or _FORCE_FLUSH_SIZE == 1:
+        await _flush_held_links(state)
+
+
+async def _flush_held_links(state: _RunState) -> None:
+    """Write the held links with `upsert_edges`, in the order each was first held, in chunks of
+    `FLUSH_CHUNK`, and settle each with the stored id it came back with (ADR-127 Amendment 19)."""
+    held = list(state.held_links.values())
+    state.held_links.clear()
+    for start in range(0, len(held), FLUSH_CHUNK):
+        chunk = held[start : start + FLUSH_CHUNK]
+        ids = await state.graph.upsert_edges([link.write for link in chunk], state.tx)
+        for link, edge_id in zip(chunk, ids, strict=True):
+            _settle_link(state, link, edge_id)
+
+
+def _settle_link(state: _RunState, link: _HeldLink, edge_id: EdgeId) -> None:
+    """What a written link tells the run: its stored id, once in the load's touched links, noted
+    created or merged, counted, and handed to its events and its rows' entries in `written`."""
+    if edge_id not in state.touched_edge_lookup:
+        state.touched_edge_lookup.add(edge_id)
+        state.touched_edge_ids.append(edge_id)
+    kept_the_id = edge_id == link.write.id
+    if link.holder_created is None:
+        # A link is created only when the store kept the id this write was sent. A second call
+        # between the same two parties merges into the link already there, and `upsert_edges`
+        # returns that link's id: counting every write said "236 edges created" for 141 links
+        # (9 October 2026). The combined write has its first row's id, as that row's write did.
+        _note_edge(
+            state, edge_id, created=kept_the_id, counted_by_readability=link.counted_by_readability
+        )
+        if kept_the_id:
+            state.edges_created += 1
+    else:
+        # A `HOLDS` link was counted per held write when it was held.
+        _note_edge(
+            state,
+            edge_id,
+            created=link.holder_created or not kept_the_id,
+            counted_by_readability=link.counted_by_readability,
+        )
+    for event in link.events:
+        event.edge_id = edge_id
+    if state.written is not None:
+        for slot in link.written_slots:
+            state.written[slot] = state.written[slot].model_copy(update={"id": edge_id})
 
 
 def _content_properties(content: dict[str, str] | None) -> dict[str, Any]:
@@ -2060,6 +2223,7 @@ async def run_recipe(
         source=source,
         investigation_scope=investigation_scope,
         written=written,
+        scheme=scheme,
     )
     events: list[EventRecord] = []
 
@@ -2101,6 +2265,9 @@ async def run_recipe(
                 events=events,
             )
 
+    # ADR-127 Amendment 19: the links the rows wrote, combined to one each, are written now, before
+    # the hidden merges are counted and the report is built, so both see stored ids only.
+    await _flush_held_links(state)
     await _count_hidden_merges(state)
     report = LoadReport(
         load_id=load_id,

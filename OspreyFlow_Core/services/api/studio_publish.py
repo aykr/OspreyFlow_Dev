@@ -35,6 +35,7 @@ from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
 from services.ingest.pipeline import recipe_packs
 from services.ingest.recipe_loader import load_recipe
 
+from conduit_common.transactions import rollback_keeping_failure
 from ontology.handling import HandlingScheme, merge_handling
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
@@ -485,8 +486,8 @@ async def load_with_rules(
                     if rules is not None
                     else PreCommitVerdict()
                 )
-            except Exception:
-                await graph.rollback_transaction(tx)
+            except BaseException:
+                await rollback_keeping_failure(graph, tx)
                 raise
             if not verdict.hold:
                 break
@@ -543,10 +544,10 @@ async def load_with_rules(
                     dataset_id=principal.datasets[0] if principal.datasets else None,
                     row_handling=lambda row: by_row_object[id(row)],
                 )
-        except Exception:
+        except BaseException:
             # Anything but a refusal (`RowRejected` is handled per row above) leaves the open
             # transaction rolled back, not abandoned: nothing of this load is committed.
-            await graph.rollback_transaction(tx)
+            await rollback_keeping_failure(graph, tx)
             raise
         await graph.commit_transaction(tx)
         if rules is not None:

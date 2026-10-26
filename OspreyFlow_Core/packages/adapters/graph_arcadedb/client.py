@@ -37,7 +37,7 @@ import logging
 import os
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 import httpx
@@ -115,6 +115,31 @@ class ArcadeDBConfig:
         )
 
 
+#: ADR-127 Amendment 20: ArcadeDB 26.10.1 expires an HTTP transaction session left idle for 5 to 10
+#: seconds (404 "Remote transaction session not found or expired"). An open transaction is sent a
+#: no-op read whenever this many seconds have passed since its last call.
+KEEPALIVE_SECONDS = 3.0
+
+#: ADR-127 Amendment 21: a session no real call has used for this long is no longer kept alive (a
+#: transaction the code abandoned, such as a cancelled request's), and ArcadeDB expires it as
+#: before.
+MAX_KEEPALIVE_IDLE = 30 * 60.0
+
+
+@dataclass(slots=True)
+class _Session:
+    """What the client keeps for one open transaction session (ADR-127 Amendments 20 and 21)."""
+
+    #: Held by every real call on the session and by the keep-alive, so they never overlap.
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    opened: float = field(default_factory=time.monotonic)
+    #: When a real call last started or finished on it; a keep-alive does not move this.
+    last_real: float = field(default_factory=time.monotonic)
+    #: When a keep-alive last reached it.
+    last_alive: float = 0.0
+    task: asyncio.Task[None] | None = None
+
+
 #: How long a found leader is trusted before the cluster is asked for it again.
 _LEADER_TTL_SECONDS = 2.0
 _EVENTUAL = {"X-ArcadeDB-Read-Consistency": "eventual"}
@@ -126,9 +151,19 @@ class ResultTruncatedError(Exception):
 
 class ArcadeDBClient:
     def __init__(
-        self, config: ArcadeDBConfig, *, transport: httpx.AsyncBaseTransport | None = None
+        self,
+        config: ArcadeDBConfig,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        keepalive_seconds: float | None = KEEPALIVE_SECONDS,
+        max_keepalive_idle: float = MAX_KEEPALIVE_IDLE,
     ) -> None:
         self._config = config
+        #: `None` turns the keep-alive off (the live test's plant, nothing else).
+        self._keepalive_seconds = keepalive_seconds
+        self._max_keepalive_idle = max_keepalive_idle
+        #: Each open session, from its begin to the commit or rollback being sent.
+        self._sessions: dict[str, _Session] = {}
         self._transport = transport
         self._http = self._client_for(config.base_url)
         # A cluster: the configured address (`_service`) answers which node leads, and `_http` is
@@ -150,6 +185,12 @@ class ArcadeDBClient:
         return self._config.database
 
     async def aclose(self) -> None:
+        sessions = list(self._sessions.values())
+        tasks = [t.task for t in sessions if t.task is not None]
+        self._sessions.clear()
+        for session in sessions:
+            self._cancel_task(session)
+        await asyncio.gather(*tasks, return_exceptions=True)
         for client in {id(c): c for c in (*self._earlier, self._service, self._http)}.values():
             await client.aclose()
 
@@ -181,7 +222,34 @@ class ArcadeDBClient:
             self._leader = address
         self._leader_found_at = time.monotonic()
 
-    async def _post(self, path: str, **kwargs: Any) -> httpx.Response:
+    async def _post(
+        self, path: str, *, ends_session: bool = False, **kwargs: Any
+    ) -> httpx.Response:
+        """Every real call. One on an open session holds the session's lock (so no keep-alive is
+        beside it) and records itself as the session's last real call. `ends_session` (commit and
+        rollback) removes the session before releasing the lock, so a keep-alive waiting for it
+        finds it gone; one already sent has finished, since this call waited for the lock."""
+        session_id = (kwargs.get("headers") or {}).get("arcadedb-session-id")
+        session = self._sessions.get(session_id) if session_id is not None else None
+        if session is None or session_id is None:
+            return await self._send(path, **kwargs)
+        async with session.lock:
+            session.last_real = time.monotonic()
+            try:
+                return await self._send(path, **kwargs)
+            finally:
+                session.last_real = time.monotonic()
+                if ends_session and self._sessions.get(session_id) is session:
+                    del self._sessions[session_id]
+                    self._cancel_task(session)
+
+    @staticmethod
+    def _cancel_task(session: _Session) -> None:
+        task, session.task = session.task, None
+        if task is not None and task is not asyncio.current_task():
+            task.cancel()
+
+    async def _send(self, path: str, **kwargs: Any) -> httpx.Response:
         if self._config.ha:
             await self._follow_leader()
         try:
@@ -226,11 +294,68 @@ class ArcadeDBClient:
         if not session_id:
             raise ArcadeDBError("ArcadeDB did not return a session id for the new transaction")
         self._tx_log[str(session_id)] = []
+        session = _Session()
+        self._sessions[str(session_id)] = session
+        if self._keepalive_seconds is not None:
+            session.task = asyncio.create_task(self._keep_alive(str(session_id), session))
         return str(session_id)
+
+    def _discard_session(self, session_id: str) -> None:
+        """Forgets a session whose commit or rollback was never sent (a replay that failed)."""
+        session = self._sessions.pop(session_id, None)
+        self._tx_log.pop(session_id, None)
+        if session is not None:
+            self._cancel_task(session)
+
+    async def _keep_alive(self, session_id: str, session: _Session) -> None:
+        """Sends the session a no-op read whenever `_keepalive_seconds` have passed since its last
+        call (ADR-127 Amendment 20), under the session's lock, so never beside a real call. Not
+        recorded among the commands a failed commit replays. It stops, saying nothing, when one
+        fails (the transaction's next real call reports the expiry, as it would without a
+        keep-alive); and, with a warning, once no real call has used the session for
+        `_max_keepalive_idle` (Amendment 21), when ArcadeDB expires it as before."""
+        assert self._keepalive_seconds is not None
+        interval = self._keepalive_seconds
+        try:
+            while self._sessions.get(session_id) is session:
+                now = time.monotonic()
+                if now - session.last_real > self._max_keepalive_idle:
+                    _log.warning(
+                        "arcadedb: no longer keeping session %s alive: no call has used it for "
+                        "%.0f s and it has been open %.0f s; ArcadeDB will expire it",
+                        session_id,
+                        now - session.last_real,
+                        now - session.opened,
+                    )
+                    # Nothing is held for the life of the process: ArcadeDB expires the session,
+                    # so a later commit of it is refused (404, not retried) and has nothing to
+                    # replay.
+                    self._discard_session(session_id)
+                    return
+                idle = now - max(session.last_real, session.last_alive)
+                if idle < interval:
+                    await asyncio.sleep(interval - idle)
+                    continue
+                async with session.lock:
+                    if self._sessions.get(session_id) is not session:
+                        return
+                    if time.monotonic() - max(session.last_real, session.last_alive) < interval:
+                        continue
+                    resp = await self._send(
+                        f"/api/v1/command/{self._config.database}",
+                        json={"language": "sql", "command": "SELECT 1", "limit": -1},
+                        headers={"arcadedb-session-id": session_id},
+                    )
+                    if resp.status_code >= 400:
+                        return
+                    session.last_alive = time.monotonic()
+        except Exception:  # noqa: BLE001 - a keep-alive that fails ends quietly (docstring)
+            return
 
     async def _commit_once(self, session_id: str) -> None:
         resp = await self._post(
             f"/api/v1/commit/{self._config.database}",
+            ends_session=True,
             headers={"arcadedb-session-id": session_id},
         )
         self._raise_for_error(resp)
@@ -255,8 +380,18 @@ class ArcadeDBClient:
                     # replayed command failing is no less a sign of a
                     # transient conflict than the commit that triggered it.
                     current = await self.begin_transaction()
-                    for language, command, params in pending_replay:
-                        await self.command(language, command, params=params, session_id=current)
+                    try:
+                        for language, command, params in pending_replay:
+                            await self.command(language, command, params=params, session_id=current)
+                    except BaseException as failure:
+                        # Whatever the replay raises (a cancellation included), the replacement
+                        # session is not left with a keep-alive on it. An error that is retried
+                        # hands the retry the WHOLE list being replayed, not the prefix this
+                        # session completed: the next attempt replays all of it into a new session.
+                        self._discard_session(current)
+                        if isinstance(failure, ArcadeDBError | httpx.TransportError):
+                            self._tx_log[current] = list(pending_replay)
+                        raise
                     pending_replay = None
                 await self._commit_once(current)
                 self._tx_log.pop(current, None)
@@ -301,11 +436,14 @@ class ArcadeDBClient:
             pending_replay = self._tx_log.pop(current, [])
 
     async def rollback_transaction(self, session_id: str) -> None:
-        self._tx_log.pop(session_id, None)
-        resp = await self._post(
-            f"/api/v1/rollback/{self._config.database}",
-            headers={"arcadedb-session-id": session_id},
-        )
+        try:
+            resp = await self._post(
+                f"/api/v1/rollback/{self._config.database}",
+                ends_session=True,
+                headers={"arcadedb-session-id": session_id},
+            )
+        finally:
+            self._tx_log.pop(session_id, None)
         self._raise_for_error(resp)
 
     # --- commands ------------------------------------------------------

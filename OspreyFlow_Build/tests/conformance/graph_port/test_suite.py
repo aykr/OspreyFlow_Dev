@@ -161,6 +161,7 @@ def _edge(
     recipe_version: int | None = None,
     basis: str | None = None,
     datasets: list[str] | None = None,
+    writes: int = 1,
 ) -> EdgeWrite:
     return EdgeWrite(
         id=new_edge_id(),
@@ -181,6 +182,7 @@ def _edge(
         recipe_id=recipe_id,
         recipe_version=recipe_version,
         datasets=datasets or [],
+        writes=writes,
     )
 
 
@@ -5970,3 +5972,50 @@ async def test_a_revert_by_id_touches_only_the_kind_it_was_given_and_refuses_an_
         await adapter.commit_transaction(tx)
         assert await adapter.get_nodes([shared], EVERYTHING) == []
         assert await held_per_type() == both, "the links are untouched by a node revert"
+
+
+# --- ADR-127 Amendment 19: a write carries the count of writes it stands for ------------------
+#
+# A run that combines its own writes sends one `EdgeWrite` per link with `writes` set to how many it
+# folded, so the stored revision (which counts the writes merged into a link, and which ADR-102
+# Amendment 4's choice among a pair's links reads) is what one write at a time would have left.
+
+
+async def test_a_link_created_with_writes_n_holds_revision_n(factory: GraphAdapterFactory) -> None:
+    """Catches `upsert_edges` storing a new link at revision 1 whatever `writes` says, which would
+    leave a combined run's link with a lower revision than the per-row path gives it."""
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        await _write(adapter, [], [_comm(a, b, writes=3)])
+        (link,) = await adapter.edges_among([a, b], EVERYTHING)
+        assert link.audit.revision == 3
+
+
+async def test_a_merge_adds_writes_to_the_stored_revision(factory: GraphAdapterFactory) -> None:
+    """Catches a merge adding 1 whatever `writes` says: a link at revision 2 merged with a write
+    standing for 4 holds 6, and a plain write after it holds 7."""
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        await _write(adapter, [], [_comm(a, b, writes=2)])
+        await _write(adapter, [], [_comm(a, b, writes=4)])
+        (link,) = await adapter.edges_among([a, b], EVERYTHING)
+        assert link.audit.revision == 6
+        await _write(adapter, [], [_comm(a, b)])
+        (link,) = await adapter.edges_among([a, b], EVERYTHING)
+        assert link.audit.revision == 7
+
+
+async def test_supersede_edge_refuses_a_write_standing_for_more_than_one(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Catches a replacement carrying a count the writer would ignore: the revision of a
+    replacement is its predecessor's plus one, and nothing but `upsert_edges` folds writes."""
+    async with factory.context() as adapter:
+        a, b = await _pair(adapter)
+        _, (old_edge_id,) = await _write(adapter, [], [_comm(a, b)])
+        tx = await adapter.begin_transaction()
+        with pytest.raises(OntologyError):
+            await adapter.supersede_edge(old_edge_id, _comm(a, b, writes=2), tx)
+        await adapter.rollback_transaction(tx)
+        (link,) = await adapter.edges_among([a, b], EVERYTHING)
+        assert link.id == old_edge_id and link.audit.superseded_by is None

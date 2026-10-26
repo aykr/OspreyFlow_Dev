@@ -437,6 +437,12 @@ class EdgeWrite(BaseModel):
     properties: dict[str, Any] = Field(default_factory=dict)
     interval: Interval | None = None
     occurrences: int = 1
+    #: ADR-127 Amendment 19: how many writes this one stands for. A run that combines its own writes
+    #: to one per link says how many it folded, so `audit.revision` (which counts the writes merged
+    #: into a link) is what one write at a time leaves. `upsert_edges` stores a new link at this
+    #: revision and adds it to a stored link's; `supersede_edge` and every other writer refuse a
+    #: value but 1. At least 1 (Amendment 21).
+    writes: int = Field(default=1, ge=1)
     #: The link's own basis (see `Edge.basis`); `None`, the usual case, means its type's.
     basis: Literal["direct", "probabilistic"] | None = None
     provenance: Provenance

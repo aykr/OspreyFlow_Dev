@@ -77,6 +77,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal, Protocol
 
+from conduit_common.transactions import rollback_keeping_failure
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.domain import Principal
@@ -502,8 +503,8 @@ async def _revert_one(
         tx = await deps.graph.begin_transaction()
         try:
             await deps.graph.revert_elements(nodes, links, tx)
-        except Exception:
-            await deps.graph.rollback_transaction(tx)
+        except BaseException:
+            await rollback_keeping_failure(deps.graph, tx)
             raise
         await deps.graph.commit_transaction(tx)
 

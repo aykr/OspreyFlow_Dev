@@ -163,6 +163,8 @@ class ValidatingGraph:
         if edge_type is None:
             raise OntologyError(f"{edge.type!r} is not a type in the active ontology")
         validate_properties(edge_type, edge.properties)
+        if edge.writes < 1:
+            raise OntologyError(f"a write standing for {edge.writes} writes: at least one")
         source_type = self._type_of(edge.source)
         target_type = self._type_of(edge.target)
         if source_type is None:
@@ -203,8 +205,9 @@ class MergingGraph(ValidatingGraph):
         self._scheme = load_uk_le_scheme()
         #: What each merge replaced, so a rollback puts it back: (the list, its index, the link).
         self._replaced: list[tuple[list[EdgeWrite], int, EdgeWrite]] = []
-        #: The revision of each link (1 when made, one more for each write merged into it), which the
-        #: adapter keeps in `audit.revision` and chooses among a pair's links by.
+        #: The revision of each link (the `writes` it was made with, and each merged write's `writes`
+        #: added to it), which the adapter keeps in `audit.revision` and chooses among a pair's links
+        #: by (ADR-127 Amendment 19).
         self._revision: dict[str, int] = {}
         self._revisions_before: list[tuple[str, int | None]] = []
 
@@ -235,7 +238,9 @@ class MergingGraph(ValidatingGraph):
         )
         (aggregated,) = merged
         self._revisions_before.append((existing.id, self._revision.get(existing.id)))
-        self._revision[existing.id] = self._revision.get(existing.id, 1) + 1
+        self._revision[existing.id] = (
+            self._revision.get(existing.id, existing.writes) + edge.writes
+        )
         for held in (self.committed_edges, self.open_edges, fresh):
             for index, link in enumerate(held):
                 if link is existing:
@@ -268,7 +273,7 @@ class MergingGraph(ValidatingGraph):
             # The adapter's deterministic choice among a pair's links of one audience (ADR-102
             # Amendment 4): the higher revision, then the later creation, then the greater id.
             existing = (
-                max(same, key=lambda e: (self._revision.get(e.id, 1), e.created_at, e.id))
+                max(same, key=lambda e: (self._revision.get(e.id, e.writes), e.created_at, e.id))
                 if same
                 else None
             )
@@ -282,6 +287,8 @@ class MergingGraph(ValidatingGraph):
                 if edge.id in held:
                     edge = edge.model_copy(update={"id": new_edge_id()})
                 fresh.append(edge)
+                self._revisions_before.append((edge.id, self._revision.get(edge.id)))
+                self._revision[edge.id] = edge.writes
                 ids.append(edge.id)
         await super().upsert_edges(fresh, tx)
         return ids

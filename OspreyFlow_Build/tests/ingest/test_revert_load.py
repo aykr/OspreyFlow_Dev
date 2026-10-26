@@ -641,6 +641,30 @@ async def test_a_failure_in_the_graph_step_rolls_the_transaction_back_and_marks_
     assert raised.value.done == []
 
 
+async def test_a_cancelled_graph_step_with_a_failing_rollback_is_still_the_cancellation() -> None:
+    """Amendment 21: the revert's guard rolls back on `BaseException`, and a rollback that itself
+    fails (an expired session, a 404) is logged, not allowed to replace the `CancelledError`."""
+    import asyncio
+
+    from adapters.graph_arcadedb.client import ArcadeDBError
+
+    world = World(_record("load-1"))
+    rolled: list[str] = []
+
+    async def cancelled(node_ids: Any, edge_ids: Any, tx: str) -> None:
+        raise asyncio.CancelledError
+
+    async def rollback(tx: str) -> None:
+        rolled.append(tx)
+        raise ArcadeDBError("session expired", status_code=404)
+
+    world.graph.revert_elements = cancelled  # type: ignore[method-assign]
+    world.graph.rollback_transaction = rollback  # type: ignore[method-assign]
+    with pytest.raises(asyncio.CancelledError):
+        await world.revert("load-1")
+    assert rolled == ["tx"] and world.ledger.marked == []
+
+
 async def test_the_row_key_hook_is_called_after_the_stores_and_before_the_ledger_is_marked() -> (
     None
 ):

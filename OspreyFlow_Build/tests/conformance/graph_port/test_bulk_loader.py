@@ -754,3 +754,26 @@ async def test_bulk_a_fixed_id_in_two_audiences_is_two_links_under_two_ids(
         again = await _loader(adapter).bulk_load_edges([restricted])
         assert again.collisions == [] and len(again.written) == 1 and again.written[0] != fixed.id
         assert len(await _bulk_links(adapter, a, b, CLEARED)) == 2, "R is not CLEARED's to read"
+
+
+async def test_a_bulk_load_of_writes_standing_for_several_holds_their_sum_as_the_revision(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-127 Amendment 19: the revision counts the writes a link stands for, not the list items
+    the loader received. Catches the aggregate counting items, so a pair sent as two writes
+    standing for 3 and 4 (and a third for 1) is left at revision 3 instead of 8, and a single write
+    standing for 5 at 1 instead of 5."""
+    async with factory.context() as adapter:
+        loader = _loader(adapter)
+        a, b, c, d = await _endpoints(adapter, 4)
+        writes = [
+            _comm(a, b, row="r1").model_copy(update={"writes": 3}),
+            _comm(a, b, row="r2").model_copy(update={"writes": 4}),
+            _comm(a, b, row="r3"),
+            _comm(c, d, row="r4").model_copy(update={"writes": 5}),
+        ]
+        await loader.bulk_load_edges(writes)
+        (pair,) = await _edges_of(adapter, a)
+        (single,) = await _edges_of(adapter, c)
+        assert pair.audit.revision == 8
+        assert single.audit.revision == 5

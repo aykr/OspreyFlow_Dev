@@ -104,7 +104,13 @@ class GraphPort(Protocol):
     async def rollback_transaction(self, tx: TxId) -> None: ...
 
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: TxId) -> list[NodeId]: ...
-    async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: TxId) -> list[EdgeId]: ...
+    async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: TxId) -> list[EdgeId]:
+        """Write each link, merging into the stored link of its own audience (ADR-102 Amendment 3).
+        `EdgeWrite.writes` is how many writes one stands for (ADR-127 Amendment 19): a new link is
+        stored at revision `writes`, and a merge adds `writes` to the stored revision, so a caller
+        that combined its writes first leaves the revision one-at-a-time would. A `writes` below
+        one is refused. Every other writer (`supersede_edge`) refuses a `writes` that is not 1."""
+        ...
 
     async def get_node(
         self, node_id: NodeId, principal: Principal, *, include_superseded: bool = False

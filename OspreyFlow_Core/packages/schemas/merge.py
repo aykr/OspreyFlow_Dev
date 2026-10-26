@@ -5,7 +5,8 @@ same pair merges into the stored edge instead of adding another: the occurrences
 provenance source is kept (de-duplicated by document and locator, §7), the interval widens, the
 latest write's own properties win (unless that write would lower an asserted element: below), the
 handling is never lowered (ADR-102: the most restrictive of each part,
-`ontology.handling.merge_handling`), and the revision counts the writes.
+`ontology.handling.merge_handling`), and the revision counts the writes (the sum of each write's
+`EdgeWrite.writes`, ADR-127 Amendment 19).
 `GraphArcadeDBAdapter.upsert_edges` applies the rule one write at a time against the store; a bulk
 load receives all of a pair's writes together and applies it here before anything is written.
 Keeping the rule in one place is the point: two copies would drift, and the test that compares the
@@ -96,7 +97,9 @@ def merge_interval(existing: Interval | None, incoming: Interval | None) -> Inte
 
 @dataclass(frozen=True)
 class AggregatedEdge:
-    """One edge per pair, and how many writes it summarises (the stored revision)."""
+    """One edge per pair, and how many writes it summarises (the stored revision): the sum of each
+    write's own `EdgeWrite.writes`, which is 1 for a write of one row and more for a write that is
+    itself the product of combining (ADR-127 Amendment 19)."""
 
     write: EdgeWrite
     writes: int
@@ -108,6 +111,19 @@ def _pair_key(write: EdgeWrite, *, directed: bool) -> tuple[str, str, str]:
     if not directed and high < low:
         low, high = high, low
     return (write.type, low, high)
+
+
+def edge_write_key(
+    write: EdgeWrite,
+    *,
+    directed: Callable[[str], bool],
+    audience: Callable[[EdgeWrite], Hashable],
+) -> tuple[Hashable, ...]:
+    """The key two writes share exactly when `aggregate_edge_writes` collapses them: the type, the
+    pair (unordered for an undirected type) and the audience. One definition, so a caller that holds
+    writes to combine as they arrive (the recipe engine, ADR-127 Amendment 19) keys them as the
+    aggregate does."""
+    return (*_pair_key(write, directed=directed(write.type)), audience(write))
 
 
 def aggregate_edge_writes(
@@ -128,39 +144,42 @@ def aggregate_edge_writes(
     from the accumulated write where the latest would lower it, `merge_properties`),
     `load_id` and recipe, because a merge takes those from the incoming write; the handling merged
     by `handling(existing, incoming)` (ADR-102, never lowered); occurrences summed; provenance and
-    interval merged. `directed(type_name)` says whether a type is directed. `handling` is required,
-    so no caller can leave a later write free to lower a link."""
+    interval merged; `writes` summed (ADR-127 Amendment 19), so the aggregate's own count is the
+    sum of what each write stands for and not the number of list items. `directed(type_name)` says
+    whether a type is directed. `handling` is required, so no caller can leave a later write free to
+    lower a link."""
     order: list[tuple[Hashable, ...]] = []
-    grouped: dict[tuple[Hashable, ...], tuple[EdgeWrite, int]] = {}
+    grouped: dict[tuple[Hashable, ...], EdgeWrite] = {}
     for write in writes:
-        key = (*_pair_key(write, directed=directed(write.type)), audience(write))
+        key = edge_write_key(write, directed=directed, audience=audience)
         held = grouped.get(key)
         if held is None:
             order.append(key)
-            grouped[key] = (write, 1)
+            grouped[key] = write
             continue
-        accumulated, count = held
-        grouped[key] = (
-            write.model_copy(
-                update={
-                    "id": accumulated.id,
-                    "source": accumulated.source,
-                    "target": accumulated.target,
-                    "created_at": accumulated.created_at,
-                    "created_by": accumulated.created_by,
-                    "properties": merge_properties(
-                        accumulated.properties,
-                        write.properties,
-                        existing_provenance=accumulated.provenance,
-                        incoming_provenance=write.provenance,
-                    ),
-                    "occurrences": accumulated.occurrences + write.occurrences,
-                    "interval": merge_interval(accumulated.interval, write.interval),
-                    "provenance": merge_provenance(accumulated.provenance, write.provenance),
-                    "datasets": merge_datasets(accumulated.datasets, write.datasets),
-                    "handling": handling(accumulated.handling, write.handling),
-                }
-            ),
-            count + 1,
+        accumulated = held
+        grouped[key] = write.model_copy(
+            update={
+                "id": accumulated.id,
+                "source": accumulated.source,
+                "target": accumulated.target,
+                "created_at": accumulated.created_at,
+                "created_by": accumulated.created_by,
+                "properties": merge_properties(
+                    accumulated.properties,
+                    write.properties,
+                    existing_provenance=accumulated.provenance,
+                    incoming_provenance=write.provenance,
+                ),
+                "occurrences": accumulated.occurrences + write.occurrences,
+                "interval": merge_interval(accumulated.interval, write.interval),
+                "provenance": merge_provenance(accumulated.provenance, write.provenance),
+                "datasets": merge_datasets(accumulated.datasets, write.datasets),
+                "handling": handling(accumulated.handling, write.handling),
+                # The sum of the writes each stands for, starting from the first's own count,
+                # carried on the write so a later fold (the engine's, a row at a time) starts
+                # from it and not from 1.
+                "writes": accumulated.writes + write.writes,
+            }
         )
-    return [AggregatedEdge(write=grouped[key][0], writes=grouped[key][1]) for key in order]
+    return [AggregatedEdge(write=grouped[key], writes=grouped[key].writes) for key in order]

@@ -768,3 +768,19 @@ def test_the_adapter_refuses_a_bulk_load_until_a_schema_is_applied() -> None:
     graph._schema = SCHEMA
     result = asyncio.run(graph.bulk_load_edges([_edge("a", "b", 1)]))
     assert len(result.written) == 1
+
+
+def test_the_bulk_revision_is_the_sum_of_the_writes_each_edge_stands_for() -> None:
+    """ADR-127 Amendment 19: the stored revision counts the writes a link stands for, not the list
+    items received. A pair sent as writes standing for 3, 4 and 1 is at revision 8, and a single
+    write standing for 5 is at 5. Catches the aggregate counting items (3 and 1)."""
+    transport = _store("a", "b", "c", "d")
+    edges = [
+        _edge("a", "b", 1).model_copy(update={"writes": 3}),
+        _edge("a", "b", 2).model_copy(update={"writes": 4}),
+        _edge("a", "b", 3),
+        _edge("c", "d", 4).model_copy(update={"writes": 5}),
+    ]
+    _load(transport, edges)
+    revisions = {(row["s"], row["t"]): row["p"]["audit"]["revision"] for row in transport.written}
+    assert revisions == {("a", "b"): 8, ("c", "d"): 5}

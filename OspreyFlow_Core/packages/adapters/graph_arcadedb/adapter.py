@@ -209,6 +209,11 @@ class GraphArcadeDBAdapter:
     async def rollback_transaction(self, tx: TxId) -> None:
         await self._client.rollback_transaction(tx)
 
+    async def aclose(self) -> None:
+        """Stops the keep-alive of every transaction still open (ADR-127 Amendment 20) and closes
+        the connections."""
+        await self._client.aclose()
+
     # --- writes ----------------------------------------------------------
 
     def _require_schema(self) -> OntologySchema:
@@ -498,6 +503,11 @@ class GraphArcadeDBAdapter:
             if edge_type is None:
                 raise OntologyError(f"{write.type!r} is not a type in the active ontology")
             validate_properties(edge_type, write.properties)
+            if write.writes < 1:
+                raise OntologyError(
+                    f"a write standing for {write.writes} writes: a link is the product of at "
+                    "least one"
+                )
 
             source_type = await self._node_type(write.source, session_id=tx)
             target_type = await self._node_type(write.target, session_id=tx)
@@ -530,7 +540,7 @@ class GraphArcadeDBAdapter:
                 existing_audit = AuditStub.model_validate(existing["audit"])
                 audit = existing_audit.model_copy(
                     update={
-                        "revision": existing_audit.revision + 1,
+                        "revision": existing_audit.revision + write.writes,
                         "load_id": write.load_id,
                         "recipe_id": write.recipe_id,
                         "recipe_version": write.recipe_version,
@@ -552,6 +562,7 @@ class GraphArcadeDBAdapter:
                 audit = AuditStub(
                     created_at=write.created_at,
                     created_by=write.created_by,
+                    revision=write.writes,
                     load_id=write.load_id,
                     recipe_id=write.recipe_id,
                     recipe_version=write.recipe_version,
@@ -1609,6 +1620,12 @@ class GraphArcadeDBAdapter:
         evidence list (`01_DOMAIN_MODEL.md` §5), which is expected to
         follow `superseded_by`, not be silently kept pointing at stale
         content."""
+        if replacement.writes != 1:
+            # Only `upsert_edges` folds writes (ADR-127 Amendment 19): a replacement's revision is
+            # its predecessor's plus one, so a count it could not honour is refused, not ignored.
+            raise OntologyError(
+                f"a replacement edge stands for one write, not {replacement.writes}"
+            )
         schema = self._require_schema()
         edge_type = schema.edge_type(replacement.type)
         if edge_type is None:
