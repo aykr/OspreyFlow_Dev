@@ -388,7 +388,18 @@ def _csv_rows(
         yield from _call_rows(ctx, header, planted)
         return
     refs: list[str] = []
-    for number, row in enumerate(rows_for(ctx.plan, file), start=1):
+    plan_rows = rows_for(ctx.plan, file)
+    if file == ESTATE:
+        # A place a later row names as a parent (the zone: `parent_ref_2`) is written before every
+        # row that names it, so a recipe that references it finds it with its name and point rather
+        # than making it bare and leaving its own row to find that (ADR-127 decision 12, R11).
+        planned = list(plan_rows)
+        named = {r.values.get("parent_ref_2") for r in planned} - {None, ""}
+        plan_rows = iter(
+            [r for r in planned if r.values.get("place_ref") in named]
+            + [r for r in planned if r.values.get("place_ref") not in named]
+        )
+    for number, row in enumerate(plan_rows, start=1):
         values = {**row.values, **_entity_cells(ctx, file, row), **_extras(file, ctx, row, number)}
         if file == REPORT_INCIDENTS:
             values["report_ref"] = ctx.ir_of[row.values["report_ref"]]

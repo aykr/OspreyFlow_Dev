@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import csv
 from collections import Counter
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -40,13 +39,13 @@ import yaml
 from services.api.studio_publish import load_with_rules
 
 from adapters.media_objectstore.testing import InMemoryMediaStore
-from conduit_common.identity import new_node_id
 from demo_fixtures import pid_files, pid_plan
 from demo_fixtures.pid_plan import _end_of, _start_of
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
-from schemas.domain import Handling, NodeWrite, Principal, Provenance, ProvenanceState, SourceRef
+from schemas.domain import NodeWrite, Principal
 from schemas.ingest import Recipe
+from tests.ingest.pid_golden_support import loaded as load_in_seed_order
 from tests.ingest.recipe_test_support import (  # noqa: F401 (the autouse fixture)
     MergingGraph,
     local_staging,
@@ -80,38 +79,9 @@ def _held_at() -> list[Any]:
     return [lk for lk in PLAN.links if lk.link_type == "HELD_AT"]
 
 
-def _establishment_nodes() -> list[NodeWrite]:
-    """What R11 makes first: each establishment of the plan, as the plan holds it."""
-    now = datetime(2026, 10, 1, tzinfo=UTC)
-    return [
-        NodeWrite(
-            id=new_node_id(),
-            type="Establishment",
-            properties=dict(e.properties),
-            provenance=Provenance(
-                state=ProvenanceState.ASSERTED,
-                sources=[SourceRef(document_id="pid_establishment_plan.csv", locator="row 1", excerpt_hash="")],
-                first_seen=now,
-            ),
-            handling=Handling(
-                classification=e.handling.classification,
-                handling_code=e.handling.handling_code,
-                originator=e.handling.originator,
-                owning_unit=e.handling.owning_unit,
-            ),
-            created_by="data-engineer-1",
-            created_at=now,
-        )
-        for e in PLAN.entities
-        if e.entity_type == "Establishment"
-    ]
-
-
 async def _graph() -> MergingGraph:
-    graph = MergingGraph(ONTOLOGY)
-    tx = await graph.begin_transaction()
-    await graph.upsert_nodes(_establishment_nodes(), tx)
-    await graph.commit_transaction(tx)
+    """The establishments, made first as the seed makes them: by R11, the committed recipe."""
+    graph, _store, _reports = await load_in_seed_order("pid_establishment_plan.csv")
     return graph
 
 
@@ -312,6 +282,7 @@ async def test_every_held_at_link_has_the_plans_interval(
     assert stored.keys() == planned.keys()
     for pair, link in planned.items():
         interval = stored[pair].interval
+        assert stored[pair].occurrences == link.occurrences == 1, pair
         assert interval is not None, pair
         assert interval.valid_from == _start_of(link.first_seen), pair
         want_end = None if link.last_seen is None else _end_of(link.last_seen)

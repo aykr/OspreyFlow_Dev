@@ -2257,3 +2257,38 @@ def test_the_script_writes_a_contact_sheet_of_the_specified_sample(
     for index, (_, _, data) in enumerate(written):
         assert _tile_of(raw, index) == _shrunk(data), sample[index]
     assert _tile_of(raw, 0) != _tile_of(raw, 1)
+
+
+# --- the estate file's order: a place is written before any row that names it --------------------
+
+_PLACE_REFERENCES = ("parent_ref", "parent_ref_2", "adjoins_ref", "used_by_ref")
+
+
+def _order_problems(rows: Sequence[Mapping[str, str]]) -> list[str]:
+    """Each place a row names (its parent, its zone, the wing it adjoins, the wing that uses it) that
+    is not yet a row written: a recipe that finds the place by reference (R11, ADR-127 decision 12)
+    would make it bare, and its own row would then find that and never write its name and point."""
+    written: set[str] = set()
+    problems: list[str] = []
+    for row in rows:
+        for column in _PLACE_REFERENCES:
+            named = row[column]
+            if named and named not in written:
+                problems.append(f"{row['place_ref']}: {column} names {named}, not yet written")
+        written.add(row["place_ref"])
+    return problems
+
+
+def test_the_estate_file_writes_every_place_before_any_row_that_names_it(
+    demo_out: Written,
+) -> None:
+    rows = list(demo_out.rows(ESTATE))
+    assert len(rows) > 500
+    assert _order_problems(rows) == []
+    # Shown able to fail: the zone moved to the end, and a wing moved after its landings.
+    zone = next(r for r in rows if r["place_kind"] == "zone")
+    moved = [r for r in rows if r is not zone] + [zone]
+    assert any("zone" in p or zone["place_ref"] in p for p in _order_problems(moved))
+    wing = next(r for r in rows if r["place_kind"] == "wing" and r["parent_ref_2"] == "")
+    late = [r for r in rows if r is not wing] + [wing]
+    assert any(wing["place_ref"] in p for p in _order_problems(late))

@@ -18238,3 +18238,23 @@ reject almost every prisoner. Built as engine unit B2-8.
   recipe changes. Map save refuses it on a property the ontology requires, on the property an entity is
   matched on, on a time or end binding, and on a deduplicate key part; handling bindings cannot carry it.
 - R1 binds `aliases` through `split`, optional, so the principal's nickname is on the loaded case.
+
+### ADR-127, Amendment 16 (26 October 2026) — recipes R11, R14, R2, R3 and R4
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **The establishment plan (R11) loads first, and every place before the rows that name it.** A
+  recipe finds a place by reference, and a reference that finds nothing makes a bare node that the
+  place's own row then finds instead of filling it in. Brief 1's file writer therefore writes every
+  place a row names (a parent, a second parent such as a zone, the wing a yard adjoins or is used by)
+  before that row; it wrote the zone after the yards and the wing that name it, and now writes it first.
+  `tests/scenarios/test_pid_files.py` fails if the order is broken. R11's duplicate key, which the brief
+  left open, is `place_ref`.
+- **An incident's area is counted once per participant.** ADR-120 Amendment 9 decision 1 gives a carried
+  link as its occurrences the number of rows that carry it, and names "an incident's `OCCURRED_AT` on
+  each participant's row" as its example; R4 writes it so. So an area's histogram, filters and
+  hotspots count an incident once for each prisoner who took part, not once per incident. That is the
+  accepted plan, recorded here so a reader of those figures knows it.
+- **The recipe tests' graph stand-in merges as the store does.** A repeated pair's link sums its
+  occurrences, widens its interval and takes the later write's properties, through the same shared rule
+  the adapter uses, and every recipe's golden test asserts those against the plan
+  (`tests/ingest/test_merging_graph_merges_as_the_adapter_does.py`).

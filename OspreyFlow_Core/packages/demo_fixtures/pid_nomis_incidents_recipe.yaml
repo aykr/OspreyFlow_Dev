@@ -1,0 +1,89 @@
+# The Prison Intelligence Dataset (ADR-127 decision 12, R4): incidents, one row per participant. Several
+# participants share one incident: the first row makes it (with its category, name, time and, for a
+# find, the item) and the rest find it, each adding their own `ROLE_IN` link. The area (a cell, landing,
+# yard or hall of R11) is found by reference and the incident is `OCCURRED_AT` it. `item` is for a find
+# only, so it is left out of an incident with none. Run after R1 and R11. Copies R1's template: every
+# element takes its whole marking from the file's six handling columns.
+id: pid-nomis-incidents
+version: 1
+label: "Visits and incidents (NOMIS). One row per participant per incident: assaults, disorder and finds, with the person's role."
+connector:
+  profile: generic-csv
+ontology_version: 16
+pack_versions: {niem: 3}
+
+defaults:
+  provenance: {state: asserted}
+  handling:
+    classification: OFFICIAL
+    handling_code: P
+    originator: fenwick-moor-security
+    owning_unit: fenwick-moor-security
+  units: [fenwick-moor-security, regional-intel-unit]
+  handling_columns:
+    classification: classification
+    handling_code: handling_code
+    action_code: action_code
+    sanitisation_code: sanitisation_code
+    originator: originator
+    owning_unit: owning_unit
+
+deduplicate:
+  key:
+    - {field: incident_ref}
+    - {field: nomis_id}
+    - {field: role}
+
+row_template:
+  entities:
+    - ref: incident
+      pole_class: event
+      type: Incident
+      match_on: incident_ref
+      on_match: reference
+      properties:
+        incident_ref: {field: incident_ref}
+        category: {field: category}
+        name: {field: name}
+        item: {field: item, optional: true}
+        occurred_at: {field: occurred_at}
+      handling: &marking
+        classification: {field: classification}
+        handling_code: {field: handling_code}
+        action_code: {field: action_code}
+        sanitisation_code: {field: sanitisation_code}
+        originator: {field: originator}
+        owning_unit: {field: owning_unit}
+    - ref: prisoner
+      pole_class: person
+      type: Person
+      match_on: prison_number
+      on_match: reference
+      properties:
+        prison_number: {field: nomis_id}
+      handling: *marking
+    - ref: area
+      pole_class: location
+      type: Location
+      match_on: site_ref
+      on_match: reference
+      properties:
+        site_ref: {field: area_ref}
+      handling: *marking
+  edges:
+    - type: ROLE_IN
+      from: prisoner
+      to: incident
+      temporal:
+        at: {field: occurred_at, transform: datetime}
+      properties:
+        role: {field: role}
+      handling: *marking
+    - type: OCCURRED_AT
+      from: incident
+      to: area
+      temporal:
+        at: {field: occurred_at, transform: datetime}
+      handling: *marking
+
+unmapped_fields: []

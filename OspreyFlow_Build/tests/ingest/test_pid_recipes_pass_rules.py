@@ -47,6 +47,11 @@ SCHEME = load_uk_le_scheme()
 #: (recipe file, the source file it reads). A later PID recipe is one more line.
 PID_RECIPES = [
     ("pid_nomis_prisoners_recipe.yaml", "pid_nomis_prisoners.csv"),
+    ("pid_establishment_plan_recipe.yaml", "pid_establishment_plan.csv"),
+    ("pid_nomis_cell_stays_recipe.yaml", "pid_nomis_cell_stays.csv"),
+    ("pid_nomis_cell_shares_recipe.yaml", "pid_nomis_cell_shares.csv"),
+    ("pid_nomis_visits_recipe.yaml", "pid_nomis_visits.csv"),
+    ("pid_nomis_incidents_recipe.yaml", "pid_nomis_incidents.csv"),
 ]
 PID_UNITS = {"fenwick-moor-security", "regional-intel-unit"}
 HANDLING_PARTS = (
@@ -157,6 +162,10 @@ def _bound_columns(recipe: Recipe) -> set[str]:
         if edge.temporal is not None:
             take(edge.temporal.at)
             take(edge.temporal.valid_to)
+    # A column only the duplicate key reads (a visit's own reference) is read all the same.
+    if recipe.deduplicate is not None:
+        for binding in recipe.deduplicate.key:
+            take(binding)
     return columns
 
 

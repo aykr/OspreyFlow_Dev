@@ -31,10 +31,11 @@ from services.ingest import staging
 
 from conduit_common.identity import new_edge_id
 from ontology.errors import OntologyError
-from ontology.handling import audience_of, load_uk_le_scheme
+from ontology.handling import audience_of, load_uk_le_scheme, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import StoredLink, StoredNode
 from schemas.domain import EdgeWrite, NodeWrite, OntologySchema
+from schemas.merge import aggregate_edge_writes
 
 
 class LocalStore:
@@ -179,7 +180,15 @@ class MergingGraph(ValidatingGraph):
     handling code, datasets, and the units under a restricted code), unless it has been reverted or
     superseded; its id comes back, so the caller's own id differs from the one returned. A write of
     another audience is a link of its own. A test marks a link reverted by adding its id to
-    `reverted`."""
+    `reverted`.
+
+    **The merge itself is the adapter's** (rule 15: a fake does what the real store does): the
+    stored link is replaced by `schemas.merge.aggregate_edge_writes` over the stored link and the
+    write, the one rule both of the adapter's write paths use. So occurrences add, the interval
+    widens (and is open if either is), provenance sources are kept, the latest write's properties win
+    unless they would lower an asserted link (`merge_properties`), datasets are added and the handling
+    is merged and never lowered; the first write's id, ends and creation stay. A rollback puts back
+    what a merge replaced."""
 
     def __init__(self, ontology: Any) -> None:
         super().__init__(ontology)
@@ -187,6 +196,34 @@ class MergingGraph(ValidatingGraph):
         self.reverted_calls: list[tuple[list[str], list[str]]] = []
         self.superseded: set[str] = set()
         self._scheme = load_uk_le_scheme()
+        #: What each merge replaced, so a rollback puts it back: (the list, its index, the link).
+        self._replaced: list[tuple[list[EdgeWrite], int, EdgeWrite]] = []
+
+    async def commit_transaction(self, tx: object) -> None:
+        await super().commit_transaction(tx)
+        self._replaced = []
+
+    async def rollback_transaction(self, tx: object) -> None:
+        await super().rollback_transaction(tx)
+        for held, index, before in reversed(self._replaced):
+            held[index] = before
+        self._replaced = []
+
+    def _merged(self, existing: EdgeWrite, edge: EdgeWrite, fresh: list[EdgeWrite]) -> None:
+        """Replace `existing` where it is held by what the adapter would leave stored."""
+        merged = aggregate_edge_writes(
+            [existing, edge],
+            directed=lambda name: bool(self._schema().edge_type(name).directed),  # type: ignore[union-attr]
+            handling=lambda old, new: merge_handling(old, new, self._scheme),
+            audience=self._audience,  # type: ignore[arg-type]
+        )
+        (aggregated,) = merged
+        for held in (self.committed_edges, self.open_edges, fresh):
+            for index, link in enumerate(held):
+                if link is existing:
+                    self._replaced.append((held, index, existing))
+                    held[index] = aggregated.write
+                    return
 
     def _audience(self, edge: EdgeWrite) -> object:
         return audience_of(edge.handling, edge.datasets, self._scheme)
@@ -213,6 +250,7 @@ class MergingGraph(ValidatingGraph):
                 None,
             )
             if existing is not None:
+                self._merged(existing, edge, fresh)
                 ids.append(existing.id)
             else:
                 # Edge `id` is UNIQUE (`schema.py`): a link of another audience holding this id
