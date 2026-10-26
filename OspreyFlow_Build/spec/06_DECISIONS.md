@@ -18917,3 +18917,47 @@ Brief 2.
   - An unresolvable row's sample is withheld from every reader, the highest-cleared included.
 - **Not a test.** The engine also records a marking at each element write. Every row read is already
   marked from its template, so those records add nothing, and no test can show one missing.
+
+### ADR-127, Amendment 27 (26 October 2026) — B2-10b corrected: the seed never touches a subject's picture history, and checks what it attaches to
+
+Found by an adversarial review of the picture split. Decided by the coordinator under the owner's
+delegation for Brief 2.
+- **A subject with any picture history is left alone.**
+  - **The defect.** Amendment 23 skipped a subject "already showing a picture of the same name". An
+    analyst's removal (ADR-105's `shown: false` copy) or a picture of another name therefore made a
+    reseed attach the seeded picture again. On the real store the reseed's write merged into the
+    analyst's removal record, a same-pair, same-audience link, rather than superseding it.
+  - **The rule.** The seed attaches a picture only to a subject that has no current `DEPICTS` link at
+    all, shown or removed, of any name. Once a subject has a picture history, the seed never writes
+    to it again.
+- **The seed re-reads its subject, and refuses an unscoped worker.** `attach_for_seed` takes the
+  subject's id, not a node.
+  - **The re-read.** It reads the subject through `get_node` as the worker, so the adapter's own filter
+    decides whether the subject is in the case's dataset and readable.
+  - **Its refusals.** It refuses a worker not scoped to a case (`datasets` unset), and a subject the
+    re-read does not return.
+- **Every refusal is unconditional.** The service refuses to attach, on either path, when built without
+  a handling scheme, as it already refuses the seed path without an audit writer. The core's
+  unreadable-marking refusal can therefore never be skipped.
+- **A subject the seed cannot mark faithfully is refused.**
+  - **The cause.** A seeded picture takes the worker's unit.
+  - **The refusals.** The seed path refuses a subject carrying a restricted handling code, an action
+    code or a sanitisation code. Each is judged on the stored node, not on the plan.
+- **The audit is written before the graph commit, on both paths.** An audit row without a committed
+  picture records an attempt. A committed picture without an audit row could stay unaudited for good,
+  since a later seed skips it.
+- **Where the legal basis lives.** Only in the audit entry, as on the route, not on the picture's
+  `Handling`. A seeded picture's provenance names `seed:<worker>:<name>`, not an upload.
+- **Recorded.** Brief 1's plan marks a picture with its subject's units, while the seed marks it with
+  the worker's. No reader's view differs, since every PID code is `P`. The Brief 1 access suite tests the
+  plan's marking, not the seeded one; the seed's live test covers the seeded marking.
+- **Tests that would fail (rule 12)**, against the real ArcadeDB in `tests/services/api/test_entity_pictures.py`.
+  - **History.** A subject whose seeded picture an analyst removed, or replaced under another name, is
+    left exactly as the analyst left it by a reseed.
+  - **Access.** A subject outside the case's dataset, or not readable by the worker, is refused. So is an
+    unscoped worker.
+  - **Marking.** A SECRET-cleared worker attaching to a SECRET subject with a code other than `P` writes
+    the subject's classification and code. A subject with a restricted code is refused.
+  - **No scheme.** A service built without a scheme refuses on both paths.
+  - **Wiring.** The lifespan gives the service `app.state.audit` and the scheme, not merely keywords of
+    those names.

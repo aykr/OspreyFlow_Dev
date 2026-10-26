@@ -91,15 +91,17 @@ def client() -> Any:
     app.dependency_overrides.clear()
 
 
-def test_the_choices_reach_the_service_and_the_legal_basis_is_audited(client: Any) -> None:
+def test_the_choices_and_the_legal_basis_reach_the_service(client: Any) -> None:
+    """The service now writes the `set_entity_picture` audit entry itself (ADR-127 Amendment 23;
+    `test_entity_picture_seed.py` proves the entry on both paths), so the route's part is to pass
+    the legal basis on and to write no second entry of its own."""
     response = client.put(URL, params=PARAMS, content=b"\x89PNG")
     assert response.status_code == 200, response.text
     (call,) = client.pictures.calls
     assert (call["node_id"], call["name"], call["data"]) == ("car-1", "car.png", b"\x89PNG")
     assert call["handling"].classification == "OFFICIAL"
-    (row,) = client.audit.rows
-    assert row["action"] == "set_entity_picture"
-    assert row["resolved_query"]["legal_basis"] == "Seized under PACE s19"
+    assert call["legal_basis"] == "Seized under PACE s19"
+    assert client.audit.rows == []
 
 
 @pytest.mark.parametrize("missing", ["classification", "legal_basis", "name"])

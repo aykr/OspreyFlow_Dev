@@ -10,7 +10,11 @@ of `expand` (rule 3). What a mistake would do, and the case that catches it:
 - **a picture above the reader shown to them, or its existence given away** (rule 4,
   `test_a_picture_above_the_reader_reads_as_none` and
   `test_a_hidden_picture_does_not_let_the_older_one_show_through`);
-- an SVG, a phone number or an entity not in the case given a picture (the refusal cases).
+- an SVG, a phone number or an entity not in the case given a picture (the refusal cases);
+- **the seed's path** (ADR-127 Amendment 27, the `test_seed_*` cases): a reseed leaves an analyst's
+  removal, or replacement under another name, exactly as they left it; a subject outside the case's
+  dataset, above the worker, restricted, or an unscoped worker, is refused; a SECRET worker marks a
+  SECRET subject with a conditional code faithfully; a service without a scheme refuses on both paths.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import pytest
+from services.api.dataset_scope import stamping
 from services.api.document_content import UploadRefusedError
 from services.api.entity_pictures import DEPICTS, EntityPictureService, PictureNotFoundError
 from services.api.working_set.service import WorkingSetService
@@ -30,6 +35,7 @@ from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.domain import (
     AuditStub,
+    Edge,
     ExpandRequest,
     Handling,
     Node,
@@ -235,3 +241,239 @@ async def test_two_live_pictures_show_the_newer(fx: _Fixture) -> None:
     newer = await _set(fx, data=PNG_B)
     assert await _shown(fx, SECRET_READER) == {"car-1": newer}
     assert await _shown(fx, OFFICIAL_READER) == {"car-1": newer}
+
+
+# --- The seed's path (ADR-127 Amendment 27), against the real adapter ---------------------------
+
+CASE_DATASET = "prison-intelligence"
+OTHER_DATASET = "another-dataset"
+WORKER = Principal(
+    id="pid-seed-worker", clearance="OFFICIAL", org_unit="verify", datasets=[CASE_DATASET]
+)
+SECRET_WORKER = WORKER.model_copy(update={"clearance": "SECRET"})
+RESTRICTED_WORKER = WORKER.model_copy(update={"receivable_handling_codes": ["R"]})
+ANALYST = Principal(
+    id="analyst-seed", clearance="OFFICIAL", org_unit="verify", datasets=[CASE_DATASET]
+)
+BASIS = "Synthetic demonstration data"
+
+
+def _seed_write(
+    node_id: str,
+    *,
+    dataset: str = CASE_DATASET,
+    classification: str = "OFFICIAL",
+    handling_code: str = "P",
+) -> NodeWrite:
+    return NodeWrite(
+        id=node_id,
+        type="Vehicle",
+        properties={},
+        provenance=PROVENANCE,
+        handling=Handling(
+            classification=classification,
+            handling_code=handling_code,
+            originator="verify",
+            owning_unit="verify",
+        ),
+        created_by="loader",
+        created_at=NOW,
+        datasets=[dataset],
+    )
+
+
+SEED_SUBJECTS = [
+    _seed_write("seed-car-1"),
+    _seed_write("seed-car-2"),
+    _seed_write("seed-car-other-dataset", dataset=OTHER_DATASET),
+    _seed_write("seed-car-secret", classification="SECRET"),
+    _seed_write("seed-car-conditional", classification="SECRET", handling_code="C"),
+    _seed_write("seed-car-restricted", handling_code="R"),
+]
+
+
+class _SeedFixture:
+    def __init__(self, service: EntityPictureService, graph: object) -> None:
+        self.service = service
+        self.graph = graph
+
+
+@pytest.fixture
+async def sx() -> AsyncIterator[_SeedFixture]:
+    """The service over the real adapter wrapped as the seed wraps it (`stamping`, the case's
+    dataset), with a working set the analyst's own route calls use."""
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as adapter:
+        graph = stamping(adapter, dataset=CASE_DATASET)
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes(SEED_SUBJECTS, tx)
+        await graph.commit_transaction(tx)
+        store = FakeWorkingSetStore()
+        await store.add_nodes(
+            "inv-1", [_node(w).model_copy(update={"datasets": w.datasets}) for w in SEED_SUBJECTS]
+        )
+        service = EntityPictureService(
+            WorkingSetService(graph, store, SCHEME),
+            graph,
+            InMemoryMediaStore(),
+            ONTOLOGY,
+            scheme=SCHEME,
+            audit=_RecordingAudit(),
+        )
+        yield _SeedFixture(service, adapter)
+
+
+class _RecordingAudit:
+    def __init__(self) -> None:
+        self.rows: list[dict[str, object]] = []
+
+    async def record(self, **kwargs: object) -> None:
+        self.rows.append(kwargs)
+
+
+async def _seed(
+    sx: _SeedFixture,
+    node_id: str = "seed-car-1",
+    *,
+    principal: Principal = WORKER,
+    name: str = "car.png",
+    data: bytes = PNG_A,
+) -> bool:
+    return await sx.service.attach_for_seed(
+        "inv-1", node_id, principal, name=name, data=data, legal_basis=BASIS
+    )
+
+
+async def _live_links(sx: _SeedFixture, node_id: str = "seed-car-1") -> list[Edge]:
+    found = await sx.graph.expand(  # type: ignore[attr-defined]
+        ExpandRequest(node_ids=[node_id], edge_types=[DEPICTS], direction="in"), SECRET_WORKER
+    )
+    return list(found.edges)
+
+
+async def test_seed_attaches_and_an_analyst_then_sees_and_can_replace_it(
+    sx: _SeedFixture,
+) -> None:
+    assert await _seed(sx) is True
+    shown = await sx.service.pictures("inv-1", ["seed-car-1"], ANALYST)
+    assert [p.node_id for p in shown] == ["seed-car-1"]
+    assert await sx.service.file("inv-1", "seed-car-1", ANALYST) == (PNG_A, "image/png")
+    mine = (
+        await sx.service.set(
+            "inv-1",
+            "seed-car-1",
+            ANALYST,
+            name="mine.png",
+            data=PNG_B,
+            handling=_handling(),
+            legal_basis=BASIS,
+        )  # fmt: skip
+    ).document_id
+    assert [e.source for e in await _live_links(sx)] == [mine]
+
+
+async def test_seed_reseed_after_an_analyst_removal_leaves_the_removal_exactly(
+    sx: _SeedFixture,
+) -> None:
+    """The defect: the same bytes make the same Document and the same pair, so the reseed's write
+    merged into the analyst's `shown: false` record on the real store and showed the picture again."""
+    assert await _seed(sx) is True
+    await sx.service.remove("inv-1", "seed-car-1", ANALYST)
+    (removal,) = await _live_links(sx)
+    assert removal.properties["shown"] is False
+    assert await _seed(sx) is False
+    assert await _seed(sx, name="another-name.png", data=PNG_B) is False
+    assert await _live_links(sx) == [removal]
+    assert await sx.service.pictures("inv-1", ["seed-car-1"], ANALYST) == []
+
+
+async def test_seed_reseed_after_an_analyst_replacement_under_another_name_leaves_it(
+    sx: _SeedFixture,
+) -> None:
+    assert await _seed(sx) is True
+    mine = (
+        await sx.service.set(
+            "inv-1",
+            "seed-car-1",
+            ANALYST,
+            name="mine.png",
+            data=PNG_B,
+            handling=_handling(),
+            legal_basis=BASIS,
+        )  # fmt: skip
+    ).document_id
+    (held,) = await _live_links(sx)
+    assert await _seed(sx) is False
+    assert await _live_links(sx) == [held]
+    assert [p.document_id for p in await sx.service.pictures("inv-1", ["seed-car-1"], ANALYST)] == [
+        mine
+    ]
+
+
+@pytest.mark.parametrize(
+    ("node_id", "principal"),
+    [
+        ("seed-car-other-dataset", WORKER),
+        ("seed-car-secret", WORKER),
+        ("seed-car-restricted", WORKER),
+    ],
+    ids=["a subject in another dataset", "a subject above the worker", "a subject hidden by code"],
+)
+async def test_seed_refuses_a_subject_the_adapter_does_not_return(
+    sx: _SeedFixture, node_id: str, principal: Principal
+) -> None:
+    with pytest.raises(NodeNotFoundError):
+        await _seed(sx, node_id, principal=principal)
+    assert await _live_links(sx, node_id) == []
+
+
+async def test_seed_refuses_an_unscoped_worker(sx: _SeedFixture) -> None:
+    with pytest.raises(UploadRefusedError, match="scoped to a case"):
+        await _seed(sx, principal=WORKER.model_copy(update={"datasets": None}))
+    assert await _live_links(sx) == []
+
+
+async def test_seed_refuses_a_subject_with_a_restricted_code_the_worker_can_read(
+    sx: _SeedFixture,
+) -> None:
+    with pytest.raises(UploadRefusedError, match="cannot take a seeded picture"):
+        await _seed(sx, "seed-car-restricted", principal=RESTRICTED_WORKER)
+    assert await _live_links(sx, "seed-car-restricted") == []
+
+
+async def test_seed_marks_a_secret_subject_with_a_conditional_code_faithfully(
+    sx: _SeedFixture,
+) -> None:
+    assert await _seed(sx, "seed-car-conditional", principal=SECRET_WORKER) is True
+    found = await sx.graph.expand(  # type: ignore[attr-defined]
+        ExpandRequest(node_ids=["seed-car-conditional"], edge_types=[DEPICTS], direction="in"),
+        SECRET_WORKER,
+    )
+    (link,) = found.edges
+    (document,) = [n for n in found.nodes if n.id == link.source]
+    for held in (link.handling, document.handling):
+        assert (held.classification, held.handling_code) == ("SECRET", "C")
+        assert (held.action_code, held.sanitisation_code) == (None, None)
+        assert (held.originator, held.owning_unit) == ("verify", "verify")
+    assert CASE_DATASET in link.datasets and CASE_DATASET in document.datasets
+    # An OFFICIAL reader does not see it, nor learn that it exists.
+    assert await sx.service.pictures("inv-1", ["seed-car-conditional"], ANALYST) == []
+
+
+async def test_a_service_without_a_scheme_refuses_on_both_paths(sx: _SeedFixture) -> None:
+    bare = EntityPictureService(
+        sx.service._working_set,
+        sx.service._graph,
+        InMemoryMediaStore(),
+        ONTOLOGY,
+        audit=_RecordingAudit(),
+    )
+    with pytest.raises(RuntimeError, match="scheme"):
+        await bare.set(
+            "inv-1", "seed-car-1", ANALYST, name="car.png", data=PNG_A, handling=_handling(),
+            legal_basis=BASIS,
+        )  # fmt: skip
+    with pytest.raises(RuntimeError, match="scheme"):
+        await bare.attach_for_seed(
+            "inv-1", "seed-car-1", WORKER, name="car.png", data=PNG_A, legal_basis=BASIS
+        )
+    assert await _live_links(sx) == []

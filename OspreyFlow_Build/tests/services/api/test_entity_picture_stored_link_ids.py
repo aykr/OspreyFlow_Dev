@@ -17,7 +17,7 @@ from services.api.entity_pictures import DEPICTS, EntityPictureService
 from services.api.working_set.service import WorkingSetService
 
 from adapters.media_objectstore.testing import InMemoryMediaStore
-from ontology.handling import load_uk_le_scheme
+from ontology.handling import audience_of, load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.domain import (
     AuditStub,
@@ -110,11 +110,39 @@ class PictureGraph:
         return [w.id for w in nodes]
 
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: TxId) -> list[str]:
-        return [self._store(w) for w in edges]
+        """As the adapter does (`_find_existing_edge`, ADR-102 Amendment 3; rule 15): a write of a
+        link whose type, ends and audience match a live link is merged into it, the latest write's
+        properties winning, and the held link's id comes back. The audience is the adapter's own
+        `audience_of`: classification, handling code, datasets and, under a restricted code, the
+        units. That is how a reseed's write landed in an analyst's removal record."""
+        scheme = load_uk_le_scheme()
+        ids: list[str] = []
+        for w in edges:
+            held = next(
+                (
+                    i
+                    for i, (e, live) in enumerate(self.links)
+                    if live
+                    and (e.type, e.source, e.target) == (w.type, w.source, w.target)
+                    and audience_of(e.handling, e.datasets, scheme)
+                    == audience_of(w.handling, w.datasets, scheme)
+                ),
+                None,
+            )
+            if held is None:
+                ids.append(self._store(w))
+                continue
+            edge, _ = self.links[held]
+            self.links[held] = (edge.model_copy(update={"properties": dict(w.properties)}), True)
+            ids.append(edge.id)
+        return ids
 
     async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: TxId) -> str:
         self.links = [(e, live and e.id != edge_id) for e, live in self.links]
         return self._store(replacement)
+
+    async def get_node(self, node_id: str, principal: Principal, **_: Any) -> Node | None:
+        return self.nodes.get(node_id)
 
     async def expand(self, req: Any, principal: Principal) -> Subgraph:
         edges = [e for e in self.live if e.type in req.edge_types and e.target in req.node_ids]
@@ -128,10 +156,16 @@ async def _service() -> tuple[EntityPictureService, PictureGraph, FakeWorkingSet
     store = FakeWorkingSetStore()
     await store.add_nodes("inv-1", [CAR])
     working_set = WorkingSetService(
-        FakeGraphPort(Subgraph(nodes=[], edges=[])), store, SCHEME  # type: ignore[arg-type]
+        FakeGraphPort(Subgraph(nodes=[], edges=[])),
+        store,
+        SCHEME,  # type: ignore[arg-type]
     )
     service = EntityPictureService(
-        working_set, graph, InMemoryMediaStore(), ONTOLOGY, scheme=SCHEME  # type: ignore[arg-type]
+        working_set,
+        graph,
+        InMemoryMediaStore(),
+        ONTOLOGY,
+        scheme=SCHEME,  # type: ignore[arg-type]
     )
     return service, graph, store
 

@@ -262,8 +262,9 @@ def picture_kind(plan: Plan, subject_key: str) -> str:
 
 def picture_writes(plan: Plan) -> list[tuple[str, str, bytes]]:
     """One (subject node id, file name, PNG bytes) for each subject that has a picture, in the
-    plan's order, for the picture route to attach (`EntityPictureService.set`). The name is the
-    subject's key with colons replaced, so it passes the route's own name check."""
+    plan's order, for the seed to attach (`EntityPictureService.attach_for_seed`; the route's `set`
+    takes the same bytes). The name is the subject's key with colons replaced, so it passes the
+    route's own name check."""
     return [
         (
             node_id(key),

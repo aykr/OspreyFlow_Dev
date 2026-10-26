@@ -798,7 +798,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         recogniser=recogniser,
     )
     app.state.entity_pictures = EntityPictureService(
-        app.state.working_set, graph, media, ontology, scheme=handling_scheme
+        app.state.working_set, graph, media, ontology, scheme=handling_scheme, audit=app.state.audit
     )
     app.state.email_extraction = EmailExtractionService(
         app.state.working_set,
@@ -4644,7 +4644,6 @@ async def set_entity_picture_route(
     request: Request,
     principal: PrincipalDep,
     pictures: EntityPicturesDep,
-    audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
     name: str = Query(min_length=1),
     classification: str = Query(min_length=1),
@@ -4677,26 +4676,20 @@ async def set_entity_picture_route(
         originator=principal.org_unit,
         owning_unit=principal.org_unit,
     )
+    # The service audits `set_entity_picture` itself (ADR-127 Amendment 23), so the seed's path
+    # writes the same entry.
     result = await pictures.set(
-        investigation.id, node_id, principal, name=filename, data=bytes(data), handling=handling
+        investigation.id,
+        node_id,
+        principal,
+        name=filename,
+        data=bytes(data),
+        handling=handling,
+        legal_basis=legal_basis,
     )
     for delta in result.deltas:
         await publish_delta(valkey, investigation.id, delta)
     response = result.to_response()
-    await audit.record(
-        principal=principal,
-        action="set_entity_picture",
-        investigation_id=investigation.id,
-        resolved_query={
-            "node_id": node_id,
-            "document_id": result.document_id,
-            "name": filename,
-            "size": len(data),
-            "classification": classification,
-            "legal_basis": legal_basis,
-        },
-        result_cardinality=1,
-    )
     return response
 
 
