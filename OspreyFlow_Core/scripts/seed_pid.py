@@ -191,6 +191,8 @@ def restore_steps() -> tuple[str, ...]:
         f"  3. Then: {RESTORE_COMMAND}",
         "     (Without --yes it is a dry run that shows what it would restore.)",
     )
+
+
 #: What the fallback does not do that the route's publish does, said when it runs.
 FALLBACK_SKIPS = (
     "This is a publish as the Conduit's route makes it, but it skips the route's role, case Editor "
@@ -807,6 +809,93 @@ def picture_lines(summary: PictureSummary, subjects: int) -> list[str]:
     for key, why in summary.refused[:5]:
         lines.append(f"refused {key}: {why}")
     lines.append(f"check {'ok' if summary.ok else 'FAILED'}: every picture subject was found")
+    return lines
+
+
+# --- the inferred links: the plan's "graph port" shapes -------------------------------------------
+
+#: The pseudo-file the plan gives the links no recipe loads (`pid_plan.LOAD_SHAPES`): model-derived
+#: links, written inferred (rule 5) by the seed itself, as Brief 1 builds them
+#: (`pid_writes.writes`).
+GRAPH_PORT = "graph port"
+
+
+@dataclass
+class InferredSummary:
+    written: int = 0
+    present: int = 0
+    #: Links whose end no reference found.
+    missing: list[str] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return not self.missing
+
+
+def inferred_links(
+    plan: pid_plan.Plan, *, created_at: datetime
+) -> list[tuple[pid_plan.PlanLink, Any]]:
+    """Every plan link whose shape's file is the graph port at the seed moment, with the write
+    Brief 1 gives it: provenance inferred (who extracted it, how sure), the plan's marking and
+    dates, the plan's own id. The ends are still the plan's ids: the seed finds the stored ends
+    by reference."""
+    types = {
+        sh.link_type for sh in pid_plan.LOAD_SHAPES if sh.file == GRAPH_PORT and sh.moment == "seed"
+    }
+    _, writes = pid_writes.writes(plan, "seed", dataset=FOLDER, created_at=created_at)
+    by_id = {w.id: w for w in writes}
+    return [
+        (link, by_id[pid_plan.link_id(link)])
+        for link in pid_plan.links_at(plan, "seed", secret_cleared=True)
+        if link.link_type in types
+    ]
+
+
+async def seed_inferred_links(
+    plan: pid_plan.Plan,
+    *,
+    find: Callable[[str, str, str], Awaitable[Any]],
+    present: Callable[[str, str, str], Awaitable[bool]],
+    write: Callable[[Sequence[Any]], Awaitable[None]],
+    now: datetime,
+) -> InferredSummary:
+    """Writes the inferred links the loads leave out, each between the stored nodes found by
+    reference. A link already live (same type and ends) is skipped, so a second seed writes none. A
+    link whose end is not found is named and fails the seed."""
+    summary = InferredSummary()
+    pending: list[Any] = []
+    for link, edge in inferred_links(plan, created_at=now):
+        ends = []
+        for key in (link.source, link.target):
+            entity_type, identifier, value = identity_of(plan, key)
+            node = await find(entity_type, identifier, value)
+            if node is None:
+                summary.missing.append(f"{link.link_type} {link.source} -> {link.target}")
+                break
+            ends.append(node.id)
+        else:
+            if await present(ends[0], link.link_type, ends[1]):
+                summary.present += 1
+            else:
+                pending.append(
+                    edge.model_copy(
+                        update={"source": ends[0], "target": ends[1], "created_by": ENGINEER_ID}
+                    )
+                )
+    if pending:
+        await write(pending)
+        summary.written = len(pending)
+    return summary
+
+
+def inferred_lines(summary: InferredSummary) -> list[str]:
+    lines = [
+        f"{summary.written} inferred link(s) written, {summary.present} already present "
+        f"(the plan's {GRAPH_PORT} links, stored inferred)"
+    ]
+    for name in summary.missing[:5]:
+        lines.append(f"no stored end for {name}")
+    lines.append(f"check {'ok' if summary.ok else 'FAILED'}: every inferred link's ends were found")
     return lines
 
 
@@ -1739,6 +1828,7 @@ async def _seed_into(
     entered: dict[str, Any] = {}
     stages = [resolve(stage, root) for stage in stages_to_run()]
     peaks: dict[str, float] = {}
+    inferred: list[InferredSummary] = []
     deps = without_post_ingest_resolution(resources.run_deps())
 
     async def scope(principal: Principal) -> Principal:
@@ -1785,7 +1875,33 @@ async def _seed_into(
                 peaks["after"] = peak_now()
             return report
 
-        return await run_stages(stages, loaded, run=one, standing_of=standing_of)
+        results = await run_stages(stages, loaded, run=one, standing_of=standing_of)
+
+        async def present(source: str, link_type: str, target: str) -> bool:
+            star = await resources.graph.expand(
+                ExpandRequest(node_ids=[source], depth=1, edge_types=[link_type], direction="out"),
+                principal,
+            )
+            return any(e.source == source and e.target == target for e in star.edges)
+
+        async def write(edges: Sequence[Any]) -> None:
+            tx = await resources.graph.begin_transaction()
+            try:
+                await resources.graph.upsert_edges(list(edges), tx)
+            except Exception:
+                await resources.graph.rollback_transaction(tx)
+                raise
+            await resources.graph.commit_transaction(tx)
+
+        async def find(entity_type: str, identifier: str, value: str) -> Any:
+            return await resources.graph.find_node(entity_type, identifier, value, principal)
+
+        inferred.append(
+            await seed_inferred_links(
+                plan, find=find, present=present, write=write, now=datetime.now(UTC)
+            )
+        )
+        return results
 
     async def pictures(principal: Principal) -> PictureSummary:
         working = WorkingSetService(
@@ -1832,6 +1948,8 @@ async def _seed_into(
         print(line)
     for line in picture_lines(summary, len(plan.picture_subjects)):
         print(line)
+    for line in inferred_lines(inferred[0]):
+        print(line)
     file_lines, files_ok = check_lines(results, rows)
     for line in file_lines:
         print(line)
@@ -1845,7 +1963,7 @@ async def _seed_into(
     )
     print(f"Take a backup now, before anything is rehearsed: {BACKUP_COMMAND}")
     print(f"If a rehearsal reset ever refuses, restore it with: {RESTORE_COMMAND}")
-    return exit_code(files_ok=files_ok, pictures_ok=summary.ok, demo_ok=demo_ok)
+    return exit_code(files_ok=files_ok, pictures_ok=summary.ok and inferred[0].ok, demo_ok=demo_ok)
 
 
 async def check_case(

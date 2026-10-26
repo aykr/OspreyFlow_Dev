@@ -1178,6 +1178,34 @@ class PlanGraph:
             update={"id": _id(key), "type": node_type, "properties": properties}
         )
 
+    # -- the writes the seed makes (inferred links)
+
+    async def begin_transaction(self) -> str:
+        return "tx"
+
+    async def commit_transaction(self, tx: str) -> None: ...
+
+    async def rollback_transaction(self, tx: str) -> None: ...
+
+    async def upsert_edges(self, writes: Sequence[Any], tx: str) -> list[str]:
+        for w in writes:
+            self.edges.append(
+                Edge(
+                    id=w.id,
+                    type=w.type,
+                    source=w.source,
+                    target=w.target,
+                    properties=dict(w.properties),
+                    interval=w.interval,
+                    occurrences=w.occurrences,
+                    provenance=w.provenance,
+                    handling=w.handling,
+                    audit=AuditStub(created_at=NOW, created_by=w.created_by),
+                    datasets=[PID.id],
+                )  # fmt: skip
+            )
+        return [w.id for w in writes]
+
     # -- the reads
 
     def _may(self, principal: Principal, classification: str) -> bool:
@@ -2270,6 +2298,135 @@ async def test_a_reseed_reports_each_standing_load_and_runs_nothing_again(
         out.count("already loaded, not read again; its run: 10 rows read, 0 rejected, 0 held") == 15
     )
     assert "check ok: " in out and "check FAILED" not in out
+
+
+# --- the inferred links the loads leave out (the plan's "graph port" shapes) --------------------
+
+
+def _graph_port_links() -> list[pid_plan.PlanLink]:
+    return [lk for lk, _ in seed_pid.inferred_links(PLAN, created_at=NOW)]
+
+
+async def _seed_the_inferred(graph: PlanGraph) -> seed_pid.InferredSummary:
+    async def find(entity_type: str, identifier: str, value: str) -> Any:
+        return await graph.find_node(entity_type, identifier, value, _persona())
+
+    async def present(source: str, link_type: str, target: str) -> bool:
+        star = await graph.expand(
+            ExpandRequest(node_ids=[source], depth=1, edge_types=[link_type], direction="out"),
+            _persona(),
+        )
+        return any(e.source == source and e.target == target for e in star.edges)
+
+    async def write(edges: Sequence[Any]) -> None:
+        await graph.upsert_edges(edges, await graph.begin_transaction())
+
+    return await seed_pid.seed_inferred_links(
+        PLAN, find=find, present=present, write=write, now=NOW
+    )
+
+
+def test_the_graph_port_links_are_the_plans_inferred_ones() -> None:
+    links = _graph_port_links()
+    assert links and {lk.link_type for lk in links} == {"PASSES_ITEMS_TO"}
+    assert all(lk.provenance == "inferred" for lk in links)
+    assert len(links) == pid_plan.PRINCIPAL_LINKS_BY_TYPE["PASSES_ITEMS_TO"] or len(links) >= 3
+
+
+async def test_the_seed_writes_the_plans_graph_port_links_inferred_and_a_second_seed_none() -> None:
+    graph = PlanGraph(PLAN, "seed")
+    planned = _graph_port_links()
+    graph.drop_edges("PASSES_ITEMS_TO")
+    first = await _seed_the_inferred(graph)
+    assert first.written == len(planned) and first.present == 0 and first.ok
+    stored = [e for e in graph.edges if e.type == "PASSES_ITEMS_TO"]
+    assert len(stored) == len(planned)
+    for edge in stored:
+        assert edge.provenance.state is ProvenanceState.INFERRED
+        assert edge.provenance.extracted_by and edge.provenance.extraction_confidence is not None
+        assert edge.audit.created_by == seed_pid.ENGINEER_ID
+        assert edge.handling.classification == "OFFICIAL"
+    second = await _seed_the_inferred(graph)
+    assert (second.written, second.present) == (0, len(planned))
+    assert len([e for e in graph.edges if e.type == "PASSES_ITEMS_TO"]) == len(planned)
+    said = "\n".join(seed_pid.inferred_lines(first))
+    assert f"{len(planned)} inferred link(s) written, 0 already present" in said
+
+
+async def test_an_inferred_link_whose_end_is_not_stored_is_named_and_fails() -> None:
+    graph = PlanGraph(PLAN, "seed")
+    link = _graph_port_links()[0]
+    graph.drop_edges("PASSES_ITEMS_TO")
+    graph.drop_node(link.target)
+    summary = await _seed_the_inferred(graph)
+    assert not summary.ok and any(link.target in m for m in summary.missing)
+    assert "check FAILED" in "\n".join(seed_pid.inferred_lines(summary))
+
+
+async def test_a_seed_over_loaded_stages_still_writes_the_missing_inferred_links(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _root(tmp_path)
+    standing = [
+        _record(f"L{i}", r.recipe_id, r.source, r.version) for i, r in enumerate(_resolved(root))
+    ]
+    graph = PlanGraph(PLAN, "seed")
+    graph.drop_edges("PASSES_ITEMS_TO")
+    resources, registry, log = _wire_the_seed(monkeypatch, tmp_path, graph, _RunLedger(standing))
+    code = await seed_pid._seed_into(
+        _seed_args(), root, resources, registry, tmp_path / "repo", seed_pid.engineer()
+    )
+    out = capsys.readouterr().out
+    assert not [n for n, _ in log if n == "run"], "every stage was loaded already"
+    assert code == 0, out
+    assert f"{len(_graph_port_links())} inferred link(s) written, 0 already present" in out
+    assert "check ok: J1" in out, "J1 counts them"
+
+
+async def test_without_the_inferred_links_the_principals_count_is_short_and_the_seed_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The plant that found it: the step does nothing, and J1 (45 in the plan) counts 42."""
+    graph = PlanGraph(PLAN, "seed")
+    graph.drop_edges("PASSES_ITEMS_TO")
+    resources, registry, _ = _wire_the_seed(monkeypatch, tmp_path, graph, _RunLedger())
+
+    async def nothing(plan: Any, **kw: Any) -> seed_pid.InferredSummary:
+        return seed_pid.InferredSummary()
+
+    monkeypatch.setattr(seed_pid, "seed_inferred_links", nothing)
+    code = await seed_pid._seed_into(
+        _seed_args(), _root(tmp_path), resources, registry, tmp_path / "repo", seed_pid.engineer()
+    )
+    out = capsys.readouterr().out
+    assert code == 1 and "check FAILED: J1" in out and "PASSES_ITEMS_TO" in out
+
+
+async def test_a_second_seed_over_a_case_that_has_them_writes_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    resources, registry, _ = _wire_the_seed(
+        monkeypatch, tmp_path, PlanGraph(PLAN, "seed"), _RunLedger()
+    )
+    code = await seed_pid._seed_into(
+        _seed_args(), _root(tmp_path), resources, registry, tmp_path / "repo", seed_pid.engineer()
+    )
+    out = capsys.readouterr().out
+    assert (
+        code == 0
+        and f"0 inferred link(s) written, {len(_graph_port_links())} already present" in out
+    )
+
+
+def test_the_reset_chooses_no_load_that_holds_an_inferred_link() -> None:
+    """Inferred links are in no load record (the seed writes them itself), and the reset reverts
+    loads of the reports, their incident links and batch 2 only: it never touches them."""
+    kinds = {r.recipe_id for r in seed_pid.choose_reset(_loads())}
+    assert kinds <= {
+        seed_pid.reports_recipe_id(),
+        seed_pid.incidents_recipe_id(),
+        seed_pid.comms_recipe_id(),
+    }
 
 
 # --- `--check`: the demo numbers for the moment the stored loads reach (Amendment 33) -----------
