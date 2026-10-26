@@ -597,5 +597,13 @@ async def run_published_pipeline(
         report.rows_held += branch.report.rows_held
         report.rule_notes.extend(branch.report.rule_notes)
         report.created_node_ids.extend(branch.report.created_node_ids)
+        report.referenced_node_ids.extend(branch.report.referenced_node_ids)
         report.touched_edge_ids.extend(branch.report.touched_edge_ids)
+    # A node one branch referenced and another created is the second's own: named once, as created.
+    created = set(report.created_node_ids)
+    report.referenced_node_ids = [
+        node_id
+        for node_id in dict.fromkeys(report.referenced_node_ids)
+        if node_id not in created
+    ]
     return report

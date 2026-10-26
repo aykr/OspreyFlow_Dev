@@ -117,3 +117,23 @@ def _person_write(family_name: str, given_names: str, date_of_birth: str) -> Nod
         created_by="test",
         created_at=now,
     )
+
+
+# --- the stream is capped by entries (Valkey is `noeviction`: an unbounded stream ends in failed
+# writes, and an entry now carries every node a run touched) --------------------------------------
+
+
+async def test_the_stream_stays_near_its_cap_however_many_entries_are_published(
+    valkey: Valkey,
+) -> None:
+    from services.api.change_stream import CHANGE_STREAM_MAXLEN, READ_SINCE_COUNT
+
+    writer = ChangeStreamWriter(valkey)
+    for _ in range(CHANGE_STREAM_MAXLEN + 300):
+        await writer.publish("manual_assertion", edge_ids=[new_id()])
+    length = await valkey.xlen("changes:corpus")
+    assert CHANGE_STREAM_MAXLEN <= length <= READ_SINCE_COUNT, length
+    # What was just published is still there, and a read from the start reaches it.
+    last = await writer.publish("manual_assertion", edge_ids=[new_id()])
+    assert last is not None
+    assert last.entry_id in {e.entry_id for e in await writer.read_since()}

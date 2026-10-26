@@ -887,6 +887,11 @@ class LoadReport(BaseModel):
     #: becomes a `LoadRecord`, records only what revert may safely
     #: supersede without touching another load's contribution).
     created_node_ids: list[NodeId] = Field(default_factory=list)
+    #: ADR-127 decision 7(a): the existing nodes this load matched by reference (`on_match:
+    #: reference`), each once and never one it created itself. For the change-stream entry alone,
+    #: which names what a run touched so a hotlist or a monitor sees it; not in the load's record
+    #: (a revert never takes back what the load did not write) and never in a route's answer.
+    referenced_node_ids: list[NodeId] = Field(default_factory=list)
     touched_edge_ids: list[EdgeId] = Field(default_factory=list)
     #: ADR-127 decision 6: of `touched_edge_ids`, the links this load wrote new, and the existing
     #: links it merged occurrences into, kept apart so a revert can tell its own links from another
@@ -994,6 +999,8 @@ class PipelineRunReport(BaseModel):
     edges_created: int = 0
     rejections: list[RejectionRecord] = Field(default_factory=list)
     created_node_ids: list[NodeId] = Field(default_factory=list)
+    #: The branches' `referenced_node_ids`, each once (ADR-127 decision 7(a)).
+    referenced_node_ids: list[NodeId] = Field(default_factory=list)
     touched_edge_ids: list[EdgeId] = Field(default_factory=list)
     #: The branches' held rows and rule notes, summed (ADR-109 ruling 1).
     rows_held: int = 0

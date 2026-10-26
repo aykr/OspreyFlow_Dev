@@ -33,6 +33,14 @@ from services.api.config import PostgresConfig
 from services.api.hotlists import HotlistStore
 from services.api.studio_publish import build_recipe, write_and_commit_recipe
 from services.api.studio_recipes import StudioRecipeStore
+from tests.conftest import (
+    TOKEN_EXCHANGE_CLIENT_ID,
+    TOKEN_EXCHANGE_CLIENT_SECRET,
+    TokenExchangeRegistry,
+    default_claims,
+    sign_token,
+)
+from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
@@ -50,14 +58,6 @@ from schemas.domain import (
     SourceRef,
 )
 from schemas.ingest import FieldBinding, RecipeEntity, RowTemplate
-from tests.conftest import (
-    TOKEN_EXCHANGE_CLIENT_ID,
-    TOKEN_EXCHANGE_CLIENT_SECRET,
-    TokenExchangeRegistry,
-    default_claims,
-    sign_token,
-)
-from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 
@@ -496,7 +496,13 @@ def _row_template() -> RowTemplate:
 
 
 async def _publish_a_recipe_touching(
-    identifier: str, *, author: Principal, approver: Principal, tmp_path: Path, git_repo: Path
+    identifier: str,
+    *,
+    author: Principal,
+    approver: Principal,
+    tmp_path: Path,
+    git_repo: Path,
+    numbers: list[str] | None = None,
 ) -> str:
     """Real Postgres (`StudioRecipeStore`), a real throwaway git commit — the identical shape
     `tests/ingest/test_studio_publish_pipeline.py`'s own `_publish_a_verified_recipe` already
@@ -508,7 +514,7 @@ async def _publish_a_recipe_touching(
         with csv_path.open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=["a_party"])
             writer.writeheader()
-            writer.writerows([{"a_party": identifier}])
+            writer.writerows([{"a_party": number} for number in (numbers or [identifier])])
 
         draft = await store.create_draft(
             author,
@@ -656,3 +662,218 @@ def test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_inge
         "no alert reached analyst A from analyst B's own ingest — the cross-analyst gap "
         "Phase 8 Stage 1 exists to close is still open"
     )
+
+
+# --- ADR-127 decisions 7 and 8 (S7): a hotlist sees what a run touches, in its canonical form ----
+
+import random  # noqa: E402
+
+_EARLIER_FILE = "incoming/pid_earlier_load.csv"
+
+
+def _drama_number() -> tuple[str, str]:
+    """An Ofcom drama-range number (synthetic by rule 9), typed in national form and as E.164, drawn
+    from 07700 900300-900399: the PID reserves 900600-900899 and the two numbers its search relies
+    on, and no other file may write them (`test_pid_plan.py`'s J2)."""
+    last = random.randint(300, 399)
+    return f"07700 900{last:03d}", f"+447700900{last:03d}"
+
+
+async def _preload_endpoints(values: list[str]) -> dict[str, str]:
+    """What an earlier load (R5) leaves behind: each number an `Endpoint` in the case's dataset,
+    naming the file it was loaded from. Returns value -> node id."""
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    try:
+        graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
+        await graph.apply_schema(load_default_ontology())
+        writes = []
+        for value in values:
+            write = _endpoint_write(
+                value, owning_unit=PRINCIPAL.org_unit, classification="OFFICIAL"
+            )
+            write = write.model_copy(
+                update={
+                    "properties": {"value_normalised": value, "endpoint_kind": "msisdn"},
+                    "provenance": write.provenance.model_copy(
+                        update={
+                            "sources": [
+                                SourceRef(
+                                    document_id=_EARLIER_FILE, locator="row 1", excerpt_hash=""
+                                )
+                            ]
+                        }
+                    ),
+                }
+            )
+            writes.append(write)
+        tx = await graph.begin_transaction()
+        ids = await graph.upsert_nodes(writes, tx)
+        await graph.commit_transaction(tx)
+        return dict(zip(values, ids, strict=True))
+    finally:
+        await client.aclose()
+
+
+async def _sources_of(node_id: str) -> list[str]:
+    from services.resolve.trigger import service_principal
+
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    try:
+        graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
+        node = await graph.get_node(node_id, service_principal(load_uk_le_scheme()))
+        assert node is not None
+        return [str(source.document_id) for source in node.provenance.sources]
+    finally:
+        await client.aclose()
+
+
+def _run_through_the_route(
+    *,
+    private_key: rsa.RSAPrivateKey,
+    git_repo: Path,
+    recipe_id: str,
+    loader: Principal,
+) -> dict[str, object]:
+    from services.api.app import app
+
+    app.dependency_overrides[get_recipes_repo_root] = lambda: git_repo
+    token = sign_token(private_key, default_claims(sub=loader.id, roles=["data_engineer"]))
+    try:
+        with TestClient(app) as client:
+            headers = {"Authorization": f"Bearer {token}"}
+            created = client.post("/v1/investigations", headers=headers)
+            assert created.status_code == 201, created.text
+            case = str(created.json()["id"])
+            asyncio.run(give_case_its_dataset(case, loader))
+            response = client.post(
+                f"/v1/investigations/{case}/ingest/recipes/{recipe_id}/run",
+                headers=headers,
+                json={},
+            )
+            assert response.status_code == 200, response.text
+            report: dict[str, object] = response.json()
+            return report
+    finally:
+        app.dependency_overrides.pop(get_recipes_repo_root, None)
+
+
+async def _alerts_of(owner: Principal) -> list[Alert]:
+    store = await AlertStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        return await store.list_authorized(owner)
+    finally:
+        await store.close()
+
+
+async def _hotlists_for(owner: Principal, typed: list[str]) -> list[str]:
+    """Hotlists made in the case's dataset, one per typed form; returns their ids."""
+    store = await HotlistStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        in_case = owner.model_copy(update={"datasets": [dataset_for(owner)]})
+        return [
+            (await store.create(in_case, identifier=form, review_date=date(2027, 1, 1))).id
+            for form in typed
+        ]
+    finally:
+        await store.close()
+
+
+def _exchange_for(registry: TokenExchangeRegistry, owner: Principal) -> None:
+    registry.register(
+        owner.id,
+        {
+            "sub": owner.id,
+            "clearance": owner.clearance,
+            "org_unit": owner.org_unit,
+            "receivable_handling_codes": [],
+            "roles": ["analyst"],
+        },
+    )
+
+
+def test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not(
+    api_env_with_exchange: None,
+    keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+    token_exchange_registry: TokenExchangeRegistry,
+    tmp_path: Path,
+    git_repo: Path,
+) -> None:
+    """ADR-127 decisions 7 and 8 over the real app, ArcadeDB, Postgres and Valkey: the number is an
+    `Endpoint` an earlier load wrote into the case's dataset, so the run matches it by reference and
+    creates nothing. The hotlists are made in the case's dataset, one typed in national form and one
+    in E.164, and both fire; the matched node names the file it was loaded from."""
+    private_key, _ = keypair
+    typed, canonical = _drama_number()
+    analyst_a = Principal(id="analyst-a", clearance="OFFICIAL", org_unit="unit-1")
+    loader = Principal(
+        id="analyst-b",
+        clearance="OFFICIAL",
+        org_unit="unit-1",
+        roles=["source_author", "source_approver", "loader"],
+    )
+    _exchange_for(token_exchange_registry, analyst_a)
+
+    async def _seed() -> tuple[str, dict[str, str], list[str]]:
+        preloaded = await _preload_endpoints([canonical])
+        hotlists = await _hotlists_for(analyst_a, [typed, canonical])
+        recipe_id = await _publish_a_recipe_touching(
+            canonical, author=loader, approver=loader, tmp_path=tmp_path, git_repo=git_repo
+        )
+        return recipe_id, preloaded, hotlists
+
+    recipe_id, preloaded, (national, plain) = asyncio.run(_seed())
+    report = _run_through_the_route(
+        private_key=private_key, git_repo=git_repo, recipe_id=recipe_id, loader=loader
+    )
+    assert report["nodes_created"] == 0 and report["nodes_referenced"] == 1, report
+    assert "referenced_node_ids" not in report, "the ids are for the change stream alone"
+
+    by_rule = {a.rule_id: a for a in asyncio.run(_alerts_of(analyst_a))}
+    node_id = preloaded[canonical]
+    for hotlist_id in (national, plain):
+        alert = by_rule.get(f"hotlist:{hotlist_id}")
+        assert alert is not None, f"no alert for hotlist {hotlist_id}: {sorted(by_rule)}"
+        assert alert.referent_node_ids == [node_id]
+    # Decision 8: the node the alert names says which file it was loaded from, through provenance.
+    assert asyncio.run(_sources_of(node_id)) == [_EARLIER_FILE]
+
+
+def test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth(
+    api_env_with_exchange: None,
+    keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+    token_exchange_registry: TokenExchangeRegistry,
+    tmp_path: Path,
+    git_repo: Path,
+) -> None:
+    """Rule 2 over the real route: the run references 250 existing numbers and creates none; the
+    hotlisted one is the last, past the 200 an evaluation used to stop at."""
+    private_key, _ = keypair
+    _, last = _drama_number()
+    numbers = [f"+44-filler-{new_id()[:10]}" for _ in range(249)] + [last]
+    analyst_a = Principal(id="analyst-a", clearance="OFFICIAL", org_unit="unit-1")
+    loader = Principal(
+        id="analyst-b",
+        clearance="OFFICIAL",
+        org_unit="unit-1",
+        roles=["source_author", "source_approver", "loader"],
+    )
+    _exchange_for(token_exchange_registry, analyst_a)
+
+    async def _seed() -> tuple[str, dict[str, str], str]:
+        preloaded = await _preload_endpoints(numbers)
+        (hotlist_id,) = await _hotlists_for(analyst_a, [last])
+        recipe_id = await _publish_a_recipe_touching(
+            last, author=loader, approver=loader, tmp_path=tmp_path, git_repo=git_repo,
+            numbers=numbers,
+        )  # fmt: skip
+        return recipe_id, preloaded, hotlist_id
+
+    recipe_id, preloaded, hotlist_id = asyncio.run(_seed())
+    report = _run_through_the_route(
+        private_key=private_key, git_repo=git_repo, recipe_id=recipe_id, loader=loader
+    )
+    assert report["nodes_created"] == 0 and report["nodes_referenced"] >= 250, report
+    by_rule = {a.rule_id: a for a in asyncio.run(_alerts_of(analyst_a))}
+    alert = by_rule.get(f"hotlist:{hotlist_id}")
+    assert alert is not None, "the hotlisted number, the 250th of the run, raised nothing"
+    assert alert.referent_node_ids == [preloaded[last]]

@@ -97,7 +97,14 @@ export function HotlistPanel({ apiBaseUrl, bearerToken, investigationId }: Hotli
                 borderBottom: "1px solid var(--border-subtle)",
               }}
             >
-              <span className="value">{hotlist.identifier}</span>
+              <span className="value">{hotlist.identifier_typed ?? hotlist.identifier}</span>
+              {/* ADR-127 decision 7(b): no adapter accepted this text, so it is matched only as
+                  written. Said, so a number that will not match its other renderings is no surprise. */}
+              {hotlist.identifier_canonical === false ? (
+                <span style={{ color: "var(--text-tertiary)" }}>
+                  kept as written: matches only this exact text
+                </span>
+              ) : null}
               <StatusBadge status={hotlist.status ?? "active"} />
             </li>
           ))}

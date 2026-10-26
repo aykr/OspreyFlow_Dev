@@ -57,12 +57,21 @@ class MergingGraph(FakeGraphPort):
 
 
 class RecordingValkey:
-    """Just the stream append `ChangeStreamWriter.publish` makes."""
+    """Just the stream append `ChangeStreamWriter.publish` makes, with the cap it passes (`maxlen`,
+    `approximate`): the real client takes those options, so the fake must too."""
 
     def __init__(self) -> None:
         self.entries: list[dict[str, str]] = []
 
-    async def xadd(self, key: str, fields: dict[str, str]) -> str:
+    async def xadd(
+        self,
+        key: str,
+        fields: dict[str, str],
+        *,
+        maxlen: int | None = None,
+        approximate: bool = True,
+    ) -> str:
+        assert maxlen is not None and approximate, "the stream is capped by entries"
         self.entries.append(fields)
         return f"{len(self.entries)}-0"
 

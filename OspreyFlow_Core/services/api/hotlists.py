@@ -11,11 +11,13 @@ of it.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime
 
 import asyncpg
 
 from conduit_common.identity import new_id
+from knowledge_adapters import REGISTRY, NormalisationError
 from schemas.domain import Hotlist, Principal, WatchStatus
 
 from .dataset_scope import made_in, reach_clause
@@ -36,7 +38,82 @@ ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'acti
 CREATE INDEX IF NOT EXISTS hotlists_owner_id_idx ON hotlists (owner_id);
 CREATE INDEX IF NOT EXISTS hotlists_identifier_idx ON hotlists (identifier);
 ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS dataset_id TEXT;
+-- ADR-127 decision 7(b): `identifier` is the canonical form; `identifier_typed` is what the analyst
+-- typed, for display. `identifier_canonical` is NULL for a row not yet read by the store, true once
+-- canonicalised and false for a text no adapter would accept, kept as written.
+ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS identifier_typed TEXT;
+ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS identifier_canonical BOOLEAN;
 """
+
+_log = logging.getLogger(__name__)
+
+_COLUMNS = (
+    "id, identifier, identifier_typed, identifier_canonical, owner_id, review_date, status, "
+    "created_at, dataset_id"
+)
+
+#: A digit string of this length fits `imei` and `imsi` alike, with different canonical forms.
+_AMBIGUOUS_DIGITS = frozenset({14, 15, 16})
+
+
+def canonical_identifier(typed: str) -> tuple[str, bool]:
+    """A hotlist identifier in its canonical form (ADR-127 decision 7(b)), and whether it was found.
+
+    A hotlist has no declared kind, so the kind is read from the text, and only where the text can
+    be of one kind alone: an address with an `@` is an `email`, any other text the `msisdn` adapter
+    accepts a phone number. A string of fourteen to sixteen digits is left as written, since it fits
+    `imei` and `imsi` and their canonical forms differ (`imei` drops the check digit, `imsi` keeps
+    all fifteen): guessing could silently hotlist the wrong value. A text the adapter refuses
+    comes back unchanged with `False`: the caller keeps it as written and says so."""
+    text = typed.strip()
+    digits = "".join(c for c in text if c.isdigit())
+    if text and "@" in text:
+        adapter = "email"
+    elif text and len(digits) in _AMBIGUOUS_DIGITS and not text.startswith("+") and text.replace(
+        " ", ""
+    ).replace("-", "").isdigit():
+        return typed, False
+    else:
+        adapter = "msisdn"
+    if not text:
+        return typed, False
+    try:
+        return str(REGISTRY[adapter](text)), True
+    except NormalisationError:
+        return typed, False
+
+
+async def _canonicalise_existing(conn: asyncpg.Connection) -> int:
+    """ADR-127 decision 7(b): the rows written before identifiers were canonical, read once. Each
+    row's original text becomes its displayed form (`identifier_typed`) and `identifier` the
+    canonical one; a text no adapter accepts is kept as written and marked. Idempotent: only a row
+    not yet read (`identifier_canonical IS NULL`) is touched, and the update says so again, so two
+    stores connecting together cannot canonicalise a row twice. Returns how many rows are kept as
+    written, which it logs as a count (never the identifiers)."""
+    rows = await conn.fetch(
+        "SELECT id, identifier FROM hotlists WHERE identifier_canonical IS NULL"
+    )
+    for row in rows:
+        typed = row["identifier"]
+        canonical, ok = canonical_identifier(typed)
+        await conn.execute(
+            "UPDATE hotlists SET identifier = $2, identifier_typed = $3, identifier_canonical = $4 "
+            "WHERE id = $1 AND identifier_canonical IS NULL",
+            row["id"],
+            canonical,
+            typed,
+            ok,
+        )
+    not_canonical = int(
+        await conn.fetchval("SELECT count(*) FROM hotlists WHERE identifier_canonical = false")
+    )
+    if not_canonical:
+        _log.warning(
+            "%d hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, "
+            "still matched as before, not canonical",
+            not_canonical,
+        )
+    return not_canonical
 
 
 class HotlistNotFoundError(Exception):
@@ -48,6 +125,8 @@ def _row_to_hotlist(row: asyncpg.Record) -> Hotlist:
     return Hotlist(
         id=row["id"],
         identifier=row["identifier"],
+        identifier_typed=row["identifier_typed"],
+        identifier_canonical=row["identifier_canonical"],
         owner_id=row["owner_id"],
         review_date=row["review_date"],
         status=row["status"],
@@ -57,8 +136,10 @@ def _row_to_hotlist(row: asyncpg.Record) -> Hotlist:
 
 
 class HotlistStore:
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, not_canonical: int = 0) -> None:
         self._pool = pool
+        #: How many rows hold a text no adapter would accept, kept as written (read at connect).
+        self.not_canonical = not_canonical
 
     @classmethod
     async def connect(cls, dsn: str) -> HotlistStore:
@@ -75,7 +156,8 @@ class HotlistStore:
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
-        return cls(pool)
+            not_canonical = await _canonicalise_existing(conn)
+        return cls(pool, not_canonical)
 
     async def close(self) -> None:
         await self._pool.close()
@@ -83,9 +165,12 @@ class HotlistStore:
     async def create(
         self, principal: Principal, *, identifier: str, review_date: date
     ) -> Hotlist:
+        canonical, canonicalised = canonical_identifier(identifier)
         hotlist = Hotlist(
             id=new_id(),
-            identifier=identifier,
+            identifier=canonical,
+            identifier_typed=identifier,
+            identifier_canonical=canonicalised,
             owner_id=principal.id,
             review_date=review_date,
             created_at=datetime.now(UTC),
@@ -94,10 +179,12 @@ class HotlistStore:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO hotlists "
-                "(id, identifier, owner_id, review_date, status, created_at, dataset_id) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                "(id, identifier, identifier_typed, identifier_canonical, owner_id, review_date, "
+                "status, created_at, dataset_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
                 hotlist.id,
                 hotlist.identifier,
+                hotlist.identifier_typed,
+                canonicalised,
                 hotlist.owner_id,
                 hotlist.review_date,
                 hotlist.status,
@@ -110,7 +197,7 @@ class HotlistStore:
         reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, identifier, owner_id, review_date, status, created_at, dataset_id "
+                f"SELECT {_COLUMNS} "
                 f"FROM hotlists WHERE id = $1 AND owner_id = $2{reach}",
                 hotlist_id,
                 principal.id,
@@ -126,7 +213,7 @@ class HotlistStore:
         reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, identifier, owner_id, review_date, status, created_at, dataset_id "
+                f"SELECT {_COLUMNS} "
                 f"FROM hotlists WHERE owner_id = $1{reach} ORDER BY created_at DESC",
                 principal.id,
                 *extra,
@@ -160,10 +247,10 @@ class HotlistStore:
         established needs an unscoped population."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, identifier, owner_id, review_date, status, created_at, dataset_id "
+                f"SELECT {_COLUMNS} "
                 "FROM hotlists"
             )
         return [_row_to_hotlist(row) for row in rows]
 
 
-__all__ = ["HotlistNotFoundError", "HotlistStore"]
+__all__ = ["HotlistNotFoundError", "HotlistStore", "canonical_identifier"]

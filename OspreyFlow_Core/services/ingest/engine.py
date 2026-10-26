@@ -713,6 +713,10 @@ class _RunState:
     #: counted at its write and is not among them.
     merged_link_ids: list[EdgeId] = field(default_factory=list)
     merged_node_ids: list[NodeId] = field(default_factory=list)
+    #: ADR-127 decision 7(a): the existing nodes matched by reference, each once, never one this
+    #: load created (`LoadReport.referenced_node_ids`).
+    referenced_node_ids: list[NodeId] = field(default_factory=list)
+    referenced_node_lookup: set[NodeId] = field(default_factory=set)
     created_node_lookup: set[NodeId] = field(default_factory=set)
     created_edge_lookup: set[EdgeId] = field(default_factory=set)
     merged_edge_lookup: set[EdgeId] = field(default_factory=set)
@@ -1152,6 +1156,15 @@ def resolve_rows_keyed(
     return Resolved(staged_rows, rejections, rows_read, rows_deduplicated, rows_already_loaded)
 
 
+def _note_referenced(state: _RunState, node_id: NodeId) -> None:
+    """Remember a node matched by reference, once, unless this load created it (a node written by an
+    earlier row and found again by a later one is this load's own, not one it merely touched)."""
+    if node_id in state.created_node_lookup or node_id in state.referenced_node_lookup:
+        return
+    state.referenced_node_lookup.add(node_id)
+    state.referenced_node_ids.append(node_id)
+
+
 async def _write_entity(
     resolved: _ResolvedEntity,
     *,
@@ -1190,6 +1203,7 @@ async def _write_entity(
         cached = state.local_index.get(match_key)
         if cached is not None:
             state.nodes_referenced += 1
+            _note_referenced(state, cached)
             return cached
         existing = await state.graph.find_node(
             entity.type, match_key[1], match_key[2], state.principal
@@ -1197,6 +1211,7 @@ async def _write_entity(
         if existing is not None:
             state.local_index[match_key] = existing.id
             state.nodes_referenced += 1
+            _note_referenced(state, existing.id)
             return existing.id
 
     if own_text is not None and own_text_media is not None:
@@ -2020,6 +2035,7 @@ async def run_recipe(
         edges_created=state.edges_created,
         rejections=[*rejections, *state.content_rejections],
         created_node_ids=state.created_node_ids,
+        referenced_node_ids=state.referenced_node_ids,
         touched_edge_ids=state.touched_edge_ids,
         created_edge_ids=state.created_edge_ids,
         merged_edge_ids=state.merged_edge_ids,

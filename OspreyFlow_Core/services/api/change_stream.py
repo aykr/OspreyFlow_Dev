@@ -39,7 +39,7 @@ matching ADR-037's own accepted list, no more and no fewer.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, Protocol
 
 from pydantic import BaseModel
 from valkey.asyncio import Valkey
@@ -49,6 +49,17 @@ from conduit_common.valkey_compat import reply
 ChangeSource = Literal["ingest", "resolution", "manual_assertion"]
 
 _STREAM_KEY = "changes:corpus"
+
+#: How many entries `publish` keeps (`XADD MAXLEN ~`). Valkey runs `noeviction`, so an uncapped
+#: stream grows until writes fail, and an ingest entry carries every node a run touched; nothing
+#: reads an entry after the fact (evaluation runs with the entry in hand, `read_since` has no caller
+#: outside tests), so old ones are of no use. 900, not 1,000: an approximate trim keeps up to one
+#: macro node (100 entries by default) over the cap, so the stream never exceeds `READ_SINCE_COUNT`
+#: and a read from its start always reaches the newest entry.
+CHANGE_STREAM_MAXLEN = 900
+
+#: `read_since`'s default window.
+READ_SINCE_COUNT = 1000
 
 
 class ChangeStreamEntry(BaseModel):
@@ -65,6 +76,21 @@ class ChangeStreamEntry(BaseModel):
 
 def _decode(value: bytes | str) -> str:
     return value.decode() if isinstance(value, bytes) else value
+
+
+class _Touched(Protocol):
+    created_node_ids: list[str]
+    referenced_node_ids: list[str]
+
+
+def touched_node_ids(report: _Touched) -> list[str]:
+    """The nodes an ingest run's entry names (ADR-127 decision 7(a)): those the run created, then
+    those it matched by reference, each once. A hotlist or a monitor is shown what a run *touched*:
+    a hotlisted number the run linked to, having been written by an earlier load, is as much its
+    business as one it wrote. What the case's rules wrote into the load (`rule_node_ids`) is in
+    neither list and stays out (decision 6). The entry is internal: its consumers re-fetch each id
+    through the access-filtered port and show a reader nothing it cannot read."""
+    return list(dict.fromkeys([*report.created_node_ids, *report.referenced_node_ids]))
 
 
 class ChangeStreamWriter:
@@ -104,7 +130,10 @@ class ChangeStreamWriter:
             "investigation_id": investigation_id or "",
             "recorded_at": recorded_at.isoformat(),
         }
-        entry_id = _decode(await reply(self._client.xadd(_STREAM_KEY, fields)))
+        added = self._client.xadd(
+            _STREAM_KEY, fields, maxlen=CHANGE_STREAM_MAXLEN, approximate=True
+        )
+        entry_id = _decode(await reply(added))
         return ChangeStreamEntry(
             entry_id=entry_id,
             source=source,
@@ -115,7 +144,7 @@ class ChangeStreamWriter:
         )
 
     async def read_since(
-        self, *, after_id: str = "-", count: int = 1000
+        self, *, after_id: str = "-", count: int = READ_SINCE_COUNT
     ) -> list[ChangeStreamEntry]:
         """A plain `XRANGE`, not a consumer group — this stage builds no scheduled consumer, only
         proves the mechanism a future one will read from. `after_id="-"` (the default) reads from

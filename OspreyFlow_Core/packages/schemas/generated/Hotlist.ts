@@ -2,6 +2,8 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Id = string;
 export type Identifier = string;
+export type IdentifierTyped = string | null;
+export type IdentifierCanonical = boolean | null;
 export type OwnerId = string;
 export type ReviewDate = string;
 export type Status = "active" | "stopped";
@@ -26,6 +28,8 @@ export type DatasetId = string | null;
 export interface Hotlist {
   id: Id;
   identifier: Identifier;
+  identifier_typed?: IdentifierTyped;
+  identifier_canonical?: IdentifierCanonical;
   owner_id: OwnerId;
   review_date: ReviewDate;
   status?: Status;

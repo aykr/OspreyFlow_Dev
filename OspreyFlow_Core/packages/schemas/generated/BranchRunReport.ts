@@ -20,6 +20,7 @@ export type KeptRowKeys = string[];
 export type RowKeyFingerprint = string | null;
 export type NodeId = string;
 export type CreatedNodeIds = NodeId[];
+export type ReferencedNodeIds = NodeId[];
 export type EdgeId = string;
 export type TouchedEdgeIds = EdgeId[];
 export type CreatedEdgeIds = EdgeId[];
@@ -57,6 +58,7 @@ export interface LoadReport {
   kept_row_keys?: KeptRowKeys;
   row_key_fingerprint?: RowKeyFingerprint;
   created_node_ids?: CreatedNodeIds;
+  referenced_node_ids?: ReferencedNodeIds;
   touched_edge_ids?: TouchedEdgeIds;
   created_edge_ids?: CreatedEdgeIds;
   merged_edge_ids?: MergedEdgeIds;

@@ -18137,3 +18137,36 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
 - **What the author sees.** The run report and Verify say how many rows were already loaded into the case
   and skipped, and show the two refusals Amendment 10 adds (a changed key definition, naming how many
   loads to revert; a run already in progress) in words, with no id.
+
+### ADR-127, Amendment 12 (26 October 2026) — B2-6: what decisions 7 and 8 left open
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **Referenced nodes in the change stream.** A load records the nodes it matched by reference
+  (`referenced_node_ids`, never one it created), and its ingest entry carries them after the created
+  nodes, for a plain run, a pipeline (aggregated across branches) and a scheduled run alike. Rule-written
+  elements stay out. The entry is internal: evaluation reads every id, in chunks of 200 until all are read,
+  with the service principal, then discloses a match only through the hotlist owner's principal under
+  ADR-038's policy: under `strict`, only to an owner who may read the node; under `notify`, as a stub
+  that names nothing. Evaluation reads an entry's nodes once and matches every active hotlist against that one read.
+  A run that only referenced nodes now publishes an entry, so monitors wake for it too: each active
+  monitor re-runs its pattern, which costs more on runs that created nothing but changes no alert.
+- **The change stream is capped.** It had no cap, and Valkey never evicts, so it grew until writes
+  failed; entries now carry referenced nodes and are larger. It is trimmed to about 900 entries
+  (approximately, so it stays inside the 1,000 entries a read from the start returns). Nothing reads an
+  entry after the fact: evaluation and monitors act on the entry as it is published. The cap bounds entries,
+  not bytes; an entry carries every node a load touched, so the largest entry Brief 2's loads write is
+  recorded in its actuals, and if it ever matters the stream can keep a bounded list or a count instead.
+- **A hotlist's kind is inferred,** because a hotlist has no kind field: a value with `@` is an email,
+  otherwise a value the `msisdn` adapter accepts is a phone number; anything else is kept as written,
+  including a 14 to 16 digit value that could be an IMEI or an IMSI, whose canonical forms differ, so a
+  wrong guess cannot hotlist the wrong value. Such a hotlist matches only the exact stored form. A
+  `kind` field on a hotlist, chosen by the analyst, is the fix, not built here. The hotlist panel says
+  when a value was kept as written and so matches only that exact text.
+- **The canonical and typed forms.** A hotlist stores the canonical identifier, which matching compares,
+  and the form the analyst typed, which the Glass shows. Existing rows are canonicalised once when the
+  store connects; a refused row is kept as written, still matches as before, and is counted.
+- **Which file the alert names (decision 8).** The matched node names the file that loaded it, in
+  `provenance.sources`. For a number a run only referenced, that is the earlier load's file, not the run
+  that raised the alert. The alert is not also taught to name its triggering load: the alert's owner may
+  not be the person who ran it, and that source is not theirs to see. The demo script's "the document"
+  must be read as the file that loaded the number; recorded as an open item for the script.

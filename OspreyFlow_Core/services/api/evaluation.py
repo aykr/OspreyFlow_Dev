@@ -47,7 +47,7 @@ attempt flips it back, so this reflects the most recent reach, not a one-way tri
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass
 
 from services.resolve.trigger import service_principal
@@ -72,12 +72,20 @@ from .pattern_store import PatternNotFoundError, PatternStore
 #: exists anywhere in this repository.
 LOCK_TTL_SECONDS = 5 * 60
 
-#: The per-evaluation cost cap (ADR-037): how many of a single change-stream entry's own touched
-#: node ids a hotlist evaluation will check. Bounds `GraphPort.get_node` calls per entry per
-#: hotlist, not the number of hotlists themselves — a corpus-wide fan-out over many hotlists is
+#: The per-read cost cap (ADR-037, ADR-127 decision 7(a)): how many of a change-stream entry's
+#: touched node ids one `GraphPort.get_nodes` read asks for. An entry's ids are read in chunks of
+#: this size until all are read; it bounds one read, not how much of an entry is looked at. It is
+#: not the number of hotlists themselves — a corpus-wide fan-out over many hotlists is
 #: bounded by the overlap lock below (one evaluation in flight per hotlist at a time) and by the
 #: caller's own population size, not by this constant.
 MAX_TOUCHED_NODES_PER_EVALUATION = 200
+
+def touched_chunks(node_ids: list[str]) -> Iterator[list[str]]:
+    """An entry's node ids in chunks of `MAX_TOUCHED_NODES_PER_EVALUATION`, until all are given
+    (ADR-127 decision 7(a): the cap is a cost bound per read, not a cut of the entry)."""
+    for start in range(0, len(node_ids), MAX_TOUCHED_NODES_PER_EVALUATION):
+        yield node_ids[start : start + MAX_TOUCHED_NODES_PER_EVALUATION]
+
 
 _HOTLIST_LOCK_PREFIX = "hotlist:running:"
 _MONITOR_LOCK_PREFIX = "monitor:running:"
@@ -144,9 +152,27 @@ async def evaluate_hotlists_for_entry(
     `recipient` — the owner's principal — never with `matcher`), and names the test that pins it."""
     if not entry.node_ids:
         return []
-    touched = entry.node_ids[:MAX_TOUCHED_NODES_PER_EVALUATION]
     matcher = service_principal(scheme)
     all_alerts: list[Alert] = []
+    #: The entry's nodes by `value_normalised`, read **once** however many hotlists are active
+    #: (H hotlists over N nodes cost ceil(N / 200) reads, not H times that), and only when a hotlist
+    #: needs them. Each holds only a node's id and datasets: the match is on the value alone.
+    index: dict[str, list[tuple[str, list[str]]]] | None = None
+
+    async def nodes_by_value() -> dict[str, list[tuple[str, list[str]]]]:
+        nonlocal index
+        if index is None:
+            built: dict[str, list[tuple[str, list[str]]]] = {}
+            # Every node of the entry is read (rule 2), a chunk at a time: the cap bounds the
+            # cost of one read, never how much of the entry is looked at. A hidden or absent id
+            # is left out of a chunk's answer alike.
+            for chunk in touched_chunks(entry.node_ids):
+                for node in await graph.get_nodes(chunk, matcher):
+                    value = node.properties.get("value_normalised")
+                    if isinstance(value, str):
+                        built.setdefault(value, []).append((node.id, list(node.datasets)))
+            index = built  # only once whole: a failed read leaves nothing half-read behind
+        return index
 
     for hotlist in await hotlist_store.list_all_active():
         recipient = await principal_for_owner(hotlist.owner_id)
@@ -162,16 +188,10 @@ async def evaluate_hotlists_for_entry(
 
         async def _run(hotlist: Hotlist = hotlist, recipient: Principal = recipient) -> list[Alert]:
             found: list[Alert] = []
-            for node_id in touched:
-                node = await graph.get_node(node_id, matcher)
-                if node is None:
-                    continue
-                value = node.properties.get("value_normalised")
-                if value != hotlist.identifier:
-                    continue
+            for node_id, datasets in (await nodes_by_value()).get(hotlist.identifier, []):
                 # Another dataset's node is not in the hotlist's world: not even a `notify` stub,
                 # which would say that something matched there.
-                if hotlist.dataset_id is not None and hotlist.dataset_id not in node.datasets:
+                if hotlist.dataset_id is not None and hotlist.dataset_id not in datasets:
                     continue
                 alert = await record_match(
                     graph=graph,

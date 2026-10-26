@@ -298,7 +298,7 @@ from .assessments import (
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
 from .cache import CachedQuery
-from .change_stream import ChangeStreamEntry, ChangeStreamWriter
+from .change_stream import ChangeStreamEntry, ChangeStreamWriter, touched_node_ids
 from .compute_routes import (
     JOB_TYPE_COMPUTE_METRIC,
     ComputeMetricAccepted,
@@ -7681,7 +7681,8 @@ async def _execute_recipe_run(
         )
     entry = await ChangeStreamWriter(deps.valkey).publish(
         "ingest",
-        node_ids=report.created_node_ids,
+        # ADR-127 decision 7(a): the nodes the run matched by reference as well as those it created.
+        node_ids=touched_node_ids(report),
         edge_ids=report.touched_edge_ids,
         investigation_id=investigation_id,
     )

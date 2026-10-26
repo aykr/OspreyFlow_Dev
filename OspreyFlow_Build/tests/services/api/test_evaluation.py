@@ -246,6 +246,77 @@ async def test_a_hotlist_match_visible_to_its_owner_writes_a_full_alert(
         assert matching[0].referent_node_ids == [node_id]
 
 
+async def test_a_hotlist_typed_in_national_form_matches_the_endpoint_stored_in_e164(
+    hotlist_store, alert_store, audit, valkey
+) -> None:
+    """ADR-127 decision 7(b): the comparison is on the canonical form, so the analyst's own
+    `07700 900nnn` finds the node a load stored as `+447700900nnn` (nnn from 300 to 399: the PID's
+    own numbers are 600 to 899 and no other file may write them)."""
+    import random
+
+    last = random.randint(300, 399)
+    typed, stored = f"07700 900{last:03d}", f"+447700900{last:03d}"
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    hotlist = await hotlist_store.create(OWNER, identifier=typed, review_date=date(2027, 1, 1))
+    assert hotlist.identifier == stored and hotlist.identifier_typed == typed
+
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        tx = await graph.begin_transaction()
+        (node_id,) = await graph.upsert_nodes(
+            [_endpoint_write(stored, owning_unit=OWNER.org_unit)], tx
+        )
+        await graph.commit_transaction(tx)
+        alerts = await evaluate_hotlists_for_entry(
+            _entry([node_id]),
+            graph=graph,
+            scheme=scheme,
+            hotlist_store=hotlist_store,
+            alert_store=alert_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=_principal_for,
+            policy="strict",
+        )
+    matching = [a for a in alerts if a.rule_id == f"hotlist:{hotlist.id}"]
+    assert [a.referent_node_ids for a in matching] == [[node_id]]
+
+
+async def test_a_hotlisted_node_past_the_two_hundredth_of_a_real_entry_still_alerts(
+    hotlist_store, alert_store, audit, valkey
+) -> None:
+    """Rule 2 against the real adapter: 450 nodes, the hotlisted one last in the entry's order."""
+    from services.api.evaluation import MAX_TOUCHED_NODES_PER_EVALUATION
+
+    ontology = load_default_ontology()
+    scheme = load_uk_le_scheme()
+    identifier = f"+44-late-{uuid.uuid4().hex[:10]}"
+    hotlist = await hotlist_store.create(OWNER, identifier=identifier, review_date=date(2027, 1, 1))
+    async with arcadedb_adapter(ontology, scheme) as graph:
+        writes = [
+            _endpoint_write(f"+44-filler-{i}-{uuid.uuid4().hex[:6]}", owning_unit=OWNER.org_unit)
+            for i in range(449)
+        ]
+        late = _endpoint_write(identifier, owning_unit=OWNER.org_unit)
+        tx = await graph.begin_transaction()
+        ids = await graph.upsert_nodes([*writes, late], tx)
+        await graph.commit_transaction(tx)
+        assert ids.index(late.id) > MAX_TOUCHED_NODES_PER_EVALUATION
+        alerts = await evaluate_hotlists_for_entry(
+            _entry(ids),
+            graph=graph,
+            scheme=scheme,
+            hotlist_store=hotlist_store,
+            alert_store=alert_store,
+            audit=audit,
+            valkey=valkey,
+            principal_for_owner=_principal_for,
+            policy="strict",
+        )
+    matching = [a for a in alerts if a.rule_id == f"hotlist:{hotlist.id}"]
+    assert [a.referent_node_ids for a in matching] == [[late.id]]
+
+
 async def test_a_hotlist_match_outside_the_owners_access_leaks_nothing_in_strict_or_notify(
     hotlist_store, alert_store, audit, valkey
 ) -> None:

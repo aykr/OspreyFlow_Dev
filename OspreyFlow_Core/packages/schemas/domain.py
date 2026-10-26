@@ -705,7 +705,16 @@ class Hotlist(BaseModel):
     outlives any one investigation it happened to be set from."""
 
     id: str
+    #: The canonical form (ADR-127 decision 7(b)), which a node's `value_normalised` is compared
+    #: with: `+447700900310` for a number typed `07700 900310`. A text no adapter accepts is kept
+    #: as written.
     identifier: str
+    #: What the analyst typed, kept for display (`identifier` is what is matched). `None` only for a
+    #: row from before the identifier was canonicalised and not yet read by the store.
+    identifier_typed: str | None = None
+    #: Whether `identifier` is canonical: `False` for a text no adapter would accept, kept as
+    #: written and matched only on that exact text. `None` for a row not yet read by the store.
+    identifier_canonical: bool | None = None
     owner_id: str
     review_date: date
     status: WatchStatus = "active"
