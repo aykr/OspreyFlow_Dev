@@ -18121,3 +18121,19 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   Studio-built recipe is given its key through the draft's API.
 - **Recorded:** a row loaded with a "content not found" rejection keeps its key, so a re-run after the
   file arrives does not attach it; a revert and re-run does.
+
+### ADR-127, Amendment 11 (26 October 2026) — B2-5b: where the key is authored
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **Where.** `09_INGEST_STUDIO.md` shows `deduplicate` only in the published recipe. It is authored in
+  Connect, beside the source's other declarations (the units and the marking columns), because it names
+  source columns and Connect's draft carries it.
+- **How.** The author types each key column, in order, and may give it a one-column transform from the
+  same list the Map inspector offers; a column can be moved, removed, or the whole key cleared. Connect
+  reads no source, so the columns are typed rather than picked; the server judges them against the
+  source on save and its refusal is shown in its own words. A column already in the key says so. On a
+  new version of a published recipe the control warns that changing the key will refuse later runs into
+  a case holding rows loaded under the old key until those loads are reverted.
+- **What the author sees.** The run report and Verify say how many rows were already loaded into the case
+  and skipped, and show the two refusals Amendment 10 adds (a changed key definition, naming how many
+  loads to revert; a run already in progress) in words, with no id.

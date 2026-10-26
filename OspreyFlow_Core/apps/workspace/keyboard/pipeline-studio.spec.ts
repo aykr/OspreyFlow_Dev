@@ -46,11 +46,16 @@ const ONTOLOGY = {
   edge_types: [],
 };
 
-function draft(pipeline: unknown, handling: Record<string, unknown> = {}) {
+function draft(
+  pipeline: unknown,
+  handling: Record<string, unknown> = {},
+  extra: { status?: string; deduplicate?: unknown } = {},
+) {
   return {
     recipe_id: "r1",
     version: 1,
-    status: "draft",
+    status: extra.status ?? "draft",
+    ...(extra.deduplicate === undefined ? {} : { deduplicate: extra.deduplicate }),
     label: "Carrier B intake",
     connector_profile: "generic-csv",
     source_location: null,
@@ -65,9 +70,21 @@ function draft(pipeline: unknown, handling: Record<string, unknown> = {}) {
   };
 }
 
-async function serve(page: Page, declared: Record<string, unknown> = {}) {
+/** ADR-127 Amendment 10 (B2-5b): what a test of the deduplicate control, Verify or a run report
+ * needs the server to say beyond the pipeline's own routes. */
+interface ServeOptions {
+  /** The draft's saved `deduplicate`. */
+  deduplicate?: unknown;
+  /** A published recipe with no pipeline opens at Publish, where it is run. */
+  published?: boolean;
+  /** What `POST …/verify` and `POST …/run` answer. */
+  verify?: unknown;
+  run?: unknown;
+}
+
+async function serve(page: Page, declared: Record<string, unknown> = {}, options: ServeOptions = {}) {
   const puts: unknown[] = [];
-  const patches: { handling: Record<string, unknown> }[] = [];
+  const patches: { handling: Record<string, unknown>; deduplicate?: { key: Record<string, unknown>[] } }[] = [];
   const templates: { row_template: { entities: { handling?: Record<string, unknown> }[] } }[] = [];
   await page.route("**/*/v1/**", async (route) => {
     const request = route.request();
@@ -88,7 +105,9 @@ async function serve(page: Page, declared: Record<string, unknown> = {}) {
       });
     if (url.endsWith("/ingest/recipes/r1/profile")) return json(200, PROFILE);
     if (url.endsWith("/v1/ontology")) return json(200, ONTOLOGY);
-    if (url.endsWith("/v1/ingest/transforms")) return json(200, []);
+    if (url.endsWith("/v1/ingest/transforms")) return json(200, [{ name: "datetime", arity: 1 }]);
+    if (url.endsWith("/ingest/recipes/r1/verify") && method === "POST") return json(200, options.verify ?? {});
+    if (url.endsWith("/ingest/recipes/r1/run") && method === "POST") return json(200, options.run ?? {});
     if (url.endsWith("/ingest/recipes/r1/row-template") && method === "PUT") {
       const sent = request.postDataJSON();
       templates.push(sent);
@@ -100,16 +119,20 @@ async function serve(page: Page, declared: Record<string, unknown> = {}) {
       puts.push(sent);
       return json(200, draft(sent));
     }
-    if (url.endsWith("/ingest/recipes/r1") && method === "GET") return json(200, draft(CHAIN, declared));
+    const status = options.published ? "published" : "draft";
+    const shown = (pipeline: unknown) =>
+      draft(pipeline, declared, { status, deduplicate: options.deduplicate });
+    if (url.endsWith("/ingest/recipes/r1") && method === "GET") return json(200, shown(options.published ? null : CHAIN));
     if (url.endsWith("/ingest/recipes/r1") && method === "PATCH") {
       const sent = request.postDataJSON();
       patches.push(sent);
-      return json(200, draft(CHAIN, sent.handling));
+      return json(200, draft(CHAIN, sent.handling, { deduplicate: sent.deduplicate }));
     }
     if (url.endsWith("/ingest/recipes") && method === "POST") return json(201, draft(null));
-    if (url.endsWith("/ingest/recipes") && method === "GET") return json(200, [draft(CHAIN, declared)]);
+    if (url.endsWith("/ingest/recipes") && method === "GET") return json(200, [shown(CHAIN)]);
     // The pipelines home lists the registry (every status but superseded), not drafts only.
-    if (url.endsWith("/ingest/recipe-registry") && method === "GET") return json(200, [draft(CHAIN)]);
+    if (url.endsWith("/ingest/recipe-registry") && method === "GET")
+      return json(200, [options.published ? shown(null) : draft(CHAIN)]);
     return json(404, {});
   });
   await page.goto("/keyboard/pipeline-studio-harness.html");
@@ -287,6 +310,116 @@ test("the map editor opens from its node by keyboard", async ({ page }) => {
   // The map editor is the existing MapScreen, proven by its own specs; reaching it is this test's.
   await expect(page.getByRole("group", { name: "Pipeline" })).toBeHidden();
   registerCovered(REGISTRY, "open-the-map-editor-by-keyboard");
+});
+
+// --- ADR-127 Amendment 10 (B2-5b): the deduplicate key, and what a second run says -----------------
+
+async function openConnectWithKey(page: Page, deduplicate: unknown) {
+  const served = await serve(page, {}, { deduplicate });
+  await openSourceSettings(page);
+  await expect(page.getByRole("group", { name: "Skip rows this case has already loaded" })).toBeVisible();
+  return served;
+}
+
+test("a key column is added to the deduplicate key in Connect by keyboard", async ({ page }) => {
+  await openConnectWithKey(page, undefined);
+  await page.getByLabel("Key column name").focus();
+  await page.keyboard.type("payer");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("payee");
+  await page.getByRole("button", { name: "Add key column" }).focus();
+  await page.keyboard.press("Enter");
+  const key = page.getByRole("list", { name: "Key columns" }).getByRole("listitem");
+  await expect(key).toHaveCount(2);
+  await expect(key.nth(0)).toHaveAttribute("data-column", "payer");
+  await expect(key.nth(1)).toHaveAttribute("data-column", "payee");
+  registerCovered(REGISTRY, "add-a-deduplicate-key-column-by-keyboard");
+});
+
+test("a key column is moved in the deduplicate key by keyboard, and the order is what is saved", async ({ page }) => {
+  const served = await openConnectWithKey(page, { key: [{ field: "a" }, { field: "b" }, { field: "c" }] });
+  await page.getByRole("button", { name: "Move c up" }).focus();
+  await page.keyboard.press("Enter");
+  const key = page.getByRole("list", { name: "Key columns" }).getByRole("listitem");
+  await expect(key.nth(1)).toHaveAttribute("data-column", "c");
+  await page.getByRole("button", { name: "Save", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => served.patches.length).toBe(1);
+  expect(served.patches[0]!.deduplicate!.key.map((part) => part.field)).toEqual(["a", "c", "b"]);
+  registerCovered(REGISTRY, "move-a-deduplicate-key-column-by-keyboard");
+});
+
+test("a key column is removed from the deduplicate key by keyboard", async ({ page }) => {
+  await openConnectWithKey(page, { key: [{ field: "a" }, { field: "b" }] });
+  await page.getByRole("button", { name: "Remove a from the key" }).focus();
+  await page.keyboard.press("Enter");
+  const key = page.getByRole("list", { name: "Key columns" }).getByRole("listitem");
+  await expect(key).toHaveCount(1);
+  await expect(key.nth(0)).toHaveAttribute("data-column", "b");
+  registerCovered(REGISTRY, "remove-a-deduplicate-key-column-by-keyboard");
+});
+
+test("the deduplicate key is saved from Connect by keyboard, and the PATCH carries it", async ({ page }) => {
+  const served = await openConnectWithKey(page, undefined);
+  await page.getByLabel("Key column name").focus();
+  await page.keyboard.type("payer");
+  await page.keyboard.press("Enter");
+  const transform = page.getByLabel("Transform for payer");
+  await expect(transform.locator("option")).toHaveCount(2);
+  await transform.focus();
+  await page.keyboard.type("datetime");
+  await page.getByRole("button", { name: "Save", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => served.patches.length).toBe(1);
+  expect(served.patches[0]!.deduplicate).toEqual({ key: [{ field: "payer", transform: "datetime" }] });
+  registerCovered(REGISTRY, "save-the-deduplicate-key-by-keyboard");
+});
+
+test("the deduplicate key is cleared in Connect by keyboard, and the PATCH carries an empty key", async ({ page }) => {
+  const served = await openConnectWithKey(page, { key: [{ field: "a" }, { field: "b" }] });
+  await page.getByRole("button", { name: "Clear the key" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("list", { name: "Key columns" })).toBeHidden();
+  await page.getByRole("button", { name: "Save", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => served.patches.length).toBe(1);
+  expect(served.patches[0]!.deduplicate).toEqual({ key: [] });
+  registerCovered(REGISTRY, "clear-the-deduplicate-key-by-keyboard");
+});
+
+test("a second run's report says by keyboard how many rows the case already held", async ({ page }) => {
+  await serve(page, {}, {
+    published: true,
+    run: {
+      load_id: "L2", recipe_id: "r1", recipe_version: 1, rows_read: 40, rows_deduplicated: 0,
+      nodes_created: 0, nodes_referenced: 0, edges_created: 0, rejections: [], rows_already_loaded: 40,
+    },
+  });
+  const open = page.getByRole("button", { name: "Open Carrier B intake" });
+  await open.focus();
+  await page.keyboard.press("Enter");
+  const run = page.getByRole("button", { name: /Run now/ });
+  await run.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("40 rows already loaded into this case, skipped")).toBeVisible();
+  await expect(page.getByText("Nodes created: 0")).toBeVisible();
+  registerCovered(REGISTRY, "read-rows-already-loaded-on-a-run-report-by-keyboard");
+});
+
+test("verify says by keyboard how many rows the case already holds", async ({ page }) => {
+  await serve(page, {}, {
+    verify: {
+      rows_read: 40, sample_is_whole_source: true, rows_deduplicated: 0, nodes: [], edges: [],
+      entities_by_type: {}, edges_by_type: {}, rejections: [], rows_already_loaded: 40,
+    },
+  });
+  await openPipeline(page);
+  await page.getByRole("button", { name: "Verify", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Run verify" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("40 rows already loaded into this case, would be skipped")).toBeVisible();
+  registerCovered(REGISTRY, "read-rows-already-loaded-in-verify-by-keyboard");
 });
 
 test("every registered pipeline-studio action has its own proving test case above", () => {

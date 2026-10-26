@@ -26,6 +26,7 @@ import { Panel } from "../../design/primitives/Panel";
 import { Table, type TableColumn } from "../../design/primitives/Table";
 import { OntologyRegistry } from "../../ontology/schema";
 import { createWorkingSet, type WorkingSet } from "../../workingset/store";
+import { alreadyLoadedWords } from "../alreadyLoaded";
 import { ProfileError, fetchDraft, fetchOntologySchema, runVerify } from "../api";
 
 export interface VerifyScreenProps {
@@ -180,6 +181,14 @@ export function VerifyScreen({ apiBaseUrl,
             {" · "}
             {report.rows_deduplicated} deduplicated
           </p>
+
+          {/* ADR-127 decision 5: the dry run counts, as a run would, the rows this case already
+              holds and would skip. */}
+          {(report.rows_already_loaded ?? 0) > 0 && (
+            <p style={{ color: "var(--text-secondary)" }}>
+              {alreadyLoadedWords(report.rows_already_loaded ?? 0, "would be skipped")}
+            </p>
+          )}
 
           {report.values_masked && (
             <div

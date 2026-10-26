@@ -19,6 +19,7 @@ import { runInWords, triggerInWords } from "../../admin/Schedules";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Panel } from "../../design/primitives/Panel";
+import { alreadyLoadedWords } from "../alreadyLoaded";
 import {
   StudioActionError,
   createNewVersion,
@@ -492,6 +493,11 @@ export function PublishScreen({
             <li>Rows read: {loadReport.rows_read}</li>
             {!pipelineRunOf(loadReport) && (
               <li>Rows deduplicated: {(loadReport as LoadReportView).rows_deduplicated}</li>
+            )}
+            {/* ADR-127 decision 5: the rows this case already held, so a second run that creates
+                nothing says why. */}
+            {(loadReport.rows_already_loaded ?? 0) > 0 && (
+              <li>{alreadyLoadedWords(loadReport.rows_already_loaded ?? 0, "skipped")}</li>
             )}
             <li>Nodes created: {loadReport.nodes_created}</li>
             <li>Nodes referenced: {loadReport.nodes_referenced}</li>

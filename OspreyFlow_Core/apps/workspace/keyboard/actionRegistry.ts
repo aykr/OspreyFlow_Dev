@@ -465,6 +465,14 @@ export const PIPELINE_STUDIO_ACTIONS = defineActionRegistry("PIPELINE_STUDIO_ACT
   "add-a-source-unit-by-keyboard",
   "declare-a-marking-column-by-keyboard",
   "bind-a-handling-part-to-a-column-by-keyboard",
+  // ADR-127 Amendment 10 (B2-5b): the deduplicate key in Connect, and what a second run says.
+  "add-a-deduplicate-key-column-by-keyboard",
+  "move-a-deduplicate-key-column-by-keyboard",
+  "remove-a-deduplicate-key-column-by-keyboard",
+  "save-the-deduplicate-key-by-keyboard",
+  "clear-the-deduplicate-key-by-keyboard",
+  "read-rows-already-loaded-on-a-run-report-by-keyboard",
+  "read-rows-already-loaded-in-verify-by-keyboard",
 ] as const);
 
 /** The Alerts place (ADR-109 phase B): the case team's queue, an alert's explanation and its

@@ -19,12 +19,15 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ConnectDraftInput,
   ConnectorCatalogueEntry,
+  FieldBinding,
   StudioRecipeDraft,
+  TransformDescriptor,
 } from "../../../../packages/schemas/generated";
 import { Button } from "../design/primitives/Button";
 import { Input } from "../design/primitives/Input";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
+import { DeduplicateControl, cleanBinding } from "./DeduplicateControl";
 import { describeFileSize } from "./fileSize";
 import { HANDLING_BINDABLE, HANDLING_PART_LABELS } from "./handlingParts";
 import {
@@ -35,6 +38,7 @@ import {
   fetchHandlingScheme,
   UPLOAD_ACCEPT,
   fetchIngestSourceFiles,
+  fetchTransforms,
   listDrafts,
   updateDraft,
   uploadIngestSourceFile,
@@ -75,6 +79,8 @@ export interface FormState {
   units: string[];
   /** A marking part to the column that carries it; a blank entry declares nothing. */
   handlingColumns: Record<string, string>;
+  /** ADR-127 decision 5: the columns that identify a row, in order; none is no deduplication. */
+  dedupKey: FieldBinding[];
 }
 
 const EMPTY_FORM: FormState = {
@@ -88,6 +94,7 @@ const EMPTY_FORM: FormState = {
   legalBasis: "",
   units: [],
   handlingColumns: {},
+  dedupKey: [],
 };
 
 export function draftToForm(draft: StudioRecipeDraft): FormState {
@@ -105,6 +112,7 @@ export function draftToForm(draft: StudioRecipeDraft): FormState {
       ? handling.units.filter((u): u is string => typeof u === "string")
       : [],
     handlingColumns: stringRecord(handling.handling_columns),
+    dedupKey: (draft.deduplicate?.key ?? []).map(cleanBinding),
   };
 }
 
@@ -151,13 +159,19 @@ export function formToInput(form: FormState, previous?: StudioRecipeDraft | null
   if (form.units.length > 0 || "units" in before) handling.units = form.units;
   const columns = declaredColumns(form);
   if (Object.keys(columns).length > 0 || "handling_columns" in before) handling.handling_columns = columns;
-  return {
+  const input: ConnectDraftInput = {
     label: form.label,
     connector_profile: form.connectorProfile,
     source_location: form.sourceLocation || null,
     handling,
     legal_basis: form.legalBasis || null,
   };
+  // ADR-127 decision 5: the server keeps the key a PATCH leaves unsaid, replaces it with a key, and
+  // removes it for an empty one — so a key the author cleared is sent empty, and a draft that never
+  // had one sends nothing.
+  if (form.dedupKey.length > 0) input.deduplicate = { key: form.dedupKey };
+  else if ((previous?.deduplicate?.key ?? []).length > 0) input.deduplicate = { key: [] };
+  return input;
 }
 
 export function groupCatalogue(
@@ -203,6 +217,10 @@ export function ConnectScreen({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [lastSaved, setLastSaved] = useState<StudioRecipeDraft | null>(null);
+  // The catalogue Map's transform picker reads, for the key's optional transforms. Read apart from
+  // the rest, as the ingest root is: a catalogue that cannot be read leaves a key without transforms,
+  // never a blank Connect.
+  const [transforms, setTransforms] = useState<TransformDescriptor[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -263,6 +281,20 @@ export function ConnectScreen({
       cancelled = true;
     };
   }, [apiBaseUrl, bearerToken, investigationId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchTransforms(apiBaseUrl, bearerToken)
+      .then((catalogueOfTransforms) => {
+        if (!cancelled) setTransforms(catalogueOfTransforms);
+      })
+      .catch(() => {
+        if (!cancelled) setTransforms([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken]);
 
   const groupedCatalogue = useMemo(
     () => (catalogue ? groupCatalogue(catalogue) : []),
@@ -701,6 +733,13 @@ export function ConnectScreen({
               </p>
             ) : null}
           </fieldset>
+
+          <DeduplicateControl
+            keyParts={form.dedupKey}
+            onChange={(dedupKey) => setForm({ ...form, dedupKey })}
+            transforms={transforms}
+            newVersion={(lastSaved?.version ?? 1) > 1}
+          />
 
           <label style={{ display: "block", marginBottom: "var(--sp-16)" }}>
             Legal basis <span aria-hidden="true">*</span>

@@ -182,8 +182,14 @@ async function parseDraftOrThrow(response: Response, action: string): Promise<St
   if (response.status === 422) {
     let cause: string | null = null;
     try {
-      const body = (await response.json()) as { error?: unknown; detail?: unknown };
+      const body = (await response.json()) as { error?: unknown; detail?: unknown; problems?: unknown };
       if (body.error === "source_declarations_invalid" && typeof body.detail === "string") cause = body.detail;
+      // ADR-127 decision 5: a `deduplicate` key the source cannot stand names each problem; the
+      // author reads those words as the server said them.
+      else if (body.error === "recipe_rule" && Array.isArray(body.problems)) {
+        const problems = body.problems.filter((p): p is string => typeof p === "string");
+        if (problems.length > 0) cause = problems.join(" ");
+      }
       // FastAPI's own list, for a body `ConnectDraftInput` refuses before the route runs.
       else if (Array.isArray(body.detail)) {
         const first = (body.detail[0] as { msg?: unknown } | undefined)?.msg;
@@ -264,17 +270,24 @@ export class ProfileError extends Error {
   }
 }
 
+/** The sentence a refusal carries: `detail`, or `message` (the ADR-127 refusals — a changed
+ * `deduplicate`, a run already in progress — say theirs in `message`), else `fallback`. */
+function causeOf(body: { detail?: unknown; message?: unknown }, fallback: string): string {
+  if (typeof body.detail === "string" && body.detail) return body.detail;
+  if (typeof body.message === "string" && body.message) return body.message;
+  return fallback;
+}
+
 async function parseCodedErrorOrThrow<T>(response: Response, action: string): Promise<T> {
   if (!response.ok) {
-    let body: { error?: unknown; detail?: unknown } = {};
+    let body: { error?: unknown; detail?: unknown; message?: unknown } = {};
     try {
       body = await response.json();
     } catch {
       // Not a JSON error body — fall through with the generic detail below.
     }
     const code = typeof body.error === "string" ? body.error : "unknown_error";
-    const detail = typeof body.detail === "string" ? body.detail : `${action}: ${response.status}`;
-    throw new ProfileError(code, detail);
+    throw new ProfileError(code, causeOf(body, `${action}: ${response.status}`));
   }
   return (await response.json()) as T;
 }
@@ -433,15 +446,14 @@ async function parseActionErrorOrThrow<T>(response: Response, action: string): P
     throw new StudioActionError("forbidden", `${action}: principal lacks the required studio role`);
   }
   if (!response.ok) {
-    let body: { error?: unknown; detail?: unknown } = {};
+    let body: { error?: unknown; detail?: unknown; message?: unknown } = {};
     try {
       body = await response.json();
     } catch {
       // Not a JSON error body — fall through with the generic detail below.
     }
     const code = typeof body.error === "string" ? body.error : "unknown_error";
-    const detail = typeof body.detail === "string" ? body.detail : `${action}: ${response.status}`;
-    throw new StudioActionError(code, detail);
+    throw new StudioActionError(code, causeOf(body, `${action}: ${response.status}`));
   }
   return (await response.json()) as T;
 }
