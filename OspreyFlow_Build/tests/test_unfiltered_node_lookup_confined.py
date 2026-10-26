@@ -4,10 +4,12 @@ called it would let any caller ask whether an id exists, which the access step e
 (rules 3 and 4): a hidden node's existence would be readable by id. So the engine's write path is
 the only caller, and this fails for any other.
 
-The revert (B2-4c, `services/ingest/load_revert.py`) has three more of the same kind, each answering
+The revert (B2-4c, `services/ingest/load_revert.py`) has more of the same kind, each answering
 whatever the caller may read, and each confined to that one module: `live_edges_touching` (does a
 live link outside the load rest on a node it created), `live_nodes_naming_geometry` (does a live node
-still name a point it inserted) and `stored_writes` (which load last wrote a node, and is it reverted).
+still name a point it inserted), `stored_writes` (which load last wrote a node, and is it reverted
+or superseded) and `stored_link_states` (is a link reverted or superseded). The analytics port's
+`events_of_load_among` (which of the events an alert cites are a load's) is confined the same way.
 
 The scan covers every Python module under `services/`, `scripts/` and `packages/`, except the port
 and the graph adapters, which define it. It flags an attribute access named `existing_node_ids` and
@@ -27,11 +29,13 @@ CONFINED = {
     "live_edges_touching": {"services/ingest/load_revert.py"},
     "live_nodes_naming_geometry": {"services/ingest/load_revert.py"},
     "stored_writes": {"services/ingest/load_revert.py"},
+    "stored_link_states": {"services/ingest/load_revert.py"},
+    "events_of_load_among": {"services/ingest/load_revert.py"},
 }
 ALLOWED = CONFINED["existing_node_ids"]
 NAME = "existing_node_ids"
 #: Where the method is defined, so where its name is not a use.
-DEFINERS = ("packages/ports", "packages/adapters/graph_")
+DEFINERS = ("packages/ports", "packages/adapters/graph_", "packages/adapters/analytics_")
 
 
 def _skipped(relative: str) -> bool:

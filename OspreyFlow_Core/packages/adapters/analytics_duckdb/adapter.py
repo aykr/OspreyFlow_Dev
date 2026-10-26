@@ -635,6 +635,19 @@ class AnalyticsDuckDBAdapter:
         ).fetchall()
         return len(removed)
 
+    async def events_of_load_among(self, load_id: str, event_ids: Sequence[str]) -> set[str]:
+        """`AnalyticsPort.events_of_load_among`: by `event_id` and `load_id`, no access step."""
+        ids = list(dict.fromkeys(event_ids))
+        if not ids:
+            return set()
+        placeholders = ",".join("?" for _ in ids)
+        rows = self._con.execute(
+            "SELECT DISTINCT event_id FROM events "
+            f"WHERE load_id = ? AND event_id IN ({placeholders})",
+            [load_id, *ids],
+        ).fetchall()
+        return {str(row[0]) for row in rows}
+
     # --- the geometry reference partition -----------------------------------
 
     async def load_geometries(self, records: Sequence[GeometryRecord]) -> None:

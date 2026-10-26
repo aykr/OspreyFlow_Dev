@@ -173,3 +173,46 @@ async def test_list_steps_shows_changed_for_an_old_label_written_after_the_relab
         )
     listed = await store.list_steps(case)
     assert [s.label for s in listed] == ["Changed", "Seeded"]
+
+
+# --- ADR-127 decision 6, B2-4c2: a revert takes a load's elements out of every stored step -----------
+
+
+async def test_a_revert_removes_its_elements_and_the_links_at_them_from_every_stored_step(
+    store: InvestigationHistoryStore,
+) -> None:
+    """A step is a full snapshot of the bodies at that moment. A revert leaves none of its
+    elements in any case's steps, nor a link ending at one of its nodes; every other element, and
+    the order of the rest, is as it was. Restore re-reads the Vault, so a reverted body would not
+    come back, but the stored bodies are not kept either. Idempotent: a second call changes nothing."""
+    from services.api.history import HistoryStep  # noqa: F401 (the shape get_step returns)
+
+    from schemas.domain import Edge, Node
+    from tests.services.api.working_set.test_visible_link import edge, node
+
+    case_a, case_b = (
+        f"case-a-{datetime.now(UTC).timestamp()}",
+        f"case-b-{datetime.now(UTC).timestamp()}",
+    )
+
+    async def step(case: str, nodes: list[Node], edges: list[Edge], seq: int) -> str:
+        made = await store.record_step(
+            case, seq=seq, label="Seeded", created_by="analyst-1", nodes=nodes, edges=edges
+        )
+        return made.id
+
+    nodes = [node("r1"), node("r-secret", "SECRET"), node("k1"), node("k2")]
+    edges = [edge("re1", "r1", "k1"), edge("hang", "r1", "k2"), edge("ke", "k1", "k2")]
+    a1 = await step(case_a, nodes, edges, 1)
+    a2 = await step(case_a, [node("k1")], [], 2)
+    b1 = await step(case_b, [node("r-secret", "SECRET"), node("k2")], [], 1)
+
+    changed = await store.remove_elements(["r1", "r-secret"], ["re1"])
+    assert changed >= 2
+    first = await store.get_step(case_a, a1)
+    assert [n.id for n in first.nodes] == ["k1", "k2"], "order kept"
+    assert [e.id for e in first.edges] == ["ke"], "the named link and the link at r1 are gone"
+    assert [n.id for n in (await store.get_step(case_a, a2)).nodes] == ["k1"]
+    assert [n.id for n in (await store.get_step(case_b, b1)).nodes] == ["k2"]
+    assert await store.remove_elements(["r1", "r-secret"], ["re1"]) == 0
+    assert await store.remove_elements([], []) == 0

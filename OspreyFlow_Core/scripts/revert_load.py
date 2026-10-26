@@ -20,6 +20,20 @@ says it exists. The principal is built the way the seed scripts build theirs, fr
 `--clearance` and `--org-unit` (and `--dataset`, `--receivable-code` where it has them). Without a
 clearance and a unit there is nothing to read as, and `--show-ids` is refused before anything runs.
 
+**The working sets, the history and the caches.** The revert also takes the load's nodes and links
+(and the links at those nodes) out of every case's working set in Valkey, whoever may read them,
+publishes each case's removal so every Conduit instance projects it for its connected readers,
+takes them out of the stored history steps, closes the alerts that cite its events, and clears the
+Conduit's kept results (`cache:*` in the same Valkey, so every instance at once). It needs the
+Valkey the Conduit uses (`VALKEY_*`).
+
+**Quiesce the Conduit.** Run a revert with the Conduit quiet. With the DuckDB engine that is
+required, since the analytics file belongs to one process. With ClickHouse it is advised: a Conduit
+left running can race the revert (an expand that read the graph before the graph step can add an
+element to a case after it was removed), and the revert guards for it only by removing from the
+working sets a second time as its last step before the ledger mark, which finds what was added back
+in between and nothing a later write adds.
+
 **The clearance is self-declared.** `--clearance` and `--org-unit` are whatever the operator types:
 nothing checks them against the identity provider, so the `--show-ids` filter is a courtesy, not
 access control. The script must never be routed through the Conduit (a route, a worker, a button),
@@ -37,9 +51,14 @@ from datetime import UTC, datetime
 from services.api.alerts import AlertStore
 from services.api.analytics_store import open_analytics
 from services.api.audit import AuditWriter
-from services.api.config import DEFAULT_ANALYTICS_DB_PATH, PostgresConfig
+from services.api.cache import invalidate_every_cache
+from services.api.config import DEFAULT_ANALYTICS_DB_PATH, PostgresConfig, ValkeyConfig
 from services.api.held_rows import HeldRowStore
+from services.api.history import InvestigationHistoryStore
 from services.api.recipe_runs import RecipeRunStore
+from services.api.working_set.service import WorkingSetService
+from services.api.working_set.store import ValkeyWorkingSetStore
+from services.api.working_set_revert import WorkingSetReverter
 from services.ingest.load_revert import (
     Refusal,
     RevertDeps,
@@ -48,6 +67,7 @@ from services.ingest.load_revert import (
     RevertResult,
     revert,
 )
+from valkey.asyncio import Valkey
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
@@ -155,6 +175,10 @@ async def run(
             f"{done.events} event(s), {done.geometries} point(s), "
             f"{done.held_rows} held row(s) discarded, {done.alerts} alert(s) closed."
         )
+        if done.cases:
+            say(f"  {done.cases} working set(s) cleared of it, and each connected reader told.")
+        if done.alerts_citing_events:
+            say(f"  {done.alerts_citing_events} alert(s) citing its events closed.")
         if done.nodes_left_alone:
             say(
                 f"  {done.nodes_left_alone} node(s) left alone: a later load wrote them again "
@@ -186,14 +210,28 @@ async def _main(args: argparse.Namespace) -> int:
     held = await HeldRowStore.connect(dsn, scheme)
     alerts = await AlertStore.connect(dsn)
     audit = await AuditWriter.connect(dsn)
+    history = await InvestigationHistoryStore.connect(dsn)
+    valkey_config = ValkeyConfig.from_env()
+    valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
     try:
+        graph = GraphArcadeDBAdapter(client, scheme)
+        # From outside the Conduit, as `strip_change_provenance` reaches the working sets: the
+        # store on Valkey, the removal published on each case's channel, the stored history, and
+        # the kept results, which are keys in the same Valkey.
+        working_sets = WorkingSetReverter(
+            WorkingSetService(graph, ValkeyWorkingSetStore(valkey), scheme, valkey=valkey),
+            valkey,
+            history,
+        )
         deps = RevertDeps(
             ledger=ledger,
-            graph=GraphArcadeDBAdapter(client, scheme),
+            graph=graph,
             analytics=analytics,
             held_rows=held,
             alerts=alerts,
             audit=audit,
+            working_sets=working_sets,
+            invalidate_caches=lambda: invalidate_every_cache(valkey),
         )
         return await run(
             args.load_id,
@@ -209,6 +247,8 @@ async def _main(args: argparse.Namespace) -> int:
         await held.close()
         await alerts.close()
         await audit.close()
+        await history.close()
+        await valkey.aclose()
         await close_analytics()
 
 

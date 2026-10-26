@@ -18051,3 +18051,35 @@ Decided by the coordinator under the owner's delegation for Brief 2, after an ad
   - analysts' notes and link changes on a link the revert hides stay keyed to that link, orphaned.
 - **Superseded by this unit:** the ingest service's earlier `revert_load`, which reverted merged links, is
   deleted.
+
+### ADR-127, Amendment 9 (25 October 2026) — B2-4c2: a reverted load leaves working sets and caches
+
+Decided by the coordinator under the owner's delegation for Brief 2, after an adversarial review.
+- **Working sets.** The revert removes the load's reverted nodes and links, and the links that end at
+  them, from every case's working set, whatever any reader may read, and appends one `DeltaRemove` per
+  case holding them, carrying the record of what each was. Each Conduit projects it per reader (ADR-124
+  decision 4), so a reader is sent only what they may read. The case's stored delta stream is dropped,
+  after its sequence number has been advanced, so no client replays a reverted element's body and any
+  client behind the revert, or behind a crash part way, is given a full snapshot. Stored investigation
+  history steps lose the same elements. The removal runs again as the last step before the ledger mark,
+  so an element a running Conduit re-added during the revert is removed too.
+- **Caches.** The Conduit's shared caches (`explore`, `query`, `analytics`) are cleared from Valkey, so
+  every instance drops them; a test fails on any cache whose prefix it cannot read.
+- **Alerts citing the load's events** are closed, found by asking which of the events the alerts name
+  the load wrote (`AnalyticsPort.events_of_load_among`, unfiltered and confined to the revert). This
+  closes Amendment 8's stale-alert limit. A closed alert still shows its own words, which may quote
+  figures drawn from the reverted events.
+- **A further refusal.** A revert is refused, by count, while any node or link the plan created has been
+  superseded by an analyst's correction, because the successor is in no record and would keep the
+  load's data.
+- **Running it.** A revert should be run with the Conduit quiesced: with DuckDB that is required, because
+  the Conduit holds the file; with ClickHouse it is advised. The script needs the Conduit's Valkey.
+- **A narrow window, recorded.** A node or link that is both superseded and reverted is not refused. It
+  can be the plan's only if an earlier attempt crashed between the graph and working-set steps and an
+  analyst then corrected the element in a working set that still held it; the correction's successor
+  would then survive the rerun. The first pass's order keeps that window very small.
+- **What is left of decision 6.** Releasing the load's row keys is B2-5's, through the revert's
+  `release_row_keys` hook, which nothing supplies until then; no row keys exist yet, so the demo reset
+  may use the revert now, with the Conduit stopped on a DuckDB deployment. This amendment closes
+  Amendment 8's working-set, cache and stale-alert limits; its others (the self-declared clearance,
+  orphaned notes on reverted links) stand.

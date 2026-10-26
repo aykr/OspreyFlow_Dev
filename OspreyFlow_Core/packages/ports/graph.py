@@ -63,6 +63,17 @@ class StoredNode:
 
     load_id: str | None
     reverted: bool
+    #: Replaced by a correction (`supersede_node`): the successor is a node of its own.
+    superseded: bool = False
+
+
+@dataclass(frozen=True)
+class StoredLink:
+    """What `GraphPort.stored_link_states` says of one link: whether it is reverted, and whether it
+    is superseded (an analyst's link change replaced it; the replacement is a link of its own)."""
+
+    reverted: bool
+    superseded: bool
 
 
 class AmbiguousElementId(Exception):
@@ -550,7 +561,17 @@ class GraphPort(Protocol):
         holds is absent. A write onto an existing node rewrites the load (a merge, even one by
         another load or by an upload, and a fresh create over a reverted node), so this is how the
         revert tells that a node it created has since been written by someone else, and whether an
-        earlier attempt already reverted it. For the revert alone. No ids give `{}`; a bare `str`
+        earlier attempt already reverted it, and whether a correction has superseded it (its
+        successor is in no load's record). For the revert alone. No ids give `{}`; a bare `str` is
+        a `TypeError`."""
+        ...
+
+    async def stored_link_states(self, edge_ids: Sequence[EdgeId]) -> dict[EdgeId, StoredLink]:
+        """As `stored_writes`, for links: each stored link's `reverted` and `superseded` flags,
+        whatever the caller may read, each id found through its type's unique `id` index, over every
+        edge type. An id no link holds is absent. An id two types hold is answered as the worst of
+        them (superseded if either is, reverted only if both are). For the revert alone, which
+        refuses a load whose created link an analyst has changed. No ids give `{}`; a bare `str`
         is a `TypeError`."""
         ...
 

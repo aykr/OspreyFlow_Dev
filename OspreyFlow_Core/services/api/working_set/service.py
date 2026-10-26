@@ -323,6 +323,15 @@ class Restored:
     response: DeltaSnapshot
 
 
+@dataclass(frozen=True)
+class RevertRemoval:
+    """One case a revert removed elements from, and the stored removal it appended: published as it
+    is (`notify.publish_delta`), which projects it for each connected reader."""
+
+    investigation_id: str
+    delta: DeltaRemove
+
+
 class WorkingSetService:
     def __init__(
         self,
@@ -1516,7 +1525,10 @@ class WorkingSetService:
         return Restored(published=snapshot, response=response)
 
     async def _record_of_nodes(
-        self, investigation_id: str, node_ids: Sequence[NodeId]
+        self,
+        investigation_id: str,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[EdgeId] = (),
     ) -> RemovedRecord:
         """What each stored node of `node_ids` is, as `principal_may_read` judges it: its handling
         and datasets, which are its signature in the counted index (`access_counts` holds the
@@ -1528,7 +1540,9 @@ class WorkingSetService:
             # epoch, so a signature an entry names (written before the entries were read) is
             # defined by a table read after them. The other order leaves a node written between the
             # two with an entry the table does not define, and it drops out of the record.
-            entries = await self._store.access_entries(investigation_id, ids, [])
+            entries = await self._store.access_entries(
+                investigation_id, ids, list(dict.fromkeys(edge_ids))
+            )
             counts = await self._store.access_counts(investigation_id)
             if entries.epoch == counts.epoch:
                 break
@@ -1541,7 +1555,69 @@ class WorkingSetService:
                 record.nodes[node_id] = RemovedElement(
                     handling=signature.handling(), datasets=list(signature.datasets)
                 )
+        for edge_id, (key, source, target) in entries.edges.items():
+            signature = counts.signatures.get(key)
+            if signature is not None:
+                record.edges[edge_id] = RemovedElement(
+                    handling=signature.handling(),
+                    datasets=list(signature.datasets),
+                    source=source,
+                    target=target,
+                )
         return record
+
+    async def remove_reverted(
+        self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId]
+    ) -> list[RevertRemoval]:
+        """A revert's removal (ADR-127 decision 6), which is not `remove`. `remove` is a reader's
+        act: it takes only ids whose stored body that reader may read, and leaves a link standing
+        after its end is gone. This removes **the load's own elements**, whoever may read them (no
+        principal here: the operator's clearance is no part of what a revert took back), from
+        **every case that stores any of them**; and the links that end at a removed node, named or
+        not, since nothing hung from what the load wrote may stay.
+
+        For each such case, in an order a rerun can finish: the stored delta stream is dropped (its
+        bodies, and any earlier record, can name what was reverted, so a client behind is sent a
+        full snapshot from the stores, not the reverted bodies back), the links and nodes are
+        removed, and one `DeltaRemove` is appended carrying the ids and the record of what each
+        was. The record is what lets every connected reader be sent the removal projected for
+        them (`project_delta`: only the ids that reader may read, and nothing for the rest).
+        Returns the cases changed with their stored removal, for the caller to publish; a case
+        holding none of the ids is not touched and burns no sequence number. A second call, with
+        everything gone, changes nothing and returns `[]`.
+
+        A failure after the removal and before the removal is appended cannot be rerun (nothing is
+        held any more), so the sequence number is taken before anything is removed: it leaves a
+        gap, and every client's next catch-up is a full snapshot from the stores. The sockets of
+        that case are unaware until they next resynchronise."""
+        nodes = list(dict.fromkeys(node_ids))
+        links = list(dict.fromkeys(edge_ids))
+        removals: list[RevertRemoval] = []
+        for case in await self._store.case_ids():
+            held_nodes, held_links = await self._store.held_among(case, nodes, links)
+            if not held_nodes and not held_links:
+                continue
+            adjacent = await self._store.adjacent_edge_ids(case, sorted(held_nodes))
+            hanging = {e for ids in adjacent.values() for e in ids}
+            _, stored_links = await self._store.held_among(case, [], sorted(held_links | hanging))
+            record = await self._record_of_nodes(case, sorted(held_nodes), sorted(stored_links))
+            # The number first. A process that dies after the elements are gone finds nothing held
+            # on its rerun, so the delta it never stored is not sent again; the counter having
+            # moved past every client is what tells them: the next catch-up finds a gap, not a
+            # stream with nothing after its number, and is sent a full snapshot.
+            seq = await self._store.next_seq(case)
+            await self._store.drop_deltas(case)
+            await self._store.remove_edges(case, sorted(stored_links))
+            await self._store.remove_nodes(case, sorted(held_nodes))
+            delta = DeltaRemove(
+                seq=seq,
+                node_ids=sorted(held_nodes),
+                edge_ids=sorted(stored_links),
+                removed=record,
+            )
+            await self._store.append_delta(case, delta)
+            removals.append(RevertRemoval(case, delta))
+        return removals
 
     async def remove(
         self, investigation_id: str, node_ids: Sequence[NodeId], principal: Principal

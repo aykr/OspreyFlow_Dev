@@ -646,6 +646,18 @@ class AnalyticsClickHouseAdapter:
             await self._ch.command("ALTER TABLE events DELETE WHERE load_id = ?" + _SYNC, [load_id])
         return removed
 
+    async def events_of_load_among(self, load_id: str, event_ids: Sequence[str]) -> set[str]:
+        """`AnalyticsPort.events_of_load_among`: by `event_id` and `load_id`, no access step.
+        Unproven on a real ClickHouse: the coordinator's live run is its first."""
+        ids = list(dict.fromkeys(event_ids))
+        if not ids:
+            return set()
+        rows = await self._ch.rows(
+            "SELECT DISTINCT event_id FROM events WHERE load_id = ? AND has(?, event_id)",
+            [load_id, ids],
+        )
+        return {str(row[0]) for row in rows}
+
     # --- the geometry reference partition -----------------------------------
 
     async def load_geometries(self, records: Sequence[GeometryRecord]) -> None:

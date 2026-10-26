@@ -506,3 +506,33 @@ async def test_the_alerts_resting_on_reverted_elements_are_closed_once_and_no_ot
         assert rows[alert.id]["disposition_reason"] == "load x was reverted"
     assert rows[theirs.id]["status"] == "open" and rows[plain.id]["status"] == "open"
     assert rows[done.id]["decided_by"] is None, "a closed alert keeps who closed it"
+
+
+async def test_alerts_citing_events_are_listed_open_and_closed_by_id(alerts: AlertStore) -> None:
+    """ADR-127 Amendment 8 (B2-4c2): a revert closes the alerts that cite an event it retracts. The
+    store lists the alerts not yet closed that name events, with the ids they name, and closes
+    named ones by id, once."""
+    cites, cites_other, none, done = new_id(), new_id(), new_id(), new_id()
+    made = [
+        _alert(None, event_ids=["ev-a", "ev-b"]).model_copy(update={"id": cites}),
+        _alert(None, event_ids=["ev-z"]).model_copy(update={"id": cites_other}),
+        _alert(None).model_copy(update={"id": none}),
+        _alert(None, "closed", event_ids=["ev-a"]).model_copy(update={"id": done}),
+    ]
+    for alert in made:
+        await alerts.save(alert)
+    listed = await alerts.alerts_citing_events()
+    assert listed[cites] == ["ev-a", "ev-b"] and listed[cites_other] == ["ev-z"]
+    assert none not in listed and done not in listed, "no events named, and already closed"
+    closed = await alerts.close_by_ids([cites, done], closed_by="operator-1", at=T0, reason="r")
+    assert closed == 1, "the open one; a closed alert is not touched again"
+    assert await alerts.close_by_ids([cites], closed_by="operator-1", at=T0, reason="r") == 0
+    assert await alerts.close_by_ids([], closed_by="operator-1", at=T0, reason="r") == 0
+    row = await alerts._pool.fetchrow(
+        "SELECT status, decided_by, disposition, disposition_reason FROM alerts WHERE id = $1",
+        cites,
+    )
+    assert (row["status"], row["decided_by"], row["disposition"]) == ("closed", "operator-1", None)
+    assert row["disposition_reason"] == "r"
+    other = await alerts._pool.fetchrow("SELECT status FROM alerts WHERE id = $1", cites_other)
+    assert other["status"] == "open"

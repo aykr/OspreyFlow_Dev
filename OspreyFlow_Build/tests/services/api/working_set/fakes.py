@@ -104,6 +104,20 @@ class FakeWorkingSetStore:
     async def node_ids(self, investigation_id: str) -> set[NodeId]:
         return set(self._n(investigation_id))
 
+    async def case_ids(self) -> list[str]:
+        return sorted({*self._nodes, *self._edges})
+
+    async def held_among(
+        self, investigation_id: str, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId]
+    ) -> tuple[set[NodeId], set[EdgeId]]:
+        return (
+            set(node_ids) & set(self._n(investigation_id)),
+            set(edge_ids) & set(self._e(investigation_id)),
+        )
+
+    async def drop_deltas(self, investigation_id: str) -> None:
+        self._deltas.pop(investigation_id, None)
+
     async def edge_ids(self, investigation_id: str) -> set[EdgeId]:
         return set(self._e(investigation_id))
 

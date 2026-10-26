@@ -1340,3 +1340,97 @@ async def test_a_conditional_rewrite_does_not_bring_back_a_link_removed_in_betwe
     counts = await working_store.access_counts(case)
     assert sum(counts.edge_counts.values()) == 3
     assert working_store.access_index_rebuilds == 0
+
+
+# --- ADR-127 decision 6, B2-4c2: a revert's reach into the real working-set store -------------
+
+
+async def test_a_revert_removes_from_every_case_in_valkey_drops_the_stream_and_publishes(
+    store: tuple[ValkeyWorkingSetStore, str],
+) -> None:
+    """Against the real store and Pub/Sub, from a second connection (the revert's own process):
+    every case holding the load's elements loses them, hidden ones included, with the links at
+    them; the stored stream keeps only the removal, a client one step behind replays it and any
+    client further back is sent a snapshot; a subscriber of the case's channel (another Conduit)
+    is sent the stored removal, whose projection leaves a hidden element out for a reader who may
+    not read it; a second run does nothing."""
+    from services.api.working_set_revert import WorkingSetReverter
+
+    first, case = store
+    other_case = case + "-other"
+    untouched_case = case + "-untouched"
+    await first.add_nodes(case, [node("r1"), node("r-secret", "SECRET"), node("keep")])
+    await first.add_edges(
+        case, [edge("re1", "r1", "keep"), edge("hang", "r-secret", "keep", "SECRET")]
+    )
+    await first.add_nodes(other_case, [node("r1")])
+    await first.add_nodes(untouched_case, [node("unrelated")])
+    seq = await first.next_seq(case)
+    await first.append_delta(case, DeltaAdd(seq=seq, nodes=[node("r-secret", "SECRET")], edges=[]))
+
+    process_two = await _connected_valkey()
+    listener = await _connected_valkey()
+    pubsub = listener.pubsub()
+    await pubsub.subscribe(notify_channel(case))
+    await pubsub.get_message(timeout=1.0)  # the subscription confirmation
+    try:
+
+        class _NoHistory:
+            async def remove_elements(self, node_ids: object, edge_ids: object) -> int:
+                return 0
+
+        service = WorkingSetService(
+            FakeGraphPort(Subgraph(nodes=[], edges=[])),
+            ValkeyWorkingSetStore(process_two),
+            SCHEME,
+            valkey=process_two,
+        )
+        reverter = WorkingSetReverter(service, process_two, _NoHistory())
+        removed_cases = await reverter.remove(["r1", "r-secret"], ["re1"])
+        assert removed_cases >= 2  # this case and the other; any stray `ws:*` case may add more
+
+        assert await first.node_ids(case) == {"keep"}
+        assert await first.edge_ids(case) == set(), "the link at the hidden node went too"
+        assert await first.node_ids(other_case) == set()
+        assert await first.node_ids(untouched_case) == {"unrelated"}
+
+        last = await first.current_seq(case)
+        replay = await first.deltas_after(case, last - 1)
+        assert replay is not None and [type(d).__name__ for d in replay] == ["DeltaRemove"]
+        assert await first.deltas_after(case, 0) is None, "a gap: the old bodies are not replayed"
+
+        message = None
+        for _ in range(20):
+            message = await pubsub.get_message(timeout=0.5, ignore_subscribe_messages=True)
+            if message is not None:
+                break
+        assert message is not None, "the case's channel carried the stored removal"
+        delta = decode_delta(json.loads(message["data"]))
+        assert isinstance(delta, DeltaRemove) and delta.removed is not None
+        projected = service.project_delta(delta, OFFICIAL_READER, {})
+        assert "r-secret" not in projected.node_ids  # type: ignore[union-attr]
+
+        assert await reverter.remove(["r1", "r-secret"], ["re1"]) == 0, "a rerun finds none"
+        assert await first.node_ids(case) == {"keep"}
+    finally:
+        await pubsub.unsubscribe(notify_channel(case))
+        await pubsub.aclose()  # type: ignore[no-untyped-call]
+        await listener.aclose()
+        await ValkeyWorkingSetStore(process_two).clear(other_case)
+        await ValkeyWorkingSetStore(process_two).clear(untouched_case)
+        await process_two.aclose()
+
+
+async def test_case_ids_and_held_among_read_the_real_hashes(
+    store: tuple[ValkeyWorkingSetStore, str],
+) -> None:
+    working_store, case = store
+    await working_store.add_nodes(case, [node("n1"), node("n2")])
+    await working_store.add_edges(case, [edge("e1", "n1", "n2")])
+    assert case in await working_store.case_ids()
+    held = await working_store.held_among(case, ["n1", "nope", "n1"], ["e1", "e-nope"])
+    assert held == ({"n1"}, {"e1"})
+    assert await working_store.held_among(case, [], []) == (set(), set())
+    await working_store.drop_deltas(case)
+    await working_store.drop_deltas(case)  # idempotent
+    assert await working_store.deltas_after(case, 0) == [], "nothing is stored and no number moved"

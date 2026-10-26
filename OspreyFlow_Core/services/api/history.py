@@ -49,6 +49,7 @@ rather than forced, correctly", not left undocumented.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import asyncpg
@@ -198,6 +199,41 @@ class InvestigationHistoryStore:
                 json.dumps([e.model_dump(mode="json") for e in edges]),
             )
         return step
+
+    async def remove_elements(self, node_ids: Sequence[str], edge_ids: Sequence[str]) -> int:
+        """Takes these nodes and links out of **every** stored step, and any link in a step that
+        ends at one of the nodes (ADR-127 decision 6: a revert takes back a load's elements, and no
+        case's snapshot keeps their bodies). Not scoped to a case or a reader, as the revert is
+        not: it removes the load's own elements. Every other element, and the order of the rest,
+        is as it was. Returns how many steps changed, so a second call returns 0.
+
+        Restore re-reads the Vault, where a reverted element is not read, so none would come back
+        in any case; this is so the stored bodies, which are unfiltered, do not outlive it. Reads
+        every step that holds one of the ids (no index serves a body's element ids), once per
+        revert."""
+        if not node_ids and not edge_ids:
+            return 0
+        nodes, edges = list(dict.fromkeys(node_ids)), list(dict.fromkeys(edge_ids))
+        async with self._pool.acquire() as conn:
+            status = await conn.execute(
+                "UPDATE investigation_history SET "
+                "nodes = COALESCE((SELECT jsonb_agg(n.value ORDER BY n.ord) "
+                "FROM jsonb_array_elements(nodes) WITH ORDINALITY AS n(value, ord) "
+                "WHERE NOT (n.value->>'id' = ANY($1::text[]))), '[]'::jsonb), "
+                "edges = COALESCE((SELECT jsonb_agg(e.value ORDER BY e.ord) "
+                "FROM jsonb_array_elements(edges) WITH ORDINALITY AS e(value, ord) "
+                "WHERE NOT (e.value->>'id' = ANY($2::text[]) "
+                "OR e.value->>'source' = ANY($1::text[]) "
+                "OR e.value->>'target' = ANY($1::text[]))), '[]'::jsonb) "
+                "WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(nodes) AS n "
+                "WHERE n->>'id' = ANY($1::text[])) "
+                "OR EXISTS (SELECT 1 FROM jsonb_array_elements(edges) AS e "
+                "WHERE e->>'id' = ANY($2::text[]) "
+                "OR e->>'source' = ANY($1::text[]) OR e->>'target' = ANY($1::text[]))",
+                nodes,
+                edges,
+            )
+        return int(status.split()[-1])
 
     async def list_steps(self, investigation_id: str) -> list[HistoryStepSummary]:
         async with self._pool.acquire() as conn:

@@ -229,6 +229,8 @@ async def test_the_resets_revert_then_rerun_of_a_content_load_is_readable_and_cr
         Held,
         Ledger,
         Steps,
+        WorkingSets,
+        no_caches,
     )
 
     now = datetime(2026, 10, 25, tzinfo=UTC)
@@ -274,6 +276,8 @@ async def test_the_resets_revert_then_rerun_of_a_content_load_is_readable_and_cr
             held_rows=Held(steps),
             alerts=Alerts(steps),
             audit=Audit(steps),
+            working_sets=WorkingSets(steps),
+            invalidate_caches=no_caches,
         )
         await revert(record.load_id, reverted_by="operator-1", deps=deps, now=now)
         assert await graph.get_nodes([document], reader) == [], "hidden by the revert"

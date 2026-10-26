@@ -31,7 +31,15 @@ from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.analytics import EventFilter, HistogramBucketing, HistogramRequest
 from schemas.domain import ExpandRequest, Interval, Principal
-from tests.ingest.test_revert_load import Alerts, Audit, Held, Ledger, Steps
+from tests.ingest.test_revert_load import (
+    Alerts,
+    Audit,
+    Held,
+    Ledger,
+    Steps,
+    WorkingSets,
+    no_caches,
+)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "scenarios" / "fixtures"
 
@@ -145,6 +153,8 @@ async def test_cdr_fixture_loads_through_a_hand_written_recipe(tmp_path: Path) -
                 held_rows=Held(steps),
                 alerts=Alerts(steps),
                 audit=Audit(steps),
+                working_sets=WorkingSets(steps),
+                invalidate_caches=no_caches,
             )
             result = await revert(
                 "load-1", reverted_by="reviewer-1", deps=deps, now=datetime.now(UTC)

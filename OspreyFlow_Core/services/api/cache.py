@@ -90,14 +90,19 @@ class CachedQuery:
         it against (`03_CONDUIT_MIDDLEWARE.md` §3.3's endpoints), so it is
         named here as the gap it is rather than built against a caller
         that doesn't exist."""
-        cursor = 0
-        pattern = f"cache:{self._prefix}:*"
-        while True:
-            cursor, keys = await _reply(self._client.scan(cursor, match=pattern, count=500))
-            if keys:
-                await _reply(self._client.delete(*keys))
-            if cursor == 0:
-                break
+        await _delete_prefix(self._client, self._prefix)
+
+
+async def _delete_prefix(client: Valkey, prefix: str) -> None:
+    """Every key `cache:<prefix>:*`, by `SCAN` (never `KEYS`) in batches of 500."""
+    cursor = 0
+    pattern = f"cache:{prefix}:*"
+    while True:
+        cursor, keys = await _reply(client.scan(cursor, match=pattern, count=500))
+        if keys:
+            await _reply(client.delete(*keys))
+        if cursor == 0:
+            break
 
 
 def query_result_cache(client: Valkey) -> CachedQuery:
@@ -106,3 +111,18 @@ def query_result_cache(client: Valkey) -> CachedQuery:
 
 def analytics_result_cache(client: Valkey) -> CachedQuery:
     return CachedQuery(client, prefix="analytics", ttl_seconds=900)
+
+
+#: Every kind of kept result the Conduit holds, by the `cache:<prefix>:` its keys carry. They live
+#: in the shared Valkey, so one process clearing a prefix clears it for every Conduit instance. The
+#: revert (`services/ingest/load_revert.py`) clears all of them, since a reverted load's events and
+#: elements are in whatever was counted before it; a test holds that each `CachedQuery` the Conduit
+#: builds is named here (`test_every_cache_the_conduit_keeps_is_one_the_revert_clears`).
+CACHE_PREFIXES = ("explore", "query", "analytics")
+
+
+async def invalidate_every_cache(client: Valkey) -> None:
+    """Clears every kept result (`CACHE_PREFIXES`) from the shared Valkey: for a process outside the
+    Conduit, a revert, whose message to every instance is these keys going."""
+    for prefix in CACHE_PREFIXES:
+        await _delete_prefix(client, prefix)

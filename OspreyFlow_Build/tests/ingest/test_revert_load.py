@@ -30,6 +30,7 @@ and the case that catches it:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -45,7 +46,7 @@ from adapters.analytics_duckdb.testing import duckdb_adapter
 from adapters.media_objectstore.testing import InMemoryMediaStore
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
-from ports.graph import StoredNode
+from ports.graph import StoredLink, StoredNode
 from schemas.domain import Principal
 from schemas.ingest import LoadRecord
 from tests.conformance.analytics_port.test_suite import (
@@ -154,6 +155,9 @@ class Graph:
         self.live: dict[str, tuple[str, str]] = {}
         self.named: dict[str, set[str]] = {}
         self.load_ids: dict[str, str | None] = {}
+        #: Nodes an analyst's correction has superseded, and the links' states by id.
+        self.superseded_nodes: set[str] = set()
+        self.link_states: dict[str, StoredLink] = {}
 
     async def begin_transaction(self) -> str:
         return "tx"
@@ -186,9 +190,23 @@ class Graph:
 
     async def stored_writes(self, node_ids: Any) -> dict[str, StoredNode]:
         return {
-            n: StoredNode(load_id=self.load_ids[n], reverted=n in self.reverted)
+            n: StoredNode(
+                load_id=self.load_ids[n],
+                reverted=n in self.reverted,
+                superseded=n in self.superseded_nodes,
+            )
             for n in node_ids
             if n in self.load_ids
+        }
+
+    async def stored_link_states(self, edge_ids: Any) -> dict[str, StoredLink]:
+        return {
+            e: StoredLink(
+                reverted=e in self.reverted or self.link_states[e].reverted,
+                superseded=self.link_states[e].superseded,
+            )
+            for e in edge_ids
+            if e in self.link_states
         }
 
 
@@ -196,11 +214,17 @@ class Analytics:
     def __init__(self, steps: Steps) -> None:
         self.steps = steps
         self.events: dict[str, int] = {}
+        #: The ids of each load's events, for the alerts that cite them.
+        self.event_ids: dict[str, set[str]] = {}
         self.geometries: set[tuple[str, int]] = set()
 
     async def retract_load(self, load_id: str) -> int:
         self.steps.hit("events", load_id)
+        self.event_ids.pop(load_id, None)
         return self.events.pop(load_id, 0)
+
+    async def events_of_load_among(self, load_id: str, event_ids: Any) -> set[str]:
+        return set(event_ids) & self.event_ids.get(load_id, set())
 
     async def retract_geometries(self, refs: Any, *, version: int) -> int:
         self.steps.hit("geometries", ",".join(refs), str(version))
@@ -223,6 +247,9 @@ class Alerts:
     def __init__(self, steps: Steps) -> None:
         self.steps = steps
         self.open: dict[str, str] = {}  # alert node id -> status
+        #: Alerts by id that cite events, and their status.
+        self.cited: dict[str, list[str]] = {}
+        self.status: dict[str, str] = {}
 
     async def close_for_elements(
         self,
@@ -238,6 +265,41 @@ class Alerts:
         for node in closed:
             self.open[node] = "closed"
         return len(closed)
+
+    async def alerts_citing_events(self) -> dict[str, list[str]]:
+        return {a: ids for a, ids in self.cited.items() if self.status.get(a) != "closed"}
+
+    async def close_by_ids(
+        self, alert_ids: Any, *, closed_by: str, at: datetime, reason: str
+    ) -> int:
+        self.steps.hit("alerts_citing_events", ",".join(alert_ids), closed_by)
+        closing = [a for a in alert_ids if self.status.get(a) != "closed"]
+        for alert in closing:
+            self.status[alert] = "closed"
+        return len(closing)
+
+
+class WorkingSets:
+    """What the revert asks of the working-set stores: the load's elements removed from every
+    case that holds them. Counts the cases; idempotent, as the real removal is."""
+
+    def __init__(self, steps: Steps) -> None:
+        self.steps = steps
+        self.cases: dict[str, set[str]] = {}  # case -> element ids it holds
+        #: Called after the first pass of each revert: a Conduit left running adding back an
+        #: element it read before the revert.
+        self.after_first_pass: Callable[[], None] | None = None
+
+    async def remove(self, node_ids: Any, edge_ids: Any, *, final_pass: bool = False) -> int:
+        name = "working_sets_again" if final_pass else "working_sets"
+        self.steps.hit(name, ",".join(node_ids), ",".join(edge_ids))
+        gone = set(node_ids) | set(edge_ids)
+        touched = [c for c, held in self.cases.items() if held & gone]
+        for case in touched:
+            self.cases[case] -= gone
+        if not final_pass and self.after_first_pass is not None:
+            self.after_first_pass()
+        return len(touched)
 
 
 class Audit:
@@ -267,6 +329,10 @@ class Audit:
         )
 
 
+async def no_caches() -> None:
+    return None
+
+
 class World:
     def __init__(self, *records: LoadRecord) -> None:
         self.steps = Steps()
@@ -276,7 +342,13 @@ class World:
         self.held = Held(self.steps)
         self.alerts = Alerts(self.steps)
         self.audit = Audit(self.steps)
+        self.working_sets = WorkingSets(self.steps)
         self.row_keys: list[str] = []
+        self.cache_clears = 0
+
+        async def invalidate_caches() -> None:
+            self.steps.hit("caches")
+            self.cache_clears += 1
 
         async def release_row_keys(record: LoadRecord) -> None:
             self.steps.hit("row_keys", record.load_id)
@@ -289,6 +361,8 @@ class World:
             held_rows=self.held,
             alerts=self.alerts,
             audit=self.audit,
+            working_sets=self.working_sets,
+            invalidate_caches=invalidate_caches,
             release_row_keys=release_row_keys,
         )
 
@@ -316,7 +390,8 @@ async def test_a_revert_does_every_step_and_marks_the_ledger_last() -> None:
     result = await world.revert("load-1")
 
     assert [s[0] for s in world.steps.log] == [
-        "graph", "events", "geometries", "held", "alerts", "row_keys", "audit",
+        "graph", "working_sets", "events", "geometries", "held", "alerts", "caches", "row_keys",
+        "audit", "working_sets_again",
     ]  # fmt: skip
     summary = result.reverted[0]
     assert (summary.events, summary.geometries, summary.held_rows, summary.alerts) == (7, 2, 3, 1)
@@ -478,7 +553,18 @@ async def test_a_pipeline_runs_branches_done_by_an_earlier_attempt_are_skipped_n
     assert {r.reason for r in raised.value.refusals} == {"already_reverted"}
 
 
-_STEPS = ["graph", "events", "geometries", "held", "alerts", "row_keys", "audit"]
+_STEPS = [
+    "graph",
+    "working_sets",
+    "events",
+    "geometries",
+    "held",
+    "alerts",
+    "caches",
+    "row_keys",
+    "audit",
+    "working_sets_again",
+]
 
 
 @pytest.mark.parametrize("failing", [*_STEPS, "mark"])
@@ -562,6 +648,7 @@ async def test_the_row_key_hook_is_called_after_the_stores_and_before_the_ledger
     bare.deps = RevertDeps(
         ledger=bare.ledger, graph=bare.graph, analytics=bare.analytics,  # type: ignore[arg-type]
         held_rows=bare.held, alerts=bare.alerts, audit=bare.audit,
+        working_sets=bare.working_sets, invalidate_caches=no_caches,
     )  # fmt: skip
     await revert("load-1", reverted_by=OPERATOR, deps=bare.deps, now=NOW)
     assert bare.ledger.records["load-1"].reverted_by == OPERATOR
@@ -615,6 +702,7 @@ async def test_the_resets_revert_then_rerun_leaves_the_documents_readable_and_cr
         ledger=world.ledger, graph=graph,  # type: ignore[arg-type]
         analytics=world.analytics,  # type: ignore[arg-type]
         held_rows=world.held, alerts=world.alerts, audit=world.audit,
+        working_sets=world.working_sets, invalidate_caches=no_caches,
     )  # fmt: skip
     await revert("load-1", reverted_by=OPERATOR, deps=world.deps, now=NOW)
     assert document in graph.reverted and document not in graph.live_nodes
@@ -647,6 +735,8 @@ async def test_a_reverted_loads_events_are_gone_from_every_read() -> None:
             held_rows=Held(steps),
             alerts=Alerts(steps),
             audit=Audit(steps),
+            working_sets=WorkingSets(steps),
+            invalidate_caches=no_caches,
         )
         await revert(LOAD_A, reverted_by=OPERATOR, deps=deps, now=NOW)
         after = {p.id: await _everything_a_reader_can_ask(adapter, p) for p in readers}
@@ -883,3 +973,164 @@ async def test_the_rerun_window_a_node_rewritten_between_the_attempts_is_not_tak
     assert again.reverted[0].left_alone_node_ids == ("load-1-n1",)
     assert "load-1-n1" not in world.graph.reverted and "load-1-n2" in world.graph.reverted
     assert world.ledger.records["load-1"].reverted_at == NOW
+
+
+# --- ADR-127 decision 6, B2-4c2: the working sets, the caches, the alerts that cite events ----------
+
+
+async def test_the_working_sets_lose_the_nodes_and_links_this_revert_took_back() -> None:
+    world = World(_record("load-1"))
+    world.working_sets.cases = {
+        "case-a": {"load-1-n1", "load-1-e1", "keep"},
+        "case-b": {"load-1-n2"},
+        "case-c": {"unrelated"},
+    }
+    result = await world.revert("load-1")
+    ((_, nodes, links),) = world.steps.of("working_sets")
+    assert (nodes, links) == ("load-1-n1,load-1-n2", "load-1-e1")
+    assert world.working_sets.cases == {
+        "case-a": {"keep"},
+        "case-b": set(),
+        "case-c": {"unrelated"},
+    }
+    assert result.reverted[0].cases == 2
+
+
+async def test_a_node_left_alone_is_not_taken_out_of_the_working_sets() -> None:
+    """A node a later load wrote again is not this revert's: no canvas loses it either."""
+    world = World(_record("load-1"))
+    world.graph.reverted = {"load-1-n1"}  # an earlier attempt's work: this is a rerun
+    world.graph.load_ids = {"load-1-n1": "load-1", "load-1-n2": "load-2"}
+    world.working_sets.cases = {"case-a": {"load-1-n1", "load-1-n2"}}
+    await world.revert("load-1")
+    ((_, nodes, _),) = world.steps.of("working_sets")
+    assert nodes == "load-1-n1"
+    assert world.working_sets.cases == {"case-a": {"load-1-n2"}}
+
+
+async def test_the_caches_are_cleared_after_the_stores_change_and_before_the_ledger_is_marked() -> (
+    None
+):
+    world = World(_record("load-1"))
+    await world.revert("load-1")
+    assert world.cache_clears == 1
+    names = [s[0] for s in world.steps.log]
+    assert names.index("caches") > max(names.index(s) for s in ("graph", "events", "geometries"))
+    assert names.index("caches") < names.index("audit")
+
+
+async def test_an_alert_citing_an_event_the_load_wrote_is_closed_before_the_events_go() -> None:
+    """An alert names the events it rests on by id. Once retracted they cannot be read, so the
+    alert would open as not found; it is closed first, in the step that retracts, and a failure in
+    the retract leaves it closed (the rerun asks again and the ids are still there)."""
+    world = World(_record("load-1"))
+    world.analytics.event_ids = {"load-1": {"ev-1", "ev-2"}, "load-2": {"ev-9"}}
+    world.alerts.cited = {
+        "alert-mine": ["ev-2", "ev-7"],
+        "alert-theirs": ["ev-9"],
+        "alert-mixed-in": ["ev-9", "ev-1"],
+    }
+    result = await world.revert("load-1")
+    assert world.alerts.status == {"alert-mine": "closed", "alert-mixed-in": "closed"}
+    names = [s[0] for s in world.steps.log]
+    assert names.index("alerts_citing_events") < names.index("events")
+    assert result.reverted[0].alerts_citing_events == 2
+
+
+async def test_a_failure_in_the_retract_leaves_the_citing_alerts_closed_and_the_rerun_completes() -> (
+    None
+):
+    world = World(_record("load-1"))
+    world.analytics.event_ids = {"load-1": {"ev-1"}}
+    world.alerts.cited = {"alert-mine": ["ev-1"]}
+    world.steps.fail_at = "events"
+    with pytest.raises(RevertIncomplete) as raised:
+        await world.revert("load-1")
+    assert raised.value.failed_step == "events"
+    assert world.alerts.status == {"alert-mine": "closed"}
+    again = await world.revert("load-1")
+    assert again.reverted[0].alerts_citing_events == 0, "already closed: not closed twice"
+    assert world.ledger.records["load-1"].reverted_at == NOW
+
+
+async def test_no_alert_is_closed_when_none_cites_this_loads_events() -> None:
+    world = World(_record("load-1"))
+    world.analytics.event_ids = {"load-1": {"ev-1"}}
+    world.alerts.cited = {"alert-theirs": ["ev-9"]}
+    await world.revert("load-1")
+    assert world.alerts.status == {} and world.steps.of("alerts_citing_events") == []
+
+
+# --- ADR-127 Amendment 8, B2-4c2 review: corrections the plan would leave behind, and the race ------
+
+
+async def test_a_link_an_analyst_changed_makes_the_revert_refuse_and_changes_nothing() -> None:
+    """A link change supersedes the link: its successor is in no record, so reverting the load
+    would leave the successor, which carries the load's data (its endpoints, its occurrences)."""
+    world = World(_record("load-1"))
+    world.graph.link_states = {"load-1-e1": StoredLink(reverted=False, superseded=True)}
+    with pytest.raises(RevertRefused) as raised:
+        await world.revert("load-1")
+    (refusal,) = raised.value.refusals
+    assert (refusal.load_id, refusal.reason, refusal.count) == (
+        "load-1", "superseded_by_a_correction", 1,
+    )  # fmt: skip
+    assert "load-1-e1" not in str(raised.value), "a count, never an id"
+    assert world.steps.log == [] and world.graph.reverted == set() and world.ledger.marked == []
+
+
+async def test_a_node_an_analyst_corrected_makes_the_revert_refuse_and_changes_nothing() -> None:
+    world = World(_record("load-1"))
+    world.graph.load_ids = {"load-1-n1": "load-1", "load-1-n2": "load-1"}
+    world.graph.superseded_nodes = {"load-1-n2"}
+    with pytest.raises(RevertRefused) as raised:
+        await world.revert("load-1")
+    (refusal,) = raised.value.refusals
+    assert (refusal.reason, refusal.count) == ("superseded_by_a_correction", 1)
+    assert "load-1-n2" not in str(raised.value)
+    assert world.steps.log == [] and world.graph.reverted == set()
+
+
+async def test_nodes_and_links_corrected_are_counted_together() -> None:
+    world = World(_record("load-1"))
+    world.graph.load_ids = {"load-1-n1": "load-1"}
+    world.graph.superseded_nodes = {"load-1-n1"}
+    world.graph.link_states = {"load-1-e1": StoredLink(reverted=False, superseded=True)}
+    with pytest.raises(RevertRefused) as raised:
+        await world.revert("load-1")
+    assert [(r.reason, r.count) for r in raised.value.refusals] == [
+        ("superseded_by_a_correction", 2)
+    ]
+
+
+async def test_an_element_superseded_and_already_reverted_is_not_the_plans_to_judge() -> None:
+    """A node superseded and then reverted (Amendment 8's fresh-create case) or a link in the same
+    state is already out of every read and stays superseded; the plan does not refuse for it. (Such
+    a node is listed as merged by a load that wrote it again, so it is not in a record's created
+    list; it can reach a plan only as a rerun's already-reverted element.)"""
+    world = World(_record("load-1"))
+    world.graph.reverted = {"load-1-n1"}
+    world.graph.load_ids = {"load-1-n1": "load-1", "load-1-n2": "load-1"}
+    world.graph.superseded_nodes = {"load-1-n1"}
+    world.graph.link_states = {"load-1-e1": StoredLink(reverted=True, superseded=True)}
+    result = await world.revert("load-1")
+    assert [s.load_id for s in result.reverted] == ["load-1"]
+
+
+async def test_an_element_re_added_between_the_two_passes_is_removed_by_the_second() -> None:
+    """A Conduit left running can add an element it read before the graph step, after the first
+    removal. The revert removes from the working sets again as its last step before the mark."""
+    world = World(_record("load-1"))
+    world.working_sets.cases = {"case-a": {"load-1-n1", "keep"}}
+
+    def re_add() -> None:
+        world.working_sets.cases["case-a"].add("load-1-n2")
+
+    world.working_sets.after_first_pass = re_add
+    result = await world.revert("load-1")
+    assert world.working_sets.cases == {"case-a": {"keep"}}
+    names = [s[0] for s in world.steps.log]
+    assert names.count("working_sets") == 1 and names[-1] == "working_sets_again"
+    assert names.index("audit") < names.index("working_sets_again")
+    assert result.reverted[0].cases == 2, "both passes' cases are counted"
+    assert world.ledger.marked == [("load-1", OPERATOR, NOW)], "marked after the second pass"

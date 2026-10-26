@@ -120,6 +120,15 @@ class AnalyticsPort(Protocol):
         counts a retracted event."""
         ...
 
+    async def events_of_load_among(self, load_id: str, event_ids: Sequence[str]) -> set[str]:
+        """Which of `event_ids` are events `load_id` wrote, **whatever the marking and whatever the
+        caller may read**: no principal, no access step. For the revert alone (ADR-127 Amendment 8),
+        to close the alerts that cite an event it is about to retract, asking about the ids the
+        alerts name and never listing a load's events. A route must never call it
+        (`tests/test_unfiltered_node_lookup_confined.py`). An id no event holds, and an event of
+        another load or of none, are absent from the answer; no ids give the empty set."""
+        ...
+
     async def load_geometries(self, records: Sequence[GeometryRecord]) -> None: ...
 
     async def retract_geometries(self, geometry_refs: Sequence[str], *, version: int) -> int:

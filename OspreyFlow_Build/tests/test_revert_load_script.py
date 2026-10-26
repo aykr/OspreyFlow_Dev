@@ -232,3 +232,37 @@ def test_the_script_says_its_clearance_is_self_declared_and_it_is_never_routed_t
     doc = " ".join((script.__doc__ or "").split())
     assert "self-declared" in doc
     assert "never be routed through the Conduit" in doc
+
+
+def test_the_working_sets_and_the_alerts_citing_events_are_reported_in_counts() -> None:
+    done = LoadReverted(
+        load_id="load-1", nodes=3, links=2, events=9, geometries=1, held_rows=0, alerts=1,
+        alerts_citing_events=4, cases=2,
+    )  # fmt: skip
+    code, text = _run(RevertResult(reverted=[done]))
+    assert code == 0
+    assert "2 working set(s) cleared" in text
+    assert "4 alert(s) citing its events closed" in text
+
+
+def test_the_script_reaches_the_working_sets_the_history_and_the_caches_directly() -> None:
+    """It runs outside the Conduit, so it builds the working-set reach itself: the store on Valkey,
+    the stored history, and the cache clear, all handed to the revert (`RevertDeps`)."""
+    import inspect
+
+    source = inspect.getsource(script._main)
+    for needed in (
+        "ValkeyWorkingSetStore",
+        "InvestigationHistoryStore",
+        "WorkingSetReverter",
+        "invalidate_every_cache",
+    ):
+        assert needed in source, needed
+    assert "working_sets=" in source and "invalidate_caches=" in source
+
+
+def test_the_script_says_a_revert_should_run_with_the_conduit_quiet() -> None:
+    doc = " ".join((script.__doc__ or "").split())
+    assert "Quiesce the Conduit" in doc
+    assert "DuckDB engine that is required" in doc
+    assert "With ClickHouse it is advised" in doc

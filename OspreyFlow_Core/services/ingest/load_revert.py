@@ -12,14 +12,16 @@ found by the `<run>:` prefix; a branch's id means that branch alone.
 `events_stamped` (its events cannot be retracted, and a revert that removed none would leave them
 moving every trend); one with `merged_node_ids` or `merged_edge_ids` (reverting those would take
 back another load's data, and a merged link's occurrences cannot be split); one marked
-`uncovered_writes`; one already reverted. Three more guard what lies outside the revert: **a later
-load merged into** a node or link the revert would take back (an unreverted record elsewhere lists
-it as merged), **a live link outside the revert touches** a node it created (a later load only
-referenced the node, which its record keeps as a count), and, on a first attempt, **a created node
-was written again by another writer** (its stored load is not one of the plan's own: a load outside
-it, or none, as for a Files-tab upload). A merge or a touch by a record in the same plan is no
-reason: that element is being reverted too. Every record to be reverted is judged first,
-so a refusal anywhere, a release included, leaves every store as it was.
+`uncovered_writes`; one already reverted; one whose created node or link an analyst's correction
+has superseded (the successor is in no record and would keep the load's data; one superseded and
+already reverted is out of every read and not judged). Three more guard what lies outside the
+revert: **a later load merged into** a node or link the revert would take back (an unreverted
+record elsewhere lists it as merged), **a live link outside the revert touches** a node it created
+(a later load only referenced the node, which its record keeps as a count), and, on a first
+attempt, **a created node was written again by another writer** (its stored load is not one of the
+plan's own: a load outside it, or none, as for a Files-tab upload). A merge or a touch by a record
+in the same plan is no reason: that element is being reverted too. Every record to be reverted is
+judged first, so a refusal anywhere, a release included, leaves every store as it was.
 
 **What a refusal says (rule 3).** Its words name the reason, the load and a count, never an id. The
 ids of what a load merged into are held on the `Refusal` for an operator who asks to see them,
@@ -38,16 +40,25 @@ newest first, with the same `reverted_by`. A release that was reverted already i
    of the plan's own (a release's merge into a parent's node included); on a rerun, after an earlier
    attempt reverted some node, one whose stored load is not (a later load's fresh create over the
    reverted node, an upload's merge) is left and named in the result;
-2. its events removed (`AnalyticsPort.retract_load`);
-3. its geometry points removed (`AnalyticsPort.retract_geometries`, at the version a load writes),
+2. the working sets: the nodes and links just reverted (and the links at those nodes) removed from
+   every case that holds them, whoever may read them, each case sent a removal that every connected
+   reader's projection reduces to what that reader may read, the stored history scrubbed
+   (`WorkingSetRemoval`, `services/api/working_set_revert.py`; repeated as step 10);
+3. its events removed (`AnalyticsPort.retract_load`), after the alerts that cite one of them are
+   closed: asked of the ids the alerts name, never of the load's events (`events_of_load_among`);
+4. its geometry points removed (`AnalyticsPort.retract_geometries`, at the version a load writes),
    except a point a live node outside the plan still names;
-4. its held rows still pending discarded;
-5. the alert queue rows closed of every alert that is one of the load's own (its `Alert` node is a
+5. its held rows still pending discarded;
+6. the alert queue rows closed of every alert that is one of the load's own (its `Alert` node is a
    created node) or that cites a node or a link the load created: the queue's read leaves out an
    alert citing a reverted node by itself, but not one citing only a reverted link;
-6. its row keys released: **the hook B2-5 (decision 5) supplies** (`RevertDeps.release_row_keys`);
-7. the audit entry (counts only, no element id);
-8. the ledger record marked reverted, with `reverted_by` and the time.
+7. the Conduit's kept results cleared (`invalidate_caches`: keys in the shared Valkey, so every
+   instance at once), after everything that changes what they were counted over;
+8. its row keys released: **the hook B2-5 (decision 5) supplies** (`RevertDeps.release_row_keys`);
+9. the audit entry (counts only, no element id);
+10. the working-set removal again (`working_sets_again`), last before the mark: a Conduit left
+    running can add back an element it read before the graph step, and this finds only that;
+11. the ledger record marked reverted, with `reverted_by` and the time.
 
 **Failure and rerun.** Every step is idempotent (setting a flag again, removing what is already
 gone, discarding rows no longer pending), and the ledger is marked last, so a load that failed part
@@ -85,6 +96,7 @@ RefusalReason = Literal[
     "merged_into_by_later_load",
     "rests_on_by_live_links",
     "rewritten_by_another_writer",
+    "superseded_by_a_correction",
 ]
 
 
@@ -117,6 +129,10 @@ class Refusal:
             "rests_on_by_live_links": (
                 f"{self.count} live link(s) outside it rest on nodes it created"
             ),
+            "superseded_by_a_correction": (
+                f"{self.count} node(s) or link(s) it created were replaced by an analyst's "
+                "correction, whose replacement is in no record and would keep the load's data"
+            ),
             "rewritten_by_another_writer": (
                 f"{self.count} node(s) it created were written again by a load outside this "
                 "revert or by an upload, which reverting them would take back"
@@ -144,6 +160,10 @@ class LoadReverted:
     geometries: int
     held_rows: int
     alerts: int
+    #: Alerts closed because they cite an event the load wrote (retracted with it).
+    alerts_citing_events: int = 0
+    #: Cases whose working set held an element the revert took back, and so were sent a removal.
+    cases: int = 0
     #: Points a live node outside the revert still names, which were left in the partition.
     geometries_kept: int = 0
     #: Nodes the load created that a later load wrote again (a fresh create over a reverted node
@@ -218,6 +238,27 @@ class AlertQueueClose(Protocol):
         reason: str,
     ) -> int: ...
 
+    async def alerts_citing_events(self) -> dict[str, list[str]]:
+        """The alerts not yet closed that name events, by id, each with the event ids it names."""
+        ...
+
+    async def close_by_ids(
+        self, alert_ids: Sequence[str], *, closed_by: str, at: datetime, reason: str
+    ) -> int: ...
+
+
+class WorkingSetRemoval(Protocol):
+    """The working-set stores, as the revert reaches them from its own process
+    (`services/api/working_set_revert.py`): the load's elements out of every case holding them, a
+    removal published to each, the stored history scrubbed. Returns the cases that held any."""
+
+    async def remove(
+        self, node_ids: Sequence[str], edge_ids: Sequence[str], *, final_pass: bool = False
+    ) -> int:
+        """`final_pass` is the second run, last before the ledger mark: a Conduit left running can
+        add back an element it read before the graph step, and this finds only that."""
+        ...
+
 
 class RevertAudit(Protocol):
     async def record(
@@ -240,6 +281,11 @@ class RevertDeps:
     held_rows: HeldRowDiscard
     alerts: AlertQueueClose
     audit: RevertAudit
+    working_sets: WorkingSetRemoval
+    #: Clears every kept result the Conduit holds (`invalidate_every_cache` in
+    #: `services/api/cache.py`): they are in the shared Valkey, so a process outside the Conduit
+    #: clears them for all of it.
+    invalidate_caches: Callable[[], Awaitable[None]]
     #: Decision 5's row keys (B2-5): releasing a reverted load's keys so a rerun loads its rows
     #: again.
     #: Nothing supplies it yet; when B2-5 does, it is called after the stores above and before the
@@ -393,6 +439,15 @@ async def _later_refusals(
     if resting:
         refusals.append(Refusal(load_id, "rests_on_by_live_links", len(resting)))
     stored = await deps.graph.stored_writes(sorted(plan_nodes))
+    # A node corrected, or a link changed, since the load wrote it: the successor is in no record,
+    # so reverting the original would leave the load's data standing in its place. One superseded
+    # and reverted already (Amendment 8) is out of every read and not the plan's to judge.
+    link_states = await deps.graph.stored_link_states(sorted(plan_links))
+    corrected = sum(1 for w in stored.values() if w.superseded and not w.reverted) + sum(
+        1 for w in link_states.values() if w.superseded and not w.reverted
+    )
+    if corrected:
+        refusals.append(Refusal(load_id, "superseded_by_a_correction", corrected))
     first_attempt = not any(w.reverted for w in stored.values())
     if first_attempt:
         rewritten = [n for n, w in stored.items() if w.load_id not in own_loads]
@@ -416,7 +471,15 @@ async def _revert_one(
     plan_nodes: frozenset[str],
     own_loads: frozenset[str],
 ) -> LoadReverted:
-    counts = {"events": 0, "geometries": 0, "held_rows": 0, "alerts": 0, "geometries_kept": 0}
+    counts = {
+        "events": 0,
+        "geometries": 0,
+        "held_rows": 0,
+        "alerts": 0,
+        "geometries_kept": 0,
+        "alerts_citing_events": 0,
+        "cases": 0,
+    }
     reverting_nodes = list(record.created_node_ids)
     left_alone: list[str] = []
 
@@ -443,7 +506,30 @@ async def _revert_one(
             raise
         await deps.graph.commit_transaction(tx)
 
+    async def working_sets() -> None:
+        # The load's own elements, out of every case that holds them, whoever may read them: a
+        # canvas keeps nothing the revert took back. Idempotent, so a rerun repeats it.
+        counts["cases"] = await deps.working_sets.remove(
+            reverting_nodes, list(record.created_edge_ids)
+        )
+
     async def events() -> None:
+        # An alert names the events it rests on, and a retracted event cannot be read, so an alert
+        # citing one of this load's is closed first, asking only about the ids the alerts name (the
+        # load's events can be millions). A failure in the retract leaves them closed, and the
+        # rerun asks again while the events are still there.
+        cited = await deps.alerts.alerts_citing_events()
+        named = sorted({e for ids in cited.values() for e in ids})
+        if named:
+            mine = await deps.analytics.events_of_load_among(record.load_id, named)
+            citing = sorted(a for a, ids in cited.items() if mine.intersection(ids))
+            if citing:
+                counts["alerts_citing_events"] = await deps.alerts.close_by_ids(
+                    citing,
+                    closed_by=reverted_by,
+                    at=now,
+                    reason=f"load {record.load_id} was reverted and its events removed",
+                )
         counts["events"] = await deps.analytics.retract_load(record.load_id)
 
     async def geometries() -> None:
@@ -470,6 +556,16 @@ async def _revert_one(
             at=now,
             reason=f"load {record.load_id} was reverted",
         )
+
+    async def working_sets_again() -> None:
+        # The race a Conduit left running can run: an expand that read the graph before the graph
+        # step adds an element back after the first removal. Cheap when clean (nothing is held).
+        counts["cases"] += await deps.working_sets.remove(
+            reverting_nodes, list(record.created_edge_ids), final_pass=True
+        )
+
+    async def caches() -> None:
+        await deps.invalidate_caches()
 
     async def row_keys() -> None:
         if deps.release_row_keys is not None:
@@ -498,12 +594,15 @@ async def _revert_one(
 
     steps: list[tuple[str, Callable[[], Awaitable[None]]]] = [
         ("graph", graph),
+        ("working_sets", working_sets),
         ("events", events),
         ("geometries", geometries),
         ("held", held),
         ("alerts", alerts),
+        ("caches", caches),
         ("row_keys", row_keys),
         ("audit", audit),
+        ("working_sets_again", working_sets_again),
         ("mark", mark),
     ]
     for name, run in steps:

@@ -26,7 +26,14 @@ import pytest
 
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.errors import OntologyError
-from ports.graph import AmbiguousElementId, GraphPort, StoredNode, SubgraphTooLarge, SuggestOptions
+from ports.graph import (
+    AmbiguousElementId,
+    GraphPort,
+    StoredLink,
+    StoredNode,
+    SubgraphTooLarge,
+    SuggestOptions,
+)
 from schemas.domain import (
     Edge,
     EdgeWrite,
@@ -5817,16 +5824,57 @@ async def test_stored_writes_says_which_load_last_wrote_each_node_and_whether_it
         await _write(adapter, [upload.model_copy(update={"id": loose})], [])
         tx = await adapter.begin_transaction()
         await adapter.revert_elements([hidden], [], tx)
+        await adapter.supersede_node(
+            loose,
+            _node("Person", classification="OFFICIAL", datasets=["enron"], load_id="load-3"),
+            tx,
+        )
         await adapter.commit_transaction(tx)
         found = await adapter.stored_writes([first, hidden, loose, new_node_id()])
-        assert found == {
-            first: StoredNode(load_id="load-2", reverted=False),
-            hidden: StoredNode(load_id="load-1", reverted=True),
-            loose: StoredNode(load_id=None, reverted=False),
-        }
+        assert found[first] == StoredNode(load_id="load-2", reverted=False, superseded=False)
+        assert found[hidden] == StoredNode(load_id="load-1", reverted=True, superseded=False)
+        assert found[loose].superseded is True and found[loose].reverted is False
+        assert len(found) == 3
         assert await adapter.stored_writes([]) == {}
         with pytest.raises(TypeError):
             await adapter.stored_writes(first)  # type: ignore[arg-type]
+
+
+async def test_stored_link_states_says_each_links_flags_whatever_the_reader_may_read(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Unfiltered and by id: a link a reader cannot read, one a correction superseded, and one a
+    revert took back are each answered, with the flags that say which. A link an analyst changed
+    is `superseded`; the revert refuses a load whose created link is (its successor is in no
+    record)."""
+    async with factory.context() as adapter:
+        people = [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "ab"]
+        (a, b), _ = await _write(adapter, people, [])
+        _, (plain, hidden, changed, taken) = await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["enron"]),
+                _edge("ASSOCIATE_OF", a, b, classification="SECRET", datasets=["fixture"]),
+                _edge("FAMILY_OF", a, b, classification="OFFICIAL", datasets=["enron"]),
+                _edge("FAMILY_OF", a, b, classification="SECRET", datasets=["enron"]),
+            ],
+        )
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_edge(
+            changed, _edge("FAMILY_OF", a, b, classification="OFFICIAL", datasets=["enron"]), tx
+        )
+        await adapter.revert_elements([], [taken], tx)
+        await adapter.commit_transaction(tx)
+        found = await adapter.stored_link_states([plain, hidden, changed, taken, new_edge_id()])
+        assert found[plain] == StoredLink(reverted=False, superseded=False)
+        assert found[hidden] == StoredLink(reverted=False, superseded=False), "unfiltered"
+        assert found[changed] == StoredLink(reverted=False, superseded=True)
+        assert found[taken] == StoredLink(reverted=True, superseded=False)
+        assert len(found) == 4
+        assert await adapter.stored_link_states([]) == {}
+        with pytest.raises(TypeError):
+            await adapter.stored_link_states(plain)  # type: ignore[arg-type]
 
 
 async def test_a_revert_by_id_touches_only_the_kind_it_was_given_and_refuses_an_ambiguous_id(

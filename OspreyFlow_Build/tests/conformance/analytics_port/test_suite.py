@@ -1851,3 +1851,43 @@ async def test_retract_geometries_leaves_a_polygon_of_the_same_ref_at_another_ve
         assert [b.geometry_ref for b in await adapter.list_boundaries(CLEARED, version=2)] == [
             "geo-b"
         ]
+
+
+# --- events_of_load_among (ADR-127 Amendment 8, B2-4c2): which events an alert cites are a load's ----
+#
+# An alert names the events it rests on by id. When a revert retracts a load's events, an alert
+# citing one of them must be closed; the revert asks which of the ids an alert names are the load's,
+# among ids it already holds (never a list of the load's events, which can be millions).
+
+
+async def test_events_of_load_among_names_only_that_loads_events_whatever_their_marking(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    events = _a_and_b_and_unattributed()
+    async with factory.context(events) as adapter:
+        page = await adapter.list_events(EventListRequest(filter=_filter(), limit=200), CLEARED)
+        by_load: dict[str | None, list[str]] = {}
+        for e in page.events:
+            by_load.setdefault(e.load_id, []).append(e.event_id)
+        everything = [i for ids in by_load.values() for i in ids]
+        found = await adapter.events_of_load_among(LOAD_A, [*everything, "no-such-event"])
+        assert found == set(by_load[LOAD_A]) and len(found) == 3
+        # The SECRET event of A is among them though OFFICIAL cannot read it.
+        official = await adapter.list_events(EventListRequest(filter=_filter(), limit=200), OFFICIAL)
+        assert len({e.event_id for e in official.events} & found) == 2
+        assert await adapter.events_of_load_among(LOAD_B, by_load[LOAD_A]) == set()
+        assert await adapter.events_of_load_among(LOAD_A, []) == set()
+        assert await adapter.events_of_load_among("never-wrote", everything) == set()
+
+
+async def test_events_of_load_among_is_not_what_it_was_after_a_retract(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Asked before the retract it says which ids are the load's; after, none (they are gone), so
+    the revert asks first and closes the alerts, in one step, before it retracts."""
+    async with factory.context(_a_and_b_and_unattributed()) as adapter:
+        page = await adapter.list_events(EventListRequest(filter=_filter(), limit=200), CLEARED)
+        ids = [e.event_id for e in page.events]
+        assert len(await adapter.events_of_load_among(LOAD_A, ids)) == 3
+        assert await adapter.retract_load(LOAD_A) == 3
+        assert await adapter.events_of_load_among(LOAD_A, ids) == set()

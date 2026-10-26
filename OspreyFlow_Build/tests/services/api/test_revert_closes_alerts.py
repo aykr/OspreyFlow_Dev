@@ -27,7 +27,16 @@ from services.api import alert_queue
 from services.ingest.load_revert import RevertDeps, revert
 
 from schemas.domain import Alert, AlertMode, Principal
-from tests.ingest.test_revert_load import Analytics, Audit, Held, Ledger, Steps, _record
+from tests.ingest.test_revert_load import (
+    Analytics,
+    Audit,
+    Held,
+    Ledger,
+    Steps,
+    WorkingSets,
+    _record,
+    no_caches,
+)
 
 T0 = datetime(2026, 10, 25, 9, 0, tzinfo=UTC)
 CASE = "case-1"
@@ -69,6 +78,9 @@ class Graph:
     async def stored_writes(self, node_ids: Any) -> dict[str, Any]:
         return {}
 
+    async def stored_link_states(self, edge_ids: Any) -> dict[str, Any]:
+        return {}
+
 
 class Store:
     """`AlertStore.list_case_queue` and `close_for_elements`, with the same matching: an alert not
@@ -79,6 +91,14 @@ class Store:
 
     async def list_case_queue(self, investigation_id: str, principal: Principal) -> list[Alert]:
         return [a for a in self.alerts.values() if a.investigation_id == investigation_id]
+
+    async def alerts_citing_events(self) -> dict[str, list[str]]:
+        return {}
+
+    async def close_by_ids(
+        self, alert_ids: Any, *, closed_by: str, at: datetime, reason: str
+    ) -> int:
+        return 0
 
     async def close_for_elements(
         self, node_ids: Any, edge_ids: Any, *, closed_by: str, at: datetime, reason: str
@@ -149,6 +169,8 @@ async def test_an_alert_citing_something_a_revert_took_back_is_gone_from_the_que
         held_rows=Held(steps),
         alerts=store,
         audit=Audit(steps),
+        working_sets=WorkingSets(steps),
+        invalidate_caches=no_caches,
     )
     await revert("load-1", reverted_by="operator-1", deps=deps, now=T0)
 

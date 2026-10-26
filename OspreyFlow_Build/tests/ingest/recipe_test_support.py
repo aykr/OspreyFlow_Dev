@@ -33,7 +33,7 @@ from conduit_common.identity import new_edge_id
 from ontology.errors import OntologyError
 from ontology.handling import audience_of, load_uk_le_scheme
 from ontology.validation import validate_edge_endpoints, validate_properties
-from ports.graph import StoredNode
+from ports.graph import StoredLink, StoredNode
 from schemas.domain import EdgeWrite, NodeWrite, OntologySchema
 
 
@@ -282,6 +282,14 @@ class MergingGraph(ValidatingGraph):
             if node.id in set(node_ids):
                 found[node.id] = StoredNode(load_id=node.load_id, reverted=node.id in self.reverted)
         return found
+
+    async def stored_link_states(self, edge_ids: Sequence[str]) -> dict[str, StoredLink]:
+        known = {e.id for e in [*self.committed_edges, *self.open_edges]}
+        return {
+            e: StoredLink(reverted=e in self.reverted, superseded=e in self.superseded)
+            for e in edge_ids
+            if e in known
+        }
 
     @property
     def live_nodes(self) -> dict[str, NodeWrite]:

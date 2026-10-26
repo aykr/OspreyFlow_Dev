@@ -320,6 +320,38 @@ class AlertStore:
         return len(rows)
 
 
+    async def alerts_citing_events(self) -> dict[str, list[str]]:
+        """The alerts not yet closed that name events (`event_ids` not empty), each with the ids it
+        names, whoever may read them: for the revert, which closes the ones that cite an event it
+        retracts (ADR-127 Amendment 8). Alerts are few, and an alert's event ids a handful, so the
+        revert asks the events store about these ids, never for a load's events."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, event_ids FROM alerts WHERE status <> 'closed' "
+                "AND event_ids IS NOT NULL AND event_ids NOT IN ('', '[]')"
+            )
+        return {row["id"]: json.loads(row["event_ids"]) for row in rows}
+
+    async def close_by_ids(
+        self, alert_ids: Sequence[str], *, closed_by: str, at: datetime, reason: str
+    ) -> int:
+        """Closes these alerts if they are not closed already, with no disposition (taken back, not
+        decided by a member), and returns how many it closed: a second call returns 0."""
+        if not alert_ids:
+            return 0
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "UPDATE alerts SET status = 'closed', assignee = NULL, decided_by = $2, "
+                "decided_at = $3, disposition_reason = $4 "
+                "WHERE id = ANY($1::text[]) AND status <> 'closed' RETURNING id",
+                list(alert_ids),
+                closed_by,
+                at,
+                reason,
+            )
+        return len(rows)
+
+
 class AlertTriageConflict(Exception):
     """The alert was not in a state that allows this (someone else claimed or closed it)."""
 

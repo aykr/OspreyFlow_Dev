@@ -26,14 +26,15 @@ import pytest
 from adapters.graph_arcadedb import adapter as adapter_module
 from adapters.graph_arcadedb.adapter import _ID_CHUNK
 from ontology.handling import load_uk_le_scheme
-from ports.graph import AmbiguousElementId, StoredNode
+from ports.graph import AmbiguousElementId, StoredLink, StoredNode
 
 _IDS = re.compile(r"SELECT id FROM `(\w+)` WHERE id IN :ids")
 _RID = re.compile(r"SELECT @rid AS rid FROM `(\w+)` WHERE id IN :ids")
 _UPDATE = re.compile(r"UPDATE `(\w+)` SET reverted = true WHERE id IN :ids")
 _LOADS = re.compile(
-    r"SELECT id, audit\.load_id AS load_id, reverted FROM `(\w+)` WHERE id IN :ids"
+    r"SELECT id, audit\.load_id AS load_id, reverted, superseded_by FROM `(\w+)` WHERE id IN :ids"
 )
+_LINKS = re.compile(r"SELECT id, reverted, superseded_by FROM `(\w+)` WHERE id IN :ids")
 _GEOMETRY = re.compile(
     r"SELECT id, properties\.geometry_ref AS ref FROM `(\w+)` "
     r"WHERE properties\.geometry_ref IN :refs "
@@ -100,7 +101,23 @@ class TypedStore:
         if (m := _LOADS.fullmatch(command)) is not None:
             table = self._table(m.group(1))
             return [
-                {"id": i, "load_id": table[i].get("load_id"), "reverted": table[i].get("reverted")}
+                {
+                    "id": i,
+                    "load_id": table[i].get("load_id"),
+                    "reverted": table[i].get("reverted"),
+                    "superseded_by": table[i].get("superseded_by"),
+                }
+                for i in params["ids"]
+                if i in table
+            ]
+        if (m := _LINKS.fullmatch(command)) is not None:
+            table = self._table(m.group(1))
+            return [
+                {
+                    "id": i,
+                    "reverted": table[i].get("reverted"),
+                    "superseded_by": table[i].get("superseded_by"),
+                }
                 for i in params["ids"]
                 if i in table
             ]
@@ -239,10 +256,39 @@ async def test_stored_writes_reads_audit_and_the_flag_by_the_index_whatever_the_
     assert found == {
         "n1": StoredNode(load_id="load-1", reverted=False),
         "n2": StoredNode(load_id=None, reverted=True),
-        "d1": StoredNode(load_id="load-2", reverted=False),
+        "d1": StoredNode(load_id="load-2", reverted=False, superseded=True),
     }
     assert await graph.stored_writes([]) == {}
     assert store.gremlin_sent == []
+
+
+async def test_stored_link_states_reads_each_links_flags_by_the_edge_types_index() -> None:
+    store = TypedStore()
+    store.edge("ASSOCIATE_OF", "live", "a", "b")
+    store.edge("ASSOCIATE_OF", "changed", "a", "b", superseded_by="live-2")
+    store.edge("FAMILY_OF", "gone", "a", "b", reverted=True)
+    store.edge("FAMILY_OF", "both", "a", "b", reverted=True, superseded_by="x")
+    store.vertex("Person", "live")  # a node of the same id is not a link
+    graph = _adapter(store)
+    found = await graph.stored_link_states(["live", "changed", "gone", "both", "absent"])
+    assert found == {
+        "live": StoredLink(reverted=False, superseded=False),
+        "changed": StoredLink(reverted=False, superseded=True),
+        "gone": StoredLink(reverted=True, superseded=False),
+        "both": StoredLink(reverted=True, superseded=True),
+    }
+    assert await graph.stored_link_states([]) == {}
+    assert store.gremlin_sent == []
+
+
+async def test_a_link_id_two_edge_types_hold_reads_as_the_worst_of_them() -> None:
+    """Superseded if either copy is, and reverted only if both are: the revert refuses when in
+    doubt, never the other way."""
+    store = TypedStore()
+    store.edge("ASSOCIATE_OF", "x", "a", "b", superseded_by="y")
+    store.edge("FAMILY_OF", "x", "a", "b")
+    found = await _adapter(store).stored_link_states(["x"])
+    assert found == {"x": StoredLink(reverted=False, superseded=True)}
 
 
 async def test_live_nodes_naming_geometry_leaves_out_reverted_and_superseded_nodes() -> None:
@@ -259,7 +305,8 @@ async def test_live_nodes_naming_geometry_leaves_out_reverted_and_superseded_nod
 
 
 @pytest.mark.parametrize(
-    "name", ["live_edges_touching", "live_nodes_naming_geometry", "stored_writes"]
+    "name",
+    ["live_edges_touching", "live_nodes_naming_geometry", "stored_writes", "stored_link_states"],
 )
 async def test_a_bare_string_is_refused_not_read_as_a_list_of_characters(name: str) -> None:
     graph = _adapter(TypedStore())

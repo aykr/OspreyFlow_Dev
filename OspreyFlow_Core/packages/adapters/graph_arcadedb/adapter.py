@@ -31,6 +31,7 @@ from ports.graph import (
     AmbiguousElementId,
     BulkEdgeResult,
     NodeSuggestions,
+    StoredLink,
     StoredNode,
     SubgraphTooLarge,
     SuggestOptions,
@@ -1325,7 +1326,7 @@ class GraphArcadeDBAdapter:
             results = await asyncio.gather(
                 *(
                     self._client.sql(
-                        f"SELECT id, audit.load_id AS load_id, reverted "
+                        f"SELECT id, audit.load_id AS load_id, reverted, superseded_by "
                         f"FROM `{groovy_identifier(t)}` WHERE id IN :ids",
                         params={"ids": chunk},
                     )
@@ -1338,8 +1339,38 @@ class GraphArcadeDBAdapter:
                     found[str(row["id"])] = StoredNode(
                         load_id=None if load_id is None else str(load_id),
                         reverted=row.get("reverted") is True,
+                        superseded=row.get("superseded_by") is not None,
                     )
         return found
+
+    async def stored_link_states(self, edge_ids: Sequence[EdgeId]) -> dict[EdgeId, StoredLink]:
+        gathered: dict[EdgeId, list[tuple[bool, bool]]] = {}
+        chunks = _id_chunks(edge_ids)
+        types = await self._types_with_unique_id("edge") if chunks else []
+        for chunk in chunks:
+            results = await asyncio.gather(
+                *(
+                    self._client.sql(
+                        f"SELECT id, reverted, superseded_by "
+                        f"FROM `{groovy_identifier(t)}` WHERE id IN :ids",
+                        params={"ids": chunk},
+                    )
+                    for t in types
+                )
+            )
+            for rows in results:
+                for row in rows:
+                    gathered.setdefault(str(row["id"]), []).append(
+                        (row.get("reverted") is True, row.get("superseded_by") is not None)
+                    )
+        # An id two types hold is read as the worst of them: superseded if either copy is,
+        # reverted only if both are, so the revert refuses when in doubt.
+        return {
+            edge_id: StoredLink(
+                reverted=all(r for r, _ in states), superseded=any(sup for _, sup in states)
+            )
+            for edge_id, states in gathered.items()
+        }
 
     # --- one-off provenance rewrite -------------------------------------------
 

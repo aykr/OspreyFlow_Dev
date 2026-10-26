@@ -138,6 +138,27 @@ class WorkingSetStorage(Protocol):
         (does each end of the link stand in the working set?)."""
         ...
 
+    async def case_ids(self) -> list[str]:
+        """Every case that has a working set stored, whoever opened it: for the one caller that
+        must reach them all, a revert removing a load's elements from every canvas."""
+        ...
+
+    async def held_among(
+        self, investigation_id: str, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId]
+    ) -> tuple[set[NodeId], set[EdgeId]]:
+        """Which of these nodes and links this case's working set stores, by id and nothing else
+        (no reader, no clearance): one hash lookup each, in chunks, never a read of the whole
+        set."""
+        ...
+
+    async def drop_deltas(self, investigation_id: str) -> None:
+        """Drops the case's stored delta stream and keeps its sequence counter. What it held (the
+        bodies of what was added, and every removal's record) can name an element a revert has
+        since taken back, so the next catch-up of any client behind the revert finds a gap and is
+        sent a full snapshot, which is projected from the stored set. A client up to date is not
+        affected: the next delta appended is the next number."""
+        ...
+
     async def add_nodes(self, investigation_id: str, nodes: Sequence[Node]) -> None: ...
     async def add_edges(self, investigation_id: str, edges: Sequence[Edge]) -> None: ...
     async def remove_nodes(self, investigation_id: str, node_ids: Sequence[NodeId]) -> None: ...
@@ -734,6 +755,31 @@ class ValkeyWorkingSetStore:
     async def node_ids(self, investigation_id: str) -> set[NodeId]:
         raw = await _reply(self._client.hkeys(_node_key(investigation_id)))
         return {key.decode() for key in raw}
+
+    async def case_ids(self) -> list[str]:
+        cases: set[str] = set()
+        for suffix in ("nodes", "edges"):
+            async for raw in self._client.scan_iter(match=f"ws:*:{suffix}", count=500):
+                key = raw.decode() if isinstance(raw, bytes) else str(raw)
+                cases.add(key[len("ws:") : -len(f":{suffix}")])
+        return sorted(cases)
+
+    async def held_among(
+        self, investigation_id: str, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId]
+    ) -> tuple[set[NodeId], set[EdgeId]]:
+        held: tuple[set[str], set[str]] = (set(), set())
+        for ids, key, found in (
+            (node_ids, _node_key(investigation_id), held[0]),
+            (edge_ids, _edge_key(investigation_id), held[1]),
+        ):
+            unique = list(dict.fromkeys(ids))
+            for chunk in _chunks(unique):
+                blobs = await _reply(self._client.hmget(key, list(chunk)))
+                found.update(i for i, blob in zip(chunk, blobs, strict=True) if blob is not None)
+        return held
+
+    async def drop_deltas(self, investigation_id: str) -> None:
+        await _reply(self._client.delete(_deltas_key(investigation_id)))
 
     async def edge_ids(self, investigation_id: str) -> set[EdgeId]:
         raw = await _reply(self._client.hkeys(_edge_key(investigation_id)))
