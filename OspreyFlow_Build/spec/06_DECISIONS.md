@@ -18570,3 +18570,60 @@ owner's delegation for Brief 2.
   what the site needs, since it names the company.
 - **The command.** The site is published with `sh OspreyFlow_Build/marketing_site/publish_pages.sh --push`.
 - **What does not change.** Everything else in Amendment 28 stands.
+
+### ADR-120, Amendment 15 (26 October 2026) — a report's outside subject is named in a column of its own
+
+Decided by the coordinator under the owner's delegation for Brief 2 (ADR-127 Amendment 22).
+- **The problem.** The reports file names a subject in `subject_1` to `subject_3`: a prison number
+  for a prisoner and, in one row (IR 0212, the person arrested outside), a National Insurance number,
+  with that person's names and date of birth beside it. A recipe tells its elements apart by a `when`
+  on one column (`is not null`, `is null` or `equals`). So no recipe can find a prisoner by prison
+  number in the slot without also trying to find the outside person by it.
+- **The change.** The file gains `subject_1_nino` to `subject_3_nino`. An outside subject's National
+  Insurance number is written there, and that row's `subject_N` cell is left empty. `subject_N` holds
+  only prison numbers.
+- **Unchanged.** The plan's entities and links are unchanged; only the file's columns move.
+  `tests/scenarios/test_pid_files.py`'s exact-header test changes with it.
+
+### ADR-127, Amendment 22 (26 October 2026) — recipe R9, the intelligence reports
+
+Decided by the coordinator under the owner's delegation for Brief 2.
+- **The report.** Each row makes one `Document`, matched on `message_id` bound to `report_ref`
+  (Amendment 17), with:
+  - `title`;
+  - `sent_at` from `submitted_at`, through `datetime`;
+  - `document_kind` from `category`;
+  - `media_kind` the literal `text`;
+  - its own text from `report_text` (decision 1).
+
+  The duplicate key is `report_ref`.
+- **The areas.** `area_ref`, `area_ref_2` and `area_ref_3` each find a `Location` by reference on its
+  place reference, as R4 does, the second and third gated on not-null. Each area is `MENTIONED_IN` the
+  report: 662 links.
+- **The subjects.**
+  - **Prisoners.** `subject_N` finds a prisoner `Person` by reference on `prison_number`, gated on
+    not-null.
+  - **The outside person.** `subject_N_nino` finds or makes a `Person` on `nino`, gated on not-null,
+    with optional `family_name`, `given_names` and `date_of_birth` (ADR-120 Amendment 15).
+  - **The links.** Each subject is `MENTIONED_IN` the report: 89 links.
+- **The number.** `phone_mentioned`, gated on not-null, is an outside `Endpoint` read through `msisdn`
+  and matched on its normalised form, as R16 does, and is `MENTIONED_IN` the report (ADR-120 Amendment
+  14's decision 5).
+- **The teaching row.** As written, row 17 carries `07700 900 6O3`, and a run or a dry run rejects that
+  row alone, naming the column and the `msisdn` adapter's cause (Brief 2 §5). With the cell corrected
+  to `07700 900603`, as the engineer does live, every row loads and the graph equals the plan.
+- **Unmapped, with reasons.**
+  - `subject_1_role` to `subject_3_role`: empty in every row; the plan holds no role.
+  - `reviewer_initials`: Brief 2 §5's teaching extra column, ignored with a note.
+- **Marking.** Every element binds the six handling columns. Every element's loaded marking is checked
+  by the replay (Amendment 18).
+- **Not built.** The optional `extract` stage (Brief 2 R9), for speed under the owner's instruction of
+  26 October 2026. Chapter 5 starts from the loaded reports.
+- **The draft pipeline and the unpublished version 1** that chapter 4 starts from belong to the seed
+  (Brief 2 §5, §7.1), not to this recipe.
+- **Tests that would fail (rule 12).**
+  - The golden test, against `pid_plan`: 350 documents with their properties and text, 662, 89 and 1
+    links, the outside person, and every marking.
+  - The file as written rejects row 17 alone, naming `phone_mentioned` and the cause.
+  - A re-run creates nothing.
+  - A prisoner slot never makes a `Person` from a National Insurance number.
