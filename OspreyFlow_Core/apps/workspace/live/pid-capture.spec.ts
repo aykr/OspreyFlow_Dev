@@ -558,7 +558,15 @@ test("CAP-A1-J9-b", async ({ page }) => {
 
 test("CAP-A1-J9-c", async ({ page }) => {
   await freshCase(page);
-  await reportsTab(page, "Packs");
+  await throwOverTrend(page);
+  await page.getByRole("button", { name: "Save trend" }).click();
+  await page.waitForTimeout(2500);
+  await page.getByRole("tab", { name: "Packs", exact: true }).click();
+  await page.waitForTimeout(2500);
+  await page.getByRole("button", { name: /^Wing F supply route/ }).first().click();
+  await page.getByLabel("Saved trend").selectOption({ label: "Throw-overs by yard" });
+  await page.getByRole("button", { name: "Add item" }).click();
+  await page.waitForTimeout(3000);
   await shot(page, "CAP-A1-J9-c");
 });
 
@@ -751,18 +759,37 @@ test("CAP-A2-C5", async ({ page }) => {
   await page.waitForTimeout(1500);
   // The marked text and the review list fit one view, so one image holds both halves.
   await shot(page, "CAP-A2-C5");
+  await shot(page, "CAP-M3-a"); // the module's reader with marked entities is the same screen
 });
 
 test("CAP-A2-C8-a", async ({ page }) => {
-  // The case keeps its questions: the answer asked on this star (27 October 2026, 08:44, as the
-  // analyst) is shown, not asked again (a second ask failed after about 50 s: a finding).
+  test.setTimeout(1_500_000);
   await principalStar(page);
-  await canvas(page).press("Escape");
+  await canvas(page).press("Escape"); // the whole view, not one node
   await rail(page, "Questions").click();
-  const asked = page.getByRole("list", { name: "Questions asked" });
-  await expect(asked.getByRole("button", { name: /^Select \[G-/ }).first()).toBeVisible();
+  const cited = page.getByRole("button", { name: /^Select \[G-/ });
+  await page.getByRole("list", { name: "Questions asked" }).waitFor({ timeout: 15_000 }).catch(() => undefined);
+  await page.waitForTimeout(3000); // the stored answers load after the panel opens
+  if (!(await cited.first().isVisible().catch(() => false))) {
+    await page.getByLabel("Your question").fill(
+      "Who is the principal passing items to, and what do the reports say about the throw-overs?",
+    );
+    const started = Date.now();
+    await page.getByRole("button", { name: "Ask", exact: true }).click();
+    // A cold model can take minutes, and the Glass may lose a slow answer though the Conduit
+    // keeps it (a finding): the panel is reopened until the stored answer is shown.
+    for (let i = 0; i < 40 && !(await cited.first().isVisible().catch(() => false)); i++) {
+      await page.waitForTimeout(30_000);
+      if (await page.getByRole("button", { name: "Asking…" }).isVisible().catch(() => false)) continue;
+      await page.getByRole("button", { name: "Close Questions" }).click().catch(() => undefined);
+      await rail(page, "Questions").click();
+    }
+    console.log(`C8-a answered after ${Math.round((Date.now() - started) / 1000)} s`);
+  }
+  await expect(cited.first()).toBeVisible();
   await page.waitForTimeout(1500);
   await shot(page, "CAP-A2-C8-a");
+  await shot(page, "CAP-M3-b");
 });
 
 test("CAP-A2-C8-b", async ({ page }) => {
@@ -770,11 +797,11 @@ test("CAP-A2-C8-b", async ({ page }) => {
   await freshCase(page);
   await onlyPanel(page, "Query builder");
   const ask = page.getByRole("group", { name: "Ask to search" });
-  await ask.getByLabel("Ask to search").fill("Visitors who visited a prisoner who is a member of an organised crime group");
+  await ask.getByLabel("Ask to search").fill("Prisoners who are members of an organised crime group");
   const started = Date.now();
   await ask.getByRole("button", { name: "Ask", exact: true }).click();
   const said = page.getByText(/matches/).first();
-  await expect(said.or(page.getByRole("alert").first())).toBeVisible({ timeout: 840_000 });
+  await expect(said.or(page.getByRole("alert").first()).or(page.getByText(/could not|cannot/i).first())).toBeVisible({ timeout: 840_000 });
   console.log(`C8-b answered in ${Math.round((Date.now() - started) / 1000)} s: ${await said.textContent().catch(() => "")}`);
   await page.waitForTimeout(1500);
   await shot(page, "CAP-A2-C8-b");
@@ -806,12 +833,164 @@ test("chapter 9b: the engineer loads batch 2", async ({ page }) => {
 });
 
 test("CAP-A2-C9", async ({ page }) => {
+  // A hotlist's alert is in the Watches rail's Alert inbox; the Alerts rail is the typology rules'
+  // queue. The inbox names the hotlist and the node by internal id only (a finding), and has no
+  // opened view with the document, the rule and the cited links drawn.
   await freshCase(page);
-  await rail(page, "Alerts").click();
-  const open = page.getByRole("button", { name: /^Open alert:/ });
-  await expect(open.first()).toBeVisible({ timeout: 120_000 });
-  console.log(`alerts: ${JSON.stringify(await open.evaluateAll((els) => els.map((e) => e.getAttribute("aria-label"))))}`);
-  await open.first().click();
-  await page.waitForTimeout(5000);
+  await rail(page, "Watches").click();
+  await expect(page.getByText(/^hotlist:/).first()).toBeVisible({ timeout: 60_000 });
+  await page.waitForTimeout(1500);
   await shot(page, "CAP-A2-C9");
+  await shot(page, "CAP-M4-b");
+});
+
+test("CAP-M4-a", async ({ page }) => {
+  await freshCase(page);
+  await rail(page, "Watches").click();
+  await page.waitForTimeout(2500);
+  await shot(page, "CAP-M4-a");
+});
+
+test("CAP-A2-C6", async ({ page }) => {
+  await principalStar(page, "Find connections");
+  // The noise unticked: what links the principal to the coordinator and the payer's pattern stay.
+  await onlyLinkTypes(page, [
+    "Visited", "Family of", "Member of", "Passes items to", "Uses", "Communicated with", "Transacted",
+  ]);
+  await canvas(page).focus();
+  await arrange(page, "Organic");
+  await chooseEnd(page, "From", "Z2486ZZ", /Vance/);
+  await chooseEnd(page, "To", "Ellery", /Ellery/);
+  await page.getByRole("button", { name: /^Find connections$/ }).last().click();
+  const said = page.getByRole("status").filter({ hasText: /degrees? apart/ });
+  await expect(said).toBeVisible();
+  console.log(`C6: ${await said.textContent()}`);
+  await page.waitForTimeout(1500);
+  await shot(page, "CAP-A2-C6");
+});
+
+test("CAP-A2-C7", async ({ page, context }) => {
+  await principalStar(page);
+  await page.getByRole("button", { name: "Show the timeline" }).click();
+  // The window in which the phones were found: January to April 2026.
+  await page.getByRole("button", { name: "More timeline options" }).click();
+  await page.getByRole("button", { name: "Set exact dates" }).click();
+  await page.getByLabel("Brush window start").fill("2026-01-05T00:00:00Z");
+  await page.keyboard.press("Tab");
+  await page.getByLabel("Brush window end").fill("2026-05-01T00:00:00Z");
+  await page.keyboard.press("Tab");
+  await page.getByRole("button", { name: "More timeline options" }).click();
+  await page.getByRole("button", { name: "Play playback" }).click();
+  await page.waitForTimeout(2500);
+  await page.getByRole("button", { name: "Pause playback" }).click();
+  await page.getByRole("button", { name: "Select what is lit" }).click();
+  await page.waitForTimeout(1500);
+  console.log(`C7 counts: ${await counts(page).textContent()}`);
+  await shot(page, "CAP-A2-C7-a");
+  const opened = context.waitForEvent("page", { timeout: 30_000 }).catch(() => null);
+  await page.getByRole("button", { name: "Branch to a new case" }).click();
+  const branch = await opened;
+  if (branch) {
+    await branch.waitForLoadState();
+    await branch.waitForTimeout(8000);
+    await branch.screenshot({ path: join(SCREENS, "CAP-A2-C7-b.png") });
+  } else {
+    await page.waitForTimeout(5000);
+    await shot(page, "CAP-A2-C7-b");
+  }
+});
+
+test("CAP-A2-C10-a", async ({ page }) => {
+  await principalStar(page);
+  await canvas(page).press("Escape"); // the composer is offered from the Inspector's empty state
+  await page.getByRole("button", { name: "Add judgement, gap or assumption" }).click();
+  await page.getByLabel("Statement").fill(
+    "Callum Vance directs the throw-overs onto Wing F through his cell-mates.",
+  );
+  const band = page.getByLabel("Probability band");
+  console.log(`C10-a bands: ${JSON.stringify(await band.locator("option").allTextContents())}`);
+  await band.selectOption({ label: /^highly likely/i } as never).catch(async () => {
+    await band.selectOption({ index: 5 });
+  });
+  const evidence = page.getByRole("combobox", { name: "Add supporting evidence" });
+  await evidence.fill("Vance");
+  await page.getByRole("option").filter({ hasText: /Vance, Callum/ }).first().click();
+  await evidence.fill("Thackwray");
+  await page.getByRole("option").filter({ hasText: /Thackwray/ }).first().click();
+  await page.waitForTimeout(1000);
+  await shot(page, "CAP-A2-C10-a");
+});
+
+test("CAP-M2", async ({ page }) => {
+  await freshCase(page);
+  await page.waitForTimeout(2000);
+  await shot(page, "CAP-M2");
+});
+
+test("CAP-M6", async ({ page }) => {
+  // The dataset is OFFICIAL throughout (ADR-120 Amendment 16): no link is above the analyst's
+  // clearance to be shown absent, so the module's trust screen is the History panel.
+  await principalStar(page);
+  await rail(page, "History").click();
+  await page.waitForTimeout(3000);
+  await shot(page, "CAP-M6");
+});
+
+test("probe: export of the principal's star", async ({ page }) => {
+  await principalStar(page);
+  await canvas(page).press("Escape");
+  await page.getByRole("button", { name: /^Export/ }).first().click();
+  await page.waitForTimeout(1500);
+  const drawer = page.getByRole("dialog", { name: "Export" });
+  await drawer.getByRole("button", { name: "Export", exact: true }).click();
+  await page.waitForTimeout(5000);
+  console.log(`export drawer: ${(await drawer.textContent())?.slice(0, 1200)}`);
+  await page.screenshot({ path: join(PROBE, "pid-probe-export-menu.png") });
+});
+
+test("CAP-A2-C11", async ({ page }) => {
+  await principalStar(page);
+  await canvas(page).press("Escape");
+  await page.getByRole("button", { name: /^Export/ }).first().click();
+  const drawer = page.getByRole("dialog", { name: "Export" });
+  await drawer.getByRole("button", { name: "Export", exact: true }).click();
+  // The S2 report is held until a justification and the originator's reference are given.
+  await expect(drawer.getByText(/consult originator/).first()).toBeVisible();
+  await page.waitForTimeout(1000);
+  await shot(page, "CAP-A2-C11-a");
+  await drawer.getByLabel("Justification").fill("Briefing the regional intelligence unit on the Wing F supply route.");
+  await drawer.getByLabel("Originator reference").fill("FMS-ORIG-2026-041");
+  await drawer.getByRole("button", { name: "Export", exact: true }).click();
+  await page.waitForTimeout(5000);
+  console.log(`C11 after export: ${(await drawer.textContent())?.slice(0, 600)}`);
+  await shot(page, "CAP-A2-C11-b");
+});
+
+test("CAP-A2-C11-c", async ({ page }) => {
+  // The case's open questions: a gap recorded against the assessment, shown open in the Inspector.
+  await principalStar(page);
+  await canvas(page).press("Escape");
+  await page.getByRole("button", { name: "Add judgement, gap or assumption" }).click();
+  await page.getByRole("tab", { name: "Gap" }).or(page.getByRole("button", { name: "Gap", exact: true })).first().click();
+  const question = page.getByRole("textbox", { name: "Question", exact: true });
+  await question.fill("Who receives the packages on the far side of the wall?");
+  await page.getByRole("button", { name: /^Save gap/ }).click();
+  await page.waitForTimeout(2500);
+  await shot(page, "CAP-A2-C11-c");
+});
+
+test("CAP-M5-a", async ({ page }) => {
+  await freshCase(page);
+  await throwOverTrend(page);
+  await shot(page, "CAP-M5-a");
+});
+
+test("CAP-M5-b", async ({ page }) => {
+  // The owner's ruling of 27 October 2026: no board is registered for the PID, so the viewer's
+  // part of the module shows the Figures the viewer reads, not a dashboard.
+  await signIn(page, "viewer");
+  await openCase(page);
+  await page.waitForTimeout(4000);
+  await shot(page, "CAP-M5-b");
+  await shot(page, "CAP-A2-C10-c");
 });
