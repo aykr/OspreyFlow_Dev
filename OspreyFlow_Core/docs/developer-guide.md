@@ -11,10 +11,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.3** · 2026-10-27 · For OspreyFlow v0.2.0 · Issued
+**Version 1.4** · 2026-10-27 · For OspreyFlow v0.2.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.4 | 2026-10-27 | §7.5: the tests behind it described, not named by path (the build's folder is not part of the product). |
 | 1.3 | 2026-10-27 | §7.5: sources withheld for a reader whose case does not read all of an element's datasets, and what a contributor's writer must do about it. |
 | 1.2 | 2026-10-18 | §3.3: the NIEM pack's incidents and custody links. |
 | 1.1 | 2026-10-15 | A cover page, contents, a list of figures, and this version history. |
@@ -398,11 +399,9 @@ A refusal there means a read that was written back was not inside `sources_in_fu
 
 **For a new writer.** Ask two questions. Does it read an element and write its provenance back? Then
 wrap the read. Does it send the element, or anything built from it, to a reader? Then pass it through
-`withhold_sources` first. The tests that stand behind this are in `OspreyFlow_Build/tests`:
-`ontology/test_withhold_sources.py` and `ontology/test_sources_in_full.py`,
-`services/api/test_sources_withheld_routes.py`, and `services/api/test_written_back_reads_in_full.py`
-(with `_stages`), which for each writer reads as a scoped principal, changes a two-dataset element, and
-checks that every stored source is kept and that what is sent back carries none.
+`withhold_sources` first. The build's tests hold every writer to this: each reads as a scoped
+principal, changes an element in two datasets, and checks that every stored source is kept and that
+what is sent back carries none.
 
 ## 8. Screening lists
 
