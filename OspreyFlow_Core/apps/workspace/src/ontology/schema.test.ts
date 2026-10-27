@@ -36,6 +36,18 @@ describe("OntologyRegistry", () => {
     expect(registry.visualFor("Endpoint")?.icon).toBeNull();
   });
 
+  it("carries the icon-by-value rule the ontology declares for a type (ADR-128), and none otherwise", () => {
+    const declared = schema();
+    declared.entity_types = declared.entity_types.map((e) =>
+      e.name === "Endpoint"
+        ? { ...e, icon: "device", icon_by_value: { property: "endpoint_kind", icons: { handle: "keypad" } } }
+        : e,
+    );
+    const registry = new OntologyRegistry(declared);
+    expect(registry.visualFor("Endpoint")?.iconByValue).toEqual({ property: "endpoint_kind", icons: { handle: "keypad" } });
+    expect(registry.visualFor("Person")?.iconByValue).toBeUndefined();
+  });
+
   it("returns undefined for an unknown entity type", () => {
     const registry = new OntologyRegistry(schema());
 

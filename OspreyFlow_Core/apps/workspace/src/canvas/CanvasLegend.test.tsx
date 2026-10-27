@@ -133,4 +133,37 @@ describe("CanvasLegend's links", () => {
     const { queryByRole } = render(<CanvasLegend types={types} links={[]} />);
     expect(queryByRole("list", { name: "Links in view" })).toBeNull();
   });
+
+  // ADR-128 Decision 4 (B7): the legend says which icon means what, for the values in view.
+  const valueIcons = [
+    { type: "Endpoint", property: "endpoint_kind", value: "handle", glyph: "keypad", count: 4 },
+    { type: "Incident", property: "category", value: "throw_over", glyph: "parcel-over-wall", count: 2 },
+  ];
+
+  it("says which icon means what for the values in view, with the drawing and how many", () => {
+    const { getByRole } = render(<CanvasLegend types={types} valueIcons={valueIcons} />);
+    const list = getByRole("list", { name: "Icons by value" });
+    const rows = Array.from(list.querySelectorAll("li")).map((li) => li.textContent);
+    expect(rows).toEqual(["Keypad: Endpoint, endpoint kind handle4", "Parcel over wall: Incident, category throw over2"]);
+    const drawn = Array.from(list.querySelectorAll("img")).map((img) => decodeURIComponent(img.getAttribute("src") ?? ""));
+    expect(drawn).toHaveLength(2);
+    expect(drawn[0]).toContain("<circle");
+    expect(drawn[0]).not.toContain("currentColor");
+  });
+
+  it("colours a value's drawing from the theme's text colour, never a literal of its own", () => {
+    const { getByRole } = render(<CanvasLegend types={types} valueIcons={valueIcons} />);
+    const src = decodeURIComponent(getByRole("list", { name: "Icons by value" }).querySelector("img")!.getAttribute("src") ?? "");
+    const colours = new Set(src.match(/#[0-9a-f]{6}\b/gi));
+    expect(colours.size).toBe(1);
+  });
+
+  it("shows no icon list when no value icon is in view, and folds the list with the legend", () => {
+    const none = render(<CanvasLegend types={types} />);
+    expect(none.queryByRole("list", { name: "Icons by value" })).toBeNull();
+    none.unmount();
+    const { container, getByRole } = render(<CanvasLegend types={types} valueIcons={valueIcons} />);
+    fireEvent.click(getByRole("button", { name: "Legend" }));
+    expect(container.querySelector<HTMLUListElement>('ul[aria-label="Icons by value"]')?.hidden).toBe(true);
+  });
 });

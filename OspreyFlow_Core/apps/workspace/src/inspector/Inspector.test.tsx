@@ -299,3 +299,40 @@ describe("Inspector states (ADR-097 step 1, design review item 4)", () => {
     expect(screen.getByText("Select a node, or press / to search.")).toBeTruthy();
   });
 });
+
+// ADR-128 Decision 4 (B7): the Inspector says which icon a value stands for.
+describe("Inspector: a value icon", () => {
+  const endpointVisual = {
+    channel: "cyan",
+    shape: "hexagon",
+    icon: "device",
+    iconByValue: { property: "endpoint_kind", icons: { handle: "keypad", msisdn: "phone" } },
+  } as const;
+  const visualFor: NonNullable<InspectorProps["visualFor"]> = (type) =>
+    type === "Endpoint" ? endpointVisual : { channel: "indigo", shape: "circle", icon: "person" };
+  const endpointOf = (properties: Record<string, unknown>) =>
+    ({ id: "e1", type: "Endpoint", properties, provenance: { state: "asserted", sources: [], first_seen: "x" } }) as unknown as Node;
+
+  it("names the drawing and the value it stands for, when the node's value is mapped", () => {
+    stubNotes();
+    render(<Inspector node={endpointOf({ endpoint_kind: "handle" })} assessment={assessment} visualFor={visualFor} />);
+    expect(screen.getByText("Icon for this value")).toBeTruthy();
+    expect(screen.getByText("Keypad (endpoint kind handle)")).toBeTruthy();
+  });
+
+  it("says nothing of an icon for a value the map leaves out, or a node without the property", () => {
+    stubNotes();
+    const { rerender } = render(<Inspector node={endpointOf({ endpoint_kind: "email" })} assessment={assessment} visualFor={visualFor} />);
+    expect(screen.queryByText("Icon for this value")).toBeNull();
+    rerender(<Inspector node={endpointOf({})} assessment={assessment} visualFor={visualFor} />);
+    expect(screen.queryByText("Icon for this value")).toBeNull();
+  });
+
+  it("says nothing of an icon for a type that has no rule", () => {
+    stubNotes();
+    const person = { id: "a", type: "Person", properties: { endpoint_kind: "handle" }, provenance: { state: "asserted", sources: [], first_seen: "x" } } as unknown as Node;
+    render(<Inspector node={person} assessment={assessment} visualFor={visualFor} />);
+    expect(screen.queryByText("Icon for this value")).toBeNull();
+  });
+});
+

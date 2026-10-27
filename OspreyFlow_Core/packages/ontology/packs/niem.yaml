@@ -22,6 +22,11 @@ entity_types:
     channel: plum
     shape: hexagon
     icon: shield
+    # ADR-128 Decision 4 and Amendment 3: the icon by category; `other` keeps the type's. In place,
+    # no pack version bump.
+    icon_by_value:
+      property: category
+      icons: {throw_over: parcel-over-wall, assault: clash, disorder: crowd, find: magnifier}
     identifiers: [incident_ref]
     properties:
       - {name: name, type: string, indexed: true}

@@ -80,6 +80,7 @@ ROUTE_RIGHTS = {
     "shared_contacts_route": "investigate",
     "shared_pair_canvas_route": "investigate",
     "patterns_preview_route": "investigate",
+    "ask_to_search_route": "ask_model",  # ADR-129 decision 2
     "patterns_run_route": "investigate",
     "patterns_save_route": "investigate",
     "patterns_list_route": "investigate",

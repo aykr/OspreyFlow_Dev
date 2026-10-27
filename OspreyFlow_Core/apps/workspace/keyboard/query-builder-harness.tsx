@@ -45,6 +45,7 @@ function Harness() {
         bearerToken="unused"
         investigationId="inv-1"
         schema={SCHEMA}
+        selectedNodeIds={["n-selected"]}
       />
     </div>
   );

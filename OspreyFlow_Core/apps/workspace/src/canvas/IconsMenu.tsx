@@ -132,6 +132,11 @@ export function IconsMenu({ entityTypes, getTypesInView, makeThumbnail = thumbna
                   <option value={NONE_VALUE}>None</option>
                   {chosen?.kind === "image" ? <option value={IMAGE_VALUE}>Your picture</option> : null}
                 </select>
+                {type.icon_by_value ? (
+                  <span style={{ color: "var(--text-secondary)", flexBasis: "100%" }}>
+                    {`Choosing an icon here replaces the icons chosen by ${type.icon_by_value.property.replaceAll("_", " ")}.`}
+                  </span>
+                ) : null}
                 <input
                   type="file"
                   accept={PICTURE_ACCEPT}

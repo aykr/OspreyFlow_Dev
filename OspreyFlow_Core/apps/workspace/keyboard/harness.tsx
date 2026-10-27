@@ -88,7 +88,16 @@ const BASE_SCHEMA: OntologySchema = {
     },
     // Phase 6a Stage 4 (B6): the only fixture data the "View messages" radial-menu item needs —
     // it is offered on `Endpoint`-type nodes specifically (`GlassCanvas.tsx`'s own condition).
-    { name: "Endpoint", pole_class: "object", channel: "cyan", shape: "hexagon", icon: "phone", identifiers: [] },
+    // ADR-128 Amendment 3: the neutral device drawing is the type's; a PIN account's kind draws a keypad.
+    {
+      name: "Endpoint",
+      pole_class: "object",
+      channel: "cyan",
+      shape: "hexagon",
+      icon: "device",
+      icon_by_value: { property: "endpoint_kind", icons: { msisdn: "phone", handle: "keypad", account: "account" } },
+      identifiers: [],
+    },
   ],
   edge_types: [
     { name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], directed: false },
@@ -234,7 +243,8 @@ const nodes = [
   node("n1"),
   node("n2", { resolution: { cluster_id: "n2" } }),
   node("n3", { resolution: { cluster_id: "n2" } }),
-  node("n4", { type: "Endpoint", properties: { value_normalised: "n4" } }),
+  // ADR-128 Decision 4: a PIN account (`handle`), so it is drawn with the keypad, not the type's drawing.
+  node("n4", { type: "Endpoint", properties: { value_normalised: "n4", endpoint_kind: "handle" } }),
   // **`n5` is deliberately disconnected — it has no edge to anything, ever.** Round 12d: every
   // other node here is on one chain, so arrow-walk (which follows `graph.neighbors`) can reach
   // all of them, and a walkthrough over this fixture could not tell whether the canvas had a

@@ -122,6 +122,16 @@ class ResolutionConfig(BaseModel):
     comparisons: list[str] = Field(default_factory=list)
 
 
+class IconByValue(BaseModel):
+    """ADR-128 Decision 4: an entity type's icon chosen by the value of one of its enum properties.
+    `icons` maps some of the property's values to glyph names; the loader checks that the property
+    is an enum of the type and that each key is one of its values and each name is on the closed
+    icon list."""
+
+    property: str
+    icons: dict[str, str]
+
+
 class EntityTypeDef(BaseModel):
     name: str
     pole_class: PoleClass
@@ -130,6 +140,9 @@ class EntityTypeDef(BaseModel):
     #: The drawing inside the shape on the canvas (ADR-079). One of the names in the ontology JSON
     #: Schema's closed list, checked there at load; `None` draws the shape alone.
     icon: str | None = None
+    #: ADR-128 Decision 4: the icon by the value of one enum property, which takes the place of
+    #: `icon` for a node whose value is mapped; any other node draws `icon`.
+    icon_by_value: IconByValue | None = None
     identifiers: list[str] = Field(default_factory=list)
     properties: list[PropertyDef] = Field(default_factory=list)
     resolution: ResolutionConfig | None = None

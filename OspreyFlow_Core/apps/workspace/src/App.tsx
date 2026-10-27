@@ -1740,6 +1740,7 @@ export function App() {
                             bearerToken={bearerToken}
                             investigationId={investigationId}
                             schema={ontologySchema}
+                            selectedNodeIds={selectedNodeIds}
                           />
                         ),
                       },

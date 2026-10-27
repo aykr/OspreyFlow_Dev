@@ -50,7 +50,8 @@ def test_every_type_of_the_default_ontology_has_an_icon_from_the_list() -> None:
 def test_the_list_has_no_repeats_and_is_plain_lower_case_words() -> None:
     names = _names()
     assert len(names) == len(set(names))
-    assert all(n.isalpha() and n == n.lower() for n in names)
+    # A hyphen joins the words of a name (`parcel-over-wall`, ADR-128 Amendment 3).
+    assert all(n.replace("-", "").isalpha() and n == n.lower() for n in names)
 
 
 def test_an_icon_is_optional(tmp_path: Path) -> None:

@@ -125,35 +125,39 @@ export function forgetIconChoicesForTest(): void {
 }
 
 /** The icon to draw inside a node of `entityType`: the analyst's choice for the type, else the
- * ontology's `ontologyIcon`, else none. A glyph is drawn in whichever of white and near-black reads
- * better on `fillHex`. */
+ * node's value icon (ADR-128 Decision 4: the drawing its ontology maps its property value to, when
+ * it maps one), else the ontology's `ontologyIcon`, else none. A glyph is drawn in whichever of
+ * white and near-black reads better on `fillHex`. */
 export function resolveNodeIcon(
   entityType: string,
   ontologyIcon: string | null | undefined,
   fillHex: string,
+  valueIcon?: string | null,
 ): NodeIcon | null {
   const choice = load()[entityType];
   if (choice?.kind === "none") return null;
   if (choice?.kind === "image") {
     return { kind: "image", key: `${entityType}:${imageKeyFor(choice.dataUrl)}`, dataUrl: choice.dataUrl };
   }
-  const name = choice?.kind === "glyph" ? choice.name : ontologyIcon;
+  const name = choice?.kind === "glyph" ? choice.name : (valueIcon ?? ontologyIcon);
   if (typeof name !== "string" || glyphMarkup(name, fillHex) === null) return null;
   return { kind: "glyph", name, colourHex: readableTextOn(fillHex) };
 }
 
 /** The icon to draw inside node `nodeId` (ADR-105): the entity's own picture, else what
- * `resolveNodeIcon` gives its type. The key names the node, because the drawn picture is cached by
- * its key and two entities may hold the same picture. */
+ * `resolveNodeIcon` gives it: the analyst's choice for its type, its value icon, its type's icon
+ * (ADR-128 Decision 4). The key names the node, because the drawn picture is cached by its key and
+ * two entities may hold the same picture. */
 export function resolveIconForNode(
   nodeId: string,
   entityType: string,
   ontologyIcon: string | null | undefined,
   fillHex: string,
+  valueIcon?: string | null,
 ): NodeIcon | null {
   const own = entityPictureFor(nodeId);
   if (own !== undefined && isSafeImageDataUrl(own) && own.length <= MAX_IMAGE_ICON_CHARS) {
     return { kind: "image", key: `node:${nodeId}:${imageKeyFor(own)}`, dataUrl: own };
   }
-  return resolveNodeIcon(entityType, ontologyIcon, fillHex);
+  return resolveNodeIcon(entityType, ontologyIcon, fillHex, valueIcon);
 }

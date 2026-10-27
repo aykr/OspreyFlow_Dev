@@ -19512,3 +19512,46 @@ Decided by the coordinator under the owner's delegation for Brief 3.
   a link and its ends together.
 - **A kept answer** records the elements of its brief. It is hidden from a reader who can no longer see
   one of them, as an answer read from a hidden document is.
+
+### ADR-128, Amendment 3 (27 October 2026) — B7's glyphs corrected
+
+Found by B7's writer before building. Decided by the coordinator under the owner's delegation for Brief 3.
+- **The defect.** Decision 4 named `phone` as a new glyph, but `phone` is one of ADR-079's twenty and is
+  `Endpoint`'s own type icon. Mapping `msisdn` to it would change nothing, and every other endpoint kind
+  (email, IMSI, card, IP) would still draw as a phone.
+- **The correction.**
+  - **The type icon.** `Endpoint`'s type icon becomes the existing neutral `device` glyph.
+  - **Endpoint values.** `msisdn` keeps `phone`, `handle` (a PIN account) gets `keypad`, and `account`
+    gets `account`.
+  - **Incident values.** `throw_over` gets `parcel-over-wall`, `assault` `clash`, `disorder` `crowd` and
+    `find` `magnifier`. `other` keeps the type icon.
+  - **New glyphs.** Six: keypad, account, parcel over a wall, clash, crowd, magnifier.
+  - **No version bump.** The icons change in place, with no ontology or pack version bump, as presentation
+    keys have before (ADR-120 Amendment 7), so no recipe is flagged.
+
+### ADR-129, Amendment 2 (27 October 2026) — what building E3 settled
+
+Decided by the coordinator under the owner's delegation for Brief 3.
+- **The golden set has sixteen answerable questions and four refusals.**
+  - **Why.** Brief 3's question 6 ("which prisoners were found with a mobile phone since 1 January")
+    needs `Incident.category` and `Incident.item`, which are not indexed, and a date range, which this ADR
+    refuses. A narrowed pattern scored as correct would overstate recall, so question 6 is a refusal.
+  - **Recorded.** This departs from the brief's seventeen and three.
+- **The recall floor.** `baseline.json` records the measured recall. The gate's floor is that value less
+  `PATTERN_RECALL_TOLERANCE` (0.15), as the extraction cases' floor is.
+- **The first measured run (27 October 2026).**
+  - **Setting.** `llama3.1:8b` through LiteLLM, three runs of the twenty questions.
+  - **Result.** Recall 0.568 and precision 0.884; all four refusals were refused. The floor is
+    therefore 0.418.
+  - **Weakest questions.** Those pinned to an account, a number or a handset (2, 3, 10, 15 and 17), at
+    0.00 to 0.18, since `endpoint_kind` is not indexed and so cannot be constrained. Showing the pattern
+    and its count before anything runs is what contains this.
+- **The vocabulary** is the deployment ontology, without system or hidden links and without sensitive or
+  unindexed properties. A vocabulary of the types present in the case would reveal that a hidden node's
+  type exists (rule 3). No shipped property is both indexed and an enum, so no enum values are offered
+  today.
+- **The route.** `POST /v1/investigations/{id}/patterns/ask` is at Viewer level with the `ask_model` right.
+  Its refusal is a 422 `could_not_express` with a fixed reason.
+- **Recorded, with a build-plan row.** "More than one" questions (3, 7, 9) are two variables of one type,
+  and nothing in `PatternQuery` requires them to bind distinct nodes. A count may therefore include a node
+  matched to both.

@@ -126,6 +126,7 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/nodes/{node_id}/shared-contacts/{other_id}/canvas"): E,
     ("POST", P + "/patterns/preview"): V,
     ("POST", P + "/patterns/run"): V,
+    ("POST", P + "/patterns/ask"): V,  # ADR-129 decision 2: proposes, writes nothing
     # ADR-099 Amendment 3: a saved pattern is the dataset's, read and saved in a case reading it.
     ("POST", P + "/patterns/save"): E,
     ("GET", P + "/patterns"): V,

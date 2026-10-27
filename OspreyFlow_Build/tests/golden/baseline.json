@@ -4,5 +4,11 @@
       "precision": 0.5324074074074074,
       "recall": 0.75
     }
+  },
+  "pid-ask-to-search": {
+    "pattern_recall": {
+      "precision": 0.884,
+      "recall": 0.568
+    }
   }
 }

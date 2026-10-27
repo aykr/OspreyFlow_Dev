@@ -85,6 +85,9 @@ _NEW_LINKS = [
 
 
 _WIDENABLE = {"identifiers", "from_types", "to_types", "properties"}
+# A presentation key may be added to a type that had none (ADR-128 Amendment 3: `icon_by_value`,
+# in place, no pack version bump); once a version holds one, it may not change or be dropped.
+_MAY_BE_ADDED = {"icon_by_value"}
 
 
 def _property_losses(where: str, old: Any, new: Any) -> list[str]:
@@ -117,6 +120,8 @@ def _model_losses(kind: str, old: Any, new: Any, fields: Any) -> list[str]:
     losses: list[str] = []
     for field in fields:
         if field in _WIDENABLE:
+            continue
+        if field in _MAY_BE_ADDED and getattr(old, field) is None:
             continue
         if getattr(old, field) != getattr(new, field):
             losses.append(
@@ -426,3 +431,20 @@ def test_an_occurred_at_write_with_an_undeclared_key_is_still_refused() -> None:
         OntologyError, match=re.escape("'OCCURRED_AT' does not declare property 'recovered'")
     ):
         validate_properties(_occurred_at(), {"lat": 51.43, "recovered": "yes"})
+
+
+def test_the_superset_check_refuses_a_changed_icon_map() -> None:
+    # An icon map the old version already held may not change or go (ADR-128 Amendment 3); only
+    # adding one to a type that had none is allowed.
+    old = _v2()
+    _entity("Incident", old)["icon_by_value"] = {
+        "property": "category",
+        "icons": {"find": "magnifier"},
+    }
+    changed = copy.deepcopy(old)
+    _entity("Incident", changed)["icon_by_value"]["icons"]["find"] = "crowd"
+    assert any("icon_by_value changed" in loss for loss in _losses(old, changed))
+    dropped = copy.deepcopy(old)
+    del _entity("Incident", dropped)["icon_by_value"]
+    assert any("icon_by_value changed" in loss for loss in _losses(old, dropped))
+    assert _losses(old, copy.deepcopy(old)) == []

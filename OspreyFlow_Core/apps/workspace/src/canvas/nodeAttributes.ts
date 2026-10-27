@@ -30,6 +30,7 @@ import { mixOklab } from "../color/oklab";
 import { activePalette } from "../color/palette";
 import type { EntityVisual } from "../ontology/schema";
 import { resolveIconForNode } from "./iconChoices";
+import { valueIconFor } from "./valueIcons";
 import { chosenLabel, defaultLabel } from "./labelChoices";
 import { linkCaption, linkTypeName } from "./linkLabel";
 import { zoomBandForRatio, type ZoomBand } from "./zoomBands";
@@ -186,9 +187,15 @@ export function computeNodeGraphAttributes(
     fillHex,
     strokeHex: stroke.hex,
     strokeStyle: stroke.style,
-    // The entity's own picture (ADR-105), else the analyst's choice for the type, else the
-    // ontology's (ADR-079).
-    icon: resolveIconForNode(node.id, node.type, visual.icon, fillHex),
+    // The entity's own picture (ADR-105), else the analyst's choice for the type, else the icon its
+    // property value maps to (ADR-128 Decision 4), else the ontology's (ADR-079).
+    icon: resolveIconForNode(
+      node.id,
+      node.type,
+      visual.icon,
+      fillHex,
+      valueIconFor(visual.iconByValue, node.properties)?.glyph,
+    ),
     iconOpacity: state.filteredOut ? 0.2 : state.dimmed ? 0.45 : 1,
   });
   const imagePlain = cachedNodeSvgDataUri({

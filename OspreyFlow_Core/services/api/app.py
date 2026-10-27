@@ -492,6 +492,12 @@ from .packs import (
     reorder_visible,
     trend_item,
 )
+from .pattern_ask import (
+    AskToSearchRequest,
+    CouldNotExpress,
+    PatternAskService,
+    PatternProposal,
+)
 from .pattern_store import PatternNotFoundError, PatternStore
 from .patterns import (
     JOB_TYPE_PATTERN_MATCH,
@@ -859,6 +865,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         analytics=analytics,
         datasets=datasets_store,
         investigations=investigations,
+    )
+    # ADR-129 decision 2: ask to search, a question turned into a pattern that nothing runs.
+    app.state.pattern_ask = PatternAskService(
+        app.state.working_set, graph, model, default_model=models.extraction
     )
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
@@ -1294,6 +1304,13 @@ def get_questions(request: Request) -> QuestionsService:
 
 
 QuestionsDep = Annotated[QuestionsService, Depends(get_questions)]
+
+
+def get_pattern_ask(request: Request) -> PatternAskService:
+    return request.app.state.pattern_ask  # type: ignore[no-any-return]
+
+
+PatternAskDep = Annotated[PatternAskService, Depends(get_pattern_ask)]
 
 
 def get_link_changes(request: Request) -> LinkChangeService:
@@ -2070,6 +2087,15 @@ async def _no_documents_handler(request: Request, exc: NoDocumentsError) -> JSON
     """ADR-098 decision 4: the case holds no Document the analyst can see to ask about."""
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"error": "no_documents"}
+    )
+
+
+@app.exception_handler(CouldNotExpress)
+async def _could_not_express_handler(request: Request, exc: CouldNotExpress) -> JSONResponse:
+    """ADR-129 decision 2: a question, or the model's answer to it, that cannot be drawn as a
+    pattern in the case's vocabulary. The panel says it could not express the question."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=exc.body().model_dump()
     )
 
 
@@ -4285,6 +4311,43 @@ async def patterns_run_route(
         result_cardinality=accepted.matched_count or 0,
     )
     return accepted
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/patterns/ask",
+    dependencies=[Depends(require_right(Right.ASK_MODEL))],
+)
+async def ask_to_search_route(
+    investigation: InvestigationViewerDep,
+    body: AskToSearchRequest,
+    principal: PrincipalDep,
+    pattern_ask: PatternAskDep,
+    audit: AuditDep,
+    ontology: OntologyDep,
+) -> PatternProposal:
+    """ADR-129 decision 2: the model is given the case's vocabulary and the question and proposes a
+    pattern, validated against the ontology and ADR-121; the response is the pattern, a one-line
+    explanation and the preview's own count. Viewer, as the preview is: it writes nothing, and
+    running the pattern is the existing run route's, counted first (rules 3 and 4)."""
+    try:
+        proposal = await pattern_ask.ask(investigation.id, body, principal, ontology)
+    except CouldNotExpress as refused:
+        await audit.record(
+            principal=principal,
+            action="patterns_ask",
+            investigation_id=investigation.id,
+            resolved_query={"refused": refused.reason},
+            result_cardinality=0,
+        )
+        raise
+    await audit.record(
+        principal=principal,
+        action="patterns_ask",
+        investigation_id=investigation.id,
+        resolved_query=proposal.pattern.model_dump(mode="json"),
+        result_cardinality=proposal.estimated_count,
+    )
+    return proposal
 
 
 # --- saved patterns (Phase 7 Stage 4, 06_DECISIONS.md ADR-032/036/040) --------

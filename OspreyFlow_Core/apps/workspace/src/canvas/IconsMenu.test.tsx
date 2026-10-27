@@ -28,6 +28,27 @@ function picker(type: string): HTMLSelectElement {
   return screen.getByRole("combobox", { name: `Icon for ${type}` }) as HTMLSelectElement;
 }
 
+describe("IconsMenu and icons chosen by value (ADR-128 Decision 4)", () => {
+  const WITH_RULE: EntityTypeDef[] = [
+    {
+      name: "Endpoint",
+      pole_class: "object",
+      channel: "cyan",
+      shape: "hexagon",
+      icon: "device",
+      icon_by_value: { property: "endpoint_kind", icons: { handle: "keypad" } },
+    },
+    { name: "Person", pole_class: "person", channel: "indigo", shape: "circle", icon: "person" },
+  ];
+
+  it("says, for a type whose icon depends on a value, that a choice here replaces those icons", () => {
+    render(<IconsMenu entityTypes={WITH_RULE} getTypesInView={() => ["Endpoint", "Person"]} />);
+    open();
+    const notes = screen.getAllByText("Choosing an icon here replaces the icons chosen by endpoint kind.");
+    expect(notes).toHaveLength(1);
+  });
+});
+
 describe("IconsMenu", () => {
   it("is closed until the button is pressed, and says it is open", () => {
     render(<IconsMenu entityTypes={TYPES} getTypesInView={() => ["Person"]} />);

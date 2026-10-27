@@ -175,6 +175,15 @@ shield, flag, link, tag, camera) held as a closed list in `ontology.schema.json`
 any other. The Glass draws it inside the type's shape. It adds to shape and hue and never replaces
 them, so the rule above is unchanged. The default ontology gives every type one. Adding the field did
 not move the ontology version: nothing a recipe writes, an index or an adapter reads changed.
+ADR-128 Decision 4 added six names (keypad, account, parcel-over-wall, clash, crowd, magnifier), so
+the closed list now holds twenty-six.
+
+**An entity type may choose its icon by a property's value (ADR-128 Decision 4).** `icon_by_value`
+is optional: `property` names one of the type's own enum properties and `icons` maps some of that
+property's values to names from the same closed list. The loader refuses a property the type lacks,
+one that is not an enum, a key that is not among its values, or a name off the list. A node whose
+value is unmapped, or that has no value, draws the type's `icon`. Like `icon`, it is presentation
+only and did not move the ontology version.
 
 ### 1.1a Domain packs (ADR-108, ADR-117, ADR-120)
 
@@ -221,12 +230,17 @@ class ResolutionConfig(BaseModel):
     blocking: list[str] = []
     comparisons: list[str] = []
 
+class IconByValue(BaseModel):     # ADR-128 Decision 4
+    property: str                  # an enum property of the type
+    icons: dict[str, str]          # some of its values -> names from the closed icon list
+
 class EntityTypeDef(BaseModel):
     name: str
     pole_class: PoleClass
     channel: str
     shape: str
     icon: str | None = None        # ADR-079: a name from the closed list in ontology.schema.json
+    icon_by_value: IconByValue | None = None   # ADR-128 Decision 4
     identifiers: list[str] = []
     properties: list[PropertyDef] = []
     resolution: ResolutionConfig | None = None

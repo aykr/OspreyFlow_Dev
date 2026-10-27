@@ -63,13 +63,28 @@
         },
         "shape": { "type": "string", "minLength": 1 },
         "icon": {
-          "description": "The drawing inside the type's shape on the canvas (ADR-079): a name from this closed list, which the Glass holds the drawings for. Optional; an analyst may choose another for themselves in their own browser.",
+          "description": "The drawing inside the type's shape on the canvas (ADR-079 and ADR-128 Amendment 3): a name from this closed list, which the Glass holds the drawings for. Optional; an analyst may choose another for themselves in their own browser.",
           "type": "string",
           "enum": [
             "person", "people", "building", "bank", "phone", "mail", "device", "pin",
             "calendar", "document", "vehicle", "box", "key", "globe", "card", "shield",
-            "flag", "link", "tag", "camera"
+            "flag", "link", "tag", "camera",
+            "keypad", "account", "parcel-over-wall", "clash", "crowd", "magnifier"
           ]
+        },
+        "icon_by_value": {
+          "description": "ADR-128 Decision 4: the icon chosen by the value of one enum property. `property` names an enum property of this type and `icons` maps some of its values to names from the closed `icon` list; a node without the property, or with a value not mapped, draws the type's `icon`. Checked at load that the property exists, is an enum and holds each mapped value.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["property", "icons"],
+          "properties": {
+            "property": { "type": "string", "minLength": 1 },
+            "icons": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": { "$ref": "#/$defs/entity_type/properties/icon" }
+            }
+          }
         },
         "identifiers": { "type": "array", "items": { "type": "string" } },
         "properties": { "type": "array", "items": { "$ref": "#/$defs/property_def" } },

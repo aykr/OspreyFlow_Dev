@@ -530,6 +530,8 @@
 .canvas-legend__list[hidden] { display: none; }
 .canvas-legend__list li { display: flex; justify-content: space-between; gap: var(--sp-8); color: var(--text-primary); }
 .canvas-legend__links { border-top: 1px solid var(--border-subtle); padding-top: var(--sp-6); }
+.canvas-legend__meaning { display: flex; align-items: center; gap: var(--sp-6); }
+.canvas-legend__meaning img { flex: none; }
 .canvas-legend__link { display: flex; align-items: center; gap: var(--sp-6); cursor: pointer; }
 /* 24 by 24, the Glass's minimum target (ADR-097 step 3); not brass, which is for the primary action
    and focus only (DESIGN.md §3.2). */
@@ -538,8 +540,11 @@
 /* The canvas toolbar (ADR-097 step 2, design review item 12): one docked row along the canvas's top
    edge, a hairline below and no shadow (DESIGN.md §6); labelled groups, the Show group one segmented
    control. Its controls are quiet buttons here, not the floating overlay buttons they are elsewhere. */
+/* One layer above the corner's legend and zoom cluster (10): the toolbar's open menus and the Clear view
+   prompt hang down over the right-hand legend, and as part of the toolbar's own layer they were drawn
+   under it, so a longer legend (ADR-128's icons by value) covered the prompt's buttons. */
 .canvas-toolbar {
-  box-sizing: border-box; position: absolute; z-index: 10; top: 0; left: 0; right: 0; min-height: var(--h-canvas-toolbar);
+  box-sizing: border-box; position: absolute; z-index: 11; top: 0; left: 0; right: 0; min-height: var(--h-canvas-toolbar);
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-4) var(--sp-12); padding: var(--sp-2) var(--sp-8);
   background: var(--surface-panel); border-bottom: 1px solid var(--border-subtle);
   font-size: var(--fs-12); line-height: var(--lh-12);

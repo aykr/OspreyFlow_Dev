@@ -28,7 +28,7 @@ from schemas.domain import DomainPack, EdgeTypeDef, EntityTypeDef, OntologySchem
 from schemas.ingest import DomainPackEntry
 
 from .errors import OntologyError
-from .loader import _check_edge_endpoints, _check_entity_types
+from .loader import _check_edge_endpoints, _check_entity_types, check_icon_by_value
 
 #: ADR-126: the values are `schemas.domain.DomainPack`'s, so a case's packs and the deployment's
 #: packs cannot drift apart.
@@ -102,6 +102,7 @@ def compose_with_packs(base: OntologySchema, packs: list[str]) -> OntologySchema
             type_packs[defined.name] = name
 
     _check_entity_types(entity_types)
+    check_icon_by_value(entity_types)
     _check_edge_endpoints(entity_types, edge_types)
     return OntologySchema(
         version=base.version,

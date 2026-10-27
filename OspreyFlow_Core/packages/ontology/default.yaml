@@ -133,7 +133,12 @@ entity_types:
     pole_class: object
     channel: cyan
     shape: hexagon
-    icon: phone
+    # ADR-128 Amendment 3: the neutral device drawing is the type's; a phone, a keypad and an account
+    # are drawn for those kinds of endpoint only (Decision 4). In place, no version bump.
+    icon: device
+    icon_by_value:
+      property: endpoint_kind
+      icons: {msisdn: phone, handle: keypad, account: account}
     identifiers: [e164, handle, email, imsi]
     properties:
       - {name: value_raw, type: string}

@@ -1603,6 +1603,40 @@ test("the Icons control is reached by Tab, and a drawing chosen with the arrow k
   registerCovered("CANVAS_ACTIONS", "icons-menu-by-keyboard");
 });
 
+// ADR-128 Decision 4 (B7). n4 is an Endpoint whose endpoint_kind is `handle`, which the ontology maps
+// to the keypad (ten dots), where the type's own drawing is a device (no dots).
+test("the legend says which value icon means what, reached by Tab, and the analyst's choice for the type takes over", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await settle(page, "n0");
+  const dots = (uri: string | null | undefined) => (svgOf(uri).match(/<g [\s\S]*<\/g>/)?.[0].match(/<circle/g) ?? []).length;
+  await expect.poll(async () => dots(await nodeImage(page, "n4"))).toBe(10); // the keypad, not the device
+
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  const toggle = page.getByRole("button", { name: "Legend", exact: true });
+  await tabTo(page, toggle);
+  const entries = page.locator('ul[aria-label="Icons by value"]');
+  const entry = entries.getByRole("listitem").filter({ hasText: "Keypad: Endpoint, endpoint kind handle" });
+  await expect(entry).toBeVisible();
+  await expect(entry).toContainText("1");
+  // Folded with the legend by the keyboard, and open again.
+  await page.keyboard.press("Enter");
+  await expect(entries).toBeHidden();
+  await page.keyboard.press("Enter");
+  await expect(entry).toBeVisible();
+
+  // The analyst's choice for the type comes before the value icon: the node draws it instead.
+  const button = page.getByRole("button", { name: "Icons" });
+  await canvas.focus();
+  await tabTo(page, button);
+  await page.keyboard.press("Enter");
+  const picker = page.getByRole("combobox", { name: "Icon for Endpoint" });
+  await tabTo(page, picker);
+  await chooseOption(page, picker, "glyph:shield");
+  await expect.poll(async () => dots(await nodeImage(page, "n4"))).toBe(0);
+  registerCovered("CANVAS_ACTIONS", "legend-says-which-value-icon-means-what-by-keyboard");
+});
+
 test("a picture given from a file is drawn in the shape, and is still there after a reload", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   await settle(page, "n0");

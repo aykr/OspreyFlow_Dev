@@ -32,12 +32,14 @@ import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
 import { GlobalSearch } from "../search/GlobalSearch";
 import {
+  askToSearch,
   fetchPatternPreview,
   listPatterns,
   loadPattern,
   runPattern,
   savePattern,
   type PatternPreview,
+  type PatternProposal,
   type PatternRunAccepted,
 } from "./api";
 import {
@@ -63,12 +65,22 @@ export interface QueryBuilderPanelProps {
   /** ADR-099: the case the pattern is matched in. */
   investigationId: string;
   schema: OntologySchema;
+  /** ADR-129 decision 2: the nodes selected on the canvas, which "the principal" or "the selected
+   * person" in a question refers to. Sent to the Conduit, which resolves them to the ones the
+   * analyst may see; the model never receives them. */
+  selectedNodeIds?: readonly string[];
 }
 
 /** The parts the Query builder folds into (ADR-096). */
 type QueryBuilderPart = "pattern" | "add" | "connect" | "save";
 
-export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, schema }: QueryBuilderPanelProps) {
+export function QueryBuilderPanel({
+  apiBaseUrl,
+  bearerToken,
+  investigationId,
+  schema,
+  selectedNodeIds = [],
+}: QueryBuilderPanelProps) {
   const [pattern, setPattern] = useState<PatternBuilderState>(createEmptyPattern());
   const [paletteType, setPaletteType] = useState(schema.entity_types[0]?.name ?? "");
   const [connectFrom, setConnectFrom] = useState("");
@@ -77,6 +89,11 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
   const [preview, setPreview] = useState<PatternPreview | null>(null);
   const [runResult, setRunResult] = useState<PatternRunAccepted | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // ADR-129: the question being typed, and the proposal drawn from the last one asked until the
+  // pattern is edited (an edited pattern is no longer what the explanation describes).
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [proposal, setProposal] = useState<PatternProposal | null>(null);
   // ADR-121: what each node's value field holds, and which property its select has chosen, until
   // "Add condition" is pressed.
   const [conditionValues, setConditionValues] = useState<Record<string, string>>({});
@@ -111,6 +128,7 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
     setPreview(null);
     setRunResult(null);
     setError(null);
+    setProposal(null);
   }
 
   function handleAddVariable(): void {
@@ -147,6 +165,25 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
       event.preventDefault();
       setPattern((p) => removeElement(p, nodeVar));
       resetResults();
+    }
+  }
+
+  async function handleAsk(): Promise<void> {
+    const text = question.trim();
+    if (!text || asking) return;
+    setAsking(true);
+    resetResults();
+    try {
+      const proposed = await askToSearch(apiBaseUrl, bearerToken, investigationId, text, selectedNodeIds);
+      // The proposed pattern is drawn in the builder as any other is, and its count is the one the
+      // preview route gave; nothing has run. The analyst edits, then runs with the Run button.
+      setPattern(fromPatternQuery(proposed.pattern));
+      setProposal(proposed);
+      setPreview({ estimated_count: proposed.estimated_count, is_floor: proposed.is_floor });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAsking(false);
     }
   }
 
@@ -216,6 +253,29 @@ export function QueryBuilderPanel({ apiBaseUrl, bearerToken, investigationId, sc
       <div style={{ display: "flex", flexDirection: "column" }}>
         <AccordionSection title="Pattern" open={parts.has("pattern")} onToggle={() => togglePart("pattern")}>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
+        {/* ADR-129 decision 2: ask in words; the model proposes, the analyst checks and runs. */}
+        <div role="group" aria-label="Ask to search" style={{ display: "flex", gap: "var(--sp-4)" }}>
+          <Input
+            aria-label="Ask to search"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void handleAsk();
+              }
+            }}
+            placeholder="Ask in words, e.g. who shares a visitor with the principal?"
+          />
+          <Button type="button" onClick={() => void handleAsk()} disabled={!question.trim() || asking}>
+            Ask
+          </Button>
+        </div>
+        {proposal && (
+          <p aria-live="polite" style={{ margin: 0 }}>
+            {proposal.explanation} A model proposed this pattern. Check the pattern before you run it.
+          </p>
+        )}
         {pattern.nodes.length === 0 && (
           <p style={{ margin: 0, color: "var(--text-tertiary)" }}>
             No pattern yet: open Add to the pattern to start one.

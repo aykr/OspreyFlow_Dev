@@ -6,9 +6,11 @@ import {
   forgetIconChoicesForTest,
   getIconChoices,
   onIconChoicesChange,
+  resolveIconForNode,
   resolveNodeIcon,
   setIconChoice,
 } from "./iconChoices";
+import { forgetEntityPictures, setEntityPictureForTest } from "./entityPictures";
 
 // ADR-079. The ontology gives each entity type a default icon; the analyst may choose another
 // built-in drawing, none, or a picture of their own. Like the label choice (ADR-076) it is a way of
@@ -115,5 +117,51 @@ describe("telling the canvas", () => {
     stop();
     setIconChoice("Person", null);
     expect(heard).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ADR-128 Decision 4: the entity's own picture, then the analyst's per-type choice, then the value
+// icon, then the type icon. The value icon is a fourth argument; the first three are as before.
+describe("the value icon in the order of what is drawn", () => {
+  const PHOTO = "data:image/png;base64,iVBORw0KGgo=";
+  const glyphOf = (icon: ReturnType<typeof resolveNodeIcon>) => (icon?.kind === "glyph" ? icon.name : icon?.kind ?? null);
+
+  beforeEach(() => forgetEntityPictures());
+  afterEach(() => forgetEntityPictures());
+
+  it("takes the place of the type's icon", () => {
+    expect(glyphOf(resolveNodeIcon("Endpoint", "device", DARK_FILL, "keypad"))).toBe("keypad");
+  });
+
+  it("leaves the type's icon when the node has no value icon", () => {
+    expect(glyphOf(resolveNodeIcon("Endpoint", "device", DARK_FILL, null))).toBe("device");
+    expect(glyphOf(resolveNodeIcon("Endpoint", "device", DARK_FILL, undefined))).toBe("device");
+  });
+
+  it("gives way to the analyst's drawing for the type", () => {
+    setIconChoice("Endpoint", { kind: "glyph", name: "shield" });
+    expect(glyphOf(resolveNodeIcon("Endpoint", "device", DARK_FILL, "keypad"))).toBe("shield");
+  });
+
+  it("gives way to the analyst choosing no icon for the type", () => {
+    setIconChoice("Endpoint", { kind: "none" });
+    expect(resolveNodeIcon("Endpoint", "device", DARK_FILL, "keypad")).toBeNull();
+  });
+
+  it("gives way to the analyst's own picture for the type", () => {
+    setIconChoice("Endpoint", { kind: "image", dataUrl: PHOTO });
+    expect(glyphOf(resolveNodeIcon("Endpoint", "device", DARK_FILL, "keypad"))).toBe("image");
+  });
+
+  it("gives way to the entity's own picture, which comes first of all", () => {
+    setEntityPictureForTest("ep-1", PHOTO);
+    expect(glyphOf(resolveIconForNode("ep-1", "Endpoint", "device", DARK_FILL, "keypad"))).toBe("image");
+    expect(glyphOf(resolveIconForNode("ep-2", "Endpoint", "device", DARK_FILL, "keypad"))).toBe("keypad");
+  });
+
+  it("is not drawn when it names a drawing the Glass has not, and the type's icon is not put back", () => {
+    // A name that cannot be drawn is a fault in the ontology; the node draws nothing rather than a
+    // different meaning's icon, the same as an unknown type icon.
+    expect(resolveNodeIcon("Endpoint", "device", DARK_FILL, "not-an-icon")).toBeNull();
   });
 });

@@ -306,6 +306,74 @@ test("a condition is added to a node by keyboard, sent by Preview, and removed a
   registerCovered("QUERY_BUILDER_ACTIONS", "remove-condition-from-pattern-node");
 });
 
+test("Ask to search: type the question, move to the proposed pattern, preview it, run it", async ({ page }) => {
+  // ADR-129 decision 2 (rule 13). The model's proposal is intercepted at the transport; what is
+  // proved is the keyboard path: the box takes the question and Enter asks, the proposed pattern is
+  // drawn in the builder and reached by Tab, and Preview and Run, the existing routes, are
+  // pressed from it. The proposal's own count (4) and the preview's (9) differ, so the case shows
+  // the second press asked the preview route and did not reuse the first.
+  const asked: { question: string; selected_node_ids: string[] }[] = [];
+  await page.route("**/*/v1/investigations/*/patterns/ask", async (route) => {
+    asked.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        pattern: {
+          nodes: [
+            { var: "a", entity_type: "Person", node_id: null },
+            { var: "b", entity_type: "Endpoint", node_id: "n-selected" },
+          ],
+          edges: [{ edge_type: "USES", from_var: "a", to_var: "b" }],
+          limit: 1000,
+        },
+        explanation: "Finds people who use the selected number.",
+        estimated_count: 4,
+        is_floor: false,
+      }),
+    });
+  });
+  await page.route("**/*/v1/investigations/*/patterns/preview", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ estimated_count: 9, is_floor: false }),
+    });
+  });
+  await page.route("**/*/v1/investigations/*/patterns/run", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ mode: "sync", subgraph: { nodes: [], edges: [] }, matched_count: 9 }),
+    });
+  });
+
+  await page.goto("/keyboard/query-builder-harness.html");
+  const box = page.getByRole("textbox", { name: "Ask to search" });
+  await box.focus();
+  await page.keyboard.type("Who uses the selected number?");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText(/Finds people who use the selected number\./)).toBeVisible();
+  await expect(page.getByRole("group", { name: /Pattern node a: Person/ })).toBeVisible();
+  await expect(page.getByRole("group", { name: /Pattern node b: Endpoint · n-selected/ })).toBeVisible();
+  await expect(page.getByText("~4 matches")).toBeVisible();
+  expect(asked).toEqual([{ question: "Who uses the selected number?", selected_node_ids: ["n-selected"] }]);
+
+  // Move to the proposed pattern: Tab from the question box reaches Ask, then the first node.
+  await tabUntil(page, async () =>
+    page.evaluate(() => document.activeElement?.getAttribute("aria-label")?.startsWith("Pattern node a") ?? false),
+  );
+  await tabToButtonNamed(page, "Preview");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("~9 matches")).toBeVisible();
+
+  await tabToButtonNamed(page, "Run");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("9 node(s) matched.")).toBeVisible();
+  registerCovered("QUERY_BUILDER_ACTIONS", "ask-to-search-propose-pattern");
+});
+
 test("every registered query-builder action has its own proving test case above", () => {
   assertAllCovered("QUERY_BUILDER_ACTIONS", QUERY_BUILDER_ACTIONS);
 });

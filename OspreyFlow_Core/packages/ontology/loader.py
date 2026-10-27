@@ -25,6 +25,7 @@ from schemas.domain import (
     EdgeTypeDef,
     EntityTypeDef,
     OntologySchema,
+    PropertyType,
 )
 
 from .errors import OntologyError
@@ -116,6 +117,7 @@ def load_ontology(path: str | Path) -> OntologySchema:
 
     _check_entity_types(entity_types)
     _check_resolution_configs(entity_types)
+    check_icon_by_value(entity_types)
     edge_types = _inject_system_edge_types(edge_types)
     _check_edge_endpoints(entity_types, edge_types)
 
@@ -153,6 +155,33 @@ def _check_entity_types(entity_types: list[EntityTypeDef]) -> None:
             "channel and shape combination(s) assigned to more than one entity type "
             f"(sharing a channel is fine; sharing channel and shape is not): {rendered}"
         )
+
+
+def check_icon_by_value(entity_types: list[EntityTypeDef]) -> None:
+    """ADR-128 Decision 4: a type's `icon_by_value` names an enum property the type has, each mapped
+    value is one of that property's values, and each glyph is on the closed `icon` list. The JSON
+    Schema checks the list for a core file; a pack is not run through it, so every composition
+    calls this too."""
+    glyphs = set(_json_schema()["$defs"]["entity_type"]["properties"]["icon"]["enum"])
+    for entity_type in entity_types:
+        declared = entity_type.icon_by_value
+        if declared is None:
+            continue
+        where = f"entity type {entity_type.name!r} icon_by_value"
+        prop = next((p for p in entity_type.properties if p.name == declared.property), None)
+        if prop is None:
+            raise OntologyError(f"{where}: {declared.property!r} is not a property of the type")
+        if prop.type is not PropertyType.ENUM:
+            raise OntologyError(f"{where}: property {declared.property!r} is not an enum")
+        allowed = set(prop.values or [])
+        for value, glyph in declared.icons.items():
+            if value not in allowed:
+                raise OntologyError(
+                    f"{where}: {value!r} is not a value of {declared.property!r} "
+                    f"({', '.join(sorted(allowed))})"
+                )
+            if glyph not in glyphs:
+                raise OntologyError(f"{where}: {glyph!r} is not a name on the icon list")
 
 
 def _check_resolution_configs(entity_types: list[EntityTypeDef]) -> None:

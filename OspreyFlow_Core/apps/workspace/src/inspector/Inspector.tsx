@@ -17,6 +17,7 @@ import type { DocumentReaderView } from "../reader/readerApi";
 import { linkTypeName } from "../canvas/linkLabel";
 import type { EntityVisual } from "../ontology/schema";
 import { SelectionList } from "./SelectionList";
+import { describeIconForValue, valueIconFor } from "../canvas/valueIcons";
 import { TypeChip } from "./TypeChip";
 import { NeighbourhoodRisk, type NeighbourhoodRiskProps } from "./NeighbourhoodRisk";
 import { SharedContacts, type SharedContactsProps } from "./SharedContacts";
@@ -500,6 +501,18 @@ function NodeView({
               <dt style={{ color: "var(--text-secondary)" }}>ID</dt>
               <dd className="identifier">{node.id}</dd>
             </div>
+            {(() => {
+              // ADR-128 Decision 4: which icon this node's value stands for, when its type maps one.
+              const rule = visualFor?.(node.type)?.iconByValue;
+              const given = valueIconFor(rule, node.properties);
+              if (!rule || !given) return null;
+              return (
+                <div>
+                  <dt style={{ color: "var(--text-secondary)" }}>Icon for this value</dt>
+                  <dd className="value">{describeIconForValue(rule.property, given)}</dd>
+                </div>
+              );
+            })()}
             {Object.entries(node.properties ?? {}).map(([key, value]) => (
               <div key={key}>
                 <dt style={{ color: "var(--text-secondary)" }}>{key}</dt>

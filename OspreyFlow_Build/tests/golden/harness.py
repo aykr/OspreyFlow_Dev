@@ -79,12 +79,17 @@ from __future__ import annotations
 
 import re
 import statistics
-from collections.abc import Sequence
+from collections import Counter
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from adapters.model_litellm.testing import model_litellm_adapter
+from schemas.domain import OntologySchema, PatternQuery
 from schemas.model import ExtractionRequest
+
+if TYPE_CHECKING:
+    from services.api.pattern_ask import PatternProposer
 
 N_RUNS = 48
 
@@ -205,3 +210,174 @@ def summarise(results: Sequence[CaseResult]) -> dict[str, dict[str, dict[str, fl
         }
         for result in results
     }
+
+
+# --- ask to search (`06_DECISIONS.md` ADR-129 decision 2) --------------------------------------
+#
+# A second kind of case: a question and the pattern a person would draw for it, scored by recall of
+# the pattern's own parts rather than of extracted strings. It sits beside the extraction cases, not
+# inside `GoldenCase`, because there is no document and no `json_schema` to fill: what is measured
+# is `services.api.pattern_ask.PatternProposer`, the code the route runs, against a real model.
+#
+# **What is scored.** A pattern is read as a multiset of elements: each node's type; each link as
+# (type, the types of its two ends, in order unless the link is undirected); each condition as
+# (node type, property, value); each pinned node as (node type, its placeholder). The variable
+# letters the model chose are not scored, since only the parts matter. Recall is the share of the
+# expected pattern's elements the proposed one holds (a multiset, so "two different documents"
+# needs two); precision is the share of the proposed pattern's elements that were expected. A
+# question the Conduit must refuse is scored correct, recall and precision 1.0, only when the
+# proposer refused (`CouldNotExpress`); a pattern proposed for it scores 0.0, and a refusal of an
+# answerable question scores recall 0.0. Gating is on recall, as the extraction cases are: a pattern
+# that is too wide is shown with its count and edited, one that is missing a part is the wrong
+# question.
+
+#: What `baseline.json` calls the one category of the ask-to-search case.
+PATTERN_CATEGORY = "pattern_recall"
+
+#: Set from the first measured run (`ADR-129`: "a recall floor is set from the first measured
+#: run"), as `test_golden_set.RECALL_TOLERANCE` is for extraction: the floor is the baseline recall
+#: less this. Owner's to set from the measured spread, not derived here.
+PATTERN_RECALL_TOLERANCE = 0.15
+
+
+@dataclass(frozen=True)
+class PatternGoldenCase:
+    id: str
+    question: str
+    #: The pattern a person would draw, in the route's own type, with `$selected_n` where the
+    #: question means what the analyst selected; `None` for a question that must be refused.
+    expected: PatternQuery | None
+    #: How many items the analyst is taken to have selected: the placeholders the model is offered.
+    selected: int = 0
+
+
+@dataclass(frozen=True)
+class PatternScore:
+    precision: float
+    recall: float
+
+
+def _pattern_elements(
+    pattern: PatternQuery, undirected: Collection[str]
+) -> Counter[tuple[str, ...]]:
+    kind = {n.var: n.entity_type or "" for n in pattern.nodes}
+    elements: Counter[tuple[str, ...]] = Counter()
+    for node in pattern.nodes:
+        elements[("type", kind[node.var])] += 1
+        if node.node_id:
+            elements[("pin", kind[node.var], node.node_id)] += 1
+        for name, value in node.where.items():
+            elements[("where", kind[node.var], name, _normalise(value))] += 1
+    for edge in pattern.edges:
+        ends = (kind[edge.from_var], kind[edge.to_var])
+        if edge.edge_type in undirected:
+            ends = (min(ends), max(ends))
+        elements[("link", edge.edge_type, *ends)] += 1
+    return elements
+
+
+def score_pattern(
+    expected: PatternQuery | None,
+    proposed: PatternQuery | None,
+    *,
+    undirected: Collection[str] = frozenset(),
+) -> PatternScore:
+    """One run's score. `proposed` is `None` when the Conduit refused the question. `undirected`
+    names the link types whose two ends may be written either way round (the ontology's own)."""
+    if expected is None:
+        correct = 1.0 if proposed is None else 0.0
+        return PatternScore(precision=correct, recall=correct)
+    if proposed is None:
+        return PatternScore(precision=1.0, recall=0.0)
+    wanted = _pattern_elements(expected, undirected)
+    got = _pattern_elements(proposed, undirected)
+    held = sum((wanted & got).values())
+    return PatternScore(
+        precision=1.0 if not got else held / sum(got.values()),
+        recall=1.0 if not wanted else held / sum(wanted.values()),
+    )
+
+
+async def run_pattern_cases(
+    proposer: PatternProposer,
+    cases: Sequence[PatternGoldenCase],
+    ontology: OntologySchema,
+    *,
+    n_runs: int,
+) -> dict[str, list[PatternScore]]:
+    """Asks each question `n_runs` times through the proposer, the code the route runs, and scores
+    each answer: `{case id: [one score per run]}`. A refusal is `None`, scored as a refusal. The
+    live test passes a proposer over a real model; the gate's own tests pass one over a fake that
+    answers in the shape a real model's constrained output takes."""
+    from services.api.pattern_ask import CouldNotExpress  # deferred: keeps the harness light
+
+    undirected = {e.name for e in ontology.edge_types if not e.directed}
+    scores: dict[str, list[PatternScore]] = {}
+    for case in cases:
+        runs: list[PatternScore] = []
+        for _ in range(n_runs):
+            try:
+                proposal = await proposer.propose(
+                    case.question, ontology, placeholders=case.selected
+                )
+            except CouldNotExpress:
+                proposed = None
+            else:
+                proposed = proposal.pattern
+            runs.append(score_pattern(case.expected, proposed, undirected=undirected))
+        scores[case.id] = runs
+    return scores
+
+
+def summarise_patterns(
+    case_id: str, scores_by_question: Mapping[str, Sequence[PatternScore]]
+) -> dict[str, dict[str, dict[str, float]]]:
+    """The shape `baseline.json` stores for the ask-to-search case: each question's mean over its
+    runs, then the mean over the questions, so no question is weighted by how often it was asked."""
+    per_question = [
+        (
+            statistics.mean(s.precision for s in runs),
+            statistics.mean(s.recall for s in runs),
+        )
+        for runs in scores_by_question.values()
+    ]
+    return {
+        case_id: {
+            PATTERN_CATEGORY: {
+                "precision": statistics.mean(p for p, _ in per_question),
+                "recall": statistics.mean(r for _, r in per_question),
+            }
+        }
+    }
+
+
+@dataclass(frozen=True)
+class PatternGateResult:
+    #: `not_yet_measured`: the baseline holds no recall yet, so there is nothing to fall below. It
+    #: is never `passed`: a gate with no floor has not been run, and says so.
+    status: Literal["passed", "failed", "not_yet_measured"]
+    message: str
+
+
+def pattern_gate(
+    case_id: str,
+    measured_recall: float,
+    baseline: Mapping[str, Any],
+    *,
+    tolerance: float = PATTERN_RECALL_TOLERANCE,
+) -> PatternGateResult:
+    """The ask-to-search gate, as the live test applies it: recall below the baseline's recall less
+    the tolerance fails; a baseline recall of `null` is not yet measured."""
+    entry = baseline.get(case_id, {}).get(PATTERN_CATEGORY)
+    recorded = None if entry is None else entry.get("recall")
+    if recorded is None:
+        return PatternGateResult(
+            "not_yet_measured",
+            f"{case_id}/{PATTERN_CATEGORY}: recall {measured_recall:.2f} measured; the baseline "
+            "holds no recall yet, so no floor applies. Record it in baseline.json.",
+        )
+    floor = float(recorded) - tolerance
+    report = f"{case_id}/{PATTERN_CATEGORY}: recall {measured_recall:.2f} (baseline {recorded:.2f})"
+    if measured_recall < floor:
+        return PatternGateResult("failed", f"{report} — below floor {floor:.2f}")
+    return PatternGateResult("passed", report)

@@ -145,3 +145,151 @@ describe("QueryBuilderPanel value field on a node", () => {
     expect(screen.queryByRole("combobox", { name: "Condition property on a" })).toBeNull();
   });
 });
+
+// ADR-129 decision 2: an Ask to search box above the pattern. The proposed pattern is drawn in the
+// builder with its explanation and count, nothing runs, and Run is the existing route.
+const ASK_SCHEMA = {
+  version: 1,
+  entity_types: [{ name: "Person", pole_class: "person", channel: "indigo", shape: "circle", identifiers: [] }],
+  edge_types: [{ name: "VISITED", from: ["Person"], to: ["Person"], directed: true }],
+} as unknown as OntologySchema;
+
+const PROPOSAL = {
+  pattern: {
+    nodes: [
+      { var: "a", entity_type: "Person", node_id: null },
+      { var: "b", entity_type: "Person", node_id: "n-dana" },
+    ],
+    edges: [{ edge_type: "VISITED", from_var: "a", to_var: "b" }],
+    limit: 1000,
+  },
+  explanation: "Finds people who visited the selected person.",
+  estimated_count: 4,
+  is_floor: false,
+};
+
+function mountAsk(ask: { ok: boolean; status: number; body: unknown }, selected: string[] = ["n-dana"]) {
+  const fetchMock = vi.fn((url: string, init?: { body?: string }) => {
+    void init;
+    const target = String(url);
+    if (target.endsWith("/patterns/ask")) {
+      return Promise.resolve({ ok: ask.ok, status: ask.status, json: async () => ask.body });
+    }
+    if (target.endsWith("/patterns/run")) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ mode: "sync", subgraph: { nodes: [], edges: [] }, matched_count: 4 }),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ patterns: [] }) });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(
+    <QueryBuilderPanel
+      investigationId="inv-1"
+      apiBaseUrl="http://api.test"
+      bearerToken="tok"
+      schema={ASK_SCHEMA}
+      selectedNodeIds={selected}
+    />,
+  );
+  return fetchMock;
+}
+
+const asked = (fetchMock: ReturnType<typeof vi.fn>) =>
+  fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/patterns/ask"));
+
+describe("QueryBuilderPanel ask to search", () => {
+  it("offers a question box and an Ask button that waits for a question", () => {
+    mountAsk({ ok: true, status: 200, body: PROPOSAL });
+    expect(screen.getByRole("textbox", { name: "Ask to search" })).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Ask" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "  " } });
+    expect((screen.getByRole("button", { name: "Ask" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("draws the proposed pattern with its explanation and count, sending the selection and running nothing", async () => {
+    const fetchMock = mountAsk({ ok: true, status: 200, body: PROPOSAL });
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), {
+      target: { value: "Who visited the principal?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+
+    await screen.findByText(/Finds people who visited the selected person\./);
+    expect(screen.getByRole("group", { name: "Pattern node a: Person" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Pattern node b: Person · n-dana" })).toBeTruthy();
+    expect(screen.getByText("~4 matches")).toBeTruthy();
+    expect(screen.getByText(/Check the pattern before you run it/)).toBeTruthy();
+
+    const [, init] = asked(fetchMock)[0] as [string, { body: string }];
+    expect(JSON.parse(init.body)).toEqual({
+      question: "Who visited the principal?",
+      selected_node_ids: ["n-dana"],
+    });
+    const runs = fetchMock.mock.calls.filter(([url]) => /\/patterns\/(run|preview)$/.test(String(url)));
+    expect(runs).toHaveLength(0); // nothing ran, and the count is the one the proposal came with
+  });
+
+  it("runs the proposed pattern only when Run is pressed, through the existing run route", async () => {
+    const fetchMock = mountAsk({ ok: true, status: 200, body: PROPOSAL });
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "q" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("~4 matches");
+
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await screen.findByText("4 node(s) matched.");
+    const [, init] = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/patterns/run")) as [
+      string,
+      { body: string },
+    ];
+    const sent = JSON.parse(init.body);
+    expect(sent.nodes.map((n: { var: string; node_id: string | null }) => [n.var, n.node_id])).toEqual([
+      ["a", null],
+      ["b", "n-dana"],
+    ]);
+    expect(sent.edges).toEqual([{ edge_type: "VISITED", from_var: "a", to_var: "b" }]);
+  });
+
+  it("asks on Enter in the box as well", async () => {
+    const fetchMock = mountAsk({ ok: true, status: 200, body: PROPOSAL });
+    const box = screen.getByRole("textbox", { name: "Ask to search" });
+    fireEvent.change(box, { target: { value: "q" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    await screen.findByText("~4 matches");
+    expect(asked(fetchMock)).toHaveLength(1);
+  });
+
+  it("says it could not express the question and draws nothing", async () => {
+    mountAsk({
+      ok: false,
+      status: 422,
+      body: { error: "could_not_express", reason: "model_declined", detail: "The question cannot be put in this case's vocabulary." },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "Who is guilty?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText(/Could not express the question as a pattern\./);
+    expect(screen.queryAllByRole("group", { name: /^Pattern node/ })).toHaveLength(0);
+    expect(screen.queryByText(/matches/)).toBeNull();
+  });
+
+  it("an edit to the proposed pattern clears the count and the explanation, which no longer describe it", async () => {
+    mountAsk({ ok: true, status: 200, body: PROPOSAL });
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "q" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("~4 matches");
+
+    fireEvent.keyDown(screen.getByRole("group", { name: "Pattern node a: Person" }), { key: "Delete" });
+    expect(screen.queryByText("~4 matches")).toBeNull();
+    expect(screen.queryByText(/Finds people who visited/)).toBeNull();
+  });
+
+  it("sends no selection when nothing is selected", async () => {
+    const fetchMock = mountAsk({ ok: true, status: 200, body: PROPOSAL }, []);
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "q" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("~4 matches");
+    const [, init] = asked(fetchMock)[0] as [string, { body: string }];
+    expect(JSON.parse(init.body).selected_node_ids).toEqual([]);
+  });
+});

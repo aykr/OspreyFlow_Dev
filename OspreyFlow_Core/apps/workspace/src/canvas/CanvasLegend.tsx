@@ -11,15 +11,29 @@
 // Under the types, the links in view (ADR-117): each link type in its colour with how many, and a
 // box to leave it out of the view or bring it back — the "links to include" a prison analyst filters
 // a network by. Leaving a type out hides its links in this view only, like hiding one link.
+//
+// Under the links, the icons chosen by a property's value (ADR-128 Decision 4): each drawing in use in
+// the view, what it means and how many nodes carry it, so an icon is never a guess.
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
+import { activePalette } from "../color/palette";
 import { TypeChip } from "../inspector/TypeChip";
 import type { EntityVisual } from "../ontology/schema";
+import { describeValueIcon, glyphImageUri } from "./valueIcons";
 
 export interface LegendType {
   type: string;
   count: number;
   visual?: EntityVisual;
+}
+
+/** One icon chosen by a property's value that is drawn in the view now (ADR-128 Decision 4). */
+export interface LegendValueIcon {
+  type: string;
+  property: string;
+  value: string;
+  glyph: string;
+  count: number;
 }
 
 export interface LegendLink {
@@ -73,10 +87,12 @@ function remember(offset: Offset) {
 export function CanvasLegend({
   types,
   links = [],
+  valueIcons = [],
   onToggleLink,
 }: {
   types: readonly LegendType[];
   links?: readonly LegendLink[];
+  valueIcons?: readonly LegendValueIcon[];
   onToggleLink?: (type: string) => void;
 }) {
   const [open, setOpen] = useState(true);
@@ -177,6 +193,21 @@ export function CanvasLegend({
           </li>
         ))}
       </ul>
+      {valueIcons.length > 0 && (
+        <ul aria-label="Icons by value" className="canvas-legend__list canvas-legend__links" hidden={!open}>
+          {[...valueIcons]
+            .sort((a, b) => b.count - a.count || a.glyph.localeCompare(b.glyph) || a.type.localeCompare(b.type))
+            .map((v) => (
+              <li key={`${v.type}:${v.property}:${v.value}`}>
+                <span className="canvas-legend__meaning">
+                  <img alt="" width={14} height={14} src={glyphImageUri(v.glyph, activePalette().textPrimary) ?? undefined} />
+                  {describeValueIcon(v.type, v.property, v.value, v.glyph)}
+                </span>
+                <span className="value">{v.count.toLocaleString("en-GB")}</span>
+              </li>
+            ))}
+        </ul>
+      )}
       {links.length > 0 && (
         <ul aria-label="Links in view" className="canvas-legend__list canvas-legend__links" hidden={!open}>
           {[...links]

@@ -4,12 +4,15 @@
 // does not change while a session is open.
 import type { EntityTypeDef, OntologySchema } from "../../../../packages/schemas/generated";
 import type { NodeShape } from "../color/nodeVisual";
+import type { IconByValueRule } from "../canvas/valueIcons";
 
 export interface EntityVisual {
   channel: string;
   shape: NodeShape;
   /** The ontology's default icon for the type (ADR-079): a name from its closed list, or none. */
   icon?: string | null;
+  /** ADR-128 Decision 4: the enum property whose value picks the icon, and the drawing for some of its values. */
+  iconByValue?: IconByValueRule;
 }
 
 /** `EntityTypeDef.channel`/`.shape` are free-form strings in the schema
@@ -33,7 +36,13 @@ function toEntityVisual(entity: EntityTypeDef): EntityVisual {
       `entity type ${JSON.stringify(entity.name)}: shape ${JSON.stringify(entity.shape)} has no Glass SVG generator`,
     );
   }
-  return { channel: entity.channel, shape: entity.shape as NodeShape, icon: entity.icon ?? null };
+  const rule = entity.icon_by_value;
+  return {
+    channel: entity.channel,
+    shape: entity.shape as NodeShape,
+    icon: entity.icon ?? null,
+    ...(rule ? { iconByValue: { property: rule.property, icons: { ...rule.icons } } } : {}),
+  };
 }
 
 export class OntologyRegistry {

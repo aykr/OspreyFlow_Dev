@@ -20,6 +20,15 @@ describe("the drawings the ontology may name", () => {
     expect([...GLYPH_NAMES].sort()).toEqual([...SCHEMA_NAMES].sort());
   });
 
+  it("include the six ADR-128 Amendment 3 added for icons chosen by a value, and make twenty-six", () => {
+    for (const name of ["keypad", "account", "parcel-over-wall", "clash", "crowd", "magnifier"]) {
+      expect(SCHEMA_NAMES).toContain(name);
+      expect(hasGlyph(name)).toBe(true);
+    }
+    expect(SCHEMA_NAMES).toHaveLength(26);
+    expect(GLYPH_NAMES).toHaveLength(26);
+  });
+
   it("each have a drawing, and an unknown name has none", () => {
     for (const name of SCHEMA_NAMES) {
       expect(hasGlyph(name)).toBe(true);

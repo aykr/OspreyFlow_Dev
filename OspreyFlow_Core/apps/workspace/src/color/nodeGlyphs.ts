@@ -1,5 +1,6 @@
-// The drawings an entity type's icon can be (ADR-079): twenty simple pictures on a 24-unit grid,
-// drawn for this project from plain shapes, so there is nothing to download or to licence. The
+// The drawings an entity type's icon can be (ADR-079): twenty simple pictures on a 24-unit grid, and
+// the six ADR-128 Amendment 3 added for icons chosen by a property's value (keypad, account,
+// parcel-over-wall, clash, crowd, magnifier), drawn for this project from plain shapes, so there is nothing to download or to licence. The
 // ontology names one (`EntityTypeDef.icon`); its JSON Schema holds the closed list of names and
 // `nodeGlyphs.test.ts` pins that list to this one. A picture is drawn in one colour, put in where
 // each drawing says `currentColor`, so it can follow the node's fill and the theme.
@@ -35,6 +36,19 @@ const GLYPHS: Readonly<Record<string, string>> = {
   tag: '<path fill-rule="evenodd" fill="currentColor" d="M3 3h8.5l9.5 9.5-8.5 8.5L3 11.5zM7.5 6.2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/>',
   camera:
     '<path fill-rule="evenodd" fill="currentColor" d="M3 7h4l1.5-2.5h7L17 7h4v13H3zM12 9.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/>',
+  // ADR-128 Amendment 3: the icons chosen by a property's value (an endpoint's kind, an incident's category).
+  keypad:
+    '<circle cx="6.5" cy="4.5" r="2.2" fill="currentColor"/><circle cx="12" cy="4.5" r="2.2" fill="currentColor"/><circle cx="17.5" cy="4.5" r="2.2" fill="currentColor"/><circle cx="6.5" cy="10" r="2.2" fill="currentColor"/><circle cx="12" cy="10" r="2.2" fill="currentColor"/><circle cx="17.5" cy="10" r="2.2" fill="currentColor"/><circle cx="6.5" cy="15.5" r="2.2" fill="currentColor"/><circle cx="12" cy="15.5" r="2.2" fill="currentColor"/><circle cx="17.5" cy="15.5" r="2.2" fill="currentColor"/><circle cx="12" cy="21" r="2.2" fill="currentColor"/>',
+  account:
+    '<circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="9.6" r="3" fill="currentColor"/><path d="M6.4 18.2c.7-3 3-4.6 5.6-4.6s4.9 1.6 5.6 4.6c-1.5 1.3-3.4 2-5.6 2s-4.1-.7-5.6-2z" fill="currentColor"/>',
+  "parcel-over-wall":
+    '<path fill-rule="evenodd" fill="currentColor" d="M8 2h8v7H8zM11.4 2h1.2v7h-1.2z"/><path fill-rule="evenodd" fill="currentColor" d="M2 13h20v9H2zM2 15.8h20v.8H2zM2 19h20v.8H2zM8 13.8h.8v2.2H8zM15 13.8h.8v2.2H15zM11.4 16.6h.8V19h-.8zM5 16.6h.8V19H5zM18 16.6h.8V19H18z"/>',
+  clash:
+    '<path fill="currentColor" d="M3.4 6.2 6.2 3.4 20.6 17.8 17.8 20.6z"/><path fill="currentColor" d="M20.6 6.2 17.8 3.4 3.4 17.8 6.2 20.6z"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/>',
+  crowd:
+    '<circle cx="5.5" cy="7" r="2.4" fill="currentColor"/><circle cx="12" cy="6" r="2.4" fill="currentColor"/><circle cx="18.5" cy="7" r="2.4" fill="currentColor"/><circle cx="8.5" cy="12.5" r="3" fill="currentColor"/><circle cx="15.5" cy="12.5" r="3" fill="currentColor"/><path d="M2.5 22c0-3.8 2.7-6 6-6s6 2.2 6 6z" fill="currentColor"/><path d="M9.5 22c0-3.8 2.7-6 6-6s6 2.2 6 6z" fill="currentColor"/>',
+  magnifier:
+    '<circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path fill="currentColor" d="M14.6 16 16 14.6 21.7 20.3 20.3 21.7z"/>',
 };
 
 /** The names an ontology may give an entity type's `icon`. */

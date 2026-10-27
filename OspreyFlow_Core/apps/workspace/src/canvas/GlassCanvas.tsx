@@ -93,7 +93,7 @@ import {
 import { settledAnchors } from "./settledAnchor";
 import { dragTargets, keepPinned, nudgeFor } from "./nodeDrag";
 import { expansionLinksNotice, linksAmongNotice, showLinksAmong } from "./linksAmong";
-import { CanvasLegend } from "./CanvasLegend";
+import { CanvasLegend, type LegendValueIcon } from "./CanvasLegend";
 import { ZoomControls } from "./ZoomControls";
 
 /** Where the canvas grid's on or off is kept, in this browser only. */
@@ -129,6 +129,7 @@ import { labelIsLiteral, NODE_LABEL_FONT, NODE_LABEL_SIZE } from "./nodeLabel";
 import { getLabelChoices, onLabelChoicesChange } from "./labelChoices";
 import { LabelsMenu } from "./LabelsMenu";
 import { IconsMenu } from "./IconsMenu";
+import { valueIconFor } from "./valueIcons";
 import { forgetEntityPictures, loadEntityPictures, onEntityPicturesChange } from "./entityPictures";
 import { onIconChoicesChange } from "./iconChoices";
 import {
@@ -948,6 +949,22 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       graph.forEachNode((_id, attrs) => counts.set(attrs.data.type, (counts.get(attrs.data.type) ?? 0) + 1));
       return [...counts].map(([type, count]) => ({ type, count, visual: ontology.visualFor(type) }));
       // `workingSetSeq` changes whenever nodes or links are added or removed.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [graph, ontology, workingSetSeq]);
+    // The legend's icons by value (ADR-128 Decision 4): each drawing a property's value gives a node in
+    // view, what it stands for and how many nodes carry it.
+    const legendValueIcons = useMemo(() => {
+      const counts = new Map<string, LegendValueIcon>();
+      graph.forEachNode((_id, attrs) => {
+        const rule = ontology.visualFor(attrs.data.type)?.iconByValue;
+        const given = valueIconFor(rule, attrs.data.properties);
+        if (!rule || !given) return;
+        const key = `${attrs.data.type}\u0000${given.value}`;
+        const held = counts.get(key);
+        if (held) held.count += 1;
+        else counts.set(key, { type: attrs.data.type, property: rule.property, value: given.value, glyph: given.glyph, count: 1 });
+      });
+      return [...counts.values()];
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [graph, ontology, workingSetSeq]);
     // The legend's links: each link type in view, its colour and how many, and whether it is shown.
@@ -3520,7 +3537,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           className="canvas-corner"
           style={toolbarHeight ? ({ "--canvas-toolbar-height": `${toolbarHeight}px` } as CSSProperties) : undefined}
         >
-          <CanvasLegend types={legendTypes} links={legendLinks} onToggleLink={toggleLinkType} />
+          <CanvasLegend types={legendTypes} links={legendLinks} valueIcons={legendValueIcons} onToggleLink={toggleLinkType} />
           <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} percent={zoomPercent} />
         </div>
         {addingFiles && bearerToken && investigationId && (

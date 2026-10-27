@@ -171,6 +171,9 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   // picture can be given from a file.
   "icons-menu-by-keyboard",
   "icon-picture-from-file",
+  // ADR-128 Decision 4 (B7): an icon chosen by a property's value is drawn for its value, the legend
+  // names what it means, and the analyst's own choice for the type takes over from it.
+  "legend-says-which-value-icon-means-what-by-keyboard",
   "large-expansion-add-all-by-keyboard",
   // 3 October 2026 (ADR-066): Communities groups the nodes in view and folds a group into one node.
   // Every way of doing it with the mouse has a keyboard route, each proved by its own case.
@@ -233,6 +236,9 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
   // Preview and Run send, and its own control removes it.
   "add-condition-to-pattern-node",
   "remove-condition-from-pattern-node",
+  // ADR-129 decision 2: a question typed in the Ask to search box (and asked by Enter) draws the
+  // model's proposed pattern in the builder, with its count, before anything runs.
+  "ask-to-search-propose-pattern",
 ] as const);
 
 /**
