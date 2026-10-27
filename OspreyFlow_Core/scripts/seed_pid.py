@@ -88,7 +88,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 
 import yaml
-from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
+from scripts.case_seed import add_case_arguments, check_case_arguments, parse_grant, scope_for
 from scripts.revert_load import build_revert_deps
 from services.api.audit import AuditWriter
 from services.api.case_brief import CaseBriefService, CaseBriefStore
@@ -1041,10 +1041,32 @@ class _CaseLevels(Protocol):
     ) -> Any: ...
 
 
+def brief_author(grant_texts: Sequence[str], seeder: Principal) -> Principal:
+    """Who the brief is written as (ADR-128 Amendment 4): the account the seed's own `--grant`
+    makes the case's Author. The pack's grants (ADR-113 decision 8) make the demo admin the Author
+    and the engineer who runs the seed an Editor, so writing as the seeder would always be refused.
+    With no account granted Author, the seeder made the case and is its Author. Two are refused by
+    name rather than one guessed. The account is given the seeder's clearance and unit and no
+    role: the brief needs the Author level, not a right."""
+    authors = [
+        account
+        for account, level in (parse_grant(text) for text in grant_texts)
+        if level is AccessLevel.AUTHOR
+    ]
+    if not authors:
+        return seeder
+    if len(authors) > 1:
+        raise SeedRefusal(
+            f"{', '.join(authors)} are each granted author, so the brief's author is not clear: "
+            "grant author to one account."
+        )
+    return seeder.model_copy(update={"id": authors[0], "roles": []})
+
+
 async def require_author(cases: _CaseLevels, case_id: str, principal: Principal) -> None:
-    """The brief is its case's Author's to write. The case the seed makes is made by the persona,
-    who is its Author; a seed pointed at a case the persona does not author is refused by name
-    before anything is written, not written through the store as someone with no standing."""
+    """The brief is its case's Author's to write (`brief_author` names who that is). An account
+    that is not the Author is refused by name before anything is written, not written through the
+    store as someone with no standing."""
     try:
         await cases.get_authorized(case_id, principal, need=AccessLevel.AUTHOR)
     except (InvestigationNotFoundError, InsufficientAccessError) as error:
@@ -2118,9 +2140,11 @@ async def _seed_into(
         for line in resolution_warning():
             print(line)
     case_id = await scope_for(args, seeder=base, dataset=PID)
-    # ADR-128: the brief is written as the case's Author, so a persona that is not is refused here,
-    # before a file is written, and not after the loads.
-    await _require_author_of(case_id, base)
+    # ADR-128: the brief is written as the case's Author, so an account that is not is refused
+    # here, before a file is written, and not after the loads. Amendment 4: that is the account the
+    # seed's grants make Author, which on a deployment is not the engineer who runs it.
+    author = brief_author(args.grant, base)
+    await _require_author_of(case_id, author)
     plan = pid_plan.build_plan("demo")
     print(f"Writing the files into {listed_folder(root)} ...", flush=True)
     rows = await asyncio.to_thread(write_listed_files, plan, root)
@@ -2237,7 +2261,7 @@ async def _seed_into(
     _, results, summary, (moment, numbers) = await seed_all(
         base, scope=scope, enter_recipes=recipes, run=run, pictures=pictures, checks=checks
     )
-    brief = await _seed_brief_into(case_id, base, resources.audit)
+    brief = await _seed_brief_into(case_id, author, resources.audit)
     draft = await store.get(reports_recipe_id())
     for line in summary_lines(results, run_as=base.id):
         print(line)
@@ -2251,7 +2275,7 @@ async def _seed_into(
         print(line)
     for line in inferred_lines(inferred[0]):
         print(line)
-    for line in brief_lines(brief, base.id):
+    for line in brief_lines(brief, author.id):
         print(line)
     file_lines, files_ok = check_lines(results, rows)
     for line in file_lines:

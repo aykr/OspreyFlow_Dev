@@ -3,9 +3,9 @@ requirement from the script's chapter 1, and four requirements, one per clause (
 throw-overs; where and when the packages arrive; how they are organised; what can be done to
 disrupt them). It is written as the case's author."
 
-Pure: the step is run over the in-memory brief store of `tests/services/api/case_brief_fakes.py` and a
-level-aware stand-in for the case store. What needs the live stack (the same step against Postgres,
-as the persona the seed created the case with) is the owner's run of the seed.
+Pure: the step is run over the in-memory brief store of `tests/services/api/case_brief_fakes.py`
+and a level-aware stand-in for the case store. What needs the live stack (the same step against
+Postgres, as the account the seed grants author: Amendment 4) is the owner's run of the seed.
 """
 
 from __future__ import annotations
@@ -147,6 +147,52 @@ async def test_a_persona_who_is_not_the_author_is_refused_by_name_before_anythin
     with pytest.raises(seed_pid.SeedRefusal) as refused:
         await seed_pid.require_author(_Cases(held), CASE, who)
     assert who.id in str(refused.value) and "Author" in str(refused.value)
+
+
+# --- who writes it on a real deployment (ADR-128 Amendment 4) -----------------------------------
+
+#: The grants `seed_internal` passes, by ADR-113 decision 8: the admin authors the case and the data
+#: engineer, who runs the seed, edits it.
+ADMIN_SUB = "sub-demo-admin"
+ENGINEER_SUB = "sub-demo-engineer"
+PACK_GRANTS = [
+    f"{ADMIN_SUB}=author",
+    "sub-demo-analyst=editor",
+    f"{ENGINEER_SUB}=editor",
+    "sub-demo-report-viewer=viewer",
+]
+PACK_LEVELS = {
+    ADMIN_SUB: AccessLevel.AUTHOR,
+    "sub-demo-analyst": AccessLevel.EDITOR,
+    ENGINEER_SUB: AccessLevel.EDITOR,
+    "sub-demo-report-viewer": AccessLevel.VIEWER,
+}
+
+
+async def test_under_the_packs_grants_the_brief_is_written_as_the_account_granted_author() -> None:
+    """Found installing the pack on the owner's deployment: the seed runs as the engineer, whom the
+    pack makes an Editor, so the brief step refused and the install stopped. The brief is written
+    as the account the seed's own grants make Author, and that account passes the Author check."""
+    engineer = seed_pid.engineer("verify", ENGINEER_SUB)
+    author = seed_pid.brief_author(PACK_GRANTS, engineer)
+    assert author.id == ADMIN_SUB
+    assert author.roles == []
+    await seed_pid.require_author(_Cases(PACK_LEVELS), CASE, author)
+    with pytest.raises(seed_pid.SeedRefusal):
+        await seed_pid.require_author(_Cases(PACK_LEVELS), CASE, engineer)
+
+
+def test_with_no_author_granted_the_seeder_who_made_the_case_writes_it() -> None:
+    """A seed with no grants (the local stack, no identity provider) makes the case as the seeder,
+    who is its Author."""
+    engineer = seed_pid.engineer("verify")
+    assert seed_pid.brief_author([f"{ENGINEER_SUB}=editor"], engineer) == engineer
+
+
+def test_two_accounts_granted_author_are_refused_by_name_rather_than_one_guessed() -> None:
+    with pytest.raises(seed_pid.SeedRefusal) as refused:
+        seed_pid.brief_author(["a=author", "b=author"], seed_pid.engineer("verify"))
+    assert "a" in str(refused.value) and "b" in str(refused.value)
 
 
 def test_a_refusal_of_the_brief_is_one_the_seed_prints_by_name() -> None:

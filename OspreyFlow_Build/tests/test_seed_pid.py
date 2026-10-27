@@ -2330,7 +2330,8 @@ async def test_the_seed_runs_end_to_end_over_fakes_and_prints_its_checks(
 async def test_the_seed_confirms_the_author_before_any_write_then_writes_the_brief_and_says_so(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """ADR-128 decision 3: the brief is written as the case's author. The author is confirmed first
+    """ADR-128 decision 3 and Amendment 4: the brief is written as the case's author, the account
+    the seed grants author. The author is confirmed first
     (before a recipe is committed or a file run) and the brief is written once the loads are in."""
     resources, registry, log = _wire_the_seed(
         monkeypatch, tmp_path, PlanGraph(PLAN, "seed"), _RunLedger()
@@ -2343,7 +2344,9 @@ async def test_the_seed_confirms_the_author_before_any_write_then_writes_the_bri
     assert code == 0, out
     assert names.count("author") == 1 and names.count("brief") == 1
     assert names.index("author") < names.index("commit") < names.index("run") < names.index("brief")
-    assert dict(log)["brief"] == seed_pid.ENGINEER_USERNAME == dict(log)["author"]
+    # Amendment 4: as the account the seed's grants make Author (`a`), not the engineer who runs
+    # it, whom the pack makes an Editor (ADR-113 decision 8).
+    assert dict(log)["brief"] == "a" == dict(log)["author"]
     assert "case brief: the priority requirement and 4 information requirements written" in out
     assert "check ok: the case holds a brief" in out
 
@@ -2376,7 +2379,12 @@ async def test_a_persona_who_is_not_the_author_stops_the_seed_before_a_recipe_or
     monkeypatch.setattr(seed_pid, "_require_author_of", not_the_author)
     with pytest.raises(seed_pid.SeedRefusal):
         await seed_pid._seed_into(
-            _seed_args(), _root(tmp_path), resources, registry, tmp_path / "repo", seed_pid.engineer()
+            _seed_args(),
+            _root(tmp_path),
+            resources,
+            registry,
+            tmp_path / "repo",
+            seed_pid.engineer(),
         )
     assert [n for n, _ in log if n in {"commit", "run", "compare", "enter", "draft", "brief"}] == []
 

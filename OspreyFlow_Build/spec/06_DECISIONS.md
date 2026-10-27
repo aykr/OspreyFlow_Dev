@@ -19556,6 +19556,34 @@ Found by B7's writer before building. Decided by the coordinator under the owner
   - **No version bump.** The icons change in place, with no ontology or pack version bump, as presentation
     keys have before (ADR-120 Amendment 7), so no recipe is flagged.
 
+### ADR-128, Amendment 4 (27 October 2026) — the seed writes the brief as the account it grants Author
+
+Found by the coordinator installing the pack on the owner's deployment, and decided under the owner's
+settings for Brief 3.
+- **The finding.** `ospreyflow demo add prison-intelligence` stopped before any file was written:
+  "… is not the Author of case …, so the brief is not written". Decision 3 has the brief written "as
+  the case's author", and the seed took that to be the account running it. But the pack's grants
+  (`seed_internal`, ADR-113 decision 8) make the demo admin the Author, and make the data engineer, who
+  runs the seed, an Editor. On a deployment, then, the step could never pass.
+- **Why the tests missed it.** The seed's test passed `--grant a=author`, the pack's own shape, but its
+  stand-in for the Author check accepted anyone. The test then asserted that the brief was written as
+  the engineer, which encoded the error. Rule 15's second worked example applies: the fake was more
+  permissive than the store it stands in for.
+- **The decision.** The brief is written as the account that the seed's own `--grant` makes Author
+  (`seed_pid.brief_author`). The write is audited under that account, as the loads are audited under
+  the engineer persona (ADR-127 Amendment 34). That account is checked to be Author before any file is
+  written, as before. With no account granted Author, the seeder made the case and writes the brief.
+  If two accounts are granted Author, the seed refuses by name rather than guess.
+  - **Rejected:** making the engineer an Author, which breaks ADR-113 decision 8.
+  - **Rejected:** writing the brief without the Author check, which decision 3's "only the Author
+    edits" and the seed's own docstring had already ruled out.
+- **Tests.** In `tests/test_seed_pid_brief.py`, three cases: one against the pack's real grant layout,
+  where the engineer is refused and the admin passes; one with no account granted Author; and one with
+  two. In `tests/test_seed_pid.py`, the end-to-end case now expects the brief and the Author check to
+  both be by `a`. All were red before the change. Two plants were red: `brief_author` returning the
+  seeder, and the write step passed the seeder. Each was restored from a saved copy, and its md5
+  matched.
+
 ### ADR-129, Amendment 2 (27 October 2026) — what building E3 settled
 
 Decided by the coordinator under the owner's delegation for Brief 3.
