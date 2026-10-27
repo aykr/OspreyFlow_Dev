@@ -26,7 +26,8 @@ from services.api.working_set.access_index import (
 from services.api.working_set.models import WorkingSetDelta, decode_delta, lacks_record
 from services.api.working_set.store import EdgeRewrite, _refuse_a_move
 
-from ontology.handling import load_uk_le_scheme
+from adapters.graph_arcadedb.serialization import _refuse_withheld
+from ontology.handling import load_uk_le_scheme, withhold_sources
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -326,7 +327,9 @@ class FakeGraphPort:
         self.get_node_requests.append((node_id, principal))
         if node_id in self._hidden_node_ids:
             return None
-        return _FAKE_VISIBLE_NODE
+        # As the adapter's element mapping does (ADR-130 Amendment 2): the body the fake holds for
+        # the id, else the stand-in, with its sources withheld for a reader who may not have them.
+        return withhold_sources(self._world_nodes().get(node_id, _FAKE_VISIBLE_NODE), principal)
 
     def _world_nodes(self) -> dict[NodeId, Node]:
         """What a lookup by id can find: `graph_nodes` and the nodes `expand_result` returns."""
@@ -401,8 +404,10 @@ class FakeGraphPort:
             raise TypeError("ids must be a sequence of ids, not a single string")
         self.get_nodes_requests.append((list(node_ids), principal))
         world = self._world_nodes()
+        # As the adapter's element mapping does (ADR-130 Amendment 2): sources withheld for a
+        # reader whose case does not read every dataset of the node.
         return [
-            world[i]
+            withhold_sources(world[i], principal)
             for i in sorted(set(node_ids))
             if i in world and self._node_readable(principal, world[i])
         ]
@@ -423,12 +428,16 @@ class FakeGraphPort:
                 continue
             ends = (nodes.get(edge.source), nodes.get(edge.target))
             if all(end is not None and self._node_readable(principal, end) for end in ends):
-                found.append(edge)
+                found.append(withhold_sources(edge, principal))
         return found
 
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph:
         self.expand_requests.append(req)
-        return self.expand_result
+        # As the adapter's element mapping does (ADR-130 Amendment 2).
+        return Subgraph(
+            nodes=[withhold_sources(n, principal) for n in self.expand_result.nodes],
+            edges=[withhold_sources(e, principal) for e in self.expand_result.edges],
+        )
 
     async def edges_among(
         self,
@@ -448,7 +457,7 @@ class FakeGraphPort:
             return node_id not in self._hidden_node_ids | self._superseded_node_ids
 
         return [
-            e
+            withhold_sources(e, principal)
             for e in self._world_edges().values()
             if e.source in asked
             and e.target in asked
@@ -505,5 +514,7 @@ class FakeGraphPort:
         self._pending_edges.pop(tx, None)
 
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: TxId) -> list[EdgeId]:
+        for write in edges:
+            _refuse_withheld(write.provenance)  # as `serialization.py` refuses it
         self._pending_edges[tx].extend(edges)
         return [e.id for e in edges]

@@ -260,6 +260,10 @@ class SourceRef(BaseModel):
 class Provenance(BaseModel):
     state: ProvenanceState
     sources: list[SourceRef]
+    #: ADR-130 Amendment 2: the element belongs to a dataset its reader's case does not read, so
+    #: its sources are not sent. Set only on a read, for a scoped principal; `sources` is empty
+    #: then, and only then.
+    sources_withheld: bool = False
     extracted_by: str | None = None
     extraction_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     first_seen: datetime
@@ -268,8 +272,10 @@ class Provenance(BaseModel):
 
     @model_validator(mode="after")
     def _invariants(self) -> Provenance:
-        if not self.sources:
+        if not self.sources and not self.sources_withheld:
             raise ValueError("provenance.sources must never be empty")
+        if self.sources and self.sources_withheld:
+            raise ValueError("provenance.sources must be empty when sources_withheld is set")
         if self.state is ProvenanceState.ASSERTED and self.extraction_confidence is not None:
             raise ValueError("extraction_confidence must be null for asserted provenance")
         return self

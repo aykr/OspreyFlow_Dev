@@ -554,7 +554,7 @@ def test_a_stored_replacement_converts_to_the_sent_form_without_its_record() -> 
         removed=_marking(edge("old", "a", "b")),
     )
 
-    sent = stored.to_sent()
+    sent = stored.to_sent(OFFICIAL_READER)
 
     assert type(sent) is DeltaReplaceEdgeSent
     assert (sent.seq, sent.old_edge_id, sent.edge.id) == (4, "old", "new")

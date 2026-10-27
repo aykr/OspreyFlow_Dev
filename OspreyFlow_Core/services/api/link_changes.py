@@ -51,7 +51,13 @@ from pydantic import BaseModel, ConfigDict
 
 from conduit_common.identity import new_edge_id, new_id
 from ontology.errors import HandlingSchemeError, OntologyError
-from ontology.handling import HandlingScheme, merge_handling, principal_may_view
+from ontology.handling import (
+    HandlingScheme,
+    merge_handling,
+    principal_may_view,
+    sources_in_full,
+    withhold_sources,
+)
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import GraphPort
 from schemas.domain import (
@@ -172,8 +178,14 @@ class LinkChangeResult(BaseModel):
     delta: DeltaReplaceEdge
     change: LinkChange
 
-    def to_response(self) -> LinkChangeResponse:
-        return LinkChangeResponse(edge=self.edge, delta=self.delta.to_sent(), change=self.change)
+    def to_response(self, reader: Principal) -> LinkChangeResponse:
+        """What the analyst who made the change is sent: the new link and its step with their
+        sources only where `reader`'s case reads every dataset of the link (ADR-130 Amendment 2)."""
+        return LinkChangeResponse(
+            edge=withhold_sources(self.edge, reader),
+            delta=self.delta.to_sent(reader),
+            change=self.change,
+        )
 
 
 class LinkChangeResponse(BaseModel):
@@ -327,6 +339,22 @@ class LinkChangeService:
             raise LinkNotFoundError(edge_id)
         return edge
 
+    async def _in_full(self, investigation_id: str, edge_id: str, principal: Principal) -> Edge:
+        """The link as it is to be changed: `_visible`, with its sources in full (ADR-130
+        Amendment 2, "a read that is written back"). The change is written from this record, and a
+        withheld list would replace the stored sources with none. Still judged for `principal`, so
+        a link they may not read answers as one that does not exist. A body the working set stored
+        withheld (it reads the Vault with the case's principal) is read again from the Vault."""
+        with sources_in_full():
+            edge = await self._visible(investigation_id, edge_id, principal)
+            if not edge.provenance.sources_withheld:
+                return edge
+            found = await self._graph.get_edges([edge_id], principal)
+        held = found[0] if found else None
+        if held is None or held.provenance.sources_withheld:
+            raise LinkNotFoundError(edge_id)
+        return edge.model_copy(update={"provenance": held.provenance})
+
     async def change(
         self,
         investigation_id: str,
@@ -336,7 +364,7 @@ class LinkChangeService:
         *,
         is_author: bool = False,
     ) -> LinkChangeResult:
-        old = await self._visible(investigation_id, edge_id, principal)
+        old = await self._in_full(investigation_id, edge_id, principal)
         reason = request.reason.strip()
         if not reason:
             raise InvalidChangeError("Say why the link is being changed: a reason is required.")

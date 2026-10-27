@@ -64,7 +64,7 @@ from services.ingest.pipeline import (
 
 from conduit_common.identity import new_node_id
 from knowledge_adapters import REGISTRY
-from ontology.handling import HandlingScheme
+from ontology.handling import HandlingScheme, sources_in_full
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from ports.media import MediaStore
@@ -326,9 +326,7 @@ async def _run_extract_stage(
                 try:
                     for candidate in found:
                         written_ids.append(
-                            await write_candidate(
-                                graph, candidate, created_by=principal.id, tx=tx
-                            )
+                            await write_candidate(graph, candidate, created_by=principal.id, tx=tx)
                         )
                 except Exception:
                     await graph.rollback_transaction(tx)
@@ -395,17 +393,18 @@ async def _run_enrich_stage(
             "only the local gazetteer was consulted"
         )
 
-    locations, withheld = await _created_nodes_of_type(
-        graph, branches, _upstream_sources(pipeline, node.id), "Location", principal
-    )
+    # In full: each mention is superseded with its own provenance (ADR-130 Amendment 2, "a read
+    # that is written back"). Still read for `principal`, so the access filter applies.
+    with sources_in_full():
+        locations, withheld = await _created_nodes_of_type(
+            graph, branches, _upstream_sources(pipeline, node.id), "Location", principal
+        )
     if withheld:
         report.refusals.append(
             f"{withheld} element(s) this run created could not be read back by the running "
             "principal and were not enriched"
         )
-    run_created = {
-        node_id for branch in branches for node_id in branch.report.created_node_ids
-    }
+    run_created = {node_id for branch in branches for node_id in branch.report.created_node_ids}
     to_ref = REGISTRY["geometry_ref"]
 
     tx = await graph.begin_transaction()
@@ -416,9 +415,7 @@ async def _run_enrich_stage(
                 continue
             report.locations_considered += 1
             suggestions = await graph.suggest_locations(str(name), principal)
-            gazetteer = [
-                c for c in suggestions if c.id != mention.id and c.id not in run_created
-            ]
+            gazetteer = [c for c in suggestions if c.id != mention.id and c.id not in run_created]
             edge = await match_place_mention(graph, mention, gazetteer, principal, scheme, tx)
             if edge is not None:
                 report.matched_local += 1
@@ -613,8 +610,6 @@ async def run_published_pipeline(
     # A node one branch referenced and another created is the second's own: named once, as created.
     created = set(report.created_node_ids)
     report.referenced_node_ids = [
-        node_id
-        for node_id in dict.fromkeys(report.referenced_node_ids)
-        if node_id not in created
+        node_id for node_id in dict.fromkeys(report.referenced_node_ids) if node_id not in created
     ]
     return report

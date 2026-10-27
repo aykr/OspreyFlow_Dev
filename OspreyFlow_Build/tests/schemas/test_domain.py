@@ -144,3 +144,43 @@ def test_edge_carries_its_own_handling_and_provenance() -> None:
     )
     assert edge.handling.handling_code == "C"
     assert edge.provenance.state is ProvenanceState.UNRESOLVED
+
+
+def test_provenance_with_withheld_sources_may_have_none() -> None:
+    """ADR-130 Amendment 2: a reader whose case does not read all of an element's datasets is sent
+    the provenance with its sources emptied and `sources_withheld` set."""
+    provenance = Provenance(
+        state=ProvenanceState.ASSERTED,
+        sources=[],
+        sources_withheld=True,
+        first_seen=datetime.now(UTC),
+    )
+    assert provenance.sources_withheld is True
+    assert provenance.sources == []
+
+
+def test_sources_withheld_defaults_to_false() -> None:
+    provenance = Provenance(
+        state=ProvenanceState.ASSERTED, sources=[_source()], first_seen=datetime.now(UTC)
+    )
+    assert provenance.sources_withheld is False
+
+
+def test_empty_sources_still_refused_unless_withheld() -> None:
+    with pytest.raises(ValidationError):
+        Provenance(
+            state=ProvenanceState.ASSERTED,
+            sources=[],
+            sources_withheld=False,
+            first_seen=datetime.now(UTC),
+        )
+
+
+def test_withheld_provenance_that_still_lists_sources_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        Provenance(
+            state=ProvenanceState.ASSERTED,
+            sources=[_source()],
+            sources_withheld=True,
+            first_seen=datetime.now(UTC),
+        )

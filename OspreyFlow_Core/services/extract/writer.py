@@ -47,6 +47,7 @@ needing this in the first place.
 from __future__ import annotations
 
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
+from ontology.handling import sources_in_full
 from ports.graph import GraphPort
 from schemas.domain import (
     Edge,
@@ -154,7 +155,9 @@ async def confirm_node(
     or `unresolved`; a no-op attempt against an already-`asserted` node raises rather than silently
     succeeding, since a caller asking to confirm something already confirmed most likely has a
     stale view of it."""
-    node = await graph.get_node(node_id, principal)
+    # In full: the replacement is built from this node's own provenance (ADR-130 Amendment 2).
+    with sources_in_full():
+        node = await graph.get_node(node_id, principal)
     if node is None:
         raise NodeNotFoundError(node_id)
     if node.provenance.state is ProvenanceState.ASSERTED:
@@ -187,7 +190,9 @@ async def retract_node(
 ) -> NodeId:
     """The mirror of `confirm_node` — valid only from `asserted`, since retracting a node that was
     never confirmed is the same caller mistake as confirming one that already is."""
-    node = await graph.get_node(node_id, principal)
+    # In full: the replacement is built from this node's own provenance (ADR-130 Amendment 2).
+    with sources_in_full():
+        node = await graph.get_node(node_id, principal)
     if node is None:
         raise NodeNotFoundError(node_id)
     if node.provenance.state is not ProvenanceState.ASSERTED:

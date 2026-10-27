@@ -19961,3 +19961,51 @@ From the review of the build, decided by the coordinator under the owner's setti
   - An alert whose evidence went between the two reads says so.
 - **Tests.** A node in two datasets, read in a case of one; the route read with a case-scoped
   principal; the hotlist fake refusing on reach as the real store does.
+
+### ADR-130, Amendment 2 (27 October 2026): every node's and link's sources only within the case's datasets
+
+The owner's ruling of 27 October 2026, "Option A", after Amendment 1 recorded that the Inspector
+had the same exposure: a node's or link's provenance sources reach the Glass only when every
+dataset it belongs to is one the reader's case reads.
+- **Where.** The rule is applied where an element is read for a principal, so nothing stored or
+  forwarded carries sources past it:
+  - in the ArcadeDB adapter's element mapping (`node_from_element_map` and `edge_from_element_map`,
+    which every read path goes through), given the reading principal;
+  - in the working set's projection (`_project` and `project_delta`), which serves the replay, the
+    live stream and a restore. The working set reads the Vault with the case's principal, so a
+    body it stores already has the sources withheld that the case may not see; the projection
+    withholds again for a reader scoped more narrowly. The store never replaces a body it already
+    holds (a seed or an expand adds only new ids), so a body stored before a case's datasets were
+    widened stays withheld until the case is restored. In that window an expand's live delta may
+    name sources that the next `sync` withholds again. That is accepted: it shows less, never more,
+    and a restore makes it whole.
+  - A principal with `datasets` of `None` is the Conduit's own unlimited work, and reads every
+    dataset (`dataset_scope.py`).
+- **A read that is written back.** A writer that reads an element and writes its provenance back
+  (a link change, a picture, an extraction's replacement, a resolution, a pipeline mention, the
+  working set's own writes) would rebuild it from a withheld list. That would silently drop the
+  stored sources, or be refused by the write guard below.
+  - So that read runs inside `sources_in_full()`, a scope beside `withhold_sources` in
+    `ontology.handling`, which both the adapter and its test double honour. It is still read with
+    the request's principal, so the access filter is applied in the adapter as before (rule 3).
+    Only the sources are left in.
+  - Whatever such a writer returns or streams to the Glass (`to_sent()`, a route's response) is
+    passed through `withhold_sources` for the reader first.
+  - The write guard stays: a `Provenance` with `sources_withheld` set is never written.
+- **The shape.** `Provenance` gains `sources_withheld: bool = False`. When it is true, `sources`
+  is empty; the rule that sources are non-empty holds otherwise. The TypeScript types are
+  regenerated from it.
+- **The predicate** is one function, shared with Amendment 1's `fired_on`: every dataset of the
+  element is in the principal's `datasets`; an element naming no dataset, read by a scoped
+  principal, is withheld.
+- **The Glass.**
+  - The Inspector, the link details, the edge overlay and the dossier say "Its sources are in data
+    this case does not read" instead of a list. They never say "No sources recorded" for a
+    withheld list.
+  - The dossier's document fetch skips a withheld element.
+- **Tests.** In the adapter (live), an element in two datasets read by a principal scoped to one
+  and to both. In the working set, a replay and a live delta to a reader scoped to one. In the
+  Glass, each surface's words. And rule 4: a read path that returns elements to the Glass is
+  covered by the adapter test, plus a route test of search and expand. For each writer that
+  reads then writes back, a test against the real adapter: a scoped reader's change to a
+  two-dataset element keeps every stored source, and what it is sent back carries none.

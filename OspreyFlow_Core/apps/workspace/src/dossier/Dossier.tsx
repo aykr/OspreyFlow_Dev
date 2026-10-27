@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { OntologyRegistry } from "../ontology/schema";
 import type { WorkingSetGraph } from "../workingset/store";
+import { SOURCES_WITHHELD_TEXT } from "../inspector/sourcesWithheld";
 import { fetchDocumentView } from "./api";
 import { HighlightedMessage } from "./HighlightedMessage";
 import type { DocumentView } from "./models";
@@ -32,8 +33,10 @@ export function Dossier({
 }: DossierProps) {
   const [documents, setDocuments] = useState<DocumentView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [withheld, setWithheld] = useState(false);
 
   useEffect(() => {
+    setWithheld(false);
     if (!graph.hasNode(nodeId)) {
       setDocuments([]);
       setLoading(false);
@@ -42,6 +45,14 @@ export function Dossier({
     // `Node.provenance.sources` is already synced to this session via the working set — no new
     // call needed to learn which documents mention this entity.
     const node = graph.getNodeAttribute(nodeId, "data");
+    // ADR-130 Amendment 2: a node whose sources are in data this case does not read names no
+    // document, so there is nothing to fetch (and nothing to learn from a refusal).
+    if (node.provenance.sources_withheld) {
+      setWithheld(true);
+      setDocuments([]);
+      setLoading(false);
+      return;
+    }
     const documentIds = [...new Set(node.provenance.sources.map((s) => s.document_id))];
     let cancelled = false;
     setLoading(true);
@@ -59,6 +70,14 @@ export function Dossier({
 
   if (loading) {
     return <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>Loading messages…</div>;
+  }
+
+  if (withheld) {
+    return (
+      <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>
+        {SOURCES_WITHHELD_TEXT}
+      </div>
+    );
   }
 
   if (documents.length === 0) {

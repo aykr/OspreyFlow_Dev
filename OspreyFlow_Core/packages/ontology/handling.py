@@ -8,14 +8,16 @@ configuration change with nothing above this module to touch.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from schemas.domain import Handling, Principal
+from schemas.domain import Edge, Handling, Node, Principal
 
 from .errors import HandlingSchemeError
 
@@ -292,3 +294,44 @@ def principal_may_read(
     """All three axes for one stored element, for a caller holding its body already (the working
     set's projection, export): its handling and its datasets."""
     return in_case_datasets(datasets, principal) and principal_may_view(handling, principal, scheme)
+
+
+def sources_within_case(datasets: Sequence[str], principal: Principal) -> bool:
+    """ADR-130 Amendments 1 and 2 (rule 3, ADR-099): every dataset the element belongs to is one
+    the reader's case reads. An element may be read through any one of its datasets, and its
+    sources name no dataset, so only this lets them be said. `principal.datasets is None` is the
+    Conduit's own unlimited work, which reads every dataset. A scoped reader with an element that
+    names no dataset cannot be confirmed, so it is not within."""
+    if principal.datasets is None:
+        return True
+    if not datasets:
+        return False
+    return set(datasets) <= set(principal.datasets)
+
+
+_SOURCES_IN_FULL: ContextVar[bool] = ContextVar("sources_in_full", default=False)
+
+
+@contextmanager
+def sources_in_full() -> Iterator[None]:
+    """ADR-130 Amendment 2, "a read that is written back": inside this scope `withhold_sources`
+    returns every element unchanged. For a writer that reads an element and writes its provenance
+    back, which would otherwise rebuild it from a withheld list. The read is still made with the
+    request's principal, so the access filter applies as before (rule 3); only the sources are left
+    in. A context variable, so it holds for the calling task alone. Never wrap a read whose result
+    goes to the Glass."""
+    token = _SOURCES_IN_FULL.set(True)
+    try:
+        yield
+    finally:
+        _SOURCES_IN_FULL.reset(token)
+
+
+def withhold_sources[Element: (Node, Edge)](element: Element, principal: Principal) -> Element:
+    """`element` as `principal` may be sent it: where its sources are not within the case, a copy
+    with them emptied and `provenance.sources_withheld` set. Otherwise `element` itself. Nothing
+    stored is changed; the working set holds the full body and projects this for each reader."""
+    if _SOURCES_IN_FULL.get() or sources_within_case(element.datasets, principal):
+        return element
+    provenance = element.provenance.model_copy(update={"sources": [], "sources_withheld": True})
+    return element.model_copy(update={"provenance": provenance})

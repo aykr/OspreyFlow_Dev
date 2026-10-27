@@ -715,7 +715,7 @@ class GraphArcadeDBAdapter:
         results = await self._client.gremlin(query)
         if not results:
             return None
-        return node_from_element_map(results[0])
+        return node_from_element_map(results[0], principal)
 
     async def _types_with_unique_id(self, kind: str) -> list[str]:
         """The stored types of `kind` (`"vertex"` or `"edge"`) a lookup by id can ask, from the
@@ -765,7 +765,7 @@ class GraphArcadeDBAdapter:
             # Sent even when no id resolved: an absent id must cost what a hidden one costs.
             query = render_get_nodes_gremlin(rids, self._access, principal)
             for record in await self._client.gremlin(query):
-                node = node_from_element_map(record)
+                node = node_from_element_map(record, principal)
                 found[node.id] = node
         return [found[node_id] for node_id in sorted(found)]
 
@@ -792,7 +792,7 @@ class GraphArcadeDBAdapter:
             # Sent even when no id resolved, as above.
             query = render_get_edges_gremlin(rids, self._access, principal)
             for record in await self._client.gremlin(query):
-                edge = edge_from_element_map(record)
+                edge = edge_from_element_map(record, principal)
                 found[edge.id] = edge
         return [found[edge_id] for edge_id in sorted(found)]
 
@@ -815,7 +815,7 @@ class GraphArcadeDBAdapter:
         ).render_gremlin(self._access, principal)
         results = await self._client.gremlin(query)
         for element in results:
-            node = node_from_element_map(element)
+            node = node_from_element_map(element, principal)
             if all(str(node.properties.get(k)) == v for k, v in (also or {}).items()):
                 return node
         if also and len(results) > FIND_WITH_ALSO_LIMIT:
@@ -864,14 +864,14 @@ class GraphArcadeDBAdapter:
             return []
         builder = SearchNodesBuilder(identifier_fields, query, limit=limit)
         results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
-        return [node_from_element_map(r) for r in results]
+        return [node_from_element_map(r, principal) for r in results]
 
     async def suggest_locations(
         self, name: str, principal: Principal, *, limit: int = 20
     ) -> list[Node]:
         builder = SuggestLocationsBuilder(name, limit=limit)
         results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
-        return [node_from_element_map(r) for r in results]
+        return [node_from_element_map(r, principal) for r in results]
 
     async def suggest_nodes(
         self,
@@ -896,7 +896,7 @@ class GraphArcadeDBAdapter:
             ignore_case=options.ignore_case,
         )
         results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
-        nodes = [node_from_element_map(r) for r in results]
+        nodes = [node_from_element_map(r, principal) for r in results]
         return NodeSuggestions(nodes=nodes[:limit], more=len(nodes) > limit)
 
     async def vault_subgraph(
@@ -918,7 +918,7 @@ class GraphArcadeDBAdapter:
     ) -> ListNodesPage:
         builder = ListNodesBuilder(entity_type, cursor, limit)
         results = await self._client.gremlin(builder.render_gremlin(self._access, principal))
-        nodes = [node_from_element_map(r) for r in results]
+        nodes = [node_from_element_map(r, principal) for r in results]
         # A short page is not itself proof of exhaustion (the port's own
         # docstring): only ask for one more than requested to know whether
         # a further page exists would need a second query, so instead the
@@ -940,10 +940,12 @@ class GraphArcadeDBAdapter:
         edge_records = await self._client.gremlin(
             builder.render_edges_gremlin(self._access, principal)
         )
-        nodes_by_id = {r["id"]: node_from_element_map(r) for r in (*seed_records, *node_records)}
+        nodes_by_id = {
+            r["id"]: node_from_element_map(r, principal) for r in (*seed_records, *node_records)
+        }
         return Subgraph(
             nodes=list(nodes_by_id.values()),
-            edges=[edge_from_element_map(r) for r in edge_records],
+            edges=[edge_from_element_map(r, principal) for r in edge_records],
         )
 
     async def edges_among(
@@ -957,7 +959,7 @@ class GraphArcadeDBAdapter:
         records = await self._client.gremlin(
             render_edges_among_gremlin(sorted(set(node_ids)), self._access, principal, edge_types)
         )
-        return [edge_from_element_map(r) for r in records]
+        return [edge_from_element_map(r, principal) for r in records]
 
     async def paths(self, req: PathRequest, principal: Principal) -> list[Path]:
         query = PathBuilder(req).render_gremlin(self._access, principal)
@@ -1001,14 +1003,14 @@ class GraphArcadeDBAdapter:
         all_edge_ids = sorted({edge_id for steps in raw_paths for edge_id in steps[1::2]})
         node_query = PathBuilder.render_hydrate_nodes_gremlin(all_node_ids, self._access, principal)
         node_results = await self._client.gremlin(node_query)
-        nodes_by_id = {r["id"]: node_from_element_map(r) for r in node_results}
+        nodes_by_id = {r["id"]: node_from_element_map(r, principal) for r in node_results}
         edges_by_id: dict[EdgeId, Edge] = {}
         if all_edge_ids:
             edge_query = PathBuilder.render_hydrate_edges_gremlin(
                 all_node_ids, all_edge_ids, self._access, principal
             )
             edge_results = await self._client.gremlin(edge_query)
-            edges_by_id = {r["id"]: edge_from_element_map(r) for r in edge_results}
+            edges_by_id = {r["id"]: edge_from_element_map(r, principal) for r in edge_results}
 
         paths: list[Path] = []
         for steps in raw_paths:
@@ -1036,7 +1038,7 @@ class GraphArcadeDBAdapter:
         query = MatchBuilder(pattern).render_gremlin(self._access, principal)
         results = await self._client.gremlin(query)
         # One element map per node, each once (`MatchBuilder._nodes_tail`).
-        nodes = {node.id: node for node in map(node_from_element_map, results)}
+        nodes = {node.id: node for node in (node_from_element_map(r, principal) for r in results)}
         return Subgraph(nodes=list(nodes.values()), edges=[])
 
     async def match_count(
@@ -1084,7 +1086,9 @@ class GraphArcadeDBAdapter:
         rows = await self._client.gremlin(builder.render_page_gremlin(self._access, principal))
         return RankedNodes(
             nodes=[
-                RankedNode(node=node_from_element_map(r["node"]), degree=int(r["degree"]))
+                RankedNode(
+                    node=node_from_element_map(r["node"], principal), degree=int(r["degree"])
+                )
                 for r in rows
             ],
             total=int(totals[0].get("result") or 0),
@@ -1106,9 +1110,9 @@ class GraphArcadeDBAdapter:
         return RankedLinks(
             links=[
                 RankedLink(
-                    edge=edge_from_element_map(r["edge"]),
-                    source=node_from_element_map(r["source"]),
-                    target=node_from_element_map(r["target"]),
+                    edge=edge_from_element_map(r["edge"], principal),
+                    source=node_from_element_map(r["source"], principal),
+                    target=node_from_element_map(r["target"], principal),
                 )
                 for r in rows
             ],
@@ -1160,7 +1164,7 @@ class GraphArcadeDBAdapter:
         return RecentlyConfirmed(
             nodes=[
                 ConfirmedNode(
-                    node=node_from_element_map(r["node"]),
+                    node=node_from_element_map(r["node"], principal),
                     confirmed_at=datetime.fromisoformat(str(r["at"])),
                     confirmed_by=str(r["by"]),
                 )
@@ -1189,17 +1193,16 @@ class GraphArcadeDBAdapter:
         (counted,) = await self._client.gremlin(count_query)
         page = await self._client.gremlin(page_query)
         shared = {str(r["id"]): int(r["n"]) for r in page}
-        nodes = {
-            node.id: node
-            for node in map(
-                node_from_element_map,
-                await self._client.gremlin(
-                    f'g.V().has("id",within({groovy_string_list_literal(list(shared))}))'
-                    f".{self._access.gremlin_has_step(principal)}.elementMap()"
-                )
-                if shared
-                else [],
+        contact_records = (
+            await self._client.gremlin(
+                f'g.V().has("id",within({groovy_string_list_literal(list(shared))}))'
+                f".{self._access.gremlin_has_step(principal)}.elementMap()"
             )
+            if shared
+            else []
+        )
+        nodes = {
+            node.id: node for node in (node_from_element_map(r, principal) for r in contact_records)
         }
         return SharedContacts(
             contacts=[

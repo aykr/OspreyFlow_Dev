@@ -1,5 +1,6 @@
 import type { Edge, Node } from "../../../../packages/schemas/generated";
 import { intervalText } from "./intervalText";
+import { SOURCES_WITHHELD_TEXT } from "./sourcesWithheld";
 import { linkTypeName } from "../canvas/linkLabel";
 import { displayValue } from "../search/searchOptions";
 
@@ -88,7 +89,9 @@ export function LinkDetails({ edge, source, target, directed, typeBasis, typeNam
       <div>
         <dt style={{ color: "var(--text-secondary)" }}>Sources</dt>
         <dd>
-          {sources.length === 0 ? (
+          {edge.provenance.sources_withheld ? (
+            SOURCES_WITHHELD_TEXT
+          ) : sources.length === 0 ? (
             "No sources recorded"
           ) : (
             <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>

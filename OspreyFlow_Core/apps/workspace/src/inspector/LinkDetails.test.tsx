@@ -144,4 +144,27 @@ describe("LinkDetails and the basis", () => {
     render(<LinkDetails edge={link({ interval: null })} {...ends} directed />);
     expect(screen.getByText("No dates recorded")).toBeTruthy();
   });
+
+  it("lists the sources a link names", () => {
+    render(<LinkDetails edge={link()} {...ends} directed />);
+    expect(screen.getByText("doc-7 · msg 3")).toBeTruthy();
+    expect(screen.queryByText(/data this case does not read/)).toBeNull();
+  });
+
+  it("says its sources are in data this case does not read when they are withheld (ADR-130 Amendment 2)", () => {
+    const withheld = link({
+      provenance: { state: "asserted", sources: [], sources_withheld: true, first_seen: "x" },
+    } as Partial<Edge>);
+    render(<LinkDetails edge={withheld} {...ends} directed />);
+    expect(screen.getByText("Its sources are in data this case does not read")).toBeTruthy();
+    expect(screen.queryByText("No sources recorded")).toBeNull();
+  });
+
+  it("still says no sources were recorded when a link has none and none are withheld", () => {
+    const none = link({
+      provenance: { state: "asserted", sources: [], first_seen: "x" },
+    } as Partial<Edge>);
+    render(<LinkDetails edge={none} {...ends} directed />);
+    expect(screen.getByText("No sources recorded")).toBeTruthy();
+  });
 });

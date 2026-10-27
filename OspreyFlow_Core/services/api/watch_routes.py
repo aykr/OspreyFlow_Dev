@@ -24,6 +24,7 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
+from ontology.handling import sources_within_case
 from ports.graph import GraphPort
 from schemas.domain import Alert, AlertMode, Hotlist, Monitor, Node, Principal
 
@@ -147,25 +148,12 @@ def _file_name(document_id: str) -> str:
     return document_id.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1] or document_id
 
 
-def _sources_are_within_the_case(node: Node, principal: Principal) -> bool:
-    """ADR-130 Amendment 1 (rule 3, ADR-099): every dataset the node belongs to is one the reader's
-    case reads. A node may be read through any one of its datasets, and its sources name no
-    dataset, so only this lets them be said. `principal.datasets is None` is the Conduit's own
-    unlimited work (`dataset_scope.py`), which the graph adapter applies no dataset filter to: it
-    reads every dataset. A scoped reader with a node that names no dataset cannot be confirmed."""
-    if principal.datasets is None:
-        return True
-    if not node.datasets:
-        return False
-    return set(node.datasets) <= set(principal.datasets)
-
-
 def _fired_on(node: Node, principal: Principal) -> FiredOn:
     """Group the node's sources by whole document, in the order each first appears. A file with one
     distinct `row N` locator and nothing else says that row; otherwise it says how many `row N`
     rows and how many records of any other locator form."""
     label = display_name(node)
-    if not _sources_are_within_the_case(node, principal):
+    if not sources_within_case(node.datasets, principal):
         return FiredOn(type=node.type, label=label, files=[], more_files=0, sources_withheld=True)
     locators: dict[str, list[str]] = {}
     for source in node.provenance.sources:

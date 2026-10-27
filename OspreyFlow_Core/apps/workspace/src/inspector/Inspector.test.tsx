@@ -200,6 +200,18 @@ describe("Inspector sections (ADR-096)", () => {
     expect(screen.getByText("d1 · p.1")).toBeTruthy();
   });
 
+  it("a node whose sources are withheld says so in Source, and never that none were recorded", () => {
+    stubNotes();
+    const withheld = {
+      ...person,
+      provenance: { state: "asserted", sources: [], sources_withheld: true, first_seen: "x" },
+    } as unknown as Node;
+    render(<Inspector node={withheld} assessment={assessment} />);
+    fireEvent.click(header("Source"));
+    expect(screen.getByText("Its sources are in data this case does not read")).toBeTruthy();
+    expect(screen.queryByText(/No sources recorded/)).toBeNull();
+  });
+
   it("with no node selected, Judgements is open", () => {
     stubNotes();
     render(<Inspector node={null} assessment={assessment} />);

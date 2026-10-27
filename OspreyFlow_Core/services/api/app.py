@@ -4565,7 +4565,7 @@ async def change_link_route(
         result_cardinality=1,
         justification=result.change.reason,
     )
-    return result.to_response()
+    return result.to_response(principal)
 
 
 # --- relationship types proposed by analysts (ADR-090) ------------------------------------
@@ -5022,7 +5022,7 @@ async def set_entity_picture_route(
     )
     for delta in result.deltas:
         await publish_delta(valkey, investigation.id, delta)
-    response = result.to_response()
+    response = result.to_response(principal)
     return response
 
 
@@ -5048,7 +5048,7 @@ async def remove_entity_picture_route(
         resolved_query={"node_id": node_id},
         result_cardinality=1,
     )
-    return delta.to_sent()
+    return delta.to_sent(principal)
 
 
 @app.post(

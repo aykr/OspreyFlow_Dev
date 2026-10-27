@@ -23,6 +23,7 @@ import { describeIconForValue } from "../canvas/valueIcons";
 import { TypeChip } from "./TypeChip";
 import { NeighbourhoodRisk, type NeighbourhoodRiskProps } from "./NeighbourhoodRisk";
 import { SharedContacts, type SharedContactsProps } from "./SharedContacts";
+import { SOURCES_WITHHELD_TEXT } from "./sourcesWithheld";
 import type { HandlingScheme } from "../ingest/api";
 
 function isResolutionLink(type: string): boolean {
@@ -599,13 +600,17 @@ function NodeView({
         section(
           "source",
           "Source",
-          <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
-            {node.provenance.sources.map((source, i) => (
-              <li key={i} className="value">
-                {source.document_id} · {source.locator}
-              </li>
-            ))}
-          </ul>,
+          node.provenance.sources_withheld ? (
+            <p style={{ margin: 0, color: "var(--text-secondary)" }}>{SOURCES_WITHHELD_TEXT}</p>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
+              {node.provenance.sources.map((source, i) => (
+                <li key={i} className="value">
+                  {source.document_id} · {source.locator}
+                </li>
+              ))}
+            </ul>
+          ),
         )}
       {assessment &&
         section(

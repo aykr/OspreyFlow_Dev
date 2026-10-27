@@ -19,6 +19,7 @@ from collections.abc import Sequence
 
 from services.extract.writer import confirm_edge, confirm_node
 
+from ontology.handling import sources_in_full
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.analytics import EventFilter, EventListRequest
@@ -228,8 +229,12 @@ async def dispose(
         # ADR-109 Amendment 7 (owner ruling, 11 October 2026): a true positive on a screening alert
         # is the analyst's confirmation of the match it found — its inferred `SAME_AS` becomes
         # asserted, and the alert cites the new revision so it still opens.
+        # Read in full: `confirm_edge` writes each of these back with its own provenance (ADR-130
+        # Amendment 2, "a read that is written back"); they are not sent to the Glass.
+        with sources_in_full():
+            cited_edges = await _cited_edges(alert, graph, member, list(nodes))
         matches = [
-            e for e in await _cited_edges(alert, graph, member, list(nodes))
+            e for e in cited_edges
             if alert.typology == "kyc_screening" and e.type == "SAME_AS"
             and e.provenance.state is not ProvenanceState.ASSERTED
         ]  # fmt: skip

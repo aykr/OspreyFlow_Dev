@@ -13,6 +13,7 @@ export type DocumentId = string;
 export type Locator = string;
 export type ExcerptHash = string;
 export type Sources = SourceRef[];
+export type SourcesWithheld = boolean;
 export type ExtractedBy = string | null;
 export type ExtractionConfidence = number | null;
 export type FirstSeen = string;
@@ -66,6 +67,7 @@ export interface Interval {
 export interface Provenance {
   state: ProvenanceState;
   sources: Sources;
+  sources_withheld?: SourcesWithheld;
   extracted_by?: ExtractedBy;
   extraction_confidence?: ExtractionConfidence;
   first_seen: FirstSeen;

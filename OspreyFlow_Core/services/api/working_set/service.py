@@ -46,7 +46,12 @@ from valkey.asyncio import Valkey
 
 from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import HandlingSchemeError
-from ontology.handling import HandlingScheme, principal_may_read, principal_may_view
+from ontology.handling import (
+    HandlingScheme,
+    principal_may_read,
+    principal_may_view,
+    withhold_sources,
+)
 from ports.graph import GraphPort
 from schemas.domain import (
     CONNECTIONS_SHOWN,
@@ -384,7 +389,9 @@ class WorkingSetService:
             for node_id, n in ends.items()
             if principal_may_read(n.handling, n.datasets, principal, self._scheme)
         }
-        visible_nodes = [n for n in nodes if n.id in readable]
+        # ADR-130 Amendment 2: each element is sent with its sources only where every dataset it
+        # belongs to is one the reader's case reads. A copy: the stored bodies keep the record.
+        visible_nodes = [withhold_sources(n, principal) for n in nodes if n.id in readable]
         visible_edges: list[Edge] = []
         hidden_edges = 0
         for e in edges:
@@ -395,7 +402,7 @@ class WorkingSetService:
                 and e.source in readable
                 and e.target in readable
             ):
-                visible_edges.append(e)
+                visible_edges.append(withhold_sources(e, principal))
             else:
                 hidden_edges += 1
         hidden_count = (len(nodes) - len(visible_nodes)) + hidden_edges
@@ -518,9 +525,11 @@ class WorkingSetService:
             and self._may_read_ends([old.source, old.target], principal, known)
         )
         if old_ok and new_ok:
-            return DeltaReplaceEdgeSent(seq=delta.seq, old_edge_id=delta.old_edge_id, edge=new)
+            return DeltaReplaceEdgeSent(
+                seq=delta.seq, old_edge_id=delta.old_edge_id, edge=withhold_sources(new, principal)
+            )
         if new_ok:
-            return DeltaAdd(seq=delta.seq, edges=[new])
+            return DeltaAdd(seq=delta.seq, edges=[withhold_sources(new, principal)])
         if old_ok:
             return DeltaRemoveSent(seq=delta.seq, edge_ids=[delta.old_edge_id])
         return DeltaRemoveSent(seq=delta.seq)

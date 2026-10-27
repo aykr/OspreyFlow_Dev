@@ -35,6 +35,7 @@ from services.api.link_notes import LinkNotFoundError
 from services.api.working_set.models import DeltaReplaceEdge
 from services.api.working_set.service import WorkingSetService
 
+from adapters.graph_arcadedb.serialization import _refuse_withheld
 from ontology.errors import OntologyError
 from schemas.domain import (
     AuditStub,
@@ -163,6 +164,7 @@ class SupersedingGraph(FakeGraphPort):
     async def supersede_edge(self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId) -> EdgeId:
         if self.fail_with is not None:
             raise self.fail_with
+        _refuse_withheld(replacement.provenance)  # as `serialization.py` refuses it
         if edge_id not in self.stored:
             raise OntologyError(f"cannot supersede {edge_id!r}: no such edge")
         if ONTOLOGY.edge_type(replacement.type) is None:

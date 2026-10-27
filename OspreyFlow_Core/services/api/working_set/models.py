@@ -21,7 +21,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
-from schemas.domain import ClusterId, Edge, EdgeId, Handling, Node, NodeId
+from ontology.handling import withhold_sources
+from schemas.domain import ClusterId, Edge, EdgeId, Handling, Node, NodeId, Principal
 
 #: `00_ARCHITECTURE.md` §4 / `03_CONDUIT_MIDDLEWARE.md` §4 — "50,000 nodes
 #: and 250,000 edges" by policy (ADR-007). Not a config value: raising the
@@ -121,6 +122,18 @@ class DeltaAdd(BaseModel):
     edges: list[Edge] = Field(default_factory=list)
 
 
+def add_for_reader(delta: DeltaAdd, reader: Principal) -> DeltaAdd:
+    """`delta` as `reader` may be sent it: each element's sources withheld where the reader's case
+    does not read every dataset of it (ADR-130 Amendment 2). For a writer's own response; the
+    delta it publishes is projected per recipient by `WorkingSetService.project_delta`."""
+    return delta.model_copy(
+        update={
+            "nodes": [withhold_sources(n, reader) for n in delta.nodes],
+            "edges": [withhold_sources(e, reader) for e in delta.edges],
+        }
+    )
+
+
 class DeltaViewOverCap(BaseModel):
     """Sent in place of a snapshot or a delta when the reader's own projected view of the case is
     past a cap (ADR-124 decision 2, "a view pushed past the cap"). A less-cleared colleague's cap
@@ -218,8 +231,15 @@ class DeltaReplaceEdge(BaseModel):
     edge: Edge
     removed: RemovedElement | None = None
 
-    def to_sent(self) -> DeltaReplaceEdgeSent:
-        return DeltaReplaceEdgeSent(seq=self.seq, old_edge_id=self.old_edge_id, edge=self.edge)
+    def to_sent(self, reader: Principal) -> DeltaReplaceEdgeSent:
+        """The form the analyst who made the change is sent: the new link with its sources only
+        where `reader`'s case reads every dataset of it (ADR-130 Amendment 2). The stored form,
+        which the route publishes, holds the record in full."""
+        return DeltaReplaceEdgeSent(
+            seq=self.seq,
+            old_edge_id=self.old_edge_id,
+            edge=withhold_sources(self.edge, reader),
+        )
 
 
 class DeltaReproject(BaseModel):

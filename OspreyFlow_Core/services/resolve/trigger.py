@@ -54,7 +54,7 @@ from valkey.asyncio import Valkey
 from valkey.asyncio.lock import Lock
 from valkey.exceptions import LockError
 
-from ontology.handling import HandlingScheme
+from ontology.handling import HandlingScheme, sources_in_full
 from ports.graph import GraphPort
 from schemas.domain import (
     Edge,
@@ -126,9 +126,7 @@ async def _fetch_population(
     nodes: list[Node] = []
     cursor: str | None = None
     while True:
-        page = await graph.list_nodes(
-            entity_type_name, principal, cursor=cursor, limit=PAGE_SIZE
-        )
+        page = await graph.list_nodes(entity_type_name, principal, cursor=cursor, limit=PAGE_SIZE)
         nodes.extend(page.nodes)
         if page.next_cursor is None:
             return nodes
@@ -140,10 +138,13 @@ async def _fetch_not_same_as_edges(
 ) -> list[Edge]:
     if not node_ids:
         return []
-    subgraph = await graph.expand(
-        ExpandRequest(node_ids=node_ids, depth=1, edge_types=["NOT_SAME_AS"], direction="both"),
-        principal,
-    )
+    # In full: `record_conflicts` supersedes each of these with its own provenance (ADR-130
+    # Amendment 2, "a read that is written back").
+    with sources_in_full():
+        subgraph = await graph.expand(
+            ExpandRequest(node_ids=node_ids, depth=1, edge_types=["NOT_SAME_AS"], direction="both"),
+            principal,
+        )
     return [e for e in subgraph.edges if e.type == "NOT_SAME_AS"]
 
 
@@ -197,7 +198,11 @@ async def run_resolution_for_entity_type(
     ]
 
     same_as_ids = await write_same_as_edges(
-        graph, mergeable_candidates, nodes_by_id, created_by=SERVICE_PRINCIPAL_ID, tx=tx,
+        graph,
+        mergeable_candidates,
+        nodes_by_id,
+        created_by=SERVICE_PRINCIPAL_ID,
+        tx=tx,
         scheme=scheme,
     )
     not_same_as_by_id = {e.id: e for e in not_same_as_edges}

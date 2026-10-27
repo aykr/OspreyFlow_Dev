@@ -25,6 +25,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from ontology.handling import withhold_sources
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -35,6 +36,7 @@ from schemas.domain import (
     Interval,
     Node,
     NodeWrite,
+    Principal,
     Provenance,
     ResolutionState,
     WeightComponents,
@@ -49,9 +51,20 @@ def _indexed_property_names(type_def: EntityTypeDef | EdgeTypeDef) -> set[str]:
     return identifiers | indexed_properties
 
 
+def _refuse_withheld(provenance: Provenance) -> None:
+    """ADR-130 Amendment 2: provenance with its sources withheld is what a scoped reader is sent,
+    never what is stored. Writing it back would replace the stored sources with none."""
+    if provenance.sources_withheld:
+        raise ValueError(
+            "provenance with its sources withheld cannot be written: it was read for a reader "
+            "whose case does not read all of the element's datasets"
+        )
+
+
 def node_write_to_properties(
     write: NodeWrite, *, node_id: str, audit: AuditStub, entity_type: EntityTypeDef
 ) -> dict[str, Any]:
+    _refuse_withheld(write.provenance)
     flattened: dict[str, Any] = {
         name: write.properties[name]
         for name in _indexed_property_names(entity_type)
@@ -91,6 +104,7 @@ def edge_write_to_properties(
     weight: float,
     weight_components: WeightComponents,
 ) -> dict[str, Any]:
+    _refuse_withheld(write.provenance)
     flattened: dict[str, Any] = {
         name: write.properties[name]
         for name in _indexed_property_names(edge_type)
@@ -133,7 +147,10 @@ def edge_write_to_properties(
     return props
 
 
-def node_from_element_map(record: Mapping[str, Any]) -> Node:
+def node_from_element_map(record: Mapping[str, Any], principal: Principal | None = None) -> Node:
+    """The stored record as a `Node`. Given the reading `principal`, a node whose datasets the
+    principal's case does not wholly read comes back with its sources withheld (ADR-130
+    Amendment 2). No principal is a system read of the whole record: the Conduit's own scripts."""
     # `supersede_node` updates the top-level flattened `superseded_by`
     # directly, on the *old* revision, without rewriting its nested
     # `audit` blob — so the flattened field, when present, is the
@@ -141,7 +158,7 @@ def node_from_element_map(record: Mapping[str, Any]) -> Node:
     audit_data: dict[str, Any] = dict(record["audit"])
     if "superseded_by" in record:
         audit_data["superseded_by"] = record["superseded_by"]
-    return Node(
+    node = Node(
         id=record["id"],
         type=logical_type_name(record["label"]),
         properties=record.get("properties") or {},
@@ -151,16 +168,18 @@ def node_from_element_map(record: Mapping[str, Any]) -> Node:
         audit=AuditStub.model_validate(audit_data),
         datasets=list(record.get("datasets") or []),
     )
+    return node if principal is None else withhold_sources(node, principal)
 
 
-def edge_from_element_map(record: Mapping[str, Any]) -> Edge:
+def edge_from_element_map(record: Mapping[str, Any], principal: Principal | None = None) -> Edge:
+    """As `node_from_element_map`, for a link."""
     interval = None
     if record.get("interval"):
         interval = Interval.model_validate(record["interval"])
     weight_components = None
     if record.get("weight_components"):
         weight_components = WeightComponents.model_validate(record["weight_components"])
-    return Edge(
+    edge = Edge(
         id=record["id"],
         type=logical_type_name(record["label"]),
         source=record["source"],
@@ -176,3 +195,4 @@ def edge_from_element_map(record: Mapping[str, Any]) -> Edge:
         audit=AuditStub.model_validate(record["audit"]),
         datasets=list(record.get("datasets") or []),
     )
+    return edge if principal is None else withhold_sources(edge, principal)

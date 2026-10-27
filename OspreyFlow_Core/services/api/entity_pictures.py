@@ -35,7 +35,7 @@ from services.extract.writer import NodeNotFoundError
 
 from adapters.media_objectstore import content_type_of, reference_for
 from conduit_common.identity import new_edge_id
-from ontology.handling import HandlingScheme, principal_may_view
+from ontology.handling import HandlingScheme, principal_may_view, sources_in_full
 from ports.graph import GraphPort
 from ports.media import MediaNotFoundError, MediaStore
 from schemas.domain import (
@@ -57,7 +57,12 @@ from .change_provenance import PICTURE_MARKER, without_link_ids
 from .document_content import DOCUMENT_TYPE, UploadRefusedError
 from .email_extraction import _node_from_write
 from .link_ids import as_stored
-from .working_set.models import DeltaAdd, DeltaReplaceEdge, DeltaReplaceEdgeSent
+from .working_set.models import (
+    DeltaAdd,
+    DeltaReplaceEdge,
+    DeltaReplaceEdgeSent,
+    add_for_reader,
+)
 from .working_set.service import WorkingSetService
 
 DEPICTS = "DEPICTS"
@@ -86,10 +91,15 @@ class PictureSetResult(BaseModel):
     document_id: str
     deltas: list[DeltaAdd | DeltaReplaceEdge]
 
-    def to_response(self) -> PictureSetResponse:
+    def to_response(self, reader: Principal) -> PictureSetResponse:
+        """Each step as `reader` may be sent it: sources only where their case reads every dataset
+        of the element (ADR-130 Amendment 2)."""
         return PictureSetResponse(
             document_id=self.document_id,
-            deltas=[d.to_sent() if isinstance(d, DeltaReplaceEdge) else d for d in self.deltas],
+            deltas=[
+                d.to_sent(reader) if isinstance(d, DeltaReplaceEdge) else add_for_reader(d, reader)
+                for d in self.deltas
+            ],
         )
 
 
@@ -105,7 +115,7 @@ class EntityPicture(BaseModel):
     document_id: str
 
 
-def _edge_from(write: EdgeWrite, revision: int = 1) -> Edge:
+def _edge_from(write: EdgeWrite, revision: int = 1, datasets: Sequence[str] = ()) -> Edge:
     return Edge(
         id=write.id,
         type=write.type,
@@ -117,6 +127,7 @@ def _edge_from(write: EdgeWrite, revision: int = 1) -> Edge:
         audit=AuditStub(
             created_at=write.created_at, created_by=write.created_by, revision=revision
         ),
+        datasets=list(datasets),
     )
 
 
@@ -472,10 +483,18 @@ class EntityPictureService:
         """Supersedes the entity's picture with a copy whose `shown` is false; the Document and the
         old link stay, as evidence and in the link's history."""
         await self._entity(investigation_id, node_id, principal)
-        current = (await self._current([node_id], principal)).get(node_id)
+        # Read in full: the successor is built from this link's own sources (ADR-130 Amendment 2,
+        # "a read that is written back"). Still read for `principal`, so the access filter applies.
+        with sources_in_full():
+            current = (await self._current([node_id], principal)).get(node_id)
         if current is None:
             raise PictureNotFoundError(node_id)
         old, _ = current
+        # Still withheld after the full read (a record stored so): the successor would carry the
+        # removal's own marker and nothing else, replacing every stored source. Not found, as
+        # `link_changes._in_full` answers it.
+        if old.provenance.sources_withheld:
+            raise PictureNotFoundError(node_id)
         now = datetime.now(UTC)
         write = EdgeWrite(
             id=new_edge_id(),
@@ -502,6 +521,10 @@ class EntityPictureService:
             await self._graph.rollback_transaction(tx)
             raise
         await self._graph.commit_transaction(tx)
+        # The successor belongs to every dataset the link did (the store merges them), so what it
+        # is sent as is judged against all of them (ADR-130 Amendment 2).
         return await self._working_set.replace_edge(
-            investigation_id, old, _edge_from(write, old.audit.revision + 1)
+            investigation_id,
+            old,
+            _edge_from(write, old.audit.revision + 1, old.datasets),
         )
