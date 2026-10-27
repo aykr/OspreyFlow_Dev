@@ -4854,6 +4854,31 @@ for the disposable subject with claims matching and nothing broader; refusal of 
 client by Keycloak; refusal of a disabled subject by the Conduit's pre-check. A fourth, realm-level
 refusal of a specific subject, is **not** available — see the bounded attempt above.
 
+### Amendment, 27 October 2026 — the pre-check reads the owner by subject id. **Accepted.**
+
+Found by the coordinator running chapter 9 on the owner's rebuilt deployment for Brief 3, and
+decided under the owner's settings for Brief 3.
+- **The finding.** The analyst's hotlist on the coordinator's number was marked `stopped` on the
+  first evaluation after the batch-2 load, and no alert was raised. The pre-check read the owner as
+  `users?username=<owner_id>&exact=true`, but the Conduit records an owner by Keycloak's subject id
+  (the token's `sub`; ADR-127 Amendment 34 made the seeds do the same). So every owner was "not
+  known to the identity provider", every hotlist and monitor was skipped, and none could fire on a
+  deployment that sets `OIDC_ADMIN_USERS_URL`.
+  - **Measured on Keycloak 26.0,** with the Conduit client's own grant: the username query for a
+    subject answers 200 with no users; `users/{subject}` answers 200 with the user and `enabled`;
+    an unknown id answers 404.
+  - **Why the tests missed it (rule 15).** The live pre-check tests resolve `VERIFY_SUBJECT`, which
+    is a username, so the username query found it every time.
+- **The decision.** The pre-check reads `users/{owner_id}` first. On a 404 it reads
+  `users?username=` too, so an owner recorded by username before ADR-127 Amendment 34 still
+  resolves. The disabled and unreachable outcomes are unchanged.
+- **Tests.** `tests/services/api/test_revoked_principal_precheck.py` (`make idp-test`, a real
+  Keycloak 26.0) gains three cases, each with a principal recorded by subject id: an enabled owner
+  resolves, a disabled owner is refused as revoked, and an unknown id is refused as not known. The
+  first two were red before the change. A plant that accepted any by-id answer without reading
+  `enabled` was red on the disabled case; the original was restored from a saved copy, md5 matching.
+  All 8 pass live. The watch, evaluation and schedule tests pass against live stores (61).
+
 ---
 
 ## ADR-044 — Distinguishing an unreachable identity provider from a revoked principal: accepted, `WatchStatus` stays binary with a separate reason field

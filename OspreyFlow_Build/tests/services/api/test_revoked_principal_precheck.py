@@ -180,3 +180,67 @@ async def test_an_unreachable_idp_is_unavailable_not_revoked() -> None:
             await resolver.resolve_for_owner_detailed(VERIFY_SUBJECT)
     finally:
         await resolver.aclose()
+
+
+# --- the owner as the Conduit records it: Keycloak's subject id (ADR-043 Amendment, 27 Oct 2026) ---
+
+
+async def _subject_id_of(username: str) -> str:
+    """The user's Keycloak id, read with the Conduit client's own view-users grant. A principal's id
+    is this subject id (the token's `sub`, ADR-127 Amendment 34), never the username."""
+    resolver = PrincipalResolver(
+        _config(client_id=CONDUIT_CLIENT_ID, secret=PROBE_SECRET, with_precheck=True)
+    )
+    try:
+        token = await resolver._client_credentials_token()
+        response = await resolver._exchange_http.get(
+            f"{KC}/admin/realms/{REALM}/users",
+            params={"username": username, "exact": "true"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return str(response.json()[0]["id"])
+    finally:
+        await resolver.aclose()
+
+
+@requires_keycloak
+async def test_an_enabled_owner_recorded_by_subject_id_is_resolved() -> None:
+    """Found on the owner's deployment: every hotlist owned by an analyst was marked stopped and no
+    alert fired, because the pre-check looked the owner up as a *username* while the Conduit records
+    owners by subject id. Measured on Keycloak 26.0: `users?username=<subject>&exact=true` answers
+    200 with no users. The tests above passed throughout, because `VERIFY_SUBJECT` is a username."""
+    subject = await _subject_id_of(VERIFY_SUBJECT)
+    resolver = PrincipalResolver(
+        _config(client_id=CONDUIT_CLIENT_ID, secret=PROBE_SECRET, with_precheck=True)
+    )
+    try:
+        principal = await resolver.resolve_for_owner_detailed(subject)
+    finally:
+        await resolver.aclose()
+    assert principal.id == subject
+
+
+@requires_keycloak
+async def test_a_disabled_owner_recorded_by_subject_id_is_still_revoked() -> None:
+    subject = await _subject_id_of(REVOKED_SUBJECT)
+    resolver = PrincipalResolver(
+        _config(client_id=CONDUIT_CLIENT_ID, secret=PROBE_SECRET, with_precheck=True)
+    )
+    try:
+        with pytest.raises(PrincipalRevoked):
+            await resolver.resolve_for_owner_detailed(subject)
+    finally:
+        await resolver.aclose()
+
+
+@requires_keycloak
+async def test_an_owner_unknown_by_id_and_by_name_is_refused_as_not_known() -> None:
+    resolver = PrincipalResolver(
+        _config(client_id=CONDUIT_CLIENT_ID, secret=PROBE_SECRET, with_precheck=True)
+    )
+    try:
+        with pytest.raises(PrincipalExchangeRefused) as raised:
+            await resolver.resolve_for_owner_detailed("00000000-0000-4000-8000-000000000000")
+    finally:
+        await resolver.aclose()
+    assert "not known" in str(raised.value)

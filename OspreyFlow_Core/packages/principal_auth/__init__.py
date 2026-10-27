@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
+from urllib.parse import quote
 
 import httpx
 import jwt
@@ -88,7 +89,7 @@ class OidcResolverSettings:
 # "OIDC via Keycloak (Apache-2.0). The session token resolves to a
 # `Principal` carrying identity, unit, roles, clearance, and the handling
 # codes the principal may receive."
-# 
+#
 # **The JWKS source is a config point, not a hardcoded key.** `ApiConfig.
 # oidc_jwks_url` names the endpoint `PyJWKClient` fetches and caches keys
 # from — a Keycloak realm's `.../protocol/openid-connect/certs` in a real
@@ -105,14 +106,14 @@ class OidcResolverSettings:
 # special-cases the fixture path, so the exact same code runs against the
 # test fixture's URL as against a real IdP later; only the config value
 # changes.
-# 
+#
 # **Claim names are this deployment's mapping, not a standard.** OIDC has no
 # standard claim for `clearance`, `org_unit` or `receivable_handling_codes`
 # — those come from `01_DOMAIN_MODEL.md` §2.2's handling model, which no IdP
 # knows about natively. A real deployment maps its IdP's actual claims (a
 # Keycloak protocol mapper, typically) onto the names below; this module
 # does not invent a mapping convention beyond naming what it expects.
-# 
+#
 # **`resolve_for_owner` — OAuth2 Token Exchange (RFC 8693), `06_DECISIONS.md` ADR-043's own
 # accepted mechanism for a stored `owner_id` with no live bearer token.** Exchanges this Conduit's
 # own client credentials for a token minted *as* the target owner, then decodes that token through
@@ -240,12 +241,21 @@ class PrincipalResolver:
         """
         if not self._config.oidc_admin_users_url:
             return
+        # An owner is recorded by Keycloak's subject id (the token's `sub`, ADR-127 Amendment 34),
+        # so it is read as `users/{id}`; a name is read as `users?username=` only when no user has
+        # that id, which keeps an owner recorded by username (before that amendment) working.
+        # Measured on Keycloak 26.0: the username query for a subject id answers 200 with no users.
+        headers = {"Authorization": f"Bearer {await self._client_credentials_token()}"}
+        base = self._config.oidc_admin_users_url.rstrip("/")
         try:
-            response = await self._exchange_http.get(
-                self._config.oidc_admin_users_url,
-                params={"username": owner_id, "exact": "true"},
-                headers={"Authorization": f"Bearer {await self._client_credentials_token()}"},
+            by_id = await self._exchange_http.get(
+                f"{base}/{quote(owner_id, safe='')}", headers=headers
             )
+            response = by_id
+            if by_id.status_code == 404:
+                response = await self._exchange_http.get(
+                    base, params={"username": owner_id, "exact": "true"}, headers=headers
+                )
         except httpx.HTTPError as exc:
             raise PrincipalExchangeUnavailable(
                 f"could not read enabled status for owner {owner_id!r}: {exc}"
@@ -255,7 +265,8 @@ class PrincipalResolver:
                 f"enabled-status read for owner {owner_id!r} returned "
                 f"{response.status_code} {response.text}"
             )
-        users = response.json()
+        found = response.json()
+        users = found if isinstance(found, list) else [found]
         if not users:
             raise PrincipalExchangeRefused(
                 f"owner {owner_id!r} is not known to the identity provider"
