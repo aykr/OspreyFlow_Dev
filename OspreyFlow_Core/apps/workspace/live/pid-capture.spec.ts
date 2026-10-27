@@ -425,10 +425,13 @@ test("CAP-A2-C3", async ({ page }) => {
   }
   await page.getByRole("button", { name: "Map", exact: true }).click();
   await page.waitForTimeout(6000);
-  // The weekly view has no brush and counts the whole case's events unless nodes are selected,
-  // so the hotspot cells are selected (the histogram's bars): it then counts their throw-overs.
-  const bars = page.getByRole("button", { name: /^[0-9A-Z]{26}: \d+$/ });
-  await bars.first().click();
+  // The weekend cells are brushed (ADR-130 decision 2): the grid stays whole with the chosen
+  // cells marked, and the map and the canvas keep only what falls in them.
+  await page.getByRole("button", { name: "More timeline options" }).click();
+  const cells = page.getByRole("group", { name: "Choose cells (UTC)" });
+  await cells.getByRole("checkbox", { name: "Sat" }).check();
+  await cells.getByRole("checkbox", { name: "Sun" }).check();
+  await page.getByRole("button", { name: "More timeline options" }).click();
   await page.waitForTimeout(3000);
   console.log(`C3 counts: ${await counts(page).textContent()}`);
   await shot(page, "CAP-A2-C3");
@@ -705,11 +708,11 @@ test("chapter 9b: the engineer loads batch 2", async ({ page }) => {
 
 test("CAP-A2-C9", async ({ page }) => {
   // A hotlist's alert is in the Watches rail's Alert inbox; the Alerts rail is the typology rules'
-  // queue. The inbox names the hotlist and the node by internal id only (a finding), and has no
-  // opened view with the document, the rule and the cited links drawn.
+  // queue. The alert explains itself (ADR-130 decision 1): the identifier as typed and its review
+  // date, and the node it matched with the files and rows that put it there.
   await freshCase(page);
   await rail(page, "Watches").click();
-  await expect(page.getByText(/^hotlist:/).first()).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/^Hotlist: /).first()).toBeVisible({ timeout: 60_000 });
   await page.waitForTimeout(1500);
   await shot(page, "CAP-A2-C9");
   await shot(page, "CAP-M4-b");
