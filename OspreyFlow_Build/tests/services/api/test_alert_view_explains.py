@@ -48,7 +48,7 @@ def _node(
         datasets=["ds-a"] if datasets is None else datasets,
         id=node_id,
         type=node_type,
-        properties={"value_normalised": "+447700900640"},
+        properties={"value_normalised": "+447700900918"},
         provenance=Provenance(
             state=ProvenanceState.ASSERTED,
             sources=[
@@ -101,13 +101,13 @@ class _Hotlists:
 
 def _hotlist(
     *,
-    typed: str | None = "07700 900640",
+    typed: str | None = "07700 900918",
     canonical: bool | None = True,
     dataset_id: str | None = "ds-a",
 ) -> Hotlist:
     return Hotlist(
         id="hl-1",
-        identifier="+447700900640",
+        identifier="+447700900918",
         identifier_typed=typed,
         identifier_canonical=canonical,
         owner_id=OWNER.id,
@@ -136,7 +136,7 @@ async def test_the_owner_sees_the_hotlist_as_typed_and_its_review_date() -> None
     graph = _Graph({"n1": _node("n1", [("a/b/calls.csv", "row 3")])}, {OWNER.id})
     view = await _view(_alert(["n1"]), OWNER, graph, _Hotlists(_hotlist()))
     assert view.hotlist is not None
-    assert view.hotlist.identifier == "07700 900640"
+    assert view.hotlist.identifier == "07700 900918"
     assert view.hotlist.kept_as_written is False
     assert view.hotlist.review_date == date(2027, 1, 31)
 
@@ -146,7 +146,7 @@ async def test_the_stored_identifier_is_shown_when_untyped_and_kept_as_written_i
     hotlists = _Hotlists(_hotlist(typed=None, canonical=False))
     view = await _view(_alert(["n1"]), OWNER, graph, hotlists)
     assert view.hotlist is not None
-    assert view.hotlist.identifier == "+447700900640"
+    assert view.hotlist.identifier == "+447700900918"
     assert view.hotlist.kept_as_written is True
 
 
@@ -174,7 +174,7 @@ async def test_fired_on_names_the_type_the_label_and_the_files_with_their_rows()
     graph = _Graph({"n1": _node("n1", sources)}, {OWNER.id})
     view = await _view(_alert(["n1"]), OWNER, graph, _Hotlists(_hotlist()))
     (fired,) = view.fired_on
-    assert fired.type == "Endpoint" and fired.label == "+447700900640"
+    assert fired.type == "Endpoint" and fired.label == "+447700900918"
     assert [(f.name, f.row, f.rows) for f in fired.files] == [
         ("pid_seized_comms_batch2.csv", 3, None),
         ("pid_pin_calls.csv", None, 2),
@@ -222,7 +222,7 @@ async def test_a_hidden_node_gives_no_fired_on_no_name_and_no_count() -> None:
     assert view.evidence_available is False and view.referent_node_ids == []
     assert view.fired_on is None
     wire = view.model_dump_json()
-    assert "secret_file" not in wire and "+447700900640" not in wire and "more_files" not in wire
+    assert "secret_file" not in wire and "+447700900918" not in wire and "more_files" not in wire
 
 
 async def test_one_hidden_referent_withdraws_every_referents_detail() -> None:
@@ -272,7 +272,7 @@ async def test_a_node_in_two_datasets_read_in_a_case_of_one_has_its_sources_with
     )
     view = await _view(_alert(["n1"]), OWNER, _Graph({"n1": node}, {OWNER.id}), None)
     (fired,) = view.fired_on
-    assert fired.type == "Endpoint" and fired.label == "+447700900640"
+    assert fired.type == "Endpoint" and fired.label == "+447700900918"
     assert fired.sources_withheld is True
     assert fired.files == [] and fired.more_files == 0
     wire = view.model_dump_json()

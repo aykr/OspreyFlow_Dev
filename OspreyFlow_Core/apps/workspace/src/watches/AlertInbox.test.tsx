@@ -126,10 +126,10 @@ describe("a hotlist alert that explains itself", () => {
     id: "alert-9", rule_id: "hotlist:01HZX3Q9K2M5N7P8R0S1T2V3W4", owner_id: "analyst-1", mode: "full",
     referent_node_ids: ["01HZX3Q9K2M5N7P8R0S1T2V3W5"], evidence_available: true,
     investigation_id: "case-1", created_at: "2026-10-02T09:00:00Z",
-    hotlist: { identifier: "07700 900640", kept_as_written: false, review_date: "2027-01-31" },
+    hotlist: { identifier: "07700 900918", kept_as_written: false, review_date: "2027-01-31" },
     fired_on: [
       {
-        type: "Endpoint", label: "+447700900640", more_files: 0,
+        type: "Endpoint", label: "+447700900918", more_files: 0,
         files: [
           { name: "pid_seized_comms_batch2.csv", row: 3 },
           { name: "pid_pin_calls.csv", rows: 2013 },
@@ -149,8 +149,8 @@ describe("a hotlist alert that explains itself", () => {
 
   test("reads the hotlist, what matched and where it was read from", () => {
     const t = text(EXPLAINED);
-    expect(t).toContain("Hotlist: 07700 900640 · review by 31 Jan 2027");
-    expect(t).toContain("Matched: Endpoint +447700900640");
+    expect(t).toContain("Hotlist: 07700 900918 · review by 31 Jan 2027");
+    expect(t).toContain("Matched: Endpoint +447700900918");
     expect(t).toContain("From: pid_seized_comms_batch2.csv, row 3; pid_pin_calls.csv, 2,013 rows");
   });
 
@@ -169,7 +169,7 @@ describe("a hotlist alert that explains itself", () => {
   test("says how many more files, never cutting silently", () => {
     const more: AlertView = {
       ...EXPLAINED,
-      fired_on: [{ type: "Endpoint", label: "+447700900640", more_files: 3,
+      fired_on: [{ type: "Endpoint", label: "+447700900918", more_files: 3,
                    files: [{ name: "a.csv", row: 1 }] }],
     };  // prettier-ignore
     expect(text(more)).toContain("From: a.csv, row 1; and 3 more files");
@@ -218,7 +218,7 @@ describe("the hotlist alert's fired-on text", () => {
           alert={{
             ...FULL,
             fired_on: [
-              { type: "Endpoint", label: "+447700900640", files: [], more_files: 0, sources_withheld: true },
+              { type: "Endpoint", label: "+447700900918", files: [], more_files: 0, sources_withheld: true },
             ],
           }}
           onJump={() => undefined}
@@ -228,7 +228,7 @@ describe("the hotlist alert's fired-on text", () => {
     );
     const text = container.textContent ?? "";
     expect(text).toContain(
-      "Matched: Endpoint +447700900640 \u2014 its sources are in data this case does not read",
+      "Matched: Endpoint +447700900918 \u2014 its sources are in data this case does not read",
     );
     expect(text).not.toContain("From:");
   });

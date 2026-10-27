@@ -83,6 +83,25 @@ def _is_authorized_store_method(fn: ast.AsyncFunctionDef | ast.FunctionDef) -> b
     return "principal" in names
 
 
+def _is_signature_only(fn: ast.AsyncFunctionDef | ast.FunctionDef) -> bool:
+    """A body that is only `...`, after an optional docstring: a `Protocol`'s signature, which
+    issues no query and so cannot fetch then check. The store implementing it is judged instead."""
+    body = fn.body
+    first = body[0] if body else None
+    if (
+        isinstance(first, ast.Expr)
+        and isinstance(first.value, ast.Constant)
+        and isinstance(first.value.value, str)
+    ):
+        body = body[1:]
+    return (
+        len(body) == 1
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and body[0].value.value is Ellipsis
+    )
+
+
 def check_source(path: str, source: str) -> list[str]:
     """Returns one message per `*_authorized` store method whose own body has no SQL SELECT call
     binding a `principal.<attr>` argument."""
@@ -91,7 +110,7 @@ def check_source(path: str, source: str) -> list[str]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
             continue
-        if not _is_authorized_store_method(node):
+        if not _is_authorized_store_method(node) or _is_signature_only(node):
             continue
         calls = [n for n in ast.walk(node) if isinstance(n, ast.Call)]
         select_calls = [c for c in calls if _is_sql_select_call(c)]

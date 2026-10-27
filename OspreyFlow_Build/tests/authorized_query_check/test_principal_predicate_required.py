@@ -110,3 +110,31 @@ def test_a_query_built_as_an_f_string_that_binds_the_principal_passes() -> None:
 
 def test_a_query_built_as_an_f_string_that_binds_no_principal_is_flagged() -> None:
     assert len(check_source("alerts.py", _FSTRING_UNSCOPED)) == 1
+
+
+_PROTOCOL_STUB = '''
+class HotlistReader(Protocol):
+    """The one read a caller needs."""
+
+    async def get_authorized(self, hotlist_id: str, principal: Principal) -> Hotlist: ...
+'''
+
+_PROTOCOL_WITH_A_BODY = '''
+class HotlistReader(Protocol):
+    async def get_authorized(self, hotlist_id: str, principal: Principal) -> Hotlist:
+        hotlist = await self.get(hotlist_id)
+        if hotlist.owner_id != principal.id:
+            raise HotlistNotFoundError(hotlist_id)
+        return hotlist
+'''
+
+
+def test_a_protocol_signature_with_no_body_is_not_flagged() -> None:
+    """A `Protocol` method that is only a signature issues no query, so it cannot fetch then check;
+    the store that implements it is the method judged (`watch_routes.HotlistReader`, flagged by CI
+    on 27 October 2026)."""
+    assert check_source("watch_routes.py", _PROTOCOL_STUB) == []
+
+
+def test_a_protocol_method_with_a_fetch_then_check_body_is_still_flagged() -> None:
+    assert len(check_source("watch_routes.py", _PROTOCOL_WITH_A_BODY)) == 1

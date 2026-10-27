@@ -55,7 +55,7 @@ export function cyclicalOption({
   colours,
   text,
   cells = null,
-  shade = "#888888",
+  shade,
 }: {
   data: number[][];
   max: number;
@@ -63,7 +63,8 @@ export function cyclicalOption({
   text: string;
   /** The cells chosen (ADR-130 decision 2): drawn with a border in `shade`; the grid stays whole. */
   cells?: readonly Cell[] | null;
-  shade?: string;
+  /** A token colour, read by the caller (`tokens.css`): no colour is written here. */
+  shade: string;
 }) {
   const chosen = new Set((cells ?? []).map((c) => `${c.hour}:${c.weekday}`));
   const mark = { borderColor: shade, borderWidth: 2 };

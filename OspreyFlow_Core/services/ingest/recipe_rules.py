@@ -186,6 +186,20 @@ class RecipeRuleError(Exception):
         self.problems = problems
 
 
+def _written(entity: RecipeEntity) -> set[str]:
+    """The properties an entity's template writes: its bound ones, and a `title` for a Document
+    holding its own text, which the engine takes from the text's first words when none is bound
+    (ADR-127 decision 1; `engine.holds_own_text`, not imported, since the engine imports this)."""
+    written = set(entity.properties)
+    if (
+        entity.type == "Document"
+        and entity.content is not None
+        and entity.content.kind == "document_text"
+    ):
+        written.add("title")
+    return written
+
+
 def reference_match_problems(
     template: RowTemplate, ontology: OntologySchema, *, complete: bool = True
 ) -> list[str]:
@@ -215,7 +229,7 @@ def reference_match_problems(
                 f"an identifier or an indexed property of the type, so this would make a new "
                 f"{entity.type} for every row."
             )
-        elif complete and entity.match_on not in entity.properties:
+        elif complete and entity.match_on not in _written(entity):
             problems.append(
                 f"{entity.type} cannot be found by {entity.match_on}: the entity does not write "
                 f"{entity.match_on}, and a reference can only match a stored identifier or "

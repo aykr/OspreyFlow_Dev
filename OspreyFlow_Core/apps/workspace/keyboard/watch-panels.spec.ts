@@ -214,11 +214,11 @@ test("jumping from an alert calls the real jump route and shows the result, reac
             evidence_available: true,
             investigation_id: "inv-source-1",
             created_at: "2026-09-22T00:00:00Z",
-            hotlist: { identifier: "07700 900640", kept_as_written: false, review_date: "2027-01-31" },
+            hotlist: { identifier: "07700 900918", kept_as_written: false, review_date: "2027-01-31" },
             fired_on: [
               {
                 type: "Endpoint",
-                label: "+447700900640",
+                label: "+447700900918",
                 files: [{ name: "pid_seized_comms_batch2.csv", row: 3 }],
                 more_files: 0,
               },
@@ -246,7 +246,7 @@ test("jumping from an alert calls the real jump route and shows the result, reac
   });
 
   await page.goto("/keyboard/watch-panels-harness.html");
-  await expect(page.getByText("Hotlist: 07700 900640 · review by 31 Jan 2027")).toBeVisible();
+  await expect(page.getByText("Hotlist: 07700 900918 · review by 31 Jan 2027")).toBeVisible();
   await tabToButtonNamed(page, "Jump into investigation");
   await page.keyboard.press("Enter");
 

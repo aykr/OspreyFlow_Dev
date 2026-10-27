@@ -11,7 +11,7 @@ import {
 } from "./cyclicalOption";
 
 describe("the weekly view's colour key", () => {
-  const option = cyclicalOption({ data: [[9, 1, 4]], max: 4, colours: ["#eee", "#055"], text: "#555" });
+  const option = cyclicalOption({ data: [[9, 1, 4]], max: 4, colours: ["#eee", "#055"], text: "#555", shade: "#123456" });
 
   it("stands upright at the right-hand side, not along the bottom", () => {
     expect(option.visualMap.orient).toBe("vertical");
@@ -25,7 +25,7 @@ describe("the weekly view's colour key", () => {
 });
 
 describe("the weekly view's chosen cells (ADR-130 decision 2)", () => {
-  const base = { data: [[9, 5, 4], [10, 5, 2]], max: 4, colours: ["#eee", "#055"], text: "#555" };
+  const base = { data: [[9, 5, 4], [10, 5, 2]], max: 4, colours: ["#eee", "#055"], text: "#555", shade: "#123456" };
 
   it("draws the whole grid whether or not cells are chosen, the chosen ones marked", () => {
     const none = cyclicalOption(base);

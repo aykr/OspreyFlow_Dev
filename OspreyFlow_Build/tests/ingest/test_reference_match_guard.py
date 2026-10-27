@@ -256,3 +256,27 @@ def test_a_half_built_template_saves_but_an_unfindable_field_is_still_refused_at
     assert reference_match_problems(unbound, ONTOLOGY) != []
     unfindable = _template("Document", "sent_at")
     assert reference_match_problems(unfindable, ONTOLOGY, complete=False) != []
+
+
+def _document_by_title(content: str | None) -> RowTemplate:
+    document: dict[str, object] = {
+        "ref": "d",
+        "pole_class": "object",
+        "type": "Document",
+        "match_on": "title",
+        "on_match": "reference",
+        "properties": {},
+    }
+    if content is not None:
+        document["content"] = {"kind": content, "field": "text"}
+    return RowTemplate.model_validate({"entities": [document], "edges": []})
+
+
+def test_a_document_holding_its_own_text_writes_its_title_so_a_reference_on_title_passes() -> None:
+    """A Document whose `content` is `document_text` holds its own text, and the engine writes its
+    `title` from the text's first words when no `title` is bound (ADR-127 decision 1), so a
+    reference on `title` finds it. Refusing it broke the own-text tests in
+    `test_handling_from_columns_review.py` (CI's conformance job, 27 October 2026). A Document
+    with no own text and no bound `title` still writes none, and is still refused."""
+    assert reference_match_problems(_document_by_title("document_text"), ONTOLOGY) == []
+    assert reference_match_problems(_document_by_title(None), ONTOLOGY) != []

@@ -70,7 +70,7 @@ def _endpoint(
     return NodeWrite(
         id=new_id(),
         type="Endpoint",
-        properties={"value_normalised": "+447700900640", "endpoint_kind": "msisdn"},
+        properties={"value_normalised": "+447700900918", "endpoint_kind": "msisdn"},
         provenance=Provenance(state=ProvenanceState.ASSERTED, sources=sources, first_seen=now),
         handling=Handling(
             classification=classification, handling_code="P", originator=owning_unit,
@@ -86,7 +86,7 @@ async def test_the_owner_sees_the_hotlist_and_what_fired_it_and_a_stranger_the_h
     stores,
 ) -> None:
     alerts, hotlists = stores
-    hotlist = await hotlists.create(OWNER, identifier="07700 900640", review_date=date(2027, 1, 31))
+    hotlist = await hotlists.create(OWNER, identifier="07700 900918", review_date=date(2027, 1, 31))
     async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as graph:
         tx = await graph.begin_transaction()
         (node_id,) = await graph.upsert_nodes([_endpoint()], tx)
@@ -98,7 +98,7 @@ async def test_the_owner_sees_the_hotlist_and_what_fired_it_and_a_stranger_the_h
         await alerts.save(alert)
 
         mine = await alert_to_view(alert, OWNER, graph, hotlists)
-        assert mine.hotlist is not None and mine.hotlist.identifier == "07700 900640"
+        assert mine.hotlist is not None and mine.hotlist.identifier == "07700 900918"
         assert mine.hotlist.review_date == date(2027, 1, 31)
         assert mine.fired_on is not None
         files = [(f.name, f.row, f.rows) for f in mine.fired_on[0].files]
