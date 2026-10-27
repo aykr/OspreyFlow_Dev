@@ -65,7 +65,14 @@ interface Attaching {
 
 const boxStyle = { width: "100%", boxSizing: "border-box", resize: "vertical" } as const;
 
-export function CaseBrief({ apiBaseUrl, bearerToken, investigationId, rights = null, onOpenAttachment }: CaseBriefProps) {
+/** The brief of one case. It is keyed by the case, so opening another case starts it afresh: the
+ * previous case's brief, its edit rights, an open Add box and any change still in flight stay with
+ * the case they were made in and cannot reach this one. */
+export function CaseBrief(props: CaseBriefProps) {
+  return <CaseBriefOfCase key={props.investigationId} {...props} />;
+}
+
+function CaseBriefOfCase({ apiBaseUrl, bearerToken, investigationId, rights = null, onOpenAttachment }: CaseBriefProps) {
   const api: BriefApi = { apiBaseUrl, bearerToken, investigationId };
   const [brief, setBrief] = useState<CaseBriefView | null>(null);
   const [canEdit, setCanEdit] = useState(false);
@@ -180,6 +187,21 @@ export function CaseBrief({ apiBaseUrl, bearerToken, investigationId, rights = n
     if (await change(() => removeRequirement(api, id))) {
       setConfirming(null);
       setFocusKey("add");
+    }
+  };
+
+  // After a detach, focus goes to the next attachment's Detach button, else the previous one's, else
+  // the requirement's Attach button: not to the page, which the removed button would leave it on.
+  const detachOne = async (
+    requirementId: string,
+    held: readonly { kind: AttachmentKind; id: string }[],
+    kind: AttachmentKind,
+    attachmentId: string,
+  ) => {
+    const at = held.findIndex((a) => a.kind === kind && a.id === attachmentId);
+    const neighbour = held[at + 1] ?? held[at - 1];
+    if (await change(() => detach(api, requirementId, kind, attachmentId))) {
+      setFocusKey(neighbour ? `detach-${requirementId}-${neighbour.kind}:${neighbour.id}` : `attach-${requirementId}`);
     }
   };
 
@@ -333,15 +355,17 @@ export function CaseBrief({ apiBaseUrl, bearerToken, investigationId, rights = n
                                 <li key={`${a.kind}:${a.id}`} style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
                                   <Button
                                     aria-label={`Open ${KIND_WORD[a.kind]}: ${a.title}`}
+                                    disabled={!onOpenAttachment}
                                     onClick={() => onOpenAttachment?.(a.kind, a.id)}
                                   >
                                     {a.title}
                                   </Button>
                                   {canEdit && (
                                     <Button
+                                      data-focus={`detach-${r.id}-${a.kind}:${a.id}`}
                                       aria-label={`Detach ${KIND_WORD[a.kind]}: ${a.title}`}
                                       disabled={busy}
-                                      onClick={() => void change(() => detach(api, r.id, a.kind, a.id))}
+                                      onClick={() => void detachOne(r.id, r.attachments, a.kind, a.id)}
                                     >
                                       Detach
                                     </Button>

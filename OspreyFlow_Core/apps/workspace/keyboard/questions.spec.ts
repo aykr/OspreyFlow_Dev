@@ -22,22 +22,11 @@ const ANSWER = {
   created_at: "2026-10-07T10:00:00Z",
 };
 
-// ADR-129: an answer that cites two graph facts; the Glass maps a number to ids from the payload.
-const FACT_ANSWER = {
-  ...ANSWER,
-  id: "q2",
-  answer: "Rohan is tied to Dana [G-1]; Dana called Callum [G-2].",
-  graph_citations: [
-    { number: 1, label: "[G-1]", node_ids: ["n-rohan", "n-dana"], link_ids: ["l-assoc"] },
-    { number: 2, label: "[G-2]", node_ids: ["n-dana", "n-callum"], link_ids: ["l-called"] },
-  ],
-};
-
-async function serve(page: Page, history: unknown[] = [], answer: unknown = ANSWER) {
+async function serve(page: Page, history: unknown[] = [], answer: unknown = ANSWER, harness = "/keyboard/questions-harness.html") {
   const asked: string[] = [];
   const scopes: unknown[] = [];
   const decided: string[] = [];
-  await page.route("**/*/v1/investigations/b1/questions**", async (route) => {
+  await page.route("**/*/v1/investigations/*/questions**", async (route) => {
     const request = route.request();
     const url = request.url();
     const json = (status: number, body: unknown) =>
@@ -53,7 +42,7 @@ async function serve(page: Page, history: unknown[] = [], answer: unknown = ANSW
     if (url.endsWith("/accept")) return json(200, { node_id: "n9", delta: { seq: 2, op: "add", nodes: [], edges: [] } });
     return json(200, { rejected: true });
   });
-  await page.goto("/keyboard/questions-harness.html");
+  await page.goto(harness);
   return { asked, decided, scopes };
 }
 
@@ -118,22 +107,63 @@ test("a proposal is rejected by keyboard, and nothing reaches the view", async (
   registerCovered(REGISTRY, "reject-a-proposal-by-keyboard");
 });
 
-test("asking, then choosing a [G-n] from the answer by keyboard selects what it stands for and brings it into view", async ({ page }) => {
-  // ADR-129 decision 1: ask (the selection goes with the question), Tab to a cited fact, Enter.
-  const { scopes } = await serve(page, [], FACT_ANSWER);
+declare global {
+  interface Window {
+    __KEYBOARD__?: { focused: string | null; selection: string[]; selectedEdge: string | null };
+  }
+}
+
+const GRAPH_FACTS = {
+  ...ANSWER,
+  id: "q3",
+  answer: "One link [G-1]; a link not in view [G-2]; two links [G-3]; nothing in view [G-4]; the one link again [G-1].",
+  graph_citations: [
+    { number: 1, label: "[G-1]", node_ids: ["n0", "n1"], link_ids: ["e0"] },
+    { number: 2, label: "[G-2]", node_ids: ["n2", "n3"], link_ids: ["gone"] },
+    { number: 3, label: "[G-3]", node_ids: ["n1", "n2", "n3"], link_ids: ["e1", "e2"] },
+    { number: 4, label: "[G-4]", node_ids: ["nowhere"], link_ids: ["nothing"] },
+  ],
+};
+
+/** Presses Tab until the focused element's accessible name is `name`; the walk an analyst makes. */
+async function tabToLabel(page: Page, name: string, max = 40) {
+  for (let i = 0; i < max; i++) {
+    await page.keyboard.press("Tab");
+    const label = await page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? "");
+    if (label === name) return;
+  }
+  throw new Error(`Tab never reached ${name}`);
+}
+
+test("asking, then reaching a [G-n] from the answer by Tab, selects what it stands for on the real canvas", async ({ page }) => {
+  // ADR-129 decision 1, against the real canvas (harness.html?questions=1), not a recording fake: a
+  // fact with one drawn link selects the link; a link not drawn, or several links, select the nodes;
+  // a fact with nothing in view leaves the selection as it was; a repeated marker is a button too.
+  const { scopes } = await serve(page, [], GRAPH_FACTS, "/keyboard/harness.html?questions=1");
   await page.getByLabel("Your question").focus();
-  await page.keyboard.type("Who is connected to Dana?");
+  await page.keyboard.type("Who is connected to n0?");
   await page.keyboard.press("Control+Enter");
-  const fact = page.getByRole("button", { name: "Select [G-2] on the canvas" });
-  await expect(fact).toBeVisible();
-  expect(scopes).toEqual([
-    { question: "Who is connected to Dana?", selected_node_ids: ["n-dana"], selected_link_ids: [] },
-  ]);
-  await fact.focus();
+  await expect(page.getByRole("button", { name: "Select [G-1] on the canvas" })).toHaveCount(2);
+  expect(scopes).toEqual([{ question: "Who is connected to n0?", selected_node_ids: [], selected_link_ids: [] }]);
+  const state = () => page.evaluate(() => ({ nodes: window.__KEYBOARD__!.selection, edge: window.__KEYBOARD__!.selectedEdge }));
+  await page.getByLabel("Your question").focus();
+
+  await tabToLabel(page, "Select [G-1] on the canvas");
   await page.keyboard.press("Enter");
-  await expect
-    .poll(() => page.evaluate(() => window.__QUESTIONS__?.canvas))
-    .toEqual({ selectedLink: "l-called", selectedNodes: [], centred: "n-dana" });
+  await expect.poll(state).toEqual({ nodes: [], edge: "e0" });
+
+  await tabToLabel(page, "Select [G-2] on the canvas");
+  await page.keyboard.press("Enter");
+  await expect.poll(state).toEqual({ nodes: ["n2", "n3"], edge: null });
+
+  await tabToLabel(page, "Select [G-3] on the canvas");
+  await page.keyboard.press("Enter");
+  await expect.poll(state).toEqual({ nodes: ["n1", "n2", "n3"], edge: null });
+
+  await tabToLabel(page, "Select [G-4] on the canvas");
+  await page.keyboard.press("Enter");
+  // Nothing in view: the selection is left as it was.
+  await expect.poll(state).toEqual({ nodes: ["n1", "n2", "n3"], edge: null });
   registerCovered(REGISTRY, "select-a-graph-fact-from-an-answer-by-keyboard");
 });
 

@@ -60,16 +60,33 @@ function firstCell(line: string): string {
   return comma === -1 ? line : line.slice(0, comma);
 }
 
-/** The list a chosen file holds: a `.csv`'s first column, a `.txt` as it is (its lines are the
- * list, and may be separated by commas or spaces too). A leading byte-order mark is dropped. */
+/** The names a header row's first cell takes, lower-cased. A first row of a `.csv` whose first cell
+ * is one of these is a header, not an identifier, and is dropped; anything else is kept, since an
+ * identifier can look like nothing in particular. */
+const HEADER_NAMES: ReadonlySet<string> = new Set([
+  "id",
+  "identifier",
+  "identifiers",
+  "value",
+  "values",
+  "reference",
+  "number",
+  "prison number",
+  "prison_number",
+  "prisonnumber",
+]);
+
+/** The list a chosen file holds: a `.csv`'s first column without its header row (the first
+ * non-blank row, when its first cell is a known column name, `HEADER_NAMES`), a `.txt` as it is
+ * (its lines are the list, and may be separated by commas or spaces too). A leading byte-order mark
+ * is dropped. */
 export function listFromFile(name: string, text: string): string {
   const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   const lines = body.split(/\r?\n/);
-  const cells = name.toLowerCase().endsWith(".csv") ? lines.map(firstCell) : lines;
-  return cells
-    .map((cell) => cell.trim())
-    .filter((cell) => cell !== "")
-    .join("\n");
+  const isCsv = name.toLowerCase().endsWith(".csv");
+  const cells = (isCsv ? lines.map(firstCell) : lines).map((cell) => cell.trim()).filter((cell) => cell !== "");
+  if (isCsv && cells.length > 0 && HEADER_NAMES.has(cells[0]!.toLowerCase())) cells.shift();
+  return cells.join("\n");
 }
 
 function refusal(status: number, body: Record<string, unknown>, what: string): AddFromListError {

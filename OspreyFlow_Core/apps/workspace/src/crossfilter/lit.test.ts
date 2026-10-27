@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { FirstSeen } from "./emergence";
-import { litSet, litTabName, UNDATED_NOT_INCLUDED, type LitLink } from "./lit";
+import { litNote, litSet, litTabName, UNDATED_NOT_INCLUDED, type LitLink } from "./lit";
 
 // ADR-128 decision 2 (B3). A link is lit when at least one of its events falls inside the window,
 // ends included; an undated link is never lit; a node is lit when a lit link touches it. What the
@@ -71,25 +71,30 @@ describe("litSet", () => {
 describe("litTabName", () => {
   it("names the tab from the window, the year once when both ends share it", () => {
     expect(
-      litTabName({ validFrom: "2026-01-05T00:00:00Z", validTo: "2026-05-01T00:00:00Z" }),
+      litTabName({ validFrom: "2026-01-05T00:00:00Z", validTo: "2026-04-30T23:59:59Z" }),
     ).toBe("5 Jan – 30 Apr 2026, selected");
   });
 
-  it("reads an end at midnight as the end of the day before, as a brush across whole days has it", () => {
+  it("names the day the window's end falls on, because the end is lit: an end at midnight is that day", () => {
+    // `litSet` includes an event at exactly the end, so a window ending at 1 May 00:00 lights
+    // 1 May's first instant and must not be labelled as if it stopped on 30 Apr.
+    expect(litSet({ nodes: {}, edges: { x: "2026-05-01T00:00:00Z" } }, { validFrom: "2026-01-05T00:00:00Z", validTo: "2026-05-01T00:00:00Z" }, [
+      { id: "x", source: "a", target: "b" },
+    ]).edgeIds).toEqual(["x"]);
     expect(
-      litTabName({ validFrom: "2026-01-05T00:00:00Z", validTo: "2026-04-30T23:59:59Z" }),
-    ).toBe("5 Jan – 30 Apr 2026, selected");
+      litTabName({ validFrom: "2026-01-05T00:00:00Z", validTo: "2026-05-01T00:00:00Z" }),
+    ).toBe("5 Jan – 1 May 2026, selected");
   });
 
   it("gives both years when the window crosses a year", () => {
     expect(
       litTabName({ validFrom: "2025-11-01T00:00:00Z", validTo: "2026-02-01T00:00:00Z" }),
-    ).toBe("1 Nov 2025 – 31 Jan 2026, selected");
+    ).toBe("1 Nov 2025 – 1 Feb 2026, selected");
   });
 
-  it("names a one-day window by its day", () => {
+  it("names a window within one day by its day", () => {
     expect(
-      litTabName({ validFrom: "2026-03-02T00:00:00Z", validTo: "2026-03-03T00:00:00Z" }),
+      litTabName({ validFrom: "2026-03-02T09:00:00Z", validTo: "2026-03-02T17:00:00Z" }),
     ).toBe("2 Mar 2026, selected");
   });
 
@@ -99,3 +104,24 @@ describe("litTabName", () => {
     );
   });
 });
+
+describe("litNote, the sentence beside what is lit", () => {
+  it("reads a window with two ends as 'Lit in <range>'", () => {
+    expect(litNote({ validFrom: "2026-01-05T00:00:00Z", validTo: "2026-04-30T23:59:59Z" })).toBe(
+      `Lit in 5 Jan – 30 Apr 2026: ${UNDATED_NOT_INCLUDED}`,
+    );
+  });
+
+  it("reads an open-ended window as 'Lit from <date>', not 'Lit in From <date>'", () => {
+    expect(litNote({ validFrom: "2026-01-05T00:00:00Z", validTo: null })).toBe(
+      `Lit from 5 Jan 2026: ${UNDATED_NOT_INCLUDED}`,
+    );
+  });
+
+  it("names a single day as 'Lit on <day>'", () => {
+    expect(litNote({ validFrom: "2026-03-02T09:00:00Z", validTo: "2026-03-02T17:00:00Z" })).toBe(
+      `Lit on 2 Mar 2026: ${UNDATED_NOT_INCLUDED}`,
+    );
+  });
+});
+

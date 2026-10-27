@@ -17,8 +17,9 @@ export type AnswerPart =
 
 const MARKER = /\[G-(\d+)\]/g;
 
-/** The answer in order, each `[G-n]` that the payload holds as a fact and the rest as text. Every
- * citation appears once: a fact the words do not mark is in `unmarked`, for a row after the answer. */
+/** The answer in order, each `[G-n]` that the payload holds as a fact (every occurrence of a
+ * repeated marker is one) and the rest as text. A fact the words do not mark is in `unmarked`, for a
+ * row after the answer, so every citation is reachable. */
 export function splitAnswer(
   answer: string,
   citations: readonly GraphCitation[],
@@ -29,7 +30,7 @@ export function splitAnswer(
   let from = 0;
   for (const match of answer.matchAll(MARKER)) {
     const citation = held.get(Number(match[1]));
-    if (!citation || placed.has(citation.number)) continue;
+    if (!citation) continue;
     const at = match.index ?? 0;
     if (at > from) parts.push({ kind: "text", text: answer.slice(from, at) });
     parts.push({ kind: "fact", citation });
@@ -45,16 +46,23 @@ export interface FactCanvas {
   highlightNodes: (nodeIds: readonly string[]) => void;
   selectLink: (edgeId: string | null) => void;
   centreOn: (nodeId: string) => void;
+  /** Whether the canvas draws a link now: `true` drawn, `false` hidden, `null` not in the view. */
+  linkDrawn: (edgeId: string) => boolean | null;
 }
 
-/** Selects what a fact stands for and brings it into view. A link fact selects the link: the canvas
- * ends a link selection when nodes are chosen, so the link and its two ends cannot both be
- * selected, and the link is what the fact is. Either way the camera goes to its first end. A fact
- * whose ids are not on the canvas leaves the selection as it was. */
+/** Selects what a fact stands for and brings it into view. A fact that stands for exactly one link
+ * that is drawn selects the link: the canvas ends a link selection when nodes are chosen, so the
+ * link and its two ends cannot both be selected, and the link is what the fact is. A fact whose
+ * link is not drawn, or that stands for several links (only one link can be selected), selects its
+ * nodes instead. Either way the camera goes to its first end. A fact none of whose ids is on the
+ * canvas leaves the selection as it was. */
 export function bringFactIntoView(canvas: FactCanvas, citation: GraphCitation): void {
   const [link] = citation.link_ids;
-  if (link !== undefined) canvas.selectLink(link);
-  else canvas.highlightNodes(citation.node_ids);
+  if (citation.link_ids.length === 1 && link !== undefined && canvas.linkDrawn(link) === true) {
+    canvas.selectLink(link);
+  } else if (citation.node_ids.length > 0) {
+    canvas.highlightNodes(citation.node_ids);
+  }
   const [first] = citation.node_ids;
   if (first !== undefined) canvas.centreOn(first);
 }

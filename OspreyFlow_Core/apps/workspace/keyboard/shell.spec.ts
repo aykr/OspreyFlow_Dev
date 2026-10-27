@@ -42,6 +42,35 @@ test("add many from a list is opened from the search box, counted and cancelled,
   registerCovered(REGISTRY, "add-many-from-the-search-box-by-keyboard");
 });
 
+// Rule 13 for the same dialog's other end: Add puts the nodes on the canvas through the shell's
+// `applyStarterDelta` wiring (`GlobalSearch` -> `onApplyDelta` -> the working set), which the case
+// above never reaches because it only counts and cancels.
+test("add many from a list, added from the search box by keyboard, puts the nodes on the canvas", async ({ page }) => {
+  await page.goto("/keyboard/top-bar-harness.html?canvas=1");
+  const canvasNodes = () => page.evaluate(() => window.__TOPBAR_CANVAS__!.count());
+  expect(await canvasNodes()).toBe(0);
+  await page.getByRole("button", { name: "Add many from a list" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("textbox", { name: /identifiers/i }).focus();
+  await page.keyboard.type("Z1234ZZ, Z9999ZZ");
+  await page.getByRole("button", { name: "Count" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "2 identifiers read." })).toBeVisible();
+  // Nothing is drawn until Add is pressed.
+  expect(await canvasNodes()).toBe(0);
+  await page.getByRole("button", { name: "Add", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "1 added." })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__TOPBAR_CANVAS__!.hasNode("n-listed-1"))).toBe(true);
+  expect(await canvasNodes()).toBe(1);
+  const asked = await page.evaluate(() => (window as unknown as { __ADD_MANY__: string[] }).__ADD_MANY__);
+  expect(asked.map((body) => JSON.parse(body))).toEqual([
+    { identifiers: ["Z1234ZZ, Z9999ZZ"], confirm: false, with_links: false },
+    { identifiers: ["Z1234ZZ, Z9999ZZ"], confirm: true, with_links: false },
+  ]);
+  registerCovered(REGISTRY, "add-many-from-the-search-box-adds-to-the-canvas-by-keyboard");
+});
+
 // DESIGN.md v0.3 §5a (ADR-115 decision 9): the strip 20, the workspace's top bar 44, the rail 48 with
 // 36px buttons.
 test("the marking strip and the top bar take 20 and 44 pixels, and the rail 48 with 36px buttons", async ({ page }) => {

@@ -21,7 +21,7 @@
 // there is no separate "save as new" control, matching the store's own `pattern_id=None` shape.
 // No share control exists: ADR-040 (pattern sharing) is Proposed, not accepted, so a saved pattern
 // is loadable only by the analyst who saved it.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
 import type { Node, OntologySchema, SavedPattern } from "../../../../packages/schemas/generated";
@@ -94,6 +94,12 @@ export function QueryBuilderPanel({
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [proposal, setProposal] = useState<PatternProposal | null>(null);
+  // A proposal replaces the pattern drawn, so what it replaced is kept until it is restored or
+  // another proposal replaces it: one press of "Restore the previous pattern" is the undo.
+  const [previous, setPrevious] = useState<{ pattern: PatternBuilderState; id: string | null; name: string } | null>(null);
+  // Counts every change the analyst makes to the pattern, so an answer that comes back after one
+  // can tell it was asked about a pattern that is no longer there.
+  const revision = useRef(0);
   // ADR-121: what each node's value field holds, and which property its select has chosen, until
   // "Add condition" is pressed.
   const [conditionValues, setConditionValues] = useState<Record<string, string>>({});
@@ -124,6 +130,12 @@ export function QueryBuilderPanel({
   );
   const runnable = isPatternRunnable(pattern);
 
+  /** Every change the analyst makes to the pattern goes through here. */
+  function edit(update: (p: PatternBuilderState) => PatternBuilderState): void {
+    revision.current += 1;
+    setPattern(update);
+  }
+
   function resetResults(): void {
     setPreview(null);
     setRunResult(null);
@@ -133,37 +145,37 @@ export function QueryBuilderPanel({
 
   function handleAddVariable(): void {
     if (!paletteType) return;
-    setPattern((p) => addVariableNode(p, paletteType));
+    edit((p) => addVariableNode(p, paletteType));
     resetResults();
   }
 
   function handlePinFromSearch(node: Node): void {
-    setPattern((p) => pinNode(p, node.type, node.id, `${node.type} · ${node.id}`));
+    edit((p) => pinNode(p, node.type, node.id, `${node.type} · ${node.id}`));
     resetResults();
   }
 
   function handleConnect(): void {
     if (!connectFrom || !connectTo || !connectEdgeType) return;
-    setPattern((p) => addEdge(p, connectEdgeType, connectFrom, connectTo));
+    edit((p) => addEdge(p, connectEdgeType, connectFrom, connectTo));
     resetResults();
   }
 
   function handleAddCondition(nodeVar: string, property: string): void {
     const value = conditionValues[nodeVar] ?? "";
-    setPattern((p) => addCondition(p, nodeVar, property, value));
+    edit((p) => addCondition(p, nodeVar, property, value));
     setConditionValues((v) => ({ ...v, [nodeVar]: "" }));
     resetResults();
   }
 
   function handleRemoveCondition(nodeVar: string, property: string): void {
-    setPattern((p) => removeCondition(p, nodeVar, property));
+    edit((p) => removeCondition(p, nodeVar, property));
     resetResults();
   }
 
   function handleNodeKeyDown(nodeVar: string, event: KeyboardEvent<HTMLDivElement>): void {
     if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
-      setPattern((p) => removeElement(p, nodeVar));
+      edit((p) => removeElement(p, nodeVar));
       resetResults();
     }
   }
@@ -173,11 +185,32 @@ export function QueryBuilderPanel({
     if (!text || asking) return;
     setAsking(true);
     resetResults();
+    const askedAt = revision.current;
     try {
       const proposed = await askToSearch(apiBaseUrl, bearerToken, investigationId, text, selectedNodeIds);
+      if (revision.current !== askedAt) {
+        // The pattern was changed while the model worked: drawing the proposal would discard those
+        // edits without a word, so it is not applied.
+        setError(
+          "The model's proposal arrived after you changed the pattern, so it was not applied. Ask again to have it drawn.",
+        );
+        return;
+      }
       // The proposed pattern is drawn in the builder as any other is, and its count is the one the
       // preview route gave; nothing has run. The analyst edits, then runs with the Run button.
+      // It is a new, unsaved pattern: it takes neither the identity nor the name of what it
+      // replaces, so Save cannot overwrite a saved pattern with the model's. What it replaced is
+      // kept, to be restored.
+      if (pattern.nodes.length > 0 || currentPatternId !== null) {
+        setPrevious({ pattern, id: currentPatternId, name: patternName });
+      } else {
+        setPrevious(null);
+      }
+      revision.current += 1;
       setPattern(fromPatternQuery(proposed.pattern));
+      setCurrentPatternId(null);
+      setPatternName("");
+      setSaveStatus(null);
       setProposal(proposed);
       setPreview({ estimated_count: proposed.estimated_count, is_floor: proposed.is_floor });
     } catch (err) {
@@ -185,6 +218,17 @@ export function QueryBuilderPanel({
     } finally {
       setAsking(false);
     }
+  }
+
+  function handleRestorePrevious(): void {
+    if (!previous) return;
+    revision.current += 1;
+    setPattern(previous.pattern);
+    setCurrentPatternId(previous.id);
+    setPatternName(previous.name);
+    setPrevious(null);
+    setSaveStatus(null);
+    resetResults();
   }
 
   async function handlePreview(): Promise<void> {
@@ -228,6 +272,7 @@ export function QueryBuilderPanel({
     setSaveStatus(null);
     try {
       const saved = await loadPattern(apiBaseUrl, bearerToken, investigationId, selectedPatternId);
+      revision.current += 1;
       setPattern(fromPatternQuery(saved.definition));
       setCurrentPatternId(saved.pattern_id);
       setPatternName(saved.name);
@@ -275,6 +320,13 @@ export function QueryBuilderPanel({
           <p aria-live="polite" style={{ margin: 0 }}>
             {proposal.explanation} A model proposed this pattern. Check the pattern before you run it.
           </p>
+        )}
+        {previous && (
+          <div>
+            <Button type="button" onClick={handleRestorePrevious}>
+              Restore the previous pattern
+            </Button>
+          </div>
         )}
         {pattern.nodes.length === 0 && (
           <p style={{ margin: 0, color: "var(--text-tertiary)" }}>

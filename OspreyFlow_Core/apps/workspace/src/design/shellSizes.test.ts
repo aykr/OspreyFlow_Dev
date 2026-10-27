@@ -33,4 +33,8 @@ describe("the workspace's regions", () => {
     expect(bar.gap).toBe("var(--sp-4) var(--sp-16)");
     expect(bar["font-size"]).toBe("var(--fs-11)");
   });
+
+  it("offsets the search box's Add many button by the spacing token, not a literal 32px", () => {
+    expect(rule(".global-search__add").right).toBe("calc(var(--sp-4) + var(--sp-32))");
+  });
 });

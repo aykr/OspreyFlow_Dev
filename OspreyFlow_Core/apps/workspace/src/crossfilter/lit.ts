@@ -68,25 +68,35 @@ const sameDay = (a: Day, b: Day) => a.day === b.day && a.month === b.month && a.
 const withoutYear = (d: Day) => `${d.day} ${MONTHS[d.month]}`;
 const withYear = (d: Day) => `${withoutYear(d)} ${d.year}`;
 
-/**
- * The tab a branch of what is lit opens in, named from the window: "5 Jan – 30 Apr 2026, selected".
- * A brush across whole days ends at the start of the next day, so an end at midnight is read as the
- * end of the day before; any other end is its own day. Dates are UTC, as the timeline's are.
- */
-export function litTabName(window: TimeWindow): string {
+/** How a window reads: its range, a single day, or "from" a date when it has no end. */
+function windowWords(window: TimeWindow): { range: string; open: boolean; oneDay: boolean } {
   const start = dayOf(new Date(window.validFrom));
-  if (window.validTo === null) return `From ${withYear(start)}, selected`;
-  const end = new Date(window.validTo);
-  const atMidnight =
-    end.getUTCHours() === 0 &&
-    end.getUTCMinutes() === 0 &&
-    end.getUTCSeconds() === 0 &&
-    end.getUTCMilliseconds() === 0;
-  const last = dayOf(atMidnight ? new Date(end.getTime() - 1) : end);
-  if (sameDay(start, last)) return `${withYear(start)}, selected`;
+  if (window.validTo === null) return { range: withYear(start), open: true, oneDay: false };
+  // The end is lit (`litSet` includes an event at exactly `validTo`), so the label names the day the
+  // end instant falls on, midnight included: a window to 1 May 00:00 reaches 1 May.
+  const last = dayOf(new Date(window.validTo));
+  if (sameDay(start, last)) return { range: withYear(start), open: false, oneDay: true };
   const range =
     start.year === last.year
       ? `${withoutYear(start)} – ${withYear(last)}`
       : `${withYear(start)} – ${withYear(last)}`;
-  return `${range}, selected`;
+  return { range, open: false, oneDay: false };
+}
+
+/**
+ * The tab a branch of what is lit opens in, named from the window: "5 Jan – 30 Apr 2026, selected".
+ * The end is included in what is lit, so it is named by the day it falls on, an end at midnight
+ * included. Dates are UTC, as the timeline's are.
+ */
+export function litTabName(window: TimeWindow): string {
+  const { range, open } = windowWords(window);
+  return open ? `From ${range}, selected` : `${range}, selected`;
+}
+
+/** The sentence beside a lit selection: "Lit in 5 Jan – 30 Apr 2026: undated links are not
+ * included", "Lit on 2 Mar 2026: …" for one day, "Lit from 5 Jan 2026: …" for a window with no end. */
+export function litNote(window: TimeWindow): string {
+  const { range, open, oneDay } = windowWords(window);
+  const lead = open ? "Lit from" : oneDay ? "Lit on" : "Lit in";
+  return `${lead} ${range}: ${UNDATED_NOT_INCLUDED}`;
 }

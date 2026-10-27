@@ -190,7 +190,7 @@ describe("a file", () => {
     mount();
     const file = new File(["id,name\nZ1234ZZ,Smith\nZ2345ZZ,Jones\n"], "cohort.csv", { type: "text/csv" });
     fireEvent.change(screen.getByLabelText(/\.txt or \.csv file/i), { target: { files: [file] } });
-    await waitFor(() => expect((box() as HTMLTextAreaElement).value).toBe("id\nZ1234ZZ\nZ2345ZZ"));
+    await waitFor(() => expect((box() as HTMLTextAreaElement).value).toBe("Z1234ZZ\nZ2345ZZ"));
     expect(screen.getByText("Read cohort.csv. Count it to see what it holds.")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Count" }) as HTMLButtonElement).disabled).toBe(false);
   });

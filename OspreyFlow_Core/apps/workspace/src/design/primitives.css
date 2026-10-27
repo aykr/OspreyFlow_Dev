@@ -281,7 +281,7 @@
 .global-search__count { font-size: var(--fs-12, var(--fs-13)); line-height: 1; }
 /* "Add many from a list" (ADR-128): a second button at the box's right-hand end, beside Filters, and the
  * panel it opens, laid over the page under the box as the Filters panel is. */
-.global-search__add { right: calc(var(--sp-4) + 32px); }
+.global-search__add { right: calc(var(--sp-4) + var(--sp-32)); }
 .global-search[data-add="true"] .global-search__field .input { padding-right: 84px; }
 .global-search__add-panel {
   position: absolute; top: 100%; left: 0; z-index: 40; margin-top: var(--sp-4);

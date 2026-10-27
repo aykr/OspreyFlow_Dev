@@ -239,6 +239,8 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
   // ADR-129 decision 2: a question typed in the Ask to search box (and asked by Enter) draws the
   // model's proposed pattern in the builder, with its count, before anything runs.
   "ask-to-search-propose-pattern",
+  // A proposal replaces the pattern drawn; one press restores it.
+  "restore-the-previous-pattern-after-ask",
 ] as const);
 
 /**
@@ -638,6 +640,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "slash-moves-focus-to-search",
   // ADR-128 decision 1 (B2): the search box's own "Add many from a list", opened, counted and cancelled.
   "add-many-from-the-search-box-by-keyboard",
+  // ...and added: the nodes arrive on the real canvas through the shell's `applyStarterDelta` wiring.
+  "add-many-from-the-search-box-adds-to-the-canvas-by-keyboard",
   "rail-entries-by-keyboard",
   "rail-shows-and-hides-names-by-keyboard",
   // ADR-111: the view switch, Reports included — never proved by keyboard before it.

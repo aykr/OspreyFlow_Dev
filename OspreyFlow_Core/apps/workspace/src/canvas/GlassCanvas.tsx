@@ -109,7 +109,7 @@ import { fetchWouldAdd } from "./expansionPreview";
 import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
 import { branchSelection } from "./branchNodes";
 import { fetchFirstSeen } from "../analytics/api";
-import { litTabName, UNDATED_NOT_INCLUDED } from "../crossfilter/lit";
+import { litNote, litTabName, UNDATED_NOT_INCLUDED } from "../crossfilter/lit";
 import { readLit } from "../crossfilter/selectLit";
 import type { TimeWindow } from "../crossfilter/store";
 import { removeFromWorkingSet } from "./removeNodes";
@@ -129,9 +129,9 @@ import { labelIsLiteral, NODE_LABEL_FONT, NODE_LABEL_SIZE } from "./nodeLabel";
 import { getLabelChoices, onLabelChoicesChange } from "./labelChoices";
 import { LabelsMenu } from "./LabelsMenu";
 import { IconsMenu } from "./IconsMenu";
-import { valueIconFor } from "./valueIcons";
 import { forgetEntityPictures, loadEntityPictures, onEntityPicturesChange } from "./entityPictures";
-import { onIconChoicesChange } from "./iconChoices";
+import { onIconChoicesChange, valueIconShownFor } from "./iconChoices";
+import { singleFlight } from "./singleFlight";
 import {
   boxAt,
   collapseView,
@@ -614,6 +614,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       previous: readonly string[];
     } | null>(null);
     const selectLitRef = useRef<((window: TimeWindow) => Promise<void>) | null>(null);
+    const litFlightRef = useRef(singleFlight());
     // Read by `refreshNodeVisualState` (called from many unrelated call sites — hover, selection,
     // dimming) without threading a new parameter through every one of them; written only by the
     // effect below, keyed on `pathResult` itself. A ref, not state, because nothing here needs a
@@ -663,6 +664,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       });
     // Re-render when the working set changes, so the view's node count stays current.
     const workingSetSeq = useStore(store, (s) => s.seq);
+    // Counts a change of the analyst's icon choice or of a node's own picture, which decide whether a
+    // value icon is drawn and so whether the legend names it.
+    const [iconSeq, setIconSeq] = useState(0);
     // ADR-119: on a large working set the zoomed-out bands draw links between communities
     // (`communityLinks.ts`); every node's community comes from a Web Worker.
     const communityLinksRef = useRef<Omit<CommunityLinkState, "active">>({ assignment: null, links: [] });
@@ -955,9 +959,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // view, what it stands for and how many nodes carry it.
     const legendValueIcons = useMemo(() => {
       const counts = new Map<string, LegendValueIcon>();
-      graph.forEachNode((_id, attrs) => {
+      graph.forEachNode((id, attrs) => {
         const rule = ontology.visualFor(attrs.data.type)?.iconByValue;
-        const given = valueIconFor(rule, attrs.data.properties);
+        // Only a value icon the renderer draws: the node's own picture and the analyst's choice
+        // for the type come first (`valueIconShownFor`, shared with the Inspector).
+        const given = valueIconShownFor(id, attrs.data.type, rule, attrs.data.properties);
         if (!rule || !given) return;
         const key = `${attrs.data.type}\u0000${given.value}`;
         const held = counts.get(key);
@@ -966,7 +972,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       });
       return [...counts.values()];
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [graph, ontology, workingSetSeq]);
+    }, [graph, ontology, workingSetSeq, iconSeq]);
     // The legend's links: each link type in view, its colour and how many, and whether it is shown.
     const legendLinks = useMemo(() => {
       const counts = new Map<string, number>();
@@ -1111,11 +1117,25 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     useEffect(() => onLabelChoicesChange(() => sigmaRef.current?.refresh()), []);
     // A different icon chosen for a type (ADR-079): it is baked into each node's picture, so the
     // nodes' stored pictures are worked out again, then the canvas is drawn.
-    useEffect(() => onIconChoicesChange(() => redrawForThemeRef.current()), []);
+    useEffect(
+      () =>
+        onIconChoicesChange(() => {
+          setIconSeq((n) => n + 1);
+          redrawForThemeRef.current();
+        }),
+      [],
+    );
     // An entity's own picture (ADR-105) is baked in the same way. The pictures of the nodes in view
     // are asked for whenever the view changes; only types a picture can depict are asked about, and
     // the server answers only for pictures the analyst may see.
-    useEffect(() => onEntityPicturesChange(() => redrawForThemeRef.current()), []);
+    useEffect(
+      () =>
+        onEntityPicturesChange(() => {
+          setIconSeq((n) => n + 1);
+          redrawForThemeRef.current();
+        }),
+      [],
+    );
     useEffect(() => forgetEntityPictures, [investigationId]);
     useEffect(() => {
       if (!bearerToken || !investigationId) return;
@@ -1880,6 +1900,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         },
         highlightNodes: (nodeIds: readonly string[]) => {
           const present = nodeIds.filter((id) => graph.hasNode(id));
+          // None of them in the view: the selection is left as it was, not cleared.
+          if (present.length === 0) return;
           setSelected(new Set(present));
           onSelectionChange?.(present);
         },
@@ -3048,6 +3070,15 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // ADR-128 decision 2 (B3): the selection is read from the view this canvas holds, never from ids
     // the server offered, and replaces whatever was selected (one undo).
     async function selectWhatIsLit(window: TimeWindow): Promise<void> {
+      // A press while one is being read does nothing: two reads would race, and the later would
+      // record the first's result as the selection to go back to.
+      await litFlightRef.current(async () => {
+        // What is selected at the moment of the press is what an undo goes back to.
+        const previous = Array.from(selected);
+        await selectWhatIsLitOnce(window, previous);
+      });
+    }
+    async function selectWhatIsLitOnce(window: TimeWindow, previous: string[]): Promise<void> {
       const links = graph.mapEdges((id, _attrs, source, target) => ({ id, source, target }));
       const read = await readLit(
         (filter) => fetchFirstSeen(apiBaseUrl, bearerToken, { filter }),
@@ -3070,7 +3101,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         return;
       }
       const present = read.lit.nodeIds.filter((id) => graph.hasNode(id));
-      setLit({ window: read.window, nodeIds: new Set(present), previous: Array.from(selected) });
+      setLit({ window: read.window, nodeIds: new Set(present), previous });
       setSelected(new Set(present));
       onSelectionChange?.(present);
     }
@@ -3510,9 +3541,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           onAsk={onAskAboutDocuments ? () => void askAboutSelected() : undefined}
           documentCount={selectedDocumentCount}
           litNote={
-            litStands && lit
-              ? `Lit in ${litTabName(lit.window).replace(/, selected$/, "")}: ${UNDATED_NOT_INCLUDED}`
-              : undefined
+            litStands && lit ? litNote(lit.window) : undefined
           }
           onUndoLit={litStands ? undoSelectLit : undefined}
           onLinksAmong={(degree) => void linksAmongOnCanvas(Array.from(selected), degree)}

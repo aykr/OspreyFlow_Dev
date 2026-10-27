@@ -374,6 +374,46 @@ test("Ask to search: type the question, move to the proposed pattern, preview it
   registerCovered("QUERY_BUILDER_ACTIONS", "ask-to-search-propose-pattern");
 });
 
+test("Ask to search over a pattern already drawn: the replaced pattern is restored by keyboard", async ({ page }) => {
+  // ADR-129 decision 2 (rule 13): a proposal replaces what was drawn, so the analyst can press
+  // "Restore the previous pattern", reached by Tab, and have it back.
+  await page.route("**/*/v1/investigations/*/patterns/ask", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        pattern: {
+          nodes: [{ var: "m", entity_type: "Endpoint", node_id: "n-selected" }],
+          edges: [],
+          limit: 1000,
+        },
+        explanation: "Finds the selected number.",
+        estimated_count: 1,
+        is_floor: false,
+      }),
+    });
+  });
+  await page.goto("/keyboard/query-builder-harness.html");
+  await openPart(page, "Add to the pattern");
+  await tabToButtonNamed(page, "Add variable");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("group", { name: /Pattern node a: Person/ })).toBeVisible();
+
+  const box = page.getByRole("textbox", { name: "Ask to search" });
+  await box.focus();
+  await page.keyboard.type("Which number is selected?");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("group", { name: /Pattern node m: Endpoint · n-selected/ })).toBeVisible();
+  await expect(page.getByRole("group", { name: /Pattern node a: Person/ })).toHaveCount(0);
+
+  await box.focus();
+  await tabToButtonNamed(page, "Restore the previous pattern");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("group", { name: /Pattern node a: Person/ })).toBeVisible();
+  await expect(page.getByRole("group", { name: /Pattern node m:/ })).toHaveCount(0);
+  registerCovered("QUERY_BUILDER_ACTIONS", "restore-the-previous-pattern-after-ask");
+});
+
 test("every registered query-builder action has its own proving test case above", () => {
   assertAllCovered("QUERY_BUILDER_ACTIONS", QUERY_BUILDER_ACTIONS);
 });

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import Graph from "graphology";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Edge, Node } from "../../../../packages/schemas/generated";
+import { forgetIconChoicesForTest, setIconChoice } from "../canvas/iconChoices";
 import { Inspector, type InspectorProps } from "./Inspector";
 
 afterEach(() => {
@@ -336,3 +337,32 @@ describe("Inspector: a value icon", () => {
   });
 });
 
+
+// The renderer gives the analyst's own choice for the type precedence over a value icon, so the
+// Inspector must not name an icon the node is not drawn with.
+describe("Inspector: a value icon the analyst's choice replaces", () => {
+  const visualFor: NonNullable<InspectorProps["visualFor"]> = () => ({
+    channel: "cyan",
+    shape: "hexagon",
+    icon: "device",
+    iconByValue: { property: "endpoint_kind", icons: { handle: "keypad" } },
+  });
+  const endpoint = { id: "e1", type: "Endpoint", properties: { endpoint_kind: "handle" }, provenance: { state: "asserted", sources: [], first_seen: "x" } } as unknown as Node;
+
+  afterEach(() => forgetIconChoicesForTest());
+
+  it("says nothing of it once a drawing is chosen for the type, and says it again when the choice goes", async () => {
+    forgetIconChoicesForTest();
+    stubNotes();
+    render(<Inspector node={endpoint} assessment={assessment} visualFor={visualFor} />);
+    expect(screen.getByText("Icon for this value")).toBeTruthy();
+    act(() => {
+      setIconChoice("Endpoint", { kind: "glyph", name: "shield" });
+    });
+    expect(screen.queryByText("Icon for this value")).toBeNull();
+    act(() => {
+      setIconChoice("Endpoint", null);
+    });
+    expect(screen.getByText("Icon for this value")).toBeTruthy();
+  });
+});

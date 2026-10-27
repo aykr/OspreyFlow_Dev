@@ -9,6 +9,7 @@ import { glyphMarkup, hasGlyph } from "../color/nodeGlyphs";
 import { MAX_IMAGE_ICON_CHARS, isSafeImageDataUrl, type NodeIcon } from "../color/nodeVisual";
 import { readableTextOn } from "../color/oklab";
 import { entityPictureFor } from "./entityPictures";
+import { valueIconFor, type IconByValueRule, type ValueIcon } from "./valueIcons";
 
 export const ICON_CHOICES_KEY = "ospreyflow.node-icons";
 
@@ -144,6 +145,30 @@ export function resolveNodeIcon(
   return { kind: "glyph", name, colourHex: readableTextOn(fillHex) };
 }
 
+/** The node's own picture, when it has one the canvas will draw. */
+function ownPictureOf(nodeId: string): string | undefined {
+  const own = entityPictureFor(nodeId);
+  return own !== undefined && isSafeImageDataUrl(own) && own.length <= MAX_IMAGE_ICON_CHARS ? own : undefined;
+}
+
+/** The value icon (ADR-128 Decision 4) that node `nodeId` of `entityType` is drawn with, or `null`
+ * when it is drawn with none. The legend and the Inspector ask this and nothing else, so they name
+ * only an icon the renderer draws: the entity's own picture and the analyst's choice for the type
+ * (none, a picture or a drawing) both come before a value icon, exactly as `resolveIconForNode`
+ * orders them. */
+export function valueIconShownFor(
+  nodeId: string,
+  entityType: string,
+  rule: IconByValueRule | null | undefined,
+  properties: Readonly<Record<string, unknown>> | undefined,
+): ValueIcon | null {
+  const given = valueIconFor(rule, properties);
+  if (given === null) return null;
+  if (ownPictureOf(nodeId) !== undefined) return null;
+  if (load()[entityType] !== undefined) return null;
+  return given;
+}
+
 /** The icon to draw inside node `nodeId` (ADR-105): the entity's own picture, else what
  * `resolveNodeIcon` gives it: the analyst's choice for its type, its value icon, its type's icon
  * (ADR-128 Decision 4). The key names the node, because the drawn picture is cached by its key and
@@ -155,8 +180,8 @@ export function resolveIconForNode(
   fillHex: string,
   valueIcon?: string | null,
 ): NodeIcon | null {
-  const own = entityPictureFor(nodeId);
-  if (own !== undefined && isSafeImageDataUrl(own) && own.length <= MAX_IMAGE_ICON_CHARS) {
+  const own = ownPictureOf(nodeId);
+  if (own !== undefined) {
     return { kind: "image", key: `node:${nodeId}:${imageKeyFor(own)}`, dataUrl: own };
   }
   return resolveNodeIcon(entityType, ontologyIcon, fillHex, valueIcon);

@@ -293,3 +293,119 @@ describe("QueryBuilderPanel ask to search", () => {
     expect(JSON.parse(init.body).selected_node_ids).toEqual([]);
   });
 });
+
+// ADR-129 decision 2, as a way of starting over: a proposal is a new, unsaved pattern. It must not
+// take the saved pattern's identity (Save would overwrite it with the model's), must not discard
+// what was drawn without a way back, and must not land on edits made while it was being worked out.
+const SAVED = {
+  pattern_id: "p1",
+  name: "Shared visitors",
+  version: 2,
+  definition: {
+    nodes: [
+      { var: "s", entity_type: "Person", node_id: null },
+      { var: "t", entity_type: "Person", node_id: "n-rohan" },
+    ],
+    edges: [{ edge_type: "VISITED", from_var: "s", to_var: "t" }],
+    limit: 1000,
+  },
+};
+
+function mountSaved(delayAsk = false) {
+  let release: (() => void) | null = null;
+  const fetchMock = vi.fn((url: string, init?: { method?: string; body?: string }) => {
+    void init;
+    const target = String(url);
+    const ok = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: async () => body });
+    if (target.endsWith("/patterns/ask")) {
+      if (!delayAsk) return ok(PROPOSAL);
+      return new Promise((resolve) => {
+        release = () => resolve({ ok: true, status: 200, json: async () => PROPOSAL });
+      });
+    }
+    if (target.endsWith("/patterns/save")) return ok({ ...SAVED, pattern_id: "new-id", version: 1 });
+    if (target.endsWith("/patterns/p1")) return ok(SAVED);
+    return ok({ patterns: [SAVED] });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(<QueryBuilderPanel investigationId="inv-1" apiBaseUrl="http://api.test" bearerToken="tok" schema={ASK_SCHEMA} />);
+  return { fetchMock, release: () => release?.() };
+}
+
+async function loadSaved() {
+  fireEvent.click(header("Save and load"));
+  await screen.findByRole("option", { name: "Shared visitors (v2)" });
+  fireEvent.change(screen.getByRole("combobox", { name: "Saved patterns" }), { target: { value: "p1" } });
+  fireEvent.click(screen.getByRole("button", { name: "Load" }));
+  await screen.findByRole("group", { name: "Pattern node s: Person" });
+}
+
+function ask(text = "Who visited the principal?") {
+  fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: text } });
+  fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+}
+
+describe("QueryBuilderPanel ask to search over a pattern already there", () => {
+  it("starts a new unsaved pattern: Save then writes a new one, never a version of the loaded pattern", async () => {
+    const { fetchMock } = mountSaved();
+    await loadSaved();
+    expect(screen.getByRole("button", { name: "Save new version" })).toBeTruthy();
+    ask();
+    await screen.findByText("~4 matches");
+    expect((screen.getByRole("textbox", { name: "Pattern name" }) as HTMLInputElement).value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("Saved as version 1.");
+    const [, init] = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/patterns/save")) as [string, { body: string }];
+    expect(JSON.parse(init.body).pattern_id).toBeNull();
+    expect(JSON.parse(init.body).name).not.toBe("Shared visitors");
+  });
+
+  it("keeps the replaced pattern, and one press of Restore the previous pattern brings it back with its identity", async () => {
+    const { fetchMock } = mountSaved();
+    await loadSaved();
+    ask();
+    await screen.findByText("~4 matches");
+    expect(screen.queryByRole("group", { name: "Pattern node s: Person" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Restore the previous pattern" }));
+    expect(screen.getByRole("group", { name: "Pattern node s: Person" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Pattern node t: Person · n-rohan" })).toBeTruthy();
+    expect(screen.queryByText(/Finds people who visited/)).toBeNull();
+    expect((screen.getByRole("textbox", { name: "Pattern name" }) as HTMLInputElement).value).toBe("Shared visitors");
+    expect(screen.getByRole("button", { name: "Save new version" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Restore the previous pattern" })).toBeNull();
+    void fetchMock;
+  });
+
+  it("keeps an unsaved pattern the analyst drew, and restores it", async () => {
+    mountSaved();
+    fireEvent.click(header("Add to the pattern"));
+    fireEvent.click(screen.getByRole("button", { name: "Add variable" }));
+    expect(screen.getByRole("group", { name: "Pattern node a: Person" })).toBeTruthy();
+    ask();
+    await screen.findByText("~4 matches");
+    fireEvent.click(screen.getByRole("button", { name: "Restore the previous pattern" }));
+    expect(screen.getAllByRole("group", { name: /^Pattern node/ })).toHaveLength(1);
+    expect(screen.queryByText("~4 matches")).toBeNull();
+  });
+
+  it("offers no restore when there was nothing to replace", async () => {
+    mountSaved();
+    ask();
+    await screen.findByText("~4 matches");
+    expect(screen.queryByRole("button", { name: "Restore the previous pattern" })).toBeNull();
+  });
+
+  it("does not apply a proposal that arrives after the pattern was edited meanwhile, and says so", async () => {
+    const { release } = mountSaved(true);
+    await loadSaved();
+    ask();
+    // While the model works, the analyst edits.
+    fireEvent.keyDown(screen.getByRole("group", { name: "Pattern node t: Person · n-rohan" }), { key: "Delete" });
+    release();
+    await screen.findByText(/arrived after you changed the pattern/);
+    expect(screen.getByRole("group", { name: "Pattern node s: Person" })).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Pattern node t: Person · n-rohan" })).toBeNull();
+    expect(screen.queryByText("~4 matches")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restore the previous pattern" })).toBeNull();
+  });
+});

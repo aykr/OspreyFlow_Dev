@@ -127,7 +127,7 @@ export function AddFromList({ apiBaseUrl, bearerToken, investigationId, onApplyD
         value={text}
         disabled={busy}
         onChange={(e) => change(e.target.value)}
-        style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--font-mono)", resize: "vertical" }}
+        style={{ width: "100%", boxSizing: "border-box", fontFamily: "var(--mono)", resize: "vertical" }}
       />
       <label htmlFor={fileId} style={caption}>
         Or choose a .txt or .csv file (first column)

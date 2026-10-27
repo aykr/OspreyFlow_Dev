@@ -144,6 +144,27 @@ describe("QuestionsPanel", () => {
     expect(screen.getAllByRole("button", { name: /Select \[G-\d+\] on the canvas/ })).toHaveLength(2);
   });
 
+  it("makes every occurrence of a repeated [G-n] a button, so no marker is left as literal text", async () => {
+    serve({
+      "GET /questions": () => json(200, [{ ...WITH_FACTS, answer: "Dana [G-1] knows Rohan [G-1], and called Callum [G-2]." }]),
+    });
+    const onSelectFacts = vi.fn();
+    mount(vi.fn(), vi.fn(), { onSelectFacts });
+    const buttons = await screen.findAllByRole("button", { name: "Select [G-1] on the canvas" });
+    expect(buttons).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Select [G-2] on the canvas" })).toHaveLength(1);
+    fireEvent.click(buttons[1]!);
+    expect(onSelectFacts).toHaveBeenCalledWith(expect.objectContaining({ number: 1 }));
+    // The words round them are still there, and no marker is left as plain text outside a button.
+    const paragraph = buttons[0]!.parentElement!;
+    expect(paragraph.textContent).toBe("Dana [G-1] knows Rohan [G-1], and called Callum [G-2].");
+    const outside = Array.from(paragraph.children)
+      .filter((child) => child.tagName !== "BUTTON")
+      .map((child) => child.textContent)
+      .join("");
+    expect(outside).not.toMatch(/\[G-\d+\]/);
+  });
+
   it("leaves a [G-n] the payload does not hold as plain words, not a button", async () => {
     serve({ "GET /questions": () => json(200, [{ ...WITH_FACTS, graph_citations: [] }]) });
     mount();

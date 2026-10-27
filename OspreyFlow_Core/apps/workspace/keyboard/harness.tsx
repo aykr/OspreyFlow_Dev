@@ -17,6 +17,8 @@ import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { SelectionList } from "../src/inspector/SelectionList";
 import { createCrossFilterStore } from "../src/crossfilter/store";
 import { OntologyRegistry } from "../src/ontology/schema";
+import { bringFactIntoView } from "../src/questions/graphFacts";
+import { QuestionsPanel } from "../src/questions/QuestionsPanel";
 import { Timeline } from "../src/timeline/Timeline";
 import { createWorkingSet } from "../src/workingset/store";
 import type { OntologySchema, Node, Edge } from "../../../packages/schemas/generated";
@@ -223,6 +225,11 @@ const SCHEMA: OntologySchema = wantsSameAs
           ],
         }
       : BASE_SCHEMA;
+
+// `?questions=1` puts the Questions panel beside the real canvas, wired as `App.tsx` wires it: a
+// chosen `[G-n]` goes to the canvas through `bringFactIntoView` (ADR-129, rule 13), so
+// `questions.spec.ts` proves the selection on the real canvas, not on a recording fake.
+const wantsQuestions = new URLSearchParams(window.location.search).get("questions") === "1";
 
 const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(SCHEMA);
@@ -472,5 +479,17 @@ createRoot(container).render(
       </div>
     )}
     <HarnessSelectionList />
+    {wantsQuestions && (
+      <QuestionsPanel
+        apiBaseUrl="http://keyboard-test.invalid"
+        bearerToken="unused"
+        investigationId="keyboard-fixture"
+        onDelta={() => undefined}
+        selection={{ nodeIds: [], linkIds: [] }}
+        onSelectFacts={(citation) => {
+          if (canvasHandle.current) bringFactIntoView(canvasHandle.current, citation);
+        }}
+      />
+    )}
   </>,
 );

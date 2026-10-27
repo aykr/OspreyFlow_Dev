@@ -190,6 +190,8 @@ test("the Author attaches a saved trend by keyboard, and then opens and detaches
   await section.getByRole("button", { name: "Detach trend: Throw-overs by week" }).focus();
   await page.keyboard.press("Enter");
   await expect(section.getByRole("button", { name: "Open trend: Throw-overs by week" })).toHaveCount(0);
+  // The Detach button is gone, so focus goes to Attach (the last attachment went), not to the page.
+  await expect(section.getByRole("button", { name: "Attach to requirement 1" })).toBeFocused();
   expect(sent.find((s) => s.method === "DELETE")?.url).toBe("/v1/investigations/c1/brief/requirements/r1/attachments/trend/t1");
   registerCovered("CASE_BRIEF_ACTIONS", "detach-an-attachment-by-keyboard");
 });

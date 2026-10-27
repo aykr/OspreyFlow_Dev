@@ -308,3 +308,135 @@ describe("CaseBrief", () => {
     expect(screen.queryByText("P")).toBeNull();
   });
 });
+
+// A different case opened (ADR-128 decision 3): the brief on screen is the new case's alone.
+describe("CaseBrief when the open case changes", () => {
+  type Deferred = { promise: Promise<Response>; resolve: (r: Response) => void };
+  const deferred = (): Deferred => {
+    let resolve!: (r: Response) => void;
+    const promise = new Promise<Response>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  };
+
+  /** c1 answers at once, as its Author; c2's reads are held until the test lets them through. */
+  function serveTwoCases() {
+    const c2Brief = deferred();
+    const c2Cases = deferred();
+    const posts: { url: string; reply: Deferred }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const key = `${init?.method ?? "GET"} ${url.replace("http://api", "")}`;
+        if (init?.method === "POST") {
+          const reply = deferred();
+          posts.push({ url: key, reply });
+          return reply.promise;
+        }
+        if (key === "GET /v1/investigations") {
+          // The listing is asked for once per case opened; the second is held with c2's brief.
+          return listingCalls++ === 0
+            ? json(200, [{ id: "c1", name: "A", level: "author", created_at: "", created_by: "" }])
+            : c2Cases.promise;
+        }
+        if (key === "GET /v1/investigations/c1/brief") return json(200, { priority: "Case A priority", requirements: [requirement("a1", "Case A requirement")] });
+        if (key === "GET /v1/investigations/c2/brief") return c2Brief.promise;
+        throw new Error(`unexpected ${key}`);
+      }),
+    );
+    let listingCalls = 0;
+    return { c2Brief, c2Cases, posts };
+  }
+
+  const view = (id: string) => (
+    <CaseBrief apiBaseUrl="http://api" bearerToken="t" investigationId={id} rights={AUTHOR_RIGHTS} />
+  );
+
+  it("shows nothing of the previous case while the new one is read: no brief, no edit, no open Add box", async () => {
+    serveTwoCases();
+    const { rerender } = render(view("c1"));
+    await screen.findByText("Case A priority");
+    fireEvent.click(await screen.findByRole("button", { name: "Add a requirement" }));
+    expect(screen.getByRole("textbox", { name: "New information requirement" })).toBeTruthy();
+    rerender(view("c2"));
+    expect(screen.queryByText("Case A priority")).toBeNull();
+    expect(screen.queryByText("Case A requirement")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add a requirement" })).toBeNull();
+    expect(screen.queryAllByRole("button")).toEqual([]);
+  });
+
+  it("does not let a change made in the previous case land in the new one", async () => {
+    const world = serveTwoCases();
+    const { rerender } = render(view("c1"));
+    await screen.findByText("Case A priority");
+    fireEvent.click(await screen.findByRole("button", { name: "Add a requirement" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "New information requirement" }), { target: { value: "Posted in A" } });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "New information requirement" }), { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(world.posts).toHaveLength(1));
+    expect(world.posts[0]!.url).toBe("POST /v1/investigations/c1/brief/requirements");
+    rerender(view("c2"));
+    world.c2Brief.resolve(json(200, { priority: "Case B priority", requirements: [] }));
+    world.c2Cases.resolve(json(200, [{ id: "c2", name: "B", level: "viewer", created_at: "", created_by: "" }]));
+    await screen.findByText("Case B priority");
+    // A's request answers late, with A's brief.
+    world.posts[0]!.reply.resolve(json(200, { priority: "Case A priority", requirements: [requirement("a2", "Posted in A")] }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByText("Case B priority")).toBeTruthy();
+    expect(screen.queryByText("Case A priority")).toBeNull();
+    expect(screen.queryByText("Posted in A")).toBeNull();
+    // Nor is B, which this reader may only read, offered A's edits.
+    expect(screen.queryAllByRole("button")).toEqual([]);
+    expect(world.posts).toHaveLength(1);
+  });
+});
+
+describe("CaseBrief attachments", () => {
+  const two = [
+    { kind: "pattern", id: "p1", title: "Wing links" },
+    { kind: "trend", id: "t1", title: "By week" },
+  ];
+
+  it("moves focus to the next attachment's Detach button after a detach, not to the page", async () => {
+    const world = serve({ brief: { priority: "P", requirements: [requirement("r1", "Who?", { attachments: two })] } });
+    show();
+    world.reply(json(200, { priority: "P", requirements: [requirement("r1", "Who?", { attachments: [two[1]!] })] }));
+    const detach = await screen.findByRole("button", { name: "Detach pattern: Wing links" });
+    detach.focus();
+    fireEvent.click(detach);
+    await waitFor(() => expect(screen.queryByText("Wing links")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Detach trend: By week" })));
+  });
+
+  it("moves focus to Attach after the last attachment is detached", async () => {
+    const world = serve({
+      brief: { priority: "P", requirements: [requirement("r1", "Who?", { attachments: [two[0]!] })] },
+    });
+    show();
+    world.reply(json(200, { priority: "P", requirements: [requirement("r1", "Who?")] }));
+    const detach = await screen.findByRole("button", { name: "Detach pattern: Wing links" });
+    detach.focus();
+    fireEvent.click(detach);
+    await waitFor(() => expect(screen.queryByText("Wing links")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Attach to requirement 1" })));
+  });
+
+  it("does not offer Open when nothing was given to open an attachment with", async () => {
+    serve({ brief: { priority: "P", requirements: [requirement("r1", "Who?", { attachments: [two[0]!] })] } });
+    show();
+    const open = (await screen.findByRole("button", { name: "Open pattern: Wing links" })) as HTMLButtonElement;
+    expect(open.disabled).toBe(true);
+  });
+
+  it("offers Open, live, when it was", async () => {
+    serve({ brief: { priority: "P", requirements: [requirement("r1", "Who?", { attachments: [two[0]!] })] } });
+    const onOpenAttachment = vi.fn();
+    show({ onOpenAttachment });
+    const open = (await screen.findByRole("button", { name: "Open pattern: Wing links" })) as HTMLButtonElement;
+    expect(open.disabled).toBe(false);
+    fireEvent.click(open);
+    expect(onOpenAttachment).toHaveBeenCalledWith("pattern", "p1");
+  });
+});
+

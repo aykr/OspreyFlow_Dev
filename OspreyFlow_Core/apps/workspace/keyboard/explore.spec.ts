@@ -328,7 +328,7 @@ test("a list file is chosen by keyboard and read into the box", async ({ page })
   await page.getByLabel(/\.txt or \.csv file/).focus();
   await page.keyboard.press("Enter");
   await (await chooser).setFiles({ name: "cohort.csv", mimeType: "text/csv", buffer: Buffer.from("id,name\nZ1234ZZ,Smith\nZ2345ZZ,Jones\n") });
-  await expect(page.getByRole("textbox", { name: /identifiers/i })).toHaveValue("id\nZ1234ZZ\nZ2345ZZ");
+  await expect(page.getByRole("textbox", { name: /identifiers/i })).toHaveValue("Z1234ZZ\nZ2345ZZ");
   await expect(page.getByText("Read cohort.csv. Count it to see what it holds.")).toBeVisible();
   registerCovered(REGISTRY, "choose-a-list-file-by-keyboard");
 });

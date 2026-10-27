@@ -38,7 +38,24 @@ describe("the count, in words", () => {
 describe("what a file gives", () => {
   it("takes a .csv's first column, a quoted cell unquoted and kept whole", () => {
     const csv = 'identifier,name\nZ1234ZZ,Smith\n"07700 900123",x\r\nQQ123456A\n';
-    expect(listFromFile("cohort.csv", csv)).toBe("identifier\nZ1234ZZ\n07700 900123\nQQ123456A");
+    expect(listFromFile("cohort.csv", csv)).toBe("Z1234ZZ\n07700 900123\nQQ123456A");
+  });
+
+  it("drops a .csv's header row, so it is not counted as an identifier that matched nothing", () => {
+    for (const header of ["id", "ID", "Identifier", "identifiers", "value", "reference", "prison number", "prison_number", "number"]) {
+      expect(listFromFile("cohort.csv", `${header},name\nZ1234ZZ,Smith\n`)).toBe("Z1234ZZ");
+    }
+    // A quoted header, a byte-order mark before it and blank lines above it are the same row.
+    expect(listFromFile("cohort.csv", '\uFEFF\n"Prison number",x\nZ1234ZZ\n')).toBe("Z1234ZZ");
+  });
+
+  it("drops only a first row that is a known column name, from a .csv only", () => {
+    // A first row that is an identifier is kept, as is one whose first cell merely starts with a name.
+    expect(listFromFile("cohort.csv", "Z1234ZZ\nZ2345ZZ\n")).toBe("Z1234ZZ\nZ2345ZZ");
+    expect(listFromFile("cohort.csv", "idris\nZ1234ZZ\n")).toBe("idris\nZ1234ZZ");
+    // A header-like word later in the file is a value, and a .txt has no header row.
+    expect(listFromFile("cohort.csv", "Z1234ZZ\nid\n")).toBe("Z1234ZZ\nid");
+    expect(listFromFile("cohort.txt", "id\nZ1234ZZ\n")).toBe("id\nZ1234ZZ");
   });
 
   it("takes a .txt whole, since its lines are the list", () => {

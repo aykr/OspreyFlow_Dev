@@ -1,13 +1,12 @@
 // Questions keyboard harness (ADR-098 decision 4): the case's questions to the model, mounted on
 // its own as the Questions drawer renders it. `questions.spec.ts` intercepts the routes at the
 // transport; what the panel hands back (a change to the view, a document to open) is exposed on
-// `window.__QUESTIONS__`.
+// `window.__QUESTIONS__`. A chosen `[G-n]` is proved against the real canvas in `harness.html?questions=1`.
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { Drawer } from "../src/design/primitives/Drawer";
-import { bringFactIntoView, type FactCanvas } from "../src/questions/graphFacts";
 import { QuestionsPanel } from "../src/questions/QuestionsPanel";
 
 declare global {
@@ -16,9 +15,6 @@ declare global {
       deltas: unknown[];
       opened: string | null;
       closed?: number;
-      /** What the canvas was told by a chosen `[G-n]`: the same `bringFactIntoView` `App.tsx` calls,
-       * against a canvas that records. */
-      canvas: { selectedLink: string | null; selectedNodes: string[]; centred: string | null };
       /** What the last question asked about, as the panel sent it. */
       scope?: unknown;
     };
@@ -29,21 +25,6 @@ window.__QUESTIONS__ = {
   deltas: [],
   opened: null,
   closed: 0,
-  canvas: { selectedLink: null, selectedNodes: [], centred: null },
-};
-
-const canvas: FactCanvas = {
-  highlightNodes: (ids) => {
-    window.__QUESTIONS__!.canvas.selectedNodes = [...ids];
-    window.__QUESTIONS__!.canvas.selectedLink = null;
-  },
-  selectLink: (id) => {
-    window.__QUESTIONS__!.canvas.selectedLink = id;
-    window.__QUESTIONS__!.canvas.selectedNodes = [];
-  },
-  centreOn: (id) => {
-    window.__QUESTIONS__!.canvas.centred = id;
-  },
 };
 
 const container = document.getElementById("root");
@@ -61,7 +42,6 @@ createRoot(container).render(
       window.__QUESTIONS__!.opened = id;
     }}
     selection={{ nodeIds: ["n-dana"], linkIds: [] }}
-    onSelectFacts={(citation) => bringFactIntoView(canvas, citation)}
     />
   </Drawer>,
 );

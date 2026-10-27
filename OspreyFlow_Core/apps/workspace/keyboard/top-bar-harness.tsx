@@ -13,9 +13,15 @@ import { AccountMenu } from "../src/auth/AccountMenu";
 import { Button } from "../src/design/primitives/Button";
 import { CaseSwitcher } from "../src/investigation/CaseSwitcher";
 import { GlobalSearch } from "../src/search/GlobalSearch";
+import { GlassCanvas } from "../src/canvas/GlassCanvas";
+import { OntologyRegistry } from "../src/ontology/schema";
+import { createWorkingSet } from "../src/workingset/store";
+import type { OntologySchema } from "../../../packages/schemas/generated";
 
 declare global {
   interface Window {
+    /** With `?canvas=1`: whether the real canvas holds a node, and how many it holds. */
+    __TOPBAR_CANVAS__?: { hasNode: (id: string) => boolean; count: () => number };
     __TOPBAR__?: { opened: string | null; browsed: boolean; signedOut: boolean; rail: string[]; views: string[]; help?: number };
   }
 }
@@ -33,17 +39,49 @@ const SUGGESTIONS = Array.from({ length: 10 }, (_, i) => ({
   properties: { value_normalised: `person${i}@enron.com` },
 }));
 // ADR-128 decision 1 (B2): what "Add many from a list" sent, for `shell.spec.ts` to read back.
+const LISTED_NODE = {
+  id: "n-listed-1",
+  type: "Person",
+  properties: { family_name: "Listed" },
+  provenance: { state: "asserted", sources: [{ document_id: "fixture-doc", locator: "p.1", excerpt_hash: "a".repeat(64) }], first_seen: "2026-01-01T00:00:00Z" },
+  handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+  audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
+};
 const addMany: string[] = [];
 (window as unknown as { __ADD_MANY__: string[] }).__ADD_MANY__ = addMany;
 window.fetch = (async (url: string, init?: RequestInit) => {
   if (String(url).endsWith("/working-set/add-by-identifiers")) {
-    addMany.push(String(init?.body ?? ""));
+    const sent = String(init?.body ?? "");
+    addMany.push(sent);
     const counts = { read: 2, found: 1, matched_nothing: 1, repeated: 0 };
-    return { ok: true, status: 200, json: async () => ({ counts, added: null }) };
+    // Confirmed (`?canvas=1` proves it): the one node found, as the server's `add` delta.
+    const confirmed = (JSON.parse(sent) as { confirm?: boolean }).confirm === true;
+    const added = confirmed
+      ? { delta: { seq: 1, op: "add", nodes: [LISTED_NODE], edges: [] }, links_among: "not_asked" }
+      : null;
+    return { ok: true, status: 200, json: async () => ({ counts, added }) };
   }
   const body = String(url).endsWith("/suggest") ? { nodes: SUGGESTIONS, more: true } : CASES;
   return { ok: true, status: 200, json: async () => body };
 }) as unknown as typeof fetch;
+
+// `?canvas=1` puts the real canvas where the stand-in is, and wires the search box's "Add many from a
+// list" to its working set as `App.tsx`'s `applyStarterDelta` does (rule 13).
+const wantsCanvas = new URLSearchParams(window.location.search).get("canvas") === "1";
+const CANVAS_SCHEMA: OntologySchema = {
+  version: 1,
+  entity_types: [
+    { name: "Person", pole_class: "person", channel: "indigo", shape: "circle", icon: "person", identifiers: [] },
+    { name: "Endpoint", pole_class: "object", channel: "cyan", shape: "hexagon", icon: "device", identifiers: [] },
+  ],
+  edge_types: [{ name: "ASSOCIATE_OF", from: ["Person"], to: ["Person"], directed: false }],
+};
+const workingSet = createWorkingSet();
+const canvasOntology = new OntologyRegistry(CANVAS_SCHEMA);
+window.__TOPBAR_CANVAS__ = {
+  hasNode: (id) => workingSet.graph.hasNode(id),
+  count: () => workingSet.graph.order,
+};
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
@@ -69,7 +107,7 @@ createRoot(container).render(
         />
       }
       search={
-        <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" investigationId="inv-1" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} onApplyDelta={() => undefined} />
+        <GlobalSearch apiBaseUrl="http://top-bar.invalid" bearerToken="unused" investigationId="inv-1" entityTypes={["Person", "Endpoint"]} onSelect={() => undefined} onApplyDelta={(delta) => workingSet.store.getState().applyDelta(delta)} />
       }
       views={[
         { id: "graph", label: "Graph", pressed: true, onSelect: () => window.__TOPBAR__!.views.push("graph") },
@@ -115,7 +153,22 @@ createRoot(container).render(
           { id: "admin", label: "Admin", icon: "admin", onSelect: rail("admin") },
         ]}
       />
-      <main style={{ flex: 1 }} aria-label="Canvas stand-in" />
+      {wantsCanvas ? (
+        <main style={{ flex: 1, position: "relative" }} aria-label="Canvas">
+          <GlassCanvas
+            graph={workingSet.graph}
+            store={workingSet.store}
+            ontology={canvasOntology}
+            edgeTypes={CANVAS_SCHEMA.edge_types}
+            entityTypes={CANVAS_SCHEMA.entity_types}
+            investigationId="inv-1"
+            apiBaseUrl="http://top-bar.invalid"
+            bearerToken="unused"
+          />
+        </main>
+      ) : (
+        <main style={{ flex: 1 }} aria-label="Canvas stand-in" />
+      )}
     </div>
   </div>,
 );

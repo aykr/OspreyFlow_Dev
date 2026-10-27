@@ -247,7 +247,7 @@ export function QuestionsPanel({
 }
 
 /** The answer, with each `[G-n]` the Conduit returned as a button that selects what it stands for.
- * A fact the words do not mark follows the answer, so every citation is reachable once. */
+ * A fact the words do not mark follows the answer, so every citation is reachable. */
 function AnswerText({
   entry,
   onSelectFacts,
@@ -256,9 +256,9 @@ function AnswerText({
   onSelectFacts?: (citation: GraphCitation) => void;
 }) {
   const { parts, unmarked } = splitAnswer(entry.answer, entry.graph_citations ?? []);
-  const factButton = (citation: GraphCitation) => (
+  const factButton = (citation: GraphCitation, key: string) => (
     <button
-      key={citation.number}
+      key={key}
       type="button"
       className="btn btn--quiet"
       disabled={!onSelectFacts}
@@ -273,13 +273,13 @@ function AnswerText({
       <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
         {entry.answer === "" && "The model gave no answer."}
         {parts.map((part, i) =>
-          part.kind === "text" ? <span key={`t${i}`}>{part.text}</span> : factButton(part.citation),
+          part.kind === "text" ? <span key={`t${i}`}>{part.text}</span> : factButton(part.citation, `f${i}`),
         )}
       </p>
       {unmarked.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)", alignItems: "center" }}>
           <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Graph facts</span>
-          {unmarked.map(factButton)}
+          {unmarked.map((citation) => factButton(citation, `u${citation.number}`))}
         </div>
       )}
     </>

@@ -3,7 +3,7 @@
 // puts there itself; nothing is mocked and no image is edited. See `pid-capture.config.ts` for how
 // to run it. Each PNG is named exactly its capture id and written to the demo's `screens/` folder.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -100,8 +100,6 @@ export async function shot(page: Page, id: string): Promise<void> {
   await page.screenshot({ path: join(SCREENS, `${id}.png`) });
 }
 
-// Probe images (never shots) go outside `test-results/`, which Playwright empties on every run.
-const PROBE = process.env.OSPREY_PID_PROBE_DIR ?? join(HERE, "../test-results");
 
 /** Closes the welcome panel when it is open, so it does not sit over the canvas in a shot. */
 export async function dismissWelcome(page: Page): Promise<void> {
@@ -129,55 +127,6 @@ export async function pickFromSearch(page: Page, text: string, pick: RegExp): Pr
   await wanted.click();
 }
 
-test("probe: search forms and the principal's star", async ({ page }) => {
-  await signIn(page, "analyst");
-  await openCase(page);
-  await dismissWelcome(page);
-  const { national, international } = coordinatorNumber();
-  const spaced = `+44 ${national.slice(1)}`;
-  for (const form of [national, spaced, international, `0044 ${national.slice(1)}`]) {
-    const options = await searchFor(page, form);
-    await page.waitForTimeout(1500);
-    const texts = await options.allTextContents();
-    console.log(`search ${JSON.stringify(form)} -> ${JSON.stringify(texts)}`);
-  }
-  const options = await searchFor(page, "Z2486ZZ");
-  await expect(options.filter({ hasText: /^Person/ }).first()).toBeVisible();
-  console.log(`principal options: ${JSON.stringify(await options.allTextContents())}`);
-  await options.filter({ hasText: /^Person/ }).first().click();
-  await page.waitForTimeout(3000);
-  await page.screenshot({ path: join(PROBE, "pid-probe-j1-picked.png") });
-});
-
-test("probe: cancel the large draw, then Explore", async ({ page }) => {
-  await signIn(page, "analyst");
-  await openCase(page);
-  await dismissWelcome(page);
-  await pickFromSearch(page, "Z2486ZZ", /^Person/);
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.waitForTimeout(2000);
-  console.log(`after cancel: ${await page.locator("footer, [role=status]").allTextContents()}`);
-  await page.screenshot({ path: join(PROBE, "pid-probe-j1-cancelled.png") });
-  await page.getByRole("button", { name: "Clear view" }).click();
-  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Explore" }).click();
-  await page.waitForTimeout(3000);
-  await page.screenshot({ path: join(PROBE, "pid-probe-explore.png") });
-});
-
-test("probe: Explore's add menu for the principal", async ({ page }) => {
-  await signIn(page, "analyst");
-  await openCase(page);
-  await dismissWelcome(page);
-  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Explore" }).click();
-  for (const section of ["Most connected", "By entity type"]) {
-    await page.getByRole("button", { name: section }).click();
-    await page.waitForTimeout(2500);
-  }
-  const adds = page.getByRole("button", { name: /^Add .* to the graph$/ });
-  console.log(`add buttons: ${JSON.stringify((await adds.evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).slice(0, 40))}`);
-  await page.screenshot({ path: join(PROBE, "pid-probe-explore-open.png"), fullPage: false });
-});
-
 // --- the shared states -----------------------------------------------------------------------
 
 /** The working set is the server's, per case, so a shot starts by emptying what an earlier one
@@ -188,6 +137,9 @@ export async function clearCanvas(page: Page): Promise<void> {
     await clear.click();
     await page.getByRole("button", { name: /^Clear all/ }).click();
   }
+  await expect(counts(page)).toContainText(/^0 nodes/);
+  // The working set is the server's: wait out a late delta from an earlier shot before adding.
+  await page.waitForTimeout(3000);
   await expect(counts(page)).toContainText(/^0 nodes/);
 }
 
@@ -321,15 +273,8 @@ test("CAP-A1-J3", async ({ page }) => {
   await freshCase(page);
   await page.getByRole("button", { name: "Add many from a list", exact: true }).first().click();
   await page.getByRole("textbox", { name: /identifiers/i }).fill(readFileSync(COHORT, "utf-8"));
-  page.on("response", async (response) => {
-    if (!response.url().includes("add-by-identifiers")) return;
-    const body = await response.text().catch(() => "");
-    console.log(`J3 ${response.status()} ${body.slice(0, 200)}`);
-    if (body.includes('"delta"')) writeFileSync(join(PROBE, "pid-j3-added.json"), body);
-  });
   await page.getByRole("button", { name: "Count" }).click();
   await page.waitForTimeout(3000);
-  await page.screenshot({ path: join(PROBE, "pid-probe-j3-counted.png") });
   await page.getByRole("button", { name: "Add with all links" }).click();
   await page.waitForTimeout(5000);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -427,19 +372,6 @@ export async function addEachWithAllLinks(page: Page, labels: string[]): Promise
   for (const label of labels) await addWithAllLinks(page, label);
 }
 
-test("probe: the yards on the map", async ({ page }) => {
-  await freshCase(page);
-  await addEachWithAllLinks(page, ["Yard 03", "Yard 04", "Yard 05"]);
-  console.log(`yards counts: ${await counts(page).textContent()}`);
-  await page.getByRole("button", { name: "Map", exact: true }).click();
-  await page.waitForTimeout(6000);
-  await page.screenshot({ path: join(PROBE, "pid-probe-map.png") });
-  const names = await page.locator("button, [role=switch], [role=checkbox]").evaluateAll((els) =>
-    els.map((e) => e.getAttribute("aria-label") || e.textContent?.trim()).filter(Boolean),
-  );
-  console.log(`map controls: ${JSON.stringify(names.slice(0, 120))}`);
-});
-
 const HOTSPOT_YARDS = ["Yard 03", "Yard 04", "Yard 05"];
 
 /** The hotspot yards with their throw-overs, on the Map view. */
@@ -535,14 +467,6 @@ test("CAP-A1-J9-a", async ({ page }) => {
   await shot(page, "CAP-A1-J9-a");
 });
 
-test("probe: the Reports view", async ({ page }) => {
-  await freshCase(page);
-  await page.getByRole("button", { name: "Reports", exact: true }).click();
-  await page.waitForTimeout(4000);
-  console.log(`reports tabs: ${JSON.stringify(await page.getByRole("tab").allTextContents())}`);
-  await page.screenshot({ path: join(PROBE, "pid-probe-reports.png") });
-});
-
 /** The Reports view on one of its tabs. */
 export async function reportsTab(page: Page, tab: string): Promise<void> {
   await page.getByRole("button", { name: "Reports", exact: true }).click();
@@ -602,28 +526,6 @@ test("CAP-A2-C10-b", async ({ page }) => {
   await shot(page, "CAP-A2-C10-b");
 });
 
-test("CAP-A2-C10-c", async ({ page }) => {
-  await signIn(page, "viewer");
-  await openCase(page);
-  await page.getByRole("tab", { name: "Dashboards", exact: true }).click();
-  await page.waitForTimeout(8000);
-  await shot(page, "CAP-A2-C10-c");
-});
-
-test("probe: the engineer's Studio", async ({ page }) => {
-  await signIn(page, "engineer");
-  await page.waitForTimeout(4000);
-  await page.getByRole("button", { name: /Open Ingest Studio/ }).or(page.getByRole("link", { name: /Open Ingest Studio/ })).first().click();
-  await page.waitForTimeout(3000);
-  await page.getByRole("button", { name: CASE_NAME, exact: true }).click();
-  await page.waitForTimeout(5000);
-  await page.screenshot({ path: join(PROBE, "pid-probe-engineer-landing.png") });
-  const names = await page.locator("button, a, [role=tab]").evaluateAll((els) =>
-    els.map((e) => e.getAttribute("aria-label") || e.textContent?.trim()).filter(Boolean),
-  );
-  console.log(`engineer controls: ${JSON.stringify(names.slice(0, 80))}`);
-});
-
 /** The Ingest Studio on the PID case, as the data engineer. */
 export async function studio(page: Page): Promise<void> {
   await signIn(page, "engineer");
@@ -647,18 +549,6 @@ test("CAP-M1", async ({ page }) => {
   await page.waitForTimeout(3000);
   const preview = page.getByRole("status", { name: "Schedule preview" });
   console.log(`V6 preview: ${await preview.textContent().catch(() => "(none)")}`);
-  await page.screenshot({ path: join(PROBE, "pid-v6-schedule-preview.png") });
-});
-
-test("probe: the reports pipeline", async ({ page }) => {
-  await studio(page);
-  await page.getByRole("button", { name: /^Open Intelligence reports/ }).click();
-  await page.waitForTimeout(4000);
-  await page.screenshot({ path: join(PROBE, "pid-probe-reports-pipeline.png") });
-  const names = await page.locator("button, [role=tab]").evaluateAll((els) =>
-    els.map((e) => e.getAttribute("aria-label") || e.textContent?.trim()).filter(Boolean),
-  );
-  console.log(`reports pipeline controls: ${JSON.stringify(names.slice(0, 60))}`);
 });
 
 test("CAP-A2-C4", async ({ page }) => {
@@ -678,10 +568,6 @@ test("CAP-A2-C4", async ({ page }) => {
   await page.waitForTimeout(20000);
   await scrollAllToTop(page);
   await shot(page, "CAP-A2-C4-b");
-  const names = await page.locator("button").evaluateAll((els) =>
-    els.map((e) => e.getAttribute("aria-label") || e.textContent?.trim()).filter(Boolean),
-  );
-  console.log(`C4 map controls: ${JSON.stringify(names.slice(0, 50))}`);
 });
 
 /** Runs a published pipeline from its Publish screen and waits for the run's own outcome. */
@@ -715,21 +601,6 @@ test("chapter 4: the report incidents, once the reports are in", async ({ page }
   test.setTimeout(600_000);
   await studio(page);
   console.log(`R17: ${await runNow(page, /^Open Report incidents/)}`);
-});
-
-test("probe: a report in the reader", async ({ page }) => {
-  await freshCase(page);
-  const options = await searchFor(page, "IR 0125 — F2 landing");
-  await page.waitForTimeout(3000);
-  console.log(`report options: ${JSON.stringify(await options.allTextContents())}`);
-  await options.filter({ hasText: /^Document/ }).first().click();
-  await declineLargeDraw(page);
-  await page.waitForTimeout(2000);
-  await page.screenshot({ path: join(PROBE, "pid-probe-report-picked.png") });
-  const names = await page.locator("button").evaluateAll((els) =>
-    els.map((e) => e.getAttribute("aria-label") || e.textContent?.trim()).filter(Boolean),
-  );
-  console.log(`report controls: ${JSON.stringify(names.filter((n) => /read|open|extract|document/i.test(n as string)))}`);
 });
 
 /** A report, alone on the canvas, opened in the reader. */
@@ -889,15 +760,16 @@ test("CAP-A2-C7", async ({ page, context }) => {
   await shot(page, "CAP-A2-C7-a");
   const opened = context.waitForEvent("page", { timeout: 30_000 }).catch(() => null);
   await page.getByRole("button", { name: "Branch to a new case" }).click();
-  const branch = await opened;
-  if (branch) {
-    await branch.waitForLoadState();
-    await branch.waitForTimeout(8000);
-    await branch.screenshot({ path: join(SCREENS, "CAP-A2-C7-b.png") });
-  } else {
-    await page.waitForTimeout(5000);
-    await shot(page, "CAP-A2-C7-b");
-  }
+  // The branch opens in a tab of its own, or in this one; either way the shot is of the branch,
+  // marked ⑂ in the case switcher, never of the parent case.
+  const branch = (await opened) ?? page;
+  await branch.waitForLoadState();
+  // The branch's name is the case's own with its window ("… › 5 Jan – 30 Apr 2026, selected").
+  await expect(branch.getByRole("button", { name: /^Case: .+ › .+, selected$/ })).toBeVisible({
+    timeout: 60_000,
+  });
+  await branch.waitForTimeout(6000);
+  await shot(branch, "CAP-A2-C7-b");
 });
 
 test("CAP-A2-C10-a", async ({ page }) => {
@@ -909,9 +781,7 @@ test("CAP-A2-C10-a", async ({ page }) => {
   );
   const band = page.getByLabel("Probability band");
   console.log(`C10-a bands: ${JSON.stringify(await band.locator("option").allTextContents())}`);
-  await band.selectOption({ label: /^highly likely/i } as never).catch(async () => {
-    await band.selectOption({ index: 5 });
-  });
+  await band.selectOption({ label: "highly likely (0.8–0.9)" });
   const evidence = page.getByRole("combobox", { name: "Add supporting evidence" });
   await evidence.fill("Vance");
   await page.getByRole("option").filter({ hasText: /Vance, Callum/ }).first().click();
@@ -934,18 +804,6 @@ test("CAP-M6", async ({ page }) => {
   await rail(page, "History").click();
   await page.waitForTimeout(3000);
   await shot(page, "CAP-M6");
-});
-
-test("probe: export of the principal's star", async ({ page }) => {
-  await principalStar(page);
-  await canvas(page).press("Escape");
-  await page.getByRole("button", { name: /^Export/ }).first().click();
-  await page.waitForTimeout(1500);
-  const drawer = page.getByRole("dialog", { name: "Export" });
-  await drawer.getByRole("button", { name: "Export", exact: true }).click();
-  await page.waitForTimeout(5000);
-  console.log(`export drawer: ${(await drawer.textContent())?.slice(0, 1200)}`);
-  await page.screenshot({ path: join(PROBE, "pid-probe-export-menu.png") });
 });
 
 test("CAP-A2-C11", async ({ page }) => {

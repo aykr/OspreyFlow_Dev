@@ -1207,7 +1207,7 @@ test("Set exact dates, Select what is lit, then Branch selected opens a tab hold
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "branch-lit-1", name: "5 Jan – 30 Apr 2026, selected" }),
+      body: JSON.stringify({ id: "branch-lit-1", name: "5 Jan – 1 May 2026, selected" }),
     });
   });
   await page.goto("/keyboard/harness.html?fixture=lit");
@@ -1222,6 +1222,8 @@ test("Set exact dates, Select what is lit, then Branch selected opens a tab hold
   await expect(page.getByRole("toolbar", { name: "Selection" })).toContainText(
     "undated links are not included",
   );
+  // The window's end is lit, so the note names the day it falls on.
+  await expect(page.getByRole("toolbar", { name: "Selection" })).toContainText("Lit in 5 Jan – 1 May 2026");
 
   await page.getByRole("application", { name: "Network canvas" }).focus();
   await tabTo(page, page.getByRole("button", { name: "Branch to a new case" }));
@@ -1229,7 +1231,7 @@ test("Set exact dates, Select what is lit, then Branch selected opens a tab hold
 
   await expect.poll(() => body).not.toBeNull();
   expect(body!.node_ids.slice().sort()).toEqual(["n0", "n1", "n2"]);
-  expect(body!.name).toBe("5 Jan – 30 Apr 2026, selected");
+  expect(body!.name).toBe("5 Jan – 1 May 2026, selected");
   expect(body!.window).toEqual({
     valid_from: "2026-01-05T00:00:00Z",
     valid_to: "2026-05-01T00:00:00Z",
@@ -1634,6 +1636,8 @@ test("the legend says which value icon means what, reached by Tab, and the analy
   await tabTo(page, picker);
   await chooseOption(page, picker, "glyph:shield");
   await expect.poll(async () => dots(await nodeImage(page, "n4"))).toBe(0);
+  // ...so the legend, which names only an icon the canvas draws, no longer lists the value icon.
+  await expect(entry).toBeHidden();
   registerCovered("CANVAS_ACTIONS", "legend-says-which-value-icon-means-what-by-keyboard");
 });
 
