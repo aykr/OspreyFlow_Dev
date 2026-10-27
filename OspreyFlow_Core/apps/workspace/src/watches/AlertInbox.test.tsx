@@ -118,3 +118,85 @@ describe("a schedule notice", () => {
     expect(queryByRole("button", { name: /Jump/ })).toBeNull();
   });
 });
+
+// ADR-130 decision 1: a hotlist alert explains itself in the words the owner knows, and shows
+// neither the raw rule id nor a node id.
+describe("a hotlist alert that explains itself", () => {
+  const EXPLAINED: AlertView = {
+    id: "alert-9", rule_id: "hotlist:01HZX3Q9K2M5N7P8R0S1T2V3W4", owner_id: "analyst-1", mode: "full",
+    referent_node_ids: ["01HZX3Q9K2M5N7P8R0S1T2V3W5"], evidence_available: true,
+    investigation_id: "case-1", created_at: "2026-10-02T09:00:00Z",
+    hotlist: { identifier: "07700 900640", kept_as_written: false, review_date: "2027-01-31" },
+    fired_on: [
+      {
+        type: "Endpoint", label: "+447700900640", more_files: 0,
+        files: [
+          { name: "pid_seized_comms_batch2.csv", row: 3 },
+          { name: "pid_pin_calls.csv", rows: 2013 },
+        ],
+      },
+    ],
+  };  // prettier-ignore
+
+  function text(alert: AlertView): string {
+    const { container } = render(
+      <ul>
+        <AlertRow alert={alert} onJump={() => undefined} jumping={false} />
+      </ul>,
+    );
+    return container.textContent ?? "";
+  }
+
+  test("reads the hotlist, what matched and where it was read from", () => {
+    const t = text(EXPLAINED);
+    expect(t).toContain("Hotlist: 07700 900640 · review by 31 Jan 2027");
+    expect(t).toContain("Matched: Endpoint +447700900640");
+    expect(t).toContain("From: pid_seized_comms_batch2.csv, row 3; pid_pin_calls.csv, 2,013 rows");
+  });
+
+  test("shows neither the raw rule id nor a node id, and keeps the jump", () => {
+    const { container, getByRole } = render(
+      <ul>
+        <AlertRow alert={EXPLAINED} onJump={() => undefined} jumping={false} />
+      </ul>,
+    );
+    const t = container.textContent ?? "";
+    expect(t).not.toContain("hotlist:");
+    expect(t).not.toContain("01HZX3Q9K2M5N7P8R0S1T2V3W");
+    expect(getByRole("button", { name: "Jump into investigation" })).toBeTruthy();
+  });
+
+  test("says how many more files, never cutting silently", () => {
+    const more: AlertView = {
+      ...EXPLAINED,
+      fired_on: [{ type: "Endpoint", label: "+447700900640", more_files: 3,
+                   files: [{ name: "a.csv", row: 1 }] }],
+    };  // prettier-ignore
+    expect(text(more)).toContain("From: a.csv, row 1; and 3 more files");
+    const first = (more.fired_on ?? [])[0];
+    if (!first) throw new Error("fixture has no fired_on");
+    const one: AlertView = { ...more, fired_on: [{ ...first, more_files: 1 }] };
+    expect(text(one)).toContain("and 1 more file");
+    expect(text(one)).not.toContain("1 more files");
+  });
+
+  test("says a hotlist kept as written, and shows nothing of one it does not have", () => {
+    const kept: AlertView = {
+      ...EXPLAINED,
+      hotlist: { identifier: "ref-A1", kept_as_written: true, review_date: "2027-01-31" },
+    };
+    expect(text(kept)).toContain("Hotlist: ref-A1 (kept as written) · review by 31 Jan 2027");
+    const none: AlertView = { ...EXPLAINED, hotlist: undefined };
+    expect(text(none)).not.toContain("Hotlist:");
+  });
+
+  test("an alert whose evidence is withdrawn names nothing of what matched", () => {
+    const gone: AlertView = {
+      ...EXPLAINED, referent_node_ids: [], evidence_available: false, fired_on: undefined,
+    };  // prettier-ignore
+    const t = text(gone);
+    expect(t).toContain("Evidence no longer available.");
+    expect(t).not.toContain("Matched:");
+    expect(t).not.toContain("From:");
+  });
+});

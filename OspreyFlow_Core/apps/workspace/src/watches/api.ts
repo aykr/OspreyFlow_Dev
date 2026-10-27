@@ -28,6 +28,34 @@ export interface AlertView {
   created_at: string;
   /** ADR-110 Amendment 3: the alert in words; a scheduled run's notice is nothing else. */
   words?: string | null;
+  /** ADR-130 decision 1: the hotlist behind a `hotlist:` rule, present only to its owner. */
+  hotlist?: AlertHotlist | null;
+  /** ADR-130 decision 1: what fired it, present only when the evidence is available to the reader. */
+  fired_on?: FiredOn[] | null;
+}
+
+/** Mirrors `services/api/watch_routes.py::AlertHotlist`. */
+export interface AlertHotlist {
+  /** As typed, else as stored. */
+  identifier: string;
+  kept_as_written: boolean;
+  /** An ISO date, `YYYY-MM-DD`. */
+  review_date: string;
+}
+
+/** Mirrors `services/api/watch_routes.py::FiredFile`: one `row`, or how many `rows`. */
+export interface FiredFile {
+  name: string;
+  row?: number | null;
+  rows?: number | null;
+}
+
+/** Mirrors `services/api/watch_routes.py::FiredOn`: at most five files, `more_files` the rest. */
+export interface FiredOn {
+  type: string;
+  label: string;
+  files: FiredFile[];
+  more_files: number;
 }
 
 /** ADR-110 decision 10: a notice that a scheduled run failed or was refused, not a match. */

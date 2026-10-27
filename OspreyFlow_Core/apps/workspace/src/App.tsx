@@ -11,7 +11,8 @@ import type {
   PublicMapConfig,
   Sighting,
 } from "../../../packages/schemas/generated";
-import { fetchGeoBins, fetchSightings } from "./analytics/api";
+import { fetchSightings } from "./analytics/api";
+import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
 import {
   clearRedirectCallbackParams,
   completeSignInFromRedirect,
@@ -920,28 +921,14 @@ export function App() {
     // layer *does* restrict to the active brush window — `02_GLASS_
     // FRONTEND.md` §3.4's "the map restricts to it" is this bullet, named
     // literally.
-    async function refresh(state: CrossFilterStoreState) {
-      const filter = buildEventFilter(
-        scope,
-        state.window,
-        state.selectedNodeIds,
-      );
-      const bins = await fetchGeoBins(API_BASE_URL, bearerToken, {
-        filter,
-        precision: GEO_BIN_PRECISION,
-      });
-      setGeoBins(bins);
-    }
-    let lastWindow = crossFilter.store.getState().window;
-    let lastSelected = crossFilter.store.getState().selectedNodeIds;
-    void refresh(crossFilter.store.getState());
-    const unsubscribe = crossFilter.store.subscribe((state) => {
-      if (state.window === lastWindow && state.selectedNodeIds === lastSelected)
-        return;
-      lastWindow = state.window;
-      lastSelected = state.selectedNodeIds;
-      void refresh(state);
-    });
+    const unsubscribe = followCrossFilterWithMapBins(
+      crossFilter.store,
+      API_BASE_URL,
+      bearerToken,
+      scope,
+      GEO_BIN_PRECISION,
+      setGeoBins,
+    );
     return () => unsubscribe();
   }, [investigationId, bearerToken]);
 

@@ -41,11 +41,17 @@ import { publishTimelineSummary } from "./timelineSummary";
 import { eventsElsewhereSentence } from "../analytics/eventsElsewhere";
 import { activePalette } from "../color/palette";
 import { currentTheme, onThemeChange, type Theme } from "../theme/theme";
-import { buildEventFilter, type CrossFilterStore } from "../crossfilter/store";
+import { buildEventFilter, type CrossFilterStore, type WeekdayHourCell } from "../crossfilter/store";
 import { Button } from "../design/primitives/Button";
 import { Select } from "../design/primitives/Select";
 import { PLAYBACK_SPEEDS, usePlayback } from "../playback/usePlayback";
-import { cyclicalOption } from "./cyclicalOption";
+import {
+  WEEKDAY_LABELS,
+  WEEKEND_DAYS,
+  cellsFromChoice,
+  cellsFromRange,
+  cyclicalOption,
+} from "./cyclicalOption";
 import { allOnOneDay, bucketLabel, bucketRangeOfWindow, windowFromBucketRange } from "./math";
 
 echarts.use([
@@ -156,15 +162,36 @@ export function Timeline({
   const [activeWindow, setActiveWindow] = useState(
     crossFilterStore.store.getState().window,
   );
+  // ADR-130 decision 2: the weekly view's chosen cells, and the "Choose cells" control's own state.
+  const [activeCells, setActiveCells] = useState<WeekdayHourCell[] | null>(
+    crossFilterStore.store.getState().cells,
+  );
+  const [chosenDays, setChosenDays] = useState<number[]>([]);
+  const [hourFrom, setHourFrom] = useState(0);
+  const [hourTo, setHourTo] = useState(23);
 
   useEffect(
     () =>
       crossFilterStore.store.subscribe((state) => {
         setSelectedNodeIds(state.selectedNodeIds);
         setActiveWindow(state.window);
+        setActiveCells(state.cells);
+        // A filter cleared elsewhere clears the control's own ticks.
+        if (state.cells === null) setChosenDays([]);
       }),
     [crossFilterStore],
   );
+
+  function chooseCells(days: number[], from: number, to: number) {
+    setChosenDays(days);
+    setHourFrom(from);
+    setHourTo(to);
+    // No day ticked is no choice, not a choice of nothing (which would dim everything).
+    crossFilterStore.store
+      .getState()
+      .setCells(days.length === 0 ? null : cellsFromChoice(days, from, to));
+    void crossFilterStore.refresh(getNodeIds(), getEdgeIds?.());
+  }
 
   // B18's own playback clock — driven off the active brush window, since
   // "animate the brush forward" (`02_GLASS_FRONTEND.md` §3.4) has nothing
@@ -243,6 +270,7 @@ export function Timeline({
       cancelled = true;
     };
   }, [apiBaseUrl, bearerToken, investigationScope, selectedNodeIds, mode, crossCaseInvestigationScope]);
+
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -466,7 +494,40 @@ export function Timeline({
       const buckets = histogram.buckets;
       const data = buckets.map((b) => [b.hour ?? 0, b.weekday ?? 0, b.count]);
       const max = Math.max(1, ...buckets.map((b) => b.count));
-      chart.setOption(cyclicalOption({ data, max, colours: seqHex, text: textSecondaryHex }), true);
+      // The weekly view has no window brush and no zoom: the density view's listeners come off, and
+      // a drag across cells is the rectangle brush, its listener registered here and taken off
+      // again by the density branch (and by this one on each redraw).
+      chart.off("brushEnd");
+      chart.off("datazoom");
+      chart.on("brushEnd", (params: unknown) => {
+        const areas =
+          (params as { areas?: Array<{ coordRange?: [[number, number], [number, number]] }> }).areas ??
+          [];
+        const range = areas[0]?.coordRange;
+        if (!range) return;
+        const cells = cellsFromRange(range[0], range[1]);
+        setChosenDays([...new Set(cells.map((c) => c.weekday))]);
+        crossFilterStore.store.getState().setCells(cells);
+        void crossFilterStore.refresh(getNodeIds(), getEdgeIds?.());
+      });
+      chart.setOption(
+        cyclicalOption({
+          data,
+          max,
+          colours: seqHex,
+          text: textSecondaryHex,
+          cells: activeCells,
+          shade: palette.textPrimary,
+        }),
+        true,
+      );
+      chart.dispatchAction({
+        type: "takeGlobalCursor",
+        key: "brush",
+        brushOption: { brushType: "rect", brushMode: "single" },
+      });
+      // The chosen cells are drawn as cells; the rectangle that chose them is not kept.
+      chart.dispatchAction({ type: "brush", areas: [] });
     }
   }, [
     histogram,
@@ -478,6 +539,7 @@ export function Timeline({
     crossCaseInvestigationScope,
     theme,
     bucketSeconds,
+    activeCells,
   ]);
 
   useEffect(() => {
@@ -551,7 +613,7 @@ export function Timeline({
           <span className="timeline__note">By the hour: every dated event is on one day</span>
         )}
         <span style={{ flex: 1 }} />
-        {(activeWindow || selectedNodeIds) && (
+        {(activeWindow || selectedNodeIds || activeCells) && (
           <Button
             onClick={() => {
               crossFilterStore.store.getState().clearFilter();
@@ -606,7 +668,7 @@ export function Timeline({
             </Select>
           </>
         )}
-        {(hasEvents && mode === "density") || onCrossCaseScopeChange ? (
+        {(hasEvents && (mode === "density" || mode === "cyclical")) || onCrossCaseScopeChange ? (
           <span className="timeline__more">
             <button
               type="button"
@@ -624,6 +686,71 @@ export function Timeline({
                   <Button aria-expanded={datesOpen} onClick={() => setDatesOpen((open) => !open)}>
                     Set exact dates
                   </Button>
+                )}
+                {hasEvents && mode === "cyclical" && (
+                  <span
+                    role="group"
+                    aria-label="Choose cells"
+                    style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "var(--sp-4)" }}
+                  >
+                    {/* ADR-130 decision 2: the keyboard route to what a drag across the grid chooses. */}
+                    <span>Choose cells</span>
+                    {WEEKDAY_LABELS.map((label, day) => (
+                      <label key={label} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                        <input
+                          type="checkbox"
+                          aria-label={label}
+                          checked={chosenDays.includes(day)}
+                          onChange={(e) =>
+                            chooseCells(
+                              e.target.checked
+                                ? [...chosenDays, day]
+                                : chosenDays.filter((d) => d !== day),
+                              hourFrom,
+                              hourTo,
+                            )
+                          }
+                        />
+                        {label}
+                      </label>
+                    ))}
+                    <label>
+                      From hour{" "}
+                      <input
+                        type="number"
+                        aria-label="From hour"
+                        min={0}
+                        max={23}
+                        value={hourFrom}
+                        onChange={(e) => chooseCells(chosenDays, Number(e.target.value), hourTo)}
+                        style={{ width: 56 }}
+                      />
+                    </label>
+                    <label>
+                      To hour{" "}
+                      <input
+                        type="number"
+                        aria-label="To hour"
+                        min={0}
+                        max={23}
+                        value={hourTo}
+                        onChange={(e) => chooseCells(chosenDays, hourFrom, Number(e.target.value))}
+                        style={{ width: 56 }}
+                      />
+                    </label>
+                    <Button onClick={() => chooseCells([...WEEKEND_DAYS], 0, 23)}>Weekend</Button>
+                    <Button
+                      onClick={() => {
+                        setChosenDays([]);
+                        setHourFrom(0);
+                        setHourTo(23);
+                        crossFilterStore.store.getState().setCells(null);
+                        void crossFilterStore.refresh(getNodeIds(), getEdgeIds?.());
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </span>
                 )}
                 {mode === "density" && datesOpen && (
                   <span style={{ display: "flex", gap: "var(--sp-4)" }}>

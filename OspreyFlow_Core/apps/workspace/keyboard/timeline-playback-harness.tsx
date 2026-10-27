@@ -19,11 +19,12 @@
 // `POST /v1/analytics/histogram` is intercepted by `timeline-playback.spec.ts` via `page.route` —
 // the same "real network call, mocked at the transport, not the component" shape every other
 // keyboard spec in this directory already uses.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
+import { followCrossFilterWithMapBins } from "../src/crossfilter/mapBins";
 import { createCrossFilterStore } from "../src/crossfilter/store";
 import { Timeline } from "../src/timeline/Timeline";
 
@@ -41,7 +42,8 @@ const crossFilterStore = createCrossFilterStore(
   "inv-1",
 );
 // `?nowindow` starts with no window, for `timeline-brush.spec.ts`, which sets one by dragging.
-if (!new URLSearchParams(window.location.search).has("nowindow")) {
+const WITH_CELLS = new URLSearchParams(window.location.search).has("cells");
+if (!new URLSearchParams(window.location.search).has("nowindow") && !WITH_CELLS) {
   crossFilterStore.store.getState().setWindow({
     validFrom: "2026-01-01T00:00:00Z",
     validTo: "2026-01-05T00:00:00Z",
@@ -51,7 +53,29 @@ crossFilterStore.store.subscribe((state) => {
   window.__TIMELINE_PLAYBACK_HARNESS__!.window = state.window;
 });
 
+// `?cells` (ADR-130 decision 2, `timeline-playback.spec.ts`'s weekend case): the map's bins follow the
+// store through the Glass's own `followCrossFilterWithMapBins` (the function `App.tsx` runs), and the
+// ids the store dims — what the canvas is given — are written where a test can read them. The three
+// node ids are the "canvas": the first-seen answer the spec returns says which of them survive.
+const NODE_IDS = ["a", "b", "c"];
+if (WITH_CELLS) {
+  followCrossFilterWithMapBins(
+    crossFilterStore.store,
+    "http://keyboard-test.invalid",
+    "unused",
+    "inv-1",
+    8,
+    () => {},
+  );
+}
+
 function Harness() {
+  const [dimmed, setDimmed] = useState<string[]>([]);
+  useEffect(
+    () =>
+      crossFilterStore.store.subscribe((state) => setDimmed([...state.dimmedNodeIds].sort())),
+    [],
+  );
   const [crossCaseScope, setCrossCaseScope] = useState("");
   return (
     <div style={{ width: 700, height: 300 }}>
@@ -61,7 +85,7 @@ function Harness() {
           bearerToken="unused"
           investigationScope="inv-1"
           crossFilterStore={crossFilterStore}
-          getNodeIds={() => []}
+          getNodeIds={() => (WITH_CELLS ? NODE_IDS : [])}
           crossCaseInvestigationScope={crossCaseScope || undefined}
           onCrossCaseScopeChange={setCrossCaseScope}
           onPlaybackFractionChange={(fraction) => {
@@ -69,6 +93,7 @@ function Harness() {
           }}
         />
       </div>
+      {WITH_CELLS && <p data-testid="dimmed-nodes">{dimmed.join(",")}</p>}
     </div>
   );
 }

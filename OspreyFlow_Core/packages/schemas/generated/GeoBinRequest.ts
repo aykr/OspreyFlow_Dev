@@ -9,6 +9,9 @@ export type EdgeTypes = string[];
 export type EdgeId = string;
 export type EdgeIds = EdgeId[];
 export type EventIds = string[];
+export type WeekdayHours = WeekdayHour[] | null;
+export type Weekday = number;
+export type Hour = number;
 export type Scopes = string[];
 export type EdgeIds1 = EdgeId[];
 export type Precision = number;
@@ -42,6 +45,7 @@ export interface EventFilter {
   edge_ids?: EdgeIds;
   event_ids?: EventIds;
   value_filters?: ValueFilters;
+  weekday_hours?: WeekdayHours;
   inherited?: InheritedEvents | null;
   [k: string]: unknown;
 }
@@ -52,6 +56,15 @@ export interface Interval {
 }
 export interface ValueFilters {
   [k: string]: string[];
+}
+/**
+ * One cell of the weekly view (ADR-130 decision 2): the weekday (0 = Monday) and the hour
+ * (0-23), read in UTC, the numbering the `weekday_hour` histogram buckets by.
+ */
+export interface WeekdayHour {
+  weekday: Weekday;
+  hour: Hour;
+  [k: string]: unknown;
 }
 /**
  * The events a branch reads from the cases it came from (ADR-084 Amendment 2).

@@ -18,7 +18,9 @@ nothing left to get wrong.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
+from typing import Protocol
 
 from pydantic import BaseModel
 
@@ -26,7 +28,15 @@ from ports.graph import GraphPort
 from schemas.domain import Alert, AlertMode, Hotlist, Monitor, Node, Principal
 
 from .alerts import evidence_available
+from .evidence_brief import display_name
+from .hotlists import HotlistNotFoundError
 from .investigations import Investigation
+
+#: ADR-130 decision 1: the most files named for one matched node. The rest are counted, never cut
+#: silently (rule 2).
+_MAX_FIRED_FILES = 5
+
+_ROW_LOCATOR = re.compile(r"^row (\d+)$")
 
 
 class CreateHotlistRequest(BaseModel):
@@ -55,6 +65,34 @@ class MonitorList(BaseModel):
     monitors: list[Monitor]
 
 
+class AlertHotlist(BaseModel):
+    """ADR-130 decision 1: the hotlist a `hotlist:` alert came from, read at display time and only
+    for the hotlist's owner. The identifier is as typed (else as stored)."""
+
+    identifier: str
+    kept_as_written: bool
+    review_date: date
+
+
+class FiredFile(BaseModel):
+    """One source file of a matched node: its name (the final path segment of the document id),
+    and either the single `row` cited or, when there is more than one, how many `rows`."""
+
+    name: str
+    row: int | None = None
+    rows: int | None = None
+
+
+class FiredOn(BaseModel):
+    """ADR-130 decision 1: what a matched node is, and where it was read from. `files` are in the
+    order of first appearance, at most five; `more_files` counts the rest."""
+
+    type: str
+    label: str
+    files: list[FiredFile]
+    more_files: int
+
+
 class AlertView(BaseModel):
     """The wire shape for an alert — see this module's own docstring for why `referent_node_ids`
     is redacted here rather than left alongside a separate `evidence_available` flag."""
@@ -70,6 +108,10 @@ class AlertView(BaseModel):
     #: ADR-110 Amendment 3: what the alert says in words — a scheduled run's notice is nothing
     #: but its words (a typology finding has them too); `None` for a hotlist or monitor match.
     words: str | None = None
+    #: ADR-130 decision 1: present for a `hotlist:` rule, only to the hotlist's owner.
+    hotlist: AlertHotlist | None = None
+    #: ADR-130 decision 1: present only when the evidence is available to the reader (rule 3).
+    fired_on: list[FiredOn] | None = None
 
 
 class AlertList(BaseModel):
@@ -88,8 +130,69 @@ class AlertJumpResult(BaseModel):
     seeded_count: int
 
 
-async def alert_to_view(alert: Alert, principal: Principal, graph: GraphPort) -> AlertView:
+class HotlistReader(Protocol):
+    """The one read of `HotlistStore` the view needs, owner-checked by the store."""
+
+    async def get_authorized(self, hotlist_id: str, principal: Principal) -> Hotlist: ...
+
+
+def _file_name(document_id: str) -> str:
+    return document_id.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1] or document_id
+
+
+def _fired_on(node: Node) -> FiredOn:
+    """Group the node's sources by file, in the order each file first appears. A file with one
+    distinct locator that reads as `row N` says that row; otherwise it says how many rows."""
+    locators: dict[str, list[str]] = {}
+    for source in node.provenance.sources:
+        seen = locators.setdefault(_file_name(source.document_id), [])
+        if source.locator not in seen:
+            seen.append(source.locator)
+    files: list[FiredFile] = []
+    for name, rows in locators.items():
+        match = _ROW_LOCATOR.match(rows[0]) if len(rows) == 1 else None
+        if match:
+            files.append(FiredFile(name=name, row=int(match.group(1))))
+        else:
+            files.append(FiredFile(name=name, rows=len(rows)))
+    return FiredOn(
+        type=node.type,
+        label=display_name(node),
+        files=files[:_MAX_FIRED_FILES],
+        more_files=max(0, len(files) - _MAX_FIRED_FILES),
+    )
+
+
+async def _alert_hotlist(
+    alert: Alert, principal: Principal, hotlists_store: HotlistReader | None
+) -> AlertHotlist | None:
+    if hotlists_store is None or not alert.rule_id.startswith("hotlist:"):
+        return None
+    try:
+        hotlist_id = alert.rule_id.removeprefix("hotlist:")
+        hotlist = await hotlists_store.get_authorized(hotlist_id, principal)
+    except HotlistNotFoundError:
+        return None
+    return AlertHotlist(
+        identifier=hotlist.identifier_typed or hotlist.identifier,
+        kept_as_written=hotlist.identifier_canonical is False,
+        review_date=hotlist.review_date,
+    )
+
+
+async def alert_to_view(
+    alert: Alert,
+    principal: Principal,
+    graph: GraphPort,
+    hotlists_store: HotlistReader | None = None,
+) -> AlertView:
     available = await evidence_available(alert, principal, graph)
+    fired_on: list[FiredOn] | None = None
+    if available and alert.mode is AlertMode.FULL and alert.referent_node_ids:
+        nodes = [await graph.get_node(node_id, principal) for node_id in alert.referent_node_ids]
+        # `evidence_available` read these a moment ago; one that has gone since is withdrawn whole.
+        if all(node is not None for node in nodes):
+            fired_on = [_fired_on(node) for node in nodes if node is not None]
     return AlertView(
         id=alert.id,
         rule_id=alert.rule_id,
@@ -100,6 +203,8 @@ async def alert_to_view(alert: Alert, principal: Principal, graph: GraphPort) ->
         investigation_id=alert.investigation_id,
         created_at=alert.created_at,
         words=alert.words,
+        hotlist=await _alert_hotlist(alert, principal, hotlists_store),
+        fired_on=fired_on,
     )
 
 
@@ -125,11 +230,14 @@ async def fetch_jumpable_referents(
 
 
 __all__ = [
+    "AlertHotlist",
     "AlertJumpResult",
     "AlertList",
     "AlertView",
     "CreateHotlistRequest",
     "CreateMonitorRequest",
+    "FiredFile",
+    "FiredOn",
     "HotlistList",
     "MonitorList",
     "alert_to_view",

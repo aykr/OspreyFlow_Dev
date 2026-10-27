@@ -315,6 +315,9 @@ export const TIMELINE_PLAYBACK_ACTIONS = defineActionRegistry("TIMELINE_PLAYBACK
   "overlay-another-case-reveals-its-box",
   "cross-case-overlay-loads-second-track",
   "no-dated-events-says-so-and-offers-no-brush-or-playback",
+  // ADR-130 decision 2: the weekly view's "Choose cells" control, the keyboard route to what a drag
+  // across the grid chooses. Proven by the map's request body and the ids the canvas dims.
+  "choose-the-weekend-by-keyboard",
 ] as const);
 
 /**

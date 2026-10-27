@@ -175,6 +175,14 @@ class InheritedEvents(BaseModel):
     window: Interval | None = None
 
 
+class WeekdayHour(BaseModel):
+    """One cell of the weekly view (ADR-130 decision 2): the weekday (0 = Monday) and the hour
+    (0-23), read in UTC, the numbering the `weekday_hour` histogram buckets by."""
+
+    weekday: int = Field(ge=0, le=6)
+    hour: int = Field(ge=0, le=23)
+
+
 class EventFilter(BaseModel):
     """Restricts the event population a method aggregates over. Every
     field here is a predicate the adapter applies inside its own `WHERE`
@@ -212,6 +220,11 @@ class EventFilter(BaseModel):
     #: **into** the adapter's `WHERE` clause alongside the access filter, never applied after
     #: retrieval (`03_CONDUIT_MIDDLEWARE.md` §6, `CLAUDE.md` rule 2).
     value_filters: dict[str, list[str]] = Field(default_factory=dict)
+    #: **A brush on the weekly view's cells (ADR-130 decision 2).** Only events whose weekday and
+    #: hour (UTC, weekday 0 = Monday: the weekly histogram's own cells) are one of these count.
+    #: `None` does not restrict; an empty list matches nothing, because "no cells chosen" is a
+    #: deliberate selection of nothing, unlike an expanded facet with nothing ticked.
+    weekday_hours: list[WeekdayHour] | None = None
     #: A branch's parents' events on the links it holds (ADR-084 Amendment 2). `None` reads the
     #: case's own events only.
     inherited: InheritedEvents | None = None

@@ -38,6 +38,7 @@ from schemas.analytics import (
     HistogramRequest,
     InheritedEvents,
     SightingRequest,
+    WeekdayHour,
 )
 from schemas.domain import Handling, Interval, Principal
 from ports.analytics import AnalyticsPort, TrendLimitExceeded
@@ -489,6 +490,147 @@ async def test_histogram_weekday_hour_folds_into_a_cyclical_grid(
         assert by_cell[(same_hour_two_weeks_apart[0].weekday(), 9)] == 2
         assert by_cell[(a_different_day.weekday(), 15)] == 1
         assert hist.total == 3
+
+
+# --- the cell brush (ADR-130 decision 2): EventFilter.weekday_hours ----------------
+#
+# A cell is (weekday, hour) with weekday 0 = Monday and the hour read in UTC, exactly the
+# numbering the weekly histogram buckets by. 5 January 2026 is a Monday.
+
+
+def _cell_corpus(classification: str = "OFFICIAL") -> list[EventRecord]:
+    return [
+        # Monday 09:00 twice, a fortnight apart; Saturday 15:00; Sunday 03:00 (with a point).
+        _event(occurred_at=datetime(2026, 1, 5, 9, 0, tzinfo=UTC), lat=51.5, lon=-0.1),
+        _event(occurred_at=datetime(2026, 1, 19, 9, 59, tzinfo=UTC), lat=51.5, lon=-0.1),
+        _event(occurred_at=datetime(2026, 1, 10, 15, 0, tzinfo=UTC), lat=51.5, lon=-0.1),
+        _event(
+            occurred_at=datetime(2026, 1, 11, 3, 0, tzinfo=UTC),
+            lat=51.5,
+            lon=-0.1,
+            classification=classification,
+        ),
+    ]
+
+
+async def _total(
+    adapter: AnalyticsPort, event_filter: EventFilter, who: Principal = CLEARED
+) -> int:
+    req = HistogramRequest(filter=event_filter, interval_seconds=3600)
+    return (await adapter.histogram(req, who)).total
+
+
+async def test_event_filter_weekday_hours_counts_only_events_in_the_chosen_cells(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    async with factory.context(_cell_corpus()) as adapter:
+        monday_nine = _filter(weekday_hours=[WeekdayHour(weekday=0, hour=9)])
+        assert await _total(adapter, monday_nine) == 2
+        two_cells = _filter(
+            weekday_hours=[WeekdayHour(weekday=0, hour=9), WeekdayHour(weekday=5, hour=15)]
+        )
+        assert await _total(adapter, two_cells) == 3
+        # The same hour on another day, and another hour on the same day, are not in the cell.
+        assert await _total(adapter, _filter(weekday_hours=[WeekdayHour(weekday=1, hour=9)])) == 0
+        assert await _total(adapter, _filter(weekday_hours=[WeekdayHour(weekday=0, hour=10)])) == 0
+
+
+async def test_event_filter_weekday_hours_uses_the_weekly_histograms_own_cells(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Whatever cell the weekly histogram puts an event in, choosing that cell finds it."""
+    async with factory.context(_cell_corpus()) as adapter:
+        weekly = await adapter.histogram(
+            HistogramRequest(filter=_filter(), bucketing=HistogramBucketing.WEEKDAY_HOUR), CLEARED
+        )
+        assert weekly.total == 4
+        for bucket in weekly.buckets:
+            assert bucket.weekday is not None and bucket.hour is not None
+            chosen = _filter(weekday_hours=[WeekdayHour(weekday=bucket.weekday, hour=bucket.hour)])
+            assert await _total(adapter, chosen) == bucket.count
+
+
+async def test_event_filter_weekday_hours_empty_set_matches_nothing_and_none_does_not_restrict(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    async with factory.context(_cell_corpus()) as adapter:
+        assert await _total(adapter, _filter(weekday_hours=[])) == 0
+        assert await _total(adapter, _filter(weekday_hours=None)) == 4
+        assert await _total(adapter, _filter()) == 4
+
+
+async def test_event_filter_weekday_hours_combines_with_the_other_predicates_by_and(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    async with factory.context(_cell_corpus()) as adapter:
+        window = Interval(
+            valid_from=datetime(2026, 1, 1, tzinfo=UTC), valid_to=datetime(2026, 1, 8, tzinfo=UTC)
+        )
+        cell = [WeekdayHour(weekday=0, hour=9)]
+        assert await _total(adapter, _filter(weekday_hours=cell, window=window)) == 1
+
+
+async def test_event_filter_weekday_hours_ranges_are_validated(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    for weekday, hour in ((7, 0), (-1, 0), (0, 24), (0, -1)):
+        with pytest.raises(ValueError):
+            WeekdayHour(weekday=weekday, hour=hour)
+
+
+async def test_event_filter_weekday_hours_honoured_by_geo_bins_and_cross_filter(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    async with factory.context(_cell_corpus()) as adapter:
+        cells = _filter(weekday_hours=[WeekdayHour(weekday=0, hour=9)])
+        bins = await adapter.geo_bins(GeoBinRequest(filter=cells, precision=4), CLEARED)
+        assert sum(b.count for b in bins) == 2
+        nothing = _filter(weekday_hours=[])
+        assert await adapter.geo_bins(GeoBinRequest(filter=nothing, precision=4), CLEARED) == []
+
+        result = await adapter.cross_filter(
+            CrossFilterRequest(
+                filter=cells,
+                dimensions=[
+                    CrossFilterDimension(
+                        name="weekly", bucketing=HistogramBucketing.WEEKDAY_HOUR
+                    ),
+                    CrossFilterDimension(
+                        name="temporal",
+                        bucketing=HistogramBucketing.FIXED_INTERVAL,
+                        interval_seconds=3600,
+                    ),
+                ],
+            ),
+            CLEARED,
+        )
+        assert result["weekly"].total == 2
+        assert [(b.weekday, b.hour) for b in result["weekly"].buckets] == [(0, 9)]
+        assert result["temporal"].total == 2
+
+
+async def test_unauthorised_event_in_a_chosen_cell_is_not_counted_by_any_read(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Rule 3: a SECRET event in a chosen cell moves nothing for an OFFICIAL reader."""
+    visible = _cell_corpus()
+    hidden = _event(
+        occurred_at=datetime(2026, 1, 5, 9, 30, tzinfo=UTC),
+        lat=51.5,
+        lon=-0.1,
+        classification="SECRET",
+    )
+    cells = _filter(weekday_hours=[WeekdayHour(weekday=0, hour=9)])
+    geo = GeoBinRequest(filter=cells, precision=4)
+
+    async with factory.context(visible) as adapter:
+        before_total = await _total(adapter, cells, OFFICIAL)
+        before_bins = await adapter.geo_bins(geo, OFFICIAL)
+
+    async with factory.context([*visible, hidden]) as adapter:
+        assert await _total(adapter, cells, OFFICIAL) == before_total == 2
+        assert await adapter.geo_bins(geo, OFFICIAL) == before_bins
+        assert await _total(adapter, cells, CLEARED) == 3  # the filter is real, not a no-op
 
 
 # --- histogram: categorical (cross_filter's non-temporal dimension) ----------

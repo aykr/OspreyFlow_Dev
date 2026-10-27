@@ -176,6 +176,12 @@ _COVERED = (
 )
 
 
+#: ADR-130 decision 2: the weekly histogram's cells, one expression each, shared by the histogram
+#: and the `weekday_hours` predicate so the two cannot drift. UTC; weekday 0 = Monday.
+_WEEKDAY_SQL = "toInt32(toDayOfWeek(occurred_at)) - 1"
+_HOUR_SQL = "toInt32(toHour(occurred_at))"
+
+
 class AnalyticsClickHouseAdapter:
     def __init__(self, client: ClickHouseClient, handling_scheme: HandlingScheme) -> None:
         self._ch = client
@@ -227,6 +233,17 @@ class AnalyticsClickHouseAdapter:
             if values:
                 clauses.append(f"{column} IN ({','.join('?' for _ in values)})")
                 params.extend(values)
+        if event_filter.weekday_hours is not None:
+            # ADR-130 decision 2: the weekly histogram's own cells (UTC, 0 = Monday), applied
+            # here in the WHERE. An empty set is "no cell chosen" and matches nothing.
+            if not event_filter.weekday_hours:
+                clauses.append("1 = 0")
+            else:
+                cell = f"({_WEEKDAY_SQL} = ? AND {_HOUR_SQL} = ?)"
+                cells = " OR ".join(cell for _ in event_filter.weekday_hours)
+                clauses.append(f"({cells})")
+                for chosen in event_filter.weekday_hours:
+                    params.extend([chosen.weekday, chosen.hour])
         # An empty value list does not restrict (the DuckDB adapter's reasoning, unchanged).
         for field, values in sorted(event_filter.value_filters.items()):
             if not values:
@@ -356,8 +373,8 @@ class AnalyticsClickHouseAdapter:
 
     async def _weekday_hour_histogram(self, predicate: SqlPredicate) -> Histogram:
         rows = await self._ch.rows(
-            "SELECT toInt32(toDayOfWeek(occurred_at)) - 1 AS weekday, "
-            "toInt32(toHour(occurred_at)) AS hour, count() AS cnt "
+            f"SELECT {_WEEKDAY_SQL} AS weekday, "
+            f"{_HOUR_SQL} AS hour, count() AS cnt "
             f"FROM events WHERE {predicate.where} GROUP BY weekday, hour "
             "ORDER BY weekday, hour",
             predicate.params,

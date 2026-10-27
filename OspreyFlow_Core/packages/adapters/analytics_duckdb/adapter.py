@@ -110,6 +110,12 @@ def _as_utc(value: object) -> datetime:
     return cast(datetime, value).replace(tzinfo=UTC)
 
 
+#: ADR-130 decision 2: the weekly histogram's cells, one expression each, shared by the histogram
+#: and the `weekday_hours` predicate so the two cannot drift. UTC; weekday 0 = Monday.
+_WEEKDAY_SQL = "CAST(isodow(occurred_at) AS INTEGER) - 1"
+_HOUR_SQL = "CAST(hour(occurred_at) AS INTEGER)"
+
+
 class AnalyticsDuckDBAdapter:
     def __init__(self, con: duckdb.DuckDBPyConnection, handling_scheme: HandlingScheme) -> None:
         # `occurred_at` is a plain TIMESTAMP holding UTC. DuckDB converts an aware time to the
@@ -170,6 +176,17 @@ class AnalyticsDuckDBAdapter:
             placeholders = ",".join("?" for _ in event_filter.event_ids)
             clauses.append(f"event_id IN ({placeholders})")
             params.extend(event_filter.event_ids)
+        if event_filter.weekday_hours is not None:
+            # ADR-130 decision 2: the weekly histogram's own cells (UTC, 0 = Monday), applied
+            # here in the WHERE. An empty set is "no cell chosen" and matches nothing.
+            if not event_filter.weekday_hours:
+                clauses.append("1 = 0")
+            else:
+                cell = f"({_WEEKDAY_SQL} = ? AND {_HOUR_SQL} = ?)"
+                cells = " OR ".join(cell for _ in event_filter.weekday_hours)
+                clauses.append(f"({cells})")
+                for chosen in event_filter.weekday_hours:
+                    params.extend([chosen.weekday, chosen.hour])
         # **A7's item-category half — round 13cdc.** Values are parameterised; only the *column*
         # is interpolated, and `_field_expression` validates it as a safe identifier first, which
         # is the same guard `cross_filter`'s own dimensions already rely on.
@@ -309,8 +326,8 @@ class AnalyticsDuckDBAdapter:
 
     def _weekday_hour_histogram(self, predicate: SqlPredicate) -> Histogram:
         rows = self._con.execute(
-            "SELECT CAST(isodow(occurred_at) AS INTEGER) - 1 AS weekday, "
-            "CAST(hour(occurred_at) AS INTEGER) AS hour, COUNT(*) AS cnt "
+            f"SELECT {_WEEKDAY_SQL} AS weekday, "
+            f"{_HOUR_SQL} AS hour, COUNT(*) AS cnt "
             f"FROM events WHERE {predicate.where} GROUP BY weekday, hour "
             "ORDER BY weekday, hour",
             predicate.params,

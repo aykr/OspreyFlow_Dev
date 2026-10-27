@@ -5898,10 +5898,13 @@ async def list_alerts_route(
     principal: PrincipalDep,
     alerts_store: AlertsStoreDep,
     graph: GraphDep,
+    hotlists_store: HotlistsStoreDep,
 ) -> AlertList:
     """ADR-099 Amendment 3: the alerts of the case's datasets, read as the case reads."""
     rows = await alerts_store.list_authorized(principal)
-    return AlertList(alerts=[await alert_to_view(a, principal, graph) for a in rows])
+    return AlertList(
+        alerts=[await alert_to_view(a, principal, graph, hotlists_store) for a in rows]
+    )
 
 
 @app.get(
@@ -5914,9 +5917,10 @@ async def get_alert_route(
     principal: PrincipalDep,
     alerts_store: AlertsStoreDep,
     graph: GraphDep,
+    hotlists_store: HotlistsStoreDep,
 ) -> AlertView:
     alert = await alerts_store.get_authorized(alert_id, principal)
-    return await alert_to_view(alert, principal, graph)
+    return await alert_to_view(alert, principal, graph, hotlists_store)
 
 
 @app.post(

@@ -19867,3 +19867,73 @@ Decided by the coordinator under the owner's settings for Brief 3.
 - **Delegated choice confirmed by the owner (27 October 2026):** the golden set's 16 answerable
   and 4 refused, Q6 among the refusals.
 
+
+## ADR-130 — A hotlist alert that explains itself, and a cell brush on the weekly view — ACCEPTED (design)
+
+**Status.** Accepted on 27 October 2026 under the owner's rulings of the same day. The owner chose
+"Build a readable alert" (without the small graph) and "Build a cell brush" after Brief 3's Part B
+(V7) and Part C (C3) found both missing. Each decision below takes the recommended option and is
+reported to the owner.
+
+**Context.**
+- **The alert.** A hotlist alert in Watches > Alert inbox reads `hotlist:<id>` and a node id. The
+  row stores no identifier, file or row, by design: evidence is referenced, never copied, and
+  re-checked when read (ADR-038 and ADR-039). The typed identifier is on the hotlist. The file and
+  row are the matched node's provenance, and a heavily referenced node can carry thousands of
+  sources (ADR-127 Amendment 12, decision 8).
+- **The weekly view.** The cyclical (weekday by hour) timeline draws a heat map with no brush. The
+  cross-filter has no weekday or hour kind, and no analytics request accepts one.
+
+**Decision 1: the hotlist alert explains itself, read at display time (rule 3).**
+- **The response.** The inbox's alert view gains `hotlist`, present for a `hotlist:` rule and only
+  to the hotlist's owner (the alert's owner). It carries the identifier as typed (else as stored),
+  whether it was kept as written, and the review date. It is read from the hotlist store with its
+  owner check, so a hotlist the reader does not own gives no `hotlist` at all.
+- **What fired it.** The view gains `fired_on`, present only when the evidence is available to the
+  reader. For each matched node it carries:
+  - the node's type and display label, read through `GraphPort.get_node` with the reader's
+    principal;
+  - its sources grouped by file: the file's name (the final path segment of the source's
+    `document_id`, as the Inspector already shows the whole of it), with the single row when there
+    is one, else the number of rows. The files come in the order of their first appearance, at most
+    five, with "and N more files" said, never cut silently (rule 2).
+- **Nothing new is stored.** The alert row and its write are unchanged.
+- **The Glass.** The inbox entry reads, for example: "Hotlist: 07700 900640 · review by 31 Jan
+  2027", "Matched: Endpoint +447700900640", "From: pid_seized_comms_batch2.csv, row 3;
+  pid_pin_calls.csv, 2,013 rows". "Jump into investigation" is unchanged. The raw rule id and node
+  ids are no longer shown (rule 7 spirit).
+- **Tests.**
+  - The owner sees `hotlist`; another analyst's alert is never listed, as today.
+  - A revoked or hidden node gives no `fired_on` and no count.
+  - Sources are grouped, rows counted, and more than five files said.
+  - The Glass renders all of it.
+  - The existing keyboard case that jumps from an alert row still passes. No new action is added
+    (rule 13).
+- **Not decided here, and recorded:** the inbox list route does not scope to the case's datasets,
+  though its docstring says it does.
+
+**Decision 2: a cell brush on the weekly view.**
+- **The filter.** `EventFilter` gains `weekday_hours`: a set of (weekday, hour) cells, or none. It
+  is applied in each analytics adapter's WHERE, with the same weekday and hour the weekly
+  histogram buckets by (the same time zone, the same weekday numbering), in DuckDB and ClickHouse
+  alike. The analytics conformance suite gains its cases first (rule 1):
+  - only events in the cells count;
+  - an empty set matches nothing;
+  - access filtering is unchanged (rule 3);
+  - the histogram, the geo bins and the cross-filter all honour it.
+- **The cross-filter store.** It gains `cells` beside `window`. `buildEventFilter` sends it, so the
+  map's bins and the canvas's dimming follow exactly as they follow a window. `clearFilter` clears
+  it.
+- **The Glass.**
+  - In the weekly view, dragging across cells selects them (an ECharts rectangle brush on the
+    heat map). The selected cells stay drawn, and the rest of the grid stays visible.
+  - The keyboard route (rule 13) is a "Choose cells" control in the weekly view's own options
+    menu: the seven days as checkboxes, an hour range from and to, and a "Weekend" shortcut.
+  - The weekly view keeps drawing the case's whole range (its existing rule), shading the chosen
+    cells.
+  - The status bar's "dimmed by filter" counts as for a window.
+- **Tests.** The conformance cases above on both engines; the store; the option; and a keyboard
+  case that chooses the weekend and proves the map's request carries the cells and the canvas
+  dims.
+- **Cost.** The conformance suite fixes how a timestamp maps to a weekday and an hour. That mapping
+  was implicit in the histogram until now.

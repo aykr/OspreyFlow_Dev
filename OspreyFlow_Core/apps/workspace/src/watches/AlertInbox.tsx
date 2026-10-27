@@ -12,7 +12,40 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
-import { type AlertJumpResult, type AlertView, isScheduleNotice, jumpAlert, listAlerts } from "./api";
+import {
+  type AlertJumpResult,
+  type AlertView,
+  type FiredFile,
+  type FiredOn,
+  isScheduleNotice,
+  jumpAlert,
+  listAlerts,
+} from "./api";
+
+const COUNT = new Intl.NumberFormat("en-GB");
+const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** ADR-130: an alert is named by what it is, never by its rule id (`hotlist:<id>`). */
+function heading(alert: AlertView): string {
+  if (alert.rule_id.startsWith("hotlist:")) return "Hotlist alert";
+  if (alert.rule_id.startsWith("monitor:")) return "Monitor alert";
+  return "Alert";
+}
+
+function fileText(file: FiredFile): string {
+  if (file.row != null) return `${file.name}, row ${COUNT.format(file.row)}`;
+  const rows = file.rows ?? 0;
+  return `${file.name}, ${COUNT.format(rows)} ${rows === 1 ? "row" : "rows"}`;
+}
+
+/** "a.csv, row 3; b.csv, 2,013 rows; and 3 more files" — the files past five are said, not cut. */
+function fromText(fired: FiredOn): string {
+  const parts = fired.files.map(fileText);
+  if (fired.more_files > 0) {
+    parts.push(`and ${COUNT.format(fired.more_files)} more file${fired.more_files === 1 ? "" : "s"}`);
+  }
+  return parts.join("; ");
+}
 
 export interface AlertRowProps {
   alert: AlertView;
@@ -49,21 +82,24 @@ export function AlertRow({ alert, onJump, jumping }: AlertRowProps) {
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span className="value">{alert.rule_id}</span>
+        <span className="value">{heading(alert)}</span>
         <span className="label">{new Date(alert.created_at).toLocaleString()}</span>
       </div>
       {alert.mode === "notify_stub" && (
         <p className="label">A match fired — no evidence visible to you.</p>
       )}
-      {alert.mode === "full" && hasReferents && (
-        <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
-          {alert.referent_node_ids.map((id) => (
-            <li key={id} className="value">
-              {id}
-            </li>
-          ))}
-        </ul>
+      {alert.hotlist && (
+        <p className="label" style={{ margin: 0 }}>
+          {`Hotlist: ${alert.hotlist.identifier}${alert.hotlist.kept_as_written ? " (kept as written)" : ""}`}
+          {` · review by ${DAY.format(new Date(alert.hotlist.review_date))}`}
+        </p>
       )}
+      {alert.mode === "full" && hasReferents && (alert.fired_on ?? []).map((fired, index) => (
+        <div key={index} style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
+          <span className="value">{`Matched: ${fired.type} ${fired.label}`}</span>
+          {fired.files.length > 0 && <span className="label">{`From: ${fromText(fired)}`}</span>}
+        </div>
+      ))}
       {alert.mode === "full" && !hasReferents && (
         <p className="label" style={{ color: "var(--warning)" }}>
           Evidence no longer available.
