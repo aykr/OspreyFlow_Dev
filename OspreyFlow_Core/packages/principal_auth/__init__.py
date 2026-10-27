@@ -217,7 +217,7 @@ class PrincipalResolver:
         except PrincipalExchangeError:
             return None
 
-    async def _refuse_if_revoked(self, owner_id: str) -> None:
+    async def _refuse_if_revoked(self, owner_id: str) -> str | None:
         """Refuses, before any exchange, if the target principal is disabled at the IdP.
 
         **The finding this closes, measured rather than assumed** (ADR-043's amendment, 24
@@ -237,22 +237,30 @@ class PrincipalResolver:
         IdP outage never marks a live analyst's watches as revoked.
 
         **Off when unconfigured.** No `oidc_admin_users_url` means no pre-check and the previous
-        behaviour exactly, which is what keeps existing deployments working.
+        behaviour exactly, which is what keeps existing deployments working; it answers `None`.
+
+        **Returns the subject id the pre-check judged**, which the exchange then asks for, so the
+        two never judge different subjects (an owner recorded by username is exchanged by the id
+        that username resolved to). **A 200 is accepted only in the shape the read promises**: the
+        by-id read answers the one user, whose `id` is the id asked for, and the username read
+        answers a list. Anything else (a URL left at the realm root answers 200 with an object
+        whose `enabled` is true) is `PrincipalExchangeUnavailable`, never a pass.
         """
         if not self._config.oidc_admin_users_url:
-            return
+            return None
         # An owner is recorded by Keycloak's subject id (the token's `sub`, ADR-127 Amendment 34),
         # so it is read as `users/{id}`; a name is read as `users?username=` only when no user has
         # that id, which keeps an owner recorded by username (before that amendment) working.
         # Measured on Keycloak 26.0: the username query for a subject id answers 200 with no users.
-        headers = {"Authorization": f"Bearer {await self._client_credentials_token()}"}
         base = self._config.oidc_admin_users_url.rstrip("/")
         try:
+            headers = {"Authorization": f"Bearer {await self._client_credentials_token()}"}
             by_id = await self._exchange_http.get(
                 f"{base}/{quote(owner_id, safe='')}", headers=headers
             )
             response = by_id
-            if by_id.status_code == 404:
+            by_username = by_id.status_code == 404
+            if by_username:
                 response = await self._exchange_http.get(
                     base, params={"username": owner_id, "exact": "true"}, headers=headers
                 )
@@ -266,10 +274,28 @@ class PrincipalResolver:
                 f"{response.status_code} {response.text}"
             )
         found = response.json()
-        users = found if isinstance(found, list) else [found]
+        if by_username:
+            if not isinstance(found, list):
+                raise PrincipalExchangeUnavailable(
+                    f"the username read for owner {owner_id!r} did not answer a list of users: "
+                    "OIDC_ADMIN_USERS_URL may not be the realm's users endpoint"
+                )
+            users = found
+        else:
+            if not isinstance(found, dict) or found.get("id") != owner_id:
+                raise PrincipalExchangeUnavailable(
+                    f"the read of owner {owner_id!r} by id did not answer that user: "
+                    "OIDC_ADMIN_USERS_URL may not be the realm's users endpoint"
+                )
+            users = [found]
         if not users:
             raise PrincipalExchangeRefused(
                 f"owner {owner_id!r} is not known to the identity provider"
+            )
+        resolved = users[0].get("id") if isinstance(users[0], dict) else None
+        if not isinstance(resolved, str) or not resolved:
+            raise PrincipalExchangeUnavailable(
+                f"the identity provider's answer for owner {owner_id!r} carried no user id"
             )
         if not users[0].get("enabled", False):
             raise PrincipalRevoked(
@@ -277,6 +303,7 @@ class PrincipalResolver:
                 "Conduit's own pre-check, because the realm will issue a token for a disabled "
                 "subject (06_DECISIONS.md ADR-043's amendment)"
             )
+        return resolved
 
     async def _client_credentials_token(self) -> str:
         """This client's own token — used both as the `subject_token` of an exchange and as the
@@ -307,7 +334,7 @@ class PrincipalResolver:
                 "OIDC_TOKEN_EXCHANGE_URL is not set — this deployment has not configured "
                 "token exchange (06_DECISIONS.md ADR-043)"
             )
-        await self._refuse_if_revoked(owner_id)
+        resolved = await self._refuse_if_revoked(owner_id)
         try:
             subject_token = await self._client_credentials_token()
         except httpx.HTTPError as exc:
@@ -333,7 +360,7 @@ class PrincipalResolver:
                     # `requested_subject` below identifies the party acted for.
                     "subject_token": subject_token,
                     "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
-                    "requested_subject": owner_id,
+                    "requested_subject": resolved or owner_id,
                     "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
                 },
             )

@@ -1,8 +1,8 @@
 name: "PHIA probabilistic yardstick"
 bands:
   - {label: "remote chance",          lower: 0.00, upper: 0.05}
-  - {label: "highly unlikely",        lower: 0.05, upper: 0.20}
-  - {label: "unlikely",               lower: 0.20, upper: 0.35}
+  - {label: "highly unlikely",        lower: 0.10, upper: 0.20}
+  - {label: "unlikely",               lower: 0.25, upper: 0.35}
   - {label: "realistic possibility",  lower: 0.40, upper: 0.50}
   - {label: "likely",                 lower: 0.55, upper: 0.75}
   - {label: "highly likely",          lower: 0.80, upper: 0.90}

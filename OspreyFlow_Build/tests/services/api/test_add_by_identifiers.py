@@ -81,7 +81,13 @@ class _Graph:
         self.calls: list[tuple[str, str, str]] = []
 
     async def find_node(
-        self, entity_type: str, identifier_field: str, value: str, principal: Principal
+        self,
+        entity_type: str,
+        identifier_field: str,
+        value: str,
+        principal: Principal,
+        *,
+        also: dict[str, str] | None = None,
     ) -> Node | None:
         self.calls.append((entity_type, identifier_field, value))
         return self.visible.get((entity_type, identifier_field, value))
@@ -190,3 +196,41 @@ async def test_the_count_is_over_what_the_strings_hold_not_over_the_strings() ->
     one_string = ["\n".join(f"Z{n:04d}ZZ" for n in range(MAX_IDENTIFIERS + 1))]
     with pytest.raises(TooManyIdentifiersError):
         await resolve_identifiers(_Graph(), one_string, ANALYST)
+
+
+class _SharedTextGraph:
+    """Two visible Endpoints holding the same `value_normalised` with different kinds, the handle
+    first. A lookup that cannot say which kind it wants gets the first, as the store's `limit(1)`
+    does; one that names the kind (`also`) gets the one of that kind."""
+
+    def __init__(self, *nodes: Node) -> None:
+        self.nodes = nodes
+
+    async def find_node(
+        self,
+        entity_type: str,
+        identifier_field: str,
+        value: str,
+        principal: Principal,
+        *,
+        also: dict[str, str] | None = None,
+    ) -> Node | None:
+        for node in self.nodes:
+            if node.type == entity_type and node.properties.get(identifier_field) == value:
+                if all(node.properties.get(k) == v for k, v in (also or {}).items()):
+                    return node
+        return None
+
+
+async def test_an_account_is_found_when_a_pin_handle_holds_the_same_text() -> None:
+    """The kind is part of the lookup, not a check on whichever node came back first: a handle
+    and an account with the same text were a coin toss, and the account could read as unmatched."""
+    handle = _endpoint("e-handle", "SYN-70417", "handle")
+    account = _endpoint("e-account", "SYN-70417", "account")
+    graph = _SharedTextGraph(handle, account)
+    result = await resolve_identifiers(graph, ["SYN-70417"], ANALYST)
+    assert [n.id for n in result.nodes] == ["e-account"]
+    assert result.counts == IdentifierCounts(read=1, found=1, matched_nothing=0, repeated=0)
+    reversed_order = _SharedTextGraph(account, handle)
+    again = await resolve_identifiers(reversed_order, ["SYN-70417"], ANALYST)
+    assert [n.id for n in again.nodes] == ["e-account"]

@@ -189,10 +189,12 @@ class RecipeRuleError(Exception):
 def reference_match_problems(template: RowTemplate, ontology: OntologySchema) -> list[str]:
     """ADR-127 Amendment 37: an entity looked up by reference (`on_match: reference`) is found by
     `GraphPort.find_node`, which the store answers only for a type's `identifiers` and its
-    `indexed` properties. A reference on any other property never matches, so the engine would
-    write a new, empty node for every row; each such entity is refused here, in one sentence. An
-    entity that is not a reference, one with no `match_on`, and a type the ontology lacks (refused
-    elsewhere) are not judged."""
+    `indexed` properties, and the adapter stores one of those as a top-level field only when the
+    node is written with it. A reference on any other property, or on a field the entity's own
+    template does not write (the lookup value is then the text "None" on every row), never
+    matches, so the engine would write a new, empty node for every row; each such entity is
+    refused here, in one sentence. An entity that is not a reference, one with no `match_on`, and a
+    type the ontology lacks (refused elsewhere) are not judged."""
     problems: list[str] = []
     for entity in template.entities:
         if entity.on_match != "reference" or not entity.match_on:
@@ -206,6 +208,12 @@ def reference_match_problems(template: RowTemplate, ontology: OntologySchema) ->
                 f"{entity.type} cannot be found by {entity.match_on}: a reference can only match "
                 f"an identifier or an indexed property of the type, so this would make a new "
                 f"{entity.type} for every row."
+            )
+        elif entity.match_on not in entity.properties:
+            problems.append(
+                f"{entity.type} cannot be found by {entity.match_on}: the entity does not write "
+                f"{entity.match_on}, and a reference can only match a stored identifier or "
+                f"indexed property, so this would make a new {entity.type} for every row."
             )
     return problems
 

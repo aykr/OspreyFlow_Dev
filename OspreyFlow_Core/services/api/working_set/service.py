@@ -58,6 +58,7 @@ from schemas.domain import (
     EdgeId,
     EdgeWrite,
     ExpandRequest,
+    Handling,
     Node,
     NodeId,
     Principal,
@@ -1014,17 +1015,19 @@ class WorkingSetService:
         **By default no links**: the nodes alone, and "Show links among all" draws them.
         **`with_links`** brings every link among the added nodes and the nodes already on the
         canvas, in the same single add, so a breach by the links leaves the nodes out too. Past
-        `AUTO_LINKS_MAX_VIEW_NODES` the canvas cannot be named to the graph in one ask (`expand`'s
-        own limit), so only the links among the added nodes themselves come with them; the outcome
-        says `added` either way, since each is every link among what was named."""
+        `AUTO_LINKS_MAX_VIEW_NODES` (the canvas and the new nodes together) they cannot be named to
+        the graph in one ask (`expand`'s own limit), so no link is asked for and the outcome says
+        `not_asked`, as `expand`'s does (rule 2: `added` would claim every link among what was
+        named was brought, and none was asked for)."""
         if not with_links:
             return await self.seed(investigation_id, nodes, [], principal)
         view = await self._reader_counts(investigation_id, principal)
         new_ids = {n.id for n in nodes}
         new_count, _, _ = await view.would_add(new_ids, ())
-        wanted = set(new_ids)
-        if view.nodes + new_count <= AUTO_LINKS_MAX_VIEW_NODES:
-            wanted |= await view.visible_node_ids()
+        if view.nodes + new_count > AUTO_LINKS_MAX_VIEW_NODES:
+            outcome = await self.seed(investigation_id, nodes, [], principal)
+            return outcome.model_copy(update={"links_among": "not_asked"})
+        wanted = new_ids | await view.visible_node_ids()
         among = await self._graph.edges_among(sorted(wanted), principal)
         outcome = await self.seed(investigation_id, nodes, among, principal)
         return outcome.model_copy(update={"links_among": "added"})
@@ -1361,6 +1364,15 @@ class WorkingSetService:
         nodes, edges = await self.current_membership(investigation_id)
         visible_nodes, visible_edges, _ = self._project(nodes, edges, principal)
         return visible_nodes, visible_edges
+
+    def may_view_all(self, handlings: Sequence[Handling], principal: Principal) -> bool:
+        """`principal` may view every one of `handlings`, by the same two axes the analytics store
+        applies to an event (`principal_may_view`). A handling the scheme no longer defines is not
+        viewable: fail closed, as `packs.item_visible` does."""
+        try:
+            return all(principal_may_view(h, principal, self._scheme) for h in handlings)
+        except HandlingSchemeError:
+            return False
 
     async def visible_node(
         self, investigation_id: str, node_id: NodeId, principal: Principal

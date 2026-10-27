@@ -717,6 +717,25 @@ async def test_an_answer_read_from_a_link_the_reader_cannot_see_is_not_shown_to_
     assert await service.history("inv-1", ANALYST) == []
 
 
+async def test_an_answer_counting_an_event_the_reader_cannot_see_is_not_shown_to_them() -> None:
+    """Rule 3: the per-month counts were made as the asker. A reader cleared lower, who can see the
+    link and every document but not one of the events counted on it, must not be shown the answer
+    (and is not told it exists); a reader who can see every event is."""
+    events = [_occurred("2026-03"), _occurred("2026-03", "SECRET")]
+    service, _, _, _, _ = await _case(events=events)
+    await service.ask("inv-1", "Who?", CLEARED, selected_node_ids=[DANA])
+    assert await service.history("inv-1", ANALYST) == []
+    assert len(await service.history("inv-1", CLEARED)) == 1
+
+
+async def test_an_answer_counting_only_events_the_reader_can_see_is_shown_to_them() -> None:
+    """The plant above is able to fail the other way: a lower reader is not hidden an answer whose
+    counted events are all within their clearance."""
+    service, _, _, _, _ = await _case(events=[_occurred("2026-03"), _occurred("2026-04")])
+    await service.ask("inv-1", "Who?", ANALYST, selected_node_ids=[DANA])
+    assert len(await service.history("inv-1", ANALYST)) == 1
+
+
 async def test_an_answer_over_visible_elements_is_shown_with_its_citations() -> None:
     service, _, _, _, _ = await _case()
     await service.ask("inv-1", "Who?", ANALYST, selected_node_ids=[DANA])

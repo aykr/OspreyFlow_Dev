@@ -12,7 +12,8 @@ dev stack. `OSPREY_GOLDEN_ASK_RUNS` (default 3) is how many times each question 
 **The floor.** `baseline.json` holds a placeholder for this case (`recall: null`) until a first
 measured run is recorded: with it, this test reports the measurement and does not fail, and says so.
 Once a recall is recorded the floor is that less `harness.PATTERN_RECALL_TOLERANCE`, and a
-measurement below it fails. The gate itself is shown red against a planted wrong pattern by
+measurement below it fails; so does one whose F1 is not above the best answer that ignores the
+question by `harness.PATTERN_CONSTANT_MARGIN` (`harness.pattern_gate`). The gate itself is shown red against a planted wrong pattern by
 `tests/test_ask_to_search_golden_gate.py`, which runs in `make ci`.
 
 Run `-s` to see each question's mean recall: a low one is a question the model gets wrong.
@@ -33,6 +34,7 @@ from ontology.packs import load_deployment_ontology
 from tests.golden.cases.pid_ask_to_search import CASE_ID, PID_ASK_TO_SEARCH_CASES
 from tests.golden.harness import (
     PATTERN_CATEGORY,
+    best_constant_answer,
     pattern_gate,
     run_pattern_cases,
     summarise_patterns,
@@ -63,6 +65,15 @@ async def test_ask_to_search_recall_has_not_regressed() -> None:
         f"golden set: {CASE_ID}/{PATTERN_CATEGORY} over {RUNS} runs with {MODEL}: "
         f"recall {measured['recall']:.4f}, precision {measured['precision']:.4f}"
     )
-    result = pattern_gate(CASE_ID, measured["recall"], BASELINE)
+    result = pattern_gate(
+        CASE_ID,
+        measured["recall"],
+        BASELINE,
+        measured_precision=measured["precision"],
+        best_constant=best_constant_answer(
+            PID_ASK_TO_SEARCH_CASES,
+            undirected={e.name for e in ontology.edge_types if not e.directed},
+        ),
+    )
     print(f"golden set: {result.status}: {result.message}")  # noqa: T201
     assert result.status != "failed", result.message

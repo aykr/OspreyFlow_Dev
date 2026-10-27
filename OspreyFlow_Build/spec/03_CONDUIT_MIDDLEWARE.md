@@ -78,7 +78,7 @@ POST   /v1/investigations/{id}/branch          fork the working set (or a chosen
 POST   /v1/investigations/{id}/branch-by-filter  a new case from the caller's own view, narrowed by entity types and/or a date window (ADR-124 decision 2)
 PUT    /v1/investigations/{id}/tab             open or close this case's tab, for the caller only
 GET    /v1/investigations/{id}/history         addressable step history
-POST   /v1/investigations/{id}/history/{step}  restore to a step
+POST   /v1/investigations/{id}/history/{step}  restore to a step; a step marked `restorable: false` (a case-brief edit) is refused 409 `step_not_restorable` (ADR-128 Amendment 1)
 GET    /v1/investigations                      the cases the caller holds a level on
 PATCH  /v1/investigations/{id}                 rename and/or set the case's domain packs, atomically and audited (Author; ADR-126)
 DELETE /v1/investigations/{id}                 remove, softly (Author, or the unit's osprey-admin)
@@ -214,7 +214,7 @@ POST   /v1/investigations/{id}/nodes/{node}/shared-contacts/{other}/canvas    th
 POST   /v1/investigations/{id}/paths       k-shortest paths between two entities, within the case's datasets (ADR-099)
 POST   /v1/investigations/{id}/connections the fewest degrees connecting two nodes and the routes there, or the routes at a degree asked for (ADR-116)
 POST   /v1/investigations/{id}/patterns/preview   cardinality estimate for a visual query, within the case's datasets (ADR-099)
-POST   /v1/investigations/{id}/patterns/ask   a question to the model, given only the case's vocabulary and the question; the proposed pattern is validated against the ontology and ADR-121 and returned with a one-line explanation and the preview's count, nothing run; `$selected_n` resolves only to selected nodes the reader may see; 422 `could_not_express` (ADR-129)
+POST   /v1/investigations/{id}/patterns/ask   a question to the model, given only the case's vocabulary and the question; the proposed pattern is validated against the ontology and ADR-121 and returned with a one-line explanation and the preview's count, nothing run; `$selected_n` resolves only to selected nodes the reader may see; 422 `could_not_express`, Viewer with the `ask_model` right (ADR-129)
 POST   /v1/investigations/{id}/patterns/run   execute; large results return a job id, which keeps the case's datasets (ADR-099)
 POST   /v1/investigations/{id}/patterns/save   persist the calling principal's own pattern, in the case's first dataset (a version bump if it exists, in its own dataset), Editor (ADR-099 Amendment 3)
 GET    /v1/investigations/{id}/patterns   the calling principal's own saved patterns of the case's datasets (and any saved before ADR-099 Amendment 3, until placed), Viewer
@@ -237,7 +237,7 @@ POST   /v1/investigations/{investigation_id}/documents/{document_id}/designation
 POST   /v1/investigations/{investigation_id}/links-among   the links among nodes already in the view (all, or the named ones), all or `limit_exceeded`, Editor (ADR-098); with `degree` 2–6 and 2–8 named nodes, also the routes between them within it (Amendment 4)
 GET    /v1/investigations/{investigation_id}/datasets   the datasets the case reads, in order, Viewer (ADR-099)
 PUT    /v1/investigations/{investigation_id}/datasets   what the case reads (`{"dataset_ids": [...]}`, at least one, all of the Author's unit; else 422 `dataset_refused`, one answer for another unit's and a missing one), audited before and after, Author (ADR-099)
-POST   /v1/investigations/{investigation_id}/questions   a question to the model about every Document in the case's view the analyst can see, whole; the answer cites them and its proposals are pending findings; past 80,000 characters refused `documents_too_large` (413), none `no_documents` (422), Editor (ADR-098 decision 4)
+POST   /v1/investigations/{investigation_id}/questions   a question to the model about every Document in the case's view the analyst can see, whole, and the graph facts around the selection (one hop) or the whole view, within the timeline window when one is set; the answer cites Documents and `[G-n]` facts and its proposals are pending findings; documents and facts together past the budget refused 409 `limit_exceeded` with its three options, never trimmed (ADR-129 decision 1, Amendment 1), none `no_documents` (422), Editor (ADR-098 decision 4)
 GET    /v1/investigations/{investigation_id}/questions   the case's questions and answers: citations of Documents the reader can see, proposals of their unit in their present state, Viewer (ADR-098 decision 4)
 POST   /v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/accept   one proposal accepted: an inferred node and its `MENTIONED_IN` link onto the canvas, Editor (ADR-098 decision 4)
 POST   /v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/reject   one proposal rejected; nothing is written, Editor (ADR-098 decision 4)

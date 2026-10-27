@@ -175,6 +175,10 @@ class QuestionEntry(BaseModel):
     graph_node_ids: list[str] = Field(default_factory=list)
     graph_link_ids: list[str] = Field(default_factory=list)
     graph_citations: list[GraphCitation] = Field(default_factory=list)
+    #: The distinct handlings of the events the brief's per-month counts were made from, counted as
+    #: the asker. A reader who may not view one of them is not shown the entry (rule 3): the figures
+    #: in its words would count an event they cannot see. Empty for an entry with no counted event.
+    event_handlings: list[Handling] = Field(default_factory=list)
 
 
 class QuestionAnswer(BaseModel):
@@ -331,6 +335,7 @@ CREATE INDEX IF NOT EXISTS case_questions_case_idx ON case_questions (investigat
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS graph_node_ids JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS graph_link_ids JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS graph_citations JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS event_handlings JSONB NOT NULL DEFAULT '[]';
 """
 
 
@@ -356,8 +361,8 @@ class PostgresQuestionStore:
             await conn.execute(
                 "INSERT INTO case_questions (id, investigation_id, author, question, answer, "
                 "document_ids, read_ids, candidate_ids, unplaced, model, created_at, "
-                "graph_node_ids, graph_link_ids, graph_citations) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
+                "graph_node_ids, graph_link_ids, graph_citations, event_handlings) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
                 entry.id,
                 entry.investigation_id,
                 entry.author,
@@ -372,6 +377,7 @@ class PostgresQuestionStore:
                 json.dumps(entry.graph_node_ids),
                 json.dumps(entry.graph_link_ids),
                 json.dumps([c.model_dump() for c in entry.graph_citations]),
+                json.dumps([h.model_dump(mode="json") for h in entry.event_handlings]),
             )
 
     async def list_for_case(self, investigation_id: str) -> list[QuestionEntry]:
@@ -390,6 +396,7 @@ class PostgresQuestionStore:
                     "graph_node_ids": json.loads(row["graph_node_ids"]),
                     "graph_link_ids": json.loads(row["graph_link_ids"]),
                     "graph_citations": json.loads(row["graph_citations"]),
+                    "event_handlings": json.loads(row["event_handlings"]),
                 }
             )
             for row in rows
@@ -507,10 +514,12 @@ class QuestionsService:
         selected_link_ids: Sequence[str],
         window: Interval | None,
         documents_chars: int,
-    ) -> EvidenceBrief:
+    ) -> tuple[EvidenceBrief, list[Handling]]:
         """The brief for what `principal` selected, from their own view, refused whole when it and
         the documents do not fit together (rule 2). The cap is checked before the events are read,
-        so the links the events are asked over are only ever as many as the budget allows."""
+        so the links the events are asked over are only ever as many as the budget allows. Returns,
+        with the brief, the distinct handlings of the events it counted: kept with the answer, so a
+        later reader is shown it only if they could have seen every one (rule 3)."""
         scope = scope_of(
             nodes,
             edges,
@@ -531,7 +540,7 @@ class QuestionsService:
         if months:
             brief = write_brief(scope, labels, months, event_handlings)
             _fits(documents_chars, len(brief.text))
-        return brief
+        return brief, event_handlings
 
     async def ask(
         self,
@@ -548,7 +557,7 @@ class QuestionsService:
         if not documents:
             raise NoDocumentsError(investigation_id)
         documents_chars = sum(len(text) for _, _, text, _ in documents)
-        brief = await self._evidence_brief(
+        brief, event_handlings = await self._evidence_brief(
             investigation_id,
             principal,
             nodes,
@@ -652,6 +661,7 @@ class QuestionsService:
             graph_node_ids=list(brief.node_ids),
             graph_link_ids=list(brief.link_ids),
             graph_citations=graph_citations,
+            event_handlings=event_handlings,
         )
         await self._store.add(entry)
         titles = {d: t for d, t, _, _ in documents}
@@ -697,6 +707,10 @@ class QuestionsService:
                 seen_nodes.issuperset(entry.graph_node_ids)
                 and seen_links.issuperset(entry.graph_link_ids)
             ):
+                continue
+            # The per-month counts in the words were made as the asker: a reader who may not view
+            # an event they counted is not shown the answer (rule 3).
+            if not self._working_set.may_view_all(entry.event_handlings, principal):
                 continue
             citations = []
             for document_id in entry.document_ids:

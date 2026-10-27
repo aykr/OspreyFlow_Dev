@@ -41,7 +41,10 @@ from schemas.model import ExtractionRequest, ExtractionResult
 from tests.golden.cases.pid_ask_to_search import CASE_ID, PID_ASK_TO_SEARCH_CASES
 from tests.golden.harness import (
     PATTERN_CATEGORY,
+    PATTERN_RECALL_TOLERANCE,
     PatternGoldenCase,
+    PatternScore,
+    best_constant_answer,
     pattern_gate,
     run_pattern_cases,
     score_pattern,
@@ -52,6 +55,7 @@ ONTOLOGY = load_deployment_ontology()
 VOCABULARY = vocabulary_of(ONTOLOGY)
 UNDIRECTED = {e.name for e in ONTOLOGY.edge_types if not e.directed}
 BASELINE = json.loads((Path(__file__).parent / "golden" / "baseline.json").read_text())
+MEASURED = BASELINE[CASE_ID][PATTERN_CATEGORY]  # the first measured model: recall 0.568
 
 #: Brief 3's table, verbatim, so the cases cannot drift from what the owner asked.
 BRIEF_QUESTIONS = (
@@ -133,9 +137,29 @@ def _right_answers() -> dict[str, dict[str, Any]]:
     }
 
 
-async def _measured_recall(model: ScriptedModel) -> float:
+async def _measured(model: ScriptedModel) -> dict[str, float]:
     scores = await run_pattern_cases(_proposer(model), PID_ASK_TO_SEARCH_CASES, ONTOLOGY, n_runs=2)
-    return summarise_patterns(CASE_ID, scores)[CASE_ID][PATTERN_CATEGORY]["recall"]
+    return summarise_patterns(CASE_ID, scores)[CASE_ID][PATTERN_CATEGORY]
+
+
+async def _measured_recall(model: ScriptedModel) -> float:
+    return (await _measured(model))["recall"]
+
+
+BEST_CONSTANT = best_constant_answer(PID_ASK_TO_SEARCH_CASES, undirected=UNDIRECTED)
+
+
+def _gate(recall: float, precision: float, baseline: dict[str, Any] | None = None, **kwargs: Any):  # type: ignore[no-untyped-def]
+    """`pattern_gate` as the live test calls it: over the committed baseline unless told otherwise,
+    with the best constant answer for these cases."""
+    return pattern_gate(
+        CASE_ID,
+        recall,
+        BASELINE if baseline is None else baseline,
+        measured_precision=precision,
+        best_constant=kwargs.pop("best_constant", BEST_CONSTANT),
+        **kwargs,
+    )
 
 
 #: A pattern the Conduit accepts and that is wrong for nearly every question: a person visited a
@@ -261,30 +285,68 @@ def test_a_refusal_is_correct_only_when_refused() -> None:
 
 async def test_the_right_pattern_for_every_question_scores_one_and_passes_the_gate() -> None:
     model = ScriptedModel(_right_answers(), otherwise=DECLINES)
-    recall = await _measured_recall(model)
-    assert recall == 1.0
-    assert pattern_gate(CASE_ID, recall, {CASE_ID: {PATTERN_CATEGORY: {"recall": 0.9}}}).status == (
-        "passed"
-    )
+    measured = await _measured(model)
+    assert (measured["recall"], measured["precision"]) == (1.0, 1.0)
+    assert _gate(1.0, 1.0, {CASE_ID: {PATTERN_CATEGORY: {"recall": 0.9}}}).status == "passed"
 
 
 async def test_a_planted_wrong_pattern_fails_the_gate() -> None:
     """The planted violation: for every answerable question the model proposes `WRONG`, a pattern
     the Conduit accepts (it goes through the real proposer), and refuses the four it should. The
-    gate, over a baseline of 0.9, must be red."""
+    gate, over the COMMITTED baseline (not a made-up one: over 0.9 it was red, over the committed
+    0.568 it passed), must be red."""
     answers = {c.question: wire_of(WRONG) for c in ANSWERABLE}
-    model = ScriptedModel(answers, otherwise=DECLINES)
-    recall = await _measured_recall(model)
-    assert recall < 0.75
-    result = pattern_gate(CASE_ID, recall, {CASE_ID: {PATTERN_CATEGORY: {"recall": 0.9}}})
+    measured = await _measured(ScriptedModel(answers, otherwise=DECLINES))
+    assert 0.40 < measured["recall"] < 0.45
+    result = _gate(measured["recall"], measured["precision"])
     assert result.status == "failed"
-    assert "below floor" in result.message
+    assert "constant-answer floor" in result.message
+
+
+def _constant_recall(pattern: PatternQuery) -> float:
+    """The recall of proposing `pattern` for every answerable question and refusing the rest."""
+    return sum(
+        score_pattern(
+            c.expected, None if c.expected is None else pattern, undirected=UNDIRECTED
+        ).recall
+        for c in PID_ASK_TO_SEARCH_CASES
+    ) / len(PID_ASK_TO_SEARCH_CASES)
+
+
+async def test_the_best_constant_answer_fails_the_gate_at_the_committed_baseline() -> None:
+    """The strongest answer that ignores the question and that the proposer can emit for every
+    question (no `$selected_n` placeholder, which only a question about the selection is offered):
+    the expected pattern that scores highest when proposed for every answerable question. Its recall
+    (0.47) clears the recall floor (0.418), so the old gate passed it; the F1 floor is what fails
+    it."""
+    patterns = [
+        c.expected
+        for c in ANSWERABLE
+        if c.expected and not any(n.node_id for n in c.expected.nodes)
+    ]
+    best = max(patterns, key=_constant_recall)
+    measured = await _measured(
+        ScriptedModel({c.question: wire_of(best) for c in ANSWERABLE}, otherwise=DECLINES)
+    )
+    assert measured["recall"] >= MEASURED["recall"] - PATTERN_RECALL_TOLERANCE, (
+        "this plant clears the recall floor, as the original defect did"
+    )
+    result = _gate(measured["recall"], measured["precision"])
+    assert result.status == "failed"
+    assert "constant-answer floor" in result.message
+
+
+def test_the_measured_model_still_passes_the_gate_at_the_committed_baseline() -> None:
+    """Green half: the first measured model (recall 0.568, precision 0.884) is above both floors,
+    so the plants above are red because of the answers and not because the gate refuses all."""
+    result = _gate(MEASURED["recall"], MEASURED["precision"])
+    assert result.status == "passed", result.message
 
 
 async def test_refusing_everything_fails_the_gate() -> None:
-    recall = await _measured_recall(ScriptedModel({}, otherwise=DECLINES))
-    assert recall == pytest.approx(4 / 20)
-    result = pattern_gate(CASE_ID, recall, {CASE_ID: {PATTERN_CATEGORY: {"recall": 0.9}}})
+    measured = await _measured(ScriptedModel({}, otherwise=DECLINES))
+    assert measured["recall"] == pytest.approx(4 / 20)
+    result = _gate(measured["recall"], measured["precision"])
     assert result.status == "failed"
 
 
@@ -306,16 +368,25 @@ async def test_the_measuring_loop_asks_every_question_every_run() -> None:
 
 def test_the_floor_is_the_baseline_less_the_tolerance_and_the_edge_is_inclusive() -> None:
     baseline = {CASE_ID: {PATTERN_CATEGORY: {"recall": 0.75}}}  # floor 0.5, exact in binary
-    assert pattern_gate(CASE_ID, 0.49, baseline, tolerance=0.25).status == "failed"
-    assert pattern_gate(CASE_ID, 0.5, baseline, tolerance=0.25).status == "passed"
-    assert pattern_gate(CASE_ID, 0.99, baseline, tolerance=0.25).status == "passed"
+    zero = PatternScore(precision=0.0, recall=0.0)  # no constant floor to speak of
+    kwargs = {"tolerance": 0.25, "margin": 0.0, "best_constant": zero}
+    assert _gate(0.49, 1.0, baseline, **kwargs).status == "failed"
+    assert _gate(0.5, 1.0, baseline, **kwargs).status == "passed"
+    assert _gate(0.99, 1.0, baseline, **kwargs).status == "passed"
+
+
+def test_the_second_floor_is_the_best_constants_f1_plus_the_margin() -> None:
+    constant = PatternScore(precision=0.5, recall=0.5)  # F1 0.5
+    low = _gate(0.9, 0.5, margin=0.25, best_constant=constant)  # F1 0.643 < 0.75
+    assert low.status == "failed" and "constant-answer floor" in low.message
+    assert _gate(0.9, 0.9, margin=0.25, best_constant=constant).status == "passed"  # F1 0.9
 
 
 def test_a_baseline_with_no_recall_is_not_yet_measured_and_never_a_pass() -> None:
     entry = BASELINE[CASE_ID][PATTERN_CATEGORY]
     assert set(entry) == {"precision", "recall"}  # the placeholder until the first measured run
     if entry["recall"] is None:
-        result = pattern_gate(CASE_ID, 1.0, BASELINE)
+        result = _gate(1.0, 1.0)
         assert result.status == "not_yet_measured"
         assert "no recall yet" in result.message
-    assert pattern_gate(CASE_ID, 1.0, {}).status == "not_yet_measured"
+    assert _gate(1.0, 1.0, {}).status == "not_yet_measured"

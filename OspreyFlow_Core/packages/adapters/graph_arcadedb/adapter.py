@@ -165,6 +165,12 @@ def _id_chunks(ids: Sequence[str]) -> list[list[str]]:
     return [unique[start : start + _ID_CHUNK] for start in range(0, len(unique), _ID_CHUNK)]
 
 
+#: How many nodes sharing one identifier value `find_node(also=...)` reads to choose among. Two
+#: Endpoints sharing a text with different kinds is the case it exists for; more than this many
+#: visible nodes sharing one identifier would itself be a data fault.
+FIND_WITH_ALSO_LIMIT = 50
+
+
 class GraphArcadeDBAdapter:
     """`spec/00_ARCHITECTURE.md` §2.1. `dialects` is `{"gremlin"}` in Phase 1
     (ADR-003's amendment) — a second dialect adds a `render_<dialect>` to
@@ -789,15 +795,26 @@ class GraphArcadeDBAdapter:
         return [found[edge_id] for edge_id in sorted(found)]
 
     async def find_node(
-        self, entity_type: str, identifier_field: str, value: str, principal: Principal
+        self,
+        entity_type: str,
+        identifier_field: str,
+        value: str,
+        principal: Principal,
+        *,
+        also: Mapping[str, str] | None = None,
     ) -> Node | None:
-        query = FindByIdentifierBuilder(entity_type, identifier_field, value).render_gremlin(
-            self._access, principal
-        )
+        # `also` names properties that are not stored top-level (an Endpoint's kind), so they
+        # cannot be asked for in the query: every node sharing the value is read, to a bound, and
+        # the first carrying them is taken. Without `also`, one node is read, as before.
+        query = FindByIdentifierBuilder(
+            entity_type, identifier_field, value, limit=FIND_WITH_ALSO_LIMIT if also else 1
+        ).render_gremlin(self._access, principal)
         results = await self._client.gremlin(query)
-        if not results:
-            return None
-        return node_from_element_map(results[0])
+        for element in results:
+            node = node_from_element_map(element)
+            if all(str(node.properties.get(k)) == v for k, v in (also or {}).items()):
+                return node
+        return None
 
     async def search_nodes(
         self, query: str, principal: Principal, *, limit: int = 20
@@ -1214,6 +1231,13 @@ class GraphArcadeDBAdapter:
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport:
         report = await _apply_schema_ddl(self._client, schema)
+        self.use_schema(schema)
+        return report
+
+    def use_schema(self, schema: OntologySchema) -> None:
+        """Takes `schema` in memory only, as `apply_schema` leaves the adapter, and sends the store
+        nothing: no DDL, no backfill. For a read-only caller (the seed's `--check`) that needs to
+        read a type and resolve a link's stored name without writing to the deployment."""
         # ADR-090 Amendment 1: the old names a type answers to, and each proposal's own storage
         # label (its links read as the name it is an alias of).
         aliases: dict[str, list[str]] = {t.name: list(t.aliases) for t in schema.edge_types}
@@ -1222,7 +1246,6 @@ class GraphArcadeDBAdapter:
         set_edge_aliases(aliases)
         self._schema = schema
         self._schema_history[schema.version] = schema
-        return report
 
     async def revert_schema(self, to_version: int) -> SchemaReport:
         target = self._schema_history.get(to_version)

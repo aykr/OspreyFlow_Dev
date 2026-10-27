@@ -13,6 +13,13 @@ and the case that catches it:
   (`test_a_reference_on_an_indexed_property_passes`);
 - a `create` entity judged by a rule that is only for a reference
   (`test_an_entity_that_is_not_a_reference_is_not_checked`);
+- a reference on a field the entity never writes: `find_node` can only match a stored top-level
+  property, and the adapter stores an identifier there only when the node is written with it, so
+  `match_on: e164` on an Endpoint whose template binds `value_normalised` and not `e164` looks up
+  the text "None" on every row and makes a node per row
+  (`test_a_reference_on_a_field_the_entity_does_not_write_is_refused`,
+  `test_the_adapter_stores_an_identifier_top_level_only_when_it_is_written`);
+- the guard refusing a shipped recipe (`test_every_shipped_recipe_passes_the_reference_guard`);
 - the Document's `message_id`, which PID's report recipe matches on, not indexed
   (`test_document_message_id_is_indexed_and_the_pid_report_recipe_passes`).
 
@@ -134,3 +141,104 @@ def test_document_message_id_is_indexed_and_the_pid_report_recipe_passes() -> No
         yaml.safe_load((FIXTURES / "pid_report_incidents_recipe.yaml").read_text())
     )
     assert reference_match_problems(recipe.row_template, ONTOLOGY) == []
+
+
+def _endpoint_template(match_on: str, bound: dict[str, str]) -> RowTemplate:
+    return RowTemplate.model_validate(
+        {
+            "entities": [
+                {
+                    "ref": "number",
+                    "pole_class": "object",
+                    "type": "Endpoint",
+                    "match_on": match_on,
+                    "on_match": "reference",
+                    "properties": {name: {"field": column} for name, column in bound.items()},
+                }
+            ],
+            "edges": [],
+        }
+    )
+
+
+def test_a_reference_on_a_field_the_entity_does_not_write_is_refused() -> None:
+    """`e164` is a declared Endpoint identifier, but this template writes `value_normalised` and
+    `endpoint_kind` only: every row would look up "None" and create its own node."""
+    template = _endpoint_template("e164", {"value_normalised": "number", "endpoint_kind": "kind"})
+    (problem,) = reference_match_problems(template, ONTOLOGY)
+    assert problem == (
+        "Endpoint cannot be found by e164: the entity does not write e164, and a reference can "
+        "only match a stored identifier or indexed property, so this would make a new Endpoint "
+        "for every row."
+    )
+    assert problem in recipe_rule_violations(template, ONTOLOGY)
+
+
+def test_a_reference_on_an_endpoint_identifier_the_entity_writes_passes() -> None:
+    template = _endpoint_template("e164", {"e164": "number", "value_normalised": "number"})
+    assert reference_match_problems(template, ONTOLOGY) == []
+
+
+def test_the_adapter_stores_an_identifier_top_level_only_when_it_is_written() -> None:
+    """The ground for the two cases above, read from the adapter's own serialiser: `e164` is
+    flattened into its own field when the write carries it, and absent when it does not."""
+    from adapters.graph_arcadedb.serialization import node_write_to_properties
+    from schemas.domain import (
+        AuditStub,
+        Handling,
+        NodeWrite,
+        Provenance,
+        ProvenanceState,
+        SourceRef,
+    )
+
+    endpoint = ONTOLOGY.entity_type("Endpoint")
+    assert endpoint is not None
+
+    def stored(properties: dict[str, str]) -> dict[str, object]:
+        write = NodeWrite(
+            id="n-1",
+            type="Endpoint",
+            properties=properties,
+            provenance=Provenance(
+                state=ProvenanceState.ASSERTED,
+                sources=[SourceRef(document_id="d", locator="r:1", excerpt_hash="")],
+                first_seen=datetime(2026, 1, 1, tzinfo=UTC),
+            ),
+            handling=Handling(
+                classification="OFFICIAL", handling_code="P", originator="u", owning_unit="u"
+            ),
+            created_by="loader",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        audit = AuditStub(created_at=datetime(2026, 1, 1, tzinfo=UTC), created_by="loader")
+        return node_write_to_properties(write, node_id="n-1", audit=audit, entity_type=endpoint)
+
+    assert stored({"e164": "+447700900123", "value_normalised": "+447700900123"})["e164"] == (
+        "+447700900123"
+    )
+    assert "e164" not in stored({"value_normalised": "+447700900123"})
+
+
+def _shipped_recipes() -> list[Path]:
+    root = Path(__file__).resolve().parents[3]
+    return sorted(
+        [
+            *(root / "OspreyFlow_Core/packages/demo_fixtures").glob("*.yaml"),
+            *(root / "OspreyFlow_Core/recipes").glob("*.yaml"),
+            *(root / "OspreyFlow_Build/tests/scenarios/fixtures").glob("*.yaml"),
+        ]
+    )
+
+
+def test_every_shipped_recipe_passes_the_reference_guard() -> None:
+    """Read only. A recipe the guard now refuses would stop loading the day it is published."""
+    judged = 0
+    for path in _shipped_recipes():
+        raw = yaml.safe_load(path.read_text())
+        if not isinstance(raw, dict) or "row_template" not in raw:
+            continue
+        template = Recipe.model_validate(raw).row_template
+        judged += 1
+        assert reference_match_problems(template, ONTOLOGY) == [], path.name
+    assert judged >= 20, "the scan found no recipes: the paths are wrong"

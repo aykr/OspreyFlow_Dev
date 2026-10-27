@@ -9,7 +9,7 @@ above this port may see it.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
@@ -194,9 +194,21 @@ class GraphPort(Protocol):
         ...
 
     async def find_node(
-        self, entity_type: str, identifier_field: str, value: str, principal: Principal
+        self,
+        entity_type: str,
+        identifier_field: str,
+        value: str,
+        principal: Principal,
+        *,
+        also: Mapping[str, str] | None = None,
     ) -> Node | None:
-        """`01_DOMAIN_MODEL.md` §7's `match_on`/`on_match` needs this: the
+        """**`also`** names further properties that must equal, in the same query as the identifier
+        field: where two visible nodes share the identifier's value (an Endpoint's
+        `value_normalised` is shared by a handle and an account holding the same text) a caller
+        that wants one kind asks for it here, since the lookup returns one node and a check made
+        afterwards on whichever came back first would be a coin toss.
+
+        `01_DOMAIN_MODEL.md` §7's `match_on`/`on_match` needs this: the
         recipe engine's `on_match: reference` looks an entity up by its
         declared identifier before deciding whether to create a new node,
         and there is no other way to express that query — `match()`'s

@@ -113,7 +113,14 @@ async def _lookup(graph: GraphPort, reading: Reading, principal: Principal) -> N
     if spec is None:
         return None
     entity_type, field, endpoint_kind = spec
-    node = await graph.find_node(entity_type, field, reading.canonical, principal)
+    # The kind is part of the lookup: two visible Endpoints can share `value_normalised` (a handle
+    # and an account holding the same text), and the lookup returns one of them.
+    also = {"endpoint_kind": endpoint_kind} if endpoint_kind is not None else None
+    node = (
+        await graph.find_node(entity_type, field, reading.canonical, principal, also=also)
+        if also
+        else await graph.find_node(entity_type, field, reading.canonical, principal)
+    )
     if node is None:
         return None
     if endpoint_kind is not None and node.properties.get("endpoint_kind") != endpoint_kind:

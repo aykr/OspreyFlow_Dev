@@ -412,6 +412,20 @@ viewer.
 
 ---
 
+### ADR-010, Amendment (27 October 2026): the yardstick is the published PHIA scale. **Accepted.**
+
+The owner's ruling of 27 October 2026, after the consolidated review of Brief 3 found that
+`packages/ontology/yardstick/phia.yaml` did not match the published Professional Head of
+Intelligence Assessment yardstick: it had "highly unlikely" at 0.05–0.20 and "unlikely" at
+0.20–0.35.
+- **The decision.** The bands are the published ones: remote chance 0–5%, highly unlikely 10–20%,
+  unlikely 25–35%, realistic possibility 40–50%, likely 55–75%, highly likely 80–90%, almost
+  certain 95–100%. The gaps between bands are deliberate.
+- **Existing judgements are unaffected.** A judgement stores its band's label, not a number, so no
+  migration is needed.
+- **Test.** `tests/ontology/test_yardstick.py::test_the_bands_are_the_published_phia_yardstick_with_its_gaps`
+  pins all seven bands. It was red against the old file and is green against the corrected one.
+
 ## ADR-011 — Three profiles, and the cluster profile is not Compose · **override**
 
 **Status.** Accepted, 13 September 2026, including the harness-controlled switch below.
@@ -4878,6 +4892,24 @@ decided under the owner's settings for Brief 3.
   first two were red before the change. A plant that accepted any by-id answer without reading
   `enabled` was red on the disabled case; the original was restored from a saved copy, md5 matching.
   All 8 pass live. The watch, evaluation and schedule tests pass against live stores (61).
+
+### Amendment, 27 October 2026 (second) — the exchange uses the id the pre-check resolved. **Accepted.**
+
+From Brief 3's consolidated review, decided by the coordinator under the owner's settings.
+- **The exchange sends the resolved id.** The pre-check resolves an owner by id, then by username,
+  but the exchange used to send the stored string as `requested_subject`. An account whose username
+  was another user's id could then be read as one user and exchanged as the other. The pre-check
+  now returns the id it resolved, and the exchange sends that.
+- **A token failure is unavailable, not raised.** The client-credentials fetch used to sit outside
+  the `try`, so an identity-provider fault escaped as a raw HTTP error instead of ADR-044's
+  "unavailable". It is now inside.
+- **Only the expected shapes count.** A read by id must return the owner's own record (a mapping
+  whose `id` equals the owner), and a read by username must return a list. Anything else is
+  unavailable. Before this, a URL misconfigured to the realm root passed every owner, disabled
+  ones included.
+- **Tests.** Hermetic: `tests/test_principal_precheck_reads.py`, an HTTP transport that models the
+  identity provider's refusals; six cases were red before the change. Live: `make idp-test`, 10
+  passed on Keycloak 26.0.
 
 ---
 
@@ -19345,7 +19377,29 @@ The owner's ruling of 27 October 2026 on Amendment 36's option: "Index + Verify 
   - One existing test's local Asset-by-`serial` reference was refused by the guard, correctly; its
     `serial` property is now declared indexed.
 
-### ADR-128 — Brief 3's analysis screens: add many, select what is lit, the case brief, icons by value
+### ADR-127, Amendment 38 (27 October 2026): Brief 3's consolidated review, the ingest and seed findings
+
+Decided by the coordinator under the owner's settings for Brief 3 ("one consolidated review, then
+the fixes").
+- **`--check` writes nothing.** Amendment 36 had `--check` call `apply_schema`, which runs DDL and
+  a backfill against the live store. The adapter gains `use_schema`, which sets the schema and
+  aliases in memory and sends nothing, and `--check` uses that. Tests:
+  `tests/adapters/graph_arcadedb/test_use_schema_writes_nothing.py`, and the `_check` case in
+  `tests/test_seed_pid.py`, rewritten so that `apply_schema` raises.
+- **The reference guard (Amendment 37) also refuses a `match_on` the entity does not write.** The
+  adapter stores an identifier top-level only when it is written, so a reference on an identifier
+  the row template never binds looks up the text "None" on every row. Tests:
+  `test_a_reference_on_a_field_the_entity_does_not_write_is_refused`, and
+  `test_every_shipped_recipe_passes_the_reference_guard`, which scans every shipped recipe.
+  - The guard is tested at Verify, at publish and in the pure function. Map save, run and seed reach
+    it through `recipe_rule_violations`, and no case drives those three paths directly.
+- **Ch5 after chapter 4 depends on the teaching row.** R9's one rejected row is the plan's teaching
+  report, its number written with a letter O. The plan's 229 and 68 hold once the engineer corrects
+  that row in chapter 4, as the script has them do. Uncorrected (the fallback publish, or a plain
+  rerun), `--check` reads 228 and 67 and fails Ch5. This is accepted as the designed outcome; the
+  demo guide and `INGEST_ACTUALS.md` say so.
+
+## ADR-128 — Brief 3's analysis screens: add many, select what is lit, the case brief, icons by value
 
 **Status:** Accepted (26 October 2026), by the coordinator under the owner's delegation for Brief 3 ("keep
 brief 2 setting and get started with brief 3": no stop per step, one consolidated review at the end).
@@ -19467,7 +19521,7 @@ repository, corrected below.
   - The keyboard case reaches a value icon's legend entry.
   - The perf run passes.
 
-### ADR-129 — Questions: graph facts in an answer (E1) and ask to search (E3)
+## ADR-129 — Questions: graph facts in an answer (E1) and ask to search (E3)
 
 **Status:** Accepted (26 October 2026), by the coordinator under the owner's delegation for Brief 3.
 **Context:** Brief 3 B4 (`03_ANALYSIS_SCREENS_AND_FEATURE_GAPS_BRIEF.md`). The Questions module reads only
@@ -19687,6 +19741,42 @@ settings for Brief 3.
   seeder, and the write step passed the seeder. Each was restored from a saved copy, and its md5
   matched.
 
+### ADR-128, Amendment 5 (27 October 2026): Brief 3's consolidated review, the screens
+
+Decided by the coordinator under the owner's settings for Brief 3.
+- **B2, counts by moment.** The 40-line cohort list resolves 38 at the chapter-4 moment, as decision
+  1 says, but **37 at the Act 1 moment**. The 38th is the arrested man's National Insurance number,
+  and he exists only once the reports load. `tests/scenarios/test_pid_cohort_list.py` asserts 38
+  against the whole plan; the script's J3 now says 37 (`FEATURES_ACTUALS.md` §6).
+- **B2, a large view.** When the view plus the new nodes passes `AUTO_LINKS_MAX_VIEW_NODES`, "add
+  with all links" asks for no links and reports `links_among: "not_asked"`, as `expand` does,
+  instead of reporting "added" for links never asked. `edges_among` never receives more ids than
+  its one-ask limit.
+- **B2, Endpoints sharing a text.** A lookup with a kind reads every visible node sharing the
+  value, up to 50, and takes the one of that kind (`find_node(also=...)`). An Endpoint's kind is
+  not a stored top-level field, so it cannot be a step in the query.
+  - A version that put the kind in the query passed its hermetic test and found nothing on ArcadeDB
+    (rule 15); it was caught by the live test.
+  - The live case `test_a_pin_and_an_account_holding_the_same_text_each_resolve_to_their_own_kind`
+    proves the fix on the real store.
+- **B6, the attachment cap counts only what the caller can see.** A refusal therefore cannot
+  reveal that someone else's attachments exist. The stored total may then exceed ten by what others
+  attached out of the caller's sight. A concurrent attach can pass the cap by one: known, not fixed.
+- **B6, case switch.** The brief's state is keyed by case. A stale box cannot post to a new case,
+  and an in-flight change from case A does not land in case B.
+- **B6, the seed's Author write.** The seed writes the brief as the account its grants make Author,
+  with the Author level and no role. The `share_case` right is therefore not checked on the seed's
+  path, and the audit entry names that account. The seed's own output names the engineer who ran
+  it. Recorded as accepted for a seed.
+- **B3, wording.** A window open at its end reads "Lit from …"; a one-day window reads "Lit on
+  …". A window ending at 1 May 00:00, the end included, is named "… – 1 May". A second press of
+  Select what is lit while the first is in flight is ignored.
+- **B7, value icons follow the renderer.** The legend and the Inspector name a value icon only
+  where the canvas draws it: the entity's own picture first, then the analyst's choice for the
+  type, then the value's icon. One function decides all three.
+- **Delegated choices confirmed by the owner (27 October 2026):** undated links are never lit
+  (decision 2).
+
 ### ADR-129, Amendment 2 (27 October 2026) — what building E3 settled
 
 Decided by the coordinator under the owner's delegation for Brief 3.
@@ -19713,3 +19803,38 @@ Decided by the coordinator under the owner's delegation for Brief 3.
 - **Recorded, with a build-plan row.** "More than one" questions (3, 7, 9) are two variables of one type,
   and nothing in `PatternQuery` requires them to bind distinct nodes. A count may therefore include a node
   matched to both.
+### ADR-129, Amendment 3 (27 October 2026): Brief 3's consolidated review, Questions and ask to search
+
+Decided by the coordinator under the owner's settings for Brief 3.
+- **E1, a stored answer is shown only to a reader who could see every event it counted.** An
+  answer's per-month counts were made as the asker, and history checked only its Documents, nodes
+  and links. A reader cleared lower could see counts drawn from events above their clearance.
+  - The entry now stores the distinct handlings of the events it counted (`event_handlings`), and
+    history shows it only if the reader may view every one. An unknown handling fails closed.
+  - **Caveat:** answers stored before this change have no record of their events and stay visible
+    as before.
+  - Tests: `test_an_answer_counting_an_event_the_reader_cannot_see_is_not_shown_to_them`, and its
+    companion showing the other direction.
+- **E1, `[G-n]`.** A fact never clears the selection. With one drawn link it selects that link;
+  otherwise (the link not drawn, several links, or a node fact) it selects the fact's nodes. Every
+  repeated marker is a button.
+- **E3, the golden gate could not fail for a constant answer.** Proposing one fixed wrong pattern
+  for every question scored recall 0.423 and passed the floor of 0.418; the best constant answer
+  found scores recall 0.677.
+  - A recall floor alone cannot separate a model from a wide constant, because recall is gated and
+    precision is not. `pattern_gate` now also requires the F1 of the measured recall and precision
+    to beat the best constant answer's F1 by `PATTERN_CONSTANT_MARGIN` (0.05). The best constant
+    is a lower bound over a finite family of answers, named in the gate's docstring.
+  - Plants over the committed baseline: the fixed wrong pattern, and the best constant the proposer
+    can emit, are both red. The measured model (recall 0.568, precision 0.884, F1 0.692, against a
+    floor of 0.552) is green.
+  - The live measurement is not in `make ci`.
+- **E3, Q3, Q7 and Q9 ("more than one").** These score a meaning the store does not enforce: two
+  variables of one type are not kept distinct (Amendment 2). Their scores overstate what a run
+  would show. Recorded, not fixed.
+- **E3, a proposal is a new, unsaved pattern.** Saving it never overwrites the loaded pattern; the
+  previous pattern can be restored; and a proposal arriving after the analyst has edited the
+  pattern is dropped with a message.
+- **Delegated choice confirmed by the owner (27 October 2026):** the golden set's 16 answerable
+  and 4 refused, Q6 among the refusals.
+

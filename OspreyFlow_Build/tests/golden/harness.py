@@ -85,7 +85,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from adapters.model_litellm.testing import model_litellm_adapter
-from schemas.domain import OntologySchema, PatternQuery
+from schemas.domain import OntologySchema, PatternNode, PatternQuery
 from schemas.model import ExtractionRequest
 
 if TYPE_CHECKING:
@@ -239,6 +239,11 @@ PATTERN_CATEGORY = "pattern_recall"
 #: less this. Owner's to set from the measured spread, not derived here.
 PATTERN_RECALL_TOLERANCE = 0.15
 
+#: How far above the best constant answer's F1 a measurement must be to pass (see
+#: `best_constant_answer`). The best constant is found over a finite family, so it is a lower bound
+#: on what an answer that ignores the question can score; the margin covers what the search missed.
+PATTERN_CONSTANT_MARGIN = 0.05
+
 
 @dataclass(frozen=True)
 class PatternGoldenCase:
@@ -255,6 +260,11 @@ class PatternGoldenCase:
 class PatternScore:
     precision: float
     recall: float
+
+    @property
+    def f1(self) -> float:
+        total = self.precision + self.recall
+        return 0.0 if total == 0 else 2 * self.precision * self.recall / total
 
 
 def _pattern_elements(
@@ -359,15 +369,77 @@ class PatternGateResult:
     message: str
 
 
+def _constant_candidates(cases: Sequence[PatternGoldenCase]) -> list[PatternQuery]:
+    """Patterns that ignore the question, drawn from the cases themselves: each expected pattern
+    whole, each of its links with their two ends, and each node type alone. A pattern naming a
+    `$selected_n` placeholder is left out: the proposer offers one only for a question about the
+    analyst's selection, so no constant answer can carry it to the others."""
+    candidates: list[PatternQuery] = []
+    for case in cases:
+        if case.expected is None or any(n.node_id for n in case.expected.nodes):
+            continue
+        candidates.append(case.expected)
+        by_var = {n.var: n for n in case.expected.nodes}
+        for edge in case.expected.edges:
+            ends = (by_var[edge.from_var], by_var[edge.to_var])
+            if ends[0].var != ends[1].var:
+                candidates.append(PatternQuery(nodes=[*ends], edges=[edge]))
+        candidates.extend(
+            PatternQuery(nodes=[PatternNode(var="a", entity_type=n.entity_type)], edges=[])
+            for n in case.expected.nodes
+        )
+    return candidates
+
+
+def best_constant_answer(
+    cases: Sequence[PatternGoldenCase], *, undirected: Collection[str] = frozenset()
+) -> PatternScore:
+    """The best score an answer that ignores the question can reach on these cases: one fixed
+    pattern proposed for every answerable question, and every question that must be refused refused
+    (the four a model that read nothing could still get right). Candidates are
+    `_constant_candidates`; each is scored by the mean of its questions' recall and precision, as
+    `summarise_patterns` takes them, and the best is the one with the highest F1. A lower bound: a
+    pattern outside the family may do better."""
+    best = PatternScore(precision=0.0, recall=0.0)
+    for candidate in [None, *_constant_candidates(cases)]:
+        scores = [
+            score_pattern(
+                case.expected, None if case.expected is None else candidate, undirected=undirected
+            )
+            for case in cases
+        ]
+        mean = PatternScore(
+            precision=statistics.mean(s.precision for s in scores),
+            recall=statistics.mean(s.recall for s in scores),
+        )
+        if mean.f1 > best.f1:
+            best = mean
+    return best
+
+
 def pattern_gate(
     case_id: str,
     measured_recall: float,
     baseline: Mapping[str, Any],
     *,
+    measured_precision: float,
+    best_constant: PatternScore,
     tolerance: float = PATTERN_RECALL_TOLERANCE,
+    margin: float = PATTERN_CONSTANT_MARGIN,
 ) -> PatternGateResult:
-    """The ask-to-search gate, as the live test applies it: recall below the baseline's recall less
-    the tolerance fails; a baseline recall of `null` is not yet measured."""
+    """The ask-to-search gate, as the live test applies it. Two floors, both required:
+
+    1. **Recall** below the baseline's recall less the tolerance fails; a baseline recall of `null`
+       is not yet measured.
+    2. **F1 of the measured recall and precision** below the best constant answer's F1 plus the
+       margin fails. Found 27 October 2026: answering one wrong pattern to every answerable
+       question scored recall 0.423 against a floor of 0.418, and the best pin-free constant
+       scores recall 0.468, so the recall floor (baseline 0.568 less 0.15) was passed by an answer
+       that ignores the question. A floor of the best constant's recall plus a margin would leave
+       the model 0.05 of room and be beaten by any wider constant pattern (recall is gated and
+       precision is not); F1 charges a wide pattern for its width: the best constant's F1 is 0.50
+       and the measured model's 0.69. `best_constant` and `measured_precision` are required so that
+       the gate cannot be called without them."""
     entry = baseline.get(case_id, {}).get(PATTERN_CATEGORY)
     recorded = None if entry is None else entry.get("recall")
     if recorded is None:
@@ -377,7 +449,16 @@ def pattern_gate(
             "holds no recall yet, so no floor applies. Record it in baseline.json.",
         )
     floor = float(recorded) - tolerance
-    report = f"{case_id}/{PATTERN_CATEGORY}: recall {measured_recall:.2f} (baseline {recorded:.2f})"
+    measured = PatternScore(precision=measured_precision, recall=measured_recall)
+    constant_floor = best_constant.f1 + margin
+    report = (
+        f"{case_id}/{PATTERN_CATEGORY}: recall {measured_recall:.2f} (baseline {recorded:.2f}), "
+        f"F1 {measured.f1:.2f} (best constant answer {best_constant.f1:.2f})"
+    )
     if measured_recall < floor:
         return PatternGateResult("failed", f"{report} — below floor {floor:.2f}")
+    if measured.f1 < constant_floor:
+        return PatternGateResult(
+            "failed", f"{report} — F1 below the constant-answer floor {constant_floor:.2f}"
+        )
     return PatternGateResult("passed", report)

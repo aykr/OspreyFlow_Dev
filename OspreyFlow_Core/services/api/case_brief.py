@@ -28,7 +28,9 @@ route, the person's own (`PUT .../brief/requirements/{id}/status`), and from not
 and fails if either stops being true. The add and edit routes' bodies refuse a `status` field.
 
 **Rule 2: nothing is cut silently.** More than twenty requirements, more than ten attachments on one
-requirement, or a text over its limit is refused, naming the limit, and what was there stays.
+requirement, or a text over its limit is refused, naming the limit, and what was there stays. The
+ten counts only the attachments the person asking can read (rule 3): a refusal that counted the
+rest would tell them those exist.
 
 **One transition, two stores.** Each change is a pure function from the stored brief to the next
 (`with_*`), applied by `CaseBriefStorage.update` under a row lock in Postgres
@@ -275,11 +277,16 @@ def with_attachment(
     attachment: StoredAttachment,
     by: str,
     now: datetime,
+    hidden: frozenset[StoredAttachment] = frozenset(),
 ) -> StoredBrief:
+    """`hidden` is what the caller may not read among the requirement's attachments. The cap counts
+    the rest alone, so a refusal is decided by what the caller can see and cannot be used to learn
+    that attachments they may not read exist (rule 3); the stored total may therefore exceed the
+    cap, by what others attached out of this caller's sight."""
     current = _one(brief, requirement_id)
     if attachment in current.attachments:
         return brief
-    if len(current.attachments) >= MAX_ATTACHMENTS:
+    if sum(1 for a in current.attachments if a not in hidden) >= MAX_ATTACHMENTS:
         raise TooManyAttachmentsError
     changed = current.model_copy(update={"attachments": [*current.attachments, attachment]})
     return _touched(brief, by, now, requirements=_replaced(brief, changed))
@@ -526,11 +533,23 @@ class CaseBriefService:
         if await self._title(investigation_id, attachment, principal) is None:
             raise AttachmentNotFoundError
         now = self._now()
+        hidden = await self._hidden_from(investigation_id, requirement_id, principal)
         stored = await self._store.update(
             investigation_id,
-            lambda b: with_attachment(b, requirement_id, attachment, principal.id, now),
+            lambda b: with_attachment(b, requirement_id, attachment, principal.id, now, hidden),
         )
         return await self._view(stored, principal)
+
+    async def _hidden_from(
+        self, investigation_id: str, requirement_id: str, reader: Principal
+    ) -> frozenset[StoredAttachment]:
+        """The requirement's attachments `reader` may not read, looked up once each."""
+        current = _one(await self._store.get(investigation_id), requirement_id)
+        hidden: set[StoredAttachment] = set()
+        for attachment in current.attachments:
+            if await self._title(investigation_id, attachment, reader) is None:
+                hidden.add(attachment)
+        return frozenset(hidden)
 
     async def detach(
         self,

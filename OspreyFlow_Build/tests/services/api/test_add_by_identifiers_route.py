@@ -69,7 +69,13 @@ class _Graph:
         self.calls: list[tuple[str, str, str, Principal]] = []
 
     async def find_node(
-        self, entity_type: str, identifier_field: str, value: str, principal: Principal
+        self,
+        entity_type: str,
+        identifier_field: str,
+        value: str,
+        principal: Principal,
+        *,
+        also: dict[str, str] | None = None,
     ) -> Node | None:
         self.calls.append((entity_type, identifier_field, value, principal))
         return self.visible.get((entity_type, identifier_field, value))

@@ -55,3 +55,22 @@ def test_a_non_mapping_yardstick_file_raises_yardstick_error(tmp_path) -> None:
     bad.write_text("- just\n- a\n- list\n")
     with pytest.raises(YardstickError):
         load_yardstick(bad)
+
+
+def test_the_bands_are_the_published_phia_yardstick_with_its_gaps() -> None:
+    """The owner's ruling of 27 October 2026: the bands are the published Professional Head of
+    Intelligence Assessment yardstick, whose gaps between bands are deliberate (no judgement sits
+    between "unlikely" and "realistic possibility"). The file once had 0.05–0.20 and 0.20–0.35,
+    which are not the published ranges."""
+    from ontology.yardstick import load_phia_yardstick
+
+    published = [
+        ("remote chance", 0.00, 0.05),
+        ("highly unlikely", 0.10, 0.20),
+        ("unlikely", 0.25, 0.35),
+        ("realistic possibility", 0.40, 0.50),
+        ("likely", 0.55, 0.75),
+        ("highly likely", 0.80, 0.90),
+        ("almost certain", 0.95, 1.00),
+    ]
+    assert [(b.label, b.lower, b.upper) for b in load_phia_yardstick().bands] == published

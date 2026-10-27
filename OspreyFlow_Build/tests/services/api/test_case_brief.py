@@ -224,6 +224,36 @@ async def test_an_attachment_over_the_limit_is_refused_stating_the_limit() -> No
     assert len(store.rows[CASE].requirements[0].attachments) == MAX_ATTACHMENTS
 
 
+async def test_the_attachment_limit_counts_only_what_the_caller_can_see() -> None:
+    """Rule 3 on the write path: a refusal for "too many" must not reveal attachments the caller
+    cannot read. Ten attachments only the author may read leave a reader who sees none free to
+    attach their own, and what they are refused is decided by what they can see alone."""
+    service, store, readable = _service()
+    await service.add_requirement(CASE, AUTHOR, "Who?")
+    for n in range(MAX_ATTACHMENTS):
+        readable.allow("trend", f"t{n}", f"Trend {n}", AUTHOR)
+        await service.attach(CASE, "req-1", AUTHOR, "trend", f"t{n}")
+    readable.allow("trend", "mine", "Mine", READER)
+    brief = await service.attach(CASE, "req-1", READER, "trend", "mine")
+    assert [a.id for a in brief.requirements[0].attachments] == ["mine"]
+    assert len(store.rows[CASE].requirements[0].attachments) == MAX_ATTACHMENTS + 1
+
+
+async def test_the_limit_still_refuses_a_caller_who_can_see_all_of_them() -> None:
+    """The case above is able to fail the other way: ten attachments the caller can see refuse an
+    eleventh, even when hidden ones are also present."""
+    service, _, readable = _service()
+    await service.add_requirement(CASE, AUTHOR, "Who?")
+    readable.allow("trend", "hidden", "Hidden", AUTHOR)
+    await service.attach(CASE, "req-1", AUTHOR, "trend", "hidden")
+    for n in range(MAX_ATTACHMENTS):
+        readable.allow("trend", f"t{n}", f"Trend {n}", AUTHOR, READER)
+        await service.attach(CASE, "req-1", READER, "trend", f"t{n}")
+    readable.allow("trend", "extra", "Extra", READER)
+    with pytest.raises(TooManyAttachmentsError):
+        await service.attach(CASE, "req-1", READER, "trend", "extra")
+
+
 async def test_an_attachment_the_author_cannot_read_is_refused_exactly_as_one_that_does_not_exist() -> (
     None
 ):

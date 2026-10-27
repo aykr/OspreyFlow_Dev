@@ -3033,6 +3033,9 @@ async def test_the_check_command_reads_through_a_graph_with_the_deployments_onto
             pass
 
         async def apply_schema(self, schema: object) -> None:
+            raise AssertionError("--check must only read: apply_schema runs DDL and a backfill")
+
+        def use_schema(self, schema: object) -> None:
             applied.append(schema)
 
     class Store:
@@ -3075,4 +3078,4 @@ async def test_the_check_command_reads_through_a_graph_with_the_deployments_onto
     monkeypatch.setattr(seed_pid, "check_case", check_case)
 
     assert await seed_pid._check(seed_pid.parse_args(["--case-name", "X", "--check"])) == 0
-    assert len(handed) == 1 and applied == [ontology], "the checks' graph has the ontology applied"
+    assert len(handed) == 1 and applied == [ontology], "the checks' graph has the ontology"

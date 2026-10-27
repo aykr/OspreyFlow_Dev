@@ -103,3 +103,18 @@ async def test_each_kind_resolves_to_its_node_and_a_pin_is_not_an_account() -> N
         result = await resolve_identifiers(graph, typed, READER)
         assert result.counts == IdentifierCounts(read=6, found=5, matched_nothing=1, repeated=1)
         assert {n.id for n in result.nodes} == {person.id, number.id, account.id}
+
+
+async def test_a_pin_and_an_account_holding_the_same_text_each_resolve_to_their_own_kind() -> None:
+    """Two visible Endpoints share `value_normalised`: the lookup names the kind, so `limit(1)`
+    cannot return the handle for an account reference whichever the store reads first."""
+    async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+        handle = _endpoint("SYN-70417", "handle")
+        account = _endpoint("SYN-70417", "account")
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes([handle, account], tx)
+        await graph.commit_transaction(tx)
+
+        result = await resolve_identifiers(graph, ["SYN-70417"], READER)
+        assert [n.id for n in result.nodes] == [account.id]
+        assert result.counts == IdentifierCounts(read=1, found=1, matched_nothing=0, repeated=0)

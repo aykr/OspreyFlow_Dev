@@ -13,8 +13,8 @@ bespoke application.
 The ontology is a YAML document validated against a JSON Schema at startup:
 
 ```yaml
-# ontology/default.yaml (abridged; version 13 is in force, ADR-105)
-version: 12
+# ontology/default.yaml (abridged; version 17 is in force, ADR-127 Amendment 37)
+version: 17
 entity_types:
   - name: Person
     pole_class: person           # POLE upper class — see §1.1
@@ -38,7 +38,7 @@ entity_types:
     properties:
       - {name: value_raw, type: string}
       - {name: value_normalised, type: string, indexed: true, required: true}
-      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, email, handle, iban, card]}
+      - {name: endpoint_kind, type: enum, values: [msisdn, imsi, email, handle, iban, card, account, ip]}
 
   - name: Device                  # a physical handset — identified by IMEI, not an Endpoint kind
     pole_class: object

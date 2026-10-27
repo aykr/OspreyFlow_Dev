@@ -11,6 +11,7 @@ from services.api.config import PostgresConfig
 from services.api.questions import GraphCitation, PostgresQuestionStore, QuestionEntry
 
 from conduit_common.identity import new_id
+from schemas.domain import Handling
 
 
 @pytest.fixture
@@ -38,6 +39,14 @@ def _entry(case: str, at: datetime, question: str) -> QuestionEntry:
         graph_citations=[
             GraphCitation(
                 number=1, label="[G-1]", node_ids=["node-1", "node-2"], link_ids=["link-1"]
+            )
+        ],
+        event_handlings=[
+            Handling(
+                classification="SECRET",
+                handling_code="P",
+                originator="unit-1",
+                owning_unit="unit-1",
             )
         ],
     )

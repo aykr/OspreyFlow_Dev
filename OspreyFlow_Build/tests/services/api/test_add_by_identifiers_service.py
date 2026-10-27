@@ -102,11 +102,27 @@ async def test_both_paths_go_through_seed() -> None:
         assert [s[1] for s in service.seeded] == [["p1", "p2"]]
 
 
-async def test_a_large_view_is_not_named_to_the_graph() -> None:
+async def test_a_large_view_is_not_named_to_the_graph_and_the_outcome_says_not_asked() -> None:
+    """Rule 2: nothing was asked for the links to the canvas, so the outcome must not say `added`
+    (which means every link among what was named): it says `not_asked`, as `expand` does."""
     view = _View({"x"}, AUTO_LINKS_MAX_VIEW_NODES)
     service = _Service(view)
-    await WorkingSetService.add_by_identifiers(  # type: ignore[arg-type]
+    outcome = await WorkingSetService.add_by_identifiers(  # type: ignore[arg-type]
         service, "inv-1", NODES, ANALYST, with_links=True
     )
     assert view.named is False
-    assert service._graph.among == [["p1", "p2"]]
+    assert service._graph.among == []
+    assert [s[1] for s in service.seeded] == [["p1", "p2"]]
+    assert outcome.links_among == "not_asked"
+
+
+async def test_no_ask_for_links_names_more_ids_than_the_one_ask_limit() -> None:
+    """Thousands of identifiers found on an empty canvas: the ids named to the graph in one ask
+    never pass `AUTO_LINKS_MAX_VIEW_NODES`, whatever the view's size."""
+    many = [_person(f"p{n}") for n in range(AUTO_LINKS_MAX_VIEW_NODES + 5)]
+    service = _Service(_View(set(), 0))
+    outcome = await WorkingSetService.add_by_identifiers(  # type: ignore[arg-type]
+        service, "inv-1", many, ANALYST, with_links=True
+    )
+    assert all(len(ids) <= AUTO_LINKS_MAX_VIEW_NODES for ids in service._graph.among)
+    assert outcome.links_among == "not_asked"

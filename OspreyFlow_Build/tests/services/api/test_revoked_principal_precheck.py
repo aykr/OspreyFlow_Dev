@@ -244,3 +244,39 @@ async def test_an_owner_unknown_by_id_and_by_name_is_refused_as_not_known() -> N
     finally:
         await resolver.aclose()
     assert "not known" in str(raised.value)
+
+
+# --- the exchange judges the subject the pre-check resolved; a misconfigured URL passes no one ---
+
+
+@requires_keycloak
+async def test_an_owner_recorded_by_username_is_exchanged_by_the_id_the_precheck_resolved() -> None:
+    """The pre-check resolves a username to its user and judges that user; the exchange must ask
+    for the same user's id, not the original string, so the two cannot judge different subjects.
+    The exchanged principal's `sub` is the id the username resolved to."""
+    subject = await _subject_id_of(VERIFY_SUBJECT)
+    resolver = PrincipalResolver(
+        _config(client_id=CONDUIT_CLIENT_ID, secret=PROBE_SECRET, with_precheck=True)
+    )
+    try:
+        principal = await resolver.resolve_for_owner_detailed(VERIFY_SUBJECT)
+    finally:
+        await resolver.aclose()
+    assert principal.id == subject
+
+
+@requires_keycloak
+async def test_a_users_url_left_at_the_realm_root_is_unavailable_and_passes_no_one() -> None:
+    """A misconfigured `OIDC_ADMIN_USERS_URL` (the realm root, not `.../users`) answers 200 with an
+    object that is not a user. It used to be read as a user and every owner passed, the disabled
+    one included. Now: unavailable, for the enabled and the disabled alike."""
+    config = _config(client_id=CONDUIT_CLIENT_ID, secret=PROBE_SECRET, with_precheck=True)
+    resolver = PrincipalResolver(
+        __import__("dataclasses").replace(config, oidc_admin_users_url=f"{KC}/admin/realms/{REALM}")
+    )
+    try:
+        for owner in (VERIFY_SUBJECT, REVOKED_SUBJECT):
+            with pytest.raises(PrincipalExchangeUnavailable):
+                await resolver.resolve_for_owner_detailed(owner)
+    finally:
+        await resolver.aclose()

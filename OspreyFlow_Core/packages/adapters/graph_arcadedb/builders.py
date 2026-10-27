@@ -52,6 +52,10 @@ class FindByIdentifierBuilder:
     entity_type: str
     identifier_field: str
     value: str
+    #: How many nodes sharing the value are read, when the caller picks among them by a further
+    #: property (`find_node(also=...)`). Such a property (an Endpoint's `endpoint_kind`) is not a
+    #: top-level stored field, so it cannot be a `has` step: the nodes are read and chosen from.
+    limit: int = 1
 
     def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
         has_access = access.gremlin_has_step(principal)
@@ -60,7 +64,7 @@ class FindByIdentifierBuilder:
         value_lit = groovy_string_literal(self.value)
         return (
             f"g.V().hasLabel({type_lit}).has({field_lit},{value_lit})"
-            f".{has_access}.limit(1).elementMap()"
+            f".{has_access}.limit({self.limit}).elementMap()"
         )
 
 
@@ -961,7 +965,7 @@ class BusiestLinksBuilder:
             )
             label = f".hasLabel({labels})"
         of_node = (
-            f".where(bothV().has(\"id\",{groovy_string_literal(self.node_id)}))"
+            f'.where(bothV().has("id",{groovy_string_literal(self.node_id)}))'
             if self.node_id is not None
             else ""
         )
