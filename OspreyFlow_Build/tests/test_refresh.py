@@ -568,6 +568,33 @@ def test_the_version_and_the_state_folder_reach_an_existing_deployment(repo: Pat
     assert (out / "state").is_dir()
 
 
+def test_the_post_ingest_resolution_switch_reaches_an_existing_deployment(repo: Path) -> None:
+    """ADR-127 Amendment 35, found on the owner's deployment: refresh never renders, so a deployment
+    made before Amendment 33 never got `OSPREY_POST_INGEST_RESOLUTION`, and the Conduit took its
+    default, on, whatever the deployment's `osprey.yaml` said. Set off, the line reads off; set back
+    on, it reads on; either way exactly once, and no secret moves."""
+    import yaml
+
+    out = _rendered(repo)
+    env = [
+        line
+        for line in (out / "deployment.env").read_text().splitlines()
+        if not line.startswith("OSPREY_POST_INGEST_RESOLUTION=")
+    ]
+    (out / "deployment.env").write_text("\n".join(env) + "\n")
+    config = yaml.safe_load((out / "osprey.yaml").read_text())
+
+    for setting, wanted in ((False, "off"), (True, "on")):
+        config["components"]["post_ingest_resolution"] = setting
+        (out / "osprey.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
+
+        refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+        lines = (out / "deployment.env").read_text().splitlines()
+        switch = [line for line in lines if line.startswith("OSPREY_POST_INGEST_RESOLUTION=")]
+        assert switch == [f"OSPREY_POST_INGEST_RESOLUTION={wanted}"]
+        assert "OSPREY_POSTGRES_PASSWORD=pg-secret-77" in lines
+
 
 def test_files_only_brings_the_files_up_to_date_and_runs_nothing(
     repo: Path, capsys: pytest.CaptureFixture[str]

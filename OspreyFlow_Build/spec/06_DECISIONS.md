@@ -19215,6 +19215,33 @@ coordinator under the owner's delegation.
   stay" reads as that. Its filename is kept, since the CI workflow and five cited records name it. The product's own access suites still cover every read
   path.
 
+### ADR-127, Amendment 35 (27 October 2026) — the resolution switch reaches a deployment that already exists
+
+Found by the coordinator rebuilding the owner's deployment for Brief 3, under the owner's settings for
+Brief 3. The deployment had `components.post_ingest_resolution: false` set, but its Conduit had no
+`OSPREY_POST_INGEST_RESOLUTION` at all and so took its default, on.
+- **The finding.** There were two gaps, and each alone keeps the switch from taking effect.
+  - **Refresh did not carry the line.** `ospreyflow start --build` runs `scripts/refresh.py`. Refresh
+    never renders again, on purpose, because a render mints new secrets. It keeps only named lines of
+    `deployment.env` current, and Amendment 33 added the switch to the renderer but not to refresh. A
+    deployment rendered before Amendment 33 therefore never got the line.
+  - **The deployment reads its own copy.** Refresh reads `deploy/generated/<profile>/osprey.yaml`, the
+    copy made at install. It does not read the checkout's `osprey.yaml`, which is where the switch had
+    been set.
+- **The decision.** Refresh keeps `OSPREY_POST_INGEST_RESOLUTION` current from the deployment's own
+  `osprey.yaml`, beside `OSPREY_RELEASE_VERSION` and in the same way: replaced where it stands, or added
+  if missing, with nothing else in the file touched and no secret moved.
+- **The operator's step,** which replaces Amendment 33's "the install or the pack's own setting writes
+  it" and `INGEST_ACTUALS.md`'s "re-render and restart". Set `post_ingest_resolution: false` under
+  `components:` in the deployment's `osprey.yaml` (`deploy/generated/local-lite/osprey.yaml` for the
+  lite profile), then run `ospreyflow start --build`. Confirm the result with
+  `docker exec osprey-local-lite-api-1 printenv OSPREY_POST_INGEST_RESOLUTION`, which must print `off`.
+- **Tests.** `tests/test_refresh.py::test_the_post_ingest_resolution_switch_reaches_an_existing_deployment`
+  takes a deployment with no switch line, sets the switch off and then on, and expects exactly one line
+  reading each in turn, with the secrets unchanged. It was red before the change. With the line planted as
+  the default (`"on"` whatever the setting), it was red again; the original was then restored from a saved
+  copy, and its md5 matched.
+
 ### ADR-128 — Brief 3's analysis screens: add many, select what is lit, the case brief, icons by value
 
 **Status:** Accepted (26 October 2026), by the coordinator under the owner's delegation for Brief 3 ("keep

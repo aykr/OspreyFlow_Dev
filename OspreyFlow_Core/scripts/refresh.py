@@ -265,8 +265,9 @@ def _new_services_added(directory: Path) -> None:
 
 
 def _release_up_to_date(directory: Path) -> None:
-    """The Conduit's version and the notice folder (ADR-114 Amendment 8), exactly as `render` writes
-    them (the same `release_version`, so a refresh never disagrees with a render): each line
+    """The Conduit's version, its post-ingest resolution switch (ADR-127 Amendment 35) and the
+    notice folder (ADR-114 Amendment 8), exactly as `render` writes them (the same
+    `release_version`, so a refresh never disagrees with a render): each line
     replaced where it stands, or added after `OSPREY_PROFILE=` as render places it, nothing else in
     `deployment.env` touched; and `state/` made here so that Docker does not make it (as root, where
     a check could not write)."""
@@ -281,6 +282,11 @@ def _release_up_to_date(directory: Path) -> None:
     wanted = {
         "OSPREY_RELEASE_VERSION": release_version(config),
         "OSPREY_STATE_DIR": STATE_CONTAINER_PATH,
+        # ADR-127 Amendment 35: the switch Amendment 33 added, which a deployment rendered before
+        # it never had, so its Conduit took the default whatever its `osprey.yaml` said.
+        "OSPREY_POST_INGEST_RESOLUTION": "on"
+        if config.components.post_ingest_resolution
+        else "off",
     }
     env_path = directory / "deployment.env"
     lines = env_path.read_text(encoding="utf-8").splitlines()
