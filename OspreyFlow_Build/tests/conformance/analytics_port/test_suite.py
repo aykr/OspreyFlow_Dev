@@ -578,6 +578,30 @@ async def test_event_filter_weekday_hours_ranges_are_validated(
             WeekdayHour(weekday=weekday, hour=hour)
 
 
+async def test_event_filter_weekday_hours_is_de_duplicated_and_counts_the_same(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    once = [WeekdayHour(weekday=0, hour=9), WeekdayHour(weekday=5, hour=15)]
+    repeated = once + [WeekdayHour(weekday=0, hour=9)] * 3 + once
+    assert _filter(weekday_hours=repeated).weekday_hours == once
+    async with factory.context(_cell_corpus()) as adapter:
+        assert await _total(adapter, _filter(weekday_hours=repeated)) == await _total(
+            adapter, _filter(weekday_hours=once)
+        )
+
+
+async def test_event_filter_weekday_hours_all_168_cells_are_allowed_and_more_is_refused(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    every = [WeekdayHour(weekday=d, hour=h) for d in range(7) for h in range(24)]
+    assert len(_filter(weekday_hours=every).weekday_hours or []) == 168
+    # The same 168 cells repeated is 336 entries: refused, not silently thinned, naming the cap.
+    with pytest.raises(ValueError, match="168"):
+        _filter(weekday_hours=every + every)
+    with pytest.raises(ValueError, match="168"):
+        _filter(weekday_hours=every + [WeekdayHour(weekday=0, hour=0)])
+
+
 async def test_event_filter_weekday_hours_honoured_by_geo_bins_and_cross_filter(
     factory: AnalyticsAdapterFactory,
 ) -> None:

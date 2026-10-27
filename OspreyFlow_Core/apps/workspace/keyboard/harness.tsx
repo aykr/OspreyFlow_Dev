@@ -472,8 +472,8 @@ createRoot(container).render(
           getNodeIds={() => workingSet.graph.nodes()}
           getEdgeIds={() => workingSet.graph.edges()}
           onSelectLit={() => {
-            const window = litStore.store.getState().window;
-            if (window) void canvasHandle.current?.selectLit(window);
+            const { window, cells } = litStore.store.getState();
+            if (window) void canvasHandle.current?.selectLit(window, cells);
           }}
         />
       </div>

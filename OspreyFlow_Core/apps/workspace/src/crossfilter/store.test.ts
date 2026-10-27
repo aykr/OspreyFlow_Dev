@@ -147,3 +147,52 @@ describe("the weekly view's cells (ADR-130 decision 2)", () => {
   });
 });
 
+// A stale answer: the filter moved while an older read was in flight, and the older one arrived last.
+describe("createCrossFilterStore, answers out of order", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  }
+
+  it("drops an older first-seen answer that arrives after a newer one", async () => {
+    const first = deferred<{ nodes: Record<string, string>; edges: Record<string, string> }>();
+    const second = deferred<{ nodes: Record<string, string>; edges: Record<string, string> }>();
+    vi.spyOn(api, "fetchFirstSeen").mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { store, refresh } = createCrossFilterStore("http://api", "token", "inv-1");
+    store.getState().setWindow({ validFrom: "2026-01-01T00:00:00Z", validTo: null });
+    const older = refresh(["a", "b"]);
+    store.getState().setWindow({ validFrom: "2026-02-01T00:00:00Z", validTo: null });
+    const newer = refresh(["a", "b"]);
+
+    second.resolve({ nodes: { b: "2026-02-02T00:00:00Z" }, edges: {} });
+    await newer;
+    first.resolve({ nodes: { a: "2026-01-02T00:00:00Z" }, edges: {} });
+    await older;
+
+    expect([...store.getState().dimmedNodeIds]).toEqual(["a"]);
+    expect(store.getState().firstSeen?.nodes).toEqual({ b: "2026-02-02T00:00:00Z" });
+  });
+
+  it("drops a filtered answer that arrives after the filter was cleared", async () => {
+    const slow = deferred<{ nodes: Record<string, string>; edges: Record<string, string> }>();
+    vi.spyOn(api, "fetchFirstSeen").mockReturnValueOnce(slow.promise);
+    const { store, refresh } = createCrossFilterStore("http://api", "token", "inv-1");
+    store.getState().setWindow({ validFrom: "2026-01-01T00:00:00Z", validTo: null });
+    const pending = refresh(["a", "b"]);
+    store.getState().clearFilter();
+    await refresh(["a", "b"]);
+    slow.resolve({ nodes: { a: "2026-01-02T00:00:00Z" }, edges: {} });
+    await pending;
+
+    expect(store.getState().dimmedNodeIds.size).toBe(0);
+    expect(store.getState().firstSeen).toBeNull();
+  });
+});
+

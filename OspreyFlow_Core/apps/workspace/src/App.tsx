@@ -948,20 +948,29 @@ export function App() {
     const scope = investigationId;
     const entityId = selectedNode.id;
     let cancelled = false;
-    function refresh(window: CrossFilterStoreState["window"]) {
+    // The chosen weekly cells narrow the trail as they narrow the dimming (ADR-130 Amendment 1).
+    // A newer read supersedes an older one, so a slow older answer arriving last is dropped.
+    let latest = 0;
+    function refresh(
+      window: CrossFilterStoreState["window"],
+      cells: CrossFilterStoreState["cells"],
+    ) {
+      latest += 1;
+      const mine = latest;
       if (!window) {
         setSightings([]);
         return;
       }
       void fetchSightings(API_BASE_URL, bearerToken, {
-        filter: buildEventFilter(scope, window, [entityId]),
+        filter: buildEventFilter(scope, window, [entityId], cells),
       }).then((result) => {
-        if (!cancelled) setSightings(result);
+        if (!cancelled && mine === latest) setSightings(result);
       });
     }
-    refresh(crossFilter.store.getState().window);
+    const initial = crossFilter.store.getState();
+    refresh(initial.window, initial.cells);
     const unsubscribe = crossFilter.store.subscribe((state) =>
-      refresh(state.window),
+      refresh(state.window, state.cells),
     );
     return () => {
       cancelled = true;
@@ -1783,8 +1792,8 @@ export function App() {
               onSelectLit={
                 view === "graph"
                   ? () => {
-                      const lit = crossFilterStore.store.getState().window;
-                      if (lit) void glassCanvasRef.current?.selectLit(lit);
+                      const { window: lit, cells } = crossFilterStore.store.getState();
+                      if (lit) void glassCanvasRef.current?.selectLit(lit, cells);
                     }
                   : undefined
               }

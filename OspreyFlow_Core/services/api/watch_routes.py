@@ -75,22 +75,29 @@ class AlertHotlist(BaseModel):
 
 
 class FiredFile(BaseModel):
-    """One source file of a matched node: its name (the final path segment of the document id),
-    and either the single `row` cited or, when there is more than one, how many `rows`."""
+    """One source file of a matched node: its name (the final path segment of the document id; two
+    loads' `calls.csv` are two entries), and what is cited in it. `row` is the single row when
+    exactly one `row N` is cited and nothing else; otherwise `rows` counts the distinct `row N`
+    locators and `records` the distinct locators of any other form (ADR-130 Amendment 1)."""
 
     name: str
     row: int | None = None
     rows: int | None = None
+    records: int | None = None
 
 
 class FiredOn(BaseModel):
     """ADR-130 decision 1: what a matched node is, and where it was read from. `files` are in the
-    order of first appearance, at most five; `more_files` counts the rest."""
+    order of first appearance, at most five; `more_files` counts the rest.
+
+    ADR-130 Amendment 1: when the node belongs to a dataset the reader's case does not read, its
+    sources are not said at all: `sources_withheld` is true, `files` is empty and `more_files` 0."""
 
     type: str
     label: str
     files: list[FiredFile]
     more_files: int
+    sources_withheld: bool = False
 
 
 class AlertView(BaseModel):
@@ -140,24 +147,43 @@ def _file_name(document_id: str) -> str:
     return document_id.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1] or document_id
 
 
-def _fired_on(node: Node) -> FiredOn:
-    """Group the node's sources by file, in the order each file first appears. A file with one
-    distinct locator that reads as `row N` says that row; otherwise it says how many rows."""
+def _sources_are_within_the_case(node: Node, principal: Principal) -> bool:
+    """ADR-130 Amendment 1 (rule 3, ADR-099): every dataset the node belongs to is one the reader's
+    case reads. A node may be read through any one of its datasets, and its sources name no
+    dataset, so only this lets them be said. `principal.datasets is None` is the Conduit's own
+    unlimited work (`dataset_scope.py`), which the graph adapter applies no dataset filter to: it
+    reads every dataset. A scoped reader with a node that names no dataset cannot be confirmed."""
+    if principal.datasets is None:
+        return True
+    if not node.datasets:
+        return False
+    return set(node.datasets) <= set(principal.datasets)
+
+
+def _fired_on(node: Node, principal: Principal) -> FiredOn:
+    """Group the node's sources by whole document, in the order each first appears. A file with one
+    distinct `row N` locator and nothing else says that row; otherwise it says how many `row N`
+    rows and how many records of any other locator form."""
+    label = display_name(node)
+    if not _sources_are_within_the_case(node, principal):
+        return FiredOn(type=node.type, label=label, files=[], more_files=0, sources_withheld=True)
     locators: dict[str, list[str]] = {}
     for source in node.provenance.sources:
-        seen = locators.setdefault(_file_name(source.document_id), [])
+        seen = locators.setdefault(source.document_id, [])
         if source.locator not in seen:
             seen.append(source.locator)
     files: list[FiredFile] = []
-    for name, rows in locators.items():
-        match = _ROW_LOCATOR.match(rows[0]) if len(rows) == 1 else None
-        if match:
-            files.append(FiredFile(name=name, row=int(match.group(1))))
+    for document_id, cited in locators.items():
+        name = _file_name(document_id)
+        rows = [m for m in (_ROW_LOCATOR.match(c) for c in cited) if m]
+        records = len(cited) - len(rows)
+        if len(rows) == 1 and records == 0:
+            files.append(FiredFile(name=name, row=int(rows[0].group(1))))
         else:
-            files.append(FiredFile(name=name, rows=len(rows)))
+            files.append(FiredFile(name=name, rows=len(rows) or None, records=records or None))
     return FiredOn(
         type=node.type,
-        label=display_name(node),
+        label=label,
         files=files[:_MAX_FIRED_FILES],
         more_files=max(0, len(files) - _MAX_FIRED_FILES),
     )
@@ -192,7 +218,7 @@ async def alert_to_view(
         nodes = [await graph.get_node(node_id, principal) for node_id in alert.referent_node_ids]
         # `evidence_available` read these a moment ago; one that has gone since is withdrawn whole.
         if all(node is not None for node in nodes):
-            fired_on = [_fired_on(node) for node in nodes if node is not None]
+            fired_on = [_fired_on(node, principal) for node in nodes if node is not None]
     return AlertView(
         id=alert.id,
         rule_id=alert.rule_id,

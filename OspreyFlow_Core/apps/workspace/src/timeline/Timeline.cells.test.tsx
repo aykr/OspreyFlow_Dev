@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // ADR-130 decision 2: the weekly view's "Choose cells" control sits in its own options menu, and the
 // chart's brush listener is registered for the weekly view and taken off for the density one.
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const setOption = vi.fn();
@@ -61,9 +61,9 @@ describe("the weekly view's Choose cells control", () => {
     mount();
     await waitFor(() => expect(setOption).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "More timeline options" }));
-    expect(screen.queryByRole("group", { name: "Choose cells" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Choose cells (UTC)" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Cyclical" }));
-    await waitFor(() => expect(screen.getByRole("group", { name: "Choose cells" })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("group", { name: "Choose cells (UTC)" })).toBeTruthy());
     for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
       expect(screen.getByRole("checkbox", { name: day })).toBeTruthy();
     }
@@ -105,5 +105,42 @@ describe("the weekly view's Choose cells control", () => {
     const handler = on.mock.calls.filter((c) => c[0] === "brushEnd").at(-1)![1] as (p: unknown) => void;
     handler({ areas: [{ coordRange: [[8.6, 10.2], [4.8, 6.1]] }] });
     expect(store.store.getState().cells).toHaveLength(4);
+  });
+
+  it("a drag sets the hours boxes from the dragged range too, not only the days", async () => {
+    mount();
+    await waitFor(() => expect(on).toHaveBeenCalledWith("brushEnd", expect.any(Function)));
+    on.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Cyclical" }));
+    await waitFor(() => expect(on).toHaveBeenCalledWith("brushEnd", expect.any(Function)));
+    const handler = on.mock.calls.filter((c) => c[0] === "brushEnd").at(-1)![1] as (p: unknown) => void;
+    act(() => handler({ areas: [{ coordRange: [[8.6, 10.2], [4.8, 6.1]] }] }));
+    fireEvent.click(screen.getByRole("button", { name: "More timeline options" }));
+    expect((screen.getByRole("spinbutton", { name: "From hour" }) as HTMLInputElement).value).toBe("9");
+    expect((screen.getByRole("spinbutton", { name: "To hour" }) as HTMLInputElement).value).toBe("10");
+  });
+
+  it("a clear elsewhere resets the hours as well as the days", async () => {
+    const store = mount();
+    fireEvent.click(screen.getByRole("button", { name: "Cyclical" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More timeline options" }));
+    fireEvent.change(await screen.findByRole("spinbutton", { name: "From hour" }), { target: { value: "6" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "To hour" }), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Mon" }));
+    act(() => store.store.getState().clearFilter());
+    expect((screen.getByRole("spinbutton", { name: "From hour" }) as HTMLInputElement).value).toBe("0");
+    expect((screen.getByRole("spinbutton", { name: "To hour" }) as HTMLInputElement).value).toBe("23");
+    expect((screen.getByRole("checkbox", { name: "Mon" }) as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("labels the control and the grid as UTC", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Cyclical" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More timeline options" }));
+    expect(await screen.findByText("Hours (UTC)")).toBeTruthy();
+    await waitFor(() => {
+      const option = setOption.mock.calls.at(-1)![0] as { xAxis?: { name?: string } };
+      expect(option.xAxis?.name).toBe("Hour (UTC)");
+    });
   });
 });

@@ -34,6 +34,9 @@ function heading(alert: AlertView): string {
 
 function fileText(file: FiredFile): string {
   if (file.row != null) return `${file.name}, row ${COUNT.format(file.row)}`;
+  if (file.records != null) {
+    return `${file.name}, ${COUNT.format(file.records)} ${file.records === 1 ? "record" : "records"}`;
+  }
   const rows = file.rows ?? 0;
   return `${file.name}, ${COUNT.format(rows)} ${rows === 1 ? "row" : "rows"}`;
 }
@@ -71,6 +74,16 @@ function ScheduleNoticeRow({ alert }: { alert: AlertView }) {
 export function AlertRow({ alert, onJump, jumping }: AlertRowProps) {
   if (isScheduleNotice(alert)) return <ScheduleNoticeRow alert={alert} />;
   const hasReferents = alert.mode === "full" && alert.referent_node_ids.length > 0;
+  // A hotlist alert whose evidence was readable when the list was read but whose node had gone by the
+  // time it was described (two reads, a node revoked between) is unavailable too, and nothing can
+  // be jumped into.
+  const vanished =
+    alert.mode === "full" &&
+    hasReferents &&
+    alert.evidence_available &&
+    alert.rule_id.startsWith("hotlist:") &&
+    (alert.fired_on == null || alert.fired_on.length === 0);
+  const unavailable = alert.mode === "full" && (!hasReferents || vanished);
   return (
     <li
       style={{
@@ -94,18 +107,22 @@ export function AlertRow({ alert, onJump, jumping }: AlertRowProps) {
           {` · review by ${DAY.format(new Date(alert.hotlist.review_date))}`}
         </p>
       )}
-      {alert.mode === "full" && hasReferents && (alert.fired_on ?? []).map((fired, index) => (
+      {alert.mode === "full" && hasReferents && !vanished && (alert.fired_on ?? []).map((fired, index) => (
         <div key={index} style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
-          <span className="value">{`Matched: ${fired.type} ${fired.label}`}</span>
-          {fired.files.length > 0 && <span className="label">{`From: ${fromText(fired)}`}</span>}
+          <span className="value">
+            {fired.sources_withheld
+              ? `Matched: ${fired.type} ${fired.label} \u2014 its sources are in data this case does not read`
+              : `Matched: ${fired.type} ${fired.label}`}
+          </span>
+          {!fired.sources_withheld && fired.files.length > 0 && <span className="label">{`From: ${fromText(fired)}`}</span>}
         </div>
       ))}
-      {alert.mode === "full" && !hasReferents && (
+      {unavailable && (
         <p className="label" style={{ color: "var(--warning)" }}>
           Evidence no longer available.
         </p>
       )}
-      <Button onClick={() => onJump(alert.id)} disabled={jumping}>
+      <Button onClick={() => onJump(alert.id)} disabled={jumping || unavailable}>
         {jumping ? "Jumping…" : "Jump into investigation"}
       </Button>
     </li>

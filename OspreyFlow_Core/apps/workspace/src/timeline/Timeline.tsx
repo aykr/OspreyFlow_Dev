@@ -177,7 +177,11 @@ export function Timeline({
         setActiveWindow(state.window);
         setActiveCells(state.cells);
         // A filter cleared elsewhere clears the control's own ticks.
-        if (state.cells === null) setChosenDays([]);
+        if (state.cells === null) {
+          setChosenDays([]);
+          setHourFrom(0);
+          setHourTo(23);
+        }
       }),
     [crossFilterStore],
   );
@@ -507,6 +511,9 @@ export function Timeline({
         if (!range) return;
         const cells = cellsFromRange(range[0], range[1]);
         setChosenDays([...new Set(cells.map((c) => c.weekday))]);
+        // The hours boxes show what the drag chose, so a tick afterwards does not quietly widen it.
+        setHourFrom(Math.min(...cells.map((c) => c.hour)));
+        setHourTo(Math.max(...cells.map((c) => c.hour)));
         crossFilterStore.store.getState().setCells(cells);
         void crossFilterStore.refresh(getNodeIds(), getEdgeIds?.());
       });
@@ -690,11 +697,11 @@ export function Timeline({
                 {hasEvents && mode === "cyclical" && (
                   <span
                     role="group"
-                    aria-label="Choose cells"
+                    aria-label="Choose cells (UTC)"
                     style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "var(--sp-4)" }}
                   >
                     {/* ADR-130 decision 2: the keyboard route to what a drag across the grid chooses. */}
-                    <span>Choose cells</span>
+                    <span>Choose cells (UTC)</span>
                     {WEEKDAY_LABELS.map((label, day) => (
                       <label key={label} style={{ display: "flex", alignItems: "center", gap: 2 }}>
                         <input
@@ -714,6 +721,7 @@ export function Timeline({
                         {label}
                       </label>
                     ))}
+                    <span>Hours (UTC)</span>
                     <label>
                       From hour{" "}
                       <input

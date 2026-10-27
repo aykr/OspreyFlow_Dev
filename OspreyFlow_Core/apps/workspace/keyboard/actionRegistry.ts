@@ -318,6 +318,9 @@ export const TIMELINE_PLAYBACK_ACTIONS = defineActionRegistry("TIMELINE_PLAYBACK
   // ADR-130 decision 2: the weekly view's "Choose cells" control, the keyboard route to what a drag
   // across the grid chooses. Proven by the map's request body and the ids the canvas dims.
   "choose-the-weekend-by-keyboard",
+  // ADR-130 Amendment 1: the day checkboxes and the hour boxes, each proven by the map's request.
+  "tick-a-day-by-keyboard-sends-its-cells",
+  "set-the-hours-by-keyboard-sends-them",
 ] as const);
 
 /**

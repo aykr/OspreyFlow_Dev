@@ -30,6 +30,7 @@ from fastapi.testclient import TestClient
 from services.api.alerts import AlertStore
 from services.api.app import get_recipes_repo_root
 from services.api.config import PostgresConfig
+from services.api.datasets import Dataset, PostgresDatasetStore
 from services.api.hotlists import HotlistStore
 from services.api.studio_publish import build_recipe, write_and_commit_recipe
 from services.api.studio_recipes import StudioRecipeStore
@@ -101,7 +102,12 @@ def _case(client: TestClient, headers: dict[str, str]) -> str:
 
 
 def _endpoint_write(
-    value_normalised: str, *, owning_unit: str, classification: str = "OFFICIAL"
+    value_normalised: str,
+    *,
+    owning_unit: str,
+    classification: str = "OFFICIAL",
+    datasets: list[str] | None = None,
+    document_id: str = "fixture",
 ) -> NodeWrite:
     now = datetime.now(UTC)
     return NodeWrite(
@@ -110,7 +116,7 @@ def _endpoint_write(
         properties={"value_normalised": value_normalised},
         provenance=Provenance(
             state=ProvenanceState.ASSERTED,
-            sources=[SourceRef(document_id="fixture", locator="test", excerpt_hash="")],
+            sources=[SourceRef(document_id=document_id, locator="row 3", excerpt_hash="")],
             first_seen=now,
         ),
         handling=Handling(
@@ -121,11 +127,18 @@ def _endpoint_write(
         ),
         created_by="test",
         created_at=now,
-        datasets=[dataset_for(PRINCIPAL)],
+        datasets=[dataset_for(PRINCIPAL)] if datasets is None else datasets,
     )
 
 
-async def _write_node(value_normalised: str, *, owning_unit: str, classification: str) -> str:
+async def _write_node(
+    value_normalised: str,
+    *,
+    owning_unit: str,
+    classification: str,
+    datasets: list[str] | None = None,
+    document_id: str = "fixture",
+) -> str:
     """Writes directly against the same real, persistent `ospreyflow` ArcadeDB database the
     running `TestClient` app's own lifespan connects to — `test_phase6a_glass_surfaces.py`'s own
     `_fetch_node_json` docstring has the full reasoning for why this, not `arcadedb_adapter`
@@ -136,7 +149,11 @@ async def _write_node(value_normalised: str, *, owning_unit: str, classification
         await graph.apply_schema(load_default_ontology())
         tx = await graph.begin_transaction()
         write = _endpoint_write(
-            value_normalised, owning_unit=owning_unit, classification=classification
+            value_normalised,
+            owning_unit=owning_unit,
+            classification=classification,
+            datasets=datasets,
+            document_id=document_id,
         )
         (node_id,) = await graph.upsert_nodes([write], tx)
         await graph.commit_transaction(tx)
@@ -297,6 +314,95 @@ def test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavail
         after_get = client.get(f"/v1/investigations/{case}/alerts/{alert.id}", headers=headers)
         assert after_get.json()["evidence_available"] is False
         assert after_get.json()["referent_node_ids"] == []
+
+
+def test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """ADR-130 Amendment 1, through the real app and the real case scoping (`get_principal`), for
+    both `list_alerts_route` and `get_alert_route`: a node that belongs to a dataset the case does
+    not read says its type and label and `sources_withheld`, and no file name, row or count; a
+    node wholly inside the case's datasets names its file. When the case then reads both datasets,
+    the same node is named."""
+    private_key, _ = keypair
+    headers = _bearer(private_key)
+    other = f"{dataset_for(PRINCIPAL)}-other-{new_id()}"
+    inside_file = f"in/inside-{new_id()}.csv"
+    shared_file = f"in/shared-{new_id()}.csv"
+
+    inside_id = asyncio.run(
+        _write_node(
+            f"+44-{new_id()}",
+            owning_unit=PRINCIPAL.org_unit,
+            classification="OFFICIAL",
+            document_id=inside_file,
+        )
+    )
+    shared_id = asyncio.run(
+        _write_node(
+            f"+44-{new_id()}",
+            owning_unit=PRINCIPAL.org_unit,
+            classification="OFFICIAL",
+            datasets=[dataset_for(PRINCIPAL), other],
+            document_id=shared_file,
+        )
+    )
+    alert = Alert(
+        id=new_id(),
+        rule_id=f"hotlist:{new_id()}",
+        owner_id=PRINCIPAL.id,
+        mode=AlertMode.FULL,
+        referent_node_ids=[inside_id, shared_id],
+        investigation_id=None,
+        created_at=datetime.now(UTC),
+        dataset_id=dataset_for(PRINCIPAL),
+    )
+    asyncio.run(_write_alert(alert))
+
+    from services.api.app import app
+
+    def _both_views(client: TestClient, case: str) -> list[dict[str, object]]:
+        listed = client.get(f"/v1/investigations/{case}/alerts", headers=headers)
+        assert listed.status_code == 200, listed.text
+        (from_list,) = [a for a in listed.json()["alerts"] if a["id"] == alert.id]
+        single = client.get(f"/v1/investigations/{case}/alerts/{alert.id}", headers=headers)
+        assert single.status_code == 200, single.text
+        return [from_list, single.json()]
+
+    with TestClient(app) as client:
+        case = _case(client, headers)
+        for view in _both_views(client, case):
+            inside, shared = view["fired_on"]
+            assert inside["sources_withheld"] is False
+            assert inside["files"][0]["name"] == inside_file.rsplit("/", 1)[-1]
+            assert inside["files"][0]["row"] == 3
+            assert shared["sources_withheld"] is True
+            assert shared["files"] == [] and shared["more_files"] == 0
+            assert shared["type"] == "Endpoint" and shared["label"]
+            assert shared_file.rsplit("/", 1)[-1] not in str(view)
+
+        # The case now reads both datasets: the same node is named.
+        async def _read_both() -> None:
+            store = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
+            try:
+                await store.add(
+                    Dataset(
+                        id=other,
+                        name="Route test data, other",
+                        owning_unit=PRINCIPAL.org_unit,
+                        created_at=datetime.now(UTC),
+                        created_by="test",
+                    )
+                )
+                await store.set_for_case(case, [dataset_for(PRINCIPAL), other], PRINCIPAL)
+            finally:
+                await store.close()
+
+        asyncio.run(_read_both())
+        for view in _both_views(client, case):
+            _, shared = view["fired_on"]
+            assert shared["sources_withheld"] is False
+            assert shared["files"][0]["name"] == shared_file.rsplit("/", 1)[-1]
 
 
 def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(

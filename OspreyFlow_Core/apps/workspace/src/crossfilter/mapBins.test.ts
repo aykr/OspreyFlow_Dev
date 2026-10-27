@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { GeoBin } from "../../../../packages/schemas/generated";
 import * as api from "../analytics/api";
 import { createCrossFilterStore } from "./store";
 import { followCrossFilterWithMapBins } from "./mapBins";
@@ -28,3 +29,31 @@ describe("the map's bins follow the cross-filter (ADR-130 decision 2)", () => {
     vi.restoreAllMocks();
   });
 });
+
+describe("the map's bins, answers out of order", () => {
+  it("drops an older bins answer that arrives after a newer one", async () => {
+    const resolvers: Array<(bins: GeoBin[]) => void> = [];
+    vi.spyOn(api, "fetchGeoBins").mockImplementation(
+      () => new Promise<GeoBin[]>((resolve) => resolvers.push(resolve)),
+    );
+    const { store } = createCrossFilterStore("http://api", "token", "inv-1");
+    const delivered: GeoBin[][] = [];
+    const unsubscribe = followCrossFilterWithMapBins(store, "http://api", "token", "inv-1", 8, (b) =>
+      delivered.push(b),
+    );
+    await vi.waitFor(() => expect(resolvers).toHaveLength(1)); // the first read
+    store.getState().setCells([{ weekday: 5, hour: 9 }]);
+    await vi.waitFor(() => expect(resolvers).toHaveLength(2));
+
+    const bin = (cell: string): GeoBin => ({ cell, count: 1 }) as unknown as GeoBin;
+    resolvers[1]!([bin("newer")]);
+    await vi.waitFor(() => expect(delivered).toHaveLength(1));
+    resolvers[0]!([bin("older")]);
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(delivered).toEqual([[bin("newer")]]);
+    unsubscribe();
+    vi.restoreAllMocks();
+  });
+});
+

@@ -3,15 +3,16 @@
 import type { EventFilter, FirstSeenResult } from "../../../../packages/schemas/generated";
 import { firstSeenFrom } from "./emergence";
 import { litSet, type LitLink, type LitSet } from "./lit";
-import { buildEventFilter, type TimeWindow } from "./store";
+import { buildEventFilter, type TimeWindow, type WeekdayHourCell } from "./store";
 
 export type LitRead =
   | { ok: true; lit: LitSet; window: TimeWindow }
   | { ok: false; message: string };
 
 /**
- * `ask` is the first-seen read. The filter holds the window and nothing else: a selection already
- * on the canvas, or a node restriction the cross-filter holds, must not narrow what is lit. A read
+ * `ask` is the first-seen read. The filter holds the window and the chosen weekly cells, as the
+ * dimming's own read does (ADR-130 Amendment 1), and nothing else: a selection already on the
+ * canvas, or a node restriction the cross-filter holds, must not narrow what is lit. A read
  * that fails is reported and selects nothing; one that finds nothing lit is a result with an empty
  * set, which the caller says in words.
  */
@@ -20,9 +21,10 @@ export async function readLit(
   investigationScope: string,
   window: TimeWindow,
   links: readonly LitLink[],
+  cells: readonly WeekdayHourCell[] | null = null,
 ): Promise<LitRead> {
   try {
-    const answer = await ask(buildEventFilter(investigationScope, window, null));
+    const answer = await ask(buildEventFilter(investigationScope, window, null, cells));
     return { ok: true, lit: litSet(firstSeenFrom(answer), window, links), window };
   } catch (err) {
     return {

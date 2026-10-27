@@ -18,9 +18,14 @@ export function followCrossFilterWithMapBins(
   precision: number,
   onBins: (bins: GeoBin[]) => void,
 ): () => void {
+  // An older answer arriving after a newer one is dropped.
+  let latest = 0;
   async function refresh(state: CrossFilterStoreState) {
+    latest += 1;
+    const mine = latest;
     const filter = buildEventFilter(scope, state.window, state.selectedNodeIds, state.cells);
-    onBins(await fetchGeoBins(apiBaseUrl, bearerToken, { filter, precision }));
+    const bins = await fetchGeoBins(apiBaseUrl, bearerToken, { filter, precision });
+    if (mine === latest) onBins(bins);
   }
   let lastWindow = store.getState().window;
   let lastSelected = store.getState().selectedNodeIds;

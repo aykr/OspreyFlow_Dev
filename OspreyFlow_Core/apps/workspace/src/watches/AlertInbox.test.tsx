@@ -200,3 +200,87 @@ describe("a hotlist alert that explains itself", () => {
     expect(t).not.toContain("From:");
   });
 });
+
+// ADR-130 Amendment 1: a node the reader cannot read through the case's datasets is named by type
+// and label alone; a file counted by records says so; evidence that went between two reads says so.
+describe("the hotlist alert's fired-on text", () => {
+  const FULL: AlertView = {
+    ...NOTIFY_ALERT,
+    mode: "full",
+    referent_node_ids: ["n1"],
+    evidence_available: true,
+  };
+
+  test("withheld sources are said in words, with no file", () => {
+    const { container } = render(
+      <ul>
+        <AlertRow
+          alert={{
+            ...FULL,
+            fired_on: [
+              { type: "Endpoint", label: "+447700900640", files: [], more_files: 0, sources_withheld: true },
+            ],
+          }}
+          onJump={() => undefined}
+          jumping={false}
+        />
+      </ul>,
+    );
+    const text = container.textContent ?? "";
+    expect(text).toContain(
+      "Matched: Endpoint +447700900640 \u2014 its sources are in data this case does not read",
+    );
+    expect(text).not.toContain("From:");
+  });
+
+  test("a file counted by records reads as records, and by rows as rows", () => {
+    const { container } = render(
+      <ul>
+        <AlertRow
+          alert={{
+            ...FULL,
+            fired_on: [
+              {
+                type: "Endpoint",
+                label: "x",
+                files: [
+                  { name: "a.csv", records: 4 },
+                  { name: "b.csv", rows: 2 },
+                  { name: "c.csv", row: 3 },
+                ],
+                more_files: 0,
+              },
+            ],
+          }}
+          onJump={() => undefined}
+          jumping={false}
+        />
+      </ul>,
+    );
+    expect(container.textContent ?? "").toContain("a.csv, 4 records; b.csv, 2 rows; c.csv, row 3");
+  });
+
+  test("evidence available but nothing fired on says it is no longer available and disables Jump", () => {
+    const { container, getByRole } = render(
+      <ul>
+        <AlertRow alert={{ ...FULL, fired_on: null }} onJump={() => undefined} jumping={false} />
+      </ul>,
+    );
+    expect(container.textContent ?? "").toContain("Evidence no longer available");
+    expect((getByRole("button", { name: "Jump into investigation" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("an available alert with something fired on keeps Jump enabled", () => {
+    const { getByRole } = render(
+      <ul>
+        <AlertRow
+          alert={{ ...FULL, fired_on: [{ type: "Endpoint", label: "x", files: [], more_files: 0 }] }}
+          onJump={() => undefined}
+          jumping={false}
+        />
+      </ul>,
+    );
+    expect((getByRole("button", { name: "Jump into investigation" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+

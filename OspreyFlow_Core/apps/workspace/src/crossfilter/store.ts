@@ -101,6 +101,9 @@ export function createCrossFilterStore(
   bearerToken: string,
   investigationScope: string,
 ): CrossFilterStore {
+  // Each refresh takes the next number; an answer applies only if it is still the latest, so an older
+  // read that arrives last cannot overwrite a newer one.
+  let latestRefresh = 0;
   const store = createStore<CrossFilterStoreState>((set) => ({
     window: null,
     cells: null,
@@ -112,7 +115,9 @@ export function createCrossFilterStore(
     setWindow: (window) => set({ window }),
     setSelectedNodeIds: (selectedNodeIds) => set({ selectedNodeIds }),
     setCells: (cells) => set({ cells }),
-    clearFilter: () =>
+    clearFilter: () => {
+      // A read still in flight was for a filter that is gone; its answer must not land.
+      latestRefresh += 1;
       set({
         window: null,
         cells: null,
@@ -121,7 +126,8 @@ export function createCrossFilterStore(
         dimmedEdgeIds: new Set(),
         firstSeen: null,
         dimmedCount: 0,
-      }),
+      });
+    },
   }));
 
   /** Re-derives what is dimmed for the nodes and links now in the view. One read: when each node
@@ -131,6 +137,8 @@ export function createCrossFilterStore(
     allEdgeIds: readonly string[] = [],
   ): Promise<void> {
     const state = store.getState();
+    latestRefresh += 1;
+    const mine = latestRefresh;
     if (state.window === null && state.selectedNodeIds === null && state.cells === null) {
       store.setState({
         dimmedNodeIds: new Set(),
@@ -146,7 +154,9 @@ export function createCrossFilterStore(
       state.selectedNodeIds,
       state.cells,
     );
-    const firstSeen = firstSeenFrom(await fetchFirstSeen(apiBaseUrl, bearerToken, { filter }));
+    const answer = await fetchFirstSeen(apiBaseUrl, bearerToken, { filter });
+    if (mine !== latestRefresh) return;
+    const firstSeen = firstSeenFrom(answer);
     const dimming = emergence(firstSeen, null, allNodeIds, allEdgeIds);
     store.setState({
       firstSeen,

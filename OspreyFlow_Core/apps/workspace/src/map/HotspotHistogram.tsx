@@ -81,7 +81,11 @@ export function HotspotHistogram({
   // self-exclusion `Timeline.tsx`'s own density strip applies to itself.
   useEffect(() => {
     let cancelled = false;
+    // An older answer arriving after a newer one is dropped.
+    let latest = 0;
     async function refresh(state: ReturnType<CrossFilterStore["store"]["getState"]>) {
+      latest += 1;
+      const mine = latest;
       const filter = {
         ...buildEventFilter(investigationScope, state.window, null, state.cells),
         edge_types: [...locationEdgeTypes],
@@ -90,7 +94,7 @@ export function HotspotHistogram({
         filter,
         dimensions: [TARGET_ID_DIMENSION],
       });
-      if (cancelled) return;
+      if (cancelled || mine !== latest) return;
       setBuckets(rankTargetIdBuckets(result.target_id));
     }
     void refresh(crossFilterStore.store.getState());

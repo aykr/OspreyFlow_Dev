@@ -19937,3 +19937,27 @@ reported to the owner.
   dims.
 - **Cost.** The conformance suite fixes how a timestamp maps to a weekday and an hour. That mapping
   was implicit in the histogram until now.
+
+### ADR-130, Amendment 1 (27 October 2026): what fired an alert is said only within the case's datasets
+
+From the review of the build, decided by the coordinator under the owner's settings for Brief 3.
+- **The finding (rule 3, ADR-099).** A node can belong to more than one dataset, and a reader may
+  read it through any one of them. Its sources carry no dataset, so `fired_on` could name the files
+  and row counts of a dataset the case does not read. That world is not the case's.
+- **The decision.** `fired_on` names a node's sources only when every dataset the node belongs to
+  is one the case reads. For any other matched node it gives the type and label alone, with
+  `sources_withheld: true`, and the Glass says "its sources are in data this case does not read".
+- **The Inspector has the same exposure.** It shows every source of a node, and that predates this
+  record. It is recorded with a build-plan row, and not changed here.
+- **Also from the review:**
+  - A file is grouped by its whole `document_id`, so two loads' `calls.csv` stay two entries,
+    each shown by its last segment. Only locators of the form "row N" count as rows; other
+    locators count as records.
+  - `weekday_hours` is de-duplicated and capped at the 168 real cells, and more is refused.
+  - "Select what is lit" and the sightings trail honour the chosen cells as the dimming does.
+  - The day checkboxes and the hour boxes each have a keyboard case (rule 13). A drag sets the
+    hours too, and the cells are labelled UTC.
+  - A stale first-seen or bins answer is dropped.
+  - An alert whose evidence went between the two reads says so.
+- **Tests.** A node in two datasets, read in a case of one; the route read with a case-scoped
+  principal; the hotlist fake refusing on reach as the real store does.

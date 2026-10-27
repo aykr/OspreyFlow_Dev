@@ -79,9 +79,14 @@ export function cyclicalOption({
   }
   return {
     backgroundColor: "transparent",
-    grid: { left: 48, right: KEY_WIDTH, top: 8, bottom: 24, containLabel: true },
+    grid: { left: 48, right: KEY_WIDTH, top: 8, bottom: 40, containLabel: true },
     xAxis: {
       type: "category" as const,
+      // The weekday and the hour are those of UTC, as the server buckets them (ADR-130 Amendment 1).
+      name: "Hour (UTC)",
+      nameLocation: "middle" as const,
+      nameGap: 24,
+      nameTextStyle: { color: text, fontSize: 11 },
       data: HOUR_LABELS,
       axisLabel: { color: text, fontSize: 11 },
       splitArea: { show: true },

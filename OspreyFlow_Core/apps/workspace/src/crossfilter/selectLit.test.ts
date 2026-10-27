@@ -28,6 +28,18 @@ describe("readLit", () => {
     expect(read).toEqual({ ok: true, lit: { nodeIds: ["a", "b"], edgeIds: ["ab"] }, window });
   });
 
+  it("sends the chosen cells too, as the dimming does, so the selection matches what is dimmed", async () => {
+    const ask = vi.fn(async (): Promise<FirstSeenResult> => ({ nodes: {}, edges: {} }));
+    await readLit(ask, "inv-1", window, links, [{ weekday: 5, hour: 9 }]);
+    expect(ask).toHaveBeenCalledWith({
+      investigation_scope: "inv-1",
+      window: { valid_from: window.validFrom, valid_to: window.validTo },
+      node_ids: [],
+      edge_types: [],
+      weekday_hours: [{ weekday: 5, hour: 9 }],
+    });
+  });
+
   it("is a result, not an error, when nothing is lit", async () => {
     const read = await readLit(async () => ({ nodes: {}, edges: {} }), "inv-1", window, links);
     expect(read).toEqual({ ok: true, lit: { nodeIds: [], edgeIds: [] }, window });

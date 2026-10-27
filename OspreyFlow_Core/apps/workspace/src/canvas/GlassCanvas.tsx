@@ -111,7 +111,7 @@ import { branchSelection } from "./branchNodes";
 import { fetchFirstSeen } from "../analytics/api";
 import { litNote, litTabName, UNDATED_NOT_INCLUDED } from "../crossfilter/lit";
 import { LIT_ANSWER_LATE, readLit, selectionChangedSince } from "../crossfilter/selectLit";
-import type { TimeWindow } from "../crossfilter/store";
+import type { TimeWindow, WeekdayHourCell } from "../crossfilter/store";
 import { removeFromWorkingSet } from "./removeNodes";
 import { ViewActions } from "./ViewActions";
 import { settleLayout, type LayoutNode } from "./forceLayout";
@@ -353,7 +353,7 @@ export interface GlassCanvasHandle {
    * event inside it, ends included; a node a lit link touches; undated links not included), read
    * from the view this canvas holds. One undo gives the previous selection back. A window that
    * lights nothing leaves the selection as it was and says so. */
-  selectLit: (window: TimeWindow) => Promise<void>;
+  selectLit: (window: TimeWindow, cells?: readonly WeekdayHourCell[] | null) => Promise<void>;
   /** Phase 8 Stage 4h: the chart artefact's own real capture path
    * (`02_GLASS_FRONTEND.md` §10.1/§10.3) — delegates to `captureChartImage`
    * (`export/chartExport.ts`), which renders the live Sigma instance to a PNG via
@@ -613,7 +613,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       nodeIds: ReadonlySet<string>;
       previous: readonly string[];
     } | null>(null);
-    const selectLitRef = useRef<((window: TimeWindow) => Promise<void>) | null>(null);
+    const selectLitRef = useRef<
+      ((window: TimeWindow, cells?: readonly WeekdayHourCell[] | null) => Promise<void>) | null
+    >(null);
     const litFlightRef = useRef(singleFlight());
     // Read by `refreshNodeVisualState` (called from many unrelated call sites — hover, selection,
     // dimming) without threading a new parameter through every one of them; written only by the
@@ -1924,7 +1926,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           const { x, y } = shown;
           redrawWhenCameraStops(sigma, sigma.getCamera().animate({ x, y }, { duration: 200 }));
         },
-        selectLit: (window: TimeWindow) => selectLitRef.current?.(window) ?? Promise.resolve(),
+        selectLit: (window: TimeWindow, cells?: readonly WeekdayHourCell[] | null) =>
+          selectLitRef.current?.(window, cells ?? null) ?? Promise.resolve(),
         deselect: (nodeId: string) => {
           setSelected((prev) => {
             if (!prev.has(nodeId)) return prev;
@@ -3069,22 +3072,30 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
 
     // ADR-128 decision 2 (B3): the selection is read from the view this canvas holds, never from ids
     // the server offered, and replaces whatever was selected (one undo).
-    async function selectWhatIsLit(window: TimeWindow): Promise<void> {
+    async function selectWhatIsLit(
+      window: TimeWindow,
+      cells: readonly WeekdayHourCell[] | null = null,
+    ): Promise<void> {
       // A press while one is being read does nothing: two reads would race, and the later would
       // record the first's result as the selection to go back to.
       await litFlightRef.current(async () => {
         // What is selected at the moment of the press is what an undo goes back to.
         const previous = Array.from(selected);
-        await selectWhatIsLitOnce(window, previous);
+        await selectWhatIsLitOnce(window, previous, cells);
       });
     }
-    async function selectWhatIsLitOnce(window: TimeWindow, previous: string[]): Promise<void> {
+    async function selectWhatIsLitOnce(
+      window: TimeWindow,
+      previous: string[],
+      cells: readonly WeekdayHourCell[] | null,
+    ): Promise<void> {
       const links = graph.mapEdges((id, _attrs, source, target) => ({ id, source, target }));
       const read = await readLit(
         (filter) => fetchFirstSeen(apiBaseUrl, bearerToken, { filter }),
         investigationId,
         window,
         links,
+        cells,
       );
       const rect = containerRef.current?.getBoundingClientRect();
       const at = { x: (rect?.left ?? 0) + 40, y: (rect?.top ?? 0) + 40 };

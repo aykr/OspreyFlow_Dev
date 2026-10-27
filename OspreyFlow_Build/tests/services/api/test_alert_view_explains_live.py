@@ -30,8 +30,15 @@ from schemas.domain import (
 
 # Ids of this run's own: the stores are shared with other suites, whose rows a fixed id would
 # meet (a stranger's "empty" list once held 220 other tests' alerts).
-OWNER = Principal(id=f"owner-{new_id()}", clearance="OFFICIAL", org_unit="unit-1")
-STRANGER = Principal(id=f"stranger-{new_id()}", clearance="OFFICIAL", org_unit="unit-1")
+# ADR-099: a request reads the datasets of its case, as `get_principal` scopes it, so these do.
+DATASET = f"alert-live-{new_id()}"
+OTHER_DATASET = f"alert-live-other-{new_id()}"
+OWNER = Principal(
+    id=f"owner-{new_id()}", clearance="OFFICIAL", org_unit="unit-1", datasets=[DATASET]
+)
+STRANGER = Principal(
+    id=f"stranger-{new_id()}", clearance="OFFICIAL", org_unit="unit-1", datasets=[DATASET]
+)
 
 
 @pytest.fixture
@@ -44,7 +51,12 @@ async def stores():
     await hotlists.close()
 
 
-def _endpoint(*, owning_unit: str = "unit-1", classification: str = "OFFICIAL") -> NodeWrite:
+def _endpoint(
+    *,
+    owning_unit: str = "unit-1",
+    classification: str = "OFFICIAL",
+    datasets: list[str] | None = None,
+) -> NodeWrite:
     now = datetime.now(UTC)
     sources = [
         SourceRef(
@@ -66,6 +78,7 @@ def _endpoint(*, owning_unit: str = "unit-1", classification: str = "OFFICIAL") 
         ),
         created_by="test",
         created_at=now,
+        datasets=[DATASET] if datasets is None else datasets,
     )  # fmt: skip
 
 
@@ -99,9 +112,34 @@ async def test_the_owner_sees_the_hotlist_and_what_fired_it_and_a_stranger_the_h
 
         # Revoke: the node becomes unreadable to the owner; no fired_on, nothing about it.
         tx = await graph.begin_transaction()
-        hidden = _endpoint(owning_unit="unit-2", classification="SECRET")
+        hidden = _endpoint(owning_unit="unit-2", classification="SECRET")  # still in DATASET
         await graph.supersede_node(node_id, hidden, tx)
         await graph.commit_transaction(tx)
         revoked = await alert_to_view(alert, OWNER, graph, hotlists)
         assert revoked.evidence_available is False and revoked.fired_on is None
         assert "pid_" not in revoked.model_dump_json()
+
+
+async def test_a_node_in_two_datasets_has_its_sources_withheld_from_a_case_of_one(stores) -> None:
+    """ADR-130 Amendment 1 through the real access filter: the node is readable through `DATASET`,
+    but it also belongs to `OTHER_DATASET`, which the owner's case does not read."""
+    _, hotlists = stores
+    hotlist = await hotlists.create(OWNER, identifier="07700 900641", review_date=date(2027, 1, 31))
+    both = OWNER.model_copy(update={"datasets": [DATASET, OTHER_DATASET]})
+    async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as graph:
+        tx = await graph.begin_transaction()
+        (node_id,) = await graph.upsert_nodes([_endpoint(datasets=[DATASET, OTHER_DATASET])], tx)
+        await graph.commit_transaction(tx)
+        alert = Alert(
+            id=new_id(), rule_id=f"hotlist:{hotlist.id}", owner_id=OWNER.id, mode=AlertMode.FULL,
+            referent_node_ids=[node_id], created_at=datetime.now(UTC),
+        )  # fmt: skip
+
+        one = await alert_to_view(alert, OWNER, graph, hotlists)
+        assert one.fired_on is not None
+        assert one.fired_on[0].sources_withheld is True and one.fired_on[0].files == []
+        assert "pid_" not in one.model_dump_json()
+
+        named = await alert_to_view(alert, both, graph, hotlists)
+        assert named.fired_on is not None and named.fired_on[0].sources_withheld is False
+        assert named.fired_on[0].files[0].name == "pid_seized_comms_batch2.csv"

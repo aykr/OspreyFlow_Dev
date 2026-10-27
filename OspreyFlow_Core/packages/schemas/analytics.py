@@ -21,7 +21,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from schemas.domain import EdgeId, Handling, Interval, NodeId
 
@@ -175,6 +175,10 @@ class InheritedEvents(BaseModel):
     window: Interval | None = None
 
 
+#: The weekly view's cells: seven weekdays by twenty-four hours.
+MAX_WEEKDAY_HOURS = 168
+
+
 class WeekdayHour(BaseModel):
     """One cell of the weekly view (ADR-130 decision 2): the weekday (0 = Monday) and the hour
     (0-23), read in UTC, the numbering the `weekday_hour` histogram buckets by."""
@@ -224,10 +228,29 @@ class EventFilter(BaseModel):
     #: hour (UTC, weekday 0 = Monday: the weekly histogram's own cells) are one of these count.
     #: `None` does not restrict; an empty list matches nothing, because "no cells chosen" is a
     #: deliberate selection of nothing, unlike an expanded facet with nothing ticked.
+    #: A list is de-duplicated, keeping the order of first appearance, and holds at most the 168
+    #: real cells (7 days x 24 hours): a longer one is refused, not thinned (ADR-130 Amendment 1).
     weekday_hours: list[WeekdayHour] | None = None
     #: A branch's parents' events on the links it holds (ADR-084 Amendment 2). `None` reads the
     #: case's own events only.
     inherited: InheritedEvents | None = None
+
+    @field_validator("weekday_hours")
+    @classmethod
+    def _cells_are_distinct_and_at_most_168(
+        cls, cells: list[WeekdayHour] | None
+    ) -> list[WeekdayHour] | None:
+        if cells is None:
+            return None
+        if len(cells) > MAX_WEEKDAY_HOURS:
+            raise ValueError(
+                f"weekday_hours holds at most {MAX_WEEKDAY_HOURS} cells (7 days x 24 hours); "
+                f"got {len(cells)}"
+            )
+        distinct: dict[tuple[int, int], WeekdayHour] = {}
+        for cell in cells:
+            distinct.setdefault((cell.weekday, cell.hour), cell)
+        return list(distinct.values())
 
 
 class HistogramBucketing(StrEnum):

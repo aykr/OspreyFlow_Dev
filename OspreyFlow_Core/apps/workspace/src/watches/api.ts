@@ -43,11 +43,13 @@ export interface AlertHotlist {
   review_date: string;
 }
 
-/** Mirrors `services/api/watch_routes.py::FiredFile`: one `row`, or how many `rows`. */
+/** Mirrors `services/api/watch_routes.py::FiredFile`: one `row`, how many `rows`, or how many
+ * `records` where the locators are not of the form "row N" (ADR-130 Amendment 1). */
 export interface FiredFile {
   name: string;
   row?: number | null;
   rows?: number | null;
+  records?: number | null;
 }
 
 /** Mirrors `services/api/watch_routes.py::FiredOn`: at most five files, `more_files` the rest. */
@@ -56,6 +58,9 @@ export interface FiredOn {
   label: string;
   files: FiredFile[];
   more_files: number;
+  /** ADR-130 Amendment 1: true when the node's sources are in data the case does not read; its
+   * `files` are then empty and its type and label are all that is said. */
+  sources_withheld?: boolean;
 }
 
 /** ADR-110 decision 10: a notice that a scheduled run failed or was refused, not a match. */
