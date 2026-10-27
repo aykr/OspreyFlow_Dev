@@ -546,6 +546,10 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_reports.py
           ../OspreyFlow_Build/tests/services/api/test_route_rights.py
           ../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_live.py
+          ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_sources_withheld_live.py
+          ../OspreyFlow_Build/tests/services/api/test_sources_withheld_routes.py
+          ../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py
+          ../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py
           ../OspreyFlow_Build/tests/services/api/test_starter_run.py
           ../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py
           ../OspreyFlow_Build/tests/services/api/test_trend_store.py
@@ -858,6 +862,10 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/test_reports.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_route_rights.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_live.py
+          --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_sources_withheld_live.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_sources_withheld_routes.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_starter_run.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_trend_store.py
