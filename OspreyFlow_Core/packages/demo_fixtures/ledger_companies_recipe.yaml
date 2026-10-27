@@ -5,7 +5,7 @@ version: 1
 label: "Operation Ledger — companies register extract"
 connector:
   profile: ledger-fixture-generic
-ontology_version: 16
+ontology_version: 17
 pack_versions: {fibo: 1}
 
 defaults:

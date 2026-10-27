@@ -64,7 +64,7 @@ entity_types:
     properties:
       - {name: title, type: string, indexed: true}
       - {name: sent_at, type: datetime}           # an email as a Document (ADR-092 Amendment 2)
-      - {name: message_id, type: string}
+      - {name: message_id, type: string, indexed: true}  # v17: a reference finds a report by it (ADR-127 Amendment 37)
       - {name: event_id, type: string}            # the analytics event it was made from
       - {name: media_kind, type: enum, values: [text, image, video]}   # ADR-094
       - {name: object_ref, type: string}          # its file in the object store, never the graph

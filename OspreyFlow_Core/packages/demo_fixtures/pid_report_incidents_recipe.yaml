@@ -10,7 +10,7 @@ version: 1
 label: "Report incidents. One row per intelligence report and the incident it mentions."
 connector:
   profile: generic-csv
-ontology_version: 16
+ontology_version: 17
 pack_versions: {niem: 3}
 
 defaults:

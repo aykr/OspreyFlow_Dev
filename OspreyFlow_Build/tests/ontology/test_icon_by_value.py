@@ -179,6 +179,6 @@ def test_the_niem_pack_maps_incident_category() -> None:
 
 def test_no_version_was_bumped_for_this() -> None:
     # ADR-128 Amendment 3: presentation keys change in place, so no recipe's pin is flagged.
-    assert load_default_ontology().version == 16
+    assert load_default_ontology().version == 17
     raw = yaml.safe_load((Path(_SCHEMA_PATH).parent.parent / "packs" / "niem.yaml").read_text())
     assert raw["pack_version"] == 3

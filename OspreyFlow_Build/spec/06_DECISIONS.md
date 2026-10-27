@@ -19308,6 +19308,43 @@ under the owner's settings for Brief 3.
     …` needs `PYTHONPATH=.:packages` from `OspreyFlow_Core`, the same cause as ADR-124 Amendment 16.
     The document is corrected.
 
+### ADR-127, Amendment 37 (27 October 2026) — a report can be referenced by its id, and a reference that can find nothing is refused
+
+The owner's ruling of 27 October 2026 on Amendment 36's option: "Index + Verify guard".
+- **Ontology version 17.** `Document.message_id` is declared `indexed: true`. An index is something
+  an adapter reads, so the core version moves, as the icon amendment (spec 01 §1.1) implies by
+  contrast: 16 becomes 17. Every recipe fixture pinned to 16 is bumped in the same change, as at v7,
+  v8 and v9: 42 recipe files, and, by the owner's ruling of 27 October 2026 ("Bump the pins only"),
+  the six `hmp_*_recipe.yaml` pins as well. Only their `ontology_version` line changed, nothing else
+  in the HMP fixture, so that pack still loads. The older pins (3, 6, 7, 8, 10) are deliberate
+  old-version fixtures and stay.
+  - **Existing data.** `apply_schema` already copies a newly indexed property up onto nodes written
+    before it was indexed (`graph_arcadedb/schema.py`). A deployment's existing reports therefore
+    become findable by `message_id` on the Conduit's next start, with no migration.
+  - **What it fixes.** R17 (`pid-report-incidents`) now finds R9's reports by `message_id` and links
+    each incident to the real report. Ch5's one pattern and S2 can then pass after chapter 4.
+- **The guard** (`services/ingest/recipe_rules.py` `reference_match_problems`, inside
+  `recipe_rule_violations`, so it also holds at Map save, at run and at seed; a `RecipeRuleError`,
+  the existing 422 `recipe_rule`). At Verify and at publish, an entity with `on_match: reference` must name in
+  `match_on` one of its type's identifiers or a property declared `indexed: true` in the loaded
+  ontology (core and packs). Those are the only fields `find_node` can look a node up by. Any other
+  `match_on` is refused by name, with the reason, so a recipe of this kind fails at Verify instead
+  of silently making a new node for every row.
+- **The refusal reads, for example:** "Document cannot be found by sent_at: a reference can only
+  match an identifier or an indexed property of the type, so this would make a new Document for
+  every row."
+- **Tests, written first.**
+  - In `tests/ingest/test_reference_match_guard.py`, seven cases: refused naming the type and field;
+    an identifier passes; an indexed property passes; a non-reference entity is not checked; Verify
+    refuses; publish refuses; `message_id` is indexed and the PID report recipe passes.
+  - In `tests/ingest/test_report_found_by_message_id_live.py`, on the real ArcadeDB: the
+    R17-shaped load made 3 new reports before the change, and after it makes none and references
+    all 3.
+  - **Plant:** a check that read only `identifiers` gave 8 failures, among them the indexed-property
+    case and six PID recipes. It was restored from a saved copy, md5 matching.
+  - One existing test's local Asset-by-`serial` reference was refused by the guard, correctly; its
+    `serial` property is now declared indexed.
+
 ### ADR-128 — Brief 3's analysis screens: add many, select what is lit, the case brief, icons by value
 
 **Status:** Accepted (26 October 2026), by the coordinator under the owner's delegation for Brief 3 ("keep

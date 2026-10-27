@@ -109,7 +109,12 @@
 # Document that verifies them, with the Document's kind, expiry and fraud mark; an organisation's
 # country and industry; a party's screening `listing` and `list_name`; `ip` as an endpoint kind;
 # an organisation may use an endpoint. Republish once; fixtures bumped to 16.
-version: 16
+#
+# v17 (ADR-127 Amendment 37): `Document.message_id` is indexed, so a recipe can reference a report
+# by it (`match_on: message_id, on_match: reference`). It was not, the store found nothing for the
+# PID report incidents' lookup, and the engine made an empty report for every row. Every recipe
+# fixture pinned to 16 is bumped to 17 alongside this.
+version: 17
 entity_types:
   - name: Person
     pole_class: person
@@ -201,7 +206,7 @@ entity_types:
       # id, and the analytics event it was made from, which the reader reads its text from. All
       # optional; the version stays 11 for the reason ADR-079 gives (nothing a recipe writes changes).
       - {name: sent_at, type: datetime}
-      - {name: message_id, type: string}
+      - {name: message_id, type: string, indexed: true}
       - {name: event_id, type: string}
       # ADR-094 step 2: what the content is, and where its file is kept. A file is never stored in
       # the graph: `object_ref` names it in the deployment's object store.

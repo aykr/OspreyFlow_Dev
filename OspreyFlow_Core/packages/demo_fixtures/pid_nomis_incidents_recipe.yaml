@@ -9,7 +9,7 @@ version: 1
 label: "Visits and incidents (NOMIS). One row per participant per incident: assaults, disorder and finds, with the person's role."
 connector:
   profile: generic-csv
-ontology_version: 16
+ontology_version: 17
 pack_versions: {niem: 3}
 
 defaults:

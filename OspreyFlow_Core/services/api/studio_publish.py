@@ -34,6 +34,7 @@ from services.ingest.engine import (
 from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
 from services.ingest.pipeline import recipe_packs
 from services.ingest.recipe_loader import load_recipe
+from services.ingest.recipe_rules import check_reference_matches
 
 from conduit_common.transactions import rollback_keeping_failure
 from ontology.handling import HandlingScheme, merge_handling
@@ -140,6 +141,13 @@ def pack_versions_for(
             )
         pins[pack] = ontology.packs[pack]
     return pins
+
+
+def check_before_publish(draft: StudioRecipeDraft, ontology: OntologySchema) -> None:
+    """What a publish refuses beyond Verify having passed (ADR-127 Amendment 37): a reference on a
+    field the store cannot find an entity by. Raises `RecipeRuleError`; writes nothing."""
+    assert draft.row_template is not None
+    check_reference_matches(draft.row_template, ontology)
 
 
 def build_recipe(

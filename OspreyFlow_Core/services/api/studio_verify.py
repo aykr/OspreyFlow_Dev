@@ -21,6 +21,7 @@ from collections.abc import Mapping, Sequence
 
 from services.ingest.engine import RowKeys, dry_run_recipe
 from services.ingest.profiler import DEFAULT_SAMPLE_SIZE, _shape_mask
+from services.ingest.recipe_rules import check_reference_matches
 
 from ontology.handling import HandlingScheme, principal_may_view
 from ports.graph import GraphPort
@@ -105,6 +106,9 @@ async def run_verify(
         raise RecipeNotReadyForProfileError(draft.recipe_id)
     if draft.row_template is None:
         raise RowTemplateMissingError(draft.recipe_id)
+    # ADR-127 Amendment 37: a reference the store cannot find would show here as "would create"
+    # for every row, which is a mistake the author should be told, not a result.
+    check_reference_matches(draft.row_template, ontology)
 
     source_handling = resolve_source_handling(draft)
     all_rows = _read_recipe_rows(draft)

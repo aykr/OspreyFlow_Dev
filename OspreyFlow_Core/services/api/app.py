@@ -594,6 +594,7 @@ from .studio_publish import (
     GitCommitError,
     RecipeNotRunnableError,
     build_recipe,
+    check_before_publish,
     load_published_recipe,
     pack_versions_for,
     write_and_commit_recipe,
@@ -7637,6 +7638,7 @@ async def publish_studio_recipe(
     # ADR-120 D10, Amendment 1: the pins come from the live ontology, for the packs the recipe
     # names and the packs whose types it writes.
     assert recipe.row_template is not None
+    check_before_publish(recipe, ontology)
     try:
         pins = pack_versions_for(recipe.pipeline, recipe.row_template, ontology)
     except ValueError as error:

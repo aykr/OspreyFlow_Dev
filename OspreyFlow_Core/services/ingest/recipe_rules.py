@@ -186,6 +186,37 @@ class RecipeRuleError(Exception):
         self.problems = problems
 
 
+def reference_match_problems(template: RowTemplate, ontology: OntologySchema) -> list[str]:
+    """ADR-127 Amendment 37: an entity looked up by reference (`on_match: reference`) is found by
+    `GraphPort.find_node`, which the store answers only for a type's `identifiers` and its
+    `indexed` properties. A reference on any other property never matches, so the engine would
+    write a new, empty node for every row; each such entity is refused here, in one sentence. An
+    entity that is not a reference, one with no `match_on`, and a type the ontology lacks (refused
+    elsewhere) are not judged."""
+    problems: list[str] = []
+    for entity in template.entities:
+        if entity.on_match != "reference" or not entity.match_on:
+            continue
+        type_def = ontology.entity_type(entity.type)
+        if type_def is None:
+            continue
+        findable = set(type_def.identifiers) | {p.name for p in type_def.properties if p.indexed}
+        if entity.match_on not in findable:
+            problems.append(
+                f"{entity.type} cannot be found by {entity.match_on}: a reference can only match "
+                f"an identifier or an indexed property of the type, so this would make a new "
+                f"{entity.type} for every row."
+            )
+    return problems
+
+
+def check_reference_matches(template: RowTemplate, ontology: OntologySchema) -> None:
+    """`reference_match_problems`, raised as `RecipeRuleError` for Verify and publish."""
+    problems = reference_match_problems(template, ontology)
+    if problems:
+        raise RecipeRuleError(problems)
+
+
 def recipe_rule_violations(
     template: RowTemplate,
     ontology: OntologySchema,
@@ -210,6 +241,7 @@ def recipe_rule_violations(
     does not have, and a column bound in `provenance`, are refused: neither would be read."""
     problems: list[str] = []
     problems.extend(handling_baseline_problems(template, defaults_handling, scheme))
+    problems.extend(reference_match_problems(template, ontology))
     # A column Connect declares as carrying a part must be bound by some element: else the
     # source's rows load at the default marking whatever that column says (rule 3). Judged at save
     # and at run (`declared_columns`); a binding to an undeclared column is refused at save only

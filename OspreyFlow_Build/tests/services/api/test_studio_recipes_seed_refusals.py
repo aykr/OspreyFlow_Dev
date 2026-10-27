@@ -204,7 +204,7 @@ def _previous_row(pipeline: Any) -> dict[str, Any]:
             "unmapped_fields": [], "pipeline": pipeline, "deduplicate": None,
         }),
         "owning_unit": "u", "created_by": "a", "created_at": NOW, "verified_at": NOW,
-        "ontology_version": 16, "pack_versions": None, "git_path": "recipes/r9.yaml",
+        "ontology_version": 17, "pack_versions": None, "git_path": "recipes/r9.yaml",
         "published_by": "a", "published_at": NOW, "schedule_cron": None, "schedule_watch": None,
         "dataset_id": "prison-intelligence",
     }  # fmt: skip
@@ -389,7 +389,7 @@ async def test_a_row_already_there_is_left_exactly_as_it_is_whatever_its_status(
             "recipe_id": "pid-intel-reports", "version": 7, "status": status, "label": "Mapped",
             "content": "{}", "owning_unit": "verify", "created_by": "someone",
             "created_at": NOW, "dataset_id": "prison-intelligence", "verified_at": NOW,
-            "ontology_version": 16, "pack_versions": None, "git_path": None, "published_by": None,
+            "ontology_version": 17, "pack_versions": None, "git_path": None, "published_by": None,
             "published_at": None, "schedule_cron": None, "schedule_watch": None,
         }  # fmt: skip
         conn = _DraftConn([row])

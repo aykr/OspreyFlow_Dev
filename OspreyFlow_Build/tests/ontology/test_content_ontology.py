@@ -16,7 +16,7 @@ ONTOLOGY = load_default_ontology()
 
 
 def test_the_ontology_is_version_16() -> None:
-    assert ONTOLOGY.version == 16
+    assert ONTOLOGY.version == 17
 
 
 def test_a_document_declares_its_media_kind_and_its_file_reference() -> None:

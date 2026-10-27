@@ -99,7 +99,7 @@ async def test_write_and_commit_recipe_goes_through_the_same_commit(
     recipe = Recipe.model_validate(
         {
             "id": "r-two", "version": 4, "label": "x", "connector": {"profile": "generic-csv"},
-            "ontology_version": 16, "defaults": {"legal_basis": "x"},
+            "ontology_version": 17, "defaults": {"legal_basis": "x"},
             "row_template": {"entities": [], "edges": []},
         }
     )  # fmt: skip

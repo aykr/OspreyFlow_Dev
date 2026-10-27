@@ -13,7 +13,7 @@ version: 1
 label: "Prisoner money. One row per transfer to a prisoner's private-cash account."
 connector:
   profile: generic-csv
-ontology_version: 16
+ontology_version: 17
 pack_versions: {}
 
 defaults:

@@ -8,7 +8,7 @@ version: 1
 label: "Prisoners and movements (NOMIS). One row per cell stay: a prisoner in a cell from a start to an end, and no end while the stay runs."
 connector:
   profile: generic-csv
-ontology_version: 16
+ontology_version: 17
 pack_versions: {}
 
 defaults:

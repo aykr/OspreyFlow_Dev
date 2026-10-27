@@ -6,7 +6,7 @@ version: 1
 label: "Operation Ledger — suspicious activity report"
 connector:
   profile: ledger-fixture-generic
-ontology_version: 16
+ontology_version: 17
 
 defaults:
   provenance: {state: asserted}

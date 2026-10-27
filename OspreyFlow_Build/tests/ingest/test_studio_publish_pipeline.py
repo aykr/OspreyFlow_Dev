@@ -324,7 +324,7 @@ def test_build_recipe_without_pack_versions_is_refused() -> None:
         row_template=_row_template(),
     )
     with pytest.raises(TypeError, match="pack_versions"):
-        build_recipe(draft, ontology_version=16, schedule_cron=None, schedule_watch=None)  # type: ignore[call-arg]
+        build_recipe(draft, ontology_version=17, schedule_cron=None, schedule_watch=None)  # type: ignore[call-arg]
 
 
 def _account_template() -> RowTemplate:

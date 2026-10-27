@@ -16,7 +16,7 @@ version: 1
 label: "PIN phone contacts (BT PIN). One row per call a prisoner made on their PIN account."
 connector:
   profile: pin-calls-csv
-ontology_version: 16
+ontology_version: 17
 pack_versions: {}
 
 defaults:

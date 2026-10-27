@@ -8,7 +8,7 @@ version: 1
 label: "Conflicts (NOMIS). One row per sighting of a conflict between two prisoners."
 connector:
   profile: generic-csv
-ontology_version: 16
+ontology_version: 17
 pack_versions: {niem: 3}
 
 defaults:

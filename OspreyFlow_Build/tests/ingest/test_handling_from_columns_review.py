@@ -1194,7 +1194,7 @@ def _ontology_with_a_numeric_match_key() -> Any:
     ontology = ONTOLOGY.model_copy(deep=True)
     asset = ontology.entity_type("Asset")
     assert asset is not None
-    asset.properties.append(PropertyDef(name="serial", type=PropertyType.INTEGER))
+    asset.properties.append(PropertyDef(name="serial", type=PropertyType.INTEGER, indexed=True))
     return ontology
 
 

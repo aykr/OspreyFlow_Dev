@@ -131,7 +131,7 @@ def test_the_recipe_is_pinned_to_the_ontology_and_pack_the_deployment_carries(
     file: str, source: str
 ) -> None:
     recipe = load(file)
-    assert recipe.ontology_version == 16 == ONTOLOGY.version
+    assert recipe.ontology_version == 17 == ONTOLOGY.version
     # Exactly what a Studio publish would stamp (ADR-127 Amendment 25): a pack the recipe neither
     # names nor writes a type of is not pinned, so a pack's version change flags only what it affects.
     # R9's file is the exception, open with the coordinator: it writes core types only, but its

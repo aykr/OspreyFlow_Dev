@@ -12,7 +12,7 @@ from ontology.loader import load_default_ontology
 
 def test_v16_carries_what_kyc_reads() -> None:
     core = load_default_ontology()
-    assert core.version == 16
+    assert core.version == 17
     verified_by = core.edge_type("VERIFIED_BY")
     assert verified_by is not None
     assert set(verified_by.from_types) == {"Person", "Organisation"}
