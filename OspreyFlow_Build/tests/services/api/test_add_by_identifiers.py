@@ -21,6 +21,7 @@ What a mistake would do, and the case that catches it:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -32,6 +33,9 @@ from services.api.add_by_identifiers import (
     resolve_identifiers,
 )
 
+from adapters.graph_arcadedb.adapter import FIND_WITH_ALSO_LIMIT
+from ontology.handling import load_uk_le_scheme, principal_may_view
+from ports.graph import FindLimitExceeded
 from schemas.domain import (
     AuditStub,
     Handling,
@@ -43,6 +47,7 @@ from schemas.domain import (
 )
 
 ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+SCHEME = load_uk_le_scheme()
 
 
 def _node(node_id: str, kind: str, props: dict[str, Any]) -> Node:
@@ -72,12 +77,30 @@ def _endpoint(node_id: str, value: str, kind: str) -> Node:
     )
 
 
-class _Graph:
-    """What the principal may see, keyed by `(type, field, value)`. Everything else, a node that
-    exists above the principal's clearance included, is `None`, as the adapter answers."""
+def _hidden(node: Node) -> Node:
+    """The same node above the principal's clearance."""
+    return node.model_copy(
+        update={
+            "handling": Handling(
+                classification="SECRET",
+                handling_code="P",
+                originator="unit-1",
+                owning_unit="unit-1",
+            )
+        }
+    )
 
-    def __init__(self, *visible: tuple[str, str, str, Node]) -> None:
-        self.visible = {(t, f, v): n for t, f, v, n in visible}
+
+class _Graph:
+    """The adapter's `find_node` as far as this file needs it (rule 15: it refuses what the real
+    one refuses). It holds every node, the ones above the principal included; reads only the
+    nodes the principal may view (the filter is in the query, before the bound); reads at most
+    `FIND_WITH_ALSO_LIMIT + 1` of those when asked to choose by `also` and one otherwise; takes the
+    first read carrying every `also` value; and, when none does and more than the bound were read,
+    raises `FindLimitExceeded` rather than answer "nothing"."""
+
+    def __init__(self, *nodes: Node) -> None:
+        self.nodes = list(nodes)
         self.calls: list[tuple[str, str, str]] = []
 
     async def find_node(
@@ -87,21 +110,35 @@ class _Graph:
         value: str,
         principal: Principal,
         *,
-        also: dict[str, str] | None = None,
+        also: Mapping[str, str] | None = None,
     ) -> Node | None:
         self.calls.append((entity_type, identifier_field, value))
-        return self.visible.get((entity_type, identifier_field, value))
+        bound = FIND_WITH_ALSO_LIMIT if also else 0
+        read = [
+            n
+            for n in self.nodes
+            if n.type == entity_type
+            and n.properties.get(identifier_field) == value
+            and principal_may_view(n.handling, principal, SCHEME)
+        ][: bound + 1 if also else 1]
+        for node in read:
+            if all(node.properties.get(k) == v for k, v in (also or {}).items()):
+                return node
+        if also and len(read) > bound:
+            raise FindLimitExceeded(entity_type, identifier_field, bound)
+        return None
 
 
 def _graph() -> _Graph:
     return _Graph(
-        ("Person", "prison_number", "Z1234ZZ", _person("p1", prison_number="Z1234ZZ")),
-        ("Person", "nino", "QQ123456A", _person("p2", nino="QQ123456A")),
-        ("Endpoint", "value_normalised", "+447700900123",
-         _endpoint("e1", "+447700900123", "msisdn")),
-        ("Endpoint", "value_normalised", "SYN-70417", _endpoint("e2", "SYN-70417", "account")),
+        _person("p1", prison_number="Z1234ZZ"),
+        _person("p2", nino="QQ123456A"),
+        _endpoint("e1", "+447700900123", "msisdn"),
+        _endpoint("e2", "SYN-70417", "account"),
         # An endpoint of another kind holding a value an account reference reads as.
-        ("Endpoint", "value_normalised", "PIN-Z2345ZZ", _endpoint("e3", "PIN-Z2345ZZ", "handle")),
+        _endpoint("e3", "PIN-Z2345ZZ", "handle"),
+        # A person above the principal's clearance, which the lookup must answer as nobody.
+        _hidden(_person("p-hidden", prison_number="Z5555ZZ")),
     )
 
 
@@ -139,10 +176,7 @@ async def test_a_repeat_of_an_identifier_that_matched_nothing_is_still_repeated(
 
 
 async def test_a_person_found_by_two_identifiers_is_added_once() -> None:
-    both = _person("p9", prison_number="Z7777ZZ", nino="QQ777777A")
-    graph = _Graph(
-        ("Person", "prison_number", "Z7777ZZ", both), ("Person", "nino", "QQ777777A", both)
-    )
+    graph = _Graph(_person("p9", prison_number="Z7777ZZ", nino="QQ777777A"))
     result = await resolve_identifiers(graph, ["Z7777ZZ QQ777777A"], ANALYST)
     assert [n.id for n in result.nodes] == ["p9"]
     assert result.counts.found == 2
@@ -155,14 +189,17 @@ async def test_an_endpoint_of_another_kind_is_not_a_match() -> None:
 
 
 async def test_a_hidden_identifier_and_a_made_up_one_give_the_same_counts_and_work() -> None:
-    """The graph holds a person at `Z5555ZZ` the principal may not see, so it answers `None` for it,
-    as for `Z6666ZZ`, which nobody holds: same shape, same figure, same single lookup each."""
+    """The graph holds a person at `Z5555ZZ` the principal may not see (SECRET), so it answers
+    `None` for it, as for `Z6666ZZ`, which nobody holds: same shape, same figure, same single
+    lookup each."""
     around = ["Z1234ZZ", "07700 900123"]
     hidden_graph, made_up_graph = _graph(), _graph()
     hidden = await resolve_identifiers(hidden_graph, [*around, "Z5555ZZ"], ANALYST)
     made_up = await resolve_identifiers(made_up_graph, [*around, "Z6666ZZ"], ANALYST)
-    assert hidden.counts == made_up.counts == IdentifierCounts(
-        read=3, found=2, matched_nothing=1, repeated=0
+    assert (
+        hidden.counts
+        == made_up.counts
+        == IdentifierCounts(read=3, found=2, matched_nothing=1, repeated=0)
     )
     assert [n.id for n in hidden.nodes] == [n.id for n in made_up.nodes]
     assert [c[:2] for c in hidden_graph.calls] == [c[:2] for c in made_up_graph.calls]
@@ -198,39 +235,62 @@ async def test_the_count_is_over_what_the_strings_hold_not_over_the_strings() ->
         await resolve_identifiers(_Graph(), one_string, ANALYST)
 
 
-class _SharedTextGraph:
-    """Two visible Endpoints holding the same `value_normalised` with different kinds, the handle
-    first. A lookup that cannot say which kind it wants gets the first, as the store's `limit(1)`
-    does; one that names the kind (`also`) gets the one of that kind."""
-
-    def __init__(self, *nodes: Node) -> None:
-        self.nodes = nodes
-
-    async def find_node(
-        self,
-        entity_type: str,
-        identifier_field: str,
-        value: str,
-        principal: Principal,
-        *,
-        also: dict[str, str] | None = None,
-    ) -> Node | None:
-        for node in self.nodes:
-            if node.type == entity_type and node.properties.get(identifier_field) == value:
-                if all(node.properties.get(k) == v for k, v in (also or {}).items()):
-                    return node
-        return None
-
-
 async def test_an_account_is_found_when_a_pin_handle_holds_the_same_text() -> None:
     """The kind is part of the lookup, not a check on whichever node came back first: a handle
     and an account with the same text were a coin toss, and the account could read as unmatched."""
     handle = _endpoint("e-handle", "SYN-70417", "handle")
     account = _endpoint("e-account", "SYN-70417", "account")
-    graph = _SharedTextGraph(handle, account)
+    graph = _Graph(handle, account)
     result = await resolve_identifiers(graph, ["SYN-70417"], ANALYST)
     assert [n.id for n in result.nodes] == ["e-account"]
     assert result.counts == IdentifierCounts(read=1, found=1, matched_nothing=0, repeated=0)
-    reversed_order = _SharedTextGraph(account, handle)
+    reversed_order = _Graph(account, handle)
     again = await resolve_identifiers(reversed_order, ["SYN-70417"], ANALYST)
     assert [n.id for n in again.nodes] == ["e-account"]
+
+
+def _handles(count: int, value: str = "SYN-70417") -> list[Node]:
+    return [_endpoint(f"e-handle-{n:03d}", value, "handle") for n in range(count)]
+
+
+async def test_an_account_among_more_than_the_bound_of_handles_is_found_if_it_is_read() -> None:
+    """The bound is `FIND_WITH_ALSO_LIMIT` and the read is one past it, so an account that is the
+    last of bound + 1 same-value nodes is found, not missed."""
+    graph = _Graph(*_handles(FIND_WITH_ALSO_LIMIT), _endpoint("e-account", "SYN-70417", "account"))
+    result = await resolve_identifiers(graph, ["SYN-70417"], ANALYST)
+    assert [n.id for n in result.nodes] == ["e-account"]
+
+
+async def test_more_than_the_bound_of_same_value_nodes_with_no_match_is_not_a_silent_miss() -> None:
+    """Rule 2: past the bound with no node of the kind in what was read, the answer is not "matched
+    nothing you can see" (which would be false: an account may be among the rest). It is its own
+    count, `undecided`, beside `found` and `matched_nothing`, and the nodes are not added."""
+    graph = _Graph(*_handles(FIND_WITH_ALSO_LIMIT + 5))
+    result = await resolve_identifiers(graph, ["SYN-70417", "Z9999ZZ"], ANALYST)
+    assert result.counts == IdentifierCounts(
+        read=2, found=0, matched_nothing=1, repeated=0, undecided=1
+    )
+    assert result.nodes == []
+
+
+async def test_nodes_above_the_principal_do_not_count_toward_the_bound() -> None:
+    """The filter is in the query, before the bound (rule 3): a pile of same-value nodes the
+    principal may not see neither hides the account from them nor makes the lookup overflow, so
+    the bound cannot be used to tell that they are there."""
+    hidden = [_hidden(n) for n in _handles(FIND_WITH_ALSO_LIMIT + 5)]
+    graph = _Graph(*hidden, _endpoint("e-account", "SYN-70417", "account"))
+    result = await resolve_identifiers(graph, ["SYN-70417"], ANALYST)
+    assert [n.id for n in result.nodes] == ["e-account"]
+    only_hidden = await resolve_identifiers(_Graph(*hidden), ["SYN-70417"], ANALYST)
+    assert only_hidden.counts == IdentifierCounts(
+        read=1, found=0, matched_nothing=1, repeated=0, undecided=0
+    )
+
+
+async def test_the_fake_refuses_as_the_adapter_does() -> None:
+    """The fake above must be able to refuse (rule 15), or the cases through it prove nothing."""
+    graph = _Graph(*_handles(FIND_WITH_ALSO_LIMIT + 1))
+    with pytest.raises(FindLimitExceeded):
+        await graph.find_node(
+            "Endpoint", "value_normalised", "SYN-70417", ANALYST, also={"endpoint_kind": "account"}
+        )

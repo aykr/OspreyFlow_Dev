@@ -242,3 +242,17 @@ def test_every_shipped_recipe_passes_the_reference_guard() -> None:
         judged += 1
         assert reference_match_problems(template, ONTOLOGY) == [], path.name
     assert judged >= 20, "the scan found no recipes: the paths are wrong"
+
+
+def test_a_half_built_template_saves_but_an_unfindable_field_is_still_refused_at_save() -> None:
+    """A Map save may hold a template still being built (`complete=False`): an entity that does
+    not yet bind its `match_on` is saved, as the route test of an empty row template requires. A
+    `match_on` no lookup can ever answer is refused even then, and the complete check at Verify,
+    publish and run still refuses the unbound one (found by the live route tests, 27 October
+    2026)."""
+    unbound = _endpoint_template("value_normalised", {})
+    assert reference_match_problems(unbound, ONTOLOGY, complete=False) == []
+    assert recipe_rule_violations(unbound, ONTOLOGY, complete=False) == []
+    assert reference_match_problems(unbound, ONTOLOGY) != []
+    unfindable = _template("Document", "sent_at")
+    assert reference_match_problems(unfindable, ONTOLOGY, complete=False) != []

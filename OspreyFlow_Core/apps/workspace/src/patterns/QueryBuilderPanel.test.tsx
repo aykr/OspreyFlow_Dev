@@ -408,4 +408,32 @@ describe("QueryBuilderPanel ask to search over a pattern already there", () => {
     expect(screen.queryByText("~4 matches")).toBeNull();
     expect(screen.queryByRole("button", { name: "Restore the previous pattern" })).toBeNull();
   });
+
+  it("does not apply a proposal that arrives after the pattern was renamed meanwhile", async () => {
+    const { release } = mountSaved(true);
+    await loadSaved();
+    ask();
+    fireEvent.change(screen.getByRole("textbox", { name: "Pattern name" }), { target: { value: "Renamed" } });
+    release();
+    await screen.findByText(/arrived after you changed the pattern/);
+    expect((screen.getByRole("textbox", { name: "Pattern name" }) as HTMLInputElement).value).toBe("Renamed");
+    expect(screen.getByRole("group", { name: "Pattern node s: Person" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Restore the previous pattern" })).toBeNull();
+  });
+
+  it("does not apply a proposal that arrives after a Save meanwhile, so Restore cannot bring back a stale id", async () => {
+    const { release, fetchMock } = mountSaved(true);
+    fireEvent.click(header("Add to the pattern"));
+    fireEvent.click(screen.getByRole("button", { name: "Add variable" }));
+    ask();
+    fireEvent.click(header("Save and load"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("Saved as version 1.");
+    release();
+    await screen.findByText(/arrived after you changed the pattern/);
+    expect(screen.queryByRole("button", { name: "Restore the previous pattern" })).toBeNull();
+    // The pattern is the saved one: the next Save writes a version of it, not a duplicate.
+    expect(screen.getByRole("button", { name: "Save new version" })).toBeTruthy();
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/patterns/save"))).toHaveLength(1);
+  });
 });

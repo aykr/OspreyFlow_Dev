@@ -184,6 +184,23 @@ class PrincipalExchangeUnavailable(PrincipalExchangeError):
     about the target subject."""
 
 
+def _access_token_of(response: httpx.Response, what: str) -> str:
+    """The `access_token` of a token endpoint's 200, or `PrincipalExchangeUnavailable`. A body that
+    is not JSON, is not an object, or carries no non-empty string token is a malformed answer, not
+    a refusal and not an exception of its own: left alone they escaped `resolve_for_owner` as
+    `JSONDecodeError`, `AttributeError` and `KeyError`, none a `PrincipalExchangeError`."""
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise PrincipalExchangeUnavailable(
+            f"{what} answered 200 with a body that is not JSON"
+        ) from exc
+    token = body.get("access_token") if isinstance(body, dict) else None
+    if not isinstance(token, str) or not token:
+        raise PrincipalExchangeUnavailable(f"{what} answered 200 with no access_token")
+    return token
+
+
 class PrincipalResolver:
     """One `PyJWKClient` per configured JWKS URL, built once at process
     start and reused for the process lifetime — `resolve()` itself makes
@@ -273,7 +290,13 @@ class PrincipalResolver:
                 f"enabled-status read for owner {owner_id!r} returned "
                 f"{response.status_code} {response.text}"
             )
-        found = response.json()
+        try:
+            found = response.json()
+        except ValueError as exc:
+            raise PrincipalExchangeUnavailable(
+                f"the read of owner {owner_id!r} answered 200 with a body that is not JSON: "
+                "OIDC_ADMIN_USERS_URL may not be the realm's users endpoint"
+            ) from exc
         if by_username:
             if not isinstance(found, list):
                 raise PrincipalExchangeUnavailable(
@@ -292,6 +315,22 @@ class PrincipalResolver:
             raise PrincipalExchangeRefused(
                 f"owner {owner_id!r} is not known to the identity provider"
             )
+        if by_username:
+            # `exact=true` asks for the whole username; a realm, proxy or version that drops it
+            # answers every name that starts with the text. Exactly one user, and the one asked
+            # for, or nothing is exchanged: the first of several is a coin toss and a prefix match
+            # is somebody else. Keycloak stores usernames in lower case, so the comparison is
+            # case-folded.
+            if len(users) != 1:
+                raise PrincipalExchangeUnavailable(
+                    f"the username read for owner {owner_id!r} answered {len(users)} users, "
+                    "where exactly one was asked for"
+                )
+            named = users[0].get("username") if isinstance(users[0], dict) else None
+            if not isinstance(named, str) or named.casefold() != owner_id.casefold():
+                raise PrincipalExchangeUnavailable(
+                    f"the username read for owner {owner_id!r} answered a different user"
+                )
         resolved = users[0].get("id") if isinstance(users[0], dict) else None
         if not isinstance(resolved, str) or not resolved:
             raise PrincipalExchangeUnavailable(
@@ -320,8 +359,7 @@ class PrincipalResolver:
             },
         )
         response.raise_for_status()
-        token: str = response.json()["access_token"]
-        return token
+        return _access_token_of(response, "this client's own token")
 
     async def resolve_for_owner_detailed(self, owner_id: str) -> Principal:
         """Raises rather than collapses — see the two exception classes above. Never caches
@@ -373,11 +411,7 @@ class PrincipalResolver:
                 f"token exchange refused for owner {owner_id!r}: "
                 f"{response.status_code} {response.text}"
             )
-        exchanged_token = response.json().get("access_token")
-        if not exchanged_token:
-            raise PrincipalExchangeRefused(
-                f"token exchange for owner {owner_id!r} returned no access_token"
-            )
+        exchanged_token = _access_token_of(response, f"the exchange for owner {owner_id!r}")
         try:
             return self.resolve(exchanged_token)
         except PrincipalResolutionError as exc:

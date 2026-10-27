@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 
 from services.api.add_by_identifiers import IdentifierCounts, resolve_identifiers
 
+from adapters.graph_arcadedb.adapter import FIND_WITH_ALSO_LIMIT
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from conduit_common.identity import new_id
 from ontology.handling import load_uk_le_scheme
@@ -118,3 +119,29 @@ async def test_a_pin_and_an_account_holding_the_same_text_each_resolve_to_their_
         result = await resolve_identifiers(graph, ["SYN-70417"], READER)
         assert [n.id for n in result.nodes] == [account.id]
         assert result.counts == IdentifierCounts(read=1, found=1, matched_nothing=0, repeated=0)
+
+
+async def test_more_than_the_bound_of_same_value_nodes_is_never_a_silent_miss() -> None:
+    """Rule 2 and 15, against the real store: `find_node(also=...)` reads the nodes sharing the
+    value, one past `FIND_WITH_ALSO_LIMIT`. Each source keeps its own copy (rule 6), so more than
+    the bound sharing one value is ordinary. Written in one batch, to keep it fast.
+
+    - bound + 1 handles and no account: the answer is `undecided`, not "matched nothing";
+    - the bound's worth of handles and one account (bound + 1 in all, all of them read): found."""
+    async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+        over = [_endpoint("SYN-80001", "handle") for _ in range(FIND_WITH_ALSO_LIMIT + 1)]
+        exact = [_endpoint("SYN-80002", "handle") for _ in range(FIND_WITH_ALSO_LIMIT)]
+        account = _endpoint("SYN-80002", "account")
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes([*over, *exact, account], tx)
+        await graph.commit_transaction(tx)
+
+        none_of_the_kind = await resolve_identifiers(graph, ["SYN-80001"], READER)
+        assert none_of_the_kind.counts == IdentifierCounts(
+            read=1, found=0, matched_nothing=0, repeated=0, undecided=1
+        )
+        assert none_of_the_kind.nodes == []
+
+        within = await resolve_identifiers(graph, ["SYN-80002"], READER)
+        assert [n.id for n in within.nodes] == [account.id]
+        assert within.counts == IdentifierCounts(read=1, found=1, matched_nothing=0, repeated=0)

@@ -49,6 +49,7 @@ def _entry(case: str, at: datetime, question: str) -> QuestionEntry:
                 owning_unit="unit-1",
             )
         ],
+        event_scopes=["parent-1"],
     )
 
 
@@ -81,3 +82,27 @@ async def test_a_question_stored_before_graph_facts_reads_back_with_none(store) 
     (listed,) = await store.list_for_case(case)
     assert listed.question == "old"
     assert (listed.graph_node_ids, listed.graph_link_ids, listed.graph_citations) == ([], [], [])
+
+
+async def test_a_row_stored_before_events_were_recorded_reads_back_as_not_recorded(store) -> None:
+    """Rule 3: `event_scopes` is NULL for a row that predates it, and that is "not recorded", not
+    "no events": the earlier `event_handlings` default of '[]' is indistinguishable from a real
+    empty list, so history hides such a row with graph facts from everyone but its author. A new
+    row with no events reads back as `[]`, which is recorded."""
+    case = new_id()
+    async with store._pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO case_questions (id, investigation_id, author, question, answer, "
+            "document_ids, read_ids, candidate_ids, unplaced, model, created_at) "
+            "VALUES ($1, $2, 'analyst-1', 'old', 'An old answer.', '[]', '[]', '[]', 0, "
+            "'local-model', now())",
+            new_id(),
+            case,
+        )
+    new = _entry(case, datetime.now(UTC) + timedelta(seconds=1), "new")
+    new.event_scopes = []
+    new.event_handlings = []
+    await store.add(new)
+    old, fresh = await store.list_for_case(case)
+    assert old.event_scopes is None
+    assert fresh.event_scopes == [] and fresh.event_handlings == []

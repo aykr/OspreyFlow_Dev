@@ -179,6 +179,13 @@ class QuestionEntry(BaseModel):
     #: the asker. A reader who may not view one of them is not shown the entry (rule 3): the figures
     #: in its words would count an event they cannot see. Empty for an entry with no counted event.
     event_handlings: list[Handling] = Field(default_factory=list)
+    #: The cases whose events the counts were read from besides the case itself: the ancestors the
+    #: asker could see at Viewer (`visible_ancestors`). A reader whose own visible ancestors do not
+    #: include every one is not shown the entry (rule 3): they could not have counted those events
+    #: by asking. `None` is "not recorded" (a row from before this was kept), which is not "none":
+    #: `[]` is recorded, and no ancestor was read. It also marks `event_handlings` as recorded,
+    #: since the column's earlier default of '[]' cannot be told from a real empty list.
+    event_scopes: list[str] | None = None
 
 
 class QuestionAnswer(BaseModel):
@@ -336,6 +343,9 @@ ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS graph_node_ids JSONB NOT NUL
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS graph_link_ids JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS graph_citations JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS event_handlings JSONB NOT NULL DEFAULT '[]';
+-- NULL is "not recorded": every row written before this column existed, including those whose
+-- event_handlings holds the earlier default '[]' (which a real "no events" cannot be told from).
+ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS event_scopes JSONB;
 """
 
 
@@ -361,8 +371,8 @@ class PostgresQuestionStore:
             await conn.execute(
                 "INSERT INTO case_questions (id, investigation_id, author, question, answer, "
                 "document_ids, read_ids, candidate_ids, unplaced, model, created_at, "
-                "graph_node_ids, graph_link_ids, graph_citations, event_handlings) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+                "graph_node_ids, graph_link_ids, graph_citations, event_handlings, event_scopes) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)",
                 entry.id,
                 entry.investigation_id,
                 entry.author,
@@ -378,6 +388,7 @@ class PostgresQuestionStore:
                 json.dumps(entry.graph_link_ids),
                 json.dumps([c.model_dump() for c in entry.graph_citations]),
                 json.dumps([h.model_dump(mode="json") for h in entry.event_handlings]),
+                None if entry.event_scopes is None else json.dumps(entry.event_scopes),
             )
 
     async def list_for_case(self, investigation_id: str) -> list[QuestionEntry]:
@@ -397,6 +408,9 @@ class PostgresQuestionStore:
                     "graph_link_ids": json.loads(row["graph_link_ids"]),
                     "graph_citations": json.loads(row["graph_citations"]),
                     "event_handlings": json.loads(row["event_handlings"]),
+                    "event_scopes": (
+                        None if row["event_scopes"] is None else json.loads(row["event_scopes"])
+                    ),
                 }
             )
             for row in rows
@@ -460,13 +474,15 @@ class QuestionsService:
         principal: Principal,
         link_ids: Sequence[str],
         window: Interval | None,
-    ) -> tuple[list[tuple[str, int]], list[Handling]]:
+    ) -> tuple[list[tuple[str, int]], list[Handling], list[str]]:
         """The events on the links in scope, counted per month as the analyst: an event they may
         not see moves no figure (the store applies the access filter in its own query). Asked only
         by link, never by node: an event on a link the analyst may not see is not theirs to count,
-        and an empty list of links would not restrict the store at all, so no link, no question."""
+        and an empty list of links would not restrict the store at all, so no link, no question.
+        Returns, with the counts and the handlings counted, the ancestor cases whose events were
+        read (the asker's own visible ancestors), so history can ask the same of a later reader."""
         if not link_ids:
-            return [], []
+            return [], [], []
         base = EventFilter(
             investigation_scope=investigation_id, edge_ids=list(link_ids), window=window
         )
@@ -502,7 +518,18 @@ class QuestionsService:
             )
             for h in trend.handlings
         ]
-        return months, handlings
+        return months, handlings, list(ancestors)
+
+    async def _visible_ancestors(self, investigation_id: str, principal: Principal) -> list[str]:
+        """The cases `investigation_id` was branched from that `principal` may see at Viewer:
+        what `_events_per_month` reads for an asker, computed for a reader."""
+        if self._investigations is None:
+            return []
+        try:
+            case = await self._investigations.get(investigation_id)
+        except InvestigationNotFoundError:
+            return []
+        return await visible_ancestors(self._investigations, case, principal)
 
     async def _evidence_brief(
         self,
@@ -514,12 +541,13 @@ class QuestionsService:
         selected_link_ids: Sequence[str],
         window: Interval | None,
         documents_chars: int,
-    ) -> tuple[EvidenceBrief, list[Handling]]:
+    ) -> tuple[EvidenceBrief, list[Handling], list[str]]:
         """The brief for what `principal` selected, from their own view, refused whole when it and
         the documents do not fit together (rule 2). The cap is checked before the events are read,
         so the links the events are asked over are only ever as many as the budget allows. Returns,
-        with the brief, the distinct handlings of the events it counted: kept with the answer, so a
-        later reader is shown it only if they could have seen every one (rule 3)."""
+        with the brief, the distinct handlings of the events it counted and the ancestor cases they
+        were read from: kept with the answer, so a later reader is shown it only if they could have
+        seen every one, and could have read those cases themselves (rule 3)."""
         scope = scope_of(
             nodes,
             edges,
@@ -534,13 +562,13 @@ class QuestionsService:
         labels = {d.id: d.name for d in await self._datasets.of_case(investigation_id)}
         brief = write_brief(scope, labels)
         _fits(documents_chars, len(brief.text))
-        months, event_handlings = await self._events_per_month(
+        months, event_handlings, event_scopes = await self._events_per_month(
             investigation_id, principal, brief.link_ids, window
         )
         if months:
             brief = write_brief(scope, labels, months, event_handlings)
             _fits(documents_chars, len(brief.text))
-        return brief, event_handlings
+        return brief, event_handlings, event_scopes
 
     async def ask(
         self,
@@ -557,7 +585,7 @@ class QuestionsService:
         if not documents:
             raise NoDocumentsError(investigation_id)
         documents_chars = sum(len(text) for _, _, text, _ in documents)
-        brief, event_handlings = await self._evidence_brief(
+        brief, event_handlings, event_scopes = await self._evidence_brief(
             investigation_id,
             principal,
             nodes,
@@ -662,6 +690,7 @@ class QuestionsService:
             graph_link_ids=list(brief.link_ids),
             graph_citations=graph_citations,
             event_handlings=event_handlings,
+            event_scopes=event_scopes,
         )
         await self._store.add(entry)
         titles = {d: t for d, t, _, _ in documents}
@@ -700,6 +729,7 @@ class QuestionsService:
             )
             seen_nodes = {n.id for n in visible_nodes}
             seen_links = {e.id for e in visible_links}
+        reader_scopes: set[str] | None = None
         for entry in entries:
             if not await self._sees_all(investigation_id, entry.read_ids, principal):
                 continue
@@ -710,8 +740,23 @@ class QuestionsService:
                 continue
             # The per-month counts in the words were made as the asker: a reader who may not view
             # an event they counted is not shown the answer (rule 3).
-            if not self._working_set.may_view_all(entry.event_handlings, principal):
-                continue
+            if entry.event_scopes is None:
+                # Not recorded: the counts may have been made from events whose handling or case
+                # nobody kept. With graph facts that is unknown, so only the author is shown it.
+                if (entry.graph_link_ids or entry.graph_citations) and entry.author != principal.id:
+                    continue
+            else:
+                if not self._working_set.may_view_all(entry.event_handlings, principal):
+                    continue
+                # The events were read from cases the asker could see as well as this one: a reader
+                # who cannot see each of them could not have counted those events by asking.
+                if entry.event_scopes:
+                    if reader_scopes is None:
+                        reader_scopes = set(
+                            await self._visible_ancestors(investigation_id, principal)
+                        )
+                    if not reader_scopes.issuperset(entry.event_scopes):
+                        continue
             citations = []
             for document_id in entry.document_ids:
                 node = await self._working_set.visible_node(

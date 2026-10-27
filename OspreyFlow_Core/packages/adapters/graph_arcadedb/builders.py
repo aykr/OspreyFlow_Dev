@@ -55,6 +55,7 @@ class FindByIdentifierBuilder:
     #: How many nodes sharing the value are read, when the caller picks among them by a further
     #: property (`find_node(also=...)`). Such a property (an Endpoint's `endpoint_kind`) is not a
     #: top-level stored field, so it cannot be a `has` step: the nodes are read and chosen from.
+    #: The adapter passes its bound plus one, so that overflowing is knowable.
     limit: int = 1
 
     def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:

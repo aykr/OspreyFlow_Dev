@@ -76,6 +76,19 @@ class StoredLink:
     superseded: bool
 
 
+class FindLimitExceeded(Exception):
+    """`find_node(also=...)` read its bound of visible nodes sharing the identifier's value, found
+    none carrying the `also` values, and there were more (rule 2: refused, never a silent miss). The
+    nodes counted are only those the principal may see, so the refusal discloses nothing."""
+
+    def __init__(self, entity_type: str, identifier_field: str, bound: int) -> None:
+        super().__init__(
+            f"more than {bound} visible {entity_type} nodes share one {identifier_field}; "
+            "the lookup cannot choose among them"
+        )
+        self.entity_type, self.identifier_field, self.bound = entity_type, identifier_field, bound
+
+
 class AmbiguousElementId(Exception):
     """`GraphPort.revert_elements` was given an id that two stored types of one kind both hold.
     Ids are unique per type, not across the store, and a load's record keeps no types, so the call
@@ -202,11 +215,16 @@ class GraphPort(Protocol):
         *,
         also: Mapping[str, str] | None = None,
     ) -> Node | None:
-        """**`also`** names further properties that must equal, in the same query as the identifier
-        field: where two visible nodes share the identifier's value (an Endpoint's
-        `value_normalised` is shared by a handle and an account holding the same text) a caller
-        that wants one kind asks for it here, since the lookup returns one node and a check made
-        afterwards on whichever came back first would be a coin toss.
+        """**`also`** names further properties that must equal: where two visible nodes share the
+        identifier's value (an Endpoint's `value_normalised` is shared by a handle and an account
+        holding the same text) a caller that wants one kind asks for it here, since the lookup
+        returns one node and a check made afterwards on whichever came back first would be a coin
+        toss. It is not answered "in the same query": a property such as an Endpoint's kind is not
+        a field a query can test, so the adapter reads the visible nodes sharing the value, one
+        past its bound, and takes the first carrying every `also` value. If none of those does and
+        there were more than the bound, it raises `FindLimitExceeded` (rule 2) and never answers
+        `None`, since `None` means no visible node matches and an unread one might. The filter is
+        applied before the bound, so only nodes the principal may see count towards it.
 
         `01_DOMAIN_MODEL.md` §7's `match_on`/`on_match` needs this: the
         recipe engine's `on_match: reference` looks an entity up by its

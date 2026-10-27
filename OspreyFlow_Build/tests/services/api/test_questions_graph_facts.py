@@ -38,14 +38,22 @@ from services.api import questions
 from services.api.datasets import Dataset, InMemoryDatasetStore
 from services.api.document_reader import DocumentReaderService
 from services.api.email_extraction import email_document_id
+from services.api.investigations import (
+    AccessLevel,
+    InsufficientAccessError,
+    Investigation,
+    InvestigationNotFoundError,
+)
 from services.api.questions import (
     InMemoryQuestionStore,
+    QuestionEntry,
     QuestionsService,
     QuestionsTooLargeError,
 )
 from services.api.review import CandidateStatus
 from services.api.working_set.service import WorkingSetService
 
+from ontology.handling import principal_may_view
 from ports.analytics import TrendLimitExceeded
 from schemas.analytics import (
     CountedHandling,
@@ -175,7 +183,13 @@ _EVENT_NUMBERS = itertools.count(1)
 
 
 def _occurred(
-    month: str, handling_classification: str = "OFFICIAL", edge_id: str = CALLED
+    month: str,
+    handling_classification: str = "OFFICIAL",
+    edge_id: str = CALLED,
+    *,
+    scope: str = "inv-1",
+    handling_code: str = "P",
+    unit: str = "unit-1",
 ) -> EventRecord:
     return EventRecord(
         event_id=f"ev-{next(_EVENT_NUMBERS)}",
@@ -184,12 +198,12 @@ def _occurred(
         source_id=DANA,
         target_id=CALLUM,
         occurred_at=datetime.fromisoformat(f"{month}-10T10:00:00").replace(tzinfo=UTC),
-        investigation_scope="inv-1",
+        investigation_scope=scope,
         handling=Handling(
             classification=handling_classification,
-            handling_code="P",
-            originator="unit-1",
-            owning_unit="unit-1",
+            handling_code=handling_code,
+            originator=unit,
+            owning_unit=unit,
         ),
     )
 
@@ -211,8 +225,15 @@ class TrendAnalytics:
         counted = [
             e
             for e in self.events
-            if SCHEME.clears(principal.clearance, e.handling.classification)
-            and e.investigation_scope == f.investigation_scope
+            if principal_may_view(e.handling, principal, SCHEME)
+            and (
+                e.investigation_scope == f.investigation_scope
+                or (
+                    f.inherited is not None
+                    and e.investigation_scope in f.inherited.scopes
+                    and e.edge_id in f.inherited.edge_ids
+                )
+            )
             and (not f.edge_ids or e.edge_id in f.edge_ids)
             and (f.window is None or e.occurred_at >= f.window.valid_from)
             and (
@@ -250,6 +271,7 @@ async def _case(
     answer: dict[str, Any] | None = None,
     documents: list[Node] | None = None,
     reverse: bool = False,
+    investigations: Any = None,
 ) -> tuple[QuestionsService, FixedModel, TrendAnalytics, InMemoryCandidates, WritingGraph]:
     docs = (
         documents
@@ -296,7 +318,7 @@ async def _case(
         default_model="local-model",
         analytics=analytics,  # type: ignore[arg-type]
         datasets=datasets,
-        investigations=None,
+        investigations=investigations,
     )
     return service, model, analytics, candidates, graph
 
@@ -741,3 +763,158 @@ async def test_an_answer_over_visible_elements_is_shown_with_its_citations() -> 
     await service.ask("inv-1", "Who?", ANALYST, selected_node_ids=[DANA])
     (entry,) = await service.history("inv-1", ANALYST)
     assert [(c.number, c.link_ids) for c in entry.graph_citations] == [(1, [ASSOCIATED])]
+
+
+# --- which cases' events were counted (rule 3) ------------------------------------------------
+
+PARENT_VIEWER = Principal(id="asker-parent-viewer", clearance="OFFICIAL", org_unit="unit-1")
+BRANCH_ONLY = Principal(id="reader-branch-only", clearance="OFFICIAL", org_unit="unit-1")
+
+
+class _Lineage:
+    """`inv-1` is a branch of `parent-1`. Who may see which case is per principal, and a case a
+    principal may not see answers as one that does not exist, as the real store does."""
+
+    def __init__(self, viewers: dict[str, set[str]]) -> None:
+        self.viewers = viewers
+        self.cases = {
+            "parent-1": Investigation(
+                id="parent-1",
+                name="Parent",
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                created_by="alice",
+                owning_unit="unit-1",
+            ),
+            "inv-1": Investigation(
+                id="inv-1",
+                name="Branch",
+                created_at=datetime(2026, 1, 2, tzinfo=UTC),
+                created_by="alice",
+                owning_unit="unit-1",
+                branched_from="parent-1",
+            ),
+        }
+
+    async def get(self, investigation_id: str) -> Investigation:
+        if investigation_id not in self.cases:
+            raise InvestigationNotFoundError(investigation_id)
+        return self.cases[investigation_id]
+
+    async def get_authorized(
+        self, investigation_id: str, principal: Principal, *, need: AccessLevel
+    ) -> Investigation:
+        if investigation_id not in self.viewers.get(principal.id, set()):
+            if investigation_id in self.cases:
+                raise InsufficientAccessError(investigation_id)
+            raise InvestigationNotFoundError(investigation_id)
+        return await self.get(investigation_id)
+
+
+def _lineage() -> _Lineage:
+    return _Lineage({PARENT_VIEWER.id: {"parent-1", "inv-1"}, BRANCH_ONLY.id: {"inv-1"}})
+
+
+async def test_an_answer_counting_a_parents_events_is_not_shown_to_a_branch_only_reader() -> None:
+    """Rule 3: the asker could view the parent, so the parent's events on the shared link were
+    counted. A reader of the branch alone, cleared for every one of those events' handling, could
+    not have counted them by asking, so must not be shown figures that include them."""
+    service, _, analytics, _, _ = await _case(
+        events=[_occurred("2026-03", scope="parent-1"), _occurred("2026-03", scope="inv-1")],
+        investigations=_lineage(),
+    )
+    await service.ask("inv-1", "Who?", PARENT_VIEWER, selected_node_ids=[DANA])
+    ((request, _),) = analytics.requests
+    assert request.filter.inherited is not None and request.filter.inherited.scopes == ["parent-1"]
+    assert await service.history("inv-1", BRANCH_ONLY) == []
+    assert len(await service.history("inv-1", PARENT_VIEWER)) == 1
+
+
+async def test_an_answer_counting_only_own_events_is_shown_to_a_branch_only_reader() -> None:
+    """The plant above is able to fail the other way: a branch-only asker counts no parent, and a
+    branch-only reader is shown their answer."""
+    service, _, analytics, _, _ = await _case(
+        events=[_occurred("2026-03", scope="parent-1"), _occurred("2026-03", scope="inv-1")],
+        investigations=_lineage(),
+    )
+    await service.ask("inv-1", "Who?", BRANCH_ONLY, selected_node_ids=[DANA])
+    ((request, _),) = analytics.requests
+    assert request.filter.inherited is None
+    assert len(await service.history("inv-1", BRANCH_ONLY)) == 1
+
+
+# --- an entry stored before the events' handling was recorded (rule 3) ------------------------
+
+
+def _stored(
+    *, events_recorded: bool, link_ids: list[str], author: str = "someone-else"
+) -> QuestionEntry:
+    """A row as the store gives it back. A row written before the events were recorded has no
+    `event_scopes` (NULL): not 'no events', but not known."""
+    return QuestionEntry(
+        id="q-old",
+        investigation_id="inv-1",
+        author=author,
+        question="Who?",
+        answer="Twelve events in 2026-03.",
+        read_ids=[email_document_id("ev-1")],
+        model="local-model",
+        created_at=datetime(2026, 9, 1, tzinfo=UTC),
+        graph_link_ids=link_ids,
+        event_handlings=[],
+        event_scopes=[] if events_recorded else None,
+    )
+
+
+async def test_an_old_entry_with_graph_facts_and_unrecorded_events_is_for_its_author_only() -> None:
+    """Before the fix the column defaulted to '[]', which passed `may_view_all`: an answer whose
+    counts were made from events nobody recorded the handling of was shown to anyone who could see
+    its links. Unknown is not 'none'."""
+    service, _, _, _, _ = await _case()
+    await service._store.add(_stored(events_recorded=False, link_ids=[CALLED]))
+    assert await service.history("inv-1", ANALYST) == []
+    assert [
+        e.id
+        for e in await service.history(
+            "inv-1", Principal(id="someone-else", clearance="OFFICIAL", org_unit="unit-1")
+        )
+    ] == ["q-old"]
+
+
+async def test_an_old_entry_with_no_graph_facts_is_still_shown() -> None:
+    """It has no link, so no event was counted for it: nothing is unknown."""
+    service, _, _, _, _ = await _case()
+    await service._store.add(_stored(events_recorded=False, link_ids=[]))
+    assert [e.id for e in await service.history("inv-1", ANALYST)] == ["q-old"]
+
+
+async def test_a_new_entry_that_counted_no_event_is_shown_to_any_reader_who_sees_its_links() -> (
+    None
+):
+    """'Recorded, and none' is distinct from 'not recorded': it is shown."""
+    service, _, _, _, _ = await _case(events=[])
+    await service.ask("inv-1", "Who?", CLEARED, selected_node_ids=[DANA])
+    (stored,) = service._store.entries  # type: ignore[attr-defined]
+    assert stored.event_scopes == [] and stored.event_handlings == []
+    assert len(await service.history("inv-1", ANALYST)) == 1
+
+
+# --- the restricted-code branch of the viewing rule (rule 3) -----------------------------------
+
+OWNER_UNIT_ASKER = Principal(
+    id="asker-unit-2", clearance="OFFICIAL", org_unit="unit-2", receivable_handling_codes=["R"]
+)
+OTHER_UNIT_READER = Principal(
+    id="reader-unit-1", clearance="OFFICIAL", org_unit="unit-1", receivable_handling_codes=["R"]
+)
+
+
+async def test_an_answer_counting_an_event_restricted_to_another_unit_is_not_shown() -> None:
+    """The first branch of the viewing rule is the classification; this is the other: a restricted
+    handling code, with a unit the reader is not in. The reader clears the classification and may
+    receive the code, so only the unit mismatch hides the answer."""
+    service, _, _, _, _ = await _case(
+        events=[_occurred("2026-03", handling_code="R", unit="unit-2")]
+    )
+    await service.ask("inv-1", "Who?", OWNER_UNIT_ASKER, selected_node_ids=[DANA])
+    assert await service.history("inv-1", OTHER_UNIT_READER) == []
+    assert len(await service.history("inv-1", OWNER_UNIT_ASKER)) == 1

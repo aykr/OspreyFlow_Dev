@@ -4,9 +4,9 @@
 The analyst pastes, or chooses a file of, identifiers: prison numbers, National Insurance numbers,
 phone numbers, account references, in any mix. This module reads each (`identifier_reading.py`),
 finds it through the access-filtered `GraphPort.find_node`, and says how many were read, found,
-matched nothing the analyst can see, and repeated. The route (`app.py`) then adds what was found
-through the working set's own add (`WorkingSetService.add_by_identifiers`), after a person has seen
-the count and confirmed.
+matched nothing the analyst can see, could not be decided, and repeated. The route (`app.py`) then
+adds what was found through the working set's own add (`WorkingSetService.add_by_identifiers`),
+after a person has seen the count and confirmed.
 
 **Rule 3 (and 7): an identifier that does not exist and one the analyst may not see are one
 answer.**
@@ -17,7 +17,10 @@ the same. Whether an identifier is read as a prison number, a number, or nothing
 shape alone.
 
 **The counts.** `read` is the identifiers in what was typed; `found` those that resolved to a node
-the analyst may see, a repeat of one that did included; `matched_nothing` is `read` less `found`;
+the analyst may see, a repeat of one that did included; `undecided` those for which more visible
+nodes share the value than a lookup by kind reads and none of the kind was among them (rule 2: not
+a silent miss, so not "matched nothing"; see `FindLimitExceeded`); `matched_nothing` is `read` less
+`found` less `undecided`;
 `repeated` those that name what an earlier one in the list did (three spellings of one number are
 three read, three found, two repeated, and one node). Nodes are added once.
 
@@ -39,7 +42,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, StringConstraints
 
-from ports.graph import GraphPort
+from ports.graph import FindLimitExceeded, GraphPort
 from schemas.domain import Node, Principal
 
 from .identifier_reading import Reading, read_identifier, split_identifiers
@@ -70,6 +73,9 @@ class IdentifierCounts(BaseModel):
     found: int
     matched_nothing: int
     repeated: int
+    #: Identifiers a lookup could not decide: more visible nodes share the value than it reads, and
+    #: none of the kind wanted was among those read. Not a miss, and not found.
+    undecided: int = 0
 
 
 class AddByIdentifiersRequest(BaseModel):
@@ -141,28 +147,40 @@ async def resolve_identifiers(
         distinct.setdefault(reading.key, reading)
     gate = asyncio.Semaphore(LOOKUP_CONCURRENCY)
 
+    undecided_keys: set[tuple[str, str]] = set()
+
     async def one(reading: Reading) -> Node | None:
         async with gate:
-            return await _lookup(graph, reading, principal)
+            try:
+                return await _lookup(graph, reading, principal)
+            except FindLimitExceeded:
+                undecided_keys.add(reading.key)
+                return None
 
     answers = await asyncio.gather(*(one(r) for r in distinct.values()))
     found_by_key = dict(zip(distinct, answers, strict=True))
     seen: set[tuple[str, str]] = set()
     seen_nodes: set[str] = set()
     nodes: list[Node] = []
-    found = repeated = 0
+    found = repeated = undecided = 0
     for reading in readings:
         if reading.key in seen:
             repeated += 1
         seen.add(reading.key)
         node = found_by_key[reading.key]
         if node is None:
+            if reading.key in undecided_keys:
+                undecided += 1
             continue
         found += 1
         if node.id not in seen_nodes:
             seen_nodes.add(node.id)
             nodes.append(node)
     counts = IdentifierCounts(
-        read=len(readings), found=found, matched_nothing=len(readings) - found, repeated=repeated
+        read=len(readings),
+        found=found,
+        matched_nothing=len(readings) - found - undecided,
+        repeated=repeated,
+        undecided=undecided,
     )
     return Resolution(counts=counts, nodes=nodes)

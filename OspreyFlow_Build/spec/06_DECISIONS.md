@@ -19399,6 +19399,35 @@ the fixes").
   rerun), `--check` reads 228 and 67 and fails Ch5. This is accepted as the designed outcome; the
   demo guide and `INGEST_ACTUALS.md` say so.
 
+### ADR-127, Amendment 39 (27 October 2026) — the re-review of the consolidated review's fixes
+
+A fourth reviewer re-read the fixes in Amendment 38, ADR-128 Amendment 5, ADR-129 Amendment 3 and
+ADR-043's second amendment. Decided by the coordinator under the owner's settings for Brief 3.
+- **E1 history also checks the case scope (rule 3).** An answer now also records the case scopes
+  whose events it counted (a parent's events reach a branch's answer through its ancestors).
+  History shows the answer only to a reader whose own visible ancestors include every one.
+- **E1, an answer stored before the fix.** Its events are unrecorded (`NULL`), which is now kept
+  distinct from "no events". If it has graph facts it is shown to its author only.
+- **B2, a lookup by kind never misses silently (rule 2).** `find_node(also=...)` reads up to 50
+  nodes plus one. If more than 50 share the value and none matched, it raises `FindLimitExceeded`.
+  Add-by-identifiers reports such identifiers as `undecided`, and the Glass says "N could not be
+  told apart: too many records share it", rather than counting them as matched nothing.
+- **B2, the fakes.** The add-by-identifiers fakes apply the same bound and principal filter as the
+  real adapter, and raise the same error.
+- **The identity provider check:**
+  - a malformed 200 (not JSON, a list, no `access_token`) is now unavailable, not an exception;
+  - a username read must return exactly one user, whose username matches;
+  - the test transport now models a lookup that ignores `exact` and an exchange without
+    `subject_token`, both refused.
+- **B6, the cap's hidden count** is computed against the locked brief, closing the race.
+- **The reference guard at a Map save.** Its "the entity does not write its `match_on`" check
+  applies only to a complete template: at Verify, at publish and in the run. A Map save
+  (`complete=False`) may hold a half-built template, and still refuses a `match_on` no lookup can
+  answer. Found by the live studio-route tests, which had refused a half-built save.
+- **Recorded, not fixed:** two older callers have the same first-match pattern with no kind. These
+  are a reference on an Endpoint's `value_normalised` in the engine, and the KYC lookup by
+  `family_name`.
+
 ## ADR-128 — Brief 3's analysis screens: add many, select what is lit, the case brief, icons by value
 
 **Status:** Accepted (26 October 2026), by the coordinator under the owner's delegation for Brief 3 ("keep

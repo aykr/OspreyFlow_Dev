@@ -145,3 +145,17 @@ describe("a refusal is said in words, with the figure", () => {
     await expect(countIdentifiers("http://api", "t", "c", "x")).rejects.toThrow("The list could not be read (500).");
   });
 });
+
+describe("countSentence with identifiers that could not be told apart", () => {
+  it("says how many were undecided, so none is silently missing", () => {
+    expect(countSentence({ read: 5, found: 3, matched_nothing: 1, repeated: 0, undecided: 1 })).toBe(
+      "5 identifiers read. 3 found. 1 matched nothing you can see. 1 could not be told apart: too many records share it. 0 repeated.",
+    );
+  });
+
+  it("says nothing of it when there were none", () => {
+    expect(countSentence({ read: 2, found: 2, matched_nothing: 0, repeated: 0, undecided: 0 })).not.toContain(
+      "told apart",
+    );
+  });
+});

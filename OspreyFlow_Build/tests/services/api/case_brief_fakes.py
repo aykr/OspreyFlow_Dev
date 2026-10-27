@@ -15,6 +15,7 @@ from services.api.case_brief import CaseBriefService, StoredBrief
 from schemas.domain import Principal
 
 Update = Callable[[StoredBrief], StoredBrief]
+AsyncUpdate = Callable[[StoredBrief], Awaitable[StoredBrief]]
 
 
 class InMemoryBriefs:
@@ -30,6 +31,13 @@ class InMemoryBriefs:
 
     async def update(self, investigation_id: str, change: Update) -> StoredBrief:
         changed = change(await self.get(investigation_id))
+        self.rows[investigation_id] = changed
+        return changed
+
+    async def update_async(self, investigation_id: str, change: AsyncUpdate) -> StoredBrief:
+        """`update` for a change that has to look something up (an attachment's readability)
+        against the very brief it changes."""
+        changed = await change(await self.get(investigation_id))
         self.rows[investigation_id] = changed
         return changed
 

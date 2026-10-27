@@ -180,3 +180,26 @@ async def test_connecting_twice_is_harmless_and_keeps_what_was_stored(store) -> 
         assert [r.text for r in (await again.get(case)).requirements] == ["Kept"]
     finally:
         await again.close()
+
+
+async def test_an_async_change_sees_what_a_racing_writer_stored_and_they_do_not_interleave(
+    store,
+) -> None:
+    """`update_async` holds the row lock across a change that awaits: twenty at once, each yielding
+    before it decides, still leave exactly the twenty-requirement cap, because each saw the brief
+    the one before it stored (rule 3's attachment decision depends on exactly this)."""
+    case = new_id()
+
+    async def add(n: int) -> str:
+        requirement = new_id()
+
+        async def change(brief: StoredBrief) -> StoredBrief:
+            await asyncio.sleep(0)  # the decision awaits, as a resolver does
+            return with_requirement_added(brief, requirement, f"Requirement {n}", "a", NOW)
+
+        await store.update_async(case, change)
+        return requirement
+
+    results = await asyncio.gather(*(add(n) for n in range(30)), return_exceptions=True)
+    assert len([r for r in results if isinstance(r, TooManyRequirementsError)]) == 10
+    assert len((await store.get(case)).requirements) == MAX_REQUIREMENTS

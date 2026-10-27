@@ -31,6 +31,7 @@ from ontology.weights import WeightRules, load_weight_rules
 from ports.graph import (
     AmbiguousElementId,
     BulkEdgeResult,
+    FindLimitExceeded,
     NodeSuggestions,
     StoredLink,
     StoredNode,
@@ -166,8 +167,9 @@ def _id_chunks(ids: Sequence[str]) -> list[list[str]]:
 
 
 #: How many nodes sharing one identifier value `find_node(also=...)` reads to choose among. Two
-#: Endpoints sharing a text with different kinds is the case it exists for; more than this many
-#: visible nodes sharing one identifier would itself be a data fault.
+#: Endpoints sharing a text with different kinds is the case it exists for. More than this many
+#: visible nodes sharing one value is ordinary (each source keeps its own copy, rule 6), so the read
+#: is one past it and a lookup that overflows without a match raises `FindLimitExceeded`.
 FIND_WITH_ALSO_LIMIT = 50
 
 
@@ -804,16 +806,20 @@ class GraphArcadeDBAdapter:
         also: Mapping[str, str] | None = None,
     ) -> Node | None:
         # `also` names properties that are not stored top-level (an Endpoint's kind), so they
-        # cannot be asked for in the query: every node sharing the value is read, to a bound, and
-        # the first carrying them is taken. Without `also`, one node is read, as before.
+        # cannot be asked for in the query: the visible nodes sharing the value are read, one past
+        # the bound, and the first carrying them is taken. One past, so that overflowing is
+        # knowable: more than the bound read with no match is `FindLimitExceeded`, never `None`
+        # (rule 2), since an unread node might match. Without `also`, one node is read.
         query = FindByIdentifierBuilder(
-            entity_type, identifier_field, value, limit=FIND_WITH_ALSO_LIMIT if also else 1
+            entity_type, identifier_field, value, limit=FIND_WITH_ALSO_LIMIT + 1 if also else 1
         ).render_gremlin(self._access, principal)
         results = await self._client.gremlin(query)
         for element in results:
             node = node_from_element_map(element)
             if all(str(node.properties.get(k)) == v for k, v in (also or {}).items()):
                 return node
+        if also and len(results) > FIND_WITH_ALSO_LIMIT:
+            raise FindLimitExceeded(entity_type, identifier_field, FIND_WITH_ALSO_LIMIT)
         return None
 
     async def search_nodes(

@@ -16,6 +16,9 @@ The sentences under test:
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import UTC, datetime
+
 import pytest
 from services.api.case_brief import (
     MAX_ATTACHMENTS,
@@ -26,12 +29,16 @@ from services.api.case_brief import (
     CaseBriefService,
     InvalidBriefTextError,
     RequirementNotFoundError,
+    StoredAttachment,
+    StoredBrief,
     TooManyAttachmentsError,
     TooManyRequirementsError,
+    with_attachment,
 )
 
 from schemas.domain import Principal
 
+from .case_brief_fakes import AsyncUpdate, InMemoryBriefs, Update
 from .case_brief_fakes import make_service as _service
 
 AUTHOR = Principal(id="author-1", clearance="OFFICIAL", org_unit="unit-1")
@@ -447,3 +454,51 @@ async def test_a_seed_that_cannot_be_written_whole_writes_none_of_it() -> None:
         await service.seed_if_empty(CASE, AUTHOR, "P", ["fine", "  "])
     assert CASE not in store.rows
     assert await service.seed_if_empty(CASE, AUTHOR, "P", ["fine"]) is True
+
+
+class _RacedBriefs(InMemoryBriefs):
+    """Another writer wins the row lock first: just before the first locked update runs, `race`
+    changes the stored brief, as a second request would between this one's read and its lock."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._race: Callable[[StoredBrief], StoredBrief] | None = None
+
+    def arm(self, race: Callable[[StoredBrief], StoredBrief]) -> None:
+        self._race = race
+
+    def _raced(self, investigation_id: str) -> None:
+        if self._race is not None:
+            self.rows[investigation_id] = self._race(self.rows[investigation_id])
+            self._race = None
+
+    async def update(self, investigation_id: str, change: Update) -> StoredBrief:
+        self._raced(investigation_id)
+        return await super().update(investigation_id, change)
+
+    async def update_async(self, investigation_id: str, change: AsyncUpdate) -> StoredBrief:
+        self._raced(investigation_id)
+        return await super().update_async(investigation_id, change)
+
+
+async def test_the_attachment_limit_is_decided_against_the_brief_the_row_lock_holds() -> None:
+    """Rule 3 on the write path, under a race. The reader reads nine attachments they can see;
+    before their update takes the row lock the author attaches a tenth that only the author may
+    read. What the reader may read must be computed from the brief the lock holds: computed from
+    the read before it, the hidden one counts as theirs, the cap is hit and the refusal tells them
+    it exists."""
+    hidden = StoredAttachment(kind="trend", id="authors-own")
+    store = _RacedBriefs()
+    service, _, readable = _service(store=store)
+    await service.add_requirement(CASE, AUTHOR, "Who?")
+    readable.allow("trend", "authors-own", "Authors own", AUTHOR)
+    for n in range(MAX_ATTACHMENTS - 1):
+        readable.allow("trend", f"t{n}", f"Trend {n}", AUTHOR, READER)
+        await service.attach(CASE, "req-1", READER, "trend", f"t{n}")
+    readable.allow("trend", "mine", "Mine", READER)
+    store.arm(
+        lambda b: with_attachment(b, "req-1", hidden, AUTHOR.id, datetime(2026, 10, 26, tzinfo=UTC))
+    )
+    brief = await service.attach(CASE, "req-1", READER, "trend", "mine")
+    assert len(brief.requirements[0].attachments) == MAX_ATTACHMENTS
+    assert "authors-own" not in [a.id for a in brief.requirements[0].attachments]

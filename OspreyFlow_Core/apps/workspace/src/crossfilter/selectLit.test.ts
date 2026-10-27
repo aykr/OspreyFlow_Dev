@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { FirstSeenResult } from "../../../../packages/schemas/generated";
-import { readLit } from "./selectLit";
+import { LIT_ANSWER_LATE, readLit, selectionChangedSince } from "./selectLit";
 
 // ADR-128 decision 2 (B3): Select what is lit asks the server which links have an event in the
 // window, for the window alone: a selection already on the canvas must not narrow what is lit.
@@ -44,5 +44,27 @@ describe("readLit", () => {
     );
     expect(read.ok).toBe(false);
     if (!read.ok) expect(read.message).toContain("offline");
+  });
+});
+
+// A lit answer that arrives after the analyst changed the selection must not replace it, and an
+// undo must go back to what the answer replaced. The shapes are the ones the canvas holds: the
+// selection at the press is an array (Array.from of its Set), the selection now is the live Set.
+describe("selectionChangedSince", () => {
+  it("is false when the live selection is exactly what it was at the press, in any order", () => {
+    expect(selectionChangedSince(["a", "b"], new Set(["b", "a"]))).toBe(false);
+    expect(selectionChangedSince([], new Set<string>())).toBe(false);
+  });
+
+  it("is true when a node was added, removed or swapped while the read was in flight", () => {
+    expect(selectionChangedSince(["a"], new Set(["a", "b"]))).toBe(true);
+    expect(selectionChangedSince(["a", "b"], new Set(["a"]))).toBe(true);
+    expect(selectionChangedSince(["a"], new Set(["c"]))).toBe(true);
+    expect(selectionChangedSince([], new Set(["c"]))).toBe(true);
+  });
+
+  it("has a status message that says the answer was dropped and the selection kept", () => {
+    expect(LIT_ANSWER_LATE).toMatch(/selection changed/i);
+    expect(LIT_ANSWER_LATE).toMatch(/unchanged|kept/i);
   });
 });

@@ -110,6 +110,9 @@ export function QueryBuilderPanel({
   const [savedPatterns, setSavedPatterns] = useState<SavedPattern[]>([]);
   const [selectedPatternId, setSelectedPatternId] = useState("");
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  // The pattern as it is now, for an answer that lands in a closure from when Ask was pressed.
+  const latest = useRef({ pattern, id: currentPatternId, name: patternName });
+  latest.current = { pattern, id: currentPatternId, name: patternName };
 
   useEffect(() => {
     // Silently leaves the list empty on failure — an analyst who has never saved anything, or
@@ -201,8 +204,9 @@ export function QueryBuilderPanel({
       // It is a new, unsaved pattern: it takes neither the identity nor the name of what it
       // replaces, so Save cannot overwrite a saved pattern with the model's. What it replaced is
       // kept, to be restored.
-      if (pattern.nodes.length > 0 || currentPatternId !== null) {
-        setPrevious({ pattern, id: currentPatternId, name: patternName });
+      const now = latest.current;
+      if (now.pattern.nodes.length > 0 || now.id !== null) {
+        setPrevious({ pattern: now.pattern, id: now.id, name: now.name });
       } else {
         setPrevious(null);
       }
@@ -258,6 +262,8 @@ export function QueryBuilderPanel({
         name: patternName || "Untitled pattern",
         definition: toPatternQuery(pattern),
       });
+      // A save is an edit: an answer still being worked on was asked of the pattern as it was.
+      revision.current += 1;
       setCurrentPatternId(saved.pattern_id);
       setSaveStatus(`Saved as version ${saved.version}.`);
       setSavedPatterns(await listPatterns(apiBaseUrl, bearerToken, investigationId));
@@ -538,7 +544,10 @@ export function QueryBuilderPanel({
           <Input
             aria-label="Pattern name"
             value={patternName}
-            onChange={(e) => setPatternName(e.target.value)}
+            onChange={(e) => {
+              revision.current += 1;
+              setPatternName(e.target.value);
+            }}
             placeholder="Untitled pattern"
           />
           <Button type="button" onClick={() => void handleSave()} disabled={pattern.nodes.length === 0}>

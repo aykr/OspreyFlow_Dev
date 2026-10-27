@@ -110,7 +110,7 @@ import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
 import { branchSelection } from "./branchNodes";
 import { fetchFirstSeen } from "../analytics/api";
 import { litNote, litTabName, UNDATED_NOT_INCLUDED } from "../crossfilter/lit";
-import { readLit } from "../crossfilter/selectLit";
+import { LIT_ANSWER_LATE, readLit, selectionChangedSince } from "../crossfilter/selectLit";
 import type { TimeWindow } from "../crossfilter/store";
 import { removeFromWorkingSet } from "./removeNodes";
 import { ViewActions } from "./ViewActions";
@@ -3088,6 +3088,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       );
       const rect = containerRef.current?.getBoundingClientRect();
       const at = { x: (rect?.left ?? 0) + 40, y: (rect?.top ?? 0) + 40 };
+      // The analyst changed the selection while the read was in flight: the answer is dropped, so it
+      // neither replaces the newer selection nor records a stale one for Undo to go back to.
+      if (selectionChangedSince(previous, selectedRef.current)) {
+        setActionError({ ...at, message: LIT_ANSWER_LATE, tone: "notice" });
+        return;
+      }
       if (!read.ok) {
         setActionError({ ...at, message: read.message });
         return;

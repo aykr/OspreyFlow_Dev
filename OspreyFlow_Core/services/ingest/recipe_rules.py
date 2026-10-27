@@ -186,7 +186,9 @@ class RecipeRuleError(Exception):
         self.problems = problems
 
 
-def reference_match_problems(template: RowTemplate, ontology: OntologySchema) -> list[str]:
+def reference_match_problems(
+    template: RowTemplate, ontology: OntologySchema, *, complete: bool = True
+) -> list[str]:
     """ADR-127 Amendment 37: an entity looked up by reference (`on_match: reference`) is found by
     `GraphPort.find_node`, which the store answers only for a type's `identifiers` and its
     `indexed` properties, and the adapter stores one of those as a top-level field only when the
@@ -194,7 +196,11 @@ def reference_match_problems(template: RowTemplate, ontology: OntologySchema) ->
     template does not write (the lookup value is then the text "None" on every row), never
     matches, so the engine would write a new, empty node for every row; each such entity is
     refused here, in one sentence. An entity that is not a reference, one with no `match_on`, and a
-    type the ontology lacks (refused elsewhere) are not judged."""
+    type the ontology lacks (refused elsewhere) are not judged.
+
+    `complete=False` is a template still being built (a Map save): the field must be findable, but
+    the entity need not bind it yet, so a half-built template can still be saved. Verify, publish
+    and the run judge a complete template."""
     problems: list[str] = []
     for entity in template.entities:
         if entity.on_match != "reference" or not entity.match_on:
@@ -209,7 +215,7 @@ def reference_match_problems(template: RowTemplate, ontology: OntologySchema) ->
                 f"an identifier or an indexed property of the type, so this would make a new "
                 f"{entity.type} for every row."
             )
-        elif entity.match_on not in entity.properties:
+        elif complete and entity.match_on not in entity.properties:
             problems.append(
                 f"{entity.type} cannot be found by {entity.match_on}: the entity does not write "
                 f"{entity.match_on}, and a reference can only match a stored identifier or "
@@ -235,8 +241,11 @@ def recipe_rule_violations(
     scheme: HandlingScheme | None = None,
     handling_columns: Mapping[str, str] | None = None,
     declared_columns: Mapping[str, str] | None = None,
+    complete: bool = True,
 ) -> list[str]:
     """Every problem with `template` against `ontology`, in the recipe's order; empty if none.
+    `complete=False` at a Map save, where the template may still be half built (see
+    `reference_match_problems`).
 
     `source_columns` (what the source has, when it is known: at Map save, from its header; a run
     has the rows and checks each) and `units` (the recipe's declared units, `defaults.units`)
@@ -249,7 +258,7 @@ def recipe_rule_violations(
     does not have, and a column bound in `provenance`, are refused: neither would be read."""
     problems: list[str] = []
     problems.extend(handling_baseline_problems(template, defaults_handling, scheme))
-    problems.extend(reference_match_problems(template, ontology))
+    problems.extend(reference_match_problems(template, ontology, complete=complete))
     # A column Connect declares as carrying a part must be bound by some element: else the
     # source's rows load at the default marking whatever that column says (rule 3). Judged at save
     # and at run (`declared_columns`); a binding to an undeclared column is refused at save only
@@ -467,6 +476,7 @@ def check_recipe_rules(
     scheme: HandlingScheme | None = None,
     handling_columns: Mapping[str, str] | None = None,
     declared_columns: Mapping[str, str] | None = None,
+    complete: bool = True,
 ) -> None:
     problems = recipe_rule_violations(
         template,
@@ -477,6 +487,7 @@ def check_recipe_rules(
         scheme=scheme,
         handling_columns=handling_columns,
         declared_columns=declared_columns,
+        complete=complete,
     )
     if problems:
         raise RecipeRuleError(problems)

@@ -168,7 +168,7 @@ def test_a_count_adds_nothing_and_confirm_adds(rig: Rig) -> None:
     counted = rig.post(typed)
     assert counted.status_code == 200
     assert counted.json() == {
-        "counts": {"read": 4, "found": 3, "matched_nothing": 1, "repeated": 1},
+        "counts": {"read": 4, "found": 3, "matched_nothing": 1, "repeated": 1, "undecided": 0},
         "added": None,
     }
     assert rig.working_set.adds == [] and rig.valkey.published == 0 and rig.history.steps == []
@@ -222,7 +222,7 @@ def test_the_audit_entry_holds_counts_and_never_an_identifier(rig: Rig) -> None:
     assert entry["action"] == "add_by_identifiers"
     assert entry["investigation_id"] == "case-e"
     assert entry["resolved_query"] == {
-        "read": 3, "found": 2, "matched_nothing": 1, "repeated": 0,
+        "read": 3, "found": 2, "matched_nothing": 1, "repeated": 0, "undecided": 0,
         "confirm": True, "with_links": True,
     }  # fmt: skip
     assert entry["result_cardinality"] == 2
@@ -270,7 +270,7 @@ def test_an_empty_list_is_read_as_nothing(rig: Rig) -> None:
     response = rig.post(["", " \n , "])
     assert response.status_code == 200
     assert response.json()["counts"] == {
-        "read": 0, "found": 0, "matched_nothing": 0, "repeated": 0
+        "read": 0, "found": 0, "matched_nothing": 0, "repeated": 0, "undecided": 0
     }
 
 

@@ -31,3 +31,13 @@ export async function readLit(
     };
   }
 }
+
+/** Said when a lit answer is dropped because the selection moved while it was being read. */
+export const LIT_ANSWER_LATE =
+  "The selection changed while what is lit was being read, so the answer was not applied. The selection is unchanged. Press Select what is lit again.";
+
+/** Whether the live selection is no longer what it was when the press was made. */
+export function selectionChangedSince(atPress: readonly string[], now: ReadonlySet<string>): boolean {
+  if (atPress.length !== now.size) return true;
+  return atPress.some((id) => !now.has(id));
+}

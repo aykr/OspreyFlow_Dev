@@ -322,6 +322,14 @@ class CaseBriefStorage(Protocol):
         what it returns and returns it. A refusal raised by `change` stores nothing."""
         ...
 
+    async def update_async(
+        self, investigation_id: str, change: Callable[[StoredBrief], Awaitable[StoredBrief]]
+    ) -> StoredBrief:
+        """`update` for a change that has to look something up against the very brief it changes
+        (which of a requirement's attachments the caller may read): the lookup runs inside the
+        step, so it is made against the brief the lock holds, not one read before it."""
+        ...
+
 
 class CaseBriefStore:
     """Postgres. One row per case; `update` locks that row for the length of the change, so two
@@ -352,6 +360,16 @@ class CaseBriefStore:
     async def update(
         self, investigation_id: str, change: Callable[[StoredBrief], StoredBrief]
     ) -> StoredBrief:
+        async def apply(brief: StoredBrief) -> StoredBrief:
+            return change(brief)
+
+        return await self.update_async(investigation_id, apply)
+
+    async def update_async(
+        self, investigation_id: str, change: Callable[[StoredBrief], Awaitable[StoredBrief]]
+    ) -> StoredBrief:
+        """Holds the row lock across `change`, which may read other stores (a handful of lookups,
+        one per attachment of one requirement): the price of deciding against the locked brief."""
         empty = StoredBrief(investigation_id=investigation_id)
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
@@ -366,7 +384,7 @@ class CaseBriefStore:
                 investigation_id,
             )
             assert row is not None
-            changed = change(StoredBrief.model_validate_json(row["brief"]))
+            changed = await change(StoredBrief.model_validate_json(row["brief"]))
             await conn.execute(
                 "UPDATE case_briefs SET brief = $2, updated_at = $3 WHERE investigation_id = $1",
                 investigation_id,
@@ -533,18 +551,23 @@ class CaseBriefService:
         if await self._title(investigation_id, attachment, principal) is None:
             raise AttachmentNotFoundError
         now = self._now()
-        hidden = await self._hidden_from(investigation_id, requirement_id, principal)
-        stored = await self._store.update(
-            investigation_id,
-            lambda b: with_attachment(b, requirement_id, attachment, principal.id, now, hidden),
-        )
+
+        async def change(locked: StoredBrief) -> StoredBrief:
+            # What the caller may not read is decided against the brief the row lock holds: one
+            # read before it would miss an attachment another request added since, count it as
+            # the caller's, and refuse them for a limit they cannot see they have reached.
+            hidden = await self._hidden_from(investigation_id, locked, requirement_id, principal)
+            return with_attachment(locked, requirement_id, attachment, principal.id, now, hidden)
+
+        stored = await self._store.update_async(investigation_id, change)
         return await self._view(stored, principal)
 
     async def _hidden_from(
-        self, investigation_id: str, requirement_id: str, reader: Principal
+        self, investigation_id: str, brief: StoredBrief, requirement_id: str, reader: Principal
     ) -> frozenset[StoredAttachment]:
-        """The requirement's attachments `reader` may not read, looked up once each."""
-        current = _one(await self._store.get(investigation_id), requirement_id)
+        """The attachments of `brief`'s requirement that `reader` may not read, looked up once
+        each."""
+        current = _one(brief, requirement_id)
         hidden: set[StoredAttachment] = set()
         for attachment in current.attachments:
             if await self._title(investigation_id, attachment, reader) is None:

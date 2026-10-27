@@ -7449,6 +7449,9 @@ async def update_studio_recipe_row_template(
         scheme=scheme,
         handling_columns=draft_handling_columns(recipe),
         declared_columns=draft_handling_columns(recipe),
+        # A Map save may hold a half-built template; Verify and publish judge it complete
+        # (ADR-127 Amendment 38).
+        complete=False,
     )
     updated = await studio_recipes.update_row_template(
         recipe.recipe_id,
