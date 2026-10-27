@@ -11,10 +11,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.2** · 2026-10-18 · For OspreyFlow v0.2.0 · Issued
+**Version 1.3** · 2026-10-27 · For OspreyFlow v0.2.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.3 | 2026-10-27 | §7.5: sources withheld for a reader whose case does not read all of an element's datasets, and what a contributor's writer must do about it. |
 | 1.2 | 2026-10-18 | §3.3: the NIEM pack's incidents and custody links. |
 | 1.1 | 2026-10-15 | A cover page, contents, a list of figures, and this version history. |
 | 1.0 | 2026-10-14 | First issue, with screenshots. |
@@ -315,7 +316,7 @@ it occurred and its weight; the individual events are in the analytics database.
 
 | Part | What it holds |
 | --- | --- |
-| **Provenance** | Asserted, inferred or unresolved; its sources; what extracted it and how sure; when first seen, last confirmed, and by whom |
+| **Provenance** | Asserted, inferred or unresolved; its sources (withheld from a reader whose case does not read all of the element's datasets, section 7.5); what extracted it and how sure; when first seen, last confirmed, and by whom |
 | **Handling** | Classification, handling code, action code, sanitisation code, originator, owning unit, review date, legal basis |
 | **Datasets** | Which datasets it belongs to; a later load adds, never removes |
 | **Audit** | The load, recipe and recipe version that wrote it; its revision; whether it was reverted |
@@ -335,6 +336,73 @@ records it thinks are one with a scored `SAME_AS`, and the Conduit shows each li
 the moment it is read, at the case's chosen strictness: Strict (0.99), Balanced (0.95) or Broad
 (0.80). An analyst can link two records by hand, or keep two apart — which is always honoured. A
 recipe may not write either.
+
+### 7.5 Sources withheld for a scoped reader
+
+An element can belong to more than one dataset, and a case reads only the datasets it names. A reader
+may see an element through any one of its datasets, but its **sources** (the files and rows it came
+from) name no dataset. So the sources are sent to a reader only when every dataset the element belongs
+to is one the reader's case reads. Otherwise the reader gets the node or link with its sources
+emptied and a flag set: what it came from is held back, not the fact that it exists.
+
+**Where it is applied.** In the Vault, where an element is read for a principal, so that nothing stored
+or forwarded carries the sources past it:
+
+- The graph adapter's element mapping, `node_from_element_map` and `edge_from_element_map` in
+  `packages/adapters/graph_arcadedb/serialization.py`, which every read path goes through, given the
+  reading principal.
+- The working set's projection, `_project` and `project_delta` in
+  `services/api/working_set/service.py`, which serve the replay, the live stream and a restore.
+- A principal whose `datasets` is `None` is the Conduit's own unlimited work, and reads every dataset
+  (`services/api/dataset_scope.py`). Nothing a request handler is given is that principal.
+
+**The shape.** `Provenance.sources_withheld` (`packages/schemas/domain.py`) is `False` by default. When
+it is `True`, `sources` is empty; when it is `False`, `sources` is never empty. The generated
+TypeScript types follow. The predicate is one function, `sources_within_case`, in
+`packages/ontology/handling.py`: every dataset of the element is in the principal's `datasets`; an
+element that names no dataset, read by a scoped principal, is withheld. `withhold_sources` applies it
+and returns a copy; it changes nothing stored.
+
+**The rule for a writer that reads and writes back.** A writer that reads an element and writes its
+provenance back (a link change, a picture, an extraction's replacement, a resolution, a pipeline run's
+mention, confirming an alert's cited links) would rebuild the element from a withheld, empty list. That would
+silently drop the stored sources, or be refused by the write guard below. So **a read whose result is
+written back runs inside `ontology.handling.sources_in_full()`**:
+
+```python
+from ontology.handling import sources_in_full
+
+with sources_in_full():
+    found = await graph.get_edges([edge_id], principal)
+# change what you mean to change in found[0], then write it back
+```
+
+The read is still made with the request's principal, so the access filter is applied in the adapter as
+before; only the sources are left in. The scope is a context variable, so it holds for the calling task
+alone, and the adapter and its test double honour it. The writers that do this today are
+`services/api/link_changes.py`, `services/api/entity_pictures.py`, `services/extract/writer.py`,
+`services/resolve/trigger.py`, `services/api/pipeline_run.py` and `services/api/alert_queue.py`. The
+working set's own writes are covered the same way.
+Never wrap a read whose result goes to the Glass.
+
+**What such a writer sends back.** Whatever a writer returns or streams to the Glass (a delta's
+`to_sent()`, a route's response) passes through `withhold_sources` for the reader first. A writer
+that read in full has the sources in its hands, and a response built from them would send the sources
+the reader may not have. `services/api/link_changes.py` does this for the edge it returns, and
+`services/api/working_set/models.py` for the deltas it sends.
+
+**A withheld provenance is never written.** The write guard, `_refuse_withheld` in
+`packages/adapters/graph_arcadedb/serialization.py`, raises if a `NodeWrite` or `EdgeWrite` carries a
+`Provenance` with `sources_withheld` set, since writing it would replace the stored sources with none.
+A refusal there means a read that was written back was not inside `sources_in_full()`.
+
+**For a new writer.** Ask two questions. Does it read an element and write its provenance back? Then
+wrap the read. Does it send the element, or anything built from it, to a reader? Then pass it through
+`withhold_sources` first. The tests that stand behind this are in `OspreyFlow_Build/tests`:
+`ontology/test_withhold_sources.py` and `ontology/test_sources_in_full.py`,
+`services/api/test_sources_withheld_routes.py`, and `services/api/test_written_back_reads_in_full.py`
+(with `_stages`), which for each writer reads as a scoped principal, changes a two-dataset element, and
+checks that every stored source is kept and that what is sent back carries none.
 
 ## 8. Screening lists
 
