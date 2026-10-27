@@ -19242,6 +19242,47 @@ Brief 3. The deployment had `components.post_ingest_resolution: false` set, but 
   the default (`"on"` whatever the setting), it was red again; the original was then restored from a saved
   copy, and its md5 matched.
 
+### ADR-127, Amendment 36 (27 October 2026) — the after-chapter-4 check, and what it found
+
+Found by the coordinator running chapter 4 on the owner's rebuilt deployment for Brief 3's captures,
+under the owner's settings for Brief 3.
+- **The check could not read.** `seed_pid --check` built its own graph adapter and never applied the
+  ontology; the seed's adapter comes from `build_run_resources`, which does. So J2 and Ch11 "could
+  not be run" (`OntologyError`). Worse, the pattern match behind Ch5 and S2 returned no rows instead
+  of refusing, because without the ontology the link names never resolve to their stored labels.
+  The checks' other tests run over `PlanGraph`, which needs no ontology, so nothing caught it
+  (rule 15).
+  - **Decision:** `--check` applies the deployment's ontology before it reads, as the seed does.
+  - **Tests:** `tests/test_seed_pid.py::test_the_check_command_reads_through_a_graph_with_the_deployments_ontology_applied`
+    drives `_check` with its stores faked. It was red before the change; with the step planted out,
+    red again; restored from a saved copy, md5 matching. Live, J2 and Ch11 now pass.
+- **What the check then showed: R17 cannot find R9's reports. Recorded, not fixed (Brief 3 Part B:
+  a failure found by a check is reported, not fixed inside the brief).**
+  - **Live, 27 October 2026.** R9 made its 349 reports, then R17 ran (`pid-report-incidents`, 589
+    rows): 253 nodes created. Each was an empty `Document` holding only `message_id` (for example
+    "IR 0129"), with the throw-over incident `MENTIONED_IN` it. R9's real report for the same id was
+    untouched. So Ch5's one pattern selects 0 reports (229 in the plan) and S2 finds none.
+  - **Why.** R17 references the report with `match_on: message_id`. The adapter looks a reference up
+    with `has(field, value)` on the vertex's top-level stored properties (`find_node`,
+    `FindByIdentifierBuilder`), and only a type's identifiers and `indexed: true` properties are
+    stored there. `Document.message_id` is neither, so the lookup can never match, and the engine
+    then writes a new node. INGEST_ACTUALS warned of empty reports when R17 runs before R9; here they
+    appear when R17 runs after it.
+  - **Options for the owner:**
+    - (a) declare `Document.message_id` `indexed: true` (an index change, so the ontology version
+      question has to be settled first) and re-seed;
+    - (b) have the Studio and the engine refuse a `match_on` field the store cannot look up, at
+      Verify and at publish. Recommended **as well as** (a), so the next such recipe fails at
+      Verify, not in front of an audience.
+  - **Rule 15 again.** The seed's tests resolve references in fakes that match on any property.
+- **Also seen on the same run, recorded with no owner:**
+  - **R9's first live run failed after 35 seconds:** `ReadTimeout` on the first entity lookup inside
+    the run's transaction, with ArcadeDB otherwise idle. The engineer saw only "POST …/run: 500". The
+    same run succeeded five minutes later. Not reproduced, not explained.
+  - **The rehearsal commands in `INGEST_ACTUALS.md` fail as printed.** `python -m scripts.seed_internal
+    …` needs `PYTHONPATH=.:packages` from `OspreyFlow_Core`, the same cause as ADR-124 Amendment 16.
+    The document is corrected.
+
 ### ADR-128 — Brief 3's analysis screens: add many, select what is lit, the case brief, icons by value
 
 **Status:** Accepted (26 October 2026), by the coordinator under the owner's delegation for Brief 3 ("keep

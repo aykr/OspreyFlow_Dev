@@ -3011,3 +3011,68 @@ def test_the_plan_constants_the_checks_read_are_the_plans_own() -> None:
     assert Counter(pid_plan.HOTSPOT_YARDS) and set(pid_plan.HOTSPOT_YARDS) <= set(
         pid_plan.YARD_COUNTS
     )
+
+
+# --- the after-chapter-4 check reads with the ontology applied --------------------------------
+
+
+async def test_the_check_command_reads_through_a_graph_with_the_deployments_ontology_applied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Found running `--check` on the owner's deployment after chapter 4: J2 and Ch11 could not be
+    run ("no ontology schema has been applied"), and Ch5 and S2 read 0 reports, because `_check`
+    built its own adapter and never applied the ontology (the seed's comes from
+    `build_run_resources`, which does). The checks' other tests run over `PlanGraph`, which needs
+    no ontology, so nothing caught it (rule 15)."""
+    ontology = object()
+    applied: list[object] = []
+    handed: list[Any] = []
+
+    class Adapter:
+        def __init__(self, client: Any, scheme: Any) -> None:
+            pass
+
+        async def apply_schema(self, schema: object) -> None:
+            applied.append(schema)
+
+    class Store:
+        async def close(self) -> None:
+            pass
+
+    class Client:
+        def __init__(self, config: Any) -> None:
+            pass
+
+        async def aclose(self) -> None:
+            pass
+
+    async def find_case(*_: Any) -> str:
+        return CASE
+
+    async def connect(_: str) -> Store:
+        return Store()
+
+    async def scope(principal: Any, *_: Any) -> Any:
+        return principal
+
+    async def check_case(*, graph: Any, **_: Any) -> int:
+        handed.append(graph)
+        return 0
+
+    monkeypatch.setattr(
+        seed_pid.ApiConfig,
+        "from_env",
+        classmethod(lambda cls: SimpleNamespace(postgres=SimpleNamespace(dsn="x"))),
+    )
+    monkeypatch.setattr(seed_pid, "_find_case", find_case)
+    monkeypatch.setattr(seed_pid, "ArcadeDBClient", Client)
+    monkeypatch.setattr(seed_pid.ArcadeDBConfig, "from_env", classmethod(lambda cls, **_: None))
+    monkeypatch.setattr(seed_pid.PostgresDatasetStore, "connect", staticmethod(connect))
+    monkeypatch.setattr(seed_pid.RecipeRunStore, "connect", staticmethod(connect))
+    monkeypatch.setattr(seed_pid, "GraphArcadeDBAdapter", Adapter)
+    monkeypatch.setattr(seed_pid, "load_deployment_ontology", lambda: ontology)
+    monkeypatch.setattr(seed_pid, "scope_to_case", scope)
+    monkeypatch.setattr(seed_pid, "check_case", check_case)
+
+    assert await seed_pid._check(seed_pid.parse_args(["--case-name", "X", "--check"])) == 0
+    assert len(handed) == 1 and applied == [ontology], "the checks' graph has the ontology applied"

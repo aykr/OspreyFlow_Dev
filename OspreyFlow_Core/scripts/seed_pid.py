@@ -2337,6 +2337,9 @@ async def _check(args: argparse.Namespace) -> int:
     ledger = await RecipeRunStore.connect(config.postgres.dsn)
     try:
         graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
+        # The deployment's ontology, as `build_run_resources` gives the seed's graph: without it the
+        # adapter cannot read a type or resolve a link's stored name (ADR-127 Amendment 36).
+        await graph.apply_schema(load_deployment_ontology())
         scoped = await scope_to_case(base, case_id, datasets)
         return await check_case(
             graph=graph,
