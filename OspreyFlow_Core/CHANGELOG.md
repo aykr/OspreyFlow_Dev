@@ -6,6 +6,66 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.0 — 2026-10-28
+
+**Before you update.** Every published Ingest Studio pipeline is flagged once and must be
+republished before it runs again: the core model moves to version 17 and the NIEM pack to version
+3. If anyone on the deployment has changed a link or removed a picture, run this once after the
+update, while the deployment is up:
+`docker exec osprey-local-lite-api-1 python -m scripts.strip_change_provenance`
+(see the bullet on link history). A second run changes nothing.
+
+- **A new demonstration case, Prison Intelligence.** It adds a prison estate of prisoners, cells,
+  visits, prison-phone calls, seized phones, prisoner money, throw-overs, incidents and
+  intelligence reports, all invented. Add it with `ospreyflow demo add prison-intelligence`.
+- **The Ingest Studio loads richer sources.**
+  - A column can carry a row's own handling, tightened only, never loosened.
+  - A Document holds its own text, so one report row gives both the report and its links.
+  - A link can be a span from two columns, open or closed.
+  - Account references in three spellings load as one account.
+  - A pipeline remembers the rows it has loaded into each case, so running the same file again
+    creates nothing. Verify says how many rows a run would skip.
+  - An operator can revert a load. A revert that would take back someone else's data is refused.
+  - Every entity and link on the Map screen can be reached and edited by keyboard.
+- **For analysts.**
+  - Add many from a list.
+  - Select what is lit, and branch the slice.
+  - The case brief.
+  - Icons chosen by a property's value.
+  - A property condition on a pattern node.
+  - Graph facts cited in a Questions answer, and Ask to search, which turns a question into a
+    draft pattern.
+  - A weekday-by-hour cell brush on the timeline.
+- **A hotlist alert explains itself.** It shows the hotlist, what matched, and which files and
+  rows it was read from.
+- **Row numbers count from 1.** Wherever a row is shown, the first row after the header is now
+  row 1: an alert's "From:", the Inspector's source, a link's details, Verify's rejected rows and
+  held rows. Data already loaded keeps its meaning and is not reloaded. The API still counts from
+  0 (developer guide §6.1).
+- **A case's domain packs.** A case is created with its domain models, an Author can change them,
+  and they decide what Reports and Trends offer: KYC for an AML case, a POLE summary for the rest.
+- **Large working sets.** One with more than 10,000 links opens grouped by community. Zoomed out,
+  it draws one link per pair of communities, and above 10,000 nodes it draws nodes as dots.
+- **Security: nothing withheld leaks through a count or a source.**
+  - The status bar says only "This case holds material you are not cleared to see", never a
+    figure.
+  - A link's weight and counts come from the link alone, never from the whole corpus.
+  - A link merges only within one audience.
+  - An element's sources are shown only when every dataset it belongs to is one the case reads.
+    Otherwise the Glass says "Its sources are in data this case does not read".
+  - Link history is filtered for each reader, and a changed link no longer names the one it
+    replaced. Links changed before this release still name it until the script above runs.
+- **Security: pypdf 6.21.2.** It fixes three denial-of-service advisories, each caused by a
+  malformed PDF (CVE-2026-115572, CVE-2026-115580, CVE-2026-115585).
+- **Removed:** the unused hover overlay for links. A link's details are in the Inspector, which a
+  click or `L` opens.
+- **Fixed:**
+  - A notice on the canvas no longer closes the Layout menu.
+  - Overlays close on Escape from the moment they appear.
+  - Hotlists and monitors fire on a deployment that checks their owners with the identity
+    provider. It looked owners up by username, but they are recorded by subject id, so every owner
+    read as unknown and nothing fired.
+
 ## v0.3.0 — 2026-10-19
 
 - **Dependencies brought up to date.** Python: every package to its newest release (among them

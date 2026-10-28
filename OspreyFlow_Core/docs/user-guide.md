@@ -11,10 +11,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.5** · 2026-10-27 · For OspreyFlow v0.2.0 · Issued
+**Version 1.6** · 2026-10-28 · For OspreyFlow v0.4.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.6 | 2026-10-28 | A source row is counted from 1 everywhere it is shown: the first row after the header is row 1. |
 | 1.5 | 2026-10-27 | Add many from a list; Select what is lit and the weekday-by-hour cell brush on the timeline; the case brief; icons by value; a property condition on a pattern node; graph facts in an answer; Ask to search; a hotlist alert that explains itself; and sources withheld where a case does not read their data. |
 | 1.4 | 2026-10-18 | §5.3: accounts where they are held, and payments as lines, on the map. |
 | 1.3 | 2026-10-18 | §5.2: link types in the legend, left out of the view or brought back, and the custody links of a prison case. |
@@ -451,8 +452,9 @@ whose evidence you cannot see says only that a match fired.
   first seen; the rest are counted, "and 3 more files", not cut. Where a source has no row, it counts
   records instead.
 
-**Row numbers count data rows from 0**, not the rows of the spreadsheet: the first row after the
-header is row 0, so "row 3" is the fourth data row, the fifth line of the file. Where two loads of a file
+**Row numbers count data rows from 1**: the first row after the header is row 1, so "row 3" is the
+third data row, the fourth line of the file. The Inspector's source, a link's details, Verify's
+rejected rows and held rows count the same way. Where two loads of a file
 with the same name matched, each is listed. **Jump into investigation** is as it was. Raw rule and node
 identifiers are no longer shown.
 
