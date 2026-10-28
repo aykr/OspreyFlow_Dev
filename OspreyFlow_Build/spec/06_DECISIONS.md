@@ -11958,6 +11958,27 @@ ADR-126, accepted by the owner, amends decisions 3, 4 and 6:
 - **Amendment 2, the mart.** A change of a case's packs replaces its rows in the dashboards' mart, so
   a chart filtered on `section='kyc'` goes empty for that case.
 
+### ADR-111, Amendment 7 (28 October 2026) — Superset's image brought up to date for v0.4.0, thirty more findings excepted until 7.0
+
+**Found by v0.4.0's release:** the Superset image's scan reported 64 HIGH and CRITICAL findings, all
+published since v0.3.0, and the release published nothing. Dev CI still does not scan this image.
+The image now also takes Authlib 1.9.1, brotli 1.2.1 and certifi 2026.10.18 in Superset's
+environment, and uv 0.13.4 in the system Python, all inside Superset 6.1.0's declared ranges. A
+fresh build's Debian packages are clean. What is left is the six Amendment 5 excepted, and thirty
+new ones.
+
+**Decided by the owner** (28 October 2026, on Amendment 5's terms, from: an exception until 7.0;
+forcing the upgrades past Superset's limits; holding v0.4.0): the thirty are in
+`OspreyFlow_Core/.trivyignore` until 14 December 2026, applied by the owner.
+- **Pillow:** 28 findings, fixed in 13.0.0, and Superset pins `<13`. Superset uses Pillow only for
+  thumbnails, alert-report screenshots and their PDFs, and none of these is turned on here.
+- **msgpack:** CVE-2026-114613, fixed in 1.2.3, and Superset pins `<1.1`. It unpacks only
+  Superset's own cached results.
+- **dnspython:** CVE-2026-114605, fixed in 2.9.0, which needs a newer Python than the image's 3.10.
+  Superset does not import it.
+
+Superset 7.0 is still the way out.
+
 ### ADR-112, Amendment 1 (11 October 2026) — steps 1 and 2 built; who calls the identity provider for the Admin area
 
 **Built (steps 1 and 2, `51e7337`).** `packages/schemas/rights.py` and a right declared on every route

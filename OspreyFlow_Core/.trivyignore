@@ -58,3 +58,41 @@ GHSA-537c-gmf6-5ccf exp:2026-12-14
 GHSA-6v7p-g79w-8964 exp:2026-12-14
 CVE-2026-27459 exp:2026-12-14
 CVE-2026-25087 exp:2026-12-14
+
+# Found by v0.4.0's release scan (ADR-111 Amendment 7), excepted on Amendment 5's terms, until 7.0.
+# Pillow (Superset 6.1.0 pins <13; fixed in 13.0.0): Superset uses it only to make thumbnails,
+# alert-report screenshots and their PDFs, and this deployment turns none of those on (its feature
+# flags are DASHBOARD_RBAC and EMBEDDED_SUPERSET), so Pillow decodes no image.
+CVE-2026-112390 exp:2026-12-14
+CVE-2026-112392 exp:2026-12-14
+CVE-2026-112393 exp:2026-12-14
+CVE-2026-112397 exp:2026-12-14
+CVE-2026-112398 exp:2026-12-14
+CVE-2026-112399 exp:2026-12-14
+CVE-2026-112400 exp:2026-12-14
+CVE-2026-112402 exp:2026-12-14
+CVE-2026-112403 exp:2026-12-14
+CVE-2026-112404 exp:2026-12-14
+CVE-2026-112405 exp:2026-12-14
+CVE-2026-112406 exp:2026-12-14
+CVE-2026-112892 exp:2026-12-14
+CVE-2026-112893 exp:2026-12-14
+CVE-2026-112894 exp:2026-12-14
+CVE-2026-112895 exp:2026-12-14
+CVE-2026-112896 exp:2026-12-14
+CVE-2026-112897 exp:2026-12-14
+CVE-2026-112900 exp:2026-12-14
+CVE-2026-112902 exp:2026-12-14
+CVE-2026-96637 exp:2026-12-14
+CVE-2026-96639 exp:2026-12-14
+CVE-2026-96640 exp:2026-12-14
+CVE-2026-96642 exp:2026-12-14
+CVE-2026-96643 exp:2026-12-14
+CVE-2026-96644 exp:2026-12-14
+CVE-2026-96778 exp:2026-12-14
+GHSA-78g4-xqwv-q3g8 exp:2026-12-14
+# msgpack (`<1.1`; fixed in 1.2.3): as above, it unpacks only Superset's own cached SQL Lab results.
+CVE-2026-114613 exp:2026-12-14
+# dnspython (fixed in 2.9.0, which needs a newer Python than the image's 3.10): Superset does not
+# import it; it comes with an e-mail validator, and the deployment sends no mail from Superset.
+CVE-2026-114605 exp:2026-12-14
