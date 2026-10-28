@@ -5,3 +5,6 @@ stanza==1.10.1
 fastapi==0.146.0
 starlette==1.9.0
 uvicorn==0.54.0
+# torch's own filelock, brought past CVE-2026-112940 (an arbitrary file overwrite), found by
+# v0.4.0's release scan; torch sets no upper bound.
+filelock==4.2.1

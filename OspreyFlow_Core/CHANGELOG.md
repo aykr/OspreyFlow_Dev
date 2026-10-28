@@ -62,6 +62,8 @@ update, while the deployment is up:
   fixed inside Superset 6.1.0, so they are excepted until Superset 7.0, as six were before. Superset
   here makes no thumbnails, screenshots or PDFs, so it decodes no image with Pillow. It unpacks only
   its own cached results with msgpack, and does not use dnspython.
+- **Security: the name-recognition image** takes filelock 4.2.1, past CVE-2026-112940 (an arbitrary
+  file overwrite).
 - **Removed:** the unused hover overlay for links. A link's details are in the Inspector, which a
   click or `L` opens.
 - **Fixed:**
