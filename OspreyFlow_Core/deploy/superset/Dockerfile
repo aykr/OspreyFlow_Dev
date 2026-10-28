@@ -14,12 +14,15 @@ USER root
 RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 # 6.x keeps Superset in its own environment, managed by uv. Beyond the two it lacks, the packages the
 # release scan found with a fix inside the ranges Superset 6.1.0 itself declares; the fixes outside
-# them (cryptography, msgpack, pyarrow, pyOpenSSL) wait for Superset (`.trivyignore`).
+# them (cryptography, msgpack, pyarrow, pyOpenSSL, Pillow 13, and dnspython 2.9, which needs a newer
+# Python than the image's 3.10) wait for Superset (`.trivyignore`). Brought up again for v0.4.0
+# (ADR-111 Amendment 7): Authlib, brotli and certifi.
 RUN uv pip install --no-cache --python /app/.venv/bin/python psycopg2-binary==2.9.6 \
-    authlib==1.6.9 mako==1.3.12 pyjwt==2.14.0 pillow==12.3.0 urllib3==2.8.0 pyasn1==0.6.4 \
-    jaraco.context==6.1.0 wheel==0.46.2 setuptools==84.0.0
-# setuptools bundles its own jaraco.context and wheel; the system Python's copy is brought up too.
-RUN /usr/local/bin/python -m pip install --no-cache-dir --upgrade setuptools==84.0.0
+    authlib==1.9.1 mako==1.3.12 pyjwt==2.14.0 pillow==12.3.0 urllib3==2.8.0 pyasn1==0.6.4 \
+    jaraco.context==6.1.0 wheel==0.46.2 setuptools==84.0.0 brotli==1.2.1 certifi==2026.10.18
+# setuptools bundles its own jaraco.context and wheel; the system Python's copy is brought up too,
+# and so is the uv installed there (ADR-111 Amendment 7).
+RUN /usr/local/bin/python -m pip install --no-cache-dir --upgrade setuptools==84.0.0 uv==0.13.4
 COPY superset_config.py osprey_theme.json /app/pythonpath/
 # The OspreyFlow mark and favicon, served by Superset itself (APP_ICON, FAVICONS).
 COPY brand/osprey-mark.svg brand/osprey-favicon.svg /app/superset/static/assets/images/

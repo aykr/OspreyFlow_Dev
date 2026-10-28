@@ -57,6 +57,11 @@ update, while the deployment is up:
     replaced. Links changed before this release still name it until the script above runs.
 - **Security: pypdf 6.21.2.** It fixes three denial-of-service advisories, each caused by a
   malformed PDF (CVE-2026-115572, CVE-2026-115580, CVE-2026-115585).
+- **Security: the dashboard's image (Superset).** It takes Authlib 1.9.1, brotli 1.2.1 and certifi
+  2026.10.18, and an up-to-date uv. Thirty newer findings in Pillow, msgpack and dnspython cannot be
+  fixed inside Superset 6.1.0, so they are excepted until Superset 7.0, as six were before. Superset
+  here makes no thumbnails, screenshots or PDFs, so it decodes no image with Pillow. It unpacks only
+  its own cached results with msgpack, and does not use dnspython.
 - **Removed:** the unused hover overlay for links. A link's details are in the Inspector, which a
   click or `L` opens.
 - **Fixed:**
