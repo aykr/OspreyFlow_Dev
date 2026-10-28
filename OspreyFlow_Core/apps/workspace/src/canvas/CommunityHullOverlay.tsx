@@ -11,8 +11,7 @@ export interface CommunityHullOverlayProps {
   hulls: ReadonlyMap<string, readonly [number, number][]>;
 }
 
-/** A DOM overlay anchored to Sigma's camera, the same established pattern
- * `EdgeInspectionOverlay`'s own docstring cites (ADR-002's "one honest caveat": some decoration is
+/** A DOM overlay anchored to Sigma's camera (ADR-002's "one honest caveat": some decoration is
  * genuinely easier in HTML/SVG than in the WebGL layer) — extended here from a static popover to a
  * polygon that must track the camera continuously while it pans/zooms, via `Camera`'s own
  * `"updated"` event rather than Sigma's full per-frame render loop, since a hull's vertices only
@@ -20,7 +19,7 @@ export interface CommunityHullOverlayProps {
  *
  * **Known simplification, disclosed rather than silent:** a container resize with no
  * accompanying camera change (e.g. the sidebar opening) does not itself re-trigger a redraw here,
- * the same class of gap `EdgeInspectionOverlay`'s own static `x`/`y` already has — real, and left
+ * the same class of gap a static popover's `x`/`y` has — real, and left
  * for a future pass rather than solved speculatively for a container-resize case this stage's own
  * plan did not name. */
 export function CommunityHullOverlay({ sigmaRef, hulls }: CommunityHullOverlayProps) {

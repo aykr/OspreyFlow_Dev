@@ -391,6 +391,9 @@ class SourceRef(BaseModel):
     excerpt_hash: str                # sha256 of the supporting span, for tamper evidence
 ```
 
+A tabular source's `row N` counts the rows under the header from 0, so `row 0` is the first data
+row. Wherever a row is shown to a person, it is counted from 1 (ADR-131).
+
 The three provenance states map one-to-one onto the design system's provenance strokes:
 
 | State | Meaning | Stroke |

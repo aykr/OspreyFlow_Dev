@@ -13,9 +13,9 @@ export interface PathfinderOverlayProps {
 
 /** Phase 7 Stage 5 — `spec/02_GLASS_FRONTEND.md` §3.1: "Select two nodes, get k-shortest paths;
  * paths render with the on-path node state... everything else dims to 32%." The same transient
- * `Popover` shape `ClusterExplainOverlay`/`EdgeInspectionOverlay` already use, anchored to the
- * triggering radial-menu position — not an Inspector tab, the same reasoning those two already
- * establish for their own class of result. `paths.length === 0` renders "No path found" rather
+ * `Popover` shape `ClusterExplainOverlay` already uses, anchored to the
+ * triggering radial-menu position — not an Inspector tab, the same reasoning it already
+ * establishes for its own class of result. `paths.length === 0` renders "No path found" rather
  * than nothing: `GraphPort.paths` searches the whole access-filtered corpus (`06_DECISIONS.md`
  * ADR-033's own "FIRST" reasoning), so this is the true, complete claim, not "not in your working
  * set" — worth saying plainly rather than leaving the analyst to wonder why nothing happened. */

@@ -306,7 +306,8 @@ async def test_a_refused_write_on_a_middle_row_fails_the_run_naming_it_and_write
     rows[3]["duration"] = "13"
     with pytest.raises(OntologyError) as raised:
         await _load_pairs(graph, rows)
-    assert "row 3" in str(raised.value), "the error names the row whose write was refused"
+    # ADR-131: the row is named as a person counts it, the fourth data row as row 4.
+    assert "row 4:" in str(raised.value), "the error names the row whose write was refused"
     assert graph.open_edges == [] and graph.committed_edges == [], "nothing was written"
     assert graph.edge_calls == [], "not so much as a call to write a link"
 

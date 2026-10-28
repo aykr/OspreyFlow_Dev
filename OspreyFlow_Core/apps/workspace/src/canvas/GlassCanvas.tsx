@@ -267,8 +267,8 @@ export interface GlassCanvasProps {
   onViewMessages?: (nodeId: string) => void;
   /** Phase 7 Stage 3: the metrics panel's own community-detection result, already grouped into
    * hull polygons by `metrics/hulls.ts`'s pure `computeCommunityHulls` — `GlassCanvas` only
-   * renders them (`CommunityHullOverlay`, camera-tracked the same way `EdgeInspectionOverlay`'s
-   * own DOM-overlay pattern is, ADR-002's "one honest caveat"), it does not compute them, so a
+   * renders them (`CommunityHullOverlay`, a camera-tracked DOM overlay, ADR-002's "one honest
+   * caveat"), it does not compute them, so a
    * caller that never fetches communities pays nothing beyond the `undefined` check below. */
   communityHulls?: ReadonlyMap<string, readonly [number, number][]>;
   /** ADR-066: how many nodes are now folded into Group Nodes (the stand-ins included), so the

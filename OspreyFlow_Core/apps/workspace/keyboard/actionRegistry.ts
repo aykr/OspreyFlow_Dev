@@ -80,13 +80,9 @@ export function assertAllCovered(registryName: string, actions: readonly string[
  * `GlassCanvas.tsx`'s own keyboard-reachable actions. Pan, zoom and lasso are deliberately absent
  * — `keyboard.spec.ts`'s own header comment already names them as having no keyboard equivalent
  * in `02_GLASS_FRONTEND.md` §6's own text, the same exemption this registry inherits rather than
- * re-litigates. `overlay-dismiss-edge-inspection` is absent for the same class of reason, checked
- * directly rather than assumed: nothing keyboard-driven ever opens `EdgeInspectionOverlay` (only
- * Sigma's own mouse `clickEdge`/`enterEdge` events do), so a pure-keyboard walkthrough has no
- * all-keyboard path to reach the state this action would dismiss — the code itself is still fixed
- * (see `GlassCanvas.tsx`'s own `onKeyDown` guard) so a keyboard user who ends up there via a mixed
- * mouse-then-keyboard session isn't stuck, but this file cannot honestly claim to test entering
- * that state, so it does not claim to test leaving it either.
+ * re-litigates. There is no `overlay-dismiss-edge-inspection`: the hover overlay it would dismiss
+ * was taken off the canvas by ADR-064 decision 3 and removed by its Amendment 1; a link's details
+ * are in the Inspector, which `L` reaches.
  */
 export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "zoom-in-and-out-by-keyboard",

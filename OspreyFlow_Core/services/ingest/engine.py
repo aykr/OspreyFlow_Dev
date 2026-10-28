@@ -1826,7 +1826,8 @@ def _refuse_held_write(state: _RunState, write: EdgeWrite, *, row_index: int) ->
         if source_type is not None and target_type is not None:
             validate_edge_endpoints(edge_type, source_type=source_type, target_type=target_type)
     except OntologyError as error:
-        raise OntologyError(f"row {row_index}: {error}") from error
+        # `row_index` is the row's offset under the header; a person counts from 1 (ADR-131).
+        raise OntologyError(f"row {row_index + 1}: {error}") from error
 
 
 async def _hold_edge(

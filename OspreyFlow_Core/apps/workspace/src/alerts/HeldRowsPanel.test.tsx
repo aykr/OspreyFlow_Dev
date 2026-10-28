@@ -37,6 +37,12 @@ async function release() {
 }
 
 describe("HeldRowsPanel", () => {
+  it("reads a held row counted from 1 (ADR-131)", async () => {
+    serve({ load_id: "L2", edges_created: 0, nodes_created: 0, rule_notes: [] });
+    render(<HeldRowsPanel apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" level="author" />);
+    expect(await screen.findByText(/^Row 5: a 1$/)).toBeTruthy();
+  });
+
   it("says how many links a release made", async () => {
     serve({ load_id: "L2", edges_created: 3, nodes_created: 0, rule_notes: [] });
     expect((await release()).textContent).toContain("3 link(s) made");

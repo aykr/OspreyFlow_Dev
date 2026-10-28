@@ -167,4 +167,16 @@ describe("LinkDetails and the basis", () => {
     render(<LinkDetails edge={none} {...ends} directed />);
     expect(screen.getByText("No sources recorded")).toBeTruthy();
   });
+
+  it("reads a source row counted from 1 (ADR-131)", () => {
+    const fromRow = link({
+      provenance: {
+        state: "asserted",
+        sources: [{ document_id: "calls.csv", locator: "row 41", excerpt_hash: "" }],
+        first_seen: "2001-05-01T00:00:00Z",
+      },
+    } as Partial<Edge>);
+    render(<LinkDetails edge={fromRow} {...ends} directed />);
+    expect(screen.getByText("calls.csv · row 42")).toBeTruthy();
+  });
 });

@@ -200,6 +200,17 @@ describe("Inspector sections (ADR-096)", () => {
     expect(screen.getByText("d1 · p.1")).toBeTruthy();
   });
 
+  it("a source row reads counted from 1, the row under the header as row 1 (ADR-131)", () => {
+    stubNotes();
+    const fromRow = {
+      ...person,
+      provenance: { state: "asserted", sources: [{ document_id: "calls.csv", locator: "row 0" }], first_seen: "x" },
+    } as unknown as Node;
+    render(<Inspector node={fromRow} assessment={assessment} />);
+    fireEvent.click(header("Source"));
+    expect(screen.getByText("calls.csv · row 1")).toBeTruthy();
+  });
+
   it("a node whose sources are withheld says so in Source, and never that none were recorded", () => {
     stubNotes();
     const withheld = {

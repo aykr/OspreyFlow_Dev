@@ -1,5 +1,6 @@
 import type { Edge, Node } from "../../../../packages/schemas/generated";
 import { intervalText } from "./intervalText";
+import { locatorText } from "./sourceLocator";
 import { SOURCES_WITHHELD_TEXT } from "./sourcesWithheld";
 import { linkTypeName } from "../canvas/linkLabel";
 import { displayValue } from "../search/searchOptions";
@@ -97,7 +98,7 @@ export function LinkDetails({ edge, source, target, directed, typeBasis, typeNam
             <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
               {sources.map((s, i) => (
                 <li key={i} className="value">
-                  {s.document_id} · {s.locator}
+                  {s.document_id} · {locatorText(s.locator)}
                 </li>
               ))}
             </ul>

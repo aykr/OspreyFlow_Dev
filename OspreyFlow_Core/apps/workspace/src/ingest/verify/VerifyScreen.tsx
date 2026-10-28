@@ -24,6 +24,7 @@ import { GlassCanvas } from "../../canvas/GlassCanvas";
 import { Button } from "../../design/primitives/Button";
 import { Panel } from "../../design/primitives/Panel";
 import { Table, type TableColumn } from "../../design/primitives/Table";
+import { rowNumber } from "../../inspector/sourceLocator";
 import { OntologyRegistry } from "../../ontology/schema";
 import { createWorkingSet, type WorkingSet } from "../../workingset/store";
 import { alreadyLoadedWords } from "../alreadyLoaded";
@@ -233,7 +234,7 @@ export function VerifyScreen({ apiBaseUrl,
                           key={s.row_index}
                           style={{ color: "var(--text-tertiary)", fontFamily: "var(--mono)" }}
                         >
-                          row {s.row_index}: {s.sample}
+                          row {rowNumber(s.row_index)}: {s.sample}
                         </li>
                       ))}
                     </ul>

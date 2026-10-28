@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { HeldRow } from "../../../../packages/schemas/generated";
 import { COUNTS_WITHHELD_REASON } from "../admin/Schedules";
 import { Button } from "../design/primitives";
+import { rowNumber } from "../inspector/sourceLocator";
 import type { AccessLevel } from "../investigation/cases";
 import { listHeldRows, rejectHeldRows, releaseHeldRows, type AlertsApi } from "./api";
 import { when } from "./names";
@@ -57,7 +58,7 @@ export function HeldRowsPanel(props: HeldRowsPanelProps) {
             <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
               {group.map((row) => (
                 <li key={row.id} className="label">
-                  Row {row.row_index}: {Object.entries(row.row).map(([k, v]) => `${k} ${v}`).join(" · ")}
+                  Row {rowNumber(row.row_index)}: {Object.entries(row.row).map(([k, v]) => `${k} ${v}`).join(" · ")}
                 </li>
               ))}
             </ul>

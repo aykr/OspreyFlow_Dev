@@ -70,7 +70,8 @@ class RowIndexOutOfRangeError(Exception):
 
     def __init__(self, row_index: int) -> None:
         self.row_index = row_index
-        super().__init__(f"row {row_index} is past the end of the profiled sample")
+        # Counted from 1 for whoever reads it, as the Map screen's "Row n of sample" is (ADR-131).
+        super().__init__(f"row {row_index + 1} is past the end of the profiled sample")
 
 
 class HandlingLoosenedError(Exception):

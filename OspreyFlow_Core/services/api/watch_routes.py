@@ -77,7 +77,8 @@ class AlertHotlist(BaseModel):
 
 class FiredFile(BaseModel):
     """One source file of a matched node: its name (the final path segment of the document id; two
-    loads' `calls.csv` are two entries), and what is cited in it. `row` is the single row when
+    loads' `calls.csv` are two entries), and what is cited in it. `row` is the single row (its
+    offset under the header, counted from 0; the Glass shows it counted from 1, ADR-131) when
     exactly one `row N` is cited and nothing else; otherwise `rows` counts the distinct `row N`
     locators and `records` the distinct locators of any other form (ADR-130 Amendment 1)."""
 

@@ -245,6 +245,8 @@ def test_get_sample_row_past_the_sample_is_not_found(client: TestClient, tmp_pat
 
     assert response.status_code == 404
     assert response.json()["error"] == "row_index_out_of_range"
+    # ADR-131: the sixth row (index 5) is named as a person counts it.
+    assert response.json()["detail"].startswith("row 6 is past the end")
 
 
 def test_get_sample_row_for_a_recipe_in_a_different_unit_is_not_found(

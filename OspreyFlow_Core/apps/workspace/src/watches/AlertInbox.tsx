@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
+import { rowNumber } from "../inspector/sourceLocator";
 import {
   type AlertJumpResult,
   type AlertView,
@@ -33,7 +34,7 @@ function heading(alert: AlertView): string {
 }
 
 function fileText(file: FiredFile): string {
-  if (file.row != null) return `${file.name}, row ${COUNT.format(file.row)}`;
+  if (file.row != null) return `${file.name}, row ${COUNT.format(rowNumber(file.row))}`;
   if (file.records != null) {
     return `${file.name}, ${COUNT.format(file.records)} ${file.records === 1 ? "record" : "records"}`;
   }

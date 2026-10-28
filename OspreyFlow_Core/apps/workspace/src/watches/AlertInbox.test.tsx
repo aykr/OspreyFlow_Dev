@@ -151,7 +151,7 @@ describe("a hotlist alert that explains itself", () => {
     const t = text(EXPLAINED);
     expect(t).toContain("Hotlist: 07700 900918 · review by 31 Jan 2027");
     expect(t).toContain("Matched: Endpoint +447700900918");
-    expect(t).toContain("From: pid_seized_comms_batch2.csv, row 3; pid_pin_calls.csv, 2,013 rows");
+    expect(t).toContain("From: pid_seized_comms_batch2.csv, row 4; pid_pin_calls.csv, 2,013 rows");
   });
 
   test("shows neither the raw rule id nor a node id, and keeps the jump", () => {
@@ -172,7 +172,7 @@ describe("a hotlist alert that explains itself", () => {
       fired_on: [{ type: "Endpoint", label: "+447700900918", more_files: 3,
                    files: [{ name: "a.csv", row: 1 }] }],
     };  // prettier-ignore
-    expect(text(more)).toContain("From: a.csv, row 1; and 3 more files");
+    expect(text(more)).toContain("From: a.csv, row 2; and 3 more files");
     const first = (more.fired_on ?? [])[0];
     if (!first) throw new Error("fixture has no fired_on");
     const one: AlertView = { ...more, fired_on: [{ ...first, more_files: 1 }] };
@@ -257,7 +257,7 @@ describe("the hotlist alert's fired-on text", () => {
         />
       </ul>,
     );
-    expect(container.textContent ?? "").toContain("a.csv, 4 records; b.csv, 2 rows; c.csv, row 3");
+    expect(container.textContent ?? "").toContain("a.csv, 4 records; b.csv, 2 rows; c.csv, row 4");
   });
 
   test("evidence available but nothing fired on says it is no longer available and disables Jump", () => {

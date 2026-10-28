@@ -9083,6 +9083,18 @@ Not decided here. Deleting a link from the store; selecting several links.
 
 Consequences. A hidden link still counts in the working set and in layout. The details panel for a link reads only what the working set already holds.
 
+### ADR-064, Amendment 1 (28 October 2026): the unused hover overlay is removed
+
+The owner's ruling of 28 October 2026, given with decision 3's history in front of them.
+- **The finding.** Decision 3 removed the hover popup and left its component,
+  `canvas/EdgeInspectionOverlay.tsx`, unused. It was still built, tested and kept current (ADR-130
+  Amendment 2 gave it the sources-withheld words), but nothing mounted it, so no analyst could
+  see it.
+- **The decision.** The component and its test are deleted. A link's details are shown in one
+  place, the Inspector (decision 1), which a click or `L` reaches.
+- **Not changed.** Link selection, the Inspector's link details, and the keyboard walkthroughs.
+  No keyboard case tested the overlay, because nothing opened it.
+
 
 ## ADR-065 — The top bar: menus for case and account, an application switch, Filters inside the search box
 
@@ -20009,3 +20021,41 @@ dataset it belongs to is one the reader's case reads.
   covered by the adapter test, plus a route test of search and expand. For each writer that
   reads then writes back, a test against the real adapter: a scoped reader's change to a
   two-dataset element keeps every stored source, and what it is sent back carries none.
+
+## ADR-131 — A source row is shown counted from 1 — ACCEPTED (design)
+
+Status: accepted 28 October 2026, the owner's ruling ("Count from 1").
+
+Context. A loaded row's provenance names it as `row N`, where N is its offset under the header
+(`services/ingest/engine.py`'s `_provenance`), so the first data row is `row 0`. Every place
+the Glass shows a row showed that offset as it is stored. So a hotlist alert said "calls.csv,
+row 0" for the first row after the header, and the Inspector, link details, Verify's rejected
+rows and the held rows did the same. The PID manifest, on the other hand, counts planted rows as
+1-based data rows (ADR-127). `01_DOMAIN_MODEL.md` §2.1 gave `row 1184` as an example and did not
+say where counting starts.
+
+Decision.
+1. **What is stored does not change.** A `row N` locator, a rejection's or held row's
+   `row_index`, and an alert's `fired_on` `row` stay offsets under the header, counted from 0.
+   Data already loaded keeps its meaning, so no deployment reloads anything. Code that reads a
+   row back, such as dedup survivors, rule holds and the KYC rules, is unchanged.
+2. **What a person reads counts from 1.** The first data row, the one under the header, is
+   **row 1**:
+   - in the Glass, through one module, `inspector/sourceLocator.ts` (`rowNumber` and
+     `locatorText`), used by the Inspector's Source, link details, the hotlist alert's
+     "From:", Verify's rejected rows and the held rows panel. A locator of any other form
+     (`char span`, `msg`, `p.`) is shown as stored;
+   - in the Conduit's two messages that name a row: a refused held write ("row N: …", which fails
+     a run) and a sample row past the end of the profiled sample.
+3. The Ingest Studio's Map sample already read "Row n of sample" counted from 1, and is
+   unchanged.
+
+Tests that would fail if it were broken: `sourceLocator.test.ts`; a case each in
+`Inspector.test.tsx`, `LinkDetails.test.tsx`, `HeldRowsPanel.test.tsx` and
+`VerifyScreen.rows.test.tsx`; `AlertInbox.test.tsx`'s three "From:" expectations, which moved by
+one; `test_run_writes_each_link_once.py`'s refused middle row, which is now named `row 4`; and
+`test_studio_map_routes.py`'s past-the-end detail. `test_recipe_engine_end_to_end.py` still
+asserts that the stored locator is `row 0`. Each was shown red before the change.
+
+Consequences. An API reader that shows `row_index` or `row` to a person must add one.
+`01_DOMAIN_MODEL.md` §2.1 says so beside `SourceRef.locator`.

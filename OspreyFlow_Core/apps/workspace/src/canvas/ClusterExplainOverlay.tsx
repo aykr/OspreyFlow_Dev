@@ -21,8 +21,8 @@ function labelFor(graph: WorkingSetGraph, nodeId: string): string {
 }
 
 /** `spec/02_GLASS_FRONTEND.md`'s resolution-cluster section (added alongside this component):
- * a transient `Popover` anchored to the triggering canvas position, the same shape
- * `EdgeInspectionOverlay` already uses — not a new Inspector tab or the Dossier (B6/Stage 4's own,
+ * a transient `Popover` anchored to the triggering canvas position (ADR-002's "one honest caveat")
+ * — not a new Inspector tab or the Dossier (B6/Stage 4's own,
  * larger, permanent surface). `03_CONDUIT_MIDDLEWARE.md` §3.5 / B10: "per-comparison match
  * weights, not just the total." */
 export function ClusterExplainOverlay({ x, y, explanation, graph, onClose }: ClusterExplainOverlayProps) {
