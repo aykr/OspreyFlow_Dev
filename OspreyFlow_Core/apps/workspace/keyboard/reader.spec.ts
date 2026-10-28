@@ -56,6 +56,12 @@ async function serveReader(page: Page) {
   );
 }
 
+/** The reader draws its scan buttons and the marking box only once the document has arrived, so a
+ * walk waits for "Opening…" to go, as a person would (CI on a3ffb48 tabbed before it had). */
+async function documentOpened(page: Page) {
+  await expect(page.getByText("Opening…")).toHaveCount(0);
+}
+
 async function tabTo(page: Page, name: RegExp, max = 10) {
   for (let i = 0; i < max; i++) {
     await page.keyboard.press("Tab");
@@ -111,6 +117,7 @@ test("Quick scan and Accept are reached and pressed by keyboard in the reader", 
   await serveReader(page);
   await page.goto("/keyboard/reader-harness.html");
   await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await documentOpened(page);
   await tabTo(page, /^Quick scan$/);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
@@ -125,6 +132,7 @@ test("Reject beside Accept is reached and pressed by keyboard, and draws nothing
   await serveReader(page);
   await page.goto("/keyboard/reader-harness.html");
   await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await documentOpened(page);
   await tabTo(page, /^Quick scan$/);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
@@ -175,6 +183,7 @@ test("Accept all pending accepts the enumerated findings as one decision by keyb
   });
   await page.goto("/keyboard/reader-harness.html");
   await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await documentOpened(page);
   await tabTo(page, /^Quick scan$/);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("list", { name: "Entities found" })).toBeVisible();
@@ -198,6 +207,7 @@ test("words are marked as an entity by keyboard: typed, a type chosen, and Mark 
   });
   await page.goto("/keyboard/reader-harness.html");
   await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await documentOpened(page);
   await tabTo(page, /^Words to mark$/, 20);
   await page.keyboard.type("MERCER");
   await page.keyboard.press("Tab");
@@ -219,6 +229,7 @@ test("Deep read (model) is reached and pressed by keyboard in the reader (ADR-09
   });
   await page.goto("/keyboard/reader-harness.html");
   await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await documentOpened(page);
   await tabTo(page, /^Deep read \(model\)$/, 20);
   await page.keyboard.press("Enter");
   await expect.poll(() => usings).toEqual(["model"]);
