@@ -1,4 +1,4 @@
-.PHONY: check lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness test-js dev-up dev-down docker-clean glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y
+.PHONY: check lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness trivy-image-ner trivy-image-worker trivy-image-report-sync trivy-image-superset test-js dev-up dev-down docker-clean glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y
 
 PY := .venv/bin/python
 RUFF := .venv/bin/ruff
@@ -7,7 +7,7 @@ MYPY := .venv/bin/mypy
 # What runs from this folder alone (`06_DECISIONS.md` ADR-114 Amendment 2). The specification's own
 # gates and the test suites are the developer repository's, in its Makefile; its `ci` runs this
 # `check` first. A user of this repository needs nothing from it.
-check: lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness harness-a11y
+check: lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness trivy-image-ner trivy-image-worker trivy-image-report-sync trivy-image-superset harness-a11y
 
 lint:
 	$(RUFF) check .
@@ -57,6 +57,22 @@ trivy-image-workspace:
 trivy-image-harness:
 	docker build -f harness/Dockerfile -t ospreyflow/harness:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/harness:ci
+
+# The four images the release scans and these checks did not (ADR-111 Amendment 7): v0.4.0's release
+# was the first to meet their findings. Same reasoning as the ones above; Superset builds from its own
+# folder.
+trivy-image-ner:
+	docker build -f services/ner/Dockerfile -t ospreyflow/ner:ci .
+	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/ner:ci
+trivy-image-worker:
+	docker build -f services/worker/Dockerfile -t ospreyflow/worker:ci .
+	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/worker:ci
+trivy-image-report-sync:
+	docker build -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
+	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/report-sync:ci
+trivy-image-superset:
+	docker build -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/superset:ci
 
 # Install, start, stop and update the deployment with the `ospreyflow` command (`cli/`; ADR-114):
 # `ospreyflow install --mode lite`, `ospreyflow start [--build]`, `ospreyflow status`, `ospreyflow open`.

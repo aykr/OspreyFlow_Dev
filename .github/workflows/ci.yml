@@ -254,6 +254,73 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
+  # The release (`.github/workflows/release.yml`) scans every image it publishes; these four it
+  # scanned and CI did not, so v0.4.0's release was the first to meet their findings (ADR-111
+  # Amendment 7: Superset's 64, and the recogniser's filelock). Same gate as the ones above.
+  # services/ner/Dockerfile: the name-recognition sidecar (ADR-098).
+  trivy-image-ner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f services/ner/Dockerfile -t ospreyflow/ner:ci .
+      - uses: aquasecurity/trivy-action@v0.24.0
+        with:
+          trivyignores: OspreyFlow_Core/.trivyignore
+          image-ref: ospreyflow/ner:ci
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # services/worker/Dockerfile: the pipeline worker.
+  trivy-image-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f services/worker/Dockerfile -t ospreyflow/worker:ci .
+      - uses: aquasecurity/trivy-action@v0.24.0
+        with:
+          trivyignores: OspreyFlow_Core/.trivyignore
+          image-ref: ospreyflow/worker:ci
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # services/report_sync/Dockerfile: the report sync service (ADR-111 Amendment 2).
+  trivy-image-report-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
+      - uses: aquasecurity/trivy-action@v0.24.0
+        with:
+          trivyignores: OspreyFlow_Core/.trivyignore
+          image-ref: ospreyflow/report-sync:ci
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # deploy/superset/Dockerfile: the reference dashboard (ADR-111).
+  trivy-image-superset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+      - uses: aquasecurity/trivy-action@v0.24.0
+        with:
+          trivyignores: OspreyFlow_Core/.trivyignore
+          image-ref: ospreyflow/superset:ci
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
   schemas-check:
     runs-on: ubuntu-latest
     steps:
