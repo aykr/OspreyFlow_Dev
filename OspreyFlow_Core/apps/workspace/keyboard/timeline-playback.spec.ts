@@ -254,8 +254,11 @@ test("choosing the weekend by keyboard puts the cells in the map's request and d
   const weekend = geoBodies.find((b) => (b.filter.weekday_hours?.length ?? 0) === 48)!;
   expect(new Set(weekend.filter.weekday_hours!.map((c) => c.weekday))).toEqual(new Set([5, 6]));
   expect(new Set(weekend.filter.weekday_hours!.map((c) => c.hour)).size).toBe(24);
-  // The canvas dims what has no weekend event, by the same cells.
-  expect(firstSeenBodies.some((b) => Array.isArray(b.filter.weekday_hours))).toBe(true);
+  // The canvas dims what has no weekend event, by the same cells. Its request follows the map's, so
+  // it is waited for, not assumed (CI on 939ad86 checked before it was sent).
+  await expect
+    .poll(() => firstSeenBodies.some((b) => Array.isArray(b.filter.weekday_hours)), { timeout: 5000 })
+    .toBe(true);
   await expect(page.getByTestId("dimmed-nodes")).toHaveText("b,c");
 
   // Clear (in the same menu) takes the restriction off: nothing dimmed, and the map asks again with no cells.
