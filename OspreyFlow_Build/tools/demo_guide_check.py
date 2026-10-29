@@ -36,6 +36,7 @@ DEMO_REGISTRY: tuple[tuple[str, str], ...] = (
     ('Scenario C — "Fixture Corp"', "shipped"),
     ("Operation Ledger", "shipped"),
     ("Prison Intelligence Dataset", "shipped"),
+    ("Prison Intelligence Dataset: scale cohort", "shipped"),
     ("PaySim", "shipped"),
     ("The real Enron email corpus", "internal"),
     ("VAST Challenge dataset", "internal"),

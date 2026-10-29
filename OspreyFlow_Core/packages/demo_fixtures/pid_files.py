@@ -9,7 +9,9 @@ plan's rows do not carry. The files are written under `out_dir`, never anywhere 
   the scale profile's files are prefixed `scale_`; a file the plan has no rows for is not written;
 - `pictures/` holds one PNG per picture subject (`pid_writes.picture_writes`);
 - `pid_cohort_list.txt` (demo profile only) holds the 40 identifiers the add-many scene pastes
-  (`cohort_list`, ADR-128 decision 1), one a line, no header;
+  (`cohort_list`, ADR-128 decision 1), one a line, no header; the scale profile writes
+  `scale_cohort_list.txt` instead, its 3,000 prisoners' numbers (`pid_plan.scale_bulk_list`,
+  ADR-127 Amendment 40);
 - `manifest.json` holds rows, bytes and SHA-256 per file and the planted counts, as written, and
   their 1-based row positions; the list is in its own `lists` section (lines, bytes, SHA-256), not
   among the CSV `files`. It carries no timestamp. Byte-identical means on one interpreter and
@@ -80,6 +82,7 @@ from .pid_plan import (
     entity_shape,
     file_header,
     rows_for,
+    scale_bulk_list,
 )
 
 CALLS = "pid_pin_calls.csv"
@@ -91,6 +94,8 @@ OWNERS = "pid_number_owners.csv"
 ESTATE = "pid_establishment_plan.csv"
 MANIFEST = "manifest.json"
 COHORT_LIST = "pid_cohort_list.txt"
+#: The scale profile's list (ADR-127 Amendment 40): its 3,000 prisoners' numbers, one a line.
+SCALE_COHORT_LIST = "scale_cohort_list.txt"
 #: Distinct calls written in each of the three international forms; and the planted duplicates.
 FORM_COUNT = 10_000
 EXACT_DUPLICATES = 40
@@ -604,11 +609,14 @@ def write_files(plan: Plan, out_dir: Path) -> WriteReport:
         pictures.append(FileRecord(f"pictures/{picture_name}", None, len(data), sha))
     lists: list[FileRecord] = []
     cohort = cohort_list(plan)
+    list_name = COHORT_LIST
+    if plan.profile == "scale":
+        cohort, list_name = list(scale_bulk_list(plan)), SCALE_COHORT_LIST
     if cohort:
-        path = out_dir / COHORT_LIST
+        path = out_dir / list_name
         path.write_text("".join(f"{line}\n" for line in cohort), encoding="utf-8", newline="\n")
         size, sha = _digest(path)
-        lists.append(FileRecord(COHORT_LIST, len(cohort), size, sha))
+        lists.append(FileRecord(list_name, len(cohort), size, sha))
     files.sort(key=lambda f: f.name)
     text = _manifest(plan, files, pictures, lists, planted)
     (out_dir / MANIFEST).write_text(text, encoding="utf-8")
@@ -619,6 +627,7 @@ def write_files(plan: Plan, out_dir: Path) -> WriteReport:
 
 __all__ = [
     "COHORT_LIST",
+    "SCALE_COHORT_LIST",
     "FileRecord",
     "WriteReport",
     "cohort_list",

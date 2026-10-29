@@ -58,6 +58,7 @@ def test_each_pack_maps_to_its_seed_key(rig: Rig, tmp_path: Path) -> None:
         "paysim": "paysim",
         "enron": "enron",
         "prison-intelligence": "prison-intelligence",
+        "prison-intelligence-scale": "prison-intelligence-scale",
     }
     assert rig("demo", "add", "operation-ledger") == 0
     (argv,) = _seed_calls(rig)

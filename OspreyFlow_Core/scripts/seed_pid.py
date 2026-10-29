@@ -62,8 +62,8 @@ for `--release-batch-2` and the fallback; `seed_internal` runs them in a one-sho
 the Conduit's image with the checkout mounted (as its inspection modes do), so the code is the
 checkout's and not the image's older copy, and the Conduit is left running all the same.
 
-**Not built here:** `--scale`, a second case over the scale cohort (it needs its own folder and
-recipe rows, since a recipe row holds one dataset).
+**The scale cohort** is its own pack, `prison-intelligence-scale`, written by the plan writer
+rather than through recipes (`scripts.seed_pid_scale`; ADR-127 Amendment 40).
 """
 
 from __future__ import annotations

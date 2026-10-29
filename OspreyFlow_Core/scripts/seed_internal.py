@@ -116,6 +116,13 @@ DATASETS: dict[str, Dataset] = {
         case_name="Prison Intelligence Dataset (synthetic demo)",
         rehearsal=True,
     ),
+    # ADR-127 Amendment 40: the scale cohort, written straight from the plan (no Studio recipes, no
+    # load record), so not a rehearsal; its edges go in bulk.
+    "prison-intelligence-scale": Dataset(
+        script="scripts.seed_pid_scale",
+        case_name="Prison Intelligence Dataset: scale cohort (synthetic demo)",
+        bulk=True,
+    ),
     # ADR-114 Amendment 23: real data, an optional download each user makes and accepts.
     "enron": Dataset(
         script="scripts.seed_enron",

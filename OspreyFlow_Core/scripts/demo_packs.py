@@ -128,6 +128,13 @@ _DESCRIPTIONS: dict[str, _Description] = {
         "through the Ingest Studio from source files, each source with its own marking.",
         "Prison Intelligence Dataset (synthetic demo)",
     ),
+    # ADR-127 Amendment 40: the scale cohort, a pack of its own.
+    "prison-intelligence-scale": _Description(
+        "Prison Intelligence Dataset: scale cohort (synthetic)",
+        "3,000 prisoners and 30,000 links across six establishments, to show a large network "
+        "grouped by community.",
+        "Prison Intelligence Dataset: scale cohort (synthetic demo)",
+    ),
 }
 
 

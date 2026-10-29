@@ -54,6 +54,7 @@ def test_the_real_registry_holds_exactly_the_datasets_it_is_known_to_hold() -> N
         "paysim",
         "enron",
         "prison-intelligence",
+        "prison-intelligence-scale",
     }
     assert {m.id for m in internal_manifests(REGISTRY)} == set()
     from internal_demos.registry import ALL

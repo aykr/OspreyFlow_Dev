@@ -19511,6 +19511,42 @@ ADR-043's second amendment. Decided by the coordinator under the owner's setting
   are a reference on an Endpoint's `value_normalised` in the engine, and the KYC lookup by
   `family_name`.
 
+### ADR-127, Amendment 40 (29 October 2026) — the scale cohort is seeded by the plan writer, as its own pack
+
+The owner's ruling of 29 October 2026, "Direct writer", from three options: the plan written straight
+into the store; a second set of Studio recipe rows over the scale folder; leaving J8 on its slide.
+- **What it replaces.** Amendment 23 deferred `--scale` because a recipe row holds one dataset, so the
+  scale case would need its own folder, recipe rows and run order. J8 shows scale on the canvas, not
+  the Ingest Studio, so the scale case does not need to be loaded through the Studio.
+- **The pack.** `prison-intelligence-scale`, added with `ospreyflow demo add
+  prison-intelligence-scale`. It runs `scripts.seed_pid_scale` through `scripts.seed_internal`, with
+  the bulk loader and the Conduit stopped as for any seed. It is synthetic, and is shipped and
+  registered like the other packs, with a demo-guide row.
+- **What it writes.**
+  - `pid_writes.writes(build_plan("scale"), "seed", dataset="prison-intelligence-scale", …)`, through
+    the dataset-stamping adapter: 3,000 prisoners, exactly 30,000 links, 7,176 nodes.
+  - The case "Prison Intelligence Dataset: scale cohort (synthetic demo)" (`datasets.py`) reads that
+    dataset alone, carries the NIEM domain pack, and is shared with the demo accounts as the main
+    pack's case is.
+  - No calls, reports, pictures or analytics events: the scale plan has none.
+- **The paste list.** `pid_plan.scale_bulk_list(plan)` lists the 3,000 prisoners' numbers. `python -m
+  scripts.write_pid_files --profile scale` writes them as `scale_cohort_list.txt`, for Add many from
+  a list (under its 5,000 cap). Added with all their links, they open as a working set of more than
+  10,000 links, grouped by community (ADR-119), which is J8's scene.
+- **What it gives up, said plainly.** The writes create no load record. So the rehearsal reset does
+  not touch the scale case, and Data feeds do not list it. A second run writes the same ids
+  (`pid_plan.node_id`), so it changes nothing, and the seed says so. Removing the case's data needs a
+  fresh deployment, as for the other directly written packs.
+- **Tests that would fail (rule 12).**
+  - Pure: `scale_bulk_list` gives 3,000 distinct numbers, each a prisoner of the scale plan. The scale
+    files include the list. The pack registry, pack descriptions, CLI keys and seed table name the
+    pack (their exact-set tests change with it). The seed's writes are 7,176 nodes and 30,000 links,
+    all in the scale dataset and none in the demo one.
+  - Live (the throwaway stack): the seed makes the case, which reads only the scale dataset. The demo
+    analyst, through the case, reads the 30,000 links. A principal whose case reads only the demo
+    dataset reads none of them (rule 4). A second run leaves the counts unchanged.
+  - Each new check is shown red first.
+
 ## ADR-128 — Brief 3's analysis screens: add many, select what is lit, the case brief, icons by value
 
 **Status:** Accepted (26 October 2026), by the coordinator under the owner's delegation for Brief 3 ("keep

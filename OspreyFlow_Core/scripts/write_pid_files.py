@@ -5,9 +5,11 @@
 `--out` is required and must be outside the git working tree: the files, about 100,000 call rows
 among them, are never committed (the naming rule and rule 9), so a path inside the repository is
 refused before anything is written. It writes the CSV files, `pictures/`, for the demo profile
-`pid_cohort_list.txt` (the 40 identifiers the add-many scene pastes, ADR-128), and `manifest.json`
-(rows, bytes and SHA-256 per file, and the planted counts and row positions; no timestamps), then,
-for a profile with pictures, `contact_sheet.png`, and prints a table of what it wrote.
+`pid_cohort_list.txt` (the 40 identifiers the add-many scene pastes, ADR-128; the scale profile
+writes `scale_cohort_list.txt`, its 3,000 prisoners' numbers, ADR-127 Amendment 40), and
+`manifest.json` (rows, bytes and SHA-256 per file, and the planted counts and row positions; no
+timestamps), then, for a profile with pictures, `contact_sheet.png`, and prints a table of what it
+wrote.
 
 Plain generation: no store, no network.
 """

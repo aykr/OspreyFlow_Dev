@@ -881,6 +881,19 @@ def test_the_prison_intelligence_dataset_is_registered_with_the_seed_and_the_cas
     )  # fmt: skip
 
 
+def test_the_scale_cohort_is_registered_as_its_own_bulk_seed_and_not_a_rehearsal() -> None:
+    """ADR-127 Amendment 40: `prison-intelligence-scale` runs `scripts.seed_pid_scale`, in the case
+    the dataset registration names, through the bulk loader. The writes make no load record, so the
+    rehearsal reset has nothing to restore."""
+    from demo_fixtures.datasets import PID_SCALE
+
+    spec = seed_internal.DATASETS["prison-intelligence-scale"]
+    assert spec.script == "scripts.seed_pid_scale"
+    assert spec.case_name == PID_SCALE.case_name
+    assert spec.bulk is True and spec.rehearsal is False
+    assert spec.data_folder is None and spec.real_dataset is None and spec.sampled is False
+
+
 def test_a_prison_intelligence_seed_passes_the_case_and_grants_and_no_other_dataset_flag(
     repo: Path,
 ) -> None:

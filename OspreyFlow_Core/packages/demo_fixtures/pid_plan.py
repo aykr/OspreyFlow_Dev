@@ -2111,6 +2111,26 @@ def bulk_list(plan: Plan) -> tuple[str, ...]:
     return tuple(sorted(out))
 
 
+def scale_bulk_list(plan: Plan) -> tuple[str, ...]:
+    """The scale plan's 3,000 prisoners' prison numbers, distinct, in sorted order: the list the
+    scale cohort's scene pastes into Add many from a list (ADR-127 Amendment 40). `ValueError` for
+    any other plan, as `bulk_list` is the demo's alone."""
+    if plan.profile != "scale":
+        raise ValueError(
+            f"scale_bulk_list is the scale plan's: this is the {plan.profile} plan "
+            "(the demo's list is bulk_list)"
+        )
+    return tuple(
+        sorted(
+            {
+                str(e.properties["prison_number"])
+                for e in plan.entities
+                if e.entity_type == "Person" and "prison_number" in e.properties
+            }
+        )
+    )
+
+
 def _as_day(value: date | datetime) -> date:
     return value.date() if isinstance(value, datetime) else value
 

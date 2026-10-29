@@ -13,7 +13,8 @@ goes red.
   distinct; one that resolves is repeated, written another way; one that does not is made up (it
   reads as nothing); one is right-shaped and absent from both profiles' plans.
 - **Written as plain text**: one identifier a line, UTF-8, `\\n` ends, no header, in the demo
-  profile's output only, and in the manifest's `lists` with its lines, bytes and SHA-256.
+  profile's output (the scale profile writes its own, `scale_cohort_list.txt`, ADR-127 Amendment 40),
+  and in the manifest's `lists` with its lines, bytes and SHA-256.
 - **Reproducible**: the same list for the same plan, built twice.
 """
 
@@ -149,6 +150,8 @@ def test_the_list_is_written_as_plain_lines_and_recorded_in_the_manifest(
     assert [(r.name, r.rows) for r in report.lists] == [("pid_cohort_list.txt", 40)]
     assert "pid_cohort_list.txt" not in manifest["files"], "it is not a CSV"
     pid_files.write_files(scale, tmp_path / "scale")
-    assert not list((tmp_path / "scale").glob("*cohort*"))
+    # ADR-127 Amendment 40: the scale profile has its own list, never the demo's 40.
+    assert [p.name for p in (tmp_path / "scale").glob("*cohort*")] == ["scale_cohort_list.txt"]
     scale_manifest = json.loads((tmp_path / "scale" / "manifest.json").read_text(encoding="utf-8"))
-    assert scale_manifest["lists"] == {}
+    assert list(scale_manifest["lists"]) == ["scale_cohort_list.txt"]
+    assert scale_manifest["lists"]["scale_cohort_list.txt"]["lines"] == 3_000
