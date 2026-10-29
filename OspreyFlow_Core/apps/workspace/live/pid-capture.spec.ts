@@ -85,10 +85,15 @@ export async function signIn(page: Page, persona: Persona): Promise<void> {
   await page.waitForURL((url) => url.hostname === glass && !url.searchParams.has("code"));
 }
 
-/** Opens the PID case by its name in the case switcher, or from the case picker on first entry. */
+/** Opens the PID case by its name in the case switcher, or from the case picker on first entry.
+ * On a deployment holding several cases, sign-in lands on Home, whose recent list need not name
+ * this one: Open Glass is taken first, then the picker or the switcher. */
 export async function openCase(page: Page, name = CASE_NAME): Promise<void> {
   const picker = page.getByRole("button", { name, exact: true });
   const switcher = page.getByRole("button", { name: /^Case:/ });
+  const openGlass = page.getByRole("button", { name: /^Open Glass/ });
+  await expect(picker.or(switcher).or(openGlass).first()).toBeVisible();
+  if (!(await picker.first().isVisible()) && (await openGlass.isVisible())) await openGlass.click();
   await expect(picker.or(switcher).first()).toBeVisible();
   if (!(await picker.first().isVisible())) await switcher.click();
   await page.getByRole("button", { name, exact: true }).first().click();
