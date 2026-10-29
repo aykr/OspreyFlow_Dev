@@ -9648,6 +9648,14 @@ Found preparing the Prison Intelligence demo, and fixed on the owner's instructi
   on the library (-85.05). With the copy it passed. The height-based flip planted back in the copy
   turned it red again (-85.05), and was restored by md5. With the map's own size tracking left on,
   it stays green, so that setting is left as it was.
+- **A second change, found checking the first live.** With the flip fixed, the camera stayed on the
+  yards but stepped in by about one zoom level (17.5 to 18.6), so two of the three yards left the
+  view. The layer's resize kept only the centre, then copied sigma's camera, still framed for the old
+  size, onto the map. It now keeps the area shown, fitting the map back to its previous bounds, and
+  once sigma has redrawn it takes sigma's camera from the map rather than the other way round.
+  `keyboard/map-view.spec.ts` gains "keeps every drawn node in view". It was red (the yards outside
+  the bounds) and green after. The library's order planted back turned it red again, and was
+  restored by md5.
 - **Not changed.** The resize observer and every other map behaviour.
 
 ## ADR-088 — Two social-network filters in the Metrics panel: a relationship-strength floor and a metric threshold, both dimming

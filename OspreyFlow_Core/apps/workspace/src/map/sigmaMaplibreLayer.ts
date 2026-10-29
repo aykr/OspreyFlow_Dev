@@ -1,5 +1,5 @@
 // The graph layer drawn over the map: `@sigma/layer-maplibre` 3.0.0's `bindMaplibreLayer`, kept here
-// with one change (ADR-086 Amendment 1). Copyright (C) 2013-2024, Alexis Jacomy, Guillaume Plique,
+// with two changes (ADR-086 Amendment 1). Copyright (C) 2013-2024, Alexis Jacomy, Guillaume Plique,
 // Benoît Simard, https://www.sigmajs.org, under the MIT licence (NOTICE).
 //
 // The change: the library flipped a node's y as the map container's height less its Mercator y,
@@ -7,7 +7,8 @@
 // world's height for 140 pixels). Its own resize then re-centred sigma before sigma had redrawn at
 // the new projection: opening the timeline over a drawn map put the camera at latitude -85 and the
 // map went blank. Any constant flips y as well, so 1 is used, and a node's graph position no
-// longer depends on the size of the box. Everything else is the library's, line for line.
+// longer depends on the size of the box. The second, in `fnOnResize`, keeps the area shown rather
+// than only its centre. Everything else is the library's, line for line.
 import { LngLat, LngLatBounds, Map, MercatorCoordinate, type MapOptions } from "maplibre-gl";
 import type Sigma from "sigma";
 
@@ -120,15 +121,20 @@ export default function bindMaplibreLayer(
   function fnOnResize(): void {
     // Avoid sync map with sigma while we do the resize, otherwise there is a side effect...
     sigma.off("afterRender", fnSyncMapWithSigma);
-    const center = map.getCenter();
+    // The second change (ADR-086 Amendment 1): the area shown is kept, not only its centre. Kept
+    // by its centre, a shorter box stepped the camera in by about one zoom level, and two of the
+    // three yards a demo had drawn left the view.
+    const shown = map.getBounds();
     map.once("resize", () => {
-      // NB: resize can change the center of the map, and we want to keep it
-      map.setCenter(center);
+      map.fitBounds(shown, { duration: 0 });
       updateGraphCoordinates(sigma.getGraph());
       fnSyncSigmaWithMap();
-      // Re-enable the map sync with sigma in the next frame
+      // Re-enable the map sync with sigma in the next frame. Sigma first draws at its new size and
+      // takes its camera from the map, so the map keeps the area it was fitted to; the library
+      // copied sigma's camera, framed for the old size, onto the map instead (ADR-086 Amendment 1).
       setTimeout(() => {
-        fnSyncMapWithSigma();
+        sigma.refresh();
+        syncSigmaWithMap(sigma, map);
         sigma.on("afterRender", fnSyncMapWithSigma);
       }, 0);
     });
