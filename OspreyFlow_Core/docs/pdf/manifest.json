@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "418652f3ea506c146e92dadd856ff55cfdb380ca5da8a538a658d70282eff492",
+    "body": "d0f386f824b18bb86d715cbe11449792faa8bfd008d16f1d32732f506c0951fe",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -10,9 +10,9 @@
       "images/admin/06-demo-packs.png": "46ff5e939c137a1e32ff3a4009e57eeda9e8aa1d50b13c36c49ed91aa2f25dc2",
       "images/admin/07-superset.png": "821b76c53a1481b17f26ee5006a9ef80a452c3d61ab5206330eb4c367f5514fd"
     },
-    "pdf": "277c681da0473f76b0b032189bdbd0c37a0ff615f950633fb839d6487c497c0e",
-    "source": "bd6e8939bedb0deb4afe024d1e36b7463a44539864cdc294768c9a4f1df1a5a6",
-    "version": "1.9"
+    "pdf": "92deec81a583291a21508b8ca8192200ebf41f896b2e1ea36b5164e12385b410",
+    "source": "3d2808b71566d0b6ff62cd5503bd1efb5abfe1679ce3a7832d77343f506227f8",
+    "version": "1.10"
   },
   "developer-guide.md": {
     "body": "a28904c6589c53ca24e659d6a16f3a9ad7a1515bb6a48a39332f6a2bcb7843a1",
@@ -30,7 +30,7 @@
       "images/developer/10-data-feeds.png": "f4d75e449663b2e98c9438d81846935bde194fcfd6ba0d8fe1aa41e014a966b1",
       "images/developer/11-held-rows.png": "3f46e1e001d99f6a9f3d8655be47ec594706b2d849bd101862a0e95ea4968f52"
     },
-    "pdf": "db0212372cf9681d915b801142019bb2a185d8c30757ee12180964f24b45991d",
+    "pdf": "4895a51ca2b5b61dc171f05cf01fe5c3f6374c21f57fcc6f2e2f4cb00a5c01e3",
     "source": "ceba402788992a8bd18729abbeae14c0a3af7c31f8c12d980028a5d96be63434",
     "version": "1.6"
   },
@@ -58,7 +58,7 @@
       "images/user/19-export.png": "b28c8956e0c450791b4e7a83577c1085c2b5fdfe6af7db4eff20f4491e5abb54",
       "images/user/20-metrics.png": "bb0659af72c65773c860d4d261299171bc0a4a997318af3fec7ae326ee6bcdbc"
     },
-    "pdf": "da78e31cdbc6e802d58e01e55441dd496ffa600826f3530eacd14c7dfa60ab40",
+    "pdf": "43e5668dd4cfbb7f963c9b7c7472faa93f563c75f24fdac606f935f102173a21",
     "source": "e564ec1df624b94ca67ff71abc5a489d706b6fae2cbb24fcb9eb394d4de4052b",
     "version": "1.7"
   }
