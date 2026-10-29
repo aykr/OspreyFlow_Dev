@@ -11,10 +11,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.8** · 2026-10-28 · For OspreyFlow v0.4.0 · Issued
+**Version 1.9** · 2026-10-29 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.9 | 2026-10-29 | §11: the two Prison Intelligence packs, the demonstration case and its scale cohort. |
 | 1.8 | 2026-10-28 | Describes v0.4.0. No change to how it is installed, updated or looked after. |
 | 1.7 | 2026-10-27 | Appendix A: `components.post_ingest_resolution`, whether a load queues entity resolution afterwards. |
 | 1.6 | 2026-10-18 | §11: the HMP pack as a prison intelligence network, and adding it again after an update. |
@@ -460,6 +461,8 @@ shows each role's model, where it runs, and a notice that case content then leav
 | `hmp` | Prison intelligence: a prison's people and places, cell shares, co-defendants, conflicts, incidents, visits in person and by video, phones, calls and payments (synthetic) | Generated |
 | `fixture-corp` | Network shapes, and duplicate records matched without being merged (synthetic) | Generated |
 | `operation-ledger` | Preventive AML: a structuring ring, onboarding screened before it commits, ownership through a trust (synthetic) | Generated |
+| `prison-intelligence` | Prison intelligence, end to end: a fictional jail's records as an intelligence team receives them, loaded through the Ingest Studio from source files, each with its own marking (synthetic) | Generated |
+| `prison-intelligence-scale` | The same estate at scale: 3,000 prisoners and 30,000 links across six establishments, to show a large network grouped by community (synthetic) | Generated |
 | `paysim` | Mobile-money fraud: 6.36 million simulated transactions with fraud labels | Downloaded by you |
 | `enron` | **Real data**: about 150 people's real email at Enron, 1998–2002 — who wrote to whom, when, and about what | Downloaded by you; accepted before it loads; never by an install |
 
@@ -471,6 +474,16 @@ download: get `PS_20174392719_1491204439457_log.csv` from its Kaggle page and pa
 `ospreyflow demo add paysim --file <path>`; it is checked by size and checksum before anything
 starts. PaySim is CC BY-SA 4.0 (E. A. Lopez-Rojas, A. Elmir and S. Axelsson, 2016); its licence and
 attribution travel with it.
+
+**Prison Intelligence** seeds its case through the Ingest Studio's own pipelines, as a data engineer
+would, and has commands for rehearsing a demonstration: `--reset-live` between rehearsals, and two
+for the session itself (`DEMO_GUIDE.md` in the repository gives each, in full). Turn
+`components.post_ingest_resolution` off (appendix A) before adding it, or a live load in the
+demonstration adds automatic "same as" links. Its **scale cohort** (`prison-intelligence-scale`) is
+written straight into the graph in a case of its own, with no pipeline runs, so the rehearsal reset
+does not touch it; adding it again changes nothing, and a run that stopped part-way says so rather
+than finishing it. `python -m scripts.write_pid_files --out <folder> --profile scale` writes its
+3,000 prison numbers as `scale_cohort_list.txt`, to paste into *Add many from a list*.
 
 **Enron** is the one pack of **real personal data**: the email of real people, released during the
 US regulator's investigation and distributed by Carnegie Mellon University. OspreyFlow never carries

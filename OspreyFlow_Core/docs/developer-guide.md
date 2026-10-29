@@ -11,10 +11,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.5** · 2026-10-28 · For OspreyFlow v0.4.0 · Issued
+**Version 1.6** · 2026-10-29 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.6 | 2026-10-29 | Describes v0.4.1. No change to its content. |
 | 1.5 | 2026-10-28 | §6.1: row numbers, counted from 1 in the Glass and from 0 in the API. |
 | 1.4 | 2026-10-27 | §7.5: the tests behind it described, not named by path (the build's folder is not part of the product). |
 | 1.3 | 2026-10-27 | §7.5: sources withheld for a reader whose case does not read all of an element's datasets, and what a contributor's writer must do about it. |

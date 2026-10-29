@@ -6,6 +6,25 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.1 — 2026-10-29
+
+Nothing to do before updating.
+
+- **Fixed: the top bar never pushes the account menu off screen.** From 1,100 pixels the bar was held
+  to one line, but a case's name and its scope badge can make it wider than the window (a Prison
+  Intelligence case at 1,440 pixels was 1,466 wide, the account menu and its clearance off screen).
+  Whole items now wrap to a second line whenever they do not fit, at any width.
+- **Fixed: opening the timeline over a drawn map no longer blanks the map.** The map's camera jumped
+  to the bottom edge of the world whenever its box changed height, because the map layer that draws
+  the graph tied a node's position to that height. The layer is now part of OspreyFlow (MIT; see
+  NOTICE), positions no longer depend on the box, and the map keeps the area it showed.
+- **New demo pack: the Prison Intelligence scale cohort.** `ospreyflow demo add
+  prison-intelligence-scale` adds 3,000 prisoners and 30,000 links across six establishments in a
+  case of their own, for showing a large network grouped by community. Its 3,000 prison numbers, for
+  *Add many from a list*, come from `python -m scripts.write_pid_files --out <folder> --profile
+  scale`. Adding it again changes nothing.
+- **Administration guide:** both Prison Intelligence packs are listed in §11.
+
 ## v0.4.0 — 2026-10-28
 
 **Before you update.** Every published Ingest Studio pipeline is flagged once and must be
