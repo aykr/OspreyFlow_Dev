@@ -156,3 +156,18 @@ test("at 924 wide the bar wraps to two lines and nothing leaves the window (ADR-
   expect(height).toBeGreaterThan(60); // two lines
   expect(height).toBeLessThan(110); // not three
 });
+
+test("at 1440 wide, a long case name and its scope badge never push the account off screen (ADR-115 Amendment 3)", async ({ page }) => {
+  // Found preparing the Prison Intelligence demo, 28 October 2026: the bar was held to one line from
+  // 1,100 px, but this case's name and scope badge made it 1,466 px wide at 1,440, the account menu
+  // 26 px off screen. Whole items wrap instead, at any width (ADR-065 decision 6).
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await page.goto("/keyboard/top-bar-harness.html?long=1");
+  await expect(page.getByRole("button", { name: /^Case: Prison Intelligence Dataset/ })).toBeVisible();
+  await expect(page.getByText("PRISON INTELLIGENCE DATASET (SYNTHETIC)")).toBeVisible();
+  const account = page.getByRole("button", { name: /osprey-demo-analyst · OFFICIAL/ });
+  const box = (await account.boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(1440);
+  const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+  expect(widths[0]).toBeLessThanOrEqual(widths[1]);
+});

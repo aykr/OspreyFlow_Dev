@@ -18,7 +18,10 @@ function rule(selector: string): Record<string, string> {
 
 describe("the workspace's regions", () => {
   it("take their sizes from §5a's tokens", () => {
-    expect(rule(".top-bar").height).toBe("var(--h-top-bar)");
+    // ADR-115 Amendment 3: §5a's height is the bar's height on one line, and a floor once it wraps.
+    expect(rule(".top-bar")["min-height"]).toBe("var(--h-top-bar)");
+    expect(rule(".top-bar")["flex-wrap"]).toBe("wrap");
+    expect(rule(".top-bar").height).toBeUndefined();
     expect(rule(".left-rail").width).toBe("var(--w-rail)");
     expect(rule(".left-rail__item").height).toBe("var(--h-rail-button)");
     expect(rule(".left-rail__item")["min-width"]).toBe("var(--h-rail-button)");

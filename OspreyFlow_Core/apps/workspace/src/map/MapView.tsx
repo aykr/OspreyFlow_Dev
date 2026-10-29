@@ -24,7 +24,8 @@
 // than dimming like a cross-filtered node elsewhere in the Glass — that
 // distinct gap (absent vs. dimmed for an unplaceable node) remains open,
 // named here so it is not mistaken for finished.
-import bindMaplibreLayer from "@sigma/layer-maplibre";
+// ADR-086 Amendment 1: the library's layer, kept here with its y no longer tied to the box's height.
+import bindMaplibreLayer from "./sigmaMaplibreLayer";
 import Graph from "graphology";
 import maplibregl from "maplibre-gl";
 import type {

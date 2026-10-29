@@ -28,9 +28,15 @@ declare global {
 
 window.__TOPBAR__ = { opened: null, browsed: false, signedOut: false, rail: [], views: [] };
 
+// `?long=1`: the current case has a long name and reads one dataset with a long name, as the Prison
+// Intelligence demo does, so the bar carries the case and its scope badge at their widest.
+const wantsLong = new URLSearchParams(window.location.search).get("long") === "1";
 const CASES = [
   { id: "c1", name: "Enron corpus (real data, this machine only)", level: "author", created_at: "2026-09-29T09:00:00Z", created_by: "a" },
   { id: "c2", name: "PaySim mobile money (internal)", level: "viewer", created_at: "2026-09-28T09:00:00Z", created_by: "b" },
+  ...(wantsLong
+    ? [{ id: "c3", name: "Prison Intelligence Dataset (synthetic demo)", level: "editor", created_at: "2026-10-27T09:00:00Z", created_by: "c", datasets: ["Prison Intelligence Dataset (synthetic)"] }]
+    : []),
 ];
 // Ten suggestions with more behind them, so the "Showing the first 10; more match" hint appears.
 const SUGGESTIONS = Array.from({ length: 10 }, (_, i) => ({
@@ -97,7 +103,7 @@ createRoot(container).render(
         <CaseSwitcher
           apiBaseUrl="http://top-bar.invalid"
           bearerToken="unused"
-          currentId="c1"
+          currentId={wantsLong ? "c3" : "c1"}
           onOpen={(id) => {
             window.__TOPBAR__!.opened = id;
           }}

@@ -404,12 +404,14 @@
   background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);
   color: var(--text-primary); font-size: var(--fs-11); line-height: var(--lh-11); font-weight: 600;
 }
-.top-bar { box-sizing: border-box; height: var(--h-top-bar); flex: none; flex-wrap: nowrap; padding-top: 0; padding-bottom: 0; }
+/* One line at §5a's height while its items fit; when they do not, whole items wrap to a second line
+   rather than one line too wide to see (ADR-115 Amendments 2 and 3). Whether they fit depends on the
+   case's name and its scope badge as well as the window, so it is not a breakpoint. */
+.top-bar { box-sizing: border-box; min-height: var(--h-top-bar); flex: none; flex-wrap: wrap; padding-top: 0; padding-bottom: 0; }
 .top-bar__search { flex: 1 1 280px; min-width: 280px; max-width: 480px; }
-/* Narrow windows (ADR-115 Amendment 2): two lines rather than one too wide to see — the case and
-   search on the first, the views and the account, clearance included, on the second. */
+/* Narrow windows (ADR-115 Amendment 2): the two lines get room above and below. */
 @media (max-width: 1099px) {
-  .top-bar { height: auto; min-height: var(--h-top-bar); flex-wrap: wrap; padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
+  .top-bar { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
 }
 .brand-mark { display: inline-flex; align-items: center; gap: var(--sp-6); flex: none; }
 .brand-mark__name { font-weight: 700; font-size: var(--fs-14); color: var(--text-primary); }

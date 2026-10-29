@@ -9626,6 +9626,30 @@ Not decided here. Dragging a panel between the column and the bottom, or floatin
 
 Consequences. New `src/layout/layoutSizes.ts` (the store, with `clamp` and the minimums) and `src/layout/Sash.tsx`; `PanelFrames.tsx` carries a sash on the column's left edge and above the timeline and takes its sizes from the store; `SidePanelStack.tsx` gives each panel but the last a height of its own and a sash below it; resize observers in `GlassCanvas.tsx`, `Timeline.tsx` and `MapView.tsx`; `PANEL_FRAME_ACTIONS` gains three ids. Spec 02 §2 states the behaviour. Tests that would fail if an invariant were broken, each shown red first: `layoutSizes.test.ts` (12: defaults, minimums, rounding, no write when unchanged, resets, read-back, bad storage), `Sash.test.tsx` (7: the separator's attributes, arrows and Shift, Up/Down for a horizontal sash, bounds, Home and double-click, pointer drag that stops on release), the three sash cases in `PanelFrames.test.tsx` and `SidePanelStack.test.tsx`, and the keyboard cases `resize-the-side-panel-by-keyboard` (the canvas gives the room up, Shift steps, Home, the width survives a reload), `resize-a-stacked-panel-by-keyboard` and `resize-the-timeline-by-keyboard` in `keyboard/panel-frames.spec.ts`. **Not seen:** the sashes in the live Glass, by the owner.
 
+### ADR-086, Amendment 1 (29 October 2026) — the map keeps its place when its box changes height
+
+Found preparing the Prison Intelligence demo, and fixed on the owner's instruction of 29 October
+("go ahead with … the blank map after the timeline").
+- **The finding.** With located nodes drawn on the Map view, opening the timeline (which shrinks the
+  map's box) moved the camera from the prison (51.43° N, zoom 17.5) to latitude -85.05, the edge of
+  the projection, at zoom 18.6. The map was blank until another view was opened.
+- **The cause.** `@sigma/layer-maplibre` 3.0.0 stores a node's graph position as its Mercator x and
+  the container's height less its Mercator y. A change of height therefore moves every node by that
+  many Mercator units, about a hundred world-heights for 140 pixels, and the layer's own resize
+  re-centres sigma before sigma has redrawn at the new projection. Turning the map's own size
+  tracking off did not help; the flip itself is the fault (shown below).
+- **The decision.** The layer is kept in the product as `apps/workspace/src/map/sigmaMaplibreLayer.ts`,
+  with its y flipped about 1 instead of the container's height, and is otherwise the library's line
+  for line. It is MIT-licensed, and its notice is in `NOTICE`. A fixed 3.x release does not exist,
+  and 4.0 needs Sigma 4, which is held back (v0.4.0's notes). Moving to Sigma 4 is the time to drop
+  the copy.
+- **Tests.** `keyboard/map-view.spec.ts` with `keyboard/map-view-harness.tsx` draws three yards on
+  the real map view in a browser, shrinks its box and expects the camera still on them. It was red
+  on the library (-85.05). With the copy it passed. The height-based flip planted back in the copy
+  turned it red again (-85.05), and was restored by md5. With the map's own size tracking left on,
+  it stays green, so that setting is left as it was.
+- **Not changed.** The resize observer and every other map behaviour.
+
 ## ADR-088 — Two social-network filters in the Metrics panel: a relationship-strength floor and a metric threshold, both dimming
 
 Status: accepted 4 October 2026 (owner's choices, put as four multiple-choice questions and answered in chat).
@@ -13065,6 +13089,24 @@ the recommended one:
 2. **The weekly timeline's colour key sits beside the hour axis**, never over it.
 3. **"Admin area" is the one name**: Start's tile and its button say *Admin area*, as the guide, the
    runbook and the deck do.
+
+### ADR-115, Amendment 3 (29 October 2026) — the top bar wraps whenever its items do not fit
+
+Found preparing the Prison Intelligence demo, and fixed on the owner's instruction of 29 October.
+- **The finding.** Amendment 2 kept the bar to one line of §5a's height from 1,100 pixels up, on the
+  measurement that everything fitted there. The case menu and its scope badge carry the case's own
+  names, and "Prison Intelligence Dataset (synthetic demo)" with "PRISON INTELLIGENCE DATASET
+  (SYNTHETIC)" make the bar 1,466 pixels wide at 1,440 (1,476 for the data engineer). The account
+  menu, which carries the clearance, was 26 to 36 pixels off screen. The harness had missed it
+  because its cases read no dataset, so it drew no scope badge.
+- **The decision.** Whether the items fit depends on the case's names as well as the window, so it
+  is not a breakpoint. `.top-bar` takes §5a's height as its minimum and wraps whole items at any
+  width (ADR-065 decision 6). Below 1,100 pixels the two lines keep Amendment 2's padding. A bar
+  whose items fit is one line, as before.
+- **Tests.** `keyboard/top-bar.spec.ts` gains a case at 1,440 with `?long=1` (the PID case, reading
+  its dataset). It was red before (the account menu ended at 1,506 pixels) and green after, with
+  the one-line case at 1,440 and Amendment 2's 924 case still passing. `shellSizes.test.ts` now
+  holds the height as a minimum and the wrap.
 
 ### ADR-114, Amendment 11 (14 October 2026) — the guided install page ships built
 

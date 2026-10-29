@@ -262,7 +262,7 @@ These are fixed sizes for the shell, overlays and canvas. They count as part of 
 | Region | Size |
 |---|---|
 | Protective marking strip | 20px high |
-| Top bar (workspace) | 44px high |
+| Top bar (workspace) | 44px high on one line; whole items wrap to a second line when they do not fit (ADR-115 Amendment 3) |
 | Top bar (welcome, home) | 48px high |
 | Left rail | 48px wide, with 36×36 buttons |
 | Canvas toolbar | 36px high |
