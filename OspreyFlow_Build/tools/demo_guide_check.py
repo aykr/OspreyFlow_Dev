@@ -19,6 +19,7 @@ heuristic, not silently assumed away here either.
 
 from __future__ import annotations
 
+import re
 import sys
 
 from tools.layout import REPO as REPO_ROOT
@@ -46,13 +47,19 @@ DEMO_REGISTRY: tuple[tuple[str, str], ...] = (
 #: carrying its class (ADR-127 Amendment 30). The looser rule below passes a demo named in a
 #: sentence while some other row holds the class marker, which is how the Prison Intelligence
 #: Dataset could have lost its row and still passed.
-TABLE_ROW_ENTRIES: frozenset[str] = frozenset({"Prison Intelligence Dataset"})
+TABLE_ROW_ENTRIES: frozenset[str] = frozenset(
+    {"Prison Intelligence Dataset", "Prison Intelligence Dataset: scale cohort"}
+)
 
 
 def _has_table_row(guide_text: str, name: str, marker: str) -> bool:
-    """Whether one line of the guide's table (it starts with `|`) holds the name and the marker."""
+    """Whether one line of the guide's table (it starts with `|`) holds the name and the marker.
+    The name is matched whole, never as the start of a longer one: the scale cohort's row names
+    "Prison Intelligence Dataset: scale cohort", which must not stand for the main dataset's row
+    (ADR-127 Amendment 40)."""
+    whole = re.compile(re.escape(name) + r"(?![:\w])")
     return any(
-        line.lstrip().startswith("|") and name in line and marker in line
+        line.lstrip().startswith("|") and whole.search(line) and marker in line
         for line in guide_text.splitlines()
     )
 

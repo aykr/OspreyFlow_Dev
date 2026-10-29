@@ -61,7 +61,11 @@ def test_the_check_fails_when_the_prison_intelligence_row_is_taken_out_of_the_gu
     without = "\n".join(
         line for line in guide_text.splitlines() if "Prison Intelligence Dataset" not in line
     )
-    assert find_undocumented(without) == ["Prison Intelligence Dataset"]
+    # The scale cohort's row names it too (ADR-127 Amendment 40), so both go.
+    assert find_undocumented(without) == [
+        "Prison Intelligence Dataset",
+        "Prison Intelligence Dataset: scale cohort",
+    ]
 
 
 # --- ADR-127 Amendment 30: the dataset's own table row, not its name anywhere --------------------
@@ -73,7 +77,7 @@ def test_the_prison_intelligence_dataset_must_have_a_row_of_its_own_in_the_table
     rows = [
         line
         for line in guide_text.splitlines()
-        if line.lstrip().startswith("|") and "Prison Intelligence Dataset" in line
+        if line.lstrip().startswith("|") and "**Prison Intelligence Dataset (synthetic)**" in line
     ]
     assert len(rows) == 1 and "`shipped`" in rows[0]
 
@@ -86,7 +90,9 @@ def test_the_check_fails_when_the_name_and_the_class_are_in_the_guide_but_not_in
     without_row = "\n".join(
         line
         for line in guide_text.splitlines()
-        if not (line.lstrip().startswith("|") and "Prison Intelligence Dataset" in line)
+        if not (
+            line.lstrip().startswith("|") and "**Prison Intelligence Dataset (synthetic)**" in line
+        )
     )
     assert "Prison Intelligence Dataset" in without_row, "the name is still in the prose"
     assert "`shipped`" in without_row, "and the class marker is elsewhere in the guide"
@@ -108,3 +114,29 @@ def test_an_entry_not_named_as_a_table_row_is_still_judged_by_the_looser_rule() 
     """Only the entries in `TABLE_ROW_ENTRIES` are held to a row; the rest keep their old check."""
     guide_text = "Operation Ledger is a `shipped` demo, said in a sentence and not in a table."
     assert find_undocumented(guide_text, (("Operation Ledger", "shipped"),)) == []
+
+
+# --- ADR-127 Amendment 40: the scale cohort's row names the main dataset too ------------------
+
+
+def test_the_scale_cohort_has_a_row_of_its_own_in_the_table() -> None:
+    assert ("Prison Intelligence Dataset: scale cohort", "shipped") in DEMO_REGISTRY
+    assert "Prison Intelligence Dataset: scale cohort" in TABLE_ROW_ENTRIES
+    assert find_undocumented(DEMO_GUIDE_PATH.read_text(encoding="utf-8")) == []
+
+
+def test_the_main_row_taken_out_is_caught_though_the_scale_row_names_the_dataset_too() -> None:
+    """With only the main pack's row removed, the scale cohort's row still contains the words
+    "Prison Intelligence Dataset" and the class marker. A name matched as a substring would pass
+    it; the gate must name the main entry missing."""
+    guide_text = DEMO_GUIDE_PATH.read_text(encoding="utf-8")
+    without_main = "\n".join(
+        line
+        for line in guide_text.splitlines()
+        if not (
+            line.lstrip().startswith("|") and "**Prison Intelligence Dataset (synthetic)**" in line
+        )
+    )
+    assert "| **Prison Intelligence Dataset: scale cohort" in without_main
+    assert find_undocumented(without_main) == ["Prison Intelligence Dataset"]
+
