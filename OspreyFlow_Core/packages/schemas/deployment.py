@@ -87,6 +87,18 @@ class SearchBackend(StrEnum):
 #: Where the Conduit's container sees `components.storage.tiles`.
 TILES_CONTAINER_PATH = "/data/tiles"
 
+#: From a rendered deployment's folder, `<product>/deploy/generated/<name>/`, back to the product
+#: folder that holds `osprey.yaml` (ADR-054 Amendment 6).
+GENERATED_TO_PRODUCT = "../../.."
+
+
+def host_folder_source(value: str) -> str:
+    """`components.storage.ingest` or `tiles` as a Compose bind source (ADR-054 Amendment 6). An
+    absolute path is used as it is. A relative one is read from the product folder, and Compose
+    reads a relative source from the folder `compose.yaml` is in, so it is written relative to that
+    folder: no rendered file then carries the host's own absolute path."""
+    return value if value.startswith("/") else f"{GENERATED_TO_PRODUCT}/{value}"
+
 
 class StorageRoots(BaseModel):
     """`05_DEPLOYMENT.md` §2.1's Components screen: "the storage roots for data, staging and
@@ -130,7 +142,8 @@ class StorageRoots(BaseModel):
         default="/var/lib/osprey/ingest",
         description=(
             "Default: /var/lib/osprey/ingest. The host folder of source files the Ingest Studio "
-            "lists (read-only to it; uploads go to its uploaded/ folder)."
+            "lists (read-only to it; uploads go to its uploaded/ folder). A relative path is read "
+            "from the folder osprey.yaml is in."
         ),
     )
     #: **The folder the built basemap lives in (ADR-054 Amendment 4).** A map provider's
@@ -141,7 +154,10 @@ class StorageRoots(BaseModel):
     #: process that serves them.
     tiles: str = Field(
         default="/var/lib/osprey/tiles",
-        description="Default: /var/lib/osprey/tiles. The host folder a built basemap lives in.",
+        description=(
+            "Default: /var/lib/osprey/tiles. The host folder a built basemap lives in. A relative "
+            "path is read from the folder osprey.yaml is in."
+        ),
     )
 
 
@@ -683,6 +699,17 @@ class OspreyConfig(BaseModel):
                 f"cluster settings are declared but profile is {self.profile.value!r}; they are "
                 "only meaningful at profile: cluster"
             )
+        if self.profile is Profile.CLUSTER:
+            # ADR-054 Amendment 6: on a cluster these folders are on other machines, so there is
+            # no product folder for a relative path to be read from.
+            for name in ("ingest", "tiles"):
+                value = getattr(self.components.storage, name)
+                if not value.startswith("/"):
+                    raise ValueError(
+                        f"components.storage.{name} {value!r} must be an absolute path at "
+                        "profile: cluster; a relative path is read from the product folder, which "
+                        "only a single-machine deployment has"
+                    )
         if self.profile is Profile.CLUSTER and not self.cluster.shared_storage_class:
             raise ValueError(
                 "a cluster names cluster.shared_storage_class: the one volume every Conduit "

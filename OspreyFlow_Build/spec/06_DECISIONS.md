@@ -7433,6 +7433,41 @@ in `test_deployment_schema.py`; and in `test_preflight.py`
 (`test_render.py`); `test_a_provider_with_a_blank_id_is_refused` and
 `test_a_blank_default_is_refused_even_when_a_blank_id_would_match_it` (`test_mapconfig.py`).
 
+### ADR-054, Amendment 6 (30 October 2026) — a relative ingest or tiles folder is read from the product folder
+
+**Owner's ruling, 30 October 2026: "Make the harness accept relative paths."**
+
+**What was wrong.** `components.storage.ingest` and `tiles` could only usefully be absolute host
+paths. A deployment that kept its data beside the checkout therefore wrote the owner's home path
+into `osprey.yaml`, and from there into every rendered file that names a mount (`compose.yaml`,
+`RUNBOOK.md`, the bundle's `osprey.yaml.example`). The bundle's authorship gate then refused to
+package it. A relative path was not an answer either, because it was read two different ways:
+Compose reads a relative bind source from the folder `compose.yaml` is in
+(`deploy/generated/<name>/`), while the preflight checks (`basemap`, `disk`) read it from whatever
+folder the operator ran them in.
+
+**The decision.**
+
+1. A relative `components.storage.ingest` or `tiles` is read from the **product folder**, the one
+   that holds `osprey.yaml`. An absolute path is unchanged.
+2. The renderer writes a relative path into `compose.yaml` relative to the rendered folder
+   (`../../../<path>`, `schemas.deployment.host_folder_source`), so Compose resolves it to the
+   same folder and no rendered file carries the host's own absolute path.
+3. The preflight checks resolve it the same way, from the rendered folder
+   (`PreflightContext.host_folder`), so the answer does not depend on the folder they are run from.
+4. At `profile: cluster` a relative path is refused: the folders are on other machines and there
+   is no product folder to read from.
+5. `data`, `staging` and `backups` are paths inside the containers and are not affected.
+
+**Tests that fail without this** (`tests/harness/test_relative_storage_paths.py`, each shown red
+before the change on 30 October 2026):
+`test_a_relative_ingest_and_tiles_are_mounted_from_the_product_folder`,
+`test_the_basemap_check_reads_a_relative_tiles_folder_from_the_product_folder` (run from a folder
+two levels away, so a cwd-relative reading cannot pass by chance) and
+`test_the_cluster_profile_refuses_a_relative_host_folder`.
+`test_no_rendered_file_names_the_folder_a_relative_path_resolves_to` and
+`test_an_absolute_path_is_rendered_unchanged` guard against a regression.
+
 ## ADR-055 — The PaySim mobile-money dataset as an internal demo: what goes in the graph, what goes in the analytics store
 
 **Status: Proposed, 29 September 2026. Three points need the owner's ruling (marked "Owner to rule");

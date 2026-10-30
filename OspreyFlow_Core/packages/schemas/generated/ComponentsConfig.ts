@@ -29,11 +29,11 @@ export type Staging = string;
  */
 export type Backups = string;
 /**
- * Default: /var/lib/osprey/ingest. The host folder of source files the Ingest Studio lists (read-only to it; uploads go to its uploaded/ folder).
+ * Default: /var/lib/osprey/ingest. The host folder of source files the Ingest Studio lists (read-only to it; uploads go to its uploaded/ folder). A relative path is read from the folder osprey.yaml is in.
  */
 export type Ingest = string;
 /**
- * Default: /var/lib/osprey/tiles. The host folder a built basemap lives in.
+ * Default: /var/lib/osprey/tiles. The host folder a built basemap lives in. A relative path is read from the folder osprey.yaml is in.
  */
 export type Tiles = string;
 /**

@@ -80,7 +80,7 @@ def check(context: PreflightContext) -> CheckResult:
     # directory is likewise reported rather than failed — Docker creates a bind-mount source that
     # does not exist, so at Preflight time its absence is normal, and the useful signal is that
     # an analyst would open the Studio to an empty list.
-    ingest = Path(context.config.components.storage.ingest)
+    ingest = context.host_folder(context.config.components.storage.ingest)
     try:
         _i_total, _i_used, ingest_free = context.host_disk_probe(_nearest_existing(ingest))
         ingest_note = (

@@ -79,6 +79,7 @@ from schemas.deployment import (
     OspreyConfig,
     Profile,
     SearchBackend,
+    host_folder_source,
 )
 
 #: Where the workspace's nginx serves the basemap's glyph files from
@@ -842,7 +843,7 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # `/fonts/`, the bundled style's `glyphs` URL. Read-only. An empty folder is fine: the
             # Glass probes for the glyphs and draws the map unlabelled without them.
             service["volumes"] = [
-                f"{config.components.storage.tiles}/fonts:{GLYPHS_CONTAINER_PATH}:ro",
+                f"{host_folder_source(config.components.storage.tiles)}/fonts:{GLYPHS_CONTAINER_PATH}:ro",
                 # ADR-114 Amendment 4 decision 5: where the identity provider is, read by the Glass
                 # at start — so the one bundle serves every deployment.
                 "./glass.json:/usr/share/nginx/html/deployment.json:ro",
@@ -911,18 +912,18 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                 # contents, and a writable mount would let a compromised Conduit alter the source
                 # material it is reading from. Rendered for every profile, so an analyst always
                 # has a door; `05_DEPLOYMENT.md` §3 and `DEMO_GUIDE.md` name the folder.
-                f"{config.components.storage.ingest}:{INGEST_CONTAINER_PATH}:ro",
+                f"{host_folder_source(config.components.storage.ingest)}:{INGEST_CONTAINER_PATH}:ro",
                 # **ADR-067 — the one writable door, laid over the read-only root.** Browser upload
                 # needs the Conduit to write somewhere; only this sub-folder is writable, so the
                 # evidence an operator put in the root above is still not. Docker lets a nested
                 # bind mount be writable inside a read-only parent. Not run against Docker from the
                 # session that wrote it: on Linux the host folder's owner must let the container's
                 # user write (ADR-067 names this).
-                f"{config.components.storage.ingest}/{INGEST_UPLOAD_SUBDIR}:"
+                f"{host_folder_source(config.components.storage.ingest)}/{INGEST_UPLOAD_SUBDIR}:"
                 f"{INGEST_CONTAINER_PATH}/{INGEST_UPLOAD_SUBDIR}",
                 # The built basemap, read-only, at the path a map provider's `source` names. See
                 # `StorageRoots.tiles`.
-                f"{config.components.storage.tiles}:{TILES_CONTAINER_PATH}:ro",
+                f"{host_folder_source(config.components.storage.tiles)}:{TILES_CONTAINER_PATH}:ro",
             ]
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}

@@ -30,7 +30,8 @@ def _host_path(source: Path, context: PreflightContext) -> Path:
     folder mounted there (`components.storage.tiles`). Anything else is a host path already."""
     mount = Path(TILES_CONTAINER_PATH)
     if source.is_relative_to(mount):
-        return Path(context.config.components.storage.tiles) / source.relative_to(mount)
+        tiles = context.host_folder(context.config.components.storage.tiles)
+        return tiles / source.relative_to(mount)
     return source
 
 
