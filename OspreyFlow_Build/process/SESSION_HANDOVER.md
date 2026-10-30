@@ -4,7 +4,7 @@
 
 ## Where things stand
 
-Repo: `/Users/ayankar/Documents/MyProjects/IntelAnalysis_and_NetworkDiscovery_Platform/ospreyflow` (git, remote `origin/main`, on Ayan's Mac). Docs live under `docs/`: 01\_DOMAIN\_MODEL.md, 02\_GLASS\_FRONTEND.md, 03\_CONDUIT\_MIDDLEWARE.md, 04\_VAULT\_BACKEND.md, 05\_DEPLOYMENT.md, 06\_DECISIONS.md (ADR log), 07\_BUILD\_PLAN.md (phase-by-phase plan, plus a "Gaps with no owning phase" section), 08\_ACCEPTANCE\_SCENARIOS.md, 09\_INGEST\_STUDIO.md.
+Repo: the repository root, the folder that holds `OspreyFlow_Core` and `OspreyFlow_Build` (git, remote `origin/main`, on the owner's Mac). Docs live under `docs/`: 01\_DOMAIN\_MODEL.md, 02\_GLASS\_FRONTEND.md, 03\_CONDUIT\_MIDDLEWARE.md, 04\_VAULT\_BACKEND.md, 05\_DEPLOYMENT.md, 06\_DECISIONS.md (ADR log), 07\_BUILD\_PLAN.md (phase-by-phase plan, plus a "Gaps with no owning phase" section), 08\_ACCEPTANCE\_SCENARIOS.md, 09\_INGEST\_STUDIO.md.
 
 | Phase | Status |
 | --- | --- |

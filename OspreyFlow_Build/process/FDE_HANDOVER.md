@@ -58,7 +58,7 @@ if an invariant were violated).
 
 ## 3. Where you are and how to run things
 
-Start Claude Code at the repository root, `/Users/ayankar/Documents/MyProjects/IntelAnalysis_and_NetworkDiscovery_Platform/ospreyflow`.
+Start Claude Code at the repository root, the folder that holds `OspreyFlow_Core` and `OspreyFlow_Build`.
 It holds `CLAUDE.md` (which imports `OspreyFlow_Build/CLAUDE.md` and so `process/CLAUDE.md`), `.claude/`
 (a `graphify` hook guard in `settings.json`, personal permissions in the gitignored `settings.local.json`,
 and a `phase` command) and the three sibling trees: `OspreyFlow_Core` (product), `OspreyFlow_Build`
