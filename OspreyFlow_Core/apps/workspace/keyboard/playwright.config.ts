@@ -10,7 +10,7 @@ export default defineConfig({
   testMatch: /.*\.spec\.ts$/,
   timeout: 60_000,
   webServer: {
-    command: "npx vite --port 5185 --strictPort",
+    command: "node scripts/sync_govuk_assets.mjs && npx vite --port 5185 --strictPort",
     port: 5185,
     reuseExistingServer: !process.env.CI,
     cwd: "..",

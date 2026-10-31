@@ -135,6 +135,12 @@ describe("theme, shared across the deployment's names", () => {
     expect(themeCookieDomain(host)).toBe(domain);
   });
 
+  it("keeps the GOV.UK brand's own name apart from the base name", () => {
+    expect(themeCookieDomain("govuk.ospreyflow.localhost")).toBe("govuk.ospreyflow.localhost");
+    expect(themeCookieDomain("id.govuk.ospreyflow.localhost")).toBe("govuk.ospreyflow.localhost");
+    expect(themeCookieDomain("govuk.ospreyflow.localhost")).not.toBe(themeCookieDomain("ospreyflow.localhost"));
+  });
+
   it("writes the choice for the base name, and clears any copy kept for this host alone", () => {
     expect(themeCookieWrites("light", "id.ospreyflow.localhost")).toEqual([
       `${THEME_COOKIE_NAME}=; Path=/; Max-Age=0`,

@@ -10,6 +10,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
+import { applyHarnessBrand } from "../keyboard/brandHarness";
 import "../src/design/primitives.css";
 import { SEQ_HEX } from "../src/color/tokens";
 import { Button } from "../src/design/primitives/Button";
@@ -72,7 +73,9 @@ function Showcase() {
           <IconButton label="Close">×</IconButton>
         </div>
         <Input placeholder="Search entities, identifiers, documents" />
-        <Select defaultValue="official">
+        {/* Named, like every control the Glass draws: found unnamed by the first full wcag2a scan of
+            this page (ADR-132's GOV.UK pass); the contrast-only scan before it could not see it. */}
+        <Select aria-label="Classification" defaultValue="official">
           <option value="official">OFFICIAL</option>
           <option value="secret">SECRET</option>
         </Select>
@@ -226,6 +229,8 @@ function Showcase() {
     </div>
   );
 }
+
+await applyHarnessBrand();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");

@@ -650,6 +650,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "views-chosen-by-keyboard",
   // ADR-115 E6: the rail's Help reopens the welcome panel.
   "help-from-the-rail-by-keyboard",
+  // ADR-132: the skip link, under both brands.
+  "skip-to-main-content-by-keyboard",
 ] as const);
 
 export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [

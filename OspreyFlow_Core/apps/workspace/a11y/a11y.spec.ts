@@ -67,3 +67,18 @@ for (const theme of ["dark", "light"] as const) {
     ).toEqual([]);
   });
 }
+
+// The GOV.UK brand (ADR-132) has no dark theme: it holds the page light, so these scans are light only.
+for (const [name, url] of [
+  ["sign-in screen", "/keyboard/sign-in-harness.html?brand=govuk"],
+  ["shell", "/keyboard/shell-harness.html?brand=govuk"],
+  ["showcase", "/a11y/showcase.html?brand=govuk"],
+] as const) {
+  test(`govuk brand ${name} has no automated wcag2aa violations`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(url);
+    await page.waitForLoadState("networkidle");
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+  });
+}

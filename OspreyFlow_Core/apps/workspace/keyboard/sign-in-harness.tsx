@@ -8,6 +8,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
+import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { SignInScreen } from "../src/auth/SignInScreen";
 import { signIn } from "../src/auth/userManager";
@@ -25,6 +26,8 @@ function Harness() {
     />
   );
 }
+
+await applyHarnessBrand();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");

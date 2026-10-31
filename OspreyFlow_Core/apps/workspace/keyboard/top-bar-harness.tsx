@@ -5,6 +5,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
+import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { LeftRail } from "../src/shell/LeftRail";
@@ -88,6 +89,8 @@ window.__TOPBAR_CANVAS__ = {
   hasNode: (id) => workingSet.graph.hasNode(id),
   count: () => workingSet.graph.order,
 };
+
+await applyHarnessBrand();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");

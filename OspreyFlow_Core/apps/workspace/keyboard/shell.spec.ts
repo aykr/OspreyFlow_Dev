@@ -128,6 +128,56 @@ test("the rail's Help is reached and pressed by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "help-from-the-rail-by-keyboard");
 });
 
+// ADR-132: the skip link, the one keyboard action the deployment brand adds, under both brands
+// (`keyboard/shell-harness.tsx`, the real `BrandFrame`). It is the first Tab stop, shows itself on
+// focus at a usable size, and Enter moves focus to the main content; under GOV.UK the header, the
+// service name, the Glass and the footer follow in that order.
+for (const brand of ["ospreyflow", "govuk"] as const) {
+  test(`${brand}: the skip link is the first Tab stop, visible on focus, and Enter moves focus to the main content`, async ({ page }) => {
+    await page.goto("/keyboard/shell-harness.html?brand=" + brand);
+    await page.getByRole("link", { name: "Skip to main content" }).waitFor({ state: "attached" });
+    await page.keyboard.press("Tab");
+    const focused = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      const r = el?.getBoundingClientRect();
+      return { text: el?.textContent?.trim() ?? "", w: r?.width ?? 0, h: r?.height ?? 0 };
+    });
+    expect(focused.text).toBe("Skip to main content");
+    expect(focused.w).toBeGreaterThanOrEqual(24);
+    expect(focused.h).toBeGreaterThanOrEqual(24);
+    await page.keyboard.press("Enter");
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe("main-content");
+    registerCovered(REGISTRY, "skip-to-main-content-by-keyboard");
+  });
+}
+
+test("govuk: the header, the service name, the Glass and the footer are reached by Tab in that order", async ({ page }) => {
+  await page.goto("/keyboard/shell-harness.html?brand=govuk");
+  await page.getByRole("link", { name: "Skip to main content" }).waitFor({ state: "attached" });
+  const names: string[] = [];
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press("Tab");
+    const name = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      return el?.getAttribute("aria-label") ?? el?.textContent?.trim() ?? "";
+    });
+    names.push(name);
+    if (name === "Cookies") break;
+  }
+  expect(names[0]).toBe("Skip to main content");
+  const at = (match: (n: string) => boolean, from: number) => names.findIndex((n, i) => i >= from && match(n));
+  const header = at((n) => n.includes("GOV.UK"), 1);
+  expect(header).toBeGreaterThan(0);
+  const service = at((n) => n === "Prison Intelligence", header + 1);
+  expect(service).toBeGreaterThan(header);
+  const glass = at((n) => n === "Workspace control", service + 1);
+  expect(glass).toBeGreaterThan(service);
+  const accessibility = at((n) => n === "Accessibility statement", glass + 1);
+  expect(accessibility).toBeGreaterThan(glass);
+  const cookies = at((n) => n === "Cookies", accessibility + 1);
+  expect(cookies).toBeGreaterThan(accessibility);
+});
+
 test("every registered shell action has its own proving test case above", () => {
   assertAllCovered("SHELL_ACTIONS", SHELL_ACTIONS);
 });

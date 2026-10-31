@@ -12,6 +12,7 @@ import { createRoot } from "react-dom/client";
 import { useRef } from "react";
 
 import "../src/design/tokens.css";
+import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { MetricsPanel } from "../src/metrics/MetricsPanel";
@@ -129,6 +130,8 @@ function Harness() {
     </div>
   );
 }
+
+await applyHarnessBrand();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");

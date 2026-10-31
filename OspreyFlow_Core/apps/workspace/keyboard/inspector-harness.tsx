@@ -6,6 +6,7 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
+import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { Inspector } from "../src/inspector/Inspector";
 import type { Edge, EdgeTypeDef, Node } from "../../../packages/schemas/generated";
@@ -117,6 +118,8 @@ function Harness() {
     </>
   );
 }
+
+await applyHarnessBrand();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");

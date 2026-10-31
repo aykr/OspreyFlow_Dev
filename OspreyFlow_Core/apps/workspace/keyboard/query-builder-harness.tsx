@@ -11,6 +11,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
+import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { QueryBuilderPanel } from "../src/patterns/QueryBuilderPanel";
 import type { OntologySchema } from "../../../packages/schemas/generated";
@@ -50,6 +51,8 @@ function Harness() {
     </div>
   );
 }
+
+await applyHarnessBrand();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");

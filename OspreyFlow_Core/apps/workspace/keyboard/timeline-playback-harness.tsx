@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
+import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { followCrossFilterWithMapBins } from "../src/crossfilter/mapBins";
 import { createCrossFilterStore } from "../src/crossfilter/store";
@@ -97,6 +98,8 @@ function Harness() {
     </div>
   );
 }
+
+await applyHarnessBrand();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
