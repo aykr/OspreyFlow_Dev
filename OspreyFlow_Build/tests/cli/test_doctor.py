@@ -169,3 +169,23 @@ def test_enterprise_building_its_cluster_checks_the_build_tools_not_a_cluster(
     checks = _by_name(run_doctor("enterprise", probes, product=tmp_path, cloud="azure"))
     assert {n for n, c in checks.items() if not c.ok} == {"tofu", "cloud-cli", "kubelogin"}
     assert "Entra ID" in checks["kubelogin"].says
+
+
+def test_the_port_checked_is_the_one_the_deployments_own_address_uses(tmp_path: Path) -> None:
+    """Found installing a second Lite deployment at `http://govuk.ospreyflow.localhost:8081`
+    (ADR-132 Amendment 1): doctor checked port 80, which that deployment never binds, and said
+    nothing of 8081, the one it does. Busy 8081 must fail; busy 80 must not."""
+    (tmp_path / "osprey.yaml").write_text(
+        "network:\n  public_origin: http://govuk.ospreyflow.localhost:8081\n", encoding="utf-8"
+    )
+    probes = FakeProbes()
+    probes.busy_ports = {80, 8081}
+    failed = [c.name for c in run_doctor("lite", probes, product=tmp_path) if not c.ok]
+    assert failed == ["port-8081"]
+
+
+def test_with_no_address_set_the_lite_default_port_80_is_checked(tmp_path: Path) -> None:
+    probes = FakeProbes()
+    probes.busy_ports = {80}
+    failed = [c.name for c in run_doctor("lite", probes, product=tmp_path) if not c.ok]
+    assert failed == ["port-80"]

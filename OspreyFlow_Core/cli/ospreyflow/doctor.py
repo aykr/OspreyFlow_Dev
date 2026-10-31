@@ -19,6 +19,19 @@ MIN_DISK_GB = 60.0
 #: The front proxy's, for the Lite address `http://ospreyflow.localhost` (ADR-114 Amendment 4): the
 #: only port a Lite deployment publishes to other machines.
 LITE_PORTS = (80,)
+
+
+def lite_ports(product: Path) -> tuple[int, ...]:
+    """The port a Lite deployment's front proxy binds: its own `network.public_origin`'s (ADR-132
+    Amendment 1: a second deployment on the same machine takes another, such as 8081), else 80."""
+    from urllib.parse import urlsplit
+
+    from ospreyflow.home import public_origin
+
+    if not (product / "osprey.yaml").is_file():
+        return LITE_PORTS
+    origin = urlsplit(public_origin(product))
+    return (origin.port or (443 if origin.scheme == "https" else 80),)
 _CLOUD_CLI = {"aws": ("aws", "AWS"), "azure": ("az", "Azure")}
 
 
@@ -211,7 +224,7 @@ def run_doctor(
             *_docker_checks(probes, product),
             git,
             uv,
-            *(_port_check(probes, port) for port in LITE_PORTS),
+            *(_port_check(probes, port) for port in lite_ports(product)),
         ]
     if mode == "enterprise":
         kube_tools = [
