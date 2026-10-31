@@ -20242,9 +20242,10 @@ Decision.
    block to §11.
 5. **The palette is the package's.** GOV.UK Frontend 6.6.0's own custom properties: text
    `#0b0c0c`, secondary text `#484949`, brand `#1d70b8`, link hover `#0f385c`, error `#ca3535`,
-   success `#0f7a52`, border and hover `#cecece`, surface `#f4f8fb`, focus `#ffdd00`. (The spike
-   brief listed the v5 palette, none of which is in v6's stylesheet.) v6 declares no warning
-   colour, so `--warning` keeps the light theme's.
+   success `#0f7a52`, border and hover `#cecece`, surface `#f4f8fb`, focus `#ffdd00`. The spike
+   brief listed the v5 palette, none of which is in v6's stylesheet; the owner confirmed the v6
+   palette on 31 October 2026 ("I am happy with the decision to use the v6 colours"). v6 declares
+   no warning colour, so `--warning` keeps the light theme's.
 6. **What had to become a token.** (Step 1 (b).) `primitives.css` already read the font (`--ui`)
    and the radii (`--r-control`, `--r-panel`, `--r-overlay`) from tokens; only the focus ring was
    fixed to brass, in `tokens.css` and on `.network-canvas`. It now reads `--focus`,
