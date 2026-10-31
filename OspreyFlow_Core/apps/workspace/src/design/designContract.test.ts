@@ -73,6 +73,56 @@ export function undeclared(css: string, design: string): string[] {
   return found;
 }
 
+/** Each `[data-brand="…"]` block's own custom properties, by brand (ADR-132). */
+export function brandBlocks(css: string): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
+  for (const [, brand] of css.matchAll(/\[data-brand="([\w-]+)"\]\s*\{/g)) {
+    out[brand!] = rawBlock(css, `[data-brand="${brand}"]`);
+  }
+  return out;
+}
+
+/** Each brand's colours as `DESIGN.md` §11 declares them: token → value, under `### <brand>`. */
+export function contractBrands(design: string): Record<string, Record<string, string>> {
+  const start = design.indexOf("## 11. Deployment brands");
+  const section = start < 0 ? "" : design.slice(start);
+  const out: Record<string, Record<string, string>> = {};
+  for (const part of section.split(/^### /m).slice(1)) {
+    const brand = part.slice(0, part.indexOf("\n")).trim();
+    out[brand] = {};
+    for (const [, name, hex] of part.matchAll(/^\|\s*`(--[\w-]+)`\s*\|\s*`(#[0-9a-f]{6})`\s*\|/gim)) {
+      out[brand]![name!] = hex!.toLowerCase();
+    }
+  }
+  return out;
+}
+
+const DATA_TOKEN = /^--(ch|chart|seq|div)-/;
+
+/** Where a brand block breaks `DESIGN.md` §11: a data token redefined, a colour §11 does not declare
+ * for that brand, a declared colour the block lacks, or a brand with no section. */
+export function brandFindings(css: string, design: string): string[] {
+  const declared = contractBrands(design);
+  const found: string[] = [];
+  for (const [brand, block] of Object.entries(brandBlocks(css))) {
+    const own = declared[brand];
+    if (!own) {
+      found.push(`${brand} has no section in DESIGN.md §11`);
+      continue;
+    }
+    for (const [name, value] of Object.entries(block)) {
+      if (DATA_TOKEN.test(name)) found.push(`${brand} ${name} redefines a data token`);
+      for (const [hex] of value.matchAll(/#[0-9a-f]{3,8}\b/gi)) {
+        if (own[name] !== hex.toLowerCase()) found.push(`${brand} ${name} ${hex} is not in §11`);
+      }
+    }
+    for (const name of Object.keys(own)) {
+      if (!(name in block)) found.push(`${brand} ${name} is in §11 but not in the block`);
+    }
+  }
+  return found;
+}
+
 describe("DESIGN.md and tokens.css", () => {
   it("every colour the contract declares is a token of that name, in both themes", () => {
     const layer = tokenLayer(TOKENS);
@@ -91,7 +141,8 @@ describe("DESIGN.md and tokens.css", () => {
 
   it("the check finds a colour the contract lacks", () => {
     const planted = TOKENS.replace("--brass:#c08a34;", "--brass:#c08a35;");
-    expect(undeclared(planted, DESIGN)).toEqual(["dark --brass #c08a35"]);
+    // `--focus` is the brass under the OspreyFlow brand (ADR-132), so the planted value shows twice.
+    expect(undeclared(planted, DESIGN)).toEqual(["dark --brass #c08a35", "dark --focus #c08a35"]);
   });
 
   it("carries the contract's radius names (§5)", () => {
@@ -120,5 +171,30 @@ describe("DESIGN.md and tokens.css", () => {
     expect([24, 26, 28, 30, 32, 34, 36].map((h) => dark[`--h-control-${h}`])).toEqual(
       ["24px", "26px", "28px", "30px", "32px", "34px", "36px"],
     );
+  });
+});
+
+// ADR-132: a deployment brand is one block in tokens.css, declared in DESIGN.md §11, and it never
+// redefines a data token. Each planted case is the shape the real block has.
+describe("deployment brands (DESIGN.md §11)", () => {
+  it("the GOV.UK block sets exactly the colours §11 declares for it", () => {
+    expect(Object.keys(brandBlocks(TOKENS))).toEqual(["govuk"]);
+    expect(Object.keys(contractBrands(DESIGN).govuk ?? {}).length).toBeGreaterThanOrEqual(20);
+    expect(brandFindings(TOKENS, DESIGN)).toEqual([]);
+  });
+
+  it("finds a brand block that redefines a data token", () => {
+    const planted = TOKENS.replace("--brass:#1d70b8;", "--brass:#1d70b8; --ch-ochre:#b34917;");
+    expect(brandFindings(planted, DESIGN)).toContain("govuk --ch-ochre redefines a data token");
+  });
+
+  it("finds a colour in a brand block that §11 does not declare", () => {
+    const planted = TOKENS.replace("--error:#ca3535;", "--error:#ca3536;");
+    expect(brandFindings(planted, DESIGN)).toEqual(["govuk --error #ca3536 is not in §11"]);
+  });
+
+  it("finds a brand with no section in §11", () => {
+    const planted = `${TOKENS}\n[data-brand="other"] {\n  --n0:#ffffff;\n}\n`;
+    expect(brandFindings(planted, DESIGN)).toEqual(["other has no section in DESIGN.md §11"]);
   });
 });

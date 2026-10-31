@@ -20201,3 +20201,66 @@ asserts that the stored locator is `row 0`. Each was shown red before the change
 
 Consequences. An API reader that shows `row_index` or `row` to a person must add one.
 `01_DOMAIN_MODEL.md` §2.1 says so beside `SourceRef.locator`.
+
+## ADR-132 — A deployment brand (`appearance.brand`): the GOV.UK look as a switch, not a fork — PROPOSED (spike)
+
+Status: proposed 31 October 2026 on the `govuk-theme-spike` branch, for the owner's decision after
+the spike's hand-back. Decision text written before any colour (the spike brief's rule); the
+licence register entry, the amendments to `02_GLASS_FRONTEND.md` §4 and §6 and the Consequences
+are completed with the spike.
+
+Context. A prospective UK Government client will run OspreyFlow, as an open-source tool for
+security-cleared analysts across several departments, on a `*.service.gov.uk` domain. The Service
+Manual's "Making your service look like GOV.UK" says a service on `gov.uk/*`, `*.service.gov.uk`
+or `*.blog.gov.uk` must look like GOV.UK (the GOV.UK header and footer with the Tudor crown, the
+GDS Transport typeface, GOV.UK colours, the light page template), and that a service on any other
+domain must not. The same product therefore needs both looks, chosen per deployment.
+
+Decision.
+
+1. **The brand is a deployment setting, separate from the viewer's theme.** `appearance.brand`
+   (`ospreyflow` | `govuk`, default `ospreyflow`) in `osprey.yaml`, with `appearance.service_name`,
+   `appearance.organisation` and `appearance.phase` (`alpha` | `beta` | `live` | `none`). It never
+   changes per viewer and is never kept in a cookie; `data-brand` on `<html>` carries it.
+   `data-theme` remains the viewer's light or dark choice (ADR-070, ADR-072).
+2. **It travels by the existing route.** (Step 1 (a).) The Glass learns a deployment setting at
+   run time from `/deployment.json`, rendered by `harness/site.py`'s `render_glass_settings` and
+   mounted read-only into the workspace (ADR-114 Amendment 4). `appearance` is a section of that
+   file, read by `deploymentAppearance()` in `auth/oidcConfig.ts`. The Admin console's planned
+   Appearance tab writes the same section. **Before first paint:** `main.tsx` applies the brand
+   after reading the file and before React draws anything (the owner's choice of 30 October 2026
+   over rendering it into `index.html` through nginx, which would put the brand in a second place).
+   Until the file is read only the empty page background can show. `?brand=` chooses a brand in a
+   development build only.
+3. **GOV.UK is light only.** Under `govuk`, `applyTheme` holds `data-theme` at `light` and neither
+   theme button is drawn: the GOV.UK Design System has no dark mode.
+4. **`tokens.css` stays the single colour authority** and gains one `[data-brand="govuk"]` block
+   after the light block. A brand block redefines chrome only: never a `--ch-*`, `--chart-*`,
+   `--seq-*` or `--div-*` token. The nine channels with their shapes, the charts and the ramps are
+   the product's instrument and the Design System does not govern data visualisation.
+   `DESIGN.md` §11 declares each brand's colours and this rule; `designContract.test.ts` holds the
+   block to §11.
+5. **The palette is the package's.** GOV.UK Frontend 6.6.0's own custom properties: text
+   `#0b0c0c`, secondary text `#484949`, brand `#1d70b8`, link hover `#0f385c`, error `#ca3535`,
+   success `#0f7a52`, border and hover `#cecece`, surface `#f4f8fb`, focus `#ffdd00`. (The spike
+   brief listed the v5 palette, none of which is in v6's stylesheet.) v6 declares no warning
+   colour, so `--warning` keeps the light theme's.
+6. **What had to become a token.** (Step 1 (b).) `primitives.css` already read the font (`--ui`)
+   and the radii (`--r-control`, `--r-panel`, `--r-overlay`) from tokens; only the focus ring was
+   fixed to brass, in `tokens.css` and on `.network-canvas`. It now reads `--focus`,
+   `--focus-width` and `--focus-offset`, which resolve to the present values under the OspreyFlow
+   brand. Under `govuk` focus is a 3px `#ffdd00` outline with a 2px `#0b0c0c` inner shadow, never
+   suppressed. Five inline radii in `.tsx` files are not tokens and are listed in the spike's
+   hand-back rather than changed. The type scale is unchanged (13px base; GOV.UK's body is 19px).
+7. **Assets are served from the deployment's own origin.** (Step 2.) `govuk-frontend` 6.6.0 is a
+   dependency; `apps/workspace/scripts/sync_govuk_assets.mjs` copies its fonts and images to
+   `/assets/govuk/` and writes its precompiled stylesheet, URLs rewritten, to
+   `apps/workspace/vendor/govuk/`. No Sass. The stylesheet loads only under `govuk`.
+8. **The skip link and the phase banner are brand-independent**: every deployment gets the skip
+   link, and a phase banner when `appearance.phase` is `alpha` or `beta`.
+
+Tests that would fail if it were broken: `src/brand/brand.test.tsx` (light only, no theme button
+under `govuk`, unchanged under `ospreyflow`; shown red with the rule removed),
+`oidcConfig.test.ts`'s appearance cases, `test_front_proxy.py`'s
+`test_the_glass_learns_the_deployments_appearance`, `syncGovukAssets.test.ts`, and
+`designContract.test.ts`'s brand cases.

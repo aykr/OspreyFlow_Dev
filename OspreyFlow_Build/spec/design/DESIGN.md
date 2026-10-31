@@ -401,3 +401,44 @@ size-switched two-cut mark instead of one logo stretched across every size.
 data, the nine categorical channels with their shape pairings, provenance encoded by stroke style
 only, the sequential and diverging ramps, both theme ramps, the type split and scale, spacing,
 radii, motion and the accessibility floor. The rebrand touched the identity, not the mechanics.
+
+---
+
+## 11. Deployment brands
+
+A deployment may show another brand instead of the OspreyFlow identity (`appearance.brand` in
+`osprey.yaml`, `06_DECISIONS.md` ADR-132). A brand is one `[data-brand="<name>"]` block in
+`tokens.css`, after the light theme's, and it obeys one rule: **it redefines chrome only, never a
+`--ch-*`, `--chart-*`, `--seq-*` or `--div-*` token.** The nine channels and their shapes, the chart
+palette and the two ramps are the same under every brand. A brand is always shown light. Every
+colour a brand block sets is listed below for that brand; anything else in the block is drift.
+`src/design/designContract.test.ts` holds the block to this section.
+
+### govuk
+
+The GOV.UK look, for a service on a gov.uk domain only. GOV.UK Frontend 6.6.0's palette, GDS
+Transport, square corners, and the Design System's focus state: a 3px `--focus` outline with a 2px
+`--focus-ink` inner shadow. `--warning` is not set (v6 has none), so the light theme's stands.
+
+| Token | Value | Use |
+|---|---|---|
+| `--n0` | `#ffffff` | page |
+| `--n1` | `#ffffff` | page |
+| `--n2` | `#f4f8fb` | panel, the GOV.UK surface |
+| `--n3` | `#f4f8fb` | raised |
+| `--n4` | `#cecece` | hover |
+| `--n5` | `#cecece` | border, subtle |
+| `--n6` | `#cecece` | border |
+| `--n7` | `#484949` | border, strong |
+| `--n8` | `#484949` | disabled text |
+| `--n9` | `#484949` | tertiary text |
+| `--n10` | `#0b0c0c` | secondary text |
+| `--n11` | `#0b0c0c` | primary text |
+| `--brass` | `#1d70b8` | the accent: GOV.UK blue |
+| `--brass-hover` | `#0f385c` | accent hover |
+| `--brass-press` | `#0f385c` | accent pressed |
+| `--brass-ink` | `#ffffff` | text on the accent |
+| `--error` | `#ca3535` | error |
+| `--success` | `#0f7a52` | success |
+| `--focus` | `#ffdd00` | focus outline |
+| `--focus-ink` | `#0b0c0c` | focus inner shadow |
