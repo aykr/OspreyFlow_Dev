@@ -15,10 +15,12 @@ from pathlib import Path
 
 import pytest
 import yaml
+from harness.register_sign_in import deployment_env_path as sign_in_env_path
+from harness.render import load_config, render
 from harness.render import main as render_main
-from harness.render import render
 from ospreyflow.home import deployment_dir
 from pydantic import ValidationError
+from scripts.refresh import _deployment_dir as refresh_deployment_dir
 
 from schemas.deployment import OspreyConfig, compose_project, generated_folder
 
@@ -89,3 +91,30 @@ def test_the_command_and_the_harness_agree_where_a_deployment_is_rendered(tmp_pa
 def test_a_name_compose_would_not_take_is_refused(name: str) -> None:
     with pytest.raises(ValidationError, match="deployment.name"):
         OspreyConfig.model_validate({"deployment": {"name": name}})
+
+
+def test_registering_the_sign_in_reads_a_named_deployments_own_env_file(tmp_path: Path) -> None:
+    """Found installing the GOV.UK deployment on 31 October 2026: `ospreyflow install` runs
+    `harness.register_sign_in` with no `--profile`, which looked in `local-lite/` for a deployment
+    rendered to `osprey-govuk/`, and the install stopped."""
+    config = _write(tmp_path / "product", {"deployment": {"name": "osprey-govuk"}})
+    out_root = tmp_path / "generated"
+
+    found = sign_in_env_path(out_root, None, load_config(config))
+
+    assert found == out_root / "osprey-govuk" / "deployment.env"
+    named = sign_in_env_path(out_root, "small", load_config(config))
+    assert named == out_root / "small" / "deployment.env"
+
+
+def test_a_rebuild_finds_the_named_deployment_beside_an_unnamed_one(tmp_path: Path) -> None:
+    """`ospreyflow start --build` runs `scripts.refresh`, which preferred `local-lite/` whenever one
+    was there: in a product folder holding both, it would have rebuilt the other deployment."""
+    product = tmp_path / "product"
+    _write(product, {"deployment": {"name": "osprey-govuk"}})
+    for folder in ("local-lite", "osprey-govuk"):
+        (product / "deploy" / "generated" / folder).mkdir(parents=True)
+        compose = product / "deploy" / "generated" / folder / "compose.yaml"
+        compose.write_text("{}\n", encoding="utf-8")
+
+    assert refresh_deployment_dir(product) == product / "deploy" / "generated" / "osprey-govuk"

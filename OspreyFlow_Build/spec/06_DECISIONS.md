@@ -20308,10 +20308,13 @@ Consequences.
   4. GOV.UK form conventions in the primitives: the error summary, hint and error wiring, legends as
      headings;
   5. **the Admin console's Appearance tab**, which writes the `appearance` section through a Conduit
-     endpoint without a redeploy: a `manage_appearance` right; audit and versioning of every
-     change; a live preview; and guard rails enforced on the server: the GOV.UK preset only when
-     `network.public_origin` ends in `.gov.uk`, a custom accent refused under 4.5:1 contrast, a logo
-     refused without alt text, and the nine data channels never editable. Today `appearance` is set
+     endpoint without a redeploy, with a `manage_appearance` right, and audit and versioning of
+     every change. **Its scope, the owner's ruling of 31 October 2026: "I just need the ability to
+     specify the organisation name, the rest of the theme should match the gov.uk design theme."**
+     So the one editable value is `appearance.organisation`; the GOV.UK brand is otherwise exactly
+     the Design System's, with no custom accent, logo or footer links (the spike brief's list of
+     those is withdrawn). The guard rail that remains is the GOV.UK preset only when
+     `network.public_origin` ends in `.gov.uk`, enforced on the server. Today `appearance` is set
      in `osprey.yaml` and nothing refuses `govuk` on another domain; the guard rail belongs with the
      tab.
 - **Sign-in and the dashboards.** The identity provider's pages (`id.`, the Keycloak login theme)
@@ -20360,3 +20363,10 @@ the change): an unnamed deployment keeps `osprey-local-lite`, `local-lite/` and 
 named one is a project and a folder of its own; `harness.render` writes the two to separate folders
 and leaves the first's; the `ospreyflow` command and the harness agree where a deployment is
 rendered; and a name Compose would not take is refused.
+
+Found installing the second deployment, 31 October 2026, and fixed the same day: two more entry
+points keyed the rendered folder by profile. `harness.register_sign_in`, run by `ospreyflow install`
+with no `--profile`, looked for `local-lite/deployment.env` and stopped the install;
+`scripts.refresh` (`ospreyflow start --build`) preferred `local-lite/` whenever one was there. Both
+now take the deployment's own folder (`register_sign_in.deployment_env_path`, `refresh` through
+`generated_folder`), each with a case in `test_deployment_name.py` shown red first.

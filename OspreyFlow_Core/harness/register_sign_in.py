@@ -42,7 +42,7 @@ from harness.realm import (
 )
 from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
 from harness.site import answer_localhost_with_loopback, deployment_origins
-from schemas.deployment import OspreyConfig
+from schemas.deployment import OspreyConfig, generated_folder
 
 ADMIN_PASSWORD_KEY = "OSPREY_KEYCLOAK_ADMIN_PASSWORD"
 DEMO_ANALYST_PASSWORD_KEY = "OSPREY_DEMO_ANALYST_PASSWORD"
@@ -256,9 +256,18 @@ def print_summary(lines: list[str], env_path: Path) -> None:
     )
 
 
+def deployment_env_path(out_root: Path, folder: str | None, config: OspreyConfig) -> Path:
+    """The deployment's `deployment.env`: under `folder` when one is named, else under the
+    deployment's own rendered folder, `deployment.name` or the profile (ADR-132 Amendment 1)."""
+    return out_root / (folder or generated_folder(config)) / "deployment.env"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--profile", default="local-lite")
+    parser.add_argument(
+        "--profile", default=None,
+        help="the rendered folder; default: the deployment's own (deployment.name or profile)",
+    )  # fmt: skip
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
     parser.add_argument(
@@ -271,7 +280,7 @@ def main(argv: list[str] | None = None) -> int:
     )  # fmt: skip
     args = parser.parse_args(argv)
 
-    env_path = args.out_root / args.profile / "deployment.env"
+    env_path = deployment_env_path(args.out_root, args.profile, load_config(args.config))
     answer_localhost_with_loopback()
     if args.no_demo_accounts:
         try:

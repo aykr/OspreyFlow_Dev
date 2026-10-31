@@ -62,10 +62,9 @@ from harness.render import (
 )
 from harness.site import answer_localhost_with_loopback, deployment_origins
 
-from schemas.deployment import OspreyConfig
+from schemas.deployment import OspreyConfig, generated_folder
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PROFILE = "local-lite"
 
 
 class NothingToRefresh(Exception):
@@ -88,7 +87,9 @@ def _register(argv: list[str]) -> int:
 
 def _deployment_dir(repo_root: Path) -> Path:
     generated = repo_root / "deploy" / "generated"
-    preferred = generated / DEFAULT_PROFILE
+    # ADR-132 Amendment 1: the deployment's own folder first, `deployment.name` or the profile, so a
+    # product folder holding two rendered deployments rebuilds the one its `osprey.yaml` names.
+    preferred = generated / generated_folder(load_config(repo_root / "osprey.yaml"))
     if (preferred / "compose.yaml").is_file():
         return preferred
     found = sorted(p.parent for p in generated.glob("*/compose.yaml"))
