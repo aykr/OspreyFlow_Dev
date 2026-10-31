@@ -20222,6 +20222,18 @@ written before any colour (the spike brief's rule).
 6. **`ospreyflow install` over a running deployment** (found in Amendment 1's install): fix it so a
    render never replaces a secret `deployment.env` already holds and preflight runs before anything
    is written, with a test that re-renders over an existing file and asserts its secrets unchanged.
+   **Done 31 October 2026:** `harness.apply` reads `deployment.env` before it renders and puts back
+   every secret it already held (`keep_existing_secrets`: each key ending in `PASSWORD`, `SECRET`,
+   `SECRET_KEY` or `ACCESS_KEY`), carrying over those `register_sign_in` added after the render;
+   `tests/harness/test_apply_keeps_secrets.py` runs the real `apply` twice, stopped at preflight both
+   times, and was shown red first (every secret replaced). **And a refused run writes nothing**
+   (the owner's "proceed", 31 October 2026): `apply` renders into a staging folder beside the
+   deployment's own (`.<name>.staging`, the same depth, so a relative storage path reads the same),
+   runs preflight against it, and copies it into place only when preflight passes; the staging
+   folder is removed either way. `test_a_run_its_preflight_refuses_writes_nothing_to_the_deployment`
+   (contents and modification times) and `test_a_first_run_its_preflight_refuses_leaves_no_deployment`,
+   both shown red on the code before. `test_keycloak_theme.py`'s apply case now stops one stage later,
+   after preflight, where the files are written.
 7. **The red `make ci`** (newly published findings in the api, workspace, harness and superset images
    and `pyasn1` 0.6.4 in `uv.lock`): update the images and `pyasn1` in a change of their own. **Done 31 October
    2026** on its own branch: `pyasn1` 0.6.5 and `pypdf` 6.21.4 in `uv.lock`, and Superset's `pyasn1`

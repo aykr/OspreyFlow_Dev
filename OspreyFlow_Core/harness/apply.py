@@ -38,6 +38,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import time
@@ -548,6 +550,36 @@ def pin_release_images(out_dir: Path, lock_path: Path) -> None:
     pin_images(out_dir, lock_path.read_text(encoding="utf-8"))
 
 
+#: A `deployment.env` key that holds a secret (ADR-132, the owner's ruling 6).
+_SECRET_KEY = re.compile(r"(PASSWORD|SECRET|SECRET_KEY|ACCESS_KEY)$")
+
+
+def keep_existing_secrets(new: str, previous: str) -> str:
+    """`new` with every secret `previous` already held put back. A deployment's stores and identity
+    provider keep the secrets they started with, so a re-render that mints fresh ones (and then
+    stops, at preflight or anywhere) leaves the file and the running stack disagreeing, and the
+    deployment cannot sign in to its own stores (found 31 October 2026). A secret only `previous`
+    holds (`register_sign_in` adds some after the render) is carried over too."""
+    held: dict[str, str] = {}
+    for line in previous.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and value and not line.startswith("#") and _SECRET_KEY.search(key):
+            held[key] = value
+    lines: list[str] = []
+    seen: set[str] = set()
+    for line in new.splitlines():
+        key, sep, _value = line.partition("=")
+        if sep and not line.startswith("#"):
+            seen.add(key)
+            if key in held:
+                line = f"{key}={held[key]}"
+        lines.append(line)
+    carried = [f"{key}={value}" for key, value in held.items() if key not in seen]
+    if carried:
+        lines += ["# Kept from the deployment's earlier render (ADR-132, ruling 6).", *carried]
+    return "\n".join(lines) + "\n"
+
+
 def render_deployment(config: OspreyConfig, out_dir: Path, *, images_from: Path | None) -> Any:
     """Step 1: the deployment's files, and — for an install from a release — its images pinned to
     the verified lock before anything can start them."""
@@ -655,19 +687,28 @@ def main(argv: list[str] | None = None) -> int:
         args.keycloak_url = sites(config).identity
 
     try:
-        # 1. Render.
-        rendered = render_deployment(config, out_dir, images_from=args.images_from)
-        write_config_copy(args.config, out_dir)
-        (out_dir / "realm.json").write_text(
+        # 1. Render. The secrets a deployment already has are read first and kept (ADR-132, the
+        # owner's ruling 6): its stores still hold them, whatever this run mints. Everything is
+        # rendered into a staging folder beside the deployment's own, at the same depth so a
+        # relative storage path reads the same (ADR-054 Amendment 6), checked there, and moved into
+        # place only once preflight passes: a refused run writes nothing to the deployment.
+        previous_path = out_dir / "deployment.env"
+        previous_env = previous_path.read_text(encoding="utf-8") if previous_path.is_file() else ""
+        stage = out_dir.parent / f".{out_dir.name}.staging"
+        shutil.rmtree(stage, ignore_errors=True)
+        env_path = stage / "deployment.env"
+        rendered = render_deployment(config, stage, images_from=args.images_from)
+        write_config_copy(args.config, stage)
+        (stage / "realm.json").write_text(
             render_realm_json(config, demo_analyst=args.demo_analyst), encoding="utf-8"
         )
         # Round 13cda — the LiteLLM proxy's routing table, written the same way and for the same
         # reason as the realm above: a generated *service config*, mounted by the compose file,
         # rather than one of `05_DEPLOYMENT.md` §2.1's four operator-facing artefacts.
-        (out_dir / "litellm.yaml").write_text(render_litellm_config(config), encoding="utf-8")
+        (stage / "litellm.yaml").write_text(render_litellm_config(config), encoding="utf-8")
         # The sign-in page's look, beside the compose file that mounts it
         # (harness/keycloak_theme.py).
-        write_login_theme(out_dir, **login_theme_options(config))
+        write_login_theme(stage, **login_theme_options(config))
         secret = generate_client_secret()
         admin_password = generate_client_secret()
         # ADR-114 Amendment 5: Keycloak's own login on the deployment's Postgres.
@@ -683,7 +724,6 @@ def main(argv: list[str] | None = None) -> int:
         demo_admin_password = generate_client_secret() if args.demo_analyst else None
         minio_user = "ospreyflow"
         minio_password = generate_client_secret()
-        env_path = out_dir / "deployment.env"
         # Both minted here and written only into generated, gitignored output — 05_DEPLOYMENT.md
         # §2.5 ("never sees a secret… records where to look, never what it found") and §7
         # ("never in osprey.yaml, never in an image"). Neither is derived from anything in the
@@ -735,17 +775,26 @@ def main(argv: list[str] | None = None) -> int:
             ),
             encoding="utf-8",
         )
+        env_path.write_text(
+            keep_existing_secrets(env_path.read_text(encoding="utf-8"), previous_env),
+            encoding="utf-8",
+        )
         result.record("render", f"{len(rendered.artefacts) + 1} artefact(s) → {out_dir}")
 
-        # 2. Preflight, before anything is built or started.
-        context = PreflightContext(config=config, out_dir=out_dir)
-        failures = []
-        for module in ALL_CHECKS:
-            check = module.check(context)
-            if check.status is Status.FAIL:
-                failures.append(f"{check.check}: {check.what_is_wrong} — {check.what_to_do}")
-        if failures:
-            raise ApplyFailed("preflight", "\n  ".join(failures))
+        # 2. Preflight, before anything is built or started, and before the deployment's own folder
+        # is touched (ADR-132, ruling 6).
+        try:
+            context = PreflightContext(config=config, out_dir=stage)
+            failures = []
+            for module in ALL_CHECKS:
+                check = module.check(context)
+                if check.status is Status.FAIL:
+                    failures.append(f"{check.check}: {check.what_is_wrong} — {check.what_to_do}")
+            if failures:
+                raise ApplyFailed("preflight", "\n  ".join(failures))
+            shutil.copytree(stage, out_dir, dirs_exist_ok=True)
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
         result.record("preflight", "all checks pass or skip")
 
         compose_file = out_dir / "compose.yaml"
