@@ -9,6 +9,7 @@
 // deployment says (decision 8); the strip is the deployment's marking (decision 2).
 import { useEffect, useState } from "react";
 
+import { currentBrand } from "../brand/brand";
 import { applyTheme, currentTheme, onThemeChange, storeTheme, type Theme } from "../theme/theme";
 import { ClassificationStrip } from "../shell/ClassificationStrip";
 import { MeshMark, SolidMark } from "../shell/BrandMark";
@@ -59,6 +60,8 @@ const LINK_NAMES: [WelcomeLink, string][] = [
 function ThemeButton() {
   const [theme, setTheme] = useState<Theme>(currentTheme());
   useEffect(() => onThemeChange(setTheme), []);
+  // ADR-132: the GOV.UK brand is light only, so there is no choice to offer.
+  if (currentBrand() === "govuk") return null;
   const next: Theme = theme === "light" ? "dark" : "light";
   return (
     <button

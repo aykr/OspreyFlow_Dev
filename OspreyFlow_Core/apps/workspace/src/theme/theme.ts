@@ -11,6 +11,8 @@
 // Everything drawn by CSS follows `data-theme` on its own. What is painted to a canvas (the graph,
 // the timeline) cannot read a CSS variable, so it asks `currentTheme()` and listens with
 // `onThemeChange()` to draw again.
+import { currentBrand } from "../brand/brand";
+
 export type Theme = "dark" | "light";
 
 export const THEME_STORAGE_KEY = "ospreyflow.theme";
@@ -95,8 +97,10 @@ export function currentTheme(): Theme {
   return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
 }
 
-/** Shows `theme` and tells whatever is listening, if it changed. */
-export function applyTheme(theme: Theme): void {
+/** Shows `theme` and tells whatever is listening, if it changed. Under the GOV.UK brand the page is
+ * light whatever is asked (ADR-132): the GOV.UK Design System has no dark mode. */
+export function applyTheme(asked: Theme): void {
+  const theme: Theme = currentBrand() === "govuk" ? "light" : asked;
   const changed = currentTheme() !== theme || document.documentElement.getAttribute("data-theme") === null;
   document.documentElement.setAttribute("data-theme", theme);
   if (changed) listeners.forEach((listener) => listener(theme));

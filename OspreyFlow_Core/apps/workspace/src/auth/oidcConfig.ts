@@ -28,6 +28,8 @@
 // into the workspace image), naming its identity provider — `id.` in front of the Glass's own name,
 // through the front proxy. `loadDeploymentSettings()` reads it before the Glass draws anything. The
 // default above remains only for the Vite development server, which serves no such file.
+import { PLAIN_APPEARANCE, readAppearance, type Appearance } from "../brand/brand";
+
 const DEFAULT_KEYCLOAK_PORT = 8081;
 
 interface DeploymentSettings {
@@ -36,6 +38,8 @@ interface DeploymentSettings {
   /** The marking a surface with no case data shows (ADR-115 decision 2). */
   marking: string | null;
   welcome: WelcomeSettingsRead;
+  /** How every page looks (ADR-132). */
+  appearance: Appearance;
 }
 
 /** What the welcome page offers (ADR-115 decisions 3 and 8). */
@@ -87,6 +91,7 @@ export async function loadDeploymentSettings(
       marking?: unknown;
       organisation_sign_in?: unknown;
       welcome?: unknown;
+      appearance?: unknown;
       version?: unknown;
     };
     if (typeof body.identity_provider === "string" && body.identity_provider) {
@@ -96,6 +101,7 @@ export async function loadDeploymentSettings(
           typeof body.realm === "string" && body.realm ? body.realm : "osprey",
         marking: typeof body.marking === "string" && body.marking ? body.marking : null,
         welcome: readWelcome(body),
+        appearance: readAppearance(body.appearance),
       };
     }
   } catch {
@@ -111,6 +117,12 @@ export function deploymentMarking(): string | null {
 /** The welcome page's settings, or the plain page where there is no deployment file. */
 export function deploymentWelcome(): WelcomeSettingsRead {
   return deployment?.welcome ?? PLAIN_WELCOME;
+}
+
+/** The deployment's brand and what its GOV.UK header, footer and banner name (ADR-132); the
+ * OspreyFlow brand where there is no deployment file. */
+export function deploymentAppearance(): Appearance {
+  return deployment?.appearance ?? PLAIN_APPEARANCE;
 }
 
 /** For tests: forget what was read. */

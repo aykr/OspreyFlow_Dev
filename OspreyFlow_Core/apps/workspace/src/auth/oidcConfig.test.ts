@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  deploymentAppearance,
   deploymentMarking,
   deploymentWelcome,
   loadDeploymentSettings,
@@ -107,5 +108,33 @@ describe("the deployment's welcome settings", () => {
   it("are the plain page where there is no deployment file", async () => {
     await loadDeploymentSettings(answering(404, "not found"));
     expect(deploymentWelcome()).toEqual({ organisationSignIn: null, about: true, links: {}, version: null });
+  });
+});
+
+// ADR-132: the deployment's brand travels in the same file, so one bundle serves every deployment.
+describe("the deployment's appearance", () => {
+  afterEach(() => resetDeploymentSettings());
+
+  it("is read with the identity provider", async () => {
+    await loadDeploymentSettings(
+      answering(
+        200,
+        JSON.stringify({
+          identity_provider: "http://id.osprey.test",
+          appearance: { brand: "govuk", service_name: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" },
+        }),
+      ),
+    );
+    expect(deploymentAppearance()).toEqual({
+      brand: "govuk",
+      serviceName: "Prison Intelligence",
+      organisation: "Ministry of Examples",
+      phase: "beta",
+    });
+  });
+
+  it("is the OspreyFlow brand where there is no deployment file", async () => {
+    await loadDeploymentSettings(answering(404, "not found"));
+    expect(deploymentAppearance()).toEqual({ brand: "ospreyflow", serviceName: null, organisation: null, phase: "none" });
   });
 });

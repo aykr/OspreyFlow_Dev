@@ -100,6 +100,7 @@ SECTIONS = {
     "reporting": "Dashboards for the business: report sync and Superset.",
     "mail": "A mail server, for invitations and password resets by email.",
     "welcome": "The welcome page before sign-in: its About section and footer links.",
+    "appearance": "How every page looks: the deployment's brand, and what a GOV.UK header names.",
     "external": "What a cloud runs for the deployment instead of a container (Small).",
     "external.postgres": "A cloud's managed PostgreSQL; its password arrives at install.",
     "external.object_store": "A cloud's S3, for every S3-protocol store (AWS).",

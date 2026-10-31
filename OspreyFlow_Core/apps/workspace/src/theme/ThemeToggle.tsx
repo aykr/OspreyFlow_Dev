@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { currentBrand } from "../brand/brand";
 import { IconButton } from "../design/primitives/IconButton";
 import { applyTheme, currentTheme, onThemeChange, storeTheme, type Theme } from "./theme";
 
@@ -13,6 +14,8 @@ export function ThemeToggle({
 }: { className?: string; variant?: "worded" | "icon" } = {}) {
   const [theme, setTheme] = useState<Theme>(currentTheme());
   useEffect(() => onThemeChange(setTheme), []);
+  // ADR-132: the GOV.UK brand is light only, so there is no choice to offer.
+  if (currentBrand() === "govuk") return null;
   const next: Theme = theme === "light" ? "dark" : "light";
   const label = `Switch to the ${next} theme`;
   const press = () => {

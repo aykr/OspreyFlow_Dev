@@ -301,6 +301,22 @@ export type Privacy = string | null;
  */
 export type ServiceStatus = string | null;
 /**
+ * Default: ospreyflow. The GOV.UK look, for a service on a gov.uk domain only.
+ */
+export type Brand = "ospreyflow" | "govuk";
+/**
+ * Default: none. The service's name in the GOV.UK header and the page title.
+ */
+export type ServiceName = string | null;
+/**
+ * Default: none. The organisation in the GOV.UK footer and the page title.
+ */
+export type Organisation = string | null;
+/**
+ * Default: none. The phase banner shows at alpha or beta.
+ */
+export type Phase = "alpha" | "beta" | "live" | "none";
+/**
  * The managed server's address
  */
 export type Host1 = string;
@@ -386,6 +402,7 @@ export interface OspreyConfig {
    */
   mail?: MailConfig | null;
   welcome?: WelcomeConfig;
+  appearance?: AppearanceConfig;
   external?: ExternalConfig;
 }
 /**
@@ -594,6 +611,19 @@ export interface WelcomeConfig {
   accessibility?: Accessibility;
   privacy?: Privacy;
   service_status?: ServiceStatus;
+}
+/**
+ * How every page of the deployment looks (ADR-132): the deployment's brand, which is not the
+ * viewer's light or dark choice. `govuk` is the GOV.UK look the Service Manual requires on a
+ * `*.service.gov.uk` service: its header and footer, GDS Transport, its colours and the light
+ * page. The network's own colours and shapes are the same under either brand. Read by the Glass
+ * from `/deployment.json`; the Admin console's Appearance tab is to write the same section.
+ */
+export interface AppearanceConfig {
+  brand?: Brand;
+  service_name?: ServiceName;
+  organisation?: Organisation;
+  phase?: Phase;
 }
 /**
  * What a cloud runs for the deployment instead of a container (ADR-114 decision 8).

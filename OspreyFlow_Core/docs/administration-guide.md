@@ -713,6 +713,11 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `welcome.accessibility` | str or none | none | The organisation's accessibility statement. |
 | `welcome.privacy` | str or none | none | The organisation's privacy notice. |
 | `welcome.service_status` | str or none | none | A page saying whether the service is up. |
+| `appearance` | section | — | How every page looks: the deployment's brand, and what a GOV.UK header names. |
+| `appearance.brand` | `ospreyflow` \| `govuk` | `ospreyflow` | The GOV.UK look, for a service on a gov.uk domain only. |
+| `appearance.service_name` | str or none | none | The service's name in the GOV.UK header and the page title. |
+| `appearance.organisation` | str or none | none | The organisation in the GOV.UK footer and the page title. |
+| `appearance.phase` | `alpha` \| `beta` \| `live` \| `none` | `none` | The phase banner shows at alpha or beta. |
 | `external` | section | — | What a cloud runs for the deployment instead of a container (Small). |
 | `external.postgres` | section or none | none | A cloud's managed PostgreSQL; its password arrives at install. |
 | `external.postgres.host` | str | required | The managed server's address |

@@ -175,7 +175,8 @@ def deployment_version() -> str:
 
 def render_glass_settings(config: OspreyConfig) -> str:
     """What the Glass reads at start (`/deployment.json`): where its identity provider is, the
-    marking it shows before any case data is on screen, and the welcome page's settings."""
+    marking it shows before any case data is on screen, the welcome page's settings and the
+    deployment's appearance (ADR-132)."""
     welcome = config.welcome
     links = {
         name: address
@@ -193,6 +194,8 @@ def render_glass_settings(config: OspreyConfig) -> str:
         "marking": marking_floor(config),
         "organisation_sign_in": config.governance.organisation_sign_in,
         "welcome": {"about": welcome.about, "links": links},
+        # ADR-132: the deployment's brand and what its GOV.UK header, footer and banner name.
+        "appearance": config.appearance.model_dump(),
         "version": deployment_version(),
     }
     return json.dumps(settings, indent=2) + "\n"

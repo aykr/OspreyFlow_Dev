@@ -118,6 +118,13 @@ def test_the_glass_learns_its_identity_provider_at_run_time() -> None:
         # no footer link the deployment has not given.
         "organisation_sign_in": None,
         "welcome": {"about": True, "links": {}},
+        # ADR-132: the OspreyFlow brand unless the deployment names another.
+        "appearance": {
+            "brand": "ospreyflow",
+            "service_name": None,
+            "organisation": None,
+            "phase": "none",
+        },
         "version": site.deployment_version(),
     }
     volumes = _compose(artefacts)["workspace"]["volumes"]
@@ -182,3 +189,19 @@ def test_a_localhost_name_reaches_loopback_where_the_resolver_refuses_it(
     assert socket.getaddrinfo("example.org", 80)[0][4][0] == "192.0.2.7", "other names untouched"
     site.answer_localhost_with_loopback()  # twice is harmless
     assert socket.getaddrinfo("LOCALHOST", 80, type=socket.SOCK_STREAM)[0][4][0] in ("127.0.0.1", "::1")
+
+
+def test_the_glass_learns_the_deployments_appearance() -> None:
+    """ADR-132: the brand, and what the GOV.UK header, footer and phase banner name, travel in the
+    same file as the identity provider, so the bundle stays the same for every deployment."""
+    appearance = {
+        "brand": "govuk",
+        "service_name": "Prison Intelligence",
+        "organisation": "Ministry of Examples",
+        "phase": "beta",
+    }
+    assert json.loads(_render(appearance=appearance)["glass.json"])["appearance"] == appearance
+    with pytest.raises(ValueError, match="brand"):
+        _render(appearance={"brand": "gov.uk"})
+    with pytest.raises(ValueError, match="phase"):
+        _render(appearance={"phase": "gamma"})

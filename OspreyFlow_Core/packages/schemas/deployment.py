@@ -553,6 +553,35 @@ class WelcomeConfig(BaseModel):
         return value
 
 
+class AppearanceConfig(BaseModel):
+    """How every page of the deployment looks (ADR-132): the deployment's brand, which is not the
+    viewer's light or dark choice. `govuk` is the GOV.UK look the Service Manual requires on a
+    `*.service.gov.uk` service: its header and footer, GDS Transport, its colours and the light
+    page. The network's own colours and shapes are the same under either brand. Read by the Glass
+    from `/deployment.json`; the Admin console's Appearance tab is to write the same section."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    brand: Literal["ospreyflow", "govuk"] = Field(
+        default="ospreyflow",
+        description="Default: ospreyflow. The GOV.UK look, for a service on a gov.uk domain only.",
+    )
+    service_name: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Default: none. The service's name in the GOV.UK header and the page title.",
+    )
+    organisation: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Default: none. The organisation in the GOV.UK footer and the page title.",
+    )
+    phase: Literal["alpha", "beta", "live", "none"] = Field(
+        default="none",
+        description="Default: none. The phase banner shows at alpha or beta.",
+    )
+
+
 class MailConfig(BaseModel):
     """The mail server the identity provider sends invitations and sign-in resets through
     (`06_DECISIONS.md` ADR-114 Amendment 5). Without one, people are signed in by a one-time code.
@@ -681,6 +710,7 @@ class OspreyConfig(BaseModel):
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     mail: MailConfig | None = Field(default=None, description="Default: none — one-time codes")
     welcome: WelcomeConfig = Field(default_factory=WelcomeConfig)
+    appearance: AppearanceConfig = Field(default_factory=AppearanceConfig)
     external: ExternalConfig = Field(default_factory=ExternalConfig)
 
     @model_validator(mode="after")
