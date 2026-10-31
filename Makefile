@@ -11,8 +11,11 @@ help:
 	@echo "Run a target, e.g. 'make seed-hmp' (in $(CORE)/Makefile) or 'make ci' (in $(BUILD)/Makefile)."
 
 # Any target not named here goes to the folder whose Makefile has it, Build first, with the same
-# variables. `make -q` asks Build only whether it has a rule (exit 2 when it has none).
+# variables. Build's rule database (`-pRrq :`, which builds no target and runs no recipe) says
+# whether it has a rule. Not `make -q <target>`: that still runs any `$(MAKE)` line under the
+# target, and `ci`'s `core-check` is one, so its answer read as "no rule" and `make ci` went to
+# Core (`tests/test_core_stands_alone.py`, found 30 October 2026).
 %:
-	@$(MAKE) --no-print-directory -C $(BUILD) -q $@ >/dev/null 2>&1; \
-	  if [ $$? -eq 2 ]; then $(MAKE) --no-print-directory -C $(CORE) $@; \
-	  else $(MAKE) --no-print-directory -C $(BUILD) $@; fi
+	@if $(MAKE) --no-print-directory -C $(BUILD) -pRrq : 2>/dev/null | grep -qx '$@:.*'; \
+	  then $(MAKE) --no-print-directory -C $(BUILD) $@; \
+	  else $(MAKE) --no-print-directory -C $(CORE) $@; fi
