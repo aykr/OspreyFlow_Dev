@@ -46,6 +46,7 @@ from harness.apply import _compose
 from harness.keycloak_theme import (
     THEME_DIRECTORY,
     THEME_NAME,
+    clear_theme_cache,
     login_theme_options,
     read_tokens,
     render_login_theme,
@@ -430,6 +431,7 @@ def refresh(
     if changed["routing_changed"]:
         run([*compose, "restart", "proxy"])
     if theme_changed:
+        run(clear_theme_cache(compose))
         run([*compose, "restart", "keycloak"])
         run([*compose, "up", "-d", "--wait"])
     identity = _identity_origin(directory / "deployment.env")

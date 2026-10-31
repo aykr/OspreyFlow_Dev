@@ -17,7 +17,12 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from harness.keycloak_theme import THEME_DIRECTORY, THEME_NAME, write_login_theme
+from harness.keycloak_theme import (
+    KEYCLOAK_GZIP_CACHE,
+    THEME_DIRECTORY,
+    THEME_NAME,
+    write_login_theme,
+)
 from scripts import refresh
 
 SECRETS = "OSPREY_POSTGRES_PASSWORD=pg-secret-77\nOSPREY_KEYCLOAK_PORT=8081\n"
@@ -59,8 +64,8 @@ def repo(tmp_path: Path) -> Path:
 
 
 def _subcommands(calls: list[list[str]]) -> list[str]:
-    """The compose verb of each call, e.g. build / up / restart."""
-    verbs = {"build", "up", "restart"}
+    """The compose verb of each call, e.g. build / up / exec / restart."""
+    verbs = {"build", "up", "exec", "restart"}
     return [next(a for a in c if a in verbs) for c in calls]
 
 
@@ -108,7 +113,10 @@ def test_a_changed_theme_is_written_and_the_identity_provider_restarted_then_wai
     repo: Path,
 ) -> None:
     """Catches the theme staying stale: Keycloak reads a mounted theme at start, so rewriting the
-    files alone changes nothing on screen."""
+    files alone changes nothing on screen. And it serves each theme file from a gzip copy it keeps
+    in the container (`kc-gzip-cache`), which a restart does not clear: found 31 October 2026, when
+    the GOV.UK sign-in theme's rewritten script was served stale through the proxy after a restart
+    (ADR-132 Amendment 2). The cache is cleared before the restart."""
     (repo / "apps" / "workspace" / "src" / "design" / "tokens.css").write_text(
         ":root { --brass: #aa8833; }\n", encoding="utf-8"
     )
@@ -118,8 +126,9 @@ def test_a_changed_theme_is_written_and_the_identity_provider_restarted_then_wai
         repo / "deploy/generated/local-lite" / THEME_DIRECTORY / THEME_NAME / "login/resources/css"
     ).joinpath("osprey.css")
     assert "#aa8833" in written.read_text(encoding="utf-8")
-    assert _subcommands(run.calls) == ["build", "up", "restart", "up"]
-    assert "keycloak" in run.calls[2]
+    assert _subcommands(run.calls) == ["build", "up", "exec", "restart", "up"]
+    assert run.calls[2][-5:] == ["keycloak", "rm", "-rf", "--", KEYCLOAK_GZIP_CACHE]
+    assert "keycloak" in run.calls[3]
 
 
 def test_sign_in_accounts_are_registered_after_everything_has_been_restarted(repo: Path) -> None:
@@ -281,8 +290,8 @@ def test_the_glass_settings_are_brought_up_to_date(repo: Path) -> None:
 
 
 def test_the_proxys_routing_table_is_brought_up_to_date_and_the_proxy_restarted(repo: Path) -> None:
-    """ADR-132 Amendment 2: a deployment switched to the GOV.UK brand needs `/assets/govuk/` routed on
-    its `id.` name, and refresh, which never rendered the Caddyfile, left the old table, so the
+    """ADR-132 Amendment 2: a deployment switched to the GOV.UK brand needs `/assets/govuk/` routed
+    on its `id.` name, and refresh, which never rendered the Caddyfile, left the old table, so the
     sign-in page would have loaded with no GOV.UK stylesheet. The proxy reads its table at start."""
     import yaml
     from harness.render import render

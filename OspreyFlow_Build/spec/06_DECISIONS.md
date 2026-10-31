@@ -20431,3 +20431,12 @@ order; the skip link's target focusable; a service name never markup), and
    checkout renders it and restarts the front proxy when it changed (`routing_changed`), and update
    restarts it too. `test_refresh.py`'s
    `test_the_proxys_routing_table_is_brought_up_to_date_and_the_proxy_restarted`, shown red first.
+6. **Keycloak's gzip cache is cleared before it restarts.** Keycloak keeps a gzip copy of each theme
+   file it serves in the container (`/opt/keycloak/data/tmp/kc-gzip-cache`), which a restart keeps,
+   and the front proxy asks for gzip; so a rewritten theme file was served stale after the restart
+   that was meant to load it (found 31 October 2026 on the GOV.UK deployment: the new sign-in script
+   reached Keycloak's disk but not the browser). This predates the brand: any change to an existing
+   theme file since ADR-115 was subject to it. `refresh` and `update` now run
+   `keycloak_theme.clear_theme_cache` before restarting Keycloak; `test_refresh.py`'s
+   `test_a_changed_theme_is_written_and_the_identity_provider_restarted_then_waited_on`, shown red
+   first. Checked live: cleared and restarted, the GOV.UK sign-in page drew its header, light.

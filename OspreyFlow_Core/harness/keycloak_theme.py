@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import html
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TypedDict
 
@@ -39,6 +40,16 @@ THEME_SCRIPT = "login/resources/js/osprey-theme.js"
 #: The handoff's sign-in card behaviour on Keycloak's pages (ADR-115 E2, `sign_in_form.js`).
 SIGN_IN_SCRIPT = "login/resources/js/osprey-sign-in.js"
 SIGN_IN_SCRIPT_SOURCE = Path(__file__).resolve().parent / "sign_in_form.js"
+#: Where Keycloak keeps a gzip copy of each theme file it serves. It lives in the container, so a
+#: restart keeps it, and a rewritten theme would be served stale through anything that asks for
+#: gzip (the front proxy does); it is cleared before Keycloak restarts (ADR-132 Amendment 2).
+KEYCLOAK_GZIP_CACHE = "/opt/keycloak/data/tmp/kc-gzip-cache"
+
+
+def clear_theme_cache(compose: Sequence[str]) -> list[str]:
+    """The command that empties Keycloak's gzip cache of theme files, run before it restarts."""
+    return [*compose, "exec", "-T", "keycloak", "rm", "-rf", "--", KEYCLOAK_GZIP_CACHE]
+
 #: The GOV.UK header and footer around Keycloak's page, under the GOV.UK brand (ADR-132 Am. 2).
 GOVUK_CHROME_SCRIPT = "login/resources/js/govuk-chrome.js"
 GOVUK_CHROME_SOURCE = Path(__file__).resolve().parent / "govuk_chrome.js"
