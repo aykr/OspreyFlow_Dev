@@ -593,6 +593,34 @@ def test_publish_refuses_what_the_runner_cannot_run_yet(client: TestClient) -> N
     assert any("whisper" in problem for problem in body["problems"])
 
 
+def test_publish_refuses_a_draft_map_has_not_been_done_on_in_words(client: TestClient) -> None:
+    """Found capturing the Prison Intelligence demo on a fresh deployment (31 October 2026): its
+    reports recipe is seeded as a draft Map has not been done on, which the presenter maps live, and
+    Publish on it answered 500 from an `assert` on its row template. A recipe with nothing mapped is
+    refused in words, as the runner gate above refuses, and nothing is written."""
+    made = client.post(
+        "/v1/investigations/inv-1/ingest/recipes",
+        json={"label": "Not yet mapped", "connector_profile": "generic-csv"},
+    ).json()
+    approver = SOURCE_AUTHOR.model_copy(
+        update={"roles": [*SOURCE_AUTHOR.roles, "source_approver"]}
+    )
+    app.dependency_overrides[get_principal] = lambda: approver
+    from pathlib import Path
+
+    from services.api.app import get_recipes_repo_root
+
+    app.dependency_overrides[get_recipes_repo_root] = lambda: Path("/tmp/never-written")
+    response = client.post(
+        f"/v1/investigations/inv-1/ingest/recipes/{made['recipe_id']}/publish",
+        json={},
+    )
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert body["error"] == "recipe_not_mapped"
+    assert "Map" in body["detail"]
+
+
 # --- ADR-127 decision 5 (B2-5): a Studio draft carries `deduplicate` ------------------------------
 
 

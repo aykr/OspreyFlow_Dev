@@ -583,11 +583,20 @@ async function runNow(page: Page, open: RegExp): Promise<string> {
   await page.getByRole("button", { name: open }).click();
   const publish = page.getByRole("button", { name: "Publish", exact: true });
   const run = page.getByRole("button", { name: "Run now" });
-  // A published recipe opens on its Publish screen; a draft opens on its canvas first.
+  // A published recipe opens on its Publish screen; a draft opens on its canvas first. There the
+  // first "Publish" is the pipeline's Publish stage, which only moves to the Publish screen; the
+  // Publish button on that screen is what publishes it. On a deployment whose recipes were all
+  // published in earlier rehearsals the second press was never needed (found capturing a fresh
+  // GOV.UK-brand deployment, 31 October 2026).
   try {
     await run.waitFor({ timeout: 10_000 });
   } catch {
     await publish.click();
+    try {
+      await run.waitFor({ timeout: 10_000 });
+    } catch {
+      await publish.click();
+    }
   }
   await run.click();
   const outcome = page.getByText(/Succeeded:|Failed|refused/i).first();

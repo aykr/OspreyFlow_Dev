@@ -7642,9 +7642,20 @@ async def publish_studio_recipe(
                 status_code=422,
                 content={"error": "pipeline_not_runnable", "problems": unrunnable},
             )
+    # A draft Map has not been done on has nothing to load: refused in words, not by an `assert`
+    # (a 500, found 31 October 2026 on the Prison Intelligence demo's reports recipe, which is
+    # seeded unmapped for the presenter to map live).
+    if recipe.row_template is None:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422,
+            content={
+                "error": "recipe_not_mapped",
+                "detail": "Map has not been done on this recipe yet: map its fields to the "
+                "domain model, run Verify, then publish.",
+            },
+        )
     # ADR-120 D10, Amendment 1: the pins come from the live ontology, for the packs the recipe
     # names and the packs whose types it writes.
-    assert recipe.row_template is not None
     check_before_publish(recipe, ontology)
     try:
         pins = pack_versions_for(recipe.pipeline, recipe.row_template, ontology)
