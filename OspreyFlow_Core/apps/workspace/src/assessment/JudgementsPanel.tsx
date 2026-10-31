@@ -101,7 +101,7 @@ function MultiPicker({
                 alignItems: "center",
                 gap: "var(--sp-4)",
                 padding: "2px var(--sp-8)",
-                borderRadius: "999px",
+                borderRadius: "var(--r-chip)",
                 background: "var(--surface-raised)",
               }}
             >

@@ -513,7 +513,7 @@ export function MapView({
             color: "var(--text-secondary)",
             background: "rgba(0,0,0,0.4)",
             padding: "2px 6px",
-            borderRadius: 2,
+            borderRadius: "var(--r-control)",
             pointerEvents: "none",
           }}
         >

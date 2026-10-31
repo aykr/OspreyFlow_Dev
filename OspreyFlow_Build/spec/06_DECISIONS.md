@@ -20316,7 +20316,11 @@ Consequences.
   five radii set inline in `.tsx` files rather than by token (`MapView`, `IconsMenu`,
   `SiteCalibrationWizard`, and the 999px chips in `JudgementsPanel` and `ReviewFlagChip`); status
   chips keep `--r-chip` (999px) where GOV.UK tags are square. Each is the spike's finding, not a
-  change it made.
+  change it made. **Fixed 31 October 2026:** the five inline radii are tokens of the same value
+  (`--r-control`, `--r-panel`, `--r-chip`), so the OspreyFlow brand is unchanged, and the GOV.UK block
+  sets `--r-chip:0`. `src/design/radiusTokens.test.ts` fails on a radius set inline as a number
+  anywhere in the Glass (a circle's "50%" and the canvas's own overlay excepted), shown red on the
+  five first; `designContract.test.ts` holds the GOV.UK block's four radii at 0.
 - **Left for the owner, and not done by this decision:**
   1. replacing any of the twenty primitives with GOV.UK Frontend components (the spike's question
      was whether the primitives absorb the brand through tokens);

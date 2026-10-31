@@ -18,7 +18,7 @@ export function ReviewFlagChip({ reason }: ReviewFlagChipProps) {
         style={{
           alignSelf: "flex-start",
           padding: "2px var(--sp-8)",
-          borderRadius: "999px",
+          borderRadius: "var(--r-chip)",
           background: "color-mix(in srgb, var(--warning) 16%, transparent)",
           color: "var(--warning)",
           fontWeight: 600,
