@@ -89,6 +89,7 @@ import { placeOf, revealPanel } from "./investigation/openAttachment";
 import { caseIsOpenable, openCase } from "./investigation/cases";
 import { bringFactIntoView } from "./questions/graphFacts";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
+import { exploreOverlayPlace } from "./explore/exploreOverlayPlace";
 import { ExplorePanel } from "./explore/ExplorePanel";
 import type { BusyDay, RankedLink } from "./explore/exploreApi";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
@@ -1445,9 +1446,9 @@ export function App() {
                 style={{
                   position: "absolute",
                   top: "var(--sp-40)",
-                  left: "50%",
+                  // Beside the welcome panel when it is open, never under it.
+                  ...exploreOverlayPlace(welcomeOpen),
                   transform: "translateX(-50%)",
-                  width: "min(28rem, calc(100% - var(--sp-32)))",
                   maxHeight: "calc(100% - var(--sp-56) - var(--sp-24))",
                   overflowY: "auto",
                   padding: "var(--sp-16)",
