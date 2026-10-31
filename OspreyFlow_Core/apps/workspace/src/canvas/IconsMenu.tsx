@@ -115,7 +115,7 @@ export function IconsMenu({ entityTypes, getTypesInView, makeThumbnail = thumbna
                     alt={`Your picture for ${type.name}`}
                     width={24}
                     height={24}
-                    style={{ borderRadius: 4 }}
+                    style={{ borderRadius: "var(--r-panel)" }}
                   />
                 ) : null}
                 <select

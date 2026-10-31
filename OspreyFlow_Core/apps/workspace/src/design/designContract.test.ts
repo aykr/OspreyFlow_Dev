@@ -183,6 +183,13 @@ describe("deployment brands (DESIGN.md §11)", () => {
     expect(brandFindings(TOKENS, DESIGN)).toEqual([]);
   });
 
+  it("the GOV.UK block squares every corner, chips included", () => {
+    const block = brandBlocks(TOKENS).govuk ?? {};
+    expect([block["--r-control"], block["--r-panel"], block["--r-overlay"], block["--r-chip"]]).toEqual([
+      "0", "0", "0", "0",
+    ]);
+  });
+
   it("finds a brand block that redefines a data token", () => {
     const planted = TOKENS.replace("--brass:#1d70b8;", "--brass:#1d70b8; --ch-ochre:#b34917;");
     expect(brandFindings(planted, DESIGN)).toContain("govuk --ch-ochre redefines a data token");

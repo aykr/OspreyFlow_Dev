@@ -188,6 +188,8 @@
 
   --ui:"GDS Transport",arial,sans-serif;
   --r-control:0; --r-panel:0; --r-overlay:0;
+  /* GOV.UK tags are square too (ADR-132). */
+  --r-chip:0;
 }
 
 /* GOV.UK type on the GOV.UK brand's pages (ADR-132, the owner's ruling 3; DESIGN.md §11): the

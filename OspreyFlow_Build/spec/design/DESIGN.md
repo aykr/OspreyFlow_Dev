@@ -417,7 +417,7 @@ colour a brand block sets is listed below for that brand; anything else in the b
 ### govuk
 
 The GOV.UK look, for a service on a gov.uk domain only. GOV.UK Frontend 6.6.0's palette, GDS
-Transport, square corners, and the Design System's focus state: a 3px `--focus` outline with a 2px
+Transport, square corners (every radius token, status chips included, is 0), and the Design System's focus state: a 3px `--focus` outline with a 2px
 `--focus-ink` inner shadow. `--warning` is not set (v6 has none), so the light theme's stands.
 
 | Token | Value | Use |

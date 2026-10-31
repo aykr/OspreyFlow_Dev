@@ -297,7 +297,7 @@ export function SiteCalibrationWizard({
         width: 320,
         background: "var(--surface-raised)",
         border: "1px solid var(--border-subtle)",
-        borderRadius: 4,
+        borderRadius: "var(--r-panel)",
         padding: "var(--sp-16)",
         color: "var(--text-primary)",
         zIndex: 10,
