@@ -232,21 +232,22 @@ def test_the_real_tokens_file_is_found_from_the_repository_root() -> None:
 def test_apply_writes_the_theme_beside_the_compose_file_it_is_mounted_from(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The real `apply`, stopped at its preflight stage (no Docker needed) by a check that fails.
-    Catches a theme that is rendered and tested but never written: compose would then mount a
-    directory that does not exist and the realm would name a theme Keycloak cannot find.
-    The realm is written by the same step, so it is the reference for 'beside the compose file'."""
+    """The real `apply`, stopped just after its preflight (no Docker needed): the checks pass and
+    the first compose command refuses. (A refused preflight now writes nothing, ADR-132 ruling 6, so
+    this stops one stage later.) Catches a theme that is rendered and tested but never written:
+    compose would then mount a directory that does not exist and the realm would name a theme
+    Keycloak cannot find. The realm is written by the same step, so it is the reference for
+    'beside the compose file'."""
     from types import SimpleNamespace
 
     from harness import apply
-    from harness.preflight.result import Status
+    from harness.preflight.result import passed
 
-    failing = SimpleNamespace(
-        check=lambda context: SimpleNamespace(
-            status=Status.FAIL, check="stop here", what_is_wrong="test", what_to_do="none"
-        )
-    )
-    monkeypatch.setattr(apply, "ALL_CHECKS", [failing])
+    def refuse_compose(_args: list[str], *, stage: str, **_kwargs: object) -> str:
+        raise apply.ApplyFailed(stage, "no Docker in this test")
+
+    monkeypatch.setattr(apply, "ALL_CHECKS", [SimpleNamespace(check=lambda _c: passed("ok"))])
+    monkeypatch.setattr(apply, "_run", refuse_compose)
 
     apply.main(["--out-root", str(tmp_path), "--no-build"])
 

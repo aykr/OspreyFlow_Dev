@@ -39,6 +39,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -687,21 +688,27 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         # 1. Render. The secrets a deployment already has are read first and kept (ADR-132, the
-        # owner's ruling 6): its stores still hold them, whatever this run mints.
-        env_path = out_dir / "deployment.env"
-        previous_env = env_path.read_text(encoding="utf-8") if env_path.is_file() else ""
-        rendered = render_deployment(config, out_dir, images_from=args.images_from)
-        write_config_copy(args.config, out_dir)
-        (out_dir / "realm.json").write_text(
+        # owner's ruling 6): its stores still hold them, whatever this run mints. Everything is
+        # rendered into a staging folder beside the deployment's own, at the same depth so a
+        # relative storage path reads the same (ADR-054 Amendment 6), checked there, and moved into
+        # place only once preflight passes: a refused run writes nothing to the deployment.
+        previous_path = out_dir / "deployment.env"
+        previous_env = previous_path.read_text(encoding="utf-8") if previous_path.is_file() else ""
+        stage = out_dir.parent / f".{out_dir.name}.staging"
+        shutil.rmtree(stage, ignore_errors=True)
+        env_path = stage / "deployment.env"
+        rendered = render_deployment(config, stage, images_from=args.images_from)
+        write_config_copy(args.config, stage)
+        (stage / "realm.json").write_text(
             render_realm_json(config, demo_analyst=args.demo_analyst), encoding="utf-8"
         )
         # Round 13cda — the LiteLLM proxy's routing table, written the same way and for the same
         # reason as the realm above: a generated *service config*, mounted by the compose file,
         # rather than one of `05_DEPLOYMENT.md` §2.1's four operator-facing artefacts.
-        (out_dir / "litellm.yaml").write_text(render_litellm_config(config), encoding="utf-8")
+        (stage / "litellm.yaml").write_text(render_litellm_config(config), encoding="utf-8")
         # The sign-in page's look, beside the compose file that mounts it
         # (harness/keycloak_theme.py).
-        write_login_theme(out_dir, **login_theme_options(config))
+        write_login_theme(stage, **login_theme_options(config))
         secret = generate_client_secret()
         admin_password = generate_client_secret()
         # ADR-114 Amendment 5: Keycloak's own login on the deployment's Postgres.
@@ -774,15 +781,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         result.record("render", f"{len(rendered.artefacts) + 1} artefact(s) → {out_dir}")
 
-        # 2. Preflight, before anything is built or started.
-        context = PreflightContext(config=config, out_dir=out_dir)
-        failures = []
-        for module in ALL_CHECKS:
-            check = module.check(context)
-            if check.status is Status.FAIL:
-                failures.append(f"{check.check}: {check.what_is_wrong} — {check.what_to_do}")
-        if failures:
-            raise ApplyFailed("preflight", "\n  ".join(failures))
+        # 2. Preflight, before anything is built or started, and before the deployment's own folder
+        # is touched (ADR-132, ruling 6).
+        try:
+            context = PreflightContext(config=config, out_dir=stage)
+            failures = []
+            for module in ALL_CHECKS:
+                check = module.check(context)
+                if check.status is Status.FAIL:
+                    failures.append(f"{check.check}: {check.what_is_wrong} — {check.what_to_do}")
+            if failures:
+                raise ApplyFailed("preflight", "\n  ".join(failures))
+            shutil.copytree(stage, out_dir, dirs_exist_ok=True)
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
         result.record("preflight", "all checks pass or skip")
 
         compose_file = out_dir / "compose.yaml"
