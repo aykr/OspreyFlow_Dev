@@ -20222,7 +20222,11 @@ written before any colour (the spike brief's rule).
 4. **The primitives:** keep re-theming the twenty through tokens; no GOV.UK Frontend component set.
    GOV.UK form conventions (error summary, hints, legends as headings) are added to the existing
    primitives later.
-5. **The organisation name:** left out until the client department is confirmed.
+5. **The organisation name:** left out until the client department is confirmed. For the
+   Prison Intelligence demo deployment the owner chose a deliberately non-specific placeholder,
+   "UK Public Sector Org" (31 October 2026), so the footer shows "Run by UK Public Sector Org"
+   without naming any real department. It is a value in that deployment's own `osprey.yaml`, not
+   a product default.
 6. **`ospreyflow install` over a running deployment** (found in Amendment 1's install): fix it so a
    render never replaces a secret `deployment.env` already holds and preflight runs before anything
    is written, with a test that re-renders over an existing file and asserts its secrets unchanged.
