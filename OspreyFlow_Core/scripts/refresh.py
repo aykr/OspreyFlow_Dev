@@ -46,6 +46,7 @@ from harness.apply import _compose
 from harness.keycloak_theme import (
     THEME_DIRECTORY,
     THEME_NAME,
+    login_theme_options,
     read_tokens,
     render_login_theme,
     write_login_theme,
@@ -112,15 +113,17 @@ def _theme_changed(directory: Path, repo_root: Path) -> bool:
     tokens = read_tokens(repo_root)
     root = directory / THEME_DIRECTORY / THEME_NAME
     # ADR-115 decision 6: the page's words depend on whether the deployment can mail a reset link.
+    # ADR-132 Amendment 2: and, under the GOV.UK brand, on the deployment's appearance.
     config_path = directory / "osprey.yaml"
-    reset_by_email = config_path.is_file() and load_config(config_path).mail is not None
-    wanted = render_login_theme(tokens, reset_by_email=reset_by_email)
+    config = load_config(config_path) if config_path.is_file() else OspreyConfig()
+    options = login_theme_options(config)
+    wanted = render_login_theme(tokens, **options)
     changed = any(
         not (root / name).is_file() or (root / name).read_text(encoding="utf-8") != content
         for name, content in wanted.items()
     )
     if changed:
-        write_login_theme(directory, tokens_css=tokens, reset_by_email=reset_by_email)
+        write_login_theme(directory, tokens_css=tokens, **options)
     return changed
 
 

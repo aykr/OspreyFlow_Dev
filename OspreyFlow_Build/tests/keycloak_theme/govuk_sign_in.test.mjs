@@ -1,0 +1,81 @@
+// ADR-132 Amendment 2: on the identity provider's sign-in page under the GOV.UK brand, the shared
+// light and dark script holds the page light and draws no theme button, and `govuk_chrome.js` adds
+// the GOV.UK header, service navigation, skip link and footer. Without the brand, the script
+// behaves as before.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+
+const require = createRequire(new URL("../../../OspreyFlow_Core/package.json", import.meta.url));
+const { JSDOM } = require("jsdom");
+const THEME = readFileSync(new URL("../../../OspreyFlow_Core/harness/theme_cookie.js", import.meta.url), "utf8");
+const CHROME = readFileSync(new URL("../../../OspreyFlow_Core/harness/govuk_chrome.js", import.meta.url), "utf8");
+
+/** A page like Keycloak's sign-in page, with the scripts run in the order the theme loads them. */
+function page({ brand, cookie = "ospreyflow_theme=dark", settings } = {}) {
+  const dom = new JSDOM(
+    '<!doctype html><html><head></head><body><main><form id="kc-form-login"><input name="username"></form></main></body></html>',
+    { url: "http://id.govuk.ospreyflow.localhost:8081/realms/osprey/", runScripts: "outside-only" },
+  );
+  dom.window.document.cookie = cookie;
+  if (brand) dom.window.eval(`document.documentElement.setAttribute("data-brand", "${brand}");`);
+  dom.window.eval(THEME);
+  if (settings) {
+    dom.window.eval(`window.OSPREY_GOVUK = ${JSON.stringify(settings)};`);
+    dom.window.eval(CHROME);
+  }
+  return dom.window;
+}
+
+const SETTINGS = {
+  serviceName: "Prison Intelligence",
+  organisation: null,
+  phase: "beta",
+  glassOrigin: "http://govuk.ospreyflow.localhost:8081",
+};
+
+test("under GOV.UK the page is light whatever was chosen, with no theme button", () => {
+  const win = page({ brand: "govuk" });
+  assert.equal(win.document.documentElement.getAttribute("data-theme"), "light");
+  assert.equal(win.document.getElementById("osprey-theme-toggle"), null);
+  win.ospreyTheme.set("dark");
+  assert.equal(win.document.documentElement.getAttribute("data-theme"), "light");
+});
+
+test("without a brand the saved choice and the button are as before", () => {
+  const win = page({});
+  assert.equal(win.document.documentElement.getAttribute("data-theme"), "dark");
+  assert.ok(win.document.getElementById("osprey-theme-toggle"));
+});
+
+test("the GOV.UK header, service name, skip link and footer are added in reading order", () => {
+  const win = page({ brand: "govuk", settings: SETTINGS });
+  // A link's name as a screen reader gets it here: its text, or the label on its logo.
+  const nameOf = (a) => a.textContent.trim() || a.querySelector("[aria-label]")?.getAttribute("aria-label") || "";
+  const links = [...win.document.querySelectorAll("a[href]")].map((a) => [nameOf(a), a.getAttribute("href")]);
+  const names = links.map(([name]) => name);
+  assert.equal(names[0], "Skip to main content");
+  assert.ok(names.findIndex((n) => n.includes("GOV.UK")) > 0);
+  assert.deepEqual(links.find(([n]) => n === "Prison Intelligence"), ["Prison Intelligence", SETTINGS.glassOrigin + "/"]);
+  assert.deepEqual(links.find(([n]) => n === "Accessibility statement"), [
+    "Accessibility statement",
+    SETTINGS.glassOrigin + "/accessibility-statement.html",
+  ]);
+  assert.ok(names.indexOf("Cookies") > names.indexOf("Prison Intelligence"));
+  const phase = win.document.querySelector('[aria-label="Service phase"]');
+  assert.ok(phase && phase.textContent.includes("Beta"));
+});
+
+test("the skip link's target is the page's main content, focusable", () => {
+  const win = page({ brand: "govuk", settings: SETTINGS });
+  const skip = win.document.querySelector("a.govuk-skip-link");
+  const target = win.document.getElementById(skip.getAttribute("href").slice(1));
+  assert.ok(target && target.contains(win.document.getElementById("kc-form-login")));
+  assert.equal(target.getAttribute("tabindex"), "-1");
+});
+
+test("a service name is text, never markup", () => {
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, serviceName: "<img src=x onerror=alert(1)>" } });
+  assert.equal(win.document.querySelector("img[src=x]"), null);
+});

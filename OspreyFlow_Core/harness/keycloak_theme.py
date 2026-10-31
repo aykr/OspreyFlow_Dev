@@ -17,11 +17,15 @@ that looks as though it worked is worse than a stopped render that says why.
 
 from __future__ import annotations
 
+import html
+import json
 from pathlib import Path
+from typing import TypedDict
 
 from harness.realm import LOGIN_THEME_NAME, REALM_DISPLAY_NAME
 from harness.render import REPO_ROOT
 from harness.theme_script import read_theme_script
+from schemas.deployment import AppearanceConfig, OspreyConfig
 
 THEME_NAME = LOGIN_THEME_NAME
 #: What the realm calls itself on the sign-in page and in the tab title.
@@ -35,6 +39,12 @@ THEME_SCRIPT = "login/resources/js/osprey-theme.js"
 #: The handoff's sign-in card behaviour on Keycloak's pages (ADR-115 E2, `sign_in_form.js`).
 SIGN_IN_SCRIPT = "login/resources/js/osprey-sign-in.js"
 SIGN_IN_SCRIPT_SOURCE = Path(__file__).resolve().parent / "sign_in_form.js"
+#: The GOV.UK header and footer around Keycloak's page, under the GOV.UK brand (ADR-132 Am. 2).
+GOVUK_CHROME_SCRIPT = "login/resources/js/govuk-chrome.js"
+GOVUK_CHROME_SOURCE = Path(__file__).resolve().parent / "govuk_chrome.js"
+#: GOV.UK Frontend's stylesheet, served on the sign-in page's own name by the front proxy from the
+#: Glass (`harness.site.render_caddyfile`), so it and its fonts are same-origin.
+GOVUK_STYLESHEET_URL = "/assets/govuk/govuk-frontend.css"
 #: Where, beside the compose file, the theme is written and where compose mounts it from.
 THEME_DIRECTORY = "keycloak-theme"
 
@@ -331,32 +341,110 @@ def read_sign_in_script() -> str:
         ) from error
 
 
-def render_login_theme(tokens_css: str, *, reset_by_email: bool = False) -> dict[str, str]:
+#: Under the GOV.UK brand the OspreyFlow mark and wordmark give way to the GOV.UK header the chrome
+#: script adds; everything else is re-themed by `tokens.css`'s brand block.
+_GOVUK_RULES = """
+[data-brand="govuk"] .osprey-wordmark,
+[data-brand="govuk"] #kc-header-wrapper::before { display: none; }
+"""
+
+
+def read_govuk_chrome_script() -> str:
+    """The GOV.UK header and footer script as it is on disk. Raises rather than ship a GOV.UK page
+    with no header."""
+    try:
+        return GOVUK_CHROME_SOURCE.read_text(encoding="utf-8")
+    except OSError as error:
+        raise FileNotFoundError(
+            f"the GOV.UK header and footer script was not found at {GOVUK_CHROME_SOURCE}; "
+            "nothing was rendered"
+        ) from error
+
+
+class LoginThemeOptions(TypedDict):
+    reset_by_email: bool
+    appearance: AppearanceConfig
+    glass_origin: str
+
+
+def login_theme_options(config: OspreyConfig) -> LoginThemeOptions:
+    """What the theme needs from the deployment besides the tokens (ADR-115 decision 6, ADR-132)."""
+    return {
+        "reset_by_email": config.mail is not None,
+        "appearance": config.appearance,
+        "glass_origin": config.network.public_origin,
+    }
+
+
+def render_login_theme(
+    tokens_css: str,
+    *,
+    reset_by_email: bool = False,
+    appearance: AppearanceConfig | None = None,
+    glass_origin: str | None = None,
+) -> dict[str, str]:
     """The theme's files, keyed by path relative to the theme's own directory. `reset_by_email` is
-    whether the deployment has a mail server (ADR-115 decision 6)."""
+    whether the deployment has a mail server (ADR-115 decision 6). Under `appearance.brand: govuk`
+    the page takes the GOV.UK look (ADR-132 Amendment 2); otherwise the files are as they were."""
+    govuk = appearance is not None and appearance.brand == "govuk"
+    base = _MESSAGES
+    if govuk:
+        assert appearance is not None
+        # Keycloak prints this message unescaped, so the name goes in as escaped text.
+        title = html.escape(appearance.service_name or "GOV.UK", quote=False)
+        base = base.replace(f"loginTitleHtml={_WORDMARK_HTML}\n", f"loginTitleHtml={title}\n")
     messages = (
-        _MESSAGES
-        + f"invalidUserMessage={_REFUSED[reset_by_email]}\n"
-        + f"emailSentMessage={_SENT}\n"
+        base + f"invalidUserMessage={_REFUSED[reset_by_email]}\n" + f"emailSentMessage={_SENT}\n"
     ).replace("'", "''")
     flag = "true" if reset_by_email else "false"
-    return {
+    files = {
         THEME_PROPERTIES: _PROPERTIES,
         THEME_STYLESHEET: tokens_css + _rules(),
         THEME_MESSAGES: messages,
         THEME_SCRIPT: read_theme_script(),
         SIGN_IN_SCRIPT: f"window.OSPREY_RESET_BY_EMAIL = {flag};\n" + read_sign_in_script(),
     }
+    if not govuk:
+        return files
+    assert appearance is not None
+    settings = {
+        "serviceName": appearance.service_name,
+        "organisation": appearance.organisation,
+        "phase": appearance.phase,
+        "glassOrigin": (glass_origin or "").rstrip("/"),
+    }
+    files[THEME_PROPERTIES] = _PROPERTIES.replace(
+        "js/osprey-sign-in.js", "js/osprey-sign-in.js js/govuk-chrome.js"
+    )
+    # An @import is honoured only before every other rule.
+    files[THEME_STYLESHEET] = (
+        f'@import url("{GOVUK_STYLESHEET_URL}");\n' + files[THEME_STYLESHEET] + _GOVUK_RULES
+    )
+    files[THEME_SCRIPT] = (
+        'document.documentElement.setAttribute("data-brand", "govuk");\n' + files[THEME_SCRIPT]
+    )
+    files[GOVUK_CHROME_SCRIPT] = (
+        f"window.OSPREY_GOVUK = {json.dumps(settings)};\n" + read_govuk_chrome_script()
+    )
+    return files
 
 
 def write_login_theme(
-    out_dir: Path, *, tokens_css: str | None = None, reset_by_email: bool = False
+    out_dir: Path,
+    *,
+    tokens_css: str | None = None,
+    reset_by_email: bool = False,
+    appearance: AppearanceConfig | None = None,
+    glass_origin: str | None = None,
 ) -> list[Path]:
     """Writes the theme where compose mounts it: `<out_dir>/keycloak-theme/osprey/`."""
     root = out_dir / THEME_DIRECTORY / THEME_NAME
     written: list[Path] = []
     tokens = read_tokens() if tokens_css is None else tokens_css
-    for name, content in sorted(render_login_theme(tokens, reset_by_email=reset_by_email).items()):
+    rendered = render_login_theme(
+        tokens, reset_by_email=reset_by_email, appearance=appearance, glass_origin=glass_origin
+    )
+    for name, content in sorted(rendered.items()):
         target = root / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")

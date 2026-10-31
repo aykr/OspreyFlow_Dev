@@ -34,7 +34,7 @@ from typing import Any
 import yaml
 
 from harness.images import DigestResolver, ServiceImage
-from harness.keycloak_theme import read_tokens, render_login_theme
+from harness.keycloak_theme import login_theme_options, read_tokens, render_login_theme
 from harness.realm import render_realm_json
 from schemas.deployment import AnalyticsEngine, GraphStore, OspreyConfig
 
@@ -432,7 +432,7 @@ def render_cluster(
     services = compose_services(config, images)
     environment = _environment(config)
     translate = _Translator(environment)
-    theme = render_login_theme(read_tokens(), reset_by_email=config.mail is not None)
+    theme = render_login_theme(read_tokens(), **login_theme_options(config))
     files: dict[str, str] = {
         "Caddyfile": render_caddyfile(config, doors=False),
         "glass.json": render_glass_settings(config),

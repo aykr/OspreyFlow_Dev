@@ -12,6 +12,9 @@
   var NAME = "ospreyflow_theme";
   var BUTTON_ID = "osprey-theme-toggle";
   var root = document.documentElement;
+  /* Under the GOV.UK brand (ADR-132) the page is light only and there is no choice to offer: the
+     GOV.UK Design System has no dark mode. The sign-in theme marks the page before this runs. */
+  var GOVUK = root.getAttribute("data-brand") === "govuk";
 
   function read() {
     try {
@@ -27,6 +30,7 @@
   }
 
   function show(theme) {
+    if (GOVUK) theme = "light";
     root.setAttribute("data-theme", theme);
     var button = document.getElementById(BUTTON_ID);
     if (button) label(button, theme);
@@ -60,6 +64,7 @@
   }
 
   function set(theme) {
+    if (GOVUK) return show("light");
     try {
       var writes = cookieWrites(theme, window.location.hostname);
       for (var i = 0; i < writes.length; i++) document.cookie = writes[i];
@@ -71,6 +76,7 @@
 
   /* A button, drawn from the tokens, at the top right of the page, worded for the theme it switches to. */
   function mountButton(parent) {
+    if (GOVUK) return null;
     var existing = document.getElementById(BUTTON_ID);
     if (existing) return existing;
     var button = document.createElement("button");

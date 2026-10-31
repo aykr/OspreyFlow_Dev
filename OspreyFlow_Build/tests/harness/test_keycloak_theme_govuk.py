@@ -1,0 +1,94 @@
+"""ADR-132 Amendment 2: the identity provider's sign-in page follows the deployment's brand.
+
+Under `appearance.brand: govuk` the login theme imports GOV.UK Frontend's stylesheet from the
+deployment's own origin, marks the page `data-brand="govuk"` (so the brand block in `tokens.css`
+re-themes it), shows the service's name rather than the OspreyFlow wordmark, and adds the GOV.UK
+header and footer. The front proxy serves `/assets/govuk/` on the `id.` name from the Glass, so the
+stylesheet and its fonts are same-origin. Under the OspreyFlow brand nothing changes: the cases
+below hold the theme and the routing table to what they were.
+"""
+
+from __future__ import annotations
+
+import json
+
+from harness.keycloak_theme import (
+    GOVUK_CHROME_SCRIPT,
+    THEME_MESSAGES,
+    THEME_PROPERTIES,
+    THEME_SCRIPT,
+    THEME_STYLESHEET,
+    render_login_theme,
+)
+from harness.site import render_caddyfile
+from tools.layout import REPO as REPO_ROOT
+
+from schemas.deployment import AppearanceConfig, OspreyConfig
+
+TOKENS = (REPO_ROOT / "apps" / "workspace" / "src" / "design" / "tokens.css").read_text(
+    encoding="utf-8"
+)
+GLASS = "http://govuk.ospreyflow.localhost:8081"
+GOVUK = AppearanceConfig(brand="govuk", service_name="Prison Intelligence", phase="beta")
+
+
+def test_the_ospreyflow_brand_renders_the_theme_it_always_did() -> None:
+    plain = render_login_theme(TOKENS)
+    assert render_login_theme(TOKENS, appearance=AppearanceConfig(), glass_origin=GLASS) == plain
+    assert GOVUK_CHROME_SCRIPT not in plain
+    assert "/assets/govuk/" not in plain[THEME_STYLESHEET]
+
+
+def test_under_govuk_the_stylesheet_imports_the_gov_uk_one_first() -> None:
+    css = render_login_theme(TOKENS, appearance=GOVUK, glass_origin=GLASS)[THEME_STYLESHEET]
+    # An @import is honoured only before every other rule.
+    assert css.startswith('@import url("/assets/govuk/govuk-frontend.css");\n')
+    assert TOKENS in css
+
+
+def test_under_govuk_the_page_is_marked_before_the_theme_script_runs() -> None:
+    script = render_login_theme(TOKENS, appearance=GOVUK, glass_origin=GLASS)[THEME_SCRIPT]
+    marked = script.index('setAttribute("data-brand", "govuk")')
+    assert marked < script.index("ospreyflow_theme"), "the brand is set before the theme reads it"
+
+
+def test_under_govuk_the_header_names_the_service_and_the_chrome_script_is_loaded() -> None:
+    theme = render_login_theme(TOKENS, appearance=GOVUK, glass_origin=GLASS)
+    assert GOVUK_CHROME_SCRIPT in theme
+    assert "js/govuk-chrome.js" in theme[THEME_PROPERTIES]
+    settings = theme[GOVUK_CHROME_SCRIPT].split("\n", 1)[0]
+    assert settings.startswith("window.OSPREY_GOVUK = ")
+    assert json.loads(settings.removeprefix("window.OSPREY_GOVUK = ").rstrip(";")) == {
+        "serviceName": "Prison Intelligence",
+        "organisation": None,
+        "phase": "beta",
+        "glassOrigin": GLASS,
+    }
+    messages = theme[THEME_MESSAGES]
+    assert "loginTitleHtml=Prison Intelligence\n" in messages
+    assert "osprey-wordmark" not in messages
+
+
+def test_a_service_name_is_escaped_where_keycloak_prints_it_unescaped() -> None:
+    hostile = AppearanceConfig(brand="govuk", service_name="<b>Prison</b> & Probation")
+    messages = render_login_theme(TOKENS, appearance=hostile, glass_origin=GLASS)[THEME_MESSAGES]
+    assert "loginTitleHtml=&lt;b&gt;Prison&lt;/b&gt; &amp; Probation\n" in messages
+
+
+def _config(appearance: dict[str, object] | None = None) -> OspreyConfig:
+    raw: dict[str, object] = {"network": {"public_origin": GLASS}}
+    if appearance:
+        raw["appearance"] = appearance
+    return OspreyConfig.model_validate(raw)
+
+
+def test_under_govuk_the_sign_in_name_serves_the_gov_uk_assets_from_the_glass() -> None:
+    caddyfile = render_caddyfile(_config({"brand": "govuk"}))
+    site = caddyfile[caddyfile.index("http://id.govuk.ospreyflow.localhost") :]
+    site = site[: site.index("\n}\n")]
+    assert "handle /assets/govuk/* {\n\t\treverse_proxy workspace:8080\n\t}" in site
+    assert "handle {\n\t\treverse_proxy keycloak:8080\n\t}" in site
+
+
+def test_under_the_ospreyflow_brand_the_routing_table_is_unchanged() -> None:
+    assert "/assets/govuk/" not in render_caddyfile(_config())

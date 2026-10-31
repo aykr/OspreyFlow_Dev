@@ -54,7 +54,7 @@ from harness.keycloak_admin import (
     set_demo_admin_password,
     set_demo_analyst_password,
 )
-from harness.keycloak_theme import write_login_theme
+from harness.keycloak_theme import login_theme_options, write_login_theme
 from harness.preflight import ALL_CHECKS, PreflightContext
 from harness.preflight.result import Status
 from harness.realm import (
@@ -667,7 +667,7 @@ def main(argv: list[str] | None = None) -> int:
         (out_dir / "litellm.yaml").write_text(render_litellm_config(config), encoding="utf-8")
         # The sign-in page's look, beside the compose file that mounts it
         # (harness/keycloak_theme.py).
-        write_login_theme(out_dir, reset_by_email=config.mail is not None)
+        write_login_theme(out_dir, **login_theme_options(config))
         secret = generate_client_secret()
         admin_password = generate_client_secret()
         # ADR-114 Amendment 5: Keycloak's own login on the deployment's Postgres.

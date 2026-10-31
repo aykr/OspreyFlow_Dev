@@ -67,6 +67,21 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
         lines += ["\tauto_https off", f"\thttp_port {PROXY_HTTP_PORT}"]
     lines.append("}")
     for name, upstream in routes:
+        if name == f"id.{names.host}" and config.appearance.brand == "govuk":
+            # ADR-132 Amendment 2: the sign-in page's GOV.UK stylesheet and fonts come from the
+            # Glass, on the sign-in page's own name, so they are same-origin there.
+            lines += [
+                "",
+                f"{names.scheme}://{name} {{",
+                "\thandle /assets/govuk/* {",
+                "\t\treverse_proxy workspace:8080",
+                "\t}",
+                "\thandle {",
+                f"\t\treverse_proxy {upstream}",
+                "\t}",
+                "}",
+            ]
+            continue
         lines += ["", f"{names.scheme}://{name} {{", f"\treverse_proxy {upstream}", "}"]
     # ADR-114 Amendment 7: the doors this machine alone uses, through the proxy, so the services
     # behind them need no published port — and so no route out (measured: a published port needs

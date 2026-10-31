@@ -20388,3 +20388,39 @@ with no `--profile`, looked for `local-lite/deployment.env` and stopped the inst
 `scripts.refresh` (`ospreyflow start --build`) preferred `local-lite/` whenever one was there. Both
 now take the deployment's own folder (`register_sign_in.deployment_env_path`, `refresh` through
 `generated_folder`), each with a case in `test_deployment_name.py` shown red first.
+
+### ADR-132, Amendment 2 (31 October 2026) — the sign-in page follows the brand
+
+Status: accepted, the owner's ruling 2 above ("GOV.UK login theme variant").
+
+Context. Under `appearance.brand: govuk` the identity provider's sign-in page (Keycloak at `id.`)
+stayed dark and OspreyFlow-branded, with the brass button, the OspreyFlow mark and a theme button:
+the one dark page in a GOV.UK deployment's sign-in.
+
+Decision.
+
+1. **The same login theme, with a GOV.UK option** (`harness.keycloak_theme.render_login_theme`,
+   `appearance=` and `glass_origin=`; every caller passes `login_theme_options(config)`). Under the
+   OspreyFlow brand its files are byte for byte what they were.
+2. **Under GOV.UK** the theme marks the page `data-brand="govuk"` before the shared light and dark
+   script runs, so `tokens.css`'s brand block re-themes it (colours, GDS Transport, square corners,
+   the yellow focus ring); `theme_cookie.js` holds a GOV.UK page light and draws no theme button; the
+   stylesheet `@import`s GOV.UK Frontend's; the header shows the service name in place of the
+   OspreyFlow wordmark, escaped, since Keycloak prints that message unescaped.
+3. **The GOV.UK header, service navigation, phase banner, skip link and footer** are added around
+   Keycloak's page by `harness/govuk_chrome.js`. Keycloak's own templates are not replaced, so the
+   form, password reset and error pages remain Keycloak's. The markup is the Glass's components
+   rendered to static HTML (`govukChrome.test.tsx` fails if it drifts); the service name,
+   organisation and links go in as text; links to the accessibility statement and cookies pages
+   point at the Glass. Without JavaScript the page keeps the GOV.UK colours and font but has no
+   header or footer.
+4. **Same-origin assets.** Under GOV.UK the front proxy serves `/assets/govuk/*` on the `id.` name
+   from the Glass (`harness.site.render_caddyfile`), so the stylesheet and the GDS Transport fonts
+   load from the sign-in page's own origin: no CORS, no CDN, no copy of the fonts in Keycloak.
+
+Tests that would fail if it were broken: `tests/harness/test_keycloak_theme_govuk.py` (the OspreyFlow
+theme and routing table unchanged; the `@import` first; the brand set before the theme script; the
+service name in the header, escaped; the `id.` route), `tests/keycloak_theme/govuk_sign_in.test.mjs`
+(light only with no button under GOV.UK, unchanged without; header, skip link and footer in reading
+order; the skip link's target focusable; a service name never markup), and
+`src/brand/govuk/govukChrome.test.tsx` (shown red with one class name changed in the script).
