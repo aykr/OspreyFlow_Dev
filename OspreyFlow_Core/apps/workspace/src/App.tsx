@@ -1126,7 +1126,8 @@ export function App() {
     showsInspector(rights) && !["ingest", "dossier", "watches", "reports", "dashboards", "admin"].includes(view);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+    // ADR-132: the window less whatever the brand frame shows above (`brand/BrandFrame.tsx`).
+    <div style={{ display: "flex", flexDirection: "column", height: "var(--workspace-height, 100vh)" }}>
       {/* ADR-097 step 1 (design review item 16): the protective marking of what is on screen. */}
       <ClassificationStrip marking={marking} />
       <TopBar

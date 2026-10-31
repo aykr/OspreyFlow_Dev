@@ -16,7 +16,8 @@ export interface AdminWithoutCaseProps {
 
 export function AdminWithoutCase({ onStart, account, marking, ...admin }: AdminWithoutCaseProps) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+    // ADR-132: the window less whatever the brand frame shows above (`brand/BrandFrame.tsx`).
+    <div style={{ display: "flex", flexDirection: "column", height: "var(--workspace-height, 100vh)" }}>
       <StartBar account={account} onStart={onStart} marking={marking} />
       <AdminPlace {...admin} />
     </div>

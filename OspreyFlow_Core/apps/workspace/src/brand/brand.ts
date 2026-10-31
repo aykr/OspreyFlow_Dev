@@ -62,3 +62,20 @@ export function brandTitle(appearance: Appearance, brand: Brand, current: string
   if (brand !== "govuk") return current;
   return `${appearance.serviceName ?? appearance.organisation ?? "OspreyFlow"} – GOV.UK`;
 }
+
+/** Where `scripts/sync_govuk_assets.mjs` puts GOV.UK Frontend's stylesheet, beside its fonts. */
+export const GOVUK_STYLESHEET = "/assets/govuk/govuk-frontend.css";
+
+/** Under `govuk`, adds GOV.UK Frontend's stylesheet to the page and resolves once it has loaded (or
+ * failed, so a missing file never stops the Glass drawing). Under `ospreyflow` it fetches nothing. */
+export function loadBrandStylesheet(brand: Brand, doc: Document = document): Promise<void> {
+  if (brand !== "govuk") return Promise.resolve();
+  return new Promise((resolve) => {
+    const link = doc.createElement("link");
+    link.rel = "stylesheet";
+    link.href = GOVUK_STYLESHEET;
+    link.onload = () => resolve();
+    link.onerror = () => resolve();
+    doc.head.append(link);
+  });
+}

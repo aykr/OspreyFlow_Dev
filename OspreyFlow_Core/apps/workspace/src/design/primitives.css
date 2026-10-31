@@ -770,3 +770,25 @@
 .case-tree__danger { color: var(--error); }
 .case-tree__problem { margin: var(--sp-4) 0 0; font-size: var(--fs-12); color: var(--error); }
 
+/* The skip link and the phase banner under the OspreyFlow brand (ADR-132). Under GOV.UK the
+   package's own govuk-skip-link and govuk-phase-banner classes draw them. The skip link is out of
+   the page's flow until it has focus, so it moves nothing. */
+.skip-link {
+  position: absolute; left: var(--sp-8); top: var(--sp-8); z-index: 1000;
+  padding: var(--sp-6) var(--sp-12); background: var(--surface-raised); color: var(--text-primary);
+  border-bottom: 0; box-shadow: var(--overlay-shadow);
+  clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; white-space: nowrap;
+}
+.skip-link:focus { clip-path: none; width: auto; height: auto; overflow: visible; }
+.phase-banner {
+  display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-4) var(--sp-16);
+  border-bottom: 1px solid var(--border-subtle); background: var(--surface-panel); color: var(--text-secondary);
+  font-size: var(--fs-12); line-height: var(--lh-12);
+}
+.phase-banner__tag {
+  /* Neutral, not brass: brass is for the primary action, focus and selection only (ADR-097). */
+  padding: 0 var(--sp-6); border: 1px solid var(--border); border-radius: var(--r-control);
+  background: var(--surface-raised); color: var(--text-primary); font-weight: 600;
+}
+/* The skip link's target is focused by script, not by the viewer, and is not a control. */
+.main-content:focus { outline: none; }

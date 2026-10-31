@@ -8,7 +8,16 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SignInScreen } from "../auth/SignInScreen";
 import { TopBar } from "../shell/TopBar";
 import { applyTheme, currentTheme } from "../theme/theme";
-import { applyBrand, brandFromUrl, brandTitle, currentBrand, PLAIN_APPEARANCE, readAppearance } from "./brand";
+import {
+  applyBrand,
+  brandFromUrl,
+  brandTitle,
+  currentBrand,
+  GOVUK_STYLESHEET,
+  loadBrandStylesheet,
+  PLAIN_APPEARANCE,
+  readAppearance,
+} from "./brand";
 
 const themeButton = { name: /Switch to the|theme$/ };
 
@@ -103,5 +112,29 @@ describe("the brand on the page", () => {
   it("is the OspreyFlow brand unless set", () => {
     document.documentElement.removeAttribute("data-brand");
     expect(currentBrand()).toBe("ospreyflow");
+  });
+});
+
+describe("the GOV.UK stylesheet", () => {
+  const govukLinks = () => document.head.querySelectorAll(`link[href="${GOVUK_STYLESHEET}"]`);
+  afterEach(() => govukLinks().forEach((link) => link.remove()));
+
+  it("is never fetched under the OspreyFlow brand", async () => {
+    await loadBrandStylesheet("ospreyflow");
+    expect(govukLinks()).toHaveLength(0);
+  });
+
+  it("is added under the GOV.UK brand, and the page waits for it", async () => {
+    let settled = false;
+    const loading = loadBrandStylesheet("govuk").then(() => {
+      settled = true;
+    });
+    const [link] = govukLinks();
+    expect(link?.getAttribute("rel")).toBe("stylesheet");
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    link!.dispatchEvent(new Event("load"));
+    await loading;
+    expect(settled).toBe(true);
   });
 });
