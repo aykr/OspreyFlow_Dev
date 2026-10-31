@@ -20222,6 +20222,15 @@ written before any colour (the spike brief's rule).
 6. **`ospreyflow install` over a running deployment** (found in Amendment 1's install): fix it so a
    render never replaces a secret `deployment.env` already holds and preflight runs before anything
    is written, with a test that re-renders over an existing file and asserts its secrets unchanged.
+   **Done 31 October 2026:** `harness.apply` reads `deployment.env` before it renders and puts back
+   every secret it already held (`keep_existing_secrets`: each key ending in `PASSWORD`, `SECRET`,
+   `SECRET_KEY` or `ACCESS_KEY`), carrying over those `register_sign_in` added after the render;
+   `tests/harness/test_apply_keeps_secrets.py` runs the real `apply` twice, stopped at preflight both
+   times, and was shown red first (every secret replaced). **Preflight before any write is not done:**
+   the checks read the rendered `compose.yaml` from the deployment's own folder (ports, disk, the
+   basemap), so running them first needs a render to a staging folder at the same depth. With the
+   secrets kept, what an early render still rewrites is what this checkout renders anyway; it is left
+   for the owner to ask for.
 7. **The red `make ci`** (newly published findings in the api, workspace, harness and superset images
    and `pyasn1` 0.6.4 in `uv.lock`): update the images and `pyasn1` in a change of their own.
 
