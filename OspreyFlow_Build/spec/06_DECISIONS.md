@@ -20202,10 +20202,28 @@ asserts that the stored locator is `row 0`. Each was shown red before the change
 Consequences. An API reader that shows `row_index` or `row` to a person must add one.
 `01_DOMAIN_MODEL.md` §2.1 says so beside `SourceRef.locator`.
 
-## ADR-132 — A deployment brand (`appearance.brand`): the GOV.UK look as a switch, not a fork — PROPOSED (spike)
+## ADR-132 — A deployment brand (`appearance.brand`): the GOV.UK look as a switch, not a fork — ACCEPTED (design)
 
-Status: proposed 31 October 2026 on the `govuk-theme-spike` branch, for the owner's decision after
-the spike's hand-back. The decision text was written before any colour (the spike brief's rule).
+Status: accepted 31 October 2026, the owner's rulings on the spike's hand-back (below). The branch
+`govuk-theme-spike` merges once the sign-in page follows the brand (ruling 2). The decision text was
+written before any colour (the spike brief's rule).
+
+**Owner's rulings on the hand-back, 31 October 2026:**
+
+1. Accept this decision; merge the spike after the sign-in fix in ruling 2.
+2. **The sign-in page:** a GOV.UK variant of the Keycloak login theme (light, the GOV.UK header and
+   footer, GDS Transport, the service name, no theme button), chosen by `appearance.brand`.
+3. **Type size under GOV.UK:** GOV.UK's 19px body on the welcome, start and Admin pages; the
+   workspace keeps its 13px base (`DESIGN.md` §9 exception 1).
+4. **The primitives:** keep re-theming the twenty through tokens; no GOV.UK Frontend component set.
+   GOV.UK form conventions (error summary, hints, legends as headings) are added to the existing
+   primitives later.
+5. **The organisation name:** left out until the client department is confirmed.
+6. **`ospreyflow install` over a running deployment** (found in Amendment 1's install): fix it so a
+   render never replaces a secret `deployment.env` already holds and preflight runs before anything
+   is written, with a test that re-renders over an existing file and asserts its secrets unchanged.
+7. **The red `make ci`** (newly published findings in the api, workspace, harness and superset images
+   and `pyasn1` 0.6.4 in `uv.lock`): update the images and `pyasn1` in a change of their own.
 
 Context. A prospective UK Government client will run OspreyFlow, as an open-source tool for
 security-cleared analysts across several departments, on a `*.service.gov.uk` domain. The Service
