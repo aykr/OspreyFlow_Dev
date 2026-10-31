@@ -147,12 +147,17 @@ export function SignInScreen({ reason, intent, onSignIn, marking = null, welcome
     <div className="welcome">
       {marking && <ClassificationStrip marking={marking} />}
       <header className="welcome-header">
-        <span className="welcome-header__brand">
-          <MeshMark size={28} />
-          <span className="welcome-header__wordmark">
-            <b>Osprey</b>Flow
+        {/* ADR-132: under GOV.UK the GOV.UK header above names the service; no OspreyFlow mark. */}
+        {currentBrand() === "govuk" ? (
+          <span className="welcome-header__brand" />
+        ) : (
+          <span className="welcome-header__brand">
+            <MeshMark size={28} />
+            <span className="welcome-header__wordmark">
+              <b>Osprey</b>Flow
+            </span>
           </span>
-        </span>
+        )}
         <nav aria-label="Page" className="welcome-header__nav">
           {welcome.about && <a href="#about">About</a>}
           <ThemeButton />

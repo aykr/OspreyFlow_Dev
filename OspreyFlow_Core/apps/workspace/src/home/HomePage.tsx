@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { ROLES } from "../admin/AdminPlace";
+import { currentBrand } from "../brand/brand";
 import { MeshMark } from "../shell/BrandMark";
 import { ClassificationStrip } from "../shell/ClassificationStrip";
 import { homePanels } from "../rights/visibility";
@@ -153,8 +154,13 @@ export function HomePage({ rights, person, summary, onChoose, onOpenCase, accoun
     <div className="home">
       {marking && <ClassificationStrip marking={marking} />}
       <header className="home-header">
-        <MeshMark size={24} />
-        <span className="home-header__wordmark"><b>Osprey</b>Flow</span>
+        {/* ADR-132: under GOV.UK the GOV.UK header above names the service; no OspreyFlow mark. */}
+        {currentBrand() !== "govuk" && (
+          <>
+            <MeshMark size={24} />
+            <span className="home-header__wordmark"><b>Osprey</b>Flow</span>
+          </>
+        )}
         <span className="home-header__spacer" />
         {account}
       </header>

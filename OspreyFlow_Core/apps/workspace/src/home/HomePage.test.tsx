@@ -5,6 +5,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { applyBrand } from "../brand/brand";
 import type { HomeSummary } from "./homeData";
 import { HomePage } from "./HomePage";
 
@@ -125,5 +126,20 @@ describe("Home", () => {
   it("says it is reading while the figures are on their way", () => {
     home(["investigate"], { summary: null });
     expect(panel("Glass").getByText("Reading…")).toBeTruthy();
+  });
+});
+
+// ADR-132: under GOV.UK the GOV.UK header above names the service, so Home draws no OspreyFlow mark.
+describe("Home under the GOV.UK brand", () => {
+  afterEach(() => applyBrand("ospreyflow"));
+
+  it("draws no OspreyFlow wordmark; under the OspreyFlow brand it does", () => {
+    home(["investigate"]);
+    expect(document.querySelector(".home-header__wordmark")).not.toBeNull();
+    cleanup();
+    applyBrand("govuk");
+    home(["investigate"]);
+    expect(document.querySelector(".home-header__wordmark")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
   });
 });

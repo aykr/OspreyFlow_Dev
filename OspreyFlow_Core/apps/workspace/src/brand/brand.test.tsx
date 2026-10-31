@@ -56,6 +56,12 @@ describe("under the GOV.UK brand", () => {
     expect(screen.queryByRole("button", themeButton)).toBeNull();
   });
 
+  it("the sign-in page draws no OspreyFlow wordmark, since the GOV.UK header names the service", () => {
+    applyBrand("govuk");
+    render(<SignInScreen onSignIn={() => undefined} />);
+    expect(document.querySelector(".welcome-header__wordmark")).toBeNull();
+  });
+
   it("the page title is the GOV.UK form", () => {
     const appearance = { ...PLAIN_APPEARANCE, brand: "govuk" as const, serviceName: "Prison Intelligence" };
     expect(brandTitle(appearance, "govuk", "OspreyFlow — The Glass")).toBe("Prison Intelligence – GOV.UK");

@@ -50,6 +50,7 @@ def clear_theme_cache(compose: Sequence[str]) -> list[str]:
     """The command that empties Keycloak's gzip cache of theme files, run before it restarts."""
     return [*compose, "exec", "-T", "keycloak", "rm", "-rf", "--", KEYCLOAK_GZIP_CACHE]
 
+
 #: The GOV.UK header and footer around Keycloak's page, under the GOV.UK brand (ADR-132 Am. 2).
 GOVUK_CHROME_SCRIPT = "login/resources/js/govuk-chrome.js"
 GOVUK_CHROME_SOURCE = Path(__file__).resolve().parent / "govuk_chrome.js"
@@ -357,6 +358,7 @@ def read_sign_in_script() -> str:
 _GOVUK_RULES = """
 [data-brand="govuk"] .osprey-wordmark,
 [data-brand="govuk"] #kc-header-wrapper::before { display: none; }
+[data-brand="govuk"] #kc-header { display: none; }
 """
 
 
@@ -404,9 +406,17 @@ def render_login_theme(
         # Keycloak prints this message unescaped, so the name goes in as escaped text.
         title = html.escape(appearance.service_name or "GOV.UK", quote=False)
         base = base.replace(f"loginTitleHtml={_WORDMARK_HTML}\n", f"loginTitleHtml={title}\n")
+        base = base.replace("For OspreyFlow accounts only.", "For this service's accounts only.")
     messages = (
         base + f"invalidUserMessage={_REFUSED[reset_by_email]}\n" + f"emailSentMessage={_SENT}\n"
-    ).replace("'", "''")
+    )
+    if govuk:
+        # The page is the service's, not OspreyFlow's: the words name no product
+        # (`sign_in_form.js` says the same, and matches the reset message's first words).
+        messages = messages.replace("an OspreyFlow account", "an account").replace(
+            "your OspreyFlow administrator", "your administrator"
+        )
+    messages = messages.replace("'", "''")
     flag = "true" if reset_by_email else "false"
     files = {
         THEME_PROPERTIES: _PROPERTIES,

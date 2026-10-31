@@ -20465,3 +20465,12 @@ order; the skip link's target focusable; a service name never markup), and
    `keycloak_theme.clear_theme_cache` before restarting Keycloak; `test_refresh.py`'s
    `test_a_changed_theme_is_written_and_the_identity_provider_restarted_then_waited_on`, shown red
    first. Checked live: cleared and restarted, the GOV.UK sign-in page drew its header, light.
+7. **No OspreyFlow name or mark on a GOV.UK service's pages** (31 October 2026). Under GOV.UK the
+   sign-in page hides Keycloak's own title (the service navigation already names the service) and its
+   words name no product ("your administrator", "an account"), in the messages and in
+   `sign_in_form.js` alike; the welcome and start pages draw no OspreyFlow mark or wordmark. The
+   workspace's own top bar keeps its mark, as the spike brief has it ("the existing OspreyFlow
+   `TopBar` becomes the service navigation row"). Tests: `test_keycloak_theme_govuk.py`'s
+   `test_under_govuk_the_words_name_no_product_and_the_title_is_not_repeated` and
+   `govuk_sign_in.test.mjs`'s card case, each shown red first; `brand.test.tsx` and
+   `HomePage.test.tsx` for the two pages.

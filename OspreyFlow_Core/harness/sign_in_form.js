@@ -13,19 +13,23 @@
 (function () {
   "use strict";
 
+  /* Under the GOV.UK brand the page is the service's, not OspreyFlow's (ADR-132 Amendment 2): the
+     theme marks it before this runs, and the words name no product. */
+  var PRODUCT = document.documentElement.getAttribute("data-brand") === "govuk" ? "" : "OspreyFlow ";
+
   var SAY = {
     emptyIdentifier: "Enter your email address or username.",
     badAddress: "Enter an email address in the format name@organisation.gov.uk, or use your username.",
     badUsername: "Usernames use letters, numbers, dots, hyphens and underscores, with no spaces.",
     emptyPassword: "Enter your password.",
     noReset:
-      "Forgot your password? Ask your OspreyFlow administrator to reset your sign-in. They'll give you a one-time code.",
-    foot: "No account yet? Your OspreyFlow administrator invites people and assigns roles.",
+      "Forgot your password? Ask your " + PRODUCT + "administrator to reset your sign-in. They'll give you a one-time code.",
+    foot: "No account yet? Your " + PRODUCT + "administrator invites people and assigns roles.",
     sendReset: "Send reset link",
     checkEmail: "Check your email",
     signIn: "Sign in",
     back: "Back to sign in",
-    sentStarts: "If an OspreyFlow account matches",
+    sentStarts: "If an " + PRODUCT + "account matches",
   };
 
   function identifierProblem(value) {
