@@ -20255,8 +20255,11 @@ Decision.
    hand-back rather than changed. The type scale is unchanged (13px base; GOV.UK's body is 19px).
 7. **Assets are served from the deployment's own origin.** (Step 2.) `govuk-frontend` 6.6.0 is a
    dependency; `apps/workspace/scripts/sync_govuk_assets.mjs` copies its fonts and images to
-   `/assets/govuk/` and writes its precompiled stylesheet, URLs rewritten, to
-   `apps/workspace/vendor/govuk/`. No Sass. The stylesheet loads only under `govuk`.
+   `/assets/govuk/` and writes its precompiled stylesheet there too, URLs rewritten. No Sass. The
+   stylesheet is served as a file of its own, not bundled: Vite's CSS minifier (LightningCSS)
+   refuses a construct in it, and turning on its error recovery would drop rules silently. Under
+   `govuk` only, `loadBrandStylesheet` adds a `<link>` to it and the Glass waits for it before
+   drawing; an OspreyFlow-brand page never fetches it (`brand.test.tsx`).
 8. **The skip link and the phase banner are brand-independent**: every deployment gets the skip
    link, and a phase banner when `appearance.phase` is `alpha` or `beta`.
 
