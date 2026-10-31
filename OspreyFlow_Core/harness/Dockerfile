@@ -105,6 +105,10 @@ COPY apps/workspace/src/design ./apps/workspace/src/design
 # `../../workspace/src/theme/theme`): without it this image stopped building the day that import
 # landed — found 9 October 2026, building the welcome service (ADR-107).
 COPY apps/workspace/src/theme ./apps/workspace/src/theme
+# The deployment's brand, which the theme module now reads (ADR-132): the second time a new import
+# broke this stage (31 October 2026). `tests/harness/test_harness_frontend_copies.py` now follows the
+# harness frontend's imports and fails on any workspace file no COPY here covers.
+COPY apps/workspace/src/brand/brand.ts ./apps/workspace/src/brand/brand.ts
 RUN npm run build --workspace apps/harness
 
 FROM python:3.12-slim

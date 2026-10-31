@@ -20223,7 +20223,16 @@ written before any colour (the spike brief's rule).
    render never replaces a secret `deployment.env` already holds and preflight runs before anything
    is written, with a test that re-renders over an existing file and asserts its secrets unchanged.
 7. **The red `make ci`** (newly published findings in the api, workspace, harness and superset images
-   and `pyasn1` 0.6.4 in `uv.lock`): update the images and `pyasn1` in a change of their own.
+   and `pyasn1` 0.6.4 in `uv.lock`): update the images and `pyasn1` in a change of their own. **Done 31 October
+   2026** on its own branch: `pyasn1` 0.6.5 and `pypdf` 6.21.4 in `uv.lock`, and Superset's `pyasn1`
+   pin raised to 0.6.5. The api, workspace and harness findings were operating-system packages their
+   Dockerfiles already upgrade at build; a build with `--pull --no-cache` scans clean. A local
+   `make trivy-image-*` can still report them, because its own `docker build` reuses older cached
+   layers; CI's runners build fresh. Found on the way: the harness image no longer built, because the
+   theme module its frontend imports now imports `src/brand/brand.ts`, which `harness/Dockerfile` did
+   not copy (the second time an import broke that stage); fixed, and
+   `tests/harness/test_harness_frontend_copies.py` now follows the imports and fails on any
+   workspace file no `COPY` covers, shown red first.
 
 Context. A prospective UK Government client will run OspreyFlow, as an open-source tool for
 security-cleared analysts across several departments, on a `*.service.gov.uk` domain. The Service
