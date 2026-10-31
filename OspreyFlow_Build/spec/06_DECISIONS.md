@@ -20205,9 +20205,7 @@ Consequences. An API reader that shows `row_index` or `row` to a person must add
 ## ADR-132 — A deployment brand (`appearance.brand`): the GOV.UK look as a switch, not a fork — PROPOSED (spike)
 
 Status: proposed 31 October 2026 on the `govuk-theme-spike` branch, for the owner's decision after
-the spike's hand-back. Decision text written before any colour (the spike brief's rule); the
-licence register entry, the amendments to `02_GLASS_FRONTEND.md` §4 and §6 and the Consequences
-are completed with the spike.
+the spike's hand-back. The decision text was written before any colour (the spike brief's rule).
 
 Context. A prospective UK Government client will run OspreyFlow, as an open-source tool for
 security-cleared analysts across several departments, on a `*.service.gov.uk` domain. The Service
@@ -20263,8 +20261,59 @@ Decision.
 8. **The skip link and the phase banner are brand-independent**: every deployment gets the skip
    link, and a phase banner when `appearance.phase` is `alpha` or `beta`.
 
+9. **The page frame** (`brand/BrandFrame.tsx`). Under `govuk`, top to bottom: the skip link, the
+   GOV.UK header (the Tudor crown and logotype, linking to GOV.UK), the service navigation naming
+   `appearance.service_name` (GOV.UK Frontend v6 puts the service name there, not in the header),
+   the phase banner, the classification strip, the existing top bar, the workspace, and the GOV.UK
+   footer (the Open Government Licence statement, Crown copyright, links to the accessibility
+   statement and cookies pages, and "Run by <organisation>"). The workspace is sized to the window
+   less what stands above it, so its status bar stays in view; the footer is below it. Panels,
+   drawers, buttons, inputs, tables and menus remain OspreyFlow's twenty primitives, re-themed by the
+   tokens; they are not replaced by GOV.UK Frontend components.
+
+**Licence register** (`00_ARCHITECTURE.md` §7): `govuk-frontend` 6.6.0, MIT; the GDS Transport font
+files inside it are restricted by the GOV.UK Design System to GOV.UK domains, which
+`appearance.brand: govuk` is defined to mean.
+
+**Spec amendments made with this decision:** `02_GLASS_FRONTEND.md` §2.0 (the GOV.UK header and
+footer around the bar; no theme button under GOV.UK), §4 (a brand block in `tokens.css`, never a
+data token) and §6 (focus is the brand's focus ring; the skip link); `00_ARCHITECTURE.md` §7 (the
+licence entry); `DESIGN.md` §11 (deployment brands). `DESIGN.md` §8's focus sentence is left as it
+is: it states the OspreyFlow identity's ring, which is unchanged, and §11 states GOV.UK's.
+
 Tests that would fail if it were broken: `src/brand/brand.test.tsx` (light only, no theme button
-under `govuk`, unchanged under `ospreyflow`; shown red with the rule removed),
-`oidcConfig.test.ts`'s appearance cases, `test_front_proxy.py`'s
-`test_the_glass_learns_the_deployments_appearance`, `syncGovukAssets.test.ts`, and
-`designContract.test.ts`'s brand cases.
+under `govuk`, unchanged under `ospreyflow`, and the GOV.UK stylesheet never fetched under
+`ospreyflow`; shown red with the rule removed), `BrandFrame.test.tsx` (the frame's order under each
+brand), the four `src/brand/govuk/*.test.tsx`, `oidcConfig.test.ts`'s appearance cases,
+`test_front_proxy.py`'s `test_the_glass_learns_the_deployments_appearance`,
+`syncGovukAssets.test.ts`, `designContract.test.ts`'s brand cases (shown red with `--ch-ochre`
+planted in the real block), `keyboard/shell.spec.ts`'s skip-link cases under both brands
+(`SHELL_ACTIONS`' `skip-to-main-content-by-keyboard`; shown red with the skip link's focus call
+removed), `a11y/a11y.spec.ts`'s three `govuk brand` scans, and `keyboard/hit-targets.spec.ts` under
+both brands.
+
+Consequences.
+
+- **What still looks wrong under the GOV.UK brand.** The 13px type scale (GOV.UK's body is 19px);
+  five radii set inline in `.tsx` files rather than by token (`MapView`, `IconsMenu`,
+  `SiteCalibrationWizard`, and the 999px chips in `JudgementsPanel` and `ReviewFlagChip`); status
+  chips keep `--r-chip` (999px) where GOV.UK tags are square. Each is the spike's finding, not a
+  change it made.
+- **Left for the owner, and not done by this decision:**
+  1. replacing any of the twenty primitives with GOV.UK Frontend components (the spike's question
+     was whether the primitives absorb the brand through tokens);
+  2. the accessibility statement's content (`public/accessibility-statement.html` is a placeholder)
+     and the cookies page's;
+  3. server-rendered pages that work without JavaScript;
+  4. GOV.UK form conventions in the primitives: the error summary, hint and error wiring, legends as
+     headings;
+  5. **the Admin console's Appearance tab**, which writes the `appearance` section through a Conduit
+     endpoint without a redeploy: a `manage_appearance` right; audit and versioning of every
+     change; a live preview; and guard rails enforced on the server: the GOV.UK preset only when
+     `network.public_origin` ends in `.gov.uk`, a custom accent refused under 4.5:1 contrast, a logo
+     refused without alt text, and the nine data channels never editable. Today `appearance` is set
+     in `osprey.yaml` and nothing refuses `govuk` on another domain; the guard rail belongs with the
+     tab.
+- **Sign-in and the dashboards.** The identity provider's pages (`id.`, the Keycloak login theme)
+  and Superset (`bi.`) are separate products and do not yet read `appearance`; see the spike's
+  hand-back for what each shows under the GOV.UK brand.

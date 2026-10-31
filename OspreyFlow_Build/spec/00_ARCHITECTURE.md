@@ -1008,6 +1008,14 @@ otherwise reach for by reflex. Two of them appear in the input documents.
 Fonts: Atkinson Hyperlegible Next and IBM Plex Mono are both SIL OFL 1.1. Self-host them; do not
 load from a CDN — an air-gapped deployment must render correctly.
 
+**ADR-132 addition (31 October 2026) — the GOV.UK brand.** `govuk-frontend` 6.6.0 (MIT, on the
+allowlist; its documentation is Crown copyright under the Open Government Licence 3.0). The GDS
+Transport font files inside it are not under the MIT licence in practice: the GOV.UK Design System
+restricts GDS Transport to services on GOV.UK domains, and the package's README says only that its
+code is MIT "unless stated otherwise". `appearance.brand: govuk` is defined to mean a service on a
+gov.uk domain (ADR-132), which is the only use the font is put to. The files are self-hosted from the
+deployment's own origin (`/assets/govuk/`), never a CDN, and fetched only by a GOV.UK-brand page.
+
 `make licence-check` runs `pip-licenses` and `license-checker` against the allowlist and fails
 on any addition. Run it in CI on every pull request, not nightly. A sidecar's own environment is out
 of its sight, so the `ner` image gates its licences itself at build (`services/ner/licence_gate.py`,

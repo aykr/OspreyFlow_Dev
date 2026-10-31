@@ -63,7 +63,7 @@ export function brandTitle(appearance: Appearance, brand: Brand, current: string
   return `${appearance.serviceName ?? appearance.organisation ?? "OspreyFlow"} – GOV.UK`;
 }
 
-/** Where `scripts/sync_govuk_assets.mjs` puts GOV.UK Frontend's stylesheet, beside its fonts. */
+/** Where `apps/workspace/scripts/sync_govuk_assets.mjs` puts GOV.UK Frontend's stylesheet, beside its fonts. */
 export const GOVUK_STYLESHEET = "/assets/govuk/govuk-frontend.css";
 
 /** Under `govuk`, adds GOV.UK Frontend's stylesheet to the page and resolves once it has loaded (or

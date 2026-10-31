@@ -321,6 +321,10 @@ their new box at once. Reachable by keyboard (`keyboard/panel-frames.spec.ts`).
 
 ### 2.0 The top bar (ADR-065; rebuilt by ADR-097 step 1)
 
+Under the GOV.UK brand (ADR-132) the GOV.UK header, the service navigation naming the service and
+the phase banner stand above the classification strip, and the GOV.UK footer below the workspace;
+the top bar below is the same bar, with the same controls and names, re-themed by the tokens.
+
 One row, 40px. From the left:
 
 - **The mark**: the solid-cut osprey in brass and the word *Osprey* (`spec/design/`). It is not a
@@ -349,7 +353,8 @@ One row, 40px. From the left:
   of the account only where there is no account menu (the local development bypass). Either is
   **the theme button** (a worded button that names the theme a press
   switches to: `Light` while the page is dark, `Dark` once it is light; ADR-073): switches between the
-  dark default and the light theme, per browser, never sent to the server (ADR-070). The choice is
+  dark default and the light theme, per browser, never sent to the server (ADR-070). Under the
+  GOV.UK brand the page is light only and there is no theme button (ADR-132). The choice is
   also kept in a cookie shared by every page of the deployment (the launcher, the sign-in page and the
   setup harness follow it and carry the same button; ADR-072).
 - **The account**, at the right-hand end (item 5 above).
@@ -1209,7 +1214,10 @@ the owner to accept, amend or reject as real spec.
 ## 4. Design system binding
 
 `design/tokens.css` is authoritative and is extracted verbatim from the brand foundations. Do not
-introduce a colour that is not a token. Three rules carry most of the weight:
+introduce a colour that is not a token. A deployment brand (ADR-132, `appearance.brand`) is one more
+block in the same file, `[data-brand="<name>"]`, declared in `DESIGN.md` §11: it re-themes the
+chrome and never redefines a data token (`--ch-*`, `--chart-*`, `--seq-*`, `--div-*`), so everything
+below holds under every brand. Three rules carry most of the weight:
 
 **Colour is data.** The chrome is a twelve-step neutral ramp at chroma 0.005. One accent, brass,
 carries primary actions, focus and selection, and its hue band is struck out of the data palette.
@@ -1402,7 +1410,11 @@ Not negotiable and cheaper to build in than to retrofit.
   cannot" case, over a deliberately disconnected fixture node.
 - The canvas exposes an accessible alternative view — the Matrix view is not a novelty, it is
   the screen-reader-navigable rendering of the same data.
-- Focus is a 2px brass outline at 2px offset, everywhere, never suppressed.
+- Focus is the brand's focus ring, everywhere, never suppressed (ADR-132): under the OspreyFlow
+  brand a 2px brass outline at 2px offset; under the GOV.UK brand a 3px `#ffdd00` outline with a 2px
+  `#0b0c0c` inner shadow. Both read the `--focus`, `--focus-width` and `--focus-offset` tokens.
+- A skip link, "Skip to main content", is the first Tab stop on every page under every brand and
+  moves focus to the main content (`keyboard/shell.spec.ts`).
 - All nine channels paired with shape; colour never sole carrier.
 - `prefers-reduced-motion` honoured as described in §3.4.
 - Every control is at least 24 by 24 pixels to press (WCAG 2.2 target size, ADR-097 step 3); a control
