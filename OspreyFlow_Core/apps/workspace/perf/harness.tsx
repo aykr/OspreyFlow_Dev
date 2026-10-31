@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
+import { applyHarnessBrand } from "../keyboard/brandHarness";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { createWorkingSet } from "../src/workingset/store";
@@ -51,6 +52,8 @@ workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges })
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
+// ADR-132: `?brand=govuk` measures the same canvas under the GOV.UK brand.
+await applyHarnessBrand();
 createRoot(container).render(
   <GlassCanvas
     ref={(handle) => {

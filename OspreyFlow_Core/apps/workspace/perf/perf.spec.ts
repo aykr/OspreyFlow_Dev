@@ -11,6 +11,10 @@ import { expect, test } from "@playwright/test";
 
 import { FIXTURE_EDGE_COUNT, FIXTURE_NODE_COUNT } from "./fixture";
 
+// ADR-132: `OSPREY_PERF_BRAND=govuk npm run test:perf` measures the GOV.UK brand; unset, the OspreyFlow
+// brand, as before.
+const HARNESS = `/perf/harness.html${process.env.OSPREY_PERF_BRAND ? `?brand=${process.env.OSPREY_PERF_BRAND}` : ""}`;
+
 test("50k/250k fixture reaches a first interactive frame within the CI software-render budget", async ({
   page,
 }) => {
@@ -35,7 +39,7 @@ test("50k/250k fixture reaches a first interactive frame within the CI software-
   await cdp.send("Profiler.start");
 
   const start = Date.now();
-  await page.goto("/perf/harness.html");
+  await page.goto(HARNESS);
   await page.waitForFunction(() => window.__PERF__?.readyAt != null, undefined, {
     timeout: 60_000,
   });
@@ -81,7 +85,7 @@ test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", asy
     const cdp = await page.context().newCDPSession(page);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
   }
-  await page.goto("/perf/harness.html");
+  await page.goto(HARNESS);
   await page.waitForFunction(() => window.__PERF__?.readyAt != null, undefined, {
     timeout: 60_000,
   });

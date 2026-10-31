@@ -9,7 +9,7 @@ export default defineConfig({
   testDir: ".",
   timeout: 120_000,
   webServer: {
-    command: "npx vite --port 5183 --strictPort",
+    command: "node scripts/sync_govuk_assets.mjs && npx vite --port 5183 --strictPort",
     port: 5183,
     reuseExistingServer: !process.env.CI,
     cwd: "..",

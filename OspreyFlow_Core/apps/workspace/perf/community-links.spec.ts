@@ -5,6 +5,10 @@
 // exists: a link selected while zoomed out is drawn.
 import { expect, test, type Page } from "@playwright/test";
 
+// ADR-132: `OSPREY_PERF_BRAND=govuk npm run test:perf` measures the GOV.UK brand; unset, the OspreyFlow
+// brand, as before.
+const HARNESS = `/perf/harness.html${process.env.OSPREY_PERF_BRAND ? `?brand=${process.env.OSPREY_PERF_BRAND}` : ""}`;
+
 /** How many pixels the community-link layer has drawn now. */
 async function communityInk(page: Page): Promise<number> {
   return page.evaluate(() => {
@@ -21,7 +25,7 @@ test("a large working set opens grouped by community, its links between communit
   page,
 }) => {
   test.setTimeout(180_000);
-  await page.goto("/perf/harness.html");
+  await page.goto(HARNESS);
   await page.waitForFunction(() => window.__PERF__?.readyAt != null, undefined, { timeout: 90_000 });
 
   // Grouped by community once the worker has answered, and the links between communities drawn.
