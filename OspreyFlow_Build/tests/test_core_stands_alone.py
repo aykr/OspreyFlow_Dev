@@ -85,6 +85,11 @@ def test_the_root_makefile_sends_each_target_where_it_lives() -> None:
         return subprocess.run(["make", "-n", target], cwd=ROOT, capture_output=True, text=True).stdout
 
     assert "tools.route_coverage_check" in dry("route-coverage-check")
+    # `ci` itself: the one target whose prerequisites run `$(MAKE)` (`core-check`), which even
+    # `make -q` executes. The forwarder used `make -q` to ask Build whether it had a target, read the
+    # sub-make's answer as "no", and sent `ci` to Core: "No rule to make target `ci`" from the
+    # repository root, the command the build brief names (found 30 October 2026).
+    assert "tools.licence_check" in dry("ci")
     # A Core target (the seed targets went to `ospreyflow demo add`, ADR-114 Amendment 22).
     assert "docker compose -f deploy/compose/dev.yaml up" in dry("dev-up")
 
