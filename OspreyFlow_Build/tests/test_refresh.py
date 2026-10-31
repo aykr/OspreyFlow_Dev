@@ -201,6 +201,8 @@ def _rendered(repo: Path, extraction: str = "qwen2.5:7b-instruct") -> Path:
     )
     (out / "deployment.env").write_text(env + "\n" + SECRETS, encoding="utf-8")
     (out / "litellm.yaml").write_text("model_list: []\n", encoding="utf-8")
+    # Every rendered deployment has its routing table; it is not what these cases are about.
+    (out / "Caddyfile").write_text(artefacts["Caddyfile"], encoding="utf-8")
     (out / "osprey.yaml").write_text(
         yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False), encoding="utf-8"
     )
@@ -276,6 +278,30 @@ def test_the_glass_settings_are_brought_up_to_date(repo: Path) -> None:
     assert written == render_glass_settings(OspreyConfig.model_validate(raw))
     assert json.loads(written)["marking"] == "OFFICIAL"
     assert _subcommands(run.calls) == ["build", "up"]
+
+
+def test_the_proxys_routing_table_is_brought_up_to_date_and_the_proxy_restarted(repo: Path) -> None:
+    """ADR-132 Amendment 2: a deployment switched to the GOV.UK brand needs `/assets/govuk/` routed on
+    its `id.` name, and refresh, which never rendered the Caddyfile, left the old table, so the
+    sign-in page would have loaded with no GOV.UK stylesheet. The proxy reads its table at start."""
+    import yaml
+    from harness.render import render
+
+    from schemas.deployment import OspreyConfig
+
+    out = _rendered(repo)
+    refresh.refresh(repo, run=Recorder(), register=Registrar())  # the models settled first
+    config_path = out / "osprey.yaml"
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["appearance"] = {"brand": "govuk", "service_name": "Prison Intelligence"}
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    run = Recorder()
+    refresh.refresh(repo, run=run, register=Registrar())
+    wanted = render(OspreyConfig.model_validate(raw), resolver=lambda _i: None, allow_unpinned=True)
+    written = (out / "Caddyfile").read_text(encoding="utf-8")
+    assert written == wanted.artefacts["Caddyfile"]
+    assert "handle /assets/govuk/*" in written
+    assert ["restart", "proxy"] in [call[-2:] for call in run.calls]
 
 
 # --- services a later render adds reach an existing deployment (ADR-098 decision 2) -------------
@@ -606,8 +632,12 @@ def test_files_only_brings_the_files_up_to_date_and_runs_nothing(
 
     out = _rendered(repo, "qwen2.5:14b-instruct")
     changed = refresh.files_up_to_date(repo)
-    assert changed == {"proxy_changed": True, "theme_changed": False}
+    assert changed == {"proxy_changed": True, "theme_changed": False, "routing_changed": False}
     assert "pull_and_verify qwen2.5:14b-instruct" in (out / "compose.yaml").read_text()
     assert refresh.main(["--files-only"], repo_root=repo) == 0
     said = capsys.readouterr().out.strip().splitlines()[-1]
-    assert json.loads(said) == {"proxy_changed": False, "theme_changed": False}
+    assert json.loads(said) == {
+        "proxy_changed": False,
+        "theme_changed": False,
+        "routing_changed": False,
+    }

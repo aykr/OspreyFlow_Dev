@@ -20424,3 +20424,10 @@ service name in the header, escaped; the `id.` route), `tests/keycloak_theme/gov
 (light only with no button under GOV.UK, unchanged without; header, skip link and footer in reading
 order; the skip link's target focusable; a service name never markup), and
 `src/brand/govuk/govukChrome.test.tsx` (shown red with one class name changed in the script).
+
+5. **A rebuild brings the routing table up to date.** `scripts.refresh` (`ospreyflow start --build`)
+   and `harness.update` never rendered the Caddyfile, so a deployment switched to GOV.UK would have
+   kept a sign-in name with no `/assets/govuk/` route. Refresh now writes the Caddyfile as the
+   checkout renders it and restarts the front proxy when it changed (`routing_changed`), and update
+   restarts it too. `test_refresh.py`'s
+   `test_the_proxys_routing_table_is_brought_up_to_date_and_the_proxy_restarted`, shown red first.

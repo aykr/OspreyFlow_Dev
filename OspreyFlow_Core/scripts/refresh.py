@@ -324,6 +324,24 @@ def _glass_settings_up_to_date(directory: Path) -> None:
         path.write_text(wanted, encoding="utf-8")
 
 
+def _routing_up_to_date(directory: Path) -> bool:
+    """The front proxy's routing table as this checkout renders it; True when it changed, since the
+    proxy reads it at start (ADR-132 Amendment 2: under GOV.UK the `id.` name routes
+    `/assets/govuk/` to the Glass). It names no secret, so it is written whole."""
+    config_path = directory / "osprey.yaml"
+    if not config_path.is_file():
+        return False
+    from harness.render import _BANNER, _comment_block
+    from harness.site import render_caddyfile
+
+    wanted = _comment_block(_BANNER, "#") + render_caddyfile(load_config(config_path))
+    path = directory / "Caddyfile"
+    if path.is_file() and path.read_text(encoding="utf-8") == wanted:
+        return False
+    path.write_text(wanted, encoding="utf-8")
+    return True
+
+
 def _pins_moved(directory: Path) -> None:
     """A service built from no source here whose rendered image differs from the deployment's is
     moved to it, with the rendered values of its settings (a new version's launch options). Secrets
@@ -383,8 +401,13 @@ def files_up_to_date(repo_root: Path = REPO_ROOT) -> dict[str, bool]:
     _new_services_added(directory)
     _pins_moved(directory)
     _glass_settings_up_to_date(directory)
+    routing_changed = _routing_up_to_date(directory)
     _release_up_to_date(directory)
-    return {"proxy_changed": proxy_changed, "theme_changed": theme_changed}
+    return {
+        "proxy_changed": proxy_changed,
+        "theme_changed": theme_changed,
+        "routing_changed": routing_changed,
+    }
 
 
 def refresh(
@@ -404,6 +427,8 @@ def refresh(
         # containers itself, since their command and environment file changed.
         run([*compose, "restart", "litellm"])
         run([*compose, "up", "-d", "--wait"])
+    if changed["routing_changed"]:
+        run([*compose, "restart", "proxy"])
     if theme_changed:
         run([*compose, "restart", "keycloak"])
         run([*compose, "up", "-d", "--wait"])
