@@ -20317,3 +20317,46 @@ Consequences.
 - **Sign-in and the dashboards.** The identity provider's pages (`id.`, the Keycloak login theme)
   and Superset (`bi.`) are separate products and do not yet read `appearance`; see the spike's
   hand-back for what each shows under the GOV.UK brand.
+
+### ADR-132, Amendment 1 (31 October 2026) — a machine may run more than one Lite deployment
+
+Status: proposed with ADR-132, on the same branch.
+
+Context. The owner wants two Lite deployments on one machine: the current one, untouched, on the
+OspreyFlow brand, and a second on the GOV.UK brand with its own containers, volumes and address, to
+switch to for demonstrations. Before this amendment the Compose project was `osprey-<profile>` and
+the rendered folder `deploy/generated/<profile>/`, so a second `local-lite` deployment would have
+been the same Compose project, silently sharing the first's named volumes (`osprey-data`,
+`osprey-staging`, `ollama-models`, `whisper-models`, `objectstore-data`: one graph store for both),
+and its render would have overwritten the first's files.
+
+Decision.
+
+1. **`deployment.name`** in `osprey.yaml` (optional; lowercase letters, digits and hyphens, starting
+   with a letter or digit). When set it names the Compose project, which prefixes every volume
+   (none declares a name of its own), and the rendered folder, `deploy/generated/<name>/`, which
+   holds that deployment's `deployment.env`. Backups are named by the same folder name.
+2. **Unset, nothing changes.** The project stays `osprey-<profile>` and the folder
+   `deploy/generated/<profile>/`, so an existing deployment keeps its project, folder and volumes.
+   Checked against the owner's own deployment on 31 October 2026: its `osprey.yaml`, rendered with
+   this change, gives the same project name (`osprey-local-lite`), folder, volumes and mounts as the
+   copy taken before the spike; `compose.yaml` is unchanged but for its header, and `glass.json`
+   differs only by ADR-132's `appearance` section and the build stamp.
+3. **One rule, in one place.** `schemas.deployment.compose_project` and `generated_folder` are the
+   rule; `harness.render`, `harness.apply`, the preflight runner, the setup web app, `harness.backup`
+   and `harness.restore` all use `generated_folder`, and the `ospreyflow` command's `deployment_dir`
+   reads the same setting.
+4. **A second deployment is a second product folder.** It has its own `osprey.yaml` (a git worktree
+   of the same checkout serves), selected for one command with `OSPREYFLOW_HOME`; the recorded home
+   stays the first deployment's. Its `network.public_origin` takes a different host and port (for
+   example `http://govuk.ospreyflow.localhost:8081`), so its `id.` and `bi.` names and its front
+   proxy do not collide with the first's.
+5. **Both publish ArcadeDB on `127.0.0.1:2480`** (ADR-054 Amendment 5), so two deployments run one
+   at a time unless the second sets `OSPREY_ARCADEDB_PORT`. On a machine under about 32 GB of Docker
+   memory they run one at a time anyway.
+
+Tests that would fail if it were broken (`tests/harness/test_deployment_name.py`, shown red before
+the change): an unnamed deployment keeps `osprey-local-lite`, `local-lite/` and unnamed volumes; a
+named one is a project and a folder of its own; `harness.render` writes the two to separate folders
+and leaves the first's; the `ospreyflow` command and the harness agree where a deployment is
+rendered; and a name Compose would not take is refused.

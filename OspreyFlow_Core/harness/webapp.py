@@ -184,6 +184,7 @@ from schemas.deployment import (
     ModelsConfig,
     OspreyConfig,
     Profile,
+    generated_folder,
 )
 
 #: The built frontend's own output directory — `apps/harness/dist`, present once `npm run build`
@@ -474,7 +475,7 @@ def create_app(
             raise HTTPException(status_code=501, detail=str(exc)) from exc
 
     def _out_dir() -> Path:
-        return out_root / _read_config(config_path).profile.value
+        return out_root / generated_folder(_read_config(config_path))
 
     def _preflight_events(context: PreflightContext, *, only: str | None) -> Iterator[bytes]:
         for result in run_streaming(context, only=only):

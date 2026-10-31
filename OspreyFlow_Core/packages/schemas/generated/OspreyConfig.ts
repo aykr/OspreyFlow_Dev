@@ -301,6 +301,10 @@ export type Privacy = string | null;
  */
 export type ServiceStatus = string | null;
 /**
+ * Default: osprey-<profile>, rendered to deploy/generated/<profile>/. Names this deployment's Compose project, its volumes and its rendered folder, so a second deployment on the same machine shares none of them.
+ */
+export type Name2 = string | null;
+/**
  * Default: ospreyflow. The GOV.UK look, for a service on a gov.uk domain only.
  */
 export type Brand = "ospreyflow" | "govuk";
@@ -402,6 +406,7 @@ export interface OspreyConfig {
    */
   mail?: MailConfig | null;
   welcome?: WelcomeConfig;
+  deployment?: DeploymentConfig;
   appearance?: AppearanceConfig;
   external?: ExternalConfig;
 }
@@ -611,6 +616,12 @@ export interface WelcomeConfig {
   accessibility?: Accessibility;
   privacy?: Privacy;
   service_status?: ServiceStatus;
+}
+/**
+ * Which deployment this is, on a machine that may run more than one (ADR-132 Amendment 1).
+ */
+export interface DeploymentConfig {
+  name?: Name2;
 }
 /**
  * How every page of the deployment looks (ADR-132): the deployment's brand, which is not the

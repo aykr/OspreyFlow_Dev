@@ -88,6 +88,7 @@ from harness.render import (
     load_config,
 )
 from harness.site import answer_localhost_with_loopback, deployment_origins
+from schemas.deployment import generated_folder
 
 #: Measured on `local-lite` against the seeded HMP + Fixture Corp set and recorded in
 #: `deploy/RUNBOOK.md`. Used only to project a duration for the dry run — see the docstring on why
@@ -628,7 +629,8 @@ def main(argv: list[str] | None = None) -> int:
     # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine.
     answer_localhost_with_loopback()
     config = load_config(args.config)
-    profile = args.profile or config.profile.value
+    # ADR-132 Amendment 1: the deployment's own folder, `deployment.name` or the profile.
+    profile = args.profile or generated_folder(config)
     compose_file = args.generated_root / profile / "compose.yaml"
     if not compose_file.exists():
         print(f"restore: no rendered deployment at {compose_file}.", file=sys.stderr)

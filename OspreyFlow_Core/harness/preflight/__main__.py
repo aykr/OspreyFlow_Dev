@@ -21,6 +21,7 @@ from harness.preflight.context import REPO_ROOT, PreflightContext
 from harness.preflight.reduced import accept, offer_for
 from harness.preflight.result import CheckResult, Status
 from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
+from schemas.deployment import generated_folder
 
 _SYMBOL = {
     Status.PASS: "PASS",
@@ -115,7 +116,7 @@ def main(argv: list[str] | None = None, *, context: PreflightContext | None = No
     """
     args = _parse_args(argv if argv is not None else sys.argv[1:])
     config = context.config if context is not None else load_config(args.config)
-    out_dir = context.out_dir if context is not None else args.out_root / config.profile.value
+    out_dir = context.out_dir if context is not None else args.out_root / generated_folder(config)
     if context is None:
         context = PreflightContext(config=config, out_dir=out_dir, seeding=args.seeding)
 

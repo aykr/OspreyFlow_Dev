@@ -99,9 +99,13 @@ def read_config(product: Path) -> dict[str, object]:
 
 
 def deployment_dir(product: Path) -> Path:
-    """Where the harness renders this product's deployment: `deploy/generated/<profile>`."""
-    profile = read_config(product).get("profile") or DEFAULT_PROFILE
-    return product / "deploy" / "generated" / str(profile)
+    """Where the harness renders this product's deployment: `deploy/generated/<deployment.name>`,
+    else `deploy/generated/<profile>` (ADR-132 Amendment 1; `schemas.deployment.generated_folder`
+    is the same rule, and `test_deployment_name.py` holds the two to each other)."""
+    config = read_config(product)
+    deployment = config.get("deployment")
+    name = deployment.get("name") if isinstance(deployment, dict) else None
+    return product / "deploy" / "generated" / str(name or config.get("profile") or DEFAULT_PROFILE)
 
 
 #: Where a Lite install answers (ADR-114 Amendment 4): the front proxy on this machine's port 80.

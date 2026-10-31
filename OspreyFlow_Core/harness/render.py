@@ -79,6 +79,8 @@ from schemas.deployment import (
     OspreyConfig,
     Profile,
     SearchBackend,
+    compose_project,
+    generated_folder,
     host_folder_source,
 )
 
@@ -1011,7 +1013,8 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
 def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str:
     services = compose_services(config, images)
     document = {
-        "name": f"osprey-{config.profile.value}",
+        # ADR-132 Amendment 1: `deployment.name`, else `osprey-<profile>` as before.
+        "name": compose_project(config),
         "services": services,
         "volumes": {
             "osprey-data": {"driver": "local"},
@@ -1603,7 +1606,7 @@ def main(argv: list[str] | None = None) -> int:
         components = config.components.model_copy(update={"source_path": str(REPO_ROOT)})
         config = config.model_copy(update={"components": components})
     result = render(config, allow_unpinned=args.allow_unpinned)
-    out_dir = args.out_root / config.profile.value
+    out_dir = args.out_root / generated_folder(config)
 
     if args.check:
         drifted = find_drift(result, out_dir)

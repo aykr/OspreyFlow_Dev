@@ -77,7 +77,7 @@ from harness.render import (
 from harness.render import write as write_artefacts
 from harness.reporting import reporting_secrets
 from harness.site import answer_localhost_with_loopback, sites
-from schemas.deployment import OspreyConfig, Profile
+from schemas.deployment import OspreyConfig, Profile, generated_folder
 
 #: How long any one service gets to become healthy. Generous because the Conduit applies the graph
 #: schema at startup and Keycloak imports a realm, and because a timeout that fires on a slow
@@ -646,7 +646,7 @@ def main(argv: list[str] | None = None) -> int:
             args.images_from.read_text(encoding="utf-8")
         )
         args.no_build = True
-    out_dir = args.out_root / config.profile.value
+    out_dir = args.out_root / generated_folder(config)
     result = ApplyResult(profile=config.profile.value)
     # ADR-114 Amendment 4 decision 7: the deployment's names reach the proxy on this machine
     # whatever the operating system's resolver does with `*.localhost`.

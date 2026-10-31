@@ -713,6 +713,8 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `welcome.accessibility` | str or none | none | The organisation's accessibility statement. |
 | `welcome.privacy` | str or none | none | The organisation's privacy notice. |
 | `welcome.service_status` | str or none | none | A page saying whether the service is up. |
+| `deployment` | section | — | Which deployment this is, on a machine that runs more than one. |
+| `deployment.name` | str or none | none | Names this deployment's Compose project, its volumes and its rendered folder, so a second deployment on the same machine shares none of them. |
 | `appearance` | section | — | How every page looks: the deployment's brand, and what a GOV.UK header names. |
 | `appearance.brand` | `ospreyflow` \| `govuk` | `ospreyflow` | The GOV.UK look, for a service on a gov.uk domain only. |
 | `appearance.service_name` | str or none | none | The service's name in the GOV.UK header and the page title. |

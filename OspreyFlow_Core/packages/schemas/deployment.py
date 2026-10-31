@@ -553,6 +553,36 @@ class WelcomeConfig(BaseModel):
         return value
 
 
+#: What Compose takes as a project name: lowercase letters, digits and hyphens, starting with a
+#: letter or digit.
+_COMPOSE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+
+class DeploymentConfig(BaseModel):
+    """Which deployment this is, on a machine that may run more than one (ADR-132 Amendment 1)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(
+        default=None,
+        description=(
+            "Default: osprey-<profile>, rendered to deploy/generated/<profile>/. Names this "
+            "deployment's Compose project, its volumes and its rendered folder, so a second "
+            "deployment on the same machine shares none of them."
+        ),
+    )
+
+    @field_validator("name")
+    @classmethod
+    def _a_compose_name(cls, value: str | None) -> str | None:
+        if value is not None and not _COMPOSE_NAME.match(value):
+            raise ValueError(
+                f"deployment.name {value!r} must be lowercase letters, digits and hyphens, "
+                "starting with a letter or digit"
+            )
+        return value
+
+
 class AppearanceConfig(BaseModel):
     """How every page of the deployment looks (ADR-132): the deployment's brand, which is not the
     viewer's light or dark choice. `govuk` is the GOV.UK look the Service Manual requires on a
@@ -710,6 +740,7 @@ class OspreyConfig(BaseModel):
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     mail: MailConfig | None = Field(default=None, description="Default: none — one-time codes")
     welcome: WelcomeConfig = Field(default_factory=WelcomeConfig)
+    deployment: DeploymentConfig = Field(default_factory=DeploymentConfig)
     appearance: AppearanceConfig = Field(default_factory=AppearanceConfig)
     external: ExternalConfig = Field(default_factory=ExternalConfig)
 
@@ -795,3 +826,15 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     NetworkConfig,
     OspreyConfig,
 )
+
+
+def compose_project(config: OspreyConfig) -> str:
+    """The deployment's Compose project, which prefixes its volumes (ADR-132 Amendment 1):
+    `deployment.name`, else `osprey-<profile>` as every deployment was named before it."""
+    return config.deployment.name or f"osprey-{config.profile.value}"
+
+
+def generated_folder(config: OspreyConfig) -> str:
+    """The folder under `deploy/generated/` the deployment is rendered to, `deployment.env` with
+    it: `deployment.name`, else the profile, as before (ADR-132 Amendment 1)."""
+    return config.deployment.name or config.profile.value
