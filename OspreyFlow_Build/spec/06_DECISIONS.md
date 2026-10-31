@@ -20214,7 +20214,11 @@ written before any colour (the spike brief's rule).
 2. **The sign-in page:** a GOV.UK variant of the Keycloak login theme (light, the GOV.UK header and
    footer, GDS Transport, the service name, no theme button), chosen by `appearance.brand`.
 3. **Type size under GOV.UK:** GOV.UK's 19px body on the welcome, start and Admin pages; the
-   workspace keeps its 13px base (`DESIGN.md` §9 exception 1).
+   workspace keeps its 13px base (`DESIGN.md` §9 exception 1). **Done 31 October 2026:** `tokens.css`'s
+   `[data-brand="govuk"] :is(.welcome, .home, .admin-place)` block redefines the type tokens for
+   those pages' subtrees (19/25 body, 24/30 and 36/40 headings), as `DESIGN.md` §11's type table
+   says; `designContract.test.ts` holds the two together and was shown red with one size changed.
+   The welcome page keeps its own OspreyFlow header under the GOV.UK one: a finding, not changed.
 4. **The primitives:** keep re-theming the twenty through tokens; no GOV.UK Frontend component set.
    GOV.UK form conventions (error summary, hints, legends as headings) are added to the existing
    primitives later.

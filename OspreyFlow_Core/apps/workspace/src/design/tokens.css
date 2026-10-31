@@ -190,6 +190,18 @@
   --r-control:0; --r-panel:0; --r-overlay:0;
 }
 
+/* GOV.UK type on the GOV.UK brand's pages (ADR-132, the owner's ruling 3; DESIGN.md §11): the
+   welcome, start and Admin pages take GOV.UK's scale, 19px body. The workspace keeps the 13px base
+   (DESIGN.md §9 exception 1): density across monitors is the analyst's job there. The tokens are
+   redefined for these pages' subtrees, so every component inside them follows. */
+[data-brand="govuk"] :is(.welcome, .home, .admin-place) {
+  --fs-11:14px; --lh-11:20px; --fs-12:16px; --lh-12:20px;
+  --fs-13:19px; --lh-13:25px; --fs-14:19px; --lh-14:25px;
+  --fs-16:19px; --lh-16:25px; --fs-19:24px; --lh-19:30px;
+  --fs-23:36px; --lh-23:40px; --fs-30:48px; --lh-30:50px;
+  font-size: var(--fs-13); line-height: var(--lh-13);
+}
+
 html, body { margin:0; padding:0; }
 
 body {

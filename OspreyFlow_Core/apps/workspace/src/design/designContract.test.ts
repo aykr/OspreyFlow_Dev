@@ -198,3 +198,46 @@ describe("deployment brands (DESIGN.md §11)", () => {
     expect(brandFindings(planted, DESIGN)).toEqual(["other has no section in DESIGN.md §11"]);
   });
 });
+
+// ADR-132, the owner's ruling 3: under GOV.UK the welcome, start and Admin pages take GOV.UK's type
+// scale, as DESIGN.md §11's table says; the workspace keeps the 13px base.
+const GOVUK_PAGES = '[data-brand="govuk"] :is(.welcome, .home, .admin-place)';
+
+/** DESIGN.md §11's type table: token → "size / line-height". */
+export function contractGovukType(design: string): Record<string, string> {
+  const section = design.slice(design.indexOf("## 11. Deployment brands"));
+  const out: Record<string, string> = {};
+  for (const [, name, value] of section.matchAll(/^\|\s*`(--fs-\d+)`\s*\|\s*(\d+ \/ \d+)\s*\|/gm)) out[name!] = value!;
+  return out;
+}
+
+/** The GOV.UK pages' block in tokens.css, as "size / line-height" per token. */
+export function tokenGovukType(css: string): Record<string, string> {
+  const block = rawBlock(css, GOVUK_PAGES);
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(block)) {
+    const lh = block[name.replace("--fs-", "--lh-")];
+    if (name.startsWith("--fs-")) out[name] = `${value.replace("px", "")} / ${lh?.replace("px", "")}`;
+  }
+  return out;
+}
+
+describe("GOV.UK type on the GOV.UK brand's pages (DESIGN.md §11)", () => {
+  it("is the scale §11 declares, 19px body", () => {
+    expect(tokenGovukType(TOKENS)).toEqual(contractGovukType(DESIGN));
+    expect(tokenGovukType(TOKENS)["--fs-13"]).toBe("19 / 25");
+  });
+
+  it("applies to the welcome, start and Admin pages and never to the workspace", () => {
+    expect(TOKENS).toContain(`${GOVUK_PAGES} {`);
+    for (const workspace of [".app-header", ".network-canvas", ".top-bar", "#main-content"]) {
+      expect(GOVUK_PAGES).not.toContain(workspace);
+    }
+  });
+
+  it("finds a size that differs from §11", () => {
+    const planted = TOKENS.replace("--fs-13:19px;", "--fs-13:18px;");
+    expect(tokenGovukType(planted)["--fs-13"]).toBe("18 / 25");
+    expect(tokenGovukType(planted)).not.toEqual(contractGovukType(DESIGN));
+  });
+});

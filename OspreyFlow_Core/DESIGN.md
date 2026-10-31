@@ -442,3 +442,17 @@ Transport, square corners, and the Design System's focus state: a 3px `--focus` 
 | `--success` | `#0f7a52` | success |
 | `--focus` | `#ffdd00` | focus outline |
 | `--focus-ink` | `#0b0c0c` | focus inner shadow |
+
+Type (the owner's ruling of 31 October 2026): the welcome, start and Admin pages take GOV.UK's
+scale, 19px body; the workspace keeps the 13px base (§9 exception 1).
+
+| Token | GOV.UK pages | Use |
+|---|---|---|
+| `--fs-11` | 14 / 20 | small meta |
+| `--fs-12` | 16 / 20 | small text, table headers |
+| `--fs-13` | 19 / 25 | body |
+| `--fs-14` | 19 / 25 | body, emphasised |
+| `--fs-16` | 19 / 25 | small headings |
+| `--fs-19` | 24 / 30 | medium headings |
+| `--fs-23` | 36 / 40 | page titles |
+| `--fs-30` | 48 / 50 | large titles |

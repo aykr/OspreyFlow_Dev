@@ -748,7 +748,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
   ];
   const [tab, setTab] = useState<Tab>((tabs[0]?.id as Tab) ?? "system");
   return (
-    <section aria-label="Admin" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", padding: "var(--sp-16)", minHeight: 0, flex: 1, overflowY: "auto" }}>
+    <section aria-label="Admin" className="admin-place" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", padding: "var(--sp-16)", minHeight: 0, flex: 1, overflowY: "auto" }}>
       <h2 className="value" style={{ margin: 0 }}>Admin</h2>
       {tabs.length === 0 && <p className="label">Your account holds no administration right.</p>}
       {tabs.length > 0 && <Tabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as Tab)} />}
