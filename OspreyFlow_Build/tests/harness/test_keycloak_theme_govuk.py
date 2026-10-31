@@ -92,3 +92,16 @@ def test_under_govuk_the_sign_in_name_serves_the_gov_uk_assets_from_the_glass() 
 
 def test_under_the_ospreyflow_brand_the_routing_table_is_unchanged() -> None:
     assert "/assets/govuk/" not in render_caddyfile(_config())
+
+
+def test_under_govuk_the_words_name_no_product_and_the_title_is_not_repeated() -> None:
+    """The service navigation names the service; Keycloak's own title above the card would say it a
+    second time, and the messages would name OspreyFlow on a GOV.UK service."""
+    for reset_by_email in (True, False):
+        theme = render_login_theme(
+            TOKENS, reset_by_email=reset_by_email, appearance=GOVUK, glass_origin=GLASS
+        )
+        assert "OspreyFlow" not in theme[THEME_MESSAGES]
+    css = render_login_theme(TOKENS, appearance=GOVUK, glass_origin=GLASS)[THEME_STYLESHEET]
+    assert '[data-brand="govuk"] #kc-header { display: none; }' in css
+

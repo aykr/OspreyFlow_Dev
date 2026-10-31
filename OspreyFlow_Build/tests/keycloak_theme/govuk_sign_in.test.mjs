@@ -79,3 +79,26 @@ test("a service name is text, never markup", () => {
   const win = page({ brand: "govuk", settings: { ...SETTINGS, serviceName: "<img src=x onerror=alert(1)>" } });
   assert.equal(win.document.querySelector("img[src=x]"), null);
 });
+
+const SIGN_IN = readFileSync(new URL("../../../OspreyFlow_Core/harness/sign_in_form.js", import.meta.url), "utf8");
+const LOGIN_FORM = `<form id="kc-form-login" action="/login" method="post">
+  <input id="username" name="username" type="text"><input id="password" name="password" type="password">
+  <div class="pf-v5-c-login__main-footer-band"><a href="/reset">Forgot password?</a></div>
+  <div id="kc-form-buttons"><button id="kc-login" name="login" type="submit">Sign in</button></div>
+</form>`;
+
+/** The card script on a sign-in page, with or without the GOV.UK brand, and no mail server. */
+function card(brand) {
+  const dom = new JSDOM(`<!doctype html><html><body>${LOGIN_FORM}</body></html>`, { runScripts: "outside-only" });
+  if (brand) dom.window.eval(`document.documentElement.setAttribute("data-brand", "${brand}");`);
+  dom.window.eval("window.OSPREY_RESET_BY_EMAIL = false;\n" + SIGN_IN);
+  dom.window.document.dispatchEvent(new dom.window.Event("DOMContentLoaded"));
+  return dom.window.document.body.textContent;
+}
+
+test("under GOV.UK the card's words name no product; without it they say OspreyFlow", () => {
+  assert.ok(card().includes("Ask your OspreyFlow administrator"), "the OspreyFlow card is unchanged");
+  const govuk = card("govuk");
+  assert.ok(govuk.includes("Ask your administrator"));
+  assert.ok(!govuk.includes("OspreyFlow"));
+});
