@@ -9,6 +9,7 @@ export type {
   AnalyticsEngine,
   ComponentsConfig,
   GraphStore,
+  ModelProviderConfig,
   ModelsConfig,
   OspreyConfig,
   Profile,
