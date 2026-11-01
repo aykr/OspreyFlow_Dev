@@ -33,7 +33,8 @@ obligation independently.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+import logging
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -41,12 +42,14 @@ import asyncpg
 
 from conduit_common.identity import new_id
 from ports.graph import GraphPort
+from schemas.analytics import HOTLISTS_RULE, MONITORS_RULE, AlertFact
 from schemas.domain import (
     Alert,
     AlertAudience,
     AlertKind,
     AlertMode,
     AlertSeverity,
+    Handling,
     Interval,
     Principal,
 )
@@ -96,6 +99,7 @@ ALTER TABLE alerts ADD COLUMN IF NOT EXISTS decided_by TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS decided_at TIMESTAMPTZ;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS severity TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS team TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS handlings TEXT;
 CREATE INDEX IF NOT EXISTS alerts_investigation_idx ON alerts (investigation_id);
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
 """
@@ -260,9 +264,65 @@ def _row_to_queue_row(row: asyncpg.Record) -> QueueRow:
     return QueueRow(_row_to_alert(row), row["kind"], row["severity_read"], row["audience"])
 
 
+_log = logging.getLogger(__name__)
+
+#: ADR-134 decision 3: an alert as the analytics store keeps it for alert trends — its kind,
+#: severity and audience read by the queue's own expressions, so the trend and the queue cannot
+#: disagree about who an alert is for.
+_FACT_COLUMNS = (
+    f"id, rule_id, owner_id, investigation_id, created_at, dataset_id, typology, status, "
+    f"disposition, team, handlings, {_KIND_SQL} AS kind, {_SEVERITY_SQL} AS severity_read, "
+    f"{_AUDIENCE_SQL} AS audience"
+)
+
+FactSink = Callable[[list[AlertFact]], Awaitable[None]]
+
+
+def _outcome(status: str, disposition: str | None) -> str:
+    if status != "closed":
+        return "claimed" if status == "claimed" else "open"
+    return disposition if disposition in ("true_positive", "false_positive") else "closed"
+
+
+def _row_to_fact(row: asyncpg.Record) -> AlertFact:
+    kind = row["kind"]
+    rule = (
+        row["rule_id"]
+        if kind == "typology"
+        else HOTLISTS_RULE
+        if kind == "hotlist"
+        else MONITORS_RULE
+    )
+    raw = row["handlings"]
+    return AlertFact(
+        alert_id=row["id"],
+        investigation_scope=row["investigation_id"],
+        kind=kind,
+        rule=rule,
+        typology=row["typology"],
+        severity=row["severity_read"],
+        outcome=_outcome(row["status"], row["disposition"]),  # type: ignore[arg-type]
+        raised_at=row["created_at"],
+        owner_id=row["owner_id"],
+        audience=row["audience"],
+        team=row["team"],
+        dataset_id=row["dataset_id"],
+        handlings=None if raw is None else [Handling(**h) for h in json.loads(raw)],
+    )
+
+
+def distinct_handlings(handlings: Sequence[Handling]) -> list[Handling]:
+    """Each handling once, in a stable order: what an alert rests on, not how often."""
+    seen = {h.model_dump_json(): h for h in handlings}
+    return [seen[k] for k in sorted(seen)]
+
+
 class AlertStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
+        #: Where each written alert is kept for alert trends (ADR-134 decision 3): the analytics
+        #: store's `load_alert_facts`, attached by `build_run_resources`. `None` keeps nothing.
+        self.fact_sink: FactSink | None = None
 
     @classmethod
     async def connect(cls, dsn: str) -> AlertStore:
@@ -280,12 +340,48 @@ class AlertStore:
     async def close(self) -> None:
         await self._pool.close()
 
-    async def save(self, alert: Alert) -> None:
+    async def publish_facts(self, alert_ids: Sequence[str]) -> None:
+        """Keeps these alerts, as they now are, for alert trends. A failure is logged, not raised:
+        the alert itself is written already, and `publish_all_facts` at the next start keeps it."""
+        if self.fact_sink is None or not alert_ids:
+            return
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_FACT_COLUMNS} FROM alerts WHERE id = ANY($1::text[]) "
+                f"AND {_KIND_SQL} IS NOT NULL",
+                list(alert_ids),
+            )
+        try:
+            await self.fact_sink([_row_to_fact(r) for r in rows])
+        except Exception:  # noqa: BLE001 — the queue row stands; the trend catches up at start
+            _log.warning("alert facts not kept for %d alert(s)", len(rows), exc_info=True)
+
+    async def publish_all_facts(self) -> int:
+        """Every alert, kept again for alert trends: at each start, so the analytics store agrees
+        with this one whatever happened while it was away. Alerts are few. Returns how many."""
+        async with self._pool.acquire() as conn:
+            ids = [r["id"] for r in await conn.fetch(f"SELECT id FROM alerts WHERE {_KIND_SQL} "
+                                                       "IS NOT NULL")]  # fmt: skip
+        for i in range(0, len(ids), 500):
+            await self.publish_facts(ids[i : i + 500])
+        return len(ids)
+
+    async def publish_rule_facts(self, rule_id: str) -> None:
+        """A rule's alerts kept again — a hotlist's, when its audience changes, so an owner who
+        takes a hotlist back to "only me" takes its alerts back from the team's trends too."""
+        async with self._pool.acquire() as conn:
+            ids = [r["id"] for r in await conn.fetch("SELECT id FROM alerts WHERE rule_id = $1",
+                                                       rule_id)]  # fmt: skip
+        await self.publish_facts(ids)
+
+    async def save(self, alert: Alert, *, handlings: Sequence[Handling] | None = None) -> None:
+        """`handlings`: every handling the alert rests on, read as whoever raised it (ADR-134
+        decision 3). Left out, they are not known, and alert trends count the alert for no one."""
         async with self._pool.acquire() as conn:
             await conn.execute(
-                f"INSERT INTO alerts ({_COLUMNS}) "
+                f"INSERT INTO alerts ({_COLUMNS}, handlings) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, "
-                "$17, $18, $19, $20, $21, $22, $23)",
+                "$17, $18, $19, $20, $21, $22, $23, $24)",
                 alert.id,
                 alert.rule_id,
                 alert.owner_id,
@@ -309,7 +405,11 @@ class AlertStore:
                 alert.decided_at,
                 alert.severity,
                 alert.team,
+                None
+                if handlings is None
+                else json.dumps([h.model_dump() for h in distinct_handlings(handlings)]),
             )
+        await self.publish_facts([alert.id])
 
     async def get_authorized(self, alert_id: str, principal: Principal) -> Alert:
         """`owner_id` filtered in the query itself — `06_DECISIONS.md` ADR-041, proven (not
@@ -455,6 +555,7 @@ class AlertStore:
             )
         if row is None:
             raise AlertTriageConflict(alert_id)
+        await self.publish_facts([alert_id])
         return _row_to_alert(row)
 
     async def set_triage(
@@ -495,8 +596,8 @@ class AlertStore:
             )
         if row is None:
             raise AlertTriageConflict(alert_id)
+        await self.publish_facts([alert_id])
         return _row_to_alert(row)
-
 
     async def close_for_elements(
         self,
@@ -531,8 +632,8 @@ class AlertStore:
                 at,
                 reason,
             )
+        await self.publish_facts([r["id"] for r in rows])
         return len(rows)
-
 
     async def alerts_citing_events(self) -> dict[str, list[str]]:
         """The alerts not yet closed that name events (`event_ids` not empty), each with the ids it
@@ -563,6 +664,7 @@ class AlertStore:
                 at,
                 reason,
             )
+        await self.publish_facts([r["id"] for r in rows])
         return len(rows)
 
 
@@ -620,10 +722,13 @@ async def record_match(
     the one queue can share it with that team when its rule allows (`queue_scope`); a `notify` stub
     never carries one."""
     visible = True
+    rests_on: list[Handling] = []
     for node_id in triggering_node_ids:
-        if await graph.get_node(node_id, recipient) is None:
+        node = await graph.get_node(node_id, recipient)
+        if node is None:
             visible = False
             break
+        rests_on.append(node.handling)
 
     if visible:
         alert = Alert(
@@ -637,7 +742,7 @@ async def record_match(
             dataset_id=dataset_id,
             team=team,
         )
-        await alert_store.save(alert)
+        await alert_store.save(alert, handlings=rests_on)
         return alert
 
     # Out of the recipient's own access — audited in both modes, `06_DECISIONS.md` ADR-038's own
@@ -663,7 +768,8 @@ async def record_match(
         created_at=datetime.now(UTC),
         dataset_id=dataset_id,
     )
-    await alert_store.save(stub)
+    # A stub cites nothing (ADR-038), so it rests on nothing: its owner's alone.
+    await alert_store.save(stub, handlings=[])
     return stub
 
 
@@ -675,6 +781,7 @@ __all__ = [
     "AlertTriageConflict",
     "QueueRow",
     "default_severity",
+    "distinct_handlings",
     "queue_scope",
     "DisclosurePolicy",
     "disclosure_policy_from_value",

@@ -79,6 +79,38 @@ CREATE TABLE IF NOT EXISTS geometries (
 """
 
 
+#: ADR-134 decision 3: the DuckDB store's alert facts, column for column
+#: (`adapters/analytics_duckdb/schema.py` has why). A `MergeTree` keeps no uniqueness, so
+#: `load_alert_facts` deletes an alert's rows (a waited-for mutation) before it writes them again.
+CREATE_ALERT_FACTS_TABLE = """
+CREATE TABLE IF NOT EXISTS alert_facts (
+    alert_id String,
+    investigation_scope Nullable(String),
+    kind String,
+    rule String,
+    typology Nullable(String),
+    severity String,
+    outcome String,
+    raised_at DateTime64(6, 'UTC'),
+    owner_id String,
+    audience String,
+    team Nullable(String),
+    dataset_id Nullable(String),
+    known UInt8
+) ENGINE = MergeTree ORDER BY (alert_id)
+"""
+
+CREATE_ALERT_FACT_HANDLINGS_TABLE = """
+CREATE TABLE IF NOT EXISTS alert_fact_handlings (
+    alert_id String,
+    handling_classification String,
+    handling_code String,
+    owning_unit String,
+    originator String
+) ENGINE = MergeTree ORDER BY (alert_id)
+"""
+
+
 def create_database(database: str, cluster: str | None) -> str:
     """On a cluster the database is made on every node at once (`ON CLUSTER`) and is `Replicated`,
     so each table definition reaches every node through Keeper."""
@@ -97,7 +129,12 @@ def drop_database(database: str, cluster: str | None) -> str:
 
 
 async def create_tables(client: ClickHouseClient) -> None:
-    for statement in (CREATE_EVENTS_TABLE, CREATE_GEOMETRIES_TABLE):
+    for statement in (
+        CREATE_EVENTS_TABLE,
+        CREATE_GEOMETRIES_TABLE,
+        CREATE_ALERT_FACTS_TABLE,
+        CREATE_ALERT_FACT_HANDLINGS_TABLE,
+    ):
         if client.cluster:
             statement = statement.replace("ENGINE = MergeTree", "ENGINE = ReplicatedMergeTree")
         await client.command(statement)

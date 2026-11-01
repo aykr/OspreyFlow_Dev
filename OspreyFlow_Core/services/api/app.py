@@ -803,6 +803,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.hotlists_store = hotlists_store
     app.state.monitors_store = monitors_store
     app.state.alerts_store = alerts_store
+    # ADR-134 decision 3: the analytics store's alert facts brought into line with the alert store
+    # at every start, so alert trends recover from any write the analytics store missed.
+    await alerts_store.publish_all_facts()
     app.state.typology_rules = typology_rules
     app.state.held_rows = held_rows
     app.state.screening_lists = screening_lists
@@ -4560,13 +4563,16 @@ async def set_hotlist_audience_route(
     hotlists_store: HotlistsStoreDep,
     monitoring: MonitoringSettingsDep,
     audit: AuditDep,
+    alerts_store: AlertsStoreDep,
 ) -> Hotlist:
     """ADR-133 ruling 3: the owner chooses whom their hotlist's alerts reach — only them, or their
     team too. Another's hotlist is not found (the store's owner check, in the statement). Refused in
-    words when the deployment does not let owners choose."""
+    words when the deployment does not let owners choose. Its alerts are kept again for alert
+    trends (ADR-134 decision 3), so the team's trends follow the choice at once."""
     if not monitoring.hotlist_audience_editable:
         raise HotlistAudienceFixed(monitoring.hotlist_audience)
     hotlist = await hotlists_store.set_audience(hotlist_id, principal, body.audience)
+    await alerts_store.publish_rule_facts(f"hotlist:{hotlist.id}")
     await audit.record(
         principal=principal,
         action="hotlist_audience_changed",
