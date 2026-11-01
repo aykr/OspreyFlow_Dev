@@ -69,7 +69,7 @@ const VERIFY = {
   rejections: [{ reason: "Person.listing is not a valid enum", count: 1,
     samples: [{ row_index: 3, reason: "Person.listing is not a valid enum", sample: "{'given_names': 'Ilya', 'family_name': 'Varga', 'listing': 'unknown'}" }] }],
   nodes: [person("p1", "Callum", "Okafor"), person("p2", "Dana", "Mercer"), person("p3", "Joel", "Ashby")], edges: [],
-  checks_judged: 3,
+  checks_judged: 2,
   would_raise: [
     { rule_id: "r-kyc", rule_name: "New customers screened", severity: "high", on_hit: "alert", entity_id: "p1", entity_type: "Person", entity_name: "Callum Okafor" },
     { rule_id: "r-wide", rule_name: "Sanctioned people, every case", severity: "high", on_hit: "alert", entity_id: "p1", entity_type: "Person", entity_name: "Callum Okafor" },

@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.15** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.16** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.16 | 2026-11-01 | §7.11: a rule that runs on a schedule, every day or every week, and its runs. §7.12: a second person's approval — for a rule for the whole deployment, and for closing a high-severity alert; a rule's versions. §7.3 and §7.10 point to them, and a list may be refreshed on a schedule. |
 | 1.15 | 2026-11-01 | §7.9: the four new AML templates (a high-risk jurisdiction, large cash, a dormant account reactivated, a sudden rise in velocity). §7.10: screening lists — the Lists tab, re-screening when a list changes, and a match confirmed by a person. |
 | 1.14 | 2026-11-01 | §7.6–7.8: a rule written as a sentence, blank by blank from the ontology, and its drawn pattern; frequency and amount conditions; Preview on the last 90 days. |
 | 1.13 | 2026-11-01 | §9.1–9.3: an alert in a report pack (open or closed, inferred or confirmed); alert trends in the Trends tab; the monitoring figures dashboards receive. |
@@ -529,7 +530,8 @@ is claimed by someone who can see it, never given to another person.
 
 **Close as true positive** confirms the node it raised; **Close as false positive** leaves it a
 suggestion. **Closing needs a reason**: the close buttons stay unavailable until you write one, and a
-reason of only spaces is refused. Triage needs Editor; a Viewer reads.
+reason of only spaces is refused. Triage needs Editor; a Viewer reads. **Closing a high-severity
+alert needs a second person** (§7.12): closing it proposes the close, and another member approves it.
 
 ### 7.4 Rules and templates
 
@@ -685,8 +687,53 @@ the alert as a true positive (§7.3). Customers are screened as the rule's deplo
 datasets, so no one is screened, or alerted on, outside what that person may see.
 
 Administrators and data engineers subscribe to a list and refresh it from this tab (the administration
-guide, §9.5, says how). Everyone else sees the lists, not how many customers each refresh re-screened,
-since that number is counted across every case in the deployment.
+guide, §9.5, says how), and may have it refreshed every day or every week; the **Schedule** column
+says when, or "By hand only". Everyone else sees the lists, not how many customers each refresh
+re-screened, since that number is counted across every case in the deployment.
+
+### 7.11 A rule that runs on a schedule
+
+![A rule written to run every day: its schedule, its runs, and the versions it has had](images/user/25-scheduled-rule.png)
+
+A rule written as a sentence (§7.6) runs as data loads — before or after each load commits — or **on a
+schedule**. Choose **Runs: on a schedule**, then **Every** day or week, the day for a weekly rule, and
+the hour (UK time). At each run the rule looks at what is already stored over the last day or week,
+as you see it, and raises an alert for each new finding, once.
+
+- **It runs as you**, its author, never as the system: it judges only what you may see, and only
+  while you may still sign in, deploy rules and are still an Author of the case (an Editor, for a rule
+  just for you).
+- **Schedule and runs**, under the rule, says when it runs next and what each run did: how many
+  alerts it raised, or why it did not run, in words. A run the deployment missed while it was down is
+  said too; after downtime only the latest run happens.
+- **If it is refused three times in a row** — say, because you can no longer sign in — it stops, and
+  says why. Changing the rule starts it again.
+- A rule for the whole deployment does not run on a schedule: it is judged within each case as that
+  case's data loads.
+
+### 7.12 A second person's approval
+
+![A rule for the whole deployment waiting for a second person, and a high-severity alert whose close waits for approval](images/user/26-second-person.png)
+
+Two decisions need a second person with the right, and the person who proposed one can never approve
+it.
+
+**A rule for the whole deployment** (§7.6) — deploying it, changing it or retiring it. A new one is
+listed as *not running: waiting for a second person's approval*, with who proposed it; a change or a
+retirement waits beside the rule, which runs as it stood until then. Another administrator who is an
+Author of the case sees **Approve** and **Reject** (with a reason); a rejected rule never runs. A rule
+for one case, or just for you, is not held up: it runs as soon as it is deployed or changed.
+
+**Closing a high-severity alert** that someone else may see. **Close as true positive** or **false
+positive** proposes the close: the alert stays in the queue as *Closing*, with your reason. Another
+member who triages alerts in the case opens it and chooses **Approve the close**, or **Send back**
+with a reason, which returns it to you, claimed. You may withdraw your own proposal the same way. An
+alert only you can see (your own hotlist's, kept to you) has no second reader, and you close it alone.
+
+**Every rule keeps its versions.** **Versions**, under a rule, lists each one: what it did (deployed,
+changed or retired), who made it and when, and who approved or rejected it. A changed rule runs as the
+person who wrote the change, since it is their judgement now. Everything here is in the case's rule
+audit.
 
 ## 8. Ownership and due diligence
 

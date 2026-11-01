@@ -31,7 +31,7 @@ export function RuleApproval(props: AlertsApi & { rule: TypologyRule; canApprove
   const words = pendingWords(rule);
   if (!words) return null;
   return (
-    <span style={{ display: "grid", gap: "var(--sp-4)" }}>
+    <span style={{ display: "grid", gap: "var(--sp-4)", justifyItems: "start", alignContent: "start" }}>
       <span className="label" role="note">
         {words}
       </span>
@@ -83,7 +83,7 @@ export function RuleHistory(props: AlertsApi & { rule: TypologyRule }) {
   const [versions, setVersions] = useState<RuleVersion[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   return (
-    <span style={{ display: "grid", gap: "var(--sp-4)" }}>
+    <span style={{ display: "grid", gap: "var(--sp-4)", justifyItems: "start", alignContent: "start" }}>
       <Button
         aria-label={`Versions of ${props.rule.name}`}
         aria-expanded={versions !== null}
@@ -125,7 +125,7 @@ export function RuleSchedule(props: AlertsApi & { rule: TypologyRule }) {
   const [view, setView] = useState<RuleScheduleView | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   return (
-    <span style={{ display: "grid", gap: "var(--sp-4)" }}>
+    <span style={{ display: "grid", gap: "var(--sp-4)", justifyItems: "start", alignContent: "start" }}>
       <Button
         aria-label={`Schedule and runs of ${props.rule.name}`}
         aria-expanded={view !== null}

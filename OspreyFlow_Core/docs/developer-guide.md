@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.7** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.8** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.8 | 2026-11-01 | §3.8a: the Checks on load step — attaching the case's and the deployment's rules to a pipeline and choosing what a hit does there. §3.8: Verify shows the alerts its sample would raise, beside the rejections, and writes nothing. §2: a data engineer attaches rules but does not write them. |
 | 1.7 | 2026-11-01 | The opening says what OspreyFlow is for: intelligence mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. |
 | 1.6 | 2026-10-29 | Describes v0.4.1. No change to its content. |
 | 1.5 | 2026-10-28 | §6.1: row numbers, counted from 1 in the Glass and from 0 in the API. |
@@ -71,7 +72,9 @@ act), and their **rights** (what they may do). A right never widens what a perso
 | `create_case`, `share_case`, `investigate`, `run_analysis`, `read_reports` | Work in cases alongside analysts |
 
 It also carries `revert_loads`, for reverting a load — which no screen or command uses yet (section
-6.4). It does **not** hold `edit_graph`, `confirm_inferred`, `extract_files`, `resolve_entities`,
+6.4). It attaches rules to a pipeline (section 3.8a) but does not write them: a rule written as a
+sentence needs the analyst's `keep_watches` as well as `deploy_rules`, so an analyst writes it in
+Monitoring. It does **not** hold `edit_graph`, `confirm_inferred`, `extract_files`, `resolve_entities`,
 `export` or `read_report_feed`: those are the Analyst's and Reports Viewer's. An administrator can
 grant any single right on its own.
 
@@ -223,6 +226,39 @@ case's datasets as you), how many rows were deduplicated or rejected, and the gr
 Rejections are grouped by cause, naming the adapter and field — never the value. A value the
 ontology refuses (a date of birth that is not a date) rejects its row; nothing is silently
 changed. **A recipe is published only after it has verified.**
+
+![Verify: the alerts the sample would raise under the pipeline's checks, beside the rejections](images/developer/12-verify-would-raise.png)
+
+**Alerts this sample would raise.** Beside the rejections, Verify judges the sample with the
+pipeline's checks on load (section 3.8a), each rule as its author, as the load would — and lists, for
+each alert, the rule, its severity, the entity it names and what a hit would do here: load with an
+alert, or hold the rows. Nothing is raised, held or written: the run that does this has no way to
+write. It judges only the rows you may read in full, and names only entities the sample shows you.
+Some checks cannot be judged in a dry run, and say why: one that reads money movements or counts
+events (a dry run makes neither), and one that reads links already in the graph. Those are judged
+when the load runs.
+
+### 3.8a Checks on load
+
+![Checks on load: the rules that judge this pipeline's loads, and what a hit does here](images/developer/13-checks-on-load.png)
+
+**Checks on load**, a button at the top of a pipeline, chooses which rules judge this source's loads
+and what a hit does here. The list holds the case's rules and the whole deployment's that judge data
+as it loads, each with its sentence or typology in words, its severity and when it runs.
+
+- **Apply** attaches a rule to this pipeline. Until anyone chooses, every rule of the case judges the
+  pipeline's loads, as it always has; once you save, only the rules you attached do.
+- **A hit here** chooses what happens: **loads with an alert**, or **holds the rows for review** (they
+  wait under Held rows for a reviewer). Holding is offered only for a rule that runs before the load
+  commits.
+- **A rule for the whole deployment applies to every pipeline**: it cannot be left off, though you may
+  make its hits hold here. A rule an analyst keeps for themselves is their own watch, not a check on
+  a load, and is not listed.
+- A rule waiting for a second person's approval is listed, and runs once approved.
+
+**Save the checks** records your choice, with your name; it is read at every run, scheduled or not,
+and when held rows are released. You attach rules here; you do not write them. Rules are written by
+analysts in Monitoring, as sentences or from templates.
 
 ### 3.9 Publish, versions and running
 
