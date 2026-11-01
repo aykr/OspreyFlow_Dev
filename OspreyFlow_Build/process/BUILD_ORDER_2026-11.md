@@ -106,6 +106,25 @@ resumed session starts here.
 
 ## Open questions found during the run
 
+13. **Step 8a, the prison demo's monitoring use cases P1 to P4** (ADR-127 Amendment 41, built on branch
+    `demo-prison-alerting`, not merged), for the owner:
+    - **A second analyst account for the demo.** Approving the rule alert's high-severity close (stage
+      (d)) needs a second person with the analyst role; the demo has one analyst account. Add a demo
+      persona (an intelligence manager, a realm change), or show the approval from a slide?
+    - **Where P4 is shown.** The Glass shows no monitoring figure (the Reports view counts typology
+      alerts only); the monitoring sections reach the Superset board, which never counts an "only me"
+      hotlist. Show P4 on the board (dashboards on, the hotlist shared with a team the board's account
+      belongs to), or add the figures to the Glass?
+    - **A seized handset is named "Device" and an id tail** in alert words and the queue: a `Device`
+      declares no name property. Should `imei` name a device?
+    - **"For Wing F"** (P3): alert trends cannot filter by place; built as the case's alerts. A place
+      filter would be a decision of its own.
+    - **Administration guide §12's `closed` row** lists true and false positives only; since ADR-133
+      Amendment 5 a label is any of the five reasons. For the guides' next version.
+    - **Rehearsals:** S1 must not be closed as *True match* (it supersedes the load's `Alert` node and
+      the reset then refuses), and a rehearsal's rule must be retired and written again (a rule raises a
+      finding once). Both are in the setup guide and the reset's words.
+
 12. **The port guard and `make dev-up` (step 7b).** The guard refuses every local test run that
     reaches 2480, but `make dev-up` also publishes its ArcadeDB on 2480, so the live ArcadeDB suites
     can no longer run against the dev stack locally (CI is allowed by `CI=true`). Proposed: move

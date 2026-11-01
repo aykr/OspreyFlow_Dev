@@ -21425,7 +21425,10 @@ the alert, hotlist, pack-free queue and close paths and real DuckDB for the aler
 the golden tests' `MergingGraph` behind the real `DatasetStampingGraph`, answering every read through
 the scheme's own predicate and the reader's datasets, so a node the reader may not see is absent
 from the answer, as the adapter's access step makes it (rule 15). The batches' own properties are in
-`tests/scenarios/test_pid_monitoring_batches.py`, and R18 and R19 have golden tests of their own.
+`tests/scenarios/test_pid_monitoring_batches.py`, and R18 and R19 have golden tests of their own
+(`tests/ingest/test_pid_monitoring_recipes.py`). The order case is run again against a throwaway
+ArcadeDB, with the adapter's own access step (`tests/ingest/test_pid_monitoring_storyline_live.py`,
+CI's live job).
 
 **The reset and rehearsals.** `--release-batch-2` now lists all three chapter-9 files (batch 2, then
 the bookings, then the new contacts) at once; the presenter loads them in that order. `--reset-live`

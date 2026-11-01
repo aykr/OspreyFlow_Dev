@@ -46,7 +46,9 @@ from typing import Any
 from services.api.change_stream import ChangeStreamEntry, touched_node_ids
 from services.api.dataset_scope import DatasetStampingGraph
 from services.api.evaluation import evaluate_hotlists_for_entry
+from services.api.pattern_store import PatternNotFoundError
 from services.api.rule_evaluation import RuleGate, handling_readable
+from services.api.rule_sentences import compile_pattern
 from services.api.studio_publish import load_with_rules, post_commit_notes
 from services.ingest import staging
 from tests.ingest import pid_golden_support as golden
@@ -65,8 +67,11 @@ from schemas.domain import (
     Node,
     NodeWrite,
     Principal,
+    SavedPattern,
     Subgraph,
+    TypologyRule,
 )
+from schemas.sentences import SentenceRuleParams
 
 DATASET = "prison-intelligence"
 CASE = golden.CASE
@@ -230,6 +235,23 @@ def local_staging() -> Iterator[None]:
             yield
         finally:
             staging.filesystem = before  # type: ignore[assignment]
+
+
+class RulePatterns:
+    """The rule's drawn pattern, read as its author alone (`PatternStore.get_authorized`'s refusal:
+    anyone else is told it is not found)."""
+
+    def __init__(self, rule: TypologyRule) -> None:
+        assert isinstance(rule.params, SentenceRuleParams)
+        self.rule = rule
+        self.pattern = compile_pattern(rule.params.sentence, ONTOLOGY)
+
+    async def get_authorized(self, pattern_id: str, principal: Principal) -> SavedPattern:
+        if principal.id != self.rule.owner_id or pattern_id != self.rule.params.pattern_id:  # type: ignore[union-attr]
+            raise PatternNotFoundError(pattern_id)
+        return SavedPattern(id=f"saved-{pattern_id}", pattern_id=pattern_id, version=1,
+                            name=f"Rule: {self.rule.name}", owner_id=self.rule.owner_id,
+                            created_at=datetime.now(UTC), definition=self.pattern)  # fmt: skip
 
 
 def msisdn(raw: str) -> str:

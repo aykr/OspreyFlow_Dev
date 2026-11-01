@@ -55,14 +55,12 @@ from services.api import alert_queue, packs, reports
 from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
 from services.api.hotlists import HotlistStore
-from services.api.pattern_store import PatternNotFoundError
-from services.api.rule_sentences import compile_pattern
 from tests.scenarios import pid_monitoring_support as support
 from tests.scenarios.pid_monitoring_support import (
     DATASET,
-    ONTOLOGY,
     SCHEME,
     Audit,
+    RulePatterns,
     SignatureSet,
     Stores,
     World,
@@ -74,7 +72,7 @@ from adapters.analytics_duckdb.schema import create_events_table
 from conduit_common.identity import new_id
 from demo_fixtures import pid_files, pid_monitoring
 from schemas.analytics import AlertTrendRequest, TrendInterval
-from schemas.domain import Interval, Principal, SavedPattern, TypologyRule
+from schemas.domain import Interval, Principal, TypologyRule
 from schemas.sentences import RuleSentence, SentenceRuleParams
 
 pytestmark = [pytest.mark.asyncio(loop_scope="module")]
@@ -167,23 +165,6 @@ async def scene(base: World, dsn: str) -> AsyncIterator[Scene]:
     con.close()
 
 
-class _Patterns:
-    """The rule's drawn pattern, read as its author alone (`PatternStore.get_authorized`'s refusal:
-    anyone else is told it is not found)."""
-
-    def __init__(self, rule: TypologyRule) -> None:
-        assert isinstance(rule.params, SentenceRuleParams)
-        self.rule = rule
-        self.pattern = compile_pattern(rule.params.sentence, ONTOLOGY)
-
-    async def get_authorized(self, pattern_id: str, principal: Principal) -> SavedPattern:
-        if principal.id != self.rule.owner_id or pattern_id != self.rule.params.pattern_id:  # type: ignore[union-attr]
-            raise PatternNotFoundError(pattern_id)
-        return SavedPattern(id=f"saved-{pattern_id}", pattern_id=pattern_id, version=1,
-                            name=f"Rule: {self.rule.name}", owner_id=self.rule.owner_id,
-                            created_at=datetime.now(UTC), definition=self.pattern)  # fmt: skip
-
-
 def p1_rule(scene: Scene, *, dataset: str = DATASET) -> TypologyRule:
     """The analyst's rule as the sentence builder deploys it (ADR-133 Amendment 2): typology
     `sentence`, its drawn pattern saved as theirs, in the case's dataset."""
@@ -206,7 +187,7 @@ async def load(scene: Scene, file: str, *, rule: TypologyRule | None = None) -> 
     loaded = await run_chapter_9_file(
         scene.world, file, scene.stores, case=scene.case,
         rules=[rule] if rule is not None else [],
-        patterns=_Patterns(rule) if rule is not None else None,
+        patterns=RulePatterns(rule) if rule is not None else None,
     )  # fmt: skip
     scene.loaded[file] = loaded
     return loaded
