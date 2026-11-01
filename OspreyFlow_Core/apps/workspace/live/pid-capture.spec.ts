@@ -275,6 +275,8 @@ test("CAP-A1-J2", async ({ page }) => {
 const COHORT = process.env.OSPREY_PID_COHORT_LIST ?? "";
 
 test("CAP-A1-J3", async ({ page }) => {
+  // Three thousand prisoners with all their links take longer than the default to add and draw.
+  test.setTimeout(900_000);
   await freshCase(page);
   await page.getByRole("button", { name: "Add many from a list", exact: true }).first().click();
   await page.getByRole("textbox", { name: /identifiers/i }).fill(readFileSync(COHORT, "utf-8"));
@@ -495,7 +497,14 @@ test("CAP-A1-J9-c", async ({ page }) => {
   await page.waitForTimeout(2500);
   await page.getByRole("tab", { name: "Packs", exact: true }).click();
   await page.waitForTimeout(2500);
-  await page.getByRole("button", { name: /^Wing F supply route/ }).first().click();
+  // The pack a presenter makes in rehearsal; made here when the deployment has none yet.
+  const pack = page.getByRole("button", { name: /^Wing F supply route/ }).first();
+  if (!(await pack.isVisible().catch(() => false))) {
+    await page.getByLabel("New pack title").fill("Wing F supply route");
+    await page.getByRole("button", { name: "Create pack" }).click();
+    await page.waitForTimeout(2500);
+  }
+  await pack.click();
   await page.getByLabel("Saved trend").selectOption({ label: "Throw-overs by yard" });
   await page.getByRole("button", { name: "Add item" }).click();
   await page.waitForTimeout(3000);
@@ -603,7 +612,9 @@ async function runNow(page: Page, open: RegExp): Promise<string> {
   await expect(outcome).toBeVisible({ timeout: 240_000 });
   await page.waitForTimeout(3000);
   const runs = (await page.getByRole("list", { name: "Runs of this recipe" }).textContent()) ?? "";
-  await page.getByRole("button", { name: /Back/ }).first().click();
+  // The Publish screen's own way back to the recipe list, by its exact name: `/Back/` also matched
+  // the rail's "Back to the investigation", which left the Studio (31 October 2026).
+  await page.getByRole("button", { name: "← Back", exact: true }).click();
   return runs;
 }
 
