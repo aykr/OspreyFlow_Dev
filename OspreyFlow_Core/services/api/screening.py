@@ -14,9 +14,16 @@ admitted locally under the owner's exceptions file, is never copied wholesale in
 suggestion, scored, for a person to judge (rule 5): it is written `inferred`, never asserted.
 
 **Rule 9.** Everything committed is synthetic
-(`packages/demo_fixtures/screening_list_synthetic.yaml`).
-`scripts/load_screening_list.py` refuses a list not marked synthetic unless the owner's local
-`real_data_exceptions.yaml` names it — OpenSanctions (CC-BY-NC 4.0, spec 00 §7) included.
+(`packages/demo_fixtures/screening_list_synthetic.yaml`, `packages/demo_fixtures/screening_lists/`).
+`scripts/load_screening_list.py` and a subscription's refresh (`screening_refresh.py`) refuse a list
+that is not synthetic unless the device's local `real_data_exceptions.yaml` names it — OpenSanctions
+(CC-BY-NC 4.0, spec 00 §7) included.
+
+**A list as a managed source (ADR-133 decision 4, stage (c)).** A subscribed list keeps its
+version, its number of entries, when it last changed and why its last attempt failed
+(`screening_lists`), and each refresh is recorded (`screening_list_updates`). `apply_update`
+replaces a list's entries whole in one transaction and says which entries it added, changed and
+removed — the changed entries are all a re-screening reads.
 """
 
 from __future__ import annotations
@@ -30,6 +37,12 @@ from typing import Literal
 
 import asyncpg
 import duckdb
+
+from schemas.screening import (
+    ScreeningListStatus,
+    ScreeningListUpdate,
+    ScreeningSubscriptionInput,
+)
 
 Listing = Literal["sanction", "pep", "adverse_media"]
 
@@ -46,6 +59,37 @@ CREATE TABLE IF NOT EXISTS screening_entries (
     loaded_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS screening_entries_type_idx ON screening_entries (entity_type);
+ALTER TABLE screening_entries ADD COLUMN IF NOT EXISTS aliases TEXT[] NOT NULL DEFAULT '{}';
+CREATE TABLE IF NOT EXISTS screening_lists (
+    list_name TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    location TEXT NOT NULL,
+    dataset TEXT,
+    use_for TEXT NOT NULL,
+    version TEXT,
+    entry_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ,
+    attempted_at TIMESTAMPTZ,
+    failure TEXT,
+    synthetic BOOLEAN NOT NULL DEFAULT FALSE,
+    subscribed_by TEXT NOT NULL,
+    subscribed_at TIMESTAMPTZ NOT NULL
+);
+CREATE TABLE IF NOT EXISTS screening_list_updates (
+    id TEXT PRIMARY KEY,
+    list_name TEXT NOT NULL,
+    at TIMESTAMPTZ NOT NULL,
+    outcome TEXT NOT NULL,
+    version TEXT,
+    previous_version TEXT,
+    added INTEGER NOT NULL DEFAULT 0,
+    changed INTEGER NOT NULL DEFAULT 0,
+    removed INTEGER NOT NULL DEFAULT 0,
+    rescreened INTEGER NOT NULL DEFAULT 0,
+    alerts INTEGER NOT NULL DEFAULT 0,
+    words TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS screening_list_updates_at_idx ON screening_list_updates (at DESC);
 """
 
 
@@ -59,6 +103,57 @@ class ScreeningEntry:
     date_of_birth: date | None = None
     country: str | None = None
     synthetic: bool = True
+    #: Every other name the list gives (ADR-133 stage (c)); a name matches on any of them.
+    aliases: tuple[str, ...] = ()
+
+    def fingerprint(self) -> tuple[object, ...]:
+        """What makes two versions of one entry the same entry: everything screening reads."""
+        return (self.listing, self.entity_type, self.name, tuple(sorted(self.aliases)),
+                self.date_of_birth, self.country)  # fmt: skip
+
+
+@dataclass(frozen=True)
+class ListDiff:
+    """What one update of a list changed, entry by entry (by the publisher's own reference)."""
+
+    list_name: str
+    previous_version: str | None
+    version: str
+    added: tuple[ScreeningEntry, ...]
+    changed: tuple[ScreeningEntry, ...]
+    removed: tuple[str, ...]
+    unchanged: int
+
+    @property
+    def to_screen(self) -> tuple[ScreeningEntry, ...]:
+        """The entries a customer could newly match: added or changed. A removed entry raises
+        nothing new, and an unchanged one was screened when it arrived."""
+        return (*self.added, *self.changed)
+
+
+def diff_entries(
+    list_name: str,
+    before: Sequence[ScreeningEntry],
+    after: Sequence[ScreeningEntry],
+    *,
+    previous_version: str | None,
+    version: str,
+) -> ListDiff:
+    old = {e.id: e for e in before}
+    new = {e.id: e for e in after}
+
+    def same(a: ScreeningEntry, b: ScreeningEntry) -> bool:
+        return a.fingerprint() == b.fingerprint()
+
+    return ListDiff(
+        list_name=list_name,
+        previous_version=previous_version,
+        version=version,
+        added=tuple(e for i, e in new.items() if i not in old),
+        changed=tuple(e for i, e in new.items() if i in old and not same(old[i], e)),
+        removed=tuple(sorted(i for i in old if i not in new)),
+        unchanged=sum(1 for i, e in new.items() if i in old and same(old[i], e)),
+    )
 
 
 @dataclass(frozen=True)
@@ -94,18 +189,23 @@ def screen(
     ]
     if not candidates:
         return []
+    # Each entry's names — its own and its aliases — scored alike; the entry scores its best.
+    names = [(i, normalised(n)) for i, e in enumerate(candidates) for n in (e.name, *e.aliases)]
     con = duckdb.connect()
     try:
         scores = con.execute(
             "SELECT jaro_winkler_similarity(?, unnest(?::VARCHAR[]))",
-            [probe, [normalised(e.name) for e in candidates]],
+            [probe, [n for _, n in names]],
         ).fetchall()
     finally:
         con.close()
+    best: dict[int, float] = {}
+    for (index, _), row in zip(names, scores, strict=True):
+        best[index] = max(best.get(index, 0.0), float(row[0]))
     hits = [
-        ScreeningHit(entry=e, score=round(float(row[0]), 4))
-        for e, row in zip(candidates, scores, strict=True)
-        if float(row[0]) >= min_score
+        ScreeningHit(entry=candidates[i], score=round(score, 4))
+        for i, score in best.items()
+        if score >= min_score
     ]
     return sorted(hits, key=lambda h: (-h.score, h.entry.id))
 
@@ -130,38 +230,166 @@ class ScreeningListStore:
         now = datetime.now(UTC)
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute("DELETE FROM screening_entries WHERE list_name = $1", list_name)
-            await conn.executemany(
-                "INSERT INTO screening_entries (id, list_name, listing, entity_type, name, "
-                "date_of_birth, country, synthetic, loaded_at) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-                [
-                    (e.id, list_name, e.listing, e.entity_type, e.name, e.date_of_birth,
-                     e.country, e.synthetic, now)
-                    for e in entries
-                ],
-            )  # fmt: skip
+            await self._insert(conn, list_name, entries, now)
         return len(entries)
+
+    @staticmethod
+    async def _insert(
+        conn: asyncpg.Connection, list_name: str, entries: Sequence[ScreeningEntry], now: datetime
+    ) -> None:
+        await conn.executemany(
+            "INSERT INTO screening_entries (id, list_name, listing, entity_type, name, "
+            "date_of_birth, country, synthetic, loaded_at, aliases) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            [
+                (e.id, list_name, e.listing, e.entity_type, e.name, e.date_of_birth,
+                 e.country, e.synthetic, now, list(e.aliases))
+                for e in entries
+            ],
+        )  # fmt: skip
 
     async def entries(self, entity_type: str) -> list[ScreeningEntry]:
         """Reference data, read by the screening rules' evaluation only (never a route)."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT id, list_name, listing, entity_type, name, date_of_birth, country, "
-                "synthetic FROM screening_entries WHERE entity_type = $1 ORDER BY id",
+                "synthetic, aliases FROM screening_entries WHERE entity_type = $1 ORDER BY id",
                 entity_type,
             )
-        return [
-            ScreeningEntry(
-                id=r["id"], list_name=r["list_name"], listing=r["listing"],
-                entity_type=r["entity_type"], name=r["name"], date_of_birth=r["date_of_birth"],
-                country=r["country"], synthetic=r["synthetic"],
+        return [_entry(r) for r in rows]
+
+    # --- a list as a managed source (ADR-133 decision 4, stage (c)) ------------------------------
+
+    async def subscribe(
+        self, spec: ScreeningSubscriptionInput, by: str, *, synthetic: bool
+    ) -> ScreeningListStatus:
+        """A new subscription, or a changed one (its source, location or dataset); its entries stay
+        until its next refresh replaces them."""
+        now = datetime.now(UTC)
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO screening_lists (list_name, source, location, dataset, use_for, "
+                "synthetic, subscribed_by, subscribed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
+                "ON CONFLICT (list_name) DO UPDATE SET source = EXCLUDED.source, "
+                "location = EXCLUDED.location, dataset = EXCLUDED.dataset, "
+                "use_for = EXCLUDED.use_for, synthetic = EXCLUDED.synthetic",
+                spec.list_name, spec.source, spec.location, spec.dataset, spec.use, synthetic,
+                by, now,
             )  # fmt: skip
-            for r in rows
-        ]
+        found = await self.subscription(spec.list_name)
+        assert found is not None
+        return found
+
+    async def subscription(self, list_name: str) -> ScreeningListStatus | None:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(f"{_LIST_SELECT} WHERE list_name = $1", list_name)
+        return _status(row) if row else None
+
+    async def use_of(self, list_name: str) -> str:
+        async with self._pool.acquire() as conn:
+            value = await conn.fetchval(
+                "SELECT use_for FROM screening_lists WHERE list_name = $1", list_name
+            )
+        return str(value or "local_development")
+
+    async def subscriptions(self) -> list[ScreeningListStatus]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(f"{_LIST_SELECT} ORDER BY list_name")
+        return [_status(r) for r in rows]
+
+    async def apply_update(
+        self,
+        list_name: str,
+        version: str,
+        entries: Sequence[ScreeningEntry],
+        *,
+        synthetic: bool,
+    ) -> ListDiff:
+        """The list's entries replaced whole by this version's, in one transaction, the list row
+        locked so two refreshes of one list never interleave; returns what changed."""
+        now = datetime.now(UTC)
+        async with self._pool.acquire() as conn, conn.transaction():
+            previous = await conn.fetchval(
+                "SELECT version FROM screening_lists WHERE list_name = $1 FOR UPDATE", list_name
+            )
+            rows = await conn.fetch(
+                "SELECT id, list_name, listing, entity_type, name, date_of_birth, country, "
+                "synthetic, aliases FROM screening_entries WHERE list_name = $1",
+                list_name,
+            )
+            diff = diff_entries(
+                list_name, [_entry(r) for r in rows], entries,
+                previous_version=previous, version=version,
+            )  # fmt: skip
+            await conn.execute("DELETE FROM screening_entries WHERE list_name = $1", list_name)
+            await self._insert(conn, list_name, entries, now)
+            changed = bool(diff.added or diff.changed or diff.removed) or previous != version
+            await conn.execute(
+                "UPDATE screening_lists SET version = $2, entry_count = $3, attempted_at = $4, "
+                "failure = NULL, synthetic = $5, "
+                "updated_at = CASE WHEN $6 THEN $4 ELSE updated_at END WHERE list_name = $1",
+                list_name, version, len(entries), now, synthetic, changed,
+            )  # fmt: skip
+        return diff
+
+    async def record_update(self, update: ScreeningListUpdate) -> None:
+        """A refresh's record; a refused or failed one also sets the list's failure, in words."""
+        async with self._pool.acquire() as conn, conn.transaction():
+            await conn.execute(
+                "INSERT INTO screening_list_updates (id, list_name, at, outcome, version, "
+                "previous_version, added, changed, removed, rescreened, alerts, words) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                update.id, update.list_name, update.at, update.outcome, update.version,
+                update.previous_version, update.added, update.changed, update.removed,
+                update.rescreened, update.alerts, update.words,
+            )  # fmt: skip
+            if update.outcome in ("refused", "failed"):
+                await conn.execute(
+                    "UPDATE screening_lists SET attempted_at = $2, failure = $3 "
+                    "WHERE list_name = $1",
+                    update.list_name, update.at, update.words,
+                )  # fmt: skip
+
+    async def updates(self, *, limit: int = 20) -> list[ScreeningListUpdate]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, list_name, at, outcome, version, previous_version, added, changed, "
+                "removed, rescreened, alerts, words FROM screening_list_updates "
+                "ORDER BY at DESC, id DESC LIMIT $1",
+                limit,
+            )
+        return [ScreeningListUpdate(**dict(r)) for r in rows]
+
+
+_LIST_SELECT = (
+    "SELECT list_name, source, location, dataset, synthetic, version, entry_count, updated_at, "
+    "attempted_at, failure FROM screening_lists"
+)
+
+
+def _status(row: asyncpg.Record) -> ScreeningListStatus:
+    from .screening_refresh import LICENCES
+
+    return ScreeningListStatus(
+        list_name=row["list_name"], source=row["source"], location=row["location"],
+        dataset=row["dataset"], synthetic=row["synthetic"], licence=LICENCES[row["source"]],
+        version=row["version"], entries=row["entry_count"], updated_at=row["updated_at"],
+        attempted_at=row["attempted_at"], failure=row["failure"],
+    )  # fmt: skip
+
+
+def _entry(r: asyncpg.Record) -> ScreeningEntry:
+    return ScreeningEntry(
+        id=r["id"], list_name=r["list_name"], listing=r["listing"],
+        entity_type=r["entity_type"], name=r["name"], date_of_birth=r["date_of_birth"],
+        country=r["country"], synthetic=r["synthetic"], aliases=tuple(r["aliases"] or ()),
+    )  # fmt: skip
 
 
 __all__ = [
+    "ListDiff",
     "ScreeningEntry",
+    "diff_entries",
     "ScreeningHit",
     "ScreeningListStore",
     "normalised",

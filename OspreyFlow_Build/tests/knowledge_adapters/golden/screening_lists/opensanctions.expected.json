@@ -1,0 +1,13 @@
+{
+  "format": "opensanctions",
+  "version": "20261030091500-syn",
+  "skipped": 2,
+  "entries": [
+    {"ref": "syn-os-0001", "listing": "sanction", "entity_type": "Person", "name": "Elena Petrova",
+     "aliases": ["Lena Petrova"], "date_of_birth": "1971-03-03", "country": "XA"},
+    {"ref": "syn-os-0002", "listing": "pep", "entity_type": "Person", "name": "Harriet Quennell",
+     "aliases": [], "date_of_birth": null, "country": "XB"},
+    {"ref": "syn-os-0003", "listing": "adverse_media", "entity_type": "Organisation", "name": "Vantage Crest Holdings",
+     "aliases": [], "date_of_birth": null, "country": null}
+  ]
+}

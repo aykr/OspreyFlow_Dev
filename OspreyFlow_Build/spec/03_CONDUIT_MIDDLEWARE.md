@@ -570,7 +570,27 @@ POST   /v1/investigations/{id}/rules/sentence/compile   a rule sentence checked 
 POST   /v1/investigations/{id}/rules/sentence/read   a drawn pattern read back as the sentence, its other blanks kept, Viewer
 POST   /v1/investigations/{id}/rules/preview   "Preview on the last 90 days": run as the caller, raises and writes nothing, Viewer
 POST   /v1/investigations/{id}/rules/sentence   deploy a sentence: Editor for "just me", Author for this case, Author and administrator for the deployment
+GET    /v1/screening-lists   each screening list's version, entries, last update and failure, read_alert_queue (no refresh counts)
+GET    /v1/admin/screening-lists   the same, with the latest refreshes and what each changed, re-screened and raised, load_screening_lists
+POST   /v1/admin/screening-lists   subscribe a list through its connector to a file in the ingest folder, load_screening_lists
+POST   /v1/admin/screening-lists/{list_name}/refresh   "Refresh now": apply the list's new version, re-screen against its changed entries, load_screening_lists
 ```
+
+**Screening lists as managed sources (ADR-133 stage (c)).** A list is subscribed through a connector,
+a Knowledge Adapter with golden files (`packages/knowledge_adapters/screening_lists.py`: OFAC SDN, OFSI
+consolidated, UN consolidated, EU consolidated, OpenSanctions; rule 8), to one file inside the ingest
+folder (a location outside it, resolved first, is refused). A refresh (`services/api/screening_refresh.py`)
+admits the list under rule 9 before reading it into the store — synthetic only when every file is one of
+the repository's own, known by its SHA-256 (`packages/demo_fixtures/screening_lists/synthetic.sha256`);
+anything else is real and needs this device's `real_data_exceptions.yaml` — then applies it as a version
+whose diff names the entries added, changed and removed. Every active `kyc_screening` rule then re-screens,
+as its own deployer and within its case's datasets, every person and organisation it may read
+(`GraphPort.list_nodes`, paged to the end) against the added and changed entries only; a match is the
+onboarding finding — a scored `SAME_AS` written `inferred`, and a `kyc_screening` alert, high severity, in
+the case's one queue. Each refresh is recorded in words (updated, unchanged, refused, failed); a refused or
+failed one leaves the list as it was. A reader of the alert queue sees each list but not the refreshes:
+their counts of customers re-screened and alerts raised are taken across every case (rule 7). A list's
+own schedule is stage (d)'s; the pipeline scheduler runs Studio recipes only.
 
 **Rules written as sentences (ADR-133 stage (b)).** A sentence (`packages/schemas/sentences.py`) is a
 set of closed choices from the ontology — never an expression (rule 8) — refused at validation by its

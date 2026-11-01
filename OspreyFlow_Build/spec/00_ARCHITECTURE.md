@@ -989,6 +989,25 @@ ADR-035 §C3), on the owner's device, for local development or an owner-run demo
 the same local-only admission. What the repository and CI hold is
 `packages/demo_fixtures/screening_list_synthetic.yaml` — invented names, marked synthetic.
 
+**ADR-133 stage (c) screening-list connectors (1 November 2026) — data, not code, and never in the
+repository or CI.** Each connector (`packages/knowledge_adapters/screening_lists.py`) reads a list a
+customer's deployment subscribes to; the repository holds only synthetic files shaped like each format
+(`packages/demo_fixtures/screening_lists/`, the golden files under `tests/knowledge_adapters/golden/`).
+A real list is admitted only by the device's own `real_data_exceptions.yaml` (rule 9, ADR-035 §C3).
+Each licence as read from its publisher, 1 November 2026:
+
+| List | Licence, as found | Source |
+| --- | --- | --- |
+| OFAC SDN (US Treasury) | A work of the US Government, so in the public domain (17 U.S.C. §105). **OFAC's own pages state no licence**: neither its data specification (dat_spec, updated 25 September 2023), its list-format FAQs nor the Sanctions List Service page says anything about copyright; the dat_spec says only that the list is published in the Federal Register, which governs | `ofac.treasury.gov/media/29976/download`, `ofac.treasury.gov/faqs/topic/1641` |
+| HM Treasury OFSI Consolidated List | Open Government Licence v3.0: "This publication is licensed under the terms of the Open Government Licence v3.0 except where otherwise stated." **The list closed on 28 January 2026**; the FCDO's UK Sanctions List is now "the only source for all UK sanctions designations" (gov.uk, under the same licence). A connector for the UK Sanctions List is not built | `gov.uk/government/publications/financial-sanctions-consolidated-list-of-targets`; `gov.uk/government/publications/the-uk-sanctions-list` |
+| UN Security Council Consolidated List | **No open licence found.** The UN's terms of use permit download and copying "for the User's personal, non-commercial use, without any right to resell or redistribute them or to compile or create derivative works therefrom", "subject to more specific restrictions that may apply"; the list's own page could not be read. To be confirmed with the UN before a customer's deployment relies on it | `un.org/en/about-us/terms-of-use`, `un.org/en/about-us/copyright` |
+| EU consolidated financial sanctions list (FSF) | The European Commission's reuse notice (Commission Decision 2011/833/EU), as the EU open-data portal's catalogue gives it for the XML 1.1 file; one older CSV distribution is labelled CC BY 4.0 there | `data.europa.eu`, dataset `consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions` |
+| OpenSanctions | CC BY-NC 4.0: "The data is licensed under the terms of Creative Commons 4.0 Attribution NonCommercial"; "Any use inside a for-profit business requires a data license. Compliance screening is a commercial use even though it generates no revenue" | `opensanctions.org/licensing/`, `opensanctions.org/docs/commercial/exemption/` |
+
+Not verified from the publishers' own documentation, and so marked in the connectors: the UN list's XML
+element names (its page and schema could not be read) and the EU XML 1.1 export's (its schema refused to
+be read); OFAC's `SDN_Type` values other than `individual`; a `Last Updated` first line in OFSI's CSV.
+
 The rejections below matter more than the acceptances, because each is a component someone will
 otherwise reach for by reflex. Two of them appear in the input documents.
 

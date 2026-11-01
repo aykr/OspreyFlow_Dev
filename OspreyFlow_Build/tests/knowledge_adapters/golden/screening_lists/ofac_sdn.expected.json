@@ -1,0 +1,12 @@
+{
+  "format": "ofac_sdn",
+  "skipped": 1,
+  "entries": [
+    {"ref": "9101", "listing": "sanction", "entity_type": "Person", "name": "PETROVA, Elena",
+     "aliases": ["PETROVA, Lena"], "date_of_birth": "1971-03-03", "country": "XA"},
+    {"ref": "9102", "listing": "sanction", "entity_type": "Organisation", "name": "BOREALIS SHIPPING CORP",
+     "aliases": ["BOREALIS MARITIME LTD"], "date_of_birth": null, "country": "XB"},
+    {"ref": "9104", "listing": "sanction", "entity_type": "Person", "name": "ORLANSKY, Dmitri",
+     "aliases": [], "date_of_birth": null, "country": null}
+  ]
+}

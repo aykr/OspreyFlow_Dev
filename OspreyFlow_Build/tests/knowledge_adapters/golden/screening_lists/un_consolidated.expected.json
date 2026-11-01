@@ -1,0 +1,13 @@
+{
+  "format": "un_consolidated",
+  "version": "2026-10-30T09:15:00.000Z",
+  "skipped": 0,
+  "entries": [
+    {"ref": "SYi.001", "listing": "sanction", "entity_type": "Person", "name": "ELENA PETROVA",
+     "aliases": ["Lena Petrova"], "date_of_birth": "1971-03-03", "country": "Xanadu Republic"},
+    {"ref": "SYi.002", "listing": "sanction", "entity_type": "Person", "name": "DMITRI ORLANSKY",
+     "aliases": [], "date_of_birth": null, "country": null},
+    {"ref": "SYe.001", "listing": "sanction", "entity_type": "Organisation", "name": "BOREALIS SHIPPING CORP",
+     "aliases": ["Borealis Maritime Ltd"], "date_of_birth": null, "country": "Bexland"}
+  ]
+}

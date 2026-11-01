@@ -220,7 +220,7 @@ _LISTING_WORDS = {"sanction": "a sanctions list", "pep": "a politically exposed 
                   "adverse_media": "an adverse-media list"}  # fmt: skip
 
 
-async def _screening_finding(
+async def screening_finding(
     rule: TypologyRule,
     deployer: Principal,
     customer: Party,
@@ -348,7 +348,7 @@ async def judge_screening(
         for hit in screen(
             party_name(customer), dob, entries[customer.type], min_score=params.min_score
         ):
-            findings.append(await _screening_finding(rule, deployer, customer, customer, hit, ctx))
+            findings.append(await screening_finding(rule, deployer, customer, customer, hit, ctx))
         if customer.type != "Organisation" or not params.screen_owners or ctx.compute is None:
             continue
         trace, parties, links = await _owners(
@@ -370,7 +370,7 @@ async def judge_screening(
                 party_name(party), owner_dob, entries["Person"], min_score=params.min_score
             ):
                 findings.append(
-                    await _screening_finding(
+                    await screening_finding(
                         rule,
                         deployer,
                         customer,
@@ -502,6 +502,7 @@ __all__ = [
     "document_state",
     "judge_kyc",
     "party_name",
+    "screening_finding",
 ]
 
 
