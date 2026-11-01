@@ -437,3 +437,84 @@ describe("QueryBuilderPanel ask to search over a pattern already there", () => {
     expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/patterns/save"))).toHaveLength(1);
   });
 });
+
+// ADR-135 decision 5: Ask to search offers the same engine choice as Ask the case. It sends no
+// handling code, so the Conduit runs it locally whatever is named (the decision's "Found while
+// building"); the panel says which engine answered from what comes back, never from the choice.
+const OFFERED = {
+  engines: [
+    { name: "local", label: "This deployment's own model", roles: ["extraction"], default_for: [] },
+    { name: "gemini", label: "Gemini", roles: ["extraction"], default_for: ["extraction"] },
+    { name: "openai", label: "OpenAI", roles: ["transcription"], default_for: ["transcription"] },
+  ],
+};
+
+function mountEngines(engines: unknown, ask: { ok: boolean; status: number; body: unknown }) {
+  const fetchMock = vi.fn((url: string, init?: { body?: string }) => {
+    void init;
+    const target = String(url);
+    if (target.endsWith("/v1/models/engines")) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => engines });
+    }
+    if (target.endsWith("/patterns/ask")) {
+      return Promise.resolve({ ok: ask.ok, status: ask.status, json: async () => ask.body });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({ patterns: [] }) });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(
+    <QueryBuilderPanel investigationId="inv-1" apiBaseUrl="http://api.test" bearerToken="tok" schema={ASK_SCHEMA} selectedNodeIds={[]} />,
+  );
+  return fetchMock;
+}
+
+describe("QueryBuilderPanel ask to search's engine choice (ADR-135)", () => {
+  it("lists only the engines offered for extraction, with the default chosen", async () => {
+    mountEngines(OFFERED, { ok: true, status: 200, body: PROPOSAL });
+    const choice = (await screen.findByRole("combobox", { name: "Model engine" })) as HTMLSelectElement;
+    expect(Array.from(choice.options).map((o) => o.value)).toEqual(["local", "gemini"]);
+    expect(choice.value).toBe("gemini");
+  });
+
+  it("is not shown when only the local engine is offered, and the request names none", async () => {
+    const fetchMock = mountEngines(
+      { engines: [{ name: "local", label: "This deployment's own model", roles: ["extraction"], default_for: ["extraction"] }] },
+      { ok: true, status: 200, body: PROPOSAL },
+    );
+    await vi.waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/v1/models/engines"))).toBe(true),
+    );
+    expect(screen.queryByRole("combobox", { name: "Model engine" })).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "q" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("~4 matches");
+    const [, init] = asked(fetchMock)[0] as [string, { body: string }];
+    expect(JSON.parse(init.body)).not.toHaveProperty("engine");
+  });
+
+  it("sends the engine chosen, and says the engine that answered, which is the local one", async () => {
+    const fetchMock = mountEngines(OFFERED, {
+      ok: true,
+      status: 200,
+      body: { ...PROPOSAL, engine: "local", model: "qwen2.5:7b-instruct" },
+    });
+    await screen.findByRole("combobox", { name: "Model engine" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "q" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByText("Answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeTruthy();
+    const [, init] = asked(fetchMock)[0] as [string, { body: string }];
+    expect(JSON.parse(init.body).engine).toBe("gemini");
+  });
+
+  it("shows a refused engine's words", async () => {
+    mountEngines(OFFERED, {
+      ok: false,
+      status: 422,
+      body: { error: "engine_refused", detail: "Gemini has no extraction model on this deployment." },
+    });
+    await screen.findByRole("combobox", { name: "Model engine" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "q" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByText("Gemini has no extraction model on this deployment.")).toBeTruthy();
+  });
+});

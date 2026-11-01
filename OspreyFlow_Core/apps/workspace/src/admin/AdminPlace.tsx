@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import type {
   DashboardIdentity,
   DemoPackStatus,
+  EngineStatus,
   PersonAccount,
   SignInDelivery,
   SystemStatus,
@@ -634,9 +635,43 @@ function System({ api }: { api: AdminApi }) {
           </tbody>
         </table>
       )}
+      {status?.engines && status.engines.length > 0 && <EnginesTable engines={status.engines} />}
       {status && <VersionSection version={status.version} update={status.update} />}
       <Button onClick={ask}>Ask again</Button>
     </>
+  );
+}
+
+/** Each model engine (ADR-135 decision 5): its models per role, the roles it is the default for,
+ * and whether its key is present — Yes or No. Only the named fields are read, so nothing else the
+ * response might carry, a key least of all, reaches the page. Keys are set on the host with
+ * `ospreyflow models key`, never here. */
+function EnginesTable({ engines }: { engines: EngineStatus[] }) {
+  return (
+    <table className="table" aria-label="Engines">
+      <thead>
+        <tr>
+          <th>Engine</th>
+          <th>Models</th>
+          <th>Default for</th>
+          <th>Key present</th>
+        </tr>
+      </thead>
+      <tbody>
+        {engines.map((engine) => (
+          <tr key={engine.name}>
+            <td>{engine.label}</td>
+            <td>
+              {Object.entries(engine.models)
+                .map(([role, model]) => `${role}: ${model}`)
+                .join("; ")}
+            </td>
+            <td>{engine.default_for.length > 0 ? engine.default_for.join(", ") : "None"}</td>
+            <td>{engine.key_present ? "Yes" : "No"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

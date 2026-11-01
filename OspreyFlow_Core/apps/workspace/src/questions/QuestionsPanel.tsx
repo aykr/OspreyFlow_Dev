@@ -4,6 +4,7 @@
 // The conversation is the case's, and shown to each reader as far as they may see it.
 import { useEffect, useState } from "react";
 
+import { AnsweredBy, EnginePicker, useEngineChoice } from "../models/engines";
 import { candidateLabel, candidateSource, type EmailCandidate } from "../inspector/linkEventsApi";
 import { splitAnswer, type GraphCitation } from "./graphFacts";
 import {
@@ -53,6 +54,8 @@ export function QuestionsPanel({
   const [asking, setAsking] = useState(false);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // ADR-135 decision 5: the engine to ask, among those offered for extraction.
+  const engineChoice = useEngineChoice(apiBaseUrl, bearerToken, "extraction");
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +81,7 @@ export function QuestionsPanel({
         nodeIds: selection?.nodeIds ?? [],
         linkIds: selection?.linkIds ?? [],
         window: getTimelineWindow?.() ?? null,
+        engine: engineChoice.chosen,
       });
       setEntries((prev) => [...(prev ?? []), answered]);
       setQuestion("");
@@ -136,6 +140,7 @@ export function QuestionsPanel({
                 {entry.author_name ?? entry.author} · {WHEN.format(new Date(entry.created_at))} UTC
               </p>
               <AnswerText entry={entry} onSelectFacts={onSelectFacts} />
+              <AnsweredBy engine={entry.engine} model={entry.model} engines={engineChoice.engines} />
               {entry.citations.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)", alignItems: "center" }}>
                   <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Draws on</span>
@@ -208,6 +213,7 @@ export function QuestionsPanel({
         }}
         style={{ display: "grid", gap: "var(--sp-8)" }}
       >
+        <EnginePicker choice={engineChoice} id="questions-engine" disabled={asking} />
         <label htmlFor="questions-input" style={{ fontSize: "var(--fs-12)" }}>
           Your question
         </label>

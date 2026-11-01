@@ -295,6 +295,52 @@ describe("the System tab's models", () => {
   });
 });
 
+// ADR-135 decision 5: the System tab shows each engine, its models, the roles it is the default
+// for, and whether its key is present: Yes or No, never the key.
+describe("the System tab's engines", () => {
+  it("lists each engine with its models, the roles it is the default for and whether its key is present", async () => {
+    serve((path) =>
+      path === "system"
+        ? json(200, {
+            components: [], models: [], model_notice: null,
+            engines: [
+              { name: "local", label: "This deployment's own model", models: { extraction: "qwen2.5:7b-instruct", embedding: "all-minilm" }, default_for: ["embedding"], key_present: true },
+              { name: "gemini", label: "Gemini", models: { extraction: "gemini/gemini-2.5-flash" }, default_for: ["extraction"], key_present: true },
+              { name: "openai", label: "OpenAI", models: { vision: "openai/gpt-4o-mini" }, default_for: [], key_present: false },
+            ],
+          })
+        : null,
+    );  // prettier-ignore
+    place(["administer_system"]);
+    const table = await screen.findByRole("table", { name: "Engines" });
+    const rows = within(table).getAllByRole("row").slice(1).map((row) =>
+      within(row).getAllByRole("cell").map((cell) => cell.textContent),
+    );
+    expect(rows).toEqual([
+      ["This deployment's own model", "extraction: qwen2.5:7b-instruct; embedding: all-minilm", "embedding", "Yes"],
+      ["Gemini", "extraction: gemini/gemini-2.5-flash", "extraction", "Yes"],
+      ["OpenAI", "vision: openai/gpt-4o-mini", "None", "No"],
+    ]);
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "Engine", "Models", "Default for", "Key present",
+    ]);  // prettier-ignore
+  });
+
+  it("never shows a key, even one the response wrongly carried", async () => {
+    serve((path) =>
+      path === "system"
+        ? json(200, {
+            components: [], models: [], model_notice: null,
+            engines: [{ name: "gemini", label: "Gemini", models: { extraction: "gemini/x" }, default_for: [], key_present: true, key: "AIza-not-a-real-key" }],
+          })
+        : null,
+    );  // prettier-ignore
+    place(["administer_system"]);
+    await screen.findByRole("table", { name: "Engines" });
+    expect(document.body.textContent).not.toContain("AIza-not-a-real-key");
+  });
+});
+
 // ADR-114 decision 13, Amendment 8 point 2: the version and the last update check.
 describe("the System tab's version", () => {
   it("says the version and an update offered, with its notes and address", async () => {

@@ -414,6 +414,57 @@ test("Ask to search over a pattern already drawn: the replaced pattern is restor
   registerCovered("QUERY_BUILDER_ACTIONS", "restore-the-previous-pattern-after-ask");
 });
 
+test("Ask to search: the model engine is reached by Shift+Tab, changed by keyboard, and named in the request", async ({ page }) => {
+  // ADR-135 decision 5 (rule 13). Ask to search sends no handling code, so the Conduit runs it
+  // locally whatever is named; the panel says the engine the answer names, not the one chosen.
+  await page.route("**/*/v1/models/engines", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        engines: [
+          { name: "local", label: "This deployment's own model", roles: ["extraction"], default_for: ["extraction"] },
+          { name: "gemini", label: "Gemini", roles: ["extraction"], default_for: [] },
+        ],
+      }),
+    }),
+  );
+  const asked: { engine?: string }[] = [];
+  await page.route("**/*/v1/investigations/*/patterns/ask", async (route) => {
+    asked.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        pattern: { nodes: [{ var: "m", entity_type: "Endpoint", node_id: "n-selected" }], edges: [], limit: 1000 },
+        explanation: "Finds the selected number.",
+        estimated_count: 1,
+        is_floor: false,
+        engine: "local",
+        model: "qwen2.5:7b-instruct",
+      }),
+    });
+  });
+  await page.goto("/keyboard/query-builder-harness.html");
+  const choice = page.getByRole("combobox", { name: "Model engine" });
+  await expect(choice).toHaveValue("local");
+  const box = page.getByRole("textbox", { name: "Ask to search" });
+  await box.focus();
+  await page.keyboard.press("Shift+Tab");
+  await expect(choice).toBeFocused();
+  // A closed select takes an arrow key differently by platform (macOS opens the menu); typing the
+  // start of an option's label chooses it everywhere (`link-change.spec.ts`'s own note).
+  await page.keyboard.type("Gem");
+  await expect(choice).toHaveValue("gemini");
+  await page.keyboard.press("Tab");
+  await expect(box).toBeFocused();
+  await page.keyboard.type("Which number is selected?");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeVisible();
+  expect(asked.map((body) => body.engine)).toEqual(["gemini"]);
+  registerCovered("QUERY_BUILDER_ACTIONS", "choose-the-ask-to-search-engine-by-keyboard");
+});
+
 test("every registered query-builder action has its own proving test case above", () => {
   assertAllCovered("QUERY_BUILDER_ACTIONS", QUERY_BUILDER_ACTIONS);
 });

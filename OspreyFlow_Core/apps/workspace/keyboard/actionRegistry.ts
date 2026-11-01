@@ -237,6 +237,9 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
   "ask-to-search-propose-pattern",
   // A proposal replaces the pattern drawn; one press restores it.
   "restore-the-previous-pattern-after-ask",
+  // ADR-135 decision 5: the model engine is reached and changed by keyboard, and the engine chosen
+  // is the one the request names.
+  "choose-the-ask-to-search-engine-by-keyboard",
 ] as const);
 
 /**
@@ -579,6 +582,9 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   "close-the-questions-drawer-by-keyboard",
   // ADR-129 decision 1: a cited graph fact selects what it stands for and brings it into view.
   "select-a-graph-fact-from-an-answer-by-keyboard",
+  // ADR-135 decision 5: the model engine is reached and changed by keyboard, and the engine chosen
+  // is the one the question names.
+  "choose-the-model-engine-by-keyboard",
 ] as const);
 
 /** Files added straight to a case (ADR-094 step 3): from the strip over the canvas, standing alone,
