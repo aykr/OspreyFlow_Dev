@@ -13,6 +13,7 @@ from typing import Any
 
 import services.api.pipeline_run as pipeline_run
 from services.api.alert_queue import dispose
+from services.api.alerts import AlertNotFoundError, AlertTriageConflict, QueueRow
 
 from ontology.handling import withhold_sources
 from schemas.domain import (
@@ -122,10 +123,22 @@ async def test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored
     )
 
     class _Store:
-        async def get_case_alert(self, *_a: Any, **_k: Any) -> Alert:
-            return alert
+        """`AlertStore`'s one-queue reads (ADR-133 decision 5), as `dispose` calls them: an alert
+        other than this one is not found, and a triage of a closed one is refused, as the real
+        store's scoped `SELECT` and `UPDATE ... AND status = ANY(...)` refuse them."""
 
-        async def set_triage(self, *_a: Any, **_k: Any) -> Alert:
+        async def get_queue_alert(self, alert_id: str, *_a: Any, **_k: Any) -> QueueRow:
+            if alert_id != alert.id:
+                raise AlertNotFoundError(alert_id)
+            return QueueRow(alert, "typology", "medium", "case")
+
+        async def set_queue_triage(
+            self, alert_id: str, *_a: Any, expect_status: Any, **_k: Any
+        ) -> Alert:
+            if alert_id != alert.id:
+                raise AlertNotFoundError(alert_id)
+            if alert.status not in expect_status:
+                raise AlertTriageConflict(alert_id)
             return alert
 
     await dispose(

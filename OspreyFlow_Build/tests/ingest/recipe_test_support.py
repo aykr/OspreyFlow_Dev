@@ -121,16 +121,30 @@ class ValidatingGraph:
     async def get_nodes(self, node_ids: Sequence[str], principal: Any) -> list[Any]:
         """The nodes the ids name, committed ones, each once, ordered by id. Models no access
         filtering (the class docstring says so): `BlindGraph` in
-        `test_load_record_created_and_merged.py` is the one that shows the loader nothing."""
-        known = {n.id for n in self.committed_nodes}
-        return [SimpleNamespace(id=i) for i in sorted(set(node_ids) & known)]
+        `test_load_record_created_and_merged.py` is the one that shows the loader nothing.
+        The real port returns whole `Node`s; this carries the id, type and marking a caller reads
+        (an alert's own handlings, ADR-134 decision 3), as the first committed write left them."""
+        known: dict[str, NodeWrite] = {}
+        for n in self.committed_nodes:
+            known.setdefault(n.id, n)
+        return [
+            SimpleNamespace(id=i, type=known[i].type, handling=known[i].handling)
+            for i in sorted(set(node_ids) & known.keys())
+        ]
 
     async def get_edges(self, edge_ids: Sequence[str], principal: Any) -> list[Any]:
         """The committed links the ids name, each once, ordered by id. Models no access filtering
         (the class docstring says so); `BlindToEdges` in `test_load_record_created_and_merged.py`
-        is the one that shows the loader nothing."""
-        known = {e.id for e in self.committed_edges}
-        return [SimpleNamespace(id=i) for i in sorted(set(edge_ids) & known)]
+        is the one that shows the loader nothing.
+        The real port returns whole `Edge`s; this carries the id, type and marking a caller reads
+        (ADR-134 decision 3), as the first committed write left them."""
+        known: dict[str, EdgeWrite] = {}
+        for e in self.committed_edges:
+            known.setdefault(e.id, e)
+        return [
+            SimpleNamespace(id=i, type=known[i].type, handling=known[i].handling)
+            for i in sorted(set(edge_ids) & known.keys())
+        ]
 
     async def existing_node_ids(self, node_ids: Sequence[str]) -> set[str]:
         """The ids that name a node, committed or open, whoever may read it: the port's internal,
