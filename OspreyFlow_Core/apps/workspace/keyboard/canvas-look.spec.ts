@@ -179,3 +179,94 @@ test("the toolbar's last change shows at desktop width and is hidden below 1100p
   await page.setViewportSize({ width: 1000, height: 900 });
   await expect(note).toBeHidden();
 });
+
+/** How strongly the link between `a` and `b` is painted at its midpoint, against the bare canvas:
+ * the largest colour difference (summed over red, green and blue) within 3 CSS pixels of the
+ * midpoint. In the harness a link drawn as normal reads 277, one in the faint `borderSubtle` (the
+ * way a link outside a tree is drawn) 147, and a hidden one 0. */
+const PLAINLY_DRAWN = 200;
+
+async function linkContrastBetween(page: Page, a: string, b: string): Promise<number> {
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  const box = (await canvas.boundingBox())!;
+  const ends = await page.evaluate(
+    ([x, y]) => [window.__CANVAS__?.viewportPositionOf(x!) ?? null, window.__CANVAS__?.viewportPositionOf(y!) ?? null],
+    [a, b],
+  );
+  if (!ends[0] || !ends[1]) throw new Error("the link's ends are not drawn");
+  // The link alone: nodes, their labels and hover layers hidden too, since zoomed out they sit
+  // within a few pixels of the midpoint and would be read as the link.
+  await page.addStyleTag({
+    content:
+      "button, select, label, .canvas-toolbar, .canvas-legend, .canvas-zoom, .sigma-nodes, .sigma-labels, .sigma-hovers, .sigma-hoverNodes, .sigma-edgeLabels { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
+  });
+  const pixels = readPng(await page.screenshot());
+  const scale = pixels.width / page.viewportSize()!.width;
+  const mx = Math.round((box.x + (ends[0].x + ends[1].x) / 2) * scale);
+  const my = Math.round((box.y + (ends[0].y + ends[1].y) / 2) * scale);
+  const background = pixels.at(Math.round((box.x + 4) * scale), Math.round((box.y + 40) * scale));
+  const reach = Math.round(3 * scale);
+  let strongest = 0;
+  for (let dx = -reach; dx <= reach; dx++) {
+    for (let dy = -reach; dy <= reach; dy++) {
+      const p = pixels.at(mx + dx, my + dy);
+      strongest = Math.max(strongest, Math.abs(p[0]! - background[0]!) + Math.abs(p[1]! - background[1]!) + Math.abs(p[2]! - background[2]!));
+    }
+  }
+  return strongest;
+}
+
+// Spec 02 §1.1: the overview band draws every link above the strength filter (below 10,000 links),
+// and the bands, not the renderer's defaults, decide what is drawn. Links were reported going out of
+// sight when zoomed out (1 November 2026); none were, but nothing proved it. The renderer never draws
+// a link thinner than its `minEdgeThickness`, so zooming out can lose one only by fading or hiding
+// it, which is what this measures. Shown red by planting both, faded and hidden, past zoom 1.2.
+test("a link is still plainly drawn when the view is zoomed out to the overview", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await layoutSettled(page, ["n1", "n2"]);
+  await page.evaluate(() => window.__CANVAS__?.zoomTo(3));
+  await layoutSettled(page, ["n1", "n2"]);
+  const contrast = await linkContrastBetween(page, "n1", "n2");
+  console.log(`link contrast at the overview zoom: ${contrast}`);
+  expect(contrast).toBeGreaterThanOrEqual(PLAINLY_DRAWN);
+});
+
+// Spec 02 §1.1: "hideEdgesOnMove during interaction, never at rest ... They return the moment the
+// camera stops." Zooming out with the wheel (as a person does, not through the camera's own API)
+// must leave the links drawn once the wheel stops, without a further click or hover.
+test("links come back once a wheel zoom-out stops", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await layoutSettled(page, ["n1", "n2"]);
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let step = 0; step < 6; step++) {
+    await page.mouse.wheel(0, 240);
+    await page.waitForTimeout(60);
+  }
+  // At rest: well past any animation, and nothing moved the pointer or clicked since.
+  await page.waitForTimeout(2500);
+  const contrast = await linkContrastBetween(page, "n1", "n2");
+  console.log(`link contrast after a wheel zoom-out: ${contrast}`);
+  expect(contrast).toBeGreaterThanOrEqual(PLAINLY_DRAWN);
+});
+
+// The same with a trackpad pinch, which a browser sends as wheel events with Ctrl held.
+test("links come back once a pinch zoom-out stops", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  await layoutSettled(page, ["n1", "n2"]);
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.down("Control");
+  for (let step = 0; step < 12; step++) {
+    await page.mouse.wheel(0, 40);
+    await page.waitForTimeout(16);
+  }
+  await page.keyboard.up("Control");
+  await page.waitForTimeout(2500);
+  const contrast = await linkContrastBetween(page, "n1", "n2");
+  console.log(`link contrast after a pinch zoom-out: ${contrast}`);
+  expect(contrast).toBeGreaterThanOrEqual(PLAINLY_DRAWN);
+});
+
