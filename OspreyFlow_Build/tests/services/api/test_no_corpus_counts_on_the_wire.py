@@ -612,6 +612,9 @@ RAW_MAPPING_ROUTES = {
 #: Routes whose response has no field to walk and is not a JSON mapping, each with why it carries
 #: no figure. A route that returns a body of another kind has to be named here.
 NON_JSON_ROUTES: dict[str, str] = {
+    # The owner's answer of 1 November 2026: the API's own description, its routes and models,
+    # built from the code; it holds no record and no figure of any case.
+    "GET /v1/openapi.json": "the OpenAPI document: the API's schema, no data",
     "PUT /v1/investigations/{investigation_id}/tab": "204, no body",
     "DELETE /v1/investigations/{investigation_id}": "204, no body",
     "PUT /v1/investigations/{investigation_id}/access": "204, no body",

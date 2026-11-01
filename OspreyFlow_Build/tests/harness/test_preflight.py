@@ -282,6 +282,12 @@ def test_a_port_from_the_real_rendered_compose_file_bound_by_a_real_socket_fails
         # Re-render with a service published on the port we are actually holding, so the check
         # reads a real file naming a real, really-bound port.
         compose["services"]["api"]["ports"] = [f"{taken_port}:8000"]
+        # Only the api's planted port is probed: the rendered file's others (80 among them) are the
+        # owner's live deployment's on this machine, which no test reaches (`tests/port_guard.py`
+        # refuses the probe's connection to 80 before it is made).
+        for name, service in compose["services"].items():
+            if name != "api":
+                service.pop("ports", None)
         (rendered_dir / "compose.yaml").write_text(yaml.safe_dump(compose), encoding="utf-8")
 
         result = ports.check(context)
