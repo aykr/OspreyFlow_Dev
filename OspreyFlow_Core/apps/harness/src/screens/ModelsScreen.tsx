@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 
-import { ApiError, getModelChoices, postConsequences } from "../api/client";
+import {
+  ApiError,
+  errorMessage,
+  getInstallKeys,
+  getModelChoices,
+  postConsequences,
+  putInstallKey,
+} from "../api/client";
 import type {
   Consequences,
   ModelChoices,
@@ -23,9 +30,12 @@ const JOBS: { job: ModelJob; label: string }[] = [
 export function ModelsScreen({
   config,
   onSave,
+  keyEntry = false,
 }: {
   config: OspreyConfig;
   onSave: (patch: Partial<OspreyConfig>) => Promise<void>;
+  /** The guided install page only (ADR-137 decision 3): a write-only key field per provider. */
+  keyEntry?: boolean;
 }) {
   const [localOnly, setLocalOnly] = useState(config.models?.local_only ?? true);
   const [hostedFallback, setHostedFallback] = useState(config.models?.hosted_fallback ?? "");
@@ -46,6 +56,30 @@ export function ModelsScreen({
       .then(setChoices)
       .catch(() => setChoices(null));
   }, []);
+
+  // ADR-137 decision 3: whether each key is set, as the install page's server says — never the key.
+  // A typed key lives in this component's state only until it is sent, then is cleared.
+  const [keySet, setKeySet] = useState<Record<string, boolean>>({});
+  const [typed, setTyped] = useState<Record<string, string>>({});
+  const [keyError, setKeyError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!keyEntry) return;
+    getInstallKeys()
+      .then(({ providers: rows }) => setKeySet(Object.fromEntries(rows.map((row) => [row.name, row.set]))))
+      .catch(() => setKeySet({}));
+  }, [keyEntry, config]);
+
+  async function sendKey(name: string) {
+    const key = typed[name] ?? "";
+    setTyped((now) => ({ ...now, [name]: "" }));
+    setKeyError(null);
+    try {
+      const result = await putInstallKey(name, key);
+      setKeySet((now) => ({ ...now, [name]: result.set }));
+    } catch (exc) {
+      setKeyError(errorMessage(exc));
+    }
+  }
 
   const picked = (job: ModelJob): string | undefined => chosen[job] ?? choices?.defaults[job];
 
@@ -165,13 +199,23 @@ export function ModelsScreen({
       {providers.length > 0 && (
         <>
           <h3>Model providers</h3>
-          <p>
-            Case content whose handling code is sendable may be sent to these providers; everything else runs on this
-            deployment&apos;s own models. They are set in the deployment&apos;s configuration and shown here as they
-            stand. A provider&apos;s key is never entered on this page: give it in the installer&apos;s terminal as{" "}
-            <code>OSPREY_MODEL_KEY_&lt;NAME&gt;</code> before you install, or later with{" "}
-            <code>ospreyflow models key &lt;name&gt;</code>.
-          </p>
+          {keyEntry ? (
+            <p>
+              Case content whose handling code is sendable may be sent to these providers; everything else runs on
+              this deployment&apos;s own models. Give each provider&apos;s key here: it goes only to this install
+              page, on this computer, and is kept only in the deployment&apos;s own secrets file. It is never shown
+              again. You can instead give it in the installer&apos;s terminal as{" "}
+              <code>OSPREY_MODEL_KEY_&lt;NAME&gt;</code>, or later with <code>ospreyflow models key &lt;name&gt;</code>.
+            </p>
+          ) : (
+            <p>
+              Case content whose handling code is sendable may be sent to these providers; everything else runs on
+              this deployment&apos;s own models. They are set in the deployment&apos;s configuration and shown here as
+              they stand. A provider&apos;s key is never entered on this page: give it in the installer&apos;s
+              terminal as <code>OSPREY_MODEL_KEY_&lt;NAME&gt;</code> before you install, or later with{" "}
+              <code>ospreyflow models key &lt;name&gt;</code>.
+            </p>
+          )}
           <table className="table" aria-label="Model providers">
             <thead>
               <tr>
@@ -193,11 +237,35 @@ export function ModelsScreen({
                   <td>{defaultFor(provider).join(", ") || "None"}</td>
                   <td>
                     <code>{keyVariable(provider.name)}</code>
+                    {keyEntry && (
+                      <>
+                        {" "}
+                        <span>{keySet[provider.name] ? "key set" : "no key"}</span>
+                        <input
+                          type="password"
+                          autoComplete="off"
+                          className="input"
+                          aria-label={`Key for ${provider.label ?? provider.name}`}
+                          value={typed[provider.name] ?? ""}
+                          onChange={(event) => setTyped({ ...typed, [provider.name]: event.target.value })}
+                        />
+                        <button
+                          type="button"
+                          className="btn"
+                          aria-label={`Set the key for ${provider.label ?? provider.name}`}
+                          disabled={!(typed[provider.name] ?? "")}
+                          onClick={() => void sendKey(provider.name)}
+                        >
+                          Set key
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {keyError && <p role="alert">{keyError}</p>}
         </>
       )}
 

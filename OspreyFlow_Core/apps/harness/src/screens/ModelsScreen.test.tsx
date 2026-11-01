@@ -3,8 +3,9 @@
 // The guided install's Models screen (ADR-095, ADR-135). Saving the local models must keep the
 // providers and defaults the configuration already holds: the screen saves `models` whole, so a
 // field it does not send is a field the save drops. The providers are shown read-only, with where
-// their keys are given — never a key field on this page (ADR-135 ruling 2 leaves key entry here to
-// a separate decision).
+// their keys are given. On the guided install page only (`keyEntry`), each has a write-only key
+// field (ADR-137 decision 3): sent to the install page's own server, cleared once sent, and the page
+// says only "key set" or "no key". The Set-up console has no key field.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +14,8 @@ import type { OspreyConfig } from "../api/types";
 const client = vi.hoisted(() => ({
   getModelChoices: vi.fn(),
   postConsequences: vi.fn(),
+  getInstallKeys: vi.fn(),
+  putInstallKey: vi.fn(),
 }));
 vi.mock("../api/client", async (original) => ({
   ...(await original<typeof import("../api/client")>()),
@@ -47,7 +50,16 @@ const WITH_PROVIDERS = {
   },
 } as unknown as OspreyConfig;
 
+const GEMINI_KEY = "AIza-gemini-NEVER-SHOWN-0123456789";
+
 beforeEach(() => {
+  client.getInstallKeys.mockReset().mockResolvedValue({
+    providers: [
+      { name: "gemini", label: "Gemini", variable: "OSPREY_MODEL_KEY_GEMINI", set: false },
+      { name: "openai", label: "OpenAI", variable: "OSPREY_MODEL_KEY_OPENAI", set: true },
+    ],
+  });
+  client.putInstallKey.mockReset().mockResolvedValue({ name: "gemini", set: true });
   client.getModelChoices.mockReset().mockResolvedValue(CHOICES);
   client.postConsequences.mockReset().mockResolvedValue({ egress_exception: true, egress_detail: "P may leave." });
 });
@@ -92,6 +104,58 @@ describe("ModelsScreen", () => {
     // Read-only: nothing on the page takes a key.
     expect(table.querySelector("input, select, textarea")).toBeNull();
     expect(screen.queryByLabelText(/key/i)).toBeNull();
+  });
+
+  it("asks for no key, and the install page for none, outside the guided install", async () => {
+    render(<ModelsScreen config={WITH_PROVIDERS} onSave={vi.fn()} />);
+    await screen.findByRole("table", { name: "Model providers" });
+    expect(client.getInstallKeys).not.toHaveBeenCalled();
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+  });
+
+  it("on the guided install, has a write-only key field per provider and says whether each key is set", async () => {
+    render(<ModelsScreen config={WITH_PROVIDERS} onSave={vi.fn()} keyEntry />);
+    const gemini = await screen.findByLabelText("Key for Gemini");
+    const openai = screen.getByLabelText("Key for OpenAI");
+    for (const field of [gemini, openai]) {
+      expect(field.getAttribute("type")).toBe("password");
+      expect(field.getAttribute("autocomplete")).toBe("off");
+      expect((field as HTMLInputElement).value).toBe("");
+    }
+    const table = screen.getByRole("table", { name: "Model providers" });
+    await waitFor(() => expect(table.textContent).toContain("no key"));
+    expect(table.textContent).toContain("key set");
+  });
+
+  it("sends the key to the install page, clears the field and shows key set — never the key", async () => {
+    client.getInstallKeys
+      .mockResolvedValueOnce({
+        providers: [
+          { name: "gemini", label: "Gemini", variable: "OSPREY_MODEL_KEY_GEMINI", set: false },
+          { name: "openai", label: "OpenAI", variable: "OSPREY_MODEL_KEY_OPENAI", set: false },
+        ],
+      });
+    render(<ModelsScreen config={WITH_PROVIDERS} onSave={vi.fn()} keyEntry />);
+    const field = (await screen.findByLabelText("Key for Gemini")) as HTMLInputElement;
+    await waitFor(() => expect(screen.getAllByText("no key")).toHaveLength(2));
+    fireEvent.change(field, { target: { value: GEMINI_KEY } });
+    fireEvent.click(screen.getByRole("button", { name: "Set the key for Gemini" }));
+    await waitFor(() => expect(client.putInstallKey).toHaveBeenCalledWith("gemini", GEMINI_KEY));
+    await waitFor(() => expect(field.value).toBe(""));
+    expect(screen.getByText("key set")).toBeTruthy();
+    expect(document.body.innerHTML).not.toContain(GEMINI_KEY);
+  });
+
+  it("says why a key was refused, and keeps no key on the page", async () => {
+    client.putInstallKey.mockRejectedValue(
+      Object.assign(new Error("refused"), { body: JSON.stringify({ error: "A key has no spaces or line breaks in it." }) }),
+    );
+    render(<ModelsScreen config={WITH_PROVIDERS} onSave={vi.fn()} keyEntry />);
+    const field = (await screen.findByLabelText("Key for Gemini")) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "two words" } });
+    fireEvent.click(screen.getByRole("button", { name: "Set the key for Gemini" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("no spaces");
+    expect(field.value).toBe("");
   });
 
   it("shows no providers table when none is enabled", async () => {

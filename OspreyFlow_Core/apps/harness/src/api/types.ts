@@ -137,6 +137,14 @@ export interface InstallState {
   home: string;
 }
 
+/** ADR-137 decision 3: an enabled provider, and whether its key is set — never the key. */
+export interface InstallKeyRow {
+  name: string;
+  label: string;
+  variable: string;
+  set: boolean;
+}
+
 export interface DoctorResult {
   lines: string[];
   returncode: number;
