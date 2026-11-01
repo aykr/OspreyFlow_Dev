@@ -106,7 +106,7 @@ describe("PublishScreen", () => {
             rule_notes: ["Rule “Onboarding screen” could not judge 2 row(s): held for review."] });  // prettier-ignore
     render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
     fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
-    expect(await screen.findByText("Rows held for review: 2 — a reviewer releases or rejects them in Alerts › Held rows")).toBeTruthy();
+    expect(await screen.findByText("Rows held for review: 2 — a reviewer releases or rejects them in Monitoring › Held rows")).toBeTruthy();
     const rules = screen.getByRole("list", { name: "What the case's rules did" });
     expect(rules.textContent).toContain("could not judge 2 row(s)");
   });

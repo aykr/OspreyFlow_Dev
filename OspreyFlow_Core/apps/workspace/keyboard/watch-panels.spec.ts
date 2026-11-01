@@ -109,6 +109,63 @@ test("submitting the hotlist form creates a hotlist and it appears in the list, 
   registerCovered("WATCH_PANEL_ACTIONS", "submit-create-hotlist");
 });
 
+// ADR-133 ruling 3: whom a hotlist's alerts reach — chosen for a new one, from the deployment's
+// default, and changed on an existing one by its owner.
+test("a new hotlist's audience is chosen, and an existing one's changed, by keyboard alone", async ({ page }) => {
+  const sent: { method: string; path: string; body: unknown }[] = [];
+  const existing = {
+    id: "hl-1", identifier: "+447700900000", identifier_typed: "07700 900000", owner_id: "analyst-1",
+    review_date: "2026-12-01", status: "active", created_at: "2026-09-22T00:00:00Z", audience: "only_me",
+  };  // prettier-ignore
+  await page.route("**/*/v1/investigations/*/hotlists**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() !== "GET") sent.push({ method: request.method(), path, body: request.postDataJSON() });
+    if (request.method() === "PUT") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...existing, audience: "team" }) });
+      return;
+    }
+    if (request.method() === "POST") {
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ ...existing, id: "hl-2" }) });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ hotlists: [existing], audience_default: "team", audience_editable: true }),
+    });
+  });
+  for (const what of ["monitors", "patterns", "alerts"]) {
+    await page.route(`**/*/v1/investigations/*/${what}`, async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ [what]: [] }) });
+    });
+  }
+
+  await page.goto("/keyboard/watch-panels-harness.html");
+  const choice = page.getByRole("combobox", { name: "Who its alerts reach" });
+  await expect(choice).toHaveValue("team");
+  await choice.selectOption("only_me");
+  await page.getByRole("textbox", { name: "Identifier" }).fill("07700 900111");
+  await page.getByLabel("Review date").fill("2027-01-01");
+  await tabToButtonNamed(page, "Add to hotlist");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => sent.find((s) => s.method === "POST")?.body).toEqual({
+    identifier: "07700 900111",
+    review_date: "2027-01-01",
+    audience: "only_me",
+  });
+  registerCovered("WATCH_PANEL_ACTIONS", "choose-a-new-hotlists-audience-by-keyboard");
+
+  await page.getByRole("combobox", { name: "Who alerts from 07700 900000 reach" }).selectOption("team");
+  await expect(page.getByText("Alerts from 07700 900000 now reach your team too.")).toBeVisible();
+  expect(sent.find((s) => s.method === "PUT")).toEqual({
+    method: "PUT",
+    path: "/v1/investigations/inv-1/hotlists/hl-1/audience",
+    body: { audience: "team" },
+  });
+  registerCovered("WATCH_PANEL_ACTIONS", "change-a-hotlists-audience-by-keyboard");
+});
+
 test("submitting the monitor form turns a saved pattern into a monitor, reachable by keyboard alone", async ({
   page,
 }) => {

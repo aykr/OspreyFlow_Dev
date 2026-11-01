@@ -1,7 +1,8 @@
 // The case's typology rules (`06_DECISIONS.md` ADR-109 phase A, rulings 1 and 4): what watches this
 // case's loads, where each runs, and — for an Author — deploying one and retiring one. A rule is a
 // typology with its parameters, a closed list per typology (rule 8: no expression language).
-import { useCallback, useEffect, useState } from "react";
+// ADR-133 stage (a): the seven typologies are offered as templates above the form; using one fills it.
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   SavedPattern,
   TypologyRule,
@@ -12,6 +13,7 @@ import type { AccessLevel } from "../investigation/cases";
 import { listPatterns } from "../patterns/api";
 import { deployRule, listRules, retireRule, type AlertsApi } from "./api";
 import { money, ruleTypologyLabel, when } from "./names";
+import { TEMPLATES, type RuleTemplate } from "./templates";
 
 type Typology =
   | "structuring"
@@ -200,6 +202,7 @@ export function RulesPanel(props: RulesPanelProps) {
   const [problem, setProblem] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [patterns, setPatterns] = useState<SavedPattern[]>([]);
+  const [preset, setPreset] = useState<{ template: RuleTemplate; nonce: number } | null>(null);
   const author = level === "author";
 
   // ADR-109 phase D: the account's own saved patterns — what a drawn rule may be deployed from,
@@ -291,9 +294,15 @@ export function RulesPanel(props: RulesPanelProps) {
           </li>
         ))}
       </ul>
+      <Templates
+        canUse={author}
+        onUse={(template) => setPreset({ template, nonce: (preset?.nonce ?? 0) + 1 })}
+      />
       {author ? (
         <DeployForm
+          key={preset?.nonce ?? 0}
           {...props}
+          preset={preset?.template ?? null}
           patterns={patterns}
           onDeployed={(rule) => {
             setSaid(`Deployed “${rule.name}”.`);
@@ -307,14 +316,58 @@ export function RulesPanel(props: RulesPanelProps) {
   );
 }
 
+const SEVERITY_WORDS: Record<string, string> = { high: "high", medium: "medium", low: "low" };
+
+/** ADR-133 decision 2, stage (a): the typologies as named templates, grouped by the work they serve.
+ * Every reader sees them; an Author uses one to fill the form below. */
+function Templates(props: { canUse: boolean; onUse: (template: RuleTemplate) => void }) {
+  return (
+    <section aria-label="Rule templates" style={{ display: "grid", gap: "var(--sp-8)" }}>
+      <h3 className="value" style={{ margin: 0 }}>
+        Templates
+      </h3>
+      <p className="label" style={{ margin: 0 }}>
+        Start a rule from one of these: it fills the form with the template&apos;s defaults, which you can change before deploying.
+      </p>
+      <ul aria-label="Templates" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
+        {TEMPLATES.map((template) => (
+          <li
+            key={template.typology}
+            style={{ display: "flex", justifyContent: "space-between", gap: "var(--sp-12)", alignItems: "center", borderBottom: "1px solid var(--border-subtle)", padding: "var(--sp-4) 0" }}
+          >
+            <span style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
+              <span className="value">
+                {template.name} · <span className="label">{template.group}</span>
+              </span>
+              <span className="label">{template.description}</span>
+              <span className="label">{`Raises ${SEVERITY_WORDS[template.severity]}-severity alerts.`}</span>
+            </span>
+            {props.canUse && (
+              <Button aria-label={`Use the template: ${template.name}`} onClick={() => props.onUse(template)}>
+                Use
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function DeployForm(
   props: RulesPanelProps & {
     patterns: SavedPattern[];
+    preset: RuleTemplate | null;
     onDeployed: (rule: TypologyRule) => void;
   },
 ) {
-  const [name, setName] = useState("");
-  const [typology, setTypology] = useState<Typology>("structuring");
+  const [name, setName] = useState(props.preset?.name ?? "");
+  const [typology, setTypology] = useState<Typology>(props.preset?.typology ?? "structuring");
+  const nameRef = useRef<HTMLInputElement>(null);
+  // A template just used: the form is filled, and the keyboard is put on its first field.
+  useEffect(() => {
+    if (props.preset) nameRef.current?.focus();
+  }, [props.preset]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [trigger, setTrigger] = useState<"pre_commit" | "post_commit">(
     "post_commit",
@@ -364,6 +417,7 @@ function DeployForm(
       <label className="label" style={FIELD}>
         Name
         <Input
+          ref={nameRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           required

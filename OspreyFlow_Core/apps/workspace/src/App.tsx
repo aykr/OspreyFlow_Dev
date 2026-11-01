@@ -1253,8 +1253,9 @@ export function App() {
             ? [
                 { id: "cases", label: "Cases", icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
                 { id: "watches", label: "Watches", icon: "watches" as const, onSelect: () => setView("watches"), pressed: view === "watches" },
-                // ADR-109 ruling 5: the case team's alert queue, its rules, held rows and audit.
-                { id: "alerts", label: "Alerts", icon: "alerts" as const, onSelect: () => setView("alerts"), pressed: view === "alerts", badge: alertCount },
+                // ADR-133 decision 5 (ADR-109 ruling 5 before it, as Alerts): the Monitoring place —
+                // the one alert queue for every kind, rules and templates, watches, held rows, audit.
+                { id: "alerts", label: "Monitoring", icon: "alerts" as const, onSelect: () => setView("alerts"), pressed: view === "alerts", badge: alertCount },
                 // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
                 { id: "ownership", label: "Ownership", icon: "ownership" as const, onSelect: () => setView("ownership"), pressed: view === "ownership" },
                 { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },

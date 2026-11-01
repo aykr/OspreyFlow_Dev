@@ -1,5 +1,7 @@
-// The *Alerts* place on the left rail (`06_DECISIONS.md` ADR-109 ruling 5): the case team's queue
-// first, then the rules that raise its alerts, the rows a failing rule held, and the rule audit.
+// The *Monitoring* place on the left rail (`06_DECISIONS.md` ADR-133 decision 5; ADR-109 ruling 5
+// before it, as *Alerts*): the one alert queue first — every kind the reader may see — then the
+// rules that raise alerts and their templates, the reader's own hotlists and watched patterns, the
+// rows a failing rule held, and the rule audit.
 // What each account may do follows its level in the case, read as every other case surface reads
 // it (`listCases`); the Conduit refuses whatever a stale view offers anyway.
 import { useEffect, useState } from "react";
@@ -10,6 +12,8 @@ import type { CanvasOutcome } from "./api";
 import { HeldRowsPanel } from "./HeldRowsPanel";
 import { RuleAuditPanel } from "./RuleAuditPanel";
 import { RulesPanel } from "./RulesPanel";
+import { HotlistPanel } from "../watches/HotlistPanel";
+import { MonitorPanel } from "../watches/MonitorPanel";
 
 export interface AlertsPlaceProps {
   apiBaseUrl: string;
@@ -20,7 +24,7 @@ export interface AlertsPlaceProps {
   onCanvas: (outcome: CanvasOutcome, nodeIds: string[]) => void;
 }
 
-type Tab = "queue" | "rules" | "held" | "audit";
+type Tab = "queue" | "rules" | "watches" | "held" | "audit";
 
 export function AlertsPlace(props: AlertsPlaceProps) {
   const { apiBaseUrl, bearerToken, investigationId } = props;
@@ -40,22 +44,29 @@ export function AlertsPlace(props: AlertsPlaceProps) {
     };
   }, [apiBaseUrl, bearerToken, investigationId]);
 
-  if (!investigationId) return <p className="label">Open a case to see its alerts.</p>;
+  if (!investigationId) return <p className="label">Open a case to see its alerts and watches.</p>;
   const api = { apiBaseUrl, bearerToken, investigationId };
   const readsAudit = level === "author" || props.isAdministrator;
   const tabs = [
     { id: "queue", label: "Queue" },
     { id: "rules", label: "Rules" },
+    { id: "watches", label: "Watches" },
     ...(level === "editor" || level === "author" ? [{ id: "held", label: "Held rows" }] : []),
     ...(readsAudit ? [{ id: "audit", label: "Audit" }] : []),
   ];
 
   return (
-    <section aria-label="Alerts" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", padding: "var(--sp-16)", minHeight: 0, flex: 1, overflowY: "auto" }}>
-      <h2 className="value" style={{ margin: 0 }}>Alerts</h2>
+    <section aria-label="Monitoring" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", padding: "var(--sp-16)", minHeight: 0, flex: 1, overflowY: "auto" }}>
+      <h2 className="value" style={{ margin: 0 }}>Monitoring</h2>
       <Tabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as Tab)} />
       {tab === "queue" && <AlertQueue {...api} level={level} accountId={props.accountId} onCanvas={props.onCanvas} />}
       {tab === "rules" && <RulesPanel {...api} level={level} />}
+      {tab === "watches" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", maxWidth: 640 }}>
+          <HotlistPanel {...api} />
+          <MonitorPanel {...api} />
+        </div>
+      )}
       {tab === "held" && <HeldRowsPanel {...api} level={level} />}
       {tab === "audit" && readsAudit && <RuleAuditPanel {...api} />}
     </section>

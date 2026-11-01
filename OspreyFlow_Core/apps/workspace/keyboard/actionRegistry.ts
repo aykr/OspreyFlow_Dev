@@ -106,6 +106,8 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   "ctrl-shift-arrow-walks-every-node",
   "arrow-walk-forward",
   "arrow-walk-backward",
+  // GDS remediation plan A2: the focused node's name, type and links said in a live region.
+  "focused-node-is-announced",
   "space-toggle-ring-membership",
   "enter-expand",
   "backslash-open-menu",
@@ -253,6 +255,9 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
  */
 export const WATCH_PANEL_ACTIONS = defineActionRegistry("WATCH_PANEL_ACTIONS", [
   "submit-create-hotlist",
+  // ADR-133 ruling 3: whom a hotlist's alerts reach, chosen for a new one and changed on an old one.
+  "choose-a-new-hotlists-audience-by-keyboard",
+  "change-a-hotlists-audience-by-keyboard",
   "submit-create-monitor",
   "alert-row-jump",
   "jump-result-open-investigation",
@@ -540,7 +545,7 @@ export const PIPELINE_STUDIO_ACTIONS = defineActionRegistry("PIPELINE_STUDIO_ACT
   "split-and-mark-a-map-binding-optional-by-keyboard",
 ] as const);
 
-/** The Alerts place (ADR-109 phase B): the case team's queue, an alert's explanation and its
+/** The Monitoring place (ADR-133 decision 5; ADR-109 phase B's Alerts place): the one queue, an alert's explanation and its
  * triage, the rules (an Author deploys and retires), held rows and the rule audit, every action by
  * keyboard alone. `keyboard/alerts.spec.ts`. */
 export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
@@ -559,6 +564,11 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
   "deploy-a-kyc-rule-by-keyboard",
   // ADR-109 phase D: the no-code typology builder — a drawn, saved pattern deployed as a rule.
   "deploy-a-drawn-pattern-rule-by-keyboard",
+  // ADR-133 stage (a): the one queue's kind and severity filters, giving a case alert to a member,
+  // and a typology template filling the rule form.
+  "filter-the-queue-by-kind-and-severity-by-keyboard",
+  "give-an-alert-to-a-member-by-keyboard",
+  "use-a-template-by-keyboard",
 ] as const);
 
 /** The Ownership place (ADR-109 phase C): find an entity, trace its beneficial owners, change the

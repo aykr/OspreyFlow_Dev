@@ -116,6 +116,24 @@ test("Tab leaves the canvas and reaches the next real focusable element on the p
   registerCovered("CANVAS_ACTIONS", "tab-leaves-the-canvas");
 });
 
+// GDS remediation plan A2 (WCAG 4.1.3): as focus moves between nodes, the canvas says which node it
+// is on — its name, type and links — in a polite live region, not only "Selection of 1".
+test("the focused node's name and type are announced as arrow keys move focus", async ({ page }) => {
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  const said = page.getByTestId("canvas-focus-announcement");
+  await expect(said).toHaveAttribute("role", "status");
+  await expect(said).toHaveAttribute("aria-live", "polite");
+  await canvas.focus();
+  await expect(said).toHaveText(/^n0, Person, \d+ links?$/);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("n1");
+  await expect(said).toHaveText(/^n1, Person, \d+ links?$/);
+  // The canvas keeps the focus: the announcement is a status message, not a focus move.
+  await expect(canvas).toBeFocused();
+  registerCovered("CANVAS_ACTIONS", "focused-node-is-announced");
+});
+
 test("arrow keys walk from the focused node to a real neighbour", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
