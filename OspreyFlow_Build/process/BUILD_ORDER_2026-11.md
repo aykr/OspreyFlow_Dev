@@ -51,8 +51,8 @@ resumed session starts here.
 | 2g | **The Matrix view** (`02_GLASS_FRONTEND.md` §6; GDS remediation A1, P1): the accessible table alternative to the canvas that the spec requires and the decks had claimed as built. Then A2 (the canvas announces the focused node's name) rides with step 3 | done | First Glass change after the audit. Keyboard and axe cases first (rules 12, 13) Done 1 November: a fourth view, Matrix — entity and link tables as ARIA grids, sortable, paged 100 rows with the caption saying so, selection shared with the canvas both ways; 43 unit, 9 keyboard, 9 axe cases; user guide 1.11. |
 | 3 | **ADR-133 stage (a):** one alert queue for every kind (typology, hotlist, monitor); severity, team, assignment; hotlist audience setting (`monitoring.hotlist_audience`, `hotlist_audience_editable`); the existing typologies as templates | done | Done means the user guide section and the Product Overview deck slides exist (ADR-133 ruling 2) Done 1 November: one queue (typology, hotlist and monitor alerts, visibility decided in SQL), severity, team, assignment, the hotlist audience setting, typologies as templates, and A2 (the canvas announces the focused node); user guide 1.12, admin guide 1.16, and Product Overview Draft1d (two slides). Interpretations recorded as ADR-133 Amendment 1. The live-store tests ran against a throwaway Postgres; the ArcadeDB suites (reports, typology rules, alerts) are not run here. |
 | 4 | **ADR-134:** `alert` pack item; monitoring dashboard feed sections and board; alert trends (conformance first); the rule-3 review of the pack and queue readers; the ADR-113 decision 4 text and the alerts route docstring fixed | done | Guide and Product Overview deck as in step 3 Done 1 November: the `alert` pack item, four monitoring feed sections (board described in admin guide §12), alert trends (DuckDB conformance first; ClickHouse written, not run here), a queue timing leak fixed, pack items filtered in SQL; user guide 1.13, admin guide 1.17, Product Overview Draft1e. Interpretations: ADR-134 Amendment 1. Live-store suites need Postgres, ArcadeDB and ClickHouse: run in CI. |
-| 5 | **ADR-133 stage (b):** sentence builder; frequency and amount conditions; preview (backtest) | in progress | Guide and deck |
-| 6 | **ADR-133 stage (c):** list subscriptions (OFAC, OFSI, UN, EU, OpenSanctions adapters with synthetic golden files; licence register entries); re-screening on update; new AML templates | to do | Guide and deck. Real lists never in the repository (rule 9) |
+| 5 | **ADR-133 stage (b):** sentence builder; frequency and amount conditions; preview (backtest) | done | Guide and deck Done 1 November: rules as sentences over the ontology, round-tripping with the drawn pattern; frequency, amount and first-time conditions (`event_frequency`, DuckDB conformance; ClickHouse not run here); a 90-day preview that writes nothing; user guide 1.14; Product Overview Draft1f. Interpretations: ADR-133 Amendment 2. Also fixed: the revert test's stand-in store, broken on main by step 4. |
+| 6 | **ADR-133 stage (c):** list subscriptions (OFAC, OFSI, UN, EU, OpenSanctions adapters with synthetic golden files; licence register entries); re-screening on update; new AML templates | in progress | Guide and deck. Real lists never in the repository (rule 9) |
 | 7 | **ADR-133 stage (d):** scheduled trigger; Studio "Checks on load" step with Verify preview; maker–checker | to do | Guide and deck |
 | 8 | **Demo use cases** (`ALERTING_MONITORING_PLAN.md`): amendments to ADR-127 (Prison Intelligence) and ADR-108 (Ledger); generated batches and golden tests; P1–P4 woven into the prison storyline; A1–A4 in Operation Ledger | to do | Each case built once its stage has landed: P2, A1 and A2 after step 3; P1 after step 5; A3 after step 6; P3, P4 and A4 after step 4 |
 | 9 | **Demos shown:** prison demo script (v4) and the Ledger walkthrough; `DEMO_GUIDE.md` and the setup guide; capture steps; captures in both brands; prison decks rebuilt | to do | |
@@ -80,6 +80,13 @@ resumed session starts here.
 - **ADR-133 ruling 3** reads "configurable" as a deployment setting; the owner to confirm.
 
 ## Open questions found during the run
+
+8. **An unpinned test reached the owner's ArcadeDB (step 5).** One worker test run reached the
+   everyday deployment's ArcadeDB on port 2480 because its shell had not pinned the ports. It was
+   refused (403, wrong credentials), so nothing was read or written. Every later worker brief carries
+   the pinned ports. For the owner: the test harness could refuse to run against port 2480 by default.
+9. **Rules as sentences** (ADR-133 Amendment 2) are open to review, notably whole-deployment rules
+   going live with no second approver until stage (d).
 
 7. **Alerts in reporting** (ADR-134 Amendment 1, for the owner):
    - Older alerts never count in alert trends (fail closed); should a backfill be built?

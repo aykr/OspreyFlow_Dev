@@ -21095,3 +21095,38 @@ review (`BUILD_ORDER_2026-11.md`, open questions).
    - **Still there:** the one batched recheck is sized by the alerts in the reader's query scope, as
      ADR-039's read-time recheck requires. Opening one alert by its id still reads its nodes in turn;
      the reader already holds the id, and gets "not found" either way.
+
+### ADR-133, Amendment 2 (1 November 2026) — stage (b) as built: rules as sentences, frequency, preview
+
+Status: recorded during the owner's autonomous-build instruction of 1 November 2026, open to the owner's
+review (`BUILD_ORDER_2026-11.md`, open questions).
+
+1. **A sentence's subject is one declared type**, grouped by its POLE class in the builder; `Alert` is
+   left out. A sentence deploys as a new typology, `sentence` (`SentenceRuleParams`). The generic
+   rule route refuses one, so the sentence route's checks cannot be skipped.
+2. **Where conditions go.** Up to three equalities on indexed, non-sensitive text properties go into
+   the drawn pattern; every other condition is a typed parameter. A drawn pattern reads back as a
+   sentence only with one subject, at most one link and no pinned node. Deploying saves the compiled
+   pattern as the author's ("Rule: <name>"), which is the rule's advanced view.
+3. **At evaluation, the saved pattern, read afresh, decides** the subject, its equalities and its link.
+   The stored sentence shown in the rules list can lag behind an edited pattern.
+4. **The blanks:**
+   - "Within a drawn area" applies to point geometries (`geometry_ref`). The Glass takes a box by its
+     corners; drawing it on the map is not built.
+   - "Within N steps" uses `expand`, with N from 1 to 4.
+   - "At a location" means a declared link to a `Location` whose point is inside the area.
+   - "On a hotlist" means the subject's own identifier is on one of the author's active hotlists.
+5. **A frequency counts events of one temporal link type**, with the subject at either end; each event
+   is filtered by its own marking. As data loads, the window runs from the load's earliest event less D
+   days to its latest. "First time" means the first event ever falls within the load. One alert per
+   subject per qualifying window.
+6. **The preview** counts over the last 90 days, over the author's pattern matches as they stand, within
+   the working-set limit (50,000 nodes, counted as the author). It is audited (`rule_previewed`) and
+   writes no alert, rule or pattern.
+7. **Scopes:**
+   - **Just me:** an Editor may deploy one. It raises monitor-kind, owner-only alerts, never holds
+     rows, and never runs before commit.
+   - **Whole deployment:** it has no dataset, is listed in every case, is judged within the loading
+     case's datasets, and is live at once. A second approver comes with stage (d).
+8. **Hold and before commit.** A "hold" hit holds its rows with the finding as the reason, and raises
+   no alert. A rule naming a graph relationship runs after commit only.
