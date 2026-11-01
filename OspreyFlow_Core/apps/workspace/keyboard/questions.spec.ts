@@ -167,6 +167,40 @@ test("asking, then reaching a [G-n] from the answer by Tab, selects what it stan
   registerCovered(REGISTRY, "select-a-graph-fact-from-an-answer-by-keyboard");
 });
 
+test("the model engine is reached from the question by Shift+Tab, changed by keyboard, and named in the question", async ({ page }) => {
+  // ADR-135 decision 5 (rule 13): the choice lists the engines offered, the default chosen; a
+  // keyboard change is what the question sends, and the answer says which engine answered.
+  await page.route("**/*/v1/models/engines", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        engines: [
+          { name: "local", label: "This deployment's own model", roles: ["extraction"], default_for: [] },
+          { name: "gemini", label: "Gemini", roles: ["extraction"], default_for: ["extraction"] },
+        ],
+      }),
+    }),
+  );
+  const { scopes } = await serve(page, [], { ...ANSWER, engine: "local", model: "qwen2.5:7b-instruct" });
+  const choice = page.getByRole("combobox", { name: "Model engine" });
+  await expect(choice).toHaveValue("gemini");
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.press("Shift+Tab");
+  await expect(choice).toBeFocused();
+  // A closed select takes an arrow key differently by platform (macOS opens the menu); typing the
+  // start of an option's label chooses it everywhere (`link-change.spec.ts`'s own note).
+  await page.keyboard.type("This");
+  await expect(choice).toHaveValue("local");
+  await page.keyboard.press("Tab");
+  await expect(page.getByLabel("Your question")).toBeFocused();
+  await page.keyboard.type("Who wrote about the plant?");
+  await page.keyboard.press("Control+Enter");
+  await expect(page.getByText("Answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeVisible();
+  expect((scopes[0] as { engine?: string }).engine).toBe("local");
+  registerCovered(REGISTRY, "choose-the-model-engine-by-keyboard");
+});
+
 test("every registered questions action has its own proving test case above", () => {
   assertAllCovered("QUESTIONS_ACTIONS", QUESTIONS_ACTIONS);
 });

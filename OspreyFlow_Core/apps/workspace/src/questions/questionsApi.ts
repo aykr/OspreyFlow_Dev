@@ -29,6 +29,10 @@ export interface QuestionAnswer {
    * never given: left out, counted. */
   unplaced: number;
   created_at: string;
+  /** ADR-135 decision 4: the engine that answered (`local` or a provider's name) and its model;
+   * absent on an answer kept before engines were named. */
+  engine?: string | null;
+  model?: string | null;
 }
 
 function questionsUrl(apiBaseUrl: string, investigationId: string): string {
@@ -71,6 +75,9 @@ export interface AskScope {
   nodeIds: string[];
   linkIds: string[];
   window?: { validFrom: string; validTo: string | null } | null;
+  /** ADR-135: the engine the analyst chose, from `GET /v1/models/engines`; absent, the role's
+   * default. The Conduit still decides, and a refusal comes back in words (422 `engine_refused`). */
+  engine?: string | null;
 }
 
 /** What a refused question says, in words: never a bare status. */
@@ -90,6 +97,7 @@ export async function askQuestion(
       ...(scope.window
         ? { window: { valid_from: scope.window.validFrom, valid_to: scope.window.validTo } }
         : {}),
+      ...(scope.engine ? { engine: scope.engine } : {}),
     }),
   });
   if (response.ok) return (await response.json()) as QuestionAnswer;

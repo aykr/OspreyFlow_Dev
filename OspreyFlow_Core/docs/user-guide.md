@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.8** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.9** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.9 | 2026-11-01 | §6: choosing the model engine in Ask the case and Ask to search, and what an answer's "Answered by" line means. |
 | 1.8 | 2026-11-01 | The opening says what OspreyFlow is for: intelligence mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. |
 | 1.7 | 2026-10-29 | Describes v0.4.1: the top bar wraps to a second line when its items do not fit, and the map keeps what it showed when the timeline opens. |
 | 1.6 | 2026-10-28 | A source row is counted from 1 everywhere it is shown: the first row after the header is row 1. |
@@ -413,6 +414,21 @@ window, or branch the case, then ask again. Your question stays in the box. Noth
 answer is shown later only to someone who could see every item it was built from, so a reader cleared
 lower does not see an answer built on events above their clearance. An answer kept before that was
 recorded may still be shown as before.
+
+**Choosing the engine.** Where the deployment offers more than one model engine, a **Model engine**
+choice sits above your question: the deployment's own model, and any provider your administrator has
+enabled, such as Gemini. The one your administrator chose is selected; change it before you ask to use
+another. Where only the deployment's own model is offered,
+there is no choice to make, and none is shown. Choosing an engine is a request, not a promise: material
+your deployment may not send outside is always answered by its own model, whatever you choose. If an
+engine cannot be used — it is no longer enabled, or has no key — the question is refused in words and
+nothing is sent; choose another and ask again.
+
+**"Answered by …".** Under each answer, a small line says which engine and model produced it, for
+example "Answered by Gemini (gemini/gemini-2.5-flash)" or "Answered by This deployment's own model
+(qwen2.5:7b-instruct)". It is what the deployment says it used, not what you chose. An answer kept
+before engines were named has no such line. **Ask to search** shows the same choice and line; it sends
+no case material, so it always runs on the deployment's own model, and its line says so.
 
 To ask in words for a pattern rather than an answer, use **Ask to search** in the query builder (section
 5.10).

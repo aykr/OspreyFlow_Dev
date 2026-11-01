@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 
 import { ApiError, getModelChoices, postConsequences } from "../api/client";
-import type { Consequences, ModelChoices, ModelJob, OspreyConfig } from "../api/types";
+import type {
+  Consequences,
+  ModelChoices,
+  ModelJob,
+  ModelProviderConfig,
+  ModelsConfig,
+  OspreyConfig,
+} from "../api/types";
 
 // ADR-095 decision 1: the system administrator chooses the deployment's own models here, from the
 // pinned list the harness serves (never a copy kept in this file); the defaults are the ones the
@@ -42,7 +49,29 @@ export function ModelsScreen({
 
   const picked = (job: ModelJob): string | undefined => chosen[job] ?? choices?.defaults[job];
 
+  // ADR-135: the screen saves `models` whole, so everything it does not edit — the providers (or the
+  // older single provider) and each role's default engine — is carried over as the config holds it.
+  // A field left out here would be a field the save drops.
+  const kept: Partial<ModelsConfig> = {
+    ...(config.models?.provider ? { provider: config.models.provider } : {}),
+    ...(config.models?.providers ? { providers: config.models.providers } : {}),
+    ...(config.models?.defaults ? { defaults: config.models.defaults } : {}),
+  };
+  const providers: ModelProviderConfig[] = config.models?.provider
+    ? [config.models.provider]
+    : (config.models?.providers ?? []);
+  const keyVariable = (name: string) =>
+    config.models?.provider ? "OSPREY_MODEL_PROVIDER_KEY" : `OSPREY_MODEL_KEY_${name.toUpperCase()}`;
+  const defaults = config.models?.defaults ?? {};
+  const defaultFor = (provider: ModelProviderConfig): string[] =>
+    config.models?.provider && Object.keys(defaults).length === 0
+      ? Object.keys(provider.roles)
+      : Object.entries(defaults)
+          .filter(([, engine]) => engine === provider.name)
+          .map(([role]) => role);
+
   const draftModels = {
+    ...kept,
     ...Object.fromEntries(
       JOBS.map(({ job }) => [job, picked(job)]).filter(([, name]) => name !== undefined),
     ),
@@ -130,6 +159,45 @@ export function ModelsScreen({
             value={codes}
             onChange={(event) => setCodes(event.target.value)}
           />
+        </>
+      )}
+
+      {providers.length > 0 && (
+        <>
+          <h3>Model providers</h3>
+          <p>
+            Case content whose handling code is sendable may be sent to these providers; everything else runs on this
+            deployment&apos;s own models. They are set in the deployment&apos;s configuration and shown here as they
+            stand. A provider&apos;s key is never entered on this page: give it in the installer&apos;s terminal as{" "}
+            <code>OSPREY_MODEL_KEY_&lt;NAME&gt;</code> before you install, or later with{" "}
+            <code>ospreyflow models key &lt;name&gt;</code>.
+          </p>
+          <table className="table" aria-label="Model providers">
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Models</th>
+                <th>Default for</th>
+                <th>Its key</th>
+              </tr>
+            </thead>
+            <tbody>
+              {providers.map((provider) => (
+                <tr key={provider.name}>
+                  <td>{provider.label ?? provider.name}</td>
+                  <td>
+                    {Object.entries(provider.roles)
+                      .map(([role, model]) => `${role}: ${model}`)
+                      .join("; ")}
+                  </td>
+                  <td>{defaultFor(provider).join(", ") || "None"}</td>
+                  <td>
+                    <code>{keyVariable(provider.name)}</code>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </>
       )}
 

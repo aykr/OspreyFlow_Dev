@@ -25,16 +25,25 @@ export interface PatternProposal {
   explanation: string;
   estimated_count: number;
   is_floor: boolean;
+  /** ADR-135 decision 4: the engine that proposed it (always `local`: ask to search sends no
+   * handling code, so it never leaves the deployment) and its model. */
+  engine?: string | null;
+  model?: string | null;
 }
 
 /** ADR-121: a condition the ontology refuses comes back as a typed 422
  * (`pattern_condition_refused`, with its reason in words); the analyst is shown those words. ADR-129:
- * a question that cannot be drawn comes back as `could_not_express`, and the panel says so. Any
+ * a question that cannot be drawn comes back as `could_not_express`, and the panel says so. ADR-135:
+ * an engine refused comes back as `engine_refused`, whose words are shown the same way. Any
  * other failure keeps the status-only message it always had. */
 async function failure(response: Response, fallback: string): Promise<Error> {
   try {
     const body = (await response.json()) as { error?: unknown; detail?: unknown };
-    if (body.error === "pattern_condition_refused" && typeof body.detail === "string") {
+    // ADR-135: an engine the Conduit refused (not enabled, no key, no model for the role), in words.
+    if (
+      (body.error === "pattern_condition_refused" || body.error === "engine_refused") &&
+      typeof body.detail === "string"
+    ) {
       return new Error(body.detail);
     }
     if (body.error === "could_not_express") {
@@ -94,11 +103,13 @@ export async function askToSearch(
   investigationId: string,
   question: string,
   selectedNodeIds: readonly string[],
+  engine: string | null = null,
 ): Promise<PatternProposal> {
+  // ADR-135: the engine the analyst chose; absent, the role's default. The Conduit decides.
   const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/patterns/ask`, {
     method: "POST",
     headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ question, selected_node_ids: selectedNodeIds }),
+    body: JSON.stringify({ question, selected_node_ids: selectedNodeIds, ...(engine ? { engine } : {}) }),
   });
   if (!response.ok) {
     throw await failure(response, `POST .../patterns/ask failed: ${response.status}`);

@@ -30,6 +30,7 @@ import { Input } from "../design/primitives/Input";
 import { AccordionSection } from "../design/primitives/AccordionSection";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
+import { AnsweredBy, EnginePicker, useEngineChoice } from "../models/engines";
 import { GlobalSearch } from "../search/GlobalSearch";
 import {
   askToSearch,
@@ -94,6 +95,9 @@ export function QueryBuilderPanel({
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [proposal, setProposal] = useState<PatternProposal | null>(null);
+  // ADR-135 decision 5: the engine to ask, among those offered for extraction. The Conduit runs
+  // ask to search locally whatever is named (it sends no handling code); the proposal says so.
+  const engineChoice = useEngineChoice(apiBaseUrl, bearerToken, "extraction");
   // A proposal replaces the pattern drawn, so what it replaced is kept until it is restored or
   // another proposal replaces it: one press of "Restore the previous pattern" is the undo.
   const [previous, setPrevious] = useState<{ pattern: PatternBuilderState; id: string | null; name: string } | null>(null);
@@ -190,7 +194,14 @@ export function QueryBuilderPanel({
     resetResults();
     const askedAt = revision.current;
     try {
-      const proposed = await askToSearch(apiBaseUrl, bearerToken, investigationId, text, selectedNodeIds);
+      const proposed = await askToSearch(
+        apiBaseUrl,
+        bearerToken,
+        investigationId,
+        text,
+        selectedNodeIds,
+        engineChoice.chosen,
+      );
       if (revision.current !== askedAt) {
         // The pattern was changed while the model worked: drawing the proposal would discard those
         // edits without a word, so it is not applied.
@@ -305,6 +316,7 @@ export function QueryBuilderPanel({
         <AccordionSection title="Pattern" open={parts.has("pattern")} onToggle={() => togglePart("pattern")}>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
         {/* ADR-129 decision 2: ask in words; the model proposes, the analyst checks and runs. */}
+        <EnginePicker choice={engineChoice} id="ask-to-search-engine" disabled={asking} />
         <div role="group" aria-label="Ask to search" style={{ display: "flex", gap: "var(--sp-4)" }}>
           <Input
             aria-label="Ask to search"
@@ -327,6 +339,7 @@ export function QueryBuilderPanel({
             {proposal.explanation} A model proposed this pattern. Check the pattern before you run it.
           </p>
         )}
+        {proposal && <AnsweredBy engine={proposal.engine} model={proposal.model} engines={engineChoice.engines} />}
         {previous && (
           <div>
             <Button type="button" onClick={handleRestorePrevious}>

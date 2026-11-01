@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.12** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.13** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.13 | 2026-11-01 | §10 rewritten for several model engines: providers, defaults, labels, keys as `OSPREY_MODEL_KEY_<NAME>`, and what may leave. §8: `ospreyflow models`, `models key` and `models remove-key`. Appendix A: `models.providers`, `models.defaults` and a provider's `label`. |
 | 1.12 | 2026-11-01 | The opening says what OspreyFlow is for: intelligence mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. |
 | 1.11 | 2026-11-01 | §8: `ospreyflow switch`. Appendix A: `deployment.name`, the `appearance` settings (the GOV.UK look), and relative storage paths. |
 | 1.10 | 2026-10-29 | §11: the Prison Intelligence pack's rehearsal commands are in `DEMO_GUIDE.md`, not the user guide. |
@@ -360,6 +361,9 @@ Lite and `https://<domain>` for Small and Enterprise.
 | `ospreyflow open` | Opens the Glass in your browser |
 | `ospreyflow logs [service] [--follow] [--tail N]` | The services' logs (the last 200 lines by default) |
 | `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`); safe to run again |
+| `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
+| `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
+| `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
 | `ospreyflow uninstall [--keep-data] [--yes]` | Removes the containers; with `--keep-data` the data volumes stay, without it cases, accounts and indexes go too. Your checkout, `osprey.yaml` and your own folders are never touched |
 
 Every service restarts itself if it stops; nothing is registered with the operating system.
@@ -445,21 +449,55 @@ page also offers *Reset your password*.
 
 By default every model runs on the deployment itself (extraction, vision, transcription and
 embedding — appendix A, `models.*`) and **no case content leaves it**. A client with its own
-agreement with a model provider (OpenAI, Anthropic, Gemini, Azure, Bedrock…) may name it:
+agreement with one or more model providers may enable them as further **engines**: `openai`,
+`anthropic` and `gemini` (Google), and other LiteLLM providers such as `azure` or `bedrock` in the
+same shape.
 
 ```yaml
 models:
   local_only: false
   sendable_handling_codes: [P]
-  provider:
-    name: openai
-    roles: {extraction: gpt-4o}
+  providers:
+    - name: gemini
+      roles: {extraction: gemini/gemini-2.5-flash}
+    - name: openai
+      label: OpenAI (client tenancy)
+      roles: {extraction: gpt-4o, vision: gpt-4o-mini}
+  defaults:
+    extraction: gemini
 ```
 
-The provider then **replaces** the local model for the roles named — for material whose handling
-code is in `sendable_handling_codes` only; anything else runs on the local model. Its key is given
-once at install as `OSPREY_MODEL_PROVIDER_KEY` and kept only in `deployment.env`. Admin → System
-shows each role's model, where it runs, and a notice that case content then leaves the deployment.
+- **`providers`** lists each enabled provider: its model for each role it takes, an optional
+  `api_base` (`https://` only) and an optional `label` — the name analysts see. Without one, the
+  label is OpenAI, Anthropic or Gemini.
+- **`defaults`** names each role's default engine: `local` or a provider's name. A role not named
+  runs on `local`.
+- The older single `provider:` is still read, as a one-entry list whose roles default to it. Naming
+  both `provider` and `providers` is refused.
+
+**Keys.** Each provider's key is `OSPREY_MODEL_KEY_<NAME>` — for example `OSPREY_MODEL_KEY_GEMINI`
+(the single `provider:` keeps `OSPREY_MODEL_PROVIDER_KEY`). Give it in the installer's terminal
+before `ospreyflow install`; an enabled provider without its key stops the install, and a later
+install keeps a key already given. On a running deployment, `ospreyflow models key <name>` sets or
+replaces it and `ospreyflow models remove-key <name>` removes it (section 8); `ospreyflow models`
+says whether each is present. A key is kept in `deployment.env` alone and read only by the
+deployment's model gateway — never by the Conduit, never written to `osprey.yaml`, never shown in
+the Admin area or any page. The guided install's Models screen shows the providers but takes no
+key.
+
+**What may leave.** `sendable_handling_codes` is the one gate, for every engine: only material
+whose handling code is in that list may be sent to a provider; anything else runs on the local
+engine, whatever was chosen, and is refused in words when the deployment has no local model for the
+role. Embeddings never leave the deployment.
+
+**Who chooses.** The administrator sets each role's default. An analyst may choose, for each
+question in Ask the case, among the engines offered — the local engine and each enabled provider
+that has a key. Ask to search sends no case material, only the case's vocabulary and the question,
+so it always runs on the local engine, and says so. Every answer names the engine and model that
+produced it.
+
+Admin → System shows each role's model, each engine with its models, the roles it is the default
+for and whether its key is present, and a notice that case content then leaves the deployment.
 
 ## 11. Demo packs
 
@@ -642,14 +680,21 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `components.storage.ingest` | str | `/var/lib/osprey/ingest` | The host folder of source files the Ingest Studio lists (read-only to it; uploads go to its uploaded/ folder). A relative path is read from the folder osprey.yaml is in. |
 | `components.storage.tiles` | str | `/var/lib/osprey/tiles` | The host folder a built basemap lives in. A relative path is read from the folder osprey.yaml is in. |
 | `components.source_path` | str or none | none | The owned services (workspace, api, ingest) are PULLED, by the digest recorded in versions.lock, from the registry reference harness/render.py's own service_images names. This is the operator path: the harness image itself carries no services/ or apps/workspace source, and round 05's own finding was that the documented one-command bootstrap could not Launch without it — a clean laptop has no checkout. Set to a checkout root containing services/api/Dockerfile, services/ingest/Dockerfile and apps/workspace/Dockerfile (this repository's own root, for a developer/CI run) to BUILD owned images from source instead. Declared and the Dockerfiles absent is refused by name (harness.render.MissingDockerfileError) — never silently treated as the pull path. |
-| `models` | section | — | The local models, and a client's own model provider if one is chosen. |
+| `models` | section | — | The local models, and the client's own model providers (engines) if any are enabled. |
 | `models.local_only` | bool | true | No hosted fallback |
 | `models.hosted_fallback` | str or none | none | A provider name, never a credential. |
 | `models.sendable_handling_codes` | list of str | — | Which handling codes may leave for a hosted model. |
-| `models.provider` | section or none | none | A client's own model provider, reached through the deployment's gateway. |
+| `models.provider` | section or none | none | The older one-provider form, read as a one-entry providers list; not with providers. |
 | `models.provider.name` | str | required | LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock… |
+| `models.provider.label` | str or none | none | The name analysts see for this engine. Default: OpenAI, Anthropic or Gemini for those three, else the provider's name capitalised. |
 | `models.provider.roles` | mapping | required | The roles it takes, each with the provider's model for it |
 | `models.provider.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
+| `models.providers` | list of section | — | The providers (engines) an administrator enables, each reached through the deployment's gateway; each key is OSPREY_MODEL_KEY_<NAME>. |
+| `models.providers.name` | str | required | LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock… |
+| `models.providers.label` | str or none | none | The name analysts see for this engine. Default: OpenAI, Anthropic or Gemini for those three, else the provider's name capitalised. |
+| `models.providers.roles` | mapping | required | The roles it takes, each with the provider's model for it |
+| `models.providers.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
+| `models.defaults` | mapping | — | Each role's default engine, `local` or an enabled provider's name. A role not named runs on `local` (for the single `provider`, on it). |
 | `models.extraction` | `qwen2.5:7b-instruct` \| `qwen2.5:14b-instruct` | `qwen2.5:7b-instruct` | The local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with. |
 | `models.vision` | `moondream:1.8b-v2-q4_K_M` | `moondream:1.8b-v2-q4_K_M` | The local model that describes an image and reads its text. |
 | `models.transcription` | `Systran/faster-whisper-tiny.en` | `Systran/faster-whisper-tiny.en` | The local model that transcribes a video's speech. |
