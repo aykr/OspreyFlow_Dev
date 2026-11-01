@@ -19,6 +19,7 @@ from typing import Any
 import asyncpg
 import pytest
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from services.api.app import (
     app,
@@ -39,6 +40,8 @@ from services.api.screening_refresh import SYNTHETIC_MANIFEST
 
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import Principal
+
+from .corpus_counts import field_names_reachable
 
 ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-a", roles=["analyst"])
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-a", roles=["osprey-admin"])
@@ -173,8 +176,22 @@ def test_a_reader_sees_each_list_but_not_the_deployment_wide_counts(
     assert shown.status_code == 200
     body = shown.json()
     assert [x["list_name"] for x in body["lists"]] == ["Synthetic list"]
-    assert body["updates"] == [] and body["can_manage"] is False
+    assert "updates" not in body and body["can_manage"] is False
     assert "re-screened" not in shown.text and "alert" not in shown.text
+
+
+def test_the_readers_route_cannot_carry_the_deployment_wide_counts() -> None:
+    """Violation caught (rule 7): the reader's route answered with the administrator's model, its
+    refreshes held empty by the handler alone, so one line changed there would send every reader
+    the counts of customers re-screened and alerts raised across every case. Its own model has no
+    field to hold them. Pure: walks the route's response model, opens no connection."""
+    (route,) = [
+        r for r in app.routes
+        if isinstance(r, APIRoute) and r.path == "/v1/screening-lists" and "GET" in r.methods
+    ]  # fmt: skip
+    reachable = field_names_reachable(route.response_model)
+    assert "lists" in reachable, "the walk sees the route's model"
+    assert reachable & {"updates", "rescreened", "alerts"} == set()
 
 
 def test_a_location_outside_the_ingest_folder_is_refused_at_subscription(

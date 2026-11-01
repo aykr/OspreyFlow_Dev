@@ -133,15 +133,15 @@ const LISTS = [
 ];  // prettier-ignore
 const REFRESHES = [
   { id: "u2", list_name: "Synthetic sanctions list", at: hoursAgo(1), outcome: "updated", version: "sha256:3906852638793da1",
-    previous_version: "sha256:f0c7091a6a53d6a2", added: 1, changed: 1, removed: 1, rescreened: 412, alerts: 1,
+    previous_version: "sha256:f0c7091a6a53d6a2", added: 1, changed: 1, delisted: 1, rescreened: 412, alerts: 1,
     words: "Version sha256:3906852638793da1: 1 added, 1 changed, 1 removed. 412 customers re-screened against 2 changed entries; 1 alert raised." },
   { id: "u1", list_name: "Synthetic OFAC-format list", at: hoursAgo(2), outcome: "failed", version: "sha256:9c41d07be2a4f1e0",
-    previous_version: null, added: 0, changed: 0, removed: 0, rescreened: 0, alerts: 0, words: LISTS[1].failure },
+    previous_version: null, added: 0, changed: 0, delisted: 0, rescreened: 0, alerts: 0, words: LISTS[1].failure },
 ];  // prettier-ignore
 
 function answer(path: string, search: URLSearchParams): unknown {
   if (path === "/v1/ontology") return ONTOLOGY;
-  if (path === "/v1/screening-lists") return { lists: LISTS, updates: [], can_manage: false };
+  if (path === "/v1/screening-lists") return { lists: LISTS, can_manage: false };
   if (path === "/v1/admin/screening-lists") return { lists: LISTS, updates: REFRESHES, can_manage: true };
   if (path.startsWith("/v1/admin/screening-lists/") && path.endsWith("/refresh")) return REFRESHES[0];
   if (path === "/v1/investigations") return [{ id: "inv-1", name: "Operation Ledger", level: "author", created_at: "", created_by: "" }];

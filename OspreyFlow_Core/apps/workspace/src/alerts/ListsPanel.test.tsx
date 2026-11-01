@@ -32,7 +32,7 @@ const LISTS = [
 
 const UPDATE = {
   id: "u1", list_name: "Synthetic list", at: "2026-11-01T09:00:00Z", outcome: "updated", version: "sha256:3906852638793da1",
-  previous_version: "sha256:f0c7091a6a53d6a2", added: 1, changed: 1, removed: 1, rescreened: 4, alerts: 1,
+  previous_version: "sha256:f0c7091a6a53d6a2", added: 1, changed: 1, delisted: 1, rescreened: 4, alerts: 1,
   words: "Version sha256:3906852638793da1: 1 added, 1 changed, 1 removed. 4 customers re-screened against 2 changed entries; 1 alert raised.",
 }; // prettier-ignore
 
@@ -44,7 +44,7 @@ function serve() {
       const path = new URL(url).pathname;
       const method = init?.method ?? "GET";
       calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-      if (path === "/v1/screening-lists") return json(200, { lists: LISTS, updates: [], can_manage: false });
+      if (path === "/v1/screening-lists") return json(200, { lists: LISTS, can_manage: false });
       if (path === "/v1/admin/screening-lists" && method === "GET")
         return json(200, { lists: LISTS, updates: [UPDATE], can_manage: true });
       if (path === "/v1/admin/screening-lists" && method === "POST")

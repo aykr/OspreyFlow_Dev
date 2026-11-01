@@ -570,8 +570,8 @@ POST   /v1/investigations/{id}/rules/sentence/compile   a rule sentence checked 
 POST   /v1/investigations/{id}/rules/sentence/read   a drawn pattern read back as the sentence, its other blanks kept, Viewer
 POST   /v1/investigations/{id}/rules/preview   "Preview on the last 90 days": run as the caller, raises and writes nothing, Viewer
 POST   /v1/investigations/{id}/rules/sentence   deploy a sentence: Editor for "just me", Author for this case, Author and administrator for the deployment
-GET    /v1/screening-lists   each screening list's version, entries, last update and failure, read_alert_queue (no refresh counts)
-GET    /v1/admin/screening-lists   the same, with the latest refreshes and what each changed, re-screened and raised, load_screening_lists
+GET    /v1/screening-lists   each screening list's version, entries, last update and failure, read_alert_queue (no refresh counts: its model, ScreeningListsOverview, has no field for them)
+GET    /v1/admin/screening-lists   the same, with the latest refreshes and what each changed, re-screened and raised (entries added, changed and delisted — never `removed`, the removal record's name, ADR-124 decision 4), load_screening_lists
 POST   /v1/admin/screening-lists   subscribe a list through its connector to a file in the ingest folder, load_screening_lists
 POST   /v1/admin/screening-lists/{list_name}/refresh   "Refresh now": apply the list's new version, re-screen against its changed entries, load_screening_lists
 ```

@@ -250,7 +250,7 @@ async def test_a_list_update_adding_one_entry_raises_one_alert_for_the_one_match
     # removes one. Petrova's entry is unchanged: a re-screening of the whole list would alert on her.
     await _subscribe(store, "lists/synthetic_opensanctions_v2.ftm.json")
     second = await _refresh(store, root, _rescreener(graph, queue, [_rule()]))
-    assert (second.outcome, second.added, second.changed, second.removed) == ("updated", 1, 1, 1)
+    assert (second.outcome, second.added, second.changed, second.delisted) == ("updated", 1, 1, 1)
     (alert,) = queue.alerts
     assert alert.typology == "kyc_screening" and alert.rule_id == "typology:rule-screen"
     assert "p-zelinsky" in alert.referent_node_ids and "p-petrova" not in alert.referent_node_ids

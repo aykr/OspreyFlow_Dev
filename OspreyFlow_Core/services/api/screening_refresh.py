@@ -391,7 +391,7 @@ async def refresh(
     )  # fmt: skip
     counts = {"version": diff.version, "previous_version": diff.previous_version,
               "added": len(diff.added), "changed": len(diff.changed),
-              "removed": len(diff.removed)}  # fmt: skip
+              "delisted": len(diff.removed)}  # fmt: skip
     skipped = (
         f" {_plural(parsed.skipped, 'entry', 'entries')} neither a person nor an organisation "
         "(a vessel, an aircraft or a ship) not screened."

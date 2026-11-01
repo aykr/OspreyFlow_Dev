@@ -16,6 +16,7 @@ import type {
   QueuedAlert,
   RuleAuditPage,
   ScreeningLists,
+  ScreeningListsOverview,
   ScreeningListStatus,
   ScreeningListUpdate,
   ScreeningSubscriptionInput,
@@ -208,12 +209,13 @@ export interface ListsApi {
 }
 
 /** The Lists screen: whoever may load lists reads the refreshes too; anyone else the lists alone. */
-export const listScreeningLists = (a: ListsApi, manage: boolean) =>
-  call<ScreeningLists>(
-    `${a.apiBaseUrl}/v1/${manage ? "admin/" : ""}screening-lists`,
-    a.bearerToken,
-    "Reading the screening lists",
-  );
+/** The lists alone, for a reader of the alert queue: no refreshes (rule 7). */
+export const listScreeningLists = (a: ListsApi) =>
+  call<ScreeningListsOverview>(`${a.apiBaseUrl}/v1/screening-lists`, a.bearerToken, "Reading the screening lists");
+
+/** The lists and their latest refreshes, for whoever holds `load_screening_lists`. */
+export const manageScreeningLists = (a: ListsApi) =>
+  call<ScreeningLists>(`${a.apiBaseUrl}/v1/admin/screening-lists`, a.bearerToken, "Reading the screening lists");
 
 export const subscribeScreeningList = (a: ListsApi, body: ScreeningSubscriptionInput) =>
   call<ScreeningListStatus>(`${a.apiBaseUrl}/v1/admin/screening-lists`, a.bearerToken, "Subscribing to the list", {

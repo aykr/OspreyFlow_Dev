@@ -257,6 +257,7 @@ from schemas.profile import SourceProfile
 from schemas.rights import Right, RightsResponse, rights_for
 from schemas.screening import (
     ScreeningLists,
+    ScreeningListsOverview,
     ScreeningListStatus,
     ScreeningListUpdate,
     ScreeningSubscriptionInput,
@@ -9547,14 +9548,15 @@ async def data_feeds_route(
 @app.get("/v1/screening-lists", dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))])
 async def list_screening_lists(
     principal: PrincipalDep, screening_lists: ScreeningListsDep, audit: AuditDep
-) -> ScreeningLists:
+) -> ScreeningListsOverview:
     """The Lists screen for a reader of the alert queue: each list's version, entries, last update
     and failure, in words. Not its refreshes: their counts of customers re-screened and alerts
-    raised are taken across every case in the deployment (rule 7: no unfiltered count)."""
+    raised are taken across every case in the deployment (rule 7: no unfiltered count), and the
+    model has no field to hold them."""
     found = await screening_lists.subscriptions()
     await audit.record(principal=principal, action="list_screening_lists", investigation_id=None,
                        resolved_query={}, result_cardinality=len(found))  # fmt: skip
-    return ScreeningLists(lists=found, updates=[], can_manage=False)
+    return ScreeningListsOverview(lists=found)
 
 
 @app.get(

@@ -67,14 +67,28 @@ class ScreeningListUpdate(BaseModel):
     previous_version: str | None = None
     added: int = 0
     changed: int = 0
-    removed: int = 0
+    #: Entries the publisher took off the list. Not `removed`: that name is the removal record's on
+    #: the wire (ADR-124 decision 4), which no route may carry.
+    delisted: int = 0
     #: The customers re-screened against the changed entries, and the alerts that raised.
     rescreened: int = 0
     alerts: int = 0
     words: str
 
 
+class ScreeningListsOverview(BaseModel):
+    """The Lists screen for a reader of the alert queue: the lists alone. No refreshes — their
+    counts of customers re-screened and alerts raised are taken across every case in the deployment
+    (rule 7) — and no field that could hold them, so the route cannot send them, not merely does
+    not."""
+
+    lists: list[ScreeningListStatus]
+    can_manage: Literal[False] = False
+
+
 class ScreeningLists(BaseModel):
+    """The Lists screen for whoever may load screening lists (`load_screening_lists`)."""
+
     lists: list[ScreeningListStatus]
     #: The latest refreshes, newest first, across every list.
     updates: list[ScreeningListUpdate]
@@ -86,5 +100,6 @@ ALL_MODELS = (
     ScreeningSubscriptionInput,
     ScreeningListStatus,
     ScreeningListUpdate,
+    ScreeningListsOverview,
     ScreeningLists,
 )

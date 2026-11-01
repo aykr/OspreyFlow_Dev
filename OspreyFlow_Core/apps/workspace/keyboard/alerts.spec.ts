@@ -160,13 +160,13 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
       return json(201, made);
     }
     // ADR-133 stage (c): the screening lists (synthetic, rule 9).
-    if (url.pathname === "/v1/screening-lists") return json(200, { lists: LISTS, updates: [], can_manage: false });
+    if (url.pathname === "/v1/screening-lists") return json(200, { lists: LISTS, can_manage: false });
     if (url.pathname === "/v1/admin/screening-lists" && method === "GET") return json(200, { lists: LISTS, updates: [], can_manage: true });
     if (url.pathname === "/v1/admin/screening-lists" && method === "POST")
       return json(201, { ...LISTS[0], ...(request.postDataJSON() as object), version: null, entries: 0, updated_at: null });
     if (url.pathname === "/v1/admin/screening-lists/Synthetic%20list/refresh")
       return json(200, { id: "u1", list_name: "Synthetic list", at: "2026-11-01T09:00:00Z", outcome: "updated", added: 1, changed: 1,
-        removed: 1, rescreened: 4, alerts: 1, words: "Version v2: 1 added, 1 changed, 1 removed. 4 customers re-screened against 2 changed entries; 1 alert raised." });  // prettier-ignore
+        delisted: 1, rescreened: 4, alerts: 1, words: "Version v2: 1 added, 1 changed, 1 removed. 4 customers re-screened against 2 changed entries; 1 alert raised." });  // prettier-ignore
     if (path === "held-rows") return json(200, state.held);
     if (path === "held-rows/reject") {
       const ids = (request.postDataJSON() as { ids: string[] }).ids;

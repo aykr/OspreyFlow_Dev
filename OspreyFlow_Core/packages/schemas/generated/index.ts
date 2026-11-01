@@ -314,4 +314,5 @@ export type { RulePreviewRequest } from "./RulePreviewRequest";
 export type { ScreeningSubscriptionInput } from "./ScreeningSubscriptionInput";
 export type { ScreeningListStatus } from "./ScreeningListStatus";
 export type { ScreeningListUpdate } from "./ScreeningListUpdate";
+export type { ScreeningListsOverview } from "./ScreeningListsOverview";
 export type { ScreeningLists } from "./ScreeningLists";
