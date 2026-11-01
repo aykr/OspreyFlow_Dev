@@ -107,7 +107,8 @@ def _architecture_landing_page() -> str:
     )
     body = (
         "<h1>OspreyFlow</h1>"
-        "<p>Open-source intelligence analysis and network discovery platform. This site is "
+        "<p>Open-source intelligence mapping for crime analysis, anti-money-laundering, fraud "
+        "detection, and event monitoring and alerting. This site is "
         "generated from this deployment's own documentation at bundle time.</p>"
         "<h2>Start here</h2><ul><li><a href=\"administration-guide.html\">Installation and "
         "Administration Guide</a> — install, run, back up and update it.</li>"

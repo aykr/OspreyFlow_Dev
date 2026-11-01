@@ -13151,6 +13151,31 @@ Found preparing the Prison Intelligence demo, and fixed on the owner's instructi
   the one-line case at 1,440 and Amendment 2's 924 case still passing. `shellSizes.test.ts` now
   holds the height as a minimum and the wrap.
 
+### ADR-115, Amendment 4 (1 November 2026) — intelligence mapping first
+
+Status: accepted, the owner's ruling: "update the welcome page to emphasize the Intelligence Mapping
+with crime analysis, AML and Fraud detection as follow up … I want this theme reflected across the
+board", with "event monitoring and alerting needs to be highlighted as key features".
+
+Decision. The product says what it is in one order everywhere it describes itself: **intelligence
+mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and
+alerting.** It replaces "intelligence analysis and network discovery" and the welcome page's "Crime
+analysis on one graph", which decision 8 had taken from the handoff.
+
+1. **The welcome page.** The heading is "Intelligence mapping"; the lead opens "For crime analysis,
+   anti-money-laundering, fraud detection, and event monitoring and alerting." The capabilities are
+   five: network analysis, geospatial, timeline trends, **monitoring and alerts**, reporting.
+2. **About** is "One intelligence map", in four parts: crime analysis and anti-money-laundering as
+   before, then **fraud detection** and **event monitoring and alerting**, each three points in words
+   about what the product does today (shared identifiers, typology rules, match-on-read resolution;
+   hotlists with review dates, rules on every load, alerts that explain themselves). No new screens.
+3. **The README, the three guides' openings and the documentation site** say the same sentence. The
+   marketing site and the decks already did.
+
+Tests: `SignInScreen.test.tsx`'s "says what the product is, with its five capabilities" and "shows
+About unless the deployment switches it off" (the four parts, in order), and `App.test.tsx`'s heading
+case, each shown red first. The guides' new versions and PDFs are held by `test_docs_pdf.py`.
+
 ### ADR-114, Amendment 11 (14 October 2026) — the guided install page ships built
 
 Found capturing B10's screens: the guided page's front end (`apps/harness/dist`) is gitignored and

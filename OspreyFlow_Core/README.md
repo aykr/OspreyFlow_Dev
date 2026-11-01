@@ -1,6 +1,7 @@
 # OspreyFlow
 
-OspreyFlow is an open-source intelligence analysis and network discovery platform. It ingests
+OspreyFlow is an open-source intelligence mapping platform for crime analysis, anti-money-laundering,
+fraud detection, and event monitoring and alerting. It ingests
 structured records and unstructured material (text, audio, imagery), resolves entities across
 sources, persists them in a property graph, and gives an analyst a single workspace in which
 network, social-network, pattern, temporal and geospatial analysis are five views of one working

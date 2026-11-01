@@ -34,11 +34,14 @@ describe("the signed-out page's marking", () => {
 });
 
 describe("the welcome page", () => {
-  it("says what the product is, with its four capabilities", () => {
+  // ADR-115 Amendment 4 (the owner, 1 November 2026): intelligence mapping first, then what it is
+  // for, with event monitoring and alerting a key capability.
+  it("says what the product is, with its five capabilities", () => {
     render(<SignInScreen welcome={PLAIN} onSignIn={() => undefined} />);
-    expect(screen.getByRole("heading", { level: 1, name: "Crime analysis on one graph" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Intelligence mapping" })).toBeTruthy();
+    expect(screen.getByText(/^For crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting\./)).toBeTruthy();
     const terms = screen.getAllByRole("term").map((t) => t.textContent);
-    expect(terms.slice(0, 4)).toEqual(["Network analysis", "Geospatial", "Timeline trends", "Reporting"]);
+    expect(terms.slice(0, 5)).toEqual(["Network analysis", "Geospatial", "Timeline trends", "Monitoring and alerts", "Reporting"]);
     expect(screen.getByRole("img", { name: /Example network/ })).toBeTruthy();
   });
 
@@ -79,11 +82,13 @@ describe("the welcome page", () => {
 
   it("shows About unless the deployment switches it off", () => {
     render(<SignInScreen welcome={PLAIN} onSignIn={() => undefined} />);
-    expect(screen.getByRole("heading", { level: 2, name: "Two kinds of work, one graph" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "One intelligence map" })).toBeTruthy();
+    const parts = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(parts).toEqual(["Crime analysis", "Anti-money-laundering", "Fraud detection", "Event monitoring and alerting"].concat(parts.slice(4)));
     expect(screen.getByRole("link", { name: "About" }).getAttribute("href")).toBe("#about");
     cleanup();
     render(<SignInScreen welcome={{ ...PLAIN, about: false }} onSignIn={() => undefined} />);
-    expect(screen.queryByRole("heading", { name: "Two kinds of work, one graph" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "One intelligence map" })).toBeNull();
     expect(screen.queryByRole("link", { name: "About" })).toBeNull();
   });
 

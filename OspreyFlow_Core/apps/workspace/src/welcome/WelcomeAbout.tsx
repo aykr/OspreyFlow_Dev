@@ -1,5 +1,5 @@
-// The welcome page's About (ADR-115 decision 8): what the product is for, in the handoff's own words,
-// with screens of synthetic demonstration cases. Switched off by `welcome.about: false`.
+// The welcome page's About (ADR-115 decision 8; Amendment 4): what the product is for, with screens of
+// synthetic demonstration cases. Switched off by `welcome.about: false`.
 import { currentBrand } from "../brand/brand";
 import { MeshMark } from "../shell/BrandMark";
 import amlDecision from "./assets/screen-aml-decision.jpg";
@@ -47,12 +47,38 @@ const AML: Feature[] = [
     body: "Closing an alert needs a reason. A true positive confirms both the alert and the match it found, which is the only way model-inferred data is promoted. Who decided, when and why stays with the alert." },
 ]; // prettier-ignore
 
+// ADR-115 Amendment 4: fraud detection and event monitoring, in words; the screens above serve both.
+const FRAUD = [
+  { title: "Rings that share an identity", says: "Applicants, accounts and claims that share a phone number, an address or an account are drawn together, so a ring reads as one cluster, not a dozen unrelated cases." },
+  { title: "Patterns as rules", says: "Structuring, rapid movement and circular flow run as typology rules on every load, and each alert names the rule that raised it." },
+  { title: "One person, many records", says: "Records that look like the same person are scored as a match and read as one, never merged in storage, so a wrong match can be undone." },
+]; // prettier-ignore
+
+const MONITORING = [
+  { title: "Hotlists and watches", says: "Put a number, an account or a person on a hotlist with a review date. When a load matches it, an alert says what matched, and which file and row put it there." },
+  { title: "Rules on every load", says: "Typology rules run as the data arrives, before it is committed, and their alerts land in one queue for the team." },
+  { title: "Each alert explains itself", says: "An alert names its rule or hotlist entry, the entity it matched and its evidence. It is closed with a reason, and the reason stays on the record." },
+]; // prettier-ignore
+
 const SAFEGUARDS = [
   { title: "Filtered in the store", says: "A record you may not see is absent, and so is any count or path that would reveal it." },
   { title: "Handling travels with the data", says: "Classification is set when data is ingested and is checked again, item by item, at export." },
   { title: "Every read and write is recorded", says: "Each read carries the person who made it, and each write is added to an audit trail." },
   { title: "Runs where your data lives", says: "It is open source throughout, runs air-gapped, and uses the same images from a laptop to a cluster." },
 ]; // prettier-ignore
+
+function Points({ points, label }: { points: { title: string; says: string }[]; label: string }) {
+  return (
+    <dl aria-label={label} className="welcome-safeguards__list welcome-points">
+      {points.map((p) => (
+        <div key={p.title}>
+          <dt>{p.title}</dt>
+          <dd>{p.says}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 function Features({ features }: { features: Feature[] }) {
   return (
@@ -89,10 +115,10 @@ export function WelcomeAbout({ version = null }: { version?: string | null }) {
             </div>
           </section>
         )}
-        <h2 className="welcome-about__title">Two kinds of work, one graph</h2>
+        <h2 className="welcome-about__title">One intelligence map</h2>
         <p className="welcome-about__lead">
-          A crime analysis unit and a financial-crime team use the same graph, rules and reports. The screens below come
-          from synthetic demonstration cases.
+          Crime analysis, anti-money-laundering and fraud detection use the same graph, rules and reports, and event
+          monitoring watches all of it as new data arrives. The screens below come from synthetic demonstration cases.
         </p>
         <h3 className="welcome-about__heading">Crime analysis</h3>
         <p className="welcome-about__sub">For fraud and organised-crime analysts: networks, rhythm, and the people who matter.</p>
@@ -114,6 +140,16 @@ export function WelcomeAbout({ version = null }: { version?: string | null }) {
             ))}
           </ol>
           <Features features={AML} />
+        </div>
+        <div className="welcome-about__part">
+          <h3 className="welcome-about__heading">Fraud detection</h3>
+          <p className="welcome-about__sub">For counter-fraud teams: the rings behind the claims and applications.</p>
+          <Points points={FRAUD} label="Fraud detection" />
+        </div>
+        <div className="welcome-about__part">
+          <h3 className="welcome-about__heading">Event monitoring and alerting</h3>
+          <p className="welcome-about__sub">For every team: the graph watches new data, so a match finds you.</p>
+          <Points points={MONITORING} label="Event monitoring and alerting" />
         </div>
         <div className="welcome-about__part welcome-safeguards">
           <div>
