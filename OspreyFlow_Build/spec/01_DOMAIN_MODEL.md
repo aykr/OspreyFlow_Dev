@@ -1893,6 +1893,24 @@ class DocumentVerificationParams(BaseModel):  # typology "document_verification"
 class PatternRuleParams(BaseModel):     # typology "pattern"; runs after commit only
     pattern_id: str                     # a SavedPattern the deployer owns, read afresh each time
     max_matches: int = 200              # a larger match is refused, never alerted on in part
+# ADR-133 decision 2, stage (c): the AML templates' typologies. Each raises medium severity; the
+# last two run after commit only, whatever the rule asks (Amendment 3, as built 5).
+class HighRiskJurisdictionParams(BaseModel):  # typology "high_risk_jurisdiction"
+    jurisdictions: list[str]            # 1..250 ISO 3166-1 alpha-2 codes, the Author's own list,
+                                        # upper-cased and de-duplicated; an account's jurisdiction
+                                        # is its IBAN's country code (ISO 13616)
+class LargeCashParams(BaseModel):       # typology "large_cash": a cash movement at or over it
+    threshold: float                    # > 0
+    cash_types: list[Literal["CASH_IN", "CASH_OUT"]] = ["CASH_IN", "CASH_OUT"]
+class DormantReactivatedParams(BaseModel):  # typology "dormant_reactivated"
+    dormant_days: int = 180             # 30..3650 days without a movement; no movement before is
+                                        # a new account, not a dormant one
+class VelocityRiseParams(BaseModel):    # typology "velocity_rise"
+    recent_days: int = 7                # 1..90
+    baseline_days: int = 90             # 7..366, the days before the recent ones
+    factor: float = 3.0                 # > 1, ≤ 100: the recent daily rate over the baseline's
+    min_recent: int = 5                 # movements at least, in the recent days
+    measure: Literal["count", "amount"] = "count"   # an account with no baseline is not judged
 
 class KycDocument(BaseModel):
     node_id: NodeId; title: str | None; document_kind: str | None; expires_on: date | None
@@ -1956,12 +1974,24 @@ class PoleFigures(BaseModel):         # the case's records by POLE class, before
     other: list[PoleTypeCount]        # stored types the current ontology does not know
     links: int                        # links of every type that is not `system`
     counted_at: datetime              # when the kept Explore counts were computed
+class LabelledWeekCount(BaseModel):   # ADR-134 decision 2: a count in one week, under a fixed label
+    week_start: date
+    label: str                        # a rule group (`typology`, `hotlists`, `monitors`), an
+                                      # outcome, or `hotlists` for matches; never a rule's own name
+    typology: str = ""                # the typology, for the `typology` group alone
+    count: int                        # ≥ 0
+class MonitoringFigures(BaseModel):   # ADR-134 decision 2: every kind of alert the one queue holds
+    raised_by_rule: list[LabelledWeekCount]       # for the reader, counted as them
+    closed_by_outcome: list[LabelledWeekCount]
+    time_to_close: list[ReportCount]  # alerts closed in the period, in the `open_by_age` bands
+    hotlist_matches: list[LabelledWeekCount]
 class ReportFigures(BaseModel):
     period_weeks: int                 # 1..52
     as_of: date; generated_at: datetime
     alerts_total: int
     alerts_by_week: list[WeekCount]; open_by_age: list[ReportCount]
     outcomes: list[OutcomeCount]
+    monitoring: MonitoringFigures     # from the same one read of the queue as the typology figures
     held: HeldFigures | None          # None for a reader below Editor
     kyc: KycFigures | None            # only when `fibo` is among the case's packs (ADR-126)
     pole: PoleFigures | None          # whenever the packs are not exactly [fibo] (ADR-126)
@@ -1978,3 +2008,32 @@ no bucket, and a customer's KYC status is assessed as the reader at the moment o
 Past either bound the report answers `ReportLimitExceeded`, never a partial figure presented as
 whole (rule 2); `would_be` counts only what the reader can see, so the refusal itself discloses
 nothing.
+
+The monitoring figures are counted from the same single read of the reader's queue as the typology
+figures, so the two cannot disagree about which alerts the reader may see: an alert of any kind the
+reader cannot see whole is in none of them, and a hotlist kept "only me" is in its owner's figures
+alone (the queue's own scope).
+
+### 11.3 The one queue: assignment, audience and rules as sentences (ADR-133)
+
+```python
+class AlertAssignInput(BaseModel):     # stage (a): give an open or claimed alert to one member
+    assignee: str                      # 1..200; a principal id among the case's Editors and Authors
+class AlertAssignee(BaseModel):        # one member an alert may be given to, by name
+    id: str; name: str | None = None   # read at Editor, by those who triage; never by a Viewer
+class HotlistAudienceInput(BaseModel): # ruling 3: the hotlist owner's choice, the owner's alone
+    audience: Literal["only_me", "team"]
+class CompiledSentence(BaseModel):     # decision 1: a sentence's drawn pattern and its words
+    pattern: PatternQuery              # the subject (variable `subject`), its equality conditions
+                                       # (ADR-121) and the link the sentence names
+    words: str                         # the sentence; the rest of it is the rule's typed parameters
+class SentenceReadRequest(BaseModel):  # read a drawn (or edited) pattern back as a sentence
+    pattern: PatternQuery; sentence: RuleSentence   # the sentence whose other blanks it keeps
+```
+
+A typology alert is given only to a member who holds Editor or Author on the case; anyone else is
+refused in words, and an alert shared with a team is claimed, not given. A hotlist's audience decides who its alerts reach — its owner alone, or the owner's team —
+and a hotlist turned back to "only me" withdraws its alerts from the team. A sentence is compiled to
+a pattern (its advanced view) and read back from one; neither writes anything, and deploying a
+sentence is a route of its own. `03_CONDUIT_MIDDLEWARE.md` has the routes: the audience in §3.8,
+assignment and sentences in §3.8a.
