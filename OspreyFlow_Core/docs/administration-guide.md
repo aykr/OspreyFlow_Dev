@@ -1,5 +1,8 @@
 # OspreyFlow — Installation and Administration Guide
 
+OspreyFlow is an open-source intelligence mapping platform for crime analysis, anti-money-laundering,
+fraud detection, and event monitoring and alerting.
+
 For whoever installs OspreyFlow and looks after it: **Lite** (one computer), **Small** (one cloud
 server on the cloud's managed services) and **Enterprise** (a Kubernetes cluster on the cloud's
 managed services). It describes what is built, and says plainly where something is not yet.
@@ -11,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.11** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.12** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.12 | 2026-11-01 | The opening says what OspreyFlow is for: intelligence mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. |
 | 1.11 | 2026-11-01 | §8: `ospreyflow switch`. Appendix A: `deployment.name`, the `appearance` settings (the GOV.UK look), and relative storage paths. |
 | 1.10 | 2026-10-29 | §11: the Prison Intelligence pack's rehearsal commands are in `DEMO_GUIDE.md`, not the user guide. |
 | 1.9 | 2026-10-29 | §11: the two Prison Intelligence packs, the demonstration case and its scale cohort. |

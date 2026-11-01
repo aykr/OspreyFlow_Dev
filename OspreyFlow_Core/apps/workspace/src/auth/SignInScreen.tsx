@@ -46,6 +46,8 @@ const CAPABILITIES = [
     says: "Places on a basemap served from your own deployment." },
   { name: "Timeline trends", icon: "M2 13.5h12M3.5 11V8M6.5 11V4.5M9.5 11V6.5M12.5 11V3",
     says: "Brush a window to dim what falls outside it, or fold a case onto one week." },
+  { name: "Monitoring and alerts", icon: "M8 2a4 4 0 0 0-4 4v3l-1.5 2h11L12 9V6a4 4 0 0 0-4-4zM6.5 13a1.5 1.5 0 0 0 3 0",
+    says: "Hotlists, watches and typology rules raise an alert as new data arrives, and each alert explains itself." },
   { name: "Reporting", icon: "M4 2h6l3 3v9H4zM10 2v3h3M6 8.5h5M6 11h5",
     says: "Trends, assessments and notes in report packs, each item under its own marking." },
 ]; // prettier-ignore
@@ -173,11 +175,12 @@ export function SignInScreen({ reason, intent, onSignIn, marking = null, welcome
         <section className="welcome-hero">
           <div className="welcome-hero__story">
             <div className="welcome-hero__intro">
-              <h1 className="welcome-hero__title">Crime analysis on one graph</h1>
+              {/* ADR-115 Amendment 4: intelligence mapping first, then what it is for. */}
+              <h1 className="welcome-hero__title">Intelligence mapping</h1>
               <p className="welcome-hero__lead">
-                Fraud, anti-money-laundering and organised-crime investigation in one workspace. Network, map, timeline
-                and reports read the same case, and a filter applied in one view applies in all of them. Every element
-                carries its handling and where it came from.
+                For crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. Network,
+                map, timeline and reports read the same case, and a filter applied in one view applies in all of them.
+                Every element carries its handling and where it came from.
               </p>
             </div>
             <dl className="welcome-capabilities">

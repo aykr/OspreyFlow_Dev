@@ -1,7 +1,10 @@
 # Moving the product repository to Solirius/ospreyflow
 
-**Status:** planned 1 November 2026, at the owner's request. Starts only once the GOV.UK capture, the deck
-rebuild, the demo-case reset and the switch back to the everyday deployment are finished.
+**Status:** planned 1 November 2026, at the owner's request. Runs last, after (owner, 1 November 2026):
+1. the GOV.UK deck work in flight;
+2. alerting and monitoring as a core feature (`ALERTING_MONITORING_PLAN.md`);
+3. the website pages updated to say that OspreyFlow has a fully featured, GDS-compliant UK public
+   sector option for all UK departments.
 
 **The owner's request (1 November 2026):** "make repository switch for published to
 https://github.com/Solirius/ospreyflow, this will also need to involve moving all the published pages as

@@ -228,7 +228,7 @@ describe("the launcher's hand-off (a person who has just signed in at the launch
     render(<App />);
 
     await screen.findByRole("heading", { level: 2, name: "Sign in" });
-    expect(screen.getByRole("heading", { level: 1, name: "Crime analysis on one graph" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Intelligence mapping" })).toBeTruthy();
   });
 });
 

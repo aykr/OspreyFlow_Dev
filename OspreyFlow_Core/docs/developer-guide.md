@@ -1,5 +1,8 @@
 # OspreyFlow — Developer Guide
 
+OspreyFlow is an open-source intelligence mapping platform for crime analysis, anti-money-laundering,
+fraud detection, and event monitoring and alerting.
+
 For data engineers: the people who bring data into OspreyFlow. It covers the Ingest Studio from a
 first pipeline to a scheduled one, the domain model data is mapped into, the rules a load must
 pass, and the interfaces a data engineer uses beyond the screens. It describes what is built, and
@@ -11,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.6** · 2026-10-29 · For OspreyFlow v0.4.1 · Issued
+**Version 1.7** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.7 | 2026-11-01 | The opening says what OspreyFlow is for: intelligence mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. |
 | 1.6 | 2026-10-29 | Describes v0.4.1. No change to its content. |
 | 1.5 | 2026-10-28 | §6.1: row numbers, counted from 1 in the Glass and from 0 in the API. |
 | 1.4 | 2026-10-27 | §7.5: the tests behind it described, not named by path (the build's folder is not part of the product). |
