@@ -1025,6 +1025,29 @@ class OutcomeCount(BaseModel):
     false_positive: int = Field(default=0, ge=0)
 
 
+class LabelledWeekCount(BaseModel):
+    """A count in one week under a fixed label (ADR-134 decision 2): the rule group an alert was
+    raised by (`typology`, with its typology, `hotlists` or `monitors`), the outcome it was closed
+    with, or `hotlists` for a hotlist's matches. Never a rule's own name or an alert's words."""
+
+    week_start: date
+    label: str
+    typology: str = ""
+    count: int = Field(ge=0)
+
+
+class MonitoringFigures(BaseModel):
+    """The monitoring dashboard's figures (ADR-134 decision 2): every kind of alert the one queue
+    holds for the reader — typology, hotlist and monitor — counted as them, per case. A hotlist
+    kept "only me" is in its owner's figures alone (the queue's own scope)."""
+
+    raised_by_rule: list[LabelledWeekCount] = Field(default_factory=list)
+    closed_by_outcome: list[LabelledWeekCount] = Field(default_factory=list)
+    #: Alerts closed in the period, by how long they took, in the `open_by_age` bands.
+    time_to_close: list[ReportCount] = Field(default_factory=list)
+    hotlist_matches: list[LabelledWeekCount] = Field(default_factory=list)
+
+
 class HeldFigures(BaseModel):
     """The case's held rows by what became of them — for Editors and above only, as the Held rows
     tab is (ADR-111 decision 2)."""
@@ -1101,6 +1124,9 @@ class ReportFigures(BaseModel):
     alerts_by_week: list[WeekCount] = Field(default_factory=list)
     open_by_age: list[ReportCount] = Field(default_factory=list)
     outcomes: list[OutcomeCount] = Field(default_factory=list)
+    #: ADR-134 decision 2: the monitoring dashboard's sections. The figures above count typology
+    #: alerts only, as they always have; these count every kind.
+    monitoring: MonitoringFigures = Field(default_factory=MonitoringFigures)
     held: HeldFigures | None = None
     #: ADR-126 decision 3: set when `fibo` is among the case's packs; `None` is "this case has no
     #: KYC card", not zero customers.
@@ -1457,6 +1483,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     RuleAuditPage,
     ReportCount,
     WeekCount,
+    LabelledWeekCount,
+    MonitoringFigures,
     OutcomeCount,
     HeldFigures,
     KycFigures,
