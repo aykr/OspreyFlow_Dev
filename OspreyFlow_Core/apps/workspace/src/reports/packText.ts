@@ -1,6 +1,6 @@
 // The words a pack and a trend are described in, shared by the screens and the print document so
 // the two never say different things (ADR-113 stage 5). Pure: no DOM, no fetch.
-import type { PackItem, TrendFigures } from "../../../../packages/schemas/generated";
+import type { AlertSnapshot, PackItem, TrendFigures } from "../../../../packages/schemas/generated";
 
 const NUMBER = new Intl.NumberFormat("en-GB");
 const DAY = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "UTC" });
@@ -28,6 +28,7 @@ export const KIND_LABEL: Record<PackItem["kind"], string> = {
   assessment: "Assessment",
   entity: "Entity",
   note: "Note",
+  alert: "Alert",
 };
 
 /** The name an item goes by in an accessible label — a short title, never a truncated datum. */
@@ -35,6 +36,7 @@ export function itemShortTitle(item: PackItem): string {
   if (item.kind === "trend") return item.trend?.definition.title ?? "Trend";
   if (item.kind === "assessment") return item.assessment?.statement ?? "Assessment";
   if (item.kind === "entity") return item.entity?.name ?? "Entity";
+  if (item.kind === "alert") return item.alert?.explanation ?? "Alert";
   const text = item.note ?? "";
   return text.length > 60 ? `${text.slice(0, 60)}…` : text;
 }
@@ -43,7 +45,8 @@ export function itemShortTitle(item: PackItem): string {
 export function trendSentence(figures: TrendFigures): string {
   const { definition, result } = figures;
   const weeks = plural(definition.weeks ?? 12, "week");
-  const events = plural(result.events, "event");
+  // ADR-134 decision 3: an alert trend counts alerts.
+  const events = plural(result.events, definition.source === "alerts" ? "alert" : "event");
   if (result.measure === "sum") {
     const field = definition.measure_field ?? "the chosen property";
     const unvalued = result.unvalued ?? 0;
@@ -88,4 +91,42 @@ export function periodsOf(figures: TrendFigures): string[] {
     }
   }
   return [...keys].sort();
+}
+
+// --- an alert in a pack (ADR-134 decision 1) -------------------------------------------------------
+
+const SEVERITY_WORD: Record<AlertSnapshot["severity"], string> = { high: "High", medium: "Medium", low: "Low" };
+const KIND_WORD: Record<AlertSnapshot["kind"], string> = { typology: "Typology alert", hotlist: "Hotlist match", monitor: "Monitor match" };
+
+/** "Typology alert (rapid_movement) · High severity · raised 29 September 2026". */
+export function alertLine(alert: AlertSnapshot): string {
+  const what = alert.typology ? `${KIND_WORD[alert.kind]} (${alert.typology})` : KIND_WORD[alert.kind];
+  return `${what} · ${SEVERITY_WORD[alert.severity]} severity · raised ${formatDay(alert.raised_at)}`;
+}
+
+/** Where the alert stood when it was added: an open alert says it is open, a closed one its outcome
+ * and the reason given. A snapshot, so it says "when this was added". */
+export function alertStatusSentence(alert: AlertSnapshot): string {
+  if (alert.status === "open") return "Open: not yet decided when this was added.";
+  if (alert.status === "claimed") return "Open, being worked on, when this was added.";
+  const reason = alert.reason ? `: ${alert.reason}` : "";
+  if (alert.outcome === "true_positive") return `Closed as a true positive${reason}.`;
+  if (alert.outcome === "false_positive") return `Closed as a false positive${reason}.`;
+  return `Closed without an outcome${reason}.`;
+}
+
+/** Rule 5: a match no person has confirmed is inferred, and the pack says so. */
+export function alertMatchSentence(alert: AlertSnapshot): string {
+  return alert.match === "confirmed" ? "Confirmed by a person." : "Inferred: no one has confirmed this match.";
+}
+
+const MONEY = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
+
+/** Each piece of evidence as one line: a link it cites, or a transaction with its day and amount. */
+export function alertEvidence(alert: AlertSnapshot): string[] {
+  const links = (alert.links ?? []).map((l) => `${l.type.replace(/_/g, " ").toLowerCase()}: ${l.source_name} to ${l.target_name}`);
+  const transactions = (alert.transactions ?? []).map(
+    (t) => `${formatDay(t.occurred_at)}: ${t.source_name} to ${t.target_name}${t.amount != null ? `, ${MONEY.format(t.amount)}` : ""}`,
+  );
+  return [...links, ...transactions];
 }

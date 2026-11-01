@@ -10,6 +10,7 @@ import type {
   PackItem,
   PublishedPack,
   PublishedPackSummary,
+  QueuedAlert,
   ReportPack,
 } from "../../../../packages/schemas/generated";
 import type { BlockedItem } from "../export/api";
@@ -92,6 +93,14 @@ export async function getPublished(api: ReportsApi, packId: string): Promise<Pub
   const reply = await send(api, "GET", `packs/${enc(packId)}/published`);
   if (!reply.ok) throw refusal(reply, "open this published pack");
   return reply.body as PublishedPack;
+}
+
+/** The case's one alert queue as this reader may see it (ADR-133), to choose an alert to add to a
+ * pack (ADR-134 decision 1). A reader who may not read the queue is offered no alert, not an error. */
+export async function listQueuedAlerts(api: ReportsApi): Promise<QueuedAlert[]> {
+  const reply = await send(api, "GET", "alert-queue");
+  if (!reply.ok) return [];
+  return reply.body as QueuedAlert[];
 }
 
 export async function listJudgements(api: ReportsApi): Promise<Judgement[]> {

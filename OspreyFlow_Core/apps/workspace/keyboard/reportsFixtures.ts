@@ -23,6 +23,13 @@ const OPTIONS = {
     { name: "payment", label: "Payments", fields: [{ name: "amount", kind: "number" }, { name: "channel", kind: "category", values: ["card", "wire"] }] },
     { name: "login", label: "Logins", fields: [{ name: "country", kind: "category" }] },
   ],
+  // ADR-134 decision 3: what an alert trend may split by, with this case's one rule.
+  alert_fields: [
+    { name: "rule", kind: "category", values: ["typology:r1", "hotlists", "monitors"], labels: ["Rapid movement over £9,000", "Hotlists", "Monitors"] },
+    { name: "typology", kind: "category", values: ["rapid_movement"], labels: [] },
+    { name: "severity", kind: "category", values: ["high", "medium", "low"], labels: ["High", "Medium", "Low"] },
+    { name: "outcome", kind: "category", values: ["open", "claimed", "true_positive", "false_positive", "closed"], labels: ["Open", "Claimed", "True positive", "False positive", "Closed, no outcome"] },
+  ],
 };
 
 export function trendFigures(title = "Payments by channel", marking = "OFFICIAL"): Json {
@@ -49,6 +56,19 @@ export const ASSESSMENT_ITEM = {
   assessment: { judgement_id: "j1", statement: "The two firms share a director", probability_band: "likely", author: "ana", created_at: "2026-10-01T09:00:00Z" },
 };  // prettier-ignore
 export const NOTE_ITEM = { id: "i3", kind: "note", marking: "SECRET", note: "Handle with care", ...base };
+// ADR-134 decision 1: an alert of the case's queue, and the item it makes in a pack (synthetic).
+export const QUEUED_ALERT = {
+  alert: { id: "a1", rule_id: "typology:r1", owner_id: "ana", mode: "full", referent_node_ids: ["n1"], created_at: "2026-09-29T14:00:00Z", status: "open" },
+  summary: "Money in and straight out again through Halcyon Marine Ltd", kind: "typology", severity: "high", audience: "case",
+};  // prettier-ignore
+export const ALERT_ITEM = {
+  id: "i4", kind: "alert", marking: "OFFICIAL", ...base,
+  alert: {
+    alert_id: "a1", kind: "typology", severity: "high", typology: "rapid_movement", explanation: QUEUED_ALERT.summary,
+    raised_at: "2026-09-29T14:00:00Z", entities: [{ node_id: "n1", entity_type: "Organisation", name: "Halcyon Marine Ltd" }],
+    links: [], transactions: [], status: "open", outcome: null, reason: null, match: "inferred", node_ids: ["n1"],
+  },
+};  // prettier-ignore
 
 export const PACK = { id: "p1", investigation_id: "inv-1", title: "Quarter pack", created_by: "ana", created_at: "2026-10-01T09:00:00Z", updated_at: "2026-10-01T09:00:00Z", versions: [] as unknown[] };
 export const LIVE_VERSION = { version: 1, published_at: "2026-10-03T09:00:00Z", published_by: "ana", withdrawn_at: null, withdrawn_by: null, withdrawal_reason: null };
@@ -89,9 +109,13 @@ export function answer(w: World, call: Call): { status: number; body: unknown } 
   }
   if (method === "GET" && path === "packs/p1") return ok(draft());
   if (method === "GET" && path === "judgements") return ok({ judgements: [{ id: "j1", statement: "The two firms share a director" }] });
+  if (method === "GET" && path === "alert-queue") return ok([QUEUED_ALERT]);
   if (method === "POST" && path === "packs/p1/items") {
     const body = call.body as Json;
-    const item = body.kind === "note" ? { ...NOTE_ITEM, id: "i9", note: body.text, marking: body.classification } : { ...TREND_ITEM, id: "i9" };
+    const item =
+      body.kind === "note" ? { ...NOTE_ITEM, id: "i9", note: body.text, marking: body.classification }
+      : body.kind === "alert" ? { ...ALERT_ITEM, id: "i9" }
+      : { ...TREND_ITEM, id: "i9" };  // prettier-ignore
     w.items.push(item);
     return ok(item, 201);
   }

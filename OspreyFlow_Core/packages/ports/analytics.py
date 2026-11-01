@@ -14,6 +14,8 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from schemas.analytics import (
+    AlertFact,
+    AlertTrendRequest,
     BaselineRequest,
     BaselineResult,
     CrossFilterRequest,
@@ -86,6 +88,17 @@ class AnalyticsPort(Protocol):
         raises `TrendLimitExceeded` — never a partial trend."""
         ...
 
+    async def alert_trend(self, req: AlertTrendRequest, principal: Principal) -> TrendResult:
+        """Alerts raised per week or month, optionally split by rule, typology, severity or outcome
+        (ADR-134 decision 3), over the alert facts `load_alert_facts` keeps. Access control is in
+        the query: an alert is counted only when the reader is in its audience (its case for a
+        typology alert; its owner, or its owner's team when shared, for the others), it is within
+        the reader's datasets, and the reader may view every handling it rests on — so an alert on
+        something they may not see moves no point, no total, no series and no classification. An
+        alert whose handlings are not known is counted for no one. Past `max_periods` or
+        `max_series` it raises `TrendLimitExceeded`, counted from what the reader sees."""
+        ...
+
     async def first_seen(self, req: FirstSeenRequest, principal: Principal) -> FirstSeenResult:
         """The earliest event in `req.filter` per node (either end) and per link (ADR-087). Access
         control is in the query: an event the principal may not see cannot pull a first appearance
@@ -127,6 +140,12 @@ class AnalyticsPort(Protocol):
         alerts name and never listing a load's events. A route must never call it
         (`tests/test_unfiltered_node_lookup_confined.py`). An id no event holds, and an event of
         another load or of none, are absent from the answer; no ids give the empty set."""
+        ...
+
+    async def load_alert_facts(self, facts: Sequence[AlertFact]) -> None:
+        """Keeps these alerts for alert trends, each replacing whatever was kept for the same
+        `alert_id` (its fact and its handlings), so an alert written twice is counted once. A
+        backend write like `load_events`, not principal-scoped."""
         ...
 
     async def load_geometries(self, records: Sequence[GeometryRecord]) -> None: ...

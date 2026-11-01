@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -549,6 +549,72 @@ class TrendResult(BaseModel):
 
 
 ALL_MODELS = (*ALL_MODELS, TrendRequest, TrendPoint, CountedHandling, TrendResult)
+
+
+# --- Alert trends (`06_DECISIONS.md` ADR-134 decision 3) ------------------------------------------
+
+AlertFactKind = Literal["typology", "hotlist", "monitor"]
+#: Who may count an alert, as the one queue decides it (`services/api/alerts.py` `queue_scope`): a
+#: typology alert is its case's; a hotlist or monitor alert is its owner's, and its owner's team's
+#: when it is shared with them.
+AlertFactAudience = Literal["case", "team", "owner"]
+#: What an alert trend may split by or filter on: a closed list, never a property name.
+AlertTrendField = Literal["rule", "typology", "severity", "outcome"]
+ALERT_TREND_FIELDS: tuple[AlertTrendField, ...] = ("rule", "typology", "severity", "outcome")
+#: The rule key that counts every hotlist together, and every monitor together (decision 2).
+HOTLISTS_RULE, MONITORS_RULE = "hotlists", "monitors"
+
+
+class AlertFact(BaseModel):
+    """One alert as the analytics store keeps it for alert trends (ADR-134 decision 3): written by
+    the Conduit whenever the alert is raised or changes, replacing what was kept for it before.
+
+    `handlings` is every handling the alert rests on — each node, link and transaction it cites —
+    as they were when it was raised. A reader counts the alert only if they may view all of them
+    (rule 3, all or nothing, in the query). `None` means they are not known (an alert raised before
+    this was kept): such an alert is counted for no one, never guessed. An empty list is an alert
+    that cites nothing (a `notify` stub), counted for its audience alone."""
+
+    alert_id: str = Field(min_length=1)
+    #: The case a typology alert belongs to; a hotlist or monitor alert may name none.
+    investigation_scope: str | None = None
+    kind: AlertFactKind
+    #: `typology:<rule id>` for a typology alert, `hotlists` or `monitors` for the others.
+    rule: str = Field(min_length=1)
+    typology: str | None = None
+    severity: Literal["high", "medium", "low"]
+    #: `open`, `claimed`, `true_positive`, `false_positive`, or `closed` (taken back, no outcome).
+    outcome: Literal["open", "claimed", "true_positive", "false_positive", "closed"]
+    raised_at: datetime
+    owner_id: str
+    audience: AlertFactAudience
+    team: str | None = None
+    dataset_id: str | None = None
+    handlings: list[Handling] | None = None
+
+
+class AlertTrendRequest(BaseModel):
+    """Alerts raised per week or month, optionally split by one field and narrowed by up to five
+    equalities — a closed definition, counted as the reader (ADR-134 decision 3)."""
+
+    #: The case read: its typology alerts, and the hotlist and monitor alerts the reader may see.
+    investigation_scope: str
+    window: Interval
+    interval: TrendInterval = TrendInterval.WEEK
+    group_by: AlertTrendField | None = None
+    filters: dict[AlertTrendField, list[str]] = Field(default_factory=dict)
+    max_periods: int = Field(default=104, gt=0)
+    max_series: int = Field(default=12, gt=0)
+
+    @field_validator("filters")
+    @classmethod
+    def _at_most_five(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        if sum(len(v) for v in value.values()) > 5:
+            raise ValueError("an alert trend takes at most five equalities")
+        return value
+
+
+ALL_MODELS = (*ALL_MODELS, AlertFact, AlertTrendRequest)
 
 
 class CaseEventHolder(BaseModel):

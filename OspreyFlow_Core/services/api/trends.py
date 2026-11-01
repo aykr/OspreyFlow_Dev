@@ -17,13 +17,24 @@ import asyncpg
 
 from conduit_common.identity import new_id
 from schemas.analytics import (
+    ALERT_TREND_FIELDS,
+    HOTLISTS_RULE,
+    MONITORS_RULE,
+    AlertTrendRequest,
     EventFilter,
     TrendMeasure,
     TrendPoint,
     TrendRequest,
     TrendResult,
 )
-from schemas.domain import EdgeTypeDef, Interval, OntologySchema, Principal, PropertyType
+from schemas.domain import (
+    EdgeTypeDef,
+    Interval,
+    OntologySchema,
+    Principal,
+    PropertyType,
+    TypologyRule,
+)
 from schemas.trends import (
     BY_EVENT_TYPE,
     TrendDefinition,
@@ -81,10 +92,111 @@ def _offered(ontology: OntologySchema, domains: Sequence[str] | None) -> list[Tr
     return options
 
 
-def trend_options(ontology: OntologySchema, domains: Sequence[str]) -> TrendOptions:
+# --- alert trends (ADR-134 decision 3) ----------------------------------------------------------
+
+#: The closed values of an alert's severity and outcome, in the order the builder offers them.
+ALERT_SEVERITIES = {"high": "High", "medium": "Medium", "low": "Low"}
+ALERT_OUTCOMES = {
+    "open": "Open",
+    "claimed": "Claimed",
+    "true_positive": "True positive",
+    "false_positive": "False positive",
+    "closed": "Closed, no outcome",
+}
+#: How hotlists and monitors are named as one rule each (decision 2: "hotlists together").
+GROUP_NAMES = {HOTLISTS_RULE: "Hotlists", MONITORS_RULE: "Monitors"}
+
+
+def rule_key(rule: TypologyRule) -> str:
+    return f"typology:{rule.id}"
+
+
+def alert_fields(rules: Sequence[TypologyRule]) -> list[TrendFieldOption]:
+    """What an alert trend may split by and filter on in a case: its typology rules by name, with
+    hotlists and monitors as one rule each; the typologies its rules run; the closed severities
+    and outcomes."""
+    rule_values = [*(rule_key(r) for r in rules), HOTLISTS_RULE, MONITORS_RULE]
+    rule_labels = [*(r.name for r in rules), *GROUP_NAMES.values()]
+    typologies: list[str] = sorted({str(r.params.typology) for r in rules})
+    return [
+        TrendFieldOption(name="rule", kind="category", values=rule_values, labels=rule_labels),
+        TrendFieldOption(name="typology", kind="category", values=typologies),
+        TrendFieldOption(name="severity", kind="category", values=list(ALERT_SEVERITIES),
+                         labels=list(ALERT_SEVERITIES.values())),
+        TrendFieldOption(name="outcome", kind="category", values=list(ALERT_OUTCOMES),
+                         labels=list(ALERT_OUTCOMES.values())),
+    ]  # fmt: skip
+
+
+def validate_alert_definition(defn: TrendDefinitionInput) -> None:
+    """An alert trend counts, names no event type, and splits and filters by the closed fields
+    alone; a severity or an outcome must be one of theirs. A rule or a typology value is not
+    checked against today's rules: a rule retired since still has its alerts."""
+    if defn.event_types:
+        raise TrendDefinitionRefused("an alert trend counts alerts, not events: name no event type")
+    if defn.measure is not TrendMeasure.COUNT or defn.measure_field:
+        raise TrendDefinitionRefused("an alert trend counts alerts; it adds up no property")
+    if defn.group_by is not None and defn.group_by not in ALERT_TREND_FIELDS:
+        raise TrendDefinitionRefused(
+            f"an alert trend is split by rule, typology, severity or outcome, not {defn.group_by!r}"
+        )
+    for f in defn.filters:
+        if f.field not in ALERT_TREND_FIELDS:
+            raise TrendDefinitionRefused(
+                "an alert trend is narrowed by rule, typology, severity or outcome, "
+                f"not {f.field!r}"
+            )
+        closed = {"severity": ALERT_SEVERITIES, "outcome": ALERT_OUTCOMES}.get(f.field)
+        if closed is not None and f.value not in closed:
+            raise TrendDefinitionRefused(f"{f.value!r} is not a value of {f.field!r}")
+
+
+def to_alert_request(
+    defn: TrendDefinitionInput, case_id: str, now: datetime
+) -> tuple[AlertTrendRequest, datetime]:
+    start = now - timedelta(weeks=defn.weeks)
+    filters: dict[str, list[str]] = {}
+    for f in defn.filters:
+        filters.setdefault(f.field, []).append(f.value)
+    request = AlertTrendRequest(
+        investigation_scope=case_id,
+        window=Interval(valid_from=start, valid_to=now),
+        interval=defn.interval,
+        group_by=defn.group_by,  # type: ignore[arg-type]
+        filters=filters,  # type: ignore[arg-type]
+    )
+    return request, start
+
+
+def name_alert_series(
+    result: TrendResult, defn: TrendDefinitionInput, rules: Sequence[TypologyRule]
+) -> TrendResult:
+    """An alert trend's series shown in words: a rule by its name (a rule of another case cannot be
+    counted here, so every typology rule counted is one of `rules`, or retired from it), hotlists
+    and monitors as one each, a severity or an outcome by its label. A typology keeps its name."""
+    names: dict[str, str] = {}
+    if defn.group_by == "rule":
+        names = {**{rule_key(r): r.name for r in rules}, **GROUP_NAMES}
+    elif defn.group_by == "severity":
+        names = ALERT_SEVERITIES
+    elif defn.group_by == "outcome":
+        names = ALERT_OUTCOMES
+    if not names:
+        return result
+    points = [p.model_copy(update={"series": names.get(p.series or "", p.series)})
+              for p in result.points]  # fmt: skip
+    return result.model_copy(
+        update={"points": points, "series": sorted({p.series for p in points if p.series})}
+    )
+
+
+def trend_options(
+    ontology: OntologySchema, domains: Sequence[str], rules: Sequence[TypologyRule] = ()
+) -> TrendOptions:
     """What the builder offers a case: the ontology's temporal link types that are core, or belong
-    to one of the case's `domains` (ADR-126 decision 6)."""
-    return TrendOptions(event_types=_offered(ontology, domains))
+    to one of the case's `domains` (ADR-126 decision 6); and, for an alert trend, the alert fields
+    with the case's own rules (ADR-134 decision 3)."""
+    return TrendOptions(event_types=_offered(ontology, domains), alert_fields=alert_fields(rules))
 
 
 def _pack_labels(domains: Sequence[str]) -> str:
@@ -111,6 +223,8 @@ def check_in_case_domains(
     """Refuses, in words, a definition naming a type outside the case's domain packs (ADR-126
     decision 6). Only saving and previewing call this: a saved trend keeps running, and a pack
     keeps refreshing it, after the packs change, because running checks the whole ontology."""
+    if defn.source == "alerts":
+        return
     outside = _outside(defn, ontology, domains)
     if outside:
         # Named as the builder shows them ("Beneficial owner of"), not by their stored keys.
@@ -134,7 +248,11 @@ def mark_outside_case_domains(
 
 def validate_definition(defn: TrendDefinitionInput, ontology: OntologySchema) -> None:
     """Refuses, in words, anything the ontology does not declare for every chosen event type. On
-    the whole ontology, never the case's packs (ADR-126 decision 6): see `check_in_case_domains`."""
+    the whole ontology, never the case's packs (ADR-126 decision 6): see `check_in_case_domains`.
+    An alert trend is checked against its own closed fields (ADR-134 decision 3)."""
+    if defn.source == "alerts":
+        validate_alert_definition(defn)
+        return
     offered = {o.name: o for o in _offered(ontology, None)}
     unknown = [t for t in defn.event_types if t not in offered]
     if unknown:

@@ -1,9 +1,10 @@
 """A case's report (`06_DECISIONS.md` ADR-111): the figures behind the Glass's Reports view and the
 dashboards' feed — one computation, so the two cannot disagree.
 
-**Every figure is counted as its reader (rule 3).** Alerts come through the case queue's own
-all-or-nothing check (`alert_queue.queue`): an alert naming anything the reader cannot see is in no
-total, outcome or age bucket — the CLAUDE.md "histogram bucket" clause read literally. Held rows are
+**Every figure is counted as its reader (rule 3).** Alerts come through the one queue's own
+all-or-nothing check (`alert_queue.monitoring_queue`, scoped in the query, one batched read): an
+alert naming anything the reader cannot see is in no total, outcome, age bucket or monitoring
+figure (ADR-134 decision 2) — the CLAUDE.md "histogram bucket" clause read literally. Held rows are
 counted through `HeldRowStore.list_authorized`, which filters marking and reach in SQL, and only for
 Editors and above (the route decides). Each customer's KYC status is `kyc.assess` as the reader.
 
@@ -29,6 +30,8 @@ from schemas.domain import (
     ExpandRequest,
     HeldFigures,
     KycFigures,
+    LabelledWeekCount,
+    MonitoringFigures,
     OntologySchema,
     OutcomeCount,
     PoleClass,
@@ -36,6 +39,7 @@ from schemas.domain import (
     PoleFigures,
     PoleTypeCount,
     Principal,
+    QueuedAlert,
     ReportCount,
     ReportFigures,
     ReportLimitExceeded,
@@ -43,7 +47,7 @@ from schemas.domain import (
 )
 from schemas.explore import TypeCounts
 
-from .alert_queue import queue
+from .alert_queue import monitoring_queue
 from .alerts import AlertStore
 from .explore import ExploreService
 from .held_rows import HeldRowStore
@@ -104,6 +108,90 @@ def _alert_figures(
         [ReportCount(label=label, value=ages[label]) for label in AGE_LABELS],
         [outcomes[t] for t in sorted(outcomes)],
         len(in_period),
+    )
+
+
+def _week_of(moment: datetime) -> date:
+    day = moment.date()
+    return day - timedelta(days=day.weekday())
+
+
+def _weeks(counts: Counter[tuple[date, str, str]]) -> list[LabelledWeekCount]:
+    return [
+        LabelledWeekCount(week_start=w, label=label, typology=typology, count=n)
+        for (w, label, typology), n in sorted(counts.items())
+    ]
+
+
+#: The rule group an alert of each kind is counted under: each typology by its typology (a closed
+#: name, where a rule's own name is analyst-written text the feed never carries), hotlists together,
+#: monitors together (ADR-134 decision 2).
+_RULE_GROUP = {"typology": "typology", "hotlist": "hotlists", "monitor": "monitors"}
+
+
+def _monitoring_figures(
+    visible: Sequence[QueuedAlert], *, start: date, now: datetime
+) -> MonitoringFigures:
+    """ADR-134 decision 2, over every alert the reader's queue holds whole (any kind)."""
+    raised: Counter[tuple[date, str, str]] = Counter()
+    matches: Counter[tuple[date, str, str]] = Counter()
+    closed: Counter[tuple[date, str, str]] = Counter()
+    took: Counter[str] = Counter()
+    in_period = [q for q in visible if q.alert.created_at.date() >= start]
+    if len(in_period) > ALERT_BOUND:
+        raise ReportLimitExceededError(
+            ReportLimitExceeded(cap_kind="alerts", cap=ALERT_BOUND, would_be=len(in_period))
+        )
+    for q in in_period:
+        week = _week_of(q.alert.created_at)
+        typology = (q.alert.typology or "") if q.kind == "typology" else ""
+        raised[(week, _RULE_GROUP[q.kind], typology)] += 1
+        if q.kind == "hotlist":
+            matches[(week, "hotlists", "")] += 1
+    for q in visible:
+        if q.alert.status != "closed":
+            continue
+        decided = q.alert.decided_at or q.alert.created_at
+        if decided.date() < start:
+            continue
+        outcome = q.alert.disposition or "closed"
+        closed[(_week_of(decided), outcome, "")] += 1
+        took[_age_label(q.alert.created_at, decided)] += 1
+    return MonitoringFigures(
+        raised_by_rule=_weeks(raised),
+        closed_by_outcome=_weeks(closed),
+        time_to_close=[ReportCount(label=label, value=took[label]) for label in AGE_LABELS],
+        hotlist_matches=_weeks(matches),
+    )
+
+
+async def alert_report(
+    alerts: AlertStore,
+    graph: GraphPort,
+    investigation_id: str,
+    reader: Principal,
+    *,
+    today: date,
+    period_weeks: int = 12,
+) -> ReportFigures:
+    """The report's alert figures alone, as `reader`: one read of the one queue — which rows is the
+    query's answer, what they name one batched read as the reader (`monitoring_queue`) — from which
+    the typology figures (ADR-111) and the monitoring figures (ADR-134 decision 2) are both
+    counted, so they cannot disagree about which alerts the reader may see."""
+    now = datetime.now(UTC)
+    start = today - timedelta(weeks=period_weeks)
+    every_kind = await monitoring_queue(alerts, graph, investigation_id, reader)
+    typology = [q.alert for q in every_kind if q.kind == "typology"]
+    by_week, by_age, outcomes, total = _alert_figures(typology, start=start, now=now)
+    return ReportFigures(
+        period_weeks=period_weeks,
+        as_of=today,
+        generated_at=now,
+        alerts_total=total,
+        alerts_by_week=by_week,
+        open_by_age=by_age,
+        outcomes=outcomes,
+        monitoring=_monitoring_figures(every_kind, start=start, now=now),
     )
 
 
@@ -211,10 +299,8 @@ async def case_report(
     period_weeks: int = 12,
     show_held: bool = False,
 ) -> ReportFigures:
-    now = datetime.now(UTC)
-    visible = [row.alert for row in await queue(alerts, graph, investigation_id, reader)]
-    by_week, by_age, outcomes, total = _alert_figures(
-        visible, start=today - timedelta(weeks=period_weeks), now=now
+    figures = await alert_report(
+        alerts, graph, investigation_id, reader, today=today, period_weeks=period_weeks
     )
     held_figures = None
     if show_held:
@@ -239,18 +325,7 @@ async def case_report(
                 "the explore counts carry no computed_at, so the card cannot say when"
             )
         pole = pole_figures(counts, ontology, counted_at=counts.computed_at)
-    return ReportFigures(
-        period_weeks=period_weeks,
-        as_of=today,
-        generated_at=now,
-        alerts_total=total,
-        alerts_by_week=by_week,
-        open_by_age=by_age,
-        outcomes=outcomes,
-        held=held_figures,
-        kyc=kyc,
-        pole=pole,
-    )
+    return figures.model_copy(update={"held": held_figures, "kyc": kyc, "pole": pole})
 
 
 def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
@@ -265,6 +340,15 @@ def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
     for o in figures.outcomes:
         rows += [("outcome", label, o.typology, "", getattr(o, label))
                  for label in ("open", "claimed", "true_positive", "false_positive")]  # fmt: skip
+    # ADR-134 decision 2: the monitoring dashboard's sections, every kind of alert.
+    m = figures.monitoring
+    rows += [("raised_by_rule", w.label, w.typology, w.week_start.isoformat(), w.count)
+             for w in m.raised_by_rule]  # fmt: skip
+    rows += [("closed", w.label, "", w.week_start.isoformat(), w.count)
+             for w in m.closed_by_outcome]  # fmt: skip
+    rows += [("time_to_close", c.label, "", "", c.value) for c in m.time_to_close]
+    rows += [("hotlist_matches", w.label, "", w.week_start.isoformat(), w.count)
+             for w in m.hotlist_matches]  # fmt: skip
     if figures.held is not None:
         rows += [("held_rows", label, "", "", getattr(figures.held, label))
                  for label in ("held", "released", "rejected")]  # fmt: skip
@@ -285,4 +369,10 @@ def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
     return rows
 
 
-__all__ = ["ReportLimitExceededError", "case_report", "feed_rows", "pole_figures"]
+__all__ = [
+    "ReportLimitExceededError",
+    "alert_report",
+    "case_report",
+    "feed_rows",
+    "pole_figures",
+]

@@ -194,6 +194,8 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
         duckdb_path=config.analytics_db_path,
         handling_scheme=handling_scheme,
     )
+    # ADR-134 decision 3: every alert written is kept in the analytics store for alert trends.
+    alerts_store.fact_sink = analytics.load_alert_facts
 
     # ADR-100 Amendment 3: the Explore panel's figures, kept per access class, cleared on a write.
     explore_cache = CachedQuery(valkey, prefix="explore", ttl_seconds=EXPLORE_TTL_SECONDS)

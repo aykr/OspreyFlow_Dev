@@ -42,6 +42,7 @@ from services.api.app import (
     get_ontology,
     get_principal,
     get_trend_store,
+    get_typology_rules,
     get_working_set,
 )
 from services.api.investigations import (
@@ -281,9 +282,17 @@ def world() -> Any:
         get_investigations: lambda: cases, get_analytics: lambda: analytics,
         get_trend_store: lambda: store, get_ontology: lambda: ONTOLOGY,
         get_handling_scheme: load_uk_le_scheme, get_audit: _Audit, get_working_set: lambda: None,
+        get_typology_rules: lambda: _NoRules(),
     })  # fmt: skip
     yield cases, analytics, store
     app.dependency_overrides.clear()
+
+
+class _NoRules:
+    """The case's typology rules (ADR-134: the builder offers them for an alert trend): none here."""
+
+    async def list_for_case(self, investigation_id: str, principal: Principal) -> list[object]:
+        return []
 
 
 def _as(who: Principal) -> TestClient:
@@ -380,6 +389,7 @@ def test_a_pack_holding_a_trend_refreshes_after_the_packs_change(world: Any) -> 
         app_module._build_pack_item(
             AddPackItem(kind="trend", trend_id=saved.id), case, EDITOR, None,  # type: ignore[arg-type]
             load_uk_le_scheme(), None, store, ONTOLOGY, analytics, cases, _Audit(), None,  # type: ignore[arg-type]
+            None, _NoRules(),  # type: ignore[arg-type]  — the alert store and rules: an event trend reads neither
         )
     )  # fmt: skip
 

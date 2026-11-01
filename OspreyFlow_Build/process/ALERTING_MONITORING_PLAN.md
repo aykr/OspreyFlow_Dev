@@ -64,6 +64,29 @@ description, as a fifth capability on the welcome page and as a part of About.
   - the owner's alerts route's docstring says "the case's datasets", but the store scopes it to the
     owner.
 
+## Built by ADR-134 (build-order step 4, 1 November 2026)
+
+- **Alerts in report packs:** a fifth item kind, `alert`, resting on every node, link and transaction
+  it cites; withheld as a yes or no; checked item by item on export; says open, and inferred.
+- **The monitoring dashboard:** four feed sections (`raised_by_rule`, `closed`, `time_to_close`,
+  `hotlist_matches`) over every kind, through the same sync and mart; the board is described in the
+  administration guide (no board ships as a file).
+- **Alert trends:** `source: alerts` in the trend builder, read through `AnalyticsPort.alert_trend`
+  over alert facts the alert store keeps in the analytics store.
+- **The rule-3 review of the pack and queue readers — what was found:**
+  - *Packs:* the reader's items were read whole into the Conduit and filtered there. No count left
+    the Conduit (a yes or no only) and no order changed (no positions), but every hidden item was
+    read. Moved into the pack store's query; the Conduit check stays as a second line.
+  - *The case queue* (`alert_queue.queue`, which the Reports figures and neighbourhood risk count):
+    read each alert's nodes in turn and stopped at the first hidden one, so the number of graph
+    reads grew with the alerts the reader may not see — a timing leak, shown as 8 reads against 2
+    (`test_case_queue_reads.py`). Now one batched read through the one queue.
+  - *The one queue* (`monitoring_queue`): already scoped in the query and one batched read; no leak
+    found. What remains in every reader: an alert's referents are checked against the graph after
+    the SQL, as ADR-039 requires, so the size of that one batch grows with the alerts in the
+    reader's SQL scope, hidden ones included; opening one alert by its id still reads its nodes in
+    turn (the reader must already hold the id, and is told "not found" either way).
+
 ## The decisions (accepted 1 November 2026)
 
 - **ADR-133 (monitoring rules):** sentences built from POLE, templates, preview, managed lists with

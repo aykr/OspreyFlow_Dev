@@ -28,6 +28,7 @@ from services.api.app import (
     get_ontology,
     get_principal,
     get_trend_store,
+    get_typology_rules,
     get_working_set,
 )
 from services.api.investigations import (
@@ -199,6 +200,7 @@ def world() -> tuple[_Analytics, _Store]:
         get_investigations: _Cases, get_analytics: lambda: analytics, get_trend_store: lambda: store,
         get_ontology: lambda: ONTOLOGY, get_handling_scheme: load_uk_le_scheme, get_audit: _Audit,
         get_working_set: lambda: None,
+        get_typology_rules: lambda: None,  # read only for an alert trend (ADR-134)
     })  # fmt: skip
     yield analytics, store
     app.dependency_overrides.clear()

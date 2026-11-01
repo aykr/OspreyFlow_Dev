@@ -773,9 +773,25 @@ class RuleGate:
         """The queue rows for what `pre_commit` wrote into the committed graph."""
         return [await self._raise_row(f, node_id) for f, node_id in verdict.findings]
 
+    async def _rests_on(self, finding: Finding, node_id: str | None) -> list[Handling] | None:
+        """Every handling the alert rests on — its entities, its own node, the links and the
+        transactions it cites — read as its deployer, who raised it (ADR-134 decision 3). `None`
+        when any of them cannot be read so: not known, and the alert trend counts it for no one."""
+        node_ids = sorted({*finding.node_ids, *([node_id] if node_id else [])})
+        edge_ids = sorted(set(finding.edge_ids))
+        nodes = await self.graph.get_nodes(node_ids, finding.deployer) if node_ids else []
+        edges = await self.graph.get_edges(edge_ids, finding.deployer) if edge_ids else []
+        if {n.id for n in nodes} != set(node_ids) or {e.id for e in edges} != set(edge_ids):
+            return None
+        return [
+            *(n.handling for n in nodes),
+            *(e.handling for e in edges),
+            *(e.handling for e in finding.events),
+        ]
+
     async def _raise_row(self, finding: Finding, node_id: str | None) -> Alert:
         alert = alert_row(finding, node_id, self.investigation_id)
-        await self.alert_store.save(alert)
+        await self.alert_store.save(alert, handlings=await self._rests_on(finding, node_id))
         await self._remember(finding)
         detail: dict[str, object] = {
             "rule_id": finding.rule.id,

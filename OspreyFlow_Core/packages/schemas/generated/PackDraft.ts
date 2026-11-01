@@ -16,17 +16,18 @@ export type WithdrawnByName = string | null;
 export type WithdrawalReason = string | null;
 export type Versions = PackVersionSummary[];
 export type Id1 = string;
-export type Kind = "trend" | "assessment" | "entity" | "note";
+export type Kind = "trend" | "assessment" | "entity" | "note" | "alert";
 export type Marking = string;
 export type AddedBy = string;
 export type AddedAt = string;
 export type TrendId = string | null;
 export type Title1 = string;
+export type Source = "events" | "alerts";
 /**
- * @minItems 1
  * @maxItems 12
  */
 export type EventTypes =
+  | []
   | [string]
   | [string, string]
   | [string, string, string]
@@ -87,6 +88,34 @@ export type EntityType = string;
 export type Name = string;
 export type Caption = string;
 export type Note = string | null;
+export type AlertId = string;
+export type Kind1 = "typology" | "hotlist" | "monitor";
+export type Severity = "low" | "medium" | "high";
+export type Explanation = string;
+export type Typology = string | null;
+export type HotlistEntry = string | null;
+export type ValidFrom = string;
+export type ValidTo = string | null;
+export type RaisedAt = string;
+export type NodeId1 = string;
+export type EntityType1 = string;
+export type Name1 = string;
+export type Entities = AlertEntitySnapshot[];
+export type EdgeId = string;
+export type Type = string;
+export type SourceName = string;
+export type TargetName = string;
+export type Links = AlertLinkSnapshot[];
+export type OccurredAt = string;
+export type Amount = number | null;
+export type SourceName1 = string;
+export type TargetName1 = string;
+export type Transactions = AlertTransactionSnapshot[];
+export type Status = "open" | "claimed" | "closed";
+export type Outcome = ("true_positive" | "false_positive") | null;
+export type Reason = string | null;
+export type Match = "inferred" | "confirmed";
+export type NodeIds = string[];
 export type ReplacedAt = string | null;
 export type ReplacedBy = string | null;
 export type Items = PackItem[];
@@ -139,6 +168,7 @@ export interface PackItem {
   assessment?: AssessmentSnapshot | null;
   entity?: EntitySnapshot | null;
   note?: Note;
+  alert?: AlertSnapshot | null;
   replaced_at?: ReplacedAt;
   replaced_by?: ReplacedBy;
   [k: string]: unknown;
@@ -156,7 +186,8 @@ export interface TrendFigures {
 }
 export interface TrendDefinitionInput {
   title: Title1;
-  event_types: EventTypes;
+  source?: Source;
+  event_types?: EventTypes;
   measure?: TrendMeasure;
   measure_field?: MeasureField;
   interval?: TrendInterval;
@@ -222,5 +253,63 @@ export interface EntitySnapshot {
   entity_type: EntityType;
   name: Name;
   caption: Caption;
+  [k: string]: unknown;
+}
+/**
+ * An alert as its adder read it (ADR-134 decision 1): its explanation, the entity it matched,
+ * its evidence, and its outcome and reason if it was closed. Frozen when added, like every item;
+ * `status` says what it was then, so an alert still open says so.
+ */
+export interface AlertSnapshot {
+  alert_id: AlertId;
+  kind: Kind1;
+  severity: Severity;
+  explanation: Explanation;
+  typology?: Typology;
+  hotlist_entry?: HotlistEntry;
+  window?: Interval | null;
+  raised_at: RaisedAt;
+  entities?: Entities;
+  links?: Links;
+  transactions?: Transactions;
+  status: Status;
+  outcome?: Outcome;
+  reason?: Reason;
+  match: Match;
+  node_ids?: NodeIds;
+  [k: string]: unknown;
+}
+export interface Interval {
+  valid_from: ValidFrom;
+  valid_to?: ValidTo;
+  [k: string]: unknown;
+}
+/**
+ * An entity an alert matched, named as its adder read it.
+ */
+export interface AlertEntitySnapshot {
+  node_id: NodeId1;
+  entity_type: EntityType1;
+  name: Name1;
+  [k: string]: unknown;
+}
+/**
+ * A link an alert cites as evidence.
+ */
+export interface AlertLinkSnapshot {
+  edge_id: EdgeId;
+  type: Type;
+  source_name: SourceName;
+  target_name: TargetName;
+  [k: string]: unknown;
+}
+/**
+ * A transaction an alert cites as evidence: when, how much, between whom.
+ */
+export interface AlertTransactionSnapshot {
+  occurred_at: OccurredAt;
+  amount?: Amount;
+  source_name: SourceName1;
+  target_name: TargetName1;
   [k: string]: unknown;
 }

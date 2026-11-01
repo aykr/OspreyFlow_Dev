@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.12** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.13** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.13 | 2026-11-01 | §9.1–9.3: an alert in a report pack (open or closed, inferred or confirmed); alert trends in the Trends tab; the monitoring figures dashboards receive. |
 | 1.12 | 2026-11-01 | §7 rewritten as Monitoring and alerts: the Monitoring place and its one queue for every kind of alert; severity, who may see an alert, giving it to a member, and closing it with a reason; the typologies as rule templates; whom a hotlist's alerts reach. §12: the canvas says the node the keyboard is on. |
 | 1.11 | 2026-11-01 | §5.11: the Matrix, the graph as two tables a screen reader can walk, with its keys in §12. |
 | 1.10 | 2026-11-01 | §6: an engine marked "under contract" or "no contract", and one the case's data may not reach shown not available, with the reason. |
@@ -604,6 +605,46 @@ packs, exported to PDF), **Published**, **Data feeds** and **Dashboards**.
 
 **Dashboards** draws the deployment's boards inside the Glass, showing only those you may open. The
 same boards are at `bi.` in front of the deployment's address, signed in the same way.
+
+![A report pack holding an open alert, a trend over alerts and a closed alert](images/user/21-alerts-in-reporting.png)
+
+### 9.1 Alerts in a report pack
+
+In **Packs**, under **Add an item**, choose **Alert** and then one of the alerts of the case's queue
+that you can see (each listed by severity, status and what it found). The pack keeps the alert as it
+was when you added it:
+
+- what it found, in words, its kind, its severity and when it was raised;
+- the entities it matched, and its evidence: the links and transactions it cites;
+- whether it was still open: an open alert says "Open: not yet decided when this was added";
+- if it was closed, its outcome (true or false positive) and the reason given;
+- "Inferred: no one has confirmed this match" until a person confirms it, by closing it as a true
+  positive. A match is never shown as confirmed on anyone's behalf.
+
+**Refresh** reads the alert again, so an alert added while open can show how it was closed; the
+earlier copy stays in the pack's history.
+
+An alert item is marked at the highest marking of what it cites, and rests on every node, link and
+transaction it cites. A reader who may not see all of them does not get the item, and is told only
+that some items are withheld, never how many or which. Exporting checks each item again for the
+person exporting; someone who may see none of it is refused, and nothing is recorded.
+
+### 9.2 Alert trends
+
+In **Trends**, **What to count** offers **Events** or **Alerts**. An alert trend counts the alerts
+raised each week or month that you may see. Split it by **rule** (each typology rule by its name,
+hotlists together, monitors together), **typology**, **severity** or **outcome**, and narrow it with
+up to five filters on the same fields. Alerts are counted, never summed. An alert on something you
+cannot see is in no bar and no total. Save an alert trend and add it to a pack as any trend; it
+is bounded in the same way (104 periods and 12 series), and past that you are asked to narrow it.
+
+### 9.3 The monitoring dashboard
+
+The figures dashboards read now include monitoring figures for every kind of alert: alerts raised
+per week by rule, alerts closed per week by outcome, how long alerts took to close, and hotlist
+matches per week. They are counted as the dashboard's own account may see them, case by case. A
+hotlist kept "only me" is counted for its owner alone, so it never appears on a shared board. An
+administrator sets the board up (administration guide §12).
 
 ## 10. Judgements
 

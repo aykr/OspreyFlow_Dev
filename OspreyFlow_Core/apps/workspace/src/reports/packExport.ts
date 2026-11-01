@@ -3,7 +3,7 @@
 // the PDF from the browser's own print dialogue. Every page carries THAT item's own marking, top
 // and bottom — never the pack's level — and every interpolated string is escaped.
 import type { PackExport, PackItem } from "../../../../packages/schemas/generated";
-import { KIND_LABEL, formatDay, formatNumber, periodKey, periodsOf, trendSentence } from "./packText";
+import { KIND_LABEL, alertEvidence, alertLine, alertMatchSentence, alertStatusSentence, formatDay, formatNumber, periodKey, periodsOf, trendSentence } from "./packText";
 import { manifestSentence } from "../export/api";
 
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
@@ -61,6 +61,19 @@ function itemContent(item: PackItem): string {
   if (item.kind === "entity" && item.entity) {
     return `<p><strong>${escapeHtml(item.entity.name)}</strong> (${escapeHtml(item.entity.entity_type)})</p><p>${escapeHtml(item.entity.caption)}</p>`;
   }
+  if (item.kind === "alert" && item.alert) {
+    const a = item.alert;
+    const list = (label: string, lines: string[]) =>
+      lines.length === 0 ? "" : `<p class="mark">${escapeHtml(label)}</p><ul>${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>`;
+    return (
+      `<p class="mark">${escapeHtml(alertLine(a))}</p>` +
+      `<p class="notice">${escapeHtml(alertStatusSentence(a))}</p>` +
+      `<p class="notice">${escapeHtml(alertMatchSentence(a))}</p>` +
+      (a.hotlist_entry ? `<p>Hotlist entry: ${escapeHtml(a.hotlist_entry)}</p>` : "") +
+      list("Entities it matched", (a.entities ?? []).map((e) => `${e.name} (${e.entity_type})`)) +
+      list("Evidence", alertEvidence(a))
+    );
+  }
   return `<p>${escapeHtml(item.note ?? "")}</p>`;
 }
 
@@ -68,6 +81,7 @@ function itemHeading(item: PackItem): string {
   if (item.kind === "trend") return item.trend?.definition.title ?? "Trend";
   if (item.kind === "assessment") return "Assessment";
   if (item.kind === "entity") return item.entity?.name ?? "Entity";
+  if (item.kind === "alert") return item.alert?.explanation ?? "Alert";
   return "Note";
 }
 

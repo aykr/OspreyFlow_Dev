@@ -1,6 +1,7 @@
 // The Trends tab (ADR-113 stage 5): build a trend from what `/trends/options` offers — and only
 // that, there is no free-text field for an event type or a property — preview it, save it, and add
-// a saved one to a pack. Every figure arrives counted for this reader; the screen only draws it.
+// a saved one to a pack. A trend counts events, or alerts (ADR-134 decision 3): an alert trend
+// counts, and is split and filtered by rule, typology, severity or outcome alone. Every figure arrives counted for this reader; the screen only draws it.
 import { useEffect, useState } from "react";
 
 import type {
@@ -31,6 +32,7 @@ interface FilterRow {
 
 export interface TrendForm {
   title: string;
+  source: "events" | "alerts";
   types: string[];
   measure: "count" | "sum";
   field: string;
@@ -40,7 +42,7 @@ export interface TrendForm {
   filters: FilterRow[];
 }
 
-const EMPTY: TrendForm = { title: "", types: [], measure: "count", field: "", interval: "week", weeks: 12, groupBy: "", filters: [] };
+const EMPTY: TrendForm = { title: "", source: "events", types: [], measure: "count", field: "", interval: "week", weeks: 12, groupBy: "", filters: [] };
 
 /** The fields of one kind that EVERY chosen event type declares — the only ones a trend may use. */
 export function commonFields(options: TrendOptions, types: string[], kind: TrendFieldOption["kind"]): TrendFieldOption[] {
@@ -67,13 +69,26 @@ function pruned(form: TrendForm, options: TrendOptions): TrendForm {
 /** What the form says is missing, in words; null when it can be previewed and saved. */
 export function formProblem(form: TrendForm): string | null {
   if (form.title.trim() === "") return "Give the trend a title.";
-  if (form.types.length === 0) return "Choose at least one event type.";
+  if (form.source === "events" && form.types.length === 0) return "Choose at least one event type.";
   if (form.measure === "sum" && form.field === "") return "Choose the property to add up.";
   if (form.filters.some((f) => f.field === "" || f.value === "")) return "Choose a property and a value for every filter, or remove it.";
   return null;
 }
 
 export function definitionOf(form: TrendForm): TrendDefinitionInput {
+  if (form.source === "alerts") {
+    return {
+      title: form.title.trim(),
+      source: "alerts",
+      event_types: [],
+      measure: "count",
+      measure_field: null,
+      interval: form.interval,
+      weeks: form.weeks,
+      group_by: form.groupBy === "" ? null : form.groupBy,
+      filters: form.filters.map((f) => ({ field: f.field, value: f.value })) as TrendDefinitionInput["filters"],
+    };
+  }
   return {
     title: form.title.trim(),
     event_types: form.types as TrendDefinitionInput["event_types"],
@@ -138,8 +153,10 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
   }, [api.apiBaseUrl, api.bearerToken, api.investigationId, canAssemble]);
 
   const eventTypes = options?.event_types ?? [];
+  const alerts = form.source === "alerts";
+  const alertFields = options?.alert_fields ?? [];
   const numbers = options ? commonFields(options, form.types, "number") : [];
-  const categories = options ? commonFields(options, form.types, "category") : [];
+  const categories = alerts ? alertFields : options ? commonFields(options, form.types, "category") : [];
   const missing = formProblem(form);
 
   function toggleType(name: string, on: boolean) {
@@ -149,9 +166,20 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
   }
 
   function valuesFor(field: string): string[] {
+    if (alerts) return alertFields.find((f) => f.name === field)?.values ?? [];
     const first = eventTypes.find((t) => form.types.includes(t.name));
     return (first?.fields ?? []).find((f) => f.name === field)?.values ?? [];
   }
+
+  /** A value as the builder shows it: an alert field's label where it has one (a rule by name). */
+  function valueLabel(field: string, value: string): string {
+    const found = alertFields.find((f) => f.name === field);
+    const at = found?.values?.indexOf(value) ?? -1;
+    return alerts && found?.labels && at >= 0 ? (found.labels[at] ?? value) : value;
+  }
+
+  /** "rule" -> "Rule": an alert field's name as the builder shows it. */
+  const fieldLabel = (name: string) => (alerts ? name.charAt(0).toUpperCase() + name.slice(1) : name);
 
   function setFilter(at: number, change: Partial<FilterRow>) {
     setForm({ ...form, filters: form.filters.map((f, i) => (i === at ? { ...f, ...change } : f)) });
@@ -253,6 +281,19 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
             Title
             <Input value={form.title} maxLength={120} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </label>
+          <div style={{ display: "grid", gap: "var(--sp-4)" }}>
+            <span className="label">What to count</span>
+            <RadioGroup
+              name="trend-source"
+              aria-label="What to count"
+              options={[{ value: "events", label: "Events" }, { value: "alerts", label: "Alerts" }]}
+              value={form.source}
+              onChange={(source) =>
+                setForm({ ...form, source: source as TrendForm["source"], measure: "count", field: "", groupBy: "", filters: [] })
+              }
+            />
+          </div>
+          {!alerts && (
           <fieldset style={{ border: 0, margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
             <legend className="label">Event types</legend>
             {eventTypes.length === 0 && <span className="label">{options ? "This case has no event types to count." : "Reading what can be counted…"}</span>}
@@ -263,6 +304,8 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
               </label>
             ))}
           </fieldset>
+          )}
+          {!alerts && (
           <div style={{ display: "grid", gap: "var(--sp-4)" }}>
             <span className="label">Measure</span>
             <RadioGroup
@@ -273,7 +316,8 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
               onChange={(measure) => setForm({ ...form, measure: measure as TrendForm["measure"], field: measure === "sum" ? form.field : "" })}
             />
           </div>
-          {form.measure === "sum" && (
+          )}
+          {!alerts && form.measure === "sum" && (
             <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
               Property to add up
               <Select aria-label="Property to add up" value={form.field} onChange={(e) => setForm({ ...form, field: e.target.value })}>
@@ -303,7 +347,7 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
             Series
             <Select aria-label="Series" value={form.groupBy} onChange={(e) => setForm({ ...form, groupBy: e.target.value })}>
               <option value="">None</option>
-              <option value="event_type">By event type</option>
+              {!alerts && <option value="event_type">By event type</option>}
               {categories.map((f) => (
                 <option key={f.name} value={f.name}>{`By ${f.name}`}</option>
               ))}
@@ -318,14 +362,14 @@ export function TrendsTab({ api, canAssemble }: TrendsTabProps) {
                   <Select aria-label="Filter property" value={row.field} onChange={(e) => setFilter(at, { field: e.target.value, value: "" })}>
                     <option value="">Choose a property</option>
                     {categories.map((f) => (
-                      <option key={f.name} value={f.name}>{f.name}</option>
+                      <option key={f.name} value={f.name}>{fieldLabel(f.name)}</option>
                     ))}
                   </Select>
                   {values.length > 0 ? (
                     <Select aria-label="Filter value" value={row.value} onChange={(e) => setFilter(at, { value: e.target.value })}>
                       <option value="">Choose a value</option>
                       {values.map((v) => (
-                        <option key={v} value={v}>{v}</option>
+                        <option key={v} value={v}>{valueLabel(row.field, v)}</option>
                       ))}
                     </Select>
                   ) : (

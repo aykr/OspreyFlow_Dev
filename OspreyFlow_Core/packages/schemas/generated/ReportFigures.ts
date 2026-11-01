@@ -17,6 +17,14 @@ export type Claimed = number;
 export type TruePositive = number;
 export type FalsePositive = number;
 export type Outcomes = OutcomeCount[];
+export type WeekStart1 = string;
+export type Label1 = string;
+export type Typology2 = string;
+export type Count1 = number;
+export type RaisedByRule = LabelledWeekCount[];
+export type ClosedByOutcome = LabelledWeekCount[];
+export type TimeToClose = ReportCount[];
+export type HotlistMatches = LabelledWeekCount[];
 export type Held = number;
 export type Released = number;
 export type Rejected = number;
@@ -31,7 +39,7 @@ export type ByBand = ReportCount[];
 export type PoleClass = "person" | "object" | "location" | "event" | "organisation";
 export type Total = number;
 export type EntityType = string;
-export type Count1 = number;
+export type Count2 = number;
 export type Types = PoleTypeCount[];
 export type Classes = PoleClassCount[];
 export type Other = PoleTypeCount[];
@@ -52,6 +60,7 @@ export interface ReportFigures {
   alerts_by_week?: AlertsByWeek;
   open_by_age?: OpenByAge;
   outcomes?: Outcomes;
+  monitoring?: MonitoringFigures;
   held?: HeldFigures | null;
   kyc?: KycFigures | null;
   pole?: PoleFigures | null;
@@ -83,6 +92,30 @@ export interface OutcomeCount {
   claimed?: Claimed;
   true_positive?: TruePositive;
   false_positive?: FalsePositive;
+  [k: string]: unknown;
+}
+/**
+ * The monitoring dashboard's figures (ADR-134 decision 2): every kind of alert the one queue
+ * holds for the reader — typology, hotlist and monitor — counted as them, per case. A hotlist
+ * kept "only me" is in its owner's figures alone (the queue's own scope).
+ */
+export interface MonitoringFigures {
+  raised_by_rule?: RaisedByRule;
+  closed_by_outcome?: ClosedByOutcome;
+  time_to_close?: TimeToClose;
+  hotlist_matches?: HotlistMatches;
+  [k: string]: unknown;
+}
+/**
+ * A count in one week under a fixed label (ADR-134 decision 2): the rule group an alert was
+ * raised by (`typology`, with its typology, `hotlists` or `monitors`), the outcome it was closed
+ * with, or `hotlists` for a hotlist's matches. Never a rule's own name or an alert's words.
+ */
+export interface LabelledWeekCount {
+  week_start: WeekStart1;
+  label: Label1;
+  typology?: Typology2;
+  count: Count1;
   [k: string]: unknown;
 }
 /**
@@ -138,6 +171,6 @@ export interface PoleClassCount {
  */
 export interface PoleTypeCount {
   entity_type: EntityType;
-  count: Count1;
+  count: Count2;
   [k: string]: unknown;
 }

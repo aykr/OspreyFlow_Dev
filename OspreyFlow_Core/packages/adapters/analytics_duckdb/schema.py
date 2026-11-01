@@ -96,9 +96,44 @@ CREATE TABLE IF NOT EXISTS geometries (
 """
 
 
+#: ADR-134 decision 3: one row per alert for alert trends (`alert_facts.py` reads it), and one row
+#: per handling it rests on, flattened as `events`' are so `access_filter.py`'s predicate runs over
+#: them unchanged. `known` is 0 for an alert whose handlings were never recorded: counted by none.
+CREATE_ALERT_FACTS_TABLE = """
+CREATE TABLE IF NOT EXISTS alert_facts (
+    alert_id VARCHAR,
+    investigation_scope VARCHAR,
+    kind VARCHAR,
+    rule VARCHAR,
+    typology VARCHAR,
+    severity VARCHAR,
+    outcome VARCHAR,
+    raised_at TIMESTAMP,
+    owner_id VARCHAR,
+    audience VARCHAR,
+    team VARCHAR,
+    dataset_id VARCHAR,
+    known INTEGER
+)
+"""
+CREATE_ALERT_FACT_HANDLINGS_TABLE = """
+CREATE TABLE IF NOT EXISTS alert_fact_handlings (
+    alert_id VARCHAR,
+    handling_classification VARCHAR,
+    handling_code VARCHAR,
+    owning_unit VARCHAR,
+    originator VARCHAR
+)
+"""
+
+
 def create_events_table(con: duckdb.DuckDBPyConnection) -> None:
+    """The events table, and the alert facts beside it: every store that holds events can be asked
+    for an alert trend, so the two are made together."""
     con.execute(CREATE_EVENTS_TABLE)
     con.execute(ADD_EVENTS_LOAD_ID)
+    con.execute(CREATE_ALERT_FACTS_TABLE)
+    con.execute(CREATE_ALERT_FACT_HANDLINGS_TABLE)
 
 
 def create_geometries_table(con: duckdb.DuckDBPyConnection) -> None:

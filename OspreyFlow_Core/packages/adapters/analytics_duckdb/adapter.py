@@ -21,6 +21,8 @@ import duckdb
 from ontology.handling import HandlingScheme
 from ports.analytics import TrendLimitExceeded
 from schemas.analytics import (
+    AlertFact,
+    AlertTrendRequest,
     BaselineRequest,
     BaselineResult,
     CountedHandling,
@@ -52,6 +54,7 @@ from schemas.analytics import (
 from schemas.domain import Handling, Interval, Principal
 
 from .access_filter import AccessFilter, SqlPredicate
+from .alert_facts import FACT_COLUMNS, HANDLING_COLUMNS, alert_predicate, series_expression
 
 #: Event columns a `CATEGORICAL` dimension may bucket by directly. Anything
 #: else is looked up inside the JSON `properties` column — validated as a
@@ -300,6 +303,91 @@ class AnalyticsDuckDBAdapter:
             classifications=classifications,
             handlings=handlings,
         )
+
+    # --- alert trends (ADR-134 decision 3) --------------------------------------------------------
+
+    async def alert_trend(self, req: AlertTrendRequest, principal: Principal) -> TrendResult:
+        predicate = alert_predicate(req, principal, self._access)
+        unit = "week" if req.interval is TrendInterval.WEEK else "month"
+        period = f"date_trunc('{unit}', raised_at)"
+        series = series_expression(req)
+        periods, groups = self._con.execute(
+            f"SELECT COUNT(DISTINCT {period}), COUNT(DISTINCT {series}) FROM alert_facts "
+            f"WHERE {predicate.where}",
+            predicate.params,
+        ).fetchone() or (0, 0)
+        if periods > req.max_periods:
+            raise TrendLimitExceeded("periods", req.max_periods, int(periods))
+        if groups > req.max_series:
+            raise TrendLimitExceeded("series", req.max_series, int(groups))
+        rows = self._con.execute(
+            f"SELECT {period} AS period, {series} AS series, COUNT(*) AS n FROM alert_facts "
+            f"WHERE {predicate.where} GROUP BY period, series ORDER BY period, series NULLS FIRST",
+            predicate.params,
+        ).fetchall()
+        counted = f"alert_id IN (SELECT alert_id FROM alert_facts WHERE {predicate.where})"
+        handlings = [
+            CountedHandling(
+                classification=str(c), handling_code=str(h), owning_unit=str(u), originator=str(o)
+            )
+            for c, h, u, o in self._con.execute(
+                "SELECT DISTINCT handling_classification, handling_code, owning_unit, originator "
+                f"FROM alert_fact_handlings WHERE {counted} ORDER BY 1, 2, 3, 4",
+                predicate.params,
+            ).fetchall()
+        ]
+        points = [
+            TrendPoint(
+                period_start=(p if p.tzinfo else p.replace(tzinfo=UTC)),
+                series=None if g is None else str(g),
+                value=float(n),
+            )
+            for p, g, n in rows
+        ]
+        return TrendResult(
+            interval=req.interval,
+            measure=TrendMeasure.COUNT,
+            points=points,
+            series=sorted({pt.series for pt in points if pt.series is not None}),
+            total=float(sum(pt.value for pt in points)),
+            events=int(sum(r[2] for r in rows)),
+            classifications=sorted({h.classification for h in handlings}),
+            handlings=handlings,
+        )
+
+    async def load_alert_facts(self, facts: Sequence[AlertFact]) -> None:
+        """Each fact replaces what was kept for its alert, in one transaction."""
+        if not facts:
+            return
+        ids = [f.alert_id for f in facts]
+        marks = ",".join("?" for _ in ids)
+        self._con.execute("BEGIN TRANSACTION")
+        try:
+            self._con.execute(f"DELETE FROM alert_facts WHERE alert_id IN ({marks})", ids)
+            self._con.execute(f"DELETE FROM alert_fact_handlings WHERE alert_id IN ({marks})", ids)
+            self._con.executemany(
+                f"INSERT INTO alert_facts ({FACT_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                [
+                    [f.alert_id, f.investigation_scope, f.kind, f.rule, f.typology, f.severity,
+                     f.outcome, f.raised_at, f.owner_id, f.audience, f.team, f.dataset_id,
+                     0 if f.handlings is None else 1]
+                    for f in facts
+                ],
+            )  # fmt: skip
+            rows = [
+                [f.alert_id, h.classification, h.handling_code, h.owning_unit, h.originator]
+                for f in facts
+                for h in f.handlings or []
+            ]
+            if rows:
+                self._con.executemany(
+                    f"INSERT INTO alert_fact_handlings ({HANDLING_COLUMNS}) VALUES (?,?,?,?,?)",
+                    rows,
+                )
+        except Exception:
+            self._con.execute("ROLLBACK")
+            raise
+        self._con.execute("COMMIT")
 
     def _fixed_interval_histogram(
         self, predicate: SqlPredicate, interval_seconds: int | None

@@ -1,9 +1,9 @@
 """Case report packs (`06_DECISIONS.md` ADR-113 decisions 3 to 5, Amendment 1): the analyst's
 intelligence product — an ordered list of items, each a dated trend snapshot, an assessment as
-written at the time, a chosen entity with a caption, or a note. Each item is marked at the highest
-classification it rests on; a reader who may not view everything an item rests on does not get it,
-and is told only whether some were withheld, never how many or which. Publishing freezes an
-immutable version.
+written at the time, a chosen entity with a caption, a note, or an alert (ADR-134 decision 1).
+Each item is marked at the highest classification it rests on; a reader who may not view
+everything an item rests on does not get it, and is told only whether some were withheld, never how
+many or which. Publishing freezes an immutable version.
 Generated into TypeScript for the Glass's Packs and Published tabs."""
 
 from __future__ import annotations
@@ -13,9 +13,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from schemas.domain import AlertDisposition, AlertKind, AlertSeverity, AlertStatus, Interval
 from schemas.trends import TrendFigures
 
-PackItemKind = Literal["trend", "assessment", "entity", "note"]
+PackItemKind = Literal["trend", "assessment", "entity", "note", "alert"]
 
 
 class AssessmentSnapshot(BaseModel):
@@ -39,6 +40,59 @@ class EntitySnapshot(BaseModel):
     caption: str
 
 
+class AlertEntitySnapshot(BaseModel):
+    """An entity an alert matched, named as its adder read it."""
+
+    node_id: str
+    entity_type: str
+    name: str
+
+
+class AlertLinkSnapshot(BaseModel):
+    """A link an alert cites as evidence."""
+
+    edge_id: str
+    type: str
+    source_name: str
+    target_name: str
+
+
+class AlertTransactionSnapshot(BaseModel):
+    """A transaction an alert cites as evidence: when, how much, between whom."""
+
+    occurred_at: datetime
+    amount: float | None = None
+    source_name: str
+    target_name: str
+
+
+class AlertSnapshot(BaseModel):
+    """An alert as its adder read it (ADR-134 decision 1): its explanation, the entity it matched,
+    its evidence, and its outcome and reason if it was closed. Frozen when added, like every item;
+    `status` says what it was then, so an alert still open says so."""
+
+    alert_id: str
+    kind: AlertKind
+    severity: AlertSeverity
+    #: The alert in words: the rule's sentence or the typology's, each entity named.
+    explanation: str
+    typology: str | None = None
+    #: The hotlisted identifier it matched, for a hotlist alert.
+    hotlist_entry: str | None = None
+    window: Interval | None = None
+    raised_at: datetime
+    entities: list[AlertEntitySnapshot] = Field(default_factory=list)
+    links: list[AlertLinkSnapshot] = Field(default_factory=list)
+    transactions: list[AlertTransactionSnapshot] = Field(default_factory=list)
+    status: AlertStatus
+    outcome: AlertDisposition | None = None
+    reason: str | None = None
+    #: Rule 5: a match no person has confirmed is `inferred`, and the pack says so.
+    match: Literal["inferred", "confirmed"]
+    #: Every node it cites, its own included: checked again as each reader, when read.
+    node_ids: list[str] = Field(default_factory=list)
+
+
 class PackItem(BaseModel):
     """One item as a reader gets it. It carries no position: the order of the list is the order, so
     a withheld item leaves no gap that says where it was."""
@@ -55,6 +109,7 @@ class PackItem(BaseModel):
     assessment: AssessmentSnapshot | None = None
     entity: EntitySnapshot | None = None
     note: str | None = None
+    alert: AlertSnapshot | None = None
     #: Set only on an earlier snapshot in the pack's history: when it was refreshed, and by what.
     replaced_at: datetime | None = None
     replaced_by: str | None = None
@@ -68,6 +123,8 @@ class AddPackItem(BaseModel):
     trend_id: str | None = None
     judgement_id: str | None = None
     node_id: str | None = None
+    #: An alert of the adder's queue in this case (ADR-134 decision 1).
+    alert_id: str | None = None
     caption: str | None = Field(default=None, max_length=500)
     text: str | None = Field(default=None, max_length=4000)
     #: A note's marking, stated by its author (Amendment 1): never above their own clearance.
@@ -218,6 +275,10 @@ class PackExport(BaseModel):
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     AssessmentSnapshot,
     EntitySnapshot,
+    AlertEntitySnapshot,
+    AlertLinkSnapshot,
+    AlertTransactionSnapshot,
+    AlertSnapshot,
     PackItem,
     AddPackItem,
     PackInput,

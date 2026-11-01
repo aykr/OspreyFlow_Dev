@@ -1,9 +1,10 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
-export type Kind = "trend" | "assessment" | "entity" | "note";
+export type Kind = "trend" | "assessment" | "entity" | "note" | "alert";
 export type TrendId = string | null;
 export type JudgementId = string | null;
 export type NodeId = string | null;
+export type AlertId = string | null;
 export type Caption = string | null;
 export type Text = string | null;
 export type Classification = string | null;
@@ -18,6 +19,7 @@ export interface AddPackItem {
   trend_id?: TrendId;
   judgement_id?: JudgementId;
   node_id?: NodeId;
+  alert_id?: AlertId;
   caption?: Caption;
   text?: Text;
   classification?: Classification;

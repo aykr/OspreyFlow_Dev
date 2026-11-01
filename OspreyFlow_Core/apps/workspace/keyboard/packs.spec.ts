@@ -58,6 +58,19 @@ test("a note is added to a pack by keyboard, with a marking chosen", async ({ pa
   registerCovered(REGISTRY, "add-a-note-to-a-pack-by-keyboard");
 });
 
+test("an alert from the case's queue is added to a pack by keyboard", async ({ page }) => {
+  const calls = await serveWorld(page, world({ packs: [PACK], items: [TREND_ITEM] }));
+  await page.goto("/keyboard/packs-harness.html");
+  await openPack(page);
+  await page.getByRole("combobox", { name: "Item kind" }).selectOption("alert");
+  await page.getByRole("combobox", { name: "Alert" }).selectOption("a1");
+  await page.getByRole("button", { name: "Add item" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => calls.find((c) => c.method === "POST" && c.path === "packs/p1/items")?.body).toEqual({ kind: "alert", alert_id: "a1" });
+  await expect(page.getByText("Added to the pack.")).toBeVisible();
+  registerCovered(REGISTRY, "add-an-alert-to-a-pack-by-keyboard");
+});
+
 test("an item is moved by keyboard", async ({ page }) => {
   const calls = await serveWorld(page, world({ packs: [PACK], items: [TREND_ITEM, NOTE_ITEM] }));
   await page.goto("/keyboard/packs-harness.html");

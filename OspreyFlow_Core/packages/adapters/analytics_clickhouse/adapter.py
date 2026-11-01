@@ -26,9 +26,12 @@ from datetime import UTC, date, datetime
 from typing import Any, cast
 
 from adapters.analytics_duckdb.access_filter import AccessFilter, SqlPredicate
+from adapters.analytics_duckdb.alert_facts import alert_predicate, series_expression
 from ontology.handling import HandlingScheme
 from ports.analytics import TrendLimitExceeded
 from schemas.analytics import (
+    AlertFact,
+    AlertTrendRequest,
     BaselineRequest,
     BaselineResult,
     CountedHandling,
@@ -346,6 +349,106 @@ class AnalyticsClickHouseAdapter:
             unvalued=int(sum(r[4] for r in rows)),
             classifications=classifications,
             handlings=handlings,
+        )
+
+    # --- alert trends (ADR-134 decision 3) --------------------------------------------------------
+
+    async def alert_trend(self, req: AlertTrendRequest, principal: Principal) -> TrendResult:
+        """The DuckDB adapter's, over the same predicate (`alert_facts.py`)."""
+        predicate = alert_predicate(req, principal, self._access)
+        period = (
+            "toMonday(raised_at)"
+            if req.interval is TrendInterval.WEEK
+            else "toStartOfMonth(raised_at)"
+        )
+        series = series_expression(req)
+        bounds = await self._ch.rows(
+            f"SELECT uniqExact({period}), count(DISTINCT {series}) FROM alert_facts "
+            f"WHERE {predicate.where}",
+            predicate.params,
+        )
+        periods, groups = (int(bounds[0][0]), int(bounds[0][1])) if bounds else (0, 0)
+        if periods > req.max_periods:
+            raise TrendLimitExceeded("periods", req.max_periods, periods)
+        if groups > req.max_series:
+            raise TrendLimitExceeded("series", req.max_series, groups)
+        rows = await self._ch.rows(
+            f"SELECT {period} AS period, {series} AS series, count() AS n FROM alert_facts "
+            f"WHERE {predicate.where} GROUP BY period, series "
+            "ORDER BY period, series ASC NULLS FIRST",
+            predicate.params,
+        )
+        counted = f"alert_id IN (SELECT alert_id FROM alert_facts WHERE {predicate.where})"
+        handlings = [
+            CountedHandling(
+                classification=str(c), handling_code=str(h), owning_unit=str(u), originator=str(o)
+            )
+            for c, h, u, o in await self._ch.rows(
+                "SELECT DISTINCT handling_classification, handling_code, owning_unit, originator "
+                f"FROM alert_fact_handlings WHERE {counted} ORDER BY 1, 2, 3, 4",
+                predicate.params,
+            )
+        ]
+        points = [
+            TrendPoint(period_start=_time(p), series=None if g is None else str(g), value=float(n))
+            for p, g, n in rows
+        ]
+        return TrendResult(
+            interval=req.interval,
+            measure=TrendMeasure.COUNT,
+            points=points,
+            series=sorted({pt.series for pt in points if pt.series is not None}),
+            total=float(sum(pt.value for pt in points)),
+            events=int(sum(int(r[2]) for r in rows)),
+            classifications=sorted({h.classification for h in handlings}),
+            handlings=handlings,
+        )
+
+    async def load_alert_facts(self, facts: Sequence[AlertFact]) -> None:
+        """Each fact replaces what was kept for its alert: its rows deleted (the mutation waited
+        for), then written again. Unproven on a real ClickHouse here: no server ran in this
+        build."""
+        if not facts:
+            return
+        ids = [f.alert_id for f in facts]
+        for table in ("alert_facts", "alert_fact_handlings"):
+            await self._ch.command(
+                f"ALTER TABLE {table} DELETE WHERE has(?, alert_id)" + _SYNC, [ids]
+            )
+        await self._ch.insert(
+            "alert_facts",
+            [
+                {
+                    "alert_id": f.alert_id,
+                    "investigation_scope": f.investigation_scope,
+                    "kind": f.kind,
+                    "rule": f.rule,
+                    "typology": f.typology,
+                    "severity": f.severity,
+                    "outcome": f.outcome,
+                    "raised_at": utc_text(f.raised_at),
+                    "owner_id": f.owner_id,
+                    "audience": f.audience,
+                    "team": f.team,
+                    "dataset_id": f.dataset_id,
+                    "known": 0 if f.handlings is None else 1,
+                }
+                for f in facts
+            ],
+        )
+        await self._ch.insert(
+            "alert_fact_handlings",
+            [
+                {
+                    "alert_id": f.alert_id,
+                    "handling_classification": h.classification,
+                    "handling_code": h.handling_code,
+                    "owning_unit": h.owning_unit,
+                    "originator": h.originator,
+                }
+                for f in facts
+                for h in f.handlings or []
+            ],
         )
 
     async def _fixed_interval_histogram(

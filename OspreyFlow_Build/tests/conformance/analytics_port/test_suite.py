@@ -2112,3 +2112,204 @@ async def test_events_of_load_among_is_not_what_it_was_after_a_retract(
         assert len(await adapter.events_of_load_among(LOAD_A, ids)) == 3
         assert await adapter.retract_load(LOAD_A) == 3
         assert await adapter.events_of_load_among(LOAD_A, ids) == set()
+
+
+# --- alert trends (ADR-134 decision 3) --------------------------------------------------------------
+#
+# Written before either adapter had `alert_trend` (rule 1). An alert's visibility is all or nothing
+# over every handling it rests on, its audience (the case for a typology alert; the owner, or the
+# owner's team when shared, for a hotlist or monitor alert) and the reader's datasets — each decided
+# in the query. Each "hidden" plant below is a fact that differs from a visible one in exactly the
+# one respect under test, so a trend that ignored that respect would count it.
+
+from schemas.analytics import AlertFact, AlertTrendRequest  # noqa: E402
+
+COLLEAGUE = Principal(id="colleague", clearance="SECRET", org_unit="unit-1")
+STRANGER = Principal(id="stranger", clearance="SECRET", org_unit="unit-2")
+ALERT_WINDOW = Interval(valid_from=datetime(2026, 1, 1, tzinfo=UTC), valid_to=datetime(2026, 6, 30, tzinfo=UTC))
+
+
+def _fact(
+    *,
+    raised_at: datetime,
+    kind: str = "typology",
+    rule: str = "typology:r1",
+    typology: str | None = "structuring",
+    severity: str = "medium",
+    outcome: str = "open",
+    owner_id: str = "analyst-official",
+    audience: str = "case",
+    team: str | None = None,
+    dataset_id: str | None = None,
+    investigation_scope: str | None = INVESTIGATION,
+    handlings: list[Handling] | None = None,
+    alert_id: str | None = None,
+) -> AlertFact:
+    return AlertFact(
+        alert_id=alert_id or str(ULID()), investigation_scope=investigation_scope, kind=kind,  # type: ignore[arg-type]
+        rule=rule, typology=typology if kind == "typology" else None, severity=severity,  # type: ignore[arg-type]
+        outcome=outcome, raised_at=raised_at, owner_id=owner_id, audience=audience,  # type: ignore[arg-type]
+        team=team, dataset_id=dataset_id,
+        handlings=[_handling("OFFICIAL")] if handlings is None else handlings,
+    )  # fmt: skip
+
+
+def _alerts(**kwargs: object) -> AlertTrendRequest:
+    return AlertTrendRequest(investigation_scope=INVESTIGATION, window=ALERT_WINDOW, **kwargs)  # type: ignore[arg-type]
+
+
+async def _alert_trend(factory: AnalyticsAdapterFactory, facts: list[AlertFact], req: AlertTrendRequest,
+                       *readers: Principal) -> list[TrendResult]:  # fmt: skip
+    async with factory.context([]) as adapter:
+        await adapter.load_alert_facts(facts)
+        return [await adapter.alert_trend(req, reader) for reader in readers]
+
+
+async def test_alert_trend_counts_alerts_raised_per_week_and_month(factory: AnalyticsAdapterFactory) -> None:
+    facts = [_fact(raised_at=_week(0)), _fact(raised_at=_week(3)), _fact(raised_at=_week(8))]
+    weekly, = await _alert_trend(factory, facts, _alerts(), OFFICIAL)
+    assert [(p.period_start.date().isoformat(), p.value) for p in weekly.points] == [
+        ("2026-01-05", 2.0), ("2026-01-12", 1.0)]  # fmt: skip
+    assert (weekly.total, weekly.events, weekly.series) == (3.0, 3, [])
+    monthly, = await _alert_trend(factory, facts, _alerts(interval=TrendInterval.MONTH), OFFICIAL)
+    assert [(p.period_start.date().isoformat(), p.value) for p in monthly.points] == [("2026-01-01", 3.0)]
+
+
+async def test_alert_trend_splits_by_rule_typology_severity_or_outcome(factory: AnalyticsAdapterFactory) -> None:
+    facts = [
+        _fact(raised_at=_week(0), rule="typology:r1", typology="structuring", severity="medium", outcome="open"),
+        _fact(raised_at=_week(0), rule="typology:r2", typology="rapid_movement", severity="low",
+              outcome="true_positive"),
+        _fact(raised_at=_week(1), kind="hotlist", rule="hotlists", severity="high", outcome="claimed",
+              audience="owner"),
+        _fact(raised_at=_week(1), kind="monitor", rule="monitors", severity="medium", outcome="false_positive",
+              audience="owner"),
+    ]  # fmt: skip
+    by = {}
+    for field in ("rule", "typology", "severity", "outcome"):
+        (by[field],) = await _alert_trend(factory, facts, _alerts(group_by=field), OFFICIAL)
+    assert by["rule"].series == ["hotlists", "monitors", "typology:r1", "typology:r2"]
+    assert by["typology"].series == ["rapid_movement", "structuring"], "a hotlist has no typology: no series"
+    assert by["typology"].total == 4.0, "an alert with no typology still counts, under no series"
+    assert by["severity"].series == ["high", "low", "medium"]
+    assert by["outcome"].series == ["claimed", "false_positive", "open", "true_positive"]
+
+
+async def test_alert_trend_filters_by_equalities(factory: AnalyticsAdapterFactory) -> None:
+    facts = [_fact(raised_at=_week(0), severity="high"), _fact(raised_at=_week(0), severity="low"),
+             _fact(raised_at=_week(0), severity="high", outcome="true_positive")]  # fmt: skip
+    (high,) = await _alert_trend(factory, facts, _alerts(filters={"severity": ["high"]}), OFFICIAL)
+    (both,) = await _alert_trend(
+        factory, facts, _alerts(filters={"severity": ["high"], "outcome": ["open"]}), OFFICIAL)
+    assert (high.events, both.events) == (2, 1)
+
+
+async def test_an_alert_resting_on_a_handling_the_reader_may_not_view_moves_nothing(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """ADR-134's test: "an alert trend counted as a reader leaves out alerts on nodes they may not
+    see". The hidden alert rests on one OFFICIAL and one SECRET handling, so a trend that checked
+    any one handling, rather than every one, would count it."""
+    visible = [_fact(raised_at=_week(0), severity="medium")]
+    hidden = _fact(raised_at=_week(8), severity="high", handlings=[_handling("OFFICIAL"), _handling("SECRET")])
+    req = _alerts(group_by="severity")
+    (before,) = await _alert_trend(factory, visible, req, OFFICIAL)
+    after, cleared = await _alert_trend(factory, [*visible, hidden], req, OFFICIAL, CLEARED)
+    assert after == before, "a hidden alert adds no point, series, total, classification or handling"
+    assert cleared.events == 2 and cleared.series == ["high", "medium"]
+    assert set(cleared.classifications) == {"OFFICIAL", "SECRET"}
+
+
+async def test_an_alert_on_a_restricted_handling_is_counted_only_within_its_units(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    restricted = _handling("OFFICIAL", handling_code="R", owning_unit="unit-1", originator="unit-9")
+    facts = [_fact(raised_at=_week(0), handlings=[restricted])]
+    receives_r = Principal(id="r-in", clearance="OFFICIAL", org_unit="unit-1", receivable_handling_codes=["R"])
+    elsewhere = Principal(id="r-out", clearance="SECRET", org_unit="unit-2", receivable_handling_codes=["R"])
+    inside, cleared_only, outside = await _alert_trend(factory, facts, _alerts(), receives_r, CLEARED, elsewhere)
+    assert (inside.events, cleared_only.events, outside.events) == (1, 0, 0)
+    assert [(h.handling_code, h.originator) for h in inside.handlings] == [("R", "unit-9")]
+
+
+async def test_an_alert_with_handlings_not_known_is_counted_for_no_one(factory: AnalyticsAdapterFactory) -> None:
+    """Fail closed: an alert kept before its handlings were, counted by nobody — not its owner,
+    not the most cleared reader. An alert citing nothing (a `notify` stub) is its owner's."""
+    unknown = AlertFact.model_validate({**_fact(raised_at=_week(0)).model_dump(), "handlings": None})
+    stub = _fact(raised_at=_week(0), kind="hotlist", rule="hotlists", audience="owner", owner_id="analyst-secret",
+                 handlings=[])  # fmt: skip
+    owner, official = await _alert_trend(factory, [unknown, stub], _alerts(), CLEARED, OFFICIAL)
+    assert (owner.events, official.events) == (1, 0)
+
+
+async def test_an_only_me_hotlist_alert_is_counted_for_its_owner_and_no_one_else(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """ADR-133 decision 5 through ADR-134 decision 2: kept "only me", a hotlist's alerts are its
+    owner's alone — a colleague in the same unit, cleared higher, does not count them. Shared with
+    the team, the colleague does; someone of another unit still does not."""
+    mine = _fact(raised_at=_week(0), kind="hotlist", rule="hotlists", audience="owner", owner_id="analyst-official",
+                 team="unit-1")  # fmt: skip
+    shared = _fact(raised_at=_week(1), kind="monitor", rule="monitors", audience="team", owner_id="analyst-official",
+                   team="unit-1")  # fmt: skip
+    owner, colleague, stranger = await _alert_trend(
+        factory, [mine, shared], _alerts(group_by="rule"), OFFICIAL, COLLEAGUE, STRANGER)
+    assert owner.series == ["hotlists", "monitors"]
+    assert colleague.series == ["monitors"] and colleague.events == 1
+    assert stranger.events == 0
+
+
+async def test_a_case_alert_is_counted_in_its_own_case_only(factory: AnalyticsAdapterFactory) -> None:
+    facts = [_fact(raised_at=_week(0)), _fact(raised_at=_week(0), investigation_scope="case-2")]
+    reader, = await _alert_trend(factory, facts, _alerts(), STRANGER)
+    assert reader.events == 1, "a typology alert is its case's members', whoever deployed the rule"
+
+
+async def test_an_alert_outside_the_readers_datasets_is_not_counted(factory: AnalyticsAdapterFactory) -> None:
+    """ADR-099's third axis, as the queue reads it (`reach_clause`): an alert of another dataset is
+    not in the case's world; one that names no dataset stays in reach."""
+    facts = [_fact(raised_at=_week(0), dataset_id="ds-1"), _fact(raised_at=_week(0), dataset_id="ds-2"),
+             _fact(raised_at=_week(0), dataset_id=None)]  # fmt: skip
+    in_case = OFFICIAL.model_copy(update={"datasets": ["ds-1"]})
+    no_datasets = OFFICIAL.model_copy(update={"datasets": []})
+    scoped, nothing, unlimited = await _alert_trend(factory, facts, _alerts(), in_case, no_datasets, OFFICIAL)
+    assert (scoped.events, nothing.events, unlimited.events) == (2, 1, 3)
+
+
+async def test_an_alert_kept_twice_is_counted_once_as_it_now_is(factory: AnalyticsAdapterFactory) -> None:
+    """Rule 12: the invariant "each write replaces what was kept for the alert" is exercised by
+    writing the same alert twice — once open on an OFFICIAL handling, then closed and resting on a
+    SECRET one. Kept as two rows, OFFICIAL would still count it, and CLEARED would count it twice."""
+    first = _fact(raised_at=_week(0), alert_id="a-1", outcome="open")
+    second = _fact(raised_at=_week(0), alert_id="a-1", outcome="true_positive", handlings=[_handling("SECRET")])
+    async with factory.context([]) as adapter:
+        await adapter.load_alert_facts([first])
+        await adapter.load_alert_facts([second])
+        official = await adapter.alert_trend(_alerts(), OFFICIAL)
+        cleared = await adapter.alert_trend(_alerts(group_by="outcome"), CLEARED)
+    assert official.events == 0
+    assert (cleared.events, cleared.series) == (1, ["true_positive"])
+
+
+async def test_an_alert_trend_past_its_bounds_is_refused_not_cut(factory: AnalyticsAdapterFactory) -> None:
+    """ADR-134's test: bounded as event trends are (104 periods, 12 series by default), refused
+    whole, counted from what the reader sees — a hidden alert in a fourth week tips nothing."""
+    assert (AlertTrendRequest.model_fields["max_periods"].default, AlertTrendRequest.model_fields["max_series"].default) == (104, 12)
+    facts = [_fact(raised_at=_week(7 * i), rule=f"typology:r{i}") for i in range(4)]
+    hidden = _fact(raised_at=datetime(2026, 2, 2, 12, tzinfo=UTC), rule="typology:r9", handlings=[_handling("SECRET")])
+    async with factory.context([]) as adapter:
+        await adapter.load_alert_facts([*facts, hidden])
+        with pytest.raises(TrendLimitExceeded) as periods:
+            await adapter.alert_trend(_alerts(max_periods=3), OFFICIAL)
+        with pytest.raises(TrendLimitExceeded) as series:
+            await adapter.alert_trend(_alerts(group_by="rule", max_series=3), OFFICIAL)
+        within = await adapter.alert_trend(_alerts(max_periods=4, group_by="rule", max_series=4), OFFICIAL)
+    assert (periods.value.cap_kind, periods.value.would_be) == ("periods", 4)
+    assert (series.value.cap_kind, series.value.would_be) == ("series", 4)
+    assert within.events == 4
+
+
+async def test_an_alert_trend_counts_only_within_its_window(factory: AnalyticsAdapterFactory) -> None:
+    facts = [_fact(raised_at=_week(0)), _fact(raised_at=datetime(2025, 12, 1, tzinfo=UTC))]
+    (result,) = await _alert_trend(factory, facts, _alerts(), OFFICIAL)
+    assert result.events == 1

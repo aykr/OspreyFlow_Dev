@@ -499,13 +499,13 @@ from .packs import (
     PackItemRefused,
     PackStore,
     StoredPackItem,
+    alert_item,
     assessment_item,
     entity_item,
     export_pack,
     highest_marking,
     note_item,
     readable,
-    reorder_visible,
     trend_item,
 )
 from .pattern_ask import (
@@ -650,7 +650,9 @@ from .trends import (
     check_in_case_domains,
     highest,
     mark_outside_case_domains,
+    name_alert_series,
     name_series,
+    to_alert_request,
     to_request,
     trend_options,
     validate_definition,
@@ -803,6 +805,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.hotlists_store = hotlists_store
     app.state.monitors_store = monitors_store
     app.state.alerts_store = alerts_store
+    # ADR-134 decision 3: the analytics store's alert facts brought into line with the alert store
+    # at every start, so alert trends recover from any write the analytics store missed.
+    await alerts_store.publish_all_facts()
     app.state.typology_rules = typology_rules
     app.state.held_rows = held_rows
     app.state.screening_lists = screening_lists
@@ -4560,13 +4565,16 @@ async def set_hotlist_audience_route(
     hotlists_store: HotlistsStoreDep,
     monitoring: MonitoringSettingsDep,
     audit: AuditDep,
+    alerts_store: AlertsStoreDep,
 ) -> Hotlist:
     """ADR-133 ruling 3: the owner chooses whom their hotlist's alerts reach — only them, or their
     team too. Another's hotlist is not found (the store's owner check, in the statement). Refused in
-    words when the deployment does not let owners choose."""
+    words when the deployment does not let owners choose. Its alerts are kept again for alert
+    trends (ADR-134 decision 3), so the team's trends follow the choice at once."""
     if not monitoring.hotlist_audience_editable:
         raise HotlistAudienceFixed(monitoring.hotlist_audience)
     hotlist = await hotlists_store.set_audience(hotlist_id, principal, body.audience)
+    await alerts_store.publish_rule_facts(f"hotlist:{hotlist.id}")
     await audit.record(
         principal=principal,
         action="hotlist_audience_changed",
@@ -6014,7 +6022,11 @@ async def list_alerts_route(
     graph: GraphDep,
     hotlists_store: HotlistsStoreDep,
 ) -> AlertList:
-    """ADR-099 Amendment 3: the alerts of the case's datasets, read as the case reads."""
+    """The reader's own alerts — those raised to them, by their hotlists, monitors and rules
+    (`owner_id`, in the store's query) — within the case's datasets (ADR-099 Amendment 3, the reach
+    clause), newest first. Not the case's alerts: another member's are not listed here; the case's
+    rule-raised alerts are the one queue's (`/alert-queue`). Corrected by ADR-134 decision 5: this
+    said "the alerts of the case's datasets", which the store never read."""
     rows = await alerts_store.list_authorized(principal)
     return AlertList(
         alerts=[await alert_to_view(a, principal, graph, hotlists_store) for a in rows]
@@ -9601,11 +9613,16 @@ async def case_event_holders_route(
     dependencies=[Depends(require_right(Right.RUN_ANALYSIS))],
 )
 async def trend_options_route(
-    investigation: InvestigationViewerDep, ontology: OntologyDep
+    investigation: InvestigationViewerDep,
+    ontology: OntologyDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
 ) -> TrendOptions:
     """The event types and properties a trend may use: this deployment's ontology, narrowed to
-    the core types and the case's own domain packs (ADR-126 decision 6)."""
-    return trend_options(ontology, investigation.domains)
+    the core types and the case's own domain packs (ADR-126 decision 6); and what an alert trend
+    may split by, with the case's rules as the reader may read them (ADR-134 decision 3)."""
+    rules = await typology_rules.list_for_case(investigation.id, principal)
+    return trend_options(ontology, investigation.domains, rules)
 
 
 async def _trend_figures(
@@ -9618,15 +9635,28 @@ async def _trend_figures(
     audit: AuditWriter,
     working_set: WorkingSetService,
     handling_scheme: HandlingScheme,
+    typology_rules: TypologyRuleStore,
 ) -> TrendFigures:
     """The trend counted for this reader now (rule 3): the case's own events, a branch's inherited
-    ones with them, nothing the reader may not see."""
+    ones with them, nothing the reader may not see. An alert trend (ADR-134 decision 3) is the
+    analytics port's `alert_trend`, filtered in its query as the reader, its rules named after."""
     validate_definition(defn, ontology)
     now = datetime.now(UTC)
-    request, start = to_request(defn, ontology, case.id, now)
-    scoped = await _case_event_filter(request.filter, principal, investigations, audit, working_set)
-    result = await analytics.trend(request.model_copy(update={"filter": scoped}), principal)
-    result = name_series(result, defn, ontology)
+    if defn.source == "alerts":
+        alert_request, start = to_alert_request(defn, case.id, now)
+        result = await analytics.alert_trend(alert_request, principal)
+        if defn.group_by == "rule":
+            rules = await typology_rules.list_for_case(case.id, principal)
+        else:
+            rules = []
+        result = name_alert_series(result, defn, rules)
+    else:
+        request, start = to_request(defn, ontology, case.id, now)
+        scoped = await _case_event_filter(
+            request.filter, principal, investigations, audit, working_set
+        )
+        result = await analytics.trend(request.model_copy(update={"filter": scoped}), principal)
+        result = name_series(result, defn, ontology)
     return TrendFigures(
         definition=TrendDefinitionInput.model_validate(
             defn.model_dump(include=set(TrendDefinitionInput.model_fields))
@@ -9652,10 +9682,12 @@ async def preview_trend(
     audit: AuditDep,
     working_set: WorkingSetDep,
     handling_scheme: HandlingSchemeDep,
+    typology_rules: TypologyRulesDep,
 ) -> TrendFigures:
     check_in_case_domains(body, ontology, investigation.domains)
     figures = await _trend_figures(body, investigation, principal, ontology, analytics,
-                                   investigations, audit, working_set, handling_scheme)  # fmt: skip
+                                   investigations, audit, working_set, handling_scheme,
+                                   typology_rules)  # fmt: skip
     await audit.record(principal=principal, action="preview_trend",
                        investigation_id=investigation.id,
                        resolved_query=body.model_dump(mode="json"),
@@ -9716,12 +9748,14 @@ async def trend_figures(
     working_set: WorkingSetDep,
     handling_scheme: HandlingSchemeDep,
     trends: TrendStoreDep,
+    typology_rules: TypologyRulesDep,
 ) -> TrendFigures:
     saved = await trends.get(investigation.id, trend_id)
     if saved is None:
         raise HTTPException(status_code=404, detail="no such trend in this case")
     figures = await _trend_figures(saved, investigation, principal, ontology, analytics,
-                                   investigations, audit, working_set, handling_scheme)  # fmt: skip
+                                   investigations, audit, working_set, handling_scheme,
+                                   typology_rules)  # fmt: skip
     await audit.record(principal=principal, action="read_trend", investigation_id=investigation.id,
                        resolved_query={"trend": trend_id},
                        result_cardinality=figures.result.events)  # fmt: skip
@@ -9796,11 +9830,12 @@ async def _readable_draft(
     scheme: HandlingScheme,
     graph: GraphPort,
     case_id: str,
-) -> tuple[list[StoredPackItem], list[StoredPackItem], int]:
-    """The draft's items in order, those this reader may see, and how many they may not."""
-    items = await packs.items(pack_id)
-    shown, withheld = await readable(items, reader, scheme, graph, case_id)
-    return items, shown, withheld
+) -> tuple[list[StoredPackItem], bool]:
+    """The draft's items this reader may see, in order, and whether any are withheld from them:
+    filtered in the store's query as the reader, then checked again against the graph now (ADR-134
+    decision 4). No item withheld from the reader reaches this function."""
+    items, in_store = await packs.readable_items(pack_id, reader, scheme)
+    return await readable(items, reader, scheme, graph, case_id, withheld_in_store=in_store)
 
 
 @app.post(
@@ -9852,7 +9887,7 @@ async def read_pack(
 ) -> PackDraft:
     """The draft as this reader may see it: the items withheld from them are counted, not named."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    _, shown, withheld = await _readable_draft(
+    shown, withheld = await _readable_draft(
         packs, pack.id, principal, scheme, graph, investigation.id
     )
     served = [i.served() for i in shown]
@@ -9865,7 +9900,7 @@ async def read_pack(
     )
     (named,) = await _named_packs([pack], principal_names)
     return PackDraft(
-        pack=named, items=served, withheld=withheld > 0, marking=highest_marking(served, scheme)
+        pack=named, items=served, withheld=withheld, marking=highest_marking(served, scheme)
     )
 
 
@@ -9889,9 +9924,12 @@ async def add_pack_item(
     investigations: InvestigationsDep,
     working_set: WorkingSetDep,
     audit: AuditDep,
+    alerts_store: AlertsStoreDep,
+    typology_rules: TypologyRulesDep,
 ) -> PackItem:
     """The content is read and frozen here, as the adder — never taken from the request, except a
-    caption and a note's own words."""
+    caption and a note's own words. An alert (ADR-134 decision 1) is one of the adder's queue in
+    this case, read whole as them, or not found."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     item = await _build_pack_item(
         body,
@@ -9906,6 +9944,8 @@ async def add_pack_item(
         investigations,
         audit,
         working_set,
+        alerts_store,
+        typology_rules,
     )
     await packs.add_item(pack.id, item)
     await audit.record(
@@ -9931,14 +9971,25 @@ async def _build_pack_item(
     investigations: InvestigationStore,
     audit: AuditWriter,
     working_set: WorkingSetService,
+    alerts_store: AlertStore,
+    typology_rules: TypologyRuleStore,
 ) -> StoredPackItem:
+    if body.kind == "alert":
+        try:
+            explained, events = await alert_queue.explain_with_evidence(
+                alerts_store, graph, analytics, case.id, body.alert_id or "", principal
+            )
+        except AlertNotFoundError as missing:
+            raise HTTPException(status_code=404, detail="no such alert in this case") from missing
+        return alert_item(explained, events, principal, scheme)
     if body.kind == "trend":
         saved = await trends.get(case.id, body.trend_id) if body.trend_id else None
         if saved is None:
             raise HTTPException(status_code=404, detail="no such trend in this case")
         figures = await _trend_figures(
-            saved, case, principal, ontology, analytics, investigations, audit, working_set, scheme
-        )
+            saved, case, principal, ontology, analytics, investigations, audit, working_set, scheme,
+            typology_rules,
+        )  # fmt: skip
         return trend_item(saved.id, figures, principal, scheme)
     if body.kind == "assessment":
         try:
@@ -9979,7 +10030,7 @@ async def remove_pack_item(
     audit: AuditDep,
 ) -> None:
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    _, shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
+    shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
     if item_id not in {i.id for i in shown} or not await packs.remove_item(pack.id, item_id):
         raise HTTPException(status_code=404, detail="no such item in this pack")
     await audit.record(
@@ -10008,20 +10059,22 @@ async def reorder_pack(
 ) -> PackDraft:
     """Only the reader's own items move; each item withheld from them keeps its place."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    items, shown, withheld = await _readable_draft(
+    shown, withheld = await _readable_draft(
         packs, pack.id, principal, scheme, graph, investigation.id
     )
+    if sorted(body.item_ids) != sorted(i.id for i in shown):
+        raise PackItemRefused("the new order must name each item you can see exactly once")
     try:
-        order = reorder_visible([i.id for i in items], {i.id for i in shown}, body.item_ids)
+        # The withheld items' places are worked out in the store, as the reader (rule 3).
+        await packs.reorder_visible(pack.id, principal, scheme, body.item_ids)
     except ValueError as exc:
         raise PackItemRefused(str(exc)) from exc
-    await packs.set_order(pack.id, order)
     await audit.record(
         principal=principal,
         action="reorder_pack",
         investigation_id=investigation.id,
         resolved_query={"pack": pack.id},
-        result_cardinality=len(order),
+        result_cardinality=len(body.item_ids),
     )
     by_id = {i.id: i for i in shown}
     served = [by_id[i].served() for i in body.item_ids]
@@ -10031,7 +10084,7 @@ async def reorder_pack(
     return PackDraft(
         pack=named,
         items=served,
-        withheld=withheld > 0,
+        withheld=withheld,
         marking=highest_marking(served, scheme),
     )
 
@@ -10056,18 +10109,25 @@ async def refresh_pack_item(
     investigations: InvestigationsDep,
     working_set: WorkingSetDep,
     audit: AuditDep,
+    alerts_store: AlertsStoreDep,
+    typology_rules: TypologyRulesDep,
 ) -> PackItem:
-    """A trend snapshot counted again, now, as the refresher; the earlier one stays in the
-    history (decision 4)."""
+    """A trend snapshot counted again, or an alert read again (ADR-134 decision 1: so an alert
+    added while open can say how it was closed), now, as the refresher; the earlier one stays in
+    the history (decision 4)."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    _, shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
+    shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
     old = next((i for i in shown if i.id == item_id), None)
     if old is None:
         raise HTTPException(status_code=404, detail="no such item in this pack")
-    if old.kind != "trend" or old.trend_id is None:
-        raise PackItemRefused("only a trend snapshot is refreshed")
+    if old.kind == "trend" and old.trend_id is not None:
+        again = AddPackItem(kind="trend", trend_id=old.trend_id)
+    elif old.kind == "alert" and old.alert is not None:
+        again = AddPackItem(kind="alert", alert_id=old.alert.alert_id)
+    else:
+        raise PackItemRefused("only a trend snapshot or an alert is refreshed")
     new = await _build_pack_item(
-        AddPackItem(kind="trend", trend_id=old.trend_id),
+        again,
         investigation,
         principal,
         graph,
@@ -10079,6 +10139,8 @@ async def refresh_pack_item(
         investigations,
         audit,
         working_set,
+        alerts_store,
+        typology_rules,
     )
     if not await packs.replace_item(pack.id, old.id, new):
         raise HTTPException(status_code=404, detail="no such item in this pack")
@@ -10108,10 +10170,12 @@ async def pack_history(
     (pack,) = await _named_packs(
         [await _pack_or_404(packs, investigation.id, pack_id)], principal_names
     )
-    earlier = await packs.earlier_snapshots(pack.id)
-    shown, withheld = await readable(earlier, principal, scheme, graph, investigation.id)
+    earlier, in_store = await packs.readable_earlier(pack.id, principal, scheme)
+    shown, withheld = await readable(
+        earlier, principal, scheme, graph, investigation.id, withheld_in_store=in_store
+    )
     return PackHistory(
-        earlier_snapshots=[i.served() for i in shown], withheld=withheld > 0, versions=pack.versions
+        earlier_snapshots=[i.served() for i in shown], withheld=withheld, versions=pack.versions
     )
 
 
@@ -10133,13 +10197,13 @@ async def publish_pack(
     """A new immutable version. Refused while the draft holds an item the publisher may not see:
     nobody publishes what they cannot read (Amendment 1)."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    items, _, withheld = await _readable_draft(
+    shown, withheld = await _readable_draft(
         packs, pack.id, principal, scheme, graph, investigation.id
     )
-    if not items:
-        raise PackItemRefused("an empty pack has nothing to publish")
     if withheld:
         raise PackHasWithheldItems()
+    if not shown:
+        raise PackItemRefused("an empty pack has nothing to publish")
     version = await packs.publish(pack.id, principal)
     await audit.record(
         principal=principal,
@@ -10245,10 +10309,13 @@ async def read_published_pack(
 ) -> PublishedPack:
     """The newest published version as this reader may see it (decision 5): every read audited."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    version = await packs.latest_published(pack.id)
-    if version is None:
+    found = await packs.readable_version(pack.id, principal, scheme)
+    if found is None:
         raise HTTPException(status_code=404, detail="this pack has no publication")
-    shown, withheld = await readable(version.items, principal, scheme, graph, investigation.id)
+    version, items, in_store = found
+    shown, withheld = await readable(
+        items, principal, scheme, graph, investigation.id, withheld_in_store=in_store
+    )
     served = [i.served() for i in shown]
     await audit.record(
         principal=principal,
@@ -10268,7 +10335,7 @@ async def read_published_pack(
             version.published_by
         ),
         items=served,
-        withheld=withheld > 0,
+        withheld=withheld,
         marking=highest_marking(served, scheme),
     )
 
@@ -10294,12 +10361,14 @@ async def export_pack_route(
     approved manifest, from which the Glass renders the PDF. Editor and `export`, as every
     export."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    version = await packs.latest_published(pack.id)
-    if version is None:
+    found = await packs.readable_version(pack.id, principal, scheme)
+    if found is None:
         raise HTTPException(status_code=404, detail="this pack has no publication to export")
+    version, _, in_store = found
     result = await export_pack(
         pack=pack,
         version=version,
+        withheld_in_store=in_store,
         request=body,
         exporter=principal,
         scheme=scheme,

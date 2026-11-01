@@ -105,3 +105,41 @@ export function manifest(items: PackItem[], over: Partial<PackExport> = {}): Pac
     ...over,
   };
 }
+
+// ADR-134 decision 1: an alert as a pack item — synthetic, open, its match not yet confirmed.
+export const ALERT_ITEM: PackItem = {
+  id: "i4", kind: "alert", marking: "OFFICIAL", added_by: "ana", added_at: "2026-10-01T09:00:00Z",
+  alert: {
+    alert_id: "a1", kind: "typology", severity: "high", typology: "rapid_movement",
+    explanation: "Money in and straight out again through Halcyon Marine Ltd",
+    raised_at: "2026-09-29T14:00:00Z",
+    entities: [{ node_id: "n1", entity_type: "Organisation", name: "Halcyon Marine Ltd" }],
+    links: [{ edge_id: "e1", type: "TRANSACTED", source_name: "Halcyon Marine Ltd", target_name: "Ardent Freight" }],
+    transactions: [{ occurred_at: "2026-09-28T10:00:00Z", amount: 9500, source_name: "Halcyon Marine Ltd", target_name: "Ardent Freight" }],
+    status: "open", outcome: null, reason: null, match: "inferred", node_ids: ["n1"],
+  },
+};
+
+export const CLOSED_ALERT_ITEM: PackItem = {
+  ...ALERT_ITEM, id: "i5",
+  alert: { ...ALERT_ITEM.alert!, alert_id: "a2", status: "closed", outcome: "true_positive", reason: "Confirmed with the bank", match: "confirmed" },
+};
+
+/** The one queue's rows (`GET alert-queue`), as the pack editor lists them to add. */
+export const QUEUED = [
+  { alert: { id: "a1", rule_id: "typology:r1", owner_id: "ana", mode: "full", referent_node_ids: ["n1"], created_at: "2026-09-29T14:00:00Z", status: "open" },
+    summary: "Money in and straight out again through Halcyon Marine Ltd", kind: "typology", severity: "high", audience: "case" },
+  { alert: { id: "a3", rule_id: "hotlist:h1", owner_id: "ana", mode: "full", referent_node_ids: ["n2"], created_at: "2026-09-30T08:00:00Z", status: "claimed" },
+    summary: "A hotlisted identifier appeared: +447700900310", kind: "hotlist", severity: "high", audience: "owner" },
+];
+
+/** ADR-134 decision 3: what an alert trend may split by and filter on, with this case's rules. */
+export const ALERT_OPTIONS: TrendOptions = {
+  ...OPTIONS,
+  alert_fields: [
+    { name: "rule", kind: "category", values: ["typology:r1", "hotlists", "monitors"], labels: ["Rapid movement over £9,000", "Hotlists", "Monitors"] },
+    { name: "typology", kind: "category", values: ["rapid_movement"], labels: [] },
+    { name: "severity", kind: "category", values: ["high", "medium", "low"], labels: ["High", "Medium", "Low"] },
+    { name: "outcome", kind: "category", values: ["open", "claimed", "true_positive", "false_positive", "closed"], labels: ["Open", "Claimed", "True positive", "False positive", "Closed, no outcome"] },
+  ],
+};
