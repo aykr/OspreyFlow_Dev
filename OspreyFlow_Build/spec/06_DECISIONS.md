@@ -21302,3 +21302,190 @@ local model was ever asked); **never sent** with a dataset set to `none`; not se
 dataset is one the visible nodes do not come from (shown red with that mistake planted — the visible
 nodes' datasets in place of the case's); mixed codes and an empty view stay local; a hidden node
 changes nothing.
+
+### ADR-127, Amendment 41 (1 November 2026) — monitoring in the storyline: use cases P1 to P4 (build-order step 8a)
+
+Status: recorded during the owner's autonomous-build instruction of 1 November 2026, on the owner's
+choice of the same day (`process/ALERTING_MONITORING_PLAN.md`): all of P1 to P4, "built into the
+story line", part of the prison demo's narrative and not an appendix. It rests on ADR-133 stages (a)
+to (d) and ADR-134, as built (their Amendments 1 to 5 and 1). Each point the spec left open is read
+conservatively and listed at the end for the owner's review (`BUILD_ORDER_2026-11.md`, open
+questions).
+
+**Where the cases sit.** Chapters 9, 10 and 11 of Act 2 carry them, in the order the investigation
+meets them; chapters 1 to 8 and Act 1 are unchanged, and so is every figure they quote (no new link
+touches the principal).
+
+| Chapter | What happens | Case |
+| --- | --- | --- |
+| 9. Watch: a hotlist, a rule and three alerts | The analyst hotlists the coordinator's number; the second seized-phone batch loads and raises **H1** (as before). The week's visit bookings load and the same hotlist raises **H2**, five days before the visit it names. The analyst writes a rule as a sentence; the data engineer attaches it to the new PIN pipeline's *Checks on load*; the week's PIN first contacts load and the rule raises **S1** | P2, P1 |
+| 10. Assess and report | H2 closed by its owner with a reason; S1's close proposed and approved by a second person; a weekly alert trend beside the throw-over trend; the monitoring figures | P4, P3 |
+| 11. Pack and gaps | H1, still open, is an `alert` item in the pack beside the two trends; the gaps now include what S1 and H2 found about the third group member | P3 |
+
+**The data** (`packages/demo_fixtures/pid_monitoring.py`; rule 9: synthetic, in the repository only).
+Two files, derived from `pid_plan.build_plan("demo")` and drawn from `random.Random` seeded by the
+plan's seed, the same on every run, written by `pid_files.write_files` under `incoming/` beside batch
+2, so the listing does not show them until chapter 9. They cover the week after the plan's cut-off,
+Monday 4 to Sunday 10 May 2026. Each is loaded by a recipe of its own, published by the seed:
+
+- **R18, `pid-visit-bookings`** (`pid_visit_bookings_recipe.yaml`, `generic-csv`) reads
+  `pid_visit_bookings.csv`: eight bookings. A booking is a record, not a visit: a `Document` found or
+  made on its booking reference (`message_id`), titled with the visit's day and time, dated when it
+  was booked (`sent_at`), with the visitor (by National Insurance number), the prisoner (by prison
+  number) and the contact number (through `msisdn`) each `MENTIONED_IN` it. No `VISITED` is written,
+  since the visit has not happened. The storyline's row, `VB-2605-001`: Marcus Ellery books a social
+  visit to Darren Ashcombe (`Z2558ZZ`, the third group member, named in no report) for Saturday 9 May
+  2026 at 14:00, on Monday 4 May at 10:17, giving 07700 900640. The other seven are background
+  visitors booking a Fenwick Moor prisoner they have visited before, each giving the number they own.
+- **R19, `pid-pin-new-contacts`** (`pid_pin_new_contacts_recipe.yaml`, `pin-calls-csv`) reads
+  `pid_pin_new_contacts.csv`: fourteen calls, the PIN supplier's weekly first-contact extract (calls
+  to numbers the account had not called before), in the call log's own columns. Each call is a
+  `COMMUNICATED_WITH` from the PIN account, found by reference, to the number. It writes no `USES`:
+  R5 tied every account to its prisoner, and writing it again would merge into R5's link. The
+  storyline's rows: Darren Ashcombe's account `PIN-Z2558ZZ` calls 07700 900718 on 5 May at 18:42
+  (312 s) and 7 May at 19:05 (95 s): the number nobody owns, which Jamie Pryce's seized handset called
+  30 times (batch 1). The other twelve are ten background Fenwick Moor prisoners' first contacts with
+  numbers no seized SIM ever called.
+- **Every link either load writes is new** (a booking is a new `Document`; each first contact is a
+  pair the plan holds no call for), so the rehearsal reset can revert both loads, which decision 6
+  requires.
+
+**The rule (P1).** Written by the analyst in the sentence builder (ADR-133 decision 1), named "Calls
+to a number on a seized handset" (`pid_monitoring.P1_SENTENCE`): *"When an Endpoint whose endpoint kind
+is msisdn, is within 2 step(s) of a Device, raise a high-severity alert for the case team, after each
+load commits."* A number is within two steps of a handset in this case only through a seized SIM
+that called it (`PAIRED_WITH`, then `COMMUNICATED_WITH`); the batches test that no other path does.
+A sentence has one subject, so the alert names the number, not the caller: opening it and expanding
+the number shows the new link from Darren Ashcombe's PIN account.
+
+**The four cases, exactly.** Every alert is raised in the case "Prison Intelligence Dataset
+(synthetic demo)", dataset `prison-intelligence`.
+
+- **P2, the bookings (chapter 9).**
+  - *Data:* R18 over `pid_visit_bookings.csv`, after batch 2.
+  - *Raises exactly one alert,* **H2**: a hotlist alert (`hotlist:<the chapter-9 hotlist>`), high
+    severity, the owner's alone ("only me", the default), naming the `Endpoint` +447700900640. The
+    booking's load touches the number by reference (decision 7(a)), so the alert is raised as the
+    file loads, before the visit of 9 May.
+  - *Stops firing:* `test_the_bookings_raise_one_hotlist_alert_before_the_visit`.
+  - *Fires when it should not:* `test_a_hotlist_added_after_the_bookings_load_raises_nothing`;
+    `test_a_hotlist_made_in_another_dataset_raises_nothing`;
+    `test_another_analyst_does_not_see_the_owners_hotlist_alerts` (rules 4 and 7: another analyst of
+    the case, and a reader without the dataset, find no H1 or H2 in their queue).
+- **P1, the new contacts (chapter 9).**
+  - *Data:* R19 over `pid_pin_new_contacts.csv`, after the rule is deployed and attached.
+  - *Raises exactly one alert,* **S1**: a sentence alert (`typology:<rule>`, typology `sentence`),
+    high severity, for the case team, naming the `Endpoint` +447700900718, its words beginning
+    "+447700900718 (Endpoint): within 2 step(s) of Device …" (the handset seized from Pryce, named
+    as below) and then the rule's sentence, with an `Alert` node (inferred) and its `ALERTED_ON`
+    link recorded in the load's record (decision 6). The load writes 11 new links for its 14 calls.
+  - *Stops firing:* `test_the_new_contacts_raise_one_alert_on_the_number_from_pryces_handset`.
+  - *Fires when it should not:* `test_a_rule_deployed_after_the_new_contacts_load_raises_nothing_for_it`;
+    `test_a_rule_author_without_the_dataset_raises_nothing` (the rule is judged as its author,
+    rule 3); `test_a_second_run_of_the_new_contacts_raises_nothing`;
+    `test_a_reader_without_the_dataset_sees_no_chapter_nine_alert`.
+- **The order (P1 and P2 together):** `test_chapter_nine_raises_exactly_these_alerts_in_this_order`
+  loads batch 2, the bookings and the new contacts through the committed recipes and asserts the
+  alerts are exactly H1, H2, S1, in that order (`pid_monitoring.EXPECTED_ALERTS`). The rule is
+  deployed *after* the bookings load: deployed before it, it would also flag the coordinator's
+  number (on the batch-2 handset since chapter 9) as the bookings touch it. That is the rule
+  working, not a fault, so the script fixes the order rather than the rule narrowing.
+- **P3, the trend and the pack item (chapters 10 and 11).**
+  - *The trend:* Reports → Trends, source *Alerts*, by week, split by rule, over the case (ADR-134
+    decision 3). Counted as the analyst, the week of the demo holds **hotlists 2 and the rule 1**.
+    It goes into chapter 11's pack beside the throw-over trend.
+  - *The pack item:* **H1**, chapter 9's alert, as an `alert` item (ADR-134 decision 1): status
+    *open*, match *inferred* (no person has confirmed it; rule 5), the number it matched, resting
+    on that number's handling.
+  - *Stops firing:* `test_the_weekly_alert_trend_counts_chapter_nines_alerts_by_rule`;
+    `test_chapter_nines_alert_goes_into_the_pack_open_and_inferred`.
+  - *Fires when it should not:* `test_the_alert_trend_counts_nothing_for_a_reader_without_the_dataset`;
+    `test_a_colleague_counts_only_the_case_alert_in_the_trend` (the hotlist is "only me");
+    `test_the_alert_item_is_withheld_from_a_reader_who_may_not_see_the_number` (a yes or no).
+- **P4, the monitoring figures (chapter 10).**
+  - *The closes:* **H2** closed by its owner, *Referred* ("to the visits team: the visit goes
+    ahead under closed conditions"), alone, since only its owner can see it (Amendment 4 item 5).
+    **S1**'s close proposed by the analyst, *Referred* ("to the regional intelligence unit for a
+    subscriber check on 07700 900718"), and approved by a second analyst of the case (stage (d)).
+    **H1** stays open.
+  - *The figures* (`reports.alert_report`'s monitoring section and the feed's four sections, one
+    computation; ADR-134 decision 2), counted as the analyst for the demo's week: raised by rule
+    **hotlists 2, typology `sentence` 1**; closed by outcome **referred 2**; time to close **under
+    a day 2**; hotlist matches **2**; the open queue **H1 alone**.
+  - *Stops firing:* `test_the_monitoring_figures_count_raised_closed_and_the_open_queue`.
+  - *Fires when it should not:* `test_the_proposer_cannot_approve_their_own_close`;
+    `test_the_board_never_counts_the_owners_only_me_hotlist` (a case viewer's figures hold S1 alone);
+    `test_a_reader_without_the_dataset_counts_nothing_on_the_board`.
+
+All of these are in `tests/scenarios/test_pid_monitoring_storyline.py`: the PID files the cases rest
+on are loaded through the committed recipes (`load_with_rules`, the engine's own), the hotlist is
+evaluated by `evaluation.evaluate_hotlists_for_entry` over the run's touched nodes as the run route
+does, the rule by `RuleGate.post_commit` as `run_published_recipe` does, against real Postgres for
+the alert, hotlist, pack-free queue and close paths and real DuckDB for the alert facts. The graph is
+the golden tests' `MergingGraph` behind the real `DatasetStampingGraph`, answering every read through
+the scheme's own predicate and the reader's datasets, so a node the reader may not see is absent
+from the answer, as the adapter's access step makes it (rule 15). The batches' own properties are in
+`tests/scenarios/test_pid_monitoring_batches.py`, and R18 and R19 have golden tests of their own
+(`tests/ingest/test_pid_monitoring_recipes.py`). The order case is run again against a throwaway
+ArcadeDB, with the adapter's own access step (`tests/ingest/test_pid_monitoring_storyline_live.py`,
+CI's live job).
+
+**The reset and rehearsals.** `--release-batch-2` now lists all three chapter-9 files (batch 2, then
+the bookings, then the new contacts) at once; the presenter loads them in that order. `--reset-live`
+reverts every unreverted R18 and R19 load in the case besides what it reverted before, and removes
+the two files from the listed folder. Reverting the new-contacts load reverts S1's `Alert` node and
+link and closes S1 (decision 6's step 6); H1, H2 and their closes stay, as alerts always have. Two
+things the reset says it cannot undo, added to its list: **a rule deployed in a rehearsal, and what
+it has raised** (a rule raises a finding once, so the next rehearsal's rule must be written afresh
+and the old one retired), and the hotlist alerts' closes.
+
+**Found while building, for the owner:**
+- **S1 must not be closed as *True match* in a rehearsal.** A true match confirms the alert's own
+  `Alert` node, which supersedes it (`confirm_node`), and the reset then refuses to revert the
+  new-contacts load (decision 6 refuses a load whose node an analyst's correction superseded). So
+  the script closes it as *Referred*. A true match is still right in real work, where no reset runs.
+- **The Glass shows no monitoring figure.** The Reports view's figures count typology alerts only;
+  the monitoring sections are in the feed, which Superset's board reads (administration guide
+  §12). And a board never counts an "only me" hotlist. So on screen, P4's board holds S1 alone
+  unless the hotlist is shared with a team the board's account belongs to. P4 is built and tested
+  as figures here; how it is shown is step 9's to settle (open question).
+- **No demo account can be the second person.** Only the analyst role triages alerts, and the demo
+  has one analyst account. Approving S1's close on screen needs a second analyst account (a demo
+  persona, a realm change); not built here (open question).
+- **A seized handset has no name in an alert.** A `Device` declares no name property, so the alert's
+  words and the queue name the handset "Device" and the last six characters of its id
+  (`alert_queue.node_name`), not its IMEI. Whether `imei` should name a device is for the owner
+  (open question); the test reads the name as the code gives it.
+- **Administration guide §12's `closed` row** still lists `true_positive`, `false_positive` or
+  `closed`; since Amendment 5 of ADR-133 a label is any of the five reasons as stored. Left for the
+  guides' next version (open question).
+
+**Read conservatively where the spec is silent:**
+1. *"For Wing F"* (P3): an alert trend splits and filters by rule, typology, severity and outcome
+   only (ADR-134 decision 3), never by place. The case is the Wing F investigation and every
+   alert of chapter 9 is about Wing F's network (the coordinator's number, a Wing F prisoner's
+   booking and calls), so the trend is the case's alerts. A place filter would be a decision of its
+   own.
+2. *"Before the visit"* (P2): the alert is raised when the bookings load, and the booked visit
+   (9 May) is after every booking in the file. The demo's clock is the presenter's, so "before" is
+   in the data's own time; the test asserts the alert exists and no `VISITED` for the booking does.
+3. *A booking is a record* (`Document`), not a `VISITED` link and not an `Event` (which declares no
+   identifying property), so the load writes only new links and can be reverted.
+4. *The first-contact extract* (P1) is how a weekly call log reaches the case: a log that repeated a
+   known pair would merge into the seed's link and could not be reverted (decision 6).
+5. *A trend's weeks are the demo's own.* Alerts carry the time they were raised, no run time is
+   faked, and the owner ruled out a backfill, so the trend shows the demo's week (and any earlier
+   rehearsal's weeks).
+6. *The hotlist stays "only me"* (the default), so H2 is closed by its owner alone and only S1 needs
+   the second person.
+
+**Tests that would fail (rule 12):** each named above; plus `test_every_link_the_batches_write_is_new`,
+`test_only_the_story_number_is_within_two_steps_of_a_handset`, `test_the_batches_are_the_same_every_time`
+and `test_the_bookings_touch_no_number_the_rule_would_flag` (`test_pid_monitoring_batches.py`); the
+reset choosing every R18 and R19 load and the release listing all three files (`test_seed_pid.py`).
+Each was shown red, in the code's own shape: a violation planted in the generator's rows, a recipe,
+the evaluation, the rule gate, the queue's SQL, the trend's SQL, the pack's reader, the figures or
+the seed's reset, and the named test failing for it. One plant stayed green and is recorded so: the
+queue's dataset clause removed alone, since the graph's own dataset step still hides the alert (two
+layers, rule 3); removing both turns `test_a_reader_without_the_dataset_sees_no_chapter_nine_alert`
+red.

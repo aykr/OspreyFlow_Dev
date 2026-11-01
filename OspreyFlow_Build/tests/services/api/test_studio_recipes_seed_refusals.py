@@ -72,8 +72,10 @@ async def enter(rec: Recipe) -> Any:
     )  # fmt: skip
 
 
-def test_the_committed_recipes_are_the_seventeen_less_the_reports_recipe() -> None:
-    assert len(SEEDED) == 16 and "pid_report_incidents_recipe.yaml" in SEEDED
+def test_the_committed_recipes_are_the_nineteen_less_the_reports_recipe() -> None:
+    # Nineteen since ADR-127 Amendment 41 (R18 and R19, chapter 9's monitoring batches).
+    assert len(SEEDED) == 18 and "pid_report_incidents_recipe.yaml" in SEEDED
+    assert {"pid_visit_bookings_recipe.yaml", "pid_pin_new_contacts_recipe.yaml"} <= set(SEEDED)
 
 
 @pytest.mark.parametrize("name", SEEDED)

@@ -67,6 +67,9 @@ RECIPE_OF = {
     "pid_throwover_log.csv": "pid_throwover_log_recipe.yaml",
     "pid_intel_reports.csv": "pid_intel_reports_recipe.yaml",
     "pid_report_incidents.csv": "pid_report_incidents_recipe.yaml",
+    # ADR-127 Amendment 41: chapter 9's monitoring batches.
+    "pid_visit_bookings.csv": "pid_visit_bookings_recipe.yaml",
+    "pid_pin_new_contacts.csv": "pid_pin_new_contacts_recipe.yaml",
 }
 
 

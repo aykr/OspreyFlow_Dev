@@ -70,7 +70,7 @@ from services.api.entity_pictures import PICTURE_TYPES
 from services.api.ingest_sources import UploadRefused, validate_upload_name
 from services.ingest.engine import dedup_key
 
-from demo_fixtures import pid_files, pid_pictures, pid_plan, pid_writes
+from demo_fixtures import pid_files, pid_monitoring, pid_pictures, pid_plan, pid_writes
 from demo_fixtures.datasets import PID, PID_SCALE
 from geo.image_dimensions import image_dimensions
 from knowledge_adapters import REGISTRY
@@ -938,7 +938,9 @@ def test_every_shape_has_a_file_and_the_chapter_9_batch_is_in_incoming(
 ) -> None:
     out = demo_out.out
     csvs = sorted(p.relative_to(out).as_posix() for p in out.rglob("*.csv"))
-    assert csvs == sorted(_expected_name("demo", f) for f in _all_files())
+    # ADR-127 Amendment 41: the demo's two monitoring batches beside batch 2, under `incoming/`.
+    monitoring = [f"incoming/{s.file}" for s in pid_monitoring.MONITORING_STAGES]
+    assert csvs == sorted([*(_expected_name("demo", f) for f in _all_files()), *monitoring])
     assert "incoming/pid_seized_comms_batch2.csv" in csvs
     assert not (out / BATCH_2).exists()
     # The scale profile's files carry the prefix, and a shape with no rows has no file: the list is

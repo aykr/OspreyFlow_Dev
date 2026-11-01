@@ -138,7 +138,7 @@ from services.api.studio_recipes import (
 from services.ingest.load_revert import Refusal as RevertRefusal
 from services.ingest.load_revert import RevertIncomplete, RevertRefused, RevertResult
 
-from demo_fixtures import pid_files, pid_plan, pid_writes
+from demo_fixtures import pid_files, pid_monitoring, pid_plan, pid_writes
 from demo_fixtures.datasets import PID
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
@@ -447,11 +447,12 @@ async def test_each_recipe_but_the_reports_is_checked_compared_copied_then_enter
     rows = await _enter(root, calls)
     entered = [c for c in calls.log if c[0] == "enter"]
     on_disk = sorted(p.name for p in FIXTURES.glob("pid_*_recipe.yaml"))
-    assert len(on_disk) == 17 and len(entered) == 16
-    assert len(rows) == 17, "the reports recipe is in the answer too, as the draft"
+    assert len(on_disk) == 19 and len(entered) == 18
+    assert len(rows) == 19, "the reports recipe is in the answer too, as the draft"
+    stages = (*pid_files.SEED_ORDER, *pid_monitoring.MONITORING_STAGES)
     for _, (recipe_id, kw) in entered:
         recipe_file = next(
-            s.recipe for s in pid_files.SEED_ORDER if seed_pid.recipe_id_of(s.recipe) == recipe_id
+            s.recipe for s in stages if seed_pid.recipe_id_of(s.recipe) == recipe_id
         )
         committed = [d for n, d in calls.log if n == "commit" and d[0] == recipe_id]
         assert len(committed) == 1
@@ -460,7 +461,7 @@ async def test_each_recipe_but_the_reports_is_checked_compared_copied_then_enter
         # the order: its checks, the comparison with the row it would meet, its commit, its row
         names = [n for n, d in calls.log if (d if isinstance(d, str) else d[0]) == recipe_id]
         assert names == ["check", "compare", "commit", "enter"], (recipe_id, names)
-        first_stage = next(s for s in pid_files.SEED_ORDER if s.recipe == recipe_file)
+        first_stage = next(s for s in stages if s.recipe == recipe_file)
         assert kw["source_location"] == _source(root, first_stage.file)
         assert kw["git_path"] == f"recipes/{recipe_id}.yaml"
         assert kw["dataset_id"] == "prison-intelligence" and kw["owning_unit"] == "verify"
@@ -1576,6 +1577,43 @@ def test_the_reset_chooses_every_r9_and_r17_load_and_only_batch_twos_r6_loads_ne
     assert kept_out.isdisjoint(r.load_id for r in chosen)
 
 
+def test_the_reset_chooses_every_monitoring_load_too_newest_first() -> None:
+    """ADR-127 Amendment 41: the visit bookings' and the PIN first contacts' recipes read only their
+    chapter-9 files, so every load of either is a rehearsal's, wherever its source; the R5 load of
+    the seed's own call file is not one."""
+    root = Path("/ingest")
+    loads = [
+        *_loads(),
+        _record("01I", "pid-visit-bookings", _source(root, pid_monitoring.VISIT_BOOKINGS)),
+        _record("01J", "pid-pin-new-contacts", _source(root, pid_monitoring.PIN_NEW_CONTACTS)),
+        _record("01K", "pid-pin-new-contacts", "/ingest/uploaded/prison-intelligence/incoming/"
+                + pid_monitoring.PIN_NEW_CONTACTS),  # fmt: skip
+    ]
+    chosen = [r.load_id for r in seed_pid.choose_reset(loads)]
+    assert chosen == ["01K", "01J", "01I", "01G", "01F:source", "01E", "01D", "01C"]
+    assert seed_pid.monitoring_recipe_ids() == ["pid-visit-bookings", "pid-pin-new-contacts"]
+
+
+async def test_the_reset_asks_the_ledger_for_the_monitoring_recipes_loads(tmp_path: Path) -> None:
+    world, said = _ResetWorld(_loads()), []
+    _seed_folder(_root(tmp_path))
+    asked: list[Sequence[str]] = []
+    args = _reset_args(tmp_path, world, said)
+    inner = args["ledger"]
+
+    class _Asking:
+        async def unreverted_loads(self, case_id: str, recipe_ids: Sequence[str]) -> Any:
+            asked.append(list(recipe_ids))
+            return await inner.unreverted_loads(case_id, recipe_ids)
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(inner, name)
+
+    assert await seed_pid.reset_live(**(args | {"ledger": _Asking()})) == 0
+    (recipe_ids,) = asked
+    assert {"pid-visit-bookings", "pid-pin-new-contacts"} <= set(recipe_ids)
+
+
 def test_the_reset_choice_fails_for_a_record_chosen_by_the_wrong_rule() -> None:
     """Planted, in the real shape (a `LoadRecord`): batch 1's R6 load and another dataset's batch-2
     file are chosen by a rule that looks at the recipe alone, and the oldest-first order is the one
@@ -1653,8 +1691,12 @@ def _seed_folder(root: Path, *, extra: Sequence[str] = (), batch_two: bool = Tru
         if stage.file != pid_files.BATCH_2:
             (listed / stage.file).write_text("x", encoding="utf-8")
     (listed / "incoming" / pid_files.BATCH_2).write_text("b2", encoding="utf-8")
+    for stage in pid_monitoring.MONITORING_STAGES:  # ADR-127 Amendment 41
+        (listed / "incoming" / stage.file).write_text(stage.recipe, encoding="utf-8")
     if batch_two:
         (listed / pid_files.BATCH_2).write_text("b2", encoding="utf-8")
+        for stage in pid_monitoring.MONITORING_STAGES:
+            (listed / stage.file).write_text(stage.recipe, encoding="utf-8")
     for name in extra:
         (listed / name).write_text("a corrected upload", encoding="utf-8")
 
@@ -1799,7 +1841,10 @@ async def test_the_reset_removes_batch_two_and_every_other_file_naming_each(
     left = sorted(p.name for p in listed.iterdir() if p.is_file())
     assert left == sorted({s.file for s in pid_files.SEED_ORDER} - {pid_files.BATCH_2})
     text = "\n".join(said)
-    for name in ("corrected_upload.csv", "notes.txt", pid_files.BATCH_2):
+    for name in (
+        "corrected_upload.csv", "notes.txt", pid_files.BATCH_2,
+        pid_monitoring.VISIT_BOOKINGS, pid_monitoring.PIN_NEW_CONTACTS,
+    ):  # fmt: skip
         assert f"removed {name}" in text, name
     assert (listed / pid_files.REPORTS).read_text(encoding="utf-8") == "fresh"
 
@@ -1818,6 +1863,9 @@ async def test_the_reset_says_what_it_cannot_undo(tmp_path: Path) -> None:
         "hotlists and saved patterns",
         "climbing version number",
         "recipe repository",
+        # ADR-127 Amendment 41: a rehearsal's rule, and the alert the revert does close.
+        "rules deployed in a rehearsal",
+        "the new-contacts rule's",
     ):
         assert phrase in text, phrase
 
@@ -1896,7 +1944,12 @@ def test_release_batch_2_copies_it_into_the_listed_folder_and_opens_no_store(
     listed = seed_pid.listed_folder(root)
     assert (listed / pid_files.BATCH_2).read_bytes() == b"b2"
     assert (listed / "incoming" / pid_files.BATCH_2).exists(), "the original stays"
-    assert pid_files.BATCH_2 in capsys.readouterr().out
+    # ADR-127 Amendment 41: chapter 9's monitoring batches are listed with it, in loading order.
+    for stage in pid_monitoring.MONITORING_STAGES:
+        assert (listed / stage.file).read_text(encoding="utf-8") == stage.recipe
+    out = capsys.readouterr().out
+    assert [line.split()[1] for line in out.splitlines() if line.startswith("released")] == [
+        pid_files.BATCH_2, pid_monitoring.VISIT_BOOKINGS, pid_monitoring.PIN_NEW_CONTACTS]  # fmt: skip
     # again: the same bytes, said to be there already, nothing changed
     assert seed_pid.main(["--release-batch-2", "--ingest-root", str(root)]) == 0
     assert "already" in capsys.readouterr().out
@@ -1907,6 +1960,19 @@ def test_release_batch_2_before_the_seed_says_to_seed_first(
 ) -> None:
     assert seed_pid.main(["--release-batch-2", "--ingest-root", str(_root(tmp_path))]) == 1
     assert "seed" in capsys.readouterr().err.lower()
+
+
+def test_release_copies_nothing_when_a_monitoring_batch_is_missing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A seed from before ADR-127 Amendment 41 wrote batch 2 alone: the release refuses, naming the
+    missing file, and lists nothing rather than part of chapter 9."""
+    root = _root(tmp_path)
+    _seed_folder(root, batch_two=False)
+    (seed_pid.incoming_folder(root) / pid_monitoring.PIN_NEW_CONTACTS).unlink()
+    assert seed_pid.main(["--release-batch-2", "--ingest-root", str(root)]) == 1
+    assert pid_monitoring.PIN_NEW_CONTACTS in capsys.readouterr().err
+    assert not (seed_pid.listed_folder(root) / pid_files.BATCH_2).exists()
 
 
 def test_the_fallback_changes_the_version_line_and_nothing_else() -> None:
@@ -2315,7 +2381,8 @@ async def test_the_seed_runs_end_to_end_over_fakes_and_prints_its_checks(
     out = capsys.readouterr().out
     assert code == 0, out
     assert [e for n, e in log if n == "run"] == [s.file for s in pid_files.seed_stages("seed")]
-    assert [n for n, _ in log if n == "commit"] == ["commit"] * 16, "every recipe but the reports'"
+    # Every recipe but the reports', the two monitoring recipes (ADR-127 Amendment 41) included.
+    assert [n for n, _ in log if n == "commit"] == ["commit"] * 18, "every recipe but the reports'"
     pictured = [edit for n, edit in log if n == "picture"]
     assert len(pictured) == len(PLAN.picture_subjects) and all(pictured), (
         "every picture is attached with the edit right"

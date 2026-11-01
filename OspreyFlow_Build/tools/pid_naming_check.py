@@ -381,7 +381,9 @@ def seed_lines() -> list[str]:
         (listed / seed_pid.INCOMING).mkdir(parents=True)
         (listed / "a_corrected_upload.csv").write_text("x", encoding="utf-8")
         (listed / files.BATCH_2).write_text("x", encoding="utf-8")
-        (listed / seed_pid.INCOMING / files.BATCH_2).write_text("x", encoding="utf-8")
+        # Chapter 9's three files (ADR-127 Amendment 41), so the release says each line it says.
+        for chapter_9_file in seed_pid.CHAPTER_9_FILES:
+            (listed / seed_pid.INCOMING / chapter_9_file).write_text("x", encoding="utf-8")
         for resting, refusing, show in (
             ({"same-as-1"}, True, False), ({"same-as-1"}, True, True), (set(), False, False),
         ):  # fmt: skip

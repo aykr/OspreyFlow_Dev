@@ -25,7 +25,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-from demo_fixtures import pid_files, pid_plan
+from demo_fixtures import pid_files, pid_monitoring, pid_plan
 from tests.ingest.pid_golden_support import FIXTURES, PLAN, RECIPE_OF, Step
 
 TESTS = Path(__file__).resolve().parent
@@ -99,8 +99,14 @@ def test_the_order_names_every_source_file_once_and_every_recipe() -> None:
     assert set(FILES) == shaped, "a file the plan loads is missing, or one it does not is named"
     assert {"pid_seized_comms_batch1.csv", "pid_seized_comms_batch2.csv"} <= set(FILES)
     on_disk = {p.name for p in FIXTURES.glob("pid_*_recipe.yaml")}
-    assert len(on_disk) == 17
-    assert {s.recipe for s in ORDER} == on_disk, "a recipe is not in the order, or is not there"
+    assert len(on_disk) == 19
+    # ADR-127 Amendment 41: the two monitoring recipes load chapter 9's batches, which the plan's
+    # load contract does not name; they are in `pid_monitoring.MONITORING_STAGES`, not this order.
+    monitoring = {s.recipe for s in pid_monitoring.MONITORING_STAGES}
+    assert len(monitoring) == 2 and not monitoring & {s.recipe for s in ORDER}
+    assert {s.recipe for s in ORDER} | monitoring == on_disk, (
+        "a recipe is not in the order, or is not there"
+    )
     for step in ORDER:
         assert RECIPE_OF[step.file] == step.recipe, step.file
 
