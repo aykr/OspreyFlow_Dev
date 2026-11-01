@@ -34,7 +34,7 @@ createRoot(container).render(
     </div>
     <BottomPanelFrame title="Timeline" height={130}>
       <div id="timeline-body" style={{ height: "100%" }}>
-        Timeline <button type="button">Play playback</button>
+        Timeline <button type="button" className="btn btn--quiet">Play playback</button>
       </div>
     </BottomPanelFrame>
   </div>,
