@@ -28,7 +28,9 @@ each licence). Where a field could not be confirmed from the publisher's documen
   Primary Name, Primary Name Variation, AKA or FKA. *Unverified:* a first line reading `Last
   Updated,<date>` before the header (tolerated, and its date taken as the version when present).
   Otherwise the version is the latest `Last Updated`. **The OFSI Consolidated List closed on 28
-  January 2026**; the FCDO's UK Sanctions List is now the only source of UK designations (gov.uk).
+  January 2026** and is no longer updated: this connector reads a closed list, and is kept only so a
+  file already held can still be read (ADR-133 Amendment 3). The FCDO's UK Sanctions List
+  (`uk_sanctions_list`, below) is now the only source of UK designations (gov.uk).
 - **UN Security Council consolidated list** (`un_consolidated`): `consolidated.xml`.
   *Unverified from the UN's own documentation* (its list page and schema could not be read when
   this was built): the element names `CONSOLIDATED_LIST` (`dateGenerated`, the version),
@@ -40,6 +42,25 @@ each licence). Where a field could not be confirmed from the publisher's documen
   (`generationDate`, the version), `sanctionEntity` (`logicalId`), `subjectType` (`code` person or
   enterprise), `nameAlias` (`wholeName`), `birthdate` (`birthdate`), `citizenship` and `address`
   (`countryIso2Code`). Read by local name, whatever the namespace.
+- **The UK Sanctions List** (`uk_sanctions_list`): the FCDO's `UK-Sanctions-List.xml`, published
+  under the Open Government Licence v3.0 at gov.uk/government/publications/the-uk-sanctions-list
+  (read 1 November 2026), the only source of UK sanctions designations since the OFSI list closed.
+  The element names are the FCDO's own schema, `SanctionsListSchema-4.33.3.xsd` (linked from that
+  page; no target namespace, so read by local name): the root `Designations` with `DateGenerated`
+  (the version), then each `Designation` with `UniqueID`, `OFSIGroupID`, `Names`/`Name`
+  (`Name1` … `Name6`, `NameType`), `IndividualEntityShip`, `RegimeName`, `Addresses`/`Address`
+  (`AddressCountry`), and `IndividualDetails`/`Individual` (`DOBs`/`DOB`,
+  `Nationalities`/`Nationality`). The field meanings are the FCDO's *Format guide for the UK
+  Sanctions List* (gov.uk/guidance/format-guide-for-the-uk-sanctions-list): `Name 6` is the
+  surname, or an entity's or ship's whole name; a name type is Primary Name, Primary Name Variation
+  or Alias; a date of birth is dd/mm/yyyy and may be partial (dd/mm/1970); "Individual, Entity,
+  Ship" says which a designation is. *Unverified* (the schema types them as plain strings and the
+  guide gives no values): the exact spelling of the `IndividualEntityShip` values (read as
+  Individual, Entity or Ship, in any case; anything else is refused), the text of `DateGenerated`
+  (taken as the version as written), whether one `UniqueID` can appear on two `Designation`s (read
+  as one entry, the second's names its aliases), and a designation with no `UniqueID` (the schema
+  allows it; the change notice says older records keep their OFSI Group ID, so it is read as
+  `OFSI-<group id>`, and refused when it has neither). Every entry is a sanction.
 - **OpenSanctions** (`opensanctions`): `entities.ftm.json`, one FollowTheMoney entity per line, per
   OpenSanctions' bulk-data documentation: `id`, `schema`, `properties` (every property a list of
   strings: `name`, `alias`, `birthDate`, `nationality`, `country`, `topics`). Topics `sanction…`,
@@ -432,6 +453,102 @@ def eu_consolidated(fsf_xml: str) -> ParsedList:
     return ParsedList(format=_EU, version=version, entries=tuple(entries), skipped=skipped)
 
 
+# --- The UK Sanctions List (FCDO) ---------------------------------------------------------------
+
+_UKSL = "uk_sanctions_list"
+_UKSL_TYPES: dict[str, PartyType | None] = {"individual": "Person", "entity": "Organisation",
+                                             "ship": None}  # fmt: skip
+
+
+def _descendant_texts(element: Element, name: str) -> list[str]:
+    return [(d.text or "").strip() for d in _descendants(element, name) if (d.text or "").strip()]
+
+
+def _uksl_name(name: Element, person: bool) -> str:
+    surname = _text(name, "Name6")
+    if not person:
+        return surname
+    given = " ".join(p for p in (_text(name, f"Name{i}") for i in range(1, 6)) if p)
+    return f"{surname}, {given}" if surname and given else surname or given
+
+
+def uk_sanctions_list(designations_xml: str) -> ParsedList:
+    """The FCDO's UK Sanctions List from `UK-Sanctions-List.xml`: each `Designation` one entry by
+    its `UniqueID`, its primary name and every other name as aliases. Every entry is a sanction."""
+    root = _xml(_UKSL, designations_xml, "Designations")
+    version = _text(root, "DateGenerated")
+    if not version:
+        raise _refuse(
+            _UKSL, designations_xml, "the list says no DateGenerated, so it has no version"
+        )
+    designations = _children(root, "Designation")
+    if not designations:
+        raise _refuse(_UKSL, designations_xml, "the list holds no <Designation>")
+    found: dict[str, ListedParty] = {}
+    skipped = 0
+    for number, item in enumerate(designations, start=1):
+        ref = _text(item, "UniqueID")
+        if not ref:
+            group = _text(item, "OFSIGroupID")
+            if not group:
+                raise _refuse(
+                    _UKSL,
+                    "Designation",
+                    f"<Designation> {number} has no UniqueID and no OFSIGroupID",
+                )
+            ref = f"OFSI-{group}"  # unverified: an older record known by its OFSI Group ID alone
+        said = _text(item, "IndividualEntityShip")
+        if said.lower() not in _UKSL_TYPES:
+            raise _refuse(
+                _UKSL,
+                said,
+                f"<Designation> {ref} says IndividualEntityShip “{said}”; the format guide gives "
+                "Individual, Entity or Ship",
+            )
+        kind = _UKSL_TYPES[said.lower()]
+        if kind is None:
+            skipped += 1
+            continue
+        person = kind == "Person"
+        names = [n for group in _children(item, "Names") for n in _children(group, "Name")]
+        primary = [n for n in names if _text(n, "NameType").lower() == "primary name"]
+        ordered = [*primary, *(n for n in names if n not in primary)]
+        spelled = [s for s in (_uksl_name(n, person) for n in ordered) if s]
+        if not spelled:
+            raise _refuse(_UKSL, ref, f"<Designation> {ref} has no name")
+        if person:
+            details = [i for d in _children(item, "IndividualDetails")
+                       for i in _children(d, "Individual")]  # fmt: skip
+            dob = _one_date(_ofsi_date(v) for i in details for v in _descendant_texts(i, "DOB"))
+            places = [v for i in details for v in _descendant_texts(i, "Nationality")]
+        else:
+            dob = None
+            places = [
+                v
+                for a in _children(item, "Addresses")
+                for v in _descendant_texts(a, "AddressCountry")
+            ]
+        earlier = found.get(ref)
+        if earlier is not None:
+            # Unverified: one UniqueID on two designations is read as one entry, never two.
+            found[ref] = ListedParty(
+                ref=ref, listing="sanction", entity_type=earlier.entity_type, name=earlier.name,
+                aliases=_aliases(earlier.name, [*earlier.aliases, *spelled]),
+                date_of_birth=earlier.date_of_birth or dob, country=earlier.country,
+            )  # fmt: skip
+            continue
+        found[ref] = ListedParty(
+            ref=ref,
+            listing="sanction",
+            entity_type=kind,
+            name=spelled[0],
+            aliases=_aliases(spelled[0], spelled[1:]),
+            date_of_birth=dob,
+            country=places[0] if places else None,
+        )
+    return ParsedList(format=_UKSL, version=version, entries=tuple(found.values()), skipped=skipped)
+
+
 # --- OpenSanctions (FollowTheMoney entities) -----------------------------------------------------
 
 _OS = "opensanctions"
@@ -525,6 +642,7 @@ LIST_ADAPTERS: dict[str, Callable[..., ParsedList]] = {
     _UN: un_consolidated,
     _EU: eu_consolidated,
     _OS: opensanctions,
+    _UKSL: uk_sanctions_list,
 }
 
 __all__ = [
@@ -535,5 +653,6 @@ __all__ = [
     "ofac_sdn",
     "ofsi_consolidated",
     "opensanctions",
+    "uk_sanctions_list",
     "un_consolidated",
 ]

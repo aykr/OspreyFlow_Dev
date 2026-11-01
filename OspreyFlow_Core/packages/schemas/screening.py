@@ -18,7 +18,12 @@ from schemas.monitoring import ListSchedule
 
 #: The connectors a list may be subscribed through — `LIST_ADAPTERS`'s keys.
 ScreeningListSource = Literal[
-    "ofac_sdn", "ofsi_consolidated", "un_consolidated", "eu_consolidated", "opensanctions"
+    "ofac_sdn",
+    "ofsi_consolidated",
+    "un_consolidated",
+    "eu_consolidated",
+    "opensanctions",
+    "uk_sanctions_list",
 ]
 #: `scripts/real_data_exceptions.py`'s `APPROVED_USES`: what a real list is admitted for.
 RealDataUse = Literal["local_development", "scale_testing", "owner_run_demonstration"]
@@ -56,6 +61,10 @@ class ScreeningListStatus(BaseModel):
     #: reason in words beside it.
     licence_confirmed: bool = True
     licence_note: str | None = None
+    #: ADR-133 Amendment 6: the words for a connector whose publisher has closed its list (the OFSI
+    #: Consolidated List, closed on 28 January 2026), which reads a list nobody updates; `None` for
+    #: a list still published.
+    closed_note: str | None = None
     version: str | None = None
     entries: int = 0
     updated_at: datetime | None = None

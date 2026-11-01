@@ -39,6 +39,16 @@ export const CONNECTORS: Record<Source, string> = {
   un_consolidated: "UN Security Council consolidated list",
   eu_consolidated: "EU consolidated financial sanctions list",
   opensanctions: "OpenSanctions (FollowTheMoney entities)",
+  uk_sanctions_list: "UK Sanctions List (FCDO)",
+};
+
+/** ADR-133 Amendment 6: the connectors whose publisher has closed the list they read, with the words
+ * the Conduit says beside such a list (`screening_refresh.CLOSED_LISTS`), held in step by
+ * `test_the_glass_says_the_same_closed_list_words_as_the_conduit`. The subscribe form says it before
+ * any list exists. */
+export const CLOSED_LISTS: Partial<Record<Source, string>> = {
+  ofsi_consolidated:
+    "this connector reads a closed list: the OFSI Consolidated List closed on 28 January 2026 and is no longer updated, and the FCDO's UK Sanctions List is now the only source of UK designations",
 };
 
 /** The owner's answer of 1 November 2026 (ADR-133 Amendment 3): the connectors whose licence for a
@@ -55,6 +65,7 @@ export const LICENCE_NOT_CONFIRMED: Partial<Record<Source, string>> = {
 
 /** A connector as the subscribe form offers it: its list, and whether its licence is confirmed. */
 function connectorOption(source: Source): string {
+  if (CLOSED_LISTS[source]) return `${CONNECTORS[source]}: reads a closed list`;
   return LICENCE_NOT_CONFIRMED[source] ? `${CONNECTORS[source]} (licence not confirmed)` : CONNECTORS[source];
 }
 
@@ -153,6 +164,14 @@ export function ListsPanel(props: ListsPanelProps) {
                     </span>
                     <br />
                     <span className="label">Licence: {list.licence}</span>
+                    {list.closed_note && (
+                      <>
+                        <br />
+                        <span className="label" style={{ fontWeight: 600 }}>
+                          {`Closed list: ${list.closed_note}.`}
+                        </span>
+                      </>
+                    )}
                     {list.licence_confirmed === false && (
                       <>
                         <br />
@@ -307,6 +326,11 @@ function SubscribeForm(props: ListsPanelProps & { onSubscribed: (listName: strin
         Real dataset it is (empty for one of OspreyFlow&apos;s synthetic lists)
         <Input aria-label="Real dataset" placeholder="ofac_sdn" value={dataset} onChange={(e) => setDataset(e.target.value)} />
       </label>
+      {CLOSED_LISTS[source] && (
+        <p className="label" style={{ margin: 0, fontWeight: 600 }}>
+          {`Closed list: ${CLOSED_LISTS[source]}. Subscribe to the UK Sanctions List (FCDO) for UK designations.`}
+        </p>
+      )}
       {LICENCE_NOT_CONFIRMED[source] && (
         <p className="label" style={{ margin: 0, fontWeight: 600 }}>
           {`Licence not confirmed: ${LICENCE_NOT_CONFIRMED[source]}. Only OspreyFlow's synthetic list may be read through this connector.`}

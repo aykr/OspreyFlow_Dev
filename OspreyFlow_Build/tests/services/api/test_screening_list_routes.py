@@ -342,6 +342,41 @@ def test_each_list_says_whether_its_licence_is_confirmed(world: tuple[_World, Te
     assert shown["ofac_sdn"]["licence_confirmed"] is True and shown["ofac_sdn"]["licence_note"] is None
 
 
+def test_the_closed_ofsi_list_says_so_and_its_successor_does_not(
+    world: tuple[_World, TestClient],
+) -> None:
+    """ADR-133 Amendment 6: the OFSI connector reads a list closed on 28 January 2026, and says so in
+    words on the Lists tab; the UK Sanctions List (FCDO), its successor, is a list of its own whose
+    licence is confirmed and which is not closed."""
+    w, client = world
+    for name, source in (("Synthetic list OFSI", "ofsi_consolidated"),
+                         ("Synthetic list UKSL", "uk_sanctions_list")):  # fmt: skip
+        made = client.post("/v1/admin/screening-lists",
+                           json={"list_name": name, "source": source, "location": "lists/x"})  # fmt: skip
+        assert made.status_code == 201, made.text
+    w.as_ = ANALYST
+    shown = {x["source"]: x for x in client.get("/v1/screening-lists").json()["lists"]}
+    assert "closed on 28 January 2026" in shown["ofsi_consolidated"]["closed_note"]
+    assert "UK Sanctions List" in shown["ofsi_consolidated"]["closed_note"]
+    successor = shown["uk_sanctions_list"]
+    assert successor["closed_note"] is None and successor["licence_confirmed"] is True
+    assert successor["licence"].startswith("Open Government Licence v3.0")
+
+
+def test_the_glass_says_the_same_closed_list_words_as_the_conduit() -> None:
+    """The subscribe form says the OFSI list is closed before any list exists, so the Glass holds the
+    words too (`ListsPanel.tsx`'s `CLOSED_LISTS`). Pure: a drift check, opening no connection."""
+    from services.api.screening_refresh import CLOSED_LISTS
+    from tools.layout import CORE
+
+    panel = (CORE / "apps" / "workspace" / "src" / "alerts" / "ListsPanel.tsx").read_text(encoding="utf-8")
+    block = panel[panel.index("export const CLOSED_LISTS"):]
+    block = block[: block.index("};")]
+    assert sorted(CLOSED_LISTS) == ["ofsi_consolidated"]
+    for source, words in CLOSED_LISTS.items():
+        assert f'{source}:\n    "{words}",' in block, source
+
+
 def test_the_glass_says_the_same_licence_reasons_as_the_conduit() -> None:
     """The subscribe form says why a connector's licence is not confirmed before any list exists, so
     the Glass holds the reasons too (`ListsPanel.tsx`'s `LICENCE_NOT_CONFIRMED`). Pure: a drift

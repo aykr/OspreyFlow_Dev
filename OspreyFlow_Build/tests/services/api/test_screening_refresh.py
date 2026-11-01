@@ -410,8 +410,8 @@ async def test_a_file_that_is_not_one_of_the_repositorys_synthetic_files_is_real
 
 
 def test_every_synthetic_list_file_is_in_the_manifest_by_its_digest() -> None:
-    files = sorted(p for p in CORE_LISTS.iterdir() if p.suffix == ".json")
-    assert files
+    files = sorted(p for p in CORE_LISTS.iterdir() if p.suffix in (".json", ".xml"))
+    assert {p.suffix for p in files} == {".json", ".xml"}
     digests = synthetic_digests()
     for path in files:
         assert hashlib.sha256(path.read_bytes()).hexdigest() in digests, path.name
