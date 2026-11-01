@@ -85,11 +85,12 @@ class _World:
     async def screening(self) -> ScreeningListStore:
         if self.store is None:
             dsn = PostgresConfig.from_env().dsn
+            # The store first, so its tables exist on a fresh server before they are emptied.
+            self.store = await ScreeningListStore.connect(dsn)
             conn = await asyncpg.connect(dsn)
             await conn.execute("DELETE FROM screening_list_updates; DELETE FROM screening_lists; "
                                "DELETE FROM screening_entries WHERE list_name = 'Synthetic list'")  # fmt: skip
             await conn.close()
-            self.store = await ScreeningListStore.connect(dsn)
         return self.store
 
 
