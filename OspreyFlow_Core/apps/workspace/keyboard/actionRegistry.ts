@@ -573,6 +573,12 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
   // previewed on the last 90 days.
   "build-a-rule-as-a-sentence-by-keyboard",
   "preview-a-rule-by-keyboard",
+  // ADR-133 stage (c): an AML template deployed with its jurisdiction list; the Lists tab read, a
+  // list refreshed and a list subscribed to.
+  "deploy-an-aml-template-by-keyboard",
+  "read-the-screening-lists-by-keyboard",
+  "refresh-a-screening-list-by-keyboard",
+  "subscribe-to-a-screening-list-by-keyboard",
 ] as const);
 
 /** The Ownership place (ADR-109 phase C): find an entity, trace its beneficial owners, change the

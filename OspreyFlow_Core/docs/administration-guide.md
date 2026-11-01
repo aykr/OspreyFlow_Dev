@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.17** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.18** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.18 | 2026-11-01 | §9.5: screening lists — subscribing to a list through its connector, each list's licence, the rule on real lists, and the refresh (*Refresh now*, `python -m scripts.refresh_screening_list`), which re-screens customers against the changed entries only. |
 | 1.17 | 2026-11-01 | §12: the monitoring board, and the four monitoring sections the feed carries (`raised_by_rule`, `closed`, `time_to_close`, `hotlist_matches`). |
 | 1.16 | 2026-11-01 | §9.4: monitoring, and whom a hotlist's alerts reach (`monitoring.hotlist_audience`, `hotlist_audience_editable`). Appendix A: the `monitoring` settings. |
 | 1.15 | 2026-11-01 | §9.1: the Datasets tab. §10: a provider's privacy-contract mark (`privacy_contract`, `contract_reference`); each dataset's egress (`none`, `contracted`, `any`), set in Admin → Datasets and audited; every dataset is `none` after upgrading, so hosted engines receive nothing until an administrator changes one. Appendix A: the two new provider settings. |
@@ -492,6 +493,53 @@ hotlist made before the setting existed reaches only its owner until the owner c
 `hotlist_audience_editable: false`, every new hotlist takes `hotlist_audience`, the Glass offers no
 choice and says so, and a change is refused in words. A match on data its owner cannot see is never
 shared. Change either with `ospreyflow apply` (section 8.3). Both are in appendix A.
+
+### 9.5 Screening lists: subscribing, licences and the refresh
+
+OspreyFlow screens customers against sanctions, PEP and adverse-media lists that the deployment
+**subscribes** to. Each list is read through its **connector**, which knows one publisher's own
+export format:
+
+| Connector | Reads | Licence (as its publisher states it, 1 November 2026) |
+| --- | --- | --- |
+| OFAC SDN list | `SDN.CSV`, with `ALT.CSV` and `ADD.CSV` beside it when present | A US Government work, in the public domain; OFAC's own pages state no licence |
+| HM Treasury OFSI consolidated list | `ConList.csv` | Open Government Licence v3.0. **The list closed on 28 January 2026**: the FCDO's UK Sanctions List replaced it, and OspreyFlow has no connector for that yet |
+| UN Security Council consolidated list | `consolidated.xml` | No open licence found: the UN's terms of use allow personal, non-commercial use. Confirm with the UN before relying on it |
+| EU consolidated financial sanctions list | the FSF XML 1.1 file | The European Commission's reuse notice (Decision 2011/833/EU) |
+| OpenSanctions | `entities.ftm.json` | CC BY-NC 4.0: **non-commercial only**. Screening inside a business is commercial use and needs OpenSanctions' data licence |
+
+Check the licence for your use before you subscribe. The architecture's licence register (spec 00 §7)
+records where each statement was read.
+
+**Real lists and this device.** OspreyFlow ships only synthetic lists. A real list loads only when this
+device's own `config/real_data_exceptions.yaml` (never committed, never copied between machines) names
+its dataset — for example `ofac_sdn` — for the use the subscription gives; otherwise the refresh is
+refused, in words, and nothing loads. Add an entry with
+`python -m scripts.real_data_exceptions add`. A list counts as synthetic only when its file is one of
+OspreyFlow's own (`packages/demo_fixtures/screening_lists/`, known by its fingerprint); a file cannot
+make itself synthetic by saying so.
+
+**Subscribing.** In the Glass, open **Monitoring → Lists** (it needs the `load_screening_lists` right,
+which the administrator and data-engineer roles hold). Under **Subscribe to a list**, give the list a
+name, choose its connector, name its file inside the ingest folder (for example `lists/SDN.CSV`), and,
+for a real list, the dataset it is. A location outside the ingest folder is refused. Put each new
+download of the list in the same place.
+
+**The refresh.** **Refresh now** beside a list (or, on the host,
+`python -m scripts.refresh_screening_list "<list name>"`, with `--list` to see the subscriptions) reads
+the file again and applies it as a new **version**: the publisher's own date where the format has one,
+otherwise the file's fingerprint. OspreyFlow compares it with the version before and re-screens every
+customer of every case with a screening rule against **the added and changed entries only**, as each
+rule's deployer and within that case's datasets; each new match is a high-severity alert in that case's
+queue, its link to the listed party inferred until a person confirms it. A file that is not in the
+connector's format fails in words and leaves the list as it was. Every refresh is recorded under
+**Latest refreshes**, with what it added, changed and removed, how many customers it re-screened and how
+many alerts it raised; the audit records who refreshed which list.
+
+**When.** A list is refreshed when someone presses **Refresh now** or runs the command. The pipeline
+scheduler (section 15) runs Studio pipelines only; a list's own schedule is still to come. Until then, run
+the command from the host's own scheduler (for example cron), as the Conduit's user, after each
+download.
 
 ## 10. Models
 

@@ -690,3 +690,53 @@ class FrequencyResult(BaseModel):
 
 
 ALL_MODELS = (*ALL_MODELS, FrequencyRequest, NodeFrequency, FrequencyResult)
+
+
+# --- An account against its own past (06_DECISIONS.md ADR-133 decision 2, stage (c)) ------------
+
+
+class ActivityRequest(BaseModel):
+    """Each of `filter.node_ids`' movements in `filter.window` (ends included) and in the
+    `baseline_days` before it, and its last movement before the window — what the AML templates "a
+    dormant account reactivated" and "a sudden rise in velocity" compare an account with. A subject
+    is at either end of an event, an event to itself counted once. The access step is in the query
+    (rule 3): an event the principal may not see is no movement, in either window or before."""
+
+    filter: EventFilter
+    baseline_days: int = Field(ge=1, le=FREQUENCY_SPAN_DAYS_MAX)
+    #: A declared numeric property of the counted link type, summed; `None` counts only.
+    amount_property: str | None = None
+
+    @field_validator("filter")
+    @classmethod
+    def _names_its_subjects_and_a_window(cls, value: EventFilter) -> EventFilter:
+        if not value.node_ids:
+            raise ValueError("activity is read for named nodes; name at least one")
+        if len(value.node_ids) > FREQUENCY_NODES_MAX:
+            raise ValueError(f"activity is read for at most {FREQUENCY_NODES_MAX:,} nodes at once")
+        window = value.window
+        if window is None or window.valid_from is None or window.valid_to is None:
+            raise ValueError("activity is read over a window with both ends")
+        return value
+
+
+class NodeActivity(BaseModel):
+    """One subject's answer: counts and totals in the window and in the baseline before it; its
+    first movement in the window; its last before the window, however long before."""
+
+    recent_count: int = Field(ge=0)
+    recent_total: float | None = None
+    baseline_count: int = Field(ge=0)
+    baseline_total: float | None = None
+    first_in_window: datetime | None = None
+    last_before_window: datetime | None = None
+
+
+class ActivityResult(BaseModel):
+    """Every subject with at least one visible movement up to the window's end; one with none is
+    absent, not zero."""
+
+    nodes: dict[NodeId, NodeActivity] = Field(default_factory=dict)
+
+
+ALL_MODELS = (*ALL_MODELS, ActivityRequest, NodeActivity, ActivityResult)

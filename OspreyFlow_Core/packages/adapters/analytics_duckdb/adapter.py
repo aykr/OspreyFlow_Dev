@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import duckdb
@@ -21,6 +21,8 @@ import duckdb
 from ontology.handling import HandlingScheme
 from ports.analytics import TrendLimitExceeded
 from schemas.analytics import (
+    ActivityRequest,
+    ActivityResult,
     AlertFact,
     AlertTrendRequest,
     BaselineRequest,
@@ -45,6 +47,7 @@ from schemas.analytics import (
     HistogramBucket,
     HistogramBucketing,
     HistogramRequest,
+    NodeActivity,
     NodeFrequency,
     Sighting,
     SightingRequest,
@@ -772,6 +775,61 @@ class AnalyticsDuckDBAdapter:
                     first_at=_as_utc(first),
                 )
                 for node, first in firsts.items()
+            }
+        )
+
+    # --- account_activity (ADR-133 decision 2, stage (c)) -------------------------------------
+
+    async def account_activity(
+        self, req: ActivityRequest, principal: Principal
+    ) -> ActivityResult:
+        window = req.filter.window
+        assert window is not None and window.valid_from is not None and window.valid_to is not None
+        # The filter and the access step without the window, bounded above by the window's end:
+        # the baseline and the last movement before the window lie before its start.
+        unbounded = self._predicate(req.filter.model_copy(update={"window": None}), principal)
+        subjects = req.filter.node_ids
+        marks = ",".join("?" for _ in subjects)
+        amount = (
+            "NULL"
+            if req.amount_property is None
+            else f"TRY_CAST({_field_expression(req.amount_property)} AS DOUBLE)"
+        )
+        touched = (
+            f"SELECT source_id AS node, occurred_at, {amount} AS amount FROM events "
+            f"WHERE {unbounded.where} AND occurred_at <= ? AND source_id IN ({marks}) "
+            "UNION ALL "
+            f"SELECT target_id AS node, occurred_at, {amount} AS amount FROM events "
+            f"WHERE {unbounded.where} AND occurred_at <= ? AND target_id IN ({marks}) "
+            "AND target_id <> source_id"
+        )
+        start, baseline_start = window.valid_from, window.valid_from - timedelta(
+            days=req.baseline_days
+        )
+        rows = self._con.execute(
+            "SELECT node, "
+            "COUNT(*) FILTER (WHERE occurred_at >= ?), "
+            "SUM(amount) FILTER (WHERE occurred_at >= ?), "
+            "COUNT(*) FILTER (WHERE occurred_at < ? AND occurred_at >= ?), "
+            "SUM(amount) FILTER (WHERE occurred_at < ? AND occurred_at >= ?), "
+            "MIN(occurred_at) FILTER (WHERE occurred_at >= ?), "
+            "MAX(occurred_at) FILTER (WHERE occurred_at < ?) "
+            f"FROM ({touched}) GROUP BY node",
+            [start, start, start, baseline_start, start, baseline_start, start, start,
+             *unbounded.params, window.valid_to, *subjects,
+             *unbounded.params, window.valid_to, *subjects],
+        ).fetchall()  # fmt: skip
+        return ActivityResult(
+            nodes={
+                node: NodeActivity(
+                    recent_count=int(recent),
+                    recent_total=None if recent_total is None else float(recent_total),
+                    baseline_count=int(baseline),
+                    baseline_total=None if baseline_total is None else float(baseline_total),
+                    first_in_window=None if first is None else _as_utc(first),
+                    last_before_window=None if last is None else _as_utc(last),
+                )
+                for node, recent, recent_total, baseline, baseline_total, first, last in rows
             }
         )
 

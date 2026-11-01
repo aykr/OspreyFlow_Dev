@@ -146,15 +146,16 @@ describe("the Monitoring place", () => {
     expect(screen.getByRole("list", { name: "What this alert concerns" }).textContent).toContain("07700 900310");
   });
 
-  it("offers the seven typologies as templates, and one fills the rule form", async () => {
+  it("offers the seven typologies and stage (c)'s four AML templates, and one fills the rule form", async () => {
     serve("author");
     place();
     fireEvent.click(screen.getByRole("tab", { name: "Rules" }));
     const list = await screen.findByRole("list", { name: "Templates" });
-    expect(within(list).getAllByRole("listitem")).toHaveLength(7);
+    expect(within(list).getAllByRole("listitem")).toHaveLength(11);
     expect(TEMPLATES.map((t) => t.typology).sort()).toEqual(
-      ["circular_flow", "document_verification", "kyc_screening", "pattern", "rapid_movement", "shared_attributes", "structuring"],
-    );
+      ["circular_flow", "document_verification", "dormant_reactivated", "high_risk_jurisdiction", "kyc_screening", "large_cash",
+       "pattern", "rapid_movement", "shared_attributes", "structuring", "velocity_rise"],
+    ); // prettier-ignore
     expect(within(list).getByText(/Raises high-severity alerts/, { selector: "*" })).toBeTruthy();
     fireEvent.click(within(list).getByRole("button", { name: "Use the template: Rapid movement" }));
     expect((screen.getByLabelText("Rule name") as HTMLInputElement).value).toBe("Rapid movement");

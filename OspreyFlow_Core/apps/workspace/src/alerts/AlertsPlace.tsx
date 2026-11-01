@@ -1,7 +1,7 @@
 // The *Monitoring* place on the left rail (`06_DECISIONS.md` ADR-133 decision 5; ADR-109 ruling 5
 // before it, as *Alerts*): the one alert queue first — every kind the reader may see — then the
 // rules that raise alerts and their templates, the reader's own hotlists and watched patterns, the
-// rows a failing rule held, and the rule audit.
+// rows a failing rule held, and the rule audit; and, since ADR-133 stage (c), the screening lists.
 // What each account may do follows its level in the case, read as every other case surface reads
 // it (`listCases`); the Conduit refuses whatever a stale view offers anyway.
 import { useEffect, useState } from "react";
@@ -10,6 +10,7 @@ import { listCases, type AccessLevel } from "../investigation/cases";
 import { AlertQueue } from "./AlertQueue";
 import type { CanvasOutcome } from "./api";
 import { HeldRowsPanel } from "./HeldRowsPanel";
+import { ListsPanel } from "./ListsPanel";
 import { RuleAuditPanel } from "./RuleAuditPanel";
 import { RulesPanel } from "./RulesPanel";
 import { HotlistPanel } from "../watches/HotlistPanel";
@@ -21,10 +22,12 @@ export interface AlertsPlaceProps {
   investigationId: string | null;
   accountId: string | null;
   isAdministrator: boolean;
+  /** ADR-112's `load_screening_lists`: subscribing to and refreshing a screening list. */
+  canManageLists?: boolean;
   onCanvas: (outcome: CanvasOutcome, nodeIds: string[]) => void;
 }
 
-type Tab = "queue" | "rules" | "watches" | "held" | "audit";
+type Tab = "queue" | "rules" | "watches" | "lists" | "held" | "audit";
 
 export function AlertsPlace(props: AlertsPlaceProps) {
   const { apiBaseUrl, bearerToken, investigationId } = props;
@@ -51,6 +54,7 @@ export function AlertsPlace(props: AlertsPlaceProps) {
     { id: "queue", label: "Queue" },
     { id: "rules", label: "Rules" },
     { id: "watches", label: "Watches" },
+    { id: "lists", label: "Lists" },
     ...(level === "editor" || level === "author" ? [{ id: "held", label: "Held rows" }] : []),
     ...(readsAudit ? [{ id: "audit", label: "Audit" }] : []),
   ];
@@ -66,6 +70,9 @@ export function AlertsPlace(props: AlertsPlaceProps) {
           <HotlistPanel {...api} />
           <MonitorPanel {...api} />
         </div>
+      )}
+      {tab === "lists" && (
+        <ListsPanel apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} canManage={props.canManageLists ?? false} />
       )}
       {tab === "held" && <HeldRowsPanel {...api} level={level} />}
       {tab === "audit" && readsAudit && <RuleAuditPanel {...api} />}

@@ -1,0 +1,11 @@
+{
+  "format": "eu_consolidated",
+  "version": "2026-10-30T18:02:11.000+01:00",
+  "skipped": 1,
+  "entries": [
+    {"ref": "800001", "listing": "sanction", "entity_type": "Person", "name": "Elena PETROVA",
+     "aliases": ["Lena Petrova"], "date_of_birth": "1971-03-03", "country": "XA"},
+    {"ref": "800002", "listing": "sanction", "entity_type": "Organisation", "name": "Northwind Metals FZE",
+     "aliases": [], "date_of_birth": null, "country": "XC"}
+  ]
+}

@@ -255,6 +255,12 @@ from schemas.packs import (
 )
 from schemas.profile import SourceProfile
 from schemas.rights import Right, RightsResponse, rights_for
+from schemas.screening import (
+    ScreeningLists,
+    ScreeningListStatus,
+    ScreeningListUpdate,
+    ScreeningSubscriptionInput,
+)
 from schemas.sentences import (
     RulePreview,
     RulePreviewRequest,
@@ -599,6 +605,13 @@ from .scheduler import (
     validate_schedule,
 )
 from .screening import ScreeningListStore
+from .screening_refresh import (
+    ListNotSubscribed,
+    ListRefused,
+    Rescreener,
+    check_location,
+)
+from .screening_refresh import refresh as refresh_screening_list
 from .search import SearchRequest, SearchResponse, SuggestRequest, SuggestResponse
 from .site_images import (
     object_key_for,
@@ -9526,6 +9539,110 @@ async def data_feeds_route(
                        investigation_id=investigation.id, resolved_query={},
                        result_cardinality=len(feeds))  # fmt: skip
     return feeds
+
+
+# --- screening lists as managed sources (ADR-133 decision 4, stage (c)) --------------------------
+
+
+@app.get("/v1/screening-lists", dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))])
+async def list_screening_lists(
+    principal: PrincipalDep, screening_lists: ScreeningListsDep, audit: AuditDep
+) -> ScreeningLists:
+    """The Lists screen for a reader of the alert queue: each list's version, entries, last update
+    and failure, in words. Not its refreshes: their counts of customers re-screened and alerts
+    raised are taken across every case in the deployment (rule 7: no unfiltered count)."""
+    found = await screening_lists.subscriptions()
+    await audit.record(principal=principal, action="list_screening_lists", investigation_id=None,
+                       resolved_query={}, result_cardinality=len(found))  # fmt: skip
+    return ScreeningLists(lists=found, updates=[], can_manage=False)
+
+
+@app.get(
+    "/v1/admin/screening-lists",
+    dependencies=[Depends(require_right(Right.LOAD_SCREENING_LISTS))],
+)
+async def manage_screening_lists(
+    principal: PrincipalDep, screening_lists: ScreeningListsDep, audit: AuditDep
+) -> ScreeningLists:
+    """The Lists screen for whoever may load screening lists: the lists and their latest
+    refreshes, with what each changed, re-screened and raised."""
+    found = await screening_lists.subscriptions()
+    updates = await screening_lists.updates(limit=20)
+    await audit.record(principal=principal, action="list_screening_lists", investigation_id=None,
+                       resolved_query={"manage": True}, result_cardinality=len(found))  # fmt: skip
+    return ScreeningLists(lists=found, updates=updates, can_manage=True)
+
+
+@app.post(
+    "/v1/admin/screening-lists",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.LOAD_SCREENING_LISTS))],
+)
+async def subscribe_screening_list(
+    principal: PrincipalDep,
+    screening_lists: ScreeningListsDep,
+    audit: AuditDep,
+    body: ScreeningSubscriptionInput,
+) -> ScreeningListStatus:
+    """A list subscribed (or its subscription changed): its connector and its file in the ingest
+    folder. Nothing is read until it is refreshed; a location outside the folder is refused now."""
+    try:
+        check_location(body.location)
+    except ListRefused as refused:
+        raise HTTPException(
+            status_code=422, detail={"error": "list_refused", "message": str(refused)}
+        ) from refused
+    status_ = await screening_lists.subscribe(body, principal.id, synthetic=False)
+    await audit.record(principal=principal, action="screening_list_subscribed",
+                       investigation_id=None, resolved_query=body.model_dump(mode="json"),
+                       result_cardinality=1)  # fmt: skip
+    return status_
+
+
+@app.post(
+    "/v1/admin/screening-lists/{list_name}/refresh",
+    dependencies=[Depends(require_right(Right.LOAD_SCREENING_LISTS))],
+)
+async def refresh_screening_list_route(
+    list_name: str,
+    request: Request,
+    principal: PrincipalDep,
+    screening_lists: ScreeningListsDep,
+    typology_rules: TypologyRulesDep,
+    graph: GraphDep,
+    handling_scheme: HandlingSchemeDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+    valkey: ValkeyDep,
+    principal_resolver: PrincipalResolverDep,
+) -> ScreeningListUpdate:
+    """*Refresh now*: the list read again through its connector, applied as a new version, and
+    every customer of every case with a screening rule re-screened against the changed entries
+    only, as each rule's deployer (rule 3). Refused or failed in words, the list left as it was."""
+    rescreen = Rescreener(
+        rules=typology_rules,
+        datasets=get_datasets(request),
+        graph=graph,
+        scheme=handling_scheme,
+        alert_store=alerts_store,
+        audit=audit,
+        valkey=valkey,
+        principal_for_owner=principal_resolver.resolve_for_owner,
+        runner=principal,
+    )
+    try:
+        update = await refresh_screening_list(list_name, store=screening_lists, rescreen=rescreen)
+    except ListNotSubscribed as missing:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": f"no list is subscribed as “{list_name}”"},
+        ) from missing
+    await audit.record(principal=principal, action="screening_list_refreshed",
+                       investigation_id=None,
+                       resolved_query={"list_name": list_name, "outcome": update.outcome,
+                                       "version": update.version, "alerts": update.alerts},
+                       result_cardinality=update.alerts)  # fmt: skip
+    return update
 
 
 @app.get("/v1/admin/schedules", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))])

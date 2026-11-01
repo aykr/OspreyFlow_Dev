@@ -3,7 +3,10 @@
 // finds this page by its directory) and for the Product Overview deck's screens, in both brands
 // (`?brand=govuk`). Nothing here reaches a server. `?open=<id>` opens that alert; `?tab=rules` and
 // `?tab=watches` open those tabs; `?tab=rules&sentence=preview` writes a rule as a sentence there and
-// previews it (ADR-133 stage (b)). The data is synthetic (rule 9): invented names and numbers.
+// previews it (ADR-133 stage (b)). ADR-133 stage (c): `?tab=lists` opens the screening lists (with
+// `&lists=manage`, as whoever may load them, after a refresh), and `?tab=rules&template=<typology>`
+// fills the rule form from that template (the high-risk jurisdiction one with two codes). The data
+// is synthetic (rule 9): invented names and numbers, and the user-assigned country codes XA and XB.
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -118,8 +121,29 @@ const SENTENCE_RULE = {
     severity: "high", team: "case", runs: "post_commit", on_hit: "load", scope: "this_case" } },
 };  // prettier-ignore
 
+// ADR-133 stage (c): the screening lists — synthetic, shaped as the Conduit sends them.
+const LISTS = [
+  { list_name: "Synthetic sanctions list", source: "opensanctions", location: "lists/synthetic_opensanctions_v2.ftm.json",
+    dataset: null, synthetic: true, licence: "CC BY-NC 4.0: non-commercial use only, unless licensed by OpenSanctions",
+    version: "sha256:3906852638793da1", entries: 10, updated_at: hoursAgo(1), attempted_at: hoursAgo(1), failure: null },
+  { list_name: "Synthetic OFAC-format list", source: "ofac_sdn", location: "lists/SDN.CSV", dataset: null, synthetic: true,
+    licence: "US Government work, in the public domain (17 U.S.C. §105)", version: "sha256:9c41d07be2a4f1e0", entries: 3,
+    updated_at: hoursAgo(26), attempted_at: hoursAgo(2),
+    failure: "The file could not be read as ofac_sdn: line 1 of SDN.CSV has no entry number (ent_num). The list was left as it was (version sha256:9c41d07be2a4f1e0)." },
+];  // prettier-ignore
+const REFRESHES = [
+  { id: "u2", list_name: "Synthetic sanctions list", at: hoursAgo(1), outcome: "updated", version: "sha256:3906852638793da1",
+    previous_version: "sha256:f0c7091a6a53d6a2", added: 1, changed: 1, removed: 1, rescreened: 412, alerts: 1,
+    words: "Version sha256:3906852638793da1: 1 added, 1 changed, 1 removed. 412 customers re-screened against 2 changed entries; 1 alert raised." },
+  { id: "u1", list_name: "Synthetic OFAC-format list", at: hoursAgo(2), outcome: "failed", version: "sha256:9c41d07be2a4f1e0",
+    previous_version: null, added: 0, changed: 0, removed: 0, rescreened: 0, alerts: 0, words: LISTS[1].failure },
+];  // prettier-ignore
+
 function answer(path: string, search: URLSearchParams): unknown {
   if (path === "/v1/ontology") return ONTOLOGY;
+  if (path === "/v1/screening-lists") return { lists: LISTS, updates: [], can_manage: false };
+  if (path === "/v1/admin/screening-lists") return { lists: LISTS, updates: REFRESHES, can_manage: true };
+  if (path.startsWith("/v1/admin/screening-lists/") && path.endsWith("/refresh")) return REFRESHES[0];
   if (path === "/v1/investigations") return [{ id: "inv-1", name: "Operation Ledger", level: "author", created_at: "", created_by: "" }];
   const local = path.replace("/v1/investigations/inv-1/", "");
   if (local === "alert-queue") {
@@ -162,6 +186,7 @@ createRoot(document.getElementById("root")!).render(
     investigationId="inv-1"
     accountId="analyst-1"
     isAdministrator={false}
+    canManageLists={new URLSearchParams(window.location.search).get("lists") === "manage"}
     onCanvas={() => undefined}
   />,
 );
@@ -186,7 +211,8 @@ const open = params.get("open");
 for (let i = 0; i < 40 && (tab || open); i++) {
   await settle();
   if (tab) {
-    const button = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent === (tab === "rules" ? "Rules" : "Watches"));
+    const label = { rules: "Rules", watches: "Watches", lists: "Lists" }[tab] ?? "Queue";
+    const button = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent === label);
     if (button) { button.click(); break; }
   } else if (open) {
     const row = QUEUE.find((r) => r.alert.id === open);
@@ -214,4 +240,23 @@ if (params.get("sentence") === "preview") {
   pressButton("Show the drawn pattern");
   await settle();
   pressButton("Preview on the last 90 days");
+}
+
+// `?template=<typology>` (with `tab=rules`): that template fills the form; a jurisdiction list is typed.
+const template = params.get("template");
+if (template) {
+  const names: Record<string, string> = {
+    high_risk_jurisdiction: "High-risk jurisdiction", large_cash: "Large cash",
+    dormant_reactivated: "Dormant account reactivated", velocity_rise: "Sudden rise in velocity",
+  };  // prettier-ignore
+  for (let i = 0; i < 40 && !document.querySelector(`[aria-label="Use the template: ${names[template]}"]`); i++) await settle();
+  document.querySelector<HTMLButtonElement>(`[aria-label="Use the template: ${names[template]}"]`)?.click();
+  await settle();
+  choose("High-risk jurisdictions", "XA, XB");
+}
+
+// `?lists=manage&tab=lists&refreshed=1`: a refresh just made, its words shown.
+if (params.get("refreshed")) {
+  for (let i = 0; i < 40 && !document.querySelector('[aria-label="Refresh now: Synthetic sanctions list"]'); i++) await settle();
+  document.querySelector<HTMLButtonElement>('[aria-label="Refresh now: Synthetic sanctions list"]')?.click();
 }

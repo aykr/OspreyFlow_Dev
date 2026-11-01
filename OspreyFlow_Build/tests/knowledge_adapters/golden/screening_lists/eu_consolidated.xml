@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<export xmlns="http://eu.europa.ec/fpi/fsd/export" generationDate="2026-10-30T18:02:11.000+01:00" globalFileId="900001">
+  <sanctionEntity designationDate="2021-02-01" logicalId="800001" euReferenceNumber="EU.SYN.1">
+    <regulation regulationType="regulation" publicationDate="2021-02-01" programme="SYN"/>
+    <subjectType code="person" classificationCode="P"/>
+    <nameAlias firstName="Elena" lastName="Petrova" wholeName="Elena PETROVA" strong="true" logicalId="1"/>
+    <nameAlias wholeName="Lena Petrova" strong="false" logicalId="2"/>
+    <citizenship countryIso2Code="XA" countryDescription="XANADU REPUBLIC" logicalId="3"/>
+    <birthdate birthdate="1971-03-03" dayOfMonth="3" monthOfYear="3" year="1971" circa="false" logicalId="4"/>
+  </sanctionEntity>
+  <sanctionEntity designationDate="2023-07-07" logicalId="800002" euReferenceNumber="EU.SYN.2">
+    <regulation regulationType="regulation" publicationDate="2023-07-07" programme="SYN"/>
+    <subjectType code="enterprise" classificationCode="E"/>
+    <nameAlias wholeName="Northwind Metals FZE" strong="true" logicalId="5"/>
+    <address city="Port Imaginary" countryIso2Code="XC" countryDescription="BEXLAND" logicalId="6"/>
+  </sanctionEntity>
+  <sanctionEntity designationDate="2023-07-07" logicalId="800003" euReferenceNumber="EU.SYN.3">
+    <regulation regulationType="regulation" publicationDate="2023-07-07" programme="SYN"/>
+    <subjectType code="vessel" classificationCode="V"/>
+    <nameAlias wholeName="Northern Gull" strong="true" logicalId="7"/>
+  </sanctionEntity>
+</export>

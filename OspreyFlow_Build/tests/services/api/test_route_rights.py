@@ -234,6 +234,10 @@ ROUTE_RIGHTS = {
     "read_rule_sentence": "investigate",
     "preview_rule_sentence": "investigate",
     "deploy_rule_sentence": "deploy_rules",
+    "list_screening_lists": "read_alert_queue",
+    "manage_screening_lists": "load_screening_lists",
+    "subscribe_screening_list": "load_screening_lists",
+    "refresh_screening_list_route": "load_screening_lists",
     "read_rule_audit": "read_rule_audit",
     "list_held_rows": "read_held_rows",
     "release_held_rows_route": "decide_held_rows",
@@ -322,10 +326,9 @@ def test_every_route_names_the_right_the_table_gives_it() -> None:
 def test_every_right_guards_at_least_one_route() -> None:
     """A right no route checks is a right stated and exercised by nothing (rule 12) — except the
     two the Conduit has no route for yet: people, dashboards and data feeds arrive with the Admin
-    area (ADR-110 Amendment 1, ADR-112); screening lists load by a script;
-    reverting a load has no route (spec 09 §6)."""
-    not_yet = {"load_screening_lists",
-               "revert_loads", "read_audit",
+    area (ADR-110 Amendment 1, ADR-112); reverting a load has no route (spec 09 §6). Screening
+    lists gained theirs with ADR-133 stage (c)."""
+    not_yet = {"revert_loads", "read_audit",
                "export_override"}  # fmt: skip
     guarded = {r for r in ROUTE_RIGHTS.values() if r}
     assert {r.value for r in Right} - guarded == not_yet

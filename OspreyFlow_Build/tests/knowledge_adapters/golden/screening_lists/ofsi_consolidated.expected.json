@@ -1,0 +1,13 @@
+{
+  "format": "ofsi_consolidated",
+  "version": "2026-01-27",
+  "skipped": 1,
+  "entries": [
+    {"ref": "90001", "listing": "sanction", "entity_type": "Person", "name": "PETROVA, Elena",
+     "aliases": ["PETROVA, Lena"], "date_of_birth": "1971-03-03", "country": "Xanadu Republic"},
+    {"ref": "90002", "listing": "sanction", "entity_type": "Person", "name": "ORLANSKY, Dmitri",
+     "aliases": [], "date_of_birth": null, "country": "Xanadu Republic"},
+    {"ref": "90003", "listing": "sanction", "entity_type": "Organisation", "name": "NORTHWIND METALS FZE",
+     "aliases": [], "date_of_birth": null, "country": "Bexland"}
+  ]
+}

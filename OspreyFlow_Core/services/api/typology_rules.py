@@ -192,5 +192,17 @@ class TypologyRuleStore:
             )
         return [_row_to_rule(r) for r in rows]
 
+    async def list_active_of_typology(self, typology: str) -> list[TypologyRule]:
+        """Every active rule of one typology, in every case — a screening list's re-screening
+        reads each `kyc_screening` rule (ADR-133 decision 4). Not principal-scoped, like
+        `list_active_for_case`: each rule then runs as its own deployer. Never a route."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM typology_rules "
+                "WHERE params->>'typology' = $1 AND status = 'active' ORDER BY created_at, id",
+                typology,
+            )
+        return [_row_to_rule(r) for r in rows]
+
 
 __all__ = ["TypologyRuleNotFoundError", "TypologyRuleStore"]

@@ -159,6 +159,14 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
       state.rules = [made, ...state.rules];
       return json(201, made);
     }
+    // ADR-133 stage (c): the screening lists (synthetic, rule 9).
+    if (url.pathname === "/v1/screening-lists") return json(200, { lists: LISTS, updates: [], can_manage: false });
+    if (url.pathname === "/v1/admin/screening-lists" && method === "GET") return json(200, { lists: LISTS, updates: [], can_manage: true });
+    if (url.pathname === "/v1/admin/screening-lists" && method === "POST")
+      return json(201, { ...LISTS[0], ...(request.postDataJSON() as object), version: null, entries: 0, updated_at: null });
+    if (url.pathname === "/v1/admin/screening-lists/Synthetic%20list/refresh")
+      return json(200, { id: "u1", list_name: "Synthetic list", at: "2026-11-01T09:00:00Z", outcome: "updated", added: 1, changed: 1,
+        removed: 1, rescreened: 4, alerts: 1, words: "Version v2: 1 added, 1 changed, 1 removed. 4 customers re-screened against 2 changed entries; 1 alert raised." });  // prettier-ignore
     if (path === "held-rows") return json(200, state.held);
     if (path === "held-rows/reject") {
       const ids = (request.postDataJSON() as { ids: string[] }).ids;
@@ -174,6 +182,12 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
   });
   return state;
 }
+
+const LISTS = [
+  { list_name: "Synthetic list", source: "opensanctions", location: "lists/synthetic_opensanctions_v1.ftm.json", dataset: null,
+    synthetic: true, licence: "CC BY-NC 4.0: non-commercial use only, unless licensed by OpenSanctions", version: "v1",
+    entries: 10, updated_at: "2026-11-01T08:00:00Z", attempted_at: "2026-11-01T08:00:00Z", failure: null },
+];  // prettier-ignore
 
 const ONTOLOGY = {
   version: 1,
@@ -437,6 +451,58 @@ test("a sentence is previewed on the last 90 days, by keyboard, and nothing is d
   expect(state.sent.find((s) => s.path === "rules/preview")?.body).toEqual({ sentence: WRITTEN });
   expect(state.sent.map((s) => s.path)).not.toContain("rules/sentence");
   registerCovered(REGISTRY, "preview-a-rule-by-keyboard");
+});
+
+test("an AML template is deployed with its jurisdiction list, by keyboard (ADR-133 stage c)", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await press(page, page.getByRole("button", { name: "Use the template: High-risk jurisdiction" }));
+  await expect(page.getByLabel("Rule name")).toBeFocused();
+  await page.getByRole("textbox", { name: "High-risk jurisdictions" }).focus();
+  await page.keyboard.type("xa, xb");
+  await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
+  await expect(page.getByText("Deployed “High-risk jurisdiction”.")).toBeVisible();
+  expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
+    name: "High-risk jurisdiction",
+    params: { typology: "high_risk_jurisdiction", jurisdictions: ["XA", "XB"] },
+    trigger: "post_commit",
+    budget_ms: 5000,
+  });
+  registerCovered(REGISTRY, "deploy-an-aml-template-by-keyboard");
+});
+
+test("the screening lists are read by keyboard, with no action offered to a reader (ADR-133 stage c)", async ({ page }) => {
+  await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "Lists" }));
+  const table = page.getByRole("table", { name: "Screening lists and their versions" });
+  await expect(table).toContainText("Synthetic list");
+  await expect(table).toContainText("Up to date with its last refresh.");
+  await expect(page.getByRole("button", { name: /Refresh now/ })).toHaveCount(0);
+  registerCovered(REGISTRY, "read-the-screening-lists-by-keyboard");
+});
+
+test("a screening list is refreshed and another subscribed to, by keyboard (ADR-133 stage c)", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html?lists=manage");
+  await press(page, page.getByRole("tab", { name: "Lists" }));
+  await press(page, page.getByRole("button", { name: "Refresh now: Synthetic list" }));
+  await expect(page.getByRole("status")).toContainText("1 alert raised");
+  expect(state.sent.some((s) => s.path === "/v1/admin/screening-lists/Synthetic%20list/refresh")).toBe(true);
+  registerCovered(REGISTRY, "refresh-a-screening-list-by-keyboard");
+  const form = page.getByRole("form", { name: "Subscribe to a list" });
+  await form.getByLabel("List name").focus();
+  await page.keyboard.type("UN list");
+  await form.getByRole("combobox", { name: "Connector" }).selectOption("un_consolidated");
+  await form.getByLabel("File in the ingest folder").focus();
+  await page.keyboard.type("lists/consolidated.xml");
+  await press(page, form.getByRole("button", { name: "Subscribe" }));
+  await expect(page.getByRole("status")).toContainText("Subscribed to “UN list”");
+  expect(state.sent.find((s) => s.path === "/v1/admin/screening-lists")?.body).toEqual({
+    list_name: "UN list", source: "un_consolidated", location: "lists/consolidated.xml", dataset: null, use: "local_development",
+  });  // prettier-ignore
+  registerCovered(REGISTRY, "subscribe-to-a-screening-list-by-keyboard");
 });
 
 test("every registered Alerts action has its own proving test case above", () => {

@@ -1,0 +1,3 @@
+# SHA-256 of every synthetic screening-list file (services/api/screening_refresh.py, rule 9).
+f0c7091a6a53d6a28d73255b1738d3619b169dc303e8c85adf2b8c5c1cfebdf0  synthetic_opensanctions_v1.ftm.json
+3906852638793da1263db873f1bcffbaa61565cdc6261ec828ed5cb7300004c3  synthetic_opensanctions_v2.ftm.json

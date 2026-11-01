@@ -87,6 +87,27 @@ description, as a fifth capability on the welcome page and as a part of About.
     reader's SQL scope, hidden ones included; opening one alert by its id still reads its nodes in
     turn (the reader must already hold the id, and is told "not found" either way).
 
+## Built by ADR-133 stage (c) (build-order step 6, 1 November 2026)
+
+- **Connectors** (`packages/knowledge_adapters/screening_lists.py`): OFAC SDN, OFSI consolidated, UN
+  and EU consolidated, OpenSanctions, each a Knowledge Adapter with synthetic golden files
+  (`tests/knowledge_adapters/golden/screening_lists/`), refusing a file not in its format in words.
+  Licences in spec 00 §7 (OFSI's list closed on 28 January 2026; the UN list has no open licence found).
+- **Lists as managed sources** (`services/api/screening.py`, `screening_refresh.py`): subscriptions,
+  versions, a diff per update, every refresh recorded; rule 9 by the repository's synthetic manifest or
+  the device's exceptions file; routes for the Lists screen, subscribing and *Refresh now*; the operator
+  command `scripts/refresh_screening_list.py`. The schedule is stage (d)'s: `scheduler.py` runs recipes
+  only.
+- **Re-screening** against the added and changed entries only, as each `kyc_screening` rule's deployer
+  within its case's datasets; matches written `inferred`, alerts high severity in the one queue.
+- **The AML templates** (`services/api/aml_rules.py`; `AnalyticsPort.account_activity`, DuckDB and
+  ClickHouse, conformance first): high-risk jurisdiction, large cash, dormant account reactivated,
+  sudden rise in velocity.
+- **The Glass** (`src/alerts/ListsPanel.tsx`, the Rules tab), user guide 1.15 §7.9–7.10, administration
+  guide 1.18 §9.5, Product Overview Draft1g.
+- Not run here: the ClickHouse half of the conformance cases, and re-screening and the AML templates
+  against ArcadeDB and Valkey (no stack was started).
+
 ## Built by ADR-133 stage (b) (build-order step 5, 1 November 2026)
 
 - **The sentence** (`packages/schemas/sentences.py`, `services/api/rule_sentences.py`): closed
