@@ -20989,3 +20989,55 @@ per-dataset egress (build order step 2d).
   - its key endpoint refuses a request that is not from loopback;
   - a key it receives appears in no log line and in no response body;
   - the page shows "key set" afterwards.
+
+## ADR-136 — Egress decided per dataset as well as by handling code, and keys marked as under a privacy contract — ACCEPTED (design)
+
+Status: accepted 1 November 2026, the owner's rulings: "Per-dataset egress" (from options), and "for
+every key specified allow the admin to mark if this key has privacy contract underpinning the key or
+not". Found while building ADR-135: the real Enron case and the synthetic demo data share handling code
+`P`, so a handling code alone could not keep one in while letting the other out.
+
+**Decision.**
+
+1. **A provider is marked as under a privacy contract, or not.** Each entry of `models.providers`
+   gains:
+   - `privacy_contract: bool` (default false), true when the deployment's organisation holds a
+     data-processing agreement with the provider covering this key;
+   - an optional `contract_reference` (words, never a secret).
+
+   The mark is shown in `ospreyflow models`, in Admin → System, in the install page's Models screen,
+   and beside each engine in the analysts' engine choice ("under contract" / "no contract").
+2. **Each dataset has an egress setting:**
+   - `none`: never sent to a hosted engine;
+   - `contracted`: only to providers marked `privacy_contract: true`;
+   - `any`: to any enabled provider.
+
+   **The default is `none`**, since egress is denied unless something allows it (`04_VAULT_BACKEND.md`
+   §4). Only an administrator sets it, in the Admin area's dataset settings; each change is audited
+   (who, when, from what to what).
+3. **Routing.** Material is sent to a hosted engine only when:
+   - its handling code is sendable (`models.sendable_handling_codes`, unchanged); **and**
+   - every dataset it comes from allows that engine.
+
+   Otherwise it runs on the local engine, and is refused in words where there is none (ADR-135
+   decision 4). A request whose datasets are not known is treated as `none`, so nothing leaves by
+   omission. In the analysts' engine choice, an engine the case's data may not reach is shown
+   disabled, with the reason in words.
+4. **The owner's deployment.** The synthetic demo datasets, and the Enron dataset as the owner ruled
+   on 1 November (a public dataset), are set to `any`. Gemini is marked
+   `privacy_contract: false` unless the owner says it is under contract.
+
+**Tests that would fail if it were broken** (rule 12; each shown red first):
+- **Routing:**
+  - a request for Gemini on material whose handling code is sendable but whose dataset is `none` is
+    **not sent**: the stand-in gateway records no call;
+  - the same with `contracted` and a provider without a contract: not sent;
+  - with `contracted` and a provider with a contract: sent;
+  - a request with no datasets known is not sent;
+  - material from two datasets, one `any` and one `none`, is not sent.
+- **Setting egress:**
+  - only an administrator may set a dataset's egress (rule 4);
+  - each change is audited.
+- **Showing it:**
+  - the engine choice disables an engine the case's data may not reach, and says why;
+  - the contract mark appears in `ospreyflow models` and Admin → System and is never a secret.
