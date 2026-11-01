@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.9** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.10** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.10 | 2026-11-01 | §6: an engine marked "under contract" or "no contract", and one the case's data may not reach shown not available, with the reason. |
 | 1.9 | 2026-11-01 | §6: choosing the model engine in Ask the case and Ask to search, and what an answer's "Answered by" line means. |
 | 1.8 | 2026-11-01 | The opening says what OspreyFlow is for: intelligence mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. |
 | 1.7 | 2026-10-29 | Describes v0.4.1: the top bar wraps to a second line when its items do not fit, and the map keeps what it showed when the timeline opens. |
@@ -423,6 +424,16 @@ there is no choice to make, and none is shown. Choosing an engine is a request, 
 your deployment may not send outside is always answered by its own model, whatever you choose. If an
 engine cannot be used — it is no longer enabled, or has no key — the question is refused in words and
 nothing is sent; choose another and ask again.
+
+**Engines you cannot choose, and why.** Beside each provider the choice says **under contract** or
+**no contract**: whether your organisation holds a privacy agreement with that provider. Your
+administrator also decides, for each dataset, whether its material may be sent to a provider at all:
+never, only to one under contract, or to any. An engine your case's data may not reach is still listed,
+marked **not available**, and cannot be chosen; the reason is written beneath the choice, for example
+"Gemini: Not available for this case: “Enron corpus” is set to egress none, never sent to a hosted
+engine such as Gemini." If the engine your administrator made the default is one of these, the
+deployment's own model is chosen instead. Every dataset starts at "never", so until your administrator
+changes yours, every question is answered by the deployment's own model.
 
 **"Answered by …".** Under each answer, a small line says which engine and model produced it, for
 example "Answered by Gemini (gemini/gemini-2.5-flash)" or "Answered by This deployment's own model
