@@ -12103,7 +12103,7 @@ is built yet.
 4. **A trend in a pack is a dated snapshot.** Adding a trend freezes its figures with the definition,
    the author and the time, and **marks the item at the highest classification among the events it
    counted** (the analytics store carries handling per event). A reader below an item's marking does
-   not see that item, and the pack says how many items are withheld from them (never which). The
+   not see that item, and the pack says that items are withheld from them, as a yes or no (Amendment 5; never which). The
    author may refresh a snapshot; the earlier one is kept in the pack's history.
 5. **Publishing within OspreyFlow.** A pack is a draft until published; a published version is
    immutable, and a new publication is a new version. Anyone with **Viewer on the case and
@@ -21066,3 +21066,32 @@ left open.
    per alert. The Reports figures still count typology alerts only, until ADR-134.
 7. **The Watches rail entry stays** beside the Monitoring place's Watches tab, until the owner decides
    whether "one place" (decision 5) removes it.
+
+### ADR-134, Amendment 1 (1 November 2026) — alerts in reporting as built
+
+Status: recorded during the owner's autonomous-build instruction of 1 November 2026, open to the owner's
+review (`BUILD_ORDER_2026-11.md`, open questions).
+
+1. **Alert trends read handlings copied when an alert is raised or changed** (alert facts), as event
+   trends read events.
+   - A node re-marked later changes the queue at once, but a trend only when the alert next changes.
+   - Facts are rewritten for every alert at each Conduit start.
+   - A failure to write a fact is logged, and does not fail the alert.
+2. **An alert raised before this change has no recorded handlings, so no one counts it in an alert
+   trend** (fail closed). It still counts in the queue and the dashboard. A backfill would need an
+   unscoped read and is not built.
+3. **The monitoring feed names typology rules by typology, not by the rule's own name.** A rule's name
+   is analyst-written text, which ADR-111 keeps out of the feed. Inside the Glass, trends show rule
+   names.
+4. **Hotlist and monitor alerts count in each case trend** of their owner (or their team, when
+   shared) within dataset reach, as the queue scopes them.
+5. **"Inferred" in an alert item means not yet confirmed by a person:**
+   - the alert's node is not asserted;
+   - or, with no node, the alert is not closed as a true positive;
+   - or a link it cites is still inferred.
+6. **The rule 3 review (decision 4) found one real leak and fixed it.** The queue read each alert's
+   nodes in turn, stopping at the first hidden one, so its reads grew with hidden alerts
+   (`test_case_queue_reads.py`). Pack items are now filtered in the pack store's query.
+   - **Still there:** the one batched recheck is sized by the alerts in the reader's query scope, as
+     ADR-039's read-time recheck requires. Opening one alert by its id still reads its nodes in turn;
+     the reader already holds the id, and gets "not found" either way.
