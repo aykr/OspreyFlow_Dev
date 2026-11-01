@@ -85,6 +85,9 @@ class Dataset:
     #: Whether the seed has a rehearsal reset and two mid-demo commands (`--reset-live`,
     #: `--release-batch-2`, `--publish-reports-fallback`: ADR-127 Amendment 23).
     rehearsal: bool = False
+    #: The seed's own mid-demo file steps, run as the PID's `--release-batch-2` is, leaving the
+    #: Conduit running (Operation Ledger's monitoring week, ADR-108 Amendment 5).
+    mid_demo_steps: tuple[str, ...] = ()
 
 
 #: The PaySim graph sample: the first fraud transactions and everything touching their accounts.
@@ -97,7 +100,9 @@ REAL_DATA_USE = "owner_run_demonstration"
 DATASETS: dict[str, Dataset] = {
     "hmp": Dataset(script="scripts.seed_hmp_fixture", case_name="HMP fixture (synthetic demo)"),
     "ledger": Dataset(
-        script="scripts.seed_ledger_fixture", case_name="Operation Ledger (synthetic demo)"
+        script="scripts.seed_ledger_fixture",
+        case_name="Operation Ledger (synthetic demo)",
+        mid_demo_steps=("--release-week-2", "--release-list-update", "--reset-week-2"),
     ),
     "fixture-corp": Dataset(
         script="scripts.seed_fixture_corp", case_name="Fixture Corp (synthetic demo)"
@@ -279,6 +284,7 @@ def seed_internal(
     release_batch_2: bool = False,
     publish_reports_fallback: bool = False,
     check: bool = False,
+    mid_demo_step: str | None = None,
     datasets: Mapping[str, Dataset] = DATASETS,
     code_mounts: Sequence[tuple[Path, str]] = (),
 ) -> list[str]:
@@ -306,6 +312,14 @@ def seed_internal(
         )
     if len(rehearsal_steps) > 1:
         raise SeedRefused(f"{' and '.join(rehearsal_steps)} are run one at a time")
+    if mid_demo_step is not None:
+        if mid_demo_step not in spec.mid_demo_steps:
+            built = [n for n, d in datasets.items() if mid_demo_step in d.mid_demo_steps]
+            raise SeedRefused(
+                f"{mid_demo_step} is only built for {', '.join(built) or 'no dataset'} so far"
+            )
+        if rehearsal_steps:
+            raise SeedRefused(f"{mid_demo_step} and {rehearsal_steps[0]} are run one at a time")
     if clear_shared_stores and not spec.sampled:
         raise SeedRefused("--clear-shared-stores is only built for paysim so far")
     if clear_shared_stores and vault is None:
@@ -385,6 +399,10 @@ def seed_internal(
     if spec.data_folder and not (data_root / spec.data_folder).is_dir():
         raise SeedRefused(
             f"the dataset is not provisioned: {data_root / spec.data_folder} is missing"
+        )
+    if mid_demo_step is not None:
+        return _mid_demo(
+            spec, repo_root, directory, run, lookup_subs(directory), mid_demo_step, code_mounts
         )
     if release_batch_2 or publish_reports_fallback or check:
         return _mid_demo(
@@ -804,6 +822,11 @@ def main(
     release_batch_2 = "--release-batch-2" in args
     publish_reports_fallback = "--publish-reports-fallback" in args
     check = "--check" in args
+    asked_steps = sorted({step for d in datasets.values() for step in d.mid_demo_steps} & set(args))
+    if len(asked_steps) > 1:
+        print(f"{' and '.join(asked_steps)} are run one at a time", file=sys.stderr)
+        return 2
+    mid_demo_step = asked_steps[0] if asked_steps else None
     confirm: str | None = None
     if "--confirm" in args:
         value = args[args.index("--confirm") + 1 :][:1]
@@ -900,7 +923,8 @@ def main(
             "[--graph-fraud-rows N|all] "
             "[--repair-strays | --restore-missing [--apply] [--repair-limit N]] "
             "[--clear-shared-stores --vault ID [--accept-strays N] [--confirm V:E:N]] "
-            "[--reset-live | --release-batch-2 | --publish-reports-fallback | --check]",
+            "[--reset-live | --release-batch-2 | --publish-reports-fallback | --check] "
+            "[--release-week-2 | --release-list-update | --reset-week-2]",
             file=sys.stderr,
         )
         return 2
@@ -934,6 +958,7 @@ def main(
             release_batch_2=release_batch_2,
             publish_reports_fallback=publish_reports_fallback,
             check=check,
+            mid_demo_step=mid_demo_step,
             datasets=datasets,
             code_mounts=code_mounts,
         )
@@ -962,7 +987,7 @@ def main(
     if reset_live:
         print("seed: reset finished; the report above says what it restored and could not undo.")
         return 0
-    if release_batch_2 or publish_reports_fallback or check:
+    if release_batch_2 or publish_reports_fallback or check or mid_demo_step:
         print("seed: done; the Conduit was left running.")
         return 0
     if repair_strays or restore_missing:
