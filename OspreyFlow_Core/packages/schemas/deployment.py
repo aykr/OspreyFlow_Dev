@@ -232,16 +232,29 @@ EXTRACTION_CONTEXT_TOKENS = 32768
 ModelRole = Literal["extraction", "vision", "transcription", "embedding"]
 
 
+#: The label analysts see for the providers ADR-135 names; any other is its name, capitalised.
+PROVIDER_LABELS: dict[str, str] = {"openai": "OpenAI", "anthropic": "Anthropic", "gemini": "Gemini"}
+
+#: The engine name that means the deployment's own models (ADR-135 decision 1).
+LOCAL_ENGINE = "local"
+
+
 class ModelProviderConfig(BaseModel):
-    """A client's own model provider (ADR-114 decision 11, Amendment 6 point 4), reached through the
-    deployment's LiteLLM gateway. For each role it names, it **replaces** the local model — for
-    material whose handling code is in `models.sendable_handling_codes` only; anything else runs on
-    the local model. Its key is never here: it is `OSPREY_MODEL_PROVIDER_KEY` at install."""
+    """A client's own model provider (ADR-114 decision 11, Amendment 6 point 4; ADR-135), reached
+    through the deployment's LiteLLM gateway, for material whose handling code is in
+    `models.sendable_handling_codes` only; anything else runs on the local model. Its key is never
+    here: it is `OSPREY_MODEL_KEY_<NAME>` at install (`OSPREY_MODEL_PROVIDER_KEY` for the single
+    `models.provider`), kept in the deployment's `deployment.env` and read by the gateway alone."""
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(
         description="LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock…"
+    )
+    label: str | None = Field(
+        default=None,
+        description="ADR-135: the name analysts see for this engine. Default: OpenAI, Anthropic "
+        "or Gemini for those three, else the provider's name capitalised.",
     )
     roles: dict[ModelRole, str] = Field(
         description="The roles it takes, each with the provider's model for it"
@@ -281,6 +294,17 @@ class ModelProviderConfig(BaseModel):
             )
         return value
 
+    @model_validator(mode="after")
+    def _labelled(self) -> ModelProviderConfig:
+        if self.label is None or not self.label.strip():
+            self.label = PROVIDER_LABELS.get(self.name, self.name.replace("_", " ").title())
+        return self
+
+
+def provider_key_variable(provider: str, *, single: bool = False) -> str:
+    """`OSPREY_MODEL_KEY_<NAME>`; `OSPREY_MODEL_PROVIDER_KEY` for the single `models.provider`."""
+    return "OSPREY_MODEL_PROVIDER_KEY" if single else f"OSPREY_MODEL_KEY_{provider.upper()}"
+
 
 class ModelsConfig(BaseModel):
     """`05_DEPLOYMENT.md` §2.1's Models screen: "Local only, or local with a named hosted fallback
@@ -302,7 +326,23 @@ class ModelsConfig(BaseModel):
     )
     #: ADR-114 decision 11, Amendment 6: a client's own provider, replacing the local model for the
     #: roles it names (sendable material only). Supersedes `hosted_fallback`, which nothing acts on.
-    provider: ModelProviderConfig | None = None
+    provider: ModelProviderConfig | None = Field(
+        default=None,
+        description="ADR-114 Amendment 6: one provider, read as a one-entry `providers` whose "
+        "roles default to it; its key is OSPREY_MODEL_PROVIDER_KEY. Not with `providers`.",
+    )
+    #: ADR-135 decision 1: each enabled provider (engine), its models per role, its label.
+    providers: list[ModelProviderConfig] = Field(
+        default_factory=list,
+        description="ADR-135: the providers an administrator enables; each key is "
+        "OSPREY_MODEL_KEY_<NAME>, entered at install or with `ospreyflow models key`.",
+    )
+    #: ADR-135 decision 1: each role's default engine — `local` or an enabled provider's name.
+    defaults: dict[ModelRole, str] = Field(
+        default_factory=dict,
+        description="ADR-135: each role's default engine, `local` or an enabled provider's name. "
+        "A role not named runs on `local` (for the single `provider`, on it).",
+    )
     extraction: ExtractionModel = Field(
         default="qwen2.5:7b-instruct",
         description="ADR-095: the local model that extracts entities from text. Default: "
@@ -321,14 +361,46 @@ class ModelsConfig(BaseModel):
         description="ADR-095: the local model that turns text into vectors.",
     )
 
+    @property
+    def enabled_providers(self) -> list[ModelProviderConfig]:
+        """ADR-135: every enabled provider — `providers`, or the single `provider` as a one-entry
+        list."""
+        return [self.provider] if self.provider is not None else list(self.providers)
+
+    def key_variable(self, provider: str) -> str:
+        """Where a provider's key is kept in `deployment.env` (ADR-135 decision 2):
+        `OSPREY_MODEL_KEY_<NAME>`, or `OSPREY_MODEL_PROVIDER_KEY` for the single `provider`, so an
+        install made before ADR-135 keeps working. `ospreyflow models` (`cli/ospreyflow/models.py`)
+        names it by the same rule; `test_model_engines.py` holds the two to each other."""
+        return provider_key_variable(provider, single=self.provider is not None)
+
+    @property
+    def role_defaults(self) -> dict[ModelRole, str]:
+        """Each role's default engine as named. The single `provider` keeps Amendment 6's meaning:
+        the roles it takes default to it. A role not here runs on `local`."""
+        if self.provider is not None and not self.defaults:
+            return {role: self.provider.name for role in self.provider.roles}
+        return dict(self.defaults)
+
     @model_validator(mode="after")
     def _hosted_fallback_and_local_only_are_consistent(self) -> ModelsConfig:
-        if self.provider is not None and self.local_only:
+        if self.provider is not None and self.providers:
+            raise ValueError(
+                "both models.provider and models.providers are named; list every provider under "
+                "providers (provider is the older one-provider form)"
+            )
+        enabled = self.enabled_providers
+        seen: set[str] = set()
+        for provider in enabled:
+            if provider.name in seen:
+                raise ValueError(f"the provider {provider.name} is named twice in models.providers")
+            seen.add(provider.name)
+        if enabled and self.local_only:
             raise ValueError(
                 "models.local_only is true but a provider is named; set local_only: false to "
                 "declare that case content may leave the deployment"
             )
-        if self.provider is not None and self.hosted_fallback is not None:
+        if enabled and self.hosted_fallback is not None:
             raise ValueError(
                 "models.provider replaces the old hosted_fallback; name only the provider"
             )
@@ -337,11 +409,25 @@ class ModelsConfig(BaseModel):
                 "models.local_only is true but a hosted_fallback is named; set local_only: false "
                 "to declare the egress exception explicitly rather than by implication"
             )
-        if self.sendable_handling_codes and self.hosted_fallback is None and self.provider is None:
+        if self.sendable_handling_codes and self.hosted_fallback is None and not enabled:
             raise ValueError(
                 "models.sendable_handling_codes is set but no hosted_fallback is named; handling "
                 "codes cannot be sendable to nothing"
             )
+        by_name = {p.name: p for p in enabled}
+        for role, engine in self.defaults.items():
+            if engine == LOCAL_ENGINE:
+                continue
+            if engine not in by_name:
+                raise ValueError(
+                    f"models.defaults names {engine} for {role}, which is not an enabled engine "
+                    f"(local, or one of: {', '.join(by_name) or 'no provider is enabled'})"
+                )
+            if role not in by_name[engine].roles:
+                raise ValueError(
+                    f"models.defaults names {engine} for {role}, but {engine} takes no {role} "
+                    "model; add one under its roles, or choose another engine"
+                )
         return self
 
 

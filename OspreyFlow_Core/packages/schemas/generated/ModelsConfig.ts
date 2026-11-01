@@ -17,9 +17,17 @@ export type SendableHandlingCodes = string[];
  */
 export type Name = string;
 /**
+ * ADR-135: the name analysts see for this engine. Default: OpenAI, Anthropic or Gemini for those three, else the provider's name capitalised.
+ */
+export type Label = string | null;
+/**
  * The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy)
  */
 export type ApiBase = string | null;
+/**
+ * ADR-135: the providers an administrator enables; each key is OSPREY_MODEL_KEY_<NAME>, entered at install or with `ospreyflow models key`.
+ */
+export type Providers = ModelProviderConfig[];
 /**
  * ADR-095: the local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with.
  */
@@ -49,20 +57,27 @@ export interface ModelsConfig {
   local_only?: LocalOnly;
   hosted_fallback?: HostedFallback;
   sendable_handling_codes?: SendableHandlingCodes;
+  /**
+   * ADR-114 Amendment 6: one provider, read as a one-entry `providers` whose roles default to it; its key is OSPREY_MODEL_PROVIDER_KEY. Not with `providers`.
+   */
   provider?: ModelProviderConfig | null;
+  providers?: Providers;
+  defaults?: Defaults;
   extraction?: Extraction;
   vision?: Vision;
   transcription?: Transcription;
   embedding?: Embedding;
 }
 /**
- * A client's own model provider (ADR-114 decision 11, Amendment 6 point 4), reached through the
- * deployment's LiteLLM gateway. For each role it names, it **replaces** the local model — for
- * material whose handling code is in `models.sendable_handling_codes` only; anything else runs on
- * the local model. Its key is never here: it is `OSPREY_MODEL_PROVIDER_KEY` at install.
+ * A client's own model provider (ADR-114 decision 11, Amendment 6 point 4; ADR-135), reached
+ * through the deployment's LiteLLM gateway, for material whose handling code is in
+ * `models.sendable_handling_codes` only; anything else runs on the local model. Its key is never
+ * here: it is `OSPREY_MODEL_KEY_<NAME>` at install (`OSPREY_MODEL_PROVIDER_KEY` for the single
+ * `models.provider`), kept in the deployment's `deployment.env` and read by the gateway alone.
  */
 export interface ModelProviderConfig {
   name: Name;
+  label?: Label;
   roles: Roles;
   api_base?: ApiBase;
 }
@@ -70,5 +85,11 @@ export interface ModelProviderConfig {
  * The roles it takes, each with the provider's model for it
  */
 export interface Roles {
+  [k: string]: string;
+}
+/**
+ * ADR-135: each role's default engine, `local` or an enabled provider's name. A role not named runs on `local` (for the single `provider`, on it).
+ */
+export interface Defaults {
   [k: string]: string;
 }

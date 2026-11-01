@@ -134,6 +134,16 @@ def _no_compose_escapes(text: str) -> str:
     return text.replace("$$", "$").replace("$(", "$$(")
 
 
+def _present(ref: re.Match[str]) -> str:
+    """The replacement of Compose's `${VAR:+replacement}` (empty when the reference is another
+    form): what the variable stands for when it is set, which never reads its value."""
+    rest = ref["rest"]
+    for marker in (":+", "+"):
+        if rest.startswith(marker):
+            return rest[len(marker) :]
+    return ""
+
+
 class _Translator:
     def __init__(self, environment: dict[str, str]) -> None:
         self.environment = environment
@@ -160,6 +170,10 @@ class _Translator:
             refs = list(_REF.finditer(value))
             if not refs:
                 entries.append({"name": name, "value": value.replace("$$", "$")})
+            elif len(refs) == 1 and refs[0].span() == (0, len(value)) and _present(refs[0]):
+                # ADR-135: `${KEY:+yes}` is whether a model key is present, never the key. A
+                # cluster install stops without every enabled provider's key, so it is present.
+                entries.append({"name": name, "value": _present(refs[0])})
             elif len(refs) == 1 and refs[0].span() == (0, len(value)):
                 entries.append({**self._source(refs[0]["name"], refs[0]["rest"]), "name": name})
             else:
@@ -424,6 +438,7 @@ def render_cluster(
         UnpinnedImagesError,
         _render_versions_lock,
         compose_services,
+        model_key_variables,
         render_litellm_config,
     )
     from harness.site import render_caddyfile, render_glass_settings
@@ -513,6 +528,15 @@ def render_cluster(
     }
     workloads.append(workers)
     workloads.append(_keeper(pin))
+    # ADR-135 decision 2: a workload that reads the whole Secret (`envFrom`) has every model key
+    # blanked above it; only the gateway reads one, by name.
+    blanks = [{"name": key, "value": ""} for key in model_key_variables(config).values()]
+    for workload in [*workloads, *jobs]:
+        if workload.get("envFrom") and workload["name"] != "litellm":
+            given = {e["name"] for e in workload.get("env", [])}
+            workload["env"] = [
+                *workload.get("env", []), *(b for b in blanks if b["name"] not in given)
+            ]
     for workload in workloads:
         _cluster_changes(workload)
         if workload["name"] in waits:

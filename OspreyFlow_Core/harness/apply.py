@@ -107,22 +107,40 @@ def analytics_secret_lines(config: OspreyConfig) -> str:
     return f"OSPREY_CLICKHOUSE_PASSWORD={password}\nCLICKHOUSE_PASSWORD={password}\n"
 
 
-def provider_secret_lines(config: OspreyConfig, environ: Mapping[str, str]) -> str:
-    """A client's own model provider's key (ADR-114 Amendment 6, point 4), carried from the
-    installer's environment into the deployment's secrets file only — read there by the LiteLLM
+def provider_secret_lines(
+    config: OspreyConfig, environ: Mapping[str, str], *, previous: str = ""
+) -> str:
+    """Each enabled model provider's key (ADR-114 Amendment 6 point 4, ADR-135 decision 2), carried
+    from the installer's environment (`OSPREY_MODEL_KEY_<NAME>`; `OSPREY_MODEL_PROVIDER_KEY` for the
+    single `models.provider`) into the deployment's secrets file only — read there by the LiteLLM
     gateway alone, never by the Conduit, never in `osprey.yaml` or a generated file, never printed.
-    A provider named without its key stops the install here, in words."""
-    if config.models.provider is None:
-        return ""
-    key = environ.get("OSPREY_MODEL_PROVIDER_KEY", "")
-    if not key:
-        raise ApplyFailed(
-            "render",
-            f"models.provider names {config.models.provider.name}, and "
-            "OSPREY_MODEL_PROVIDER_KEY is not set. Set it in this terminal (it is kept only in the "
-            "deployment's own secrets file) and run the install again.",
-        )
-    return f"OSPREY_MODEL_PROVIDER_KEY={key}\n"
+
+    A key the deployment's earlier `deployment.env` (`previous`) already holds is not asked for
+    again (ADR-132 ruling 6; `keep_existing_secrets` then keeps the earlier value, and `ospreyflow
+    models key` is how one is changed). An enabled provider with neither stops the install here, in
+    words naming the variable."""
+    held = _env_pairs(previous)
+    lines: list[str] = []
+    for provider in config.models.enabled_providers:
+        variable = config.models.key_variable(provider.name)
+        key = environ.get(variable, "") or held.get(variable, "")
+        if not key:
+            raise ApplyFailed(
+                "render",
+                f"models enables the provider {provider.name}, and {variable} is not set. Set it "
+                "in this terminal (it is kept only in the deployment's own secrets file) and run "
+                "the install again, or remove the provider from osprey.yaml.",
+            )
+        lines.append(f"{variable}={key}\n")
+    return "".join(lines)
+
+
+def _env_pairs(text: str) -> dict[str, str]:
+    return {
+        name: value
+        for name, sep, value in (line.partition("=") for line in text.splitlines())
+        if sep and name and not name.startswith("#")
+    }
 
 
 def mail_secret_lines(config: OspreyConfig, environ: Mapping[str, str]) -> str:
@@ -550,8 +568,11 @@ def pin_release_images(out_dir: Path, lock_path: Path) -> None:
     pin_images(out_dir, lock_path.read_text(encoding="utf-8"))
 
 
-#: A `deployment.env` key that holds a secret (ADR-132, the owner's ruling 6).
-_SECRET_KEY = re.compile(r"(PASSWORD|SECRET|SECRET_KEY|ACCESS_KEY)$")
+#: A `deployment.env` key that holds a secret (ADR-132, the owner's ruling 6), a model provider's
+#: key among them (ADR-135 decision 2).
+_SECRET_KEY = re.compile(
+    r"(PASSWORD|SECRET|SECRET_KEY|ACCESS_KEY)$|^OSPREY_MODEL_KEY_[A-Z0-9_]+$|^OSPREY_MODEL_PROVIDER_KEY$"
+)
 
 
 def keep_existing_secrets(new: str, previous: str) -> str:
@@ -753,7 +774,7 @@ def main(argv: list[str] | None = None) -> int:
             + reporting_secrets(config)
             + analytics_secret_lines(config)
             + mail_secret_lines(config, os.environ)
-            + provider_secret_lines(config, os.environ)
+            + provider_secret_lines(config, os.environ, previous=previous_env)
             + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\n"
             # Postgres and the object stores: the deployment's own, or the cloud's (05 §3a).
             + managed_service_lines(

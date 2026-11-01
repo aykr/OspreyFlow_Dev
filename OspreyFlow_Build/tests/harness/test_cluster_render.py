@@ -291,3 +291,30 @@ def test_a_valkey_workload_in_the_chart_would_never_evict_a_key_on_its_own() -> 
     )
     if "valkey" in templates.lower():
         assert "--maxmemory-policy" in templates and "noeviction" in templates
+
+
+def test_a_cluster_gives_no_workload_but_the_gateway_a_model_key() -> None:
+    """ADR-135 decision 2. Lite's Conduit is told whether a key is present by Compose
+    (`${KEY:+yes}`); read as a plain reference here it would hand the Conduit the key itself. A
+    cluster install stops without every enabled provider's key (`provider_secret_lines`), so the
+    presence is "yes"; and every `envFrom` reader blanks the key above the Secret."""
+    values = values_for(
+        cluster_config(
+            models={"local_only": False, "sendable_handling_codes": ["P"],
+                    "providers": [{"name": "gemini", "roles": {"extraction": "gemini-2.5-flash"}}]}
+        )
+    )  # fmt: skip
+    workloads = _workloads(values)
+    api = {e["name"]: e for e in workloads["api"]["env"]}
+    assert api["OSPREY_MODEL_KEY_PRESENT_GEMINI"] == {
+        "name": "OSPREY_MODEL_KEY_PRESENT_GEMINI", "value": "yes"
+    }
+    assert api["OSPREY_MODEL_KEY_GEMINI"] == {"name": "OSPREY_MODEL_KEY_GEMINI", "value": ""}
+    for container in _containers(values):
+        for entry in container.get("env", []):
+            if entry.get("secret") == "OSPREY_MODEL_KEY_GEMINI":
+                assert container["name"] == "litellm", container["name"]
+        if container.get("envFrom") and container["name"] != "litellm":
+            blanked = {e["name"]: e.get("value") for e in container.get("env", [])}
+            assert blanked.get("OSPREY_MODEL_KEY_GEMINI") == "", container["name"]
+    assert "OSPREY_MODEL_KEY_GEMINI" in values["secrets"]["keys"]
