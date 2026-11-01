@@ -170,6 +170,9 @@ class QuestionEntry(BaseModel):
     unplaced: int = 0
     model: str
     created_at: datetime
+    #: ADR-135: the engine that answered (`local` or a provider's name); `None` for an answer kept
+    #: before engines were recorded.
+    engine: str | None = None
     #: Every node and link the evidence brief was drawn from, held like `read_ids`: a reader who
     #: may not see one of them is not shown the entry (rule 3).
     graph_node_ids: list[str] = Field(default_factory=list)
@@ -205,6 +208,10 @@ class QuestionAnswer(BaseModel):
     unplaced: int
     created_at: datetime
     graph_citations: list[GraphCitation] = Field(default_factory=list)
+    #: ADR-135 decision 4: which engine (`local` or a provider's name) and which model produced the
+    #: answer. `engine` is `None` for an answer kept before engines were recorded.
+    engine: str | None = None
+    model: str | None = None
 
 
 class QuestionAccepted(BaseModel):
@@ -222,6 +229,9 @@ class AskRequest(BaseModel):
     #: The timeline window, when one is set: only links whose interval overlaps it, and only events
     #: inside it, are in the brief ("narrow the timeline window" is one of the limit's options).
     window: Interval | None = None
+    #: ADR-135 decision 4: the engine the analyst chose (`local` or an enabled provider's name,
+    #: from `GET /v1/models/engines`); none is the role's default. The route still decides.
+    engine: str | None = Field(default=None, min_length=1, max_length=64)
 
     @model_validator(mode="after")
     def _window_runs_forward(self) -> AskRequest:
@@ -346,6 +356,8 @@ ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS event_handlings JSONB NOT NU
 -- NULL is "not recorded": every row written before this column existed, including those whose
 -- event_handlings holds the earlier default '[]' (which a real "no events" cannot be told from).
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS event_scopes JSONB;
+-- ADR-135: the engine that answered; NULL for an answer kept before engines were recorded.
+ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS engine TEXT;
 """
 
 
@@ -371,8 +383,10 @@ class PostgresQuestionStore:
             await conn.execute(
                 "INSERT INTO case_questions (id, investigation_id, author, question, answer, "
                 "document_ids, read_ids, candidate_ids, unplaced, model, created_at, "
-                "graph_node_ids, graph_link_ids, graph_citations, event_handlings, event_scopes) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)",
+                "graph_node_ids, graph_link_ids, graph_citations, event_handlings, event_scopes, "
+                "engine) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, "
+                "$17)",
                 entry.id,
                 entry.investigation_id,
                 entry.author,
@@ -389,6 +403,7 @@ class PostgresQuestionStore:
                 json.dumps([c.model_dump() for c in entry.graph_citations]),
                 json.dumps([h.model_dump(mode="json") for h in entry.event_handlings]),
                 None if entry.event_scopes is None else json.dumps(entry.event_scopes),
+                entry.engine,
             )
 
     async def list_for_case(self, investigation_id: str) -> list[QuestionEntry]:
@@ -579,6 +594,7 @@ class QuestionsService:
         selected_node_ids: Sequence[str] = (),
         selected_link_ids: Sequence[str] = (),
         window: Interval | None = None,
+        engine: str | None = None,
     ) -> QuestionAnswer:
         nodes, edges = await self._working_set.visible_membership(investigation_id, principal)
         documents = await self._documents(investigation_id, principal, nodes)
@@ -607,6 +623,7 @@ class QuestionsService:
                 json_schema=_schema(),
                 model=self._default_model,
                 handling=shared_handling([h for _, _, _, h in documents] + list(brief.handlings)),
+                engine=engine,
             )
         )
         data = result.data
@@ -685,6 +702,7 @@ class QuestionsService:
             candidate_ids=[r.id for r in records],
             unplaced=unplaced,
             model=result.model,
+            engine=result.engine,
             created_at=datetime.now(UTC),
             graph_node_ids=list(brief.node_ids),
             graph_link_ids=list(brief.link_ids),
@@ -704,6 +722,8 @@ class QuestionsService:
             unplaced=unplaced,
             created_at=entry.created_at,
             graph_citations=graph_citations,
+            engine=entry.engine,
+            model=entry.model,
         )
 
     async def _handling_of(
@@ -786,6 +806,8 @@ class QuestionsService:
                     unplaced=entry.unplaced,
                     created_at=entry.created_at,
                     graph_citations=entry.graph_citations,
+                    engine=entry.engine,
+                    model=entry.model,
                 )
             )
         return out

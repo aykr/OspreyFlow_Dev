@@ -20,7 +20,7 @@ word timings), not caller-chosen, so it gets concrete fields instead of a `data:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -42,6 +42,10 @@ class ExtractionRequest(BaseModel):
     #: its handling code is sendable; `None` is treated as not sendable (`services/api/
     #: model_routing.py`).
     handling: Handling | None = None
+    #: ADR-135 decision 4: the engine an analyst named for this request (`local` or an enabled
+    #: provider's name); `None` is the role's default. The route decides: a named engine that is not
+    #: enabled or has no key is refused, and unsendable material runs locally whatever is named.
+    engine: str | None = None
 
 
 class ExtractionResult(BaseModel):
@@ -53,6 +57,32 @@ class ExtractionResult(BaseModel):
     #: The schema-conforming structured output. Shape is whatever the request's `json_schema`
     #: declared.
     data: dict[str, Any]
+    #: ADR-135 decision 4: the engine that produced it (`local` or a provider's name), set by the
+    #: routing (`services/api/model_routing.py`); `None` from an adapter called directly.
+    engine: str | None = None
+
+
+ModelRoleName = Literal["extraction", "vision", "transcription", "embedding"]
+
+
+class OfferedEngine(BaseModel):
+    """An engine an analyst may choose (ADR-135 decision 5): the local engine, and each enabled
+    provider that has a key. Nothing about the key is here, not even whether one exists."""
+
+    #: `local`, or the provider's name — what a request sends as `engine`.
+    name: str
+    #: What the analyst sees, e.g. "Gemini".
+    label: str
+    #: The roles it has a model for; Ask the case and Ask to search use `extraction`.
+    roles: list[ModelRoleName]
+    #: The roles it is the default engine for.
+    default_for: list[ModelRoleName]
+
+
+class OfferedEngines(BaseModel):
+    """`GET /v1/models/engines`."""
+
+    engines: list[OfferedEngine]
 
 
 class TranscribeRequest(BaseModel):
@@ -125,4 +155,6 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     Transcript,
     VisionRequest,
     ImageAnalysis,
+    OfferedEngine,
+    OfferedEngines,
 )

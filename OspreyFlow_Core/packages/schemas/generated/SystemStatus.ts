@@ -11,6 +11,11 @@ export type Model = string;
 export type RunsAt = string;
 export type LocalModel = string | null;
 export type Models = ModelRoleStatus[];
+export type Name1 = string;
+export type Label = string;
+export type DefaultFor = string[];
+export type KeyPresent = boolean;
+export type Engines = EngineStatus[];
 export type ModelNotice = string | null;
 export type Current = string;
 export type CheckedAt = string;
@@ -28,6 +33,7 @@ export interface SystemStatus {
   version?: Version;
   components: Components;
   models?: Models;
+  engines?: Engines;
   model_notice?: ModelNotice;
   update?: UpdateNotice | null;
   [k: string]: unknown;
@@ -51,6 +57,21 @@ export interface ModelRoleStatus {
   runs_at: RunsAt;
   local_model?: LocalModel;
   [k: string]: unknown;
+}
+/**
+ * One model engine as the Admin area's System screen shows it (ADR-135 decision 5): its models,
+ * the roles it is the default for, and whether its key is present — never the key.
+ */
+export interface EngineStatus {
+  name: Name1;
+  label: Label;
+  models: Models1;
+  default_for: DefaultFor;
+  key_present: KeyPresent;
+  [k: string]: unknown;
+}
+export interface Models1 {
+  [k: string]: string;
 }
 /**
  * The last `ospreyflow update --check` (ADR-114 Amendment 8 point 2), as it wrote it.

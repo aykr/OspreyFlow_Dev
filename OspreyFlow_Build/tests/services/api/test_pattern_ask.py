@@ -175,6 +175,34 @@ async def _ask(
     )
 
 
+async def test_the_engine_named_reaches_the_routing_and_the_proposal_names_what_answered() -> None:
+    """ADR-135 decision 4. The question is sent with no handling, so it is never sent to a provider
+    (`model_routing.py`): naming Gemini runs locally, and the proposal says so."""
+    from services.api.model_routing import Engine, ModelRoutes, RoutedModel
+
+    service, model, _ = await _case(_two_visited(), count=1)
+    gemini = Engine(name="gemini", label="Gemini", key_present=True,
+                    models={"extraction": "gemini/gemini-2.5-flash"})  # fmt: skip
+    routed = RoutedModel(
+        model,  # type: ignore[arg-type]
+        routes=ModelRoutes(
+            locals={"extraction": "local-model"},
+            engines={"gemini": gemini},
+            sendable=frozenset({"P"}),
+        ),
+    )
+    service._proposer = pattern_ask.PatternProposer(routed, default_model="local-model")
+    proposal = await service.ask(
+        "inv-1",
+        pattern_ask.AskToSearchRequest(question="Who visited whom?", engine="gemini"),
+        ANALYST,
+        ONTOLOGY,
+    )
+    (request,) = model.requests
+    assert request.engine == "gemini" and request.model == "local-model"
+    assert (proposal.engine, proposal.model) == ("local", "local-model")
+
+
 # --- the proposal is validated against the ontology and the pattern rules ---------------------
 
 
@@ -551,7 +579,10 @@ async def test_the_route_answers_the_pattern_the_explanation_and_the_count(
     )
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"pattern", "explanation", "estimated_count", "is_floor"}
+    # ADR-135: the engine and model that proposed it (the fake model here is not routed).
+    assert set(body) == {"pattern", "explanation", "estimated_count", "is_floor", "engine",
+                         "model"}  # fmt: skip
+    assert body["model"]
     assert body["estimated_count"] == 4 and body["is_floor"] is False
     assert body["pattern"]["nodes"][1]["node_id"] == DANA
     assert graph.matched == 0

@@ -227,6 +227,7 @@ from schemas.ingest import (
     VerifyReport,
 )
 from schemas.mapconfig import MapConfig, PublicMapConfig
+from schemas.model import OfferedEngines
 from schemas.packs import (
     AddPackItem,
     PackDraft,
@@ -474,7 +475,14 @@ from .link_types import (
 )
 from .load_records import LedgerSink, may_see_counts, released_from_of, report_view
 from .mapconfig_loader import load_map_config, public_view
-from .model_routing import ModelEgressRefused, RoutedModel, model_status, routes_from_env
+from .model_routing import (
+    EngineRefused,
+    ModelEgressRefused,
+    ModelRoutes,
+    RoutedModel,
+    model_status,
+    routes_from_env,
+)
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
 from .packs import (
@@ -738,13 +746,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # own opinion (`services/api/review.py`'s own docstring on `RunExtractionRequest.model`).
     # ADR-095: the deployment's own models, never the conformance suite's.
     models = DeploymentModels.from_env()
-    # ADR-114 Amendment 6: every model call goes through the routes, so a client's own provider
-    # sees only material whose handling code the deployment declared sendable.
-    routes, sendable = routes_from_env(models, os.environ)
+    # ADR-114 Amendment 6, ADR-135: every model call goes through the routes, so a client's
+    # provider sees only material whose handling code the deployment declared sendable, and an
+    # engine an analyst names is used only when it is enabled and has a key.
     model: ModelPort = RoutedModel(
         ModelLiteLLMAdapter(litellm_client, embed_model=models.embedding),
-        routes=routes,
-        sendable_handling_codes=sendable,
+        routes=routes_from_env(models, os.environ),
     )
     # `spec/09_INGEST_STUDIO.md` §6's reverse index: "an ontology edit flags
     # every recipe that depends on the changed version". This deployment's
@@ -1071,6 +1078,11 @@ def get_valkey(request: Request) -> Valkey:
     return request.app.state.valkey  # type: ignore[no-any-return]
 
 
+def get_model_routes() -> ModelRoutes:
+    """ADR-135: the engines, read from the Conduit's own environment as the routing reads them."""
+    return routes_from_env(DeploymentModels.from_env(), os.environ)
+
+
 def get_jobs(request: Request) -> JobQueue:
     return request.app.state.jobs  # type: ignore[no-any-return]
 
@@ -1360,6 +1372,7 @@ HandlingSchemeDep = Annotated[HandlingScheme, Depends(get_handling_scheme)]
 YardstickDep = Annotated[Yardstick, Depends(get_yardstick)]
 JobsDep = Annotated[JobQueue, Depends(get_jobs)]
 ValkeyDep = Annotated[Valkey, Depends(get_valkey)]
+ModelRoutesDep = Annotated[ModelRoutes, Depends(get_model_routes)]
 SiteImageStorageDep = Annotated[ObjectStorageConfig, Depends(get_site_image_storage)]
 TileCacheStorageDep = Annotated[ObjectStorageConfig, Depends(get_tile_cache_storage)]
 AnalyticsDep = Annotated[AnalyticsPort, Depends(get_analytics)]
@@ -2172,6 +2185,16 @@ async def _model_egress_refused_handler(request: Request, exc: ModelEgressRefuse
     """ADR-114 Amendment 6: material that may not leave, for a role with no local model."""
     return JSONResponse(
         status_code=409, content={"error": "model_egress_refused", "detail": str(exc)}
+    )
+
+
+@app.exception_handler(EngineRefused)
+async def _engine_refused_handler(request: Request, exc: EngineRefused) -> JSONResponse:
+    """ADR-135 decision 4: a named engine not enabled, with no key, or with no model for the role.
+    Nothing was sent."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "engine_refused", "detail": str(exc)},
     )
 
 
@@ -5235,6 +5258,7 @@ async def ask_question_route(
         selected_node_ids=body.selected_node_ids,
         selected_link_ids=body.selected_link_ids,
         window=body.window,
+        engine=body.engine,
     )
     await audit.record(
         principal=principal,
@@ -9334,6 +9358,7 @@ async def system_status_route(
     investigations: InvestigationsDep,
     valkey: ValkeyDep,
     identity_admin: IdentityAdminDep,
+    model_routes: ModelRoutesDep,
 ) -> SystemStatus:
     """Each component of the running deployment, asked now (ADR-110 Amendment 1, the *System*
     screen). The graph is asked as a principal of no datasets, so the check reads nothing."""
@@ -9361,13 +9386,15 @@ async def system_status_route(
         await check("Model server", models),
         await check("Identity provider", identity_admin.reachable),
     ]
-    # ADR-114 decision 11: each role's model and where it runs, from names only — never a key.
-    statuses, notice = model_status(*routes_from_env(DeploymentModels.from_env(), os.environ))
+    # ADR-114 decision 11, ADR-135: each role's model and where it runs, each engine and whether
+    # its key is present, from names only — never a key.
+    statuses, engines, notice = model_status(model_routes)
     return SystemStatus(
         # ADR-114 Amendment 8: the version the deployment was rendered with, and the last check.
         version=os.environ.get("OSPREY_RELEASE_VERSION") or os.environ.get("OSPREY_VERSION"),
         components=components,
         models=statuses,
+        engines=engines,
         model_notice=notice,
         update=read_update_notice(),
     )
@@ -10282,6 +10309,15 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
     """ADR-112: what the signed-in person may do, so the Glass and the Studio leave out what they
     would only refuse. Not a gate — every route still checks its own right."""
     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+
+
+@app.get("/v1/models/engines")
+async def model_engines_route(principal: PrincipalDep, routes: ModelRoutesDep) -> OfferedEngines:
+    """ADR-135 decision 5: the engines an analyst may choose for Ask the case and Ask to search —
+    the local engine and each enabled engine that has a key — with each one's label and the roles
+    it is the default for. Any signed-in person; nothing about a key, not even whether one exists
+    (an engine with none is simply not listed). The route still decides each request."""
+    return OfferedEngines(engines=routes.offered())
 
 
 @app.post("/v1/ws-ticket", response_model=WsTicketResponse)

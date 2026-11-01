@@ -225,3 +225,30 @@ async def test_an_answer_asked_over_a_document_the_reader_cannot_see_is_not_show
     assert request.text.count("Document ") >= 2  # the cleared asker's question read both
     assert [e.answer for e in await service.history("inv-1", cleared)] == ["Drawn from both."]
     assert await service.history("inv-1", ANALYST) == []
+
+
+async def test_an_answer_says_the_engine_and_model_that_produced_it_and_keeps_saying_it() -> None:
+    """ADR-135 decision 4: the engine the analyst named reaches the routing, and the answer — and
+    the conversation read back later — names the engine and model that produced it."""
+    from services.api.model_routing import Engine, ModelRoutes, RoutedModel
+
+    service, model, _, _, _ = await _service()
+    gemini = Engine(name="gemini", label="Gemini", key_present=True,
+                    models={"extraction": "gemini/gemini-2.5-flash"})  # fmt: skip
+    codes = {_document("d").handling.handling_code, node("a").handling.handling_code}
+    service._model = RoutedModel(  # type: ignore[assignment]
+        model,  # type: ignore[arg-type]
+        routes=ModelRoutes(
+            locals={"extraction": "local-model"},
+            engines={"gemini": gemini},
+            sendable=frozenset(codes),
+        ),
+    )
+    answered = await service.ask("inv-1", "Who?", ANALYST, engine="gemini")
+    (request,) = model.requests
+    assert request.model == "gemini/gemini-2.5-flash"
+    assert (answered.engine, answered.model) == ("gemini", "gemini/gemini-2.5-flash")
+    (kept,) = await service.history("inv-1", ANALYST)
+    assert (kept.engine, kept.model) == ("gemini", "gemini/gemini-2.5-flash")
+    local = await service.ask("inv-1", "Who?", ANALYST, engine="local")
+    assert (local.engine, local.model) == ("local", "local-model")

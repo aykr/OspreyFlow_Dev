@@ -762,6 +762,7 @@ blank map.
 
 ```
 GET    /v1/me/rights                                       the signed-in person's rights (ADR-112), so the Glass leaves out what it would be refused; any signed-in person
+GET    /v1/models/engines                                  the model engines an analyst may choose for Ask the case and Ask to search (ADR-135): the local engine and each enabled provider with a key, its label, roles and the roles it is the default for; nothing about a key; any signed-in person
 GET    /v1/admin/people                                    every person in the realm with roles, clearance and unit, no service account (ADR-112); manage_people
 PUT    /v1/admin/people/{user_id}/roles                    a person's roles set whole — the four roles, right:<name>, the old role names; anything else 422; manage_people
 POST   /v1/admin/people                                    invite a person (ADR-114 Amendment 5): sign-in by the identity provider's emailed link when the deployment has a mail server and the person an address, else a one-time code in the answer only; clearance and handling codes no higher than the administrator's (403), a name or address already held 409; audited without the code; manage_people
@@ -773,7 +774,7 @@ GET    /v1/admin/demo-packs                                each shipped demo pac
 GET    /v1/admin/dashboards                                the registered dashboard identities (ADR-111 decision 7), each with how fresh its figures are in the reporting mart — last pulled, standing failure and when, cases pulled; aggregates only, never a case id; manage_dashboards
 POST   /v1/admin/dashboards                                register one: its secret in this answer only; clearance capped at the registrar's (403); manage_dashboards
 DELETE /v1/admin/dashboards/{client_id}                    remove one — only an osprey-dashboard-* client; manage_dashboards
-GET    /v1/admin/system                                    each component asked now: graph, Postgres, Valkey, models, identity provider; administer_system
+GET    /v1/admin/system                                    each component asked now: graph, Postgres, Valkey, models, identity provider; each model engine, its role defaults and whether its key is present (ADR-135); administer_system
 GET    /v1/investigations/{id}/reports                     the Reports view's figures (ADR-111): every figure counted as the reader; KYC figures only for a case with the fibo pack, a POLE summary otherwise, both for a mixed case (ADR-126); held rows for Editors and above; 409 limit_exceeded past the bound; Viewer
 GET    /v1/investigations/{id}/reports/feed                the same figures for a dashboard, ?format=json|csv; figures only; every read in the export ledger (artefact_kind report_feed); Viewer
 GET    /v1/investigations/{id}/events/holders          whether the case holds events the reader may count and, when none, which cases the reader can open read one of its datasets and do — never a case without a level, never on a hidden event, never a count (ADR-099 Am. 9); investigate, Viewer

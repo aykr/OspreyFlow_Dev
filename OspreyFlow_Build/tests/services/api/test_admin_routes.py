@@ -288,7 +288,11 @@ def test_the_system_screen_shows_each_roles_model_and_where_it_runs(
     key = "sk-client-NEVER-IN-A-RESPONSE"
     monkeypatch.setenv("OSPREY_MODEL_PROVIDER_KEY", key)
     monkeypatch.setenv("OSPREY_EXTRACTION_MODEL", "qwen2.5:7b-instruct")
-    monkeypatch.setenv("OSPREY_PROVIDER_EXTRACTION_MODEL", "openai/gpt-4o-mini")
+    # ADR-135: what the renderer and Compose tell the Conduit of the single provider.
+    monkeypatch.setenv("OSPREY_MODEL_ENGINES", '[{"name":"openai","label":"OpenAI",'
+                       '"roles":{"extraction":"openai/gpt-4o-mini"}}]')  # fmt: skip
+    monkeypatch.setenv("OSPREY_MODEL_DEFAULTS", '{"extraction":"openai"}')
+    monkeypatch.setenv("OSPREY_MODEL_KEY_PRESENT_OPENAI", "yes")
     monkeypatch.setenv("OSPREY_SENDABLE_HANDLING_CODES", "P")
     response = _system(client, monkeypatch)
     assert key not in response.text
@@ -308,7 +312,7 @@ def test_the_system_screen_shows_each_roles_model_and_where_it_runs(
 def test_the_system_screen_has_no_notice_when_every_model_is_local(
     client: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    for name in ("OSPREY_PROVIDER_EXTRACTION_MODEL", "OSPREY_SENDABLE_HANDLING_CODES"):
+    for name in ("OSPREY_MODEL_ENGINES", "OSPREY_SENDABLE_HANDLING_CODES"):
         monkeypatch.delenv(name, raising=False)
     body = _system(client, monkeypatch).json()
     assert body["model_notice"] is None
