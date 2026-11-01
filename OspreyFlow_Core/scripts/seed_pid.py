@@ -6,7 +6,7 @@ Amendments 25 to 27 and 30 to 32; Brief 2 sections 5, 7 and 8).
         --grant ACCOUNT=LEVEL ...        # the seed (through `seed_internal`; Conduit stopped)
     python -m scripts.seed_pid --reset-live --case-name ... [--show-ids]   # the rehearsal reset
     python -m scripts.seed_pid --check --case-name ...       # the demo numbers, loading nothing
-    python -m scripts.seed_pid --release-batch-2             # chapter 9 (Conduit stays up)
+    python -m scripts.seed_pid --release-batch-2             # chapter 9's files (Conduit stays up)
     python -m scripts.seed_pid --publish-reports-fallback    # chapter 4 fallback (Conduit stays up)
 
 Run the first two through `python -m scripts.seed_internal prison-intelligence [--reset-live]
@@ -21,8 +21,9 @@ the case before any write**, so every node, link and picture is stamped with the
 reference finds only that dataset's nodes. The role holds no `EDIT_GRAPH`, which the picture path
 needs, so that one right is granted to the persona within the pictures step alone and to nothing
 else. The files are written into `<ingest root>/uploaded/<dataset>/`, the one folder the Conduit's
-image may write, with batch 2 of the seized-phone file under `incoming/` beneath it, which the
-Studio's listing does not show; nothing else (no manifest, no pictures) lands in the listed folder.
+image may write, with chapter 9's files (batch 2 of the seized-phone file, and the visit bookings
+and the PIN first contacts of ADR-127 Amendment 41) under `incoming/` beneath it, which the Studio's
+listing does not show; nothing else (no manifest, no pictures) lands in the listed folder.
 Each committed recipe but the reports recipe is compared with the row it would meet (the store's
 own comparison, so a committed file never differs from its published row), then copied byte for byte
 into the recipe repository, committed there, and entered as published. The reports recipe is entered
@@ -48,13 +49,15 @@ report for each of its 589 rows (a reference that finds nothing is made, not ref
 that runs a stage refuses it unless the case holds an unreverted load of the reports recipe.
 
 **The reset** reverts, newest first, every unreverted load in the case of the incident-to-report
-recipe and of the reports recipe, and every load of the seized-phone recipe whose source is batch 2
-wherever under the dataset's folder it was read. On the first revert that refuses it stops, names
-the refusal by its counts (link types and ids only with `--show-ids`), and gives the restore
-procedure: a reseed skips loads that stand, so the way back is the backup taken after seeding.
+recipe, of the reports recipe and of the two monitoring recipes (the visit bookings and the PIN
+first contacts, which read only their chapter-9 files), and every load of the seized-phone recipe
+whose source is batch 2 wherever under the dataset's folder it was read. On the first revert that
+refuses it stops, names the refusal by its counts (link types and ids only with `--show-ids`), and
+gives the restore procedure: a reseed skips loads that stand, so the way back is the backup taken
+after seeding.
 Only when every revert has been made does it restore the reports recipe to its starting draft
 (writing no new version when nothing was reverted and it is there already), rewrite the reports
-file, remove batch 2 from the listed folder and every file the seed did not
+file, remove chapter 9's files from the listed folder and every file the seed did not
 write, naming each, and say what it cannot undo.
 
 **Deviation from the amendment's wording, and why.** The amendment gives `docker compose exec api`
@@ -148,7 +151,7 @@ from services.ingest.recipe_rules import RecipeRuleError
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from demo_fixtures import pid_files, pid_plan, pid_writes
+from demo_fixtures import pid_files, pid_monitoring, pid_plan, pid_writes
 from demo_fixtures.datasets import PID
 from demo_fixtures.pid_files import SEED_ORDER, SeedStage, seed_stages
 from ontology.handling import HandlingScheme, load_uk_le_scheme
@@ -474,20 +477,39 @@ def rewrite_reports_file(
         _place(Path(scratch) / pid_files.REPORTS, listed_folder(root) / pid_files.REPORTS)
 
 
-def release_batch_2(root: Path) -> str:
-    """Chapter 9: copies batch 2 from `incoming/` into the listed folder. A file copy only, so the
-    Conduit stays up. Refuses before the seed has written it; says so if it is there already."""
-    source = incoming_folder(root) / pid_files.BATCH_2
-    destination = listed_folder(root) / pid_files.BATCH_2
+#: Chapter 9's files, in the order the presenter loads them: the second seized-phone batch, then the
+#: two monitoring batches (ADR-127 Amendment 41: the visit bookings, then the PIN first contacts).
+CHAPTER_9_FILES: tuple[str, ...] = (
+    pid_files.BATCH_2,
+    *(stage.file for stage in pid_monitoring.MONITORING_STAGES),
+)
+
+
+def _release_one(root: Path, file: str) -> str:
+    source = incoming_folder(root) / file
+    destination = listed_folder(root) / file
     if not source.is_file():
         raise SeedRefusal(
-            f"batch 2 is not at {source}: seed the dataset first "
+            f"{file} is not at {source}: seed the dataset first "
             "(`ospreyflow demo add prison-intelligence`)"
         )
     if destination.is_file() and destination.read_bytes() == source.read_bytes():
-        return f"{pid_files.BATCH_2} is already in {listed_folder(root)}; nothing changed"
+        return f"{file} is already in {listed_folder(root)}; nothing changed"
     _place(source, destination)
-    return f"released {pid_files.BATCH_2} into {listed_folder(root)}"
+    return f"released {file} into {listed_folder(root)}"
+
+
+def release_batch_2(root: Path) -> str:
+    """Chapter 9: copies batch 2, and the two monitoring batches after it (ADR-127 Amendment 41),
+    from `incoming/` into the listed folder. A file copy only, so the Conduit stays up. Refuses,
+    before copying anything, when the seed has not written one; says so of a file there already."""
+    for file in CHAPTER_9_FILES:
+        if not (incoming_folder(root) / file).is_file():
+            raise SeedRefusal(
+                f"{file} is not at {incoming_folder(root) / file}: seed the dataset first "
+                "(`ospreyflow demo add prison-intelligence`)"
+            )
+    return "\n".join(_release_one(root, file) for file in CHAPTER_9_FILES)
 
 
 # --- the recipes ---------------------------------------------------------------------------------
@@ -521,7 +543,7 @@ async def enter_recipes(
     committed nor published. Answers each recipe's row by its id."""
     rows: dict[str, Any] = {}
     reports_file = reports_recipe_file()
-    for stage in SEED_ORDER:
+    for stage in (*SEED_ORDER, *pid_monitoring.MONITORING_STAGES):
         recipe = _recipe(stage.recipe)
         if recipe.id in rows:
             continue
@@ -1667,11 +1689,18 @@ def is_batch_2(record: LoadRecord) -> bool:
     )
 
 
+def monitoring_recipe_ids() -> list[str]:
+    """The recipes of chapter 9's monitoring batches (ADR-127 Amendment 41): each reads only its
+    one chapter-9 file, so every load of either is a rehearsal's."""
+    return [recipe_id_of(stage.recipe) for stage in pid_monitoring.MONITORING_STAGES]
+
+
 def choose_reset(records: Sequence[LoadRecord]) -> list[LoadRecord]:
     """The loads the reset reverts, newest first by load id: every unreverted load of the
-    incident-to-report recipe and of the reports recipe, and of the seized-phone recipe only where
-    its source is batch 2 under the dataset's folder (listed, or still under `incoming/`)."""
-    wanted = {incidents_recipe_id(), reports_recipe_id()}
+    incident-to-report recipe, of the reports recipe and of the two monitoring recipes (ADR-127
+    Amendment 41), and of the seized-phone recipe only where its source is batch 2 under the
+    dataset's folder (listed, or still under `incoming/`)."""
+    wanted = {incidents_recipe_id(), reports_recipe_id(), *monitoring_recipe_ids()}
     return sorted(
         (r for r in records if r.recipe_id in wanted or is_batch_2(r)),
         key=lambda r: r.load_id,
@@ -1693,7 +1722,11 @@ CANNOT_UNDO = (
     "What the reset cannot undo:",
     "  - Reverted runs stay in the ledger, so Data feeds shows a rehearsal run as the last run of "
     "the incident-to-report recipe or of the seized-phone recipe. No run time is faked.",
-    "  - Alerts and the cases they opened.",
+    "  - Alerts and the cases they opened, except an alert a reverted load's own rule raised, "
+    "which the revert closes (the new-contacts rule's). The hotlist alerts of chapter 9 stay, and "
+    "so do their closes.",
+    "  - Rules deployed in a rehearsal, and what each has already raised: a rule raises a finding "
+    "once, so retire the rehearsal's rule and write it again before the next run.",
     "  - Review-queue findings.",
     "  - The contents of working sets.",
     "  - Hotlists and saved patterns.",
@@ -1770,7 +1803,8 @@ async def reset_live(
     revert stopped part way (run it again). Only a complete run restores R9's draft and the
     files."""
     found = await ledger.unreverted_loads(
-        case_id, [incidents_recipe_id(), reports_recipe_id(), comms_recipe_id()]
+        case_id,
+        [incidents_recipe_id(), reports_recipe_id(), comms_recipe_id(), *monitoring_recipe_ids()],
     )
     chosen = choose_reset(found)
     done: list[str] = []
@@ -1817,7 +1851,7 @@ async def reset_live(
     rewrite_reports()
     say(f"rewrote {pid_files.REPORTS}")
     listed = listed_folder(root)
-    keep = {stage.file for stage in SEED_ORDER if stage.file != pid_files.BATCH_2}
+    keep = {stage.file for stage in SEED_ORDER if stage.file not in CHAPTER_9_FILES}
     if listed.is_dir():
         for path in sorted(listed.iterdir()):
             if path.is_file() and path.name not in keep:
@@ -2046,7 +2080,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Run every demo number for the moment the stored loads reach; loads nothing.",
     )
     modes.add_argument(
-        "--release-batch-2", action="store_true", help="Chapter 9: list batch 2 (Conduit stays up)."
+        "--release-batch-2",
+        action="store_true",
+        help=(
+            "Chapter 9: list batch 2, the visit bookings and the PIN first contacts "
+            "(Conduit stays up)."
+        ),
     )
     modes.add_argument(
         "--publish-reports-fallback",
@@ -2148,7 +2187,10 @@ async def _seed_into(
     plan = pid_plan.build_plan("demo")
     print(f"Writing the files into {listed_folder(root)} ...", flush=True)
     rows = await asyncio.to_thread(write_listed_files, plan, root)
-    print(f"  {len(rows)} file(s) written; batch 2 is under {INCOMING}/, out of the listing.")
+    print(
+        f"  {len(rows)} file(s) written; chapter 9's files are under {INCOMING}/, out of the "
+        "listing."
+    )
     entered: dict[str, Any] = {}
     stages = [resolve(stage, root) for stage in stages_to_run()]
     peaks: dict[str, float] = {}

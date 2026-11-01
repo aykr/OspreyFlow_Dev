@@ -5,8 +5,10 @@ Brief 2 sections 3.4, 4 and 5).
 `pid_plan.rows_for` yields, one CSV per file the plan's load shapes name, and adds the columns the
 plan's rows do not carry. The files are written under `out_dir`, never anywhere else:
 
-- `incoming/` holds the chapter 9 seized-comms batch (Brief 2 R6: loaded by the demo, not the seed);
-  the scale profile's files are prefixed `scale_`; a file the plan has no rows for is not written;
+- `incoming/` holds the chapter 9 seized-comms batch (Brief 2 R6: loaded by the demo, not the seed),
+  and, in the demo profile, chapter 9's two monitoring batches, the visit bookings and the PIN first
+  contacts (`pid_monitoring`, ADR-127 Amendment 41); the scale profile's files are prefixed
+  `scale_`; a file the plan has no rows for is not written;
 - `pictures/` holds one PNG per picture subject (`pid_writes.picture_writes`);
 - `pid_cohort_list.txt` (demo profile only) holds the 40 identifiers the add-many scene pastes
   (`cohort_list`, ADR-128 decision 1), one a line, no header; the scale profile writes
@@ -67,7 +69,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from . import pid_writes
+from . import pid_monitoring, pid_writes
 from .pid_plan import (
     HANDLING_COLUMNS,
     LOAD_SHAPES,
@@ -199,11 +201,17 @@ class WriteReport:
 def output_name(profile: str, file: str) -> str:
     if profile == "scale":
         return f"scale_{file}"
-    return f"incoming/{file}" if file == BATCH_2 else file
+    if file == BATCH_2 or file in pid_monitoring.HEADERS:
+        return f"incoming/{file}"
+    return file
 
 
 def header_for(file: str) -> list[str]:
-    """The plan's shapes' columns, then `EXTRAS`, then the handling columns the contract gives."""
+    """The plan's shapes' columns, then `EXTRAS`, then the handling columns the contract gives. A
+    monitoring batch (`pid_monitoring`) has its own header, which carries the six handling
+    columns."""
+    if file in pid_monitoring.HEADERS:
+        return list(pid_monitoring.HEADERS[file])
     shaped = list(file_header(file))
     handling = [c for c in shaped if c in HANDLING_COLUMNS]
     plain = [c for c in shaped if c not in HANDLING_COLUMNS]
@@ -600,6 +608,9 @@ def write_files(plan: Plan, out_dir: Path) -> WriteReport:
         count = _write_csv(path, header, _csv_rows(ctx, file, header, planted))
         size, sha = _digest(path)
         files.append(FileRecord(name, count, size, sha))
+    # ADR-127 Amendment 41: chapter 9's monitoring batches, derived from the plan, beside batch 2.
+    for batch in pid_monitoring.write_batches(plan, out_dir):
+        files.append(FileRecord(batch.name, batch.rows, batch.bytes, batch.sha256))
     pictures: list[FileRecord] = []
     for _, picture_name, data in pid_writes.picture_writes(plan):
         path = out_dir / "pictures" / picture_name

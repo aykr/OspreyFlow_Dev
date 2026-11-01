@@ -73,6 +73,9 @@ PID_RECIPES = [
     ("pid_throwover_log_recipe.yaml", "pid_throwover_log.csv"),
     ("pid_intel_reports_recipe.yaml", "pid_intel_reports.csv"),
     ("pid_report_incidents_recipe.yaml", "pid_report_incidents.csv"),
+    # ADR-127 Amendment 41: chapter 9's monitoring batches.
+    ("pid_visit_bookings_recipe.yaml", "pid_visit_bookings.csv"),
+    ("pid_pin_new_contacts_recipe.yaml", "pid_pin_new_contacts.csv"),
 ]
 
 
@@ -288,7 +291,7 @@ def test_the_declared_units_cover_every_unit_the_file_holds(
     file with none: every element the plan writes from it is at the recipe's defaults."""
     import csv
 
-    with (written / source).open(newline="", encoding="utf-8") as handle:
+    with (written / pid_files.output_name("demo", source)).open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     recipe = load(file)
     if _carries_handling(source):

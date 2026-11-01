@@ -1,5 +1,5 @@
 """ADR-127 Amendment 23, "The registration": the Prison Intelligence Dataset is a shipped, seeded
-demo, so its generator code, its seventeen recipes and its connector layout travel in the artefact
+demo, so its generator code, its nineteen recipes and its connector layout travel in the artefact
 and the packaging gate must not refuse them. What would fail if it drifted:
 
 - a PID module or recipe added to the folder and left out of the manifest, so the artefact would
@@ -38,7 +38,7 @@ def test_the_manifest_lists_every_pid_module_and_recipe_and_nothing_else() -> No
         for pattern in ("pid_*.py", "pid_*_recipe.yaml")
         for p in FIXTURES.glob(pattern)
     }
-    assert len(on_disk) == 5 + 17, "five modules and seventeen recipes"
+    assert len(on_disk) == 6 + 19, "six modules and nineteen recipes (ADR-127 Amendment 41)"
     assert listed == on_disk | {"connectors/pin-calls-csv.yaml"}
 
 
