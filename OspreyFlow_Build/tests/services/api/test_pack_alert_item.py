@@ -328,3 +328,29 @@ def test_adding_an_alert_needs_editor_and_record_assessment(aw: AlertWorld) -> N
         refused = _add_alert(aw, pack, alert_id, who)
         assert refused.status_code == status, (who.id, refused.text)
     assert _add_alert(aw, pack, alert_id).status_code == 201
+
+
+def test_an_alert_trend_goes_into_a_pack_resting_on_what_it_counted(world: World) -> None:  # noqa: F811
+    """ADR-134 decision 3: a trend over alerts goes into a pack as any trend does — its snapshot
+    rests on the handlings the alert trend counted, so a reader below them does not get it."""
+    from services.api.app import get_typology_rules
+    from schemas.trends import TrendDefinition
+    from tests.services.api.test_alert_trends import NOW as LATER
+    from tests.services.api.test_alert_trends import _Analytics as _AlertAnalytics
+    from tests.services.api.test_alert_trends import _defn, _Rules
+
+    world.analytics = _AlertAnalytics()  # type: ignore[assignment]
+    app.dependency_overrides[get_typology_rules] = lambda: _Rules()
+    world.trends.saved["at"] = TrendDefinition(**_defn(group_by="rule").model_dump(), id="at",
+                                               investigation_id="case-1", created_by="ed", created_at=LATER,
+                                               updated_at=LATER)  # fmt: skip
+    pack = _new_pack(world)
+    added = world.as_(EDITOR).post(f"{CASE}/packs/{pack}/items", json={"kind": "trend", "trend_id": "at"})
+    assert added.status_code == 201, added.text
+    item = added.json()
+    assert item["marking"] == "OFFICIAL-SENSITIVE" and item["trend"]["definition"]["source"] == "alerts"
+    assert item["trend"]["result"]["series"] == ["Hotlists", "Rapid movement over £9,000"]
+    _publish(world, pack)
+    low = world.as_(READER).get(f"{CASE}/packs/{pack}/published").json()
+    assert (low["withheld"], low["items"]) == (True, [])
+    assert world.as_(CLEARED_READER).get(f"{CASE}/packs/{pack}/published").json()["withheld"] is False

@@ -8,12 +8,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from schemas.analytics import TrendInterval, TrendMeasure, TrendResult
 
 #: Group by the event's type rather than by one of its properties.
 BY_EVENT_TYPE = "event_type"
+
+#: What a trend counts (ADR-134 decision 3): analytics events, or the case's alerts.
+TrendSource = Literal["events", "alerts"]
 
 
 class TrendFilter(BaseModel):
@@ -25,7 +28,11 @@ class TrendFilter(BaseModel):
 
 class TrendDefinitionInput(BaseModel):
     title: str = Field(min_length=1, max_length=120)
-    event_types: list[str] = Field(min_length=1, max_length=12)
+    #: Events (ADR-113), or alerts (ADR-134 decision 3): an alert trend names no event type, counts,
+    #: and splits and filters by `rule`, `typology`, `severity` or `outcome` alone.
+    source: TrendSource = "events"
+    #: The event types counted: at least one for an event trend, none for an alert trend.
+    event_types: list[str] = Field(default_factory=list, max_length=12)
     measure: TrendMeasure = TrendMeasure.COUNT
     #: A numeric property every chosen event type declares; only for a sum.
     measure_field: str | None = None
@@ -36,6 +43,12 @@ class TrendDefinitionInput(BaseModel):
     #: series.
     group_by: str | None = None
     filters: list[TrendFilter] = Field(default_factory=list, max_length=5)
+
+    @model_validator(mode="after")
+    def _an_event_trend_names_its_events(self) -> TrendDefinitionInput:
+        if self.source == "events" and not self.event_types:
+            raise ValueError("an event trend names at least one event type")
+        return self
 
 
 class TrendDefinition(TrendDefinitionInput):
@@ -55,6 +68,9 @@ class TrendFieldOption(BaseModel):
     kind: Literal["number", "category"]
     #: An enumeration's values, when the ontology declares them.
     values: list[str] = Field(default_factory=list)
+    #: What each value is shown as, in the same order, where that is not the value itself (an alert
+    #: trend's rules are shown by name).
+    labels: list[str] = Field(default_factory=list)
 
 
 class TrendEventTypeOption(BaseModel):
@@ -68,6 +84,9 @@ class TrendOptions(BaseModel):
     for each, the properties a sum or a series may use."""
 
     event_types: list[TrendEventTypeOption]
+    #: ADR-134 decision 3: what an alert trend may split by and filter on — rule, typology,
+    #: severity and outcome, each with the values this case has.
+    alert_fields: list[TrendFieldOption] = Field(default_factory=list)
 
 
 class TrendFigures(BaseModel):

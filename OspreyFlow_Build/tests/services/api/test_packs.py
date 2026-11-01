@@ -60,6 +60,7 @@ from services.api.app import (
     get_principal,
     get_principal_names,
     get_trend_store,
+    get_typology_rules,
     get_working_set,
 )
 from services.api.assessments import JudgementNotFoundError
@@ -253,6 +254,7 @@ def world() -> Iterator[World]:
         # ADR-134: the add and refresh routes take the alert store; only an alert item reads it
         # (`test_pack_alert_item.py` gives it the real one).
         get_alerts_store: lambda: None,
+        get_typology_rules: lambda: None,  # read only for an alert trend (ADR-134)
     })  # fmt: skip
     yield w
     app.dependency_overrides.clear()

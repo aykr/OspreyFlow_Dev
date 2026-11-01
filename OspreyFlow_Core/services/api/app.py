@@ -650,7 +650,9 @@ from .trends import (
     check_in_case_domains,
     highest,
     mark_outside_case_domains,
+    name_alert_series,
     name_series,
+    to_alert_request,
     to_request,
     trend_options,
     validate_definition,
@@ -9611,11 +9613,16 @@ async def case_event_holders_route(
     dependencies=[Depends(require_right(Right.RUN_ANALYSIS))],
 )
 async def trend_options_route(
-    investigation: InvestigationViewerDep, ontology: OntologyDep
+    investigation: InvestigationViewerDep,
+    ontology: OntologyDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
 ) -> TrendOptions:
     """The event types and properties a trend may use: this deployment's ontology, narrowed to
-    the core types and the case's own domain packs (ADR-126 decision 6)."""
-    return trend_options(ontology, investigation.domains)
+    the core types and the case's own domain packs (ADR-126 decision 6); and what an alert trend
+    may split by, with the case's rules as the reader may read them (ADR-134 decision 3)."""
+    rules = await typology_rules.list_for_case(investigation.id, principal)
+    return trend_options(ontology, investigation.domains, rules)
 
 
 async def _trend_figures(
@@ -9628,15 +9635,28 @@ async def _trend_figures(
     audit: AuditWriter,
     working_set: WorkingSetService,
     handling_scheme: HandlingScheme,
+    typology_rules: TypologyRuleStore,
 ) -> TrendFigures:
     """The trend counted for this reader now (rule 3): the case's own events, a branch's inherited
-    ones with them, nothing the reader may not see."""
+    ones with them, nothing the reader may not see. An alert trend (ADR-134 decision 3) is the
+    analytics port's `alert_trend`, filtered in its query as the reader, its rules named after."""
     validate_definition(defn, ontology)
     now = datetime.now(UTC)
-    request, start = to_request(defn, ontology, case.id, now)
-    scoped = await _case_event_filter(request.filter, principal, investigations, audit, working_set)
-    result = await analytics.trend(request.model_copy(update={"filter": scoped}), principal)
-    result = name_series(result, defn, ontology)
+    if defn.source == "alerts":
+        alert_request, start = to_alert_request(defn, case.id, now)
+        result = await analytics.alert_trend(alert_request, principal)
+        if defn.group_by == "rule":
+            rules = await typology_rules.list_for_case(case.id, principal)
+        else:
+            rules = []
+        result = name_alert_series(result, defn, rules)
+    else:
+        request, start = to_request(defn, ontology, case.id, now)
+        scoped = await _case_event_filter(
+            request.filter, principal, investigations, audit, working_set
+        )
+        result = await analytics.trend(request.model_copy(update={"filter": scoped}), principal)
+        result = name_series(result, defn, ontology)
     return TrendFigures(
         definition=TrendDefinitionInput.model_validate(
             defn.model_dump(include=set(TrendDefinitionInput.model_fields))
@@ -9662,10 +9682,12 @@ async def preview_trend(
     audit: AuditDep,
     working_set: WorkingSetDep,
     handling_scheme: HandlingSchemeDep,
+    typology_rules: TypologyRulesDep,
 ) -> TrendFigures:
     check_in_case_domains(body, ontology, investigation.domains)
     figures = await _trend_figures(body, investigation, principal, ontology, analytics,
-                                   investigations, audit, working_set, handling_scheme)  # fmt: skip
+                                   investigations, audit, working_set, handling_scheme,
+                                   typology_rules)  # fmt: skip
     await audit.record(principal=principal, action="preview_trend",
                        investigation_id=investigation.id,
                        resolved_query=body.model_dump(mode="json"),
@@ -9726,12 +9748,14 @@ async def trend_figures(
     working_set: WorkingSetDep,
     handling_scheme: HandlingSchemeDep,
     trends: TrendStoreDep,
+    typology_rules: TypologyRulesDep,
 ) -> TrendFigures:
     saved = await trends.get(investigation.id, trend_id)
     if saved is None:
         raise HTTPException(status_code=404, detail="no such trend in this case")
     figures = await _trend_figures(saved, investigation, principal, ontology, analytics,
-                                   investigations, audit, working_set, handling_scheme)  # fmt: skip
+                                   investigations, audit, working_set, handling_scheme,
+                                   typology_rules)  # fmt: skip
     await audit.record(principal=principal, action="read_trend", investigation_id=investigation.id,
                        resolved_query={"trend": trend_id},
                        result_cardinality=figures.result.events)  # fmt: skip
@@ -9901,6 +9925,7 @@ async def add_pack_item(
     working_set: WorkingSetDep,
     audit: AuditDep,
     alerts_store: AlertsStoreDep,
+    typology_rules: TypologyRulesDep,
 ) -> PackItem:
     """The content is read and frozen here, as the adder — never taken from the request, except a
     caption and a note's own words. An alert (ADR-134 decision 1) is one of the adder's queue in
@@ -9920,6 +9945,7 @@ async def add_pack_item(
         audit,
         working_set,
         alerts_store,
+        typology_rules,
     )
     await packs.add_item(pack.id, item)
     await audit.record(
@@ -9946,6 +9972,7 @@ async def _build_pack_item(
     audit: AuditWriter,
     working_set: WorkingSetService,
     alerts_store: AlertStore,
+    typology_rules: TypologyRuleStore,
 ) -> StoredPackItem:
     if body.kind == "alert":
         try:
@@ -9960,8 +9987,9 @@ async def _build_pack_item(
         if saved is None:
             raise HTTPException(status_code=404, detail="no such trend in this case")
         figures = await _trend_figures(
-            saved, case, principal, ontology, analytics, investigations, audit, working_set, scheme
-        )
+            saved, case, principal, ontology, analytics, investigations, audit, working_set, scheme,
+            typology_rules,
+        )  # fmt: skip
         return trend_item(saved.id, figures, principal, scheme)
     if body.kind == "assessment":
         try:
@@ -10082,6 +10110,7 @@ async def refresh_pack_item(
     working_set: WorkingSetDep,
     audit: AuditDep,
     alerts_store: AlertsStoreDep,
+    typology_rules: TypologyRulesDep,
 ) -> PackItem:
     """A trend snapshot counted again, or an alert read again (ADR-134 decision 1: so an alert
     added while open can say how it was closed), now, as the refresher; the earlier one stays in
@@ -10111,6 +10140,7 @@ async def refresh_pack_item(
         audit,
         working_set,
         alerts_store,
+        typology_rules,
     )
     if not await packs.replace_item(pack.id, old.id, new):
         raise HTTPException(status_code=404, detail="no such item in this pack")
