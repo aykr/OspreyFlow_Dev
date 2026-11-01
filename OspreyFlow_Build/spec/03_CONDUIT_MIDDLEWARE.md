@@ -69,6 +69,31 @@ authenticated response are compared byte for byte and must be identical. A liven
 quietly said more to an authenticated caller would be a route with two behaviours, and the
 unauthenticated one is the one an attacker gets.
 
+### 3.0a The OpenAPI document (the owner's answer of 1 November 2026)
+
+```
+GET    /v1/openapi.json                        the API's OpenAPI document, its info.version the release (signed in)
+```
+
+**Published at the deployment's address, behind sign-in, versioned with the release.** The document
+is served under `/v1/`, so the workspace's proxy carries it to the deployment's address with every
+other route (`05_DEPLOYMENT.md` §2.6.1), and it takes a signed-in principal as every other `/v1`
+route does; any signed-in person may read it. FastAPI's own unauthenticated copies (`/openapi.json`,
+`/docs`, `/redoc`) are switched off: no page of this API answers without sign-in except `/healthz`.
+
+**Its `info.version` is the release, from one source.** The deployment's version is the release tag
+its checkout sits on, else `dev-<short commit>` (ADR-114 Amendment 8), rendered into
+`deployment.env` as `OSPREY_RELEASE_VERSION` by `harness.render.release_version`. The Conduit reads
+it in one place (`services/api/release_version.py`), and both Admin → System and the OpenAPI document
+say that value; neither keeps a version of its own, and neither says FastAPI's default `0.1.0`. A
+process started with no rendered version says `dev-unknown`. The packages' own `version` fields in
+`pyproject.toml` and `package.json` are not the release and are not read.
+
+**Tests:** `tests/services/api/test_openapi_published.py` — refused without sign-in; FastAPI's
+unauthenticated copies gone; the version rendered from a checkout tagged `v0.4.1` read back through
+the route; the workspace proxy's `/v1/` location carries it. It closes the GDS baseline audit's
+open-standards item O1.
+
 ### 3.1 Investigations
 
 ```

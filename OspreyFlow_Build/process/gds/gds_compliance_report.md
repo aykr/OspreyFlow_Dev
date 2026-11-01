@@ -61,7 +61,7 @@ Findings, critical and serious first. axe reported no critical findings.
 | F3 | serious | 4.1.2 / 2.4.3 | A folded timeline: controls inside an `aria-hidden` box stayed in the Tab order (`aria-hidden-focus`) | live scan (Map, Alerts) | real | **fixed** (`8484b72`) |
 | F4 | serious | 2.5.3 Label in Name (A) | Pipeline canvas node buttons: kind and label run together in the visible text | new harness scan | real | **fixed** (`ed1531d`) |
 | F5 | serious | 1.4.10 Reflow (AA) | Start page at 320px: 35px of sideways scroll (340px column minimum) | manual probe, then `reflow.spec.ts` | real | **fixed** (`a675913`) |
-| F6 | serious | 2.5.3 Label in Name (A) | Top bar brand button: visible "Osprey", name "OspreyFlow, go to Home" | live scan, every workspace view | real | **deferred: the owner's word on the name** (remediation A3) |
+| F6 | serious | 2.5.3 Label in Name (A) | Top bar brand button: visible "Osprey", name "OspreyFlow, go to Home" | live scan, every workspace view | real | **fixed in step 7b: "Osprey, go to Home"** (the owner's answer; remediation A3) |
 | F7 | serious | 1.4.3 | Panel-frames harness, light and GOV.UK | new harness scan | false positive: the harness used a token that does not exist (`--surface-base`) | harness fixed (`ed1531d`) |
 | F8 | serious | 2.5.8 Target Size | `#after-form` in the link-change harness | new harness scan | false positive: a harness-only focus sentinel | excluded by name in the spec |
 

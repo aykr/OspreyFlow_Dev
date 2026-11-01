@@ -583,8 +583,13 @@ class AlertFact(BaseModel):
     rule: str = Field(min_length=1)
     typology: str | None = None
     severity: Literal["high", "medium", "low"]
-    #: `open`, `claimed`, `true_positive`, `false_positive`, or `closed` (taken back, no outcome).
-    outcome: Literal["open", "claimed", "true_positive", "false_positive", "closed"]
+    #: `open`, `claimed`, one of the closing reasons (`true_positive` — a true match —,
+    #: `false_positive`, `duplicate`, `no_further_action`, `referred`), or `closed` (taken back, no
+    #: outcome).
+    outcome: Literal[
+        "open", "claimed", "true_positive", "false_positive", "duplicate", "no_further_action",
+        "referred", "closed",
+    ]  # fmt: skip
     raised_at: datetime
     owner_id: str
     audience: AlertFactAudience

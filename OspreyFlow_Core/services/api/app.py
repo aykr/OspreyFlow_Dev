@@ -576,6 +576,7 @@ from .recipe_run import (
 )
 from .recipe_runs import RecipeRun, RecipeRunStore
 from .release_notice import read_update_notice
+from .release_version import deployment_version, release_version
 from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
@@ -944,10 +945,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         datasets=datasets_store,
         investigations=investigations,
     )
-    # ADR-129 decision 2: ask to search, a question turned into a pattern that nothing runs.
+    # ADR-129 decision 2: ask to search, a question turned into a pattern that nothing runs. ADR-135
+    # Amendment 1: it carries the case's handling and datasets, so the engine choice applies.
     app.state.pattern_ask = PatternAskService(
-        app.state.working_set, graph, model, default_model=models.extraction
-    )
+        app.state.working_set, graph, model, default_model=models.extraction,
+        datasets=datasets_store,
+    )  # fmt: skip
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
     app.state.assumptions_store = assumptions_store
@@ -1071,7 +1074,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await resources.close()
 
 
-app = FastAPI(title="OspreyFlow Conduit", lifespan=lifespan)
+# The OpenAPI document is published at `GET /v1/openapi.json` behind sign-in (the owner's answer of
+# 1 November 2026; `03_CONDUIT_MIDDLEWARE.md` §3.0a), versioned with the release. FastAPI's own
+# unauthenticated copies (`/openapi.json`, `/docs`, `/redoc`) are switched off.
+app = FastAPI(
+    title="OspreyFlow Conduit",
+    version=release_version(),
+    lifespan=lifespan,
+    openapi_url=None,
+    docs_url=None,
+    redoc_url=None,
+)
 
 # The Glass is served from its own origin (`apps/workspace`'s Vite dev
 # server locally; a separately-hosted static build in a real deployment)
@@ -6338,6 +6351,18 @@ async def liveness_route() -> dict[str, str]:
     return LIVENESS_BODY
 
 
+@app.get("/v1/openapi.json", include_in_schema=False)
+async def openapi_document_route(principal: PrincipalDep) -> JSONResponse:
+    """The API's OpenAPI document (`03_CONDUIT_MIDDLEWARE.md` §3.0a; the owner's answer of 1
+    November 2026; GDS remediation O1). Under `/v1/`, so the workspace's proxy carries it to the
+    deployment's address with every other route, and signed in as every other `/v1` route is. Its
+    `info.version` is the release the deployment was rendered from (`release_version.py`), read
+    when it is asked for, so it always says what Admin → System says."""
+    document = dict(app.openapi())
+    document["info"] = {**document["info"], "version": release_version()}
+    return JSONResponse(document)
+
+
 @app.get("/v1/ontology")
 async def get_ontology_route(principal: PrincipalDep, ontology: OntologyDep) -> OntologySchema:
     """The Glass's channel/shape mapping (`spec/02_GLASS_FRONTEND.md` §4:
@@ -10031,9 +10056,11 @@ async def manage_screening_lists(
     principal: PrincipalDep, screening_lists: ScreeningListsDep, audit: AuditDep
 ) -> ScreeningLists:
     """The Lists screen for whoever may load screening lists: the lists and their latest
-    refreshes, with what each changed, re-screened and raised."""
+    refreshes, with what each changed, and what each re-screened and raised **in the reader's own
+    unit** (the owner's answer of 1 November 2026; rule 7). The store's query joins that unit's
+    counts alone; another unit's customers, alerts and rule names never reach the Conduit."""
     found = await screening_lists.subscriptions()
-    updates = await screening_lists.updates(limit=20)
+    updates = await screening_lists.updates(org_unit=principal.org_unit, limit=20)
     await audit.record(principal=principal, action="list_screening_lists", investigation_id=None,
                        resolved_query={"manage": True}, result_cardinality=len(found))  # fmt: skip
     return ScreeningLists(lists=found, updates=updates, can_manage=True)
@@ -10117,7 +10144,9 @@ async def refresh_screening_list_route(
 ) -> ScreeningListUpdate:
     """*Refresh now*: the list read again through its connector, applied as a new version, and
     every customer of every case with a screening rule re-screened against the changed entries
-    only, as each rule's deployer (rule 3). Refused or failed in words, the list left as it was."""
+    only, as each rule's deployer (rule 3). Refused or failed in words, the list left as it was.
+    The answer counts the administrator's own unit alone, read back through the store's query as
+    the Lists screen reads it (rule 7); the deployment's totals go to the audit only."""
     rescreen = Rescreener(
         rules=typology_rules,
         datasets=get_datasets(request),
@@ -10141,7 +10170,14 @@ async def refresh_screening_list_route(
                        resolved_query={"list_name": list_name, "outcome": update.outcome,
                                        "version": update.version, "alerts": update.alerts},
                        result_cardinality=update.alerts)  # fmt: skip
-    return update
+    own = await screening_lists.update_for(update.id, org_unit=principal.org_unit)
+    if own is None:  # recorded a moment ago in the same store
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "not_recorded",
+                    "message": "the refresh ran but its record could not be read back"},
+        )  # fmt: skip
+    return own
 
 
 @app.get("/v1/admin/schedules", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))])
@@ -10351,7 +10387,7 @@ async def system_status_route(
     statuses, engines, notice = model_status(model_routes)
     return SystemStatus(
         # ADR-114 Amendment 8: the version the deployment was rendered with, and the last check.
-        version=os.environ.get("OSPREY_RELEASE_VERSION") or os.environ.get("OSPREY_VERSION"),
+        version=deployment_version(),
         components=components,
         models=statuses,
         engines=engines,

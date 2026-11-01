@@ -51,6 +51,11 @@ class ScreeningListStatus(BaseModel):
     dataset: str | None = None
     synthetic: bool
     licence: str
+    #: The owner's answer of 1 November 2026: false for a connector whose licence for a customer's
+    #: screening is not confirmed (UN, OpenSanctions), which reads synthetic lists only; the
+    #: reason in words beside it.
+    licence_confirmed: bool = True
+    licence_note: str | None = None
     version: str | None = None
     entries: int = 0
     updated_at: datetime | None = None
@@ -65,7 +70,9 @@ class ScreeningListStatus(BaseModel):
 
 
 class ScreeningListUpdate(BaseModel):
-    """One refresh of one list: what changed, and how many alerts its re-screening raised."""
+    """One refresh of one list: what changed, and — counted in the reader's own organisational unit
+    alone (the owner's answer of 1 November 2026; rule 7) — how many customers its re-screening read
+    and how many alerts it raised."""
 
     id: str
     list_name: str
@@ -78,7 +85,8 @@ class ScreeningListUpdate(BaseModel):
     #: Entries the publisher took off the list. Not `removed`: that name is the removal record's on
     #: the wire (ADR-124 decision 4), which no route may carry.
     delisted: int = 0
-    #: The customers re-screened against the changed entries, and the alerts that raised.
+    #: The customers of the reader's own unit re-screened against the changed entries, and the
+    #: alerts that raised there; never another unit's.
     rescreened: int = 0
     alerts: int = 0
     words: str
@@ -88,9 +96,9 @@ class ScreeningListUpdate(BaseModel):
 
 class ScreeningListsOverview(BaseModel):
     """The Lists screen for a reader of the alert queue: the lists alone. No refreshes — their
-    counts of customers re-screened and alerts raised are taken across every case in the deployment
-    (rule 7) — and no field that could hold them, so the route cannot send them, not merely does
-    not."""
+    counts of customers re-screened and alerts raised are for whoever may load lists, in their own
+    unit (rule 7) — and no field that could hold them, so the route cannot send them, not merely
+    does not."""
 
     lists: list[ScreeningListStatus]
     can_manage: Literal[False] = False
@@ -100,7 +108,7 @@ class ScreeningLists(BaseModel):
     """The Lists screen for whoever may load screening lists (`load_screening_lists`)."""
 
     lists: list[ScreeningListStatus]
-    #: The latest refreshes, newest first, across every list.
+    #: The latest refreshes, newest first, across every list; each counted in the reader's own unit.
     updates: list[ScreeningListUpdate]
     #: Whether the reader may subscribe and refresh (an administrator).
     can_manage: bool = False

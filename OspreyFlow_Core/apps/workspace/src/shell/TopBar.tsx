@@ -1,6 +1,6 @@
 // The top bar (ADR-097 step 1, design review item 1): 40px, one row. The mark, the case, search, the
 // view switch, then what acts on the whole case, and the account at the right. The places the
-// analyst goes to (cases, watches, history, proposed types, the Ingest Studio) are on the left rail,
+// analyst goes to (cases, Monitoring, history, proposed types, the Ingest Studio) are on the left rail,
 // and what belongs to one view is on that view's own toolbar.
 import { ThemeToggle } from "../theme/ThemeToggle";
 import type { ReactNode } from "react";
@@ -31,7 +31,7 @@ export function TopBar({ app, caseSwitcher, search, views = [], actions, account
   return (
     <header className="app-header top-bar" data-app={app}>
       {onStart ? (
-        <button type="button" className="brand-mark-button" aria-label="OspreyFlow, go to Home" onClick={onStart}>
+        <button type="button" className="brand-mark-button" aria-label="Osprey, go to Home" onClick={onStart}>
           <BrandMark />
         </button>
       ) : (

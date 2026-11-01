@@ -6,6 +6,8 @@ export type Location = string;
 export type Dataset = string | null;
 export type Synthetic = boolean;
 export type Licence = string;
+export type LicenceConfirmed = boolean;
+export type LicenceNote = string | null;
 export type Version = string | null;
 export type Entries = number;
 export type UpdatedAt = string | null;
@@ -22,9 +24,9 @@ export type CanManage = false;
 
 /**
  * The Lists screen for a reader of the alert queue: the lists alone. No refreshes — their
- * counts of customers re-screened and alerts raised are taken across every case in the deployment
- * (rule 7) — and no field that could hold them, so the route cannot send them, not merely does
- * not.
+ * counts of customers re-screened and alerts raised are for whoever may load lists, in their own
+ * unit (rule 7) — and no field that could hold them, so the route cannot send them, not merely
+ * does not.
  */
 export interface ScreeningListsOverview {
   lists: Lists;
@@ -42,6 +44,8 @@ export interface ScreeningListStatus {
   dataset?: Dataset;
   synthetic: Synthetic;
   licence: Licence;
+  licence_confirmed?: LicenceConfirmed;
+  licence_note?: LicenceNote;
   version?: Version;
   entries?: Entries;
   updated_at?: UpdatedAt;

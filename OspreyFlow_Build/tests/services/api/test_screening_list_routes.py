@@ -151,6 +151,9 @@ def test_a_list_is_subscribed_refreshed_and_shown(world: tuple[_World, TestClien
     made = client.post("/v1/admin/screening-lists", json=LIST)
     assert made.status_code == 201, made.text
     assert made.json()["licence"].startswith("CC BY-NC 4.0")
+    # The owner's answer of 1 November 2026: marked "licence not confirmed", with the reason.
+    assert made.json()["licence_confirmed"] is False
+    assert "commercial use" in made.json()["licence_note"]
     refreshed = client.post("/v1/admin/screening-lists/Synthetic list/refresh")
     assert refreshed.status_code == 200, refreshed.text
     assert (refreshed.json()["outcome"], refreshed.json()["added"]) == ("updated", 10)
@@ -210,3 +213,145 @@ def test_refreshing_a_list_never_subscribed_says_so(world: tuple[_World, TestCli
     response = client.post("/v1/admin/screening-lists/No such list/refresh")
     assert response.status_code == 404
     assert response.json()["detail"]["message"] == "no list is subscribed as “No such list”"
+
+
+# --- the admin's own unit (the owner's answer of 1 November 2026; rules 3, 4 and 7) --------------
+
+UNIT_A = Principal(id="officer-a", clearance="OFFICIAL", org_unit="unit-a", roles=["analyst"])
+UNIT_B = Principal(id="officer-b", clearance="OFFICIAL", org_unit="unit-b", roles=["analyst"])
+V1 = {**LIST, "location": "lists/synthetic_opensanctions_v1.ftm.json"}
+V2 = {**LIST, "location": "lists/synthetic_opensanctions_v2.ftm.json"}
+
+
+class _TwoCases:
+    async def ids_of_case(self, investigation_id: str) -> list[str]:
+        return {"case-a": ["ds-a"], "case-b": ["ds-b"]}.get(investigation_id, [])
+
+
+class _TwoUnits:
+    async def resolve_for_owner(self, owner_id: str) -> Principal | None:
+        return {UNIT_A.id: UNIT_A, UNIT_B.id: UNIT_B}.get(owner_id)
+
+
+class _ScreeningRules:
+    def __init__(self, rules: list[Any]) -> None:
+        self.rules = rules
+
+    async def list_active_of_typology(self, typology: str) -> list[Any]:
+        return self.rules if typology == "kyc_screening" else []
+
+
+def _screening_rule(rule_id: str, case: str, owner: Principal, name: str) -> Any:
+    from datetime import UTC, datetime
+
+    from schemas.domain import KycScreeningParams, TypologyRule
+
+    return TypologyRule(id=rule_id, investigation_id=case, owner_id=owner.id, name=name,
+                        params=KycScreeningParams(), trigger="post_commit",
+                        created_at=datetime(2026, 11, 1, tzinfo=UTC))  # fmt: skip
+
+
+@pytest.fixture
+def two_units(
+    world: tuple[_World, TestClient], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[_World, TestClient, Any]:
+    """Unit A's case holds one customer the second version lists; unit B's case holds three, two
+    of them listed. Each unit's screening rule is deployed by one of its own officers."""
+    from services.api.dataset_scope import DatasetStampingGraph
+
+    from .test_screening_refresh import _customer, _Graph, _Queue
+
+    w, client = world
+    shutil.copy(SYNTHETIC_MANIFEST.parent / "synthetic_opensanctions_v2.ftm.json", tmp_path / "lists")
+    graph = _Graph([
+        _customer("a-zelinsky", "Tomas", "Zelinsky", dob="1997-01-30", datasets=("ds-a",)),
+        _customer("b-zelinsky", "Tomas", "Zelinsky", dob="1997-01-30", datasets=("ds-b",)),
+        _customer("b-hale", "Marcus", "Hale", dob="1981-03-07", datasets=("ds-b",)),
+        _customer("b-other", "Someone", "Else", datasets=("ds-b",)),
+    ])  # fmt: skip
+    queue = _Queue()
+    # The refresh route reads each case's datasets from the app's state, as the lifespan sets it.
+    monkeypatch.setattr(app.state, "datasets", _TwoCases(), raising=False)
+    app.dependency_overrides.update({
+        get_graph: lambda: DatasetStampingGraph(graph),  # type: ignore[arg-type]
+        get_alerts_store: lambda: queue,
+        get_valkey: lambda: queue,
+        get_principal_resolver: lambda: _TwoUnits(),
+        get_typology_rules: lambda: _ScreeningRules([]),
+    })  # fmt: skip
+    assert client.post("/v1/admin/screening-lists", json=V1).status_code == 201
+    assert client.post("/v1/admin/screening-lists/Synthetic list/refresh").status_code == 200
+    rules = [_screening_rule("rule-a", "case-a", UNIT_A, "Unit A screening"),
+             _screening_rule("rule-b", "case-b", UNIT_B, "Unit B screening")]  # fmt: skip
+    app.dependency_overrides[get_typology_rules] = lambda: _ScreeningRules(rules)
+    assert client.post("/v1/admin/screening-lists", json=V2).status_code == 201
+    return w, client, queue
+
+
+def test_a_refresh_counts_only_the_admins_own_unit(
+    two_units: tuple[_World, TestClient, Any],
+) -> None:
+    """Violation caught: the refresh answered with the counts of every case in the deployment —
+    unit B's three customers and its alert told to unit A's administrator (rule 7)."""
+    _, client, queue = two_units
+    refreshed = client.post("/v1/admin/screening-lists/Synthetic list/refresh")
+    assert refreshed.status_code == 200, refreshed.text
+    assert len(queue.alerts) == 2, "both units' rules ran: the deployment re-screened four customers"
+    body = refreshed.json()
+    assert (body["rescreened"], body["alerts"]) == (1, 1), body
+    assert "1 customer re-screened" in body["words"] and "1 alert raised" in body["words"], body
+    assert "Unit B" not in refreshed.text and "4 customers" not in refreshed.text
+
+
+def test_a_second_units_rescreening_is_invisible_in_the_admin_list(
+    two_units: tuple[_World, TestClient, Any],
+) -> None:
+    """Rule 4's access-control test for `GET /v1/admin/screening-lists`: an administrator of unit
+    B reads only unit B's counts, unit A's only unit A's, and one of a unit with no screening rule
+    reads none — not even a zero that differs from another unit's."""
+    w, client, _ = two_units
+    client.post("/v1/admin/screening-lists/Synthetic list/refresh")
+    seen: dict[str, tuple[int, int, str]] = {}
+    for unit in ("unit-a", "unit-b", "unit-c"):
+        w.as_ = ADMIN.model_copy(update={"id": f"admin-{unit}", "org_unit": unit})
+        latest = client.get("/v1/admin/screening-lists").json()["updates"][0]
+        seen[unit] = (latest["rescreened"], latest["alerts"], latest["words"])
+    assert seen["unit-a"][:2] == (1, 1) and seen["unit-b"][:2] == (3, 1)
+    assert seen["unit-c"][:2] == (0, 0)
+    assert "0 customers re-screened" in seen["unit-c"][2] and "0 alerts raised" in seen["unit-c"][2]
+    assert "Unit B" not in seen["unit-a"][2] and "Unit A" not in seen["unit-b"][2]
+    for unit, (_, _, words) in seen.items():
+        assert "4 customers" not in words and "2 alerts" not in words, (unit, words)
+
+
+def test_each_list_says_whether_its_licence_is_confirmed(world: tuple[_World, TestClient]) -> None:
+    """The owner's answer of 1 November 2026 (ADR-133 Amendment 3): UN and OpenSanctions are marked
+    "licence not confirmed" with the reason in words, on the reader's route as on the manager's;
+    the other connectors carry no such mark."""
+    w, client = world
+    for name, source in (("Synthetic list", "opensanctions"), ("Synthetic list UN", "un_consolidated"),
+                         ("Synthetic list OFAC", "ofac_sdn")):  # fmt: skip
+        made = client.post("/v1/admin/screening-lists",
+                           json={"list_name": name, "source": source, "location": "lists/x"})  # fmt: skip
+        assert made.status_code == 201, made.text
+    w.as_ = ANALYST
+    shown = {x["source"]: x for x in client.get("/v1/screening-lists").json()["lists"]}
+    assert shown["un_consolidated"]["licence_confirmed"] is False
+    assert "non-commercial use only" in shown["un_consolidated"]["licence_note"]
+    assert shown["opensanctions"]["licence_confirmed"] is False
+    assert shown["ofac_sdn"]["licence_confirmed"] is True and shown["ofac_sdn"]["licence_note"] is None
+
+
+def test_the_glass_says_the_same_licence_reasons_as_the_conduit() -> None:
+    """The subscribe form says why a connector's licence is not confirmed before any list exists, so
+    the Glass holds the reasons too (`ListsPanel.tsx`'s `LICENCE_NOT_CONFIRMED`). Pure: a drift
+    check between the two, opening no connection."""
+    from services.api.screening_refresh import LICENCE_NOT_CONFIRMED
+    from tools.layout import CORE
+
+    panel = (CORE / "apps" / "workspace" / "src" / "alerts" / "ListsPanel.tsx").read_text(encoding="utf-8")
+    block = panel[panel.index("export const LICENCE_NOT_CONFIRMED"):]
+    block = block[: block.index("};")]
+    assert sorted(LICENCE_NOT_CONFIRMED) == ["opensanctions", "un_consolidated"]
+    for source, reason in LICENCE_NOT_CONFIRMED.items():
+        assert f'{source}:\n    "{reason}",' in block, source

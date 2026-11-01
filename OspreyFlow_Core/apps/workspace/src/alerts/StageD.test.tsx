@@ -186,7 +186,7 @@ describe("closing a high-severity alert (decision 7)", () => {
     expect(closeNeedsSecondPerson("medium", "team")).toBe(false);
     const closing = { ...ALERT, status: "closing", disposition: "false_positive", disposition_reason: "known", close_proposed_by: "member" };
     expect(statusSentence(closing as never, false)).toBe(
-      "Closing as a false positive (known), proposed by member: waiting for a second person to approve it",
+      "Closing as False positive (known), proposed by member: waiting for a second person to approve it",
     );
   });
 
@@ -208,8 +208,9 @@ describe("closing a high-severity alert (decision 7)", () => {
     const calls = await openAlert(ALERT, "member");
     await screen.findByText(/closing it here proposes the close/);
     fireEvent.change(screen.getByLabelText("Reason for closing"), { target: { value: "known" } });
-    fireEvent.click(screen.getByRole("button", { name: "Close as false positive" }));
-    await screen.findByText("Close proposed as a false positive; it waits for a second person to approve it.");
+    fireEvent.click(screen.getByRole("radio", { name: "False positive" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose the close" }));
+    await screen.findByText("Close proposed as False positive; it waits for a second person to approve it.");
     expect(calls.some((c) => c.path === "alert-queue/a1/disposition")).toBe(true);
   });
 

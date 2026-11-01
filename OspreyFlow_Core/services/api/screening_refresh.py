@@ -53,7 +53,7 @@ from .alerts import AlertStore
 from .audit import AuditWriter
 from .dataset_scope import set_case_datasets
 from .ingest_sources import ingest_root, is_inside
-from .screening import ListDiff, ScreeningEntry, ScreeningListStore, screen
+from .screening import ListDiff, ScreeningEntry, ScreeningListStore, UnitCounts, screen
 
 #: Each connector's licence, as the Lists screen says it (`00_ARCHITECTURE.md` §7 cites each).
 LICENCES: dict[str, str] = {
@@ -67,6 +67,22 @@ LICENCES: dict[str, str] = {
     ),
     "eu_consolidated": "European Commission reuse notice (Decision 2011/833/EU)",
     "opensanctions": "CC BY-NC 4.0: non-commercial use only, unless licensed by OpenSanctions",
+}
+
+#: The owner's answer of 1 November 2026 (ADR-133 Amendment 3's licence findings): the connectors
+#: whose licence for a customer's screening is not confirmed, each with the reason in words. Until
+#: it is, they read OspreyFlow's synthetic lists only; a real file is refused, whatever this
+#: device's exceptions admit. `apps/workspace/src/alerts/ListsPanel.tsx` says the same words, held
+#: in step by `test_the_glass_says_the_same_licence_reasons_as_the_conduit`.
+LICENCE_NOT_CONFIRMED: dict[str, str] = {
+    "un_consolidated": (
+        "no open licence was found for the UN consolidated list, and the UN's general terms allow "
+        "personal, non-commercial use only; its terms are to be confirmed with the UN"
+    ),
+    "opensanctions": (
+        "OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs "
+        "OpenSanctions' own data licence"
+    ),
 }
 
 SYNTHETIC_MANIFEST = (
@@ -131,6 +147,14 @@ def admit(
         raise ListRefused(
             f"“{status.dataset}” is real data and is not in this device's "
             f"real_data_exceptions.yaml for {use.replace('_', ' ')}; nothing was loaded (rule 9)"
+        )
+    # A real list this device admits is still refused while its connector's licence is not
+    # confirmed (the owner's answer of 1 November 2026).
+    unconfirmed = LICENCE_NOT_CONFIRMED.get(status.source)
+    if unconfirmed is not None:
+        raise ListRefused(
+            f"this list's licence is not confirmed: {unconfirmed}. Until it is, only OspreyFlow's "
+            "synthetic list may be read through this connector; nothing was loaded"
         )
     return False
 
@@ -206,10 +230,19 @@ class CaseDatasets(Protocol):
 
 @dataclass
 class RescreenReport:
+    """The whole re-screening (the operator's command and the audit), and each unit's own part of
+    it: a rule's customers, alerts and failure belong to its deployer's unit, which alone reads
+    them (the owner's answer of 1 November 2026). A rule whose deployer cannot be resolved has no
+    unit, so its failure is in the whole report alone."""
+
     rules: int = 0
     customers: int = 0
     alerts: int = 0
     failures: list[str] = field(default_factory=list)
+    by_unit: dict[str, UnitCounts] = field(default_factory=dict)
+
+    def unit(self, org_unit: str) -> UnitCounts:
+        return self.by_unit.setdefault(org_unit, UnitCounts())
 
 
 @dataclass
@@ -236,26 +269,40 @@ class Rescreener:
             return report
         for rule in await self.rules.list_active_of_typology("kyc_screening"):
             report.rules += 1
+            unit: str | None = None
             try:
-                customers, raised = await self._rule(rule, changed, diff)
+                deployer = await self.principal_for_owner(rule.owner_id)
+                if deployer is None:
+                    raise RuntimeError(
+                        "its deployer could not be resolved, so it could not run as them"
+                    )
+                unit = deployer.org_unit
+                customers, raised = await self._rule(rule, deployer, changed, diff)
             except Exception as error:  # noqa: BLE001 - one rule's trouble never stops the rest
-                report.failures.append(f"rule “{rule.name}” could not re-screen: {error}")
+                said = f"rule “{rule.name}” could not re-screen: {error}"
+                report.failures.append(said)
+                if unit is not None:
+                    report.unit(unit).failures.append(said)
                 continue
             report.customers += customers
             report.alerts += raised
+            counts = report.unit(unit)
+            counts.rescreened += customers
+            counts.alerts += raised
         return report
 
     async def _rule(
-        self, rule: TypologyRule, changed: Sequence[ScreeningEntry], diff: ListDiff
+        self,
+        rule: TypologyRule,
+        deployer: Principal,
+        changed: Sequence[ScreeningEntry],
+        diff: ListDiff,
     ) -> tuple[int, int]:
         from .kyc_rules import CUSTOMER_TYPES, KycContext, party_name, screening_finding
         from .rule_evaluation import RuleGate
 
         params = rule.params
         assert isinstance(params, KycScreeningParams)
-        deployer = await self.principal_for_owner(rule.owner_id)
-        if deployer is None:
-            raise RuntimeError("its deployer could not be resolved, so it could not run as them")
         # The rule reads within its case's datasets, as at onboarding (ADR-099): its own dataset,
         # else the case's. Whatever it writes belongs to the first of them.
         reach = (
@@ -405,6 +452,10 @@ async def refresh(
             **counts,
         )
     report = await rescreen(diff)
+    list_words = (
+        f"Version {diff.version}: {len(diff.added):,} added, {len(diff.changed):,} changed, "
+        f"{len(diff.removed):,} removed.{skipped}"
+    )
     words = (
         f"Version {diff.version}: {len(diff.added):,} added, {len(diff.changed):,} changed, "
         f"{len(diff.removed):,} removed. {_plural(report.customers, 'customer')} re-screened "
@@ -413,13 +464,19 @@ async def refresh(
     )
     if report.failures:
         words += " " + " ".join(f"{f[0].upper()}{f[1:]}." for f in report.failures)
-    return await record(
-        "updated", words, rescreened=report.customers, alerts=report.alerts, **counts
-    )
+    update = ScreeningListUpdate(
+        id=new_id(), list_name=list_name, at=now, outcome="updated", words=words,
+        trigger=trigger, rescreened=report.customers, alerts=report.alerts, **counts,  # type: ignore[arg-type]
+    )  # fmt: skip
+    # The whole refresh for the operator's command and the audit; each unit's own part beside it,
+    # which is all a route reads (`ScreeningListStore.update_for`).
+    await store.record_update(update, list_words=list_words, by_unit=report.by_unit)
+    return update
 
 
 __all__ = [
     "LICENCES",
+    "LICENCE_NOT_CONFIRMED",
     "ListNotSubscribed",
     "ListRefused",
     "RescreenReport",

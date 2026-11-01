@@ -89,11 +89,13 @@ test("the marking strip and the top bar take 20 and 44 pixels, and the rail 48 w
 
 test("each rail entry is reached and pressed by keyboard", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
-  for (const name of ["Cases", "Watches", "Monitoring", "Ownership", "History", "Explore", "Questions", "Ingest Studio", "Dashboards", "Admin"]) {
+  for (const name of ["Cases", "Monitoring", "Ownership", "History", "Explore", "Questions", "Ingest Studio", "Dashboards", "Admin"]) {
     await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name }).focus();
     await page.keyboard.press("Enter");
   }
-  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["cases", "watches", "alerts", "ownership", "history", "explore", "questions", "ingest", "dashboards", "admin"]);
+  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["cases", "alerts", "ownership", "history", "explore", "questions", "ingest", "dashboards", "admin"]);
+  // The owner's answer of 1 November 2026: watches are in Monitoring's Watches tab, not the rail.
+  await expect(page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Watches" })).toHaveCount(0);
   registerCovered(REGISTRY, "rail-entries-by-keyboard");
 });
 

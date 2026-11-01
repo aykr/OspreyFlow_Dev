@@ -25,6 +25,8 @@ import {
 
 const COUNT = new Intl.NumberFormat("en-GB");
 const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+/** When an alert was raised, in British English (UK time), never the browser's own locale. */
+const RAISED = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
 
 /** ADR-130: an alert is named by what it is, never by its rule id (`hotlist:<id>`). */
 function heading(alert: AlertView): string {
@@ -65,7 +67,7 @@ function ScheduleNoticeRow({ alert }: { alert: AlertView }) {
                  borderBottom: "1px solid var(--border-subtle)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span className="value">Scheduled run</span>
-        <span className="label">{new Date(alert.created_at).toLocaleString()}</span>
+        <span className="label">{RAISED.format(new Date(alert.created_at))}</span>
       </div>
       <p className="label" style={{ margin: 0 }}>{alert.words}</p>
     </li>
@@ -97,7 +99,7 @@ export function AlertRow({ alert, onJump, jumping }: AlertRowProps) {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span className="value">{heading(alert)}</span>
-        <span className="label">{new Date(alert.created_at).toLocaleString()}</span>
+        <span className="label">{RAISED.format(new Date(alert.created_at))}</span>
       </div>
       {alert.mode === "notify_stub" && (
         <p className="label">A match fired — no evidence visible to you.</p>

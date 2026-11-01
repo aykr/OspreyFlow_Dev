@@ -19,12 +19,15 @@ const LISTS = [
   {
     list_name: "Synthetic list", source: "opensanctions", location: "lists/synthetic_opensanctions_v2.ftm.json",
     dataset: null, synthetic: true, licence: "CC BY-NC 4.0: non-commercial use only, unless licensed by OpenSanctions",
+    licence_confirmed: false,
+    licence_note: "OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs OpenSanctions' own data licence",
     version: "sha256:3906852638793da1", entries: 10, updated_at: "2026-11-01T09:00:00Z",
     attempted_at: "2026-11-01T09:00:00Z", failure: null,
   },
   {
     list_name: "OFAC SDN", source: "ofac_sdn", location: "lists/SDN.CSV", dataset: "ofac_sdn", synthetic: false,
-    licence: "US Government work, in the public domain (17 U.S.C. §105)", version: null, entries: 0,
+    licence: "US Government work, in the public domain (17 U.S.C. §105)", licence_confirmed: true, licence_note: null,
+    version: null, entries: 0,
     updated_at: null, attempted_at: "2026-11-01T09:05:00Z",
     failure: "Refused: “ofac_sdn” is real data and is not in this device's real_data_exceptions.yaml for local development; nothing was loaded (rule 9).",
   },
@@ -61,6 +64,36 @@ function serve() {
 const props = { apiBaseUrl: "http://api.invalid", bearerToken: "t" };
 
 describe("the Lists tab", () => {
+  it("marks a list whose licence is not confirmed, with the reason in words, and no other", async () => {
+    // The owner's answer of 1 November 2026 (ADR-133 Amendment 3): UN and OpenSanctions.
+    serve();
+    render(<ListsPanel {...props} canManage={false} />);
+    const table = await screen.findByRole("table", { name: "Screening lists and their versions" });
+    const [, synthetic, ofac] = within(table).getAllByRole("row");
+    expect(synthetic!.textContent).toContain(
+      "Licence not confirmed: OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs OpenSanctions' own data licence. Synthetic lists only.",
+    );
+    expect(ofac!.textContent).not.toContain("Licence not confirmed");
+  });
+
+  it("says in the subscribe form which connectors' licences are not confirmed, and why", async () => {
+    serve();
+    render(<ListsPanel {...props} canManage={true} />);
+    const connector = (await screen.findByRole("combobox", { name: "Connector" })) as HTMLSelectElement;
+    const labels = Array.from(connector.options).map((o) => o.textContent);
+    expect(labels).toContain("UN Security Council consolidated list (licence not confirmed)");
+    expect(labels).toContain("OpenSanctions (FollowTheMoney entities) (licence not confirmed)");
+    expect(labels).toContain("OFAC SDN list (US Treasury)");
+    fireEvent.change(connector, { target: { value: "un_consolidated" } });
+    const form = screen.getByRole("form", { name: "Subscribe to a list" });
+    expect(form.textContent).toContain(
+      "Licence not confirmed: no open licence was found for the UN consolidated list, and the UN's general terms allow personal, non-commercial use only; its terms are to be confirmed with the UN. Only OspreyFlow's synthetic list may be read through this connector.",
+    );
+    fireEvent.change(connector, { target: { value: "ofac_sdn" } });
+    expect(form.textContent).not.toContain("Licence not confirmed");
+  });
+
+
   it("shows each list's version, entries, last update, licence and state in words", async () => {
     serve();
     render(<ListsPanel {...props} canManage={false} />);

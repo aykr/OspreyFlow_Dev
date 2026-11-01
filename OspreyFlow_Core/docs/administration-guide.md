@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.19** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.20** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.20 | 2026-11-01 | §9.5: the UN and OpenSanctions connectors are marked "licence not confirmed" and read OspreyFlow's synthetic lists only, whatever this device's exceptions admit; the refreshes' counts of customers re-screened and alerts raised are your own unit's. |
 | 1.19 | 2026-11-01 | §9.5: a list's refresh schedule, set in Monitoring → Lists and run as the person who set it. §9.6: approval rights — a second person for a rule for the whole deployment and for closing a high-severity alert, and who holds the right to approve; whole-deployment rules live before this version wait for approval after upgrading. |
 | 1.18 | 2026-11-01 | §9.5: screening lists — subscribing to a list through its connector, each list's licence, the rule on real lists, and the refresh (*Refresh now*, `python -m scripts.refresh_screening_list`), which re-screens customers against the changed entries only. |
 | 1.17 | 2026-11-01 | §12: the monitoring board, and the four monitoring sections the feed carries (`raised_by_rule`, `closed`, `time_to_close`, `hotlist_matches`). |
@@ -505,12 +506,19 @@ export format:
 | --- | --- | --- |
 | OFAC SDN list | `SDN.CSV`, with `ALT.CSV` and `ADD.CSV` beside it when present | A US Government work, in the public domain; OFAC's own pages state no licence |
 | HM Treasury OFSI consolidated list | `ConList.csv` | Open Government Licence v3.0. **The list closed on 28 January 2026**: the FCDO's UK Sanctions List replaced it, and OspreyFlow has no connector for that yet |
-| UN Security Council consolidated list | `consolidated.xml` | No open licence found: the UN's terms of use allow personal, non-commercial use. Confirm with the UN before relying on it |
+| UN Security Council consolidated list | `consolidated.xml` | **Licence not confirmed.** No open licence found: the UN's terms of use allow personal, non-commercial use. Confirm with the UN before relying on it. Synthetic lists only until then |
 | EU consolidated financial sanctions list | the FSF XML 1.1 file | The European Commission's reuse notice (Decision 2011/833/EU) |
-| OpenSanctions | `entities.ftm.json` | CC BY-NC 4.0: **non-commercial only**. Screening inside a business is commercial use and needs OpenSanctions' data licence |
+| OpenSanctions | `entities.ftm.json` | **Licence not confirmed.** CC BY-NC 4.0: **non-commercial only**. Screening inside a business is commercial use and needs OpenSanctions' data licence. Synthetic lists only until then |
 
 Check the licence for your use before you subscribe. The architecture's licence register (spec 00 §7)
 records where each statement was read.
+
+**Licence not confirmed: UN and OpenSanctions.** Until their licences for a customer's screening are
+confirmed, these two connectors read OspreyFlow's own synthetic lists only. The Lists tab marks each
+such list "Licence not confirmed", with the reason, and the subscribe form says so beside the
+connector. A real UN or OpenSanctions file is refused, in words, even when this device's exceptions
+admit its dataset, and nothing loads; `python -m scripts.load_screening_list` refuses a list whose
+dataset is `opensanctions` or `un_consolidated` the same way.
 
 **Real lists and this device.** OspreyFlow ships only synthetic lists. A real list loads only when this
 device's own `config/real_data_exceptions.yaml` (never committed, never copied between machines) names
@@ -534,8 +542,11 @@ customer of every case with a screening rule against **the added and changed ent
 rule's deployer and within that case's datasets; each new match is a high-severity alert in that case's
 queue, its link to the listed party inferred until a person confirms it. A file that is not in the
 connector's format fails in words and leaves the list as it was. Every refresh is recorded under
-**Latest refreshes**, with what it added, changed and removed, how many customers it re-screened and how
-many alerts it raised; the audit records who refreshed which list.
+**Latest refreshes**, with what it added, changed and removed, and how many customers it re-screened and
+how many alerts it raised **in your own unit**: each screening rule re-screens as its deployer, and its
+customers and alerts are counted for the deployer's unit alone, so an administrator never learns how
+many of another unit's customers a list touched. *Refresh now* answers the same way. The audit
+records who refreshed which list.
 
 **When.** A list is refreshed when someone presses **Refresh now**, runs the command, or on the list's
 own **refresh schedule**. Under **Refresh schedule** in Monitoring → Lists, choose the list, **every

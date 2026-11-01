@@ -284,3 +284,15 @@ describe("the hotlist alert's fired-on text", () => {
   });
 });
 
+
+describe("when an alert was raised", () => {
+  test("is said in British English, day before month, whatever the browser's own locale", () => {
+    // Found capturing the guide's Watches screen (step 7b): "10/31/2026, 2:31:52 PM".
+    const { container } = render(
+      <ul>
+        <AlertRow alert={{ ...NOTIFY_ALERT, created_at: "2026-10-31T14:31:52Z" }} onJump={() => undefined} jumping={false} />
+      </ul>,
+    );
+    expect(container.textContent).toContain("31 Oct 2026, 14:31");
+  });
+});

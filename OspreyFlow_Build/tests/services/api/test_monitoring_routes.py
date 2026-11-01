@@ -318,6 +318,49 @@ def test_closing_without_a_reason_is_refused(world: tuple[_World, TestClient]) -
     assert closed.status_code == 200 and closed.json()["status"] == "closed"
 
 
+# The owner's answer of 1 November 2026 (ADR-133 decision 7's closed list, named): the five closing
+# reasons, each a value the route takes, with its label as the Glass says it.
+CLOSING_REASONS = {
+    "true_positive": "True match",
+    "false_positive": "False positive",
+    "duplicate": "Duplicate",
+    "no_further_action": "No further action",
+    "referred": "Referred",
+}
+
+
+@pytest.mark.parametrize("reason", sorted(CLOSING_REASONS))
+def test_each_of_the_five_closing_reasons_closes_an_alert(
+    world: tuple[_World, TestClient], reason: str
+) -> None:
+    w, client = world
+    alert = _alert(w, f"monitor:{new_id()}", team=w.unit)
+    _save(client, w, alert)
+    w.as_ = w.member
+    closed = client.post(f"{Q.format(case=w.case)}/{alert.id}/disposition",
+                         json={"disposition": reason, "reason": "seen on the file"})  # fmt: skip
+    assert closed.status_code == 200, closed.text
+    assert (closed.json()["status"], closed.json()["disposition"]) == ("closed", reason)
+
+
+def test_a_reason_outside_the_closed_list_is_refused_in_words(
+    world: tuple[_World, TestClient],
+) -> None:
+    w, client = world
+    alert = _alert(w, f"monitor:{new_id()}", team=w.unit)
+    _save(client, w, alert)
+    w.as_ = w.member
+    path = f"{Q.format(case=w.case)}/{alert.id}/disposition"
+    for other in ("escalated", "True match", "TRUE_POSITIVE", ""):
+        refused = client.post(path, json={"disposition": other, "reason": "seen on the file"})
+        assert refused.status_code == 422, (other, refused.text)
+        said = refused.text
+        assert ("the closing reason must be one of: True match, False positive, Duplicate, "
+                "No further action, Referred") in said, (other, said)  # fmt: skip
+    still = client.get(f"{Q.format(case=w.case)}/{alert.id}").json()
+    assert still["alert"]["status"] != "closed", "a refused reason closes nothing"
+
+
 # --- the hotlist's audience (ruling 3) -----------------------------------------------------------
 
 

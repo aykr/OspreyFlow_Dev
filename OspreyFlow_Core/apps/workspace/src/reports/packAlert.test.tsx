@@ -20,7 +20,8 @@ describe("the words an alert item is said in", () => {
   });
 
   it("says a closed alert's outcome and reason, and a confirmed match", () => {
-    expect(alertStatusSentence(CLOSED_ALERT_ITEM.alert!)).toBe("Closed as a true positive: Confirmed with the bank.");
+    expect(alertStatusSentence(CLOSED_ALERT_ITEM.alert!)).toBe("Closed as True match: Confirmed with the bank.");
+    expect(alertStatusSentence({ ...CLOSED_ALERT_ITEM.alert!, outcome: "duplicate" })).toBe("Closed as Duplicate: Confirmed with the bank.");
     expect(alertMatchSentence(CLOSED_ALERT_ITEM.alert!)).toBe("Confirmed by a person.");
     expect(alertStatusSentence({ ...ALERT_ITEM.alert!, status: "claimed" })).toBe("Open, being worked on, when this was added.");
     expect(alertStatusSentence({ ...ALERT_ITEM.alert!, status: "closed", outcome: null, reason: "Taken back with its load" })).toBe(
@@ -55,7 +56,7 @@ describe("an alert item on the printed page", () => {
     expect(open).toContain("Open: not yet decided when this was added.");
     expect(open).toContain("Inferred: no one has confirmed this match.");
     expect(open.match(/Marked OFFICIAL/g)).toHaveLength(2);
-    expect(closed).toContain("Closed as a true positive: Confirmed with the bank.");
+    expect(closed).toContain("Closed as True match: Confirmed with the bank.");
     expect(closed).toContain("Halcyon Marine Ltd");
   });
 });

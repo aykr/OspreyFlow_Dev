@@ -106,7 +106,6 @@ import type { HistoryStepSummary } from "./workingset/models";
 import { setWelcomeDismissed, useHelpKey, welcomeDismissed, WorkspaceWelcome } from "./welcome/WorkspaceWelcome";
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
-import { AlertInbox } from "./watches/AlertInbox";
 import { AlertsPlace } from "./alerts/AlertsPlace";
 import { AdminPlace } from "./admin/AdminPlace";
 import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
@@ -122,8 +121,6 @@ import {
 import { startScreen } from "./shell/startScreen";
 import { loadHome, openInQueue, summariseHome, type HomeSummary } from "./home/homeData";
 import { OwnershipPlace } from "./ownership/OwnershipPlace";
-import { HotlistPanel } from "./watches/HotlistPanel";
-import { MonitorPanel } from "./watches/MonitorPanel";
 import {
   connectDeltaClient,
   type DeltaClient,
@@ -592,7 +589,7 @@ export function App() {
   }, [counts, classificationOrder]);
 
   const [view, setView] = useState<
-    "graph" | "map" | "matrix" | "reports" | "admin" | "dashboards" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
+    "graph" | "map" | "matrix" | "reports" | "admin" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership"
   >(handoff.view === "ingest" ? "ingest" : handoff.view === "admin" ? "admin" : "graph");
   // ADR-115 E6: the canvas toolbar's "Last change", read again as the working set changes.
   const [lastChange, setLastChange] = useState<string | null>(null);
@@ -648,7 +645,7 @@ export function App() {
       window.setTimeout(() => revealPanel(place.panel), 0);
     }
   };
-  const lastGlassView = useRef<"graph" | "map" | "matrix" | "reports" | "admin" | "dashboards" | "dossier" | "watches" | "alerts" | "ownership">("graph");
+  const lastGlassView = useRef<"graph" | "map" | "matrix" | "reports" | "admin" | "dashboards" | "dossier" | "alerts" | "ownership">("graph");
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {
@@ -1165,7 +1162,7 @@ export function App() {
   // the map, not over Reports, a Superset board or the Admin area, and not to an account that may
   // not investigate (opened under an embedded board, the timeline overlapped it).
   const showsWorkingSetTools =
-    showsInspector(rights) && !["ingest", "dossier", "watches", "reports", "dashboards", "admin"].includes(view);
+    showsInspector(rights) && !["ingest", "dossier", "reports", "dashboards", "admin"].includes(view);
 
   return (
     // ADR-132: the window less whatever the brand frame shows above (`brand/BrandFrame.tsx`).
@@ -1252,9 +1249,10 @@ export function App() {
           ...(app === "glass"
             ? [
                 { id: "cases", label: "Cases", icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
-                { id: "watches", label: "Watches", icon: "watches" as const, onSelect: () => setView("watches"), pressed: view === "watches" },
                 // ADR-133 decision 5 (ADR-109 ruling 5 before it, as Alerts): the Monitoring place —
                 // the one alert queue for every kind, rules and templates, watches, held rows, audit.
+                // The owner's answer of 1 November 2026: watches are reached from its Watches tab
+                // alone; the rail has no Watches entry.
                 { id: "alerts", label: "Monitoring", icon: "alerts" as const, onSelect: () => setView("alerts"), pressed: view === "alerts", badge: alertCount },
                 // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
                 { id: "ownership", label: "Ownership", icon: "ownership" as const, onSelect: () => setView("ownership"), pressed: view === "ownership" },
@@ -1350,38 +1348,6 @@ export function App() {
             }}
           />
         )}
-        {view === "watches" && (
-          // Owner-only, not investigation-scoped — the same reasoning `/v1/patterns/*` already
-          // gives (`patterns/api.ts`'s own module docstring) — so this view, like "ingest" and
-          // "dossier", opts out of the investigation-scoped side panel/timeline/status bar below
-          // rather than being squeezed into `view === "graph"`'s own 320px column.
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--sp-8)",
-              overflowY: "auto",
-              padding: "var(--sp-8)",
-            }}
-          >
-            <HotlistPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} />
-            <MonitorPanel apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} />
-            <AlertInbox
-              apiBaseUrl={API_BASE_URL}
-              bearerToken={bearerToken}
-              investigationId={investigationId}
-              onOpenInvestigation={(newInvestigationId) => {
-                sessionStorage.setItem(
-                  INVESTIGATION_ID_SESSION_KEY,
-                  newInvestigationId,
-                );
-                setInvestigationId(newInvestigationId);
-                setView("graph");
-              }}
-            />
-          </div>
-        )}
         {view === "alerts" && (
           <AlertsPlace
             apiBaseUrl={API_BASE_URL}
@@ -1393,6 +1359,11 @@ export function App() {
             onCanvas={(outcome, nodeIds) => {
               applyStarterDelta(outcome.delta);
               pendingHighlight.current = nodeIds;
+              setView("graph");
+            }}
+            onOpenInvestigation={(newInvestigationId) => {
+              sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, newInvestigationId);
+              setInvestigationId(newInvestigationId);
               setView("graph");
             }}
           />
@@ -1418,7 +1389,7 @@ export function App() {
             }}
           />
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "admin" && view !== "dashboards" && (
+        {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "admin" && view !== "dashboards" && (
           <div style={{ flex: 1, position: "relative" }}>
             {view === "graph" && welcomeOpen && (
               <WorkspaceWelcome
@@ -1664,7 +1635,7 @@ export function App() {
               })()}
           </div>
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "watches" && view !== "dashboards" && showsInspector(rights) && (
+        {view !== "ingest" && view !== "dossier" && view !== "dashboards" && showsInspector(rights) && (
           <SidePanelFrame name="Inspector">
             <SidePanelStack
               panels={[

@@ -140,6 +140,6 @@ export const ALERT_OPTIONS: TrendOptions = {
     { name: "rule", kind: "category", values: ["typology:r1", "hotlists", "monitors"], labels: ["Rapid movement over £9,000", "Hotlists", "Monitors"] },
     { name: "typology", kind: "category", values: ["rapid_movement"], labels: [] },
     { name: "severity", kind: "category", values: ["high", "medium", "low"], labels: ["High", "Medium", "Low"] },
-    { name: "outcome", kind: "category", values: ["open", "claimed", "true_positive", "false_positive", "closed"], labels: ["Open", "Claimed", "True positive", "False positive", "Closed, no outcome"] },
+    { name: "outcome", kind: "category", values: ["open", "claimed", "true_positive", "false_positive", "duplicate", "no_further_action", "referred", "closed"], labels: ["Open", "Claimed", "True match", "False positive", "Duplicate", "No further action", "Referred", "Closed, no outcome"] },
   ],
 };

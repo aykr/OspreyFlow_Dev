@@ -1,6 +1,6 @@
 // Alerts in reporting (ADR-134 decisions 1 and 3), drawn from synthetic data with no server: a
 // report pack holding an open alert whose match is still inferred, a trend over alerts split by
-// rule, and an alert closed as a true positive — each as the Glass shows a pack item. For the
+// rule, and an alert closed as a true match — each as the Glass shows a pack item. For the
 // every-harness axe scan (`a11y/every-harness.spec.ts`, which finds this page by its directory) and
 // for the Product Overview deck's screens, in both brands (`?brand=govuk`). `?show=alert` draws the
 // open alert alone and `?show=trend` the trend alone. The names and numbers are invented (rule 9).

@@ -443,6 +443,11 @@ CORS policy to get wrong; and the Glass's boot stays synchronous, where fetching
 before first render would have made it asynchronous and changed `App.tsx`'s top-level constants and
 the tests around them.
 
+**The API's OpenAPI document rides the same path** (the owner's answer of 1 November 2026): it is
+`GET /v1/openapi.json`, so the deployment's address serves it through the workspace's proxy, behind
+sign-in like every other `/v1` route, with the release as its version (`03_CONDUIT_MIDDLEWARE.md`
+§3.0a). Nothing else publishes it; the Conduit's port stays unpublished.
+
 **The consequence for §3 and §7**: the Conduit no longer needs a published host port, and does not
 get one. `network.expose_conduit: true` in `osprey.yaml` publishes it, off by default. §7 states the
 posture; the enforcing tests are `test_the_conduit_is_not_published_by_default_and_is_when_asked_for`
@@ -755,6 +760,30 @@ If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSe
 back to PostgreSQL full-text, stating the trade-off on screen: search quality degrades and
 semantic search is unavailable, and the platform otherwise works. It is offered, not applied
 silently.
+
+### 3.1 Tests never reach a deployment on the same machine (the owner's answer, 1 November 2026)
+
+A Lite deployment publishes ArcadeDB on 2480 (to `127.0.0.1`), the proxy on 80, and on a
+developer's machine the Glass and Keycloak on 8080 and 8081 and Postgres on 5432. A test run whose
+shell had not pinned the store ports reached the owner's everyday ArcadeDB on 2480, because
+`ARCADEDB_HTTP_PORT` defaults to 2480 (`BUILD_ORDER_2026-11.md`, open question 8). **The test
+harness refuses ports 2480, 5432, 80, 8080 and 8081 on this machine** (`tests/port_guard.py`, loaded
+by `tests/conftest.py`), in two layers, both before any connection:
+
+- **At start-up**, before collection, each store setting is resolved as the code resolves it (the
+  variable, else its default) and each service address the environment names is read. If any is a
+  live port on a loopback address, the run stops with a usage error that names the setting, the
+  port and whose it is, and how to pin the ports. An unpinned run is refused here.
+- **At every connection**, a connection to a live port on a loopback address raises
+  `LivePortRefused` (not an `OSError`, so no client reads it as an unavailable store and skips).
+
+**CI is the one exception.** The `conformance` job in `.github/workflows/ci.yml` runs its own
+ArcadeDB on 2480 and Postgres on 5432 on a fresh runner where no deployment exists; GitHub sets
+`CI=true`, and with it the guard stands aside and the run's header says so. Locally, a run pins the
+ports (`ARCADEDB_HTTP_PORT=2491 POSTGRES_PORT=55433 …`). `make dev-up` publishes its ArcadeDB on 2480
+too, so the live suites against it are refused while the guard stands; they run in CI, or against a
+store on another port. Tests: `tests/test_port_guard.py` (an unpinned run planted in a subprocess
+over a tripwire, so it cannot reach 2480; shown red with the start-up check removed).
 
 ## 3a. Small on a cloud's managed services (ADR-114 decision 8, Amendment 10)
 

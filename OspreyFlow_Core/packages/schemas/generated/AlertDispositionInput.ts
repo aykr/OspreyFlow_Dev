@@ -1,11 +1,12 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
-export type Disposition = "true_positive" | "false_positive";
+export type Disposition = "true_positive" | "false_positive" | "duplicate" | "no_further_action" | "referred";
 export type Reason = string;
 
 /**
- * Closing an alert (ADR-133 decision 7: "closing needs a reason"). A reason of only spaces is
- * no reason: it is refused as an empty one is.
+ * Closing an alert (ADR-133 decision 7: "closing needs a reason"): one of the closed list of
+ * reasons (`CLOSING_REASONS`), and words. A reason outside the list is refused in words that name
+ * the list; a reason of only spaces is no reason, refused as an empty one is.
  */
 export interface AlertDispositionInput {
   disposition: Disposition;

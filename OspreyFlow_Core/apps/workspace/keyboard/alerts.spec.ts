@@ -245,14 +245,67 @@ test("an alert is closed with its reason, by keyboard", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
   await openTheAlert(page);
+  // The closing reason: one of the owner's closed list, chosen with Space on the first.
+  await page.getByRole("radio", { name: "True match" }).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("radio", { name: "True match" })).toBeChecked();
   await page.getByLabel("Reason for closing").fill("Matches the SAR");
-  await press(page, page.getByRole("button", { name: "Close as true positive" }));
-  await expect(page.getByText(/Closed as a true positive/)).toBeVisible();
+  await press(page, page.getByRole("button", { name: "Close the alert" }));
+  await expect(page.getByText(/Closed as True match/).first()).toBeVisible();
   expect(state.sent.find((s) => s.path === "alert-queue/a1/disposition")?.body).toEqual({
     disposition: "true_positive",
     reason: "Matches the SAR",
   });
   registerCovered(REGISTRY, "close-an-alert-with-a-reason-by-keyboard");
+});
+
+test("a closing reason is chosen from the closed list with the arrow keys, by keyboard", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await openTheAlert(page);
+  const close = page.getByRole("button", { name: "Close the alert" });
+  await page.getByLabel("Reason for closing").fill("Passed to the NCA");
+  await expect(close).toBeDisabled(); // words alone are not a closing reason
+  await page.getByRole("radio", { name: "True match" }).focus();
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("radio", { name: "Referred" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Referred" })).toBeFocused();
+  await press(page, close);
+  expect(state.sent.find((s) => s.path === "alert-queue/a1/disposition")?.body).toEqual({
+    disposition: "referred",
+    reason: "Passed to the NCA",
+  });
+  registerCovered(REGISTRY, "choose-a-closing-reason-by-keyboard");
+});
+
+test("the watches and their alert inbox are reached from Monitoring's Watches tab, by keyboard", async ({ page }) => {
+  // The owner's answer of 1 November 2026: the rail's Watches entry is gone, so this tab is the only
+  // way to the hotlists, the monitors and the alert inbox's jump into a new investigation.
+  await serve(page);
+  const fulfil = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route("**/*/v1/investigations/inv-1/hotlists", (route) => route.fulfill(fulfil({ hotlists: [], audience_default: "only_me", audience_editable: true })));
+  await page.route("**/*/v1/investigations/inv-1/monitors", (route) => route.fulfill(fulfil({ monitors: [] })));
+  await page.route("**/*/v1/investigations/inv-1/patterns", (route) => route.fulfill(fulfil({ patterns: [] })));
+  await page.route("**/*/v1/investigations/inv-1/alerts", (route) =>
+    route.fulfill(fulfil({ alerts: [{
+      id: "w1", rule_id: "hotlist:hl-1", owner_id: "analyst-1", mode: "full", referent_node_ids: ["n1"],
+      evidence_available: true, investigation_id: "inv-1", created_at: "2026-09-22T00:00:00Z",
+      hotlist: { identifier: "07700 900918", kept_as_written: false, review_date: "2027-01-31" },
+      fired_on: [{ type: "Endpoint", label: "+447700900918", files: [{ name: "batch2.csv", row: 3 }], more_files: 0 }],
+    }] })),
+  );  // prettier-ignore
+  await page.route("**/*/v1/investigations/inv-1/alerts/w1/jump", (route) =>
+    route.fulfill(fulfil({ investigation: { id: "inv-branch-1", created_at: "2026-09-22T00:00:00Z", created_by: "analyst-1",
+      owning_unit: "unit-1", branched_from: "inv-1" }, seeded_count: 1 }, 201)),
+  );  // prettier-ignore
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "Watches" }));
+  await expect(page.getByRole("heading", { name: "Hotlists" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Alert inbox" })).toBeVisible();
+  await press(page, page.getByRole("button", { name: "Jump into investigation" }));
+  await press(page, page.getByRole("button", { name: "Open investigation" }));
+  await expect.poll(() => page.evaluate(() => window.__ALERTS__?.openedInvestigationId)).toBe("inv-branch-1");
+  registerCovered(REGISTRY, "reach-the-watches-and-alert-inbox-by-keyboard");
 });
 
 test("the queue is filtered, by keyboard", async ({ page }) => {

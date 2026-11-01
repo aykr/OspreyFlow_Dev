@@ -190,10 +190,13 @@ test("closing a high-severity alert is proposed, by keyboard", async ({ page }) 
   await page.goto("/keyboard/alerts-harness.html");
   await openTheAlert(page);
   await expect(page.getByText(/closing it here proposes the close/)).toBeVisible();
+  await page.getByRole("radio", { name: "True match" }).focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("radio", { name: "False positive" })).toBeChecked();
   await page.getByLabel("Reason for closing").focus();
   await page.keyboard.type("a known payroll deposit");
-  await press(page, page.getByRole("button", { name: "Close as false positive" }));
-  await expect(page.getByRole("status")).toContainText("Close proposed as a false positive");
+  await press(page, page.getByRole("button", { name: "Propose the close" }));
+  await expect(page.getByRole("status")).toContainText("Close proposed as False positive");
   expect(sent.find((s) => s.path === "alert-queue/h1/disposition")?.body).toEqual({
     disposition: "false_positive", reason: "a known payroll deposit" });  // prettier-ignore
   registerCovered(REGISTRY, "propose-closing-a-high-severity-alert-by-keyboard");

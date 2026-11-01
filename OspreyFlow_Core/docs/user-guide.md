@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.16** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.17** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.17 | 2026-11-01 | §7.3: closing an alert takes one of five closing reasons (True match, False positive, Duplicate, No further action, Referred) and words. §7.5 and the left rail: watches, and the alert inbox, are in Monitoring's Watches tab; the rail has no Watches entry. §7.10: UN and OpenSanctions are marked "licence not confirmed", and whoever manages lists sees only their own unit's counts. Ask to search answers on the engine you choose when the case's data may leave (the engine choice). The mark on the top bar is read aloud as "Osprey, go to Home". |
 | 1.16 | 2026-11-01 | §7.11: a rule that runs on a schedule, every day or every week, and its runs. §7.12: a second person's approval — for a rule for the whole deployment, and for closing a high-severity alert; a rule's versions. §7.3 and §7.10 point to them, and a list may be refreshed on a schedule. |
 | 1.15 | 2026-11-01 | §7.9: the four new AML templates (a high-risk jurisdiction, large cash, a dormant account reactivated, a sudden rise in velocity). §7.10: screening lists — the Lists tab, re-screening when a list changes, and a match confirmed by a person. |
 | 1.14 | 2026-11-01 | §7.6–7.8: a rule written as a sentence, blank by blank from the ontology, and its drawn pattern; frequency and amount conditions; Preview on the last 90 days. |
@@ -138,7 +139,7 @@ one dataset; you may see it through any one the case reads, but what it says of 
 | Part | What it is |
 | --- | --- |
 | **Top bar** | The case menu, search, the view switch (Graph, Map, Matrix, Reports), Export, and your account |
-| **Left rail** | The places: Explore, Monitoring, Ownership, Watches, Questions, History, Dashboards, Help — those your rights allow |
+| **Left rail** | The places: Explore, Monitoring (its Watches tab holds your watches), Ownership, Questions, History, Dashboards, Help — those your rights allow |
 | **Canvas** | The graph, the map, the Matrix or the reports |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
 | **Timeline** | Folded at the bottom until opened |
@@ -472,8 +473,11 @@ changes yours, every question is answered by the deployment's own model.
 **"Answered by …".** Under each answer, a small line says which engine and model produced it, for
 example "Answered by Gemini (gemini/gemini-2.5-flash)" or "Answered by This deployment's own model
 (qwen2.5:7b-instruct)". It is what the deployment says it used, not what you chose. An answer kept
-before engines were named has no such line. **Ask to search** shows the same choice and line; it sends
-no case material, so it always runs on the deployment's own model, and its line says so.
+before engines were named has no such line. **Ask to search** shows the same choice and line, and the
+choice applies there too: your question is about the case, so it goes under the case's handling and
+from the case's datasets, through the same two checks as Ask the case. It reaches the engine you chose
+only when the case's material, as you see it, may leave the deployment and every dataset of the case
+allows that engine; otherwise the deployment's own model answers, and its line says so.
 
 To ask in words for a pattern rather than an answer, use **Ask to search** in the query builder (section
 5.10).
@@ -528,9 +532,11 @@ to work on it (**Release** gives it back). A rule alert can also be **given to**
 choose them by name under **Give to**, then **Give**. An alert shared with a team, or its owner's alone,
 is claimed by someone who can see it, never given to another person.
 
-**Close as true positive** confirms the node it raised; **Close as false positive** leaves it a
-suggestion. **Closing needs a reason**: the close buttons stay unavailable until you write one, and a
-reason of only spaces is refused. Triage needs Editor; a Viewer reads. **Closing a high-severity
+**Closing needs a reason, in two parts.** Choose one **closing reason** — **True match**, **False
+positive**, **Duplicate**, **No further action** or **Referred** (the arrow keys move between them) —
+and say why in words; **Close the alert** stays unavailable until you have done both, and words of only
+spaces are refused. **True match** confirms the node it raised; every other reason leaves it a
+suggestion. OspreyFlow accepts no reason outside this list. Triage needs Editor; a Viewer reads. **Closing a high-severity
 alert needs a second person** (§7.12): closing it proposes the close, and another member approves it.
 
 ### 7.4 Rules and templates
@@ -547,9 +553,11 @@ has **Use**. A rule can also be written as a sentence (§7.6).
 
 ![Watches: hotlists, monitors, and the alerts they raise](images/user/13-watches.png)
 
-The Monitoring place's **Watches** tab, and the rail's **Watches**, keep a **hotlist** of identifiers — a phone number, an email address — each with a review
+The Monitoring place's **Watches** tab keeps a **hotlist** of identifiers — a phone number, an email address — each with a review
 date: any data that touches one raises an alert. A **monitor** runs a saved pattern against new data.
-Both watch only their case's data. **Jump into investigation** starts a case from an alert.
+Both watch only their case's data. Under them, the **Alert inbox** lists what your hotlists and
+monitors raised; **Jump into investigation** starts a case from an alert. There is no separate
+Watches place on the left rail: open **Monitoring**, then **Watches**.
 
 **Who its alerts reach.** Each hotlist says who its alerts reach in the Monitoring queue: **Only me**,
 or **Me and my team**. A new hotlist starts from your deployment's choice (only you, unless your
@@ -683,13 +691,19 @@ date of birth or country changed. An entry that did not change was screened when
 raises nothing again. Each new match raises a high-severity screening alert in that case's queue,
 naming the customer and the list entry, with its score. Like every screening match, it is a suggestion:
 the link between the customer and the listed party is inferred until a person confirms it, by closing
-the alert as a true positive (§7.3). Customers are screened as the rule's deployer and within the case's
+the alert as a **True match** (§7.3). Customers are screened as the rule's deployer and within the case's
 datasets, so no one is screened, or alerted on, outside what that person may see.
+
+**Licence not confirmed.** The **UN** and **OpenSanctions** lists are marked "Licence not confirmed",
+with the reason: no open licence was found for the UN list, whose general terms allow personal,
+non-commercial use only; OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use,
+which needs its own data licence. Until a licence is confirmed, these connectors read OspreyFlow's
+synthetic lists only.
 
 Administrators and data engineers subscribe to a list and refresh it from this tab (the administration
 guide, §9.5, says how), and may have it refreshed every day or every week; the **Schedule** column
-says when, or "By hand only". Everyone else sees the lists, not how many customers each refresh
-re-screened, since that number is counted across every case in the deployment.
+says when, or "By hand only". They see how many customers each refresh re-screened, and the alerts it
+raised, **in their own unit only**. Everyone else sees the lists, not those numbers.
 
 ### 7.11 A rule that runs on a schedule
 
@@ -724,8 +738,8 @@ retirement waits beside the rule, which runs as it stood until then. Another adm
 Author of the case sees **Approve** and **Reject** (with a reason); a rejected rule never runs. A rule
 for one case, or just for you, is not held up: it runs as soon as it is deployed or changed.
 
-**Closing a high-severity alert** that someone else may see. **Close as true positive** or **false
-positive** proposes the close: the alert stays in the queue as *Closing*, with your reason. Another
+**Closing a high-severity alert** that someone else may see. Choosing a closing reason, writing why
+and **Propose the close** proposes the close: the alert stays in the queue as *Closing*, with your reason. Another
 member who triages alerts in the case opens it and chooses **Approve the close**, or **Send back**
 with a reason, which returns it to you, claimed. You may withdraw your own proposal the same way. An
 alert only you can see (your own hotlist's, kept to you) has no second reader, and you close it alone.
@@ -772,9 +786,9 @@ was when you added it:
 - what it found, in words, its kind, its severity and when it was raised;
 - the entities it matched, and its evidence: the links and transactions it cites;
 - whether it was still open: an open alert says "Open: not yet decided when this was added";
-- if it was closed, its outcome (true or false positive) and the reason given;
-- "Inferred: no one has confirmed this match" until a person confirms it, by closing it as a true
-  positive. A match is never shown as confirmed on anyone's behalf.
+- if it was closed, its closing reason (for example "Closed as True match") and the words given;
+- "Inferred: no one has confirmed this match" until a person confirms it, by closing it as a True
+  match. A match is never shown as confirmed on anyone's behalf.
 
 **Refresh** reads the alert again, so an alert added while open can show how it was closed; the
 earlier copy stays in the pack's history.

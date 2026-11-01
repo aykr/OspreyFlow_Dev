@@ -30,6 +30,10 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
 
+# The owner's answer of 1 November 2026: no test run reaches a live deployment on this machine
+# (ports 2480, 5432, 80, 8080, 8081), refused at start-up and at every connection.
+from tests.port_guard import pytest_configure, pytest_report_header  # noqa: F401
+
 DEFAULT_KID = "test-signing-key-1"
 TOKEN_EXCHANGE_CLIENT_ID = "conduit-service-account"
 TOKEN_EXCHANGE_CLIENT_SECRET = "test-client-secret"  # noqa: S105 - test fixture only

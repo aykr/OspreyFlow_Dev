@@ -6,6 +6,8 @@ export type Location = string;
 export type Dataset = string | null;
 export type Synthetic = boolean;
 export type Licence = string;
+export type LicenceConfirmed = boolean;
+export type LicenceNote = string | null;
 export type Version = string | null;
 export type Entries = number;
 export type UpdatedAt = string | null;
@@ -54,6 +56,8 @@ export interface ScreeningListStatus {
   dataset?: Dataset;
   synthetic: Synthetic;
   licence: Licence;
+  licence_confirmed?: LicenceConfirmed;
+  licence_note?: LicenceNote;
   version?: Version;
   entries?: Entries;
   updated_at?: UpdatedAt;
@@ -77,7 +81,9 @@ export interface ListSchedule {
   weekday?: Weekday;
 }
 /**
- * One refresh of one list: what changed, and how many alerts its re-screening raised.
+ * One refresh of one list: what changed, and — counted in the reader's own organisational unit
+ * alone (the owner's answer of 1 November 2026; rule 7) — how many customers its re-screening read
+ * and how many alerts it raised.
  */
 export interface ScreeningListUpdate {
   id: Id;

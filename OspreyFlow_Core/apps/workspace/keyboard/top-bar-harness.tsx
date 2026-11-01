@@ -149,7 +149,6 @@ createRoot(container).render(
         onHelp={() => { window.__TOPBAR__!.help = (window.__TOPBAR__!.help ?? 0) + 1; }}
         items={[
           { id: "cases", label: "Cases", icon: "cases", onSelect: rail("cases") },
-          { id: "watches", label: "Watches", icon: "watches", onSelect: rail("watches") },
           { id: "alerts", label: "Monitoring", icon: "alerts", onSelect: rail("alerts") },
           { id: "ownership", label: "Ownership", icon: "ownership", onSelect: rail("ownership") },
           { id: "history", label: "History", icon: "history", onSelect: rail("history") },

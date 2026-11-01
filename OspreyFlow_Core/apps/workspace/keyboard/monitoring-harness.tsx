@@ -171,6 +171,9 @@ if (STAGE_D) {
 const LISTS = [
   { list_name: "Synthetic sanctions list", source: "opensanctions", location: "lists/synthetic_opensanctions_v2.ftm.json",
     dataset: null, synthetic: true, licence: "CC BY-NC 4.0: non-commercial use only, unless licensed by OpenSanctions",
+    // The owner's answer of 1 November 2026: marked "licence not confirmed", with the reason.
+    licence_confirmed: false,
+    licence_note: "OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs OpenSanctions' own data licence",
     version: "sha256:3906852638793da1", entries: 10, updated_at: hoursAgo(1), attempted_at: hoursAgo(1), failure: null },
   { list_name: "Synthetic OFAC-format list", source: "ofac_sdn", location: "lists/SDN.CSV", dataset: null, synthetic: true,
     licence: "US Government work, in the public domain (17 U.S.C. §105)", version: "sha256:9c41d07be2a4f1e0", entries: 3,
@@ -224,6 +227,16 @@ function answer(path: string, search: URLSearchParams): unknown {
   if (local === "patterns") return { patterns: [{ id: "sp1", pattern_id: "pat-1", version: 1, name: "Phone shared by two people", owner_id: "analyst-1", created_at: hoursAgo(500), definition: { nodes: [], edges: [] } }] };
   if (local === "hotlists") return HOTLISTS;
   if (local === "monitors") return { monitors: [{ id: "mo-1", pattern_id: "pat-1", owner_id: "analyst-1", status: "active", created_at: hoursAgo(500) }] };
+  // The owner's answer of 1 November 2026: the alert inbox lives in the Watches tab now.
+  if (local === "alerts")
+    return {
+      alerts: [{
+        id: "w-1", rule_id: "hotlist:hl-1", owner_id: "analyst-1", mode: "full", referent_node_ids: ["n1"],
+        evidence_available: true, investigation_id: "inv-1", created_at: hoursAgo(30),
+        hotlist: { identifier: "07700 900918", kept_as_written: false, review_date: "2027-01-31" },
+        fired_on: [{ type: "Endpoint", label: "+447700900918", files: [{ name: "pid_seized_comms_batch2.csv", row: 3 }], more_files: 0 }],
+      }],
+    };  // prettier-ignore
   return null;
 }
 

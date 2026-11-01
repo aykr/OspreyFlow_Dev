@@ -3,11 +3,12 @@
 // hotlist and monitor — each with its severity, who may see it, who has it and its age; what fired,
 // on which entities, through which transactions — and the triage a member does: claim it, release
 // it, give a case alert to a member, put it on the canvas, close it as a true or false positive with
-// the reason. A true positive confirms the alert's node (rule 5); the server says which. The kind,
+// the reason — one of the owner's closed list (`closingReasons.ts`) and words. A true match confirms
+// the alert's node (rule 5); the server says which. The kind,
 // severity and status filters are the server's: the Glass never hides a row it was sent.
 import { useCallback, useEffect, useState } from "react";
 import type { Alert, AlertAssignee, AlertExplanation, QueuedAlert } from "../../../../packages/schemas/generated";
-import { Button, Select } from "../design/primitives";
+import { Button, RadioGroup, Select } from "../design/primitives";
 import type { AccessLevel } from "../investigation/cases";
 import {
   alertToCanvas,
@@ -26,6 +27,7 @@ import {
   type QueueFilter,
   type SeverityFilter,
 } from "./api";
+import { CLOSING_REASONS, closingReasonLabel, type ClosingReason } from "./closingReasons";
 import { money, nodeName, typologyLabel, when } from "./names";
 
 export interface AlertQueueProps extends AlertsApi {
@@ -80,16 +82,14 @@ export function ageWords(iso: string, now: Date = new Date()): string {
   return `${days} day${days === 1 ? "" : "s"} old`;
 }
 
-/** Where an alert stands, in one sentence: "Claimed by you", "Closed as a true positive: …". */
+/** Where an alert stands, in one sentence: "Claimed by you", "Closed as True match: …". */
 export function statusSentence(alert: Alert, mine: boolean): string {
   if (alert.status === "closed") {
-    const kind = alert.disposition === "false_positive" ? "a false" : "a true";
-    return alert.disposition ? `Closed as ${kind} positive: ${alert.disposition_reason ?? ""}` : "Closed";
+    return alert.disposition ? `Closed as ${closingReasonLabel(alert.disposition)}: ${alert.disposition_reason ?? ""}` : "Closed";
   }
   if (alert.status === "closing") {
-    const kind = alert.disposition === "false_positive" ? "a false" : "a true";
     const by = alert.close_proposed_by ?? "a member";
-    return `Closing as ${kind} positive (${alert.disposition_reason ?? ""}), proposed by ${mine ? "you" : by}: waiting for a second person to approve it`;
+    return `Closing as ${closingReasonLabel(alert.disposition)} (${alert.disposition_reason ?? ""}), proposed by ${mine ? "you" : by}: waiting for a second person to approve it`;
   }
   if (alert.status === "claimed" && alert.assignee) return `Claimed by ${mine ? "you" : alert.assignee}`;
   return STATUS_WORDS[alert.status ?? "open"] ?? "Open";
@@ -210,6 +210,8 @@ function AlertDetail(props: AlertDetailProps) {
   const [problem, setProblem] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  // The owner's closed list (1 November 2026): none is chosen until the closer chooses one.
+  const [closingReason, setClosingReason] = useState<ClosingReason | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
@@ -376,8 +378,18 @@ function AlertDetail(props: AlertDetailProps) {
               A high-severity alert closes once a second person with the right approves: closing it here proposes the close.
             </p>
           )}
+          <RadioGroup
+            name={`closing-reason-${alertId}`}
+            aria-label="Closing reason"
+            options={(Object.keys(CLOSING_REASONS) as ClosingReason[]).map((value) => ({ value, label: CLOSING_REASONS[value] }))}
+            value={closingReason ?? ""}
+            onChange={(value) => setClosingReason(value as ClosingReason)}
+          />
+          <p className="label" style={{ margin: 0 }}>
+            True match confirms what the alert found; every other reason leaves it a suggestion.
+          </p>
           <label className="label" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
-            Reason (required)
+            Why, in words (required)
             <textarea
               className="input"
               rows={2}
@@ -389,30 +401,21 @@ function AlertDetail(props: AlertDetailProps) {
           <div style={{ display: "flex", gap: "var(--sp-8)" }}>
             <Button
               variant="primary"
-              disabled={busy || !reason.trim()}
-              onClick={() =>
+              disabled={busy || !reason.trim() || closingReason === null}
+              onClick={() => {
+                if (closingReason === null) return;
+                const label = CLOSING_REASONS[closingReason];
                 void act(
-                  () => disposeAlert(api, alertId, { disposition: "true_positive", reason: reason.trim() }),
+                  () => disposeAlert(api, alertId, { disposition: closingReason, reason: reason.trim() }),
                   secondPerson
-                    ? "Close proposed as a true positive; it waits for a second person to approve it."
-                    : "Closed as a true positive; its node is now confirmed.",
-                )
-              }
+                    ? `Close proposed as ${label}; it waits for a second person to approve it.`
+                    : closingReason === "true_positive"
+                      ? "Closed as True match; what it found is now confirmed."
+                      : `Closed as ${label}; what it found stays a suggestion.`,
+                );
+              }}
             >
-              Close as true positive
-            </Button>
-            <Button
-              disabled={busy || !reason.trim()}
-              onClick={() =>
-                void act(
-                  () => disposeAlert(api, alertId, { disposition: "false_positive", reason: reason.trim() }),
-                  secondPerson
-                    ? "Close proposed as a false positive; it waits for a second person to approve it."
-                    : "Closed as a false positive; its node stays a suggestion.",
-                )
-              }
-            >
-              Close as false positive
+              {secondPerson ? "Propose the close" : "Close the alert"}
             </Button>
           </div>
         </fieldset>

@@ -20581,6 +20581,16 @@ and no link" and `SignInScreen.test.tsx`'s "names OspreyFlow, with its mark and 
 section only" (it fails on any other mention on the page). `govukChrome.test.tsx` keeps the sign-in
 page's copy of the footer in step. `DESIGN.md` §11 states the width and where the identity goes.
 
+**Ruling 5, the top bar's spoken name (the owner's answer of 1 November 2026; built in step 7b).** The
+mark on the top bar, and on the bar outside a case, shows the solid cut and "Osprey" and is a button
+back to Home. It is spoken **"Osprey, go to Home"**: WCAG 2.5.3 (label in name) asks that the spoken
+name start with the visible label, and "OspreyFlow, go to Home" began with a longer word than the one
+shown, which the every-harness axe scan's `label-content-name-mismatch` did not catch (the shown word is
+inside the spoken one). Under GOV.UK the top bar keeps its mark (5(b)), so its visible label is the same
+and so is the name; the GOV.UK header's own logo link and service name are spoken as they read. Test:
+`src/shell/brandButton.test.tsx` — both bars, both brands, the name's first word is the visible label
+word for word; shown red ("OspreyFlow" against "Osprey"). GDS finding F6 and remediation A3 are closed.
+
 ## ADR-133 — Monitoring: rules written as sentences, from templates, previewed before they run — ACCEPTED (design)
 
 Status: accepted 1 November 2026, the owner's rulings (below). Proposed the same day.
@@ -20708,7 +20718,8 @@ What is missing:
 7. **Alert handling.**
    - Every alert explains itself: the rule's sentence, the entity matched and its evidence (ADR-130's
      shape, extended to every kind).
-   - Closing needs a reason: a closed list plus words.
+   - Closing needs a reason: a closed list plus words. The list, named by the owner on 1 November
+     2026 (Amendment 5): **True match, False positive, Duplicate, No further action, Referred**.
    - Suppressing a known entity for a rule is a person's decision, with an expiry, recorded. Nothing
      suppresses itself, and no confidence threshold closes or promotes an alert (rule 5).
    - **Maker–checker:** deploying, changing or retiring a deployment-scope rule, and closing a
@@ -20909,7 +20920,8 @@ Key to be used for the demos."
   way (`test_no_service_but_the_gateway_is_given_a_key`,
   `test_a_cluster_gives_no_workload_but_the_gateway_a_model_key`, both shown red first).
 - Ask to search sends no handling code, so it always runs on the local engine, whatever was named,
-  and says so (`engine: "local"`). Embeddings never leave the deployment.
+  and says so (`engine: "local"`). Embeddings never leave the deployment. **Superseded by Amendment 1
+  (the owner's answer of 1 November 2026): Ask to search carries the case's handling.**
 
 **Tests that would fail if it were broken** (rule 12; each shown red first):
 - **Config:** two providers render two gateway entries, each reading its own
@@ -21204,3 +21216,89 @@ answers that change what stages (a) to (d) built are step 7b's.
 shown red), vitest, keyboard (`monitoring-stage-d.spec.ts`, `checks-on-load.spec.ts`) and 6 axe states.
 Merged into `main` at `1666e1a` together with `fix-sweep-regressions`. The ArcadeDB, Valkey and
 ClickHouse suites are not run here.
+
+### ADR-133, Amendment 5 (1 November 2026) — the owner's answers, built (step 7b)
+
+Status: built on 1 November 2026 from the owner's answers of the same day (`BUILD_ORDER_2026-11.md`,
+"Owner's answers", questions 6, 10 and 11). Each item is how the answer was read where it left a
+choice open; open to the owner's review.
+
+1. **The Watches rail entry is gone** (question 6). Watches are reached from Monitoring's Watches tab
+   alone. Read as:
+   - The tab now also holds the **alert inbox** (`AlertInbox`, with *Jump into investigation*), which
+     only the old Watches view had: nothing the entry opened became unreachable.
+   - **Monitoring is offered to whoever keeps watches** (`keep_watches`) as well as whoever reads the
+     queue (`read_alert_queue`), so a person granted the first alone keeps their watches.
+   - Tests: `rights/visibility.test.ts`, `App.test.tsx` (no Watches rail entry; the inbox's jump from
+     the tab), `MonitoringPlace.test.tsx`; keyboard `shell.spec.ts` (the rail without it) and
+     `alerts.spec.ts` (`reach-the-watches-and-alert-inbox-by-keyboard`); axe `monitoring-harness`
+     `tab=watches`. Shown red.
+2. **An administrator's screening counts are their own unit's** (question 11; rules 3 and 7). Read as:
+   - a refresh's re-screening belongs to **each screening rule's deployer's unit**
+     (`Principal.org_unit`), recorded per unit (`screening_list_update_units`);
+   - `GET /v1/admin/screening-lists` and *Refresh now*'s answer select the reader's unit's row in the
+     store's query; the refresh's words are rebuilt from the list's own words and that unit's counts;
+   - a unit with no screening rule reads zeros, as does a refresh recorded before this change, whose
+     words then say its counts were not kept by unit (fail closed);
+   - a rule whose deployer cannot be resolved has no unit, so its failure is in the operator's
+     command output and the audit only, not on any administrator's screen;
+   - the operator's command (`scripts.refresh_screening_list`) and the audit still see the
+     deployment's totals; no route selects them.
+   - Test (rule 4): `test_screening_list_routes.py`'s `test_a_second_units_rescreening_is_invisible_in_the_admin_list`
+     and `test_a_refresh_counts_only_the_admins_own_unit`; shown red (unit A's administrator read
+     (4, 2), the deployment's totals).
+3. **The closing reasons** (question 6), decision 7's closed list: **True match, False positive,
+   Duplicate, No further action, Referred**. Read as:
+   - the first two keep the values stages (a) to (d) stored (`true_positive`, `false_positive`), now
+     labelled "True match" and "False positive"; the three new ones are `duplicate`,
+     `no_further_action`, `referred`;
+   - **only True match confirms** what the alert found (rule 5); Referred included, every other
+     reason leaves it inferred;
+   - the Conduit refuses any other value with 422, in words naming the list
+     (`AlertDispositionInput`); the words beside the reason stay required;
+   - outcomes, alert trends, the monitoring feed and pack items carry the reason as stored, and say it
+     by its label (`closingReasons.ts`, `trends.ALERT_OUTCOMES`); the Reports outcome table still
+     counts true and false positives only.
+   - The Glass close dialog is a radio group (arrow keys) plus words and one button (*Close the
+     alert*, or *Propose the close* where a second person decides). Keyboard step
+     `choose-a-closing-reason-by-keyboard`. Shown red at the route and in the Glass.
+4. **UN and OpenSanctions are marked "licence not confirmed"** (question 10; Amendment 3's findings).
+   Read as:
+   - each list carries `licence_confirmed` and `licence_note` (the reason in words); the Lists tab
+     marks the row and the subscribe form names the connector "(licence not confirmed)" and says why;
+   - **"synthetic only" is enforced**: a real UN or OpenSanctions file is refused, in words, even when
+     the device's exceptions admit its dataset, through a subscription's refresh and through
+     `scripts.load_screening_list` (by dataset name, `opensanctions` or `un_consolidated`);
+   - the Glass holds the reasons too, for the subscribe form, in step with the Conduit's by a drift
+     test. The UK Sanctions List (FCDO) connector rides with step 8.
+
+### ADR-135, Amendment 1 (1 November 2026) — Ask to search carries the case's handling
+
+Status: built on 1 November 2026 from the owner's answer to open question 2 ("Ask to search carries
+the case's handling, so the engine choice applies"). Open to the owner's review.
+
+**Before:** Ask to search sent no handling code, so the routing always kept it on the local engine,
+whatever the analyst chose (this ADR's "Found while building").
+
+**Now:** the question is sent under the case's handling and from the case's datasets, through the same
+two gates as Ask the case (decision 4; ADR-136 decision 3):
+1. **The case's handling** is the one its material shares *as the analyst sees it*: the handlings of
+   the visible working set (`WorkingSetService.visible_membership`, the projection every read
+   applies), passed through `questions.shared_handling` — one handling code, or none. A case of
+   mixed codes, or one the analyst sees nothing of, has none and stays local. A node the analyst may
+   not see plays no part, so where the question goes reveals nothing about it (rule 3).
+2. **The datasets** are every dataset of the case (`DatasetStore.ids_of_case`), as Ask the case sends
+   them — never only those of the visible nodes, since the question may be about anything in the case.
+3. A hosted engine is asked only when the code is sendable **and** every dataset allows that engine;
+   otherwise the local engine answers and the proposal says `engine: "local"`, which the Glass shows
+   ("Answered by …"). The engine picker already used the case's route
+   (`/v1/investigations/{id}/models/engines`), so an engine the case's data may not reach is shown
+   unavailable with the reason.
+4. What is sent is unchanged: the case's vocabulary and the analyst's question, never an id (rule 7).
+
+**Tests** (rule 12): `tests/services/api/test_ask_to_search_egress.py`, against the stand-in gateway
+(rule 15): sent to the engine chosen when both gates allow (the positive control, red before: only the
+local model was ever asked); **never sent** with a dataset set to `none`; not sent when a kept-in
+dataset is one the visible nodes do not come from (shown red with that mistake planted — the visible
+nodes' datasets in place of the case's); mixed codes and an empty view stay local; a hidden node
+changes nothing.

@@ -20,7 +20,7 @@ describe("AdminWithoutCase", () => {
     );
     expect(screen.getByRole("tab", { name: "People and roles" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "OspreyFlow, go to Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Osprey, go to Home" }));
     expect(start).toHaveBeenCalledTimes(1);
   });
 });

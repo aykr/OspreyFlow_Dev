@@ -157,7 +157,10 @@ def test_the_builder_offers_the_alert_fields_and_the_cases_rules(world: Any) -> 
     assert fields["rule"]["labels"] == ["Rapid movement over £9,000", "Hotlists", "Monitors"]
     assert fields["typology"]["values"] == ["rapid_movement"]
     assert fields["severity"]["values"] == ["high", "medium", "low"]
-    assert fields["outcome"]["values"] == ["open", "claimed", "true_positive", "false_positive", "closed"]
+    assert fields["outcome"]["values"] == [
+        "open", "claimed", "true_positive", "false_positive", "duplicate", "no_further_action",
+        "referred", "closed",
+    ]  # fmt: skip
 
 
 def test_an_alert_trend_past_its_bound_is_refused(world: Any) -> None:

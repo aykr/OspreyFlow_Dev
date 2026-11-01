@@ -2,9 +2,9 @@
 // list the deployment subscribes to — its connector, version, number of entries, last update, licence,
 // and why its last refresh failed, in words. Whoever may load screening lists (an administrator or a
 // data engineer, ADR-112's `load_screening_lists`) also subscribes to a list, refreshes one, and reads
-// what each refresh changed, re-screened and raised; everyone else reads the lists alone, since those
-// counts are taken across every case in the deployment (rule 7). The Conduit refuses whatever a stale
-// view offers anyway.
+// what each refresh changed, and what it re-screened and raised in their own unit alone (the owner's
+// answer of 1 November 2026: the Conduit's store counts the reader's unit, rule 7); everyone else reads
+// the lists alone. The Conduit refuses whatever a stale view offers anyway.
 import { useCallback, useEffect, useState } from "react";
 import type {
   ScreeningLists,
@@ -40,6 +40,23 @@ export const CONNECTORS: Record<Source, string> = {
   eu_consolidated: "EU consolidated financial sanctions list",
   opensanctions: "OpenSanctions (FollowTheMoney entities)",
 };
+
+/** The owner's answer of 1 November 2026 (ADR-133 Amendment 3): the connectors whose licence for a
+ * customer's screening is not confirmed, each with the reason. They read OspreyFlow's synthetic lists
+ * only; the Conduit refuses a real one. The words are the Conduit's own (`screening_refresh.
+ * LICENCE_NOT_CONFIRMED`), held in step by `test_the_glass_says_the_same_licence_reasons_as_the_conduit`;
+ * a list row says the reason the Conduit sends with it. */
+export const LICENCE_NOT_CONFIRMED: Partial<Record<Source, string>> = {
+  un_consolidated:
+    "no open licence was found for the UN consolidated list, and the UN's general terms allow personal, non-commercial use only; its terms are to be confirmed with the UN",
+  opensanctions:
+    "OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs OpenSanctions' own data licence",
+};
+
+/** A connector as the subscribe form offers it: its list, and whether its licence is confirmed. */
+function connectorOption(source: Source): string {
+  return LICENCE_NOT_CONFIRMED[source] ? `${CONNECTORS[source]} (licence not confirmed)` : CONNECTORS[source];
+}
 
 /** A list's state in words: never read, failing, or read at its version. */
 export function listState(list: ScreeningListStatus): string {
@@ -136,6 +153,14 @@ export function ListsPanel(props: ListsPanelProps) {
                     </span>
                     <br />
                     <span className="label">Licence: {list.licence}</span>
+                    {list.licence_confirmed === false && (
+                      <>
+                        <br />
+                        <span className="label" style={{ fontWeight: 600 }}>
+                          {`Licence not confirmed: ${list.licence_note ?? "its terms are to be confirmed"}. Synthetic lists only.`}
+                        </span>
+                      </>
+                    )}
                   </td>
                   <td>{list.version ?? "—"}</td>
                   <td style={{ textAlign: "right" }}>{(list.entries ?? 0).toLocaleString("en-GB")}</td>
@@ -195,6 +220,9 @@ function Refreshes({ updates }: { updates: ScreeningLists["updates"] }) {
       <h3 className="value" style={{ margin: 0 }}>
         Latest refreshes
       </h3>
+      <p className="label" style={{ margin: 0 }}>
+        Customers re-screened and alerts raised are counted in your own unit only.
+      </p>
       {updates.length === 0 ? (
         <p className="label" style={{ margin: 0 }}>
           No list has been refreshed yet.
@@ -260,7 +288,7 @@ function SubscribeForm(props: ListsPanelProps & { onSubscribed: (listName: strin
         <Select aria-label="Connector" value={source} onChange={(e) => setSource(e.target.value as Source)}>
           {(Object.keys(CONNECTORS) as Source[]).map((key) => (
             <option key={key} value={key}>
-              {CONNECTORS[key]}
+              {connectorOption(key)}
             </option>
           ))}
         </Select>
@@ -279,6 +307,11 @@ function SubscribeForm(props: ListsPanelProps & { onSubscribed: (listName: strin
         Real dataset it is (empty for one of OspreyFlow&apos;s synthetic lists)
         <Input aria-label="Real dataset" placeholder="ofac_sdn" value={dataset} onChange={(e) => setDataset(e.target.value)} />
       </label>
+      {LICENCE_NOT_CONFIRMED[source] && (
+        <p className="label" style={{ margin: 0, fontWeight: 600 }}>
+          {`Licence not confirmed: ${LICENCE_NOT_CONFIRMED[source]}. Only OspreyFlow's synthetic list may be read through this connector.`}
+        </p>
+      )}
       <p className="label" style={{ margin: 0 }}>
         A real list loads only on a device whose own exceptions file names its dataset; check its licence first.
       </p>

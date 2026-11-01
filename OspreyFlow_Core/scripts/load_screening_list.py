@@ -5,7 +5,8 @@ list of the same name whole. Run as `python -m scripts.load_screening_list <file
 other list must name its `dataset` (e.g. `opensanctions`) and that dataset must be in the owner's
 local `config/real_data_exceptions.yaml` for the `--use` given (`scripts.real_data_exceptions.
 is_permitted`) — otherwise nothing is loaded and the script says why. OpenSanctions is CC-BY-NC 4.0
-(spec 00 §7): non-commercial use only.
+(spec 00 §7): non-commercial use only. A list whose dataset is `opensanctions` or `un_consolidated`
+is refused even then: their licences are not confirmed (the owner's answer of 1 November 2026).
 
 The file's shape: `list_name`, `synthetic`, optionally `dataset`, and `entries`, each with `id`,
 `listing` (sanction, pep or adverse_media), `entity_type` (Person or Organisation), `name`, and
@@ -26,6 +27,7 @@ import yaml
 from scripts.real_data_exceptions import APPROVED_USES, is_permitted
 from services.api.config import PostgresConfig
 from services.api.screening import ScreeningEntry, ScreeningListStore
+from services.api.screening_refresh import LICENCE_NOT_CONFIRMED
 
 _LISTINGS = {"sanction", "pep", "adverse_media"}
 _TYPES = {"Person", "Organisation"}
@@ -52,6 +54,14 @@ def parse_list(
             raise ListRefused(
                 f"{dataset!r} is real data and is not in this device's real_data_exceptions.yaml "
                 f"for {use!r} (rule 9); nothing was loaded"
+            )
+        # The owner's answer of 1 November 2026: UN and OpenSanctions are synthetic-only until
+        # their licences are confirmed, here as in a subscription's refresh (`screening_refresh`).
+        unconfirmed = LICENCE_NOT_CONFIRMED.get(dataset.lower())
+        if unconfirmed is not None:
+            raise ListRefused(
+                f"{dataset!r}: this list's licence is not confirmed: {unconfirmed}. Until it is, "
+                "only a synthetic list may be loaded; nothing was loaded"
             )
     list_name = str(raw.get("list_name") or "").strip()
     if not list_name:
