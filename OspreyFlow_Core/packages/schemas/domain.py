@@ -19,6 +19,8 @@ from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from schemas.sentences import RuleSentence, SentenceRuleParams
+
 # --- Scalar identifiers -------------------------------------------------
 #
 # ULIDs (lexicographically sortable, time-ordered) per `01_DOMAIN_MODEL.md`
@@ -826,6 +828,7 @@ TypologyName = Literal[
     "shared_attributes",
     "document_verification",
     "pattern",
+    "sentence",
 ]
 #: ADR-109 ruling 1: the rule chooses where it runs. `pre_commit` judges the incoming rows inside
 #: the load (a hit loads with its alert; a failure holds the rows); `post_commit` runs on the
@@ -920,7 +923,8 @@ TypologyParams = Annotated[
     | KycScreeningParams
     | SharedAttributesParams
     | DocumentVerificationParams
-    | PatternRuleParams,
+    | PatternRuleParams
+    | SentenceRuleParams,
     Field(discriminator="typology"),
 ]
 
@@ -941,6 +945,11 @@ class TypologyRuleInput(BaseModel):
             raise ValueError(
                 "a drawn pattern is matched against the stored graph, so it runs after commit"
             )
+        if (
+            isinstance(self.params, SentenceRuleParams)
+            and self.trigger != self.params.sentence.runs
+        ):
+            raise ValueError("a sentence says when it runs; the rule runs then")
         return self
 
 
@@ -1437,6 +1446,24 @@ class ListNodesPage(BaseModel):
     next_cursor: NodeId | None = None
 
 
+class CompiledSentence(BaseModel):
+    """ADR-133 decision 1: a sentence's drawn pattern — its "advanced" view in the query builder —
+    and the sentence in words. The pattern holds the subject (variable `subject`), its equality
+    conditions a pattern may carry (ADR-121) and the link the sentence names; the rest of the
+    sentence is the rule's typed parameters."""
+
+    pattern: PatternQuery
+    words: str
+
+
+class SentenceReadRequest(BaseModel):
+    """Read a drawn pattern back as a sentence: the pattern (as drawn, or as edited in the query
+    builder) and the sentence whose other blanks it keeps."""
+
+    pattern: PatternQuery
+    sentence: RuleSentence
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     PropertyDef,
     ResolutionConfig,
@@ -1476,6 +1503,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     SharedAttributesParams,
     DocumentVerificationParams,
     PatternRuleParams,
+    CompiledSentence,
+    SentenceReadRequest,
     TypologyRuleInput,
     TypologyRule,
     HeldRow,

@@ -566,7 +566,22 @@ GET    /v1/investigations/{id}/rules/audit   the rule audit, newest first, paged
 GET    /v1/investigations/{id}/held-rows   rows a failing pre-commit rule held, at or below the reader's marking, Editor
 POST   /v1/investigations/{id}/held-rows/reject   reject named held rows, with a reason, Author
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/held-rows/release   load named held rows of one load, Author and Loader
+POST   /v1/investigations/{id}/rules/sentence/compile   a rule sentence checked against the ontology and compiled to its drawn pattern, Viewer
+POST   /v1/investigations/{id}/rules/sentence/read   a drawn pattern read back as the sentence, its other blanks kept, Viewer
+POST   /v1/investigations/{id}/rules/preview   "Preview on the last 90 days": run as the caller, raises and writes nothing, Viewer
+POST   /v1/investigations/{id}/rules/sentence   deploy a sentence: Editor for "just me", Author for this case, Author and administrator for the deployment
 ```
+
+**Rules written as sentences (ADR-133 stage (b)).** A sentence (`packages/schemas/sentences.py`) is a
+set of closed choices from the ontology — never an expression (rule 8) — refused at validation by its
+blank, in words (`422 sentence_refused`), when it names a type, property or link type the ontology does
+not declare. It compiles to a drawn pattern, saved as its author's, plus the sentence as the rule's
+parameters (`SentenceRuleParams`); the generic `POST …/rules` refuses a sentence. It is judged as its
+author (`services/api/rule_sentences.py`): subjects and links through `GraphPort`, frequency and amount
+conditions through `AnalyticsPort.event_frequency`, both with the access step in the store's query
+(rule 3). The preview counts only what the caller may see, refuses with `409 limit_exceeded` past the
+working-set limit (rule 2), and writes no alert, rule or pattern. A deployment-wide sentence watches every
+case's loads, judged within the loading case's datasets.
 
 **A rule belongs to its case** and evaluates as its deployer's principal, resolved fresh (ADR-036);
 its parameters are a closed vocabulary per typology (structuring, rapid movement, circular flow —

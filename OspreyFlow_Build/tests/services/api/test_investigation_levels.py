@@ -179,6 +179,13 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/rules"): V,
     ("POST", P + "/rules"): A,
     ("POST", P + "/rules/{rule_id}/retire"): A,
+    # ADR-133 stage (b): compiling, reading back and previewing a sentence read only, as a pattern
+    # preview does; deploying one needs Editor ("just me") and, in the route, Author for a case or
+    # the whole deployment (`test_rule_sentence_routes.py`).
+    ("POST", P + "/rules/sentence/compile"): V,
+    ("POST", P + "/rules/sentence/read"): V,
+    ("POST", P + "/rules/preview"): V,
+    ("POST", P + "/rules/sentence"): E,
     ("GET", P + "/rules/audit"): A,
     ("GET", P + "/held-rows"): E,
     ("POST", P + "/held-rows/reject"): A,
