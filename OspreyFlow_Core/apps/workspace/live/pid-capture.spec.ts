@@ -275,7 +275,8 @@ test("CAP-A1-J2", async ({ page }) => {
 const COHORT = process.env.OSPREY_PID_COHORT_LIST ?? "";
 
 test("CAP-A1-J3", async ({ page }) => {
-  // Three thousand prisoners with all their links take longer than the default to add and draw.
+  // OSPREY_PID_COHORT_LIST is the demo's 40-identifier list (`pid_files.cohort_list`, script J3:
+  // 37 found, 3 match nothing, 1 repeated), not the scale cohort's 3,000: those are in another case.
   test.setTimeout(900_000);
   await freshCase(page);
   await page.getByRole("button", { name: "Add many from a list", exact: true }).first().click();
@@ -287,8 +288,8 @@ test("CAP-A1-J3", async ({ page }) => {
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await closeMessages(page);
   console.log(`J3 counts: ${await counts(page).textContent()}`);
-  await page.getByRole("button", { name: "Communities" }).click();
-  await page.waitForTimeout(3000);
+  // No community grouping (script v3, J3): grouped, the 11 links folded into the clusters and the
+  // slide read as nodes with no links (found reviewing the deck, 1 November 2026).
   await page.getByRole("button", { name: "Fit to view" }).click();
   await rail(page, "Explore").click();
   const explore = page.getByRole("dialog", { name: "Explore" });
