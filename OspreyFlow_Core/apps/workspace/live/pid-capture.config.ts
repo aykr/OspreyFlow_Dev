@@ -6,7 +6,13 @@ import { defineConfig } from "@playwright/test";
 // deployment up with the pack installed, and `pid-capture.spec.ts` skips itself unless
 // `OSPREY_PID_CAPTURE=1`. Run from `apps/workspace`:
 //
-//   OSPREY_PID_CAPTURE=1 npx playwright test --config live/pid-capture.config.ts
+//   OSPREY_PID_CAPTURE=1 npx playwright test --config live/pid-capture.config.ts -g "<one test>"
+//
+// One named test at a time (`-g`), never the whole file on a deployment the owner uses: several
+// tests change the case's state as the presenter would (a hotlist, a load, a rule, a close, a pack
+// item). The order and the state each test needs are in the demo folder's `CAPTURE_RUNBOOK_v4.md`.
+// `OSPREY_PID_CAPTURE_ORIGIN` and `OSPREY_PID_CAPTURE_ENV` pick the deployment (the GOV.UK one, for
+// its brand); `OSPREY_PID_CAPTURE_SCREENS` writes the shots to another folder than `screens/`.
 //
 // No web server: the Glass is the deployment's, served by its proxy.
 export default defineConfig({
