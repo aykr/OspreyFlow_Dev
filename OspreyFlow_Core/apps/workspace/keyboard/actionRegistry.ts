@@ -554,6 +554,8 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
   "release-an-alert-by-keyboard",
   "show-an-alert-on-the-canvas-by-keyboard",
   "close-an-alert-with-a-reason-by-keyboard",
+  // The owner's answer of 1 November 2026: the closing reason, one of a closed list of five.
+  "choose-a-closing-reason-by-keyboard",
   "filter-the-queue-by-keyboard",
   "deploy-a-rule-by-keyboard",
   "retire-a-rule-by-keyboard",

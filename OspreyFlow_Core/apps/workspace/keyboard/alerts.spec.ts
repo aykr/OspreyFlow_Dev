@@ -245,14 +245,37 @@ test("an alert is closed with its reason, by keyboard", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
   await openTheAlert(page);
+  // The closing reason: one of the owner's closed list, chosen with Space on the first.
+  await page.getByRole("radio", { name: "True match" }).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("radio", { name: "True match" })).toBeChecked();
   await page.getByLabel("Reason for closing").fill("Matches the SAR");
-  await press(page, page.getByRole("button", { name: "Close as true positive" }));
-  await expect(page.getByText(/Closed as a true positive/)).toBeVisible();
+  await press(page, page.getByRole("button", { name: "Close the alert" }));
+  await expect(page.getByText(/Closed as True match/).first()).toBeVisible();
   expect(state.sent.find((s) => s.path === "alert-queue/a1/disposition")?.body).toEqual({
     disposition: "true_positive",
     reason: "Matches the SAR",
   });
   registerCovered(REGISTRY, "close-an-alert-with-a-reason-by-keyboard");
+});
+
+test("a closing reason is chosen from the closed list with the arrow keys, by keyboard", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await openTheAlert(page);
+  const close = page.getByRole("button", { name: "Close the alert" });
+  await page.getByLabel("Reason for closing").fill("Passed to the NCA");
+  await expect(close).toBeDisabled(); // words alone are not a closing reason
+  await page.getByRole("radio", { name: "True match" }).focus();
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("radio", { name: "Referred" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Referred" })).toBeFocused();
+  await press(page, close);
+  expect(state.sent.find((s) => s.path === "alert-queue/a1/disposition")?.body).toEqual({
+    disposition: "referred",
+    reason: "Passed to the NCA",
+  });
+  registerCovered(REGISTRY, "choose-a-closing-reason-by-keyboard");
 });
 
 test("the queue is filtered, by keyboard", async ({ page }) => {

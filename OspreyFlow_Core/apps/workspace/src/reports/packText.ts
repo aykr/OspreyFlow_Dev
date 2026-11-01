@@ -1,6 +1,7 @@
 // The words a pack and a trend are described in, shared by the screens and the print document so
 // the two never say different things (ADR-113 stage 5). Pure: no DOM, no fetch.
 import type { AlertSnapshot, PackItem, TrendFigures } from "../../../../packages/schemas/generated";
+import { closingReasonLabel } from "../alerts/closingReasons";
 
 const NUMBER = new Intl.NumberFormat("en-GB");
 const DAY = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "UTC" });
@@ -110,8 +111,7 @@ export function alertStatusSentence(alert: AlertSnapshot): string {
   if (alert.status === "open") return "Open: not yet decided when this was added.";
   if (alert.status === "claimed") return "Open, being worked on, when this was added.";
   const reason = alert.reason ? `: ${alert.reason}` : "";
-  if (alert.outcome === "true_positive") return `Closed as a true positive${reason}.`;
-  if (alert.outcome === "false_positive") return `Closed as a false positive${reason}.`;
+  if (alert.outcome) return `Closed as ${closingReasonLabel(alert.outcome)}${reason}.`;
   return `Closed without an outcome${reason}.`;
 }
 

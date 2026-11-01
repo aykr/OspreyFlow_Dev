@@ -99,8 +99,11 @@ ALERT_SEVERITIES = {"high": "High", "medium": "Medium", "low": "Low"}
 ALERT_OUTCOMES = {
     "open": "Open",
     "claimed": "Claimed",
-    "true_positive": "True positive",
+    "true_positive": "True match",
     "false_positive": "False positive",
+    "duplicate": "Duplicate",
+    "no_further_action": "No further action",
+    "referred": "Referred",
     "closed": "Closed, no outcome",
 }
 #: How hotlists and monitors are named as one rule each (decision 2: "hotlists together").

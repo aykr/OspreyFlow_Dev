@@ -853,7 +853,21 @@ RuleChangeAction = Literal["deploy", "change", "retire"]
 #: ADR-133 decision 7, stage (d): `closing` is a high-severity alert someone has proposed to close,
 #: waiting for a second person with the right to approve it.
 AlertStatus = Literal["open", "claimed", "closing", "closed"]
-AlertDisposition = Literal["true_positive", "false_positive"]
+#: ADR-133 decision 7's closed list of closing reasons, as the owner named it on 1 November 2026.
+#: The first two keep the values stages (a) to (d) stored. Only `true_positive` ("True match") is
+#: the human confirmation rule 5 waits for; every other reason leaves what the alert found
+#: `inferred`.
+AlertDisposition = Literal[
+    "true_positive", "false_positive", "duplicate", "no_further_action", "referred"
+]
+#: Each closing reason as the Glass, the guides and the refusal say it, in the order offered.
+CLOSING_REASONS: dict[str, str] = {
+    "true_positive": "True match",
+    "false_positive": "False positive",
+    "duplicate": "Duplicate",
+    "no_further_action": "No further action",
+    "referred": "Referred",
+}
 #: ADR-133 stage (a): an alert's severity, and the three kinds the one queue holds — told apart by
 #: `Alert.rule_id`'s prefix (`typology:`, `hotlist:`, `monitor:`); a scheduled run's notice is none
 #: of these and is never queued.
@@ -1322,11 +1336,21 @@ class AlertExplanation(BaseModel):
 
 
 class AlertDispositionInput(BaseModel):
-    """Closing an alert (ADR-133 decision 7: "closing needs a reason"). A reason of only spaces is
-    no reason: it is refused as an empty one is."""
+    """Closing an alert (ADR-133 decision 7: "closing needs a reason"): one of the closed list of
+    reasons (`CLOSING_REASONS`), and words. A reason outside the list is refused in words that name
+    the list; a reason of only spaces is no reason, refused as an empty one is."""
 
     disposition: AlertDisposition
     reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("disposition", mode="before")
+    @classmethod
+    def _one_of_the_closing_reasons(cls, value: object) -> object:
+        if value not in CLOSING_REASONS:
+            raise ValueError(
+                "the closing reason must be one of: " + ", ".join(CLOSING_REASONS.values())
+            )
+        return value
 
     @field_validator("reason")
     @classmethod

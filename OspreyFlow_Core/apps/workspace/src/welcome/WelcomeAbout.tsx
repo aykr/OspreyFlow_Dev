@@ -44,7 +44,7 @@ const AML: Feature[] = [
     body: "Cumulative beneficial ownership is traced through every layer, and circles of cross-holdings are traced only once. Each share is shown as arithmetic, for example 60% × 80% = 48%, so an auditor can redo it by hand." },
   { picture: amlDecision, alt: "An alert being closed with a reason",
     title: "A person decides",
-    body: "Closing an alert needs a reason. A true positive confirms both the alert and the match it found, which is the only way model-inferred data is promoted. Who decided, when and why stays with the alert." },
+    body: "Closing an alert needs a reason from a closed list (True match, False positive, Duplicate, No further action, Referred) and words. A true match confirms both the alert and the match it found, which is the only way model-inferred data is promoted. Who decided, when and why stays with the alert." },
 ]; // prettier-ignore
 
 // ADR-115 Amendment 4: fraud detection and event monitoring, in words; the screens above serve both.

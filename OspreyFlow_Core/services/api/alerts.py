@@ -44,6 +44,7 @@ from conduit_common.identity import new_id
 from ports.graph import GraphPort
 from schemas.analytics import HOTLISTS_RULE, MONITORS_RULE, AlertFact
 from schemas.domain import (
+    CLOSING_REASONS,
     Alert,
     AlertAudience,
     AlertKind,
@@ -286,7 +287,7 @@ FactSink = Callable[[list[AlertFact]], Awaitable[None]]
 def _outcome(status: str, disposition: str | None) -> str:
     if status != "closed":
         return "claimed" if status == "claimed" else "open"
-    return disposition if disposition in ("true_positive", "false_positive") else "closed"
+    return disposition if disposition in CLOSING_REASONS else "closed"
 
 
 def _row_to_fact(row: asyncpg.Record) -> AlertFact:

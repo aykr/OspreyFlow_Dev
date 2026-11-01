@@ -6,7 +6,8 @@ export type Kind = "typology" | "hotlist" | "monitor";
 export type Rule = string;
 export type Typology = string | null;
 export type Severity = "high" | "medium" | "low";
-export type Outcome = "open" | "claimed" | "true_positive" | "false_positive" | "closed";
+export type Outcome =
+  "open" | "claimed" | "true_positive" | "false_positive" | "duplicate" | "no_further_action" | "referred" | "closed";
 export type RaisedAt = string;
 export type OwnerId = string;
 export type Audience = "case" | "team" | "owner";
