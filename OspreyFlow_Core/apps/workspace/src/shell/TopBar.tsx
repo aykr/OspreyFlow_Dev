@@ -31,7 +31,7 @@ export function TopBar({ app, caseSwitcher, search, views = [], actions, account
   return (
     <header className="app-header top-bar" data-app={app}>
       {onStart ? (
-        <button type="button" className="brand-mark-button" aria-label="OspreyFlow, go to Home" onClick={onStart}>
+        <button type="button" className="brand-mark-button" aria-label="Osprey, go to Home" onClick={onStart}>
           <BrandMark />
         </button>
       ) : (
