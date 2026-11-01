@@ -576,6 +576,7 @@ from .recipe_run import (
 )
 from .recipe_runs import RecipeRun, RecipeRunStore
 from .release_notice import read_update_notice
+from .release_version import deployment_version, release_version
 from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
@@ -1071,7 +1072,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await resources.close()
 
 
-app = FastAPI(title="OspreyFlow Conduit", lifespan=lifespan)
+# The OpenAPI document is published at `GET /v1/openapi.json` behind sign-in (the owner's answer of
+# 1 November 2026; `03_CONDUIT_MIDDLEWARE.md` §3.0a), versioned with the release. FastAPI's own
+# unauthenticated copies (`/openapi.json`, `/docs`, `/redoc`) are switched off.
+app = FastAPI(
+    title="OspreyFlow Conduit",
+    version=release_version(),
+    lifespan=lifespan,
+    openapi_url=None,
+    docs_url=None,
+    redoc_url=None,
+)
 
 # The Glass is served from its own origin (`apps/workspace`'s Vite dev
 # server locally; a separately-hosted static build in a real deployment)
@@ -6338,6 +6349,18 @@ async def liveness_route() -> dict[str, str]:
     return LIVENESS_BODY
 
 
+@app.get("/v1/openapi.json", include_in_schema=False)
+async def openapi_document_route(principal: PrincipalDep) -> JSONResponse:
+    """The API's OpenAPI document (`03_CONDUIT_MIDDLEWARE.md` §3.0a; the owner's answer of 1
+    November 2026; GDS remediation O1). Under `/v1/`, so the workspace's proxy carries it to the
+    deployment's address with every other route, and signed in as every other `/v1` route is. Its
+    `info.version` is the release the deployment was rendered from (`release_version.py`), read
+    when it is asked for, so it always says what Admin → System says."""
+    document = dict(app.openapi())
+    document["info"] = {**document["info"], "version": release_version()}
+    return JSONResponse(document)
+
+
 @app.get("/v1/ontology")
 async def get_ontology_route(principal: PrincipalDep, ontology: OntologyDep) -> OntologySchema:
     """The Glass's channel/shape mapping (`spec/02_GLASS_FRONTEND.md` §4:
@@ -10362,7 +10385,7 @@ async def system_status_route(
     statuses, engines, notice = model_status(model_routes)
     return SystemStatus(
         # ADR-114 Amendment 8: the version the deployment was rendered with, and the last check.
-        version=os.environ.get("OSPREY_RELEASE_VERSION") or os.environ.get("OSPREY_VERSION"),
+        version=deployment_version(),
         components=components,
         models=statuses,
         engines=engines,

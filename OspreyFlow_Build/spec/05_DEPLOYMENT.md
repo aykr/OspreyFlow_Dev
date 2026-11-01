@@ -443,6 +443,11 @@ CORS policy to get wrong; and the Glass's boot stays synchronous, where fetching
 before first render would have made it asynchronous and changed `App.tsx`'s top-level constants and
 the tests around them.
 
+**The API's OpenAPI document rides the same path** (the owner's answer of 1 November 2026): it is
+`GET /v1/openapi.json`, so the deployment's address serves it through the workspace's proxy, behind
+sign-in like every other `/v1` route, with the release as its version (`03_CONDUIT_MIDDLEWARE.md`
+§3.0a). Nothing else publishes it; the Conduit's port stays unpublished.
+
 **The consequence for §3 and §7**: the Conduit no longer needs a published host port, and does not
 get one. `network.expose_conduit: true` in `osprey.yaml` publishes it, off by default. §7 states the
 posture; the enforcing tests are `test_the_conduit_is_not_published_by_default_and_is_when_asked_for`
