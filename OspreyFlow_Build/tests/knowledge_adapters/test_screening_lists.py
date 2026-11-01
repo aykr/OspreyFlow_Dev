@@ -24,6 +24,7 @@ from knowledge_adapters.screening_lists import (
     ofac_sdn,
     ofsi_consolidated,
     opensanctions,
+    uk_sanctions_list,
     un_consolidated,
 )
 
@@ -94,9 +95,19 @@ def test_opensanctions_reads_its_golden_file() -> None:
     assert "Lena" not in parsed.entries[0].aliases
 
 
+def test_uk_sanctions_list_reads_its_golden_file() -> None:
+    # ADR-133 Amendment 6: a ship is counted and not screened; a partial or a second possible date
+    # of birth is no exact date; a designation known by its OFSI Group ID alone keeps it; one
+    # UniqueID on a second designation (another regime) is the same entry, its name an alias.
+    assert _as_expected(uk_sanctions_list(_read("uk_sanctions_list.xml"))) == _expected(
+        "uk_sanctions_list.expected.json"
+    )
+
+
 def test_every_connector_is_offered_by_name() -> None:
     assert sorted(LIST_ADAPTERS) == [
-        "eu_consolidated", "ofac_sdn", "ofsi_consolidated", "opensanctions", "un_consolidated",
+        "eu_consolidated", "ofac_sdn", "ofsi_consolidated", "opensanctions", "uk_sanctions_list",
+        "un_consolidated",
     ]  # fmt: skip
 
 
@@ -188,3 +199,47 @@ def test_opensanctions_refuses_the_csv_export_and_a_malformed_entity() -> None:
     not_lists = '{"id": "x", "schema": "Person", "properties": {"name": "Elena Petrova", "topics": ["sanction"]}}'
     assert "“name” is not a list of strings" in _refused(opensanctions, not_lists)
     assert "not a FollowTheMoney entity" in _refused(opensanctions, '{"name": "Elena"}')
+
+
+# --- the UK Sanctions List (FCDO), ADR-133 Amendment 6 -------------------------------------------
+
+
+def test_uk_sanctions_list_refuses_the_other_lists_files() -> None:
+    assert "root is <CONSOLIDATED_LIST>, not <Designations>" in _refused(
+        uk_sanctions_list, _read("un_consolidated.xml")
+    )
+    assert "root is <export>, not <Designations>" in _refused(
+        uk_sanctions_list, _read("eu_consolidated.xml")
+    )
+    # The closed OFSI list's CSV, handed to the successor's connector by mistake.
+    assert "not well-formed XML" in _refused(uk_sanctions_list, _read("ofsi_consolidated.csv"))
+
+
+def test_uk_sanctions_list_refuses_a_list_with_no_date_generated() -> None:
+    undated = _read("uk_sanctions_list.xml").replace("<DateGenerated>30/10/2026</DateGenerated>", "")
+    assert "no DateGenerated" in _refused(uk_sanctions_list, undated)
+
+
+def test_uk_sanctions_list_refuses_a_designation_it_cannot_name_or_place() -> None:
+    nameless = _read("uk_sanctions_list.xml").replace(
+        "<Name><Name6>NORTHWIND METALS FZE</Name6><NameType>Primary Name</NameType></Name>", ""
+    ).replace(
+        "<Name><Name6>NORTHWIND METAL TRADING</Name6><NameType>Primary Name Variation</NameType></Name>",
+        "",
+    )
+    assert _refused(uk_sanctions_list, nameless) == "<Designation> SYN0003 has no name"
+    aircraft = _read("uk_sanctions_list.xml").replace(
+        "<IndividualEntityShip>Ship</IndividualEntityShip>",
+        "<IndividualEntityShip>Aircraft</IndividualEntityShip>",
+    )
+    assert "IndividualEntityShip “Aircraft”" in _refused(uk_sanctions_list, aircraft)
+    unidentified = _read("uk_sanctions_list.xml").replace("<OFSIGroupID>90005</OFSIGroupID>", "")
+    assert "has no UniqueID and no OFSIGroupID" in _refused(uk_sanctions_list, unidentified)
+
+
+def test_uk_sanctions_list_refuses_entity_expansion() -> None:
+    bomb = (
+        '<?xml version="1.0"?><!DOCTYPE l [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;">]>'
+        "<Designations><DateGenerated>&b;</DateGenerated></Designations>"
+    )
+    assert "not well-formed XML" in _refused(uk_sanctions_list, bomb)

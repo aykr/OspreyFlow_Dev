@@ -21489,3 +21489,242 @@ the seed's reset, and the named test failing for it. One plant stayed green and 
 queue's dataset clause removed alone, since the graph's own dataset step still hides the alert (two
 layers, rule 3); removing both turns `test_a_reader_without_the_dataset_sees_no_chapter_nine_alert`
 red.
+
+### ADR-133, Amendment 6 (1 November 2026) — the UK Sanctions List (FCDO) connector; OFSI marked as reading a closed list
+
+Status: built on 1 November 2026 from the owner's answer to open question 10 ("Build a UK Sanctions
+List (FCDO) connector in step 8"), within build-order step 8b. Open to the owner's review; the points
+read conservatively are listed at the end.
+
+**Why.** Amendment 3 found that HM Treasury's OFSI Consolidated List closed on 28 January 2026 and that
+the FCDO's UK Sanctions List is now "the only source for all UK sanctions designations" (gov.uk). The
+OFSI connector reads a list nobody updates. Decision 4 names OFSI's list because it was written before
+the closure; the successor list is the same publisher's (HM Government's), under the same licence, and
+this amendment adds it as a sixth connector. It does not reopen decision 4.
+
+**Built.**
+1. **A sixth connector, `uk_sanctions_list`** (`packages/knowledge_adapters/screening_lists.py`), a
+   Knowledge Adapter with a synthetic golden file (rule 8), reading the FCDO's XML file
+   (`UK-Sanctions-List.xml`). The XML is chosen over the CSV because the FCDO publishes the XML's
+   schema (`SanctionsListSchema-4.33.3.xsd`, linked from the list's page), so its element names are
+   confirmed; the CSV's column order is not documented anywhere found (the format guide lists the field
+   headings and says all seven formats hold the same data).
+   - **Read from the publisher's own documents:** the schema for the elements (root `Designations` with
+     `DateGenerated`; each `Designation` with `UniqueID`, `OFSIGroupID`, `Names`/`Name` holding
+     `Name1` to `Name6` and `NameType`, `IndividualEntityShip`, `RegimeName`, `Addresses`/`Address`/
+     `AddressCountry`, `IndividualDetails`/`Individual` with `DOBs`/`DOB` and
+     `Nationalities`/`Nationality`; no target namespace); the *Format guide for the UK Sanctions List*
+     for their meaning (`Name 6` a surname or an entity's or ship's whole name; Primary Name, Primary
+     Name Variation or Alias; a date of birth dd/mm/yyyy, possibly partial; "Individual, Entity, Ship").
+   - **As the other connectors:** each designation is one entry, keyed by its `UniqueID`, every entry a
+     sanction; a ship is counted in `skipped`, never dropped silently (rule 2); a date of birth only
+     when the designation gives exactly one exact date; anything that is not the format (another
+     list's XML, the closed OFSI CSV, XML with entity expansion) is refused in words and nothing is
+     kept.
+   - **Marked unverified in the code** (the schema types every value as a plain string): the spelling
+     of the `IndividualEntityShip` values (read as Individual, Entity or Ship in any case; anything
+     else refused); the text of `DateGenerated` (taken as the version as written); one `UniqueID` on two
+     designations (read as one entry, the second's names its aliases, since the guide says a person
+     designated under several regimes may carry several Unique IDs but not the reverse); and a
+     designation with no `UniqueID` (allowed by the schema; read as `OFSI-<group id>`, since the change
+     notice says older records keep their OFSI Group ID, and refused when it has neither).
+2. **The licence** (spec 00 §7): Open Government Licence v3.0, from the list's publication page
+   (gov.uk/government/publications/the-uk-sanctions-list, last updated 30 October 2026, read 1 November
+   2026). The Lists tab says it ("Open Government Licence v3.0 (Crown copyright; the FCDO's UK Sanctions
+   List, gov.uk)"); the connector's licence is confirmed, so a real file is admitted by a device's
+   exceptions entry like OFAC's or the EU's (rule 9 unchanged).
+3. **The OFSI connector reads a closed list, in words.** Its code is kept (Amendment 3). The Conduit's
+   `CLOSED_LISTS` and the Glass's, held in step by a drift test, say: "this connector reads a closed
+   list: the OFSI Consolidated List closed on 28 January 2026 and is no longer updated, and the FCDO's
+   UK Sanctions List is now the only source of UK designations". The Lists tab shows it on an OFSI
+   list's row (`ScreeningListStatus.closed_note`), and the subscribe form names the connector "…: reads
+   a closed list" and points to the UK Sanctions List.
+4. **Synthetic lists for the demo** (`packages/demo_fixtures/screening_lists/`,
+   `synthetic_uk_sanctions_list_v1.xml` and `_v2.xml`, their SHA-256 in `synthetic.sha256`): version 1
+   holds four invented people and organisations and one ship, none of them an Operation Ledger
+   customer; version 2 adds one designation (Sofia RUIZ, born 14 June 2001), changes one (a spelling
+   variation) and removes one. Operation Ledger's A3 uses them (ADR-108 Amendment 5).
+
+**Tests that would fail (rule 12), each shown red in the code's own shape:**
+`test_uk_sanctions_list_reads_its_golden_file` (planted: a ship screened as an organisation; one
+UniqueID read as two entries; a partial date of birth kept);
+`test_uk_sanctions_list_refuses_a_designation_it_cannot_name_or_place` (planted: an unknown
+`IndividualEntityShip` read as an organisation instead of refused — first planted so that it failed by
+a `KeyError` rather than the missing refusal, which proved nothing, and planted again; rule 15);
+`test_uk_sanctions_list_refuses_the_other_lists_files`, `…_with_no_date_generated`,
+`…_refuses_entity_expansion`; `test_every_synthetic_list_file_is_in_the_manifest_by_its_digest` (now
+over the XML files too; planted: version 2's digest left out);
+`test_the_closed_ofsi_list_says_so_and_its_successor_does_not` (planted: the route not sending the
+words); `test_the_glass_says_the_same_closed_list_words_as_the_conduit`; and the Lists tab's vitest case
+(planted: the row and the form not saying it).
+
+**Read conservatively, for the owner:**
+- **The XML, not the CSV.** A customer whose bank publishes the CSV only would need a second connector
+  once the CSV's columns are documented.
+- **The schema's own notice.** The XSD file carries a notice that is not the OGL: use "for the purpose
+  of developing, testing, or implementing compatible systems", not "for commercial resale or as part of
+  a paid service without prior consent". OspreyFlow does not ship the schema; the connector was written
+  from its element names. Whether a paid deployment's use is "part of a paid service" is for the owner
+  to confirm with the FCDO (spec 00 §7).
+- **No HTTP fetch**, as for every list (Amendment 3 item 3): the file is placed in the ingest folder.
+  The FCDO's static URL (`sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml`) is named in the
+  administration guide, not fetched.
+
+### ADR-108, Amendment 5 (1 November 2026) — Operation Ledger's monitoring week: use cases A1 to A4 (build-order step 8b)
+
+Status: recorded during the owner's autonomous-build instruction of 1 November 2026, on the owner's
+choice of the same day (`process/ALERTING_MONITORING_PLAN.md`): all of A1 to A4, woven into Operation
+Ledger's walkthrough. It rests on ADR-133 stages (a) to (d) and ADR-134, as built (their Amendments 1 to
+6 and 1), as ADR-127 Amendment 41 did for the prison demo. Operation Ledger is this ADR's synthetic case
+(Amendment 4); its money-laundering rules are ADR-109's. Each point the spec left open is read
+conservatively and listed at the end for the owner's review.
+
+**Where the cases sit.** A new act at the end of the Ledger walkthrough (`DEMO_GUIDE.md` §8b, "the
+monitoring week"), after the structuring ring, the onboarding gate and the ownership trace, which are
+unchanged, as is every figure they quote: nothing of the week touches September's flows.
+
+| Step | What happens | Case |
+| --- | --- | --- |
+| 1. After the SAR | The analyst hotlists Jamal Carter's Lloyds account ("only me"), and deploys two rules from the typology templates, each after each load commits: "Money straight through an account" (rapid movement, the template's 48 hours and 80%) and "Money back where it started within a week" (circular flow, 4 movements, tuned from 30 days to 7) | A1, A2 |
+| 2. The next weekly export | The data engineer loads `ledger_transactions_week2.csv` through a Studio pipeline mapped as `ledger_transactions_recipe.yaml`; *Checks on load* applies the case's rules (the default). The load raises **R1**, **C1** and **H1** | A1, A2 |
+| 3. A list update | The administrator refreshes the UK Sanctions List (synthetic) at version 1 (nothing found); the presenter releases version 2; *Refresh now* re-screens every customer and raises **K1** | A3 |
+| 4. Close and report | The analyst closes R1 as *Referred*; it goes into the case's pack as an `alert` item, closed; the monitoring figures count the week | A4 |
+
+**The data** (`packages/demo_fixtures/ledger_monitoring.py`; rule 9: synthetic, in the repository only).
+One file, the bank's next weekly export for Monday 5 to Sunday 11 October 2026 (the seed's own export
+ends with the week of 28 September), in the seed's own columns, so the committed transactions recipe
+loads it unchanged. Its background is drawn from `random.Random` seeded by a fixed digest, the same on
+every run. Thirteen rows:
+- **A1:** Crescent Imports pays £18,000 into Sofia Ruiz's Monzo account (Monday 10:05); £17,400 leaves
+  it for Tomas Zelinsky's Starling account at 16:20; Zelinsky pays £16,900 back to Crescent on Thursday
+  at 11:30, more than 48 hours after his account was paid.
+- **A2:** on Friday at 11:40, £9,700 is paid in, in cash (`CASH_IN`), from Zelinsky's account into
+  Carter's Lloyds account (a cash deposit as the seed writes its own: the depositor's account paying the
+  account credited).
+- **Background:** nine payments between the three trading counterparties, always buyer to supplier
+  (Kesterton Freight to Midland Pallets and Arden Fuel Cards; Midland Pallets to Arden), each onward
+  payment under £450 against at least £1,200 paid in, and no three of one pair summing past £10,000.
+  None touches Hale Logistics, whose September trading would close a circle with any new payment to or
+  from it.
+- **A3:** the synthetic UK Sanctions List, version 1 and version 2 (ADR-133 Amendment 6). Version 2 adds
+  Sofia RUIZ, born 14 June 2001, who is the case's customer (the KYC export's Ruiz, same date of birth).
+
+**The seed, the release and the reset** (`scripts/seed_ledger_fixture.py`). The seed writes the week's
+file under `<ingest root>/uploaded/ledger/incoming/` (which the Studio's listing does not show), the
+list's version 1 at `uploaded/ledger/lists/uk_sanctions_list.xml` and version 2 under `incoming/`, and
+subscribes "UK Sanctions List (synthetic)" to that file through the `uk_sanctions_list` connector (it
+does not refresh it: a refresh re-screens, which is the administrator's step on screen). Three mid-demo
+commands, file copies only, so the Conduit stays up, run as `python -m scripts.seed_internal ledger
+<flag>`: `--release-week-2` (the week's file into the dataset's listed folder), `--release-list-update`
+(version 2 over the subscribed file) and `--reset-week-2` (the released file removed and version 1 put
+back). The reset says what it cannot undo: the week's load (reverted with `python -m
+scripts.revert_load <load id>`, the Conduit stopped), the rules, the hotlist, the alerts and their
+closes, and the list's applied versions (a refresh after the reset applies version 1 again, which
+delists Ruiz and raises nothing).
+
+**The four cases, exactly.** Every alert is raised in the case "Operation Ledger (synthetic demo)",
+dataset `ledger`, as the analyst may see it.
+
+- **A1, rapid movement and a circle (step 2).**
+  - *Raises exactly two alerts,* both typology alerts (medium severity, the case's team, an `Alert` node
+    written `inferred`): **R1**, `rapid_movement`, naming Ruiz's Monzo account and citing the two
+    transfers through it ("18,000 arrived … and 17,400 left within 6.2 hour(s) — the account is a
+    pass-through"); then **C1**, `circular_flow`, naming Crescent Imports' account and citing the three
+    transfers of the circle ("value left … and returned to it over 3 movements").
+  - *Stops firing:* `test_the_week_raises_one_pass_through_and_one_circle`.
+  - *Fires when it should not:* `test_a_rule_deployed_after_the_week_two_load_raises_nothing_for_it`;
+    `test_a_second_run_of_the_week_two_file_raises_nothing`; `test_the_background_raises_nothing`
+    (the background alone, with both rules and the structuring template live);
+    `test_the_structuring_template_raises_nothing_for_the_week` (one cash deposit is no ring);
+    `test_a_rule_author_without_the_dataset_raises_nothing` (rule 3);
+    `test_a_reader_without_the_dataset_sees_no_week_two_alert` (rules 4 and 7).
+- **A2, the hotlisted account (step 2).**
+  - *Raises exactly one alert,* **H1**: a hotlist alert (`hotlist:<id>`), high severity, the owner's
+    alone ("only me"), naming Carter's account, as the load touches it by reference.
+  - **A product gap found and closed here.** A hotlist matched a node's `value_normalised` alone, and an
+    `Account` (FIBO) carries none: a hotlist on an account number could never fire, in the evaluation
+    or in a sentence's "on a hotlist". Read as ADR-038's "one exact identifier", which the FIBO pack
+    already declares an account has (`identifiers: [iban, card]`): a hotlist identifier in the IBAN's
+    shape (two letters, two digits, eleven to thirty letters and digits, spaces allowed) is stored in the
+    `account_ref` adapter's form (spaces removed, upper case; its checksum not asked for, since an account
+    is matched on what the bank's file says and the Ledger's own numbers are invented), and a node is
+    watched by its `account_number` in that form beside its `value_normalised`
+    (`evaluation.watched_values`, used by the evaluation and by the sentence's `_identifiers`). Nothing
+    about who is told changes: the match is disclosed by `record_match` as before.
+  - *Stops firing:* `test_the_cash_deposit_raises_one_hotlist_alert_on_carters_account`; with the
+    adapter's form, `test_an_account_number_is_stored_compact_and_upper_case` and
+    `test_a_node_is_watched_by_its_account_number_as_well_as_its_value`.
+  - *Fires when it should not:* `test_a_hotlist_added_after_the_week_two_load_raises_nothing`;
+    `test_a_hotlist_made_in_another_dataset_raises_nothing`;
+    `test_a_hotlist_on_an_account_the_week_does_not_touch_raises_nothing` (Hale Logistics');
+    `test_another_analyst_does_not_see_the_owners_hotlist_alert` (rules 4 and 7).
+- **The order (A1 and A2 together):** `test_the_week_raises_exactly_these_alerts_in_this_order` loads
+  the week through the committed recipe as the run route runs it (the rules after commit, then the
+  hotlists over the load's touched nodes) and asserts R1, C1, H1, in that order
+  (`ledger_monitoring.EXPECTED_ALERTS`), and nothing else in the store.
+- **A3, the list update (step 3).**
+  - *Raises exactly one alert,* **K1**: a `kyc_screening` alert, high severity, the case's team,
+    naming Sofia Ruiz, with the listed party and a scored `SAME_AS` written `inferred` (rule 5), raised
+    by version 2's refresh re-screening every customer of each case with an active screening rule,
+    against the one added and one changed entry only. The refresh says "1 added, 1 changed, 1 removed …
+    1 alert raised".
+  - *Stops firing:* `test_the_list_update_raises_one_screening_alert_on_ruiz`.
+  - *Fires when it should not:* `test_the_first_version_raises_nothing`;
+    `test_the_same_version_again_rescreens_no_one`; `test_a_case_without_a_screening_rule_raises_nothing`;
+    `test_a_screening_rule_whose_deployer_lacks_the_dataset_raises_nothing` (rule 3);
+    `test_a_reader_without_the_dataset_sees_no_screening_alert` (rules 4 and 7).
+- **A4, closed and reported (step 4).**
+  - *The close:* R1 closed by the analyst as **Referred** ("To the MLRO: a further SAR on the Monzo
+    account, citing the circle through Crescent."), alone: a medium-severity alert needs no second person
+    (ADR-133 Amendment 4 item 5 is about high severity).
+  - *The pack item:* R1 as an `alert` item (ADR-134 decision 1): status *closed*, outcome *referred*,
+    match *inferred* (only True match confirms; ADR-133 Amendment 5 item 3), resting on the handlings of
+    the accounts and links it cites.
+  - *The figures* (`reports.alert_report`'s monitoring section, the feed's four sections), counted as the
+    analyst for the week of the demo: raised by rule **hotlists 1; typology `rapid_movement` 1,
+    `circular_flow` 1, `kyc_screening` 1**; closed by outcome **referred 1**; time to close **under a
+    day 1**; hotlist matches **1**; the open queue **C1, H1, K1**.
+  - *Stops firing:* `test_the_referred_alert_goes_into_the_pack_closed_and_inferred`;
+    `test_the_monitoring_figures_count_the_week`.
+  - *Fires when it should not:* `test_a_reason_outside_the_five_is_refused`;
+    `test_the_alert_item_is_withheld_from_a_reader_without_the_dataset` (a yes or no);
+    `test_the_board_never_counts_the_owners_only_me_hotlist` (a colleague's figures hold the three case
+    alerts and no hotlist); `test_a_reader_without_the_dataset_counts_nothing_on_the_board`.
+
+All of these are in `tests/scenarios/test_ledger_monitoring_storyline.py`: the Ledger's September is
+built by the seed's own `build_ledger_graph` (its recipes through the engine, behind the real
+`DatasetStampingGraph`), its events in a real DuckDB; the week is loaded by `load_with_rules` through the
+committed recipe; the rules run by `RuleGate.post_commit` and the hotlists by
+`evaluation.evaluate_hotlists_for_entry`, as `run_published_recipe` runs them; the list is refreshed by
+`screening_refresh.refresh` with the real `Rescreener`; the alert, hotlist, screening and close paths run
+against real Postgres. The graph is ADR-127 Amendment 41's `AccessGraph` (every read through the scheme's
+own predicate and the reader's datasets), with `list_nodes` paged as the adapter pages it. The batch's
+own properties are in `tests/scenarios/test_ledger_monitoring_batches.py`; the seed's files, release and
+reset in `tests/test_seed_ledger_monitoring.py`.
+
+**Read conservatively where the spec is silent:**
+1. *A cash deposit "into" an account* is written as the seed writes its own: `CASH_IN` from the
+   depositor's account to the account credited, since the fixture has no account for cash itself.
+2. *The circle's window is tuned to 7 days.* With the template's 30 days, the circle also finds the
+   ring's September deposits going round through Brightpath and Crescent, and Hale Logistics' ordinary
+   trading going round its suppliers: the rule working, but several alerts for one week's story
+   (`test_the_story_makes_one_pass_through_and_one_circle` shows it). The walkthrough says why, and
+   deploys at 7. A typology template has no preview: ADR-133 decision 3's preview is built for a
+   rule written as a sentence only (Amendment 2 item 6), so the tuning cannot be shown against
+   evidence on screen — for the owner.
+3. *Checks on load, not a schedule.* A1 runs as the week loads (after commit), which is when a weekly
+   export is judged; a schedule (stage (d)) would judge the same rows a day later and adds nothing.
+4. *The week is loaded through a pipeline the engineer builds in the Studio*, mapped as the committed
+   recipe, as the onboarding chapter is: the Ledger's seed writes from code and publishes no Studio
+   recipe, so there is nothing for its reset to revert by recipe, and the reset names the revert command.
+5. *The list is subscribed by the seed and refreshed by the administrator*, so the first refresh, and
+   the re-screening it starts, are on screen and as the person, never the seed's.
+6. *A hotlist on an account number* (A2 above) is a product change, built here because without it A2
+   cannot be shown; it is the smallest reading of ADR-038 that makes the case fire.
+
+**Tests that would fail (rule 12):** each named above; plus `test_the_week_is_the_same_every_time`,
+`test_only_the_story_rows_touch_the_storys_accounts`, `test_the_background_never_comes_back_round`
+and `test_the_list_versions_differ_by_one_designation_matching_one_customer`
+(`test_ledger_monitoring_batches.py`); the seed placing the files, each release and the reset
+(`test_seed_ledger_monitoring.py`); and `seed_internal` running the three steps for `ledger` alone,
+leaving the Conduit up. Each was shown red in the code's own shape; the evidence is in the step's report.

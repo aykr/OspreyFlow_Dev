@@ -58,3 +58,56 @@ def test_a_text_the_adapter_refuses_is_kept_as_written_and_said_so(typed: str) -
 @pytest.mark.parametrize("typed", ["490154203237518", "234 15 0999999999", "49-015420-323751-8"])
 def test_a_digit_string_that_fits_two_kinds_is_left_as_written(typed: str) -> None:
     assert canonical_identifier(typed) == (typed, False)
+
+
+# --- an account number (ADR-108 Amendment 5, Operation Ledger's A2) ---------------------------------
+#
+# An `Account` (FIBO) is identified by its `account_number` (the pack declares `iban` as its kind),
+# and carries no `value_normalised`, so before this a hotlist on an account matched nothing: the
+# evaluation and the sentence's "on a hotlist" read `value_normalised` alone. An account number is
+# now canonicalised by the `account_ref` adapter (whitespace removed, upper case), and a node's
+# `account_number` is watched in that form beside its `value_normalised`. The IBAN checksum is not
+# asked for: an account is matched on what the bank's file says, as written, not on whether it is a
+# valid IBAN (Operation Ledger's synthetic numbers are not).
+
+
+@pytest.mark.parametrize(
+    ("typed", "canonical"),
+    [
+        ("GB58 LOYD 3096 1700 7099 43", "GB58LOYD30961700709943"),
+        ("gb58loyd30961700709943", "GB58LOYD30961700709943"),
+        ("  GB29 NWBK 6016 1331 9268 19 ", "GB29NWBK60161331926819"),
+    ],
+)
+def test_an_account_number_is_stored_compact_and_upper_case(typed: str, canonical: str) -> None:
+    assert canonical_identifier(typed) == (canonical, True)
+
+
+def test_a_node_is_watched_by_its_account_number_as_well_as_its_value() -> None:
+    from services.api.evaluation import watched_values
+
+    account = {"account_number": "GB58 LOYD 3096 1700 7099 43", "institution": "Lloyds"}
+    assert watched_values(account) == {"GB58LOYD30961700709943"}
+    assert watched_values({"value_normalised": "+447700900461"}) == {"+447700900461"}
+    # Neither: a node with nothing an identifier is watched by is never matched.
+    assert watched_values({"family_name": "Carter", "account_number": "Lloyds — no number"}) == set()
+    assert watched_values({"account_number": 1234}) == set()
+
+
+def test_a_sentence_on_a_hotlist_reads_an_accounts_number() -> None:
+    from datetime import UTC, datetime
+
+    from services.api.rule_sentences import _identifiers
+
+    from ontology.packs import load_deployment_ontology
+    from schemas.domain import Handling, Node, Provenance, ProvenanceState, SourceRef
+
+    node = Node(
+        id="acc-1", type="Account",
+        properties={"account_number": "GB58 LOYD 3096 1700 7099 43"},
+        provenance=Provenance(state=ProvenanceState.ASSERTED, first_seen=datetime.now(UTC),
+                              sources=[SourceRef(document_id="d", locator="row 1", excerpt_hash="")]),
+        handling=Handling(classification="OFFICIAL", handling_code="P", originator="u", owning_unit="u"),
+        audit={"created_at": datetime.now(UTC), "created_by": "x", "revision": 1},
+    )  # fmt: skip
+    assert "GB58LOYD30961700709943" in _identifiers(node, load_deployment_ontology())

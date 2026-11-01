@@ -1133,3 +1133,47 @@ def test_the_connector_layouts_are_mounted_into_every_one_shot_once(repo: Path) 
     for name, call in _all_steps(repo, Runner(), SUBS).items():
         mounts = [call[i + 1] for i, a in enumerate(call) if a == "-v"]
         assert mounts.count(f"{repo}/connectors:/app/connectors:ro") == 1, name
+
+
+# --- Operation Ledger's monitoring week (ADR-108 Amendment 5) ------------------------------------
+
+LEDGER_STEPS = ("--release-week-2", "--release-list-update", "--reset-week-2")
+
+
+@pytest.mark.parametrize("step", LEDGER_STEPS)
+def test_the_ledgers_week_steps_run_once_beside_the_running_conduit(repo: Path, step: str) -> None:
+    runner = Runner()
+    seed_internal.seed_internal(
+        "ledger", repo, run=runner, lookup_subs=lambda d: {}, api_running=lambda c: True,
+        mid_demo_step=step,
+    )  # fmt: skip
+    verbs = [next((a for a in c if a in COMPOSE_VERBS), None) for c in runner.calls]
+    assert verbs == ["run"], "one one-shot run, and the Conduit left as it was"
+    call = _seed_call(runner)
+    assert step in call and call[call.index("-m") + 1] == "scripts.seed_ledger_fixture"
+    assert "--case-name" not in call and "--grant" not in call, "no case is made and none shared"
+    mounts = [call[i + 1] for i, a in enumerate(call) if a == "-v"]
+    assert f"{repo}/scripts:/app/scripts:ro" in mounts
+
+
+@pytest.mark.parametrize("step", LEDGER_STEPS)
+def test_the_ledgers_week_steps_are_refused_for_another_dataset(repo: Path, step: str) -> None:
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="only built for ledger"):
+        seed_internal.seed_internal(
+            "prison-intelligence", repo, run=runner, lookup_subs=lambda d: SUBS,
+            api_running=lambda c: False, mid_demo_step=step,
+        )  # fmt: skip
+    assert runner.calls == []
+
+
+def test_the_command_line_takes_one_ledger_step_at_a_time(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(seed_internal, "seed_internal", lambda dataset, **kw: seen.update(kw) or [])
+    assert seed_internal.main(["ledger", "--release-week-2", "--reset-week-2"]) == 2
+    assert "are run one at a time" in capsys.readouterr().err
+    assert seed_internal.main(["ledger", "--release-list-update"]) == 0
+    assert seen["mid_demo_step"] == "--release-list-update"
+    assert "the Conduit was left running" in capsys.readouterr().out

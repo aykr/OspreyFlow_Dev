@@ -604,12 +604,18 @@ async def _meets_conditions(
 
 
 def _identifiers(node: Node, ontology: OntologySchema | None) -> set[str]:
+    """What a hotlist identifier is matched against on the subject: what the hotlist evaluation
+    watches (`evaluation.watched_values`: `value_normalised`, and an account's number, ADR-108
+    Amendment 5), and any property named as one of the type's declared identifiers."""
+    from .evaluation import watched_values
+
     names = {"value_normalised"}
     if ontology is not None:
         declared = ontology.entity_type(node.type)
         if declared is not None:
             names.update(declared.identifiers)
-    return {str(node.properties[n]) for n in names if node.properties.get(n)}
+    found = {str(node.properties[n]) for n in names if node.properties.get(n)}
+    return found | watched_values(node.properties)
 
 
 def _screening_name(node: Node) -> str:

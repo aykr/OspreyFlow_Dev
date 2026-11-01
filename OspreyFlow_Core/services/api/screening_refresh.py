@@ -62,6 +62,9 @@ LICENCES: dict[str, str] = {
         "Open Government Licence v3.0. The OFSI Consolidated List closed on 28 January 2026; "
         "the UK Sanctions List replaces it"
     ),
+    "uk_sanctions_list": (
+        "Open Government Licence v3.0 (Crown copyright; the FCDO's UK Sanctions List, gov.uk)"
+    ),
     "un_consolidated": (
         "United Nations terms of use; no open licence is stated for the list — check before reuse"
     ),
@@ -82,6 +85,19 @@ LICENCE_NOT_CONFIRMED: dict[str, str] = {
     "opensanctions": (
         "OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs "
         "OpenSanctions' own data licence"
+    ),
+}
+
+#: ADR-133 Amendment 6: the connectors whose publisher has closed the list they read, with the words
+#: the Lists tab says beside each. The connector's code is kept (ADR-133 Amendment 3), so a file
+#: already held can still be read, but nothing new will ever be published to it.
+#: `apps/workspace/src/alerts/ListsPanel.tsx` says the same words, held in step by
+#: `test_the_glass_says_the_same_closed_list_words_as_the_conduit`.
+CLOSED_LISTS: dict[str, str] = {
+    "ofsi_consolidated": (
+        "this connector reads a closed list: the OFSI Consolidated List closed on 28 January 2026 "
+        "and is no longer updated, and the FCDO's UK Sanctions List is now the only source of UK "
+        "designations"
     ),
 }
 
@@ -475,6 +491,7 @@ async def refresh(
 
 
 __all__ = [
+    "CLOSED_LISTS",
     "LICENCES",
     "LICENCE_NOT_CONFIRMED",
     "ListNotSubscribed",

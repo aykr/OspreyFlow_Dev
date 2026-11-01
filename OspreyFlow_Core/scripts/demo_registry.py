@@ -145,6 +145,11 @@ REGISTRY: tuple[DemoManifest, ...] = (
             "packages/demo_fixtures/ledger.py",
             "packages/demo_fixtures/ledger_onboarding_applications.csv",
             "packages/demo_fixtures/screening_list_synthetic.yaml",
+            # ADR-108 Amendment 5: the monitoring week, and the synthetic UK Sanctions List (FCDO
+            # format) whose version 2 it releases.
+            "packages/demo_fixtures/ledger_monitoring.py",
+            "packages/demo_fixtures/screening_lists/synthetic_uk_sanctions_list_v1.xml",
+            "packages/demo_fixtures/screening_lists/synthetic_uk_sanctions_list_v2.xml",
         ),
     ),
     # ADR-114 Amendment 1 (superseding ADR-055 §3's `internal`). Third-party simulated data

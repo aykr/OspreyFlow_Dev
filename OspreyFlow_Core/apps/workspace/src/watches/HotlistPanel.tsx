@@ -98,7 +98,7 @@ export function HotlistPanel({ apiBaseUrl, bearerToken, investigationId }: Hotli
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
           <Input
             aria-label="Identifier"
-            placeholder="Identifier (e.g. MSISDN, email)"
+            placeholder="Identifier (e.g. MSISDN, email, account number)"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
           />

@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "8d65a85436eea267ec594c687bf172f7c3774850db2d8a64a2f5ed99b6016303",
+    "body": "a9890d477573ed88befff89b0f4b61d1a91baf1cf9681be36451bed82ded862f",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -10,9 +10,9 @@
       "images/admin/06-demo-packs.png": "46ff5e939c137a1e32ff3a4009e57eeda9e8aa1d50b13c36c49ed91aa2f25dc2",
       "images/admin/07-superset.png": "821b76c53a1481b17f26ee5006a9ef80a452c3d61ab5206330eb4c367f5514fd"
     },
-    "pdf": "8d21d8e781c4f559463b73e0b9034541087ce508a331c5b25042482d2923725a",
-    "source": "e6071e571ea8e83d30857f4623c7f0f149d2ab47884735aeae3f4bb50f999154",
-    "version": "1.20"
+    "pdf": "cdabc0de601d20df59f7b771aecebeca23c08e5f4036925aff4685a7d3977197",
+    "source": "f6ed081c765106fe636015b41afd929df9021d3091a43cf83a9a27dbd9229385",
+    "version": "1.21"
   },
   "developer-guide.md": {
     "body": "75aaf5895f317e27480885af51b7e5ae9eb6b2456b852918520a5e1b59e96939",
@@ -37,7 +37,7 @@
     "version": "1.9"
   },
   "user-guide.md": {
-    "body": "935ed60506a27720d4f9f04693f566ddc25a6a531649fa5a76bac6438a3acdee",
+    "body": "ba2c8378fec0cba90739860ec01d89862e7be9657646be58ae277d35e8d1505d",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -66,8 +66,8 @@
       "images/user/25-scheduled-rule.png": "85fd57e01b357aaa6923a965531bc1a29970cf4cd1b0f503f519988bfe8381e1",
       "images/user/26-second-person.png": "c27f6a95d9a76921c21821823ec56de4334b4670ce2455fe30f964aac38802e8"
     },
-    "pdf": "d424dff56e5a87969e80c8b9083b4c953efe7acd5379b921b5ef9d1982110528",
-    "source": "e8537e1c56043f8b6e86ba04f1860083a02a91b4a4630df7fa6f35339d8c7dda",
-    "version": "1.17"
+    "pdf": "9d4afe53c00423d0a3c9bd28194d1136b62c414ce703d59185a0cc7aa36bd6e4",
+    "source": "1637578aa7a66e9f3fcfb7a87b2bda226207cb6af4e44d0d00d6127738b9b296",
+    "version": "1.18"
   }
 }

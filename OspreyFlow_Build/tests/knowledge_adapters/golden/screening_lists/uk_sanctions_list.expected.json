@@ -1,0 +1,15 @@
+{
+  "format": "uk_sanctions_list",
+  "version": "30/10/2026",
+  "skipped": 1,
+  "entries": [
+    {"ref": "SYN0001", "listing": "sanction", "entity_type": "Person", "name": "PETROVA, Elena",
+     "aliases": ["PETROVA, Lena", "PETROVA, Yelena"], "date_of_birth": "1971-03-03", "country": "Xanadu Republic"},
+    {"ref": "SYN0002", "listing": "sanction", "entity_type": "Person", "name": "ORLANSKY, Dmitri Pavel",
+     "aliases": [], "date_of_birth": null, "country": null},
+    {"ref": "SYN0003", "listing": "sanction", "entity_type": "Organisation", "name": "NORTHWIND METALS FZE",
+     "aliases": ["NORTHWIND METAL TRADING"], "date_of_birth": null, "country": "Bexland"},
+    {"ref": "OFSI-90005", "listing": "sanction", "entity_type": "Person", "name": "BRANDT, Ilsa",
+     "aliases": [], "date_of_birth": "1980-12-12", "country": "Bexland"}
+  ]
+}

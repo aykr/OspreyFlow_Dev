@@ -47,7 +47,7 @@ attempt flips it back, so this reflects the most recent reach, not a one-way tri
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
 
 from services.resolve.trigger import service_principal
@@ -55,6 +55,7 @@ from valkey.asyncio import Valkey
 from valkey.asyncio.lock import Lock
 from valkey.exceptions import LockError
 
+from knowledge_adapters import REGISTRY, NormalisationError
 from ontology.handling import HandlingScheme
 from ports.graph import GraphPort
 from schemas.domain import Alert, Hotlist, Monitor, Principal, Subgraph
@@ -122,6 +123,24 @@ async def _with_overlap_guard(
             pass
 
 
+def watched_values(properties: Mapping[str, object]) -> set[str]:
+    """The values a hotlist identifier is matched against on one node: its `value_normalised` (a
+    number, an address, a handle), and — ADR-108 Amendment 5 — its `account_number` in the
+    `account_ref` adapter's form, the form `hotlists.canonical_identifier` stores an account number
+    in. A value an adapter refuses is not watched; nothing is guessed."""
+    found: set[str] = set()
+    value = properties.get("value_normalised")
+    if isinstance(value, str) and value:
+        found.add(value)
+    number = properties.get("account_number")
+    if isinstance(number, str) and number.strip():
+        try:
+            found.add(str(REGISTRY["account_ref"](number)))
+        except NormalisationError:
+            pass
+    return found
+
+
 async def evaluate_hotlists_for_entry(
     entry: ChangeStreamEntry,
     *,
@@ -168,8 +187,7 @@ async def evaluate_hotlists_for_entry(
             # is left out of a chunk's answer alike.
             for chunk in touched_chunks(entry.node_ids):
                 for node in await graph.get_nodes(chunk, matcher):
-                    value = node.properties.get("value_normalised")
-                    if isinstance(value, str):
+                    for value in sorted(watched_values(node.properties)):
                         built.setdefault(value, []).append((node.id, list(node.datasets)))
             index = built  # only once whole: a failed read leaves nothing half-read behind
         return index

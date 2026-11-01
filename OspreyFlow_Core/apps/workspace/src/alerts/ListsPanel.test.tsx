@@ -93,6 +93,39 @@ describe("the Lists tab", () => {
     expect(form.textContent).not.toContain("Licence not confirmed");
   });
 
+  it("says the OFSI connector reads a closed list, on its row and in the subscribe form, and offers its successor", async () => {
+    // ADR-133 Amendment 6: the OFSI Consolidated List closed on 28 January 2026; the FCDO's UK
+    // Sanctions List is its successor. The words are the Conduit's (`CLOSED_LISTS`).
+    const closed =
+      "this connector reads a closed list: the OFSI Consolidated List closed on 28 January 2026 and is no longer updated, and the FCDO's UK Sanctions List is now the only source of UK designations";
+    LISTS.push({
+      list_name: "Old OFSI file", source: "ofsi_consolidated", location: "lists/ConList.csv", dataset: null, synthetic: true,
+      licence: "Open Government Licence v3.0. The OFSI Consolidated List closed on 28 January 2026; the UK Sanctions List replaces it",
+      licence_confirmed: true, licence_note: null, closed_note: closed, version: "2026-01-27", entries: 3,
+      updated_at: "2026-11-01T09:00:00Z", attempted_at: "2026-11-01T09:00:00Z", failure: null,
+    } as unknown as (typeof LISTS)[number]); // prettier-ignore
+    try {
+      serve();
+      render(<ListsPanel {...props} canManage={true} />);
+      const table = await screen.findByRole("table", { name: "Screening lists and their versions" });
+      const rows = within(table).getAllByRole("row");
+      const ofsi = rows.find((r) => r.textContent?.includes("Old OFSI file"))!;
+      expect(ofsi.textContent).toContain(`Closed list: ${closed}.`);
+      for (const other of rows.filter((r) => r !== ofsi)) expect(other.textContent).not.toContain("Closed list");
+      const connector = screen.getByRole("combobox", { name: "Connector" }) as HTMLSelectElement;
+      const labels = Array.from(connector.options).map((o) => o.textContent);
+      expect(labels).toContain("HM Treasury OFSI consolidated list (closed 28 January 2026): reads a closed list");
+      expect(labels).toContain("UK Sanctions List (FCDO)");
+      fireEvent.change(connector, { target: { value: "ofsi_consolidated" } });
+      const form = screen.getByRole("form", { name: "Subscribe to a list" });
+      expect(form.textContent).toContain(`Closed list: ${closed}. Subscribe to the UK Sanctions List (FCDO) for UK designations.`);
+      fireEvent.change(connector, { target: { value: "uk_sanctions_list" } });
+      expect(form.textContent).not.toContain("Closed list");
+      expect(form.textContent).not.toContain("Licence not confirmed");
+    } finally {
+      LISTS.pop();
+    }
+  });
 
   it("shows each list's version, entries, last update, licence and state in words", async () => {
     serve();

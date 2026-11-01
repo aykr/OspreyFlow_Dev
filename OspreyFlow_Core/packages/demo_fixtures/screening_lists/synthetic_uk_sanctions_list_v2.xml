@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic (rule 9): an invented UK Sanctions List, version 2, shaped like the FCDO's
+     UK-Sanctions-List.xml (schema SanctionsListSchema-4.33.3.xsd). Every name, date and place is
+     invented; no real designation is in this file. Operation Ledger's A3 (ADR-108 Amendment 5). -->
+<Designations>
+  <DateGenerated>06/10/2026</DateGenerated>
+
+  <Designation>
+    <LastUpdated>14/03/2025</LastUpdated>
+    <DateDesignated>14/03/2025</DateDesignated>
+    <UniqueID>SYNUK0001</UniqueID>
+    <Names>
+      <Name><Name1>Arkady</Name1><Name6>VORONTSOV</Name6><NameType>Primary Name</NameType></Name>
+    </Names>
+    <RegimeName>Synthetic Regime (OspreyFlow demo)</RegimeName>
+    <IndividualEntityShip>Individual</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <SanctionsImposed>Asset freeze</SanctionsImposed>
+    <IndividualDetails>
+      <Individual>
+        <DOBs><DOB>19/04/1969</DOB></DOBs>
+        <Nationalities><Nationality>Xanadu Republic</Nationality></Nationalities>
+      </Individual>
+    </IndividualDetails>
+  </Designation>
+  <Designation>
+    <LastUpdated>06/10/2026</LastUpdated>
+    <DateDesignated>02/06/2025</DateDesignated>
+    <UniqueID>SYNUK0002</UniqueID>
+    <Names>
+      <Name><Name1>Demetra</Name1><Name6>KALLIS</Name6><NameType>Primary Name</NameType></Name>
+      <Name><Name1>Dimitra</Name1><Name6>KALLI</Name6><NameType>Primary Name Variation</NameType></Name>
+    </Names>
+    <RegimeName>Synthetic Regime (OspreyFlow demo)</RegimeName>
+    <IndividualEntityShip>Individual</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <SanctionsImposed>Asset freeze</SanctionsImposed>
+    <IndividualDetails>
+      <Individual>
+        <DOBs><DOB>02/11/1975</DOB></DOBs>
+        <Nationalities><Nationality>Bexland</Nationality></Nationalities>
+      </Individual>
+    </IndividualDetails>
+  </Designation>
+  <Designation>
+    <LastUpdated>21/01/2026</LastUpdated>
+    <DateDesignated>21/01/2026</DateDesignated>
+    <UniqueID>SYNUK0003</UniqueID>
+    <Names>
+      <Name><Name6>OSTRAVA METALS TRADING LLC</Name6><NameType>Primary Name</NameType></Name>
+    </Names>
+    <RegimeName>Synthetic Regime (OspreyFlow demo)</RegimeName>
+    <IndividualEntityShip>Entity</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <SanctionsImposed>Asset freeze</SanctionsImposed>
+    <Addresses>
+      <Address><AddressLine1>Plot 9, Eastern Free Zone</AddressLine1><AddressCountry>Bexland</AddressCountry></Address>
+    </Addresses>
+  </Designation>
+  <Designation>
+    <LastUpdated>21/01/2026</LastUpdated>
+    <DateDesignated>21/01/2026</DateDesignated>
+    <UniqueID>SYNUK0004</UniqueID>
+    <Names>
+      <Name><Name6>BLUE LANTERN SHIPPING FZCO</Name6><NameType>Primary Name</NameType></Name>
+    </Names>
+    <RegimeName>Synthetic Regime (OspreyFlow demo)</RegimeName>
+    <IndividualEntityShip>Entity</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <SanctionsImposed>Asset freeze</SanctionsImposed>
+    <Addresses>
+      <Address><AddressLine1>Office 1204, Harbour Tower</AddressLine1><AddressCountry>Bexland</AddressCountry></Address>
+    </Addresses>
+  </Designation>
+  <Designation>
+    <LastUpdated>21/01/2026</LastUpdated>
+    <DateDesignated>21/01/2026</DateDesignated>
+    <UniqueID>SYNUK0005</UniqueID>
+    <Names>
+      <Name><Name6>MV GREY HERON</Name6><NameType>Primary Name</NameType></Name>
+    </Names>
+    <RegimeName>Synthetic Regime (OspreyFlow demo)</RegimeName>
+    <IndividualEntityShip>Ship</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <SanctionsImposed>Asset freeze</SanctionsImposed>
+  </Designation>
+  <Designation>
+    <LastUpdated>06/10/2026</LastUpdated>
+    <DateDesignated>06/10/2026</DateDesignated>
+    <UniqueID>SYNUK0007</UniqueID>
+    <Names>
+      <Name><Name1>Sofia</Name1><Name6>RUIZ</Name6><NameType>Primary Name</NameType></Name>
+    </Names>
+    <RegimeName>Synthetic Regime (Money Laundering, OspreyFlow demo)</RegimeName>
+    <IndividualEntityShip>Individual</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <SanctionsImposed>Asset freeze</SanctionsImposed>
+    <IndividualDetails>
+      <Individual>
+        <DOBs><DOB>14/06/2001</DOB></DOBs>
+        <Nationalities><Nationality>Xanadu Republic</Nationality></Nationalities>
+      </Individual>
+    </IndividualDetails>
+  </Designation>
+</Designations>

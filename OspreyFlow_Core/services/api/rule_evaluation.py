@@ -354,6 +354,32 @@ class Finding:
         return Interval(valid_from=min(times), valid_to=max(times)) if times else None
 
 
+async def _readable_accounts(
+    ids: Sequence[str],
+    written: Sequence[NodeWrite | EdgeWrite],
+    graph: GraphPort,
+    scheme: HandlingScheme,
+    deployer: Principal,
+) -> set[str]:
+    """The accounts the deployer may read: from the load's own writes (a pre-commit rule's accounts
+    are still in the open transaction), judged by marking and dataset reach as the adapter judges
+    them; the rest asked of the store as the deployer, in one batched read (rule 3 in the adapter).
+    An account they may not read is absent."""
+    reach = deployer.datasets
+    found = {
+        w.id
+        for w in written
+        if isinstance(w, NodeWrite)
+        and w.id in set(ids)
+        and handling_readable(scheme, deployer, w.handling)
+        and (reach is None or bool(set(w.datasets) & set(reach)))
+    }
+    missing = [i for i in ids if i not in found]
+    if missing:
+        found |= {n.id for n in await graph.get_nodes(missing, deployer)}
+    return found
+
+
 async def judge(
     rule: TypologyRule,
     deployer: Principal,
@@ -362,14 +388,27 @@ async def judge(
     analytics: AnalyticsPort,
     scheme: HandlingScheme,
     investigation_scope: str,
+    graph: GraphPort | None = None,
+    written: Sequence[NodeWrite | EdgeWrite] = (),
 ) -> list[Finding]:
     """The rule over this load's events and the flows around them. Only events the deployer may
-    read are judged or read (rule 3); only findings citing one of this load's events count."""
+    read are judged or read (rule 3); only findings citing one of this load's events count.
+
+    An event carries its marking but no dataset (ADR-099 decision 7: it belongs to its case), so a
+    rule deployed within one of the case's datasets would otherwise judge every money movement of
+    the case. With `graph` (the rule gate always gives it), a movement is judged or read only when
+    the deployer may read both its accounts, as the AML templates read theirs (found building
+    ADR-108 Amendment 5: a rule in another dataset raised an alert on accounts its author could
+    not see)."""
     judged = [
         e
         for e in incoming
         if e.edge_type == FLOW_EDGE_TYPE and handling_readable(scheme, deployer, e.handling)
     ]
+    if graph is not None and judged:
+        ends = sorted({e.source_id for e in judged} | {e.target_id for e in judged})
+        readable = await _readable_accounts(ends, written, graph, scheme, deployer)
+        judged = [e for e in judged if e.source_id in readable and e.target_id in readable]
     params = rule.params
     if not isinstance(params, (StructuringParams, RapidMovementParams, CircularFlowParams)):
         return []
@@ -385,6 +424,10 @@ async def judge(
         node_ids=accounts,
         window=Interval(valid_from=min(times) - reach, valid_to=max(times) + reach),
     )
+    if graph is not None and context:
+        ends = sorted({e.source_id for e in context} | {e.target_id for e in context})
+        readable = await _readable_accounts(ends, written, graph, scheme, deployer)
+        context = [e for e in context if e.source_id in readable and e.target_id in readable]
     canonical = one_per_transaction([*context, *judged])
     by_id = {e.event_id: e for e in canonical.values()}
     hits = hits_citing(
@@ -711,6 +754,8 @@ class RuleGate:
                 analytics=self.analytics,
                 scheme=self.scheme,
                 investigation_scope=self.investigation_id,
+                graph=self.graph,
+                written=written,
             )
         if rule.params.typology == "pattern":
             from .pattern_rules import judge_pattern

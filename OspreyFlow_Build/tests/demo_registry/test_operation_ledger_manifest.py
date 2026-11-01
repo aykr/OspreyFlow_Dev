@@ -22,6 +22,10 @@ def test_operation_ledger_is_shipped_and_seeded() -> None:
         "packages/demo_fixtures/ledger.py",
         "packages/demo_fixtures/ledger_onboarding_applications.csv",
         "packages/demo_fixtures/screening_list_synthetic.yaml",
+        # ADR-108 Amendment 5: the monitoring week and the synthetic UK Sanctions List it updates.
+        "packages/demo_fixtures/ledger_monitoring.py",
+        "packages/demo_fixtures/screening_lists/synthetic_uk_sanctions_list_v1.xml",
+        "packages/demo_fixtures/screening_lists/synthetic_uk_sanctions_list_v2.xml",
     )
 
 

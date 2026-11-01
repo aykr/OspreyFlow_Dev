@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic (rule 9): invented designations shaped like the FCDO's UK-Sanctions-List.xml, per its
+     schema SanctionsListSchema-4.33.3.xsd. No real designation is in this file. -->
+<Designations>
+  <DateGenerated>30/10/2026</DateGenerated>
+  <Designation>
+    <LastUpdated>27/01/2026</LastUpdated>
+    <DateDesignated>01/02/2021</DateDesignated>
+    <UniqueID>SYN0001</UniqueID>
+    <OFSIGroupID>90001</OFSIGroupID>
+    <Names>
+      <Name><Name1>Elena</Name1><Name6>PETROVA</Name6><NameType>Primary Name</NameType></Name>
+      <Name><Name1>Lena</Name1><Name6>PETROVA</Name6><NameType>Alias</NameType><AliasStrength>good quality</AliasStrength></Name>
+    </Names>
+    <RegimeName>Synthetic Regime</RegimeName>
+    <IndividualEntityShip>Individual</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <SanctionsImposed>Asset freeze</SanctionsImposed>
+    <SanctionsImposedIndicators>
+      <AssetFreeze>true</AssetFreeze><ArmsEmbargo>false</ArmsEmbargo><TargetedArmsEmbargo>false</TargetedArmsEmbargo>
+      <CharteringOfShips>false</CharteringOfShips><ClosureOfRepresentativeOffices>false</ClosureOfRepresentativeOffices>
+      <CrewServicingOfShipsAndAircraft>false</CrewServicingOfShipsAndAircraft><Deflag>false</Deflag>
+      <PreventionOfBusinessArrangements>false</PreventionOfBusinessArrangements><ProhibitionOfPortEntry>false</ProhibitionOfPortEntry>
+      <TravelBan>true</TravelBan><PreventionOfCharteringOfShips>false</PreventionOfCharteringOfShips>
+      <PreventionOfCharteringOfShipsAndAircraft>false</PreventionOfCharteringOfShipsAndAircraft>
+      <TechnicalAssistanceRelatedToAircraft>false</TechnicalAssistanceRelatedToAircraft>
+      <TrustServicesSanctions>false</TrustServicesSanctions><DirectorDisqualificationSanction>false</DirectorDisqualificationSanction>
+    </SanctionsImposedIndicators>
+    <IndividualDetails>
+      <Individual>
+        <DOBs><DOB>03/03/1971</DOB></DOBs>
+        <Nationalities><Nationality>Xanadu Republic</Nationality></Nationalities>
+      </Individual>
+    </IndividualDetails>
+  </Designation>
+  <Designation>
+    <UniqueID>SYN0002</UniqueID>
+    <Names>
+      <Name><Name1>Dmitri</Name1><Name2>Pavel</Name2><Name6>ORLANSKY</Name6><NameType>Primary Name</NameType></Name>
+    </Names>
+    <RegimeName>Synthetic Regime</RegimeName>
+    <IndividualEntityShip>Individual</IndividualEntityShip>
+    <DesignationSource>UN</DesignationSource>
+    <IndividualDetails>
+      <Individual>
+        <DOBs><DOB>00/00/1964</DOB><DOB>dd/mm/1965</DOB></DOBs>
+      </Individual>
+    </IndividualDetails>
+  </Designation>
+  <Designation>
+    <UniqueID>SYN0003</UniqueID>
+    <Names>
+      <Name><Name6>NORTHWIND METALS FZE</Name6><NameType>Primary Name</NameType></Name>
+      <Name><Name6>NORTHWIND METAL TRADING</Name6><NameType>Primary Name Variation</NameType></Name>
+    </Names>
+    <RegimeName>Synthetic Regime</RegimeName>
+    <IndividualEntityShip>Entity</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <Addresses>
+      <Address><AddressLine1>Unit 4, Free Zone</AddressLine1><AddressCountry>Bexland</AddressCountry></Address>
+    </Addresses>
+    <EntityDetails><Entity><TypeOfEntities><TypeOfEntity>Trading company</TypeOfEntity></TypeOfEntities></Entity></EntityDetails>
+  </Designation>
+  <Designation>
+    <UniqueID>SYN0004</UniqueID>
+    <Names>
+      <Name><Name6>MV GREY HERON</Name6><NameType>Primary Name</NameType></Name>
+    </Names>
+    <RegimeName>Synthetic Regime</RegimeName>
+    <IndividualEntityShip>Ship</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <ShipDetails><Ship><IMONumbers><IMONumber>0000000</IMONumber></IMONumbers></Ship></ShipDetails>
+  </Designation>
+  <Designation>
+    <OFSIGroupID>90005</OFSIGroupID>
+    <Names>
+      <Name><Name1>Ilsa</Name1><Name6>BRANDT</Name6><NameType>Primary Name</NameType></Name>
+    </Names>
+    <RegimeName>Synthetic Regime</RegimeName>
+    <IndividualEntityShip>Individual</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <IndividualDetails>
+      <Individual>
+        <DOBs><DOB>12/12/1980</DOB><DOB>12/12/1980</DOB></DOBs>
+        <Nationalities><Nationality>Bexland</Nationality><Nationality>Xanadu Republic</Nationality></Nationalities>
+      </Individual>
+    </IndividualDetails>
+  </Designation>
+  <Designation>
+    <UniqueID>SYN0001</UniqueID>
+    <Names>
+      <Name><Name1>Yelena</Name1><Name6>PETROVA</Name6><NameType>Primary Name</NameType></Name>
+    </Names>
+    <RegimeName>Second Synthetic Regime</RegimeName>
+    <IndividualEntityShip>Individual</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+  </Designation>
+</Designations>
