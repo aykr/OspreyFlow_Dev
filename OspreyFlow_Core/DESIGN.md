@@ -456,3 +456,12 @@ scale, 19px body; the workspace keeps the 13px base (§9 exception 1).
 | `--fs-19` | 24 / 30 | medium headings |
 | `--fs-23` | 36 / 40 | page titles |
 | `--fs-30` | 48 / 50 | large titles |
+
+Page width (ADR-132 Amendment 4): the sign-in and start pages hold their content in GOV.UK's width
+container, 960px with 30px gutters (15px at 640px and narrower), so it starts on the logo's edge.
+GOV.UK's own header, service navigation, phase banner and footer keep GOV.UK's link styling, with no
+Glass link border.
+
+Identity under GOV.UK (ADR-132 Amendment 4): no OspreyFlow mark in the page's chrome. The GOV.UK footer
+says "Built with OspreyFlow, open source." in words; the workspace's top bar keeps its mark; the
+welcome page's About section opens with the mark, the name and the version.

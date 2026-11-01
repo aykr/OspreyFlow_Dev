@@ -6,6 +6,8 @@ import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
+import { applyHarnessBrand } from "./brandHarness";
+import { BrandFrame } from "../src/brand/BrandFrame";
 import { TopBar } from "../src/shell/TopBar";
 import type { HomeSummary } from "../src/home/homeData";
 import { startScreen, type StartChoice } from "../src/shell/startScreen";
@@ -75,4 +77,15 @@ function Harness() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(<Harness />);
+// Under `?brand=govuk` Start sits in the real GOV.UK frame, as the Glass draws it (ADR-132).
+const brand = await applyHarnessBrand();
+
+createRoot(document.getElementById("root")!).render(
+  brand === "govuk" ? (
+    <BrandFrame appearance={{ brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" }}>
+      <Harness />
+    </BrandFrame>
+  ) : (
+    <Harness />
+  ),
+);

@@ -82,12 +82,16 @@ function SignInCard({ reason, intent, onSignIn, welcome }: Required<Pick<SignInS
   const [opening, setOpening] = useState<"organisation" | "account" | null>(null);
   const organisation = welcome.organisationSignIn;
   const help = welcome.links.account_help;
+  // ADR-132 Amendment 4: under GOV.UK the card is plain and names no product (ruling 7).
+  const govuk = currentBrand() === "govuk";
   const purpose =
     intent === "ingest"
       ? "Sign in to bring a new source of data in: connect it, map it, check it, publish it."
       : intent === "admin"
         ? "Sign in to administer this deployment."
-        : "You see only what your role, clearance and cases allow. Every session is recorded in the audit log.";
+        : govuk
+          ? "You'll see only the cases your role and clearance allow. Your activity is recorded."
+          : "You see only what your role, clearance and cases allow. Every session is recorded in the audit log.";
   const start = (which: "organisation" | "account") => {
     setOpening(which);
     onSignIn(which === "organisation" && organisation ? organisation : undefined);
@@ -113,11 +117,13 @@ function SignInCard({ reason, intent, onSignIn, welcome }: Required<Pick<SignInS
                     onClick={() => start("organisation")}>
               {opening === "organisation" ? "Opening your organisation's sign-in page…" : "Continue with organisation sign-in"}
             </button>
-            <p className="welcome-card__note">Your password is entered only on your organisation's sign-in page.</p>
-            <div className="welcome-card__divider"><span>or use an OspreyFlow account</span></div>
+            {!govuk && <p className="welcome-card__note">Your password is entered only on your organisation's sign-in page.</p>}
+            <div className="welcome-card__divider"><span>{govuk ? "or" : "or use an OspreyFlow account"}</span></div>
             <button type="button" className="btn welcome-card__secondary" disabled={opening !== null}
                     onClick={() => start("account")}>
-              {opening === "account" ? "Opening the sign-in page…" : "Sign in with an OspreyFlow account"}
+              {opening === "account"
+                ? "Opening the sign-in page…"
+                : govuk ? "Sign in with a username and password" : "Sign in with an OspreyFlow account"}
             </button>
           </>
         ) : (
@@ -126,11 +132,11 @@ function SignInCard({ reason, intent, onSignIn, welcome }: Required<Pick<SignInS
                     onClick={() => start("account")}>
               {opening === "account" ? "Opening the sign-in page…" : "Sign in"}
             </button>
-            <p className="welcome-card__note">Your password is entered only on the OspreyFlow sign-in page, never here.</p>
+            {!govuk && <p className="welcome-card__note">Your password is entered only on the OspreyFlow sign-in page, never here.</p>}
           </>
         )}
         <p className="welcome-card__foot">
-          No account yet? Your OspreyFlow administrator invites people and assigns roles.
+          {govuk ? "No account? Ask your administrator." : "No account yet? Your OspreyFlow administrator invites people and assigns roles."}
           {help && (
             <>
               {" "}Locked out or seeing the wrong cases? <a href={help}>Get account help</a>.
@@ -191,14 +197,19 @@ export function SignInScreen({ reason, intent, onSignIn, marking = null, welcome
           </div>
           <SignInCard reason={reason} intent={intent} onSignIn={onSignIn} welcome={welcome} />
         </section>
-        {welcome.about && <WelcomeAbout />}
+        {welcome.about && <WelcomeAbout version={welcome.version} />}
       </main>
       <footer className="welcome-footer">
-        <div className="welcome-footer__brand">
-          <SolidMark size={16} />
-          <span>OspreyFlow</span>
-          {welcome.version && <span className="value">{welcome.version}</span>}
-        </div>
+        {/* ADR-132 Amendment 4: under GOV.UK the GOV.UK footer credits the product and About names it. */}
+        {currentBrand() === "govuk" ? (
+          <span />
+        ) : (
+          <div className="welcome-footer__brand">
+            <SolidMark size={16} />
+            <span>OspreyFlow</span>
+            {welcome.version && <span className="value">{welcome.version}</span>}
+          </div>
+        )}
         <nav aria-label="Footer" className="welcome-footer__links">
           {LINK_NAMES.filter(([key]) => welcome.links[key]).map(([key, name]) => (
             <a key={key} href={welcome.links[key]}>

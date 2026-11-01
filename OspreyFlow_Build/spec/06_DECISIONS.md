@@ -20508,3 +20508,50 @@ running deployment is stopped with its own env file before this one starts and o
 unrelated project is not touched; with nothing else running only this one starts; `--list` names each
 OspreyFlow deployment and its state, marks this one, leaves out other projects and runs nothing. The
 administration guide's §8 table names the verb (`test_admin_guide.py`).
+
+### ADR-132, Amendment 4 (1 November 2026) — GOV.UK's page width, its own link styling, and a plain sign-in card
+
+Status: accepted, the owner's report against www.gov.uk ("the gov.uk logo seems a bit misaligned")
+and request ("this box is very confusing to read, can you make this simpler").
+
+Context. Decision 9 put the GOV.UK header, service navigation and phase banner in GOV.UK's width
+container but said nothing of the pages below them. The sign-in and start pages kept their own rows
+(1,320px and 1,240px wide, their own gutters), so their content started up to 140px left of the logo
+at 1,440px, where every GOV.UK page lines up on one edge. The Glass gives every link a 1px bottom
+border (`tokens.css`), which drew a rule under the GOV.UK logo and the service name at rest; GOV.UK
+draws none. And the sign-in card under GOV.UK said OspreyFlow twice, which ruling 7 forbids, in five
+pieces of text around one button.
+
+Decision.
+
+1. **Under GOV.UK the sign-in and start pages hold their rows' content in GOV.UK's width container:**
+   960px, gutters of 30px (15px at 640px and narrower). A row's own rule still runs the full width.
+2. **GOV.UK's own header, service navigation, phase banner and footer keep GOV.UK's link styling**;
+   the Glass's link border is not drawn on them.
+3. **Under GOV.UK the sign-in card is a heading, one sentence, the button and who to ask**: "Sign in";
+   "You'll see only the cases your role and clearance allow. Your activity is recorded."; **Sign in**;
+   "No account? Ask your administrator." (and the account-help link where the deployment gives one).
+   With organisation sign-in: "Continue with organisation sign-in", "or", "Sign in with a username and
+   password". No password note and no product name. The OspreyFlow brand's card (ADR-115 E2) is
+   unchanged.
+4. The service name stays in the service navigation on the sign-in page, as decision 9 has it: the
+   GOV.UK Design System shows a service's name on every page of the service.
+5. **The product's identity, narrowing ruling 7** (the owner's choice of 1 November 2026: "I don't
+   want to lose the identity of the product"; of the four options put, the three that keep one brand
+   in the page's chrome). Under GOV.UK: (a) the GOV.UK footer, on every page and on the sign-in page
+   at `id.`, says "Built with OspreyFlow, open source." in words, under "Run by <organisation>", with
+   no mark and no link; (b) the workspace's top bar keeps its mark, as ruling 7 already had it; (c)
+   the welcome page's About section opens with "About OspreyFlow": the mark, one sentence and the
+   version. The welcome page's own footer row keeps its links and loses its mark, name and version,
+   which had stood under GOV.UK in breach of ruling 7 with no test to see it. A mark beside the
+   sign-in card was the fourth option, not taken: a second brand in a GOV.UK page's chrome is what a
+   service assessment would question.
+
+Tests that would fail if it were broken, each shown red first: `keyboard/shell.spec.ts`'s "the GOV.UK
+logo and the service name are not underlined at rest", and "the sign-in page's / the start page's
+content lines up with the GOV.UK header" at 1,440, 800 and 375px (the sign-in and start harnesses
+draw the real `BrandFrame` under `?brand=govuk`); `SignInScreen.test.tsx`'s three "under GOV.UK, the
+sign-in card" cases; for 5, `GovukFooter.test.tsx`'s "credits OspreyFlow in words, with no mark
+and no link" and `SignInScreen.test.tsx`'s "names OspreyFlow, with its mark and version, in the About
+section only" (it fails on any other mention on the page). `govukChrome.test.tsx` keeps the sign-in
+page's copy of the footer in step. `DESIGN.md` §11 states the width and where the identity goes.

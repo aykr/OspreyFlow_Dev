@@ -7,6 +7,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { applyBrand } from "../brand/brand";
 import { SignInScreen, type WelcomeSettings } from "./SignInScreen";
 
 afterEach(() => {
@@ -112,5 +113,65 @@ describe("the welcome page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Light theme" }));
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(screen.getByRole("button", { name: "Dark theme" })).toBeTruthy();
+  });
+});
+
+// ADR-132 Amendment 4 (the owner, 1 November 2026: "this box is very confusing to read"): under
+// GOV.UK the card is a heading, one plain sentence, the button and who to ask, and names no product
+// (ruling 7). The OspreyFlow brand's card is ADR-115 E2's and is unchanged.
+describe("under GOV.UK, the sign-in card", () => {
+  afterEach(() => applyBrand("ospreyflow"));
+
+  it("is the heading, one sentence, the button and who to ask, naming no product", () => {
+    applyBrand("govuk");
+    render(<SignInScreen welcome={PLAIN} onSignIn={() => undefined} />);
+    const box = screen.getByRole("complementary", { name: "Sign in" });
+    expect(box.textContent).toBe(
+      "Sign in" +
+        "You'll see only the cases your role and clearance allow. Your activity is recorded." +
+        "Sign in" +
+        "No account? Ask your administrator.",
+    );
+  });
+
+  it("with organisation sign-in, offers it first and a username and password second, naming no product", () => {
+    applyBrand("govuk");
+    const signIn = vi.fn();
+    render(<SignInScreen welcome={{ ...PLAIN, organisationSignIn: "acme-entra" }} onSignIn={signIn} />);
+    const box = screen.getByRole("complementary", { name: "Sign in" });
+    expect(box.textContent).not.toMatch(/OspreyFlow|password is entered/);
+    expect(card().getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Continue with organisation sign-in",
+      "Sign in with a username and password",
+    ]);
+    fireEvent.click(card().getByRole("button", { name: "Sign in with a username and password" }));
+    expect(signIn).toHaveBeenCalledWith(undefined);
+  });
+
+  it("keeps the account-help link where the deployment gives one", () => {
+    applyBrand("govuk");
+    render(<SignInScreen welcome={{ ...PLAIN, links: { account_help: "https://help.test/" } }} onSignIn={() => undefined} />);
+    expect(card().getByText(/^No account\? Ask your administrator\./)).toBeTruthy();
+    expect(card().getByRole("link", { name: "Get account help" }).getAttribute("href")).toBe("https://help.test/");
+  });
+
+  // ADR-132 Amendment 4: the product's identity is in the About section, nowhere else on the page.
+  it("names OspreyFlow, with its mark and version, in the About section only", () => {
+    applyBrand("govuk");
+    render(<SignInScreen welcome={{ ...PLAIN, links: { privacy: "https://privacy.test/" } }} onSignIn={() => undefined} />);
+    const about = document.getElementById("about")!;
+    const identity = within(about).getByRole("region", { name: "About OspreyFlow" });
+    expect(identity.textContent).toContain("OspreyFlow is the open-source intelligence analysis and network discovery platform this service is built on.");
+    expect(within(identity).getByText("c01833b")).toBeTruthy();
+    expect(identity.querySelector("svg")).not.toBeNull();
+    about.remove();
+    expect(document.body.textContent).not.toMatch(/OspreyFlow/);
+    // The page's own footer keeps its links.
+    expect(screen.getByRole("link", { name: "Privacy notice" })).toBeTruthy();
+  });
+
+  it("under the OspreyFlow brand has no separate About OspreyFlow block", () => {
+    render(<SignInScreen welcome={PLAIN} onSignIn={() => undefined} />);
+    expect(screen.queryByRole("region", { name: "About OspreyFlow" })).toBeNull();
   });
 });

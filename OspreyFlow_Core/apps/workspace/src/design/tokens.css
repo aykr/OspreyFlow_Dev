@@ -204,6 +204,19 @@
   font-size: var(--fs-13); line-height: var(--lh-13);
 }
 
+/* GOV.UK page width (ADR-132 Amendment 4; DESIGN.md §11): the sign-in and start pages' rows hold
+   their content in GOV.UK's width container, 960px with 30px gutters (15px on a phone), so it starts
+   on the logo's edge as on every GOV.UK page. A row's rule still runs the full width. */
+[data-brand="govuk"] { --govuk-gutter: 30px; }
+@media (max-width: 640px) { [data-brand="govuk"] { --govuk-gutter: 15px; } }
+[data-brand="govuk"] :is(.welcome-header, .welcome-hero, .welcome-section, .welcome-footer, .home-header, .home-main) {
+  max-width: none;
+  padding-left: max(var(--govuk-gutter), calc((100% - 960px) / 2));
+  padding-right: max(var(--govuk-gutter), calc((100% - 960px) / 2));
+}
+/* GOV.UK's own header, service navigation and footer keep GOV.UK's link styling: no Glass border. */
+[data-brand="govuk"] :is(.govuk-header, .govuk-service-navigation, .govuk-footer, .govuk-phase-banner) a { border-bottom: 0; }
+
 html, body { margin:0; padding:0; }
 
 body {

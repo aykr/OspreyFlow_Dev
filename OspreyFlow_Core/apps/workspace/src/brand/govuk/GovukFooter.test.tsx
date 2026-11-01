@@ -32,4 +32,15 @@ describe("GovukFooter", () => {
     render(<GovukFooter organisation={null} />);
     expect(screen.queryByText(/Run by/)).toBeNull();
   });
+
+  // ADR-132 Amendment 4 (the owner's choice, 1 November 2026): the product is credited in words in
+  // the footer's meta, on every GOV.UK page; no mark, no link.
+  it("credits OspreyFlow in words, with no mark and no link", () => {
+    applyBrand("govuk");
+    const { container } = render(<GovukFooter organisation="Ministry of Examples" />);
+    const credit = screen.getByText("Built with OspreyFlow, open source.");
+    expect(credit.tagName).toBe("P");
+    expect(credit.closest("a")).toBeNull();
+    expect(container.querySelectorAll("svg").length).toBe(2); // the crown and the licence logo only
+  });
 });
