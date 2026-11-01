@@ -45,7 +45,8 @@ export function itemShortTitle(item: PackItem): string {
 export function trendSentence(figures: TrendFigures): string {
   const { definition, result } = figures;
   const weeks = plural(definition.weeks ?? 12, "week");
-  const events = plural(result.events, "event");
+  // ADR-134 decision 3: an alert trend counts alerts.
+  const events = plural(result.events, definition.source === "alerts" ? "alert" : "event");
   if (result.measure === "sum") {
     const field = definition.measure_field ?? "the chosen property";
     const unvalued = result.unvalued ?? 0;

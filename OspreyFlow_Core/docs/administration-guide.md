@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.16** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.17** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.17 | 2026-11-01 | §12: the monitoring board, and the four monitoring sections the feed carries (`raised_by_rule`, `closed`, `time_to_close`, `hotlist_matches`). |
 | 1.16 | 2026-11-01 | §9.4: monitoring, and whom a hotlist's alerts reach (`monitoring.hotlist_audience`, `hotlist_audience_editable`). Appendix A: the `monitoring` settings. |
 | 1.15 | 2026-11-01 | §9.1: the Datasets tab. §10: a provider's privacy-contract mark (`privacy_contract`, `contract_reference`); each dataset's egress (`none`, `contracted`, `any`), set in Admin → Datasets and audited; every dataset is `none` after upgrading, so hosted engines receive nothing until an administrator changes one. Appendix A: the two new provider settings. |
 | 1.14 | 2026-11-01 | §8: `ospreyflow apply`, and a new §8.3, "Changing a setting". `deployment.env` is readable by its owner alone. §10: a provider enabled on a running deployment, and key entry on the guided install's Models screen. |
@@ -649,6 +650,27 @@ Each pull is made as that account, at its clearance, audited and recorded in the
 ![Admin → Dashboards: registering a dashboard's account and seeing when it last pulled](images/admin/03-dashboards.png)
 
 ![Superset at bi.: the boards and charts built on the reporting figures](images/admin/07-superset.png)
+
+### The monitoring board
+
+The feed also carries four monitoring sections, for every kind of alert (typology, hotlist and
+monitor), each a row of `section`, `label`, `typology`, `week_start` and `value` in the reporting
+database's `figures` table, beside `raised`, `open_by_age` and `outcome`:
+
+| `section` | `label` | What it counts |
+| --- | --- | --- |
+| `raised_by_rule` | `typology` (with its `typology`), `hotlists` or `monitors` | alerts raised each week, by rule |
+| `closed` | `true_positive`, `false_positive` or `closed` (taken back, no outcome) | alerts closed each week, by outcome |
+| `time_to_close` | `under a day`, `1 to 7 days`, `7 to 30 days`, `over 30 days` | alerts closed in the period, by how long they took |
+| `hotlist_matches` | `hotlists` | hotlist matches each week |
+
+A typology rule is named by its typology, never by its own name, which an analyst writes and the
+feed does not carry. Every figure is counted as the dashboard's account may see it; a hotlist kept
+"only me" is counted for its owner alone, so never on a dashboard. No board ships as a file: build
+the monitoring board in Superset from the `figures` table, filtered on these sections — for
+example a stacked bar of `raised_by_rule` by `week_start` and `label`, a bar of `closed` by
+`label`, a table of `time_to_close`, and a line of `hotlist_matches` — with a filter on
+`case_name`. Report sync fills it on its next pull; nothing else needs to change.
 
 ## 13. Backup and restore
 

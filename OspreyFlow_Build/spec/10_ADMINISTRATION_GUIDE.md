@@ -559,6 +559,27 @@ reads the same figures:
 
 Each pull is made as that account, at its clearance, audited and recorded in the export ledger.
 
+### The monitoring board
+
+The feed also carries four monitoring sections, for every kind of alert (typology, hotlist and
+monitor), each a row of `section`, `label`, `typology`, `week_start` and `value` in the reporting
+database's `figures` table, beside `raised`, `open_by_age` and `outcome`:
+
+| `section` | `label` | What it counts |
+| --- | --- | --- |
+| `raised_by_rule` | `typology` (with its `typology`), `hotlists` or `monitors` | alerts raised each week, by rule |
+| `closed` | `true_positive`, `false_positive` or `closed` (taken back, no outcome) | alerts closed each week, by outcome |
+| `time_to_close` | `under a day`, `1 to 7 days`, `7 to 30 days`, `over 30 days` | alerts closed in the period, by how long they took |
+| `hotlist_matches` | `hotlists` | hotlist matches each week |
+
+A typology rule is named by its typology, never by its own name, which an analyst writes and the
+feed does not carry. Every figure is counted as the dashboard's account may see it; a hotlist kept
+"only me" is counted for its owner alone, so never on a dashboard. No board ships as a file: build
+the monitoring board in Superset from the `figures` table, filtered on these sections — for
+example a stacked bar of `raised_by_rule` by `week_start` and `label`, a bar of `closed` by
+`label`, a table of `time_to_close`, and a line of `hotlist_matches` — with a filter on
+`case_name`. Report sync fills it on its next pull; nothing else needs to change.
+
 ## 13. Backup and restore
 
 **Lite.** `ospreyflow backup` writes a set to `backups/<time>-<profile>-<commit>/`: the graph

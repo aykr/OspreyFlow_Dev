@@ -597,7 +597,8 @@ reader owns or that are shared with their team — the owner's organisational un
 always, a hotlist's while its audience is `team`, never a `notify` stub — decided in the query
 (`services/api/alerts.py::queue_scope`). Each row carries `kind` (typology, hotlist, monitor),
 `severity` (low, medium, high; the stored value, else its kind's default) and `audience` (case,
-team or owner). The Reports view still counts the typology alerts alone (ADR-134 widens it).
+team or owner). The Reports view's typology figures count the typology alerts alone; ADR-134's
+monitoring figures (below) count every kind.
 
 ```
 GET    /v1/investigations/{id}/alert-queue   the one queue; ?status= active (default), open, claimed, closed or all; ?kind= and ?severity=, each repeatable, Viewer
@@ -617,6 +618,24 @@ entities as the reader sees them, never by id. A move between statuses is one co
 so two members acting at once cannot both win: the loser gets 409 `alert_moved_on`. A true positive
 confirms the `Alert` node (asserted, `confirmed_by` the member, rule 5); a false positive leaves it
 `inferred`. The canvas route seeds all or, past the cap, nothing (`limit_exceeded`, rule 2).
+
+**Rule 3 in the pack and queue readers (ADR-134 decision 4, 1 November 2026).** Which pack items a
+reader gets is decided in the pack store's query (`PackStore.readable_items`, `readable_earlier`,
+`readable_version`; the handling check compiled into Postgres by `services/api/handling_sql.py`),
+with a second query answering only yes or no that some were left out; a reorder works out the
+withheld items' places inside the store. The Conduit then checks each item again — `item_visible`,
+which `test_pack_store_query.py` holds to the same answers as the SQL, and against the graph now for
+what an entity, assessment or alert item cites. The case queue (`alert_queue.queue`, what the
+Reports figures and neighbourhood risk count) reads through the one queue's batched read instead of
+each alert's nodes in turn, which had let the work done grow with the alerts the reader may not see
+(`test_case_queue_reads.py`).
+
+**Alert facts (ADR-134 decision 3).** Every alert the alert store writes — raised, triaged, closed
+by a revert — is kept in the analytics store as it now is (`AnalyticsPort.load_alert_facts`), with
+every handling it rests on as read by whoever raised it (`alerts.handlings`); a hotlist's alerts
+are kept again when its audience changes, and every alert at each Conduit start. An alert raised
+before this was kept carries no handlings and is counted in an alert trend by no one; a failure to
+keep one is logged, never fails the alert itself.
 
 **Held rows** are read in the store's query by marking (the adapters' two axes) and case; a
 decision names rows by id and decides all or none (an id not held, or not readable, refuses the
@@ -788,10 +807,10 @@ GET    /v1/admin/system                                    each component asked 
 GET    /v1/admin/datasets                                  every dataset of the deployment, whichever unit holds it, with its unit and its egress — none, contracted or any (ADR-136 decision 2); names and settings only, no content and no count; administer_system
 PUT    /v1/admin/datasets/{dataset_id}/egress              set one dataset's egress (`{"egress": "none"|"contracted"|"any"}`); audited as set_dataset_egress with who, from what and to what; 404 for a dataset that does not exist; administer_system
 GET    /v1/investigations/{id}/reports                     the Reports view's figures (ADR-111): every figure counted as the reader; KYC figures only for a case with the fibo pack, a POLE summary otherwise, both for a mixed case (ADR-126); held rows for Editors and above; 409 limit_exceeded past the bound; Viewer
-GET    /v1/investigations/{id}/reports/feed                the same figures for a dashboard, ?format=json|csv; figures only; every read in the export ledger (artefact_kind report_feed); Viewer
+GET    /v1/investigations/{id}/reports/feed                the same figures for a dashboard, ?format=json|csv; figures only; every read in the export ledger (artefact_kind report_feed); since ADR-134 decision 2 also the monitoring sections `raised_by_rule` (label typology, hotlists or monitors; a typology rule by its typology, never the rule's own analyst-written name), `closed` (by outcome, per week), `time_to_close` (the open-by-age bands) and `hotlist_matches` (per week), every kind of alert the one queue holds for the reader, so a hotlist kept "only me" is in its owner's figures alone; Viewer
 GET    /v1/investigations/{id}/events/holders          whether the case holds events the reader may count and, when none, which cases the reader can open read one of its datasets and do — never a case without a level, never on a hidden event, never a count (ADR-099 Am. 9); investigate, Viewer
-GET    /v1/investigations/{id}/trends/options          the event types and properties a trend may use: the core's temporal link types and those of the case's domain packs (ADR-126; by `type_packs`); numeric and categorical properties, never a high-sensitivity one) — ADR-113; run_analysis, Viewer
-POST   /v1/investigations/{id}/trends/preview          a trend definition counted for the reader now, through AnalyticsPort.trend; marked at the highest classification counted; 422 trend_refused for anything the ontology does not declare, or a type outside the case's domain packs (ADR-126); 409 limit_exceeded with its options past 104 periods or 12 series; run_analysis, Viewer
+GET    /v1/investigations/{id}/trends/options          the event types and properties a trend may use: the core's temporal link types and those of the case's domain packs (ADR-126; by `type_packs`); numeric and categorical properties, never a high-sensitivity one) — ADR-113; and `alert_fields`, what an alert trend may split and filter by (rule — the case's typology rules by name, hotlists and monitors as one each — typology, severity, outcome; ADR-134 decision 3); run_analysis, Viewer
+POST   /v1/investigations/{id}/trends/preview          a trend definition counted for the reader now, through AnalyticsPort.trend — or, for `source: alerts` (ADR-134 decision 3: a count, no event type, split and filtered by the alert fields alone), AnalyticsPort.alert_trend, its series named after (a rule by its name, a severity or outcome by its label); marked at the highest classification counted; 422 trend_refused for anything the ontology does not declare, or a type outside the case's domain packs (ADR-126); 409 limit_exceeded with its options past 104 periods or 12 series; run_analysis, Viewer
 POST   /v1/investigations/{id}/trends                  save a checked definition to the case, refused for a type outside the case's domain packs (ADR-126); run_analysis, Editor
 GET    /v1/investigations/{id}/trends                  the case's saved definitions, each marked `outside_case_domains` when it uses a type outside the case's packs (it still runs); run_analysis, Viewer
 GET    /v1/investigations/{id}/trends/{trend}/figures  a saved trend counted for the reader now; another case's trend is 404; run_analysis, Viewer
@@ -799,10 +818,10 @@ DELETE /v1/investigations/{id}/trends/{trend}          remove a saved definition
 POST   /v1/investigations/{id}/packs                   create a report pack (ADR-113 decision 3); record_assessment, Editor
 GET    /v1/investigations/{id}/packs                   the case's packs with their versions, each publisher and withdrawer named at read (ADR-106, ADR-113 Am. 3); record_assessment, Viewer
 GET    /v1/investigations/{id}/packs/{pack}            the draft as the reader may see it: items in order, no positions, a yes or no that some are withheld (never how many or which — ADR-113 Am. 1 and Am. 5); record_assessment, Viewer
-POST   /v1/investigations/{id}/packs/{pack}/items      add an item — a saved trend (snapshotted now, as the adder), an assessment, an entity with a caption, or a note with its marking; content read and frozen by the Conduit; record_assessment, Editor
+POST   /v1/investigations/{id}/packs/{pack}/items      add an item — a saved trend (snapshotted now, as the adder), an assessment, an entity with a caption, a note with its marking, or an alert of the adder's queue in this case (`alert_id`; ADR-134 decision 1: its explanation, the entities it matched, its cited links and transactions, open or closed with its outcome and reason, `match` inferred or confirmed, resting on the handling of every node, link and transaction it cites; 404 for one outside the adder's queue); content read and frozen by the Conduit; record_assessment, Editor
 DELETE /v1/investigations/{id}/packs/{pack}/items/{item}         remove one of the reader's own items; record_assessment, Editor
 PUT    /v1/investigations/{id}/packs/{pack}/order      the reader's own items in a new order; withheld items keep their places; record_assessment, Editor
-POST   /v1/investigations/{id}/packs/{pack}/items/{item}/refresh a trend snapshot counted again now; the earlier one kept in the history; record_assessment, Editor
+POST   /v1/investigations/{id}/packs/{pack}/items/{item}/refresh a trend snapshot counted again now, or an alert read again now (so one added while open can say how it was closed); the earlier one kept in the history; record_assessment, Editor
 GET    /v1/investigations/{id}/packs/{pack}/history    earlier snapshots the reader may see, a yes or no that some are withheld, the versions with any withdrawal; record_assessment, Viewer
 POST   /v1/investigations/{id}/packs/{pack}/publish    a new immutable version; 409 pack_has_withheld_items (`withheld: true`, no number) while the publisher cannot see an item; record_assessment, Editor
 POST   /v1/investigations/{id}/packs/{pack}/versions/{v}/withdraw  withdraw a publication, with a reason, recorded once; record_assessment, Editor

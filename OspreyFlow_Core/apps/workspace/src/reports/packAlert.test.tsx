@@ -59,3 +59,13 @@ describe("an alert item on the printed page", () => {
     expect(closed).toContain("Halcyon Marine Ltd");
   });
 });
+
+describe("an alert trend in words", () => {
+  it("counts alerts, not events", async () => {
+    const { trendSentence } = await import("./packText");
+    const { figures } = await import("./reportsTestKit");
+    const f = figures({ source: "alerts", event_types: [], measure: "count", measure_field: null });
+    expect(trendSentence({ ...f, result: { ...f.result, measure: "count", events: 1 } })).toBe("1 alert in 12 weeks");
+    expect(trendSentence({ ...f, result: { ...f.result, measure: "count", events: 54 } })).toBe("54 alerts in 12 weeks");
+  });
+});
