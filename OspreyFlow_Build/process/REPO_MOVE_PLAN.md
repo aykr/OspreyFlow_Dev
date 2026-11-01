@@ -36,9 +36,9 @@ repository's `origin`) stays where it is.
      first.
    - The statement goes where the product describes itself: the README's opening, the install page,
      the marketing site, and the welcome page's About section.
-   - **Still to ask the owner:** should `NOTICE`'s "Copyright 2026 The OspreyFlow Authors" become
-     Solirius Reply? That is a legal choice, not a wording one. And should the GOV.UK footer's "Built
-     with OspreyFlow, open source." (ADR-132 Amendment 4) name Solirius Reply?
+   - `NOTICE` keeps "Copyright 2026 The OspreyFlow Authors", and the GOV.UK footer keeps "Built with
+     OspreyFlow, open source." (the owner, 1 November 2026). The full statement goes in About, not in
+     GOV.UK chrome.
 2. **The method:** push to `Solirius/ospreyflow`, release there, then delete `aykr/OspreyFlow`.
 3. **The old releases are not copied.** The first release in the new repository is v0.4.2. The owner
    will ask every existing user to wipe their install and clone again from the new repository, so no
