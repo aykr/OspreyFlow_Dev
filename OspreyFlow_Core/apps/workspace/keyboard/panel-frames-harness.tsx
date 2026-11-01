@@ -16,7 +16,7 @@ const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
 createRoot(container).render(
-  <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-base, #111)" }}>
+  <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-app)" }}>
     <div id="work-area" style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
       <div id="canvas-stand-in" style={{ flex: 1, position: "relative" }}>
         {/* In the Glass, Details is in the canvas's own toolbar (ADR-115 E4). */}
