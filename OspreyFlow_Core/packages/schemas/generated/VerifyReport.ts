@@ -66,6 +66,19 @@ export type ComputedAt = string;
 export type Basis = ("direct" | "probabilistic") | null;
 export type Datasets1 = string[];
 export type Edges = Edge[];
+export type RuleId = string;
+export type RuleName = string;
+export type Severity = "low" | "medium" | "high";
+export type OnHit = "alert" | "hold";
+export type EntityId = string;
+export type EntityType = string;
+export type EntityName = string;
+export type WouldRaise = WouldRaise1[];
+export type RuleId1 = string;
+export type RuleName1 = string;
+export type Why = string;
+export type ChecksNotJudged = CheckNotJudged[];
+export type ChecksJudged = number;
 
 /**
  * The dry run's three outputs (§5) in one response: counts,
@@ -84,6 +97,9 @@ export interface VerifyReport {
   rejections?: Rejections;
   nodes?: Nodes;
   edges?: Edges;
+  would_raise?: WouldRaise;
+  checks_not_judged?: ChecksNotJudged;
+  checks_judged?: ChecksJudged;
   [k: string]: unknown;
 }
 export interface EntitiesByType {
@@ -240,5 +256,28 @@ export interface WeightComponents {
   corpus_total_occurrences: CorpusTotalOccurrences;
   parameter_set?: ParameterSet;
   computed_at: ComputedAt;
+  [k: string]: unknown;
+}
+/**
+ * One alert Verify's sample would raise (decision 6): the rule, what a hit does at this
+ * pipeline, and the entity matched, as the person verifying reads it in the sample.
+ */
+export interface WouldRaise1 {
+  rule_id: RuleId;
+  rule_name: RuleName;
+  severity: Severity;
+  on_hit: OnHit;
+  entity_id: EntityId;
+  entity_type: EntityType;
+  entity_name: EntityName;
+  [k: string]: unknown;
+}
+/**
+ * A rule that applies at load but that a dry run cannot judge, and why, in words.
+ */
+export interface CheckNotJudged {
+  rule_id: RuleId1;
+  rule_name: RuleName1;
+  why: Why;
   [k: string]: unknown;
 }

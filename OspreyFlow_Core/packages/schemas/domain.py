@@ -724,6 +724,11 @@ class Alert(BaseModel):
     disposition_reason: str | None = None
     decided_by: str | None = None
     decided_at: datetime | None = None
+    #: ADR-133 decision 7, stage (d): who proposed closing a high-severity alert, and when. The
+    #: alert is `closing` until a second person approves (then `decided_by`), and keeps who
+    #: proposed it.
+    close_proposed_by: str | None = None
+    close_proposed_at: datetime | None = None
     #: ADR-133 stage (a): how urgent the alert is. `None` on a row written before severity existed,
     #: or by a producer that sets none; the queue then reads its kind's default
     #: (`services/api/alerts.py::DEFAULT_SEVERITY`), so no stored row has to be rewritten.
@@ -838,9 +843,16 @@ TypologyName = Literal[
 #: ADR-109 ruling 1: the rule chooses where it runs. `pre_commit` judges the incoming rows inside
 #: the load (a hit loads with its alert; a failure holds the rows); `post_commit` runs on the
 #: change stream after the load commits, best-effort.
-RuleTrigger = Literal["pre_commit", "post_commit"]
-RuleStatus = Literal["active", "retired"]
-AlertStatus = Literal["open", "claimed", "closed"]
+#: ADR-133 stage (d): a rule written as a sentence may also run on a schedule, never at a load.
+RuleTrigger = Literal["pre_commit", "post_commit", "schedule"]
+#: ADR-133 decision 7, stage (d): a whole-deployment rule is `pending` until a second person
+#: approves it, and runs only once `active`.
+RuleStatus = Literal["pending", "active", "retired"]
+#: What a change to a rule did: deployed it, changed it, or retired it (decision 7's maker–checker).
+RuleChangeAction = Literal["deploy", "change", "retire"]
+#: ADR-133 decision 7, stage (d): `closing` is a high-severity alert someone has proposed to close,
+#: waiting for a second person with the right to approve it.
+AlertStatus = Literal["open", "claimed", "closing", "closed"]
 AlertDisposition = Literal["true_positive", "false_positive"]
 #: ADR-133 stage (a): an alert's severity, and the three kinds the one queue holds — told apart by
 #: `Alert.rule_id`'s prefix (`typology:`, `hotlist:`, `monitor:`); a scheduled run's notice is none
@@ -1018,6 +1030,8 @@ class TypologyRuleInput(BaseModel):
 
     @model_validator(mode="after")
     def _a_drawn_pattern_runs_after_commit(self) -> TypologyRuleInput:
+        if self.trigger == "schedule" and not isinstance(self.params, SentenceRuleParams):
+            raise ValueError("only a rule written as a sentence runs on a schedule")
         if self.params.typology == "pattern" and self.trigger != "post_commit":
             raise ValueError(
                 "a drawn pattern is matched against the stored graph, so it runs after commit"
@@ -1041,7 +1055,12 @@ class TypologyRuleInput(BaseModel):
 
 class TypologyRule(TypologyRuleInput):
     """A deployed rule. It belongs to the case it was deployed in and evaluates as its deployer's
-    principal, resolved fresh at each evaluation (ADR-036, unchanged by ADR-109)."""
+    principal, resolved fresh at each evaluation (ADR-036, unchanged by ADR-109).
+
+    ADR-133 stage (d): `version` counts its changes, each kept as a `RuleVersion`; `pending_action`
+    names a change waiting for a second person's approval (a whole-deployment rule's deploy, change
+    or retire), proposed by `pending_by`. The rule runs as it stands until that change is
+    approved."""
 
     id: str
     investigation_id: str
@@ -1050,6 +1069,10 @@ class TypologyRule(TypologyRuleInput):
     created_at: datetime
     retired_at: datetime | None = None
     dataset_id: str | None = None
+    version: int = 1
+    pending_action: RuleChangeAction | None = None
+    pending_by: str | None = None
+    pending_version: int | None = None
 
 
 HeldRowStatus = Literal["held", "released", "rejected"]

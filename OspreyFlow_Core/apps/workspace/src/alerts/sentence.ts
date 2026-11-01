@@ -52,9 +52,24 @@ export interface SentenceDraft {
   over: string;
   severity: "low" | "medium" | "high";
   team: "case" | "my_team";
-  runs: "pre_commit" | "post_commit";
+  runs: "pre_commit" | "post_commit" | "schedule";
   onHit: "load" | "hold";
   scope: Scope;
+  /** ADR-133 stage (d): a scheduled rule's cadence, its hour (Europe/London) and, weekly, its day. */
+  every: "daily" | "weekly";
+  hour: string;
+  weekday: string;
+}
+
+/** Monday first, as the server numbers them (1 to 7). */
+export const WEEKDAY_WORDS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+
+/** "every day at 06:00", "every Monday at 06:00" — the schedule as the rules list says it. */
+export function scheduleWords(schedule: { every?: string; hour?: number; weekday?: number | null } | null | undefined): string {
+  if (!schedule) return "on a schedule";
+  const at = `at ${String(schedule.hour ?? 6).padStart(2, "0")}:00`;
+  if (schedule.every === "weekly") return `every ${WEEKDAY_WORDS[(schedule.weekday ?? 1) - 1] ?? "Monday"} ${at}`;
+  return `every day ${at}`;
 }
 
 export const MAX_CONDITIONS = 5;
@@ -99,6 +114,9 @@ export function emptyDraft(subject = "Person"): SentenceDraft {
     runs: "post_commit",
     onHit: "load",
     scope: "this_case",
+    every: "daily",
+    hour: "6",
+    weekday: "1",
   };
 }
 
@@ -269,6 +287,20 @@ export function toSentence(draft: SentenceDraft): RuleSentence {
       break;
   }
   const holds = draft.runs === "pre_commit" && draft.onHit === "hold";
+  // A rule just for its author runs after each load commits, or on a schedule; a whole-deployment
+  // rule never runs on a schedule (it is judged within each loading case).
+  const runs =
+    draft.runs === "schedule" && draft.scope !== "deployment"
+      ? "schedule"
+      : draft.scope === "just_me"
+        ? "post_commit"
+        : draft.runs === "schedule"
+          ? "post_commit"
+          : draft.runs;
+  const schedule =
+    runs === "schedule"
+      ? { every: draft.every, hour: Number(draft.hour), weekday: draft.every === "weekly" ? Number(draft.weekday) : null }
+      : null;
   return {
     subject: draft.subject,
     conditions: draft.conditions.map(condition),
@@ -276,9 +308,11 @@ export function toSentence(draft: SentenceDraft): RuleSentence {
     frequency,
     severity: draft.severity,
     team: draft.scope === "just_me" ? "case" : draft.team,
-    runs: draft.scope === "just_me" ? "post_commit" : draft.runs,
+    runs,
     on_hit: holds && draft.scope !== "just_me" ? "hold" : "load",
     scope: draft.scope,
+    // Sent only for a rule that runs on a schedule: a sentence that runs as data loads names none.
+    ...(schedule ? { schedule } : {}),
   } as unknown as RuleSentence;
 }
 
@@ -322,6 +356,12 @@ export function fromSentence(sentence: RuleSentence): SentenceDraft {
   draft.runs = (sentence.runs ?? "post_commit") as SentenceDraft["runs"];
   draft.onHit = (sentence.on_hit ?? "load") as SentenceDraft["onHit"];
   draft.scope = (sentence.scope ?? "this_case") as Scope;
+  const schedule = (sentence as unknown as { schedule?: { every: string; hour: number; weekday?: number | null } | null }).schedule;
+  if (schedule) {
+    draft.every = schedule.every === "weekly" ? "weekly" : "daily";
+    draft.hour = String(schedule.hour);
+    draft.weekday = String(schedule.weekday ?? 1);
+  }
   return draft;
 }
 
@@ -375,5 +415,9 @@ export function sentenceSummary(sentence: RuleSentence): string {
   const whom = { just_me: "its author alone", this_case: sentence.team === "my_team" ? "its author's team" : "the case team", deployment: "every case's team" }[
     (sentence.scope ?? "this_case") as Scope
   ];
-  return `${parts.join(", ")}: a ${sentence.severity ?? "medium"}-severity alert for ${whom}${sentence.on_hit === "hold" ? ", its rows held for review" : ""}.`;
+  const scheduled =
+    sentence.runs === "schedule"
+      ? `, ${scheduleWords((sentence as unknown as { schedule?: { every: string; hour: number; weekday?: number | null } }).schedule)}`
+      : "";
+  return `${parts.join(", ")}: a ${sentence.severity ?? "medium"}-severity alert for ${whom}${scheduled}${sentence.on_hit === "hold" ? ", its rows held for review" : ""}.`;
 }

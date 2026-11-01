@@ -7,6 +7,11 @@
 // `&lists=manage`, as whoever may load them, after a refresh), and `?tab=rules&template=<typology>`
 // fills the rule form from that template (the high-risk jurisdiction one with two codes). The data
 // is synthetic (rule 9): invented names and numbers, and the user-assigned country codes XA and XB.
+// ADR-133 stage (d): `?stage=d` adds a whole-deployment rule waiting for a second person, a rule that
+// runs on a schedule, a high-severity alert whose close waits for approval (`open=a-close`) and a
+// list refreshed on a schedule; it signs in as an administrator who did not propose the rule (so
+// Approve is offered). `&opened=1` opens the scheduled rule's runs and versions; `&sentence=schedule`
+// writes a sentence set to run every week.
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -121,6 +126,47 @@ const SENTENCE_RULE = {
     severity: "high", team: "case", runs: "post_commit", on_hit: "load", scope: "this_case" } },
 };  // prettier-ignore
 
+// ADR-133 stage (d): a whole-deployment rule waiting for a second person, and a rule on a schedule.
+const STAGE_D = new URLSearchParams(window.location.search).get("stage") === "d";
+const WIDE_RULE = {
+  ...SENTENCE_RULE, id: "r-wide", name: "Sanctioned people, every case", status: "pending", owner_id: "analyst-1",
+  pending_action: "deploy", pending_by: "analyst-1", pending_version: 1, trigger: "pre_commit",
+  params: { ...SENTENCE_RULE.params, sentence: { ...SENTENCE_RULE.params.sentence, frequency: null, runs: "pre_commit",
+    scope: "deployment", relationship: { kind: "on_screening_list", min_score: 0.9 }, conditions: [] } },
+};  // prettier-ignore
+const SCHEDULED_RULE = {
+  ...SENTENCE_RULE, id: "r-daily", name: "Listed people, every morning", trigger: "schedule", version: 2,
+  params: { ...SENTENCE_RULE.params, sentence: { ...SENTENCE_RULE.params.sentence, frequency: null, runs: "schedule",
+    schedule: { every: "daily", hour: 6 } } },
+};  // prettier-ignore
+const RULE_RUNS = {
+  rule_id: "r-daily", schedule: "every day at 06:00 (Europe/London)", state: "scheduled", words: null,
+  next_run: new Date(NOW + 9 * 3_600_000).toISOString(),
+  runs: [
+    { id: "run-2", rule_id: "r-daily", rule_version: 2, slot: hoursAgo(15), ran_at: hoursAgo(15), run_as: "analyst-1",
+      outcome: "ran", alerts: 2, words: "Ran as analyst-1 over the last day: 2 alert(s) raised." },
+    { id: "run-1", rule_id: "r-daily", rule_version: 2, slot: hoursAgo(39), ran_at: hoursAgo(39), run_as: "analyst-1",
+      outcome: "refused", alerts: 0, words: "Refused: the identity provider could not be reached to act as the rule's author." },
+  ],
+};  // prettier-ignore
+const RULE_VERSIONS = [
+  { rule_id: "r-daily", version: 1, action: "deploy", name: "Listed people, every morning", params: {}, trigger: "schedule",
+    budget_ms: 5000, proposed_by: "analyst-1", proposed_by_name: "Ana Lyst", proposed_at: hoursAgo(200), status: "applied",
+    decided_by: "analyst-1", decided_at: hoursAgo(200) },
+  { rule_id: "r-daily", version: 2, action: "change", name: "Listed people, every morning", params: {}, trigger: "schedule",
+    budget_ms: 5000, proposed_by: "analyst-2", proposed_by_name: "Priya Shah", proposed_at: hoursAgo(60), status: "applied",
+    decided_by: "analyst-2", decided_at: hoursAgo(60) },
+];  // prettier-ignore
+if (STAGE_D) {
+  QUEUE.unshift({
+    alert: { ...base, id: "a-close", rule_id: "typology:r4", typology: "kyc_screening", referent_node_ids: ["n5"], created_at: hoursAgo(3),
+      status: "closing", assignee: "analyst-1", disposition: "false_positive", disposition_reason: "A different company: registered 2019, not the listed party",
+      close_proposed_by: "analyst-1", close_proposed_at: hoursAgo(1), words: "Harbour Freight Ltd is a close match (0.94) to a listed party",
+      trigger: "pre_commit", alert_node_id: null },
+    summary: "Harbour Freight Ltd is a close match (0.94) to a listed party", kind: "typology", severity: "high", audience: "case", team: null,
+  } as never);  // prettier-ignore
+}
+
 // ADR-133 stage (c): the screening lists — synthetic, shaped as the Conduit sends them.
 const LISTS = [
   { list_name: "Synthetic sanctions list", source: "opensanctions", location: "lists/synthetic_opensanctions_v2.ftm.json",
@@ -141,8 +187,14 @@ const REFRESHES = [
 
 function answer(path: string, search: URLSearchParams): unknown {
   if (path === "/v1/ontology") return ONTOLOGY;
-  if (path === "/v1/screening-lists") return { lists: LISTS, can_manage: false };
-  if (path === "/v1/admin/screening-lists") return { lists: LISTS, updates: REFRESHES, can_manage: true };
+  // ADR-133 stage (d): the first list refreshed on a schedule.
+  const lists = STAGE_D
+    ? [{ ...LISTS[0], schedule: { every: "daily", hour: 5 }, schedule_words: "every day at 05:00 (Europe/London)",
+         schedule_owner: "analyst-1", next_refresh: new Date(NOW + 8 * 3_600_000).toISOString() }, LISTS[1]]
+    : LISTS;  // prettier-ignore
+  // The reader's route: no refreshes, and who a schedule runs as blanked, as the Conduit sends it.
+  if (path === "/v1/screening-lists") return { lists: lists.map((l) => ({ ...l, schedule_owner: null })), can_manage: false };
+  if (path === "/v1/admin/screening-lists") return { lists, updates: REFRESHES, can_manage: true };
   if (path.startsWith("/v1/admin/screening-lists/") && path.endsWith("/refresh")) return REFRESHES[0];
   if (path === "/v1/investigations") return [{ id: "inv-1", name: "Operation Ledger", level: "author", created_at: "", created_by: "" }];
   const local = path.replace("/v1/investigations/inv-1/", "");
@@ -163,7 +215,9 @@ function answer(path: string, search: URLSearchParams): unknown {
     return { ...row, nodes, edges: [], transactions: [] };
   }
   if (local === "alert-assignees") return [{ id: "analyst-1", name: "Ana Lyst" }, { id: "analyst-2", name: "Priya Shah" }];
-  if (local === "rules") return [SENTENCE_RULE];
+  if (local === "rules") return STAGE_D ? [WIDE_RULE, SCHEDULED_RULE, SENTENCE_RULE] : [SENTENCE_RULE];
+  if (local === "rules/r-daily/runs") return RULE_RUNS;
+  if (local === "rules/r-daily/versions") return RULE_VERSIONS;
   if (local === "rules/preview") return PREVIEW;
   if (local === "rules/sentence/compile")
     return { words: SENTENCE_WORDS, pattern: { nodes: [{ var: "subject", entity_type: "Person", where: {} }], edges: [], limit: 50000 } };
@@ -184,8 +238,8 @@ createRoot(document.getElementById("root")!).render(
     apiBaseUrl="http://monitoring-harness.invalid"
     bearerToken="unused"
     investigationId="inv-1"
-    accountId="analyst-1"
-    isAdministrator={false}
+    accountId={STAGE_D ? "analyst-2" : "analyst-1"}
+    isAdministrator={STAGE_D}
     canManageLists={new URLSearchParams(window.location.search).get("lists") === "manage"}
     onCanvas={() => undefined}
   />,
@@ -259,4 +313,23 @@ if (template) {
 if (params.get("refreshed")) {
   for (let i = 0; i < 40 && !document.querySelector('[aria-label="Refresh now: Synthetic sanctions list"]'); i++) await settle();
   document.querySelector<HTMLButtonElement>('[aria-label="Refresh now: Synthetic sanctions list"]')?.click();
+}
+
+// `?opened=1` (with `stage=d&tab=rules`): the scheduled rule's runs and its versions shown.
+if (params.get("opened")) {
+  for (let i = 0; i < 40 && !document.querySelector('[aria-label="Schedule and runs of Listed people, every morning"]'); i++) await settle();
+  document.querySelector<HTMLButtonElement>('[aria-label="Schedule and runs of Listed people, every morning"]')?.click();
+  document.querySelector<HTMLButtonElement>('[aria-label="Versions of Listed people, every morning"]')?.click();
+}
+
+// `?sentence=schedule` (with `tab=rules`): a sentence set to run every week, on a Monday at 07:00.
+if (params.get("sentence") === "schedule") {
+  for (let i = 0; i < 40 && !choose("Subject", "Person"); i++) await settle();
+  await settle();
+  choose("Runs", "schedule");
+  await settle();
+  choose("Every", "weekly");
+  await settle();
+  choose("Day of the week", "1");
+  choose("Hour", "7");
 }

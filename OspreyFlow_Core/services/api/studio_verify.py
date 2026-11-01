@@ -17,7 +17,7 @@ filter already decided this principal may see that node at all).
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 
 from services.ingest.engine import RowKeys, dry_run_recipe
 from services.ingest.profiler import DEFAULT_SAMPLE_SIZE, _shape_mask
@@ -25,7 +25,7 @@ from services.ingest.recipe_rules import check_reference_matches
 
 from ontology.handling import HandlingScheme, principal_may_view
 from ports.graph import GraphPort
-from schemas.domain import Edge, Handling, Node, OntologySchema, Principal
+from schemas.domain import Edge, EdgeWrite, Handling, Node, NodeWrite, OntologySchema, Principal
 from schemas.ingest import (
     Recipe,
     RecipeDefaults,
@@ -36,7 +36,9 @@ from schemas.ingest import (
     VerifyEntityCount,
     VerifyReport,
 )
+from schemas.monitoring import CheckNotJudged, WouldRaise
 
+from .load_checks import as_writes, readable_in_full
 from .studio_map import resolve_source_handling
 from .studio_profile import (
     RecipeNotReadyForProfileError,
@@ -45,7 +47,14 @@ from .studio_profile import (
 )
 from .studio_profile import _read_rows as _read_recipe_rows
 
-__all__ = ["RowTemplateMissingError", "run_verify"]
+__all__ = ["JudgeChecks", "RowTemplateMissingError", "run_verify"]
+
+#: ADR-133 decision 6: the pipeline's checks over what the sample would write, as `load_checks.
+#: would_raise` judges them.
+JudgeChecks = Callable[
+    [Sequence[NodeWrite | EdgeWrite], Mapping[str, Node]],
+    Awaitable[tuple[list[WouldRaise], list[CheckNotJudged], int]],
+]
 
 #: Rejection samples are capped per reason (studio_verify.py's own
 #: `RejectionGroup.samples`) — `count` itself never is, so a reason with 400
@@ -98,10 +107,15 @@ async def run_verify(
     *,
     row_keys: RowKeys | None = None,
     investigation_id: str | None = None,
+    checks: JudgeChecks | None = None,
 ) -> VerifyReport:
     """`row_keys` and `investigation_id` (ADR-127 decision 5): given the store of loaded rows and
     the case, the dry run counts the rows the run would skip by the draft's own `deduplicate`, as
-    the run counts them, and writes nothing (it only asks the store which keys the case kept)."""
+    the run counts them, and writes nothing (it only asks the store which keys the case kept).
+
+    `checks` (ADR-133 decision 6, stage (d)): the pipeline's checks on load, judging what the sample
+    would write that this principal may read in full (`load_checks.would_raise`), writing nothing;
+    their would-be alerts are reported beside the rejections."""
     if not draft.ready_for_profile:
         raise RecipeNotReadyForProfileError(draft.recipe_id)
     if draft.row_template is None:
@@ -187,6 +201,14 @@ async def run_verify(
         else rejection
         for rejection in result.rejections
     ]
+    shown = {n.id: n for n in nodes}
+    would: tuple[list[WouldRaise], list[CheckNotJudged], int] = ([], [], 0)
+    if checks is not None:
+        created = [n for n in result.nodes if n.id in result.created_node_ids]
+        readable_edges = [
+            e for e in result.edges if not (values_masked or masked_by_own_marking(e))
+        ]
+        would = await checks(as_writes(readable_in_full(created, shown), readable_edges), shown)
     values_masked = (
         values_masked
         or nodes != result.nodes
@@ -210,4 +232,7 @@ async def run_verify(
         rejections=_group_rejections(rejections),
         nodes=nodes,
         edges=edges,
+        would_raise=would[0],
+        checks_not_judged=would[1],
+        checks_judged=would[2],
     )

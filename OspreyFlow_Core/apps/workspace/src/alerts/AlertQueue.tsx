@@ -11,6 +11,7 @@ import { Button, Select } from "../design/primitives";
 import type { AccessLevel } from "../investigation/cases";
 import {
   alertToCanvas,
+  approveClose,
   assignAlert,
   claimAlert,
   disposeAlert,
@@ -18,6 +19,7 @@ import {
   listAssignees,
   listQueue,
   releaseAlert,
+  sendBackClose,
   type AlertsApi,
   type CanvasOutcome,
   type KindFilter,
@@ -33,7 +35,13 @@ export interface AlertQueueProps extends AlertsApi {
   onCanvas: (outcome: CanvasOutcome, nodeIds: string[]) => void;
 }
 
-const STATUS_WORDS: Record<string, string> = { open: "Open", claimed: "Claimed", closed: "Closed" };
+const STATUS_WORDS: Record<string, string> = { open: "Open", claimed: "Claimed", closing: "Closing", closed: "Closed" };
+
+/** ADR-133 decision 7, stage (d): closing a high-severity alert a second person may read waits for
+ * that person's approval; the server decides, and this says beforehand what will happen. */
+export function closeNeedsSecondPerson(severity: string, audience: string): boolean {
+  return severity === "high" && audience !== "owner";
+}
 const SEVERITY_WORDS: Record<string, string> = { high: "High", medium: "Medium", low: "Low" };
 
 type Kind = "typology" | "hotlist" | "monitor";
@@ -78,6 +86,11 @@ export function statusSentence(alert: Alert, mine: boolean): string {
     const kind = alert.disposition === "false_positive" ? "a false" : "a true";
     return alert.disposition ? `Closed as ${kind} positive: ${alert.disposition_reason ?? ""}` : "Closed";
   }
+  if (alert.status === "closing") {
+    const kind = alert.disposition === "false_positive" ? "a false" : "a true";
+    const by = alert.close_proposed_by ?? "a member";
+    return `Closing as ${kind} positive (${alert.disposition_reason ?? ""}), proposed by ${mine ? "you" : by}: waiting for a second person to approve it`;
+  }
   if (alert.status === "claimed" && alert.assignee) return `Claimed by ${mine ? "you" : alert.assignee}`;
   return STATUS_WORDS[alert.status ?? "open"] ?? "Open";
 }
@@ -107,7 +120,7 @@ export function AlertQueue(props: AlertQueueProps) {
           <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
             Show
             <Select aria-label="Which alerts" value={filter} onChange={(e) => setFilter(e.target.value as QueueFilter)}>
-              <option value="active">Open and claimed</option>
+              <option value="active">Open, claimed and closing</option>
               <option value="closed">Closed</option>
               <option value="all">All</option>
             </Select>
@@ -230,8 +243,11 @@ function AlertDetail(props: AlertDetailProps) {
   const alert = why.alert;
   const f = facts(why);
   const canTriage = level === "editor" || level === "author";
-  const closed = alert.status === "closed";
-  const mine = alert.assignee === props.accountId;
+  // A close waiting for a second person (stage (d)) is settled for claiming, giving and closing.
+  const closed = alert.status === "closed" || alert.status === "closing";
+  const closing = alert.status === "closing";
+  const mine = (closing ? alert.close_proposed_by : alert.assignee) === props.accountId;
+  const secondPerson = closeNeedsSecondPerson(f.severity, f.audience);
 
   return (
     <section aria-label="What fired this alert" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", overflowY: "auto" }}>
@@ -328,9 +344,38 @@ function AlertDetail(props: AlertDetailProps) {
           An alert shared with a team, or its owner&apos;s alone, is claimed by someone who can see it; it is not given to another person.
         </p>
       )}
+      {canTriage && closing && (
+        <fieldset aria-label="Approve or send back the close" style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
+          <legend className="label">A second person decides this close</legend>
+          {mine ? (
+            <p className="label" style={{ margin: 0 }}>You proposed this close; another member with the right approves it. You may withdraw it.</p>
+          ) : (
+            <Button variant="primary" disabled={busy} onClick={() => void act(() => approveClose(api, alertId), "Approved: the alert is closed.")}>
+              Approve the close
+            </Button>
+          )}
+          <label className="label" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
+            {mine ? "Why withdraw it" : "Why send it back"}
+            <textarea className="input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Reason for sending the close back" />
+          </label>
+          <Button
+            disabled={busy || !reason.trim()}
+            onClick={() =>
+              void act(() => sendBackClose(api, alertId, reason.trim()), mine ? "Withdrawn: the alert is yours again." : "Sent back to the member who proposed it.")
+            }
+          >
+            {mine ? "Withdraw the close" : "Send back"}
+          </Button>
+        </fieldset>
+      )}
       {canTriage && !closed && (
         <fieldset style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
           <legend className="label">Close this alert</legend>
+          {secondPerson && (
+            <p className="label" style={{ margin: 0 }}>
+              A high-severity alert closes once a second person with the right approves: closing it here proposes the close.
+            </p>
+          )}
           <label className="label" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
             Reason (required)
             <textarea
@@ -348,7 +393,9 @@ function AlertDetail(props: AlertDetailProps) {
               onClick={() =>
                 void act(
                   () => disposeAlert(api, alertId, { disposition: "true_positive", reason: reason.trim() }),
-                  "Closed as a true positive; its node is now confirmed.",
+                  secondPerson
+                    ? "Close proposed as a true positive; it waits for a second person to approve it."
+                    : "Closed as a true positive; its node is now confirmed.",
                 )
               }
             >
@@ -359,7 +406,9 @@ function AlertDetail(props: AlertDetailProps) {
               onClick={() =>
                 void act(
                   () => disposeAlert(api, alertId, { disposition: "false_positive", reason: reason.trim() }),
-                  "Closed as a false positive; its node stays a suggestion.",
+                  secondPerson
+                    ? "Close proposed as a false positive; it waits for a second person to approve it."
+                    : "Closed as a false positive; its node stays a suggestion.",
                 )
               }
             >

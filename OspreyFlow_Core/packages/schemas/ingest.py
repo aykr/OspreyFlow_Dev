@@ -21,6 +21,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from schemas.domain import Edge, EdgeId, Handling, Node, NodeId, PrincipalId, Provenance
+from schemas.monitoring import CheckNotJudged, WouldRaise
 
 from .connectors import load_connector_profiles
 
@@ -1135,6 +1136,13 @@ class VerifyReport(BaseModel):
     rejections: list[RejectionGroup] = Field(default_factory=list)
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)
+    #: ADR-133 decision 6, stage (d): the alerts the sample would raise under the pipeline's checks
+    #: on load, beside the rejections — judged as at a load, writing nothing — and the checks a dry
+    #: run cannot judge, each with why.
+    would_raise: list[WouldRaise] = Field(default_factory=list)
+    checks_not_judged: list[CheckNotJudged] = Field(default_factory=list)
+    #: How many of the pipeline's checks the sample was judged against.
+    checks_judged: int = 0
 
 
 # --- The load ledger (01_DOMAIN_MODEL.md §2.4, ADR-018) -------------------

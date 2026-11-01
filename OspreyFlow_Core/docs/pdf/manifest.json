@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "304aaa1452b274ca1599ed9172a2f24e3681d591b99bdeabe084eb4bf45d670d",
+    "body": "b934c0d0ab8777f55a845903b75ad77b6a5853baf89c5b2a9f904046bd6829a3",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -10,12 +10,12 @@
       "images/admin/06-demo-packs.png": "46ff5e939c137a1e32ff3a4009e57eeda9e8aa1d50b13c36c49ed91aa2f25dc2",
       "images/admin/07-superset.png": "821b76c53a1481b17f26ee5006a9ef80a452c3d61ab5206330eb4c367f5514fd"
     },
-    "pdf": "0f18aed859308ac7ef9e1973c93e56c637e0c1f3cfc0416acb01f67fdd10c395",
-    "source": "ed99f1ab21871b140a6e94f4b3e495c88a8f3cd616fefc47ab8c39f7c1bf82cd",
-    "version": "1.18"
+    "pdf": "2a5a60347884eb450479f02823f8fc5a5c56cc7928af93d4a5ee81a3edd8eb3c",
+    "source": "28e08acf9cfa43f653425d81d1d6a0162eadd8ab8cd6a2cc922c3afaaacd989d",
+    "version": "1.19"
   },
   "developer-guide.md": {
-    "body": "d21715b787ce508d7441e6bb5678bedfa0f87e6cb626d2a16860874c5c0dd720",
+    "body": "a02fd859094913e43fe782e749071216807fa7077d4bf3b1ba5771322968f81b",
     "images": {
       "images/developer/01-studio-pipelines.png": "37cef8fe2178bcb0b1b53f406aefd85ba13b389a597f8764eb173a655f72c385",
       "images/developer/02-pipeline-canvas.png": "5b865977a3c4f6eb99c9ab9610b92c8772614501f5be0842cc715590616af793",
@@ -28,14 +28,16 @@
       "images/developer/08-verify.png": "7463aa0b96db0a91997e418fbe6226e0fbb41f8290de6483ecc757ebeca2e4af",
       "images/developer/09-files.png": "7c163a139b3c5b5a88a49f35dc766fd1dd7246f4b2518c0766c1220ed8d710dd",
       "images/developer/10-data-feeds.png": "f4d75e449663b2e98c9438d81846935bde194fcfd6ba0d8fe1aa41e014a966b1",
-      "images/developer/11-held-rows.png": "3f46e1e001d99f6a9f3d8655be47ec594706b2d849bd101862a0e95ea4968f52"
+      "images/developer/11-held-rows.png": "3f46e1e001d99f6a9f3d8655be47ec594706b2d849bd101862a0e95ea4968f52",
+      "images/developer/12-verify-would-raise.png": "e00c85fa9c746c8160f12c633e97d7d508af88f495d577b9ce9f826eec5d4763",
+      "images/developer/13-checks-on-load.png": "41e838f55d1448a3c20ab70bbc7f587db063982847c85015ab5a656a85c7b492"
     },
-    "pdf": "5366048738799a8e0e45cbdb78c01cf54f4a3af980a000af6fccd0fdd9358f9e",
-    "source": "187e69fb2209a0fbfb6d0b191b98ee98458f27313295094bacadb12a7410a983",
-    "version": "1.7"
+    "pdf": "8807667c9232b42d54bae7d61d7fea6f4b9b1a1d2086eda0e43e5a6b69133bef",
+    "source": "36e8e02f04e59327d001dcf5006ddb96fdfe1aeab5747411f5e2b391b881c909",
+    "version": "1.8"
   },
   "user-guide.md": {
-    "body": "9d53da4bf8d0c7890a1033807ba7cff06bb0b414289c8d8c8ebabfa66e4366dc",
+    "body": "77c307f8c4489ac93ceef9e09694cd3554df110496499edc6793dabbaa34bb7d",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -60,10 +62,12 @@
       "images/user/21-alerts-in-reporting.png": "fe3bdcd4abd83a5fd65481fcced067cadd527138b27cef73b3fc6a2f6ecc0264",
       "images/user/22-rule-sentences.png": "64309e02b668b8de41cb656e0855f75e76a559c730b2133bbf40aebad23ccb0d",
       "images/user/23-screening-lists.png": "ef5367d8daa64f21a8eefc3d0305b04a691c3febc19a5bece4c1066b6322acca",
-      "images/user/24-aml-templates.png": "ba583a099a4777b93e91cfdaa574c8f905fad8bebde236c2afeb16793f857905"
+      "images/user/24-aml-templates.png": "ba583a099a4777b93e91cfdaa574c8f905fad8bebde236c2afeb16793f857905",
+      "images/user/25-scheduled-rule.png": "85fd57e01b357aaa6923a965531bc1a29970cf4cd1b0f503f519988bfe8381e1",
+      "images/user/26-second-person.png": "c27f6a95d9a76921c21821823ec56de4334b4670ce2455fe30f964aac38802e8"
     },
-    "pdf": "d88b3a6c8ab502cb377e9b2d46e5a3f9d3993e45f6f2f5fd92e67386da197d26",
-    "source": "1c419bd3f2d0c39b697f20ed7afa8a714a149ce3c053bd1300019342dd3460f3",
-    "version": "1.15"
+    "pdf": "649d78f540c8695af0b27468083fe107ddfafc84a50d45cf0a797b188c3e1189",
+    "source": "7b2c5ff0a1dde503117ff71a5d15376062c2738df03e37949246b54c4c2236dd",
+    "version": "1.16"
   }
 }

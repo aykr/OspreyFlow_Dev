@@ -174,11 +174,24 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # ADR-133 stage (a): giving an alert to a member, and the members it may be given to, at Editor
     # (who triages); a hotlist's audience is its owner's change, at Editor as making one is.
     ("POST", P + "/alert-queue/{alert_id}/assign"): E,
+    # ADR-133 decision 7, stage (d): approving or sending back a proposed close, at Editor (who
+    # triages); `test_alert_close_approval.py` has the second-person rule.
+    ("POST", P + "/alert-queue/{alert_id}/approve-close"): E,
+    ("POST", P + "/alert-queue/{alert_id}/send-back"): E,
     ("GET", P + "/alert-assignees"): E,
     ("PUT", P + "/hotlists/{hotlist_id}/audience"): E,
     ("GET", P + "/rules"): V,
     ("POST", P + "/rules"): A,
     ("POST", P + "/rules/{rule_id}/retire"): A,
+    # ADR-133 decision 7, stage (d): approving and rejecting a whole-deployment rule's change at
+    # Author (with the administrator's right, in the route); changing a sentence at Editor ("just
+    # me") and Author otherwise, in the route as deploying one; its versions and schedule read at
+    # Viewer, as the rules are.
+    ("POST", P + "/rules/{rule_id}/approve"): A,
+    ("POST", P + "/rules/{rule_id}/reject"): A,
+    ("POST", P + "/rules/{rule_id}/change"): E,
+    ("GET", P + "/rules/{rule_id}/versions"): V,
+    ("GET", P + "/rules/{rule_id}/runs"): V,
     # ADR-133 stage (b): compiling, reading back and previewing a sentence read only, as a pattern
     # preview does; deploying one needs Editor ("just me") and, in the route, Author for a case or
     # the whole deployment (`test_rule_sentence_routes.py`).
@@ -193,6 +206,9 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}"): V,
     ("POST", P + "/ingest/recipes/{recipe_id}/map/handling-preview"): V,
     ("POST", P + "/ingest/recipes/{recipe_id}/verify"): E,
+    # ADR-133 decision 6, stage (d): the "Checks on load" step, at Editor as the pipeline is.
+    ("GET", P + "/ingest/recipes/{recipe_id}/checks"): E,
+    ("PUT", P + "/ingest/recipes/{recipe_id}/checks"): E,
     ("GET", P + "/ingest/recipe-registry"): V,
     ("POST", P + "/ingest/recipes/{recipe_id}/publish"): E,
     ("PATCH", P + "/ingest/recipes/{recipe_id}/schedule"): E,

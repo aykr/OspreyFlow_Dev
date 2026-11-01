@@ -574,7 +574,49 @@ GET    /v1/screening-lists   each screening list's version, entries, last update
 GET    /v1/admin/screening-lists   the same, with the latest refreshes and what each changed, re-screened and raised (entries added, changed and delisted — never `removed`, the removal record's name, ADR-124 decision 4), load_screening_lists
 POST   /v1/admin/screening-lists   subscribe a list through its connector to a file in the ingest folder, load_screening_lists
 POST   /v1/admin/screening-lists/{list_name}/refresh   "Refresh now": apply the list's new version, re-screen against its changed entries, load_screening_lists
+PUT    /v1/admin/screening-lists/{list_name}/schedule   set (or stop) the list's refresh schedule, run as the person setting it, load_screening_lists
+POST   /v1/investigations/{id}/rules/{rule_id}/approve   a second person approves the change waiting on a whole-deployment rule (never its proposer), Author and administrator
+POST   /v1/investigations/{id}/rules/{rule_id}/reject   reject (or, by its proposer, withdraw) a waiting change, with a reason, Author and administrator
+POST   /v1/investigations/{id}/rules/{rule_id}/change   a new version of a sentence rule: applied at once, or waiting for approval for a whole-deployment rule, deploy_rules and keep_watches
+GET    /v1/investigations/{id}/rules/{rule_id}/versions   every version of a rule, with who proposed and who decided each, Viewer
+GET    /v1/investigations/{id}/rules/{rule_id}/runs   a scheduled rule's schedule in words, its next run or why it will not run, its latest runs, Viewer
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/approve-close   a second member approves a proposed close of a high-severity alert (never its proposer), Editor
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/send-back   send a proposed close back to its proposer, with a reason, Editor
+GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}/checks   the pipeline's "Checks on load" step: the rules it may attach and what was chosen, edit_pipelines, Editor
+PUT    /v1/investigations/{id}/ingest/recipes/{recipe_id}/checks   choose the pipeline's checks and what a hit does there; names rules, never writes one, edit_pipelines, Editor
 ```
+
+**Stage (d): the scheduled trigger, checks on load, and maker–checker (ADR-133 decisions 1, 6 and 7).**
+- **A scheduled rule** is a sentence that runs "on a schedule" (`runs: schedule`, with `schedule`: every
+  day, or every week on one day, at a whole hour, read in Europe/London) instead of as data loads; a
+  whole-deployment rule cannot be scheduled (it is judged within each loading case). Each slot is claimed
+  once (Valkey `SET NX`) and judged as the rule's author resolved afresh — never as the system — over the
+  last day or week of stored data, through the same gate and alert path a load uses
+  (`services/api/rule_schedule.py`, `sentence_rules.run_scheduled_rule`). The author must still sign in,
+  hold `deploy_rules` and be an Author of the case (an Editor for "just me"), or the slot is refused in
+  words; three refusals in a row stop the schedule, said on the rule, until it is changed. Every slot is
+  recorded (`rule_runs`), with its outcome and the alerts it raised.
+- **A screening list's refresh schedule** (Amendment 3 item 4) runs the one refresh as the person who set
+  it, resolved afresh; without `load_screening_lists` the slot is refused, recorded with the list's
+  refreshes in words, and nothing is read (`services/api/list_schedule.py`).
+- **Checks on load** (`services/api/load_checks.py`): a pipeline's chosen rules are kept by the recipe
+  (`recipe_load_checks`). Once chosen, its loads are judged by the attached case rules, each doing what was
+  chosen for a hit (a hold only before commit), and by every whole-deployment rule and every rule just for
+  its author, which no pipeline leaves out. Until chosen, every case rule judges the load, as before. The
+  choice names rules (`LoadCheck`, extra fields forbidden); writing a rule needs `keep_watches` as well as
+  `deploy_rules`, which a data engineer does not hold. **Verify** judges the sample with the pipeline's
+  checks, each as its author, over the rows the person verifying may read in full, through a gate whose
+  alert store, quarantine and signature set refuse every call: it writes nothing. It reports the would-be
+  alerts beside the rejections, and each check a dry run cannot judge (one reading money movements, events
+  or stored links) with why.
+- **Maker–checker** (`TypologyRuleStore`): a whole-deployment rule is deployed `pending`, and a change to or
+  retirement of one waits beside it as a pending version, the rule running as it stood; a second person
+  with `deploy_rules`, the administrator's right and the case's Author level approves or rejects it, never
+  the person who proposed it (`403 own_change`). Every change to every rule is kept as a `RuleVersion` with
+  who proposed and who decided it; a case rule's change applies at once and is kept the same way, and a
+  changed rule runs as the person who wrote the new version. Closing a high-severity alert that a second
+  person may read is proposed (`closing`) and approved by another member with `triage_alerts`
+  (`alert_queue.approve_close`); an alert its owner alone may read closes as before.
 
 **Screening lists as managed sources (ADR-133 stage (c)).** A list is subscribed through a connector,
 a Knowledge Adapter with golden files (`packages/knowledge_adapters/screening_lists.py`: OFAC SDN, OFSI
@@ -590,7 +632,7 @@ onboarding finding — a scored `SAME_AS` written `inferred`, and a `kyc_screeni
 the case's one queue. Each refresh is recorded in words (updated, unchanged, refused, failed); a refused or
 failed one leaves the list as it was. A reader of the alert queue sees each list but not the refreshes:
 their counts of customers re-screened and alerts raised are taken across every case (rule 7). A list's
-own schedule is stage (d)'s; the pipeline scheduler runs Studio recipes only.
+own schedule is stage (d)'s (below); the pipeline scheduler runs Studio recipes only.
 
 **Rules written as sentences (ADR-133 stage (b)).** A sentence (`packages/schemas/sentences.py`) is a
 set of closed choices from the ontology — never an expression (rule 8) — refused at validation by its

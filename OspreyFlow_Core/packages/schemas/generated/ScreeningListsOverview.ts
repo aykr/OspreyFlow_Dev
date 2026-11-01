@@ -11,6 +11,12 @@ export type Entries = number;
 export type UpdatedAt = string | null;
 export type AttemptedAt = string | null;
 export type Failure = string | null;
+export type Every = "daily" | "weekly";
+export type Hour = number;
+export type Weekday = number | null;
+export type ScheduleWords = string | null;
+export type ScheduleOwner = string | null;
+export type NextRefresh = string | null;
 export type Lists = ScreeningListStatus[];
 export type CanManage = false;
 
@@ -41,5 +47,20 @@ export interface ScreeningListStatus {
   updated_at?: UpdatedAt;
   attempted_at?: AttemptedAt;
   failure?: Failure;
+  schedule?: ListSchedule | null;
+  schedule_words?: ScheduleWords;
+  schedule_owner?: ScheduleOwner;
+  next_refresh?: NextRefresh;
   [k: string]: unknown;
+}
+/**
+ * A screening list's refresh schedule (ADR-133 Amendment 3, item 4): every day, or every week
+ * on one day, at a whole hour, read in Europe/London. That a weekly one names its day, and a daily
+ * one none, is checked by `services/api/list_schedule.check_list_schedule`, so the route says it
+ * in words.
+ */
+export interface ListSchedule {
+  every?: Every;
+  hour?: Hour;
+  weekday?: Weekday;
 }

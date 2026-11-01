@@ -17,10 +17,18 @@ import {
   listScreeningLists,
   manageScreeningLists,
   refreshScreeningList,
+  setListSchedule,
   subscribeScreeningList,
   type ListsApi,
 } from "./api";
 import { when } from "./names";
+import { WEEKDAY_WORDS } from "./sentence";
+
+/** ADR-133 stage (d): a list's refresh schedule in words, or that it is refreshed by hand. */
+export function scheduleState(list: ScreeningListStatus): string {
+  if (!list.schedule_words) return "By hand only";
+  return `Refreshed ${list.schedule_words}${list.next_refresh ? `; next ${when(list.next_refresh)}` : ""}`;
+}
 
 type Source = ScreeningSubscriptionInput["source"];
 
@@ -112,6 +120,7 @@ export function ListsPanel(props: ListsPanelProps) {
                 <th style={{ textAlign: "right" }}>Entries</th>
                 <th>Last update</th>
                 <th>State</th>
+                <th>Schedule</th>
                 {canManage && <th>Refresh</th>}
               </tr>
             </thead>
@@ -132,6 +141,7 @@ export function ListsPanel(props: ListsPanelProps) {
                   <td style={{ textAlign: "right" }}>{(list.entries ?? 0).toLocaleString("en-GB")}</td>
                   <td>{list.updated_at ? when(list.updated_at) : "—"}</td>
                   <td style={list.failure ? { color: "var(--error)" } : undefined}>{listState(list)}</td>
+                  <td>{scheduleState(list)}</td>
                   {canManage && (
                     <td>
                       <Button
@@ -152,6 +162,16 @@ export function ListsPanel(props: ListsPanelProps) {
       {canManage ? (
         <>
           <Refreshes updates={refreshes} />
+          {lists.length > 0 && (
+            <ScheduleForm
+              {...props}
+              lists={lists}
+              onSaved={(words) => {
+                setSaid(words);
+                reload();
+              }}
+            />
+          )}
           <SubscribeForm
             {...props}
             onSubscribed={(listName) => {
@@ -185,6 +205,7 @@ function Refreshes({ updates }: { updates: ScreeningLists["updates"] }) {
             <li key={u.id} style={{ borderBottom: "1px solid var(--border-subtle)", padding: "var(--sp-4) 0" }}>
               <span className="value">
                 {u.list_name} · {when(u.at)}
+                {u.trigger === "schedule" ? " · on its schedule" : ""}
               </span>
               <br />
               <span className="label" style={u.outcome === "failed" || u.outcome === "refused" ? { color: "var(--error)" } : undefined}>
@@ -270,5 +291,95 @@ function SubscribeForm(props: ListsPanelProps & { onSubscribed: (listName: strin
         Subscribe
       </Button>
     </form>
+  );
+}
+
+/** ADR-133 Amendment 3 item 4, built with stage (d): a list refreshed every day or every week at an
+ * hour, as the person who sets it. Each slot is refused, in words, if they no longer may load lists. */
+function ScheduleForm(props: ListsApi & { lists: ScreeningListStatus[]; onSaved: (words: string) => void }) {
+  const [listName, setListName] = useState(props.lists[0]?.list_name ?? "");
+  const [every, setEvery] = useState<"none" | "daily" | "weekly">("daily");
+  const [weekday, setWeekday] = useState("1");
+  const [hour, setHour] = useState("5");
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const save = () => {
+    setBusy(true);
+    setProblem(null);
+    const schedule =
+      every === "none"
+        ? null
+        : { every, hour: Number(hour), weekday: every === "weekly" ? Number(weekday) : null };
+    setListSchedule(props, listName, schedule)
+      .then((status) =>
+        props.onSaved(
+          status.schedule_words
+            ? `“${listName}” is refreshed ${status.schedule_words}, as you.`
+            : `“${listName}” is refreshed by hand only.`,
+        ),
+      )
+      .catch((e: Error) => setProblem(e.message))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <section aria-label="Refresh schedule" style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 520 }}>
+      <h3 className="value" style={{ margin: 0 }}>
+        Refresh schedule
+      </h3>
+      <p className="label" style={{ margin: 0 }}>
+        A scheduled refresh runs as you. If you no longer hold the right to load screening lists, each
+        refresh is refused and says so in the list&apos;s refreshes; nothing is read.
+      </p>
+      <label className="label" style={FIELD}>
+        List
+        <Select aria-label="List to schedule" value={listName} onChange={(e) => setListName(e.target.value)}>
+          {props.lists.map((l) => (
+            <option key={l.list_name} value={l.list_name}>
+              {l.list_name}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <label className="label" style={FIELD}>
+        Refreshed
+        <Select aria-label="Refreshed" value={every} onChange={(e) => setEvery(e.target.value as typeof every)}>
+          <option value="none">by hand only</option>
+          <option value="daily">every day</option>
+          <option value="weekly">every week</option>
+        </Select>
+      </label>
+      {every === "weekly" && (
+        <label className="label" style={FIELD}>
+          On
+          <Select aria-label="Refresh day" value={weekday} onChange={(e) => setWeekday(e.target.value)}>
+            {WEEKDAY_WORDS.map((day, i) => (
+              <option key={day} value={String(i + 1)}>
+                {day}
+              </option>
+            ))}
+          </Select>
+        </label>
+      )}
+      {every !== "none" && (
+        <label className="label" style={FIELD}>
+          At (Europe/London)
+          <Select aria-label="Refresh hour" value={hour} onChange={(e) => setHour(e.target.value)}>
+            {Array.from({ length: 24 }, (_, h) => (
+              <option key={h} value={String(h)}>
+                {`${String(h).padStart(2, "0")}:00`}
+              </option>
+            ))}
+          </Select>
+        </label>
+      )}
+      {problem && (
+        <p role="alert" style={{ color: "var(--error)", margin: 0 }}>
+          {problem}
+        </p>
+      )}
+      <Button disabled={busy || !listName} onClick={save}>
+        Save the schedule
+      </Button>
+    </section>
   );
 }

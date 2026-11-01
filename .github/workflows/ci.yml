@@ -635,6 +635,12 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_screening_list_store.py
           ../OspreyFlow_Build/tests/services/api/test_screening_refresh.py
           ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py
+          ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py
+          ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py
+          ../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py
+          ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py
+          ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py
+          ../OspreyFlow_Build/tests/services/api/test_load_checks.py
           ../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py
           ../OspreyFlow_Build/tests/test_seed_links_replace.py
           ../OspreyFlow_Build/tests/test_stamp_datasets.py
@@ -965,6 +971,12 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_screening_refresh.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_rule_schedule.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_load_checks.py
           --ignore=../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py
           --ignore=../OspreyFlow_Build/tests/test_seed_links_replace.py
           --ignore=../OspreyFlow_Build/tests/test_stamp_datasets.py

@@ -472,9 +472,16 @@ def sentence_words(sentence: RuleSentence, ontology: OntologySchema | None = Non
                 words.append(f"for the first time ever by “{link}”")
     team = "my team" if sentence.team == "my_team" else "the case team"
     audience = {"just_me": "me alone", "this_case": team, "deployment": "every case's team"}
-    runs = (
-        "before each load commits" if sentence.runs == "pre_commit" else "after each load commits"
-    )
+    if sentence.runs == "schedule" and sentence.schedule is not None:
+        from .rule_schedule import schedule_words
+
+        runs = f"on a schedule, {schedule_words(sentence.schedule)}"
+    else:
+        runs = (
+            "before each load commits"
+            if sentence.runs == "pre_commit"
+            else "after each load commits"
+        )
     hold = ", holding its rows for review" if sentence.on_hit == "hold" else ""
     return (
         ", ".join(words)

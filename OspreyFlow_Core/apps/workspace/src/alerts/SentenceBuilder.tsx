@@ -44,6 +44,7 @@ import {
   type ConditionDraft,
   type Op,
   type SentenceDraft,
+  WEEKDAY_WORDS,
 } from "./sentence";
 
 const ROW = { display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "end" } as const;
@@ -477,7 +478,16 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
           </label>
           <label className="label" style={BLANK}>
             For
-            <Select aria-label="Scope" value={draft.scope} onChange={(e) => change({ scope: e.target.value as SentenceDraft["scope"] })}>
+            <Select
+              aria-label="Scope"
+              value={draft.scope}
+              onChange={(e) => {
+                const scope = e.target.value as SentenceDraft["scope"];
+                // A runs choice the new scope does not offer goes back to "after each load commits".
+                const offered = !(scope === "just_me" && draft.runs === "pre_commit") && !(scope === "deployment" && draft.runs === "schedule");
+                change({ scope, ...(offered ? {} : { runs: "post_commit", onHit: "load" }) });
+              }}
+            >
               <option value="just_me">just me</option>
               <option value="this_case">this case</option>
               {props.isAdministrator && <option value="deployment">the whole deployment</option>}
@@ -492,14 +502,48 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
               </Select>
             </label>
           )}
-          {!justMe && (
-            <label className="label" style={BLANK}>
-              Runs
-              <Select aria-label="Runs" value={draft.runs} onChange={(e) => change({ runs: e.target.value as SentenceDraft["runs"], onHit: "load" })}>
-                <option value="post_commit">after each load commits</option>
-                {!graphLink && <option value="pre_commit">before each load commits</option>}
-              </Select>
-            </label>
+          <label className="label" style={BLANK}>
+            Runs
+            <Select aria-label="Runs" value={draft.runs} onChange={(e) => change({ runs: e.target.value as SentenceDraft["runs"], onHit: "load" })}>
+              <option value="post_commit">after each load commits</option>
+              {!graphLink && !justMe && <option value="pre_commit">before each load commits</option>}
+              {/* ADR-133 stage (d): daily or weekly; never for the whole deployment, which is
+                  judged within each case as its data loads. */}
+              {draft.scope !== "deployment" && <option value="schedule">on a schedule</option>}
+            </Select>
+          </label>
+          {draft.runs === "schedule" && draft.scope !== "deployment" && (
+            <>
+              <label className="label" style={BLANK}>
+                Every
+                <Select aria-label="Every" value={draft.every} onChange={(e) => change({ every: e.target.value as SentenceDraft["every"] })}>
+                  <option value="daily">day</option>
+                  <option value="weekly">week</option>
+                </Select>
+              </label>
+              {draft.every === "weekly" && (
+                <label className="label" style={BLANK}>
+                  On
+                  <Select aria-label="Day of the week" value={draft.weekday} onChange={(e) => change({ weekday: e.target.value })}>
+                    {WEEKDAY_WORDS.map((day, i) => (
+                      <option key={day} value={String(i + 1)}>
+                        {day}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+              )}
+              <label className="label" style={BLANK}>
+                At (Europe/London)
+                <Select aria-label="Hour" value={draft.hour} onChange={(e) => change({ hour: e.target.value })}>
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={String(h)}>
+                      {`${String(h).padStart(2, "0")}:00`}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            </>
           )}
           {!justMe && draft.runs === "pre_commit" && (
             <label className="label" style={BLANK}>

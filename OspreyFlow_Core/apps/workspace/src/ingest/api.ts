@@ -25,6 +25,8 @@ import type {
   TransformDescriptor,
   UnmappedField,
   VerifyReport,
+  LoadCheck,
+  LoadChecksView,
   PipelineGraph,
   DomainPackEntry,
 } from "../../../../packages/schemas/generated";
@@ -423,6 +425,46 @@ export async function runVerify(
     headers: authHeaders(bearerToken),
   });
   return parseCodedErrorOrThrow(response, "POST /v1/ingest/recipes/{id}/verify");
+}
+
+// --- Checks on load (ADR-133 decision 6, stage (d); 09_INGEST_STUDIO.md §5a) ---------------------
+
+/** The pipeline's "Checks on load" step: the rules it may attach and what has been chosen. */
+export async function fetchChecks(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  recipeId: string,
+): Promise<LoadChecksView> {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/checks`, {
+    headers: authHeaders(bearerToken),
+  });
+  return checksOrThrow(response, "Reading the checks on load");
+}
+
+/** The engineer's choice, replaced whole; it names rules and never carries one. */
+export async function saveChecks(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  recipeId: string,
+  checks: LoadCheck[],
+): Promise<LoadChecksView> {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/checks`, {
+    method: "PUT",
+    headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ checks }),
+  });
+  return checksOrThrow(response, "Saving the checks on load");
+}
+
+async function checksOrThrow(response: Response, what: string): Promise<LoadChecksView> {
+  if (response.ok) return (await response.json()) as LoadChecksView;
+  const body = (await response.json().catch(() => ({}))) as { detail?: { message?: unknown; right?: unknown } };
+  if (typeof body.detail?.message === "string") throw new Error(body.detail.message);
+  if (response.status === 403) throw new Error(`${what} needs the right to edit pipelines, and the case's Editor level.`);
+  if (response.status === 404) throw new Error(`${what}: not found, or not yours to see.`);
+  throw new Error(`${what} failed (${response.status}).`);
 }
 
 // --- Publish (09_INGEST_STUDIO.md §6) ---------------------------------------

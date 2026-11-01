@@ -25,10 +25,9 @@ screening severity. An entry the update left unchanged is not read, and a match 
 not alerted again. A listed party is not itself a customer and is never screened.
 
 **When it runs.** A refresh is started by an administrator (the Lists screen's *Refresh now*,
-`POST /v1/admin/screening-lists/{name}/refresh`) or an operator (`python -m
-scripts.refresh_screening_list <name>`). The pipeline scheduler (`scheduler.py`) runs Studio recipes
-as their owners and cannot run a list; a list's own schedule is ADR-133 stage (d)'s scheduled
-trigger.
+`POST /v1/admin/screening-lists/{name}/refresh`), an operator (`python -m
+scripts.refresh_screening_list <name>`), or the list's own schedule (ADR-133 stage (d),
+`list_schedule.py`), run as the person who set it.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 from valkey.asyncio import Valkey
 
@@ -352,9 +351,10 @@ async def refresh(
     root: Path | None = None,
     manifest: Path = SYNTHETIC_MANIFEST,
     exceptions_path: Path | None = None,
+    trigger: Literal["manual", "schedule"] = "manual",
 ) -> ScreeningListUpdate:
     """Reads, admits, parses and applies the list, re-screens against what changed, and records
-    the outcome in words."""
+    the outcome in words, with how it was started (by a person, or by the list's schedule)."""
     status = await store.subscription(list_name)
     if status is None:
         raise ListNotSubscribed(list_name)
@@ -363,7 +363,7 @@ async def refresh(
     async def record(outcome: str, words: str, **counts: object) -> ScreeningListUpdate:
         update = ScreeningListUpdate(
             id=new_id(), list_name=list_name, at=now, outcome=outcome,  # type: ignore[arg-type]
-            words=words, **counts,  # type: ignore[arg-type]
+            words=words, trigger=trigger, **counts,  # type: ignore[arg-type]
         )  # fmt: skip
         await store.record_update(update)
         return update

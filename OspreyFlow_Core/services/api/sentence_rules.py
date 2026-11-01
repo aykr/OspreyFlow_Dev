@@ -19,16 +19,25 @@ The author's hotlists are read as them too. `rule_sentences.judge_sentence` does
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from schemas.analytics import EventRecord
-from schemas.domain import EdgeWrite, NodeWrite, Principal, TypologyRule
+from schemas.domain import EdgeWrite, Interval, NodeWrite, PatternQuery, Principal, TypologyRule
 from schemas.sentences import SentenceRuleParams
 
 from .dataset_scope import made_in
 from .kyc_rules import customer_rows
 from .pattern_store import PatternNotFoundError
-from .rule_sentences import SentenceContext, judge_sentence, sentence_words
+from .rule_sentences import (
+    Hit,
+    SentenceContext,
+    _split,
+    judge_sentence,
+    judge_subjects,
+    sentence_of,
+    sentence_words,
+)
 
 if TYPE_CHECKING:
     from .rule_evaluation import Finding, RuleGate
@@ -106,15 +115,11 @@ def rows_of_finding(
     return sorted(rows)
 
 
-async def judge_sentence_rule(
-    rule: TypologyRule,
-    deployer: Principal,
-    written: Sequence[NodeWrite | EdgeWrite],
-    events: Sequence[EventRecord],
-    gate: RuleGate,
-) -> list[Finding]:
-    from .rule_evaluation import Finding
-
+async def _context(
+    rule: TypologyRule, deployer: Principal, gate: RuleGate
+) -> tuple[SentenceRuleParams, PatternQuery, SentenceContext]:
+    """What judging the sentence reads, each as its author: the drawn pattern read afresh, the
+    author's own hotlists, the screening lists' entries."""
     params = sentence_of_rule(rule)
     assert params is not None
     if gate.patterns is None:
@@ -148,10 +153,14 @@ async def judge_sentence_rule(
         hotlisted=hotlisted,
         screening_entries=entries,
     )
-    hits = await judge_sentence(
-        rule, deployer, written, events, ctx, pattern=saved.definition, scheme=gate.scheme
-    )
-    said = sentence_words(params.sentence, gate.ontology)
+    return params, saved.definition, ctx
+
+
+def _findings(
+    rule: TypologyRule, deployer: Principal, hits: Sequence[Hit], said: str
+) -> list[Finding]:
+    from .rule_evaluation import Finding
+
     return [
         Finding(
             rule=rule,
@@ -166,12 +175,76 @@ async def judge_sentence_rule(
     ]
 
 
+async def judge_sentence_rule(
+    rule: TypologyRule,
+    deployer: Principal,
+    written: Sequence[NodeWrite | EdgeWrite],
+    events: Sequence[EventRecord],
+    gate: RuleGate,
+) -> list[Finding]:
+    params, pattern, ctx = await _context(rule, deployer, gate)
+    hits = await judge_sentence(
+        rule, deployer, written, events, ctx, pattern=pattern, scheme=gate.scheme
+    )
+    return _findings(rule, deployer, hits, sentence_words(params.sentence, gate.ontology))
+
+
+#: How far back a scheduled run reads: the day, or the week, since the last slot.
+SCHEDULE_PERIOD = {"daily": timedelta(days=1), "weekly": timedelta(days=7)}
+
+
+async def run_scheduled_rule(
+    rule: TypologyRule, deployer: Principal, gate: RuleGate, *, now: datetime
+) -> int:
+    """ADR-133 decision 1, stage (d): one scheduled slot of a sentence rule, as its author over what
+    is stored — the subjects its drawn pattern matches as the author may see them (rule 3), judged
+    over the last day or week (a frequency over its own span before that) — each new finding raised
+    as at a load, once. More subjects than the rule's `max_matches` is refused in words, never
+    judged in part (rule 2). Returns how many alerts it raised."""
+    params, pattern, ctx = await _context(rule, deployer, gate)
+    sentence = params.sentence
+    if gate.ontology is not None:
+        sentence = sentence_of(pattern, sentence, gate.ontology)
+    if sentence.schedule is None:
+        raise RuntimeError("the rule has no schedule to run on")
+    counted = await gate.graph.match_count(pattern, deployer, ceiling=params.max_matches + 1)
+    if counted > params.max_matches:
+        raise RuntimeError(
+            f"its drawn pattern matches more than {params.max_matches:,} subjects, the rule's "
+            "limit; none was judged"
+        )
+    period = SCHEDULE_PERIOD[sentence.schedule.every]
+    span = timedelta(days=getattr(sentence.frequency, "within_days", 0))
+    window = Interval(valid_from=now - period - span, valid_to=now)
+    firsts = Interval(valid_from=now - period, valid_to=now)
+    subjects: list[Any] = []
+    if counted:
+        matched = await gate.graph.match(
+            pattern.model_copy(update={"limit": params.max_matches}), deployer
+        )
+        subjects = sorted(
+            (n for n in matched.nodes if n.type == sentence.subject), key=lambda n: n.id
+        )
+    rest = _split(sentence, gate.ontology)[1] if gate.ontology is not None else sentence.conditions
+    hits = await judge_subjects(
+        subjects, sentence, deployer, ctx, window=window, firsts=firsts, conditions=rest
+    )
+    raised = 0
+    for finding in _findings(rule, deployer, hits, sentence_words(sentence, gate.ontology)):
+        if await gate.seen(finding):
+            continue
+        await gate.raise_committed(finding)
+        raised += 1
+    return raised
+
+
 __all__ = [
     "holds_on_hit",
     "is_deployment_wide",
     "is_just_me",
     "judge_sentence_rule",
     "rows_of_finding",
+    "run_scheduled_rule",
     "sentence_alert_fields",
     "sentence_rows",
 ]

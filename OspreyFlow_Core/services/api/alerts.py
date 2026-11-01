@@ -100,6 +100,8 @@ ALTER TABLE alerts ADD COLUMN IF NOT EXISTS decided_at TIMESTAMPTZ;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS severity TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS team TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS handlings TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS close_proposed_by TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS close_proposed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS alerts_investigation_idx ON alerts (investigation_id);
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
 """
@@ -124,7 +126,8 @@ class AlertNotFoundError(Exception):
 _COLUMNS = (
     "id, rule_id, owner_id, mode, referent_node_ids, investigation_id, created_at, dataset_id, "
     "typology, words, edge_ids, event_ids, window_json, trigger, alert_node_id, status, assignee, "
-    "disposition, disposition_reason, decided_by, decided_at, severity, team"
+    "disposition, disposition_reason, decided_by, decided_at, severity, team, close_proposed_by, "
+    "close_proposed_at"
 )
 
 
@@ -153,6 +156,8 @@ def _row_to_alert(row: asyncpg.Record) -> Alert:
         decided_at=row["decided_at"],
         severity=row["severity"],
         team=row["team"],
+        close_proposed_by=row["close_proposed_by"],
+        close_proposed_at=row["close_proposed_at"],
     )
 
 
@@ -381,7 +386,7 @@ class AlertStore:
             await conn.execute(
                 f"INSERT INTO alerts ({_COLUMNS}, handlings) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, "
-                "$17, $18, $19, $20, $21, $22, $23, $24)",
+                "$17, $18, $19, $20, $21, $22, $23, $24, $25, $26)",
                 alert.id,
                 alert.rule_id,
                 alert.owner_id,
@@ -405,6 +410,8 @@ class AlertStore:
                 alert.decided_at,
                 alert.severity,
                 alert.team,
+                alert.close_proposed_by,
+                alert.close_proposed_at,
                 None
                 if handlings is None
                 else json.dumps([h.model_dump() for h in distinct_handlings(handlings)]),
@@ -529,17 +536,23 @@ class AlertStore:
         decided_by: str | None = None,
         alert_node_id: str | None = None,
         edge_ids: Sequence[str] | None = None,
+        close_proposed_by: str | None = None,
     ) -> Alert:
         """`set_triage` for the one queue: the same single statement, and the alert must still be
         in the reader's queue scope as it is written, so a triage can reach no alert the queue
-        would not show them."""
-        scope, extra = queue_scope(principal, investigation_id, 10)
+        would not show them. `close_proposed_by` (ADR-133 decision 7): who proposed closing a
+        high-severity alert; kept, with when, while the same person stays named, and cleared with
+        `None`."""
+        scope, extra = queue_scope(principal, investigation_id, 11)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "UPDATE alerts SET status = $2, assignee = $3, disposition = $4, "
                 "disposition_reason = $5, decided_by = $6, "
                 "decided_at = CASE WHEN $6::text IS NULL THEN NULL ELSE now() END, "
-                "alert_node_id = COALESCE($7, alert_node_id), edge_ids = COALESCE($9, edge_ids) "
+                "alert_node_id = COALESCE($7, alert_node_id), edge_ids = COALESCE($9, edge_ids), "
+                "close_proposed_at = CASE WHEN $10::text IS NULL THEN NULL "
+                "WHEN close_proposed_by IS NOT DISTINCT FROM $10::text THEN close_proposed_at "
+                "ELSE now() END, close_proposed_by = $10 "
                 f"WHERE id = $1 AND status = ANY($8::text[]){scope} "
                 f"RETURNING {_COLUMNS}",
                 alert_id,
@@ -551,6 +564,7 @@ class AlertStore:
                 alert_node_id,
                 list(expect_status),
                 None if edge_ids is None else json.dumps(list(edge_ids)),
+                close_proposed_by,
                 *extra,
             )
         if row is None:

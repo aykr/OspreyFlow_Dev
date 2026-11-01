@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.18** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.19** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.19 | 2026-11-01 | §9.5: a list's refresh schedule, set in Monitoring → Lists and run as the person who set it. §9.6: approval rights — a second person for a rule for the whole deployment and for closing a high-severity alert, and who holds the right to approve; whole-deployment rules live before this version wait for approval after upgrading. |
 | 1.18 | 2026-11-01 | §9.5: screening lists — subscribing to a list through its connector, each list's licence, the rule on real lists, and the refresh (*Refresh now*, `python -m scripts.refresh_screening_list`), which re-screens customers against the changed entries only. |
 | 1.17 | 2026-11-01 | §12: the monitoring board, and the four monitoring sections the feed carries (`raised_by_rule`, `closed`, `time_to_close`, `hotlist_matches`). |
 | 1.16 | 2026-11-01 | §9.4: monitoring, and whom a hotlist's alerts reach (`monitoring.hotlist_audience`, `hotlist_audience_editable`). Appendix A: the `monitoring` settings. |
@@ -536,10 +537,44 @@ connector's format fails in words and leaves the list as it was. Every refresh i
 **Latest refreshes**, with what it added, changed and removed, how many customers it re-screened and how
 many alerts it raised; the audit records who refreshed which list.
 
-**When.** A list is refreshed when someone presses **Refresh now** or runs the command. The pipeline
-scheduler (section 15) runs Studio pipelines only; a list's own schedule is still to come. Until then, run
-the command from the host's own scheduler (for example cron), as the Conduit's user, after each
-download.
+**When.** A list is refreshed when someone presses **Refresh now**, runs the command, or on the list's
+own **refresh schedule**. Under **Refresh schedule** in Monitoring → Lists, choose the list, **every
+day** or **every week** (and the day), and the hour (UK time), then **Save the schedule**; **by hand
+only** stops it. The **Schedule** column shows when each list is refreshed and when next.
+
+- **A scheduled refresh runs as the person who saved the schedule**, resolved afresh each time —
+  never as the system. If they can no longer sign in or no longer hold `load_screening_lists`, that
+  refresh is refused, recorded under **Latest refreshes** in words, and nothing is read; save the
+  schedule again as someone who holds the right.
+- Each scheduled time runs once, whichever Conduit replica takes it; after downtime only the latest
+  runs. A refresh that ran on its schedule says so under **Latest refreshes**.
+- Put each new download in the list's location before the scheduled hour: the schedule reads the file
+  that is there.
+
+### 9.6 Approval rights: a second person
+
+Two decisions wait for a second person with the right, and **the person who proposed one can never
+approve it** (ADR-133 decision 7):
+
+| Decision | Who proposes it | Who approves it |
+| --- | --- | --- |
+| Deploying, changing or retiring a rule **for the whole deployment** | An Author of the case who holds `deploy_rules` and `administer_system` (an analyst who is also an administrator) | **Another** person with the same rights and level |
+| Closing a **high-severity** alert another person may see | A member of the case who triages alerts (`triage_alerts`, Editor) | **Another** member who triages alerts in that case |
+
+A rule for one case, or just for its author, needs no approval. An alert only its owner may see (their
+own hotlist's, kept to them) is closed by its owner alone, since no second person may read it. Writing
+a rule as a sentence needs `keep_watches` as well as `deploy_rules`, so a data engineer attaches rules
+to pipelines (Checks on load) but does not write them.
+
+**So a deployment that writes whole-deployment rules needs at least two people holding both the
+Analyst and the Admin roles** (or `deploy_rules` and `administer_system` granted singly), each an
+Author of a case the rule is listed in (a whole-deployment rule is listed in every case). With one such person, a whole-deployment rule can be
+proposed but never run.
+
+Every proposal, approval and rejection is in the case's rule audit, and every rule keeps its versions
+— who proposed each and who decided it. **After upgrading to this version**, a whole-deployment rule
+that was running waits for a second person's approval before it runs again; Monitoring → Rules lists
+it as waiting, "deployed before a second person's approval was needed".
 
 ## 10. Models
 

@@ -38,6 +38,7 @@ from typing import Literal
 import asyncpg
 import duckdb
 
+from schemas.monitoring import ListSchedule
 from schemas.screening import (
     ScreeningListStatus,
     ScreeningListUpdate,
@@ -90,7 +91,27 @@ CREATE TABLE IF NOT EXISTS screening_list_updates (
     words TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS screening_list_updates_at_idx ON screening_list_updates (at DESC);
+-- ADR-133 stage (d): a list's refresh schedule (Amendment 3, item 4), whom it runs as, since when,
+-- and the last slot it ran; and how each refresh was started.
+ALTER TABLE screening_lists ADD COLUMN IF NOT EXISTS schedule_every TEXT;
+ALTER TABLE screening_lists ADD COLUMN IF NOT EXISTS schedule_hour INTEGER;
+ALTER TABLE screening_lists ADD COLUMN IF NOT EXISTS schedule_weekday INTEGER;
+ALTER TABLE screening_lists ADD COLUMN IF NOT EXISTS schedule_owner TEXT;
+ALTER TABLE screening_lists ADD COLUMN IF NOT EXISTS schedule_set_at TIMESTAMPTZ;
+ALTER TABLE screening_lists ADD COLUMN IF NOT EXISTS schedule_last_slot TIMESTAMPTZ;
+ALTER TABLE screening_list_updates ADD COLUMN IF NOT EXISTS trigger TEXT NOT NULL DEFAULT 'manual';
 """
+
+
+@dataclass(frozen=True)
+class ScheduledList:
+    """A list with a refresh schedule, as the scheduler reads it."""
+
+    list_name: str
+    schedule: ListSchedule
+    owner: str
+    set_at: datetime
+    last_slot: datetime | None
 
 
 @dataclass(frozen=True)
@@ -337,11 +358,11 @@ class ScreeningListStore:
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 "INSERT INTO screening_list_updates (id, list_name, at, outcome, version, "
-                "previous_version, added, changed, removed, rescreened, alerts, words) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                "previous_version, added, changed, removed, rescreened, alerts, words, trigger) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
                 update.id, update.list_name, update.at, update.outcome, update.version,
                 update.previous_version, update.added, update.changed, update.delisted,
-                update.rescreened, update.alerts, update.words,
+                update.rescreened, update.alerts, update.words, update.trigger,
             )  # fmt: skip
             if update.outcome in ("refused", "failed"):
                 await conn.execute(
@@ -350,11 +371,76 @@ class ScreeningListStore:
                     update.list_name, update.at, update.words,
                 )  # fmt: skip
 
+    async def set_schedule(
+        self, list_name: str, schedule: ListSchedule | None, by: str
+    ) -> ScreeningListStatus:
+        """The list's refresh schedule set (or, with `None`, stopped), as `by`, who it then runs
+        as. Raises `LookupError` for a list never subscribed, and `ListScheduleRefused` for a
+        schedule that cannot be kept."""
+        from .list_schedule import check_list_schedule
+
+        if schedule is not None:
+            check_list_schedule(schedule)
+        now = datetime.now(UTC)
+        async with self._pool.acquire() as conn:
+            done = await conn.execute(
+                "UPDATE screening_lists SET schedule_every = $2, schedule_hour = $3, "
+                "schedule_weekday = $4, schedule_owner = $5, schedule_set_at = $6, "
+                "schedule_last_slot = NULL WHERE list_name = $1",
+                list_name,
+                schedule.every if schedule else None,
+                schedule.hour if schedule else None,
+                schedule.weekday if schedule else None,
+                by if schedule else None,
+                now if schedule else None,
+            )
+        if done.endswith(" 0"):
+            raise LookupError(list_name)
+        found = await self.subscription(list_name)
+        assert found is not None
+        return found
+
+    async def scheduled_lists(self) -> list[ScheduledList]:
+        """Every list with a schedule: the scheduler's read, never a route."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT list_name, schedule_every, schedule_hour, schedule_weekday, "
+                "schedule_owner, schedule_set_at, schedule_last_slot FROM screening_lists "
+                "WHERE schedule_every IS NOT NULL ORDER BY list_name"
+            )
+        return [
+            ScheduledList(
+                list_name=r["list_name"],
+                schedule=ListSchedule(
+                    every=r["schedule_every"],
+                    hour=r["schedule_hour"],
+                    weekday=r["schedule_weekday"],
+                ),  # fmt: skip
+                owner=r["schedule_owner"],
+                set_at=r["schedule_set_at"],
+                last_slot=r["schedule_last_slot"],
+            )
+            for r in rows
+        ]
+
+    async def mark_slot(self, list_name: str, slot: datetime) -> bool:
+        """The slot taken, once: false when another replica (or an earlier tick) has taken it or
+        a later one."""
+        async with self._pool.acquire() as conn:
+            done = await conn.execute(
+                "UPDATE screening_lists SET schedule_last_slot = $2 WHERE list_name = $1 AND "
+                "(schedule_last_slot IS NULL OR schedule_last_slot < $2)",
+                list_name,
+                slot,
+            )
+        return not done.endswith(" 0")
+
     async def updates(self, *, limit: int = 20) -> list[ScreeningListUpdate]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT id, list_name, at, outcome, version, previous_version, added, changed, "
-                "removed AS delisted, rescreened, alerts, words FROM screening_list_updates "
+                "removed AS delisted, rescreened, alerts, words, trigger "
+                "FROM screening_list_updates "
                 "ORDER BY at DESC, id DESC LIMIT $1",
                 limit,
             )
@@ -363,18 +449,33 @@ class ScreeningListStore:
 
 _LIST_SELECT = (
     "SELECT list_name, source, location, dataset, synthetic, version, entry_count, updated_at, "
-    "attempted_at, failure FROM screening_lists"
+    "attempted_at, failure, schedule_every, schedule_hour, schedule_weekday, schedule_owner "
+    "FROM screening_lists"
 )
 
 
 def _status(row: asyncpg.Record) -> ScreeningListStatus:
+    from .rule_schedule import cron_of, schedule_words
+    from .scheduler import DEFAULT_TIMEZONE, next_slot
     from .screening_refresh import LICENCES
 
+    schedule = (
+        ListSchedule(
+            every=row["schedule_every"], hour=row["schedule_hour"], weekday=row["schedule_weekday"]
+        )  # fmt: skip
+        if row["schedule_every"]
+        else None
+    )
     return ScreeningListStatus(
         list_name=row["list_name"], source=row["source"], location=row["location"],
         dataset=row["dataset"], synthetic=row["synthetic"], licence=LICENCES[row["source"]],
         version=row["version"], entries=row["entry_count"], updated_at=row["updated_at"],
-        attempted_at=row["attempted_at"], failure=row["failure"],
+        attempted_at=row["attempted_at"], failure=row["failure"], schedule=schedule,
+        schedule_words=schedule_words(schedule) if schedule else None,
+        schedule_owner=row["schedule_owner"] if schedule else None,
+        next_refresh=next_slot(cron_of(schedule), DEFAULT_TIMEZONE, after=datetime.now(UTC))
+        if schedule
+        else None,
     )  # fmt: skip
 
 

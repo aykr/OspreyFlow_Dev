@@ -184,6 +184,9 @@ ROUTE_RIGHTS = {
     "get_studio_recipe_sample_row": "edit_pipelines",
     "preview_studio_recipe_element_handling": "edit_pipelines",
     "verify_studio_recipe": "verify_pipelines",
+    # ADR-133 decision 6, stage (d): the "Checks on load" step, an engineer's (D1).
+    "read_load_checks": "edit_pipelines",
+    "set_load_checks": "edit_pipelines",
     "list_studio_recipe_registry": "edit_pipelines",
     "publish_studio_recipe": "publish_pipelines",
     "update_studio_recipe_schedule": "schedule_pipelines",
@@ -224,12 +227,23 @@ ROUTE_RIGHTS = {
     "claim_alert": "triage_alerts",
     "release_alert": "triage_alerts",
     "dispose_alert": "triage_alerts",
+    # ADR-133 decision 7, stage (d): a second member approves (or sends back) a high-severity close.
+    "approve_alert_close": "triage_alerts",
+    "send_back_alert_close": "triage_alerts",
     "alert_canvas": "triage_alerts",
     "assign_alert": "triage_alerts",  # ADR-133 stage (a)
     "read_alert_assignees": "triage_alerts",
     "list_typology_rules": "read_alert_queue",
     "deploy_typology_rule": "deploy_rules",
     "retire_typology_rule": "deploy_rules",
+    # ADR-133 decision 7, stage (d): maker–checker — approving, rejecting and changing a rule need
+    # the deployer's right (and, for a whole-deployment rule, the administrator's too, in the
+    # route); reading a rule's versions and its schedule is the case team's, as reading rules is.
+    "approve_rule_change": "deploy_rules",
+    "reject_rule_change": "deploy_rules",
+    "change_rule_sentence": "deploy_rules",
+    "read_rule_versions": "read_alert_queue",
+    "read_rule_schedule": "read_alert_queue",
     "compile_rule_sentence": "investigate",
     "read_rule_sentence": "investigate",
     "preview_rule_sentence": "investigate",
@@ -238,6 +252,8 @@ ROUTE_RIGHTS = {
     "manage_screening_lists": "load_screening_lists",
     "subscribe_screening_list": "load_screening_lists",
     "refresh_screening_list_route": "load_screening_lists",
+    # ADR-133 Amendment 3 item 4, stage (d): a list's refresh schedule.
+    "set_screening_list_schedule": "load_screening_lists",
     "read_rule_audit": "read_rule_audit",
     "list_held_rows": "read_held_rows",
     "release_held_rows_route": "decide_held_rows",

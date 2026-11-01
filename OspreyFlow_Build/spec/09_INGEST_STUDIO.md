@@ -593,6 +593,26 @@ that values were masked).
 
 **Verify must pass before publish.** Not "verify is recommended".
 
+**The alerts the sample would raise (ADR-133 decision 6, stage (d)).** Beside the rejection report,
+Verify judges the sample with the pipeline's checks on load (§5a), each rule as its own author, as
+the load would — and writes nothing: its alert store, quarantine and signature set refuse every call
+(`services/api/load_checks.py`). It judges only the rows the person verifying may read in full, and
+names only entities the sample shows them (rule 3). A check a dry run cannot judge — one reading
+money movements or counting events, which a dry run does not make, or one reading links in the
+stored graph — is listed with why, never left out. Test: `tests/services/api/test_load_checks.py`.
+
+### 5a. Checks on load (ADR-133 decision 6, as built 1 November 2026)
+
+Each pipeline has a "Checks on load" step. The data engineer chooses which load-time rules — the
+case's, and the whole deployment's — apply to this source, and what a hit does here: **load with an
+alert**, or **hold the rows** for a reviewer (before commit only; ADR-109 ruling 1). Engineers attach
+rules; they do not write them: the step names rules by id, and writing a rule needs the analyst's
+`keep_watches` right as well as `deploy_rules`. A whole-deployment rule applies to every pipeline and
+cannot be left off one (the step may make it hold, never loosen one its author wrote to hold); a rule
+just for its author is their own watch and is not offered. Until an engineer chooses, every case rule
+judges the pipeline's loads, as before the step existed. The choice is kept per pipeline
+(`recipe_load_checks`), audited, and read at each run, scheduled or not, and at a release of held rows.
+
 ## 6. Stage 5 — Publish
 
 The recipe is written, versioned, and optionally scheduled.
