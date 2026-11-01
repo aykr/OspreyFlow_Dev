@@ -42,6 +42,8 @@ from schemas.analytics import (
     EventRecord,
     FirstSeenRequest,
     FirstSeenResult,
+    FrequencyRequest,
+    FrequencyResult,
     GeoBin,
     GeoBinRequest,
     GeocodedEvent,
@@ -52,6 +54,7 @@ from schemas.analytics import (
     HistogramBucket,
     HistogramBucketing,
     HistogramRequest,
+    NodeFrequency,
     Sighting,
     SightingRequest,
     TrendInterval,
@@ -735,6 +738,68 @@ class AnalyticsClickHouseAdapter:
         return FirstSeenResult(
             nodes={node_id: _time(first) for node_id, first in node_rows},
             edges={edge_id: _time(first) for edge_id, first in edge_rows},
+        )
+
+    # --- event_frequency (ADR-133 decision 1, stage (b)), as the DuckDB adapter's ---------------
+
+    async def event_frequency(
+        self, req: FrequencyRequest, principal: Principal
+    ) -> FrequencyResult:
+        predicate = self._predicate(req.filter, principal)
+        subjects = req.filter.node_ids
+        marks = ",".join("?" for _ in subjects)
+        amount = (
+            "CAST(NULL AS Nullable(Float64))"
+            if req.amount_property is None
+            else f"toFloat64OrNull({_field_expression(req.amount_property)})"
+        )
+        # Each event once per subject it touches: an event to itself is one event, not two.
+        touched = (
+            f"SELECT source_id AS node, toUnixTimestamp64Milli(occurred_at) AS at, "
+            f"{amount} AS amount FROM events WHERE {predicate.where} AND source_id IN ({marks}) "
+            "UNION ALL "
+            f"SELECT target_id AS node, toUnixTimestamp64Milli(occurred_at) AS at, "
+            f"{amount} AS amount FROM events "
+            f"WHERE {predicate.where} AND target_id IN ({marks}) AND target_id != source_id"
+        )
+        span_ms = int(req.span_days) * 86_400_000
+        rows = await self._ch.rows(
+            "SELECT node, max(n), max(total) FROM ("
+            "  SELECT node, count() OVER span AS n, sum(amount) OVER span AS total "
+            f"  FROM ({touched}) "
+            "  WINDOW span AS (PARTITION BY node ORDER BY at "
+            f"  RANGE BETWEEN {span_ms} PRECEDING AND CURRENT ROW)"
+            ") GROUP BY node",
+            [*predicate.params, *subjects, *predicate.params, *subjects],
+        )
+        window = req.filter.window
+        unbounded = self._predicate(req.filter.model_copy(update={"window": None}), principal)
+        upper, upper_params = "", list[object]()
+        if window is not None and window.valid_to is not None:
+            upper, upper_params = " AND occurred_at <= ?", [window.valid_to]
+        firsts = await self._ch.rows(
+            "SELECT node, min(occurred_at) FROM ("
+            f"  SELECT source_id AS node, occurred_at FROM events "
+            f"  WHERE {unbounded.where}{upper} AND source_id IN ({marks}) "
+            "  UNION ALL "
+            f"  SELECT target_id AS node, occurred_at FROM events "
+            f"  WHERE {unbounded.where}{upper} AND target_id IN ({marks})"
+            ") GROUP BY node",
+            [*unbounded.params, *upper_params, *subjects,
+             *unbounded.params, *upper_params, *subjects],
+        )  # fmt: skip
+        found = {
+            str(node): (int(n), None if total is None else float(total)) for node, n, total in rows
+        }
+        return FrequencyResult(
+            nodes={
+                str(node): NodeFrequency(
+                    most_in_span=found.get(str(node), (0, None))[0],
+                    largest_total=found.get(str(node), (0, None))[1],
+                    first_at=_time(first),
+                )
+                for node, first in firsts
+            }
         )
 
     # --- writes -------------------------------------------------------------

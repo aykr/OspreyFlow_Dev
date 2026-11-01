@@ -2313,3 +2313,121 @@ async def test_an_alert_trend_counts_only_within_its_window(factory: AnalyticsAd
     facts = [_fact(raised_at=_week(0)), _fact(raised_at=datetime(2025, 12, 1, tzinfo=UTC))]
     (result,) = await _alert_trend(factory, facts, _alerts(), OFFICIAL)
     assert result.events == 1
+
+
+# --- event_frequency (ADR-133 decision 1, stage (b)): frequency and amount conditions -------------
+#
+# A rule's "N or more times in D days", "a total of an amount over X in D days" and "the first time
+# ever", counted per subject as the rule's own author, the access step in the query (rule 3). Each
+# hidden plant differs from a visible event in exactly the respect under test — its marking, its
+# case, its link type — so a count that ignored that respect would include it.
+
+from schemas.analytics import FrequencyRequest  # noqa: E402
+
+FREQ_T0 = datetime(2026, 3, 2, 9, tzinfo=UTC)
+FREQ_WINDOW = Interval(valid_from=datetime(2026, 3, 1, tzinfo=UTC), valid_to=datetime(2026, 5, 31, tzinfo=UTC))
+
+
+def _day(n: float) -> datetime:
+    from datetime import timedelta
+
+    return FREQ_T0 + timedelta(days=n)
+
+
+def _paid(day: float, amount: float | None = None, **kwargs: object) -> EventRecord:
+    properties = {} if amount is None else {"amount": amount}
+    return _event(occurred_at=_day(day), edge_type="TRANSACTED", source_id="acct-a",
+                  target_id="acct-b", properties=properties, **kwargs)  # type: ignore[arg-type]  # fmt: skip
+
+
+def _frequency(span_days: int, *, nodes: list[str] | None = None, amount: str | None = None,
+               window: Interval | None = FREQ_WINDOW, edge_types: list[str] | None = None) -> FrequencyRequest:  # fmt: skip
+    return FrequencyRequest(
+        filter=_filter(node_ids=nodes or ["acct-a"], window=window, edge_types=edge_types or ["TRANSACTED"]),
+        span_days=span_days, amount_property=amount,
+    )  # fmt: skip
+
+
+async def test_frequency_counts_the_most_events_in_any_span_of_the_days_asked(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    events = [_paid(0), _paid(1), _paid(2), _paid(10)]
+    async with factory.context(events) as adapter:
+        two = await adapter.event_frequency(_frequency(2), OFFICIAL)
+        one = await adapter.event_frequency(_frequency(1), OFFICIAL)
+        thirty = await adapter.event_frequency(_frequency(30), OFFICIAL)
+    assert two.nodes["acct-a"].most_in_span == 3  # days 0, 1 and 2, the span's ends included
+    assert one.nodes["acct-a"].most_in_span == 2
+    assert thirty.nodes["acct-a"].most_in_span == 4
+
+
+async def test_frequency_counts_a_subject_at_either_end_and_each_event_once(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    events = [_paid(0), _event(occurred_at=_day(1), edge_type="TRANSACTED", source_id="acct-b", target_id="acct-a"),
+              _event(occurred_at=_day(1.5), edge_type="TRANSACTED", source_id="acct-a", target_id="acct-a")]  # fmt: skip
+    async with factory.context(events) as adapter:
+        result = await adapter.event_frequency(_frequency(7, nodes=["acct-a", "acct-b"]), OFFICIAL)
+    assert result.nodes["acct-a"].most_in_span == 3  # out, in, and the one to itself counted once
+    assert result.nodes["acct-b"].most_in_span == 2
+
+
+async def test_frequency_totals_the_amount_named_in_the_largest_span(factory: AnalyticsAdapterFactory) -> None:
+    events = [_paid(0, 4_000), _paid(1, 3_000), _paid(5, 9_000), _paid(6, 2_500), _paid(6.5)]
+    async with factory.context(events) as adapter:
+        result = await adapter.event_frequency(_frequency(2, amount="amount"), OFFICIAL)
+        counted = await adapter.event_frequency(_frequency(2), OFFICIAL)
+    assert result.nodes["acct-a"].largest_total == 11_500.0  # days 5, 6 and 6.5 (no amount adds nothing)
+    assert counted.nodes["acct-a"].largest_total is None
+
+
+async def test_frequency_says_the_first_event_ever_up_to_the_windows_end(factory: AnalyticsAdapterFactory) -> None:
+    before = _event(occurred_at=datetime(2025, 6, 1, tzinfo=UTC), edge_type="TRANSACTED", source_id="acct-a", target_id="acct-z")
+    after = _event(occurred_at=datetime(2026, 7, 1, tzinfo=UTC), edge_type="TRANSACTED", source_id="acct-c", target_id="acct-z")
+    events = [before, _paid(3), after, _event(occurred_at=_day(4), edge_type="TRANSACTED", source_id="acct-c", target_id="acct-z")]
+    async with factory.context(events) as adapter:
+        result = await adapter.event_frequency(_frequency(7, nodes=["acct-a", "acct-c"]), OFFICIAL)
+    assert result.nodes["acct-a"].first_at == datetime(2025, 6, 1, tzinfo=UTC)  # before the window: not a first
+    assert result.nodes["acct-a"].most_in_span == 1  # the window bounds what is counted
+    assert result.nodes["acct-c"].first_at == _day(4)  # one after the window's end is not earlier
+
+
+async def test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """ADR-133's "a rule's frequency count leaves out a node its author may not see": the
+    restricted events are what tie the subject to what is hidden. Planted in the shapes a store
+    holds: SECRET, and OFFICIAL restricted to another unit."""
+    hidden = [_paid(0.5, 50_000, classification="SECRET"),
+              _paid(0.7, 50_000, handling_code="R", owning_unit="unit-2", originator="unit-2"),
+              _event(occurred_at=datetime(2025, 1, 1, tzinfo=UTC), edge_type="TRANSACTED", source_id="acct-a",
+                     target_id="acct-hidden", classification="SECRET")]  # fmt: skip
+    events = [_paid(0, 100), _paid(1, 100), *hidden]
+    async with factory.context(events) as adapter:
+        official = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+        cleared = await adapter.event_frequency(_frequency(7, amount="amount"), CLEARED)
+        only_hidden = await adapter.event_frequency(_frequency(7, nodes=["acct-hidden"]), OFFICIAL)
+    assert (official.nodes["acct-a"].most_in_span, official.nodes["acct-a"].largest_total) == (2, 200.0)
+    assert official.nodes["acct-a"].first_at == _day(0)
+    assert cleared.nodes["acct-a"].most_in_span == 3  # the SECRET one, for a reader who may see it
+    assert cleared.nodes["acct-a"].first_at == datetime(2025, 1, 1, tzinfo=UTC)
+    assert only_hidden.nodes == {}  # a node reached only through what is hidden is not there at all
+
+
+async def test_frequency_counts_only_this_case_and_the_link_types_named(factory: AnalyticsAdapterFactory) -> None:
+    events = [_paid(0), _paid(1, investigation_scope="case-2"),
+              _event(occurred_at=_day(1), edge_type="COMMUNICATED_WITH", source_id="acct-a", target_id="acct-b")]  # fmt: skip
+    async with factory.context(events) as adapter:
+        transacted = await adapter.event_frequency(_frequency(7), OFFICIAL)
+        either = await adapter.event_frequency(_frequency(7, edge_types=["TRANSACTED", "COMMUNICATED_WITH"]), OFFICIAL)
+    assert transacted.nodes["acct-a"].most_in_span == 1
+    assert either.nodes["acct-a"].most_in_span == 2
+
+
+def test_a_frequency_names_its_subjects_and_at_most_a_thousand(factory: AnalyticsAdapterFactory) -> None:
+    with pytest.raises(ValueError, match="name at least one"):
+        FrequencyRequest(filter=_filter(), span_days=7)
+    with pytest.raises(ValueError, match="at most 1,000"):
+        FrequencyRequest(filter=_filter(node_ids=[f"n{i}" for i in range(1001)]), span_days=7)
+    with pytest.raises(ValueError):
+        FrequencyRequest(filter=_filter(node_ids=["a"]), span_days=367)
