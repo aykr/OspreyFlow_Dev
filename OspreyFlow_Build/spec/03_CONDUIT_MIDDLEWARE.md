@@ -603,6 +603,17 @@ conditions through `AnalyticsPort.event_frequency`, both with the access step in
 working-set limit (rule 2), and writes no alert, rule or pattern. A deployment-wide sentence watches every
 case's loads, judged within the loading case's datasets.
 
+**The AML templates (ADR-133 decision 2, stage (c))** are four more typologies with typed parameters
+(`packages/schemas/domain.py`; rule 8), judged over a load's `TRANSACTED` movements the deployer may
+read (`services/api/aml_rules.py`): `large_cash` (a CASH_IN or CASH_OUT at or over a threshold),
+`high_risk_jurisdiction` (a movement to or from an account whose IBAN country code is on the rule's own
+list of two-letter codes — the list is data in the rule, the account read as the deployer),
+`dormant_reactivated` (an account moving again after N days without a movement) and `velocity_rise`
+(an account's last N days at a factor or more of its own daily rate over the days before, counted or
+by amount). The last two read the account's past through `AnalyticsPort.account_activity`, the access
+step in the store's query, and run after commit only, since the stored past holds the load's own
+movements only once committed. Each raises a medium-severity alert in the case's one queue.
+
 **A rule belongs to its case** and evaluates as its deployer's principal, resolved fresh (ADR-036);
 its parameters are a closed vocabulary per typology (structuring, rapid movement, circular flow —
 rule 8), refused at the schema otherwise. **Where it runs is the rule's** (ADR-109 ruling 1): a

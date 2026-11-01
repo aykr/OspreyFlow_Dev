@@ -661,7 +661,22 @@ class RuleGate:
         written: Sequence[NodeWrite | EdgeWrite],
     ) -> list[Finding]:
         """A flow typology over the load's money movements; a KYC typology over its new customers
-        (`kyc_rules.py`, imported here, not at the top: it builds on this module)."""
+        (`kyc_rules.py`, imported here, not at the top: it builds on this module). ADR-133 stage
+        (c)'s AML templates over the load's movements and the accounts' own past
+        (`aml_rules.py`)."""
+        from .aml_rules import AML_TYPOLOGIES, judge_aml
+
+        if rule.params.typology in AML_TYPOLOGIES:
+            return await judge_aml(
+                rule,
+                deployer,
+                events,
+                written,
+                graph=self.graph,
+                analytics=self.analytics,
+                scheme=self.scheme,
+                investigation_scope=self.investigation_id,
+            )
         if is_flow_rule(rule):
             if self.analytics is None:
                 raise RuntimeError(
@@ -710,7 +725,9 @@ class RuleGate:
             from .sentence_rules import sentence_rows
 
             return sentence_rows(rule, events, written)
-        if is_flow_rule(rule):
+        from .aml_rules import AML_TYPOLOGIES
+
+        if is_flow_rule(rule) or rule.params.typology in AML_TYPOLOGIES:
             return sorted(
                 {r for e in events if e.edge_type == FLOW_EDGE_TYPE for r in _source_rows(e)}
             )

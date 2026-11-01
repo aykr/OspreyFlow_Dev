@@ -9,7 +9,11 @@ export type Params =
   | SharedAttributesParams
   | DocumentVerificationParams
   | PatternRuleParams
-  | SentenceRuleParams;
+  | SentenceRuleParams
+  | HighRiskJurisdictionParams
+  | LargeCashParams
+  | DormantReactivatedParams
+  | VelocityRiseParams;
 export type Typology = "structuring";
 export type Threshold = number;
 export type WindowDays = number;
@@ -263,6 +267,26 @@ export type Runs = "pre_commit" | "post_commit";
 export type OnHit = "load" | "hold";
 export type Scope = "just_me" | "this_case" | "deployment";
 export type MaxMatches1 = number;
+export type Typology8 = "high_risk_jurisdiction";
+/**
+ * @minItems 1
+ * @maxItems 250
+ */
+export type Jurisdictions = [string, ...string[]];
+export type Typology9 = "large_cash";
+export type Threshold1 = number;
+/**
+ * @minItems 1
+ */
+export type CashTypes = ["CASH_IN" | "CASH_OUT", ...("CASH_IN" | "CASH_OUT")[]];
+export type Typology10 = "dormant_reactivated";
+export type DormantDays = number;
+export type Typology11 = "velocity_rise";
+export type RecentDays = number;
+export type BaselineDays = number;
+export type Factor = number;
+export type MinRecent = number;
+export type Measure = "count" | "amount";
 export type Trigger = "pre_commit" | "post_commit";
 export type BudgetMs = number;
 export type Id = string;
@@ -513,5 +537,49 @@ export interface AmountFrequency {
 export interface FirstTimeFrequency {
   kind?: Kind7;
   link_type: LinkType4;
+  [k: string]: unknown;
+}
+/**
+ * A movement to or from an account held in a jurisdiction on the rule's own list. The list is
+ * data in the rule — ISO 3166-1 alpha-2 codes, chosen by the rule's Author (a deployment's
+ * policy, such as the FATF's lists, is theirs to enter) — and an account's jurisdiction is its
+ * IBAN's country code (ISO 13616: the IBAN's first two letters).
+ */
+export interface HighRiskJurisdictionParams {
+  typology?: Typology8;
+  jurisdictions: Jurisdictions;
+  [k: string]: unknown;
+}
+/**
+ * A cash movement (paid in, or drawn out) at or over the threshold.
+ */
+export interface LargeCashParams {
+  typology?: Typology9;
+  threshold: Threshold1;
+  cash_types?: CashTypes;
+  [k: string]: unknown;
+}
+/**
+ * An account moving money again after at least `dormant_days` days without a movement. An
+ * account with no movement before is new, not dormant.
+ */
+export interface DormantReactivatedParams {
+  typology?: Typology10;
+  dormant_days?: DormantDays;
+  [k: string]: unknown;
+}
+/**
+ * An account's movements over the last `recent_days` days at `factor` times or more its own
+ * daily rate over the `baseline_days` before — counted, or by amount — with at least
+ * `min_recent` movements in the recent days. An account with no movements in the baseline has no
+ * rate to rise from and is not judged.
+ */
+export interface VelocityRiseParams {
+  typology?: Typology11;
+  recent_days?: RecentDays;
+  baseline_days?: BaselineDays;
+  factor?: Factor;
+  min_recent?: MinRecent;
+  measure?: Measure;
   [k: string]: unknown;
 }

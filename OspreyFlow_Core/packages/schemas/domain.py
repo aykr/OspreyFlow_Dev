@@ -13,6 +13,7 @@ good as of Phase 7 Stage 2 — see `tests/schemas/test_placeholder_lifecycle.py`
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Final, Literal
@@ -829,6 +830,10 @@ TypologyName = Literal[
     "document_verification",
     "pattern",
     "sentence",
+    "high_risk_jurisdiction",
+    "large_cash",
+    "dormant_reactivated",
+    "velocity_rise",
 ]
 #: ADR-109 ruling 1: the rule chooses where it runs. `pre_commit` judges the incoming rows inside
 #: the load (a hit loads with its alert; a failure holds the rows); `post_commit` runs on the
@@ -904,6 +909,74 @@ class DocumentVerificationParams(BaseModel):
     typology: Literal["document_verification"] = "document_verification"
 
 
+# --- ADR-133 decision 2, stage (c): the new AML transaction-monitoring templates ---------------
+#
+# Each a typed typology with its parameters (rule 8: no expression language), judged over a load's
+# money movements (`TRANSACTED`) as the rule's deployer (`services/api/aml_rules.py`).
+
+#: A cash movement's `transaction_type` (the core ontology's `TRANSACTED` enum).
+CashType = Literal["CASH_IN", "CASH_OUT"]
+
+
+class HighRiskJurisdictionParams(BaseModel):
+    """A movement to or from an account held in a jurisdiction on the rule's own list. The list is
+    data in the rule — ISO 3166-1 alpha-2 codes, chosen by the rule's Author (a deployment's
+    policy, such as the FATF's lists, is theirs to enter) — and an account's jurisdiction is its
+    IBAN's country code (ISO 13616: the IBAN's first two letters)."""
+
+    typology: Literal["high_risk_jurisdiction"] = "high_risk_jurisdiction"
+    jurisdictions: list[str] = Field(min_length=1, max_length=250)
+
+    @field_validator("jurisdictions")
+    @classmethod
+    def _two_letter_codes(cls, value: list[str]) -> list[str]:
+        codes = []
+        for code in value:
+            code = code.strip().upper()
+            if not re.fullmatch(r"[A-Z]{2}", code):
+                raise ValueError(
+                    f"“{code}” is not a two-letter country code (ISO 3166-1 alpha-2, such as GB)"
+                )
+            if code not in codes:
+                codes.append(code)
+        return codes
+
+
+class LargeCashParams(BaseModel):
+    """A cash movement (paid in, or drawn out) at or over the threshold."""
+
+    typology: Literal["large_cash"] = "large_cash"
+    threshold: float = Field(gt=0)
+    cash_types: list[CashType] = Field(
+        default_factory=lambda: list[CashType](["CASH_IN", "CASH_OUT"]), min_length=1
+    )
+
+
+class DormantReactivatedParams(BaseModel):
+    """An account moving money again after at least `dormant_days` days without a movement. An
+    account with no movement before is new, not dormant."""
+
+    typology: Literal["dormant_reactivated"] = "dormant_reactivated"
+    dormant_days: int = Field(default=180, ge=30, le=3650)
+
+
+VelocityMeasure = Literal["count", "amount"]
+
+
+class VelocityRiseParams(BaseModel):
+    """An account's movements over the last `recent_days` days at `factor` times or more its own
+    daily rate over the `baseline_days` before — counted, or by amount — with at least
+    `min_recent` movements in the recent days. An account with no movements in the baseline has no
+    rate to rise from and is not judged."""
+
+    typology: Literal["velocity_rise"] = "velocity_rise"
+    recent_days: int = Field(default=7, ge=1, le=90)
+    baseline_days: int = Field(default=90, ge=7, le=366)
+    factor: float = Field(default=3.0, gt=1, le=100)
+    min_recent: int = Field(default=5, ge=1, le=10000)
+    measure: VelocityMeasure = "count"
+
+
 class PatternRuleParams(BaseModel):
     """ADR-109 phase D, the no-code typology builder: a sub-graph drawn in the query builder and
     saved (a `SavedPattern` the deployer owns, read afresh at each evaluation — ADR-036's own
@@ -924,7 +997,11 @@ TypologyParams = Annotated[
     | SharedAttributesParams
     | DocumentVerificationParams
     | PatternRuleParams
-    | SentenceRuleParams,
+    | SentenceRuleParams
+    | HighRiskJurisdictionParams
+    | LargeCashParams
+    | DormantReactivatedParams
+    | VelocityRiseParams,
     Field(discriminator="typology"),
 ]
 
@@ -944,6 +1021,15 @@ class TypologyRuleInput(BaseModel):
         if self.params.typology == "pattern" and self.trigger != "post_commit":
             raise ValueError(
                 "a drawn pattern is matched against the stored graph, so it runs after commit"
+            )
+        if (
+            self.params.typology in ("dormant_reactivated", "velocity_rise")
+            and self.trigger != "post_commit"
+        ):
+            raise ValueError(
+                "an account is compared with its own past as stored, which holds the load's own "
+                "movements only once it has committed, so this template runs after each load "
+                "commits"
             )
         if (
             isinstance(self.params, SentenceRuleParams)
@@ -1503,6 +1589,10 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     SharedAttributesParams,
     DocumentVerificationParams,
     PatternRuleParams,
+    HighRiskJurisdictionParams,
+    LargeCashParams,
+    DormantReactivatedParams,
+    VelocityRiseParams,
     CompiledSentence,
     SentenceReadRequest,
     TypologyRuleInput,
