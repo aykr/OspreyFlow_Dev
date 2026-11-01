@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.17** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.18** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.18 | 2026-11-01 | §7.5: a hotlist can hold an account number, matched on the account however its spaces are written. §7.4: a money-flow rule judges only movements between accounts its author may see. §7.10: the UK Sanctions List (FCDO) among the lists; the closed OFSI list says so. |
 | 1.17 | 2026-11-01 | §7.3: closing an alert takes one of five closing reasons (True match, False positive, Duplicate, No further action, Referred) and words. §7.5 and the left rail: watches, and the alert inbox, are in Monitoring's Watches tab; the rail has no Watches entry. §7.10: UN and OpenSanctions are marked "licence not confirmed", and whoever manages lists sees only their own unit's counts. Ask to search answers on the engine you choose when the case's data may leave (the engine choice). The mark on the top bar is read aloud as "Osprey, go to Home". |
 | 1.16 | 2026-11-01 | §7.11: a rule that runs on a schedule, every day or every week, and its runs. §7.12: a second person's approval — for a rule for the whole deployment, and for closing a high-severity alert; a rule's versions. §7.3 and §7.10 point to them, and a list may be refreshed on a schedule. |
 | 1.15 | 2026-11-01 | §7.9: the four new AML templates (a high-risk jurisdiction, large cash, a dormant account reactivated, a sudden rise in velocity). §7.10: screening lists — the Lists tab, re-screening when a list changes, and a match confirmed by a person. |
@@ -549,12 +550,18 @@ the severity of its alerts. **Use** fills the form with the template's defaults 
 rule's name; change anything, then **Deploy**. Everyone in the case sees the templates; only an Author
 has **Use**. A rule can also be written as a sentence (§7.6).
 
+The money-flow templates (structuring, rapid movement, circular flow) judge each load's movements with
+the movements around them, and only those whose two accounts the rule's author may see, in the rule's
+own dataset: a movement between accounts hidden from them shapes no finding.
+
 ### 7.5 Watches, and whom a hotlist's alerts reach
 
 ![Watches: hotlists, monitors, and the alerts they raise](images/user/13-watches.png)
 
-The Monitoring place's **Watches** tab keeps a **hotlist** of identifiers — a phone number, an email address — each with a review
-date: any data that touches one raises an alert. A **monitor** runs a saved pattern against new data.
+The Monitoring place's **Watches** tab keeps a **hotlist** of identifiers — a phone number, an email address, an account
+number — each with a review date: any data that touches one raises an alert. An account number is
+matched however its spaces are written: `GB58 LOYD 3096 1700 7099 43` and `GB58LOYD30961700709943` are
+the same account. A **monitor** runs a saved pattern against new data.
 Both watch only their case's data. Under them, the **Alert inbox** lists what your hotlists and
 monitors raised; **Jump into investigation** starts a case from an alert. There is no separate
 Watches place on the left rail: open **Monitoring**, then **Watches**.
@@ -680,7 +687,8 @@ with its own stored past, so they run after each load commits.
 ![The Lists tab: each list's version, entries, last update and state, the latest refreshes, and subscribing](images/user/23-screening-lists.png)
 
 The **Lists** tab shows each sanctions, PEP or adverse-media list the deployment screens against: the
-list it is (OFAC, HM Treasury OFSI, the UN or EU consolidated list, or OpenSanctions), its version, how
+list it is (OFAC, the FCDO's UK Sanctions List, the UN or EU consolidated list, OpenSanctions, or HM
+Treasury OFSI's, which closed on 28 January 2026 and is marked "Closed list"), its version, how
 many entries it holds, when it last changed, its licence, and its state — up to date, not yet read, or
 why its last refresh failed, in words. A list read from a file that is not in its publisher's format is
 left as it was, and says so.

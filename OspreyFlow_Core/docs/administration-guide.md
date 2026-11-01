@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.20** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.21** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.21 | 2026-11-01 | §9.5: a sixth connector, the FCDO's UK Sanctions List (the XML file, Open Government Licence v3.0); the OFSI connector marked as reading a closed list, on the Lists tab and in the subscribe form. §12: the `closed` section's labels are the five closing reasons as stored. |
 | 1.20 | 2026-11-01 | §9.5: the UN and OpenSanctions connectors are marked "licence not confirmed" and read OspreyFlow's synthetic lists only, whatever this device's exceptions admit; the refreshes' counts of customers re-screened and alerts raised are your own unit's. |
 | 1.19 | 2026-11-01 | §9.5: a list's refresh schedule, set in Monitoring → Lists and run as the person who set it. §9.6: approval rights — a second person for a rule for the whole deployment and for closing a high-severity alert, and who holds the right to approve; whole-deployment rules live before this version wait for approval after upgrading. |
 | 1.18 | 2026-11-01 | §9.5: screening lists — subscribing to a list through its connector, each list's licence, the rule on real lists, and the refresh (*Refresh now*, `python -m scripts.refresh_screening_list`), which re-screens customers against the changed entries only. |
@@ -505,13 +506,25 @@ export format:
 | Connector | Reads | Licence (as its publisher states it, 1 November 2026) |
 | --- | --- | --- |
 | OFAC SDN list | `SDN.CSV`, with `ALT.CSV` and `ADD.CSV` beside it when present | A US Government work, in the public domain; OFAC's own pages state no licence |
-| HM Treasury OFSI consolidated list | `ConList.csv` | Open Government Licence v3.0. **The list closed on 28 January 2026**: the FCDO's UK Sanctions List replaced it, and OspreyFlow has no connector for that yet |
+| HM Treasury OFSI consolidated list | `ConList.csv` | Open Government Licence v3.0. **Reads a closed list**: the OFSI Consolidated List closed on 28 January 2026 and is no longer updated. Use the UK Sanctions List below for UK designations |
+| UK Sanctions List (FCDO) | `UK-Sanctions-List.xml` (the XML format) | Open Government Licence v3.0 (Crown copyright). The only source of UK sanctions designations since 28 January 2026. Its XML schema carries a notice of its own about commercial use; OspreyFlow does not ship it |
 | UN Security Council consolidated list | `consolidated.xml` | **Licence not confirmed.** No open licence found: the UN's terms of use allow personal, non-commercial use. Confirm with the UN before relying on it. Synthetic lists only until then |
 | EU consolidated financial sanctions list | the FSF XML 1.1 file | The European Commission's reuse notice (Decision 2011/833/EU) |
 | OpenSanctions | `entities.ftm.json` | **Licence not confirmed.** CC BY-NC 4.0: **non-commercial only**. Screening inside a business is commercial use and needs OpenSanctions' data licence. Synthetic lists only until then |
 
 Check the licence for your use before you subscribe. The architecture's licence register (spec 00 §7)
 records where each statement was read.
+
+**A closed list: OFSI.** HM Treasury closed the OFSI Consolidated List on 28 January 2026; the FCDO's
+UK Sanctions List is now the only source of UK designations. OspreyFlow keeps the OFSI connector, so a
+file you already hold can still be read, but nothing new will ever be published to it: the Lists tab
+says "Closed list" on such a list's row, and the subscribe form names the connector "reads a closed
+list" and points to the UK Sanctions List. To screen against UK designations, download
+`UK-Sanctions-List.xml` from the list's page (gov.uk/government/publications/the-uk-sanctions-list;
+the FCDO keeps it at a fixed address, `sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml`), put it
+in the ingest folder, and subscribe to it through the **UK Sanctions List (FCDO)** connector. OspreyFlow
+does not fetch it for you. The connector reads the XML only (its schema is published; the CSV's column
+order is not).
 
 **Licence not confirmed: UN and OpenSanctions.** Until their licences for a customer's screening are
 confirmed, these two connectors read OspreyFlow's own synthetic lists only. The Lists tab marks each
@@ -754,7 +767,7 @@ database's `figures` table, beside `raised`, `open_by_age` and `outcome`:
 | `section` | `label` | What it counts |
 | --- | --- | --- |
 | `raised_by_rule` | `typology` (with its `typology`), `hotlists` or `monitors` | alerts raised each week, by rule |
-| `closed` | `true_positive`, `false_positive` or `closed` (taken back, no outcome) | alerts closed each week, by outcome |
+| `closed` | the closing reason as stored: `true_positive` (True match), `false_positive` (False positive), `duplicate`, `no_further_action` or `referred`; or `closed` (taken back, no outcome) | alerts closed each week, by outcome |
 | `time_to_close` | `under a day`, `1 to 7 days`, `7 to 30 days`, `over 30 days` | alerts closed in the period, by how long they took |
 | `hotlist_matches` | `hotlists` | hotlist matches each week |
 

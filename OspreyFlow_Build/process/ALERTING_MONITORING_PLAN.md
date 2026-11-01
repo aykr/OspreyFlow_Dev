@@ -87,10 +87,22 @@ description, as a fifth capability on the welcome page and as a part of About.
     reader's SQL scope, hidden ones included; opening one alert by its id still reads its nodes in
     turn (the reader must already hold the id, and is told "not found" either way).
 
+## Built by step 8b (1 November 2026): the Ledger's monitoring week and the UK Sanctions List
+
+- **A1–A4** (ADR-108 Amendment 5; `packages/demo_fixtures/ledger_monitoring.py`): the bank's next
+  weekly export raises a pass-through (rapid movement) and a circle (circular flow) through the case's
+  rules on load, and a hotlist alert on a mule's account; a synthetic UK Sanctions List update raises a
+  screening alert on Sofia Ruiz; the pass-through, closed as *Referred*, reaches the pack and the
+  figures. Golden and negative tests: `tests/scenarios/test_ledger_monitoring_storyline.py`.
+- **The UK Sanctions List (FCDO) connector** (ADR-133 Amendment 6), OGL v3.0; the OFSI connector
+  marked as reading a closed list.
+- **Two fixes:** a hotlist can watch an account number; a money-flow rule judges only accounts its
+  author may see (rule 3).
+
 ## Built by ADR-133 stage (c) (build-order step 6, 1 November 2026)
 
 - **Connectors** (`packages/knowledge_adapters/screening_lists.py`): OFAC SDN, OFSI consolidated, UN
-  and EU consolidated, OpenSanctions, each a Knowledge Adapter with synthetic golden files
+  and EU consolidated, OpenSanctions (and, from step 8b, the FCDO's UK Sanctions List), each a Knowledge Adapter with synthetic golden files
   (`tests/knowledge_adapters/golden/screening_lists/`), refusing a file not in its format in words.
   Licences in spec 00 §7 (OFSI's list closed on 28 January 2026; the UN list has no open licence found).
 - **Lists as managed sources** (`services/api/screening.py`, `screening_refresh.py`): subscriptions,

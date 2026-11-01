@@ -21585,7 +21585,7 @@ unchanged, as is every figure they quote: nothing of the week touches September'
 
 | Step | What happens | Case |
 | --- | --- | --- |
-| 1. After the SAR | The analyst hotlists Jamal Carter's Lloyds account ("only me"), and deploys two rules from the typology templates, each after each load commits: "Money straight through an account" (rapid movement, the template's 48 hours and 80%) and "Money back where it started within a week" (circular flow, 4 movements, tuned from 30 days to 7 with the preview) | A1, A2 |
+| 1. After the SAR | The analyst hotlists Jamal Carter's Lloyds account ("only me"), and deploys two rules from the typology templates, each after each load commits: "Money straight through an account" (rapid movement, the template's 48 hours and 80%) and "Money back where it started within a week" (circular flow, 4 movements, tuned from 30 days to 7) | A1, A2 |
 | 2. The next weekly export | The data engineer loads `ledger_transactions_week2.csv` through a Studio pipeline mapped as `ledger_transactions_recipe.yaml`; *Checks on load* applies the case's rules (the default). The load raises **R1**, **C1** and **H1** | A1, A2 |
 | 3. A list update | The administrator refreshes the UK Sanctions List (synthetic) at version 1 (nothing found); the presenter releases version 2; *Refresh now* re-screens every customer and raises **K1** | A3 |
 | 4. Close and report | The analyst closes R1 as *Referred*; it goes into the case's pack as an `alert` item, closed; the monitoring figures count the week | A4 |
@@ -21707,8 +21707,11 @@ reset in `tests/test_seed_ledger_monitoring.py`.
    depositor's account to the account credited, since the fixture has no account for cash itself.
 2. *The circle's window is tuned to 7 days.* With the template's 30 days, the circle also finds the
    ring's September deposits going round through Brightpath and Crescent, and Hale Logistics' ordinary
-   trading going round its suppliers: the rule working, but several alerts for one week's story. The
-   walkthrough shows the preview (ADR-133 decision 3) at 30 days, then deploys at 7.
+   trading going round its suppliers: the rule working, but several alerts for one week's story
+   (`test_the_story_makes_one_pass_through_and_one_circle` shows it). The walkthrough says why, and
+   deploys at 7. A typology template has no preview: ADR-133 decision 3's preview is built for a
+   rule written as a sentence only (Amendment 2 item 6), so the tuning cannot be shown against
+   evidence on screen — for the owner.
 3. *Checks on load, not a schedule.* A1 runs as the week loads (after commit), which is when a weekly
    export is judged; a schedule (stage (d)) would judge the same rows a day later and adds nothing.
 4. *The week is loaded through a pipeline the engineer builds in the Studio*, mapped as the committed
