@@ -224,6 +224,16 @@ function answer(path: string, search: URLSearchParams): unknown {
   if (local === "patterns") return { patterns: [{ id: "sp1", pattern_id: "pat-1", version: 1, name: "Phone shared by two people", owner_id: "analyst-1", created_at: hoursAgo(500), definition: { nodes: [], edges: [] } }] };
   if (local === "hotlists") return HOTLISTS;
   if (local === "monitors") return { monitors: [{ id: "mo-1", pattern_id: "pat-1", owner_id: "analyst-1", status: "active", created_at: hoursAgo(500) }] };
+  // The owner's answer of 1 November 2026: the alert inbox lives in the Watches tab now.
+  if (local === "alerts")
+    return {
+      alerts: [{
+        id: "w-1", rule_id: "hotlist:hl-1", owner_id: "analyst-1", mode: "full", referent_node_ids: ["n1"],
+        evidence_available: true, investigation_id: "inv-1", created_at: hoursAgo(30),
+        hotlist: { identifier: "07700 900918", kept_as_written: false, review_date: "2027-01-31" },
+        fired_on: [{ type: "Endpoint", label: "+447700900918", files: [{ name: "pid_seized_comms_batch2.csv", row: 3 }], more_files: 0 }],
+      }],
+    };  // prettier-ignore
   return null;
 }
 

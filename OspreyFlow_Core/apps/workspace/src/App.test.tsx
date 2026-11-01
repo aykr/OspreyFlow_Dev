@@ -346,6 +346,16 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     expect(header.getAttribute("data-app")).toBe("glass");
   });
 
+  test("the rail has no Watches entry: watches are reached from Monitoring's Watches tab", async () => {
+    holdAllRequests();
+    render(<App />);
+    const rail = await screen.findByRole("navigation", { name: "Workspace" });
+    await within(rail).findByRole("button", { name: "Monitoring" });
+    expect(within(rail).queryByRole("button", { name: "Watches" })).toBeNull();
+    fireEvent.click(within(rail).getByRole("button", { name: "Monitoring" }));
+    expect(await screen.findByRole("tab", { name: "Watches" })).toBeTruthy();
+  });
+
   test("inside the Ingest Studio the bar keeps only what belongs to it", async () => {
     holdAllRequests();
     sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
@@ -365,11 +375,11 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     holdAllRequests();
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Watches" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Monitoring" }));
     fireEvent.click(screen.getByRole("button", { name: "Ingest Studio" }));
-    expect(screen.queryByRole("button", { name: "Watches" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Monitoring" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Back to the investigation" }));
-    expect(screen.getByRole("button", { name: "Watches" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
   });
 
@@ -435,7 +445,9 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
         .onmessage?.({ data: JSON.stringify({ seq: 1, op: "snapshot", nodes: [], edges: [], withheld: true }) });
       expect(await screen.findByText(sentence)).toBeTruthy();
 
-      fireEvent.click(screen.getByRole("button", { name: "Watches" }));
+      // The owner's answer of 1 November 2026: the alert inbox is in Monitoring's Watches tab.
+      fireEvent.click(screen.getByRole("button", { name: "Monitoring" }));
+      fireEvent.click(await screen.findByRole("tab", { name: "Watches" }));
       fireEvent.click(await screen.findByRole("button", { name: "Jump into investigation" }));
       fireEvent.click(await screen.findByRole("button", { name: "Open investigation" }));
 

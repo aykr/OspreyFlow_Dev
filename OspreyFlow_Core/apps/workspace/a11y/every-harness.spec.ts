@@ -40,6 +40,9 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-133 stage (c): the Lists tab, as a reader and as whoever may load lists after a refresh
   // (its refreshes, a failure in words, the subscribe form), and an AML template filling the form.
   "monitoring-harness.html": [
+    // The owner's answer of 1 November 2026: the Watches tab, now the only way to the hotlists,
+    // the monitors and the alert inbox (the rail's Watches entry is gone).
+    "tab=watches",
     "tab=rules&sentence=preview",
     "tab=lists",
     "tab=lists&lists=manage&refreshed=1",

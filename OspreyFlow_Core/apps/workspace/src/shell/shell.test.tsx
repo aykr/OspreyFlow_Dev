@@ -42,15 +42,15 @@ describe("the left rail", () => {
   const items = () => [
     { id: "cases", label: "Cases", icon: "cases" as const, onSelect: vi.fn() },
     { id: "history", label: "History", icon: "history" as const, onSelect: vi.fn() },
-    { id: "watches", label: "Watches", icon: "watches" as const, onSelect: vi.fn(), pressed: true },
+    { id: "alerts", label: "Monitoring", icon: "alerts" as const, onSelect: vi.fn(), pressed: true },
   ];
 
   it("names every entry for assistive technology, even folded to icons", () => {
     render(<LeftRail items={items()} />);
     const nav = screen.getByRole("navigation", { name: "Workspace" });
     expect(nav).toBeTruthy();
-    for (const name of ["Cases", "History", "Watches"]) expect(screen.getByRole("button", { name })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Watches" }).getAttribute("aria-pressed")).toBe("true");
+    for (const name of ["Cases", "History", "Monitoring"]) expect(screen.getByRole("button", { name })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("an entry does what it names", () => {

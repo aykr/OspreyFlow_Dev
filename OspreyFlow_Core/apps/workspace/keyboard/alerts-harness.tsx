@@ -10,7 +10,7 @@ import { AlertsPlace } from "../src/alerts/AlertsPlace";
 
 declare global {
   interface Window {
-    __ALERTS__?: { canvasNodeIds: string[] | null };
+    __ALERTS__?: { canvasNodeIds: string[] | null; openedInvestigationId?: string };
   }
 }
 
@@ -29,6 +29,10 @@ createRoot(document.getElementById("root")!).render(
     canManageLists={new URLSearchParams(window.location.search).get("lists") === "manage"}
     onCanvas={(_outcome, nodeIds) => {
       window.__ALERTS__!.canvasNodeIds = nodeIds;
+    }}
+    // The owner's answer of 1 November 2026: the alert inbox's jump, from the Watches tab.
+    onOpenInvestigation={(id) => {
+      window.__ALERTS__!.openedInvestigationId = id;
     }}
   />,
 );

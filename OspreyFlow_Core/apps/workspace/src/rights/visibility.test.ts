@@ -25,9 +25,17 @@ const READER = ["read_alert_queue", "read_reports", "read_report_feed", "read_da
 
 describe("what the Glass offers each role", () => {
   it("offers an analyst the investigation and no administration", () => {
-    expect(railEntries(new Set(ANALYST))).toEqual(["cases", "watches", "alerts", "ownership", "history", "explore", "questions", "dashboards"]);
+    // The owner's answer of 1 November 2026: no Watches entry; watches are in Monitoring's Watches tab.
+    expect(railEntries(new Set(ANALYST))).toEqual(["cases", "alerts", "ownership", "history", "explore", "questions", "dashboards"]);
     expect(viewsFor(new Set(ANALYST))).toEqual(["graph", "map", "matrix", "reports"]);
     expect(landingView(new Set(ANALYST))).toBe("graph");
+  });
+
+  it("keeps watches reachable for someone who keeps watches but does not read the queue", () => {
+    // With the rail's Watches entry gone, Monitoring is where watches are: a person granted
+    // `keep_watches` alone must still be offered it, or their watches would be unreachable.
+    expect(railEntries(new Set(["investigate", "keep_watches"]))).toContain("alerts");
+    expect(railEntries(new Set(["investigate"]))).not.toContain("alerts");
   });
 
   it("offers a data engineer the Studio and no watches or ownership", () => {

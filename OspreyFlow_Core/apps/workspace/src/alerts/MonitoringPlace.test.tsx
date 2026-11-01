@@ -91,6 +91,16 @@ describe("the Monitoring place", () => {
     for (const tab of ["Queue", "Rules", "Watches"]) expect(screen.getByRole("tab", { name: tab })).toBeTruthy();
   });
 
+  it("holds the hotlists, the monitors and the alert inbox in its Watches tab, the rail having none", async () => {
+    // The owner's answer of 1 November 2026: the rail's Watches entry is gone, so everything it
+    // opened — the alert inbox with its jump into a new investigation included — is here.
+    serve("viewer");
+    place();
+    fireEvent.click(screen.getByRole("tab", { name: "Watches" }));
+    expect(await screen.findByRole("heading", { name: "Alert inbox" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Hotlists/ })).toBeTruthy();
+  });
+
   it("lists every kind with its severity, who may see it and its age", async () => {
     serve("viewer");
     vi.setSystemTime(new Date("2026-11-01T09:00:00Z"));

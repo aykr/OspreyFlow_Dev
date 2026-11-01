@@ -1,7 +1,9 @@
 // The *Monitoring* place on the left rail (`06_DECISIONS.md` ADR-133 decision 5; ADR-109 ruling 5
 // before it, as *Alerts*): the one alert queue first — every kind the reader may see — then the
-// rules that raise alerts and their templates, the reader's own hotlists and watched patterns, the
-// rows a failing rule held, and the rule audit; and, since ADR-133 stage (c), the screening lists.
+// rules that raise alerts and their templates, the reader's own hotlists and watched patterns with
+// their alert inbox, the rows a failing rule held, and the rule audit; and, since ADR-133 stage (c),
+// the screening lists. Since the owner's answer of 1 November 2026 the Watches tab is the only way
+// to the watches: the left rail's Watches entry is gone.
 // What each account may do follows its level in the case, read as every other case surface reads
 // it (`listCases`); the Conduit refuses whatever a stale view offers anyway.
 import { useEffect, useState } from "react";
@@ -13,6 +15,7 @@ import { HeldRowsPanel } from "./HeldRowsPanel";
 import { ListsPanel } from "./ListsPanel";
 import { RuleAuditPanel } from "./RuleAuditPanel";
 import { RulesPanel } from "./RulesPanel";
+import { AlertInbox } from "../watches/AlertInbox";
 import { HotlistPanel } from "../watches/HotlistPanel";
 import { MonitorPanel } from "../watches/MonitorPanel";
 
@@ -25,6 +28,8 @@ export interface AlertsPlaceProps {
   /** ADR-112's `load_screening_lists`: subscribing to and refreshing a screening list. */
   canManageLists?: boolean;
   onCanvas: (outcome: CanvasOutcome, nodeIds: string[]) => void;
+  /** The alert inbox's jump: the new investigation an alert was branched into, opened. */
+  onOpenInvestigation?: (investigationId: string) => void;
 }
 
 type Tab = "queue" | "rules" | "watches" | "lists" | "held" | "audit";
@@ -69,6 +74,7 @@ export function AlertsPlace(props: AlertsPlaceProps) {
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", maxWidth: 640 }}>
           <HotlistPanel {...api} />
           <MonitorPanel {...api} />
+          <AlertInbox {...api} onOpenInvestigation={props.onOpenInvestigation ?? (() => undefined)} />
         </div>
       )}
       {tab === "lists" && (
