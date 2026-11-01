@@ -44,7 +44,17 @@ const EXTRA_STATES: Record<string, string[]> = {
     "tab=lists",
     "tab=lists&lists=manage&refreshed=1",
     "tab=rules&template=high_risk_jurisdiction",
+    // ADR-133 stage (d): a whole-deployment rule waiting for a second person (Approve and Reject
+    // offered), a scheduled rule's runs and versions open, a sentence set to run every week, a
+    // high-severity alert whose close waits for approval, and a list refreshed on a schedule with
+    // its schedule form.
+    "stage=d&tab=rules&opened=1",
+    "stage=d&tab=rules&sentence=schedule",
+    "stage=d&open=a-close",
+    "stage=d&tab=lists&lists=manage",
   ],
+  // ADR-133 decision 6, stage (d): the Checks on load step (the default) and Verify's would-be alerts.
+  "checks-on-load-harness.html": ["view=verify"],
 };
 
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();

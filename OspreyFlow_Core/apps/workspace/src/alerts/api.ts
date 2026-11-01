@@ -9,12 +9,15 @@ import type {
   AlertExplanation,
   CompiledSentence,
   HeldRow,
+  ListSchedule,
   OntologySchema,
   PatternQuery,
   RulePreview,
   RuleSentence,
   QueuedAlert,
   RuleAuditPage,
+  RuleScheduleView,
+  RuleVersion,
   ScreeningLists,
   ScreeningListStatus,
   ScreeningListUpdate,
@@ -79,6 +82,15 @@ async function failure(response: Response, what: string): Promise<Error> {
     return new Error(
       `Too many to preview: the rule's subjects number ${fmt.format(body.would_be ?? 0)}, past the limit of ${fmt.format(body.cap ?? 0)}. Nothing was counted; narrow the sentence and preview again.`,
     );
+  }
+  // ADR-133 decision 7: the server says, in words, why a second person is needed.
+  const own = body.detail as { error?: unknown; message?: unknown } | undefined;
+  if (own && typeof own === "object" && own.error === "own_change" && typeof own.message === "string") {
+    return new Error(own.message);
+  }
+  const refusal = body as { error?: string; message?: unknown };
+  if (refusal.error === "rule_change_refused" && typeof refusal.message === "string") {
+    return new Error(refusal.message);
   }
   if (body.error === "assignment_refused" && typeof body.detail === "string") {
     return new Error(body.detail);
@@ -227,4 +239,32 @@ export const refreshScreeningList = (a: ListsApi, listName: string) =>
     a.bearerToken,
     "Refreshing the list",
     { method: "POST" },
+  );
+
+// --- stage (d): maker–checker and the scheduled trigger (ADR-133 decisions 1 and 7) --------------
+
+export const approveRule = (a: AlertsApi, ruleId: string) =>
+  call<TypologyRule>(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/approve`), a.bearerToken, "Approving the change", { method: "POST" });
+
+export const rejectRule = (a: AlertsApi, ruleId: string, reason: string) =>
+  call<TypologyRule>(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/reject`), a.bearerToken, "Rejecting the change", { method: "POST", body: { reason } });
+
+export const ruleVersions = (a: AlertsApi, ruleId: string) =>
+  call<RuleVersion[]>(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/versions`), a.bearerToken, "Reading the rule's versions");
+
+export const ruleRuns = (a: AlertsApi, ruleId: string) =>
+  call<RuleScheduleView>(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/runs`), a.bearerToken, "Reading the rule's schedule");
+
+export const approveClose = (a: AlertsApi, alertId: string) =>
+  call<Alert>(caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue/${encodeURIComponent(alertId)}/approve-close`), a.bearerToken, "Approving the close", { method: "POST" });
+
+export const sendBackClose = (a: AlertsApi, alertId: string, reason: string) =>
+  call<Alert>(caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue/${encodeURIComponent(alertId)}/send-back`), a.bearerToken, "Sending the close back", { method: "POST", body: { reason } });
+
+export const setListSchedule = (a: ListsApi, listName: string, schedule: ListSchedule | null) =>
+  call<ScreeningListStatus>(
+    `${a.apiBaseUrl}/v1/admin/screening-lists/${encodeURIComponent(listName)}/schedule`,
+    a.bearerToken,
+    "Setting the refresh schedule",
+    { method: "PUT", body: { schedule } },
   );

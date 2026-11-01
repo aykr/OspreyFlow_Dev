@@ -19,6 +19,7 @@ import {
   fetchRecipeRegistry,
   savePipeline,
 } from "../api";
+import { ChecksScreen } from "../checks/ChecksScreen";
 import { ConnectScreen } from "../ConnectScreen";
 import { MapScreen } from "../map/MapScreen";
 import { ProfileScreen } from "../ProfileScreen";
@@ -42,7 +43,7 @@ export interface PipelineStudioProps {
 type View =
   | { at: "home" }
   | { at: "canvas"; recipeId: string }
-  | { at: "connect" | "profile" | "map" | "verify" | "publish"; recipeId: string; fromHome?: boolean };
+  | { at: "connect" | "profile" | "map" | "checks" | "verify" | "publish"; recipeId: string; fromHome?: boolean };
 
 export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId }: PipelineStudioProps) {
   const [view, setView] = useState<View>({ at: "home" });
@@ -75,6 +76,8 @@ export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId }: Pip
   }
   if (view.at === "profile") return <ProfileScreen {...stage} onBack={back} />;
   if (view.at === "map") return <MapScreen {...stage} onBack={back} />;
+  // ADR-133 decision 6, stage (d): the rules that judge this pipeline's loads, attached here.
+  if (view.at === "checks") return <ChecksScreen {...stage} onBack={back} />;
   if (view.at === "verify") return <VerifyScreen {...stage} onBack={back} />;
   if (view.at === "publish") {
     return (
@@ -193,7 +196,7 @@ function PipelineEditor({
 }: PipelineStudioProps & {
   recipeId: string;
   onHome: () => void;
-  onOpenStage: (at: "connect" | "profile" | "map" | "verify" | "publish") => void;
+  onOpenStage: (at: "connect" | "profile" | "map" | "checks" | "verify" | "publish") => void;
 }) {
   const [draft, setDraft] = useState<StudioRecipeDraft | null>(null);
   const [pipeline, setPipeline] = useState<PipelineGraph | null>(null);
@@ -261,6 +264,7 @@ function PipelineEditor({
           <h2 style={{ margin: 0, fontSize: "var(--fs-16)" }}>{draft.label}</h2>
           <span className="label">{`v${draft.version} · ${draft.status}`}</span>
           <span style={{ flex: 1 }} />
+          <Button onClick={() => onOpenStage("checks")}>Checks on load</Button>
           <Button onClick={() => onOpenStage("verify")}>Verify</Button>
           <Button onClick={() => onOpenStage("publish")}>Publish</Button>
         </header>

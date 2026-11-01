@@ -581,6 +581,32 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
   "subscribe-to-a-screening-list-by-keyboard",
 ] as const);
 
+/** ADR-133 stage (d) in the Monitoring place: a rule written to run on a schedule, its schedule and
+ * runs read; a whole-deployment rule approved and another's change rejected by a second person; a
+ * rule's versions read; a high-severity alert's close proposed, approved by a second member, and
+ * another sent back; a screening list's refresh schedule set. `keyboard/monitoring-stage-d.spec.ts`. */
+export const MONITORING_STAGE_D_ACTIONS = defineActionRegistry("MONITORING_STAGE_D_ACTIONS", [
+  "schedule-a-rule-by-keyboard",
+  "read-a-rules-schedule-and-runs-by-keyboard",
+  "approve-a-whole-deployment-rule-by-keyboard",
+  "reject-a-whole-deployment-rule-change-by-keyboard",
+  "read-a-rules-versions-by-keyboard",
+  "propose-closing-a-high-severity-alert-by-keyboard",
+  "approve-closing-a-high-severity-alert-by-keyboard",
+  "send-back-a-proposed-close-by-keyboard",
+  "set-a-list-refresh-schedule-by-keyboard",
+] as const);
+
+/** ADR-133 decision 6, stage (d): the Ingest Studio's "Checks on load" step reached from a pipeline,
+ * a rule attached and set to hold on a hit, the choice saved; Verify's would-be alerts read beside
+ * the rejections. `keyboard/checks-on-load.spec.ts`. */
+export const CHECKS_ON_LOAD_ACTIONS = defineActionRegistry("CHECKS_ON_LOAD_ACTIONS", [
+  "open-checks-on-load-by-keyboard",
+  "attach-a-rule-and-hold-on-a-hit-by-keyboard",
+  "save-the-checks-by-keyboard",
+  "read-the-alerts-a-sample-would-raise-by-keyboard",
+] as const);
+
 /** The Ownership place (ADR-109 phase C): find an entity, trace its beneficial owners, change the
  * threshold, read a party's chains, put the structure on the canvas. `keyboard/ownership.spec.ts`. */
 export const OWNERSHIP_ACTIONS = defineActionRegistry("OWNERSHIP_ACTIONS", [

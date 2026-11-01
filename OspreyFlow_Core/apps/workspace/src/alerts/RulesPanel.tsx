@@ -16,8 +16,9 @@ import type { AccessLevel } from "../investigation/cases";
 import { listPatterns } from "../patterns/api";
 import { deployRule, listRules, retireRule, type AlertsApi } from "./api";
 import { money, ruleTypologyLabel, when } from "./names";
+import { RuleApproval, RuleHistory, RuleSchedule } from "./RuleChanges";
 import { SentenceBuilder } from "./SentenceBuilder";
-import { sentenceSummary } from "./sentence";
+import { scheduleWords, sentenceSummary } from "./sentence";
 import { TEMPLATES, type RuleTemplate } from "./templates";
 
 type Typology =
@@ -263,6 +264,27 @@ export interface RulesPanelProps extends AlertsApi {
   level: AccessLevel | null;
   /** ADR-133 decision 1: a rule for the whole deployment is an administrator's. */
   isAdministrator?: boolean;
+  /** ADR-133 decision 7: who is reading, so their own proposal is not offered to them to approve. */
+  accountId?: string | null;
+}
+
+/** When the rule runs, in words: before or after each load, or on its schedule (stage (d)). */
+export function runsWords(rule: TypologyRule): string {
+  if (rule.trigger === "schedule") {
+    const schedule = (rule.params as unknown as { sentence?: { schedule?: { every: string; hour: number; weekday?: number | null } } })
+      .sentence?.schedule;
+    return `Runs on a schedule, ${scheduleWords(schedule)} (Europe/London), as its author`;
+  }
+  return rule.trigger === "pre_commit"
+    ? `Judges each load before it commits (budget ${(rule.budget_ms ?? 5000).toLocaleString("en-GB")} ms; held if it cannot judge)`
+    : "Runs after each load commits";
+}
+
+/** The rule's status in words; a whole-deployment rule waiting for its first approval runs nowhere. */
+export function statusWords(rule: TypologyRule): string {
+  if (rule.status === "retired") return `retired ${rule.retired_at ? when(rule.retired_at) : ""}`.trim();
+  if (rule.status === "pending") return "not running: waiting for a second person's approval";
+  return `active${(rule.version ?? 1) > 1 ? `, version ${rule.version}` : ""}`;
 }
 
 export function RulesPanel(props: RulesPanelProps) {
@@ -336,22 +358,33 @@ export function RulesPanel(props: RulesPanelProps) {
                 {describeParams(rule, patternNames)}
               </span>
               <span className="label">
-                {rule.trigger === "pre_commit"
-                  ? `Judges each load before it commits (budget ${(rule.budget_ms ?? 5000).toLocaleString("en-GB")} ms; held if it cannot judge)`
-                  : "Runs after each load commits"}{" "}
-                ·{" "}
-                {rule.status === "retired"
-                  ? `retired ${rule.retired_at ? when(rule.retired_at) : ""}`
-                  : "active"}
+                {runsWords(rule)} · {statusWords(rule)}
+              </span>
+              <RuleApproval
+                {...props}
+                rule={rule}
+                canApprove={author && (props.isAdministrator ?? false) && rule.pending_by !== props.accountId}
+                onDone={(words) => {
+                  setSaid(words);
+                  reload();
+                }}
+              />
+              <span style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
+                <RuleHistory {...props} rule={rule} />
+                {rule.trigger === "schedule" && <RuleSchedule {...props} rule={rule} />}
               </span>
             </span>
-            {author && rule.status === "active" && (
+            {author && rule.status === "active" && !rule.pending_action && (
               <Button
                 aria-label={`Retire ${rule.name}`}
                 onClick={() =>
                   void retireRule(props, rule.id)
-                    .then(() => {
-                      setSaid(`Retired “${rule.name}”.`);
+                    .then((done) => {
+                      setSaid(
+                        done.pending_action === "retire"
+                          ? `Retiring “${rule.name}” waits for a second person's approval.`
+                          : `Retired “${rule.name}”.`,
+                      );
                       reload();
                     })
                     .catch((e: Error) => setProblem(e.message))
@@ -368,7 +401,11 @@ export function RulesPanel(props: RulesPanelProps) {
         isAdministrator={props.isAdministrator ?? false}
         patterns={patterns}
         onDeployed={(rule) => {
-          setSaid(`Deployed “${rule.name}”.`);
+          setSaid(
+            rule.status === "pending"
+              ? `“${rule.name}” is deployed for the whole deployment and waits for a second person's approval before it runs.`
+              : `Deployed “${rule.name}”.`,
+          );
           reload();
         }}
       />

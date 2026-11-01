@@ -213,11 +213,12 @@ describe("the sentence builder", () => {
     serve();
     builder();
     const runs = async () => [...((await screen.findByLabelText("Runs")) as HTMLSelectElement).options].map((o) => o.value);
-    expect(await runs()).toEqual(["post_commit", "pre_commit"]);
+    expect(await runs()).toEqual(["post_commit", "pre_commit", "schedule"]);
     fireEvent.change(screen.getByLabelText("Runs"), { target: { value: "pre_commit" } });
     expect(screen.getByLabelText("A hit")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Relationship"), { target: { value: "linked" } });
-    expect(await runs()).toEqual(["post_commit"]);
+    // ADR-133 stage (d): a link is read from the stored graph, so after commit or on a schedule.
+    expect(await runs()).toEqual(["post_commit", "schedule"]);
     expect(screen.getByText("A link is read from the stored graph, so this rule runs after each load commits.")).toBeTruthy();
   });
 });

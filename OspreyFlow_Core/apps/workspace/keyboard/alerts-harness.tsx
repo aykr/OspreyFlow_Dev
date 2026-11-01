@@ -21,8 +21,10 @@ createRoot(document.getElementById("root")!).render(
     apiBaseUrl="http://keyboard-test.invalid"
     bearerToken="unused"
     investigationId="inv-1"
-    accountId="analyst-1"
-    isAdministrator={false}
+    // ADR-133 stage (d): `?account=` signs in as another member (a second person), `?admin=1` as an
+    // administrator, who approves a whole-deployment rule's change.
+    accountId={new URLSearchParams(window.location.search).get("account") ?? "analyst-1"}
+    isAdministrator={new URLSearchParams(window.location.search).get("admin") === "1"}
     // ADR-133 stage (c): `?lists=manage` renders the Lists tab for whoever may load screening lists.
     canManageLists={new URLSearchParams(window.location.search).get("lists") === "manage"}
     onCanvas={(_outcome, nodeIds) => {

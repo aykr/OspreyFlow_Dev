@@ -64,7 +64,7 @@ export function AlertsPlace(props: AlertsPlaceProps) {
       <h2 className="value" style={{ margin: 0 }}>Monitoring</h2>
       <Tabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as Tab)} />
       {tab === "queue" && <AlertQueue {...api} level={level} accountId={props.accountId} onCanvas={props.onCanvas} />}
-      {tab === "rules" && <RulesPanel {...api} level={level} isAdministrator={props.isAdministrator} />}
+      {tab === "rules" && <RulesPanel {...api} level={level} isAdministrator={props.isAdministrator} accountId={props.accountId} />}
       {tab === "watches" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", maxWidth: 640 }}>
           <HotlistPanel {...api} />
