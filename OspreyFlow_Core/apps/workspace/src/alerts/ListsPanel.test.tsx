@@ -103,7 +103,7 @@ describe("the Lists tab", () => {
       licence: "Open Government Licence v3.0. The OFSI Consolidated List closed on 28 January 2026; the UK Sanctions List replaces it",
       licence_confirmed: true, licence_note: null, closed_note: closed, version: "2026-01-27", entries: 3,
       updated_at: "2026-11-01T09:00:00Z", attempted_at: "2026-11-01T09:00:00Z", failure: null,
-    } as (typeof LISTS)[number]); // prettier-ignore
+    } as unknown as (typeof LISTS)[number]); // prettier-ignore
     try {
       serve();
       render(<ListsPanel {...props} canManage={true} />);
