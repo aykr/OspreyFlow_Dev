@@ -27,7 +27,9 @@
   display: flex; flex-direction: column; overflow: hidden;
   background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: var(--r-2);
 }
-.home-panel--gated { opacity: 0.72; }
+/* A gated panel dims its picture only: its words (who it is for, why it is closed) stay at full
+   contrast, which dimming the whole panel took below 4.5:1 (GDS baseline audit, 1 November 2026). */
+.home-panel--gated .home-panel__picture > :not(.home-pic__note) { opacity: 0.72; }
 .home-panel__picture {
   position: relative; height: 132px; overflow: hidden;
   background-color: var(--surface-app); border-bottom: 1px solid var(--border-subtle);
@@ -96,7 +98,7 @@
 }
 
 /* Attention, recent cases, ways of working. */
-.home-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--sp-32) var(--sp-40); align-items: start; }
+.home-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: var(--sp-32) var(--sp-40); align-items: start; }
 .home-column { display: flex; flex-direction: column; gap: var(--sp-32); min-width: 0; }
 .home-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-12); margin-bottom: var(--sp-8); }
 .home-section__head h2 { margin: 0; font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 700; }

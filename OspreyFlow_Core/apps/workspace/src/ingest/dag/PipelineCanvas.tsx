@@ -116,7 +116,10 @@ export function PipelineCanvas({ pipeline, selectedId, onSelect }: PipelineCanva
                 cursor: "pointer",
               }}
             >
-              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>{kind}</span>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>{kind}</span>{" "}
+              {/* The space keeps a word boundary between the kind and the label in the visible text,
+                  which the name must contain (WCAG 2.5.3 Label in Name; without it the text reads
+                  "SourceCarrier B…", found by the GDS baseline audit, 1 November 2026). */}
               <span
                 style={{
                   fontSize: "var(--fs-13)",
