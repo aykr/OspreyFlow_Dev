@@ -45,6 +45,8 @@ export function GovukFooter({ organisation }: { organisation: string | null }) {
               </li>
             </ul>
             {organisation !== null && <p className="govuk-body-s">Run by {organisation}</p>}
+            {/* ADR-132 Amendment 4: the product credited in words, on every GOV.UK page. */}
+            <p className="govuk-body-s">Built with OspreyFlow, open source.</p>
             <svg
               aria-hidden="true"
               focusable="false"

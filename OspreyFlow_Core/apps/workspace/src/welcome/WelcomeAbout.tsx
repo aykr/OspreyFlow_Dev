@@ -1,5 +1,7 @@
 // The welcome page's About (ADR-115 decision 8): what the product is for, in the handoff's own words,
 // with screens of synthetic demonstration cases. Switched off by `welcome.about: false`.
+import { currentBrand } from "../brand/brand";
+import { MeshMark } from "../shell/BrandMark";
 import amlDecision from "./assets/screen-aml-decision.jpg";
 import amlOwnership from "./assets/screen-aml-ownership.jpg";
 import amlQueue from "./assets/screen-aml-queue.jpg";
@@ -70,10 +72,23 @@ function Features({ features }: { features: Feature[] }) {
   );
 }
 
-export function WelcomeAbout() {
+export function WelcomeAbout({ version = null }: { version?: string | null }) {
   return (
     <section id="about" className="welcome-about">
       <div className="welcome-section">
+        {/* ADR-132 Amendment 4: under GOV.UK the product's identity is here, not in the page's chrome. */}
+        {currentBrand() === "govuk" && (
+          <section aria-labelledby="about-ospreyflow" className="welcome-identity">
+            <MeshMark size={40} />
+            <div>
+              <h2 id="about-ospreyflow" className="welcome-identity__title">About OspreyFlow</h2>
+              <p className="welcome-about__sub">
+                OspreyFlow is the open-source intelligence analysis and network discovery platform this service is built on.
+                {version && <> Version <span className="value">{version}</span>.</>}
+              </p>
+            </div>
+          </section>
+        )}
         <h2 className="welcome-about__title">Two kinds of work, one graph</h2>
         <p className="welcome-about__lead">
           A crime analysis unit and a financial-crime team use the same graph, rules and reports. The screens below come

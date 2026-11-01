@@ -173,3 +173,11 @@
 .welcome-footer__brand .value { font-size: var(--fs-11); }
 .welcome-footer__links { display: flex; flex-wrap: wrap; gap: var(--sp-8) var(--sp-20); font-size: var(--fs-12); }
 .welcome-footer__links a { color: var(--text-secondary); }
+
+/* The product's identity in About, under GOV.UK only (ADR-132 Amendment 4). */
+.welcome-identity {
+  display: flex; align-items: flex-start; gap: var(--sp-16);
+  padding-bottom: var(--sp-24); margin-bottom: var(--sp-24); border-bottom: 1px solid var(--border-subtle);
+}
+.welcome-identity svg { flex: none; color: var(--text-primary); }
+.welcome-identity__title { margin: 0 0 var(--sp-4); font-size: var(--fs-19); line-height: var(--lh-19); font-weight: 700; }
