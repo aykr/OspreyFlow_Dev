@@ -14,6 +14,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
+from services.api.datasets import Dataset, InMemoryDatasetStore
 from services.api.model_routing import Engine, ModelEgressRefused, ModelRoutes, RoutedModel
 
 from schemas.domain import Handling
@@ -27,6 +28,10 @@ from schemas.model import (
 )
 
 LOCAL, PROVIDER = "qwen2.5:7b-instruct", "openai/gpt-4o-mini"
+#: ADR-136: the material comes from a dataset set to `any`, so only the handling codes decide here.
+OPEN = InMemoryDatasetStore()
+OPEN.add(Dataset(id="open", name="Open", owning_unit="u", created_by="seed", egress="any",
+                 created_at="2026-11-01T00:00:00Z"))  # type: ignore[arg-type]  # fmt: skip
 
 
 def _handling(code: str) -> Handling:
@@ -62,6 +67,7 @@ def _routed(
                     key_present=True)  # fmt: skip
     return RoutedModel(
         inner,  # type: ignore[arg-type]
+        egress=OPEN,
         routes=ModelRoutes(
             locals={"extraction": local, "vision": "moondream", "transcription": "whisper"},
             engines={"openai": openai},
@@ -73,8 +79,9 @@ def _routed(
 
 def _extract(model: str, handling: Handling | None) -> ExtractionRequest:
     return ExtractionRequest(
-        document_id="d", text="t", json_schema={}, model=model, handling=handling
-    )
+        document_id="d", text="t", json_schema={}, model=model, handling=handling,
+        datasets=["open"],
+    )  # fmt: skip
 
 
 async def test_sendable_material_goes_to_the_clients_provider() -> None:
@@ -112,7 +119,7 @@ async def test_with_no_local_model_unsendable_material_is_refused_in_words_and_n
 async def test_a_role_the_provider_does_not_name_is_never_sent() -> None:
     inner = _Inner()
     request = VisionRequest(document_id="d", image=b"x", text="t", json_schema={},
-                            model=PROVIDER, handling=_handling("P"))  # fmt: skip
+                            model=PROVIDER, handling=_handling("P"), datasets=["open"])  # fmt: skip
     await _routed(inner).describe_image(request)
     assert inner.models == ["moondream"]
 

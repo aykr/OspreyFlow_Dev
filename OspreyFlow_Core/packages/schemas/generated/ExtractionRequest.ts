@@ -11,6 +11,7 @@ export type OrgUnitId = string;
 export type ReviewDate = string | null;
 export type LegalBasis = string | null;
 export type Engine = string | null;
+export type Datasets = string[] | null;
 
 export interface ExtractionRequest {
   document_id: DocumentId;
@@ -19,6 +20,7 @@ export interface ExtractionRequest {
   model: Model;
   handling?: Handling | null;
   engine?: Engine;
+  datasets?: Datasets;
   [k: string]: unknown;
 }
 export interface JsonSchema {

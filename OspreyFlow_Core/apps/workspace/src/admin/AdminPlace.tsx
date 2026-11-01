@@ -1,10 +1,12 @@
 // The Admin area (`06_DECISIONS.md` ADR-110 Amendment 1, ADR-112): the deployment's administration,
 // inside the running system and behind the same sign-in — no separate console to start. People and
 // their roles, dashboard identities, and the system's health; each tab shown only to an account
-// holding its right, and the Conduit refusing anything a stale view still offers.
+// holding its right, and the Conduit refusing anything a stale view still offers. ADR-136: the
+// Datasets tab, where an administrator sets where each dataset's material may go.
 import { useEffect, useState } from "react";
 
 import type {
+  AdminDataset,
   DashboardIdentity,
   DemoPackStatus,
   EngineStatus,
@@ -21,12 +23,14 @@ import {
   enablePerson,
   invitePerson,
   listDashboards,
+  listDatasets,
   listDemoPacks,
   listPeople,
   registerDashboard,
   removeDashboard,
   resetSignIn,
   setAccess,
+  setDatasetEgress,
   setRoles,
   systemStatus,
   type AdminApi,
@@ -643,9 +647,10 @@ function System({ api }: { api: AdminApi }) {
 }
 
 /** Each model engine (ADR-135 decision 5): its models per role, the roles it is the default for,
- * and whether its key is present — Yes or No. Only the named fields are read, so nothing else the
+ * whether its key is present — Yes or No — and (ADR-136 decision 1) whether it is under a privacy
+ * contract, with the agreement's reference. Only the named fields are read, so nothing else the
  * response might carry, a key least of all, reaches the page. Keys are set on the host with
- * `ospreyflow models key`, never here. */
+ * `ospreyflow models key`, and the mark in `osprey.yaml`, never here. */
 function EnginesTable({ engines }: { engines: EngineStatus[] }) {
   return (
     <table className="table" aria-label="Engines">
@@ -655,6 +660,7 @@ function EnginesTable({ engines }: { engines: EngineStatus[] }) {
           <th>Models</th>
           <th>Default for</th>
           <th>Key present</th>
+          <th>Privacy contract</th>
         </tr>
       </thead>
       <tbody>
@@ -668,10 +674,99 @@ function EnginesTable({ engines }: { engines: EngineStatus[] }) {
             </td>
             <td>{engine.default_for.length > 0 ? engine.default_for.join(", ") : "None"}</td>
             <td>{engine.key_present ? "Yes" : "No"}</td>
+            <td>{contractWords(engine)}</td>
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+function contractWords(engine: EngineStatus): string {
+  if (engine.name === "local") return "Not needed: nothing leaves";
+  if (!engine.privacy_contract) return "No contract";
+  return engine.contract_reference ? `Under contract (${engine.contract_reference})` : "Under contract";
+}
+
+const EGRESS: { value: AdminDataset["egress"]; label: string }[] = [
+  { value: "none", label: "none — never sent to a hosted engine" },
+  { value: "contracted", label: "contracted — only to a provider under a privacy contract" },
+  { value: "any", label: "any — to any enabled provider" },
+];
+
+/** ADR-136 decision 2: every dataset and where its material may go when a model is asked. A change
+ * is one dataset at a time, saved by its own button, and the Conduit audits it. */
+function Datasets({ api }: { api: AdminApi }) {
+  const [datasets, setDatasets] = useState<AdminDataset[] | null>(null);
+  const [chosen, setChosen] = useState<Record<string, AdminDataset["egress"]>>({});
+  const [said, setSaid] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    listDatasets(api).then(setDatasets).catch((e: Error) => setProblem(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api.apiBaseUrl, api.bearerToken]);
+  const save = (dataset: AdminDataset) => {
+    const egress = chosen[dataset.id] ?? dataset.egress;
+    setProblem(null);
+    setSaid(null);
+    void setDatasetEgress(api, dataset.id, egress)
+      .then((changed) => {
+        setDatasets((current) => (current ?? []).map((d) => (d.id === changed.id ? changed : d)));
+        setSaid(`${changed.name}: egress is now ${changed.egress}.`);
+      })
+      .catch((e: Error) => setProblem(e.message));
+  };
+  return (
+    <>
+      <p className="label" style={{ margin: 0 }}>
+        Where each dataset&apos;s material may go when a model is asked. <strong>none</strong>: never to a hosted engine.{" "}
+        <strong>contracted</strong>: only to a provider marked as under a privacy contract. <strong>any</strong>: to any
+        enabled provider. Every dataset is none until you change it. Its handling code must still be one the deployment
+        sends, and each change is recorded in the audit log.
+      </p>
+      {problem && <p role="alert">{problem}</p>}
+      {said && <p role="status">{said}</p>}
+      {!datasets && !problem && <p className="label">Reading the datasets…</p>}
+      {datasets && (
+        <table className="table" aria-label="Datasets">
+          <thead>
+            <tr>
+              <th>Dataset</th>
+              <th>Unit</th>
+              <th>Egress</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {datasets.map((dataset) => (
+              <tr key={dataset.id}>
+                <td>{dataset.name}</td>
+                <td>{dataset.owning_unit}</td>
+                <td>
+                  <Select
+                    aria-label={`Egress for ${dataset.name}`}
+                    value={chosen[dataset.id] ?? dataset.egress}
+                    onChange={(e) => setChosen({ ...chosen, [dataset.id]: e.target.value as AdminDataset["egress"] })}
+                  >
+                    {EGRESS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </td>
+                <td>
+                  <Button aria-label={`Save egress for ${dataset.name}`} onClick={() => save(dataset)}>
+                    Save
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {datasets?.length === 0 && <p className="label" style={{ margin: 0 }}>There is no dataset yet.</p>}
+    </>
   );
 }
 
@@ -771,7 +866,7 @@ function DemoPacks({ api }: { api: AdminApi }) {
   );
 }
 
-type Tab = "people" | "dashboards" | "schedules" | "system" | "demo-packs";
+type Tab = "people" | "dashboards" | "schedules" | "system" | "datasets" | "demo-packs";
 
 export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
   const tabs = [
@@ -779,6 +874,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
     ...(rights.has("manage_dashboards") ? [{ id: "dashboards", label: "Dashboards" }] : []),
     ...(rights.has("operate_schedules") ? [{ id: "schedules", label: "Schedules and runs" }] : []),
     ...(rights.has("administer_system") ? [{ id: "system", label: "System" }] : []),
+    ...(rights.has("administer_system") ? [{ id: "datasets", label: "Datasets" }] : []),
     ...(rights.has("administer_system") ? [{ id: "demo-packs", label: "Demo packs" }] : []),
   ];
   const [tab, setTab] = useState<Tab>((tabs[0]?.id as Tab) ?? "system");
@@ -791,6 +887,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
       {tab === "dashboards" && rights.has("manage_dashboards") && <Dashboards api={api} />}
       {tab === "schedules" && rights.has("operate_schedules") && <Schedules api={api} />}
       {tab === "system" && rights.has("administer_system") && <System api={api} />}
+      {tab === "datasets" && rights.has("administer_system") && <Datasets api={api} />}
       {tab === "demo-packs" && rights.has("administer_system") && <DemoPacks api={api} />}
     </section>
   );

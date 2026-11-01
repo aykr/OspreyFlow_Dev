@@ -91,16 +91,27 @@ def read_models(product: Path, deployment: Path) -> dict[str, Any]:
     return {}
 
 
+def _contract(provider: Mapping[str, Any]) -> str:
+    """ADR-136 decision 1: "yes" (with the agreement's reference, words only) or "no"."""
+    if provider.get("privacy_contract") is not True:
+        return "no"
+    reference = provider.get("contract_reference")
+    return f"yes ({reference})" if reference else "yes"
+
+
 def list_engines(models: Mapping[str, Any], env_file: Path) -> list[str]:
     """What `ospreyflow models` says: each engine, whether each key is present (yes or no, never
-    the key), and each role's default."""
+    the key), whether it is under a privacy contract (ADR-136), and each role's default."""
     held = _held(env_file)
     lines = ["Engines:", f"  {LOCAL}: this deployment's own models (no key)"]
     for provider in _providers(models):
         name = str(provider.get("name"))
         present = "yes" if held.get(key_variable(models, name)) else "no"
         roles = ", ".join(f"{r} {m}" for r, m in (provider.get("roles") or {}).items())
-        lines.append(f"  {name} ({_label(provider)}): key present: {present} — {roles}")
+        lines.append(
+            f"  {name} ({_label(provider)}): key present: {present}; "
+            f"privacy contract: {_contract(provider)} — {roles}"
+        )
     defaults = _defaults(models)
     lines.append("Defaults:")
     lines += [f"  {role}: {defaults.get(role, LOCAL)}" for role in ROLES]

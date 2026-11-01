@@ -27,6 +27,13 @@ const JOBS: { job: ModelJob; label: string }[] = [
   { job: "embedding", label: "Embedding model" },
 ];
 
+/** ADR-136 decision 1: whether the organisation holds a data-processing agreement with the
+ * provider covering its key, as `osprey.yaml` marks it (`privacy_contract`, `contract_reference`). */
+function contractWords(provider: ModelProviderConfig): string {
+  if (!provider.privacy_contract) return "No contract";
+  return provider.contract_reference ? `Under contract (${provider.contract_reference})` : "Under contract";
+}
+
 export function ModelsScreen({
   config,
   onSave,
@@ -201,17 +208,20 @@ export function ModelsScreen({
           <h3>Model providers</h3>
           {keyEntry ? (
             <p>
-              Case content whose handling code is sendable may be sent to these providers; everything else runs on
-              this deployment&apos;s own models. Give each provider&apos;s key here: it goes only to this install
+              Case content whose handling code is sendable may be sent to these providers, and only from a dataset
+              whose egress an administrator has set to allow it (every dataset is none until then, in Admin,
+              Datasets); everything else runs on this deployment&apos;s own models. A provider is marked as under a
+              privacy contract in <code>osprey.yaml</code>. Give each provider&apos;s key here: it goes only to this install
               page, on this computer, and is kept only in the deployment&apos;s own secrets file. It is never shown
               again. You can instead give it in the installer&apos;s terminal as{" "}
               <code>OSPREY_MODEL_KEY_&lt;NAME&gt;</code>, or later with <code>ospreyflow models key &lt;name&gt;</code>.
             </p>
           ) : (
             <p>
-              Case content whose handling code is sendable may be sent to these providers; everything else runs on
-              this deployment&apos;s own models. They are set in the deployment&apos;s configuration and shown here as
-              they stand. A provider&apos;s key is never entered on this page: give it in the installer&apos;s
+              Case content whose handling code is sendable may be sent to these providers, and only from a dataset
+              whose egress an administrator has set to allow it (every dataset is none until then, in Admin,
+              Datasets); everything else runs on this deployment&apos;s own models. They, and whether each is under a
+              privacy contract, are set in the deployment&apos;s configuration and shown here as they stand. A provider&apos;s key is never entered on this page: give it in the installer&apos;s
               terminal as <code>OSPREY_MODEL_KEY_&lt;NAME&gt;</code> before you install, or later with{" "}
               <code>ospreyflow models key &lt;name&gt;</code>.
             </p>
@@ -222,6 +232,7 @@ export function ModelsScreen({
                 <th>Provider</th>
                 <th>Models</th>
                 <th>Default for</th>
+                <th>Privacy contract</th>
                 <th>Its key</th>
               </tr>
             </thead>
@@ -235,6 +246,7 @@ export function ModelsScreen({
                       .join("; ")}
                   </td>
                   <td>{defaultFor(provider).join(", ") || "None"}</td>
+                  <td>{contractWords(provider)}</td>
                   <td>
                     <code>{keyVariable(provider.name)}</code>
                     {keyEntry && (

@@ -3,6 +3,11 @@
 // a request, not a ruling — the Conduit decides where each request runs (decision 4), and every
 // answer says which engine and model produced it, so the Glass names the engine from the answer,
 // never from the choice.
+//
+// ADR-136: within a case the engines come from the case's own route, each with its privacy-contract
+// mark ("under contract" / "no contract"), and an engine the case's data may not reach is offered
+// disabled, with the reason in words beneath the choice. A disabled engine is never chosen, not even
+// as the role's default: the local engine is chosen instead.
 import { useEffect, useState } from "react";
 
 import type { OfferedEngine } from "../../../../packages/schemas/generated";
@@ -14,9 +19,17 @@ export type EngineRole = OfferedEngine["roles"][number];
 export const LOCAL_ENGINE = "local";
 const LOCAL_LABEL = "This deployment's own model";
 
-/** `GET /v1/models/engines`: what the deployment offers. Anything but a list of engines is none. */
-export async function fetchOfferedEngines(apiBaseUrl: string, bearerToken: string): Promise<OfferedEngine[]> {
-  const response = await fetch(`${apiBaseUrl}/v1/models/engines`, {
+/** `GET /v1/models/engines`, or within a case `GET /v1/investigations/{id}/models/engines` (ADR-136):
+ * what the deployment offers. Anything but a list of engines is none. */
+export async function fetchOfferedEngines(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId?: string,
+): Promise<OfferedEngine[]> {
+  const path = investigationId
+    ? `/v1/investigations/${encodeURIComponent(investigationId)}/models/engines`
+    : "/v1/models/engines";
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: { Authorization: `Bearer ${bearerToken}` },
   });
   if (!response.ok) throw new Error(`The model engines could not be read (${response.status}).`);
@@ -37,13 +50,18 @@ export interface EngineChoice {
 /** The engines offered for `role` and the one chosen. With fewer than two there is nothing to
  * choose, and the request names no engine: the role's default is the Conduit's to apply. A failure
  * to read the engines is the same as none offered — Ask still works, on the role's default. */
-export function useEngineChoice(apiBaseUrl: string, bearerToken: string, role: EngineRole): EngineChoice {
+export function useEngineChoice(
+  apiBaseUrl: string,
+  bearerToken: string,
+  role: EngineRole,
+  investigationId?: string,
+): EngineChoice {
   const [engines, setEngines] = useState<OfferedEngine[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetchOfferedEngines(apiBaseUrl, bearerToken)
+    fetchOfferedEngines(apiBaseUrl, bearerToken, investigationId)
       .then((found) => {
         if (!cancelled) setEngines(found);
       })
@@ -53,31 +71,67 @@ export function useEngineChoice(apiBaseUrl: string, bearerToken: string, role: E
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken]);
+  }, [apiBaseUrl, bearerToken, investigationId]);
 
   const offered = engines.filter((engine) => engine.roles.includes(role));
-  const fallback = offered.find((engine) => engine.default_for.includes(role)) ?? offered[0];
+  const usable = offered.filter(isAvailable);
+  const fallback =
+    usable.find((engine) => engine.default_for.includes(role)) ??
+    usable.find((engine) => engine.name === LOCAL_ENGINE) ??
+    usable[0];
   const chosen =
-    offered.length < 2 ? null : (offered.find((engine) => engine.name === picked) ?? fallback)!.name;
+    offered.length < 2 || fallback === undefined
+      ? null
+      : (usable.find((engine) => engine.name === picked) ?? fallback).name;
   return { engines, offered, chosen, choose: setPicked };
+}
+
+/** ADR-136: an engine is available unless the Conduit says the case's data may not reach it. */
+export const isAvailable = (engine: OfferedEngine) => engine.available !== false;
+
+/** What the choice shows for an engine: its label, its contract mark for a provider, and whether
+ * it is available. */
+export function engineOptionText(engine: OfferedEngine): string {
+  const mark = engine.name === LOCAL_ENGINE ? "" : engine.privacy_contract ? " (under contract)" : " (no contract)";
+  return `${engine.label}${mark}${isAvailable(engine) ? "" : " — not available"}`;
 }
 
 /** The choice itself, with its visible label: hidden unless there are two or more engines to
  * choose between. `id` ties the label to the select, so it must be unique on the page. */
 export function EnginePicker({ choice, id, disabled }: { choice: EngineChoice; id: string; disabled?: boolean }) {
   if (choice.chosen === null) return null;
+  const unavailable = choice.offered.filter((engine) => !isAvailable(engine));
+  const reasons = `${id}-reasons`;
   return (
     <div style={{ display: "grid", gap: "var(--sp-4)" }}>
       <label htmlFor={id} style={{ fontSize: "var(--fs-12)" }}>
         Model engine
       </label>
-      <Select id={id} value={choice.chosen} disabled={disabled} onChange={(event) => choice.choose(event.target.value)}>
+      <Select
+        id={id}
+        value={choice.chosen}
+        disabled={disabled}
+        aria-describedby={unavailable.length > 0 ? reasons : undefined}
+        onChange={(event) => {
+          const named = choice.offered.find((engine) => engine.name === event.target.value);
+          if (named && isAvailable(named)) choice.choose(named.name);
+        }}
+      >
         {choice.offered.map((engine) => (
-          <option key={engine.name} value={engine.name}>
-            {engine.label}
+          <option key={engine.name} value={engine.name} disabled={!isAvailable(engine)}>
+            {engineOptionText(engine)}
           </option>
         ))}
       </Select>
+      {unavailable.length > 0 && (
+        <div id={reasons} style={{ display: "grid", gap: "var(--sp-2)" }}>
+          {unavailable.map((engine) => (
+            <p key={engine.name} style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
+              {`${engine.label}: ${engine.reason ?? "Not available for this case."}`}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

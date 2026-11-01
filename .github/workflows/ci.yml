@@ -601,6 +601,7 @@ jobs:
           ../OspreyFlow_Build/tests/harness/test_first_admin.py
           ../OspreyFlow_Build/tests/scenarios/test_ledger_graph.py
           ../OspreyFlow_Build/tests/services/api/test_dataset_names_store.py
+          ../OspreyFlow_Build/tests/services/api/test_dataset_egress_store.py
           ../OspreyFlow_Build/tests/services/api/test_datasets_store.py
           ../OspreyFlow_Build/tests/services/api/test_explore_whats_new.py
           ../OspreyFlow_Build/tests/services/api/test_object_transfer.py
@@ -918,6 +919,7 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/harness/test_first_admin.py
           --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_graph.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_names_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_egress_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_datasets_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_explore_whats_new.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_object_transfer.py

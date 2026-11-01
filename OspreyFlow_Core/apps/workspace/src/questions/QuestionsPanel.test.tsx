@@ -249,7 +249,8 @@ const ONLY_LOCAL = {
 };
 
 describe("the engine choice (ADR-135)", () => {
-  const engineRoute = (body: unknown) => ({ "GET http://api/v1/models/engines": () => json(200, body) });
+  // ADR-136: the case's own engines route, so an engine its data may not reach comes back disabled.
+  const engineRoute = (body: unknown) => ({ "GET /models/engines": () => json(200, body) });
 
   it("lists only the engines offered for extraction, with the default chosen", async () => {
     serve({ "GET /questions": () => json(200, []), ...engineRoute(ENGINES) });
@@ -257,7 +258,7 @@ describe("the engine choice (ADR-135)", () => {
     const choice = (await screen.findByRole("combobox", { name: "Model engine" })) as HTMLSelectElement;
     expect(Array.from(choice.options).map((o) => [o.value, o.textContent])).toEqual([
       ["local", "This deployment's own model"],
-      ["gemini", "Gemini"],
+      ["gemini", "Gemini (no contract)"],
     ]);
     expect(choice.value).toBe("gemini");
   });
@@ -270,7 +271,7 @@ describe("the engine choice (ADR-135)", () => {
     });
     mount();
     await screen.findByText("No questions asked in this case yet.");
-    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/v1/models/engines"))).toBe(true));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/v1/investigations/b1/models/engines"))).toBe(true));
     expect(screen.queryByRole("combobox", { name: "Model engine" })).toBeNull();
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
@@ -319,5 +320,50 @@ describe("the engine choice (ADR-135)", () => {
     expect((await screen.findByRole("alert")).textContent).toBe(
       "Gemini has no key on this deployment, so it is not offered.",
     );
+  });
+});
+
+
+describe("an engine the case's data may not reach (ADR-136)", () => {
+  const REASON =
+    "Not available for this case: “Enron corpus” is set to egress none, never sent to a hosted engine such as Gemini.";
+  const BLOCKED = {
+    engines: [
+      { name: "local", label: "This deployment's own model", roles: ["extraction"], default_for: [], available: true },
+      { name: "gemini", label: "Gemini", roles: ["extraction"], default_for: ["extraction"], privacy_contract: false,
+        available: false, reason: REASON },
+      { name: "anthropic", label: "Claude", roles: ["extraction"], default_for: [], privacy_contract: true, available: true },
+    ],
+  };  // prettier-ignore
+
+  it("asks the case's own engines, shows each one's contract mark, and disables one with the reason in words", async () => {
+    const calls = serve({ "GET /questions": () => json(200, []), "GET /models/engines": () => json(200, BLOCKED) });
+    mount();
+    const choice = (await screen.findByRole("combobox", { name: "Model engine" })) as HTMLSelectElement;
+    expect(calls.some((c) => c.url === "http://api/v1/investigations/b1/models/engines")).toBe(true);
+    expect(Array.from(choice.options).map((o) => [o.value, o.textContent, o.disabled])).toEqual([
+      ["local", "This deployment's own model", false],
+      ["gemini", "Gemini (no contract) — not available", true],
+      ["anthropic", "Claude (under contract)", false],
+    ]);
+    expect(screen.getByText(`Gemini: ${REASON}`)).toBeTruthy();
+  });
+
+  it("never chooses a disabled default: the local engine is chosen and sent instead", async () => {
+    const calls = serve({
+      "GET /questions": () => json(200, []),
+      "GET /models/engines": () => json(200, BLOCKED),
+      "POST /questions": () => json(200, { ...ANSWERED, engine: "local", model: "qwen2.5:7b-instruct" }),
+    });
+    mount();
+    const choice = (await screen.findByRole("combobox", { name: "Model engine" })) as HTMLSelectElement;
+    expect(choice.value).toBe("local");
+    fireEvent.change(choice, { target: { value: "gemini" } }); // a disabled option is not taken
+    expect(choice.value).toBe("local");
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("Dana Mercer wrote about it [1].");
+    const posted = calls.find((c) => c.init?.method === "POST")!;
+    expect(JSON.parse(String(posted.init!.body)).engine).toBe("local");
   });
 });

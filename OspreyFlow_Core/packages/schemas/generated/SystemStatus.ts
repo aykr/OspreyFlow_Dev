@@ -15,6 +15,8 @@ export type Name1 = string;
 export type Label = string;
 export type DefaultFor = string[];
 export type KeyPresent = boolean;
+export type PrivacyContract = boolean;
+export type ContractReference = string | null;
 export type Engines = EngineStatus[];
 export type ModelNotice = string | null;
 export type Current = string;
@@ -68,6 +70,8 @@ export interface EngineStatus {
   models: Models1;
   default_for: DefaultFor;
   key_present: KeyPresent;
+  privacy_contract?: PrivacyContract;
+  contract_reference?: ContractReference;
   [k: string]: unknown;
 }
 export interface Models1 {

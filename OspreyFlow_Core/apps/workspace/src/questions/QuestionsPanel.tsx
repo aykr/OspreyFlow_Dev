@@ -55,7 +55,7 @@ export function QuestionsPanel({
   const [deciding, setDeciding] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   // ADR-135 decision 5: the engine to ask, among those offered for extraction.
-  const engineChoice = useEngineChoice(apiBaseUrl, bearerToken, "extraction");
+  const engineChoice = useEngineChoice(apiBaseUrl, bearerToken, "extraction", investigationId);
 
   useEffect(() => {
     let cancelled = false;

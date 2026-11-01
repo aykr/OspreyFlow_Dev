@@ -325,6 +325,8 @@ class EmailExtractionService:
             handling=event.handling,
             principal=principal,
             extraction_model=model or self._default_model,
+            # ADR-136: the email is read through the case, so it is of the case's datasets.
+            datasets=principal.datasets,
         )
         return EmailExtractionResult(document_id=node.id, candidates=candidates, delta=delta)
 

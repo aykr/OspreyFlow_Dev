@@ -235,6 +235,8 @@ ROUTE_RIGHTS = {
     "my_rights_route": None,
     # ADR-135 decision 5: the engines an analyst may choose; any signed-in person, never a key.
     "model_engines_route": None,
+    # ADR-136: the same within a case (its datasets' egress), the case's Viewer level applying.
+    "case_model_engines_route": None,
     "list_people_route": "manage_people",
     "set_person_roles_route": "manage_people",
     # ADR-114 Amendment 5 (B4b)
@@ -248,6 +250,9 @@ ROUTE_RIGHTS = {
     "register_dashboard_route": "manage_dashboards",
     "remove_dashboard_route": "manage_dashboards",
     "system_status_route": "administer_system",
+    # ADR-136 decision 2: every dataset's egress, set by an administrator alone, audited.
+    "admin_datasets_route": "administer_system",
+    "set_dataset_egress_route": "administer_system",
     "list_schedules_route": "operate_schedules",
     "schedule_runs_route": "operate_schedules",
     "pause_schedule_route": "operate_schedules",

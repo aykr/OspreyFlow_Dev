@@ -678,6 +678,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   // ADR-110 Amendment 3: Run now and Change schedule, as the schedule's owner.
   "run-a-schedule-now-by-keyboard",
   "change-a-schedule-by-keyboard",
+  // ADR-136 decision 2: a dataset's egress, set by an administrator.
+  "set-a-datasets-egress-by-keyboard",
 ] as const);
 
 // ADR-110 decision 7 (D5): the Publish screen's structured schedule.

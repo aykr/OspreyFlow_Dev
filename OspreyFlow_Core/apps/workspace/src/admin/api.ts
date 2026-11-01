@@ -3,6 +3,7 @@
 // provider directly. Shapes are the generated ones.
 import type {
   AccessInput,
+  AdminDataset,
   AdminSchedule,
   DashboardIdentity,
   DemoPackStatus,
@@ -42,6 +43,7 @@ async function failure(response: Response): Promise<Error> {
   if (body.error === "dashboard_exists") return new Error("A dashboard of that name is already registered.");
   if (body.error === "not_allowed" && typeof detail === "string") return new Error(detail);
   if (body.error === "identity_provider_refused" && typeof detail === "string") return new Error(detail);
+  if (body.error === "dataset_not_found") return new Error("That dataset is no longer there.");
   if (response.status === 403) return new Error("Your account does not hold the right for this.");
   return new Error(`The Admin area could not complete that (${response.status}).`);
 }
@@ -80,6 +82,13 @@ export const removeDashboard = (api: AdminApi, clientId: string) =>
   call<void>(api, `dashboards/${encodeURIComponent(clientId)}`, { method: "DELETE" });
 export const listDemoPacks = (api: AdminApi) => call<DemoPackStatus[]>(api, "demo-packs");
 export const systemStatus = (api: AdminApi) => call<SystemStatus>(api, "system");
+// ADR-136 decision 2: each dataset's egress, set by an administrator, audited by the Conduit.
+export const listDatasets = (api: AdminApi) => call<AdminDataset[]>(api, "datasets");
+export const setDatasetEgress = (api: AdminApi, datasetId: string, egress: AdminDataset["egress"]) =>
+  call<AdminDataset>(api, `datasets/${encodeURIComponent(datasetId)}/egress`, {
+    method: "PUT",
+    body: JSON.stringify({ egress }),
+  });
 // ADR-110 decision 8: Schedules and runs.
 const schedule = (recipeId: string, what: string) => `schedules/${encodeURIComponent(recipeId)}/${what}`;
 export const listSchedules = (api: AdminApi) => call<AdminSchedule[]>(api, "schedules");

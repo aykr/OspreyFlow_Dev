@@ -15,18 +15,25 @@ a branch takes its parent's.
 unit's datasets never read alike; the id stays what every element and case refers to. A dataset
 asked for by name is refused when the name is taken; the one a case makes for itself, and a seed's,
 take a suffix instead ("Branch of Enron (2)").
+
+**Egress (ADR-136 decision 2).** Each dataset says where its material may go when a model is asked:
+`none`, never to a hosted engine; `contracted`, only to a provider under a privacy contract; `any`,
+to any enabled provider. It is `none` until an administrator changes it in the Admin area (each
+change audited by the route), a dataset made before ADR-136 included: the column is added with that
+default. The routing reads it (`model_routing.RoutedModel`); a dataset it cannot find is `none`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Protocol, cast
 
 import asyncpg
 from pydantic import BaseModel, Field
 
 from conduit_common.identity import new_id
+from schemas.admin import DatasetEgress
 from schemas.domain import Principal
 
 MAX_DATASET_NAME = 200
@@ -38,6 +45,8 @@ class Dataset(BaseModel):
     owning_unit: str
     created_at: datetime
     created_by: str
+    #: ADR-136 decision 2: `none` until an administrator changes it.
+    egress: DatasetEgress = "none"
 
 
 class CreateDatasetRequest(BaseModel):
@@ -66,6 +75,16 @@ class DatasetStore(Protocol):
         self, investigation_id: str, dataset_ids: Sequence[str], principal: Principal
     ) -> list[Dataset]: ...
     async def copy_case(self, from_investigation_id: str, to_investigation_id: str) -> None: ...
+    # ADR-136 decision 2: every dataset, for the Admin area; the egress of some; setting it.
+    async def list_all(self) -> list[Dataset]: ...
+    async def egress_of(self, dataset_ids: Sequence[str]) -> dict[str, Dataset]: ...
+    async def set_egress(
+        self, dataset_id: str, egress: DatasetEgress
+    ) -> tuple[DatasetEgress, Dataset]: ...
+
+
+class UnknownDatasetEgressError(Exception):
+    """An administrator named a dataset that does not exist (a 404)."""
 
 
 def _clean(name: str) -> str:
@@ -167,6 +186,22 @@ class InMemoryDatasetStore:
     async def copy_case(self, from_investigation_id: str, to_investigation_id: str) -> None:
         self.cases[to_investigation_id] = list(self.cases.get(from_investigation_id, []))
 
+    async def list_all(self) -> list[Dataset]:
+        return sorted(self.datasets.values(), key=lambda d: (d.owning_unit, d.name))
+
+    async def egress_of(self, dataset_ids: Sequence[str]) -> dict[str, Dataset]:
+        return {d: self.datasets[d] for d in dataset_ids if d in self.datasets}
+
+    async def set_egress(
+        self, dataset_id: str, egress: DatasetEgress
+    ) -> tuple[DatasetEgress, Dataset]:
+        held = self.datasets.get(dataset_id)
+        if held is None:
+            raise UnknownDatasetEgressError(dataset_id)
+        changed = held.model_copy(update={"egress": egress})
+        self.datasets[dataset_id] = changed
+        return held.egress, changed
+
 
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS datasets (
@@ -177,6 +212,9 @@ CREATE TABLE IF NOT EXISTS datasets (
     created_by TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS datasets_unit_idx ON datasets (owning_unit, name);
+-- ADR-136 decision 2: every dataset, those made before it included, starts at `none`.
+ALTER TABLE datasets ADD COLUMN IF NOT EXISTS egress TEXT NOT NULL DEFAULT 'none'
+    CHECK (egress IN ('none', 'contracted', 'any'));
 CREATE TABLE IF NOT EXISTS investigation_datasets (
     investigation_id TEXT NOT NULL,
     dataset_id TEXT NOT NULL REFERENCES datasets (id),
@@ -185,7 +223,7 @@ CREATE TABLE IF NOT EXISTS investigation_datasets (
 );
 """
 
-_COLUMNS = "d.id, d.name, d.owning_unit, d.created_at, d.created_by"
+_COLUMNS = "d.id, d.name, d.owning_unit, d.created_at, d.created_by, d.egress"
 
 #: The name a unit's datasets may not share, case and spacing aside (`name_key`).
 _NAME_KEY_SQL = "lower(regexp_replace(btrim(name), '\\s+', ' ', 'g'))"
@@ -347,6 +385,39 @@ class PostgresDatasetStore:
             )
         return await self.of_case(investigation_id)
 
+    async def list_all(self) -> list[Dataset]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM datasets d ORDER BY d.owning_unit, d.name"
+            )
+        return [Dataset(**dict(r)) for r in rows]
+
+    async def egress_of(self, dataset_ids: Sequence[str]) -> dict[str, Dataset]:
+        if not dataset_ids:
+            return {}
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM datasets d WHERE d.id = ANY($1::text[])",
+                list(set(dataset_ids)),
+            )
+        return {r["id"]: Dataset(**dict(r)) for r in rows}
+
+    async def set_egress(
+        self, dataset_id: str, egress: DatasetEgress
+    ) -> tuple[DatasetEgress, Dataset]:
+        async with self._pool.acquire() as conn, conn.transaction():
+            before = await conn.fetchval(
+                "SELECT egress FROM datasets WHERE id = $1 FOR UPDATE", dataset_id
+            )
+            if before is None:
+                raise UnknownDatasetEgressError(dataset_id)
+            row = await conn.fetchrow(
+                f"UPDATE datasets d SET egress = $2 WHERE d.id = $1 RETURNING {_COLUMNS}",
+                dataset_id,
+                egress,
+            )
+        return cast(DatasetEgress, before), Dataset(**dict(row))
+
     async def copy_case(self, from_investigation_id: str, to_investigation_id: str) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(
@@ -366,4 +437,5 @@ __all__: Sequence[str] = (
     "DatasetStore",
     "InMemoryDatasetStore",
     "PostgresDatasetStore",
+    "UnknownDatasetEgressError",
 )

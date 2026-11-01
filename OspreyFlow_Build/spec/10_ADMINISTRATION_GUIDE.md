@@ -375,6 +375,7 @@ holding its right:
 | Dashboards | `manage_dashboards` | Register a dashboard's account (its secret shown once), see when it last pulled, remove it |
 | Schedules and runs | `operate_schedules` | Every scheduled or watched pipeline: pause, resume, run now, change its time, its runs |
 | System | `administer_system` | Each component's health, the models in use, the version and whether an update exists |
+| Datasets | `administer_system` | Every dataset and its egress — whether its material may be sent to a hosted model engine (section 10) |
 | Demo packs | `administer_system` | Which packs are loaded, and the command that adds one |
 
 ### 9.2 Roles
@@ -419,6 +420,8 @@ models:
     - name: openai
       label: OpenAI (client tenancy)
       roles: {extraction: gpt-4o, vision: gpt-4o-mini}
+      privacy_contract: true
+      contract_reference: DPA 2026/07
   defaults:
     extraction: gemini
 ```
@@ -428,6 +431,10 @@ models:
   label is OpenAI, Anthropic or Gemini.
 - **`defaults`** names each role's default engine: `local` or a provider's name. A role not named
   runs on `local`.
+- **`privacy_contract`** marks a provider as under a privacy contract: set it to `true` only when
+  your organisation holds a data-processing agreement with the provider that covers this key. It is
+  `false` unless you set it. **`contract_reference`** says which agreement, in words ("DPA 2026/07");
+  it is shown to analysts, so it is never a secret, and one that looks like a key is refused.
 - The older single `provider:` is still read, as a one-entry list whose roles default to it. Naming
   both `provider` and `providers` is refused.
 
@@ -448,19 +455,40 @@ anywhere else is refused — and is held there until the install gives it to `de
 never written anywhere else, never logged and never shown again: the field empties once the key is
 sent, and the page says only "key set" or "no key".
 
-**What may leave.** `sendable_handling_codes` is the one gate, for every engine: only material
-whose handling code is in that list may be sent to a provider; anything else runs on the local
-engine, whatever was chosen, and is refused in words when the deployment has no local model for the
-role. Embeddings never leave the deployment.
+**What may leave.** Material is sent to a provider only when both of these allow it:
+
+- **its handling code** is in `sendable_handling_codes` (one list, for every engine); and
+- **every dataset it comes from** allows that provider. Each dataset has an **egress** setting:
+  - `none` — never sent to a hosted engine. **This is every dataset's setting until you change
+    it.**
+  - `contracted` — sent only to a provider marked `privacy_contract: true`.
+  - `any` — sent to any enabled provider.
+
+Anything else runs on the local engine, whatever was chosen, and is refused in words when the
+deployment has no local model for the role. Material whose datasets are not known is treated as
+`none`, so nothing leaves by omission. Embeddings never leave the deployment.
+
+**Setting a dataset's egress.** Only an administrator sets it: Admin → Datasets lists every dataset,
+the unit that holds it and its egress; choose the setting and press Save beside it. Each change is
+recorded in the audit log — who made it, when, and from what to what.
+
+> **After upgrading to this release, hosted engines receive nothing** until an administrator sets
+> a dataset's egress to `contracted` or `any`. Every existing dataset, demo packs included, starts
+> at `none`; until you change one, every question runs on the deployment's own models, whatever
+> engine an analyst chooses. Set only the datasets you are entitled to send.
 
 **Who chooses.** The administrator sets each role's default. An analyst may choose, for each
 question in Ask the case, among the engines offered — the local engine and each enabled provider
-that has a key. Ask to search sends no case material, only the case's vocabulary and the question,
-so it always runs on the local engine, and says so. Every answer names the engine and model that
-produced it.
+that has a key — each shown "under contract" or "no contract". An engine the case's datasets may not
+reach is shown but cannot be chosen, with the reason beneath the choice. Ask to search sends no case
+material, only the case's vocabulary and the question, so it always runs on the local engine, and
+says so. Every answer names the engine and model that produced it.
 
 Admin → System shows each role's model, each engine with its models, the roles it is the default
-for and whether its key is present, and a notice that case content then leaves the deployment.
+for, whether its key is present and whether it is under a privacy contract (with its reference), and
+a notice that case content then leaves the deployment. `ospreyflow models` shows the same mark
+beside each provider ("privacy contract: yes (DPA 2026/07)" or "privacy contract: no"), and the
+guided install's Models screen shows it as the configuration holds it.
 
 ## 11. Demo packs
 
@@ -628,11 +656,15 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.provider.label` | str or none | none | The name analysts see for this engine. Default: OpenAI, Anthropic or Gemini for those three, else the provider's name capitalised. |
 | `models.provider.roles` | mapping | required | The roles it takes, each with the provider's model for it |
 | `models.provider.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
+| `models.provider.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
+| `models.provider.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
 | `models.providers` | list of section | — | The providers (engines) an administrator enables, each reached through the deployment's gateway; each key is OSPREY_MODEL_KEY_<NAME>. |
 | `models.providers.name` | str | required | LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock… |
 | `models.providers.label` | str or none | none | The name analysts see for this engine. Default: OpenAI, Anthropic or Gemini for those three, else the provider's name capitalised. |
 | `models.providers.roles` | mapping | required | The roles it takes, each with the provider's model for it |
 | `models.providers.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
+| `models.providers.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
+| `models.providers.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
 | `models.defaults` | mapping | — | Each role's default engine, `local` or an enabled provider's name. A role not named runs on `local` (for the single `provider`, on it). |
 | `models.extraction` | `qwen2.5:7b-instruct` \| `qwen2.5:14b-instruct` | `qwen2.5:7b-instruct` | The local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with. |
 | `models.vision` | `moondream:1.8b-v2-q4_K_M` | `moondream:1.8b-v2-q4_K_M` | The local model that describes an image and reads its text. |

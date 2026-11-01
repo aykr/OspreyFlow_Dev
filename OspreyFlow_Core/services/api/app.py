@@ -112,6 +112,7 @@ from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
 from schemas.admin import (
     AccessInput,
+    AdminDataset,
     AdminSchedule,
     ChangeScheduleInput,
     ComponentHealth,
@@ -119,6 +120,7 @@ from schemas.admin import (
     DashboardIdentity,
     DashboardInput,
     DataFeed,
+    DatasetEgressInput,
     DemoPackStatus,
     EmbeddedDashboard,
     InviteInput,
@@ -330,6 +332,7 @@ from .datasets import (
     DatasetRefusedError,
     DatasetStore,
     InMemoryDatasetStore,
+    UnknownDatasetEgressError,
 )
 from .document_content import (
     UPLOAD_CONTENT_EXTENSIONS,
@@ -746,12 +749,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # own opinion (`services/api/review.py`'s own docstring on `RunExtractionRequest.model`).
     # ADR-095: the deployment's own models, never the conformance suite's.
     models = DeploymentModels.from_env()
-    # ADR-114 Amendment 6, ADR-135: every model call goes through the routes, so a client's
-    # provider sees only material whose handling code the deployment declared sendable, and an
-    # engine an analyst names is used only when it is enabled and has a key.
+    # ADR-114 Amendment 6, ADR-135, ADR-136: every model call goes through the routes, so a
+    # client's provider sees only material whose handling code the deployment declared sendable
+    # and whose every dataset allows that provider, and an engine an analyst names is used only
+    # when it is enabled and has a key.
     model: ModelPort = RoutedModel(
         ModelLiteLLMAdapter(litellm_client, embed_model=models.embedding),
         routes=routes_from_env(models, os.environ),
+        # ADR-136: and only from datasets whose egress allows the engine.
+        egress=datasets_store,
     )
     # `spec/09_INGEST_STUDIO.md` §6's reverse index: "an ontology edit flags
     # every recipe that depends on the changed version". This deployment's
@@ -3549,6 +3555,8 @@ async def run_extraction_route(
         handling=body.handling,
         principal=principal,
         extraction_model=body.model,
+        # ADR-136: text extracted in a case is of the case's datasets.
+        datasets=principal.datasets,
     )
     await audit.record(
         principal=principal,
@@ -10318,6 +10326,67 @@ async def model_engines_route(principal: PrincipalDep, routes: ModelRoutesDep) -
     it is the default for. Any signed-in person; nothing about a key, not even whether one exists
     (an engine with none is simply not listed). The route still decides each request."""
     return OfferedEngines(engines=routes.offered())
+
+
+@app.get("/v1/investigations/{investigation_id}/models/engines")
+async def case_model_engines_route(
+    investigation: InvestigationViewerDep, routes: ModelRoutesDep, datasets: DatasetsDep
+) -> OfferedEngines:
+    """ADR-136 decision 3: the engines offered, as for `GET /v1/models/engines`, with each one's
+    contract mark, and an engine the case's data may not reach listed unavailable with the reason in
+    words. The case's datasets are read from the store, as the routing reads them for Ask the case;
+    a Viewer of the case may ask (anyone else is told the case is not there). Each request is still
+    decided by the route, by its own handling code and datasets."""
+    case_datasets = await datasets.ids_of_case(investigation.id)
+    held = await datasets.egress_of(case_datasets)
+    return OfferedEngines(engines=routes.offered(case_datasets, held))
+
+
+@app.get("/v1/admin/datasets", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
+async def admin_datasets_route(datasets: DatasetsDep) -> list[AdminDataset]:
+    """ADR-136 decision 2: every dataset of the deployment, with the unit that holds it and its
+    egress, for the administrator who sets where each may go. Names and settings only: nothing of
+    what a dataset holds, and no count."""
+    return [
+        AdminDataset(id=d.id, name=d.name, owning_unit=d.owning_unit, egress=d.egress)
+        for d in await datasets.list_all()
+    ]
+
+
+@app.put(
+    "/v1/admin/datasets/{dataset_id}/egress",
+    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
+)
+async def set_dataset_egress_route(
+    dataset_id: str,
+    body: DatasetEgressInput,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    audit: AuditDep,
+) -> AdminDataset:
+    """ADR-136 decision 2: an administrator sets where a dataset's material may go — `none`,
+    `contracted` or `any` — and each change is audited: who (the principal), when (the audit row's
+    own time), and from what to what."""
+    before, changed = await datasets.set_egress(dataset_id, body.egress)
+    await audit.record(
+        principal=principal,
+        action="set_dataset_egress",
+        resolved_query={"dataset_id": dataset_id, "before": before, "after": changed.egress},
+        result_cardinality=1,
+    )
+    return AdminDataset(
+        id=changed.id, name=changed.name, owning_unit=changed.owning_unit, egress=changed.egress
+    )
+
+
+@app.exception_handler(UnknownDatasetEgressError)
+async def _unknown_dataset_egress_handler(
+    request: Request, exc: UnknownDatasetEgressError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"error": "dataset_not_found", "detail": "There is no such dataset."},
+    )
 
 
 @app.post("/v1/ws-ticket", response_model=WsTicketResponse)
