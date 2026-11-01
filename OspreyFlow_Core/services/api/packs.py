@@ -27,9 +27,13 @@ from conduit_common.identity import new_id
 from ontology.errors import HandlingSchemeError
 from ontology.handling import HandlingScheme, evaluate_handling, principal_may_view
 from ports.graph import GraphPort
-from schemas.analytics import CountedHandling
-from schemas.domain import Handling, Judgement, Node, Principal
+from schemas.analytics import CountedHandling, EventRecord
+from schemas.domain import AlertExplanation, Handling, Judgement, Node, Principal, ProvenanceState
 from schemas.packs import (
+    AlertEntitySnapshot,
+    AlertLinkSnapshot,
+    AlertSnapshot,
+    AlertTransactionSnapshot,
     AssessmentSnapshot,
     EntitySnapshot,
     PackExport,
@@ -43,6 +47,7 @@ from schemas.packs import (
 from schemas.trends import TrendFigures
 
 from .alert_queue import node_name
+from .alerts import distinct_handlings
 from .assessments import judgement_visible_to, resolve_superseded_citation
 from .export import (
     BlockedItem,
@@ -51,6 +56,7 @@ from .export import (
     ExportManifestPolicy,
     OverrideRequiredError,
 )
+from .handling_sql import viewable_handlings_sql
 from .trends import highest
 
 
@@ -117,25 +123,44 @@ async def readable(
     scheme: HandlingScheme,
     graph: GraphPort,
     case_id: str,
-) -> tuple[list[StoredPackItem], int]:
-    """The items this reader gets, in order, and how many were withheld from them."""
+    *,
+    withheld_in_store: bool = False,
+) -> tuple[list[StoredPackItem], bool]:
+    """The items this reader gets, in order, and whether any were withheld from them — a yes or
+    no, never a count. `items` is what the store's query gave the reader (`PackStore.readable_*`,
+    ADR-134 decision 4) and `withheld_in_store` its own yes or no; each item is then checked again
+    here: by `item_visible`, a second line that must agree with the query, and against the graph
+    now, as the reader, for what it cites."""
     shown: list[StoredPackItem] = []
     for item in items:
         if item_visible(item.handlings, reader, scheme) and await _still_visible(
             item, reader, graph, case_id
         ):
             shown.append(item)
-    return shown, len(items) - len(shown)
+    return shown, withheld_in_store or len(shown) < len(items)
+
+
+async def _node_now(graph: GraphPort, reader: Principal, node_id: str) -> bool:
+    """The node, or the revision that superseded it, is one the reader may see now."""
+    return await graph.get_node(node_id, reader) is not None or (
+        await resolve_superseded_citation(graph, reader, node_id) is not None
+    )
 
 
 async def _still_visible(
     item: StoredPackItem, reader: Principal, graph: GraphPort, case_id: str
 ) -> bool:
     if item.entity is not None:
-        node_id = item.entity.node_id
-        return await graph.get_node(node_id, reader) is not None or (
-            await resolve_superseded_citation(graph, reader, node_id) is not None
-        )
+        return await _node_now(graph, reader, item.entity.node_id)
+    if item.alert is not None:
+        # Every node it cites, in one read; one missing (hidden, or confirmed since into a new
+        # revision) is looked for by its successor, as an entity item's node is.
+        wanted = sorted(set(item.alert.node_ids))
+        found = {n.id for n in await graph.get_nodes(wanted, reader)} if wanted else set()
+        for node_id in wanted:
+            if node_id not in found and not await _node_now(graph, reader, node_id):
+                return False
+        return True
     if item.assessment is not None:
         a = item.assessment
         judgement = Judgement(
@@ -190,6 +215,13 @@ def _consult_originator(item: StoredPackItem, scheme: HandlingScheme) -> Blocked
             label=item.assessment.statement[:80],
             reason="consult_originator",
         )
+    if item.alert is not None:
+        return BlockedItem(
+            id=item.alert.alert_id,
+            kind="node",
+            label=item.alert.explanation[:80],
+            reason="consult_originator",
+        )
     return BlockedItem(id=item.id, kind="node", label=item.kind, reason="consult_originator")
 
 
@@ -222,12 +254,22 @@ async def export_pack(
     graph: GraphPort,
     ledger: ExportLedgerStore,
     policy: ExportManifestPolicy,
+    withheld_in_store: bool = False,
 ) -> PackExport:
     """The gate for a pack. The exporter's access is checked again now, item by item, as every
     export gate does (ADR-045: there is no second chance once it has left); what they may not see
-    is withheld and counted, never named. Only then the originator check, the mark and the ledger
-    entry — nothing before that point is recorded or returned."""
-    shown, withheld = await readable(version.items, exporter, scheme, graph, pack.investigation_id)
+    is withheld and said as a yes or no, never named. `version.items` is what the store's query
+    gave the exporter (`PackStore.readable_version`), `withheld_in_store` its yes or no. Only then
+    the originator check, the mark and the ledger entry — nothing before that point is recorded or
+    returned."""
+    shown, withheld = await readable(
+        version.items,
+        exporter,
+        scheme,
+        graph,
+        pack.investigation_id,
+        withheld_in_store=withheld_in_store,
+    )
     if not shown:
         raise PackExportRefused("nothing in this pack is within your handling")
     blocked = [b for b in (_consult_originator(i, scheme) for i in shown) if b is not None]
@@ -245,7 +287,7 @@ async def export_pack(
         handling_level=level,
         exported_at=now,
         item_count=len(served),
-        withheld=withheld > 0,
+        withheld=withheld,
         manifest_policy=policy,
         justification_given=bool(request.justification),
         originator_reference_given=bool(request.originator_reference),
@@ -268,7 +310,7 @@ async def export_pack(
         published_by=version.published_by,
         items=served,
         policy=policy,
-        withheld=(withheld > 0) if policy == "disclose" else None,
+        withheld=withheld if policy == "disclose" else None,
         ledger_entry_id=entry.id,
     )
 
@@ -333,6 +375,78 @@ async def assessment_item(
         created_at=judgement.created_at,
     )
     return _item("assessment", by, handlings, scheme, assessment=snapshot)
+
+
+def _match(explained: AlertExplanation) -> str:
+    """Rule 5: `confirmed` only when a person has confirmed the match — the alert's own node
+    asserted (a true positive asserts it), or, with no node of its own, closed as a true positive —
+    and no link it cites is still inferred. Anything else is `inferred`, and the pack says so."""
+    alert = explained.alert
+    cited = set(alert.edge_ids)
+    links_inferred = any(
+        e.provenance.state is not ProvenanceState.ASSERTED for e in explained.edges if e.id in cited
+    )
+    own = next((n for n in explained.nodes if n.id == alert.alert_node_id), None)
+    if own is not None:
+        confirmed = own.provenance.state is ProvenanceState.ASSERTED
+    else:
+        confirmed = alert.status == "closed" and alert.disposition == "true_positive"
+    return "confirmed" if confirmed and not links_inferred else "inferred"
+
+
+def alert_item(
+    explained: AlertExplanation,
+    events: Sequence[EventRecord],
+    by: Principal,
+    scheme: HandlingScheme,
+) -> StoredPackItem:
+    """An alert as its adder read it (ADR-134 decision 1) — every part of it read as them already
+    (`alert_queue.explain_with_evidence`, all or nothing) — resting on the handling of every node,
+    link and transaction it cites."""
+    alert = explained.alert
+    names = {n.id: node_name(n) for n in explained.nodes}
+    cited = set(alert.edge_ids)
+    entities = [
+        AlertEntitySnapshot(node_id=n.id, entity_type=n.type, name=node_name(n))
+        for n in explained.nodes
+        if n.id != alert.alert_node_id
+    ]
+    links = [
+        AlertLinkSnapshot(edge_id=e.id, type=e.type, source_name=names.get(e.source, e.source),
+                          target_name=names.get(e.target, e.target))
+        for e in explained.edges
+        if e.id in cited
+    ]  # fmt: skip
+    transactions = [
+        AlertTransactionSnapshot(occurred_at=t.occurred_at, amount=t.amount,
+                                 source_name=names.get(t.source_id, t.source_id),
+                                 target_name=names.get(t.target_id, t.target_id))
+        for t in explained.transactions
+    ]  # fmt: skip
+    snapshot = AlertSnapshot(
+        alert_id=alert.id,
+        kind=explained.kind or "typology",
+        severity=explained.severity or "medium",
+        explanation=explained.summary,
+        typology=alert.typology,
+        hotlist_entry=entities[0].name if explained.kind == "hotlist" and entities else None,
+        window=alert.window,
+        raised_at=alert.created_at,
+        entities=entities,
+        links=links,
+        transactions=transactions,
+        status=alert.status,
+        outcome=alert.disposition if alert.status == "closed" else None,
+        reason=alert.disposition_reason if alert.status == "closed" else None,
+        match=_match(explained),  # type: ignore[arg-type]
+        node_ids=[n.id for n in explained.nodes],
+    )
+    handlings = [
+        *(n.handling for n in explained.nodes),
+        *(e.handling for e in explained.edges if e.id in cited),
+        *(e.handling for e in events),
+    ]
+    return _item("alert", by, distinct_handlings(handlings), scheme, alert=snapshot)
 
 
 def entity_item(node: Node, caption: str, by: Principal, scheme: HandlingScheme) -> StoredPackItem:
@@ -577,6 +691,133 @@ class PackStore:
             _stored(r["item"], replaced_by=r["replaced_by"], replaced_at=r["replaced_at"])
             for r in rows
         ]
+
+    # --- what a reader gets (ADR-134 decision 4, rule 3) --------------------------------------
+    #
+    # Which items a reader gets is decided here, in the query, as the reader: an item resting on a
+    # handling they may not view never leaves the database, and they are told only whether some
+    # were left out — a second query that answers yes or no, never a count. The route still checks
+    # each item again (`readable`): against the graph now, and by `item_visible` as a second line.
+
+    async def readable_items(
+        self, pack_id: str, reader: Principal, scheme: HandlingScheme
+    ) -> tuple[list[StoredPackItem], bool]:
+        """The draft's current items this reader may view, in order, and whether any are not."""
+        viewable, params = viewable_handlings_sql("item->'handlings'", reader, scheme, 2)
+        current = "pack_id = $1 AND replaced_by IS NULL"
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT item FROM report_pack_items WHERE {current} AND {viewable} "
+                "ORDER BY position",
+                pack_id,
+                *params,
+            )
+            withheld = await conn.fetchval(
+                f"SELECT EXISTS (SELECT 1 FROM report_pack_items WHERE {current} "
+                f"AND NOT {viewable})",
+                pack_id,
+                *params,
+            )
+        return [_stored(r["item"]) for r in rows], bool(withheld)
+
+    async def readable_earlier(
+        self, pack_id: str, reader: Principal, scheme: HandlingScheme
+    ) -> tuple[list[StoredPackItem], bool]:
+        """The earlier snapshots this reader may view, oldest replaced first, and whether any are
+        not."""
+        viewable, params = viewable_handlings_sql("item->'handlings'", reader, scheme, 2)
+        earlier = "pack_id = $1 AND replaced_by IS NOT NULL"
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT item, replaced_by, replaced_at FROM report_pack_items WHERE {earlier} "
+                f"AND {viewable} ORDER BY replaced_at",
+                pack_id,
+                *params,
+            )
+            withheld = await conn.fetchval(
+                f"SELECT EXISTS (SELECT 1 FROM report_pack_items WHERE {earlier} "
+                f"AND NOT {viewable})",
+                pack_id,
+                *params,
+            )
+        items = [
+            _stored(r["item"], replaced_by=r["replaced_by"], replaced_at=r["replaced_at"])
+            for r in rows
+        ]
+        return items, bool(withheld)
+
+    async def readable_version(
+        self,
+        pack_id: str,
+        reader: Principal,
+        scheme: HandlingScheme,
+        *,
+        version: int | None = None,
+    ) -> tuple[PackVersion, list[StoredPackItem], bool] | None:
+        """A published version — `version`, or the newest not withdrawn — with only the items this
+        reader may view (its `items` is that list) and whether any are not; `None` when there is
+        no such version."""
+        which = (
+            "version = $2"
+            if version is not None
+            else "withdrawn_at IS NULL ORDER BY version DESC LIMIT 1"
+        )
+        key: list[object] = [pack_id, *([version] if version is not None else [])]
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT pack_id, version, published_at, published_by, withdrawn_at, withdrawn_by, "
+                f"withdrawal_reason FROM report_pack_versions WHERE pack_id = $1 AND {which}",
+                *key,
+            )
+            if row is None:
+                return None
+            chosen = [pack_id, row["version"]]
+            elems = (
+                "FROM report_pack_versions v, jsonb_array_elements(v.items) WITH ORDINALITY "
+                "AS t(elem, n) WHERE v.pack_id = $1 AND v.version = $2"
+            )
+            viewable, params = viewable_handlings_sql("elem->'handlings'", reader, scheme, 3)
+            rows = await conn.fetch(
+                f"SELECT elem {elems} AND {viewable} ORDER BY n", *chosen, *params
+            )
+            withheld = await conn.fetchval(
+                f"SELECT EXISTS (SELECT 1 {elems} AND NOT {viewable})", *chosen, *params
+            )
+        items = [_stored(r["elem"]) for r in rows]
+        meta = PackVersion(
+            pack_id=row["pack_id"],
+            version=row["version"],
+            published_at=row["published_at"],
+            published_by=row["published_by"],
+            items=items,
+            withdrawn_at=row["withdrawn_at"],
+            withdrawn_by=row["withdrawn_by"],
+            withdrawal_reason=row["withdrawal_reason"],
+        )
+        return meta, items, bool(withheld)
+
+    async def reorder_visible(
+        self, pack_id: str, reader: Principal, scheme: HandlingScheme, wanted: Sequence[str]
+    ) -> None:
+        """The reader's own items put in `wanted`'s order, every item withheld from them kept in
+        its place — worked out here, so no hidden item's id leaves the store. `wanted` must name
+        each item the reader may view exactly once (`ValueError` otherwise)."""
+        viewable, params = viewable_handlings_sql("item->'handlings'", reader, scheme, 2)
+        async with self._pool.acquire() as conn, conn.transaction():
+            rows = await conn.fetch(
+                f"SELECT id, {viewable} AS mine FROM report_pack_items "
+                "WHERE pack_id = $1 AND replaced_by IS NULL ORDER BY position FOR UPDATE",
+                pack_id,
+                *params,
+            )
+            order = reorder_visible(
+                [r["id"] for r in rows], {r["id"] for r in rows if r["mine"]}, wanted
+            )
+            await conn.executemany(
+                "UPDATE report_pack_items SET position = $2 WHERE id = $1",
+                [(item_id, n) for n, item_id in enumerate(order, start=1)],
+            )
+            await self._touch(conn, pack_id)
 
     # --- versions
 

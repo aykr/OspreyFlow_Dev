@@ -499,13 +499,13 @@ from .packs import (
     PackItemRefused,
     PackStore,
     StoredPackItem,
+    alert_item,
     assessment_item,
     entity_item,
     export_pack,
     highest_marking,
     note_item,
     readable,
-    reorder_visible,
     trend_item,
 )
 from .pattern_ask import (
@@ -6020,7 +6020,11 @@ async def list_alerts_route(
     graph: GraphDep,
     hotlists_store: HotlistsStoreDep,
 ) -> AlertList:
-    """ADR-099 Amendment 3: the alerts of the case's datasets, read as the case reads."""
+    """The reader's own alerts — those raised to them, by their hotlists, monitors and rules
+    (`owner_id`, in the store's query) — within the case's datasets (ADR-099 Amendment 3, the reach
+    clause), newest first. Not the case's alerts: another member's are not listed here; the case's
+    rule-raised alerts are the one queue's (`/alert-queue`). Corrected by ADR-134 decision 5: this
+    said "the alerts of the case's datasets", which the store never read."""
     rows = await alerts_store.list_authorized(principal)
     return AlertList(
         alerts=[await alert_to_view(a, principal, graph, hotlists_store) for a in rows]
@@ -9802,11 +9806,12 @@ async def _readable_draft(
     scheme: HandlingScheme,
     graph: GraphPort,
     case_id: str,
-) -> tuple[list[StoredPackItem], list[StoredPackItem], int]:
-    """The draft's items in order, those this reader may see, and how many they may not."""
-    items = await packs.items(pack_id)
-    shown, withheld = await readable(items, reader, scheme, graph, case_id)
-    return items, shown, withheld
+) -> tuple[list[StoredPackItem], bool]:
+    """The draft's items this reader may see, in order, and whether any are withheld from them:
+    filtered in the store's query as the reader, then checked again against the graph now (ADR-134
+    decision 4). No item withheld from the reader reaches this function."""
+    items, in_store = await packs.readable_items(pack_id, reader, scheme)
+    return await readable(items, reader, scheme, graph, case_id, withheld_in_store=in_store)
 
 
 @app.post(
@@ -9858,7 +9863,7 @@ async def read_pack(
 ) -> PackDraft:
     """The draft as this reader may see it: the items withheld from them are counted, not named."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    _, shown, withheld = await _readable_draft(
+    shown, withheld = await _readable_draft(
         packs, pack.id, principal, scheme, graph, investigation.id
     )
     served = [i.served() for i in shown]
@@ -9871,7 +9876,7 @@ async def read_pack(
     )
     (named,) = await _named_packs([pack], principal_names)
     return PackDraft(
-        pack=named, items=served, withheld=withheld > 0, marking=highest_marking(served, scheme)
+        pack=named, items=served, withheld=withheld, marking=highest_marking(served, scheme)
     )
 
 
@@ -9895,9 +9900,11 @@ async def add_pack_item(
     investigations: InvestigationsDep,
     working_set: WorkingSetDep,
     audit: AuditDep,
+    alerts_store: AlertsStoreDep,
 ) -> PackItem:
     """The content is read and frozen here, as the adder — never taken from the request, except a
-    caption and a note's own words."""
+    caption and a note's own words. An alert (ADR-134 decision 1) is one of the adder's queue in
+    this case, read whole as them, or not found."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     item = await _build_pack_item(
         body,
@@ -9912,6 +9919,7 @@ async def add_pack_item(
         investigations,
         audit,
         working_set,
+        alerts_store,
     )
     await packs.add_item(pack.id, item)
     await audit.record(
@@ -9937,7 +9945,16 @@ async def _build_pack_item(
     investigations: InvestigationStore,
     audit: AuditWriter,
     working_set: WorkingSetService,
+    alerts_store: AlertStore,
 ) -> StoredPackItem:
+    if body.kind == "alert":
+        try:
+            explained, events = await alert_queue.explain_with_evidence(
+                alerts_store, graph, analytics, case.id, body.alert_id or "", principal
+            )
+        except AlertNotFoundError as missing:
+            raise HTTPException(status_code=404, detail="no such alert in this case") from missing
+        return alert_item(explained, events, principal, scheme)
     if body.kind == "trend":
         saved = await trends.get(case.id, body.trend_id) if body.trend_id else None
         if saved is None:
@@ -9985,7 +10002,7 @@ async def remove_pack_item(
     audit: AuditDep,
 ) -> None:
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    _, shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
+    shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
     if item_id not in {i.id for i in shown} or not await packs.remove_item(pack.id, item_id):
         raise HTTPException(status_code=404, detail="no such item in this pack")
     await audit.record(
@@ -10014,20 +10031,22 @@ async def reorder_pack(
 ) -> PackDraft:
     """Only the reader's own items move; each item withheld from them keeps its place."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    items, shown, withheld = await _readable_draft(
+    shown, withheld = await _readable_draft(
         packs, pack.id, principal, scheme, graph, investigation.id
     )
+    if sorted(body.item_ids) != sorted(i.id for i in shown):
+        raise PackItemRefused("the new order must name each item you can see exactly once")
     try:
-        order = reorder_visible([i.id for i in items], {i.id for i in shown}, body.item_ids)
+        # The withheld items' places are worked out in the store, as the reader (rule 3).
+        await packs.reorder_visible(pack.id, principal, scheme, body.item_ids)
     except ValueError as exc:
         raise PackItemRefused(str(exc)) from exc
-    await packs.set_order(pack.id, order)
     await audit.record(
         principal=principal,
         action="reorder_pack",
         investigation_id=investigation.id,
         resolved_query={"pack": pack.id},
-        result_cardinality=len(order),
+        result_cardinality=len(body.item_ids),
     )
     by_id = {i.id: i for i in shown}
     served = [by_id[i].served() for i in body.item_ids]
@@ -10037,7 +10056,7 @@ async def reorder_pack(
     return PackDraft(
         pack=named,
         items=served,
-        withheld=withheld > 0,
+        withheld=withheld,
         marking=highest_marking(served, scheme),
     )
 
@@ -10062,18 +10081,24 @@ async def refresh_pack_item(
     investigations: InvestigationsDep,
     working_set: WorkingSetDep,
     audit: AuditDep,
+    alerts_store: AlertsStoreDep,
 ) -> PackItem:
-    """A trend snapshot counted again, now, as the refresher; the earlier one stays in the
-    history (decision 4)."""
+    """A trend snapshot counted again, or an alert read again (ADR-134 decision 1: so an alert
+    added while open can say how it was closed), now, as the refresher; the earlier one stays in
+    the history (decision 4)."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    _, shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
+    shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
     old = next((i for i in shown if i.id == item_id), None)
     if old is None:
         raise HTTPException(status_code=404, detail="no such item in this pack")
-    if old.kind != "trend" or old.trend_id is None:
-        raise PackItemRefused("only a trend snapshot is refreshed")
+    if old.kind == "trend" and old.trend_id is not None:
+        again = AddPackItem(kind="trend", trend_id=old.trend_id)
+    elif old.kind == "alert" and old.alert is not None:
+        again = AddPackItem(kind="alert", alert_id=old.alert.alert_id)
+    else:
+        raise PackItemRefused("only a trend snapshot or an alert is refreshed")
     new = await _build_pack_item(
-        AddPackItem(kind="trend", trend_id=old.trend_id),
+        again,
         investigation,
         principal,
         graph,
@@ -10085,6 +10110,7 @@ async def refresh_pack_item(
         investigations,
         audit,
         working_set,
+        alerts_store,
     )
     if not await packs.replace_item(pack.id, old.id, new):
         raise HTTPException(status_code=404, detail="no such item in this pack")
@@ -10114,10 +10140,12 @@ async def pack_history(
     (pack,) = await _named_packs(
         [await _pack_or_404(packs, investigation.id, pack_id)], principal_names
     )
-    earlier = await packs.earlier_snapshots(pack.id)
-    shown, withheld = await readable(earlier, principal, scheme, graph, investigation.id)
+    earlier, in_store = await packs.readable_earlier(pack.id, principal, scheme)
+    shown, withheld = await readable(
+        earlier, principal, scheme, graph, investigation.id, withheld_in_store=in_store
+    )
     return PackHistory(
-        earlier_snapshots=[i.served() for i in shown], withheld=withheld > 0, versions=pack.versions
+        earlier_snapshots=[i.served() for i in shown], withheld=withheld, versions=pack.versions
     )
 
 
@@ -10139,13 +10167,13 @@ async def publish_pack(
     """A new immutable version. Refused while the draft holds an item the publisher may not see:
     nobody publishes what they cannot read (Amendment 1)."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    items, _, withheld = await _readable_draft(
+    shown, withheld = await _readable_draft(
         packs, pack.id, principal, scheme, graph, investigation.id
     )
-    if not items:
-        raise PackItemRefused("an empty pack has nothing to publish")
     if withheld:
         raise PackHasWithheldItems()
+    if not shown:
+        raise PackItemRefused("an empty pack has nothing to publish")
     version = await packs.publish(pack.id, principal)
     await audit.record(
         principal=principal,
@@ -10251,10 +10279,13 @@ async def read_published_pack(
 ) -> PublishedPack:
     """The newest published version as this reader may see it (decision 5): every read audited."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    version = await packs.latest_published(pack.id)
-    if version is None:
+    found = await packs.readable_version(pack.id, principal, scheme)
+    if found is None:
         raise HTTPException(status_code=404, detail="this pack has no publication")
-    shown, withheld = await readable(version.items, principal, scheme, graph, investigation.id)
+    version, items, in_store = found
+    shown, withheld = await readable(
+        items, principal, scheme, graph, investigation.id, withheld_in_store=in_store
+    )
     served = [i.served() for i in shown]
     await audit.record(
         principal=principal,
@@ -10274,7 +10305,7 @@ async def read_published_pack(
             version.published_by
         ),
         items=served,
-        withheld=withheld > 0,
+        withheld=withheld,
         marking=highest_marking(served, scheme),
     )
 
@@ -10300,12 +10331,14 @@ async def export_pack_route(
     approved manifest, from which the Glass renders the PDF. Editor and `export`, as every
     export."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    version = await packs.latest_published(pack.id)
-    if version is None:
+    found = await packs.readable_version(pack.id, principal, scheme)
+    if found is None:
         raise HTTPException(status_code=404, detail="this pack has no publication to export")
+    version, _, in_store = found
     result = await export_pack(
         pack=pack,
         version=version,
+        withheld_in_store=in_store,
         request=body,
         exporter=principal,
         scheme=scheme,

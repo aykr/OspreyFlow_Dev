@@ -29,7 +29,7 @@ from services.extract.writer import confirm_edge, confirm_node
 from ontology.handling import sources_in_full
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
-from schemas.analytics import EventFilter, EventListRequest
+from schemas.analytics import EventFilter, EventListRequest, EventRecord
 from schemas.domain import (
     Alert,
     AlertExplanation,
@@ -150,15 +150,15 @@ async def queue(
     *,
     statuses: Sequence[str] | None = None,
 ) -> list[QueuedAlert]:
-    shown: list[QueuedAlert] = []
-    for alert in await store.list_case_queue(investigation_id, reader):
-        if statuses is not None and alert.status not in statuses:
-            continue
-        nodes = await _visible_nodes(alert, graph, reader)
-        if nodes is None:
-            continue
-        shown.append(QueuedAlert(alert=alert, summary=summary_of(alert, nodes)))
-    return shown
+    """The case's typology alerts the reader may see whole, newest first: what the Reports figures
+    and neighbourhood risk count. Through `monitoring_queue`, so which rows is the query's answer
+    and what they name is one batched read as the reader (ADR-134 decision 4: this read each
+    alert's nodes in turn, stopping at a hidden one, so its work grew with the alerts the reader
+    may not see; `test_case_queue_reads.py`)."""
+    shown = await monitoring_queue(
+        store, graph, investigation_id, reader, kinds=["typology"], statuses=statuses
+    )
+    return sorted(shown, key=lambda q: (q.alert.created_at, q.alert.id), reverse=True)
 
 
 async def _visible_row(
@@ -188,12 +188,29 @@ async def explain(
     alert_id: str,
     reader: Principal,
 ) -> AlertExplanation:
+    explanation, _ = await explain_with_evidence(
+        store, graph, analytics, investigation_id, alert_id, reader
+    )
+    return explanation
+
+
+async def explain_with_evidence(
+    store: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    investigation_id: str,
+    alert_id: str,
+    reader: Principal,
+) -> tuple[AlertExplanation, list[EventRecord]]:
+    """`explain`, and the cited transactions as the analytics store holds them — with their
+    handlings, which a report pack's alert item rests on (ADR-134 decision 1)."""
     row, nodes = await _visible_row(store, graph, alert_id, investigation_id, reader)
     alert = row.alert
     edges = await _cited_edges(alert, graph, reader, list(nodes))
     if len({e.id for e in edges if e.type != "ALERTED_ON"}) < len(set(alert.edge_ids)):
         raise AlertNotFoundError(alert_id)
     transactions: list[ExplainedTransaction] = []
+    cited_events: list[EventRecord] = []
     if alert.event_ids:
         page = await analytics.list_events(
             EventListRequest(
@@ -205,6 +222,7 @@ async def explain(
         if page.total < len(set(alert.event_ids)):
             # A cited transaction the reader cannot read: the alert is not theirs to see.
             raise AlertNotFoundError(alert_id)
+        cited_events = list(page.events)
         transactions = sorted(
             (
                 ExplainedTransaction(
@@ -219,7 +237,7 @@ async def explain(
             ),
             key=lambda t: t.occurred_at,
         )
-    return AlertExplanation(
+    explanation = AlertExplanation(
         alert=alert,
         summary=summary_of(alert, nodes),
         nodes=list(nodes.values()),
@@ -230,6 +248,7 @@ async def explain(
         audience=row.audience,
         team=alert.team if row.audience == "team" else None,
     )
+    return explanation, cited_events
 
 
 def _number(value: object) -> float | None:
@@ -385,6 +404,7 @@ __all__ = [
     "claim",
     "dispose",
     "explain",
+    "explain_with_evidence",
     "monitoring_queue",
     "node_name",
     "queue",

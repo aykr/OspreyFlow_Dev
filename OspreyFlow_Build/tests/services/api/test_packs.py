@@ -48,6 +48,7 @@ from schemas.domain import (
 from schemas.trends import TrendDefinition
 from services.api.app import (
     app,
+    get_alerts_store,
     get_analytics,
     get_audit,
     get_graph,
@@ -249,6 +250,9 @@ def world() -> Iterator[World]:
         get_analytics: lambda: w.analytics, get_ontology: lambda: ONTOLOGY,
         get_handling_scheme: lambda: SCHEME, get_audit: lambda: w.audit, get_working_set: lambda: None,
         get_principal_names: lambda: w.names,
+        # ADR-134: the add and refresh routes take the alert store; only an alert item reads it
+        # (`test_pack_alert_item.py` gives it the real one).
+        get_alerts_store: lambda: None,
     })  # fmt: skip
     yield w
     app.dependency_overrides.clear()
