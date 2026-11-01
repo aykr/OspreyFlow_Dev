@@ -1851,8 +1851,11 @@ class TypologyRuleInput(BaseModel):     # what a case Author deploys (ruling 4)
 
 class TypologyRule(TypologyRuleInput):
     id: str; investigation_id: str; owner_id: str
-    status: Literal["active", "retired"] = "active"
+    status: Literal["pending", "active", "retired"] = "active"   # pending: ADR-133 decision 7
     created_at: datetime; retired_at: datetime | None = None; dataset_id: str | None = None
+    version: int = 1                    # ADR-133 stage (d): each change is a RuleVersion (§11.1a)
+    pending_action: Literal["deploy", "change", "retire"] | None = None   # waiting for a second person
+    pending_by: str | None = None; pending_version: int | None = None
 
 class HeldRow(BaseModel):               # a row a failing pre-commit rule could not judge
     id: str; investigation_id: str; recipe_id: str; recipe_version: int; load_id: str
@@ -1930,6 +1933,71 @@ evaluates as its deployer (ADR-036); its alerts are the case team's (ADR-109 rul
 only to a reader who can see all of it. A true positive confirms the alert's `Alert` node
 (asserted, rule 5); a false positive leaves it `inferred`. `03_CONDUIT_MIDDLEWARE.md` §3.8a has the
 routes and the trigger points; the tests that pin each invariant are named in ADR-109's amendments.
+
+### 11.1a Monitoring, stage (d): schedules, checks on load, maker–checker (ADR-133)
+
+```python
+# packages/schemas/sentences.py — a sentence may run on a schedule instead of as data loads.
+class RuleSchedule(BaseModel):          # sentence.runs == "schedule"; never a whole-deployment rule
+    every: Literal["daily", "weekly"] = "daily"; hour: int = 6   # whole hours, Europe/London
+    weekday: int | None = None          # 1 (Monday) to 7; a weekly schedule names one, a daily none
+
+# packages/schemas/monitoring.py
+class RuleVersion(BaseModel):           # one change to one rule, kept whole (decision 7)
+    rule_id: str; version: int; action: Literal["deploy", "change", "retire"]
+    name: str; params: TypologyParams; trigger: RuleTrigger; budget_ms: int
+    proposed_by: str; proposed_at: datetime
+    status: Literal["pending", "approved", "rejected", "applied"]   # applied: needed no approval
+    decided_by: str | None; decided_at: datetime | None; words: str | None   # a rejection's reason
+    proposed_by_name: str | None; decided_by_name: str | None      # resolved when read (ADR-106)
+class RuleChangeRejection(BaseModel):   # rejecting, or withdrawing, a waiting change
+    reason: str
+class RuleRun(BaseModel):               # one scheduled slot of one rule
+    id: str; rule_id: str; rule_version: int; slot: datetime; ran_at: datetime
+    run_as: str                         # the rule's author, resolved afresh — never the system
+    outcome: Literal["ran", "refused", "missed", "failed"]; alerts: int; words: str
+class RuleScheduleView(BaseModel):      # the schedule in words, its next run, or why it will not run
+    rule_id: str; schedule: str; state: Literal["scheduled", "stopped", "waiting_for_approval"]
+    words: str | None; next_run: datetime | None; runs: list[RuleRun]
+class ListSchedule(BaseModel):          # a screening list's refresh schedule (Amendment 3 item 4)
+    every: Literal["daily", "weekly"] = "daily"; hour: int = 5; weekday: int | None = None
+class ListScheduleInput(BaseModel):     # `None` stops it
+    schedule: ListSchedule | None = None
+class LoadCheck(BaseModel):             # a rule attached to a pipeline, by id; never a rule itself
+    rule_id: str; on_hit: Literal["alert", "hold"] = "alert"   # hold: before commit only
+class LoadChecksInput(BaseModel):       # the pipeline's checks, replaced whole
+    checks: list[LoadCheck]
+class LoadCheckRule(BaseModel):         # a load-time rule the engineer may attach
+    rule_id: str; name: str; words: str; scope: Literal["this_case", "deployment"]
+    trigger: RuleTrigger; severity: AlertSeverity; status: Literal["pending", "active"]
+    can_hold: bool; always_applies: bool; authors_on_hit: Literal["alert", "hold"]
+class LoadChecksView(BaseModel):        # chosen: false until an engineer has chosen
+    recipe_id: str; chosen: bool; checks: list[LoadCheck]; available: list[LoadCheckRule]
+    set_by: str | None; set_at: datetime | None
+class WouldRaise(BaseModel):            # an alert Verify's sample would raise, writing nothing
+    rule_id: str; rule_name: str; severity: AlertSeverity; on_hit: Literal["alert", "hold"]
+    entity_id: str; entity_type: str; entity_name: str   # as the person verifying reads it
+class CheckNotJudged(BaseModel):        # a check a dry run cannot judge, and why
+    rule_id: str; rule_name: str; why: str
+```
+
+**Maker–checker (decision 7).** A whole-deployment rule is `pending` until a second person with the
+right approves its deployment; a change to it, or its retirement, waits as a pending `RuleVersion`
+while the rule runs as it stood. The person who proposed a change can never approve it. A case
+rule's change applies at once. Every change to every rule is kept, with who proposed it and who
+decided it, and a changed rule runs as the person who wrote the new version (ADR-036). An `Alert`
+gains `status: "closing"` and `close_proposed_by`/`close_proposed_at`: closing a high-severity alert a
+second person may read is proposed, then approved by another member; the alert keeps who proposed it
+beside who decided it. An alert its owner alone may read has no second reader, and its owner closes it.
+
+**A scheduled rule** runs each slot as its author resolved afresh, over the last day or week of
+stored data, as the author may see it (rule 3); a refused slot is said in words, and three in a row
+stop the schedule until the rule changes. **Checks on load** are kept per pipeline (by recipe id);
+until chosen, every case rule judges a pipeline's loads. A whole-deployment rule and a rule just for
+its author judge every load whatever a pipeline chose. The tests that pin each invariant:
+`tests/services/api/test_rule_maker_checker_store.py`, `test_rule_maker_checker_routes.py`,
+`test_alert_close_approval.py`, `test_rule_schedule.py`, `test_list_refresh_schedule.py` and
+`test_load_checks.py`.
 
 ### 11.2 A case's report (ADR-111)
 
