@@ -87,8 +87,9 @@ _CITATION = re.compile(r"\s*\((?:[^()]*?(?:\d\d_[A-Z_]+\.md|ADR-\d+)[^()]*?)\)|A
 SECTIONS = {
     "components": "Which stores the deployment runs, and where their data lives.",
     "components.storage": "Folders: inside the containers, and on the host for ingest and tiles.",
-    "models": "The local models, and a client's own model provider if one is chosen.",
-    "models.provider": "A client's own model provider, reached through the deployment's gateway.",
+    "models": "The local models, and the client's own model providers (engines) if any are enabled.",
+    "models.provider": "The older one-provider form, read as a one-entry providers list; not with providers.",
+    "models.providers": "The providers (engines) an administrator enables, each reached through the deployment's gateway; each key is OSPREY_MODEL_KEY_<NAME>.",
     "governance": "Identity, handling, ontology and the marking shown on screen.",
     "cluster": "A Kubernetes deployment: its namespace, storage classes and machines.",
     "cluster.hosts": "One machine.",
