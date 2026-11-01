@@ -20829,3 +20829,96 @@ monitoring dashboard, alert trends.
 **Cost.** A new item kind through packs, export and the Glass's pack editor; three feed sections and
 a board; a new analytics-port operation, with conformance cases written first (rule 1). It depends
 on ADR-133 stage (a) only for severity and the "only me" choice; the rest can go first.
+
+## ADR-135 — Several model engines, each with its own key, chosen by the admin and the analyst — ACCEPTED (design)
+
+Status: accepted 1 November 2026, the owner's rulings (below). It amends ADR-114 decision 11 and
+Amendment 6 point 4, which allowed one client provider replacing the local model for the roles it
+names. Built before ADR-133 stage (a) (the owner's ruling 4).
+
+The owner's request: "build in the ability to provide api keys for OpenAI, Anthropic and Google for
+this release version. So at the time of the install the admin should be able to specify which LLM
+engine(s) are available to the analysts. For my local build, … a local LLM and I will provide a Gemini
+Key to be used for the demos."
+
+**Owner's rulings, 1 November 2026, from options:**
+
+1. Who picks the engine: **both**. The admin sets a default engine per role; an analyst may switch,
+   per request, among the engines the admin enabled.
+2. Where keys are entered: **at install, and with a new `ospreyflow models` verb** on a running
+   deployment. Never in the Admin area, never in a browser page of the Glass.
+3. The sendable handling codes: **one list for all engines**, as today.
+4. Order: **now**, before ADR-133 stage (a).
+
+**Decision.**
+
+1. **Engines.** The local engine (Ollama, as today; always present unless the deployment has none) and
+   any of `openai`, `anthropic` and `gemini` (Google). Other LiteLLM providers (`azure`, `bedrock`)
+   keep working through the same shape. `models.providers` in `osprey.yaml` lists each enabled
+   provider, with:
+   - its models per role;
+   - an optional `api_base` (`https://` only, as today);
+   - a label analysts see (for example "Gemini").
+
+   `models.defaults` maps each role to an engine (`local` or a provider's name). Today's single
+   `models.provider` is still read, as a one-entry list. Naming both `provider` and `providers` is
+   refused in words.
+2. **Keys.** Each provider's key is `OSPREY_MODEL_KEY_<NAME>` (for example `OSPREY_MODEL_KEY_GEMINI`).
+   - The single provider's `OSPREY_MODEL_PROVIDER_KEY` is still read for the one-entry case.
+   - A key is carried from the installer's environment, or the guided install's Models screen (the
+     installer's own page on the admin's machine, not the Glass), into `deployment.env` only.
+   - It is read by the LiteLLM gateway alone: never the Conduit, never `osprey.yaml` or a generated
+     file, never printed.
+   - An enabled provider without its key stops the install in words, as today.
+   - `apply` keeps an existing key (ADR-132 ruling 6).
+3. **`ospreyflow models`.**
+   - With no argument, it lists the engines, each role's default, and whether each provider's key
+     is present (yes or no, never the key).
+   - `ospreyflow models key <name>` sets or rotates a key, from `OSPREY_MODEL_KEY_<NAME>` in the
+     terminal or a hidden prompt. It writes `deployment.env`, renders the gateway's model table
+     again, and restarts the gateway alone.
+   - `ospreyflow models remove-key <name>` removes it. A provider left enabled without a key is
+     then shown "no key" and is not offered to analysts.
+4. **Routing** (`services/api/model_routing.py`). A request may name an engine.
+   - **The route decides:**
+     - a named engine the admin did not enable, or one with no key, is refused in words;
+     - material whose handling code is not sendable runs on the local engine, whatever was named,
+       and is refused in words where there is no local engine (ADR-114 Amendment 6 point 4,
+       unchanged);
+     - otherwise it runs where named, or on the role's default.
+   - **Every answer says which engine and model produced it.**
+5. **The Glass.**
+   - Ask the case and Ask to search show an engine choice, listing only the enabled engines that have
+     a key, with the role's default selected. It is reached by keyboard, with a step in its keyboard
+     spec (rule 13).
+   - `GET /v1/models/engines` returns, for a signed-in user, each offered engine's name and label,
+     and nothing about keys.
+   - Admin → System shows each engine, each role's default, whether its key is present, and that
+     case content leaves the deployment.
+6. **Documentation.**
+   - The administration guide: §10, Appendix A, and the new verb in §8's table.
+   - The user guide: the engine choice and what the answer's engine line means.
+   - Each guide gets a new version and its PDF.
+
+**Tests that would fail if it were broken** (rule 12; each shown red first):
+- **Config:** two providers render two gateway entries, each reading its own
+  `os.environ/OSPREY_MODEL_KEY_<NAME>`, and no key appears in any generated file.
+- **Install:**
+  - an enabled provider without its key stops the install in words;
+  - a second `apply` keeps both keys.
+- **The verb:**
+  - `models key gemini` writes the key to `deployment.env` alone and restarts only the gateway;
+  - `models` lists presence as yes or no and never prints a key.
+- **Routing:**
+  - a request naming Gemini for material above the sendable codes is **not sent**: the stand-in
+    gateway records no call;
+  - a request naming an engine not enabled is refused;
+  - an answer names the engine that produced it.
+- **The stand-in gateway refuses as the real one does** (`CLAUDE.md` rule 15): an unknown model, a
+  missing or wrong key, a provider not in the table. A test against it is not trusted until it has
+  been shown to refuse each one.
+- **Routes:** `GET /v1/models/engines` never carries a key and is refused without sign-in (rule 4).
+- **Keyboard:** the engine choice is reached and changed by keyboard in Ask the case and Ask to search.
+- **Live, once:** the owner's local deployment, with the owner's Gemini key, answers an Ask the case
+  question on Gemini and the same question on the local model. Synthetic case only: the real Enron
+  case's handling is never made sendable (rule 9).
