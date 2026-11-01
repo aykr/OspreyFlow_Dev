@@ -102,7 +102,7 @@ async def test_an_owner_without_the_right_is_refused_in_words_and_nothing_is_rea
     refresh = _Refreshes()
     await _executor(lists, refresh, OWNER.model_copy(update={"roles": ["analyst"]}), {name}).tick(at)
     assert refresh.calls == []
-    (update,) = [u for u in await lists.updates(limit=50) if u.list_name == name]
+    (update,) = [u for u in await lists.updates(org_unit=OWNER.org_unit, limit=50) if u.list_name == name]
     assert (update.outcome, update.trigger) == ("refused", "schedule")
     assert update.words == (f"The scheduled refresh was refused: the schedule's owner, {OWNER.id}, no "
                             "longer holds load_screening_lists. The list was left as it was.")  # fmt: skip

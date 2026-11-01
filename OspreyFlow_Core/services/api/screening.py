@@ -24,14 +24,22 @@ version, its number of entries, when it last changed and why its last attempt fa
 (`screening_lists`), and each refresh is recorded (`screening_list_updates`). `apply_update`
 replaces a list's entries whole in one transaction and says which entries it added, changed and
 removed — the changed entries are all a re-screening reads.
+
+**A refresh's re-screening is counted per unit (the owner's answer of 1 November 2026; rules 3 and
+7).** Each screening rule re-screens as its own deployer, so what it re-screened, raised and failed
+belongs to the deployer's organisational unit (`screening_list_update_units`). An administrator
+reads a refresh through `updates(org_unit=...)` and `update_for(...)`: the query joins their own
+unit's row and nothing else, so another unit's customers, alerts and rule names never leave the
+store. The whole-deployment totals stay on `screening_list_updates` for the operator's command and
+the audit; no route selects them.
 """
 
 from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Literal
 
@@ -100,7 +108,45 @@ ALTER TABLE screening_lists ADD COLUMN IF NOT EXISTS schedule_owner TEXT;
 ALTER TABLE screening_lists ADD COLUMN IF NOT EXISTS schedule_set_at TIMESTAMPTZ;
 ALTER TABLE screening_lists ADD COLUMN IF NOT EXISTS schedule_last_slot TIMESTAMPTZ;
 ALTER TABLE screening_list_updates ADD COLUMN IF NOT EXISTS trigger TEXT NOT NULL DEFAULT 'manual';
+-- The owner's answer of 1 November 2026: a refresh's re-screening counted per unit, and the words
+-- about the list alone (version, entries changed), which every unit may read.
+ALTER TABLE screening_list_updates ADD COLUMN IF NOT EXISTS list_words TEXT;
+CREATE TABLE IF NOT EXISTS screening_list_update_units (
+    update_id TEXT NOT NULL,
+    org_unit TEXT NOT NULL,
+    rescreened INTEGER NOT NULL DEFAULT 0,
+    alerts INTEGER NOT NULL DEFAULT 0,
+    failures TEXT[] NOT NULL DEFAULT '{}',
+    PRIMARY KEY (update_id, org_unit)
+);
 """
+
+
+@dataclass
+class UnitCounts:
+    """What one unit's screening rules did in one refresh: customers re-screened, alerts raised,
+    and each rule that could not re-screen, in words."""
+
+    rescreened: int = 0
+    alerts: int = 0
+    failures: list[str] = field(default_factory=list)
+
+
+def _plural(n: int, one: str, many: str | None = None) -> str:
+    return f"{n:,} {one if n == 1 else (many or one + 's')}"
+
+
+def unit_words(list_words: str, screened_entries: int, counts: UnitCounts) -> str:
+    """An updated refresh in words for one unit: the list's own words, then that unit's counts and
+    failures alone."""
+    words = (
+        f"{list_words} {_plural(counts.rescreened, 'customer')} re-screened against "
+        f"{_plural(screened_entries, 'changed entry', 'changed entries')}; "
+        f"{_plural(counts.alerts, 'alert')} raised."
+    )
+    if counts.failures:
+        words += " " + " ".join(f"{f[0].upper()}{f[1:]}." for f in counts.failures)
+    return words
 
 
 @dataclass(frozen=True)
@@ -353,17 +399,31 @@ class ScreeningListStore:
             )  # fmt: skip
         return diff
 
-    async def record_update(self, update: ScreeningListUpdate) -> None:
-        """A refresh's record; a refused or failed one also sets the list's failure, in words."""
+    async def record_update(
+        self,
+        update: ScreeningListUpdate,
+        *,
+        list_words: str | None = None,
+        by_unit: Mapping[str, UnitCounts] | None = None,
+    ) -> None:
+        """A refresh's record; a refused or failed one also sets the list's failure, in words. An
+        updated one also keeps the words about the list alone and each unit's own counts."""
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 "INSERT INTO screening_list_updates (id, list_name, at, outcome, version, "
-                "previous_version, added, changed, removed, rescreened, alerts, words, trigger) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+                "previous_version, added, changed, removed, rescreened, alerts, words, trigger, "
+                "list_words) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
                 update.id, update.list_name, update.at, update.outcome, update.version,
                 update.previous_version, update.added, update.changed, update.delisted,
-                update.rescreened, update.alerts, update.words, update.trigger,
+                update.rescreened, update.alerts, update.words, update.trigger, list_words,
             )  # fmt: skip
+            for unit, counts in (by_unit or {}).items():
+                await conn.execute(
+                    "INSERT INTO screening_list_update_units (update_id, org_unit, rescreened, "
+                    "alerts, failures) VALUES ($1, $2, $3, $4, $5)",
+                    update.id, unit, counts.rescreened, counts.alerts, counts.failures,
+                )  # fmt: skip
             if update.outcome in ("refused", "failed"):
                 await conn.execute(
                     "UPDATE screening_lists SET attempted_at = $2, failure = $3 "
@@ -435,16 +495,55 @@ class ScreeningListStore:
             )
         return not done.endswith(" 0")
 
-    async def updates(self, *, limit: int = 20) -> list[ScreeningListUpdate]:
+    async def updates(self, *, org_unit: str, limit: int = 20) -> list[ScreeningListUpdate]:
+        """The latest refreshes, newest first, each counted for `org_unit` alone: the query joins
+        that unit's own counts and nothing else (rules 3 and 7)."""
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT id, list_name, at, outcome, version, previous_version, added, changed, "
-                "removed AS delisted, rescreened, alerts, words, trigger "
-                "FROM screening_list_updates "
-                "ORDER BY at DESC, id DESC LIMIT $1",
-                limit,
+            rows = await conn.fetch(f"{_UPDATE_SELECT} ORDER BY u.at DESC, u.id DESC LIMIT $2",
+                                    org_unit, limit)  # fmt: skip
+        return [_update(r) for r in rows]
+
+    async def update_for(self, update_id: str, *, org_unit: str) -> ScreeningListUpdate | None:
+        """One refresh counted for `org_unit` alone, as `updates` counts it."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(f"{_UPDATE_SELECT} WHERE u.id = $2", org_unit, update_id)
+        return _update(row) if row is not None else None
+
+
+#: A refresh as one unit reads it. The whole-deployment `rescreened`, `alerts` and `words` of an
+#: updated refresh are never selected; the unit's own row is joined by `$1` in the query.
+_UPDATE_SELECT = (
+    "SELECT u.id, u.list_name, u.at, u.outcome, u.version, u.previous_version, u.added, "
+    "u.changed, u.removed AS delisted, u.trigger, u.list_words, "
+    "CASE WHEN u.outcome = 'updated' THEN NULL ELSE u.words END AS words, "
+    "COALESCE(n.rescreened, 0) AS rescreened, COALESCE(n.alerts, 0) AS alerts, "
+    "COALESCE(n.failures, '{}') AS failures "
+    "FROM screening_list_updates u "
+    "LEFT JOIN screening_list_update_units n ON n.update_id = u.id AND n.org_unit = $1"
+)
+
+
+def _update(row: asyncpg.Record) -> ScreeningListUpdate:
+    """A refresh as one unit reads it. An updated refresh's words are the list's own words and the
+    unit's own counts; one recorded before counts were kept per unit says only what the list did."""
+    words = row["words"]
+    rescreened, alerts = row["rescreened"], row["alerts"]
+    if row["outcome"] == "updated":
+        if row["list_words"] is not None:
+            counts = UnitCounts(rescreened, alerts, list(row["failures"]))
+            words = unit_words(row["list_words"], row["added"] + row["changed"], counts)
+        else:
+            words = (
+                f"Version {row['version']}: {row['added']:,} added, {row['changed']:,} changed, "
+                f"{row['delisted']:,} removed. Who it re-screened was not counted by unit then, "
+                "so it is not shown."
             )
-        return [ScreeningListUpdate(**dict(r)) for r in rows]
+    return ScreeningListUpdate(
+        id=row["id"], list_name=row["list_name"], at=row["at"], outcome=row["outcome"],
+        version=row["version"], previous_version=row["previous_version"], added=row["added"],
+        changed=row["changed"], delisted=row["delisted"], rescreened=rescreened, alerts=alerts,
+        words=words, trigger=row["trigger"],
+    )  # fmt: skip
 
 
 _LIST_SELECT = (
@@ -493,6 +592,8 @@ __all__ = [
     "diff_entries",
     "ScreeningHit",
     "ScreeningListStore",
+    "UnitCounts",
     "normalised",
+    "unit_words",
     "screen",
 ]

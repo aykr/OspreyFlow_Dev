@@ -10031,9 +10031,11 @@ async def manage_screening_lists(
     principal: PrincipalDep, screening_lists: ScreeningListsDep, audit: AuditDep
 ) -> ScreeningLists:
     """The Lists screen for whoever may load screening lists: the lists and their latest
-    refreshes, with what each changed, re-screened and raised."""
+    refreshes, with what each changed, and what each re-screened and raised **in the reader's own
+    unit** (the owner's answer of 1 November 2026; rule 7). The store's query joins that unit's
+    counts alone; another unit's customers, alerts and rule names never reach the Conduit."""
     found = await screening_lists.subscriptions()
-    updates = await screening_lists.updates(limit=20)
+    updates = await screening_lists.updates(org_unit=principal.org_unit, limit=20)
     await audit.record(principal=principal, action="list_screening_lists", investigation_id=None,
                        resolved_query={"manage": True}, result_cardinality=len(found))  # fmt: skip
     return ScreeningLists(lists=found, updates=updates, can_manage=True)
@@ -10117,7 +10119,9 @@ async def refresh_screening_list_route(
 ) -> ScreeningListUpdate:
     """*Refresh now*: the list read again through its connector, applied as a new version, and
     every customer of every case with a screening rule re-screened against the changed entries
-    only, as each rule's deployer (rule 3). Refused or failed in words, the list left as it was."""
+    only, as each rule's deployer (rule 3). Refused or failed in words, the list left as it was.
+    The answer counts the administrator's own unit alone, read back through the store's query as
+    the Lists screen reads it (rule 7); the deployment's totals go to the audit only."""
     rescreen = Rescreener(
         rules=typology_rules,
         datasets=get_datasets(request),
@@ -10141,7 +10145,14 @@ async def refresh_screening_list_route(
                        resolved_query={"list_name": list_name, "outcome": update.outcome,
                                        "version": update.version, "alerts": update.alerts},
                        result_cardinality=update.alerts)  # fmt: skip
-    return update
+    own = await screening_lists.update_for(update.id, org_unit=principal.org_unit)
+    if own is None:  # recorded a moment ago in the same store
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "not_recorded",
+                    "message": "the refresh ran but its record could not be read back"},
+        )  # fmt: skip
+    return own
 
 
 @app.get("/v1/admin/schedules", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))])

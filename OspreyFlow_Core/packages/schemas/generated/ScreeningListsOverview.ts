@@ -22,9 +22,9 @@ export type CanManage = false;
 
 /**
  * The Lists screen for a reader of the alert queue: the lists alone. No refreshes — their
- * counts of customers re-screened and alerts raised are taken across every case in the deployment
- * (rule 7) — and no field that could hold them, so the route cannot send them, not merely does
- * not.
+ * counts of customers re-screened and alerts raised are for whoever may load lists, in their own
+ * unit (rule 7) — and no field that could hold them, so the route cannot send them, not merely
+ * does not.
  */
 export interface ScreeningListsOverview {
   lists: Lists;

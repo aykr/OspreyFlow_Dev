@@ -10,7 +10,11 @@ What a mistake would do, and the case that catches it:
   `test_a_failure_is_shown_until_the_next_good_refresh`;
 - aliases lost between the file and the screening — `test_aliases_are_kept_and_read_back`;
 - a re-screening that misses a case's screening rule, or runs a retired one —
-  `test_every_active_screening_rule_in_every_case_is_found`.
+  `test_every_active_screening_rule_in_every_case_is_found`;
+- another unit's counts, or its rule's failure, read by an administrator (the owner's answer of 1
+  November 2026; rules 3 and 7) — `test_a_refresh_is_read_with_the_readers_own_units_counts_alone`;
+- a refresh recorded before counts were kept per unit read with the deployment's totals —
+  `test_an_older_refresh_shows_what_the_list_did_and_no_count`.
 """
 
 from __future__ import annotations
@@ -21,7 +25,7 @@ from datetime import UTC, date, datetime
 import asyncpg
 import pytest
 from services.api.config import PostgresConfig
-from services.api.screening import ScreeningEntry, ScreeningListStore
+from services.api.screening import ScreeningEntry, ScreeningListStore, UnitCounts
 from services.api.typology_rules import TypologyRuleStore
 
 from conduit_common.identity import new_id
@@ -108,7 +112,7 @@ async def test_a_failure_is_shown_until_the_next_good_refresh(store: ScreeningLi
     await store.apply_update("Store test", "v1", [_entry("1", "Ann Able")], synthetic=True)
     status = await store.subscription("Store test")
     assert status is not None and status.failure is None
-    (latest, *_) = await store.updates()
+    (latest, *_) = await store.updates(org_unit="unit-a")
     assert latest.outcome == "failed"
 
 
@@ -137,3 +141,51 @@ async def test_every_active_screening_rule_in_every_case_is_found() -> None:
         assert all(r.params.typology == "kyc_screening" for r in await rules.list_active_of_typology("kyc_screening"))
     finally:
         await rules.close()
+
+
+async def test_a_refresh_is_read_with_the_readers_own_units_counts_alone(
+    store: ScreeningListStore,
+) -> None:
+    await _subscribe(store)
+    update = ScreeningListUpdate(
+        id=new_id(), list_name="Store test", at=datetime.now(UTC), outcome="updated", added=2,
+        changed=1, rescreened=9, alerts=3,
+        words="Version v2: 2 added, 1 changed, 0 removed. 9 customers re-screened against 3 changed "
+              "entries; 3 alerts raised. Rule “Unit B watch” could not re-screen: the graph failed.",
+    )  # fmt: skip
+    await store.record_update(
+        update,
+        list_words="Version v2: 2 added, 1 changed, 0 removed.",
+        by_unit={
+            "unit-a": UnitCounts(rescreened=4, alerts=1),
+            "unit-b": UnitCounts(rescreened=5, alerts=2,
+                                 failures=["rule “Unit B watch” could not re-screen: the graph failed"]),
+        },
+    )  # fmt: skip
+    (a,) = [u for u in await store.updates(org_unit="unit-a") if u.id == update.id]
+    assert (a.rescreened, a.alerts) == (4, 1)
+    assert a.words == ("Version v2: 2 added, 1 changed, 0 removed. 4 customers re-screened against "
+                       "3 changed entries; 1 alert raised.")  # fmt: skip
+    b = await store.update_for(update.id, org_unit="unit-b")
+    assert b is not None and (b.rescreened, b.alerts) == (5, 2)
+    assert b.words.endswith("Rule “Unit B watch” could not re-screen: the graph failed.")
+    c = await store.update_for(update.id, org_unit="unit-c")
+    assert c is not None and (c.rescreened, c.alerts) == (0, 0)
+    assert "Unit B" not in c.words and "9 customers" not in c.words
+
+
+async def test_an_older_refresh_shows_what_the_list_did_and_no_count(
+    store: ScreeningListStore,
+) -> None:
+    await _subscribe(store)
+    older = ScreeningListUpdate(
+        id=new_id(), list_name="Store test", at=datetime.now(UTC), outcome="updated", version="v1",
+        added=3, rescreened=12, alerts=4,
+        words="Version v1: 3 added, 0 changed, 0 removed. 12 customers re-screened against 3 changed "
+              "entries; 4 alerts raised.",
+    )  # fmt: skip
+    await store.record_update(older)  # as stage (c) recorded it: no unit rows, no list words
+    read = await store.update_for(older.id, org_unit="unit-a")
+    assert read is not None and (read.rescreened, read.alerts) == (0, 0)
+    assert read.words.startswith("Version v1: 3 added, 0 changed, 0 removed.")
+    assert "12" not in read.words and "not counted by unit" in read.words

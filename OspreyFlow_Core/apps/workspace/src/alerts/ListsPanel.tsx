@@ -2,9 +2,9 @@
 // list the deployment subscribes to — its connector, version, number of entries, last update, licence,
 // and why its last refresh failed, in words. Whoever may load screening lists (an administrator or a
 // data engineer, ADR-112's `load_screening_lists`) also subscribes to a list, refreshes one, and reads
-// what each refresh changed, re-screened and raised; everyone else reads the lists alone, since those
-// counts are taken across every case in the deployment (rule 7). The Conduit refuses whatever a stale
-// view offers anyway.
+// what each refresh changed, and what it re-screened and raised in their own unit alone (the owner's
+// answer of 1 November 2026: the Conduit's store counts the reader's unit, rule 7); everyone else reads
+// the lists alone. The Conduit refuses whatever a stale view offers anyway.
 import { useCallback, useEffect, useState } from "react";
 import type {
   ScreeningLists,
@@ -195,6 +195,9 @@ function Refreshes({ updates }: { updates: ScreeningLists["updates"] }) {
       <h3 className="value" style={{ margin: 0 }}>
         Latest refreshes
       </h3>
+      <p className="label" style={{ margin: 0 }}>
+        Customers re-screened and alerts raised are counted in your own unit only.
+      </p>
       {updates.length === 0 ? (
         <p className="label" style={{ margin: 0 }}>
           No list has been refreshed yet.
