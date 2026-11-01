@@ -96,7 +96,7 @@
 }
 
 /* Attention, recent cases, ways of working. */
-.home-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--sp-32) var(--sp-40); align-items: start; }
+.home-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: var(--sp-32) var(--sp-40); align-items: start; }
 .home-column { display: flex; flex-direction: column; gap: var(--sp-32); min-width: 0; }
 .home-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-12); margin-bottom: var(--sp-8); }
 .home-section__head h2 { margin: 0; font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 700; }
