@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.13** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.14** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.14 | 2026-11-01 | §7.6–7.8: a rule written as a sentence, blank by blank from the ontology, and its drawn pattern; frequency and amount conditions; Preview on the last 90 days. |
 | 1.13 | 2026-11-01 | §9.1–9.3: an alert in a report pack (open or closed, inferred or confirmed); alert trends in the Trends tab; the monitoring figures dashboards receive. |
 | 1.12 | 2026-11-01 | §7 rewritten as Monitoring and alerts: the Monitoring place and its one queue for every kind of alert; severity, who may see an alert, giving it to a member, and closing it with a reason; the typologies as rule templates; whom a hotlist's alerts reach. §12: the canvas says the node the keyboard is on. |
 | 1.11 | 2026-11-01 | §5.11: the Matrix, the graph as two tables a screen reader can walk, with its keys in §12. |
@@ -536,7 +537,7 @@ form, **Templates** lists the seven typologies as named starting points, grouped
 serve (anti-money-laundering transaction monitoring, KYC, any case), each with what it looks for and
 the severity of its alerts. **Use** fills the form with the template's defaults and puts you on the
 rule's name; change anything, then **Deploy**. Everyone in the case sees the templates; only an Author
-has **Use**.
+has **Use**. A rule can also be written as a sentence (§7.6).
 
 ### 7.5 Watches, and whom a hotlist's alerts reach
 
@@ -579,6 +580,62 @@ alert says "Evidence no longer available." and cannot be jumped into. **Where a 
 to data this case does not read**, the alert names its type and name and says "its sources are in data
 this case does not read", with no file and no row (section 5.6): a file name is as much a source as a
 row.
+
+### 7.6 A rule written as a sentence
+
+![A rule written as a sentence, its drawn pattern, and its preview on the last 90 days](images/user/22-rule-sentences.png)
+
+On the **Rules** tab, **Write a rule as a sentence** builds a rule from blanks, read as one sentence:
+*When a* subject *whose* conditions, *and is* related to something, *how often*, *then* raise an alert.
+Every blank is a choice from a list made from the deployment's ontology — its types, their properties
+and its link types — so there is nothing to type that could fail to be understood.
+
+- **Subject.** A type, grouped as people, objects, locations, events and organisations.
+- **Whose.** Up to five conditions on the subject's properties: *is*, *is one of*, *is above*, *is
+  below*, *is within a time window*, or, for a location, *is within a drawn area* (entered by its four
+  corners). A property marked highly sensitive is never offered.
+- **And is.** Optionally: *linked by* a link type to something; *within* 1 to 4 *steps of* something
+  of a type; *at a location in a drawn area*; *on one of my hotlists*; or, for a person or an
+  organisation, *on a screening list* at a name match you choose.
+- **Then.** The alert's severity; whether it goes to the case team or is labelled for your team; and
+  when the rule runs — after each load commits, or before it. Before commit you also choose what a hit
+  does: load with its alert, or hold its rows for a reviewer in **Held rows**. A rule that names a link
+  runs after commit, since a link is read from the stored graph.
+- **For.** *Just me* (the alerts reach you alone, like a monitor's), *this case*, or — for an
+  administrator — *the whole deployment*, which watches every case's loads.
+
+**Show the drawn pattern** shows the same rule as the Query builder would draw it. Once deployed, the
+pattern is saved among your patterns, and you can open and change it there: the rule follows the
+pattern as it now reads. **Read a saved pattern as a sentence** goes the other way, from a pattern
+you drew to a sentence. A pattern a sentence cannot say (more than one link, or a pinned node) is
+refused in words.
+
+Deploying needs a name. A case Editor may deploy a rule *just for me*; a case Author deploys one for
+the case; only an administrator, who is also the case's Author, deploys one for the whole deployment.
+A sentence that names something the ontology does not declare is refused, naming the blank.
+
+### 7.7 How often: frequency and amount conditions
+
+A sentence may also say how often:
+
+- *a number of times or more within some days* — for example, present at a location 3 or more times
+  within 7 days;
+- *a total amount over a figure within some days* — the total of a link's declared amount, such as a
+  payment's amount, over 10,000 within 30 days;
+- *for the first time ever* — the subject's first event of that link type.
+
+The events counted are those of the link type you choose, with the subject at either end. They are
+counted as the rule's author: an event you may not see adds nothing to a count or a total, and is
+never a "first".
+
+### 7.8 Preview on the last 90 days
+
+**Preview on the last 90 days** runs the rule as you, over the case's stored data, and says how many
+alerts it would have raised, with up to five of them. Use it to set a threshold against evidence
+before you deploy. A preview raises no alert and writes nothing. It counts only what you may see, so
+it says nothing about anything hidden from you. If the rule would judge more subjects than the
+working-set limit, the preview is refused and counts nothing: narrow the sentence and preview again.
+Frequency conditions are counted over the 90 days.
 
 ## 8. Ownership and due diligence
 
