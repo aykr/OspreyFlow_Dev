@@ -263,9 +263,12 @@ export type Kind7 = "first_time";
 export type LinkType4 = string;
 export type Severity = "low" | "medium" | "high";
 export type Team = "case" | "my_team";
-export type Runs = "pre_commit" | "post_commit";
+export type Runs = "pre_commit" | "post_commit" | "schedule";
 export type OnHit = "load" | "hold";
 export type Scope = "just_me" | "this_case" | "deployment";
+export type Every = "daily" | "weekly";
+export type Hour = number;
+export type Weekday = number | null;
 export type MaxMatches1 = number;
 export type Typology8 = "high_risk_jurisdiction";
 /**
@@ -287,19 +290,28 @@ export type BaselineDays = number;
 export type Factor = number;
 export type MinRecent = number;
 export type Measure = "count" | "amount";
-export type Trigger = "pre_commit" | "post_commit";
+export type Trigger = "pre_commit" | "post_commit" | "schedule";
 export type BudgetMs = number;
 export type Id = string;
 export type InvestigationId = string;
 export type OwnerId = string;
-export type Status = "active" | "retired";
+export type Status = "pending" | "active" | "retired";
 export type CreatedAt = string;
 export type RetiredAt = string | null;
 export type DatasetId = string | null;
+export type Version = number;
+export type PendingAction = ("deploy" | "change" | "retire") | null;
+export type PendingBy = string | null;
+export type PendingVersion = number | null;
 
 /**
  * A deployed rule. It belongs to the case it was deployed in and evaluates as its deployer's
  * principal, resolved fresh at each evaluation (ADR-036, unchanged by ADR-109).
+ *
+ * ADR-133 stage (d): `version` counts its changes, each kept as a `RuleVersion`; `pending_action`
+ * names a change waiting for a second person's approval (a whole-deployment rule's deploy, change
+ * or retire), proposed by `pending_by`. The rule runs as it stands until that change is
+ * approved.
  */
 export interface TypologyRule {
   name: Name;
@@ -313,6 +325,10 @@ export interface TypologyRule {
   created_at: CreatedAt;
   retired_at?: RetiredAt;
   dataset_id?: DatasetId;
+  version?: Version;
+  pending_action?: PendingAction;
+  pending_by?: PendingBy;
+  pending_version?: PendingVersion;
   [k: string]: unknown;
 }
 export interface StructuringParams {
@@ -407,6 +423,7 @@ export interface RuleSentence {
   runs?: Runs;
   on_hit?: OnHit;
   scope?: Scope;
+  schedule?: RuleSchedule | null;
   [k: string]: unknown;
 }
 export interface EqualsCondition {
@@ -537,6 +554,17 @@ export interface AmountFrequency {
 export interface FirstTimeFrequency {
   kind?: Kind7;
   link_type: LinkType4;
+  [k: string]: unknown;
+}
+/**
+ * When a scheduled rule runs (ADR-133 decision 1, stage (d)): every day, or every week on one
+ * day, at a whole hour, read in Europe/London. A scheduled run judges what was stored over the
+ * last day or the last week, as the rule's own author.
+ */
+export interface RuleSchedule {
+  every?: Every;
+  hour?: Hour;
+  weekday?: Weekday;
   [k: string]: unknown;
 }
 /**

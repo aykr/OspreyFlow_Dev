@@ -30,7 +30,7 @@ import json
 import logging
 import os
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -237,6 +237,16 @@ from schemas.ingest import (
 )
 from schemas.mapconfig import MapConfig, PublicMapConfig
 from schemas.model import OfferedEngines
+from schemas.monitoring import (
+    CheckNotJudged,
+    ListScheduleInput,
+    LoadChecksInput,
+    LoadChecksView,
+    RuleChangeRejection,
+    RuleScheduleView,
+    RuleVersion,
+    WouldRaise,
+)
 from schemas.packs import (
     AddPackItem,
     PackDraft,
@@ -496,6 +506,8 @@ from .link_types import (
     RetireLinkTypeRequest,
     public_ontology,
 )
+from .list_schedule import ListRefreshExecutor, ListScheduleRefused
+from .load_checks import READ_ONLY, ChecksRefused, check_choice, checks_view, would_raise
 from .load_records import LedgerSink, may_see_counts, released_from_of, report_view
 from .mapconfig_loader import load_map_config, public_view
 from .model_routing import (
@@ -581,6 +593,7 @@ from .review import (
 from .risk import NeighbourhoodTooLarge
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .rule_holds import ReleaseRefused, readable_rule_audit, release_held_rows
+from .rule_schedule import RuleScheduleExecutor, schedule_view
 from .rule_sentences import (
     SentenceContext,
     SentenceRefused,
@@ -613,6 +626,7 @@ from .screening_refresh import (
 )
 from .screening_refresh import refresh as refresh_screening_list
 from .search import SearchRequest, SearchResponse, SuggestRequest, SuggestResponse
+from .sentence_rules import is_deployment_wide, run_scheduled_rule
 from .site_images import (
     object_key_for,
     read_site_image,
@@ -689,7 +703,12 @@ from .trends import (
     trend_options,
     validate_definition,
 )
-from .typology_rules import TypologyRuleNotFoundError, TypologyRuleStore
+from .typology_rules import (
+    OwnChangeRefused,
+    RuleChangeRefused,
+    TypologyRuleNotFoundError,
+    TypologyRuleStore,
+)
 from .watch_routes import (
     AlertJumpResult,
     AlertList,
@@ -1011,12 +1030,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # run by the one that claims it, as the schedule's owner through the one run path.
     app.state.schedule_executor = _schedule_executor(app)
     schedule_task = asyncio.create_task(run_every_minute(app.state.schedule_executor))
+    # ADR-133 stage (d): scheduled rules, each slot as the rule's author, and screening lists'
+    # refresh schedules, each slot as the person who set it — ticking each minute, one replica per
+    # slot.
+    app.state.monitoring_schedules = _MonitoringSchedules(
+        rules=_rule_schedule_executor(app), lists=_list_schedule_executor(app)
+    )
+    monitoring_task = asyncio.create_task(run_every_minute(app.state.monitoring_schedules))
 
     try:
         yield
     finally:
         sweep_task.cancel()
         schedule_task.cancel()
+        monitoring_task.cancel()
         await investigations.close()
         await history.close()
         await sites.close()
@@ -1735,6 +1762,22 @@ async def _typology_rule_not_found_handler(
     request: Request, exc: TypologyRuleNotFoundError
 ) -> JSONResponse:
     return JSONResponse(status_code=404, content={"error": "rule_not_found"})
+
+
+@app.exception_handler(RuleChangeRefused)
+async def _rule_change_refused_handler(request: Request, exc: RuleChangeRefused) -> JSONResponse:
+    """ADR-133 decision 7: a change, approval or rejection that cannot be made, in words."""
+    said = str(exc)
+    return JSONResponse(
+        status_code=409,
+        content={"error": "rule_change_refused", "message": f"{said[0].upper()}{said[1:]}."},
+    )
+
+
+@app.exception_handler(alert_queue.CloseRefused)
+async def _close_refused_handler(request: Request, exc: alert_queue.CloseRefused) -> JSONResponse:
+    return JSONResponse(status_code=403, content={"detail": {"error": "own_change",
+                                                             "message": str(exc)}})  # fmt: skip
 
 
 @app.exception_handler(HeldRowNotFoundError)
@@ -7711,6 +7754,13 @@ async def verify_studio_recipe(
     studio_recipes: StudioRecipesDep,
     audit: AuditDep,
     recipe_runs: RecipeRunsDep,
+    typology_rules: TypologyRulesDep,
+    analytics: AnalyticsDep,
+    principal_resolver: PrincipalResolverDep,
+    patterns_store: PatternsStoreDep,
+    hotlists_store: HotlistsStoreDep,
+    screening_lists: ScreeningListsDep,
+    compute: ComputeDep,
 ) -> VerifyReport:
     """§5: the dry run. No persistent write of any kind happens here — no
     Parquet staging, no `GraphPort` write, no transaction — but an
@@ -7724,6 +7774,22 @@ async def verify_studio_recipe(
     # ADR-127 decision 5: the dry run counts the rows the case already kept as the run would count
     # them, by the draft's own `deduplicate`, asking the store of loaded rows (this case's keys
     # only) and writing nothing.
+    # ADR-133 decision 6, stage (d): the pipeline's checks on load judge the sample as at its
+    # load, each as its author, through a gate whose alert store, quarantine and signature set
+    # refuse every call — Verify writes nothing.
+    gate = await _rule_gate(
+        investigation.id, loader=principal, graph=graph, analytics=analytics, scheme=scheme,
+        typology_rules=typology_rules, principal_resolver=principal_resolver,
+        screening=screening_lists, compute=compute, patterns=patterns_store,
+        hotlists=hotlists_store, ontology=ontology, recipe_id=recipe.recipe_id,
+        **READ_ONLY,  # type: ignore[arg-type]
+    )  # fmt: skip
+
+    async def judge_checks(
+        written: Sequence[NodeWrite | EdgeWrite], shown: Mapping[str, Node]
+    ) -> tuple[list[WouldRaise], list[CheckNotJudged], int]:
+        return await would_raise(gate, written, shown)
+
     report = await run_verify(
         recipe,
         principal,
@@ -7732,6 +7798,7 @@ async def verify_studio_recipe(
         ontology,
         row_keys=recipe_runs,
         investigation_id=investigation.id,
+        checks=judge_checks,
     )
     # §5: "Verify must pass before publish" — recorded here, against a
     # *completed* run (rejections included, per §5's own "a run with
@@ -7741,10 +7808,70 @@ async def verify_studio_recipe(
     await audit.record(
         principal=principal,
         action="verify_studio_recipe",
-        resolved_query={"recipe_id": recipe.recipe_id},
+        resolved_query={"recipe_id": recipe.recipe_id, "would_raise": len(report.would_raise)},
         result_cardinality=len(report.nodes) + len(report.edges),
     )
     return report
+
+
+# --- ingest studio: checks on load (ADR-133 decision 6, stage (d)) ------------------------------
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/checks",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
+async def read_load_checks(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+) -> LoadChecksView:
+    """The pipeline's "Checks on load" step: the case's and the deployment's load-time rules the
+    engineer may attach, read within their reach, and what has been chosen."""
+    rules = await typology_rules.list_for_case(investigation.id, principal)
+    record = await typology_rules.load_checks(recipe.recipe_id)
+    view = checks_view(recipe.recipe_id, rules, record, ontology)
+    await audit.record(principal=principal, action="read_load_checks",
+                       investigation_id=investigation.id,
+                       resolved_query={"recipe_id": recipe.recipe_id},
+                       result_cardinality=len(view.available))  # fmt: skip
+    return view
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/checks",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
+async def set_load_checks(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+    body: LoadChecksInput,
+) -> LoadChecksView:
+    """The engineer's choice: which offered rules apply to this pipeline and what a hit does here.
+    It names rules, never carries one — engineers attach rules, they do not author analyst rules
+    (decision 6). A rule not offered, or a hold on a rule that runs after commit, is refused in
+    words. Audited."""
+    rules = await typology_rules.list_for_case(investigation.id, principal)
+    try:
+        checks = check_choice(body.checks, rules)
+    except ChecksRefused as refused:
+        raise HTTPException(
+            status_code=422, detail={"error": "checks_refused", "message": str(refused)}
+        ) from refused
+    record = await typology_rules.set_load_checks(recipe.recipe_id, checks, principal)
+    await audit.record(principal=principal, action="load_checks_set",
+                       investigation_id=investigation.id,
+                       resolved_query={"recipe_id": recipe.recipe_id,
+                                       "checks": [c.model_dump() for c in checks]},
+                       result_cardinality=len(checks))  # fmt: skip
+    return checks_view(recipe.recipe_id, rules, record, ontology)
 
 
 # --- ingest studio: publish (09_INGEST_STUDIO.md §6) --------------------------
@@ -8175,6 +8302,81 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
     )
 
 
+@dataclass
+class _MonitoringSchedules:
+    """Both of ADR-133 stage (d)'s schedules on the one minute tick."""
+
+    rules: RuleScheduleExecutor
+    lists: ListRefreshExecutor
+
+    async def tick(self, now: datetime) -> None:
+        await self.rules.tick(now)
+        await self.lists.tick(now)
+
+
+def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
+    """Scheduled rules over the running Conduit's own stores, each slot judged as the rule's author
+    resolved afresh, through the same gate a load uses (ADR-133 decision 1, stage (d))."""
+    state = application.state
+
+    async def check_case(author: Principal, case: str, level: AccessLevel) -> Principal:
+        await state.investigations.get_authorized(case, author, need=level)
+        return await scope_to_case(author, case, state.datasets)
+
+    async def judge(rule: TypologyRule, author: Principal, slot: datetime) -> int:
+        async def as_author(owner_id: str) -> Principal | None:
+            return author if owner_id == author.id else None
+
+        gate = RuleGate(
+            rules=[rule], investigation_id=rule.investigation_id, graph=state.graph,
+            analytics=state.analytics, scheme=state.handling_scheme, alert_store=state.alerts_store,
+            audit=state.audit, valkey=state.valkey, principal_for_owner=as_author, loader=author,
+            screening=state.screening_lists, compute=state.compute, patterns=state.patterns_store,
+            hotlists=state.hotlists_store, ontology=state.ontology,
+        )  # fmt: skip
+        return await run_scheduled_rule(rule, author, gate, now=slot)
+
+    return RuleScheduleExecutor(
+        rules=state.typology_rules,
+        valkey=state.valkey,
+        resolve_owner=state.principal_resolver.resolve_for_owner_detailed,
+        check_case=check_case,
+        judge=judge,
+    )
+
+
+def _list_schedule_executor(application: FastAPI) -> ListRefreshExecutor:
+    """Screening lists' refresh schedules (ADR-133 Amendment 3 item 4), each slot run as the person
+    who set it, through the one refresh and re-screening."""
+    state = application.state
+
+    async def refresh(list_name: str, owner: Principal, slot: datetime) -> ScreeningListUpdate:
+        rescreen = Rescreener(
+            rules=state.typology_rules, datasets=state.datasets, graph=state.graph,
+            scheme=state.handling_scheme, alert_store=state.alerts_store, audit=state.audit,
+            valkey=state.valkey, principal_for_owner=state.principal_resolver.resolve_for_owner,
+            runner=owner,
+        )  # fmt: skip
+        update = await refresh_screening_list(
+            list_name, store=state.screening_lists, rescreen=rescreen, trigger="schedule"
+        )
+        await state.audit.record(
+            principal=owner, action="screening_list_refreshed", investigation_id=None,
+            resolved_query={"list_name": list_name, "outcome": update.outcome,
+                            "version": update.version, "alerts": update.alerts,
+                            "trigger": "schedule", "slot": slot.isoformat()},
+            result_cardinality=update.alerts,
+        )  # fmt: skip
+        return update
+
+    return ListRefreshExecutor(
+        lists=state.screening_lists,
+        valkey=state.valkey,
+        resolve_owner=state.principal_resolver.resolve_for_owner_detailed,
+        refresh=refresh,
+    )
+
+
 # --- ultimate beneficial ownership (ADR-109 phase C) ------------------------------
 
 
@@ -8475,7 +8677,7 @@ async def read_alert_queue(
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
     status_filter: Annotated[
-        Literal["open", "claimed", "closed", "active", "all"], Query(alias="status")
+        Literal["open", "claimed", "closing", "closed", "active", "all"], Query(alias="status")
     ] = "active",
     kind: Annotated[list[AlertKind] | None, Query()] = None,
     severity: Annotated[list[AlertSeverity] | None, Query()] = None,
@@ -8487,7 +8689,7 @@ async def read_alert_queue(
     an alert any of whose entities the reader cannot see is then left out, and not counted (rule 3).
     """
     statuses = {
-        "active": ["open", "claimed"],
+        "active": ["open", "claimed", "closing"],
         "all": None,
     }.get(status_filter, [status_filter])
     rows = await alert_queue.monitoring_queue(
@@ -8631,7 +8833,64 @@ async def dispose_alert(
         disposition=body.disposition,
         reason=body.reason,
     )
-    await _triage_audit(audit, principal, investigation.id, "alert_disposed", alert)
+    action = "alert_close_proposed" if alert.status == "closing" else "alert_disposed"
+    await _triage_audit(audit, principal, investigation.id, action, alert)
+    return alert
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/approve-close",
+    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+)
+async def approve_alert_close(
+    alert_id: str,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+) -> Alert:
+    """ADR-133 decision 7, stage (d): a second member approves a proposed close of a high-severity
+    alert — never the member who proposed it."""
+    try:
+        alert = await alert_queue.approve_close(
+            alerts_store, graph, investigation.id, alert_id, principal
+        )
+    except alert_queue.CloseRefused as refused:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "own_change", "message": str(refused)},
+        ) from refused
+    await _triage_audit(audit, principal, investigation.id, "alert_close_approved", alert)
+    return alert
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/send-back",
+    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+)
+async def send_back_alert_close(
+    alert_id: str,
+    body: RuleChangeRejection,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+) -> Alert:
+    """A proposed close sent back to its proposer with the reason, or withdrawn by them."""
+    alert = await alert_queue.send_back(alerts_store, graph, investigation.id, alert_id, principal)
+    await audit.record(
+        principal=principal,
+        action="alert_close_sent_back",
+        investigation_id=investigation.id,
+        resolved_query={
+            "alert_id": alert.id,
+            "reason": body.reason,
+            "node_ids": alert.referent_node_ids,
+        },  # fmt: skip
+        result_cardinality=1,
+    )
     return alert
 
 
@@ -8784,15 +9043,197 @@ async def retire_typology_rule(
     typology_rules: TypologyRulesDep,
     audit: AuditDep,
 ) -> TypologyRule:
-    rule = await typology_rules.retire(rule_id, investigation.id, principal)
+    """Retires a case rule at once. A whole-deployment rule's retirement waits for a second person
+    with the administrator's right (ADR-133 decision 7), and needs that right to propose."""
+    listed = await typology_rules.get_listed(rule_id, investigation.id, principal)
+    if is_deployment_wide(listed):
+        _require_administrator(principal)
+    rule = await typology_rules.propose_retire(rule_id, investigation.id, principal)
+    action = "rule_change_proposed" if rule.pending_action == "retire" else "rule_retired"
     await audit.record(
         principal=principal,
-        action="rule_retired",
+        action=action,
         investigation_id=investigation.id,
-        resolved_query={"rule_id": rule.id},
+        resolved_query={"rule_id": rule.id, "change": "retire", "version": rule.pending_version},
         result_cardinality=1,
     )
     return rule
+
+
+def _require_administrator(principal: Principal) -> None:
+    """A whole-deployment rule is the administrator's (ADR-133 decision 1): deploying, changing,
+    retiring, approving or rejecting one needs that right as well as the case's Author level."""
+    if Right.ADMINISTER_SYSTEM not in rights_for(principal.roles):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "right_required", "right": Right.ADMINISTER_SYSTEM.value},
+        )
+
+
+def _require_rule_author(principal: Principal) -> None:
+    """ADR-133 decision 6: engineers attach rules; they do not author analyst rules. A rule written
+    as a sentence is a saved pattern watching the case's data, so writing one needs the analyst's
+    right to keep watches and saved-pattern monitors (ADR-112 L8) as well as `deploy_rules`."""
+    if Right.KEEP_WATCHES not in rights_for(principal.roles):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "right_required", "right": Right.KEEP_WATCHES.value},
+        )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/approve",
+    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+)
+async def approve_rule_change(
+    rule_id: str,
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    audit: AuditDep,
+) -> TypologyRule:
+    """ADR-133 decision 7, stage (d): a second person with the right approves the change waiting
+    on a whole-deployment rule — its deployment, a new version, or its retirement. The person who
+    proposed it cannot."""
+    _require_administrator(principal)
+    try:
+        rule = await typology_rules.approve(rule_id, investigation.id, principal)
+    except OwnChangeRefused as refused:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "own_change",
+                "message": f"{str(refused)[0].upper()}{str(refused)[1:]}.",
+            },
+        ) from refused
+    await audit.record(
+        principal=principal,
+        action="rule_change_approved",
+        investigation_id=investigation.id,
+        resolved_query={"rule_id": rule.id, "version": rule.version, "status": rule.status},
+        result_cardinality=1,
+    )
+    return rule
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/reject",
+    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+)
+async def reject_rule_change(
+    rule_id: str,
+    body: RuleChangeRejection,
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    audit: AuditDep,
+) -> TypologyRule:
+    """The change waiting on a whole-deployment rule turned down, with the reason — or withdrawn
+    by the person who proposed it. The rule stays as it was; a rejected deployment never runs."""
+    _require_administrator(principal)
+    rule = await typology_rules.reject(rule_id, investigation.id, principal, body.reason)
+    await audit.record(
+        principal=principal,
+        action="rule_change_rejected",
+        investigation_id=investigation.id,
+        resolved_query={"rule_id": rule.id, "reason": body.reason},
+        result_cardinality=1,
+    )
+    return rule
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/change",
+    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+)
+async def change_rule_sentence(
+    rule_id: str,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    typology_rules: TypologyRulesDep,
+    patterns_store: PatternsStoreDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+    body: SentenceRuleInput,
+) -> TypologyRule:
+    """A new version of a rule written as a sentence, checked as a deployment is. Its drawn
+    pattern is saved as the person changing it, who the rule then runs as. A change to (or into) a
+    whole-deployment rule waits for a second person (decision 7); any other applies at once. Every
+    version is kept with who made it."""
+    _require_rule_author(principal)
+    current = await typology_rules.get_listed(rule_id, investigation.id, principal)
+    if not isinstance(current.params, SentenceRuleParams):
+        raise ReleaseRefused("only a rule written as a sentence is changed here")
+    sentence = normalised(body.sentence)
+    await _authorize_sentence_scope(sentence, investigation.id, principal, investigations, audit)
+    if is_deployment_wide(current):
+        _require_administrator(principal)
+    spec = await _compiled_rule(body, sentence, principal, patterns_store, ontology)
+    rule = await typology_rules.propose_change(rule_id, investigation.id, principal, spec)
+    await audit.record(
+        principal=principal,
+        action="rule_change_proposed" if rule.pending_action == "change" else "rule_changed",
+        investigation_id=investigation.id,
+        resolved_query={"rule_id": rule.id, "rule": body.model_dump(mode="json")},
+        result_cardinality=1,
+    )
+    return rule
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/versions",
+    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+)
+async def read_rule_versions(
+    rule_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    principal_names: PrincipalNamesDep,
+    audit: AuditDep,
+) -> list[RuleVersion]:
+    """Every version of the rule, oldest first, with who proposed and who decided each, by name
+    (decision 7: "rules keep their versions, and each change records who made it")."""
+    versions = await typology_rules.versions(rule_id, investigation.id, principal)
+    ids = {v.proposed_by for v in versions} | {v.decided_by for v in versions if v.decided_by}
+    names = await principal_names.display_names(sorted(ids))
+    named = [
+        v.model_copy(
+            update={
+                "proposed_by_name": names.get(v.proposed_by),
+                "decided_by_name": names.get(v.decided_by or ""),
+            }
+        )  # fmt: skip
+        for v in versions
+    ]
+    await audit.record(principal=principal, action="read_rule_versions",
+                       investigation_id=investigation.id, resolved_query={"rule_id": rule_id},
+                       result_cardinality=len(named))  # fmt: skip
+    return named
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/runs",
+    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+)
+async def read_rule_schedule(
+    rule_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    audit: AuditDep,
+) -> RuleScheduleView:
+    """A scheduled rule's schedule in words, its next run (or why it will not run), and its latest
+    runs (ADR-133 decision 1, stage (d)). A rule that runs as data loads is refused in words."""
+    rule = await typology_rules.get_listed(rule_id, investigation.id, principal)
+    if rule.trigger != "schedule":
+        raise ReleaseRefused("this rule runs as data loads, not on a schedule")
+    runs = await typology_rules.rule_runs(rule.id)
+    await audit.record(principal=principal, action="read_rule_runs",
+                       investigation_id=investigation.id, resolved_query={"rule_id": rule_id},
+                       result_cardinality=len(runs))  # fmt: skip
+    return schedule_view(rule, runs, now=datetime.now(UTC))
 
 
 # --- rules written as sentences, and their preview (ADR-133 decisions 1 and 3, stage (b)) -------
@@ -8901,42 +9342,62 @@ async def deploy_rule_sentence(
     """A sentence deployed: checked against the ontology, its drawn pattern saved as the author's
     (the rule's "advanced" view, read afresh as them at each evaluation) and the rule deployed.
     "Just me" needs the case's Editor level; "this case" its Author level (ADR-109 ruling 4);
-    "the whole deployment" its Author level and the administrator's right too."""
+    "the whole deployment" its Author level and the administrator's right too, and waits for a
+    second person's approval (ADR-133 decision 7). Writing one is an analyst's: it needs
+    `keep_watches` (decision 6: engineers attach rules, they do not author analyst rules)."""
+    _require_rule_author(principal)
     sentence = normalised(body.sentence)
-    if sentence.scope != "just_me":
-        await _authorize(investigation.id, principal, investigations, audit, AccessLevel.AUTHOR)
-    if sentence.scope == "deployment" and Right.ADMINISTER_SYSTEM not in rights_for(
-        principal.roles
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": "right_required", "right": Right.ADMINISTER_SYSTEM.value},
-        )
-    pattern = compile_pattern(sentence, ontology)
-    check_pattern_conditions(pattern, ontology)
-    saved = await patterns_store.save(
-        principal, pattern_id=None, name=f"Rule: {body.name}", definition=pattern
-    )
-    rule = await typology_rules.create(
-        principal,
-        investigation.id,
-        TypologyRuleInput(
-            name=body.name,
-            params=SentenceRuleParams(
-                pattern_id=saved.pattern_id, sentence=sentence, max_matches=body.max_matches
-            ),
-            trigger=sentence.runs,
-            budget_ms=body.budget_ms,
-        ),
-    )
+    await _authorize_sentence_scope(sentence, investigation.id, principal, investigations, audit)
+    spec = await _compiled_rule(body, sentence, principal, patterns_store, ontology)
+    rule = await typology_rules.create(principal, investigation.id, spec)
     await audit.record(
         principal=principal,
-        action="rule_deployed",
+        # ADR-133 decision 7, stage (d): a whole-deployment rule waits for a second person.
+        action="rule_change_proposed" if rule.status == "pending" else "rule_deployed",
         investigation_id=investigation.id,
         resolved_query={"rule_id": rule.id, "rule": body.model_dump(mode="json")},
         result_cardinality=1,
     )
     return rule
+
+
+async def _authorize_sentence_scope(
+    sentence: RuleSentence,
+    investigation_id: str,
+    principal: Principal,
+    investigations: InvestigationStore,
+    audit: AuditWriter,
+) -> None:
+    """ "Just me" needs the case's Editor level; "this case" its Author level (ADR-109 ruling 4);
+    "the whole deployment" its Author level and the administrator's right too."""
+    if sentence.scope != "just_me":
+        await _authorize(investigation_id, principal, investigations, audit, AccessLevel.AUTHOR)
+    if sentence.scope == "deployment":
+        _require_administrator(principal)
+
+
+async def _compiled_rule(
+    body: SentenceRuleInput,
+    sentence: RuleSentence,
+    principal: Principal,
+    patterns_store: PatternStore,
+    ontology: OntologySchema,
+) -> TypologyRuleInput:
+    """The sentence checked against the ontology, its drawn pattern saved as `principal`'s (the
+    rule's "advanced" view, read afresh as them at each evaluation), and the rule it deploys as."""
+    pattern = compile_pattern(sentence, ontology)
+    check_pattern_conditions(pattern, ontology)
+    saved = await patterns_store.save(
+        principal, pattern_id=None, name=f"Rule: {body.name}", definition=pattern
+    )
+    return TypologyRuleInput(
+        name=body.name,
+        params=SentenceRuleParams(
+            pattern_id=saved.pattern_id, sentence=sentence, max_matches=body.max_matches
+        ),
+        trigger=sentence.runs,
+        budget_ms=body.budget_ms,
+    )
 
 
 @app.get(
@@ -9054,6 +9515,7 @@ async def release_held_rows_route(
         compute=compute,
         expiries=kyc_expiries,
         patterns=patterns_store,
+        recipe_id=recipe.recipe_id,
     ) or RuleGate(
         rules=[],
         investigation_id=investigation.id,
@@ -9551,7 +10013,9 @@ async def list_screening_lists(
     """The Lists screen for a reader of the alert queue: each list's version, entries, last update
     and failure, in words. Not its refreshes: their counts of customers re-screened and alerts
     raised are taken across every case in the deployment (rule 7: no unfiltered count)."""
-    found = await screening_lists.subscriptions()
+    # Who a list's schedule runs as is for whoever manages lists to know.
+    found = [s.model_copy(update={"schedule_owner": None})
+             for s in await screening_lists.subscriptions()]  # fmt: skip
     await audit.record(principal=principal, action="list_screening_lists", investigation_id=None,
                        resolved_query={}, result_cardinality=len(found))  # fmt: skip
     return ScreeningLists(lists=found, updates=[], can_manage=False)
@@ -9597,6 +10061,39 @@ async def subscribe_screening_list(
                        investigation_id=None, resolved_query=body.model_dump(mode="json"),
                        result_cardinality=1)  # fmt: skip
     return status_
+
+
+@app.put(
+    "/v1/admin/screening-lists/{list_name}/schedule",
+    dependencies=[Depends(require_right(Right.LOAD_SCREENING_LISTS))],
+)
+async def set_screening_list_schedule(
+    list_name: str,
+    principal: PrincipalDep,
+    screening_lists: ScreeningListsDep,
+    audit: AuditDep,
+    body: ListScheduleInput,
+) -> ScreeningListStatus:
+    """ADR-133 Amendment 3 item 4, stage (d): the list refreshed every day or every week at an
+    hour, as the person setting it — resolved afresh at each slot, and refused in words if they no
+    longer hold the right. Without a schedule, the list is refreshed by hand only."""
+    try:
+        updated = await screening_lists.set_schedule(list_name, body.schedule, principal.id)
+    except ListScheduleRefused as refused:
+        raise HTTPException(
+            status_code=422, detail={"error": "schedule_refused", "message": str(refused)}
+        ) from refused
+    except LookupError as missing:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "not_found", "message": f"no list is subscribed as “{list_name}”"},
+        ) from missing
+    await audit.record(principal=principal, action="screening_list_schedule_set",
+                       investigation_id=None,
+                       resolved_query={"list_name": list_name, "schedule": (
+                           body.schedule.model_dump() if body.schedule else None)},
+                       result_cardinality=1)  # fmt: skip
+    return updated
 
 
 @app.post(

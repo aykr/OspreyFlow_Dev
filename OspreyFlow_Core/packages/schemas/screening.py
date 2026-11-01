@@ -14,6 +14,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from schemas.monitoring import ListSchedule
+
 #: The connectors a list may be subscribed through — `LIST_ADAPTERS`'s keys.
 ScreeningListSource = Literal[
     "ofac_sdn", "ofsi_consolidated", "un_consolidated", "eu_consolidated", "opensanctions"
@@ -54,6 +56,12 @@ class ScreeningListStatus(BaseModel):
     updated_at: datetime | None = None
     attempted_at: datetime | None = None
     failure: str | None = None
+    #: ADR-133 stage (d): the list's refresh schedule, in words and as set, who it runs as, and
+    #: when it next runs; `None` when it is refreshed by hand only.
+    schedule: ListSchedule | None = None
+    schedule_words: str | None = None
+    schedule_owner: str | None = None
+    next_refresh: datetime | None = None
 
 
 class ScreeningListUpdate(BaseModel):
@@ -72,6 +80,8 @@ class ScreeningListUpdate(BaseModel):
     rescreened: int = 0
     alerts: int = 0
     words: str
+    #: ADR-133 stage (d): how the refresh was started — by a person, or by the list's schedule.
+    trigger: Literal["manual", "schedule"] = "manual"
 
 
 class ScreeningLists(BaseModel):

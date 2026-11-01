@@ -258,6 +258,12 @@ RULE_AUDIT_ACTIONS: tuple[str, ...] = (
     "rows_released",
     "rows_rejected",
     "alert_node_withheld",
+    # ADR-133 stage (d): maker–checker's changes, and the pipeline checks rules are attached as.
+    "rule_change_proposed",
+    "rule_change_approved",
+    "rule_change_rejected",
+    "rule_changed",
+    "load_checks_set",
 )
 
 
@@ -588,6 +594,22 @@ class RuleGate:
     #: ontology a sentence's drawn pattern is read back against.
     hotlists: HotlistStore | None = None
     ontology: OntologySchema | None = None
+    #: ADR-133 decision 6, stage (d): what a hit of a rule does at this pipeline, as its "Checks on
+    #: load" step chose ("alert" or "hold"), by rule id. A rule not named keeps its author's choice.
+    on_hit: dict[str, str] = field(default_factory=dict)
+
+    def holds(self, rule: TypologyRule) -> bool:
+        """Whether a hit of `rule` holds its rows here: before commit only; as the pipeline chose,
+        else as the author wrote. A pipeline may make a whole-deployment rule hold, never loosen
+        one its author wrote to hold."""
+        from .sentence_rules import holds_on_hit, is_deployment_wide
+
+        if rule.trigger != "pre_commit":
+            return False
+        chosen = self.on_hit.get(rule.id)
+        if chosen is None or (is_deployment_wide(rule) and holds_on_hit(rule)):
+            return holds_on_hit(rule)
+        return chosen == "hold"
 
     async def record_expiries(self, written: Sequence[NodeWrite | EdgeWrite]) -> int:
         """Every verifying document this load wrote that carries an expiry, recorded so the
@@ -791,9 +813,9 @@ class RuleGate:
                  "findings": len(fresh)},
                 len(fresh),
             )
-            from .sentence_rules import holds_on_hit, rows_of_finding
+            from .sentence_rules import rows_of_finding
 
-            if holds_on_hit(rule):
+            if self.holds(rule):
                 # ADR-133 decision 1: a hit holds its rows for a reviewer, the finding its reason.
                 for finding in fresh:
                     rows = rows_of_finding(finding, events, written)

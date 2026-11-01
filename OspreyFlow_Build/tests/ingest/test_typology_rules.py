@@ -445,15 +445,22 @@ async def test_rules_are_read_only_within_their_case_and_reach(stores: dict[str,
     in_set = ANALYST.model_copy(update={"datasets": ["ds-1"]})
     rule = await stores["rules"].create(in_set, case, _structuring("post_commit"))
     assert rule.dataset_id == "ds-1"
-    assert [r.id for r in await stores["rules"].list_for_case(case, in_set)] == [rule.id]
-    assert await stores["rules"].list_for_case("another-case", in_set) == []
+
+    async def own(case_id: str, reader: Any) -> list[str]:
+        # A whole-deployment sentence (ADR-133, stage (b)) is listed in every case; the database is
+        # shared by the run, and other tests' are not this case's rules.
+        return [r.id for r in await stores["rules"].list_for_case(case_id, reader)
+                if r.investigation_id == case_id]  # fmt: skip
+
+    assert await own(case, in_set) == [rule.id]
+    assert await own("another-case", in_set) == []
     elsewhere = ANALYST.model_copy(update={"datasets": ["ds-2"]})
-    assert await stores["rules"].list_for_case(case, elsewhere) == []
+    assert await own(case, elsewhere) == []
     with pytest.raises(TypologyRuleNotFoundError):
         await stores["rules"].retire(rule.id, case, elsewhere)
     retired = await stores["rules"].retire(rule.id, case, in_set)
     assert retired.status == "retired"
-    assert await stores["rules"].list_active_for_case(case) == []
+    assert [r for r in await stores["rules"].list_active_for_case(case) if r.investigation_id == case] == []
     with pytest.raises(TypologyRuleNotFoundError):
         await stores["rules"].retire(rule.id, case, in_set)
 

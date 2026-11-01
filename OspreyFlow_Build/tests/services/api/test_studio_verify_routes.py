@@ -13,7 +13,19 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from services.api.app import app, get_graph, get_ontology, get_recipe_runs
+from services.api.app import (
+    app,
+    get_analytics,
+    get_compute,
+    get_graph,
+    get_hotlists_store,
+    get_ontology,
+    get_patterns_store,
+    get_principal_resolver,
+    get_recipe_runs,
+    get_screening_lists,
+    get_typology_rules,
+)
 
 from ontology.loader import load_default_ontology
 from schemas.domain import Node, Principal
@@ -22,6 +34,7 @@ from schemas.ingest import (
     RecipeEntity,
     RowTemplate,
 )
+from tests.services.api.test_rule_sentence_routes import _Refuses
 from tests.services.api.test_studio_recipe_routes import (
     _UNCLEARED_HANDLING,
     _ready_draft,
@@ -70,6 +83,17 @@ class _FakeRunKeys:
         return dict(self.made_under)
 
 
+class _NoRules:
+    """The rule store of a case with no rules, as the real one answers it: no active rule, and no
+    checks chosen for the pipeline (`None`)."""
+
+    async def list_active_for_case(self, investigation_id: str) -> list[object]:
+        return []
+
+    async def load_checks(self, recipe_id: str) -> None:
+        return None
+
+
 @pytest.fixture
 def graph_client(client: TestClient) -> TestClient:
     """`client` (imported above) already overrides principal/store/audit/
@@ -81,6 +105,12 @@ def graph_client(client: TestClient) -> TestClient:
     app.dependency_overrides[get_graph] = lambda: fake_graph
     app.dependency_overrides[get_ontology] = lambda: load_default_ontology()
     app.dependency_overrides[get_recipe_runs] = lambda: fake_runs
+    # ADR-133 stage (d): Verify judges the pipeline's checks on load. This case has no rules, so
+    # nothing else is read; the stores a check would read refuse, so a read here fails the test.
+    app.dependency_overrides[get_typology_rules] = lambda: _NoRules()
+    for getter in (get_analytics, get_principal_resolver, get_patterns_store, get_hotlists_store,
+                   get_screening_lists, get_compute):  # fmt: skip
+        app.dependency_overrides[getter] = lambda: _Refuses("a store no check reads here")
     client.fake_graph = fake_graph  # type: ignore[attr-defined]
     client.fake_runs = fake_runs  # type: ignore[attr-defined]
     return client

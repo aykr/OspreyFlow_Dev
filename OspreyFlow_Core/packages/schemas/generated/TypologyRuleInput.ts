@@ -263,9 +263,12 @@ export type Kind7 = "first_time";
 export type LinkType4 = string;
 export type Severity = "low" | "medium" | "high";
 export type Team = "case" | "my_team";
-export type Runs = "pre_commit" | "post_commit";
+export type Runs = "pre_commit" | "post_commit" | "schedule";
 export type OnHit = "load" | "hold";
 export type Scope = "just_me" | "this_case" | "deployment";
+export type Every = "daily" | "weekly";
+export type Hour = number;
+export type Weekday = number | null;
 export type MaxMatches1 = number;
 export type Typology8 = "high_risk_jurisdiction";
 /**
@@ -287,7 +290,7 @@ export type BaselineDays = number;
 export type Factor = number;
 export type MinRecent = number;
 export type Measure = "count" | "amount";
-export type Trigger = "pre_commit" | "post_commit";
+export type Trigger = "pre_commit" | "post_commit" | "schedule";
 export type BudgetMs = number;
 
 /**
@@ -394,6 +397,7 @@ export interface RuleSentence {
   runs?: Runs;
   on_hit?: OnHit;
   scope?: Scope;
+  schedule?: RuleSchedule | null;
   [k: string]: unknown;
 }
 export interface EqualsCondition {
@@ -524,6 +528,17 @@ export interface AmountFrequency {
 export interface FirstTimeFrequency {
   kind?: Kind7;
   link_type: LinkType4;
+  [k: string]: unknown;
+}
+/**
+ * When a scheduled rule runs (ADR-133 decision 1, stage (d)): every day, or every week on one
+ * day, at a whole hour, read in Europe/London. A scheduled run judges what was stored over the
+ * last day or the last week, as the rule's own author.
+ */
+export interface RuleSchedule {
+  every?: Every;
+  hour?: Hour;
+  weekday?: Weekday;
   [k: string]: unknown;
 }
 /**

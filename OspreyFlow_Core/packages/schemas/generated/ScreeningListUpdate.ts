@@ -12,6 +12,7 @@ export type Removed = number;
 export type Rescreened = number;
 export type Alerts = number;
 export type Words = string;
+export type Trigger = "manual" | "schedule";
 
 /**
  * One refresh of one list: what changed, and how many alerts its re-screening raised.
@@ -29,5 +30,6 @@ export interface ScreeningListUpdate {
   rescreened?: Rescreened;
   alerts?: Alerts;
   words: Words;
+  trigger?: Trigger;
   [k: string]: unknown;
 }

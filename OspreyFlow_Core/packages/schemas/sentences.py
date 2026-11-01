@@ -202,12 +202,36 @@ SentenceFrequency = Annotated[
 SentenceSeverity = Literal["low", "medium", "high"]
 #: Who the alert goes to: the case's queue, or labelled for the author's own team within it.
 SentenceTeam = Literal["case", "my_team"]
-SentenceRuns = Literal["pre_commit", "post_commit"]
+#: As data loads (before or after commit), or on a schedule (ADR-133 decision 1, stage (d)).
+SentenceRuns = Literal["pre_commit", "post_commit", "schedule"]
+#: How often a scheduled rule runs (decision 1: "daily or weekly").
+RuleCadence = Literal["daily", "weekly"]
+#: The days a weekly rule may run on, Monday first, as the schedule says them.
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 #: Before commit, what a hit does: loads with its alert, or holds its rows for a reviewer.
 SentenceOnHit = Literal["load", "hold"]
 #: Just me (alerts for the author alone, as a monitor's), this case (the case team's queue, a
 #: typology rule's), or the whole deployment (every case's loads; administrators only).
 SentenceScope = Literal["just_me", "this_case", "deployment"]
+
+
+class RuleSchedule(BaseModel):
+    """When a scheduled rule runs (ADR-133 decision 1, stage (d)): every day, or every week on one
+    day, at a whole hour, read in Europe/London. A scheduled run judges what was stored over the
+    last day or the last week, as the rule's own author."""
+
+    every: RuleCadence = "daily"
+    hour: int = Field(default=6, ge=0, le=23)
+    #: 1 (Monday) to 7 (Sunday); a weekly rule names one, a daily rule none.
+    weekday: int | None = Field(default=None, ge=1, le=7)
+
+    @model_validator(mode="after")
+    def _a_day_for_a_week(self) -> RuleSchedule:
+        if self.every == "weekly" and self.weekday is None:
+            raise ValueError("a weekly schedule names the day of the week it runs on")
+        if self.every == "daily" and self.weekday is not None:
+            raise ValueError("a daily schedule runs every day, so it names no day of the week")
+        return self
 
 
 class RuleSentence(BaseModel):
@@ -226,9 +250,22 @@ class RuleSentence(BaseModel):
     runs: SentenceRuns = "post_commit"
     on_hit: SentenceOnHit = "load"
     scope: SentenceScope = "this_case"
+    #: Stage (d): when a rule that runs on a schedule runs; none for one that runs as data loads.
+    schedule: RuleSchedule | None = None
 
     @model_validator(mode="after")
     def _blanks_agree(self) -> RuleSentence:
+        if self.runs == "schedule" and self.schedule is None:
+            raise ValueError(
+                "a rule that runs on a schedule needs one: every day or every week, at an hour"
+            )
+        if self.runs != "schedule" and self.schedule is not None:
+            raise ValueError("only a rule that runs on a schedule takes a schedule")
+        if self.runs == "schedule" and self.scope == "deployment":
+            raise ValueError(
+                "a rule for the whole deployment is judged within each case as its data loads; a "
+                "schedule runs within one case, so a scheduled rule is for this case or for you"
+            )
         if self.on_hit == "hold" and self.runs != "pre_commit":
             raise ValueError("only a rule that runs before commit can hold its rows")
         if (
@@ -242,9 +279,9 @@ class RuleSentence(BaseModel):
         if self.scope == "just_me":
             if self.team != "case":
                 raise ValueError("a rule just for you raises its alerts for you alone")
-            if self.runs != "post_commit":
+            if self.runs == "pre_commit":
                 raise ValueError(
-                    "a rule just for you runs after each load commits; "
+                    "a rule just for you runs after each load commits or on a schedule; "
                     "it cannot judge or hold a case's rows"
                 )
         properties = [c.property for c in self.conditions]
@@ -329,6 +366,7 @@ ALL_MODELS = (
     CountFrequency,
     AmountFrequency,
     FirstTimeFrequency,
+    RuleSchedule,
     RuleSentence,
     SentenceRuleParams,
     SentenceRuleInput,

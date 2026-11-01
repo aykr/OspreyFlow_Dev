@@ -523,11 +523,13 @@ _STUB_STATE = ["typology_rules", "held_rows", "screening_lists", "compute", "kyc
 
 
 class _Empty:
-    """A store that holds nothing: every query answers an empty list."""
+    """A store that holds nothing: every query answers an empty list — except a pipeline's checks
+    on load (ADR-133 stage (d)), which the real rule store answers with `None` when nobody has
+    chosen them, as here nobody has."""
 
-    def __getattr__(self, _name: str) -> Any:
-        async def nothing(*_: Any, **__: Any) -> list[Any]:
-            return []
+    def __getattr__(self, name: str) -> Any:
+        async def nothing(*_: Any, **__: Any) -> list[Any] | None:
+            return None if name == "load_checks" else []
 
         return nothing
 

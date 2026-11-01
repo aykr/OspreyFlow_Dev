@@ -306,6 +306,19 @@ async def release(
     )  # fmt: skip
 
 
+class CloseRefused(Exception):
+    """ADR-133 decision 7: the person who proposed closing a high-severity alert cannot approve
+    it."""
+
+
+def needs_second_person(row: QueueRow) -> bool:
+    """ADR-133 decision 7, stage (d): closing a high-severity alert needs a second person with the
+    right — where a second person may read it. An alert its owner alone may read (their "only me"
+    hotlist's, their own monitor's) has no second reader to ask: asking would show it to someone it
+    is not shared with, so its owner closes it."""
+    return row.severity == "high" and row.audience != "owner"
+
+
 async def dispose(
     store: AlertStore,
     graph: GraphPort,
@@ -316,9 +329,72 @@ async def dispose(
     disposition: str,
     reason: str,
 ) -> Alert:
-    alert, nodes = await _visible_alert(store, graph, alert_id, investigation_id, member)
-    if alert.status == "closed":
+    """Closes the alert with its disposition and reason — or, for a high-severity alert a second
+    person may read, proposes the close: the alert waits as `closing`, its disposition and reason
+    kept, until another member approves it (`approve_close`)."""
+    row, nodes = await _visible_row(store, graph, alert_id, investigation_id, member)
+    alert = row.alert
+    if alert.status in ("closed", "closing"):
         raise AlertTriageConflict(alert_id)
+    if needs_second_person(row):
+        return await store.set_queue_triage(
+            alert_id, investigation_id, member, expect_status=["open", "claimed"],
+            status="closing", assignee=alert.assignee or member.id, disposition=disposition,
+            disposition_reason=reason, close_proposed_by=member.id,
+        )  # fmt: skip
+    return await _close(
+        store, graph, investigation_id, alert, nodes, member, disposition=disposition,
+        reason=reason, expect=["open", "claimed"],
+    )  # fmt: skip
+
+
+async def approve_close(
+    store: AlertStore, graph: GraphPort, investigation_id: str, alert_id: str, member: Principal
+) -> Alert:
+    """The second person approves a proposed close: the alert closes with the proposer's
+    disposition and reason, decided by `member`, the proposer kept beside it."""
+    alert, nodes = await _visible_alert(store, graph, alert_id, investigation_id, member)
+    if alert.status != "closing" or alert.disposition is None or alert.close_proposed_by is None:
+        raise AlertTriageConflict(alert_id)
+    if alert.close_proposed_by == member.id:
+        raise CloseRefused(
+            "You proposed closing this alert; a second person with the right must approve it."
+        )
+    return await _close(
+        store, graph, investigation_id, alert, nodes, member, disposition=alert.disposition,
+        reason=alert.disposition_reason or "", expect=["closing"],
+        proposed_by=alert.close_proposed_by,
+    )  # fmt: skip
+
+
+async def send_back(
+    store: AlertStore, graph: GraphPort, investigation_id: str, alert_id: str, member: Principal
+) -> Alert:
+    """A proposed close turned down (or withdrawn by its proposer): the alert goes back to the
+    person who proposed it, claimed, its proposed disposition cleared."""
+    alert, _ = await _visible_alert(store, graph, alert_id, investigation_id, member)
+    if alert.status != "closing":
+        raise AlertTriageConflict(alert_id)
+    return await store.set_queue_triage(
+        alert_id, investigation_id, member, expect_status=["closing"], status="claimed",
+        assignee=alert.close_proposed_by or alert.assignee, close_proposed_by=None,
+    )  # fmt: skip
+
+
+async def _close(
+    store: AlertStore,
+    graph: GraphPort,
+    investigation_id: str,
+    alert: Alert,
+    nodes: dict[str, Node],
+    member: Principal,
+    *,
+    disposition: str,
+    reason: str,
+    expect: list[str],
+    proposed_by: str | None = None,
+) -> Alert:
+    alert_id = alert.id
     confirmed_node: str | None = None
     cited: list[str] | None = None
     if disposition == "true_positive":
@@ -351,7 +427,7 @@ async def dispose(
         alert_id,
         investigation_id,
         member,
-        expect_status=["open", "claimed"],
+        expect_status=expect,
         status="closed",
         assignee=alert.assignee or member.id,
         disposition=disposition,
@@ -359,6 +435,7 @@ async def dispose(
         decided_by=member.id,
         alert_node_id=confirmed_node,
         edge_ids=cited,
+        close_proposed_by=proposed_by,
     )
 
 
@@ -399,6 +476,8 @@ async def assign(
 
 __all__ = [
     "AssignmentRefused",
+    "CloseRefused",
+    "approve_close",
     "assign",
     "canvas_elements",
     "claim",
@@ -409,4 +488,5 @@ __all__ = [
     "node_name",
     "queue",
     "release",
+    "send_back",
 ]

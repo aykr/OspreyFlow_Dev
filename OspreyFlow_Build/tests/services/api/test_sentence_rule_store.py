@@ -43,13 +43,17 @@ async def test_a_deployment_wide_sentence_watches_every_case_and_a_case_sentence
 ) -> None:
     case_a, case_b = new_id(), new_id()
     wide = await store.create(ADMIN, case_a, _input("deployment", "Everywhere"))
+    # ADR-133 decision 7, stage (d): a whole-deployment rule runs once a second person approves it
+    # (`test_rule_maker_checker_store.py`).
+    await store.approve(wide.id, case_a, ADMIN.model_copy(update={"id": "second-admin"}))
     own = await store.create(ADMIN, case_a, _input("this_case", "Here"))
     in_b = {r.id for r in await store.list_active_for_case(case_b)}
     in_a = {r.id for r in await store.list_active_for_case(case_a)}
     assert wide.id in in_b and own.id not in in_b
     assert {wide.id, own.id} <= in_a
     assert (wide.dataset_id, own.dataset_id) == (None, "ds-a")
-    await store.retire(wide.id, case_a, ADMIN)
+    await store.propose_retire(wide.id, case_a, ADMIN)
+    await store.approve(wide.id, case_a, ADMIN.model_copy(update={"id": "second-admin"}))
     assert wide.id not in {r.id for r in await store.list_active_for_case(case_b)}
 
 
@@ -60,4 +64,5 @@ async def test_a_deployment_wide_sentence_is_listed_in_every_cases_reach(store: 
     (read,) = [r for r in listed if r.id == wide.id]
     assert isinstance(read.params, SentenceRuleParams)
     assert (read.params.sentence.scope, read.params.sentence.severity) == ("deployment", "high")
-    await store.retire(wide.id, case_a, ADMIN)
+    assert read.status == "pending"  # listed while it waits for a second person (stage (d))
+    await store.reject(wide.id, case_a, ADMIN.model_copy(update={"id": "second-admin"}), "a test")
