@@ -21130,3 +21130,38 @@ review (`BUILD_ORDER_2026-11.md`, open questions).
      case's datasets, and is live at once. A second approver comes with stage (d).
 8. **Hold and before commit.** A "hold" hit holds its rows with the finding as the reason, and raises
    no alert. A rule naming a graph relationship runs after commit only.
+
+### ADR-133, Amendment 3 (1 November 2026) — stage (c) as built: lists, re-screening, AML templates
+
+Status: recorded during the owner's autonomous-build instruction of 1 November 2026, open to the owner's
+review (`BUILD_ORDER_2026-11.md`, open questions).
+
+**Two findings for the owner before any customer relies on these lists:**
+- **The OFSI Consolidated List closed on 28 January 2026.** gov.uk says the FCDO's UK Sanctions List is
+  now "the only source for all UK sanctions designations". The OFSI connector is built, as the decision
+  named it, but reads a list nobody publishes. A UK Sanctions List connector is needed.
+- **No open licence was found for the UN consolidated list.** The UN's general terms allow personal,
+  non-commercial use only. The terms must be confirmed with the UN before a customer uses it.
+  OpenSanctions is CC BY-NC 4.0, and compliance screening in a business is commercial use, which needs
+  their data licence.
+
+**As built:**
+1. **Subscribing and refreshing need `load_screening_lists`** (ADR-112's right for this), held by the
+   administrator and data-engineer roles.
+2. **"Every customer in the deployment"** means every person and organisation in each case with an
+   active `kyc_screening` rule, read as that rule's deployer within its dataset. Beneficial-owner chains
+   are not traced again on re-screening.
+3. **A list is read from a file in the ingest folder;** there is no HTTP fetch. A version is the
+   publisher's date where the format has one, otherwise the file's digest. A list counts as synthetic
+   only if every file's SHA-256 is in the repository's manifest; anything else is real and needs this
+   device's exceptions entry (rule 9).
+4. **Refresh is a route and an operator command** (`python -m scripts.refresh_screening_list`).
+   `scheduler.py` cannot run a list, so a list's schedule comes with stage (d).
+5. **The AML templates:**
+   - the jurisdiction list lives in the rule's parameters as ISO codes, and an account's jurisdiction
+     is its IBAN's country code;
+   - the dormant-account and velocity rules run after commit only;
+   - all four raise medium severity.
+6. **Format details that could not be checked against publisher documentation** are marked in the
+   code: the UN and EU XML element names, OFAC `SDN_Type` values other than individual, and an OFSI
+   "Last Updated" first line.
