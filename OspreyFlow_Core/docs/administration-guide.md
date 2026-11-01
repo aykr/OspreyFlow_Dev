@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.13** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.14** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.14 | 2026-11-01 | §8: `ospreyflow apply`, and a new §8.3, "Changing a setting". `deployment.env` is readable by its owner alone. §10: a provider enabled on a running deployment, and key entry on the guided install's Models screen. |
 | 1.13 | 2026-11-01 | §10 rewritten for several model engines: providers, defaults, labels, keys as `OSPREY_MODEL_KEY_<NAME>`, and what may leave. §8: `ospreyflow models`, `models key` and `models remove-key`. Appendix A: `models.providers`, `models.defaults` and a provider's `label`. |
 | 1.12 | 2026-11-01 | The opening says what OspreyFlow is for: intelligence mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. |
 | 1.11 | 2026-11-01 | §8: `ospreyflow switch`. Appendix A: `deployment.name`, the `appearance` settings (the GOV.UK look), and relative storage paths. |
@@ -360,6 +361,7 @@ Lite and `https://<domain>` for Small and Enterprise.
 | `ospreyflow status` | Each service's state and health; exits 1 unless everything is running and healthy |
 | `ospreyflow open` | Opens the Glass in your browser |
 | `ospreyflow logs [service] [--follow] [--tail N]` | The services' logs (the last 200 lines by default) |
+| `ospreyflow apply` | Applies a changed `osprey.yaml` to the installed deployment (section 8.3): renders it again, keeps every password and key, asks for a newly enabled provider's key (from `OSPREY_MODEL_KEY_<NAME>` or a hidden prompt), and restarts only the services whose settings changed. It makes no account, adds no demo pack and touches no data |
 | `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`); safe to run again |
 | `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
 | `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
@@ -397,6 +399,29 @@ with `network.expose_conduit: true`.
 | Your ingest and basemap folders | As the answers named them |
 
 `RUNBOOK.md`, written for each deployment, lists what runs, its paths and its addresses.
+
+`deployment.env` is readable by your own account alone (`600`): `ospreyflow install` writes it so,
+and `ospreyflow apply`, `models key` and `models remove-key` keep it so.
+
+### 8.3 Changing a setting
+
+Edit `osprey.yaml` in the checkout, then run:
+
+```
+ospreyflow apply
+```
+
+It checks the file first, and if anything in it is wrong it says what, and changes nothing. Then it
+renders the deployment again from it, keeping every password and key the deployment already has,
+and starts again only the services whose settings changed; the rest keep running. A provider newly
+enabled under `models.providers` needs its key: give it as `OSPREY_MODEL_KEY_<NAME>` in the same
+terminal, or type it at the hidden prompt `apply` shows. `apply` makes no account, adds no demo pack,
+rebuilds nothing and never touches the stored data. Do not run `ospreyflow install` again over a
+running deployment to change a setting; `ospreyflow start --build` rebuilds the code but reads the
+settings the deployment already has.
+
+A changed `deployment.name` names a different deployment, which `apply` refuses: install it as a new
+one.
 
 ## 9. People and accounts
 
@@ -477,13 +502,20 @@ models:
 
 **Keys.** Each provider's key is `OSPREY_MODEL_KEY_<NAME>` — for example `OSPREY_MODEL_KEY_GEMINI`
 (the single `provider:` keeps `OSPREY_MODEL_PROVIDER_KEY`). Give it in the installer's terminal
-before `ospreyflow install`; an enabled provider without its key stops the install, and a later
-install keeps a key already given. On a running deployment, `ospreyflow models key <name>` sets or
-replaces it and `ospreyflow models remove-key <name>` removes it (section 8); `ospreyflow models`
-says whether each is present. A key is kept in `deployment.env` alone and read only by the
-deployment's model gateway — never by the Conduit, never written to `osprey.yaml`, never shown in
-the Admin area or any page. The guided install's Models screen shows the providers but takes no
-key.
+before `ospreyflow install`, or on the guided install's Models screen; an enabled provider without
+its key stops the install, and a later install keeps a key already given. To enable a provider on a
+running deployment, add it to `osprey.yaml` and run `ospreyflow apply` (section 8.3), which takes
+its key from `OSPREY_MODEL_KEY_<NAME>` or asks for it at a hidden prompt. On a running deployment,
+`ospreyflow models key <name>` sets or replaces a key and `ospreyflow models remove-key <name>`
+removes it (section 8); `ospreyflow models` says whether each is present. A key is kept in
+`deployment.env` alone and read only by the deployment's model gateway — never by the Conduit,
+never written to `osprey.yaml`, never shown in the Admin area or any page of the Glass.
+
+**On the guided install page** (section 4.1), the Models screen has a key field for each enabled
+provider. A key typed there is sent only to the install page, on this computer — a request from
+anywhere else is refused — and is held there until the install gives it to `deployment.env`. It is
+never written anywhere else, never logged and never shown again: the field empties once the key is
+sent, and the page says only "key set" or "no key".
 
 **What may leave.** `sendable_handling_codes` is the one gate, for every engine: only material
 whose handling code is in that list may be sent to a provider; anything else runs on the local
