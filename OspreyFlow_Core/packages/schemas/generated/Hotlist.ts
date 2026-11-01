@@ -9,6 +9,7 @@ export type ReviewDate = string;
 export type Status = "active" | "stopped";
 export type CreatedAt = string;
 export type DatasetId = string | null;
+export type Audience = "only_me" | "team";
 
 /**
  * A watched identifier — `02_GLASS_FRONTEND.md` §3.3: "A list of identifiers with an owner
@@ -35,5 +36,6 @@ export interface Hotlist {
   status?: Status;
   created_at: CreatedAt;
   dataset_id?: DatasetId;
+  audience?: Audience;
   [k: string]: unknown;
 }

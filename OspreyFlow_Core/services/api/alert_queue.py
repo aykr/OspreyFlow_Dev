@@ -1,4 +1,11 @@
-"""The case team's alert queue and an alert's explanation (`06_DECISIONS.md` ADR-109 phase B).
+"""The one alert queue and an alert's explanation (`06_DECISIONS.md` ADR-109 phase B; ADR-133
+decision 5 and stage (a)).
+
+**One queue for every kind (ADR-133 stage (a)).** The queue a case's Monitoring place shows holds
+its typology alerts (the case team's) and the hotlist and monitor alerts the reader owns or that are
+shared with their team (`alerts.queue_scope`, decided in the query, rule 3). Each carries its kind,
+its severity and who may see it. `queue` below stays the typology alerts alone: it is what the
+Reports view and neighbourhood risk count (ADR-111), which ADR-134 widens, not this stage.
 
 **One queue per case (ruling 3).** Every member of the case reads the rule-raised alerts of the
 case; the rule still evaluated as its deployer (ADR-036), only readership widens. **What a reader
@@ -26,6 +33,7 @@ from schemas.analytics import EventFilter, EventListRequest
 from schemas.domain import (
     Alert,
     AlertExplanation,
+    AlertMode,
     Edge,
     ExplainedTransaction,
     Node,
@@ -34,7 +42,7 @@ from schemas.domain import (
     QueuedAlert,
 )
 
-from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict
+from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict, QueueRow
 
 #: The properties that name an entity, most telling first.
 _NAME_PROPERTIES = (
@@ -58,11 +66,65 @@ def node_name(node: Node) -> str:
 
 
 def summary_of(alert: Alert, nodes: dict[str, Node]) -> str:
-    """The finding in words, each entity named as the reader sees it, not by its id."""
+    """The finding in words, each entity named as the reader sees it, not by its id. A hotlist or
+    monitor alert has no words of its own; it is said from what it found."""
+    if alert.words is None and alert.typology is None:
+        named = ", ".join(node_name(nodes[i]) for i in alert.referent_node_ids if i in nodes)
+        if alert.rule_id.startswith("hotlist:"):
+            if alert.mode is AlertMode.NOTIFY_STUB:
+                return "A hotlisted identifier matched data you cannot see."
+            return f"A hotlisted identifier appeared: {named}"
+        if alert.rule_id.startswith("monitor:"):
+            return f"A watched pattern matched: {named}"
     words = alert.words or alert.typology or "Alert"
     for node_id, node in nodes.items():
         words = words.replace(node_id, node_name(node))
     return words
+
+
+def _wanted(alert: Alert) -> list[str]:
+    return [*alert.referent_node_ids, *([alert.alert_node_id] if alert.alert_node_id else [])]
+
+
+def _queued(row: QueueRow, summary: str) -> QueuedAlert:
+    return QueuedAlert(
+        alert=row.alert,
+        summary=summary,
+        kind=row.kind,
+        severity=row.severity,
+        audience=row.audience,
+        team=row.alert.team if row.audience == "team" else None,
+    )
+
+
+async def monitoring_queue(
+    store: AlertStore,
+    graph: GraphPort,
+    investigation_id: str,
+    reader: Principal,
+    *,
+    kinds: Sequence[str] | None = None,
+    severities: Sequence[str] | None = None,
+    statuses: Sequence[str] | None = None,
+) -> list[QueuedAlert]:
+    """ADR-133 decision 5: the one queue, as `reader` may see it. Which rows is the query's answer
+    (`AlertStore.list_queue`, rule 3); what each names is then read **once, in one batch**, as the
+    reader, through the adapter's own access step (`GraphPort.get_nodes`). An alert any of whose
+    entities is missing from that answer is left out whole (ADR-039's all-or-nothing): it is neither
+    listed nor counted, the order of the rest is unchanged, and the work done is the same one read
+    whether it exists or not — so no count, order or timing says a hidden alert is there."""
+    rows = await store.list_queue(
+        investigation_id, reader, kinds=kinds, severities=severities, statuses=statuses
+    )
+    wanted = sorted({node_id for row in rows for node_id in _wanted(row.alert)})
+    readable = {n.id: n for n in await graph.get_nodes(wanted, reader)} if wanted else {}
+    shown: list[QueuedAlert] = []
+    for row in rows:
+        ids = _wanted(row.alert)
+        if any(node_id not in readable for node_id in ids):
+            continue
+        shown.append(_queued(row, summary_of(row.alert, {i: readable[i] for i in ids})))
+    return shown
 
 
 async def _visible_nodes(
@@ -99,14 +161,23 @@ async def queue(
     return shown
 
 
+async def _visible_row(
+    store: AlertStore, graph: GraphPort, alert_id: str, investigation_id: str, reader: Principal
+) -> tuple[QueueRow, dict[str, Node]]:
+    """One alert of the reader's queue, and everything it names as they read it — or not found,
+    the same answer as for an alert that does not exist."""
+    row = await store.get_queue_alert(alert_id, investigation_id, reader)
+    nodes = await _visible_nodes(row.alert, graph, reader)
+    if nodes is None:
+        raise AlertNotFoundError(alert_id)
+    return row, nodes
+
+
 async def _visible_alert(
     store: AlertStore, graph: GraphPort, alert_id: str, investigation_id: str, reader: Principal
 ) -> tuple[Alert, dict[str, Node]]:
-    alert = await store.get_case_alert(alert_id, investigation_id, reader)
-    nodes = await _visible_nodes(alert, graph, reader)
-    if nodes is None:
-        raise AlertNotFoundError(alert_id)
-    return alert, nodes
+    row, nodes = await _visible_row(store, graph, alert_id, investigation_id, reader)
+    return row.alert, nodes
 
 
 async def explain(
@@ -117,7 +188,8 @@ async def explain(
     alert_id: str,
     reader: Principal,
 ) -> AlertExplanation:
-    alert, nodes = await _visible_alert(store, graph, alert_id, investigation_id, reader)
+    row, nodes = await _visible_row(store, graph, alert_id, investigation_id, reader)
+    alert = row.alert
     edges = await _cited_edges(alert, graph, reader, list(nodes))
     if len({e.id for e in edges if e.type != "ALERTED_ON"}) < len(set(alert.edge_ids)):
         raise AlertNotFoundError(alert_id)
@@ -153,6 +225,10 @@ async def explain(
         nodes=list(nodes.values()),
         edges=edges,
         transactions=transactions,
+        kind=row.kind,
+        severity=row.severity,
+        audience=row.audience,
+        team=alert.team if row.audience == "team" else None,
     )
 
 
@@ -193,9 +269,10 @@ async def claim(
     store: AlertStore, graph: GraphPort, investigation_id: str, alert_id: str, member: Principal
 ) -> Alert:
     await _visible_alert(store, graph, alert_id, investigation_id, member)
-    return await store.set_triage(
-        alert_id, investigation_id, expect_status=["open"], status="claimed", assignee=member.id
-    )
+    return await store.set_queue_triage(
+        alert_id, investigation_id, member, expect_status=["open"], status="claimed",
+        assignee=member.id,
+    )  # fmt: skip
 
 
 async def release(
@@ -204,9 +281,10 @@ async def release(
     alert, _ = await _visible_alert(store, graph, alert_id, investigation_id, member)
     if alert.assignee not in (None, member.id):
         raise AlertTriageConflict(alert_id)
-    return await store.set_triage(
-        alert_id, investigation_id, expect_status=["claimed"], status="open", assignee=None
-    )
+    return await store.set_queue_triage(
+        alert_id, investigation_id, member, expect_status=["claimed"], status="open",
+        assignee=None,
+    )  # fmt: skip
 
 
 async def dispose(
@@ -250,9 +328,10 @@ async def dispose(
             await graph.commit_transaction(tx)
             if renamed:
                 cited = [renamed.get(edge_id, edge_id) for edge_id in alert.edge_ids]
-    return await store.set_triage(
+    return await store.set_queue_triage(
         alert_id,
         investigation_id,
+        member,
         expect_status=["open", "claimed"],
         status="closed",
         assignee=alert.assignee or member.id,
@@ -264,4 +343,50 @@ async def dispose(
     )
 
 
-__all__ = ["canvas_elements", "claim", "dispose", "explain", "node_name", "queue", "release"]
+class AssignmentRefused(Exception):
+    """An alert may not be given to that person; the message says why, in words."""
+
+
+async def assign(
+    store: AlertStore,
+    graph: GraphPort,
+    investigation_id: str,
+    alert_id: str,
+    member: Principal,
+    *,
+    assignee: str,
+    allowed: set[str],
+) -> Alert:
+    """ADR-133 stage (a): give an open or claimed alert to one member of the case. `allowed` is the
+    route's answer to who may be given work in this case (its Editors and Authors). Only a case
+    alert (a typology alert, which every member of the case may read) is given to someone else: an
+    alert shared with a team, or its owner's alone, may be read by people the case's member list
+    does not show, so it is claimed by a person who can see it, never handed to one who may not."""
+    row, _ = await _visible_row(store, graph, alert_id, investigation_id, member)
+    if row.alert.status == "closed":
+        raise AlertTriageConflict(alert_id)
+    if assignee not in allowed:
+        raise AssignmentRefused("That person is not a member of this case who can work on alerts.")
+    if row.audience != "case" and assignee != member.id:
+        raise AssignmentRefused(
+            "An alert shared with a team, or its owner's alone, is claimed by someone who can see "
+            "it; it cannot be given to another person."
+        )
+    return await store.set_queue_triage(
+        alert_id, investigation_id, member, expect_status=["open", "claimed"], status="claimed",
+        assignee=assignee,
+    )  # fmt: skip
+
+
+__all__ = [
+    "AssignmentRefused",
+    "assign",
+    "canvas_elements",
+    "claim",
+    "dispose",
+    "explain",
+    "monitoring_queue",
+    "node_name",
+    "queue",
+    "release",
+]

@@ -16,6 +16,13 @@ afterEach(() => {
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
+/** A queue row's name: "Open alert: High severity, Hotlist — <what it found>", whatever spacing the
+ * accessible-name computation gives the hidden joining words. */
+function alertName(severity: string, title: string, summary = ""): RegExp {
+  const words = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
+  return new RegExp(`Open alert:\\s*${words(severity)}\\s*severity,\\s*${words(title)}\\s*—\\s*${words(summary)}`);
+}
+
 function account(id: string, name: string) {
   return {
     id,
@@ -72,7 +79,7 @@ describe("the Alerts place", () => {
   it("lists the queue by name and explains an alert with its transactions", async () => {
     serve("viewer");
     place();
-    const row = await screen.findByRole("button", { name: /Open alert: Structuring — 4 movements from GB-MULE to GB-HUB/ });
+    const row = await screen.findByRole("button", { name: alertName("Medium", "Structuring", "4 movements from GB-MULE to GB-HUB") });
     expect(screen.queryByText(/n1/)).toBeNull();
     fireEvent.click(row);
     expect(await screen.findByRole("table", { name: "Transactions this alert cites" })).toBeTruthy();

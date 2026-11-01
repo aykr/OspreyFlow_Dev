@@ -23,7 +23,13 @@ export type Disposition = ("true_positive" | "false_positive") | null;
 export type DispositionReason = string | null;
 export type DecidedBy = string | null;
 export type DecidedAt = string | null;
+export type Severity = ("low" | "medium" | "high") | null;
+export type Team = string | null;
 export type Summary = string;
+export type Kind = "typology" | "hotlist" | "monitor";
+export type Severity1 = "low" | "medium" | "high";
+export type Audience = "case" | "team" | "owner";
+export type Team1 = string | null;
 
 /**
  * One row of the case's alert queue: the alert, and its finding in words with the entities
@@ -32,6 +38,10 @@ export type Summary = string;
 export interface QueuedAlert {
   alert: Alert;
   summary: Summary;
+  kind?: Kind;
+  severity?: Severity1;
+  audience?: Audience;
+  team?: Team1;
   [k: string]: unknown;
 }
 /**
@@ -75,6 +85,8 @@ export interface Alert {
   disposition_reason?: DispositionReason;
   decided_by?: DecidedBy;
   decided_at?: DecidedAt;
+  severity?: Severity;
+  team?: Team;
   [k: string]: unknown;
 }
 export interface Interval {

@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "70f46bfa7087e31f8aa3a3642f3a32c80803ff1c8e55cbbe137cd97dc50b34f3",
+    "body": "c9ff1a781f6855157e907ba2656dd064d1a60bb962568673e18f72256a56e83c",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -10,9 +10,9 @@
       "images/admin/06-demo-packs.png": "46ff5e939c137a1e32ff3a4009e57eeda9e8aa1d50b13c36c49ed91aa2f25dc2",
       "images/admin/07-superset.png": "821b76c53a1481b17f26ee5006a9ef80a452c3d61ab5206330eb4c367f5514fd"
     },
-    "pdf": "2e06fac78bfcca1e882e5aae8569fd9de9b8102ed933de858e00641db0360d5c",
-    "source": "564239b770ba82640a8d4ecb263488ad84241fae7cb27788067925f06395ad24",
-    "version": "1.15"
+    "pdf": "998c5c4889cd1dcf5ef06e49d36093fe2c35c61b88d5842ed459dfdd37a96e2a",
+    "source": "495e8663934475615074386580afe8e1be2a69c6c76a47ba7f0ca61390064341",
+    "version": "1.16"
   },
   "developer-guide.md": {
     "body": "d21715b787ce508d7441e6bb5678bedfa0f87e6cb626d2a16860874c5c0dd720",
@@ -35,7 +35,7 @@
     "version": "1.7"
   },
   "user-guide.md": {
-    "body": "dabb7b383b6e9a0945e111597bc50130646c3ebd9eae1fd2764928d9e571ea96",
+    "body": "a5bba79d5134831df6f7282b30d497b9dc979cf6491da133c2e4a506fe5f1de0",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -45,7 +45,7 @@
       "images/user/06-map.png": "b6ae274fee9848859ba9603a90a22ccf22a33cfe30ddf3a6293c742eeaea0936",
       "images/user/07-reports-figures.png": "08f2d4337191d0803b43ab67989d4fb68bbf5362b63abc71fad0e75dd1f13b66",
       "images/user/08-reports-dashboard.png": "7003c438bd3ec3c87dd238b5e7c8be459bdd559e5c47ef9f7df706c9b3ef8d39",
-      "images/user/09-alerts.png": "117adb41ec5b8ae3caa9d8e7fe927d60363c200158531fc4d757da88c278a49c",
+      "images/user/09-monitoring.png": "57d511480677477eaa93b6d9b4c8d2b5d1adf876a6c0b6fa5abb4df716290dd0",
       "images/user/10-ownership-due-diligence.png": "d28baa7b047b18e8a2572635c22c0a8476db7fccdd8c4d445d84a03b02254fe0",
       "images/user/11-history.png": "d3bf4e146ffc55cbeae6c88bbc9d254b5d467564da53822ddd1cdfd594162c26",
       "images/user/12-questions.png": "4da2b5f26da67363dd79368a908d3f5b69a5a1049771018d86c03da38e8936a1",
@@ -58,8 +58,8 @@
       "images/user/19-export.png": "b28c8956e0c450791b4e7a83577c1085c2b5fdfe6af7db4eff20f4491e5abb54",
       "images/user/20-metrics.png": "bb0659af72c65773c860d4d261299171bc0a4a997318af3fec7ae326ee6bcdbc"
     },
-    "pdf": "f7ffe8af765e4a66bb721dec145091dd175d8f8826772c6a9d541928716aa856",
-    "source": "448e30ffcc969ce33b7108133023d47b779d207ad344f8c1ee19c427498272e0",
-    "version": "1.11"
+    "pdf": "61b953ebe91c91908a088ea8c7a2361e42e115f962476d187a82fafc5839f2eb",
+    "source": "31734d7d501f2580d9cc5c665f96e21e1d4bfd2ad29b863f0e03f2c0d9d74c6b",
+    "version": "1.12"
   }
 }

@@ -204,6 +204,9 @@ async def evaluate_hotlists_for_entry(
                     policy=policy,
                     investigation_id=entry.investigation_id,
                     dataset_id=hotlist.dataset_id,
+                    # ADR-133: the owner's team, which sees it while the hotlist's audience is
+                    # `team` (read at the queue, so a later change of audience applies at once).
+                    team=recipient.org_unit,
                 )
                 if alert is not None:
                     found.append(alert)
@@ -283,6 +286,8 @@ async def evaluate_monitors_for_entry(
                 policy="strict",  # irrelevant here — see this function's own docstring
                 investigation_id=entry.investigation_id,
                 dataset_id=monitor.dataset_id,
+                # ADR-133 stage (a): a monitor's alert goes to its owner's team in the one queue.
+                team=recipient.org_unit,
             )
             return [alert] if alert is not None else []
 

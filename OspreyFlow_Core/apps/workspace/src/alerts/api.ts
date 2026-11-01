@@ -4,6 +4,7 @@
 // generated one, so a change on the server is a type error here, never a silent drift.
 import type {
   Alert,
+  AlertAssignee,
   AlertDispositionInput,
   AlertExplanation,
   HeldRow,
@@ -15,6 +16,23 @@ import type {
 import type { WorkingSetDelta } from "../workingset/models";
 
 export type QueueFilter = "active" | "closed" | "all";
+export type KindFilter = "all" | "typology" | "hotlist" | "monitor";
+export type SeverityFilter = "all" | "high" | "medium" | "low";
+
+/** ADR-133 stage (a): what the queue is asked for. The server filters; the Glass never hides a row
+ * it was sent. */
+export interface QueueQuery {
+  status: QueueFilter;
+  kind?: KindFilter;
+  severity?: SeverityFilter;
+}
+
+export function queueSearch(query: QueueQuery): string {
+  const params = new URLSearchParams({ status: query.status });
+  if (query.kind && query.kind !== "all") params.append("kind", query.kind);
+  if (query.severity && query.severity !== "all") params.append("severity", query.severity);
+  return params.toString();
+}
 
 export interface CanvasOutcome {
   delta: WorkingSetDelta;
@@ -43,6 +61,9 @@ async function failure(response: Response, what: string): Promise<Error> {
     return new Error(
       `Too many for the canvas: ${fmt.format(body.would_be ?? 0)} ${body.cap_kind ?? "nodes"} against a limit of ${fmt.format(body.cap ?? 0)}.`,
     );
+  }
+  if (body.error === "assignment_refused" && typeof body.detail === "string") {
+    return new Error(body.detail);
   }
   if (body.error === "release_refused" && typeof body.detail === "string") {
     return new Error(`${body.detail[0]?.toUpperCase() ?? ""}${body.detail.slice(1)}.`);
@@ -82,8 +103,18 @@ export interface AlertsApi {
   investigationId: string;
 }
 
-export const listQueue = (a: AlertsApi, filter: QueueFilter) =>
-  call<QueuedAlert[]>(caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue?status=${filter}`), a.bearerToken, "Reading the alert queue");
+export const listQueue = (a: AlertsApi, query: QueueFilter | QueueQuery) =>
+  call<QueuedAlert[]>(
+    caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue?${queueSearch(typeof query === "string" ? { status: query } : query)}`),
+    a.bearerToken,
+    "Reading the alert queue",
+  );
+
+export const listAssignees = (a: AlertsApi) =>
+  call<AlertAssignee[]>(caseUrl(a.apiBaseUrl, a.investigationId, "alert-assignees"), a.bearerToken, "Reading who alerts may be given to");
+
+export const assignAlert = (a: AlertsApi, alertId: string, assignee: string) =>
+  call<Alert>(caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue/${encodeURIComponent(alertId)}/assign`), a.bearerToken, "Giving the alert", { method: "POST", body: { assignee } });
 
 export const explainAlert = (a: AlertsApi, alertId: string) =>
   call<AlertExplanation>(caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue/${encodeURIComponent(alertId)}`), a.bearerToken, "Opening the alert");

@@ -171,6 +171,11 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/alert-queue/{alert_id}/release"): E,
     ("POST", P + "/alert-queue/{alert_id}/disposition"): E,
     ("POST", P + "/alert-queue/{alert_id}/canvas"): E,
+    # ADR-133 stage (a): giving an alert to a member, and the members it may be given to, at Editor
+    # (who triages); a hotlist's audience is its owner's change, at Editor as making one is.
+    ("POST", P + "/alert-queue/{alert_id}/assign"): E,
+    ("GET", P + "/alert-assignees"): E,
+    ("PUT", P + "/hotlists/{hotlist_id}/audience"): E,
     ("GET", P + "/rules"): V,
     ("POST", P + "/rules"): A,
     ("POST", P + "/rules/{rule_id}/retire"): A,

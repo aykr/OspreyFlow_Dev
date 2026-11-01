@@ -514,7 +514,7 @@ export function PublishScreen({
             <li>Rows rejected: {(loadReport.rejections ?? []).length}</li>
             {(loadReport.rows_held ?? 0) > 0 && (
               <li>
-                Rows held for review: {loadReport.rows_held} — a reviewer releases or rejects them in Alerts › Held rows
+                Rows held for review: {loadReport.rows_held} — a reviewer releases or rejects them in Monitoring › Held rows
               </li>
             )}
           </ul>

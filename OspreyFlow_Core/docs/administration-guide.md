@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.15** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.16** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.16 | 2026-11-01 | §9.4: monitoring, and whom a hotlist's alerts reach (`monitoring.hotlist_audience`, `hotlist_audience_editable`). Appendix A: the `monitoring` settings. |
 | 1.15 | 2026-11-01 | §9.1: the Datasets tab. §10: a provider's privacy-contract mark (`privacy_contract`, `contract_reference`); each dataset's egress (`none`, `contracted`, `any`), set in Admin → Datasets and audited; every dataset is `none` after upgrading, so hosted engines receive nothing until an administrator changes one. Appendix A: the two new provider settings. |
 | 1.14 | 2026-11-01 | §8: `ospreyflow apply`, and a new §8.3, "Changing a setting". `deployment.env` is readable by its owner alone. §10: a provider enabled on a running deployment, and key entry on the guided install's Models screen. |
 | 1.13 | 2026-11-01 | §10 rewritten for several model engines: providers, defaults, labels, keys as `OSPREY_MODEL_KEY_<NAME>`, and what may leave. §8: `ospreyflow models`, `models key` and `models remove-key`. Appendix A: `models.providers`, `models.defaults` and a provider's `label`. |
@@ -472,6 +473,25 @@ A mail server is set in `osprey.yaml`'s `mail:` (appendix A); if it signs in, it
 once at install as `OSPREY_SMTP_PASSWORD` and kept only in `deployment.env`. With mail, the sign-in
 page also offers *Reset your password*.
 
+### 9.4 Monitoring: whom a hotlist's alerts reach
+
+Analysts work alerts in one queue, in the Glass's **Monitoring** place: the case's rule alerts reach
+every member of the case; a watched pattern's alerts reach its owner and the people of the owner's
+**unit** (the unit set on their account, section 9.3); a hotlist's alerts reach its owner, and the
+owner's unit too only when the hotlist is shared. Two settings in `osprey.yaml` decide hotlists:
+
+```yaml
+monitoring:
+  hotlist_audience: only_me        # or team: a new hotlist is shared with its owner's unit
+  hotlist_audience_editable: true  # false: owners cannot choose, and a change is refused
+```
+
+`hotlist_audience` is where a **new** hotlist starts; it never changes an existing one, and every
+hotlist made before the setting existed reaches only its owner until the owner changes it. With
+`hotlist_audience_editable: false`, every new hotlist takes `hotlist_audience`, the Glass offers no
+choice and says so, and a change is refused in words. A match on data its owner cannot see is never
+shared. Change either with `ospreyflow apply` (section 8.3). Both are in appendix A.
+
 ## 10. Models
 
 By default every model runs on the deployment itself (extraction, vision, transcription and
@@ -817,6 +837,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `reporting.sync_memory` | str | `256m` | Report sync's memory limit. |
 | `reporting.superset` | bool | false | Run Superset |
 | `reporting.superset_memory` | str | `2g` | Superset's memory limit. |
+| `monitoring` | section | — | Monitoring and alerts: whom a new hotlist's alerts reach, and who changes it. |
+| `monitoring.hotlist_audience` | `only_me` \| `team` | `only_me` | Whom a new hotlist's alerts reach: its owner alone (only_me), or also the owner's team, the people of the owner's organisational unit (team). Applies to hotlists made after it is set, never to an existing one. |
+| `monitoring.hotlist_audience_editable` | bool | true | Whether a hotlist's owner may choose its audience, when making it or later. When false, every new hotlist takes hotlist_audience and a change is refused. |
 | `mail` | section or none | none | A mail server, for invitations and password resets by email. |
 | `mail.host` | str | required | The mail server's name |
 | `mail.port` | int | `587` | The mail server's port. |

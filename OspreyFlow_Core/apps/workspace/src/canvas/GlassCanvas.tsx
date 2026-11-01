@@ -114,6 +114,7 @@ import { LIT_ANSWER_LATE, readLit, selectionChangedSince } from "../crossfilter/
 import type { TimeWindow, WeekdayHourCell } from "../crossfilter/store";
 import { removeFromWorkingSet } from "./removeNodes";
 import { ViewActions } from "./ViewActions";
+import { focusAnnouncement } from "./focusAnnouncement";
 import { settleLayout, type LayoutNode } from "./forceLayout";
 import { BubbleOverlay, type Bubble } from "./BubbleOverlay";
 import { ARRANGE_MAX_NODES, arrange, enclosingCircle, linkKey, packBubbles, treeLinkKeys, type LayoutMode } from "./layoutModes";
@@ -3224,6 +3225,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       return count;
     })();
 
+    function focusedNodeWords(id: string): string {
+      const data = graph.getNodeAttribute(id, "data") as Node | undefined;
+      return focusAnnouncement(data ? nodeLabel(data) : id, data?.type ?? "Group", graph.degree(id));
+    }
+
     async function askAboutSelected(): Promise<void> {
       const n = selectedDocumentCount;
       const made = await branchSelected(`Questions on ${n} document${n === 1 ? "" : "s"}`, {
@@ -3551,6 +3557,18 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             }
           />
         )}
+        {/* GDS remediation plan A2 (WCAG 4.1.3): the node keyboard focus is on, said as focus moves —
+            its name as drawn, its type and its links on the canvas — in a polite live region, so a
+            screen reader hears where it is while the focus stays on the canvas. */}
+        <span
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="visually-hidden"
+          data-testid="canvas-focus-announcement"
+        >
+          {focused && graph.hasNode(focused) ? focusedNodeWords(focused) : ""}
+        </span>
         {/* ADR-115 E4: what the canvas holds selected, read with its name (the reference's label). */}
         <span id={canvasDescriptionId} className="visually-hidden">
           {selected.size > 0

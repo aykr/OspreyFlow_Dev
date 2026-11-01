@@ -4,7 +4,7 @@ OspreyFlow is an open-source intelligence mapping platform for crime analysis, a
 fraud detection, and event monitoring and alerting.
 
 For analysts: the people who investigate in OspreyFlow. It covers signing in, cases, the graph, the
-map, the timeline and the reports, alerts and watches, and how OspreyFlow decides what you can see.
+map, the timeline and the reports, monitoring and alerts, and how OspreyFlow decides what you can see.
 It describes what is built, and says plainly where something is not yet.
 
 The other guides in this folder are the [administration guide](administration-guide.md), for
@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.11** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.12** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.12 | 2026-11-01 | §7 rewritten as Monitoring and alerts: the Monitoring place and its one queue for every kind of alert; severity, who may see an alert, giving it to a member, and closing it with a reason; the typologies as rule templates; whom a hotlist's alerts reach. §12: the canvas says the node the keyboard is on. |
 | 1.11 | 2026-11-01 | §5.11: the Matrix, the graph as two tables a screen reader can walk, with its keys in §12. |
 | 1.10 | 2026-11-01 | §6: an engine marked "under contract" or "no contract", and one the case's data may not reach shown not available, with the reason. |
 | 1.9 | 2026-11-01 | §6: choosing the model engine in Ask the case and Ask to search, and what an answer's "Answered by" line means. |
@@ -133,7 +134,7 @@ one dataset; you may see it through any one the case reads, but what it says of 
 | Part | What it is |
 | --- | --- |
 | **Top bar** | The case menu, search, the view switch (Graph, Map, Matrix, Reports), Export, and your account |
-| **Left rail** | The places: Explore, Alerts, Ownership, Watches, Questions, History, Dashboards, Help — those your rights allow |
+| **Left rail** | The places: Explore, Monitoring, Ownership, Watches, Questions, History, Dashboards, Help — those your rights allow |
 | **Canvas** | The graph, the map, the Matrix or the reports |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
 | **Timeline** | Folded at the bottom until opened |
@@ -312,7 +313,7 @@ the sources would be listed, the Inspector's **Source**, a link's details and th
 (**View messages**) say "Its sources are in data this case does not read". They never say "No sources
 recorded": there are some, and they are not this case's to see. The node or link itself is still
 shown, as you may see it; only where it came from is held back. The same applies in an alert (section
-7.2). If an Author widens the case's datasets, records already on your canvas may keep saying this
+7.5). If an Author widens the case's datasets, records already on your canvas may keep saying this
 until you open the case afresh.
 
 ### 5.7 Metrics
@@ -473,32 +474,83 @@ no case material, so it always runs on the deployment's own model, and its line 
 To ask in words for a pattern rather than an answer, use **Ask to search** in the query builder (section
 5.10).
 
-## 7. Alerts and watches
+## 7. Monitoring and alerts
 
-### 7.1 Alerts
+### 7.1 The Monitoring place
 
-![Alerts: the queue, with an alert's detail and its close box](images/user/09-alerts.png)
+![Monitoring: the one queue, with a hotlist alert open](images/user/09-monitoring.png)
 
-The rail's **Alerts** (its badge counts what is open or claimed) holds the alerts the case's rules
-raised — structuring, rapid movement, circular flow, screening matches, shared contact details,
-unverified customers, and patterns drawn by analysts. **An alert concerning anything you cannot see
-is neither shown nor counted.**
+The rail's **Monitoring** (its badge counts what is open or claimed) is the one place for alerts. Its
+tabs are **Queue**, **Rules**, **Watches**, and, by your level in the case, **Held rows** and **Audit**.
 
-Open one to see why it was raised and what it concerns; **Show on the canvas** draws them. **Claim**
-it to work on it (**Release** gives it back). **Close as true positive** confirms the node it raised;
-**Close as false positive** leaves it a suggestion. Closing needs a reason. Triage needs Editor; a
-Viewer reads. The **Rules** tab shows the rules judging this case; an Author deploys and retires them.
+**The queue holds every kind of alert you may see**, in one list:
 
-An entry in this queue is raised by a **rule**, a typology such as structuring or a pattern drawn by an
-analyst. It is not a hotlist match: those are in **Watches** (section 7.2), and are read there.
+- **rule alerts**, raised by the case's rules — structuring, rapid movement, circular flow, screening
+  matches, shared contact details, unverified customers, and patterns drawn by analysts;
+- **hotlist alerts**, when data touches an identifier on a hotlist (section 7.5);
+- **watched-pattern alerts**, when a monitor's saved pattern matches new data.
 
-### 7.2 Watches
+**An alert concerning anything you cannot see is neither shown nor counted**, whatever its kind.
+
+Each row says its **severity**, what kind it is and what it found, then where it stands (open, or
+claimed and by whom), **who may see it**, how long it has waited ("2 hours old") and when it was raised.
+The most severe come first, then the newest. **Show**, **Kind** and **Severity** above the list choose
+which alerts to list; the choice is made by the server, so a count always means what it says.
+
+### 7.2 Severity and who sees an alert
+
+Every alert is **high**, **medium** or **low**. Until rules can set their own (a later release), each
+kind has its own:
+
+| Alert | Severity |
+| --- | --- |
+| A hotlist match | High |
+| A screening match | High |
+| Shared contact details | Low |
+| Any other rule, and a watched pattern | Medium |
+
+Who may see an alert is shown on its row:
+
+- **The case team**: a rule alert reaches every member of the case.
+- **Shared with team …**: a watched pattern's alert, and a hotlist's alert when its owner has shared
+  it, reach the owner and the people of the owner's **unit** (the unit your administrator gave your
+  account).
+- **Only its owner**: a hotlist kept to its owner, and an alert raised before teams existed.
+
+### 7.3 Working an alert, and closing it
+
+Open one to see why it was raised and what it concerns; **Show on the canvas** draws them. **Claim** it
+to work on it (**Release** gives it back). A rule alert can also be **given to** a member of the case:
+choose them by name under **Give to**, then **Give**. An alert shared with a team, or its owner's alone,
+is claimed by someone who can see it, never given to another person.
+
+**Close as true positive** confirms the node it raised; **Close as false positive** leaves it a
+suggestion. **Closing needs a reason**: the close buttons stay unavailable until you write one, and a
+reason of only spaces is refused. Triage needs Editor; a Viewer reads.
+
+### 7.4 Rules and templates
+
+The **Rules** tab shows the rules judging this case; an Author deploys and retires them. Above the
+form, **Templates** lists the seven typologies as named starting points, grouped by the work they
+serve (anti-money-laundering transaction monitoring, KYC, any case), each with what it looks for and
+the severity of its alerts. **Use** fills the form with the template's defaults and puts you on the
+rule's name; change anything, then **Deploy**. Everyone in the case sees the templates; only an Author
+has **Use**.
+
+### 7.5 Watches, and whom a hotlist's alerts reach
 
 ![Watches: hotlists, monitors, and the alerts they raise](images/user/13-watches.png)
 
-**Watches** keeps a **hotlist** of identifiers — a phone number, an email address — each with a review
+The Monitoring place's **Watches** tab, and the rail's **Watches**, keep a **hotlist** of identifiers — a phone number, an email address — each with a review
 date: any data that touches one raises an alert. A **monitor** runs a saved pattern against new data.
-Both watch only their case's data. **Jump into investigation** starts a case from an alert. An alert
+Both watch only their case's data. **Jump into investigation** starts a case from an alert.
+
+**Who its alerts reach.** Each hotlist says who its alerts reach in the Monitoring queue: **Only me**,
+or **Me and my team**. A new hotlist starts from your deployment's choice (only you, unless your
+administrator has chosen otherwise); change it when you make the hotlist, or later on its row. A
+hotlist made before this choice existed reaches only you until you change it. Where your deployment
+fixes the choice, the panel says so ("Alerts reach only you. The deployment sets this.") and offers
+none. A match on data you cannot see is never shared with your team. An alert
 whose evidence you cannot see says only that a match fired.
 
 **A hotlist alert explains itself.** In **Watches**, under **Alert inbox**, a hotlist alert is headed
@@ -586,7 +638,7 @@ recorded. Report packs export to PDF from the Packs and Published tabs.
 | Anywhere | `/` | Search |
 | Anywhere | `?` | The welcome panel, with keys worth knowing |
 | Canvas | Tab, Shift+Tab | Move into and out of the canvas |
-| Canvas | Arrows | Step to the next or previous neighbour |
+| Canvas | Arrows | Step to the next or previous neighbour; a screen reader hears its name, type and links |
 | Canvas | Ctrl/Cmd+Arrows | Step within the selection; with Shift, through every node |
 | Canvas | Space | Add or remove the focused node from the selection |
 | Canvas | Enter | Expand the focused node, or read a document |

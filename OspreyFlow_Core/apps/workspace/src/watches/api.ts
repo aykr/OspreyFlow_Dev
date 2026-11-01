@@ -14,6 +14,9 @@
 // this file's own copy drift-check the way `Hotlist`/`Monitor` already do.
 import type { Hotlist, Monitor } from "../../../../packages/schemas/generated";
 
+/** ADR-133 ruling 3: whom a hotlist's alerts reach. */
+export type HotlistAudience = NonNullable<Hotlist["audience"]>;
+
 export type AlertMode = "full" | "notify_stub";
 
 /** Mirrors `services/api/watch_routes.py::AlertView` field-for-field. */
@@ -90,11 +93,18 @@ function authHeaders(bearerToken: string): Record<string, string> {
   return { Authorization: `Bearer ${bearerToken}` };
 }
 
+/** A refusal in the server's own words where it gave some (ADR-133 ruling 3's
+ * `hotlist_audience_fixed`), else the status. */
+async function refusal(response: Response, what: string): Promise<Error> {
+  const body = (await response.json().catch(() => ({}))) as { detail?: unknown };
+  return new Error(typeof body.detail === "string" ? body.detail : `${what} failed: ${response.status}`);
+}
+
 export async function createHotlist(
   apiBaseUrl: string,
   bearerToken: string,
   investigationId: string,
-  request: { identifier: string; review_date: string },
+  request: { identifier: string; review_date: string; audience?: HotlistAudience },
 ): Promise<Hotlist> {
   const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/hotlists`, {
     method: "POST",
@@ -102,7 +112,56 @@ export async function createHotlist(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`POST .../hotlists failed: ${response.status}`);
+    throw await refusal(response, "POST .../hotlists");
+  }
+  return (await response.json()) as Hotlist;
+}
+
+/** ADR-133 ruling 3: the owner's hotlists, and the deployment's audience setting. */
+export interface HotlistsWithSettings {
+  hotlists: Hotlist[];
+  audienceDefault: HotlistAudience;
+  audienceEditable: boolean;
+}
+
+export async function readHotlists(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+): Promise<HotlistsWithSettings> {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/hotlists`, { headers: authHeaders(bearerToken) });
+  if (!response.ok) {
+    throw new Error(`GET .../hotlists failed: ${response.status}`);
+  }
+  const body = (await response.json()) as {
+    hotlists: Hotlist[];
+    audience_default?: HotlistAudience;
+    audience_editable?: boolean;
+  };
+  return {
+    hotlists: body.hotlists,
+    audienceDefault: body.audience_default ?? "only_me",
+    audienceEditable: body.audience_editable ?? true,
+  };
+}
+
+export async function setHotlistAudience(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  hotlistId: string,
+  audience: HotlistAudience,
+): Promise<Hotlist> {
+  const response = await fetch(
+    `${caseUrl(apiBaseUrl, investigationId)}/hotlists/${encodeURIComponent(hotlistId)}/audience`,
+    {
+      method: "PUT",
+      headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
+      body: JSON.stringify({ audience }),
+    },
+  );
+  if (!response.ok) {
+    throw await refusal(response, "Changing who its alerts reach");
   }
   return (await response.json()) as Hotlist;
 }

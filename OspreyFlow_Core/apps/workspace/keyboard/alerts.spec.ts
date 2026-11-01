@@ -27,6 +27,7 @@ interface State {
   held: Record<string, unknown>[];
   sent: { method: string; path: string; body: unknown }[];
   queueFilters: string[];
+  queueSearches: string[];
 }
 
 function alert(state: State) {
@@ -74,6 +75,7 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
     ],
     sent: [],
     queueFilters: [],
+    queueSearches: [],
   };  // prettier-ignore
   await page.route("**/*/v1/**", async (route) => {
     const request = route.request();
@@ -87,6 +89,7 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
       return json(200, [{ id: "inv-1", name: "Ledger", level, created_at: "", created_by: "" }]);
     if (path === "alert-queue") {
       state.queueFilters.push(url.searchParams.get("status") ?? "");
+      state.queueSearches.push(url.search);
       return json(200, [{ alert: alert(state), summary: "4 movements from GB-MULE to GB-HUB" }]);
     }
     if (path === "alert-queue/a1")
@@ -111,6 +114,13 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
     }
     if (path === "alert-queue/a1/disposition") {
       state.status = "closed";
+      return json(200, alert(state));
+    }
+    if (path === "alert-assignees")
+      return json(200, [{ id: "analyst-1", name: "Ana Lyst" }, { id: "analyst-2", name: "Priya Shah" }]);
+    if (path === "alert-queue/a1/assign") {
+      state.status = "claimed";
+      state.assignee = (request.postDataJSON() as { assignee: string }).assignee;
       return json(200, alert(state));
     }
     if (path === "alert-queue/a1/canvas")
@@ -154,7 +164,7 @@ async function press(page: Page, target: Locator) {
 }
 
 async function openTheAlert(page: Page) {
-  await press(page, page.getByRole("button", { name: /Open alert: Structuring/ }));
+  await press(page, page.getByRole("button", { name: /Open alert: Medium severity, Structuring — / }));
   await expect(page.getByRole("table", { name: "Transactions this alert cites" })).toBeVisible();
 }
 
@@ -209,6 +219,48 @@ test("the queue is filtered, by keyboard", async ({ page }) => {
   await page.getByRole("combobox", { name: "Which alerts" }).selectOption("closed");
   await expect.poll(() => state.queueFilters).toContain("closed");
   registerCovered(REGISTRY, "filter-the-queue-by-keyboard");
+});
+
+test("the queue is filtered by kind and severity, by keyboard (ADR-133 stage a)", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  // A native select, chosen as "the queue is filtered" chooses one (its keyboard is the browser's).
+  await page.getByRole("combobox", { name: "Kind of alert" }).selectOption("hotlist");
+  await expect.poll(() => state.queueSearches).toContain("?status=active&kind=hotlist");
+  await page.getByRole("combobox", { name: "Severity" }).selectOption("high");
+  await expect.poll(() => state.queueSearches).toContain("?status=active&kind=hotlist&severity=high");
+  registerCovered(REGISTRY, "filter-the-queue-by-kind-and-severity-by-keyboard");
+});
+
+test("a case alert is given to a member, by keyboard (ADR-133 stage a)", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await openTheAlert(page);
+  await page.getByRole("combobox", { name: "Give this alert to" }).selectOption("analyst-2");
+  await press(page, page.getByRole("button", { name: "Give", exact: true }));
+  await expect(page.getByText("Given to Priya Shah.")).toBeVisible();
+  expect(state.sent.find((s) => s.path === "alert-queue/a1/assign")?.body).toEqual({ assignee: "analyst-2" });
+  expect(state.assignee).toBe("analyst-2");
+  registerCovered(REGISTRY, "give-an-alert-to-a-member-by-keyboard");
+});
+
+test("a template fills the rule form, which is then deployed, by keyboard (ADR-133 stage a)", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await press(page, page.getByRole("button", { name: "Use the template: Circular flow" }));
+  // The keyboard is put on the filled form's name.
+  await expect(page.getByLabel("Rule name")).toBeFocused();
+  await expect(page.getByLabel("Rule name")).toHaveValue("Circular flow");
+  await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
+  await expect(page.getByText("Deployed “Circular flow”.")).toBeVisible();
+  expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
+    name: "Circular flow",
+    params: { typology: "circular_flow", max_hops: 4, window_days: 30 },
+    trigger: "post_commit",
+    budget_ms: 5000,
+  });
+  registerCovered(REGISTRY, "use-a-template-by-keyboard");
 });
 
 test("a rule is deployed and another retired, by keyboard", async ({ page }) => {

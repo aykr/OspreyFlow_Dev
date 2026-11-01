@@ -23,6 +23,8 @@ export type Disposition = ("true_positive" | "false_positive") | null;
 export type DispositionReason = string | null;
 export type DecidedBy = string | null;
 export type DecidedAt = string | null;
+export type Severity = ("low" | "medium" | "high") | null;
+export type Team = string | null;
 
 /**
  * A persisted alert row — `06_DECISIONS.md` ADR-038/039, Phase 7 Stage 6a's own foundation.
@@ -65,6 +67,8 @@ export interface Alert {
   disposition_reason?: DispositionReason;
   decided_by?: DecidedBy;
   decided_at?: DecidedAt;
+  severity?: Severity;
+  team?: Team;
   [k: string]: unknown;
 }
 export interface Interval {

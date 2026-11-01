@@ -23,6 +23,8 @@ export type Disposition = ("true_positive" | "false_positive") | null;
 export type DispositionReason = string | null;
 export type DecidedBy = string | null;
 export type DecidedAt = string | null;
+export type Severity = ("low" | "medium" | "high") | null;
+export type Team = string | null;
 export type Summary = string;
 export type Type = string;
 export type ProvenanceState = "asserted" | "inferred" | "unresolved";
@@ -74,6 +76,10 @@ export type EventId = string;
 export type OccurredAt = string;
 export type Amount = number | null;
 export type Transactions = ExplainedTransaction[];
+export type Kind = "typology" | "hotlist" | "monitor";
+export type Severity1 = "low" | "medium" | "high";
+export type Audience = "case" | "team" | "owner";
+export type Team1 = string | null;
 
 /**
  * What fired an alert, for the reader (ADR-109 phase B): the entities it concerns and its
@@ -87,6 +93,10 @@ export interface AlertExplanation {
   nodes?: Nodes;
   edges?: Edges;
   transactions?: Transactions;
+  kind?: Kind;
+  severity?: Severity1;
+  audience?: Audience;
+  team?: Team1;
   [k: string]: unknown;
 }
 /**
@@ -130,6 +140,8 @@ export interface Alert {
   disposition_reason?: DispositionReason;
   decided_by?: DecidedBy;
   decided_at?: DecidedAt;
+  severity?: Severity;
+  team?: Team;
   [k: string]: unknown;
 }
 export interface Interval {

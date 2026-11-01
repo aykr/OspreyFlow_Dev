@@ -1278,6 +1278,11 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_DASHBOARDS_ORIGIN={sites(config).dashboards}",
         # ADR-114 Amendment 5: invitations and resets by the identity provider's emailed link.
         *(["OSPREY_SIGN_IN_EMAIL=true"] if config.mail is not None else []),
+        # ADR-133 ruling 3: a new hotlist's audience in the alert queue, and whether its owner may
+        # change it.
+        f"OSPREY_HOTLIST_AUDIENCE={config.monitoring.hotlist_audience}",
+        "OSPREY_HOTLIST_AUDIENCE_EDITABLE="
+        + ("true" if config.monitoring.hotlist_audience_editable else "false"),
         "",
         "# Ports published besides the front proxy's: the Conduit only when network.expose_conduit",
         "# asks, ArcadeDB on loopback only (ADR-114 Amendment 4 decision 3). Each is overridable.",

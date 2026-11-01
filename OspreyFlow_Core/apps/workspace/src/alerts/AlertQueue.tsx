@@ -1,21 +1,28 @@
-// The case team's alert queue and one alert's explanation (`06_DECISIONS.md` ADR-109 phase B,
-// rulings 2 and 3): what fired, on which entities, through which transactions — and the triage a
-// member does: claim it, release it, put it on the canvas, close it as a true or false positive
-// with the reason. A true positive confirms the alert's node (rule 5); the server says which.
+// The one alert queue and one alert's explanation (`06_DECISIONS.md` ADR-109 phase B, rulings 2
+// and 3; ADR-133 decision 5 and stage (a)): every kind of alert the reader may see — typology,
+// hotlist and monitor — each with its severity, who may see it, who has it and its age; what fired,
+// on which entities, through which transactions — and the triage a member does: claim it, release
+// it, give a case alert to a member, put it on the canvas, close it as a true or false positive with
+// the reason. A true positive confirms the alert's node (rule 5); the server says which. The kind,
+// severity and status filters are the server's: the Glass never hides a row it was sent.
 import { useCallback, useEffect, useState } from "react";
-import type { Alert, AlertExplanation, QueuedAlert } from "../../../../packages/schemas/generated";
+import type { Alert, AlertAssignee, AlertExplanation, QueuedAlert } from "../../../../packages/schemas/generated";
 import { Button, Select } from "../design/primitives";
 import type { AccessLevel } from "../investigation/cases";
 import {
   alertToCanvas,
+  assignAlert,
   claimAlert,
   disposeAlert,
   explainAlert,
+  listAssignees,
   listQueue,
   releaseAlert,
   type AlertsApi,
   type CanvasOutcome,
+  type KindFilter,
   type QueueFilter,
+  type SeverityFilter,
 } from "./api";
 import { money, nodeName, typologyLabel, when } from "./names";
 
@@ -27,6 +34,43 @@ export interface AlertQueueProps extends AlertsApi {
 }
 
 const STATUS_WORDS: Record<string, string> = { open: "Open", claimed: "Claimed", closed: "Closed" };
+const SEVERITY_WORDS: Record<string, string> = { high: "High", medium: "Medium", low: "Low" };
+
+type Kind = "typology" | "hotlist" | "monitor";
+type Audience = "case" | "team" | "owner";
+
+/** A row's kind, severity and audience; a row from before ADR-133 is a medium case alert. */
+function facts(row: Pick<QueuedAlert, "kind" | "severity" | "audience" | "team">) {
+  return {
+    kind: (row.kind ?? "typology") as Kind,
+    severity: row.severity ?? "medium",
+    audience: (row.audience ?? "case") as Audience,
+    team: row.team ?? null,
+  };
+}
+
+/** What the alert is called: a typology's name, or what kind of watch raised it. */
+export function alertTitle(alert: Alert, kind: Kind): string {
+  if (kind === "hotlist") return "Hotlist";
+  if (kind === "monitor") return "Watched pattern";
+  return typologyLabel(alert.typology);
+}
+
+/** Who may see it, in words (ADR-133 decision 5 and ruling 3). */
+export function audienceWords(audience: Audience, team: string | null): string {
+  if (audience === "case") return "The case team";
+  if (audience === "team") return team ? `Shared with team ${team}` : "Shared with the owner's team";
+  return "Only its owner";
+}
+
+/** How long it has waited, in words. */
+export function ageWords(iso: string, now: Date = new Date()): string {
+  const hours = Math.floor((now.getTime() - new Date(iso).getTime()) / 3_600_000);
+  if (hours < 1) return "under an hour old";
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} old`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} old`;
+}
 
 /** Where an alert stands, in one sentence: "Claimed by you", "Closed as a true positive: …". */
 export function statusSentence(alert: Alert, mine: boolean): string {
@@ -41,30 +85,52 @@ export function statusSentence(alert: Alert, mine: boolean): string {
 export function AlertQueue(props: AlertQueueProps) {
   const { apiBaseUrl, bearerToken, investigationId } = props;
   const [filter, setFilter] = useState<QueueFilter>("active");
+  const [kind, setKind] = useState<KindFilter>("all");
+  const [severity, setSeverity] = useState<SeverityFilter>("all");
   const [rows, setRows] = useState<QueuedAlert[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     setProblem(null);
-    listQueue({ apiBaseUrl, bearerToken, investigationId }, filter)
+    listQueue({ apiBaseUrl, bearerToken, investigationId }, { status: filter, kind, severity })
       .then(setRows)
       .catch((e: Error) => setProblem(e.message));
-  }, [apiBaseUrl, bearerToken, investigationId, filter]);
+  }, [apiBaseUrl, bearerToken, investigationId, filter, kind, severity]);
 
   useEffect(reload, [reload]);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) 2fr", gap: "var(--sp-16)", minHeight: 0 }}>
       <section aria-label="Alert queue" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8)", minHeight: 0 }}>
-        <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
-          Show
-          <Select aria-label="Which alerts" value={filter} onChange={(e) => setFilter(e.target.value as QueueFilter)}>
-            <option value="active">Open and claimed</option>
-            <option value="closed">Closed</option>
-            <option value="all">All</option>
-          </Select>
-        </label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)" }}>
+          <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+            Show
+            <Select aria-label="Which alerts" value={filter} onChange={(e) => setFilter(e.target.value as QueueFilter)}>
+              <option value="active">Open and claimed</option>
+              <option value="closed">Closed</option>
+              <option value="all">All</option>
+            </Select>
+          </label>
+          <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+            Kind
+            <Select aria-label="Kind of alert" value={kind} onChange={(e) => setKind(e.target.value as KindFilter)}>
+              <option value="all">Every kind</option>
+              <option value="typology">Rules</option>
+              <option value="hotlist">Hotlists</option>
+              <option value="monitor">Watched patterns</option>
+            </Select>
+          </label>
+          <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+            Severity
+            <Select aria-label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value as SeverityFilter)}>
+              <option value="all">Any</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </Select>
+          </label>
+        </div>
         {problem && <p role="alert" style={{ color: "var(--error)" }}>{problem}</p>}
         {rows !== null && rows.length === 0 && <p className="label">No alerts here.</p>}
         {rows !== null && rows.length > 0 && (
@@ -73,28 +139,36 @@ export function AlertQueue(props: AlertQueueProps) {
           </p>
         )}
         <ul style={{ listStyle: "none", margin: 0, padding: 0, overflowY: "auto" }}>
-          {(rows ?? []).map((row) => (
-            <li key={row.alert.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-              <button
-                type="button"
-                className="btn btn--quiet"
-                aria-pressed={openId === row.alert.id}
-                aria-label={`Open alert: ${typologyLabel(row.alert.typology)} — ${row.summary}`}
-                onClick={() => setOpenId(row.alert.id)}
-                style={{ width: "100%", textAlign: "left", display: "flex", flexDirection: "column", gap: "var(--sp-4)", padding: "var(--sp-8)" }}
-              >
-                <span style={{ display: "flex", justifyContent: "space-between", gap: "var(--sp-8)" }}>
-                  <span className="value">{typologyLabel(row.alert.typology)}</span>
-                  <span className="label">
-                    {STATUS_WORDS[row.alert.status ?? "open"]}
-                    {row.alert.assignee ? ` · ${row.alert.assignee === props.accountId ? "you" : row.alert.assignee}` : ""}
-                  </span>
-                </span>
-                <span className="label">{row.summary}</span>
-                <span className="label">{when(row.alert.created_at)}</span>
-              </button>
-            </li>
-          ))}
+          {(rows ?? []).map((row) => {
+            const f = facts(row);
+            const title = alertTitle(row.alert, f.kind);
+            return (
+              <li key={row.alert.id} style={{ borderBottom: "1px solid var(--border-subtle)", padding: "var(--sp-4) 0" }}>
+                {/* The button's name is its own visible words, with the hidden words that make them a
+                    sentence (WCAG 2.5.3): "Open alert: High severity, Hotlist — <what it found>". */}
+                <button
+                  type="button"
+                  className="btn btn--quiet"
+                  aria-pressed={openId === row.alert.id}
+                  onClick={() => setOpenId(row.alert.id)}
+                  style={{ width: "100%", textAlign: "left", display: "block", padding: "var(--sp-8)", height: "auto", whiteSpace: "normal" }}
+                >
+                  <span className="visually-hidden">Open alert: </span>
+                  <span className={`severity severity--${f.severity}`}>{SEVERITY_WORDS[f.severity]}</span>
+                  <span className="visually-hidden"> severity, </span>{" "}
+                  <span className="value">{title}</span>
+                  <span className="visually-hidden"> — </span>
+                  <br />
+                  <span className="label">{row.summary}</span>
+                </button>
+                <p className="label" style={{ margin: 0, padding: "0 var(--sp-8)" }}>
+                  {STATUS_WORDS[row.alert.status ?? "open"]}
+                  {row.alert.assignee ? ` · ${row.alert.assignee === props.accountId ? "you" : row.alert.assignee}` : ""}
+                  {` · ${audienceWords(f.audience, f.team)} · ${ageWords(row.alert.created_at)} · ${when(row.alert.created_at)}`}
+                </p>
+              </li>
+            );
+          })}
         </ul>
       </section>
       {openId ? (
@@ -154,19 +228,25 @@ function AlertDetail(props: AlertDetailProps) {
   const nodes = why.nodes ?? [];
   const names = new Map(nodes.map((n) => [n.id, nodeName(n)]));
   const alert = why.alert;
+  const f = facts(why);
   const canTriage = level === "editor" || level === "author";
   const closed = alert.status === "closed";
   const mine = alert.assignee === props.accountId;
 
   return (
     <section aria-label="What fired this alert" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", overflowY: "auto" }}>
-      <h3 className="value" style={{ margin: 0 }}>{typologyLabel(alert.typology)}</h3>
-      <p style={{ margin: 0 }}>{why.summary}</p>
+      <h3 className="value" style={{ margin: 0 }}>{alertTitle(alert, f.kind)}</h3>
       <p className="label" style={{ margin: 0 }}>
-        {`Raised ${alert.trigger === "pre_commit" ? "as the data loaded (before it was committed)" : "after the data loaded"}`}
-        {alert.window ? ` · ${when(alert.window.valid_from)} to ${when(alert.window.valid_to ?? alert.window.valid_from)}` : ""}
+        {`${alertTitle(alert, f.kind)} · ${SEVERITY_WORDS[f.severity]} severity · ${audienceWords(f.audience, f.team)}`}
       </p>
-      {alert.alert_node_id === null && (
+      <p style={{ margin: 0 }}>{why.summary}</p>
+      {f.kind === "typology" && (
+        <p className="label" style={{ margin: 0 }}>
+          {`Raised ${alert.trigger === "pre_commit" ? "as the data loaded (before it was committed)" : "after the data loaded"}`}
+          {alert.window ? ` · ${when(alert.window.valid_from)} to ${when(alert.window.valid_to ?? alert.window.valid_from)}` : ""}
+        </p>
+      )}
+      {f.kind === "typology" && alert.alert_node_id === null && (
         <p className="label" style={{ color: "var(--warning)", margin: 0 }}>
           This alert has no node on the graph: what it concerns is held under markings no single marking can cover.
         </p>
@@ -240,6 +320,14 @@ function AlertDetail(props: AlertDetailProps) {
           )}
         </div>
       )}
+      {canTriage && !closed && f.audience === "case" && (
+        <GiveTo api={api} alertId={alertId} busy={busy} act={act} />
+      )}
+      {canTriage && !closed && f.audience !== "case" && (
+        <p className="label" style={{ margin: 0 }}>
+          An alert shared with a team, or its owner&apos;s alone, is claimed by someone who can see it; it is not given to another person.
+        </p>
+      )}
       {canTriage && !closed && (
         <fieldset style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
           <legend className="label">Close this alert</legend>
@@ -281,5 +369,46 @@ function AlertDetail(props: AlertDetailProps) {
         </fieldset>
       )}
     </section>
+  );
+}
+
+/** ADR-133 stage (a): give a case alert to one of the case's Editors or Authors, by name. */
+function GiveTo(props: {
+  api: AlertsApi;
+  alertId: string;
+  busy: boolean;
+  act: (what: () => Promise<unknown>, words: string) => Promise<void>;
+}) {
+  const { api, alertId } = props;
+  const [people, setPeople] = useState<AlertAssignee[]>([]);
+  const [chosen, setChosen] = useState("");
+  useEffect(() => {
+    listAssignees(api)
+      .then(setPeople)
+      .catch(() => setPeople([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api.apiBaseUrl, api.bearerToken, api.investigationId]);
+  if (people.length === 0) return null;
+  const name = (id: string) => people.find((p) => p.id === id)?.name ?? id;
+  return (
+    <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "flex-end", flexWrap: "wrap" }}>
+      <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
+        Give to
+        <Select aria-label="Give this alert to" value={chosen} onChange={(e) => setChosen(e.target.value)}>
+          <option value="">Choose a member…</option>
+          {people.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name ?? p.id}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <Button
+        disabled={props.busy || !chosen}
+        onClick={() => void props.act(() => assignAlert(api, alertId, chosen), `Given to ${name(chosen)}.`)}
+      >
+        Give
+      </Button>
+    </div>
   );
 }
