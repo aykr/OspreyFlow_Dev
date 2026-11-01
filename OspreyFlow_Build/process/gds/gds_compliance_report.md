@@ -20,7 +20,7 @@ mapping's status unless the repository now shows something different, and says s
 open standards and operability. Accessibility automation is broad and now covers every harness page.
 Two of the deck's claims went further than the repository, and are corrected here and in the decks:
 
-- **The Matrix view does not exist.** `spec/02_GLASS_FRONTEND.md` §6 requires it ("the
+- **The Matrix view did not exist at the baseline. Since built (1 November 2026, build order step 2g; remediation A1 done).** `spec/02_GLASS_FRONTEND.md` §6 requires it ("the
   screen-reader-navigable rendering of the same data"), and the decks presented it as built. It is
   not in `apps/workspace/src`. A screen-reader user on the graph canvas today hears "Selection of 1"
   and the selection count, but not which node has focus. That is the largest accessibility gap
