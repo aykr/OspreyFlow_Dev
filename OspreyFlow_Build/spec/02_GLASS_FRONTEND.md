@@ -967,6 +967,20 @@ goes the other way. *Preview on the last 90 days* says the count and up to five 
 was refused (`limit_exceeded` in words). Keyboard cases `build-a-rule-as-a-sentence-by-keyboard` and
 `preview-a-rule-by-keyboard`; the monitoring harness's `tab=rules&sentence=preview` state is axe-scanned.
 
+**Screening lists and the AML templates (ADR-133 stage (c)).** The Monitoring place's **Lists** tab
+(`src/alerts/ListsPanel.tsx`) shows each subscribed screening list — connector, version, entries, last
+update, licence, and its state, a failed refresh in words. Whoever holds `load_screening_lists` reads it
+from `GET /v1/admin/screening-lists`, with **Refresh now** per list, the latest refreshes and *Subscribe
+to a list*; anyone else reads `GET /v1/screening-lists`, which carries no refreshes, since their counts
+are taken across every case (rule 7). The Rules tab offers the four AML templates (a high-risk
+jurisdiction, as two-letter codes typed into the form; large cash, with cash types; a dormant account
+reactivated; a sudden rise in velocity, counted or by amount); the last two are sent to run after commit
+whatever the form says. Keyboard cases `deploy-an-aml-template-by-keyboard`,
+`read-the-screening-lists-by-keyboard`, `refresh-a-screening-list-by-keyboard` and
+`subscribe-to-a-screening-list-by-keyboard`; the monitoring harness's `tab=lists`,
+`tab=lists&lists=manage&refreshed=1` and `tab=rules&template=high_risk_jurisdiction` states are
+axe-scanned.
+
 **Neighbourhood risk (ADR-109 phase E).** The Inspector's *Neighbourhood risk* part, for the
 selected entity, asks on request (*Score this neighbourhood*) and shows the score in words — alerts
 within two hops, halved per hop, from the last ninety days, in what the analyst can see — and each

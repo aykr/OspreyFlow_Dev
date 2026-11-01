@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.14** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.15** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.15 | 2026-11-01 | §7.9: the four new AML templates (a high-risk jurisdiction, large cash, a dormant account reactivated, a sudden rise in velocity). §7.10: screening lists — the Lists tab, re-screening when a list changes, and a match confirmed by a person. |
 | 1.14 | 2026-11-01 | §7.6–7.8: a rule written as a sentence, blank by blank from the ontology, and its drawn pattern; frequency and amount conditions; Preview on the last 90 days. |
 | 1.13 | 2026-11-01 | §9.1–9.3: an alert in a report pack (open or closed, inferred or confirmed); alert trends in the Trends tab; the monitoring figures dashboards receive. |
 | 1.12 | 2026-11-01 | §7 rewritten as Monitoring and alerts: the Monitoring place and its one queue for every kind of alert; severity, who may see an alert, giving it to a member, and closing it with a reason; the typologies as rule templates; whom a hotlist's alerts reach. §12: the canvas says the node the keyboard is on. |
@@ -533,7 +534,8 @@ reason of only spaces is refused. Triage needs Editor; a Viewer reads.
 ### 7.4 Rules and templates
 
 The **Rules** tab shows the rules judging this case; an Author deploys and retires them. Above the
-form, **Templates** lists the seven typologies as named starting points, grouped by the work they
+form, **Templates** lists the typologies as named starting points (the four new AML templates are in
+§7.9), grouped by the work they
 serve (anti-money-laundering transaction monitoring, KYC, any case), each with what it looks for and
 the severity of its alerts. **Use** fills the form with the template's defaults and puts you on the
 rule's name; change anything, then **Deploy**. Everyone in the case sees the templates; only an Author
@@ -636,6 +638,55 @@ before you deploy. A preview raises no alert and writes nothing. It counts only 
 it says nothing about anything hidden from you. If the rule would judge more subjects than the
 working-set limit, the preview is refused and counts nothing: narrow the sentence and preview again.
 Frequency conditions are counted over the 90 days.
+
+### 7.9 The AML templates: jurisdiction, cash, dormancy and velocity
+
+![The Rules tab: the AML templates, and the form filled from "High-risk jurisdiction"](images/user/24-aml-templates.png)
+
+Four templates watch a case's money movements (its *transacted* links), each with settings you choose
+and no formula to write:
+
+- **High-risk jurisdiction** — a payment to or from an account held in a jurisdiction on your list.
+  Type the list as two-letter country codes, separated by commas (for example `XA, XB`): the list is
+  part of the rule, so your organisation's policy list is what you enter. An account's jurisdiction is
+  its IBAN's country code, the IBAN's first two letters; an account whose number is not an IBAN has no
+  jurisdiction here.
+- **Large cash** — cash paid in, drawn out, or either, of an amount at or over a threshold (10,000 by
+  default) in one movement.
+- **Dormant account reactivated** — an account moving money again after a number of days (180 by
+  default) without a movement. An account that has never moved before is new, not dormant.
+- **Sudden rise in velocity** — an account whose movements over the last days (7) run at a factor (3)
+  or more of its own daily rate over the days before (90), with at least a minimum (5) in the last
+  days; measured by the number of movements or by the amount moved. An account with nothing in those
+  days before has no rate to rise from and raises nothing.
+
+Each raises a medium-severity alert in the queue, in words: the movement, the accounts and what made it
+a finding. They judge only movements and accounts you could see as the rule's deployer: a movement
+hidden from them neither wakes a dormant account nor adds to a rate. The last two compare an account
+with its own stored past, so they run after each load commits.
+
+### 7.10 Screening lists, re-screened when they change
+
+![The Lists tab: each list's version, entries, last update and state, the latest refreshes, and subscribing](images/user/23-screening-lists.png)
+
+The **Lists** tab shows each sanctions, PEP or adverse-media list the deployment screens against: the
+list it is (OFAC, HM Treasury OFSI, the UN or EU consolidated list, or OpenSanctions), its version, how
+many entries it holds, when it last changed, its licence, and its state — up to date, not yet read, or
+why its last refresh failed, in words. A list read from a file that is not in its publisher's format is
+left as it was, and says so.
+
+When a list changes, OspreyFlow re-screens every customer in every case that has a **Screening on
+onboarding** rule (§7.4) against **the entries that changed only** — those added and those whose names,
+date of birth or country changed. An entry that did not change was screened when it arrived, so it
+raises nothing again. Each new match raises a high-severity screening alert in that case's queue,
+naming the customer and the list entry, with its score. Like every screening match, it is a suggestion:
+the link between the customer and the listed party is inferred until a person confirms it, by closing
+the alert as a true positive (§7.3). Customers are screened as the rule's deployer and within the case's
+datasets, so no one is screened, or alerted on, outside what that person may see.
+
+Administrators and data engineers subscribe to a list and refresh it from this tab (the administration
+guide, §9.5, says how). Everyone else sees the lists, not how many customers each refresh re-screened,
+since that number is counted across every case in the deployment.
 
 ## 8. Ownership and due diligence
 
