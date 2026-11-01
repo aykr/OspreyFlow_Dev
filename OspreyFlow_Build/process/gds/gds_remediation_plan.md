@@ -49,7 +49,7 @@ surface is marked "own change", to be done before step 9b re-audits.
 | S5 | Development-only `minimatch` ReDoS (15 moderate, through ESLint and license-checker) | P3 | `npm audit` clean, or each accepted in a documented list | `npm audit` | When ESLint and typescript-eslint publish fixed ranges |
 | S6 | Revisit ADR-014's accepted risk: `@sigma/layer-maplibre` 4.0.0 exists but still peers on `maplibre-gl ^4.5.0` and needs Sigma v4 | P2 | Trigger re-checked at every map-dependency change | `map-view.spec.ts` (now guards the mitigation) | Rides with any step touching `apps/workspace` map dependencies |
 | S7 | Penetration test (CHECK or CREST) and a DPIA (a template, then the client's) | P2 | Reports on file | — | Step 9b onwards, commissioned by the owner |
-| S8 | Wire `bandit` (medium and above, with the B608 and B310 triage as a baseline) and `gitleaks` into `make ci` as dev-only tools, through the licence gate | P3 | Each shown red with a planted finding (rule 15) before it is wired | `tests/test_bandit_gate.py`, `tests/test_gitleaks_gate.py` | Own change |
+| S8 | Wire `bandit` (medium and above, with the B608 and B310 triage as a baseline) and `gitleaks` into `make ci` as dev-only tools, through the licence gate | P3 | Each shown red with a planted finding (rule 15) before it is wired | A test per gate that plants a finding and asserts the gate reports it (to be written) | Own change |
 | S9 | Run the live rule-3 conformance suites again under CI once the current `main` is pushed (last green 29 October) | P1 | CI green on the step 2b merge | CI | On merge of this branch |
 
 ## Epic O: open standards (points 11 and 13, TCoP 4)

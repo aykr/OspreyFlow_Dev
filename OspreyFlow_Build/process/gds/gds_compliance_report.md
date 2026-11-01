@@ -188,13 +188,13 @@ of erasing sources. What proves it:
   `ontology/test_sources_in_full.py` (including
   `test_the_scope_does_not_leak_across_concurrent_tasks`, so the scope cannot leak to a reader on
   another task)
-- `services/api/test_written_back_reads_in_full.py` and `..._stages.py` (confirm, retract, conflict
+- `tests/services/api/test_written_back_reads_in_full.py` and `..._stages.py` (confirm, retract, conflict
   annotation, geocode supersession, true positive)
 - `working_set/test_fake_graph_matches_the_adapter_on_sources.py`, which includes
   `test_upsert_edges_refuses_withheld_provenance_as_the_adapter_does`. This is rule 15's point: the
   fake refuses what the real adapter refuses.
-- `services/api/test_sources_withheld_routes.py` and
-  `adapters/graph_arcadedb/test_sources_withheld_live.py` (live)
+- `tests/services/api/test_sources_withheld_routes.py` and
+  `tests/adapters/graph_arcadedb/test_sources_withheld_live.py` (live)
 
 Run in this step: 97 passed (the non-live set above, with `test_link_changes.py` and
 `test_connections_route.py`). No pinned test stack was up, and none was started, so the live suites
