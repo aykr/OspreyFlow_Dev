@@ -57,6 +57,22 @@ test("Hide the timeline gives its height back, and Show restores it", async ({ p
   registerCovered(REGISTRY, "hide-and-show-the-timeline-by-keyboard");
 });
 
+// Found by the GDS baseline audit's axe scan of the live Map view (1 November 2026): a hidden
+// timeline kept its controls in the Tab order at zero height, inside an `aria-hidden` box, so focus
+// went somewhere neither seen nor announced (WCAG 2.4.3, 4.1.2). Shown red before the box was inert.
+test("a hidden timeline's controls are out of the Tab order and the accessibility tree", async ({ page }) => {
+  await page.goto(URL);
+  await expect(page.getByRole("button", { name: "Play playback" })).toBeVisible();
+  await press(page, "Hide the timeline");
+  await expect(page.getByRole("button", { name: "Play playback" })).toHaveCount(0);
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => document.activeElement?.closest("#timeline-body") !== null)).toBe(false);
+  }
+  await press(page, "Show the timeline");
+  await expect(page.getByRole("button", { name: "Play playback" })).toBeVisible();
+});
+
 const slotOrder = (page: Page) =>
   page.locator("[data-panel-slot]").evaluateAll((els) => els.map((el) => el.getAttribute("data-panel-slot")));
 

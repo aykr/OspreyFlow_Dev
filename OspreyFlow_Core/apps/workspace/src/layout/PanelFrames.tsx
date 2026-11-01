@@ -256,7 +256,10 @@ export function BottomPanelFrame({
         {summary}
       </div>
       <div style={{ height: open ? current : 0, overflow: "hidden" }}>
-        <div style={{ height: current }} aria-hidden={!open}>
+        {/* Inert while folded, not only aria-hidden: its controls leave the Tab order too, or focus
+            goes to a control at zero height that is neither seen nor announced (WCAG 2.4.3, 4.1.2;
+            the GDS baseline audit, 1 November 2026). */}
+        <div style={{ height: current }} aria-hidden={!open} inert={!open}>
           {children}
         </div>
       </div>
