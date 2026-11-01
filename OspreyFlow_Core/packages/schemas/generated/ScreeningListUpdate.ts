@@ -8,7 +8,7 @@ export type Version = string | null;
 export type PreviousVersion = string | null;
 export type Added = number;
 export type Changed = number;
-export type Removed = number;
+export type Delisted = number;
 export type Rescreened = number;
 export type Alerts = number;
 export type Words = string;
@@ -25,7 +25,7 @@ export interface ScreeningListUpdate {
   previous_version?: PreviousVersion;
   added?: Added;
   changed?: Changed;
-  removed?: Removed;
+  delisted?: Delisted;
   rescreened?: Rescreened;
   alerts?: Alerts;
   words: Words;

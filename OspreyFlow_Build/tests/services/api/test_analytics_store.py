@@ -44,6 +44,16 @@ async def test_an_engine_it_does_not_know_is_refused_in_words(engine: str, tmp_p
 # refuses a plain `MergeTree` there; these cases pin what the Conduit asks for.
 
 
+#: Every table the Conduit makes: the events and geometries, and the alert facts and their
+#: handlings (ADR-134 decision 3). Named, not counted, so an added table is seen to take the engine.
+TABLES = ["alert_fact_handlings", "alert_facts", "events", "geometries"]
+
+
+def _names(tables: list[str]) -> list[str]:
+    made = (t.split("CREATE TABLE IF NOT EXISTS", 1)[1] for t in tables)
+    return sorted(t.split("(", 1)[0].strip() for t in made)
+
+
 def _statements_sent(monkeypatch: pytest.MonkeyPatch, **env: str) -> list[str]:
     import httpx
     from services.api import analytics_store
@@ -84,7 +94,7 @@ async def test_a_cluster_makes_its_database_replicated_on_every_node(
         "Replicated('/clickhouse/databases/ospreyflow', '{shard}', '{replica}')"
     )
     tables = [s for s in sent if s.lstrip().startswith("CREATE TABLE")]
-    assert len(tables) == 2
+    assert _names(tables) == TABLES
     assert all("ENGINE = ReplicatedMergeTree" in s for s in tables)
     assert [s for s in sent if s.startswith("ALTER")] == [
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS load_id Nullable(String)"
@@ -101,7 +111,7 @@ async def test_a_single_server_keeps_plain_tables_in_a_plain_database(
     await close()
     assert sent[0] == "CREATE DATABASE IF NOT EXISTS ospreyflow"
     tables = [s for s in sent if s.lstrip().startswith("CREATE TABLE")]
-    assert len(tables) == 2
+    assert _names(tables) == TABLES
     assert all("ENGINE = MergeTree" in s and "Replicated" not in s for s in tables)
 
 

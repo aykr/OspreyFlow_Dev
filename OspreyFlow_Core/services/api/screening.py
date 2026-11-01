@@ -340,7 +340,7 @@ class ScreeningListStore:
                 "previous_version, added, changed, removed, rescreened, alerts, words) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
                 update.id, update.list_name, update.at, update.outcome, update.version,
-                update.previous_version, update.added, update.changed, update.removed,
+                update.previous_version, update.added, update.changed, update.delisted,
                 update.rescreened, update.alerts, update.words,
             )  # fmt: skip
             if update.outcome in ("refused", "failed"):
@@ -354,7 +354,7 @@ class ScreeningListStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT id, list_name, at, outcome, version, previous_version, added, changed, "
-                "removed, rescreened, alerts, words FROM screening_list_updates "
+                "removed AS delisted, rescreened, alerts, words FROM screening_list_updates "
                 "ORDER BY at DESC, id DESC LIMIT $1",
                 limit,
             )

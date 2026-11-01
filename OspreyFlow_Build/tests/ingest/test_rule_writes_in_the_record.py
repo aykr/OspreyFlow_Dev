@@ -67,7 +67,8 @@ class _Fake:
     def __init__(self) -> None:
         self.saved: list[Any] = []
 
-    async def save(self, alert: Any) -> None:
+    async def save(self, alert: Any, *, handlings: Any = None) -> None:
+        # `AlertStore.save`'s own signature: what the alert rests on (ADR-134 decision 3).
         self.saved.append(alert)
 
     async def record(self, **kwargs: Any) -> None:

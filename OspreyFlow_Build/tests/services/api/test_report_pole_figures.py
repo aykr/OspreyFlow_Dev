@@ -161,7 +161,8 @@ def spy(monkeypatch: pytest.MonkeyPatch) -> _Spy:
     async def _no_alerts(*args: object, **kwargs: object) -> list[object]:
         return []
 
-    monkeypatch.setattr(reports_module, "queue", _no_alerts)
+    # ADR-134 decision 2: the report reads every kind of alert through the one queue.
+    monkeypatch.setattr(reports_module, "monitoring_queue", _no_alerts)
     monkeypatch.setattr(reports_module, "_kyc_figures", spy.kyc)
     return spy
 

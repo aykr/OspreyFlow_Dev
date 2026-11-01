@@ -8,11 +8,18 @@
 import { useCallback, useEffect, useState } from "react";
 import type {
   ScreeningLists,
+  ScreeningListsOverview,
   ScreeningListStatus,
   ScreeningSubscriptionInput,
 } from "../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../design/primitives";
-import { listScreeningLists, refreshScreeningList, subscribeScreeningList, type ListsApi } from "./api";
+import {
+  listScreeningLists,
+  manageScreeningLists,
+  refreshScreeningList,
+  subscribeScreeningList,
+  type ListsApi,
+} from "./api";
 import { when } from "./names";
 
 type Source = ScreeningSubscriptionInput["source"];
@@ -42,15 +49,22 @@ export interface ListsPanelProps extends ListsApi {
 
 export function ListsPanel(props: ListsPanelProps) {
   const { apiBaseUrl, bearerToken, canManage } = props;
-  const [found, setFound] = useState<ScreeningLists | null>(null);
+  // The lists from either route; the refreshes from the administrator's alone (rule 7).
+  const [found, setFound] = useState<Pick<ScreeningListsOverview, "lists"> | null>(null);
+  const [refreshes, setRefreshes] = useState<ScreeningLists["updates"]>([]);
   const [problem, setProblem] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const reload = useCallback(() => {
-    listScreeningLists({ apiBaseUrl, bearerToken }, canManage)
-      .then(setFound)
-      .catch((e: Error) => setProblem(e.message));
+    const api = { apiBaseUrl, bearerToken };
+    const read: Promise<Pick<ScreeningListsOverview, "lists">> = canManage
+      ? manageScreeningLists(api).then((managed) => {
+          setRefreshes(managed.updates);
+          return managed;
+        })
+      : listScreeningLists(api);
+    read.then(setFound).catch((e: Error) => setProblem(e.message));
   }, [apiBaseUrl, bearerToken, canManage]);
   useEffect(reload, [reload]);
 
@@ -137,7 +151,7 @@ export function ListsPanel(props: ListsPanelProps) {
       </section>
       {canManage ? (
         <>
-          <Refreshes found={found} />
+          <Refreshes updates={refreshes} />
           <SubscribeForm
             {...props}
             onSubscribed={(listName) => {
@@ -155,8 +169,7 @@ export function ListsPanel(props: ListsPanelProps) {
   );
 }
 
-function Refreshes({ found }: { found: ScreeningLists | null }) {
-  const updates = found?.updates ?? [];
+function Refreshes({ updates }: { updates: ScreeningLists["updates"] }) {
   return (
     <section aria-label="Latest refreshes" style={{ display: "grid", gap: "var(--sp-8)" }}>
       <h3 className="value" style={{ margin: 0 }}>

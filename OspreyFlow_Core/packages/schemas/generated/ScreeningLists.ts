@@ -20,13 +20,16 @@ export type Version1 = string | null;
 export type PreviousVersion = string | null;
 export type Added = number;
 export type Changed = number;
-export type Removed = number;
+export type Delisted = number;
 export type Rescreened = number;
 export type Alerts = number;
 export type Words = string;
 export type Updates = ScreeningListUpdate[];
 export type CanManage = boolean;
 
+/**
+ * The Lists screen for whoever may load screening lists (`load_screening_lists`).
+ */
 export interface ScreeningLists {
   lists: Lists;
   updates: Updates;
@@ -63,7 +66,7 @@ export interface ScreeningListUpdate {
   previous_version?: PreviousVersion;
   added?: Added;
   changed?: Changed;
-  removed?: Removed;
+  delisted?: Delisted;
   rescreened?: Rescreened;
   alerts?: Alerts;
   words: Words;
