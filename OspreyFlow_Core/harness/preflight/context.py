@@ -141,6 +141,10 @@ class PreflightContext:
     #: one: nothing in the specification projects this yet, and the check says so rather than
     #: implying the number is derived.
     projected_staging_bytes: int = 20 * 1024**3
+    #: ADR-137: the host ports the deployment's own running containers publish, when an installed
+    #: deployment is applied again. The `ports` check does not bind-test them: the deployment
+    #: holding its own ports is not a reason to refuse its own apply.
+    own_ports: frozenset[int] = frozenset()
 
     def host_folder(self, value: str) -> Path:
         """`components.storage.ingest` or `tiles` on this machine, read the way Compose reads the

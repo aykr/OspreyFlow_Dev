@@ -17,6 +17,7 @@ by `tests/cli/test_models_verb.py`.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -108,22 +109,42 @@ def list_engines(models: Mapping[str, Any], env_file: Path) -> list[str]:
     return lines
 
 
-def _provider(models: Mapping[str, Any], name: str) -> dict[str, Any]:
+def read_wanted(product: Path) -> dict[str, Any]:
+    """The product's own `osprey.yaml`, as the admin has edited it, which may be ahead of what is
+    rendered (ADR-137)."""
+    candidate = product / "osprey.yaml"
+    if candidate.is_file():
+        loaded = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
+        if isinstance(loaded, dict):
+            return _models(loaded)
+    return {}
+
+
+def _provider(
+    models: Mapping[str, Any], name: str, wanted: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
     for provider in _providers(models):
         if provider.get("name") == name:
             return provider
+    if any(p.get("name") == name for p in _providers(wanted or {})):
+        # ADR-137: enabled in osprey.yaml, not yet rendered. `install` must not be run over a
+        # running deployment; `apply` renders it and takes its key.
+        raise CommandRefused(
+            f"{name} is enabled in osprey.yaml but not yet applied to this deployment. Run "
+            "ospreyflow apply: it renders the change, keeps every other setting and secret, and "
+            f"takes the key from OSPREY_MODEL_KEY_{name.upper()} or asks for it."
+        )
     enabled = ", ".join(str(p.get("name")) for p in _providers(models)) or "none"
     raise CommandRefused(
         f"{name} is not a provider this deployment enables (enabled: {enabled}). Enable it under "
-        "models.providers in osprey.yaml and run ospreyflow install again; the local engine has "
-        "no key."
+        "models.providers in osprey.yaml and run ospreyflow apply; the local engine has no key."
     )
 
 
 def _write(env_file: Path, variable: str, value: str | None) -> bool:
     """`variable`'s line set to `value` (appended where absent), or removed when `value` is None;
-    every other line as it was. The file is written in place, so its mode is kept. Whether
-    anything changed."""
+    every other line as it was. The file is left `600` (ADR-137 decision 2). Whether anything
+    changed."""
     lines = _env_lines(env_file)
     kept: list[str] = []
     found = False
@@ -138,9 +159,24 @@ def _write(env_file: Path, variable: str, value: str | None) -> bool:
     if value is not None and not found:
         kept.append(f"{variable}={value}")
     if kept == lines:
+        _private(env_file)
         return False
-    env_file.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    _write_private(env_file, "\n".join(kept) + "\n")
     return True
+
+
+def _private(env_file: Path) -> None:
+    if env_file.is_file():
+        env_file.chmod(0o600)
+
+
+def _write_private(env_file: Path, text: str) -> None:
+    """The secrets file, readable by its owner alone (ADR-137 decision 2), set before the new key is
+    written into it — as `harness.render.write_private` does; the command cannot import it."""
+    descriptor = os.open(env_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        os.fchmod(handle.fileno(), 0o600)
+        handle.write(text)
 
 
 def set_key(
@@ -149,11 +185,12 @@ def set_key(
     env_file: Path,
     environ: Mapping[str, str],
     ask_secret: Callable[[str], str],
+    wanted: Mapping[str, Any] | None = None,
 ) -> str:
     """Writes the provider's key into `env_file`, from `OSPREY_MODEL_KEY_<NAME>` in the terminal
     (or the single provider's `OSPREY_MODEL_PROVIDER_KEY`), else a hidden prompt. Returns the
     label."""
-    provider = _provider(models, name)
+    provider = _provider(models, name, wanted)
     variable = key_variable(models, name)
     terminal = f"OSPREY_MODEL_KEY_{name.upper()}"
     key = (environ.get(terminal) or environ.get(variable) or "").strip()
@@ -167,7 +204,9 @@ def set_key(
     return _label(provider)
 
 
-def remove_key(models: Mapping[str, Any], name: str, env_file: Path) -> tuple[str, bool]:
+def remove_key(
+    models: Mapping[str, Any], name: str, env_file: Path, wanted: Mapping[str, Any] | None = None
+) -> tuple[str, bool]:
     """Removes the provider's key line. Returns the label and whether there was one."""
-    provider = _provider(models, name)
+    provider = _provider(models, name, wanted)
     return _label(provider), _write(env_file, key_variable(models, name), None)

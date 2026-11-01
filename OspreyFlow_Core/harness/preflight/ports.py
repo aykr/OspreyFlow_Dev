@@ -66,9 +66,13 @@ def declared_ports(
             host_side, _, _container = text.rpartition(":")
             if not host_side:
                 continue
-            # An explicit bind address, `IP:HOST:CONTAINER`, leaves the IP on the front.
-            if host_side.count(":") and not host_side.startswith("${"):
-                host_side = host_side.rpartition(":")[2]
+            # An explicit bind address, `IP:HOST:CONTAINER`, leaves the IP on the front. It is cut
+            # at its own end, not the last colon: the host side after it may be `${VAR:-2480}`
+            # (found building ADR-137: ArcadeDB's port read as `2480}` and was never checked).
+            if host_side.startswith("["):  # `[::1]:HOST`
+                host_side = host_side.partition("]:")[2]
+            elif host_side.count(":") and not host_side.startswith("${"):
+                host_side = host_side.partition(":")[2]
             port = _host_port(host_side, environ)
             if port is not None:
                 found.append((service, port))
@@ -113,8 +117,16 @@ def check(context: PreflightContext) -> CheckResult:
     if not ports:
         return passed(NAME, detail=("the rendered compose file publishes no host ports",))
 
-    taken = [(service, port) for service, port in ports if not _is_bindable(port)]
-    detail = tuple(f"{service}: {port}" for service, port in ports)
+    # ADR-137: a port the deployment's own running container publishes is held by the deployment
+    # itself, which is about to be applied again; every other port is still bound for real.
+    own = context.own_ports
+    taken = [
+        (service, port) for service, port in ports if port not in own and not _is_bindable(port)
+    ]
+    detail = tuple(
+        f"{service}: {port}" + (" (held by this deployment)" if port in own else "")
+        for service, port in ports
+    )
     if not taken:
         return passed(NAME, detail=detail)
 
