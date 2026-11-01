@@ -64,6 +64,22 @@ description, as a fifth capability on the welcome page and as a part of About.
   - the owner's alerts route's docstring says "the case's datasets", but the store scopes it to the
     owner.
 
+## The decisions (accepted 1 November 2026)
+
+- **ADR-133 (monitoring rules):** sentences built from POLE, templates, preview, managed lists with
+  re-screening, one Monitoring place in the Glass, the Studio's "Checks on load" step, and
+  maker–checker. Accepted as written, in four stages, with these rulings:
+  - each stage is done only when the user guide and the Product Overview deck show it working;
+  - the hotlist audience is a deployment setting;
+  - stage (a) is built first.
+- **ADR-134 (alerts in reporting):** the `alert` pack item, the monitoring dashboard, and alert
+  trends. Accepted as written; built after ADR-133 stage (a).
+- **Build order:**
+  1. ADR-133 (a);
+  2. ADR-134;
+  3. ADR-133 (b), (c) and (d).
+  The demo use cases P1–P4 and A1–A4 land with the stage that makes each one possible.
+
 ## Stage 1 — map what is built
 
 For each candidate use case, mark it as one of: **built today**, **needs the reporting ADR**, or **a

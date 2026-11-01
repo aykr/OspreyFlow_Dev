@@ -20580,3 +20580,252 @@ sign-in card" cases; for 5, `GovukFooter.test.tsx`'s "credits OspreyFlow in word
 and no link" and `SignInScreen.test.tsx`'s "names OspreyFlow, with its mark and version, in the About
 section only" (it fails on any other mention on the page). `govukChrome.test.tsx` keeps the sign-in
 page's copy of the footer in step. `DESIGN.md` §11 states the width and where the identity goes.
+
+## ADR-133 — Monitoring: rules written as sentences, from templates, previewed before they run — ACCEPTED (design)
+
+Status: accepted 1 November 2026, the owner's rulings (below). Proposed the same day.
+
+**Owner's rulings, 1 November 2026:**
+
+1. Accepted as written, with all four stages.
+2. "I also need the documentation to show this works for the user guide and in the powerpoint decks
+   for the product overview." Each stage, as it lands, adds:
+   - its chapter or section to the user guide (new version, PDF);
+   - its slides to the Product Overview deck (a new revision beside the latest draft), with screens
+     captured from a synthetic case in both brands.
+   A stage is not done until both are.
+3. Hotlist audience (decision 5): "Can we make this configurable." Taken to mean: a deployment
+   setting, `monitoring.hotlist_audience` in `osprey.yaml`, which sets the default audience of a new
+   hotlist (`only_me` by default, or `team`) and whether its owner may change it
+   (`hotlist_audience_editable`, default true). An existing hotlist keeps `only_me` until its owner
+   changes it. Setting tests: the default applies to a new hotlist and to no existing one; with
+   editing off, the choice is refused in words. Appendix A of the administration guide documents
+   both settings.
+4. Build order: stage (a) first, then ADR-134, then stages (b) to (d).
+
+The owner's request: "the ingest studio and / or glass to provide me with the ability to define rules based on
+POLE for all use cases and the ability to declare AML/KYC specific rules e.g., OFAC monitoring, event
+monitoring of suspicious transactions … in the most user friendly manner." The owner made event
+monitoring and alerting a core feature the same day (ADR-115 Amendment 4).
+`process/ALERTING_MONITORING_PLAN.md` places this work.
+
+**Context: what exists.** Four mechanisms, met in four places:
+- hotlists: one owner's exact identifier (ADR-038, ADR-039, ADR-130);
+- monitors: one owner's saved pattern, run against new data (ADR-036, ADR-037);
+- typology rules: per case, a closed list of seven typologies with parameters. Six are fixed:
+  `structuring`, `rapid_movement`, `circular_flow`, `kyc_screening`, `shared_attributes`,
+  `document_verification`. The seventh, `pattern`, is a sub-graph drawn in the query builder and
+  deployed as a rule (ADR-109, phase D). Each runs before or after commit;
+- screening lists: deployment-wide sanctions, PEP and adverse-media registers, held outside the graph
+  and loaded by an operator's script (ADR-109 phase F).
+
+Every alert is a row of one `alerts` table, told apart by `rule_id`. Only typology alerts reach the
+case's alert queue.
+
+What is missing:
+- one place to see and manage all of these;
+- a way to state a rule about any POLE type without drawing it;
+- frequency and amount conditions ("3 or more times in 7 days");
+- running a rule on a schedule;
+- re-screening when a list changes;
+- seeing what a rule would raise before deploying it;
+- severity, team and assignment;
+- a second person's approval for compliance rules.
+
+**Decision (proposed).**
+
+1. **A rule is a sentence with blanks, never an expression.** Every blank is a closed choice built
+   from the deployment's ontology (`01_DOMAIN_MODEL.md`), so rule 8 holds and a rule cannot fail to
+   parse.
+   - **Subject:** a POLE type (Person, Object, Location, Event, and their declared subtypes).
+   - **Conditions:** on the subject's declared properties: equals, one of, above, below, within a
+     drawn area, within a time window.
+   - **Relationship** (optional): linked by a declared link type to something; within N steps of;
+     at a location in an area; on a hotlist; on a screening list.
+   - **Frequency** (optional): N or more times in D days; total of a declared amount over X in D days;
+     first time ever.
+   - **Then:** severity (low, medium or high); the team the alert goes to; and, before commit, whether
+     a hit loads with its alert or holds its rows (ADR-109 ruling 1, fail closed).
+   - **Runs:** as data loads (before or after commit), or on a schedule (daily or weekly).
+   - **Scope:** just me (today's monitors), this case (today's typology rules), or the whole
+     deployment (compliance; administrators only).
+
+   A sentence compiles to what exists: a saved pattern (ADR-109 phase D) plus typed parameters,
+   validated by Pydantic models in `packages/schemas` (generated TypeScript; drift fails the build).
+   The drawn pattern stays as the sentence's "advanced" view, and the two stay one rule. A frequency
+   or amount condition is a new typed parameter, evaluated in the analytics port as the rule's own
+   principal (rule 3).
+2. **Rules start from templates.** A library of sentences with sensible defaults, each naming the
+   typology it serves:
+   - **Any case (POLE):**
+     - contact with a hotlisted number or person;
+     - two watched people at one location within N hours;
+     - a new link between two watched people;
+     - an object (phone, vehicle) seen in a drawn area;
+     - events at a location above their usual weekly rate.
+   - **AML transaction monitoring:**
+     - structuring, rapid movement and circular flow (existing typologies, shown as templates);
+     - and, new: a high-risk jurisdiction, large cash, a dormant account reactivated, a sudden rise in
+       velocity.
+   - **KYC:**
+     - screening on onboarding, and of owners at or over a threshold (existing);
+     - shared attributes and document verification (existing).
+   - **Sanctions and PEP:** screening against a list (decision 4).
+   The existing seven typologies remain and appear as templates; none is removed.
+3. **A rule is previewed before it is deployed.** "Preview on the last 90 days" runs the rule as its
+   author over stored data and says how many alerts it would have raised, showing up to five. This is
+   the tuning step: a threshold is set against evidence. A preview raises nothing and writes nothing.
+   Over the working-set limit it is refused with the typed `limit_exceeded` error (rule 2), never
+   counted in part.
+4. **A screening list is a managed source.** A list (OFAC SDN; HM Treasury OFSI's consolidated list;
+   UN; EU; OpenSanctions where licensed) is subscribed to through a connector, a Knowledge Adapter with
+   golden test files (rule 8), on a schedule.
+   - The Lists screen shows each list's version, number of entries, last update and failures, in
+     words.
+   - **A list update re-screens every customer in the deployment against the changed entries only**,
+     and raises alerts for new matches.
+   - A match is `inferred` until a person confirms it (rule 5).
+   - Real lists enter only a customer's deployment, never this repository or CI (rule 9); demos and
+     tests use `screening_list_synthetic.yaml`.
+   - Each list's licence is entered in `00_ARCHITECTURE.md` §7 before its connector ships: OFAC is US
+     Government public domain; OFSI is under the Open Government Licence; OpenSanctions is CC-BY-NC,
+     non-commercial unless licensed.
+5. **The Glass has one Monitoring place.** It holds:
+   - one alert queue for every kind of alert (typology, hotlist, monitor), with severity, team,
+     assignee and age;
+   - rules and templates;
+   - hotlists and watches;
+   - lists;
+   - the monitoring dashboard (ADR-134).
+
+   **To decide:** a hotlist alert today belongs to its owner alone (ADR-038). In the shared queue it
+   would be visible to the owner's team. Proposed: a hotlist chooses "only me" or "my team", with
+   "only me" the default, so no existing hotlist's audience changes.
+6. **The Ingest Studio has a "Checks on load" step** in each pipeline. The data engineer chooses which
+   load-time rules (case or deployment scope) apply to this source, and what a hit does there.
+   **Verify** shows the alerts a sample would raise, beside the rejection report, before anything is
+   published. Engineers attach rules; they do not author analyst rules.
+7. **Alert handling.**
+   - Every alert explains itself: the rule's sentence, the entity matched and its evidence (ADR-130's
+     shape, extended to every kind).
+   - Closing needs a reason: a closed list plus words.
+   - Suppressing a known entity for a rule is a person's decision, with an expiry, recorded. Nothing
+     suppresses itself, and no confidence threshold closes or promotes an alert (rule 5).
+   - **Maker–checker:** deploying, changing or retiring a deployment-scope rule, and closing a
+     high-severity alert, needs a second person with the right. Rules keep their versions, and each
+     change records who made it.
+8. **Delivered in stages:**
+   - (a) one queue for every alert, severity, team and assignment, and the existing typologies as
+     templates;
+   - (b) the sentence builder, frequency conditions and preview;
+   - (c) list subscriptions, re-screening on update, and the new AML templates;
+   - (d) the scheduled trigger, the Studio step, and maker–checker.
+
+**Tests that would fail if it were broken** (rule 12, each shown red first):
+- **The sentence:**
+  - a sentence naming a property or link type the ontology does not declare is refused at
+    validation;
+  - a sentence and its drawn pattern compile to the same rule.
+- **Access control:**
+  - a rule's frequency count leaves out a node its author may not see;
+  - a preview run by an analyst returns no count or example that would reveal a filtered node
+    (rules 3 and 4).
+- **Preview:**
+  - a preview over the limit returns `limit_exceeded`;
+  - a preview writes no alert.
+- **Re-screening:**
+  - a list update adding one entry raises exactly one alert, for the one matching customer, and none
+    for an unchanged entry;
+  - the match is written `inferred`.
+- **The queue:**
+  - it shows a typology, a hotlist and a monitor alert to a team member;
+  - it shows an "only me" hotlist alert to its owner alone.
+- **Maker–checker:**
+  - a deployment-scope rule deployed by one person is pending until a second approves it;
+  - the author cannot approve their own rule.
+- **Closing:** closing without a reason is refused.
+
+**Cost.** This is the largest part of the alerting work: a new place in the Glass, a Studio step,
+new port operations (frequency, preview), list connectors, and a scheduler path. Stage (a) alone
+makes every alert visible in one queue.
+
+## ADR-134 — Alerts in reporting: a pack item, a monitoring dashboard, and alert trends — ACCEPTED (design)
+
+Status: accepted 1 November 2026, as written (the owner's ruling). It is built after ADR-133 stage (a),
+whose severity, team and hotlist audience it uses. The user guide and the Product Overview deck carry
+it, as ADR-133 ruling 2 requires.
+
+The owner's request: "event monitoring and alerting needs to be highlighted as key features, this means that the
+reporting screens should allow for this as well", with all three of: alerts in report packs, a
+monitoring dashboard, alert trends.
+
+**Context: what exists.**
+- **Report packs** hold four item kinds: trend, assessment, entity, note
+  (`packages/schemas/packs.py`, ADR-113 decision 3). An item is withheld unless the reader may view
+  every handling it rests on (ADR-113 Amendment 1), shown as a yes or no (Amendment 5).
+- **The reporting feed** (ADR-111) already carries typology alerts raised per week by typology, open
+  alerts by age, and outcomes, per case, counted as the reader. Hotlist and monitor alerts are in no
+  figure.
+- **Trends** count analytics events only (ADR-113 decisions 1–2). Alerts are rows in Postgres, not
+  events.
+
+**Decision (proposed).**
+
+1. **A fifth pack item kind, `alert`.** It carries:
+   - the alert's own explanation: the rule's sentence or typology, the hotlist entry where there is
+     one, and the window;
+   - the entity it matched;
+   - its evidence;
+   - its outcome and reason, if closed.
+
+   It rests on the handlings of every node, link and source row it cites, and is withheld, as a yes
+   or no, from a reader who may not view all of them. Export checks it item by item, as every item is
+   checked (ADR-045/047). An open alert in a pack says it is open. A match still `inferred` says so
+   (rule 5).
+2. **A monitoring dashboard.** New feed sections beside `raised`, `open_by_age` and `outcome`:
+   - alerts raised per week by rule (each typology rule by name, hotlists together, monitors
+     together);
+   - closed per week by outcome;
+   - time to close;
+   - hotlist matches per week.
+
+   Counted as the reader, per case, and through the same sync and mart (ADR-111). A hotlist kept
+   "only me" (ADR-133 decision 5) is never counted beyond its owner. The reference dashboard ships as
+   a Superset board, as ADR-111 decision 9 has it.
+3. **Alert trends.** The trend builder gains a second source, alerts, beside events:
+   - **count by:** week or month;
+   - **group by:** rule, typology, severity or outcome;
+   - **filter by:** up to five equalities, as today.
+
+   It is read through a new analytics-port operation over the alert store, filtered in the query as
+   the reader (rule 3). A trend over alerts goes into a pack as any trend does.
+4. **Read paths that filter after retrieval are settled here, not copied.** The pack and queue
+   readers today read rows, then drop what the reader may not see, in the Conduit
+   (`services/api/packs.py` `item_visible`; `services/api/alert_queue.py`). ADR-111 and ADR-113
+   describe these as all-or-nothing checks on an already-filtered read. Proposed: the new `alert` item
+   and alert-trend reads are filtered in the store query as the reader. The existing two are reviewed
+   against rule 3 in the same change, and moved into the query if the review finds a leak (a count, an
+   order, or a timing that reveals a filtered row).
+5. **Corrections found while reading:**
+   - ADR-113 decision 4 still says "how many" withheld, where Amendment 5 made it yes or no; the
+     decision text is corrected;
+   - the owner's alerts route's docstring (`services/api/app.py`) says "the case's datasets" where the
+     store scopes it to the owner; the docstring is corrected.
+
+**Tests that would fail if it were broken** (rule 12, each shown red first):
+- **The pack item:**
+  - an `alert` item citing a node the reader may not see is withheld, and the pack says only that
+    something is withheld;
+  - an exporter who may not see the item's evidence is refused, and nothing is recorded.
+- **The dashboard:**
+  - a hidden alert changes no dashboard figure (as `test_a_hidden_alert_changes_no_figure` does for
+    typology alerts today);
+  - an "only me" hotlist's matches are in its owner's figures and no one else's.
+- **Alert trends:**
+  - an alert trend counted as a reader leaves out alerts on nodes they may not see;
+  - its periods and series are bounded as event trends are (104 periods, 12 series).
+- **The open alert:** an open alert in a pack says it is open; an inferred match says inferred.
+
+**Cost.** A new item kind through packs, export and the Glass's pack editor; three feed sections and
+a board; a new analytics-port operation, with conformance cases written first (rule 1). It depends
+on ADR-133 stage (a) only for severity and the "only me" choice; the rest can go first.
