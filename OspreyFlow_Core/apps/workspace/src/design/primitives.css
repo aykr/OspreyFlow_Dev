@@ -792,3 +792,30 @@
 }
 /* The skip link's target is focused by script, not by the viewer, and is not a control. */
 .main-content:focus { outline: none; }
+
+/* The Matrix view (02_GLASS_FRONTEND.md §6; GDS remediation plan A1): the working set as two tables.
+   A selected row is the raised surface with a 3px bar at its start, in primary text — never brass,
+   and never colour alone (the bar is a shape; the row says aria-selected). A dimmed row keeps full
+   contrast and says "Dimmed by filter" in words. */
+.matrix-view { position: absolute; inset: 0; overflow: auto; padding: var(--sp-16) var(--sp-24); background: var(--surface-app); }
+.matrix-view__heading { margin: 0 0 var(--sp-4); font-size: var(--fs-16); }
+.matrix-view__subheading { margin: var(--sp-16) 0 var(--sp-8); font-size: var(--fs-14); }
+.matrix-view__intro { margin: 0; max-width: 72ch; font-size: var(--fs-13); color: var(--text-secondary); }
+.matrix-grid caption { caption-side: top; text-align: left; padding: 0 0 var(--sp-8); font-size: var(--fs-12); color: var(--text-secondary); }
+.matrix-grid th[scope="row"] { font-size: var(--fs-13); font-weight: 400; color: var(--text-primary); }
+.matrix-grid td, .matrix-grid th[scope="row"] { cursor: default; vertical-align: middle; }
+.matrix-grid .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.matrix-grid tr[aria-selected="true"] > td, .matrix-grid tr[aria-selected="true"] > th { background: var(--surface-raised); }
+.matrix-grid tr[aria-selected="true"] > :first-child { box-shadow: inset 3px 0 0 var(--text-primary); }
+.matrix-grid__sort {
+  display: inline-flex; align-items: center; gap: var(--sp-4); min-width: 24px; min-height: 24px; padding: 0;
+  font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
+}
+.matrix-grid__sort-mark { fill: currentColor; }
+.matrix-grid__action { padding: var(--sp-2) var(--sp-8); min-height: 24px; min-width: 24px; }
+.matrix-grid__tag {
+  margin-left: var(--sp-8); padding: 0 var(--sp-4); font-size: var(--fs-11); color: var(--text-secondary);
+  border: 1px dashed var(--border); border-radius: var(--r-1); white-space: nowrap;
+}
+.matrix-grid .marking-badge { margin-left: 0; }
+.matrix-view__pager { display: flex; align-items: center; gap: var(--sp-8); margin: var(--sp-8) 0 var(--sp-16); font-size: var(--fs-12); color: var(--text-secondary); }

@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.10** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.11** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.11 | 2026-11-01 | §5.11: the Matrix, the graph as two tables a screen reader can walk, with its keys in §12. |
 | 1.10 | 2026-11-01 | §6: an engine marked "under contract" or "no contract", and one the case's data may not reach shown not available, with the reason. |
 | 1.9 | 2026-11-01 | §6: choosing the model engine in Ask the case and Ask to search, and what an answer's "Answered by" line means. |
 | 1.8 | 2026-11-01 | The opening says what OspreyFlow is for: intelligence mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. |
@@ -131,9 +132,9 @@ one dataset; you may see it through any one the case reads, but what it says of 
 
 | Part | What it is |
 | --- | --- |
-| **Top bar** | The case menu, search, the view switch (Graph, Map, Reports), Export, and your account |
+| **Top bar** | The case menu, search, the view switch (Graph, Map, Matrix, Reports), Export, and your account |
 | **Left rail** | The places: Explore, Alerts, Ownership, Watches, Questions, History, Dashboards, Help — those your rights allow |
-| **Canvas** | The graph, the map or the reports |
+| **Canvas** | The graph, the map, the Matrix or the reports |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
 | **Timeline** | Folded at the bottom until opened |
 | **Status bar** | How many nodes and links are drawn, how many dimmed by a filter, and how many hidden by handling |
@@ -387,6 +388,34 @@ nothing in the case. A proposal is a suggestion, not a finding.
   type are not forced to be different, so a count can include a node matched twice.
 - Asking needs the right to ask the model, and Viewer on the case.
 
+### 5.11 The Matrix
+
+**Matrix** in the view switch shows the same working set as the graph, as two tables: **Entities**
+and **Links**. It is the way to work through the graph with a screen reader, or whenever a list reads
+better than a picture.
+
+- **Entities** has a row for each node on the graph: its name, as the graph labels it; its type; its
+  own marking; its provenance, in words, so a node a model proposed reads **Inferred** until someone
+  confirms it; and how many links it has in view. **Links** has a row for each link: its type, the two
+  ends, its marking and its provenance.
+- The tables hold only what the graph holds. What you are not cleared to see is not in them, and they
+  give no count of it. A node a filter dims stays in the table and says **Dimmed by filter**.
+- Choose a column's heading to sort by it; choose it again to reverse. Each table's caption says how it
+  is sorted and which rows are shown. A long table is shown a hundred rows at a time, with **Previous**
+  and **Next**, and the caption says so: "Rows 101 to 200 of 12,481". Nothing is left out without
+  saying so.
+- The selection is the graph's. Select a row and the Inspector shows that node; go back to **Graph** and
+  it is selected there. What you selected on the graph is selected in the Matrix, which opens on the
+  page that holds it.
+- **Expand** on a row opens the graph and expands that node there, with the same preview and limits as
+  expanding it on the graph. **Show** opens the graph with that node selected and centred.
+- The Matrix lists the whole working set. Groups folded on the graph, links hidden from the view and
+  link types left out from the legend are shown in full.
+
+From the keyboard, each table is one Tab stop. The arrow keys move between cells, Home and End to the
+start and end of a row, Page Down and Page Up between pages. Enter selects the row's node; Space adds
+it to the selection or takes it out.
+
 ## 6. Questions to the model
 
 ![Questions: ask about the documents in this case](images/user/12-questions.png)
@@ -567,6 +596,10 @@ recorded. Report packs export to PDF from the Packs and Published tabs.
 | Canvas | `F` | Fit the graph to the view |
 | Canvas | Shift+Arrows | Move the selection; with Alt, further |
 | Canvas | Delete | Hide the selected link, or remove the selection from view |
+| Matrix | Arrows, Home, End | Move between cells; with Ctrl, Home and End go to the first and last cell |
+| Matrix | Page Down, Page Up | The next or previous page of rows |
+| Matrix | Enter | Select the row's node or link |
+| Matrix | Space | Add the row's node to the selection, or take it out |
 | Anywhere | Esc | Clear the selection; close a menu, drawer or reader |
 | Forms | Ctrl/Cmd+Enter | Confirm a reason, save a change or a note, ask a question |
 | Side panels | Alt+Up, Alt+Down | Move a panel up or down the column |

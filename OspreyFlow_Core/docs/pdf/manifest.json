@@ -35,7 +35,7 @@
     "version": "1.7"
   },
   "user-guide.md": {
-    "body": "a55cda02b26961706c873ad35e75d2fdf9c517416a49fdb8c269cedf84800069",
+    "body": "dabb7b383b6e9a0945e111597bc50130646c3ebd9eae1fd2764928d9e571ea96",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -58,8 +58,8 @@
       "images/user/19-export.png": "b28c8956e0c450791b4e7a83577c1085c2b5fdfe6af7db4eff20f4491e5abb54",
       "images/user/20-metrics.png": "bb0659af72c65773c860d4d261299171bc0a4a997318af3fec7ae326ee6bcdbc"
     },
-    "pdf": "170273c89cf54ff21fc4ca7f65dd9660a60785c0b2e94667c76e6f2868708916",
-    "source": "f60f1b8da3407b18dc3092ab1a72bf3d0a105a8805d7245545f0f47ae0fef04e",
-    "version": "1.10"
+    "pdf": "f7ffe8af765e4a66bb721dec145091dd175d8f8826772c6a9d541928716aa856",
+    "source": "448e30ffcc969ce33b7108133023d47b779d207ad344f8c1ee19c427498272e0",
+    "version": "1.11"
   }
 }

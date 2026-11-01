@@ -33,6 +33,8 @@ const HARNESS_ONLY: Record<string, string[]> = {
 // found their text at 4.25:1 there, which the default (an administrator, nothing gated) never drew.
 const EXTRA_STATES: Record<string, string[]> = {
   "start-harness.html": ["rights=investigate"],
+  // The Matrix view (GDS remediation plan A1) with rows selected, and long enough to page.
+  "matrix-harness.html": ["select=p2,p4", "many=1"],
 };
 
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();

@@ -11,6 +11,7 @@ const HARNESSES = [
   "/keyboard/metrics-panel-harness.html",
   "/keyboard/query-builder-harness.html",
   "/keyboard/timeline-playback-harness.html",
+  "/keyboard/matrix-harness.html",
 ];
 
 for (const brand of ["ospreyflow", "govuk"] as const) {

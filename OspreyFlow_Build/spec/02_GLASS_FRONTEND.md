@@ -1411,7 +1411,30 @@ Not negotiable and cheaper to build in than to retrofit.
   `apps/workspace/keyboard/keyboard.spec.ts`'s own "Ctrl+Shift+Arrow reaches a node arrow-walk
   cannot" case, over a deliberately disconnected fixture node.
 - The canvas exposes an accessible alternative view — the Matrix view is not a novelty, it is
-  the screen-reader-navigable rendering of the same data.
+  the screen-reader-navigable rendering of the same data. **What it is (built 1 November 2026, GDS
+  remediation plan A1):** *Matrix* in the view switch beside *Graph* and *Map*, open to anyone who
+  may investigate. Two HTML tables over the working set's own graph — no request of its own, so
+  nothing the reader may not see can reach it (rule 3) and it carries no count but the rows it shows
+  (rule 7): *Entities* (Name as the row header, as the canvas names the node; Type; its own Marking,
+  as the Inspector's badge; Provenance in words, so an inferred node reads "Inferred" (rule 5); Links
+  in view; *Expand*; *Show* on the graph) and *Links* (the type's label as the row header; From; To;
+  Marking; Provenance). Each has a caption naming it, how it is sorted and which rows are shown;
+  every column but the two actions sorts, said by `aria-sort`. A node the cross-filter dims stays a
+  row and says "Dimmed by filter" (§2 rule 2). Each table is an ARIA grid: one Tab stop; the arrow
+  keys between cells; Home, End, and with Ctrl the corners; Page Down and Page Up turn the page;
+  Enter selects the row (as a click does on the canvas), Space adds it to the selection or takes it
+  out (as on the canvas). A view longer than a hundred rows is paged, never cut short, and the
+  caption says "Rows 101 to 200 of 12,481" (rule 2); a page, not a virtualised list, so every row
+  drawn is in the page for a screen reader. The selection is the one the canvas and the Inspector
+  use: the canvas opens with what was selected in the Matrix (or before the Map was opened), and the
+  Matrix opens on the page holding what was selected on the canvas. *Expand* and *Show* open the
+  Graph and are done there by the canvas — Expand through its own preview and the working set's cap,
+  never a second expansion path. Opening it over 50,000 nodes and 250,000 links stays inside §5's
+  2.5 s first frame. Proven by `apps/workspace/keyboard/matrix.spec.ts` (rule 13),
+  `src/matrix/MatrixView.test.tsx`, `src/App.matrix.test.tsx`, `src/matrix/MatrixView.budget.test.tsx`
+  and `a11y/every-harness.spec.ts`'s scans of `keyboard/matrix-harness.html`. What the canvas alone
+  holds — a folded group, a link hidden from the view, a type left out from the legend, the
+  resolution clusters drawn as one — the Matrix does not reflect: it lists the working set.
 - Focus is the brand's focus ring, everywhere, never suppressed (ADR-132): under the OspreyFlow
   brand a 2px brass outline at 2px offset; under the GOV.UK brand a 3px `#ffdd00` outline with a 2px
   `#0b0c0c` inner shadow. Both read the `--focus`, `--focus-width` and `--focus-offset` tokens.
