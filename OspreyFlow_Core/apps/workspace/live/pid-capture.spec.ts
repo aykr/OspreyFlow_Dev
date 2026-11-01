@@ -1,41 +1,72 @@
 // The Prison Intelligence demo's screen captures (Brief 3 Part C), against the deployed Glass and
 // the loaded synthetic PID case. Every shot is a function of a named case state that this file
 // puts there itself; nothing is mocked and no image is edited. See `pid-capture.config.ts` for how
-// to run it. Each PNG is named exactly its capture id and written to the demo's `screens/` folder.
+// to run it, and `CAPTURE_RUNBOOK_v4.md` beside the demo script for the order and the deployment
+// state each shot needs. Each PNG is named exactly its capture id and written to the demo's
+// `screens/` folder, or to `OSPREY_PID_CAPTURE_SCREENS` when it is set (the second brand's shots).
+// The shared helpers are in `capture-kit.ts`; never import from this file (it would run it).
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const CORE = join(HERE, "../../..");
-const SCREENS = join(CORE, "../OspreyFlow_presentations/prison_intelligence_demo/screens");
+import {
+  CORE,
+  PRESENTATIONS,
+  closeOpenedAlert,
+  dismissWelcome,
+  lightTheme,
+  monitoringTab,
+  openCaseNamed,
+  openQueuedAlert,
+  rail,
+  reportsTab,
+  scrollAllToTop,
+  shotInto,
+  signInAs,
+  type Persona,
+} from "./capture-kit";
+
+const SCREENS =
+  process.env.OSPREY_PID_CAPTURE_SCREENS ?? join(PRESENTATIONS, "prison_intelligence_demo/screens");
 const ENV_FILE =
   process.env.OSPREY_PID_CAPTURE_ENV ?? join(CORE, "deploy/generated/local-lite/deployment.env");
 
 export const CASE_NAME = "Prison Intelligence Dataset (synthetic demo)";
 
-/** The coordinator's number, as the plan writes it (`07`… national form) and as it is stored
- * (`+44`…), read from the plan itself: Brief 1's J2 check refuses any file of the repository that
- * writes it, so that a search for it finds the PID's data and nothing else. */
-function coordinatorNumber(): { national: string; international: string } {
-  const out = execFileSync(
+/** A value of the demo plan or its monitoring batches, read from the generator itself (Python), so
+ * no number is written in this file: Brief 1's J2 check refuses any file of the repository that
+ * writes the coordinator's number, so that a search for it finds the PID's data and nothing else. */
+function fromPlan(expression: string): string[] {
+  return execFileSync(
     join(CORE, ".venv/bin/python"),
     [
       "-c",
-      "from demo_fixtures import pid_plan; e = pid_plan.build_plan('demo').entity('number:coordinator');" +
-        " print(e.properties['value_raw']); print(e.properties['value_normalised'])",
+      "from demo_fixtures import pid_plan, pid_monitoring; plan = pid_plan.build_plan('demo')\n" +
+        `for line in (${expression}): print(line)`,
     ],
     { cwd: CORE, env: { ...process.env, PYTHONPATH: ".:packages" } },
   )
     .toString()
     .trim()
     .split("\n");
-  const [national, international] = out;
+}
+
+/** The coordinator's number, as the plan writes it (`07`… national form) and as it is stored
+ * (`+44`…). */
+function coordinatorNumber(): { national: string; international: string } {
+  const e = "plan.entity('number:coordinator').properties";
+  const [national, international] = fromPlan(`${e}['value_raw'], ${e}['value_normalised']`);
   if (!national || !international) throw new Error("the plan gave no coordinator's number");
   return { national, international };
+}
+
+/** The number on the seized handset that the PIN first contacts reach (S1's subject), stored form. */
+function unownedNumber(): string {
+  const [number] = fromPlan("[pid_monitoring.EXPECTED_ALERTS[2].number]");
+  if (!number) throw new Error("the monitoring batches gave no rule-alert number");
+  return number;
 }
 
 test.skip(
@@ -43,77 +74,22 @@ test.skip(
   "captures the owner's deployment; opt in with OSPREY_PID_CAPTURE=1",
 );
 
-type Persona = "analyst" | "engineer" | "viewer" | "admin";
-
-const ACCOUNTS: Record<Persona, { username: string; secret: string }> = {
-  analyst: { username: "osprey-demo-analyst", secret: "OSPREY_DEMO_ANALYST_PASSWORD" },
-  engineer: { username: "osprey-demo-engineer", secret: "OSPREY_DEMO_ENGINEER_PASSWORD" },
-  viewer: { username: "osprey-demo-report-viewer", secret: "OSPREY_DEMO_REPORT_VIEWER_PASSWORD" },
-  admin: { username: "osprey-demo-admin", secret: "OSPREY_DEMO_ADMIN_PASSWORD" },
-};
-
-/** The persona's password, read from the deployment's own file and never printed or logged. */
-function passwordOf(persona: Persona): string {
-  const name = ACCOUNTS[persona].secret;
-  for (const line of readFileSync(ENV_FILE, "utf-8").split("\n")) {
-    if (line.startsWith(`${name}=`)) return line.slice(name.length + 1).replace(/^"|"$/g, "");
-  }
-  throw new Error(`${name} is not in the deployment's env file`);
-}
-
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    try {
-      localStorage.setItem("ospreyflow.theme", "light");
-    } catch {
-      /* storage may be blocked; the attribute below still decides this page */
-    }
-    document.documentElement.setAttribute("data-theme", "light");
-  });
+  await lightTheme(page);
 });
 
-/** Through the deployment's own sign-in page, as a person would. Tokens live in memory only, so
- * a shot never reloads the page after this. */
+/** Signs in as the persona through the deployment's own sign-in page. */
 export async function signIn(page: Page, persona: Persona): Promise<void> {
-  await page.goto("/");
-  const glass = new URL(page.url()).hostname;
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.locator("#username").fill(ACCOUNTS[persona].username);
-  await page.locator("#password").fill(passwordOf(persona));
-  await page.locator("#kc-login").click();
-  // Back on the Glass's own address, once it has taken the code out of the address bar.
-  await page.waitForURL((url) => url.hostname === glass && !url.searchParams.has("code"));
+  await signInAs(page, ENV_FILE, persona);
 }
 
-/** Opens the PID case by its name in the case switcher, or from the case picker on first entry.
- * On a deployment holding several cases, sign-in lands on Home, whose recent list need not name
- * this one: Open Glass is taken first, then the picker or the switcher. */
+/** Opens the PID case (or another by name). */
 export async function openCase(page: Page, name = CASE_NAME): Promise<void> {
-  const picker = page.getByRole("button", { name, exact: true });
-  const switcher = page.getByRole("button", { name: /^Case:/ });
-  const openGlass = page.getByRole("button", { name: /^Open Glass/ });
-  await expect(picker.or(switcher).or(openGlass).first()).toBeVisible();
-  if (!(await picker.first().isVisible()) && (await openGlass.isVisible())) await openGlass.click();
-  await expect(picker.or(switcher).first()).toBeVisible();
-  if (!(await picker.first().isVisible())) await switcher.click();
-  await page.getByRole("button", { name, exact: true }).first().click();
-  await expect(page.getByRole("button", { name: /^Case:/ })).toContainText(name);
+  await openCaseNamed(page, name);
 }
 
 export async function shot(page: Page, id: string): Promise<void> {
-  mkdirSync(SCREENS, { recursive: true });
-  await page.screenshot({ path: join(SCREENS, `${id}.png`) });
-}
-
-
-/** Closes the welcome panel when it is open, so it does not sit over the canvas in a shot. */
-export async function dismissWelcome(page: Page): Promise<void> {
-  const welcome = page.getByRole("dialog", { name: "Welcome back" });
-  if (await welcome.isVisible().catch(() => false)) {
-    await page.keyboard.press("Escape");
-  }
-  const close = page.getByRole("button", { name: /close/i }).filter({ hasText: "×" });
-  if (await close.first().isVisible().catch(() => false)) await close.first().click();
+  await shotInto(page, SCREENS, id);
 }
 
 /** The search box: types `text` and returns the type-ahead's options. */
@@ -167,9 +143,6 @@ export async function freshCase(page: Page, persona: Persona = "analyst"): Promi
   await dismissWelcome(page);
   await clearCanvas(page);
 }
-
-export const rail = (page: Page, name: string) =>
-  page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name });
 
 /** Explore, Most connected, the node's Add…, then "With all N links…". */
 export async function addWithAllLinks(page: Page, label: string): Promise<void> {
@@ -487,13 +460,6 @@ test("CAP-A1-J9-a", async ({ page }) => {
   await shot(page, "CAP-A1-J9-a");
 });
 
-/** The Reports view on one of its tabs. */
-export async function reportsTab(page: Page, tab: string): Promise<void> {
-  await page.getByRole("button", { name: "Reports", exact: true }).click();
-  await page.getByRole("tab", { name: tab, exact: true }).click();
-  await page.waitForTimeout(4000);
-}
-
 test("CAP-A1-J9-b", async ({ page }) => {
   await freshCase(page);
   await reportsTab(page, "Data feeds");
@@ -534,17 +500,6 @@ export async function throwOverTrend(page: Page): Promise<void> {
   await page.getByRole("button", { name: /^Preview/ }).click();
   await page.waitForTimeout(5000);
   await scrollAllToTop(page);
-}
-
-/** Puts every scrolled pane back at its top, so a shot starts at the top of each. */
-export async function scrollAllToTop(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    for (const el of Array.from(document.querySelectorAll<HTMLElement>("*"))) {
-      if (el.scrollTop > 0) el.scrollTop = 0;
-    }
-    window.scrollTo(0, 0);
-  });
-  await page.waitForTimeout(500);
 }
 
 test("CAP-A2-C10-b", async ({ page }) => {
@@ -716,9 +671,56 @@ test("CAP-A2-C8-b", async ({ page }) => {
   await shot(page, "CAP-A2-C8-b");
 });
 
+// --- Chapter 9: a hotlist, a rule and three alerts (script v4; ADR-127 Amendment 41) -----------
+// Run in this order, after `--release-batch-2` (which lists all three chapter-9 files): 9a, 9b, C9,
+// M4-a, 9c, C9Q-a, 9d, C9S, 9e, C9Q-b. Each "chapter …" test changes the deployment's state as the
+// presenter would; each CAP- test only reads and shoots, except where its comment says otherwise.
+
+/** The rule P1 deploys (`pid_monitoring.P1_RULE_NAME`). */
+const P1_RULE = "Calls to a number on a seized handset";
+
+/** The incoming folder `pid_files.write_files` writes the chapter-9 files to, as the Conduit sees
+ * it: the demo loads them, the seed does not. */
+const INCOMING = "/var/lib/osprey/ingest/uploaded/prison-intelligence/incoming";
+
+/** Runs a published pipeline over one of the chapter-9 files from its Publish screen, as the data
+ * engineer, and says what its runs list reads afterwards. */
+async function loadIncoming(page: Page, open: RegExp, file: string): Promise<void> {
+  await studio(page);
+  await page.getByRole("button", { name: open }).click();
+  const run = page.getByRole("button", { name: "Run now" });
+  await run.waitFor();
+  await page.getByLabel(/^Source file/).fill(`${INCOMING}/${file}`);
+  await run.click();
+  const runs = page.getByRole("list", { name: "Runs of this recipe" });
+  await expect(runs).toContainText(/Succeeded|Failed|refused/i, { timeout: 300_000 }).catch(() => undefined);
+  await page.waitForTimeout(5000);
+  console.log(`${file} runs: ${await runs.textContent()}`);
+}
+
+/** The queue's hotlist rows, newest first (high severity, then newest: `alerts.py`'s order), so
+ * `nth(0)` is H2 (the bookings) and `nth(1)` is H1 (batch 2) once both are raised. */
+const hotlistRows = (page: Page) =>
+  page
+    .getByRole("region", { name: "Alert queue" })
+    .getByRole("button", { name: /^Open alert: .*Hotlist/ });
+
+async function openHotlistAlert(page: Page, nth: number) {
+  const row = hotlistRows(page).nth(nth);
+  await expect(row).toBeVisible({ timeout: 60_000 });
+  await row.click();
+  const detail = page.getByRole("region", { name: "What fired this alert" });
+  await expect(detail).toBeVisible();
+  await page.waitForTimeout(1500);
+  return detail;
+}
+
+/** S1's row: its words begin with the number it names (`EXPECTED_ALERTS[2]`). */
+const ruleAlertSummary = () => new RegExp(unownedNumber().replace(/[+]/g, "\\+") + ".*within 2 step");
+
 test("chapter 9a: the analyst hotlists the coordinator's number", async ({ page }) => {
   await freshCase(page);
-  await rail(page, "Watches").click();
+  await monitoringTab(page, "Watches");
   await page.getByLabel("Identifier", { exact: true }).fill(coordinatorNumber().national);
   await page.getByLabel("Review date").fill("2027-01-31");
   await page.getByRole("button", { name: "Add to hotlist" }).click();
@@ -728,27 +730,16 @@ test("chapter 9a: the analyst hotlists the coordinator's number", async ({ page 
 
 test("chapter 9b: the engineer loads batch 2", async ({ page }) => {
   test.setTimeout(600_000);
-  await studio(page);
-  await page.getByRole("button", { name: /^Open Seized media/ }).click();
-  const run = page.getByRole("button", { name: "Run now" });
-  await run.waitFor();
-  await page.getByLabel(/^Source file/).fill(
-    // `incoming/`, where the files writer puts batch 2 (`pid_files.py`): the demo loads it, the seed
-    // does not. The folder above only had it where someone had copied it by hand (1 November 2026).
-    "/var/lib/osprey/ingest/uploaded/prison-intelligence/incoming/pid_seized_comms_batch2.csv",
-  );
-  await run.click();
-  await expect(page.getByRole("list", { name: "Runs of this recipe" })).toContainText(/batch2|Succeeded.*\n?.*Succeeded/, { timeout: 300_000 }).catch(() => undefined);
-  await page.waitForTimeout(5000);
-  console.log(`batch 2 runs: ${await page.getByRole("list", { name: "Runs of this recipe" }).textContent()}`);
+  await loadIncoming(page, /^Open Seized media/, "pid_seized_comms_batch2.csv");
 });
 
 test("CAP-A2-C9", async ({ page }) => {
-  // A hotlist's alert is in the Watches rail's Alert inbox; the Alerts rail is the typology rules'
-  // queue. The alert explains itself (ADR-130 decision 1): the identifier as typed and its review
-  // date, and the node it matched with the files and rows that put it there.
+  // The Watches tab of Monitoring (the rail's Watches entry is gone, the owner's answer of
+  // 1 November 2026): the hotlist and its Alert inbox. The alert explains itself (ADR-130 decision
+  // 1): the identifier as typed and its review date, and the node it matched with the files and
+  // rows that put it there.
   await freshCase(page);
-  await rail(page, "Watches").click();
+  await monitoringTab(page, "Watches");
   await expect(page.getByText(/^Hotlist: /).first()).toBeVisible({ timeout: 60_000 });
   await page.waitForTimeout(1500);
   await shot(page, "CAP-A2-C9");
@@ -757,9 +748,213 @@ test("CAP-A2-C9", async ({ page }) => {
 
 test("CAP-M4-a", async ({ page }) => {
   await freshCase(page);
-  await rail(page, "Watches").click();
+  await monitoringTab(page, "Watches");
   await page.waitForTimeout(2500);
   await shot(page, "CAP-M4-a");
+});
+
+test("chapter 9c: the engineer loads the visit bookings", async ({ page }) => {
+  test.setTimeout(600_000);
+  await loadIncoming(page, /^Open Visit bookings/, "pid_visit_bookings.csv");
+});
+
+test("CAP-A2-C9Q-a", async ({ page }) => {
+  // P2: the one queue holds both hotlist alerts; H2 (the bookings, newest) is opened. It is the
+  // analyst's alone ("Only its owner") and was raised as the bookings loaded, before the visit.
+  await freshCase(page);
+  await monitoringTab(page, "Queue");
+  console.log(`queue: ${await page.getByRole("region", { name: "Alert queue" }).textContent()}`);
+  await openHotlistAlert(page, 0);
+  await shot(page, "CAP-A2-C9Q-a");
+});
+
+test("chapter 9d: the case's Author writes the rule as a sentence, previews it and deploys it", async ({ page }) => {
+  // A rule for the case team needs the case's Author level (ADR-109 ruling 4; the sentence route);
+  // the demo analyst is an Editor, and the demo admin, who holds the Analyst role too, is the
+  // case's Author. Deployed only after the bookings load: before it, the rule would also flag the
+  // coordinator's number as the bookings touch it (ADR-127 Amendment 41, "The order").
+  // Shoots CAP-A2-C9R-a (the sentence, its drawn pattern and its preview) before deploying.
+  test.setTimeout(600_000);
+  await freshCase(page, "admin");
+  await monitoringTab(page, "Rules");
+  const rules = page.getByRole("list", { name: "Rules" });
+  // An active rule offers Retire; a retired one does not.
+  if (await page.getByRole("button", { name: `Retire ${P1_RULE}` }).isVisible().catch(() => false)) {
+    console.log(`rules: ${await rules.textContent()}`);
+    throw new Error(`"${P1_RULE}" is already deployed: retire it first (a rule raises a finding once)`);
+  }
+  const form = page.getByRole("form", { name: "Write a rule as a sentence" });
+  await form.getByRole("combobox", { name: "Subject" }).selectOption("Endpoint");
+  await form.getByRole("button", { name: "Add a condition" }).click();
+  await form.getByRole("combobox", { name: "Condition 1: property" }).selectOption("endpoint_kind");
+  await form.getByRole("combobox", { name: "Condition 1: test" }).selectOption("equals");
+  await form.getByRole("combobox", { name: "Condition 1: value" }).selectOption("msisdn");
+  await form.getByRole("combobox", { name: "Relationship" }).selectOption("within_steps");
+  await form.getByRole("combobox", { name: "Steps" }).selectOption("2");
+  await form.getByRole("combobox", { name: "Near a" }).selectOption("Device");
+  await form.getByRole("combobox", { name: "Severity" }).selectOption("high");
+  await form.getByRole("combobox", { name: "Scope" }).selectOption("this_case");
+  await form.getByRole("combobox", { name: "Team" }).selectOption("case");
+  await form.getByRole("combobox", { name: "Runs" }).selectOption("post_commit");
+  await form.getByRole("button", { name: "Show the drawn pattern" }).click();
+  await expect(form.getByRole("region", { name: "The drawn pattern" })).toBeVisible();
+  await form.getByRole("button", { name: "Preview on the last 90 days" }).click();
+  const preview = form.getByRole("region", { name: "Preview" });
+  await expect(preview).toBeVisible({ timeout: 240_000 });
+  console.log(`P1 drawn pattern: ${await form.getByRole("region", { name: "The drawn pattern" }).textContent()}`);
+  console.log(`P1 preview: ${await preview.textContent()}`);
+  await form.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(1000);
+  await shot(page, "CAP-A2-C9R-a");
+  await form.getByRole("textbox", { name: "Name of the sentence rule" }).fill(P1_RULE);
+  await form.getByRole("button", { name: "Deploy the sentence" }).click();
+  await expect(page.getByRole("status").filter({ hasText: P1_RULE })).toBeVisible({ timeout: 60_000 });
+  console.log(`deployed: ${await page.getByRole("status").filter({ hasText: P1_RULE }).textContent()}`);
+});
+
+test("CAP-A2-C9S", async ({ page }) => {
+  // Checks on load and Verify's would-be alerts, as the data engineer. Shown on the Intelligence
+  // reports pipeline, which has a canvas (and so the Checks on load and Verify buttons) since
+  // chapter 4: the seed publishes the PIN first contacts pipeline from its recipe with no canvas,
+  // so reaching its own Checks on load means Reopen for editing, a new version (not done here).
+  // Reads only: the checks are not saved, and Verify is a dry run that writes nothing.
+  test.setTimeout(600_000);
+  await studio(page);
+  await page.getByRole("button", { name: /^Open Intelligence reports/ }).click();
+  await page.getByRole("button", { name: "Checks on load", exact: true }).click();
+  const table = page.getByRole("table", { name: "Rules this pipeline may be checked by" });
+  await expect(table.or(page.getByText(/No rule of this case/)).first()).toBeVisible({ timeout: 60_000 });
+  console.log(`checks: ${await page.locator("main").textContent().catch(() => "")}`.slice(0, 800));
+  await page.waitForTimeout(1000);
+  await shot(page, "CAP-A2-C9S-a");
+  await page.getByRole("button", { name: "← Back to the pipeline" }).click();
+  await page.getByRole("button", { name: "Verify", exact: true }).click();
+  await page.getByRole("button", { name: "Run verify" }).click();
+  const would = page.getByRole("heading", { name: "Alerts this sample would raise" });
+  await expect(would).toBeVisible({ timeout: 240_000 });
+  await would.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(1500);
+  console.log(`would raise: ${await would.locator("xpath=../..").textContent()}`.slice(0, 600));
+  await shot(page, "CAP-A2-C9S-b");
+});
+
+test("chapter 9e: the engineer loads the PIN first contacts", async ({ page }) => {
+  test.setTimeout(600_000);
+  await loadIncoming(page, /^Open PIN phone first contacts/, "pid_pin_new_contacts.csv");
+});
+
+test("CAP-A2-C9Q-b", async ({ page }) => {
+  // P1: the rule's alert, S1, for the case team, naming the number Pryce's seized handset called.
+  await freshCase(page);
+  await monitoringTab(page, "Queue");
+  console.log(`queue: ${await page.getByRole("region", { name: "Alert queue" }).textContent()}`);
+  const detail = await openQueuedAlert(page, ruleAlertSummary());
+  console.log(`S1: ${(await detail.textContent())?.slice(0, 600)}`);
+  await shot(page, "CAP-A2-C9Q-b");
+});
+
+// --- Chapter 10: closes, the trend and the figures (P3, P4) ---------------------------------------
+// After chapter 9, in this order: 10a, 10b, (10c, the open question), C10M-d, C11M, (C10M-e).
+
+test("chapter 10a: the analyst closes H2 as Referred, alone (CAP-A2-C10M-a)", async ({ page }) => {
+  // H2 is "Only its owner": its owner closes it with no second person (ADR-133 Amendment 4 item 5).
+  await freshCase(page);
+  await monitoringTab(page, "Queue");
+  await openHotlistAlert(page, 0);
+  await closeOpenedAlert(page, "Referred", "To the visits team: the visit goes ahead under closed conditions.");
+  await shot(page, "CAP-A2-C10M-a");
+});
+
+test("chapter 10b: the analyst proposes S1's close as Referred (CAP-A2-C10M-b)", async ({ page }) => {
+  // High severity, for the case team: closing it proposes the close, which waits for a second
+  // person (ADR-133 decision 7, stage (d)). Never True match in a rehearsal: the reset then refuses.
+  await freshCase(page);
+  await monitoringTab(page, "Queue");
+  await openQueuedAlert(page, ruleAlertSummary());
+  await closeOpenedAlert(page, "Referred", "To the regional intelligence unit for a subscriber check on the number.");
+  await shot(page, "CAP-A2-C10M-b");
+});
+
+test("chapter 10c, open question 13: the admin approves S1's close as the second person (CAP-A2-C10M-c)", async ({ page }) => {
+  // Not part of the script's stage path (the script narrates the approval from a slide). The demo
+  // admin holds the Analyst role and is the case's Author, so the Conduit should accept it as the
+  // second person (`approve_close` refuses only the proposer); this test is how that is found out.
+  // Shoots the approval before and after. Run it only when the owner wants the slide's images.
+  await freshCase(page, "admin");
+  await monitoringTab(page, "Queue");
+  const detail = await openQueuedAlert(page, ruleAlertSummary());
+  const approve = detail.getByRole("button", { name: "Approve the close" });
+  await expect(approve).toBeVisible();
+  await shot(page, "CAP-A2-C10M-c");
+  await approve.click();
+  await expect(detail.getByRole("status")).toBeVisible({ timeout: 30_000 });
+  console.log(`approval: ${await detail.getByRole("status").textContent()}`);
+  await page.waitForTimeout(1500);
+  await shot(page, "CAP-A2-C10M-c2");
+});
+
+/** P3's trend: the case's alerts, counted by week and split by rule (ADR-134 decision 3). */
+const ALERT_TREND = "Alerts by rule, weekly";
+
+test("CAP-A2-C10M-d", async ({ page }) => {
+  // Saves the trend (a state change chapter 11 needs), once: a second run finds it saved.
+  await freshCase(page);
+  await reportsTab(page, "Trends");
+  await page.getByLabel("Title", { exact: true }).fill(ALERT_TREND);
+  await page.getByRole("radiogroup", { name: "What to count" }).getByRole("radio", { name: "Alerts" }).check();
+  await page.getByLabel("Interval").selectOption("week");
+  await page.getByLabel("Series").selectOption({ label: "By rule" });
+  await page.getByRole("button", { name: /^Preview/ }).click();
+  await page.waitForTimeout(5000);
+  await scrollAllToTop(page);
+  await shot(page, "CAP-A2-C10M-d");
+  const saved = page.getByRole("region", { name: "Saved trends" });
+  if (!((await saved.textContent().catch(() => "")) ?? "").includes(ALERT_TREND)) {
+    await page.getByRole("button", { name: "Save trend" }).click();
+    await page.waitForTimeout(2500);
+  }
+});
+
+test("CAP-A2-C11M", async ({ page }) => {
+  // Chapter 11's pack: the alert trend and H1, still open, as an `alert` item (ADR-134 decision 1).
+  // Adds the two items to the briefing pack (a state change), then shoots the pack.
+  await freshCase(page);
+  await reportsTab(page, "Packs");
+  const pack = page.getByRole("button", { name: /^Wing F supply route/ }).first();
+  if (!(await pack.isVisible().catch(() => false))) {
+    await page.getByLabel("New pack title").fill("Wing F supply route");
+    await page.getByRole("button", { name: "Create pack" }).click();
+    await page.waitForTimeout(2500);
+  }
+  await pack.click();
+  await page.getByLabel("Item kind").selectOption("trend");
+  await page.getByLabel("Saved trend").selectOption({ label: ALERT_TREND });
+  await page.getByRole("button", { name: "Add item" }).click();
+  await page.waitForTimeout(3000);
+  await page.getByLabel("Item kind").selectOption("alert");
+  const options = await page.getByLabel("Alert", { exact: true }).locator("option").allTextContents();
+  console.log(`alerts offered: ${JSON.stringify(options)}`);
+  const h1 = options.find((o) => /Open/.test(o) && /hotlisted/.test(o));
+  if (!h1) throw new Error("H1 (the open hotlist alert) is not offered for the pack");
+  await page.getByLabel("Alert", { exact: true }).selectOption({ label: h1 });
+  await page.getByRole("button", { name: "Add item" }).click();
+  await page.waitForTimeout(3000);
+  await scrollAllToTop(page);
+  await shot(page, "CAP-A2-C11M");
+});
+
+test("CAP-A2-C10M-e", async ({ page }) => {
+  // P4 on the Superset monitoring board, only where one is registered for this case (dashboards
+  // on, a board built as administration guide §12 describes, its account a Viewer of the case).
+  // Otherwise skipped: chapter 10 then shows P4 from a slide. The board never counts an "only me"
+  // hotlist, so it holds S1 alone.
+  await signIn(page, "viewer");
+  await openCase(page);
+  const boards = rail(page, "Dashboards");
+  test.skip(!(await boards.isVisible().catch(() => false)), "no dashboard for this case: P4 is a slide");
+  await boards.click();
+  await page.waitForTimeout(15_000);
+  await shot(page, "CAP-A2-C10M-e");
 });
 
 test("CAP-A2-C6", async ({ page }) => {
