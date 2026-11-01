@@ -25,6 +25,45 @@ description, as a fifth capability on the welcome page and as a part of About.
   onboarding file is screened before commit. Both are part of the loading story; nothing shows
   ongoing monitoring of later data.
 
+## The owner's choices (1 November 2026)
+
+- **Use cases:**
+  - all of P1–P4, "built into the story line as well": they become part of the prison demo's
+    narrative, not an appendix;
+  - all of A1–A4.
+- **Order:**
+  1. Finish the current deck work.
+  2. The reporting ADR, then the demo use cases on top of it, then guides and decks (this plan).
+  3. One more change before the repository move: the website pages say that OspreyFlow now has a
+     fully featured, GDS-compliant UK public sector option that any UK department can use.
+  4. Then the repository move (`REPO_MOVE_PLAN.md`).
+
+## What is built today (read 1 November 2026; file references in the session's findings)
+
+- **One `alerts` table for every kind** (`services/api/alerts.py`), told apart by `rule_id`:
+  - typology alerts (`typology:<rule>`; KYC rules are typology alerts too);
+  - hotlist alerts (`hotlist:<id>`, owned by the recipient);
+  - monitor alerts (`monitor:<id>`);
+  - scheduler run notices.
+  An alert has no handling field of its own; triage gives it a status, a disposition, a reason and
+  who decided.
+- **Only typology alerts reach the case queue and the reporting figures** (`typology IS NOT NULL`).
+  Hotlist and monitor alerts are in the owner's own list and in no figure. P4 and A4 therefore need
+  hotlist and monitor alerts counted too, which the reporting ADR must decide.
+- **The reporting feed already carries alerts by typology by week** (the `raised` section), alerts
+  open by age, and outcomes, per case. So part of the monitoring dashboard's feed exists; no
+  monitoring dashboard does.
+- **Report packs** hold four item kinds (trend, assessment, entity, note), and each item is withheld
+  unless the reader may view every handling it rests on.
+- **Trends** count analytics events only. Alerts are in Postgres, not the event store, so an alert
+  trend needs a new source.
+- **Matters to settle in the reporting ADR, not to fix here:**
+  - pack items and queue alerts are checked for visibility after the rows are read, in the Conduit,
+    which rule 3 forbids for retrieval (ADR-111 and ADR-113 describe them as all-or-nothing checks);
+  - ADR-113 decision 4 still says "how many" where Amendment 5 made it yes or no;
+  - the owner's alerts route's docstring says "the case's datasets", but the store scopes it to the
+    owner.
+
 ## Stage 1 — map what is built
 
 For each candidate use case, mark it as one of: **built today**, **needs the reporting ADR**, or **a
