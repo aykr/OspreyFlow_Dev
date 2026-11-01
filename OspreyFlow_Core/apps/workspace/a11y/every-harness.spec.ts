@@ -28,6 +28,13 @@ const HARNESS_ONLY: Record<string, string[]> = {
   "link-change-harness.html": ["#after-form"],
 };
 
+// States a harness draws only when asked, scanned as well as its default. The start page as an
+// analyst (no Studio or Admin right) draws those two panels gated: the live audit of 1 November 2026
+// found their text at 4.25:1 there, which the default (an administrator, nothing gated) never drew.
+const EXTRA_STATES: Record<string, string[]> = {
+  "start-harness.html": ["rights=investigate"],
+};
+
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();
 
 function appliesBrand(page: string): boolean {
@@ -46,22 +53,26 @@ test("the scan found the harness pages", () => {
 
 for (const name of pages) {
   const variants = ["dark", "light", ...(appliesBrand(name) ? ["govuk"] : [])] as const;
-  for (const variant of variants) {
-    test(`${name} (${variant}) has no automated WCAG 2.2 A or AA violations`, async ({ page }) => {
-      await page.emulateMedia({ reducedMotion: "reduce" });
-      await page.goto(`/keyboard/${name}${variant === "govuk" ? "?brand=govuk" : ""}`);
-      await page.waitForLoadState("networkidle");
-      await page.evaluate(() => document.fonts.ready);
-      if (variant === "light") {
-        await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
-      }
-      if (variant === "govuk") {
-        await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
-      }
-      let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
-      for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
-      const results = await builder.analyze();
-      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
-    });
+  for (const state of ["", ...(EXTRA_STATES[name] ?? [])]) {
+    for (const variant of variants) {
+      const query = [state, variant === "govuk" ? "brand=govuk" : ""].filter(Boolean).join("&");
+      const title = `${name}${state ? ` ${state}` : ""} (${variant})`;
+      test(`${title} has no automated WCAG 2.2 A or AA violations`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await page.goto(`/keyboard/${name}${query ? `?${query}` : ""}`);
+        await page.waitForLoadState("networkidle");
+        await page.evaluate(() => document.fonts.ready);
+        if (variant === "light") {
+          await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        }
+        if (variant === "govuk") {
+          await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+        }
+        let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
+        for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        const results = await builder.analyze();
+        expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      });
+    }
   }
 }
