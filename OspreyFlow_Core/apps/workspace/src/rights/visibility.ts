@@ -6,7 +6,7 @@
 export type Rights = ReadonlySet<string> | null;
 export type RailEntry =
   | "cases" | "watches" | "alerts" | "ownership" | "history" | "explore" | "questions" | "types" | "ingest" | "dashboards" | "admin";
-export type GlassView = "graph" | "map" | "reports";
+export type GlassView = "graph" | "map" | "matrix" | "reports";
 
 const has = (rights: Rights, ...any: string[]) => rights === null || any.some((r) => rights.has(r));
 const known = (rights: Rights, ...any: string[]) => rights !== null && any.some((r) => rights.has(r));
@@ -64,6 +64,8 @@ export function viewsFor(rights: Rights): GlassView[] {
   const views: [GlassView, boolean][] = [
     ["graph", has(rights, "investigate")],
     ["map", has(rights, "investigate")],
+    // `02_GLASS_FRONTEND.md` §6: the screen-reader-navigable rendering of the same working set.
+    ["matrix", has(rights, "investigate")],
     ["reports", has(rights, "read_reports")],
   ];
   return views.filter(([, shown]) => shown).map(([view]) => view);

@@ -293,6 +293,13 @@ export interface GlassCanvasProps {
    * bring the Inspector's Picture part forward — the choice itself (file, marking, legal basis)
    * stays there, never in the menu. */
   onSetPicture?: (nodeId: string) => void;
+  /** `02_GLASS_FRONTEND.md` §2 rule 1: "Switching view never refetches and never loses selection."
+   * The nodes selected when this canvas is drawn — what was selected in the Matrix or before the
+   * Map was opened — read once, when it mounts; ids not in the view are left out. Absent, nothing
+   * is selected, as before. */
+  initialSelectedNodeIds?: readonly string[];
+  /** The link selected when this canvas is drawn, read once, as `initialSelectedNodeIds` is. */
+  initialSelectedEdgeId?: string | null;
 }
 
 /** Phase 7 Stage 3: what the metrics panel needs from outside the canvas's own event handlers —
@@ -422,6 +429,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       getEventsWindow,
       onOpenDocument,
       onSetPicture,
+      initialSelectedNodeIds,
+      initialSelectedEdgeId,
     }: GlassCanvasProps,
     ref,
   ) {
@@ -433,7 +442,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       WorkingSetNodeAttributes,
       WorkingSetEdgeAttributes
     > | null>(null);
-    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [selected, setSelected] = useState<Set<string>>(
+      () => new Set((initialSelectedNodeIds ?? []).filter((id) => graph.hasNode(id))),
+    );
     const canvasDescriptionId = useId();
     const [zoomPercent, setZoomPercent] = useState<number | undefined>(undefined);
     const [hoverLink, setHoverLink] = useState<{ key: string; x: number; y: number } | null>(null);
@@ -539,7 +550,14 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     >({});
     // A link selected by click or by keyboard. A ref as well, because the Sigma edge reducer
     // reads it when drawing.
-    const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+    const [selectedEdge, setSelectedEdge] = useState<string | null>(() =>
+      // A link and nodes are never selected together (`selectLink` below).
+      initialSelectedEdgeId &&
+      graph.hasEdge(initialSelectedEdgeId) &&
+      !(initialSelectedNodeIds ?? []).some((id) => graph.hasNode(id))
+        ? initialSelectedEdgeId
+        : null,
+    );
     const selectedEdgeRef = useRef<string | null>(null);
     selectedEdgeRef.current = selectedEdge;
     // Links hidden from this view in this browser tab only (not recorded anywhere, not in History).

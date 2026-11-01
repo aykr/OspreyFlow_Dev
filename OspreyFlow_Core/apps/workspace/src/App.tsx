@@ -66,6 +66,7 @@ import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
 import { placeableTypes, resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
+import { MatrixView } from "./matrix/MatrixView";
 import { defaultProvider, fetchMapConfig } from "./map/providers";
 import { instantAtFraction, itemsUpTo } from "./playback/math";
 import {
@@ -591,7 +592,7 @@ export function App() {
   }, [counts, classificationOrder]);
 
   const [view, setView] = useState<
-    "graph" | "map" | "reports" | "admin" | "dashboards" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
+    "graph" | "map" | "matrix" | "reports" | "admin" | "dashboards" | "ingest" | "dossier" | "watches" | "alerts" | "ownership"
   >(handoff.view === "ingest" ? "ingest" : handoff.view === "admin" ? "admin" : "graph");
   // ADR-115 E6: the canvas toolbar's "Last change", read again as the working set changes.
   const [lastChange, setLastChange] = useState<string | null>(null);
@@ -647,7 +648,7 @@ export function App() {
       window.setTimeout(() => revealPanel(place.panel), 0);
     }
   };
-  const lastGlassView = useRef<"graph" | "map" | "reports" | "admin" | "dashboards" | "dossier" | "watches" | "alerts" | "ownership">("graph");
+  const lastGlassView = useRef<"graph" | "map" | "matrix" | "reports" | "admin" | "dashboards" | "dossier" | "watches" | "alerts" | "ownership">("graph");
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {
@@ -657,11 +658,25 @@ export function App() {
     const frame = requestAnimationFrame(() => glassCanvasRef.current?.highlightNodes(ids));
     return () => cancelAnimationFrame(frame);
   }, [view]);
+  // The Matrix view's Expand and Show (02_GLASS_FRONTEND.md §6, GDS remediation plan A1): done by the
+  // canvas itself once the Graph is drawn — Expand through its own preview and the working set's cap
+  // (rule 2), never a second expansion path.
+  const pendingCanvasAction = useRef<{ kind: "expand" | "show"; nodeId: string } | null>(null);
+  useEffect(() => {
+    if (view !== "graph" || !pendingCanvasAction.current) return;
+    const { kind, nodeId } = pendingCanvasAction.current;
+    pendingCanvasAction.current = null;
+    const frame = requestAnimationFrame(() => {
+      if (kind === "expand") glassCanvasRef.current?.expandNode(nodeId);
+      else glassCanvasRef.current?.focusOnNode(nodeId);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [view]);
   if (view !== "ingest") lastGlassView.current = view;
   // ADR-112: someone who may not investigate (a Reports Viewer) lands where they may look.
   useEffect(() => {
     const views: string[] = viewsFor(rights);
-    if ((view === "graph" || view === "map" || view === "reports") && !views.includes(view)) {
+    if ((view === "graph" || view === "map" || view === "matrix" || view === "reports") && !views.includes(view)) {
       setView(landingView(rights));
     }
   }, [rights, view]);
@@ -672,6 +687,32 @@ export function App() {
   const [readerFallback, setReaderFallback] = useState<DocumentReaderView | undefined>(undefined);
   // ADR-093: every node selected on the canvas, for the Inspector's list.
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  // The selection made where no canvas is drawn (the Matrix view): the same state the canvas reports
+  // to, so the Inspector shows it and the canvas opens with it. Selecting nodes clears the link and
+  // the other way round, as on the canvas.
+  const selectNodesOffCanvas = (nodeIds: string[]) => {
+    const graph = workingSetRef.current.graph;
+    const present = nodeIds.filter((id) => graph.hasNode(id));
+    setSelectedNodeIds(present);
+    setSelectedLink(null);
+    setSelectedNode(present[0] ? graph.getNodeAttribute(present[0], "data") : null);
+  };
+  const selectLinkOffCanvas = (edgeId: string | null) => {
+    const graph = workingSetRef.current.graph;
+    setSelectedNodeIds([]);
+    setSelectedNode(null);
+    setSelectedLink(edgeId && graph.hasEdge(edgeId) ? graph.getEdgeAttribute(edgeId, "data") : null);
+  };
+  const showOnGraph = (nodeId: string) => {
+    selectNodesOffCanvas([nodeId]);
+    pendingCanvasAction.current = { kind: "show", nodeId };
+    setView("graph");
+  };
+  const expandOnGraph = (nodeId: string) => {
+    selectNodesOffCanvas([nodeId]);
+    pendingCanvasAction.current = { kind: "expand", nodeId };
+    setView("graph");
+  };
   const [mapConfig, setMapConfig] = useState<PublicMapConfig | null>(null);
   const [siteWizardOpen, setSiteWizardOpen] = useState(false);
   const [boundaryToolOpen, setBoundaryToolOpen] = useState(false);
@@ -1173,6 +1214,8 @@ export function App() {
                 ...[
                   { id: "graph", label: "Graph", pressed: view === "graph", onSelect: () => setView("graph") },
                   { id: "map", label: "Map", pressed: view === "map", onSelect: () => setView("map") },
+                  // `02_GLASS_FRONTEND.md` §6: the screen-reader-navigable rendering of the same data.
+                  { id: "matrix", label: "Matrix", pressed: view === "matrix", onSelect: () => setView("matrix") },
                   // ADR-111: the case's figures for people who read rather than investigate.
                   { id: "reports", label: "Reports", pressed: view === "reports", onSelect: () => setView("reports") },
                 ].filter((v) => (viewsFor(rights) as string[]).includes(v.id)),
@@ -1437,6 +1480,26 @@ export function App() {
                   setView("dossier");
                 }}
                 onSetPicture={() => setPictureOpenSignal((n) => n + 1)}
+                // §2 rule 1: switching view never loses selection — the Matrix's, or what was
+                // selected before the Map opened, is the canvas's when it is drawn again.
+                initialSelectedNodeIds={selectedNodeIds}
+                initialSelectedEdgeId={selectedLink?.id ?? null}
+              />
+            )}
+            {view === "matrix" && (
+              <MatrixView
+                graph={workingSetRef.current.graph}
+                store={workingSetRef.current.store}
+                edgeTypes={edgeTypes}
+                visualFor={(type) => ontology.visualFor(type)}
+                dimmedNodeIds={dimmedNodeIds}
+                dimmedEdgeIds={dimmedEdgeIds}
+                selectedNodeIds={selectedNodeIds}
+                selectedEdgeId={selectedLink?.id ?? null}
+                onSelectNodes={selectNodesOffCanvas}
+                onSelectLink={selectLinkOffCanvas}
+                onExpand={expandOnGraph}
+                onShowOnGraph={showOnGraph}
               />
             )}
             {/* ADR-100: an empty canvas offers where to start, until something is drawn. */}
@@ -1611,15 +1674,19 @@ export function App() {
                     <Inspector
                       node={selectedNode}
                       // ADR-115 E4: the Inspector's Expand, through the canvas's own preview.
-                      onExpand={(id) => glassCanvasRef.current?.expandNode(id)}
+                      // With no canvas drawn (the Matrix, the Map), the Graph opens and expands it.
+                      onExpand={(id) => (glassCanvasRef.current ? glassCanvasRef.current.expandNode(id) : expandOnGraph(id))}
                       // ADR-097 step 1: several selected are shown together (the list of ADR-093
                       // is one of their parts), not the first alone.
                       selection={{
                         nodes: selectedNodeIds
                           .filter((id) => workingSetRef.current.graph.hasNode(id))
                           .map((id) => workingSetRef.current.graph.getNodeAttribute(id, "data")),
-                        onCentre: (id) => glassCanvasRef.current?.centreOn(id),
-                        onRemove: (id) => glassCanvasRef.current?.deselect(id),
+                        onCentre: (id) => (glassCanvasRef.current ? glassCanvasRef.current.centreOn(id) : showOnGraph(id)),
+                        onRemove: (id) =>
+                          glassCanvasRef.current
+                            ? glassCanvasRef.current.deselect(id)
+                            : selectNodesOffCanvas(selectedNodeIds.filter((n) => n !== id)),
                       }}
                       visualFor={(type) => ontology.visualFor(type)}
                       neighbourhoodRisk={

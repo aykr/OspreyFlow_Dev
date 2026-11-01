@@ -783,3 +783,21 @@ export const CONNECTIONS_ACTIONS = defineActionRegistry("CONNECTIONS_ACTIONS", [
   "add-a-route-to-the-canvas-by-keyboard",
   "clear-the-degree-marks-by-keyboard",
 ] as const);
+
+/** The Matrix view (`02_GLASS_FRONTEND.md` §6; GDS remediation plan A1): reached from the view
+ * switch, walked cell by cell, a row selected (alone and added to), sorted, paged, the selection
+ * carried to the canvas and back, a link row selected, and a row's Expand and Show done by the
+ * canvas. `keyboard/matrix.spec.ts`. */
+export const MATRIX_ACTIONS = defineActionRegistry("MATRIX_ACTIONS", [
+  "reach-the-matrix-view-by-keyboard",
+  "move-between-cells-by-keyboard",
+  "select-a-row-by-keyboard",
+  "add-a-row-to-the-selection-by-keyboard",
+  "sort-a-column-by-keyboard",
+  "turn-the-page-by-keyboard",
+  "selection-carried-to-the-canvas",
+  "canvas-selection-carried-to-the-matrix",
+  "select-a-link-row-by-keyboard",
+  "expand-from-a-row-by-keyboard",
+  "show-a-row-on-the-graph-by-keyboard",
+] as const);
