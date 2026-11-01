@@ -98,7 +98,7 @@ export function InstallApp() {
         {current === "Domain" && <DomainScreen state={state} onSaveAnswers={handleSaveAnswers} />}
         {current === "Components" && <ComponentsScreen config={config} onSave={handleSave} />}
         {current === "Map" && <GeospatialScreen />}
-        {current === "Models" && <ModelsScreen config={config} onSave={handleSave} />}
+        {current === "Models" && <ModelsScreen config={config} onSave={handleSave} keyEntry />}
         {current === "Governance" && <GovernanceScreen config={config} onSave={handleSave} />}
         {current === "Demo packs" && <DemoPacksScreen state={state} onSaveAnswers={handleSaveAnswers} />}
         {current === "Review" && (

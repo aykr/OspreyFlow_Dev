@@ -1561,12 +1561,29 @@ def diff_for(result: RenderResult, out_dir: Path) -> dict[str, str]:
     return diffs
 
 
+#: The rendered file that holds, once `apply` has written them, the deployment's secrets.
+SECRETS_FILE = "deployment.env"
+
+
+def write_private(path: Path, text: str) -> None:
+    """`text` into `path`, readable and writable by its owner alone (`600`), whether the file is new
+    or was looser before (ADR-137 decision 2: `deployment.env` had been written `644`, readable by
+    every account on the machine). The mode is set on the open file, before anything is written."""
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        os.fchmod(handle.fileno(), 0o600)
+        handle.write(text)
+
+
 def write(result: RenderResult, out_dir: Path) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     written = []
     for name, content in sorted(result.artefacts.items()):
         target = out_dir / name
-        target.write_text(content, encoding="utf-8")
+        if name == SECRETS_FILE:
+            write_private(target, content)
+        else:
+            target.write_text(content, encoding="utf-8")
         written.append(target)
     return written
 

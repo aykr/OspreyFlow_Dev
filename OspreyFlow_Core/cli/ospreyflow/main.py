@@ -52,7 +52,7 @@ from .run import (
 
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
-    "update", "uninstall", "repair-sign-in", "switch", "models",
+    "update", "uninstall", "repair-sign-in", "switch", "models", "apply",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
 
@@ -187,6 +187,13 @@ def _parser() -> argparse.ArgumentParser:
         "--first-admin-code-file", type=Path,
         help="small, on the server: where the first boot collects the first administrator's code",
     )  # fmt: skip
+
+    # ADR-137 decision 1: a changed osprey.yaml, applied to the deployment installed from it.
+    verbs.add_parser(
+        "apply",
+        help="apply a changed osprey.yaml to the installed deployment: keep every secret, ask "
+        "for a newly enabled provider's key, restart only what changed",
+    )
 
     start = verbs.add_parser("start", help="bring the deployment up")
     start.add_argument("--build", action="store_true", help="rebuild from the checkout first")
@@ -530,6 +537,21 @@ def _start(args: argparse.Namespace, ctx: _Context) -> int:
     return 0
 
 
+def _apply_settings(ctx: _Context) -> int:
+    """ADR-137 decision 1: the harness's own `--reapply` — the same rendering an install does, with
+    every secret kept and only the services whose files changed started again. No install step is
+    run. A newly enabled provider's key comes from `OSPREY_MODEL_KEY_<NAME>` in this terminal, which
+    the harness inherits, or the harness asks for it at a hidden prompt."""
+    directory = ctx.deployed()
+    ctx.step(
+        "apply the changed settings",
+        [*ctx.python, "-m", "harness.apply", "--reapply",
+         "--config", str(ctx.product / "osprey.yaml"), "--out-root", str(directory.parent)],
+    )  # fmt: skip
+    print(f"The settings in {ctx.product / 'osprey.yaml'} are applied.")
+    return 0
+
+
 def _repair_sign_in(args: argparse.Namespace, ctx: _Context) -> int:
     """ADR-114 Amendment 22: the deployment's sign-in registered again, for its own profile."""
     step = [*ctx.python, "-m", "harness.register_sign_in", "--profile", ctx.deployed().name]
@@ -693,14 +715,17 @@ def _models(args: argparse.Namespace, ctx: _Context) -> int:
     directory = ctx.deployed()
     env_file = directory / "deployment.env"
     models = engine_keys.read_models(ctx.product, directory)
+    wanted = engine_keys.read_wanted(ctx.product)
     if args.action is None:
         print("\n".join(engine_keys.list_engines(models, env_file)))
         return 0
     if args.action == "key":
-        label = engine_keys.set_key(models, args.name, env_file, ctx.env, ctx.ask_secret)
+        label = engine_keys.set_key(
+            models, args.name, env_file, ctx.env, ctx.ask_secret, wanted=wanted
+        )
         said = f"The key for {label} is set, in {env_file}."
     else:
-        label, removed = engine_keys.remove_key(models, args.name, env_file)
+        label, removed = engine_keys.remove_key(models, args.name, env_file, wanted=wanted)
         if not removed:
             print(f"{label} has no key here; nothing was changed.")
             return 0
@@ -748,6 +773,8 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
         return _repair_sign_in(args, ctx)
     if verb == "models":
         return _models(args, ctx)
+    if verb == "apply":
+        return _apply_settings(ctx)
     raise AssertionError(verb)  # pragma: no cover - argparse refuses any other verb
 
 

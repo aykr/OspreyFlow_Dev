@@ -13,6 +13,15 @@ its own:
 | `PUT /api/install/answers` | the answers, checked by `load_answers`, then saved |
 | `GET /api/install/doctor` | `ospreyflow doctor --mode <mode>`, its lines and exit code |
 | `POST /api/install/run` | Lite only: `ospreyflow install --config <answers>`, streamed |
+| `GET /api/install/keys` | each enabled provider, and whether its key is set (never the key) |
+| `PUT /api/install/keys/{name}` | a provider's key, from this computer only (ADR-137 decision 3) |
+
+**A provider's key** (ADR-137 decision 3) is held in this server's memory only, never written by it,
+never logged and never sent back; the page shows only "key set" or "no key". The install the page
+runs is given it as `OSPREY_MODEL_KEY_<NAME>` in its own environment — exactly how a key typed in
+the installer's terminal reaches `harness.apply` — and `harness.apply` writes it to the deployment's
+`deployment.env` alone. The key route refuses any request that is not from this computer, on top of
+the console's own loopback refusal: the token proves the link was followed, not where from.
 
 **The token.** The link `ospreyflow` prints carries a one-time token. The first request,
 `GET /?token=<t>`, sets an HttpOnly, SameSite=Strict cookie and redirects to `/`; every other
@@ -57,6 +66,8 @@ from ospreyflow.home import deployment_dir, python_for  # noqa: E402
 from ospreyflow.run import Redactor  # noqa: E402
 
 from harness.webapp import create_app  # noqa: E402
+from harness.webapp_auth import is_loopback  # noqa: E402
+from schemas.deployment import OspreyConfig  # noqa: E402
 
 COOKIE = "osprey_install"
 HEADER = "X-Install-Token"
@@ -76,6 +87,7 @@ MODE_SAYS = {
 }
 _ALREADY = "The install is already running."
 _NO_ANSWERS = "Save your answers first: the install runs from them."
+_NOT_HERE = "A key is taken only from this computer."
 
 
 def install_argv(product: Path, answers: Path) -> list[str]:
@@ -92,15 +104,30 @@ def doctor_argv(product: Path) -> list[str]:
     return [*python_for(product), "-m", "ospreyflow", "doctor"]
 
 
-def _child_env(product: Path) -> dict[str, str]:
+def _child_env(product: Path, keys: dict[str, str] | None = None) -> dict[str, str]:
     cli = str(product / "cli")
     existing = os.environ.get("PYTHONPATH")
     return {
         **os.environ,
+        **(keys or {}),
         "PYTHONPATH": f"{cli}{os.pathsep}{existing}" if existing else cli,
         "OSPREYFLOW_HOME": str(product),
         "PYTHONUNBUFFERED": "1",
     }
+
+
+def _providers(draft_config: Path) -> list[dict[str, str]]:
+    """Each provider the draft `osprey.yaml` enables: its name, label and the variable its key is
+    given to the install by. None while the draft is not a valid configuration."""
+    try:
+        raw = yaml.safe_load(draft_config.read_text(encoding="utf-8")) or {}
+        models = OspreyConfig.model_validate(raw).models
+    except (OSError, yaml.YAMLError, ValueError):
+        return []
+    return [
+        {"name": p.name, "label": p.label or p.name, "variable": models.key_variable(p.name)}
+        for p in models.enabled_providers
+    ]
 
 
 def _pack_rows() -> list[dict[str, Any]]:
@@ -164,6 +191,8 @@ def create_install_app(
     )
     app.state.running = False
     app.state.last_seen = time.monotonic()
+    #: ADR-137 decision 3: each provider's key, by provider name — in this process's memory only.
+    keys: dict[str, str] = {}
     pack_ids = [str(p["id"]) for p in packs]
     secret = token.encode("utf-8")
 
@@ -239,6 +268,46 @@ def create_install_app(
         text = "\n".join(t for t in (done.stdout, done.stderr) if t)
         return {"lines": text.splitlines(), "returncode": done.returncode}
 
+    def provider_rows() -> list[dict[str, Any]]:
+        return [
+            {**row, "set": bool(keys.get(row["name"]) or os.environ.get(row["variable"]))}
+            for row in _providers(draft_config)
+        ]
+
+    def keys_for_the_install() -> dict[str, str]:
+        """The keys given here, under the variables `harness.apply` reads them by."""
+        return {
+            row["variable"]: keys[row["name"]]
+            for row in _providers(draft_config)
+            if keys.get(row["name"])
+        }
+
+    @app.get("/api/install/keys", response_model=None)
+    def get_keys(request: Request) -> Any:
+        if not is_loopback(request.client.host if request.client else None):
+            return JSONResponse({"error": _NOT_HERE}, status_code=403)
+        return {"providers": provider_rows()}
+
+    @app.put("/api/install/keys/{name}", response_model=None)
+    def put_key(name: str, request: Request, body: Any = Body(...)) -> Any:
+        # Never echoed, never logged: nothing below names the key, only the provider.
+        if not is_loopback(request.client.host if request.client else None):
+            return JSONResponse({"error": _NOT_HERE}, status_code=403)
+        enabled = {row["name"] for row in _providers(draft_config)}
+        if name not in enabled:
+            return JSONResponse(
+                {"error": f"{name} is not a provider the configuration enables."}, status_code=422
+            )
+        key = body.get("key") if isinstance(body, dict) else None
+        if not isinstance(key, str) or not key.strip():
+            return JSONResponse({"error": "No key was given."}, status_code=422)
+        if any(ch.isspace() for ch in key):
+            return JSONResponse(
+                {"error": "A key has no spaces or line breaks in it."}, status_code=422
+            )
+        keys[name] = key
+        return {"name": name, "set": True}
+
     async def run_events(argv: list[str]) -> AsyncIterator[bytes]:
         redact = _redactor(product)
         try:
@@ -247,7 +316,7 @@ def create_install_app(
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(product),
-                env=_child_env(product),
+                env=_child_env(product, keys_for_the_install()),
             )
         except OSError as failed:
             yield _event({"line": f"The install could not be started: {failed}"})

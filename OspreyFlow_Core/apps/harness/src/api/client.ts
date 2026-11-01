@@ -7,6 +7,7 @@ import type {
   Consequences,
   DoctorResult,
   InstallAnswers,
+  InstallKeyRow,
   InstallState,
   LaunchTarget,
   MapConfig,
@@ -212,6 +213,23 @@ export async function putInstallAnswers(answers: InstallAnswers): Promise<Instal
 
 export async function getInstallDoctor(): Promise<DoctorResult> {
   return asJson(await fetch("/api/install/doctor", { credentials: "same-origin" }));
+}
+
+// ADR-137 decision 3: a provider's key, sent to the install page's own server on this computer and
+// never read back — the server answers only whether one is set.
+export async function getInstallKeys(): Promise<{ providers: InstallKeyRow[] }> {
+  return asJson(await fetch("/api/install/keys", { credentials: "same-origin" }));
+}
+
+export async function putInstallKey(name: string, key: string): Promise<{ name: string; set: boolean }> {
+  return asJson(
+    await fetch(`/api/install/keys/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    }),
+  );
 }
 
 export function streamInstall(

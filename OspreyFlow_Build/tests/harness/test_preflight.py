@@ -820,6 +820,15 @@ def test_a_plain_and_an_ip_qualified_host_port_both_parse() -> None:
     assert sorted(ports.declared_ports(compose, {})) == [("bound", 9001), ("plain", 9000)]
 
 
+def test_an_ip_qualified_interpolated_host_port_parses() -> None:
+    """The shape the render gives ArcadeDB (`127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480`): found
+    building ADR-137, it read as `2480}` and named no port, so ArcadeDB's port was never checked."""
+    published = ["127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"]
+    compose = {"services": {"arcadedb": {"ports": published}}}
+    assert ports.declared_ports(compose, {}) == [("arcadedb", 2480)]
+    assert ports.declared_ports(compose, {"OSPREY_ARCADEDB_PORT": "2491"}) == [("arcadedb", 2491)]
+
+
 def test_an_unresolvable_port_is_skipped_rather_than_guessed() -> None:
     """A variable with no default and nothing in the environment names no port. Guessing one would
     check something arbitrary and report it as this deployment's."""

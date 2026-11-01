@@ -567,6 +567,47 @@ test("install page: a keyboard-activated switch reaches Demo packs and a real En
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-demo-packs");
 });
 
+test("install page: a provider's key field is reached by keyboard, a real Enter sends it and the page says key set", async ({
+  page,
+}) => {
+  // The draft enables Gemini, through the page's own configuration route (a scratch draft).
+  await page
+    .context()
+    .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+  const enabled = await page.request.put(`${INSTALL_BASE}/api/config`, {
+    data: {
+      models: {
+        local_only: false,
+        sendable_handling_codes: ["P"],
+        providers: [{ name: "gemini", label: "Gemini", roles: { extraction: "gemini-2.5-flash" } }],
+      },
+    },
+  });
+  expect(enabled.ok()).toBe(true);
+  await openInstallPage(page);
+  await page.getByRole("button", { name: "Models", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  const codes = page.getByRole("textbox", { name: "Sendable handling codes (comma-separated)" });
+  await codes.waitFor();
+  await expect(page.getByText("no key")).toBeVisible();
+  await codes.focus();
+  await page.keyboard.press("Tab");
+  const field = page.getByRole("textbox", { name: "Key for Gemini", exact: true });
+  await expect(field).toBeFocused();
+  await page.keyboard.type("keyboard-spec-not-a-real-key");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Set the key for Gemini" })).toBeFocused();
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/api/install/keys/gemini") && r.request().method() === "PUT"),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+  expect(await response.text()).not.toContain("keyboard-spec-not-a-real-key");
+  await expect(page.getByText("key set")).toBeVisible();
+  await expect(field).toHaveValue("");
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-set-key");
+});
+
 test("install page: Small's Cloud and region screen is reached by keyboard and a real Enter saves it", async ({
   page,
 }) => {

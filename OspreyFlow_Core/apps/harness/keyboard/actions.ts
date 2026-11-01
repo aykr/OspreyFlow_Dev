@@ -44,4 +44,6 @@ export const SETUP_SCREENS_ACTIONS = defineActionRegistry("SETUP_SCREENS_ACTIONS
   "submit-save-domain",
   "submit-install",
   "submit-save-answers",
+  // ADR-137 decision 3: a provider's key, entered on the install page's Models screen.
+  "submit-set-key",
 ] as const);
