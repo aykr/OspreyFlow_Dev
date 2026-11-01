@@ -28,8 +28,10 @@ resumed session starts here.
   - Leave the everyday deployment running at the end.
 - **Data:**
   - Synthetic data only.
-  - The real Enron case on the everyday deployment is never touched and never made sendable to a
-    hosted model.
+  - The real Enron case on the everyday deployment is never touched. Since the owner's ruling of
+    1 November (step 2c) it may be sent to Gemini; it is sent nowhere else.
+- **Every worker runs the whole non-live suite before handing back**, and shows that each failure it
+  leaves also fails on `main` (added 1 November, after the step 4–6 stand-in regressions).
 - **When the spec is silent:**
   - write the question under "Open questions" below;
   - take the conservative reading;
@@ -53,7 +55,8 @@ resumed session starts here.
 | 4 | **ADR-134:** `alert` pack item; monitoring dashboard feed sections and board; alert trends (conformance first); the rule-3 review of the pack and queue readers; the ADR-113 decision 4 text and the alerts route docstring fixed | done | Guide and Product Overview deck as in step 3 Done 1 November: the `alert` pack item, four monitoring feed sections (board described in admin guide §12), alert trends (DuckDB conformance first; ClickHouse written, not run here), a queue timing leak fixed, pack items filtered in SQL; user guide 1.13, admin guide 1.17, Product Overview Draft1e. Interpretations: ADR-134 Amendment 1. Live-store suites need Postgres, ArcadeDB and ClickHouse: run in CI. |
 | 5 | **ADR-133 stage (b):** sentence builder; frequency and amount conditions; preview (backtest) | done | Guide and deck Done 1 November: rules as sentences over the ontology, round-tripping with the drawn pattern; frequency, amount and first-time conditions (`event_frequency`, DuckDB conformance; ClickHouse not run here); a 90-day preview that writes nothing; user guide 1.14; Product Overview Draft1f. Interpretations: ADR-133 Amendment 2. Also fixed: the revert test's stand-in store, broken on main by step 4. |
 | 6 | **ADR-133 stage (c):** list subscriptions (OFAC, OFSI, UN, EU, OpenSanctions adapters with synthetic golden files; licence register entries); re-screening on update; new AML templates | done | Guide and deck. Real lists never in the repository (rule 9) Done 1 November: five list connectors (OFAC, OFSI, UN, EU, OpenSanctions) proven on synthetic golden files; versions, diffs and delta re-screening into the one queue, written inferred; a Lists tab; four AML templates (`account_activity`, DuckDB conformance); user guide 1.15, admin guide 1.18, Product Overview Draft1g. Interpretations and two licence findings: ADR-133 Amendment 3. Also fixed: the run-resources stand-in, broken on main by step 4. |
-| 7 | **ADR-133 stage (d):** scheduled trigger; Studio "Checks on load" step with Verify preview; maker–checker | to do | Guide and deck |
+| 7 | **ADR-133 stage (d):** scheduled trigger; Studio "Checks on load" step with Verify preview; maker–checker | in progress | Guide and deck. Built on `monitoring-stage-d` (4 commits; 50 backend tests, vitest, keyboard and axe cases, each shown red; user guide 1.16, developer guide 1.8, admin guide 1.19; Product Overview Draft1h). Merging into `main` conflicts with `fix-sweep-regressions` (merged first) on the screening-list wire: a worker reconciles, then the sweep, then Amendment 4 |
+| 7b | **The owner's answers of 1 November** (see "Owner's answers" below): build what they ask — Watches rail entry removed; admin screening counts limited to the admin's unit; the closing reasons list; Ask to search carries the case's handling; the brand button's spoken name; OpenAPI published and versioned; the UK Sanctions List (FCDO) connector; UN and OpenSanctions marked "licence not confirmed"; the test-harness port guard; `make ci` run locally before each merge | to do | After step 7. Each with a test shown red first. The FCDO connector may ride with step 8 |
 | 8 | **Demo use cases** (`ALERTING_MONITORING_PLAN.md`): amendments to ADR-127 (Prison Intelligence) and ADR-108 (Ledger); generated batches and golden tests; P1–P4 woven into the prison storyline; A1–A4 in Operation Ledger | to do | Each case built once its stage has landed: P2, A1 and A2 after step 3; P1 after step 5; A3 after step 6; P3, P4 and A4 after step 4 |
 | 9 | **Demos shown:** prison demo script (v4) and the Ledger walkthrough; `DEMO_GUIDE.md` and the setup guide; capture steps; captures in both brands; prison decks rebuilt | to do | |
 | 9b | **GDS re-audit** on the finished product, with the monitoring features: the report and backlog updated; an accessibility statement drafted; `process/gds/gds_pitch_deck_content.md` (Gemini's seven slides: title, the mission, Service Standard alignment, accessibility, security by design, deployment, the road to assessment) | to do | **The owner (1 November): the GDS testing outcomes are recorded in the Prison Intelligence demo decks** (v1, v2 and v3, via `build_decks.py`): a results slide per pass (2b baseline, 9b re-audit) and each Service Standard point's status and evidence brought up to date on the existing mapping slides. Feeds step 10 (a GDS section in the Product Overview deck; the prison decks' mapping slides refreshed; a GDS section in the guides) and step 12 (the website claims only what this re-audit evidences) |
@@ -79,7 +82,32 @@ resumed session starts here.
   case. Either clean it by hand in the app or reinstall that deployment: the owner's choice.
 - **ADR-133 ruling 3** reads "configurable" as a deployment setting; the owner to confirm.
 
+## Owner's answers, 1 November (interactive review)
+
+| Question | Answer |
+| --- | --- |
+| 1, hotlist audience ("configurable") | As built: `monitoring.hotlist_audience` (default `only_me`), with `hotlist_audience_editable`; dataset access still applies. ADR-133 ruling 3 confirmed |
+| 2, Ask to search's engine choice | Ask to search carries the case's handling, so the engine choice applies |
+| 3, Admin → Datasets across units | Keep it for system administrators; unit admins see their own unit |
+| 4, the brand button's spoken name | "Osprey, go to Home" (WCAG 2.5.3) |
+| 4, OpenAPI | Publish it at the deployment's address, versioned with the release |
+| 4, CI | Run `make ci` locally (ports pinned) before each step merges; still no push |
+| 4, independent checks | Website and decks say "designed to meet the GDS Service Standard", and list the accessibility audit, penetration test and DPIA as planned |
+| 5, the Matrix view | Keep as built |
+| 6, stage (a) | Keep; remove the Watches rail entry; closing reasons are True match, False positive, Duplicate, No further action, Referred |
+| 7, alert trends | No backfill |
+| 8, the port guard | Add it: tests refuse 2480, 5432, 8080 and 8081, shown red first |
+| 9, deployment rules with no approver | Closed by stage (d) |
+| 10, lists | Build a UK Sanctions List (FCDO) connector in step 8; mark UN and OpenSanctions "licence not confirmed" (Lists tab and admin guide), synthetic only |
+| 11, admin screening counts | Limit them to the admin's own unit (rule 7) |
+| Step 7, Data Engineers' L3 | Keep L3 for the seven typology rules |
+| GOV.UK rehearsal residue | Reinstall that deployment before step 11, listing what is removed first |
+
 ## Open questions found during the run
+
+11. **Admin screening counts (found fixing the sweep regressions):** the admin screening routes return
+    re-screened and alert counts across the whole deployment, in tension with rule 7. **Answered
+    above:** limit them to the admin's own unit.
 
 10. **Sanctions lists (ADR-133 Amendment 3), before a customer relies on them:**
     - The OFSI Consolidated List closed on 28 January 2026; a UK Sanctions List (FCDO) connector is
