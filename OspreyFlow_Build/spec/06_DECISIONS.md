@@ -20933,3 +20933,59 @@ Key to be used for the demos."
 - **Live, once:** the owner's local deployment, with the owner's Gemini key, answers an Ask the case
   question on Gemini and the same question on the local model. Synthetic case only: the real Enron
   case's handling is never made sendable (rule 9).
+
+## ADR-137 — Applying a changed `osprey.yaml`, a private secrets file, and key entry on the install page — ACCEPTED (design)
+
+Status: accepted 1 November 2026. Part 3 is the owner's ruling ("Build key entry"). Parts 1 and 2
+follow from ADR-135 and fix defects found putting it to use. They were recorded during the owner's
+autonomous-build instruction of the same day, and are open to the owner's review. ADR-136 is kept for
+per-dataset egress (build order step 2d).
+
+**Found 1 November 2026, enabling Gemini on the owner's everyday deployment.**
+- **A changed `osprey.yaml` could not be applied to an installed deployment by any supported
+  command:**
+  - `ospreyflow start --build` reads the rendered copy (`deploy/generated/<name>/osprey.yaml`);
+  - `ospreyflow install --yes` refuses a different `osprey.yaml`, and `--force` would replace it
+    with the defaults;
+  - `ospreyflow models key` refuses a provider newly enabled in `osprey.yaml`, and tells the admin
+    to "run ospreyflow install again" — which must not be done over a running deployment (31 October
+    2026).
+- **`apply` writes `deployment.env` readable by every account on the machine** (`-rw-r--r--`). Both
+  of the owner's deployments were set to `600` by hand.
+
+**Decision.**
+
+1. **`ospreyflow apply`** re-renders an installed deployment from its `osprey.yaml`:
+   - It validates the file first and refuses in words, changing nothing, if it is invalid.
+   - It keeps every secret already in `deployment.env` (ADR-132 ruling 6).
+   - It takes a newly enabled provider's key from `OSPREY_MODEL_KEY_<NAME>` in the terminal, or a
+     hidden prompt.
+   - It writes the rendered files through the staging folder, as `apply` already does.
+   - It restarts only the services whose rendered configuration changed.
+   - It never runs the first-install steps (accounts, first admin, demo packs), and never touches a
+     data volume.
+   - `ospreyflow models key` names this verb, not `install`, for a provider not yet rendered.
+   - The administration guide's §8 table and a short "Changing a setting" section document it.
+2. **`deployment.env` is created `600`** and stays `600` after every rewrite: `apply`, the new verb,
+   `models key` and `models remove-key`.
+3. **Key entry on the guided install page.**
+   - A write-only field per enabled provider, sent only to the install page's own server on the
+     admin's machine (bound to loopback).
+   - The key is never logged, never echoed back, and never written anywhere but `deployment.env`.
+   - The field clears once sent; the page shows only "key set" or "no key".
+   - The mail password may use the same path.
+
+**Tests that would fail if it were broken** (rule 12; each shown red first):
+- **`apply`:**
+  - it re-renders a provider newly enabled in `osprey.yaml` and stores its key from the terminal;
+  - every other secret is unchanged after it;
+  - an invalid `osprey.yaml` changes nothing;
+  - it restarts only the services whose rendered files changed;
+  - it runs no first-install step.
+- **The message:** `models key` for a provider not yet rendered names `ospreyflow apply`.
+- **The secrets file:** `deployment.env` is `600` after `apply`, after the new verb, after
+  `models key` and after `models remove-key`.
+- **The install page:**
+  - its key endpoint refuses a request that is not from loopback;
+  - a key it receives appears in no log line and in no response body;
+  - the page shows "key set" afterwards.
