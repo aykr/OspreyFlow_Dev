@@ -106,8 +106,7 @@ resumed session starts here.
 
 ## Open questions found during the run
 
-13. **Step 8a, the prison demo's monitoring use cases P1 to P4** (ADR-127 Amendment 41, built on branch
-    `demo-prison-alerting`, not merged), for the owner:
+13. **Step 8a, the prison demo's monitoring use cases P1 to P4** (ADR-127 Amendment 41, merged at `b75683f`), for the owner:
     - **A second analyst account for the demo.** Approving the rule alert's high-severity close (stage
       (d)) needs a second person with the analyst role; the demo has one analyst account. Add a demo
       persona (an intelligence manager, a realm change), or show the approval from a slide?
