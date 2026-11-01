@@ -102,3 +102,24 @@ test("under GOV.UK the card's words name no product; without it they say OspreyF
   assert.ok(govuk.includes("Ask your administrator"));
   assert.ok(!govuk.includes("OspreyFlow"));
 });
+
+// WCAG 3.1.1 Language of Page (A): Keycloak's `keycloak.v2` template writes `lang` on `<html>` only
+// when the realm has internationalisation on, which this realm does not, so the sign-in page had
+// none (found by the GDS baseline audit's axe scan of the live sign-in page, 1 November 2026).
+// The shared script names the page English, as the Glass's own `index.html` does, under both brands;
+// a `lang` Keycloak did write is left as it is. Shown red before the script set it.
+for (const brand of [undefined, "govuk"]) {
+  test(`the sign-in page is marked English (${brand ?? "ospreyflow"} brand)`, () => {
+    const win = page({ brand });
+    assert.equal(win.document.documentElement.getAttribute("lang"), "en");
+  });
+}
+
+test("a lang Keycloak wrote is kept", () => {
+  const dom = new JSDOM('<!doctype html><html lang="cy"><head></head><body></body></html>', {
+    url: "http://id.ospreyflow.localhost/realms/osprey/",
+    runScripts: "outside-only",
+  });
+  dom.window.eval(THEME);
+  assert.equal(dom.window.document.documentElement.getAttribute("lang"), "cy");
+});

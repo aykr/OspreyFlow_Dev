@@ -12,6 +12,10 @@
   var NAME = "ospreyflow_theme";
   var BUTTON_ID = "osprey-theme-toggle";
   var root = document.documentElement;
+  /* WCAG 3.1.1: Keycloak's template writes `lang` only when the realm has internationalisation on,
+     which this realm does not. English, as the Glass's own index.html has it; a `lang` already
+     written is kept. */
+  if (!root.getAttribute("lang")) root.setAttribute("lang", "en");
   /* Under the GOV.UK brand (ADR-132) the page is light only and there is no choice to offer: the
      GOV.UK Design System has no dark mode. The sign-in theme marks the page before this runs. */
   var GOVUK = root.getAttribute("data-brand") === "govuk";
