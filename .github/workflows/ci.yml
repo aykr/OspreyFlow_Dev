@@ -626,6 +626,11 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py
           ../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py
           ../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py
+          ../OspreyFlow_Build/tests/services/api/test_alert_facts.py
+          ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py
+          ../OspreyFlow_Build/tests/services/api/test_pack_store_query.py
+          ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py
+          ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py
           ../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py
           ../OspreyFlow_Build/tests/test_seed_links_replace.py
           ../OspreyFlow_Build/tests/test_stamp_datasets.py
@@ -947,6 +952,11 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_alert_facts.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_pack_store_query.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py
           --ignore=../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py
           --ignore=../OspreyFlow_Build/tests/test_seed_links_replace.py
           --ignore=../OspreyFlow_Build/tests/test_stamp_datasets.py

@@ -5,6 +5,7 @@ export type Label = string;
 export type Name1 = string;
 export type Kind = "number" | "category";
 export type Values = string[];
+export type Labels = string[];
 export type Fields = TrendFieldOption[];
 
 export interface TrendEventTypeOption {
@@ -17,5 +18,6 @@ export interface TrendFieldOption {
   name: Name1;
   kind: Kind;
   values?: Values;
+  labels?: Labels;
   [k: string]: unknown;
 }

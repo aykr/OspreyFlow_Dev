@@ -46,6 +46,26 @@ test("a trend is built and previewed by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "build-and-preview-a-trend-by-keyboard");
 });
 
+test("an alert trend is built and previewed by keyboard", async ({ page }) => {
+  const calls = await serveWorld(page, world());
+  await page.goto("/keyboard/trends-harness.html");
+  await openTab(page, 1);
+  await expect(page.getByLabel("Payments", { exact: true })).toBeVisible();
+  await page.getByLabel("Title").focus();
+  await page.keyboard.type("Alerts by rule");
+  await page.getByLabel("Alerts", { exact: true }).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByLabel("Payments", { exact: true })).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Series" }).selectOption("rule");
+  await page.getByRole("button", { name: "Preview" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => calls.find((c) => c.path === "trends/preview")?.body).toEqual({
+    title: "Alerts by rule", source: "alerts", event_types: [], measure: "count", measure_field: null,
+    interval: "week", weeks: 12, group_by: "rule", filters: [],
+  });  // prettier-ignore
+  registerCovered(REGISTRY, "build-an-alert-trend-by-keyboard");
+});
+
 test("a trend is saved by keyboard", async ({ page }) => {
   const calls = await serveWorld(page, world());
   await page.goto("/keyboard/trends-harness.html");

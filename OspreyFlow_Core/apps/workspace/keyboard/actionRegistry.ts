@@ -739,12 +739,16 @@ export const TRENDS_ACTIONS = defineActionRegistry("TRENDS_ACTIONS", [
   "build-and-preview-a-trend-by-keyboard",
   "save-a-trend-by-keyboard",
   "add-a-trend-to-a-pack-by-keyboard",
+  // ADR-134 decision 3: the builder's second source.
+  "build-an-alert-trend-by-keyboard",
 ] as const);
 
 // ADR-113 stage 5: the Packs and Published tabs.
 export const PACKS_ACTIONS = defineActionRegistry("PACKS_ACTIONS", [
   "create-a-pack-by-keyboard",
   "add-a-note-to-a-pack-by-keyboard",
+  // ADR-134 decision 1: an alert of the case's queue as a pack item.
+  "add-an-alert-to-a-pack-by-keyboard",
   "move-a-pack-item-by-keyboard",
   "refresh-a-snapshot-by-keyboard",
   "publish-a-pack-by-keyboard",

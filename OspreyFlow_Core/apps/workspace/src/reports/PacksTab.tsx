@@ -1,10 +1,10 @@
-// The Packs tab (ADR-113 stage 5): assemble a case's report pack from trends, assessments and
-// notes, put the items in order, publish it as an immutable version, withdraw a version, and
+// The Packs tab (ADR-113 stage 5): assemble a case's report pack from trends, assessments, notes
+// and alerts of the case's one queue (ADR-134 decision 1), put the items in order, publish it as an immutable version, withdraw a version, and
 // export it. Items arrive already counted and marked for this reader; what is withheld from them is
 // said once, in a sentence with no number, never which.
 import { useEffect, useState } from "react";
 
-import type { AddPackItem, Judgement, PackDraft, PackHistory, PackVersionSummary, ReportPack, TrendDefinition } from "../../../../packages/schemas/generated";
+import type { AddPackItem, Judgement, PackDraft, PackHistory, PackVersionSummary, QueuedAlert, ReportPack, TrendDefinition } from "../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../design/primitives";
 import type { ReportsApi } from "./api";
 import { ExportControl } from "./ExportControl";
@@ -18,6 +18,7 @@ import {
   getDraft,
   listJudgements,
   listPacks,
+  listQueuedAlerts,
   publishPack,
   refreshItem,
   removeItem,
@@ -26,7 +27,15 @@ import {
 } from "./packsApi";
 import { listTrends } from "./trendsApi";
 
-type Kind = "trend" | "assessment" | "note";
+type Kind = "trend" | "assessment" | "note" | "alert";
+
+const STATUS_WORD: Record<string, string> = { open: "Open", claimed: "Claimed", closed: "Closed" };
+const SEVERITY_WORD: Record<string, string> = { high: "High", medium: "Medium", low: "Low" };
+
+/** "High · Open · Money in and straight out again through …": how an alert is offered to add. */
+function queuedLabel(q: QueuedAlert): string {
+  return `${SEVERITY_WORD[q.severity ?? "medium"] ?? q.severity} · ${STATUS_WORD[q.alert.status ?? "open"] ?? q.alert.status} · ${q.summary}`;
+}
 
 /** The newest version still standing, or null while the pack is only a draft. */
 function liveVersion(pack: ReportPack): PackVersionSummary | null {
@@ -53,6 +62,8 @@ export function PacksTab({ api, canExport, print }: PacksTabProps) {
   const [history, setHistory] = useState<PackHistory | null>(null);
   const [trends, setTrends] = useState<TrendDefinition[]>([]);
   const [judgements, setJudgements] = useState<Judgement[]>([]);
+  const [queued, setQueued] = useState<QueuedAlert[]>([]);
+  const [alertId, setAlertId] = useState("");
   const [classifications, setClassifications] = useState<string[]>([]);
   const [newTitle, setNewTitle] = useState("");
   const [kind, setKind] = useState<Kind>("trend");
@@ -72,6 +83,7 @@ export function PacksTab({ api, canExport, print }: PacksTabProps) {
     listPacks(api).then((p) => live && setPacks(p)).catch((e: Error) => live && setProblem(e.message));
     listTrends(api).then((t) => live && setTrends(t)).catch(() => live && setTrends([]));
     listJudgements(api).then((j) => live && setJudgements(j)).catch(() => live && setJudgements([]));
+    listQueuedAlerts(api).then((q) => live && setQueued(q)).catch(() => live && setQueued([]));
     fetchClassifications(api).then((c) => live && setClassifications(c)).catch((e: Error) => live && setProblem(e.message));
     return () => {
       live = false;
@@ -136,6 +148,7 @@ export function PacksTab({ api, canExport, print }: PacksTabProps) {
   const addableItem = (): AddPackItem | null => {
     if (kind === "trend") return trendId ? { kind: "trend", trend_id: trendId } : null;
     if (kind === "assessment") return judgementId ? { kind: "assessment", judgement_id: judgementId } : null;
+    if (kind === "alert") return alertId ? { kind: "alert", alert_id: alertId } : null;
     return noteText.trim() !== "" && noteMarking !== "" ? { kind: "note", text: noteText.trim(), classification: noteMarking } : null;
   };
   const toAdd = addableItem();
@@ -148,6 +161,7 @@ export function PacksTab({ api, canExport, print }: PacksTabProps) {
       setNoteMarking("");
       setTrendId("");
       setJudgementId("");
+      setAlertId("");
       await reload(draft.pack.id);
       setNotice("Added to the pack.");
     });
@@ -241,7 +255,7 @@ export function PacksTab({ api, canExport, print }: PacksTabProps) {
               <PackItemView key={item.id} item={item}>
                 <Button disabled={at === 0} onClick={() => void move(at, -1)}>Move up</Button>
                 <Button disabled={at === draft.items.length - 1} onClick={() => void move(at, 1)}>Move down</Button>
-                {item.kind === "trend" && (
+                {(item.kind === "trend" || item.kind === "alert") && (
                   <Button onClick={() => void act(async () => { await refreshItem(api, draft.pack.id, item.id); await reload(draft.pack.id); setNotice("The snapshot was refreshed."); })}>
                     Refresh
                   </Button>
@@ -258,8 +272,17 @@ export function PacksTab({ api, canExport, print }: PacksTabProps) {
                   <option value="trend">Trend</option>
                   <option value="assessment">Assessment</option>
                   <option value="note">Note</option>
+                  <option value="alert">Alert</option>
                 </Select>
               </label>
+              {kind === "alert" && (
+                <Select aria-label="Alert" value={alertId} onChange={(e) => setAlertId(e.target.value)}>
+                  <option value="">{queued.length === 0 ? "No alerts in this case's queue that you can add" : "Choose an alert"}</option>
+                  {queued.map((q) => (
+                    <option key={q.alert.id} value={q.alert.id}>{queuedLabel(q)}</option>
+                  ))}
+                </Select>
+              )}
               {kind === "trend" && (
                 <Select aria-label="Saved trend" value={trendId} onChange={(e) => setTrendId(e.target.value)}>
                   <option value="">{trends.length === 0 ? "No trends are saved in this case" : "Choose a saved trend"}</option>

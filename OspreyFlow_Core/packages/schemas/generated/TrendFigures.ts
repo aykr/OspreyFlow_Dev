@@ -1,11 +1,12 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Title = string;
+export type Source = "events" | "alerts";
 /**
- * @minItems 1
  * @maxItems 12
  */
 export type EventTypes =
+  | []
   | [string]
   | [string, string]
   | [string, string, string]
@@ -68,7 +69,8 @@ export interface TrendFigures {
 }
 export interface TrendDefinitionInput {
   title: Title;
-  event_types: EventTypes;
+  source?: Source;
+  event_types?: EventTypes;
   measure?: TrendMeasure;
   measure_field?: MeasureField;
   interval?: TrendInterval;

@@ -3,10 +3,12 @@
 export type Name = string;
 export type Kind = "number" | "category";
 export type Values = string[];
+export type Labels = string[];
 
 export interface TrendFieldOption {
   name: Name;
   kind: Kind;
   values?: Values;
+  labels?: Labels;
   [k: string]: unknown;
 }

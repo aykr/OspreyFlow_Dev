@@ -5,7 +5,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PACK, OPTIONS, figures, json, serve, type Call } from "./reportsTestKit";
+import { ALERT_OPTIONS, PACK, OPTIONS, figures, json, serve, type Call } from "./reportsTestKit";
 import { TrendsTab } from "./TrendsTab";
 
 afterEach(() => {
@@ -239,5 +239,48 @@ describe("a saved trend", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Payments by channel" }));
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.path === "trends/t1")).toBe(true));
+  });
+});
+
+// ADR-134 decision 3: the builder's second source. Alerts are counted, never summed; they are split
+// and filtered by the closed alert fields alone, each value shown by its label.
+describe("an alert trend", () => {
+  function alertRoutes(extra: (call: Call) => Response | null = () => null) {
+    return routes((c) => extra(c) ?? (c.method === "GET" && c.path === "trends/options" ? json(200, ALERT_OPTIONS) : null));
+  }
+
+  it("counts alerts: no event types, no sum, the alert fields to split and filter by", async () => {
+    const calls = serve(alertRoutes((c) => (c.method === "POST" && c.path === "trends/preview" ? json(200, figures({ source: "alerts", event_types: [], measure: "count", measure_field: null, group_by: "rule" })) : null)));
+    place();
+    fireEvent.change(await screen.findByLabelText("Title"), { target: { value: "Alerts by rule" } });
+    // An analyst who began an event trend and changed their mind: nothing of it is sent.
+    fireEvent.click(await screen.findByLabelText("Payments"));
+    fireEvent.click(screen.getByRole("radio", { name: "Sum" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Alerts" }));
+    expect(screen.queryByLabelText("Payments")).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Sum" })).toBeNull();
+    const series = screen.getByLabelText("Series");
+    expect([...series.querySelectorAll("option")].map((o) => o.textContent)).toEqual(["None", "By rule", "By typology", "By severity", "By outcome"]);
+    fireEvent.change(series, { target: { value: "rule" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter property"), { target: { value: "severity" } });
+    const value = screen.getByLabelText("Filter value");
+    expect(within(value).getByRole("option", { name: "High" })).toBeTruthy();
+    fireEvent.change(value, { target: { value: "high" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(calls.find((c) => c.path === "trends/preview")?.body).toEqual({
+      title: "Alerts by rule", source: "alerts", event_types: [], measure: "count", measure_field: null, interval: "week",
+      weeks: 12, group_by: "rule", filters: [{ field: "severity", value: "high" }],
+    }));
+  });
+
+  it("can be previewed with no event type chosen, which an event trend cannot", async () => {
+    serve(alertRoutes());
+    place();
+    fireEvent.change(await screen.findByLabelText("Title"), { target: { value: "Alerts" } });
+    expect(screen.getByText("Choose at least one event type.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Alerts" }));
+    expect(screen.queryByText("Choose at least one event type.")).toBeNull();
+    expect((screen.getByRole("button", { name: "Preview" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

@@ -4,7 +4,7 @@
 import type { ReactNode } from "react";
 
 import type { PackItem } from "../../../../packages/schemas/generated";
-import { KIND_LABEL, formatDay, itemShortTitle } from "./packText";
+import { KIND_LABEL, alertEvidence, alertLine, alertMatchSentence, alertStatusSentence, formatDay, itemShortTitle } from "./packText";
 import { TrendChart } from "./TrendChart";
 
 function Content({ item }: { item: PackItem }) {
@@ -31,6 +31,33 @@ function Content({ item }: { item: PackItem }) {
         <p className="value" style={{ margin: 0 }}>{item.entity.name}</p>
         <p className="label" style={{ margin: 0 }}>{item.entity.entity_type}</p>
         <p style={{ margin: 0 }}>{item.entity.caption}</p>
+      </>
+    );
+  }
+  if (item.kind === "alert" && item.alert) {
+    const alert = item.alert;
+    const evidence = alertEvidence(alert);
+    return (
+      <>
+        <h4 style={{ margin: 0 }}>{alert.explanation}</h4>
+        <p className="label" style={{ margin: 0 }}>{alertLine(alert)}</p>
+        <p style={{ margin: 0 }}>{alertStatusSentence(alert)}</p>
+        <p style={{ margin: 0 }}>{alertMatchSentence(alert)}</p>
+        {alert.hotlist_entry && <p className="label" style={{ margin: 0 }}>{`Hotlist entry: ${alert.hotlist_entry}`}</p>}
+        {(alert.entities ?? []).length > 0 && (
+          <ul aria-label="Entities it matched" style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
+            {(alert.entities ?? []).map((e) => (
+              <li key={e.node_id}>{`${e.name} (${e.entity_type})`}</li>
+            ))}
+          </ul>
+        )}
+        {evidence.length > 0 && (
+          <ul aria-label="Evidence" style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
+            {evidence.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        )}
       </>
     );
   }

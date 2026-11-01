@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PacksTab } from "./PacksTab";
-import { ASSESSMENT_ITEM, NOTE_ITEM, PACK, PUBLISHED_PACK, TREND_ITEM, draft, json, serve, type Call } from "./reportsTestKit";
+import { ALERT_ITEM, ASSESSMENT_ITEM, NOTE_ITEM, PACK, PUBLISHED_PACK, QUEUED, TREND_ITEM, draft, json, serve, type Call } from "./reportsTestKit";
 
 afterEach(() => {
   cleanup();
@@ -206,5 +206,49 @@ describe("publishing and withdrawing", () => {
     place(true);
     await openPack();
     expect(screen.queryByRole("button", { name: "Export PDF" })).toBeNull();
+  });
+});
+
+// ADR-134 decision 1: an alert of the case's one queue added to a pack, and refreshed there.
+describe("an alert in a pack", () => {
+  it("adds an alert chosen from the case's queue, sending only its id", async () => {
+    const calls = serve(
+      routes((c) =>
+        c.method === "GET" && c.path === "alert-queue" ? json(200, QUEUED)
+        : c.method === "POST" && c.path === "packs/p1/items" ? json(201, ALERT_ITEM)
+        : null),  // prettier-ignore
+    );
+    place();
+    await openPack();
+    fireEvent.change(screen.getByLabelText("Item kind"), { target: { value: "alert" } });
+    const choice = await screen.findByLabelText("Alert");
+    expect(within(choice).getByRole("option", { name: "High · Open · Money in and straight out again through Halcyon Marine Ltd" })).toBeTruthy();
+    expect(within(choice).getByRole("option", { name: "High · Claimed · A hotlisted identifier appeared: +447700900310" })).toBeTruthy();
+    fireEvent.change(choice, { target: { value: "a1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "POST" && c.path === "packs/p1/items")?.body).toEqual({ kind: "alert", alert_id: "a1" }));
+    expect(await screen.findByText("Added to the pack.")).toBeTruthy();
+  });
+
+  it("says when there are no alerts to add, or the queue cannot be read", async () => {
+    serve(routes((c) => (c.method === "GET" && c.path === "alert-queue" ? json(403, {}) : null)));
+    place();
+    await openPack();
+    fireEvent.change(screen.getByLabelText("Item kind"), { target: { value: "alert" } });
+    expect(await screen.findByRole("option", { name: "No alerts in this case's queue that you can add" })).toBeTruthy();
+  });
+
+  it("offers Refresh on an alert item, so one added while open can say how it was closed", async () => {
+    const calls = serve(
+      routes((c) => (c.path === "packs/p1/items/i4/refresh" ? json(201, { ...ALERT_ITEM, id: "i4b" }) : null), PACK, {
+        items: [ALERT_ITEM, NOTE_ITEM],
+      }),
+    );
+    place();
+    await openPack();
+    const [alert, note] = screen.getAllByRole("article") as HTMLElement[];
+    expect(within(note!).queryByRole("button", { name: "Refresh" })).toBeNull();
+    fireEvent.click(within(alert!).getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "packs/p1/items/i4/refresh")).toBe(true));
   });
 });
