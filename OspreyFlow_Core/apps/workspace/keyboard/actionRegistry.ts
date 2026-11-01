@@ -569,6 +569,10 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
   "filter-the-queue-by-kind-and-severity-by-keyboard",
   "give-an-alert-to-a-member-by-keyboard",
   "use-a-template-by-keyboard",
+  // ADR-133 stage (b): a rule written as a sentence (shown as its drawn pattern, deployed), and
+  // previewed on the last 90 days.
+  "build-a-rule-as-a-sentence-by-keyboard",
+  "preview-a-rule-by-keyboard",
 ] as const);
 
 /** The Ownership place (ADR-109 phase C): find an entity, trace its beneficial owners, change the

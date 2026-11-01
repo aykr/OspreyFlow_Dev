@@ -2,7 +2,8 @@
 // served by the page itself: for the every-harness axe scan (`a11y/every-harness.spec.ts`, which
 // finds this page by its directory) and for the Product Overview deck's screens, in both brands
 // (`?brand=govuk`). Nothing here reaches a server. `?open=<id>` opens that alert; `?tab=rules` and
-// `?tab=watches` open those tabs. The data is synthetic (rule 9): invented names and numbers.
+// `?tab=watches` open those tabs; `?tab=rules&sentence=preview` writes a rule as a sentence there and
+// previews it (ADR-133 stage (b)). The data is synthetic (rule 9): invented names and numbers.
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -73,7 +74,52 @@ const HOTLISTS = {
   audience_editable: true,
 };  // prettier-ignore
 
+// ADR-133 stage (b): the ontology the sentence builder's blanks come from (a slice of the default's),
+// a deployed sentence, its drawn pattern and its preview.
+const ONTOLOGY = {
+  version: 17,
+  entity_types: [
+    { name: "Person", pole_class: "person", channel: "indigo", shape: "circle", identifiers: ["nino"], properties: [
+      { name: "family_name", type: "string", indexed: true }, { name: "given_names", type: "string", indexed: true },
+      { name: "date_of_birth", type: "date", sensitivity: "high" },
+      { name: "listing", type: "enum", values: ["sanction", "pep", "adverse_media"] }] },
+    { name: "Endpoint", pole_class: "object", channel: "cyan", shape: "hexagon", identifiers: ["e164"], properties: [
+      { name: "value_normalised", type: "string", indexed: true },
+      { name: "endpoint_kind", type: "enum", values: ["msisdn", "email", "account"] }] },
+    { name: "Location", pole_class: "location", channel: "ochre", shape: "pin", identifiers: [], properties: [
+      { name: "geometry_ref", type: "string" }, { name: "name", type: "string", indexed: true }] },
+  ],
+  edge_types: [
+    { name: "USES", from: ["Person"], to: ["Endpoint"], basis: "direct", label: "Uses" },
+    { name: "PRESENT_AT", from: ["Person"], to: ["Location"], temporal: true, basis: "direct", label: "Present at" },
+    { name: "TRANSACTED", from: ["Endpoint"], to: ["Endpoint"], temporal: true, basis: "direct", label: "Transacted",
+      properties: [{ name: "amount", type: "float" }] },
+  ],
+};  // prettier-ignore
+
+const SENTENCE_WORDS =
+  "When a Person whose listing is one of sanction, pep, 3 or more times by “Present at” within 7 day(s), raise a high-severity alert for the case team, after each load commits.";
+const PREVIEW = {
+  days: 90, would_raise: 7, words: SENTENCE_WORDS,
+  examples: [
+    { node_id: "p1", name: "Callum Okafor", entity_type: "Person", words: "Callum Okafor (Person): 4 times within 7 day(s)" },
+    { node_id: "p2", name: "Dana Mercer", entity_type: "Person", words: "Dana Mercer (Person): 3 times within 7 day(s)" },
+    { node_id: "p3", name: "Ilya Varga", entity_type: "Person", words: "Ilya Varga (Person): 5 times within 7 day(s)" },
+    { node_id: "p4", name: "Joel Ashby", entity_type: "Person", words: "Joel Ashby (Person): 3 times within 7 day(s)" },
+    { node_id: "p5", name: "Mira Quinn", entity_type: "Person", words: "Mira Quinn (Person): 6 times within 7 day(s)" },
+  ],
+};  // prettier-ignore
+const SENTENCE_RULE = {
+  id: "r9", investigation_id: "inv-1", owner_id: "analyst-1", name: "Listed people seen often", status: "active",
+  created_at: hoursAgo(20), trigger: "post_commit", budget_ms: 5000,
+  params: { typology: "sentence", pattern_id: "pat-9", max_matches: 200, sentence: {
+    subject: "Person", conditions: [{ op: "one_of", property: "listing", values: ["sanction", "pep"] }], relationship: null,
+    frequency: { kind: "count", link_type: "PRESENT_AT", at_least: 3, within_days: 7 },
+    severity: "high", team: "case", runs: "post_commit", on_hit: "load", scope: "this_case" } },
+};  // prettier-ignore
+
 function answer(path: string, search: URLSearchParams): unknown {
+  if (path === "/v1/ontology") return ONTOLOGY;
   if (path === "/v1/investigations") return [{ id: "inv-1", name: "Operation Ledger", level: "author", created_at: "", created_by: "" }];
   const local = path.replace("/v1/investigations/inv-1/", "");
   if (local === "alert-queue") {
@@ -93,7 +139,10 @@ function answer(path: string, search: URLSearchParams): unknown {
     return { ...row, nodes, edges: [], transactions: [] };
   }
   if (local === "alert-assignees") return [{ id: "analyst-1", name: "Ana Lyst" }, { id: "analyst-2", name: "Priya Shah" }];
-  if (local === "rules") return [];
+  if (local === "rules") return [SENTENCE_RULE];
+  if (local === "rules/preview") return PREVIEW;
+  if (local === "rules/sentence/compile")
+    return { words: SENTENCE_WORDS, pattern: { nodes: [{ var: "subject", entity_type: "Person", where: {} }], edges: [], limit: 50000 } };
   if (local === "patterns") return { patterns: [{ id: "sp1", pattern_id: "pat-1", version: 1, name: "Phone shared by two people", owner_id: "analyst-1", created_at: hoursAgo(500), definition: { nodes: [], edges: [] } }] };
   if (local === "hotlists") return HOTLISTS;
   if (local === "monitors") return { monitors: [{ id: "mo-1", pattern_id: "pat-1", owner_id: "analyst-1", status: "active", created_at: hoursAgo(500) }] };
@@ -117,6 +166,18 @@ createRoot(document.getElementById("root")!).render(
   />,
 );
 
+/** Sets a select or input as a person would, so React sees the change. */
+function choose(label: string, value: string) {
+  const field = document.querySelector<HTMLInputElement | HTMLSelectElement>(`[aria-label="${label}"]`);
+  if (!field) return false;
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value")?.set;
+  setter?.call(field, value);
+  field.dispatchEvent(new Event(field instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }));
+  return true;
+}
+const pressButton = (name: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === name)?.click();
+
 // `?open=` and `?tab=`: the page opens on that alert or tab, as a reader would by keyboard.
 const params = new URLSearchParams(window.location.search);
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
@@ -132,4 +193,25 @@ for (let i = 0; i < 40 && (tab || open); i++) {
     const button = row && [...document.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")].find((b) => b.textContent?.includes(row.summary));
     if (button) { button.click(); break; }
   }
+}
+
+// `?sentence=preview` (with `tab=rules`): a sentence written blank by blank and previewed.
+if (params.get("sentence") === "preview") {
+  for (let i = 0; i < 40 && !choose("Subject", "Person"); i++) await settle();
+  await settle();
+  pressButton("Add a condition");
+  await settle();
+  choose("Condition 1: property", "listing");
+  await settle();
+  choose("Condition 1: test", "one_of");
+  await settle();
+  for (const value of ["sanction", "pep"]) document.querySelector<HTMLInputElement>(`[aria-label="Condition 1: ${value}"]`)?.click();
+  await settle();
+  choose("Frequency", "count");
+  await settle();
+  choose("Severity", "high");
+  await settle();
+  pressButton("Show the drawn pattern");
+  await settle();
+  pressButton("Preview on the last 90 days");
 }

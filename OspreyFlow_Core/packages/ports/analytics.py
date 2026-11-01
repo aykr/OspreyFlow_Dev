@@ -24,6 +24,8 @@ from schemas.analytics import (
     EventRecord,
     FirstSeenRequest,
     FirstSeenResult,
+    FrequencyRequest,
+    FrequencyResult,
     GeoBin,
     GeoBinRequest,
     GeocodedEvent,
@@ -103,6 +105,18 @@ class AnalyticsPort(Protocol):
         """The earliest event in `req.filter` per node (either end) and per link (ADR-087). Access
         control is in the query: an event the principal may not see cannot pull a first appearance
         forward, so the answer equals the one over a corpus without that event."""
+        ...
+
+    async def event_frequency(
+        self, req: FrequencyRequest, principal: Principal
+    ) -> FrequencyResult:
+        """A rule's frequency and amount conditions (ADR-133 decision 1, stage (b)): for each of
+        `req.filter.node_ids`, at either end of an event, the most events — and the largest total of
+        `req.amount_property` — in any span of `req.span_days` days (ends included) ending at one
+        of its events within the filter, and its earliest event up to the window's end. An event
+        to itself counts once. Access control is in the query (rule 3): an event the principal may
+        not see adds nothing to a count or a total and is never a first, so the answer equals the
+        one over a store without it, and a node reached only through hidden events is absent."""
         ...
 
     # --- writes --------------------------------------------------------------

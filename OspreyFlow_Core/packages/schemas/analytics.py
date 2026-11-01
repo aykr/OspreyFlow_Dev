@@ -633,3 +633,60 @@ class CaseEvents(BaseModel):
 
 
 ALL_MODELS = (*ALL_MODELS, CaseEventHolder, CaseEvents)
+
+
+# --- Frequency and amount conditions (06_DECISIONS.md ADR-133 decision 1, stage (b)) ------------
+
+#: The longest span a frequency condition counts within: a year and a day, as a typology's window.
+FREQUENCY_SPAN_DAYS_MAX = 366
+#: The most subjects one frequency read asks about; more is the caller's to refuse (rule 2).
+FREQUENCY_NODES_MAX = 1000
+
+
+class FrequencyRequest(BaseModel):
+    """How often each of `filter.node_ids` took part in an event, for a rule's frequency or amount
+    condition (ADR-133 decision 1): "3 or more times in 7 days", "a total of an amount over X in
+    D days", "the first time ever".
+
+    `filter.node_ids` are the subjects, at either end of an event; a caller passes only nodes it
+    has read as `principal` (a rule's subjects are matched as its own author). `filter.window`
+    bounds the events counted. Within it, for each subject, the most events — and the largest total
+    of `amount_property` — in any span of `span_days` days ending at one of its events. The access
+    step is in the query (rule 3): an event the principal may not see adds nothing to a count or a
+    total, and cannot be a subject's first."""
+
+    filter: EventFilter
+    span_days: int = Field(ge=1, le=FREQUENCY_SPAN_DAYS_MAX)
+    #: A declared numeric property of the counted link type, summed; `None` counts only.
+    amount_property: str | None = None
+
+    @field_validator("filter")
+    @classmethod
+    def _names_its_subjects(cls, value: EventFilter) -> EventFilter:
+        if not value.node_ids:
+            raise ValueError("a frequency is counted for named nodes; name at least one")
+        if len(value.node_ids) > FREQUENCY_NODES_MAX:
+            raise ValueError(
+                f"a frequency is counted for at most {FREQUENCY_NODES_MAX:,} nodes at once"
+            )
+        return value
+
+
+class NodeFrequency(BaseModel):
+    """One subject's answer. `most_in_span` and `largest_total` are over the request's window;
+    `first_at` is the subject's earliest visible event at all, up to the window's end (its start is
+    not applied), so "the first time ever" is `first_at` falling inside the window."""
+
+    most_in_span: int = Field(ge=0)
+    largest_total: float | None = None
+    first_at: datetime | None = None
+
+
+class FrequencyResult(BaseModel):
+    """Every subject asked about that has at least one visible event up to the window's end; a
+    subject with none is absent."""
+
+    nodes: dict[NodeId, NodeFrequency] = Field(default_factory=dict)
+
+
+ALL_MODELS = (*ALL_MODELS, FrequencyRequest, NodeFrequency, FrequencyResult)

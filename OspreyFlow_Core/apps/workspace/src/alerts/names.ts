@@ -24,6 +24,7 @@ export const TYPOLOGY_LABELS: Record<string, string> = {
   shared_attributes: "Shared contact details",
   document_verification: "Unverified customer",
   pattern: "Drawn pattern",
+  sentence: "Sentence rule",
 };
 
 export function typologyLabel(typology: string | null | undefined): string {

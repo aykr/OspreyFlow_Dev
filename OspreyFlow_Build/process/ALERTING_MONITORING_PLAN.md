@@ -87,6 +87,21 @@ description, as a fifth capability on the welcome page and as a part of About.
     reader's SQL scope, hidden ones included; opening one alert by its id still reads its nodes in
     turn (the reader must already hold the id, and is told "not found" either way).
 
+## Built by ADR-133 stage (b) (build-order step 5, 1 November 2026)
+
+- **The sentence** (`packages/schemas/sentences.py`, `services/api/rule_sentences.py`): closed
+  choices from the ontology, refused by blank when undeclared; compiled to a drawn pattern saved as the
+  author's plus `SentenceRuleParams` (typology `sentence`); a drawn pattern reads back as the sentence.
+- **On the load path** (`services/api/sentence_rules.py`, on `RuleGate`): severity and team on the
+  alert; *just me* alerts its author alone with no `Alert` node; *hold* holds a hit's rows; a
+  deployment-wide sentence watches every case, judged in the loading case's datasets.
+- **Frequency and amount** (`AnalyticsPort.event_frequency`, DuckDB and ClickHouse, conformance first).
+- **Preview** (`POST …/rules/preview`): as the caller, `limit_exceeded` past the working-set limit,
+  writes nothing.
+- **The Glass** (`src/alerts/SentenceBuilder.tsx`), user guide 1.14 §7.6–7.8, Product Overview Draft1f.
+- Not run here: the ClickHouse half of the conformance cases, and the load path against ArcadeDB and
+  Valkey (no stack was started); see the step's report for its interpretations.
+
 ## The decisions (accepted 1 November 2026)
 
 - **ADR-133 (monitoring rules):** sentences built from POLE, templates, preview, managed lists with

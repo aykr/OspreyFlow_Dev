@@ -35,6 +35,9 @@ const EXTRA_STATES: Record<string, string[]> = {
   "start-harness.html": ["rights=investigate"],
   // The Matrix view (GDS remediation plan A1) with rows selected, and long enough to page.
   "matrix-harness.html": ["select=p2,p4", "many=1"],
+  // ADR-133 stage (b): the Rules tab with a rule written as a sentence, its drawn pattern and its
+  // preview shown.
+  "monitoring-harness.html": ["tab=rules&sentence=preview"],
 };
 
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();

@@ -142,6 +142,23 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
       const offset = Number(url.searchParams.get("offset") ?? 0);
       return json(200, { entries: AUDIT.slice(offset, offset + 50), total: AUDIT.length });
     }
+    // ADR-133 stage (b): the ontology the sentence builder offers its blanks from, the preview,
+    // the drawn pattern and the deploy.
+    if (url.pathname === "/v1/ontology") return json(200, ONTOLOGY);
+    if (path === "rules/preview")
+      return json(200, { days: 90, would_raise: 2, words: "When a Person…", examples: [
+        { node_id: "p1", name: "Callum Okafor", entity_type: "Person", words: "Callum Okafor (Person)" },
+        { node_id: "p2", name: "Dana Okafor", entity_type: "Person", words: "Dana Okafor (Person)" }] });  // prettier-ignore
+    if (path === "rules/sentence/compile")
+      return json(200, { words: "When a Person whose listing is one of sanction, pep, raise a high-severity alert for the case team, after each load commits.",
+        pattern: { nodes: [{ var: "subject", entity_type: "Person", where: {} }], edges: [], limit: 50000 } });  // prettier-ignore
+    if (path === "rules/sentence" && method === "POST") {
+      const body = request.postDataJSON() as { name: string; sentence: unknown };
+      const made = { name: body.name, id: "r3", investigation_id: "inv-1", owner_id: "analyst-1", status: "active", trigger: "post_commit",
+        created_at: "2026-11-01T00:00:00Z", params: { typology: "sentence", pattern_id: "pat-9", sentence: body.sentence } };  // prettier-ignore
+      state.rules = [made, ...state.rules];
+      return json(201, made);
+    }
     if (path === "held-rows") return json(200, state.held);
     if (path === "held-rows/reject") {
       const ids = (request.postDataJSON() as { ids: string[] }).ids;
@@ -157,6 +174,17 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
   });
   return state;
 }
+
+const ONTOLOGY = {
+  version: 1,
+  entity_types: [
+    { name: "Person", pole_class: "person", channel: "indigo", shape: "circle", identifiers: [], properties: [
+      { name: "family_name", type: "string", indexed: true },
+      { name: "listing", type: "enum", values: ["sanction", "pep", "adverse_media"] }] },
+    { name: "Location", pole_class: "location", channel: "ochre", shape: "pin", identifiers: [], properties: [] },
+  ],
+  edge_types: [{ name: "PRESENT_AT", from: ["Person"], to: ["Location"], temporal: true, basis: "direct", label: "Present at" }],
+};  // prettier-ignore
 
 async function press(page: Page, target: Locator) {
   await target.focus();
@@ -355,6 +383,60 @@ test("an Editor is offered triage but neither deployment nor the audit", async (
   await expect(page.getByRole("tab", { name: "Audit" })).toHaveCount(0);
   await press(page, page.getByRole("tab", { name: "Rules" }));
   await expect(page.getByText("A case Author deploys and retires rules.")).toBeVisible();
+});
+
+// ADR-133 stage (b): a rule written as a sentence, blank by blank, its drawn pattern shown, previewed
+// on the last 90 days and deployed — each step proven at the server it reached.
+async function writeTheSentence(page: Page) {
+  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await page.getByRole("combobox", { name: "Subject" }).focus();
+  await page.getByRole("combobox", { name: "Subject" }).selectOption("Person");
+  await press(page, page.getByRole("button", { name: "Add a condition" }));
+  await page.getByRole("combobox", { name: "Condition 1: property" }).selectOption("listing");
+  await page.getByRole("combobox", { name: "Condition 1: test" }).selectOption("one_of");
+  for (const value of ["sanction", "pep"]) {
+    await page.getByRole("checkbox", { name: `Condition 1: ${value}` }).focus();
+    await page.keyboard.press("Space");
+  }
+  await page.getByRole("combobox", { name: "Frequency" }).selectOption("count");
+  await page.getByLabel("Times or more").fill("3");
+  await page.getByRole("combobox", { name: "Severity" }).selectOption("high");
+}
+
+const WRITTEN = {
+  subject: "Person",
+  conditions: [{ op: "one_of", property: "listing", values: ["sanction", "pep"] }],
+  relationship: null,
+  frequency: { kind: "count", link_type: "PRESENT_AT", at_least: 3, within_days: 7 },
+  severity: "high", team: "case", runs: "post_commit", on_hit: "load", scope: "this_case",
+};  // prettier-ignore
+
+test("a rule is written as a sentence, shown as its drawn pattern and deployed, by keyboard", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await writeTheSentence(page);
+  await press(page, page.getByRole("button", { name: "Show the drawn pattern" }));
+  await expect(page.getByRole("region", { name: "The drawn pattern" })).toContainText("When a Person whose listing is one of sanction, pep");
+  expect(state.sent.find((s) => s.path === "rules/sentence/compile")?.body).toEqual(WRITTEN);
+  await page.getByLabel("Name of the sentence rule").fill("Listed people seen often");
+  await press(page, page.getByRole("button", { name: "Deploy the sentence" }));
+  await expect(page.getByText("Deployed “Listed people seen often”.")).toBeVisible();
+  expect(state.sent.find((s) => s.path === "rules/sentence")?.body).toEqual({ name: "Listed people seen often", sentence: WRITTEN });
+  await expect(page.getByText(/When a Person whose listing is one of sanction, pep, 3 or more times by PRESENT_AT/)).toBeVisible();
+  registerCovered(REGISTRY, "build-a-rule-as-a-sentence-by-keyboard");
+});
+
+test("a sentence is previewed on the last 90 days, by keyboard, and nothing is deployed", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await writeTheSentence(page);
+  await press(page, page.getByRole("button", { name: "Preview on the last 90 days" }));
+  const preview = page.getByRole("region", { name: "Preview" });
+  await expect(preview.getByRole("status")).toHaveText("It would have raised 2 alerts in the last 90 days.");
+  await expect(preview.getByRole("listitem")).toHaveText(["Callum Okafor (Person)", "Dana Okafor (Person)"]);
+  expect(state.sent.find((s) => s.path === "rules/preview")?.body).toEqual({ sentence: WRITTEN });
+  expect(state.sent.map((s) => s.path)).not.toContain("rules/sentence");
+  registerCovered(REGISTRY, "preview-a-rule-by-keyboard");
 });
 
 test("every registered Alerts action has its own proving test case above", () => {

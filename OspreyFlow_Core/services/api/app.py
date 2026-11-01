@@ -160,6 +160,7 @@ from schemas.domain import (
     AlertKind,
     AlertSeverity,
     Assumption,
+    CompiledSentence,
     Connections,
     ConnectionsRequest,
     DomainPack,
@@ -191,6 +192,7 @@ from schemas.domain import (
     ReportFigures,
     RuleAuditPage,
     SavedPattern,
+    SentenceReadRequest,
     SourceRef,
     TypologyRule,
     TypologyRuleInput,
@@ -253,6 +255,13 @@ from schemas.packs import (
 )
 from schemas.profile import SourceProfile
 from schemas.rights import Right, RightsResponse, rights_for
+from schemas.sentences import (
+    RulePreview,
+    RulePreviewRequest,
+    RuleSentence,
+    SentenceRuleInput,
+    SentenceRuleParams,
+)
 from schemas.trends import (
     TrendDefinition,
     TrendDefinitionInput,
@@ -566,6 +575,16 @@ from .review import (
 from .risk import NeighbourhoodTooLarge
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .rule_holds import ReleaseRefused, readable_rule_audit, release_held_rows
+from .rule_sentences import (
+    SentenceContext,
+    SentenceRefused,
+    check_sentence,
+    compile_pattern,
+    compile_sentence,
+    normalised,
+    preview_sentence,
+    sentence_of,
+)
 from .run_resources import RECIPES_REPO_ROOT, build_run_resources
 from .scheduler import (
     DEFAULT_TIMEZONE,
@@ -2339,6 +2358,15 @@ async def _ontology_error_handler(request: Request, exc: OntologyError) -> JSONR
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"error": "ontology_violation", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(SentenceRefused)
+async def _sentence_refused_handler(request: Request, exc: SentenceRefused) -> JSONResponse:
+    """ADR-133 decision 1: a sentence naming what the ontology does not declare, or a choice that
+    does not fit what it names, is refused at validation by its blank, typed, in words."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=exc.refusal.model_dump()
     )
 
 
@@ -8711,7 +8739,11 @@ async def deploy_typology_rule(
     body: TypologyRuleInput,
 ) -> TypologyRule:
     """A case Author deploys, with no second approver (ADR-109 ruling 4); audited. A drawn
-    pattern (phase D) must be one the Author saved: it is read as theirs at every evaluation."""
+    pattern (phase D) must be one the Author saved: it is read as theirs at every evaluation. A
+    sentence (ADR-133) is deployed through `…/rules/sentence`, which checks it against the ontology
+    and its scope against the author's level and rights; it is refused here."""
+    if body.params.typology == "sentence":
+        raise ReleaseRefused("a rule written as a sentence is deployed from the sentence builder")
     if body.params.typology == "pattern":
         try:
             await patterns_store.get_authorized(body.params.pattern_id, principal)
@@ -8745,6 +8777,150 @@ async def retire_typology_rule(
         action="rule_retired",
         investigation_id=investigation.id,
         resolved_query={"rule_id": rule.id},
+        result_cardinality=1,
+    )
+    return rule
+
+
+# --- rules written as sentences, and their preview (ADR-133 decisions 1 and 3, stage (b)) -------
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/sentence/compile",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def compile_rule_sentence(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    ontology: OntologyDep,
+    body: RuleSentence,
+) -> CompiledSentence:
+    """The sentence checked against the ontology and compiled to its drawn pattern — its
+    "advanced" view, to open in the query builder. Reads nothing from a store."""
+    return compile_sentence(body, ontology)
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/sentence/read",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def read_rule_sentence(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    ontology: OntologyDep,
+    body: SentenceReadRequest,
+) -> RuleSentence:
+    """A drawn pattern read back as the sentence, its other blanks kept; one a sentence cannot say
+    is refused in words. Reads nothing from a store."""
+    check_pattern_conditions(body.pattern, ontology)
+    return sentence_of(body.pattern, body.sentence, ontology)
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/preview",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def preview_rule_sentence(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    analytics: AnalyticsDep,
+    ontology: OntologyDep,
+    hotlists_store: HotlistsStoreDep,
+    screening_lists: ScreeningListsDep,
+    audit: AuditDep,
+    body: RulePreviewRequest,
+) -> RulePreview:
+    """Decision 3: "Preview on the last 90 days" — the rule run as the caller over the case's stored
+    data, counted only over what they may see (rules 3 and 7). It raises no alert and writes no
+    rule, pattern or graph element; the read is audited as every read is. Past the working-set
+    limit it is refused with `limit_exceeded` (rule 2)."""
+    sentence = body.sentence
+    check_sentence(sentence, ontology)
+    relationship = sentence.relationship
+    hotlisted = None
+    if relationship is not None and relationship.kind == "on_hotlist":
+        hotlisted = frozenset(
+            h.identifier
+            for h in await hotlists_store.list_authorized(principal)
+            if h.status == "active"
+        )
+    entries: dict[str, list[Any]] = {}
+    if relationship is not None and relationship.kind == "on_screening_list":
+        entries[sentence.subject] = list(await screening_lists.entries(sentence.subject))
+    preview = await preview_sentence(
+        sentence,
+        principal,
+        SentenceContext(
+            graph=graph,
+            analytics=analytics,
+            investigation_scope=investigation.id,
+            ontology=ontology,
+            hotlisted=hotlisted,
+            screening_entries=entries,
+        ),
+    )
+    await audit.record(
+        principal=principal,
+        action="rule_previewed",
+        investigation_id=investigation.id,
+        resolved_query={"sentence": sentence.model_dump(mode="json")},
+        result_cardinality=preview.would_raise,
+    )
+    return preview
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/sentence",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+)
+async def deploy_rule_sentence(
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    typology_rules: TypologyRulesDep,
+    patterns_store: PatternsStoreDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+    body: SentenceRuleInput,
+) -> TypologyRule:
+    """A sentence deployed: checked against the ontology, its drawn pattern saved as the author's
+    (the rule's "advanced" view, read afresh as them at each evaluation) and the rule deployed.
+    "Just me" needs the case's Editor level; "this case" its Author level (ADR-109 ruling 4);
+    "the whole deployment" its Author level and the administrator's right too."""
+    sentence = normalised(body.sentence)
+    if sentence.scope != "just_me":
+        await _authorize(investigation.id, principal, investigations, audit, AccessLevel.AUTHOR)
+    if sentence.scope == "deployment" and Right.ADMINISTER_SYSTEM not in rights_for(
+        principal.roles
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "right_required", "right": Right.ADMINISTER_SYSTEM.value},
+        )
+    pattern = compile_pattern(sentence, ontology)
+    check_pattern_conditions(pattern, ontology)
+    saved = await patterns_store.save(
+        principal, pattern_id=None, name=f"Rule: {body.name}", definition=pattern
+    )
+    rule = await typology_rules.create(
+        principal,
+        investigation.id,
+        TypologyRuleInput(
+            name=body.name,
+            params=SentenceRuleParams(
+                pattern_id=saved.pattern_id, sentence=sentence, max_matches=body.max_matches
+            ),
+            trigger=sentence.runs,
+            budget_ms=body.budget_ms,
+        ),
+    )
+    await audit.record(
+        principal=principal,
+        action="rule_deployed",
+        investigation_id=investigation.id,
+        resolved_query={"rule_id": rule.id, "rule": body.model_dump(mode="json")},
         result_cardinality=1,
     )
     return rule

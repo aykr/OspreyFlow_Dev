@@ -35,7 +35,7 @@
     "version": "1.7"
   },
   "user-guide.md": {
-    "body": "26d77089664cf7a7c0d36c3c6434a7eb07c61c56cd387c1584fb5917e1d837d7",
+    "body": "2865e69b597ea62b55dc89e4c88f0be3f8a42e89c8385aeb71e7257d3cd69d52",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -57,10 +57,11 @@
       "images/user/18-find-connections.png": "29f42fd0d166becfcc7b7edcea4096f15fb940f22509380ad8b57b7e401023e3",
       "images/user/19-export.png": "b28c8956e0c450791b4e7a83577c1085c2b5fdfe6af7db4eff20f4491e5abb54",
       "images/user/20-metrics.png": "bb0659af72c65773c860d4d261299171bc0a4a997318af3fec7ae326ee6bcdbc",
-      "images/user/21-alerts-in-reporting.png": "fe3bdcd4abd83a5fd65481fcced067cadd527138b27cef73b3fc6a2f6ecc0264"
+      "images/user/21-alerts-in-reporting.png": "fe3bdcd4abd83a5fd65481fcced067cadd527138b27cef73b3fc6a2f6ecc0264",
+      "images/user/22-rule-sentences.png": "64309e02b668b8de41cb656e0855f75e76a559c730b2133bbf40aebad23ccb0d"
     },
-    "pdf": "37270a900a888b4ce30f2e3709b104bf2216be6cd02173f3b4ac03679cac4b4c",
-    "source": "5bbeeb9f9dba9769b0c954bfbd45631a089727c9d03e0d8346e833d65ca328c9",
-    "version": "1.13"
+    "pdf": "2b214c585d2bd0accb6ff715722035ae1f3dcfaa09dbfefc160c65197fbcfbd7",
+    "source": "a506d40a040fe4c69ec5151826f627a425754b23b8f298f744169d01d3c9813e",
+    "version": "1.14"
   }
 }

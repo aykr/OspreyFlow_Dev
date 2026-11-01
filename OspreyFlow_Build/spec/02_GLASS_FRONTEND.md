@@ -956,6 +956,17 @@ drawn — the Query builder (§3.3) — and saved there; in the *Alerts* place's
 it. It always runs after each load commits (said in the form, with no choice offered). Deploying has
 its own keyboard case (`deploy-a-drawn-pattern-rule-by-keyboard`).
 
+**Rules written as sentences (ADR-133 stage (b)).** The Monitoring place's Rules tab holds *Write a
+rule as a sentence* (`src/alerts/SentenceBuilder.tsx`): subject (grouped by POLE class), up to five
+conditions on its declared properties, an optional relationship and frequency, then severity, team,
+when it runs, what a hit does before commit, and scope — every blank a list read from `/v1/ontology`,
+none free text (rule 8); a `sensitivity: high` property, a system link and a link with no dated events
+are not offered where they cannot be used, and *the whole deployment* is offered to an administrator
+only. *Show the drawn pattern* is the sentence's advanced view; *Read a saved pattern as a sentence*
+goes the other way. *Preview on the last 90 days* says the count and up to five examples, or why it
+was refused (`limit_exceeded` in words). Keyboard cases `build-a-rule-as-a-sentence-by-keyboard` and
+`preview-a-rule-by-keyboard`; the monitoring harness's `tab=rules&sentence=preview` state is axe-scanned.
+
 **Neighbourhood risk (ADR-109 phase E).** The Inspector's *Neighbourhood risk* part, for the
 selected entity, asks on request (*Score this neighbourhood*) and shows the score in words — alerts
 within two hops, halved per hop, from the last ninety days, in what the analyst can see — and each

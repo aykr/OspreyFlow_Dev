@@ -60,6 +60,7 @@ from schemas.domain import (
     HeldRow,
     Interval,
     NodeWrite,
+    OntologySchema,
     Principal,
     Provenance,
     ProvenanceState,
@@ -73,6 +74,7 @@ from schemas.domain import (
 from .alerts import AlertStore
 from .audit import AuditWriter
 from .held_rows import HeldRowStore
+from .hotlists import HotlistStore
 from .kyc_expiries import KycExpiryStore
 from .pattern_store import PatternStore
 from .screening import ScreeningListStore
@@ -436,6 +438,10 @@ async def write_alert_node(
     finding writes alongside (`pending`). `None` when no single marking is safe
     (`alert_handling`): the node is withheld, the queue row still raised."""
     record = writes if writes is not None else RuleWrites()
+    from .sentence_rules import is_just_me
+
+    if is_just_me(finding.rule):
+        return None  # an alert for its author alone puts nothing in the case's graph
     if finding.pending:
         pending_nodes = [w for w in finding.pending if isinstance(w, NodeWrite)]
         pending_edges = [w for w in finding.pending if isinstance(w, EdgeWrite)]
@@ -493,16 +499,17 @@ async def write_alert_node(
 
 
 def alert_row(finding: Finding, alert_node_id: str | None, investigation_id: str) -> Alert:
+    from .sentence_rules import sentence_alert_fields
+
+    fields = sentence_alert_fields(finding)
     return Alert(
+        **fields,
         id=new_id(),
-        rule_id=f"typology:{finding.rule.id}",
         owner_id=finding.deployer.id,
         mode=AlertMode.FULL,
         referent_node_ids=finding.node_ids,
         investigation_id=investigation_id,
         created_at=datetime.now(UTC),
-        dataset_id=finding.rule.dataset_id,
-        typology=finding.typology,
         words=finding.words,
         edge_ids=finding.edge_ids,
         event_ids=[e.event_id for e in finding.events],
@@ -577,6 +584,10 @@ class RuleGate:
     last_written: Sequence[NodeWrite | EdgeWrite] = ()
     #: ADR-109 phase F: where a verifying document's expiry is recorded for the daily sweep.
     expiries: KycExpiryStore | None = None
+    #: ADR-133 stage (b): a sentence's "on one of my hotlists", read as its author, and the
+    #: ontology a sentence's drawn pattern is read back against.
+    hotlists: HotlistStore | None = None
+    ontology: OntologySchema | None = None
 
     async def record_expiries(self, written: Sequence[NodeWrite | EdgeWrite]) -> int:
         """Every verifying document this load wrote that carries an expiry, recorded so the
@@ -599,6 +610,12 @@ class RuleGate:
         deployer = await self.principal_for_owner(rule.owner_id)
         if deployer is not None and rule.dataset_id is not None:
             deployer = deployer.model_copy(update={"datasets": [rule.dataset_id]})
+        from .sentence_rules import is_deployment_wide
+
+        if deployer is not None and is_deployment_wide(rule):
+            # ADR-133 decision 1: a deployment-wide sentence judges each case's loads within that
+            # case's datasets (the loader's), as its administrator author may read them.
+            deployer = deployer.model_copy(update={"datasets": self.loader.datasets})
         return deployer
 
     async def _audit(self, action: str, detail: dict[str, object], count: int = 0) -> None:
@@ -664,6 +681,10 @@ class RuleGate:
             return await judge_pattern(
                 rule, deployer, written, graph=self.graph, patterns=self.patterns
             )
+        if rule.params.typology == "sentence":
+            from .sentence_rules import judge_sentence_rule
+
+            return await judge_sentence_rule(rule, deployer, written, events, self)
         from .kyc_rules import KycContext, judge_kyc
 
         context = KycContext(
@@ -685,6 +706,10 @@ class RuleGate:
         movement for a flow typology; those that created a customer for a KYC one."""
         if rule.params.typology == "pattern":
             return []  # a drawn pattern runs after commit only; it never holds a row
+        if rule.params.typology == "sentence":
+            from .sentence_rules import sentence_rows
+
+            return sentence_rows(rule, events, written)
         if is_flow_rule(rule):
             return sorted(
                 {r for e in events if e.edge_type == FLOW_EDGE_TYPE for r in _source_rows(e)}
@@ -749,6 +774,19 @@ class RuleGate:
                  "findings": len(fresh)},
                 len(fresh),
             )
+            from .sentence_rules import holds_on_hit, rows_of_finding
+
+            if holds_on_hit(rule):
+                # ADR-133 decision 1: a hit holds its rows for a reviewer, the finding its reason.
+                for finding in fresh:
+                    rows = rows_of_finding(finding, events, written)
+                    for row in rows:
+                        verdict.hold.setdefault(row, (rule, f"it matched: {finding.words}"))
+                    verdict.notes.append(
+                        f"Rule “{rule.name}” matched {len(rows)} row(s); they are held for "
+                        "review, not loaded."
+                    )
+                continue
             for finding in fresh:
                 try:
                     node_id = await write_alert_node(
@@ -801,7 +839,9 @@ class RuleGate:
             "node_ids": finding.node_ids,
         }
         await self._audit("rule_fired", detail, 1)
-        if node_id is None:
+        from .sentence_rules import is_just_me
+
+        if node_id is None and not is_just_me(finding.rule):
             await self._audit(
                 "alert_node_withheld",
                 {"rule_id": finding.rule.id, "alert_id": alert.id, "node_ids": finding.node_ids,
@@ -815,6 +855,10 @@ class RuleGate:
         """A finding raised outside any load's transaction (after commit, or by the daily sweep):
         its node in a transaction of its own, then its queue row. `writes` collects what it wrote,
         for the record of the load it follows."""
+        from .sentence_rules import is_just_me
+
+        if is_just_me(finding.rule):
+            return await self._raise_row(finding, None)  # nothing goes into the case's graph
         tx = await self.graph.begin_transaction()
         try:
             node_id = await write_alert_node(

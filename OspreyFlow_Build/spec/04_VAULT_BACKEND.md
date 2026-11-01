@@ -309,6 +309,11 @@ on — one hidden handling of several hides it — and never for an alert whose 
 known; an alert kept twice counted once as it now is; bounded at 104 periods and 12 series,
 refused whole, counted from what the reader sees. Both adapters run one predicate
 (`adapters/analytics_duckdb/alert_facts.py`).
+`event_frequency` (ADR-133 decision 1, stage (b)): for named subjects at either end of an event,
+the most events and the largest total of a declared amount in any span of D days (ends included)
+within the window, and the first event ever up to the window's end; an event to itself counted once;
+an event the principal may not see adds nothing and is never a first, and a node reached only through
+hidden events is absent — the access step in the query, as every read's.
 
 **RecognisePort suite** (ADR-098) — a person, an organisation and a place found with their spans;
 spans count characters, not bytes; an empty text has no entities and the recogniser names itself; a

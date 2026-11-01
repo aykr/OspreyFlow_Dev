@@ -34,6 +34,7 @@ from schemas.packs import ALL_MODELS as PACK_MODELS  # noqa: E402
 from schemas.profile import ALL_MODELS as PROFILE_MODELS  # noqa: E402
 from schemas.provider_profile import ALL_MODELS as PROVIDER_PROFILE_MODELS  # noqa: E402
 from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
+from schemas.sentences import ALL_MODELS as SENTENCE_MODELS  # noqa: E402
 from schemas.trends import ALL_MODELS as TREND_MODELS  # noqa: E402
 
 #: Every Pydantic model in the repo the drift gate must cover: the real
@@ -57,6 +58,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *EXPLORE_MODELS,
     *TREND_MODELS,
     *PACK_MODELS,
+    *SENTENCE_MODELS,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

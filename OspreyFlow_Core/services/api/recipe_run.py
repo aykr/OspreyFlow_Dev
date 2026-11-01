@@ -191,6 +191,8 @@ async def _execute_recipe_run(
         compute=deps.compute,
         expiries=deps.kyc_expiries,
         patterns=deps.patterns_store,
+        hotlists=deps.hotlists_store,
+        ontology=deps.ontology,
     )
     report: LoadReport | PipelineRunReport
     if recipe.pipeline is not None:
@@ -311,6 +313,8 @@ async def _rule_gate(
     compute: ComputePort,
     expiries: KycExpiryStore | None,
     patterns: PatternStore,
+    hotlists: HotlistStore | None = None,
+    ontology: OntologySchema | None = None,
     fail_closed: bool = True,
 ) -> RuleGate | None:
     """The case's active typology rules for one load (ADR-109), or `None` when it has none.
@@ -336,6 +340,8 @@ async def _rule_gate(
         compute=compute,
         expiries=expiries,
         patterns=patterns,
+        hotlists=hotlists,
+        ontology=ontology,
     )
 
 

@@ -25,6 +25,7 @@ from schemas.domain import (
     TypologyRule,
     TypologyRuleInput,
 )
+from schemas.sentences import SentenceRuleParams
 
 from .dataset_scope import made_in, reach_clause
 
@@ -51,6 +52,15 @@ _COLUMNS = (
 )
 
 _PARAMS: TypeAdapter[Any] = TypeAdapter(TypologyParams)
+
+#: ADR-133 decision 1: a sentence deployed for the whole deployment watches every case's loads.
+#: Read from the stored parameters, so no column is added and no stored row changes.
+_DEPLOYMENT_WIDE = "params->'sentence'->>'scope' = 'deployment'"
+
+
+def _deployment_wide(spec: TypologyRuleInput) -> bool:
+    params = spec.params
+    return isinstance(params, SentenceRuleParams) and params.sentence.scope == "deployment"
 
 
 class TypologyRuleNotFoundError(Exception):
@@ -97,7 +107,8 @@ class TypologyRuleStore:
             investigation_id=investigation_id,
             owner_id=principal.id,
             created_at=datetime.now(UTC),
-            dataset_id=made_in(principal),
+            # A deployment-wide sentence belongs to no one case's dataset: it watches every case.
+            dataset_id=None if _deployment_wide(spec) else made_in(principal),
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
@@ -121,11 +132,13 @@ class TypologyRuleStore:
         self, investigation_id: str, principal: Principal
     ) -> list[TypologyRule]:
         """Every rule of the case within the caller's dataset reach, newest first, retired ones
-        included (the record of what ran stays readable)."""
+        included (the record of what ran stays readable) — and every deployment-wide sentence,
+        which watches this case's loads too (ADR-133 decision 1)."""
         reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                f"SELECT {_COLUMNS} FROM typology_rules WHERE investigation_id = $1{reach} "
+                f"SELECT {_COLUMNS} FROM typology_rules "
+                f"WHERE (investigation_id = $1 OR {_DEPLOYMENT_WIDE}){reach} "
                 "ORDER BY created_at DESC",
                 investigation_id,
                 *extra,
@@ -173,7 +186,8 @@ class TypologyRuleStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM typology_rules "
-                "WHERE investigation_id = $1 AND status = 'active' ORDER BY created_at",
+                f"WHERE (investigation_id = $1 OR {_DEPLOYMENT_WIDE}) AND status = 'active' "
+                "ORDER BY created_at",
                 investigation_id,
             )
         return [_row_to_rule(r) for r in rows]
