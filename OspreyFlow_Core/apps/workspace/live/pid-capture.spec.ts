@@ -138,9 +138,18 @@ export async function pickFromSearch(page: Page, text: string, pick: RegExp): Pr
  * left, through the view's own Clear view and its confirmation. */
 export async function clearCanvas(page: Page): Promise<void> {
   const clear = page.getByRole("button", { name: "Clear view" });
-  if (await clear.isEnabled().catch(() => false)) {
-    await clear.click();
-    await page.getByRole("button", { name: /^Clear all/ }).click();
+  // The case's saved working set arrives after the page draws: checked at once, Clear view was still
+  // disabled and the saved nodes landed after it (357 of them, 1 November 2026). So it is checked
+  // again until the canvas reads empty.
+  await expect(counts(page)).toBeVisible();
+  await page.waitForTimeout(3000);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (/^0 nodes/.test((await counts(page).textContent()) ?? "")) break;
+    if (await clear.isEnabled().catch(() => false)) {
+      await clear.click();
+      await page.getByRole("button", { name: /^Clear all/ }).click();
+    }
+    await page.waitForTimeout(3000);
   }
   await expect(counts(page)).toContainText(/^0 nodes/);
   // The working set is the server's: wait out a late delta from an earlier shot before adding.
@@ -724,7 +733,9 @@ test("chapter 9b: the engineer loads batch 2", async ({ page }) => {
   const run = page.getByRole("button", { name: "Run now" });
   await run.waitFor();
   await page.getByLabel(/^Source file/).fill(
-    "/var/lib/osprey/ingest/uploaded/prison-intelligence/pid_seized_comms_batch2.csv",
+    // `incoming/`, where the files writer puts batch 2 (`pid_files.py`): the demo loads it, the seed
+    // does not. The folder above only had it where someone had copied it by hand (1 November 2026).
+    "/var/lib/osprey/ingest/uploaded/prison-intelligence/incoming/pid_seized_comms_batch2.csv",
   );
   await run.click();
   await expect(page.getByRole("list", { name: "Runs of this recipe" })).toContainText(/batch2|Succeeded.*\n?.*Succeeded/, { timeout: 300_000 }).catch(() => undefined);
