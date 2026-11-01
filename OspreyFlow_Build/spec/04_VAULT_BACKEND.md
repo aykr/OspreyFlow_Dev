@@ -239,6 +239,14 @@ material with no handling given never sent); and the rendered deployment's conta
 internal network with no route out, the model gateway joining the `egress` network only when a
 provider is named.
 
+**As built (1 November 2026, ADR-136):** a second condition, per dataset. Material reaches a hosted
+engine only when its handling code is sendable **and** every dataset it comes from allows that engine:
+egress `none` (every dataset's setting until an administrator changes it, those made before ADR-136
+included), `contracted` (only a provider marked `privacy_contract: true`) or `any`. Material whose
+datasets are not given or not found is `none`. Each caller names the datasets on its request (Ask the
+case: the case's; a Document: its own; an extraction in a case: the case's), and the routing reads
+their egress from the `datasets` table (`model_routing.dataset_refusal`).
+
 ## 5. Supporting services
 
 | Service | Choice | Licence | Role |

@@ -499,7 +499,8 @@ class PatternProposer:
         vocabulary = vocabulary_of(ontology)
         # Handling is not given: the text holds the ontology and the analyst's own words, no
         # record, and a client's provider is never sent material with no handling
-        # (`model_routing.py`).
+        # (`model_routing.py`). Nor datasets (ADR-136): not known is `none`, so it stays local
+        # on that count too.
         result = await self._model.extract(
             ExtractionRequest(
                 document_id=document_id,

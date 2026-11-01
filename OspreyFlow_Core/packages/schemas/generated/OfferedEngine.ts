@@ -4,6 +4,9 @@ export type Name = string;
 export type Label = string;
 export type Roles = ("extraction" | "vision" | "transcription" | "embedding")[];
 export type DefaultFor = ("extraction" | "vision" | "transcription" | "embedding")[];
+export type PrivacyContract = boolean;
+export type Available = boolean;
+export type Reason = string | null;
 
 /**
  * An engine an analyst may choose (ADR-135 decision 5): the local engine, and each enabled
@@ -14,5 +17,8 @@ export interface OfferedEngine {
   label: Label;
   roles: Roles;
   default_for: DefaultFor;
+  privacy_contract?: PrivacyContract;
+  available?: Available;
+  reason?: Reason;
   [k: string]: unknown;
 }

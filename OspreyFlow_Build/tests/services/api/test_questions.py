@@ -14,8 +14,10 @@ here would do, and the case that catches it:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
-from services.api.datasets import InMemoryDatasetStore
+from services.api.datasets import Dataset, InMemoryDatasetStore
 from services.api.document_reader import DocumentReaderService
 from services.api.email_extraction import email_document_id
 from services.api.questions import (
@@ -236,6 +238,12 @@ async def test_an_answer_says_the_engine_and_model_that_produced_it_and_keeps_sa
     gemini = Engine(name="gemini", label="Gemini", key_present=True,
                     models={"extraction": "gemini/gemini-2.5-flash"})  # fmt: skip
     codes = {_document("d").handling.handling_code, node("a").handling.handling_code}
+    # ADR-136: the case reads a dataset an administrator set to `any`.
+    datasets = service._datasets
+    opened = Dataset(id="open", name="Open", owning_unit="unit-1", egress="any",
+                     created_at=datetime.now(UTC), created_by="seed")  # fmt: skip
+    datasets.add(opened)  # type: ignore[attr-defined]
+    datasets.cases["inv-1"] = ["open"]  # type: ignore[attr-defined]
     service._model = RoutedModel(  # type: ignore[assignment]
         model,  # type: ignore[arg-type]
         routes=ModelRoutes(
@@ -243,6 +251,7 @@ async def test_an_answer_says_the_engine_and_model_that_produced_it_and_keeps_sa
             engines={"gemini": gemini},
             sendable=frozenset(codes),
         ),
+        egress=datasets,
     )
     answered = await service.ask("inv-1", "Who?", ANALYST, engine="gemini")
     (request,) = model.requests
@@ -252,3 +261,32 @@ async def test_an_answer_says_the_engine_and_model_that_produced_it_and_keeps_sa
     assert (kept.engine, kept.model) == ("gemini", "gemini/gemini-2.5-flash")
     local = await service.ask("inv-1", "Who?", ANALYST, engine="local")
     assert (local.engine, local.model) == ("local", "local-model")
+
+
+async def test_ask_the_case_names_its_datasets_and_one_set_to_none_stays_local() -> None:
+    """ADR-136 decision 3, at the caller: Ask the case names the case's datasets on its request, so
+    a case reading a dataset left at `none` is answered locally even when Gemini is named and the
+    handling code is sendable — and the answer says so."""
+    from services.api.model_routing import Engine, ModelRoutes, RoutedModel
+
+    service, model, _, _, _ = await _service()
+    gemini = Engine(name="gemini", label="Gemini", key_present=True,
+                    models={"extraction": "gemini/gemini-2.5-flash"})  # fmt: skip
+    codes = {_document("d").handling.handling_code, node("a").handling.handling_code}
+    datasets = service._datasets
+    for id_, egress in (("open", "any"), ("kept-in", "none")):
+        made = Dataset(id=id_, name=id_, owning_unit="unit-1", egress=egress,  # type: ignore[arg-type]
+                       created_at=datetime.now(UTC), created_by="seed")  # fmt: skip
+        datasets.add(made)  # type: ignore[attr-defined]
+    datasets.cases["inv-1"] = ["open", "kept-in"]  # type: ignore[attr-defined]
+    service._model = RoutedModel(  # type: ignore[assignment]
+        model,  # type: ignore[arg-type]
+        routes=ModelRoutes(locals={"extraction": "local-model"}, engines={"gemini": gemini},
+                           sendable=frozenset(codes)),  # fmt: skip
+        egress=datasets,
+    )
+    answered = await service.ask("inv-1", "Who?", ANALYST, engine="gemini")
+    (request,) = model.requests
+    assert request.datasets == ["open", "kept-in"]
+    assert request.model == "local-model"
+    assert (answered.engine, answered.model) == ("local", "local-model")

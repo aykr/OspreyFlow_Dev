@@ -69,6 +69,14 @@ export type Label = string | null;
  */
 export type ApiBase = string | null;
 /**
+ * ADR-136: true when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false.
+ */
+export type PrivacyContract = boolean;
+/**
+ * ADR-136: the agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark.
+ */
+export type ContractReference = string | null;
+/**
  * ADR-135: the providers an administrator enables; each key is OSPREY_MODEL_KEY_<NAME>, entered at install or with `ospreyflow models key`.
  */
 export type Providers = ModelProviderConfig[];
@@ -477,6 +485,8 @@ export interface ModelProviderConfig {
   label?: Label;
   roles: Roles;
   api_base?: ApiBase;
+  privacy_contract?: PrivacyContract;
+  contract_reference?: ContractReference;
 }
 /**
  * The roles it takes, each with the provider's model for it

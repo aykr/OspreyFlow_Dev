@@ -46,6 +46,10 @@ class ExtractionRequest(BaseModel):
     #: provider's name); `None` is the role's default. The route decides: a named engine that is not
     #: enabled or has no key is refused, and unsendable material runs locally whatever is named.
     engine: str | None = None
+    #: ADR-136 decision 3: the datasets the material comes from. It is sent to a hosted engine only
+    #: when every one of them allows that engine; `None` or empty is not known, and not known is
+    #: `none` — nothing leaves by omission.
+    datasets: list[str] | None = None
 
 
 class ExtractionResult(BaseModel):
@@ -77,10 +81,19 @@ class OfferedEngine(BaseModel):
     roles: list[ModelRoleName]
     #: The roles it is the default engine for.
     default_for: list[ModelRoleName]
+    #: ADR-136 decision 1: whether the deployment's organisation holds a data-processing agreement
+    #: with this provider ("under contract" / "no contract"). False for the local engine.
+    privacy_contract: bool = False
+    #: ADR-136 decision 3: whether the case's data may reach it. Always true for the local engine,
+    #: and outside a case; within a case, false when a dataset's egress does not allow it.
+    available: bool = True
+    #: Why it is not available, in words; `None` when it is.
+    reason: str | None = None
 
 
 class OfferedEngines(BaseModel):
-    """`GET /v1/models/engines`."""
+    """`GET /v1/models/engines`, and `GET /v1/investigations/{id}/models/engines` (ADR-136), where
+    an engine the case's data may not reach is listed unavailable, with the reason."""
 
     engines: list[OfferedEngine]
 
@@ -100,6 +113,10 @@ class TranscribeRequest(BaseModel):
     #: its handling code is sendable; `None` is treated as not sendable (`services/api/
     #: model_routing.py`).
     handling: Handling | None = None
+    #: ADR-136 decision 3: the datasets the material comes from. It is sent to a hosted engine only
+    #: when every one of them allows that engine; `None` or empty is not known, and not known is
+    #: `none` — nothing leaves by omission.
+    datasets: list[str] | None = None
 
 
 class TranscriptWord(BaseModel):
@@ -138,6 +155,10 @@ class VisionRequest(BaseModel):
     #: its handling code is sendable; `None` is treated as not sendable (`services/api/
     #: model_routing.py`).
     handling: Handling | None = None
+    #: ADR-136 decision 3: the datasets the material comes from. It is sent to a hosted engine only
+    #: when every one of them allows that engine; `None` or empty is not known, and not known is
+    #: `none` — nothing leaves by omission.
+    datasets: list[str] | None = None
 
 
 class ImageAnalysis(BaseModel):

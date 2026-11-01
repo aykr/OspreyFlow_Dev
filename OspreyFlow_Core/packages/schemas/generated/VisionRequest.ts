@@ -11,6 +11,7 @@ export type SanitisationCode = string | null;
 export type OrgUnitId = string;
 export type ReviewDate = string | null;
 export type LegalBasis = string | null;
+export type Datasets = string[] | null;
 
 export interface VisionRequest {
   document_id: DocumentId;
@@ -19,6 +20,7 @@ export interface VisionRequest {
   json_schema: JsonSchema;
   model: Model;
   handling?: Handling | null;
+  datasets?: Datasets;
   [k: string]: unknown;
 }
 export interface JsonSchema {

@@ -292,7 +292,8 @@ def model_key_variables(config: OspreyConfig) -> dict[str, str]:
 
 def model_engines_env(config: OspreyConfig) -> list[str]:
     """ADR-135: what the Conduit is told of the engines, as `deployment.env` lines — each enabled
-    provider's name, label and model per role, each role's default engine, and the sendable codes.
+    provider's name, label, model per role and privacy-contract mark (ADR-136), each role's
+    default engine, and the sendable codes.
     Never a key, and not whether one is present: that is resolved by Compose from the env file when
     the Conduit starts (`OSPREY_MODEL_KEY_PRESENT_<NAME>`, `_keys_for_the_gateway_alone`), so
     setting or removing a key needs no render."""
@@ -304,6 +305,9 @@ def model_engines_env(config: OspreyConfig) -> list[str]:
             "name": p.name,
             "label": p.label,
             "roles": {role: f"{p.name}/{model}" for role, model in p.roles.items()},
+            # ADR-136 decision 1: the contract mark and its reference (words, never a secret).
+            "privacy_contract": p.privacy_contract,
+            "contract_reference": p.contract_reference,
         }
         for p in models.enabled_providers
     ]

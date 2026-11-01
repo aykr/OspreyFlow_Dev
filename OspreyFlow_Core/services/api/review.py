@@ -36,6 +36,7 @@ content renders with the entity spans... highlighted in place" (`08_ACCEPTANCE_S
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, cast
@@ -359,6 +360,7 @@ async def run_extraction(
     handling: Handling,
     principal: Principal,
     extraction_model: str,
+    datasets: Sequence[str] | None = None,
     window_chars: int = 40_000,
     overlap_chars: int = 2_000,
 ) -> list[ExtractionCandidateRecord]:
@@ -383,6 +385,8 @@ async def run_extraction(
                 json_schema=schema,
                 model=extraction_model,
                 handling=handling,
+                # ADR-136: the datasets the text comes from; not given is `none`.
+                datasets=list(datasets) if datasets is not None else None,
             )
         )
         for found in extract_candidates(result, profile, ontology, window, handling):

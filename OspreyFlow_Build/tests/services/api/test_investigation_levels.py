@@ -110,6 +110,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # ADR-099: what a case reads is the Author's to change.
     ("GET", P + "/datasets"): V,
     ("PUT", P + "/datasets"): A,
+    # ADR-136 decision 3: the engines this case's data may reach; a Viewer may ask.
+    ("GET", P + "/models/engines"): V,
     # ADR-099: reads over the whole graph moved under the case, so they read only its datasets.
     ("POST", P + "/search"): V,
     ("POST", P + "/suggest"): V,

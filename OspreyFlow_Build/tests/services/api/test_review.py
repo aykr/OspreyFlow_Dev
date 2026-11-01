@@ -89,6 +89,7 @@ async def test_run_extraction_persists_pending_candidates(store: ExtractionCandi
         handling=_handling(),
         principal=ANALYST,
         extraction_model="qwen2.5:0.5b-instruct",
+        datasets=["case-dataset"],
     )
 
     assert len(records) == 1
@@ -97,6 +98,8 @@ async def test_run_extraction_persists_pending_candidates(store: ExtractionCandi
     assert model.requests[0].model == "qwen2.5:0.5b-instruct"
     # ADR-114 Amendment 6: the document's handling travels with it, or it is never sent.
     assert model.requests[0].handling == _handling()
+    # ADR-136: and its datasets, or a hosted engine is never sent it.
+    assert model.requests[0].datasets == ["case-dataset"]
 
     listed = await store.list_for_document(document_id, ANALYST)
     assert len(listed) == 1

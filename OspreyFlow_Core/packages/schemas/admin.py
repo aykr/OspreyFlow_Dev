@@ -138,6 +138,33 @@ class EngineStatus(BaseModel):
     default_for: list[str]
     #: Always true for `local`; for a provider, whether `deployment.env` holds its key.
     key_present: bool
+    #: ADR-136 decision 1: the deployment's organisation holds a data-processing agreement with the
+    #: provider covering this key. Always false for `local`, which sends nothing anywhere.
+    privacy_contract: bool = False
+    #: The agreement's reference, in words — never a secret.
+    contract_reference: str | None = None
+
+
+#: ADR-136 decision 2: where a dataset's material may go. `none` (the default): never to a hosted
+#: engine; `contracted`: only to a provider marked `privacy_contract: true`; `any`: to any enabled
+#: provider. The handling code must still be sendable.
+DatasetEgress = Literal["none", "contracted", "any"]
+
+
+class AdminDataset(BaseModel):
+    """One dataset as the Admin area's Datasets screen shows it (ADR-136 decision 2): its name, the
+    unit that holds it, and its egress."""
+
+    id: str
+    name: str
+    owning_unit: str
+    egress: DatasetEgress
+
+
+class DatasetEgressInput(BaseModel):
+    """`PUT /v1/admin/datasets/{dataset_id}/egress`: an administrator's change, audited."""
+
+    egress: DatasetEgress
 
 
 class UpdateNotice(BaseModel):
@@ -284,5 +311,5 @@ ALL_MODELS: list[type[BaseModel]] = [
     ComponentHealth, UpdateNotice, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
     ModelRoleStatus, EngineStatus, ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed,
-    ChangeScheduleInput,
+    ChangeScheduleInput, AdminDataset, DatasetEgressInput,
 ]  # fmt: skip

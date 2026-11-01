@@ -239,6 +239,25 @@ PROVIDER_LABELS: dict[str, str] = {"openai": "OpenAI", "anthropic": "Anthropic",
 LOCAL_ENGINE = "local"
 
 
+#: ADR-136: how long a contract reference may be — a name or number, not a document.
+MAX_CONTRACT_REFERENCE = 200
+#: A provider key's own prefixes (OpenAI and Anthropic `sk-`, Google `AIza`).
+_KEY_PREFIXES = ("sk-", "AIza")
+
+
+def _looks_like_a_key(text: str) -> bool:
+    """A key's shape: a known key prefix, or one unbroken run of 24 or more letters, digits, `-`
+    and `_` mixing letters and digits. A reference in words (`DPA-2026-0001, signed 3 March`) has
+    spaces or is short."""
+    if any(word.startswith(_KEY_PREFIXES) for word in text.split()):
+        return True
+    return bool(
+        re.fullmatch(r"[A-Za-z0-9_\-]{24,}", text)
+        and re.search(r"[A-Za-z]", text)
+        and re.search(r"[0-9]", text)
+    )
+
+
 class ModelProviderConfig(BaseModel):
     """A client's own model provider (ADR-114 decision 11, Amendment 6 point 4; ADR-135), reached
     through the deployment's LiteLLM gateway, for material whose handling code is in
@@ -263,6 +282,17 @@ class ModelProviderConfig(BaseModel):
         default=None,
         description="The provider's address, where it is not LiteLLM's default (an Azure "
         "deployment, a proxy)",
+    )
+    privacy_contract: bool = Field(
+        default=False,
+        description="ADR-136: true when the deployment's organisation holds a data-processing "
+        "agreement with the provider covering this key. A dataset whose egress is `contracted` is "
+        "sent only to a provider marked so. Default: false.",
+    )
+    contract_reference: str | None = Field(
+        default=None,
+        description="ADR-136: the agreement's reference, in words (for example DPA 2026/07); "
+        "never a secret. Shown beside the mark.",
     )
 
     @field_validator("name")
@@ -293,6 +323,36 @@ class ModelProviderConfig(BaseModel):
                 "the provider's address must be https://, so case content is encrypted"
             )
         return value
+
+    @field_validator("contract_reference")
+    @classmethod
+    def _reference_is_words(cls, value: str | None) -> str | None:
+        """ADR-136 decision 1: words, never a secret. One line, short, and not shaped like a key —
+        the mark and its reference are shown in the Admin area and the analysts' engine choice."""
+        if value is None:
+            return None
+        if "\n" in value or "\r" in value:
+            raise ValueError("the contract reference is one line of words")
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if len(cleaned) > MAX_CONTRACT_REFERENCE:
+            raise ValueError(
+                f"the contract reference is at most {MAX_CONTRACT_REFERENCE} characters"
+            )
+        if not re.fullmatch(r"[A-Za-z0-9 .,;:/()&'_+\-]+", cleaned):
+            # It travels to the Conduit in `deployment.env`, where `$` and ` #` would be read as
+            # an interpolation and a comment, and in JSON, where a quote or backslash is escaped.
+            raise ValueError(
+                "the contract reference may hold letters, digits, spaces and . , ; : / ( ) & ' _ "
+                "+ - only"
+            )
+        if _looks_like_a_key(cleaned):
+            raise ValueError(
+                "the contract reference looks like a key; it is shown to analysts, so give the "
+                "agreement's name or number in words, and the key with ospreyflow models key"
+            )
+        return cleaned
 
     @model_validator(mode="after")
     def _labelled(self) -> ModelProviderConfig:

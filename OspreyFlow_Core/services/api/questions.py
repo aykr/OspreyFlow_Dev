@@ -624,6 +624,9 @@ class QuestionsService:
                 model=self._default_model,
                 handling=shared_handling([h for _, _, _, h in documents] + list(brief.handlings)),
                 engine=engine,
+                # ADR-136: what is sent is read from the case, so it comes from the case's
+                # datasets; a hosted engine sees it only when every one of them allows it.
+                datasets=await self._datasets.ids_of_case(investigation_id),
             )
         )
         data = result.data

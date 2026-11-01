@@ -177,6 +177,8 @@ export type { AdminSchedule } from "./AdminSchedule";
 export type { PauseScheduleInput } from "./PauseScheduleInput";
 export type { DataFeed } from "./DataFeed";
 export type { ChangeScheduleInput } from "./ChangeScheduleInput";
+export type { AdminDataset } from "./AdminDataset";
+export type { DatasetEgressInput } from "./DatasetEgressInput";
 export type { ExtractionRequest } from "./ExtractionRequest";
 export type { ExtractionResult } from "./ExtractionResult";
 export type { TranscribeRequest } from "./TranscribeRequest";

@@ -4,10 +4,14 @@ export type Name = string;
 export type Label = string;
 export type Roles = ("extraction" | "vision" | "transcription" | "embedding")[];
 export type DefaultFor = ("extraction" | "vision" | "transcription" | "embedding")[];
+export type PrivacyContract = boolean;
+export type Available = boolean;
+export type Reason = string | null;
 export type Engines = OfferedEngine[];
 
 /**
- * `GET /v1/models/engines`.
+ * `GET /v1/models/engines`, and `GET /v1/investigations/{id}/models/engines` (ADR-136), where
+ * an engine the case's data may not reach is listed unavailable, with the reason.
  */
 export interface OfferedEngines {
   engines: Engines;
@@ -22,5 +26,8 @@ export interface OfferedEngine {
   label: Label;
   roles: Roles;
   default_for: DefaultFor;
+  privacy_contract?: PrivacyContract;
+  available?: Available;
+  reason?: Reason;
   [k: string]: unknown;
 }

@@ -200,6 +200,7 @@ class DocumentContentService:
                     json_schema=VISION_SCHEMA,
                     model=self._vision_model,
                     handling=node.handling,
+                    datasets=node.datasets,  # ADR-136
                 )
             )
             description = str(analysis.data.get("description") or "").strip()
@@ -212,6 +213,7 @@ class DocumentContentService:
                     audio=data,
                     model=self._transcribe_model,
                     handling=node.handling,
+                    datasets=node.datasets,  # ADR-136
                 )
             )
             return " ".join(segment.text.strip() for segment in transcript.segments).strip()
@@ -259,6 +261,7 @@ class DocumentContentService:
             handling=node.handling,
             principal=principal,
             extraction_model=self._text_model,
+            datasets=node.datasets,  # ADR-136: the Document's own datasets
         )
         return DocumentExtractionResult(document_id=node.id, text=text, candidates=candidates)
 

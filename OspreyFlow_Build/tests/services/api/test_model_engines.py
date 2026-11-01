@@ -38,6 +38,7 @@ from fastapi.testclient import TestClient
 from harness.render import model_engines_env, render_litellm_config
 from services.api.app import app, get_model_routes, get_principal
 from services.api.config import DeploymentModels
+from services.api.datasets import Dataset, InMemoryDatasetStore
 from services.api.model_routing import (
     EngineRefused,
     ModelEgressRefused,
@@ -74,6 +75,14 @@ MODELS = ModelsConfig.model_validate(
 GATEWAY_ENV = {"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY, "OSPREY_MODEL_KEY_ANTHROPIC": ANTHROPIC_KEY}
 #: What each provider itself accepts.
 PROVIDERS_ACCEPT = {"gemini": GEMINI_KEY, "anthropic": ANTHROPIC_KEY, "openai": "sk-openai-real"}
+
+
+#: ADR-136: since datasets also decide egress, these requests come from a dataset an administrator
+#: set to `any`, so only ADR-135's own conditions are under test here (`test_dataset_egress.py`
+#: tests the datasets').
+OPEN = InMemoryDatasetStore()
+OPEN.add(Dataset(id="open", name="Open", owning_unit="u", created_by="seed", egress="any",
+                 created_at="2026-11-01T00:00:00Z"))  # type: ignore[arg-type]  # fmt: skip
 
 
 def _handling(code: str) -> Handling:
@@ -168,9 +177,13 @@ def _gateway(environ: Mapping[str, str] = GATEWAY_ENV) -> StandInGateway:
     return StandInGateway(_table(), environ, PROVIDERS_ACCEPT)
 
 
+def _routed(gateway: StandInGateway, routes: ModelRoutes) -> RoutedModel:
+    return RoutedModel(gateway, routes=routes, egress=OPEN)  # type: ignore[arg-type]
+
+
 def _ask(engine: str | None, handling: Handling | None) -> ExtractionRequest:
     return ExtractionRequest(document_id="q", text="t", json_schema={}, model=LOCAL,
-                             handling=handling, engine=engine)  # fmt: skip
+                             handling=handling, engine=engine, datasets=["open"])  # fmt: skip
 
 
 # --- the stand-in, shown to refuse first (rule 15) -----------------------------------------------
@@ -199,12 +212,12 @@ async def test_the_stand_in_gateway_refuses_as_the_real_one_does() -> None:
 
 async def test_naming_gemini_for_material_that_may_not_be_sent_does_not_send_it() -> None:
     gateway = _gateway()
-    result = await RoutedModel(gateway, routes=_routes()).extract(_ask("gemini", _handling("C")))
+    result = await _routed(gateway, _routes()).extract(_ask("gemini", _handling("C")))
     assert gateway.asked == [LOCAL]
     assert not [m for m in gateway.asked if m.startswith("gemini/")]
     assert (result.engine, result.model) == ("local", LOCAL)
     # Material whose handling is not given is never sent either.
-    await RoutedModel(gateway, routes=_routes()).extract(_ask("gemini", None))
+    await _routed(gateway, _routes()).extract(_ask("gemini", None))
     assert gateway.asked == [LOCAL, LOCAL]
 
 
@@ -213,7 +226,7 @@ async def test_with_no_local_model_unsendable_material_naming_gemini_is_refused_
 ):
     gateway = _gateway()
     with pytest.raises(ModelEgressRefused, match="handling code C may not be sent"):
-        await RoutedModel(gateway, routes=_routes(extraction=None)).extract(
+        await _routed(gateway, _routes(extraction=None)).extract(
             _ask("gemini", _handling("C"))
         )
     assert gateway.asked == []
@@ -222,23 +235,23 @@ async def test_with_no_local_model_unsendable_material_naming_gemini_is_refused_
 async def test_an_engine_not_enabled_is_refused_in_words() -> None:
     gateway = _gateway()
     with pytest.raises(EngineRefused, match="mistral is not an engine this deployment enabled"):
-        await RoutedModel(gateway, routes=_routes()).extract(_ask("mistral", _handling("P")))
+        await _routed(gateway, _routes()).extract(_ask("mistral", _handling("P")))
     assert gateway.asked == []
 
 
 async def test_an_engine_with_no_key_is_refused_in_words() -> None:
     gateway = _gateway()
     with pytest.raises(EngineRefused, match="OpenAI has no key on this deployment"):
-        await RoutedModel(gateway, routes=_routes()).extract(_ask("openai", _handling("P")))
+        await _routed(gateway, _routes()).extract(_ask("openai", _handling("P")))
     # Refused whatever the material, before anything is sent.
     with pytest.raises(EngineRefused, match="no key"):
-        await RoutedModel(gateway, routes=_routes()).extract(_ask("openai", _handling("C")))
+        await _routed(gateway, _routes()).extract(_ask("openai", _handling("C")))
     assert gateway.asked == []
 
 
 async def test_an_answer_names_its_engine_and_model() -> None:
     gateway = _gateway()
-    routed = RoutedModel(gateway, routes=_routes())
+    routed = _routed(gateway, _routes())
     sent = await routed.extract(_ask("gemini", _handling("P")))
     assert (sent.engine, sent.model) == ("gemini", "gemini/gemini-2.5-flash")
     local = await routed.extract(_ask("local", _handling("P")))
@@ -248,12 +261,12 @@ async def test_an_answer_names_its_engine_and_model() -> None:
 
 async def test_no_engine_named_runs_on_the_default_and_a_default_with_no_key_runs_locally() -> None:
     gateway = _gateway()
-    result = await RoutedModel(gateway, routes=_routes()).extract(_ask(None, _handling("P")))
+    result = await _routed(gateway, _routes()).extract(_ask(None, _handling("P")))
     assert (result.engine, result.model) == ("anthropic", "anthropic/claude-sonnet-4")
     # The default's key removed: it is not used, and nothing reaches the gateway for it.
     without = {"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY}
     gateway = _gateway(without)
-    result = await RoutedModel(gateway, routes=_routes(keys=without)).extract(
+    result = await _routed(gateway, _routes(keys=without)).extract(
         _ask(None, _handling("P"))
     )
     assert (result.engine, gateway.asked) == ("local", [LOCAL])
@@ -287,8 +300,9 @@ def test_the_status_shows_each_engine_its_defaults_and_whether_its_key_is_presen
     )
     assert notice == (
         "Case content with handling code P is sent to anthropic for extraction, and may be sent to "
-        "gemini for extraction when an analyst chooses it. Anything else runs on this "
-        "deployment's own models."
+        "gemini for extraction when an analyst chooses it, but only from a dataset whose egress "
+        "allows it (Admin, Datasets; every dataset is none until an administrator changes it). "
+        "Anything else runs on this deployment's own models."
     )
     for text in (json.dumps([s.model_dump() for s in statuses]), notice):
         assert GEMINI_KEY not in text and ANTHROPIC_KEY not in text
@@ -314,10 +328,13 @@ def test_the_engines_route_offers_only_enabled_engines_with_a_key(client: TestCl
         "engines": [
             {"name": "local", "label": "This deployment's own model",
              "roles": ["extraction", "vision", "transcription", "embedding"],
-             "default_for": ["vision", "transcription", "embedding"]},
-            {"name": "gemini", "label": "Gemini", "roles": ["extraction"], "default_for": []},
+             "default_for": ["vision", "transcription", "embedding"],
+             "privacy_contract": False, "available": True, "reason": None},
+            {"name": "gemini", "label": "Gemini", "roles": ["extraction"], "default_for": [],
+             "privacy_contract": False, "available": True, "reason": None},
             {"name": "anthropic", "label": "Claude", "roles": ["extraction"],
-             "default_for": ["extraction"]},
+             "default_for": ["extraction"],
+             "privacy_contract": False, "available": True, "reason": None},
         ]
     }  # fmt: skip
 

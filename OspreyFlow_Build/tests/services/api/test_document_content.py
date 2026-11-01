@@ -86,6 +86,7 @@ def _document(doc_id: str, kind: str, ref: str, classification: str = "OFFICIAL"
         ),
         handling=HANDLING.model_copy(update={"classification": classification}),
         audit=AuditStub(created_at=datetime(2026, 1, 1, tzinfo=UTC), created_by="loader-1"),
+        datasets=["media-dataset"],
     )
 
 
@@ -153,7 +154,10 @@ async def test_an_image_is_described_and_its_text_read_then_extracted_from() -> 
     (vision,) = model.vision
     assert vision.image == PNG and vision.model == "vision-model"
     assert vision.handling is not None and vision.handling.handling_code == HANDLING.handling_code
+    # ADR-136: the Document's datasets travel with it, or a hosted engine is never sent it.
+    assert vision.datasets == ["media-dataset"]
     (extraction,) = model.requests
+    assert extraction.datasets == ["media-dataset"]
     assert "beside a grey van at a dock gate." in extraction.text and "AB12 CDE" in extraction.text
     assert candidates.texts["image-1"][0] == extraction.text
     assert [c.status.value for c in result.candidates] == ["pending"]
@@ -166,6 +170,7 @@ async def test_a_video_is_transcribed_then_extracted_from() -> None:
     (transcription,) = model.transcriptions
     assert transcription.audio == MP4 and transcription.model == "speech-model"
     assert transcription.handling is not None
+    assert transcription.datasets == ["media-dataset"]  # ADR-136
     (extraction,) = model.requests
     assert extraction.text == "Tomasz is driving. Gate three."
 

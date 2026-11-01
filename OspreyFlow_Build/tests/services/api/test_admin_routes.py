@@ -304,8 +304,9 @@ def test_the_system_screen_shows_each_roles_model_and_where_it_runs(
     }  # fmt: skip
     assert roles["vision"]["runs_at"] == "this deployment"
     assert body["model_notice"] == (
-        "Case content with handling code P is sent to openai for extraction. Anything else runs on "
-        "this deployment's own models."
+        "Case content with handling code P is sent to openai for extraction, but only from a "
+        "dataset whose egress allows it (Admin, Datasets; every dataset is none until an "
+        "administrator changes it). Anything else runs on this deployment's own models."
     )
 
 

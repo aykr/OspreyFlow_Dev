@@ -4,6 +4,8 @@ export type Name = string;
 export type Label = string;
 export type DefaultFor = string[];
 export type KeyPresent = boolean;
+export type PrivacyContract = boolean;
+export type ContractReference = string | null;
 
 /**
  * One model engine as the Admin area's System screen shows it (ADR-135 decision 5): its models,
@@ -15,6 +17,8 @@ export interface EngineStatus {
   models: Models;
   default_for: DefaultFor;
   key_present: KeyPresent;
+  privacy_contract?: PrivacyContract;
+  contract_reference?: ContractReference;
   [k: string]: unknown;
 }
 export interface Models {

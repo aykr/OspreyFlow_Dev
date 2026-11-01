@@ -15,7 +15,9 @@ What a mistake would do, and the case that catches it (rule 12):
   in_words`;
 - `remove-key` leaving the key, or restarting nothing — `test_remove_key_removes_the_line`;
 - the command and the harness disagreeing on where a key is kept —
-  `test_the_command_names_each_key_as_the_harness_does`.
+  `test_the_command_names_each_key_as_the_harness_does`;
+- the privacy-contract mark (ADR-136) not shown, or shown without its reference —
+  `test_models_shows_each_providers_privacy_contract_mark_and_its_reference`.
 """
 
 from __future__ import annotations
@@ -91,6 +93,25 @@ def test_models_lists_engines_defaults_and_presence_and_never_a_key(
     assert "openai (OpenAI): key present: yes" in text
     assert "extraction: gemini" in text and "vision: local" in text
     assert rig.runner.calls == []
+
+
+def test_models_shows_each_providers_privacy_contract_mark_and_its_reference(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR-136 decision 1: the mark is shown, "no" by default, with the reference where there is
+    one — and still never a key."""
+    marked = {**MODELS, "providers": [
+        {"name": "gemini", "roles": {"extraction": "gemini-2.5-flash"}},
+        {"name": "openai", "label": "OpenAI", "roles": {"extraction": "gpt-4o-mini"},
+         "privacy_contract": True, "contract_reference": "DPA 2026/07"},
+    ]}  # fmt: skip
+    _installed(rig, marked)
+    assert rig("models") == 0
+    out = capsys.readouterr()
+    text = out.out + out.err
+    assert "gemini (Gemini): key present: no; privacy contract: no" in text
+    assert "openai (OpenAI): key present: yes; privacy contract: yes (DPA 2026/07)" in text
+    assert OPENAI_KEY not in text
 
 
 def test_models_key_writes_only_that_line_and_restarts_only_the_gateway_and_the_conduit(
