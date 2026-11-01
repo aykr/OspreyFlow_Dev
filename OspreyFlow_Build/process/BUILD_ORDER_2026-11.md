@@ -1,0 +1,80 @@
+# Build order from 1 November 2026 (autonomous run)
+
+**The owner's instruction (1 November 2026, 09:41):** run the build autonomously, in this order; if the
+token quota runs out, resume automatically once it resets (12:00); **pause only before the repository
+move.** This file is the run's state: each step's status is updated and committed as it changes, so a
+resumed session starts here.
+
+**To resume:**
+1. Read this file.
+2. Read `git log --oneline -15`.
+3. Confirm no other agent is running (`ListAgents`; CLAUDE.md rule 14).
+4. Continue at the first step not marked **done**.
+
+## Guardrails for the whole run
+
+- **No pushes and no GitHub changes.**
+  - Never `git push`; no GitHub repository, release, Pages or package changes.
+  - The website is prepared locally and published only within the repository move.
+- **Git:** commit on a branch per step, and merge into local `main` once that step's gates are green.
+- **One agent at a time** against the tree and the stacks (rule 14). Tests first, shown red (rules 12
+  and 15).
+- **Pin ports on every pytest** (`ARCADEDB_HTTP_PORT=2491 POSTGRES_PORT=55433
+  POSTGRES_PASSWORD=throwaway VALKEY_PORT=6379 CLICKHOUSE_HTTP_PORT=18123`).
+- **Deployments:**
+  - May be switched, rebuilt with `ospreyflow start --build`, and the GOV.UK demo case reset, for
+    captures.
+  - Never `ospreyflow install` over a running deployment.
+  - Leave the everyday deployment running at the end.
+- **Data:**
+  - Synthetic data only.
+  - The real Enron case on the everyday deployment is never touched and never made sendable to a
+    hosted model.
+- **When the spec is silent:**
+  - write the question under "Open questions" below;
+  - take the conservative reading;
+  - carry on, or move to the next independent step.
+  - Do not stop the run for it.
+- **Never print a secret.**
+
+## Steps
+
+| # | Step | Status | Notes |
+| --- | --- | --- | --- |
+| 0 | Today's finished work: GOV.UK alignment, identity, plain sign-in card (ADR-132 Am. 4); intelligence-mapping theme (ADR-115 Am. 4); capture fixes; decks rebuilt; plans written; ADR-133, ADR-134, ADR-135 accepted | done | `main` at `ec7b611` and before |
+| 1 | **ADR-135, server side:** engines and keys in `osprey.yaml`; gateway table; install; `ospreyflow models` verb; routing; `GET /v1/models/engines` | done | Merged 1 November. 193 model tests and 991 CLI and harness tests pass; the one failure is the owner's own uncommitted map setting |
+| 2 | **ADR-135, the rest:** (also: the guided install's Models screen drops `providers` and `defaults` when it saves; a key typed into the install page needs a secret-carrying endpoint, a decision of its own) engine picker in Ask the case and Ask to search (+ keyboard step); Admin → System; guided install Models screen; administration guide §8, §10 and Appendix A; user guide; new versions and PDFs; correct ADR-135 decision 3 if the verb restarts more than the gateway | in progress | The live Gemini check waits for the owner's key (see "Waiting on the owner"); it does not block |
+| 2b | **GDS baseline audit** (the owner's request of 1 November, from Gemini's brief): accessibility (axe on every page and harness, plus manual keyboard and screen-reader checks of the graph, map and timeline against WCAG 2.2 AA); security (bandit, `npm audit`, secrets and configuration, the `withhold_sources` and `sources_in_full` use in writers); open standards and OpenAPI; then `process/gds/gds_compliance_report.md` and `gds_remediation_plan.md` (prioritised backlog). Critical items fixed in this step; the rest folded into steps 3–7. Its outcomes go into the Prison Intelligence decks at once (a baseline-results slide; the mapping slides' statuses), and the decks are rebuilt | to do | Evidence against each of the 14 Service Standard points, with an honest status; never a claim of "compliant" (only an assessment panel can say that). The new tools are dev-only and go through the licence gate |
+| 3 | **ADR-133 stage (a):** one alert queue for every kind (typology, hotlist, monitor); severity, team, assignment; hotlist audience setting (`monitoring.hotlist_audience`, `hotlist_audience_editable`); the existing typologies as templates | to do | Done means the user guide section and the Product Overview deck slides exist (ADR-133 ruling 2) |
+| 4 | **ADR-134:** `alert` pack item; monitoring dashboard feed sections and board; alert trends (conformance first); the rule-3 review of the pack and queue readers; the ADR-113 decision 4 text and the alerts route docstring fixed | to do | Guide and Product Overview deck as in step 3 |
+| 5 | **ADR-133 stage (b):** sentence builder; frequency and amount conditions; preview (backtest) | to do | Guide and deck |
+| 6 | **ADR-133 stage (c):** list subscriptions (OFAC, OFSI, UN, EU, OpenSanctions adapters with synthetic golden files; licence register entries); re-screening on update; new AML templates | to do | Guide and deck. Real lists never in the repository (rule 9) |
+| 7 | **ADR-133 stage (d):** scheduled trigger; Studio "Checks on load" step with Verify preview; maker–checker | to do | Guide and deck |
+| 8 | **Demo use cases** (`ALERTING_MONITORING_PLAN.md`): amendments to ADR-127 (Prison Intelligence) and ADR-108 (Ledger); generated batches and golden tests; P1–P4 woven into the prison storyline; A1–A4 in Operation Ledger | to do | Each case built once its stage has landed: P2, A1 and A2 after step 3; P1 after step 5; A3 after step 6; P3, P4 and A4 after step 4 |
+| 9 | **Demos shown:** prison demo script (v4) and the Ledger walkthrough; `DEMO_GUIDE.md` and the setup guide; capture steps; captures in both brands; prison decks rebuilt | to do | |
+| 9b | **GDS re-audit** on the finished product, with the monitoring features: the report and backlog updated; an accessibility statement drafted; `process/gds/gds_pitch_deck_content.md` (Gemini's seven slides: title, the mission, Service Standard alignment, accessibility, security by design, deployment, the road to assessment) | to do | **The owner (1 November): the GDS testing outcomes are recorded in the Prison Intelligence demo decks** (v1, v2 and v3, via `build_decks.py`): a results slide per pass (2b baseline, 9b re-audit) and each Service Standard point's status and evidence brought up to date on the existing mapping slides. Feeds step 10 (a GDS section in the Product Overview deck; the prison decks' mapping slides refreshed; a GDS section in the guides) and step 12 (the website claims only what this re-audit evidences) |
+| 10 | **Decks and guides as a core feature:** Pitch (Draft2 → Draft3), Product Overview, AML Opportunity, Administration Architecture: monitoring and alerting slides and the one-line description; guides' monitoring chapters checked end to end; README feature list | to do | New revisions beside the originals; originals kept |
+| 11 | **Rehearsal:** every demo on a freshly reset deployment, both brands, start to finish; the guides' steps checked against the screens | to do | The rehearsal residue (repeated hotlists and gaps) is an open question below |
+| 12 | **Website:** pages saying OspreyFlow has a fully featured, GDS-compliant UK public sector option for every UK department; the alerting and monitoring theme | to do | Prepared and committed locally; **published only within step 13** |
+| 13 | **PAUSE: the repository move** (`REPO_MOVE_PLAN.md`) | **waits for the owner** | Do not start any part of it, including the packaging-rule change, without the owner |
+
+## Waiting on the owner (does not block the run)
+
+- **The Gemini key** for the everyday deployment's demos.
+  - Saved by the owner on 1 November to `~/.ospreyflow/gemini.key` (mode 600, outside the
+    repository). Checked the same day: Google's API accepted it (HTTP 200). Use `gemini-2.5-flash`.
+  - Once step 1 has merged, install it with
+    `OSPREY_MODEL_KEY_GEMINI="$(cat ~/.ospreyflow/gemini.key)" ospreyflow models key gemini`. Never
+    print the file or the key.
+  - Then enable Gemini in the everyday `osprey.yaml` (`models.providers`) for the synthetic demo
+    cases' handling codes only. Never the Enron case's (rule 9).
+  - Retry the C8-a and C8-b captures on Gemini.
+  - If the file is missing, leave the C8 captures on the local model and carry on.
+- **Rehearsal residue on the GOV.UK demo deployment.** The case reset leaves the coordinator's number
+  hotlisted three times, the intelligence gap four times, alerts, and 3,000 nodes in the scale-cohort
+  case. Either clean it by hand in the app or reinstall that deployment: the owner's choice.
+- **ADR-133 ruling 3** reads "configurable" as a deployment setting; the owner to confirm.
+
+## Open questions found during the run
+
+(none yet)

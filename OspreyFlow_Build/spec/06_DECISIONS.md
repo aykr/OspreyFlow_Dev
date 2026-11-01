@@ -20875,8 +20875,9 @@ Key to be used for the demos."
    - With no argument, it lists the engines, each role's default, and whether each provider's key
      is present (yes or no, never the key).
    - `ospreyflow models key <name>` sets or rotates a key, from `OSPREY_MODEL_KEY_<NAME>` in the
-     terminal or a hidden prompt. It writes `deployment.env`, renders the gateway's model table
-     again, and restarts the gateway alone.
+     terminal or a hidden prompt. It writes `deployment.env` and restarts the gateway, and the Conduit
+     too when the key's presence changes (corrected while building: nothing rendered depends on a
+     key, and the Conduit learns whether a key exists from the environment it starts with).
    - `ospreyflow models remove-key <name>` removes it. A provider left enabled without a key is
      then shown "no key" and is not offered to analysts.
 4. **Routing** (`services/api/model_routing.py`). A request may name an engine.
@@ -20899,6 +20900,16 @@ Key to be used for the demos."
    - The administration guide: §10, Appendix A, and the new verb in §8's table.
    - The user guide: the engine choice and what the answer's engine line means.
    - Each guide gets a new version and its PDF.
+
+**Found while building (1 November 2026).**
+- The single provider's key had reached every service that reads `deployment.env` through
+  `env_file` (the Conduit, the Glass, the workers), contrary to Amendment 6; the old test looked only
+  at the Conduit's `environment`. Each such service now blanks every model key in its own
+  `environment`, which wins over the file. The cluster render had the same flaw and is fixed the same
+  way (`test_no_service_but_the_gateway_is_given_a_key`,
+  `test_a_cluster_gives_no_workload_but_the_gateway_a_model_key`, both shown red first).
+- Ask to search sends no handling code, so it always runs on the local engine, whatever was named,
+  and says so (`engine: "local"`). Embeddings never leave the deployment.
 
 **Tests that would fail if it were broken** (rule 12; each shown red first):
 - **Config:** two providers render two gateway entries, each reading its own
