@@ -43,7 +43,10 @@ resumed session starts here.
 | --- | --- | --- | --- |
 | 0 | Today's finished work: GOV.UK alignment, identity, plain sign-in card (ADR-132 Am. 4); intelligence-mapping theme (ADR-115 Am. 4); capture fixes; decks rebuilt; plans written; ADR-133, ADR-134, ADR-135 accepted | done | `main` at `ec7b611` and before |
 | 1 | **ADR-135, server side:** engines and keys in `osprey.yaml`; gateway table; install; `ospreyflow models` verb; routing; `GET /v1/models/engines` | done | Merged 1 November. 193 model tests and 991 CLI and harness tests pass; the one failure is the owner's own uncommitted map setting |
-| 2 | **ADR-135, the rest:** (also: the guided install's Models screen drops `providers` and `defaults` when it saves; a key typed into the install page needs a secret-carrying endpoint, a decision of its own) engine picker in Ask the case and Ask to search (+ keyboard step); Admin → System; guided install Models screen; administration guide §8, §10 and Appendix A; user guide; new versions and PDFs; correct ADR-135 decision 3 if the verb restarts more than the gateway | in progress | The live Gemini check waits for the owner's key (see "Waiting on the owner"); it does not block |
+| 2 | **ADR-135, the rest:** (merged 1 November: 120 workspace and 28 install-page unit tests, two keyboard steps, guides 1.13 and 1.9 with their PDFs; also: the guided install's Models screen drops `providers` and `defaults` when it saves; a key typed into the install page needs a secret-carrying endpoint, a decision of its own) engine picker in Ask the case and Ask to search (+ keyboard step); Admin → System; guided install Models screen; administration guide §8, §10 and Appendix A; user guide; new versions and PDFs; correct ADR-135 decision 3 if the verb restarts more than the gateway | done | The live Gemini check waits for the owner's key (see "Waiting on the owner"); it does not block |
+| 2c | **Gemini on the everyday deployment** (the owner's ruling of 1 November): install the key with `ospreyflow models key gemini` from `~/.ospreyflow/gemini.key`; enable `gemini` (`gemini-2.5-flash`, label "Gemini") in the everyday `osprey.yaml` with `sendable_handling_codes: [P]`; **the owner rules the Enron case sendable to Gemini** ("the dataset I am using is a publicly available dataset"), recorded as an amendment to ADR-035 §C3 and in the local exceptions entry. Then `ospreyflow start` to apply, and a live check: one Ask the case question on the synthetic PID case on Gemini, and one on the local model | to do | After step 2 merges (one agent at a time). Remind the owner: on a free-tier key Google may use prompts to improve its products; a paid key does not |
+| 2d | **Per-dataset egress** (the owner's ruling, ADR to write): a second gate beside the handling codes — each dataset is marked sendable to hosted engines or not, and material leaves only when both its handling code and its dataset allow it. **Plus, the owner's ruling of 1 November: each provider key is marked by the admin as covered by a privacy contract or not** ("for every key specified allow the admin to mark if this key has privacy contract underpinning the key or not"): shown in Admin → System, in the analysts' engine choice and in `ospreyflow models`; and a dataset may be marked sendable to contracted engines only. Schema, the route, the Admin screen, tests that a non-sendable dataset's material is never sent | to do | New ADR-136, written and recorded as accepted from the owner's ruling before code |
+| 2e | **Key entry on the guided install page** (the owner's ruling): a write-only key field per provider and an install-page endpoint bound to the installer's own machine, never logged or echoed, writing `deployment.env` as the terminal does | to do | New small ADR-137 before code |
 | 2b | **GDS baseline audit** (the owner's request of 1 November, from Gemini's brief): accessibility (axe on every page and harness, plus manual keyboard and screen-reader checks of the graph, map and timeline against WCAG 2.2 AA); security (bandit, `npm audit`, secrets and configuration, the `withhold_sources` and `sources_in_full` use in writers); open standards and OpenAPI; then `process/gds/gds_compliance_report.md` and `gds_remediation_plan.md` (prioritised backlog). Critical items fixed in this step; the rest folded into steps 3–7. Its outcomes go into the Prison Intelligence decks at once (a baseline-results slide; the mapping slides' statuses), and the decks are rebuilt | to do | Evidence against each of the 14 Service Standard points, with an honest status; never a claim of "compliant" (only an assessment panel can say that). The new tools are dev-only and go through the licence gate |
 | 3 | **ADR-133 stage (a):** one alert queue for every kind (typology, hotlist, monitor); severity, team, assignment; hotlist audience setting (`monitoring.hotlist_audience`, `hotlist_audience_editable`); the existing typologies as templates | to do | Done means the user guide section and the Product Overview deck slides exist (ADR-133 ruling 2) |
 | 4 | **ADR-134:** `alert` pack item; monitoring dashboard feed sections and board; alert trends (conformance first); the rule-3 review of the pack and queue readers; the ADR-113 decision 4 text and the alerts route docstring fixed | to do | Guide and Product Overview deck as in step 3 |
@@ -77,17 +80,17 @@ resumed session starts here.
 
 ## Open questions found during the run
 
+2. **Ask to search's engine choice changes nothing** (found building step 2). It sends no handling
+   code, so it always runs locally (ADR-135's note), yet decision 5 gives it an engine choice. Built as
+   written, and the answer line says truthfully that the local model answered. For the owner: keep
+   the choice, drop it, or let Ask to search carry the case's handling so the choice applies?
+
 1. **Gemini on the everyday deployment would also send the real Enron case (found 1 November).**
    - The Enron seed stamps its data with handling code `P` (`scripts/seed_enron.py:63`), the same
      code as the synthetic demo data.
    - Egress is decided by handling code alone, so `sendable_handling_codes: [P]` on the everyday
      deployment would make the real email sendable to Google (rule 9).
-   - **What the run does:**
-     - the everyday deployment stays local-only;
-     - the Gemini key goes into the GOV.UK deployment instead, once its case list has been checked
-       (when it is next running) to hold no Enron data;
-     - the C8 captures run there.
-   - **For the owner:** should real data get a handling code of its own (for example, the Enron seed
-     stamps a distinct code that is never sendable), or should egress be decided per case or per
-     dataset as well as by handling code? Either is a decision (an ADR), not a fix the run makes on
-     its own.
+   - **Superseded by the owner's ruling below (step 2c).**
+   - **Answered by the owner, 1 November:** egress is to be decided per dataset as well as by handling
+     code (step 2d); meanwhile the Enron case may be sent to Gemini, since the dataset is public
+     (step 2c).
