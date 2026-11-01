@@ -4,6 +4,7 @@
 // ADR-133 stage (a): the seven typologies are offered as templates above the form; using one fills it.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  RuleSentence,
   SavedPattern,
   TypologyRule,
   TypologyRuleInput,
@@ -13,6 +14,8 @@ import type { AccessLevel } from "../investigation/cases";
 import { listPatterns } from "../patterns/api";
 import { deployRule, listRules, retireRule, type AlertsApi } from "./api";
 import { money, ruleTypologyLabel, when } from "./names";
+import { SentenceBuilder } from "./SentenceBuilder";
+import { sentenceSummary } from "./sentence";
 import { TEMPLATES, type RuleTemplate } from "./templates";
 
 type Typology =
@@ -22,7 +25,8 @@ type Typology =
   | "kyc_screening"
   | "shared_attributes"
   | "document_verification"
-  | "pattern";
+  | "pattern"
+  | "sentence";
 
 interface Field {
   key: string;
@@ -118,6 +122,8 @@ export const PARAMETERS: Record<Typology, Field[]> = {
     },
   ],
   document_verification: [],
+  // ADR-133 stage (b): written in the sentence builder, never in this form.
+  sentence: [],
   // ADR-109 phase D: a pattern drawn in the Query builder and saved; it alerts on whole matches.
   pattern: [
     {
@@ -154,6 +160,10 @@ export function describeParams(
     }
     case "document_verification":
       return "a new customer with no valid verifying document (none, expired or marked fraudulent); checked again daily as documents lapse";
+    case "sentence": {
+      const sentence = (rule.params as unknown as { sentence: RuleSentence }).sentence;
+      return sentenceSummary(sentence);
+    }
     case "pattern": {
       const id = String(
         (rule.params as unknown as Record<string, unknown>).pattern_id ?? "",
@@ -194,6 +204,8 @@ export function ruleInput(
 
 export interface RulesPanelProps extends AlertsApi {
   level: AccessLevel | null;
+  /** ADR-133 decision 1: a rule for the whole deployment is an administrator's. */
+  isAdministrator?: boolean;
 }
 
 export function RulesPanel(props: RulesPanelProps) {
@@ -294,6 +306,15 @@ export function RulesPanel(props: RulesPanelProps) {
           </li>
         ))}
       </ul>
+      <SentenceBuilder
+        {...props}
+        isAdministrator={props.isAdministrator ?? false}
+        patterns={patterns}
+        onDeployed={(rule) => {
+          setSaid(`Deployed “${rule.name}”.`);
+          reload();
+        }}
+      />
       <Templates
         canUse={author}
         onUse={(template) => setPreset({ template, nonce: (preset?.nonce ?? 0) + 1 })}
