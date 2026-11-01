@@ -645,7 +645,9 @@ PUT    /v1/investigations/{id}/ingest/recipes/{recipe_id}/checks   choose the pi
 
 **Screening lists as managed sources (ADR-133 stage (c)).** A list is subscribed through a connector,
 a Knowledge Adapter with golden files (`packages/knowledge_adapters/screening_lists.py`: OFAC SDN, OFSI
-consolidated, UN consolidated, EU consolidated, OpenSanctions; rule 8), to one file inside the ingest
+consolidated (a closed list since 28 January 2026, said so on the Lists tab), UN consolidated, EU
+consolidated, OpenSanctions, and the FCDO's UK Sanctions List, OFSI's successor (ADR-133 Amendment 6);
+rule 8), to one file inside the ingest
 folder (a location outside it, resolved first, is refused). A refresh (`services/api/screening_refresh.py`)
 admits the list under rule 9 before reading it into the store — synthetic only when every file is one of
 the repository's own, known by its SHA-256 (`packages/demo_fixtures/screening_lists/synthetic.sha256`);
