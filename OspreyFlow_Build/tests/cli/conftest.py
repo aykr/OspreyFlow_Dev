@@ -115,6 +115,9 @@ class Rig:
     #: and the last stays (`tofu output`, the secret store asked until the code is there).
     responses: dict[str, list[tuple[int, str]]] = field(default_factory=dict)
     captured: list[list[str]] = field(default_factory=list)
+    #: The hidden prompt (`getpass`) a key is asked at (ADR-135): what it asked, what it answers.
+    secret_prompts: list[str] = field(default_factory=list)
+    secret_replies: list[str] = field(default_factory=list)
 
     def capture(
         self, argv: Sequence[str], *, env: Mapping[str, str] | None = None, cwd: Path | None = None
@@ -136,6 +139,10 @@ class Rig:
         self.questions.append(prompt)
         return self.replies.pop(0) if self.replies else default
 
+    def ask_secret(self, prompt: str) -> str:
+        self.secret_prompts.append(prompt)
+        return self.secret_replies.pop(0) if self.secret_replies else ""
+
     def __call__(self, *argv: str) -> int:
         return main(
             list(argv),
@@ -145,6 +152,7 @@ class Rig:
             recorded_home=lambda: None,
             capture=self.capture,
             ask=self.ask,
+            ask_secret=self.ask_secret,
             open_url=self.opened.append,
         )
 
