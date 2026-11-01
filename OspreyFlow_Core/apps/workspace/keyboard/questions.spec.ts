@@ -170,7 +170,8 @@ test("asking, then reaching a [G-n] from the answer by Tab, selects what it stan
 test("the model engine is reached from the question by Shift+Tab, changed by keyboard, and named in the question", async ({ page }) => {
   // ADR-135 decision 5 (rule 13): the choice lists the engines offered, the default chosen; a
   // keyboard change is what the question sends, and the answer says which engine answered.
-  await page.route("**/*/v1/models/engines", (route) =>
+  // ADR-136: the case's own engines route.
+  await page.route("**/*/v1/investigations/*/models/engines", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",

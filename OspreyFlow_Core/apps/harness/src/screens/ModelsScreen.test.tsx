@@ -106,6 +106,32 @@ describe("ModelsScreen", () => {
     expect(screen.queryByLabelText(/key/i)).toBeNull();
   });
 
+  it("shows each provider's privacy-contract mark and reference, and keeps the mark when it saves (ADR-136)", async () => {
+    const marked = {
+      models: {
+        ...WITH_PROVIDERS.models,
+        providers: [
+          { name: "gemini", label: "Gemini", roles: { extraction: "gemini/gemini-2.5-flash" } },
+          { name: "openai", label: "OpenAI", roles: { vision: "openai/gpt-4o-mini" }, privacy_contract: true,
+            contract_reference: "DPA 2026/07" },
+        ],
+      },
+    } as unknown as OspreyConfig;  // prettier-ignore
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ModelsScreen config={marked} onSave={onSave} />);
+    const table = await screen.findByRole("table", { name: "Model providers" });
+    const headers = Array.from(table.querySelectorAll("th")).map((th) => th.textContent);
+    expect(headers).toContain("Privacy contract");
+    const rows = Array.from(table.querySelectorAll("tbody tr")).map((tr) => tr.textContent ?? "");
+    expect(rows[0]).toContain("No contract");
+    expect(rows[1]).toContain("Under contract (DPA 2026/07)");
+    await screen.findByLabelText("Entity extraction model");
+    fireEvent.click(screen.getByRole("button", { name: "Save models" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const saved = onSave.mock.calls[0]![0] as { models: { providers: { privacy_contract?: boolean }[] } };
+    expect(saved.models.providers[1]!.privacy_contract).toBe(true);
+  });
+
   it("asks for no key, and the install page for none, outside the guided install", async () => {
     render(<ModelsScreen config={WITH_PROVIDERS} onSave={vi.fn()} />);
     await screen.findByRole("table", { name: "Model providers" });

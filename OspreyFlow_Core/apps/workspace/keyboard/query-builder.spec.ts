@@ -417,7 +417,8 @@ test("Ask to search over a pattern already drawn: the replaced pattern is restor
 test("Ask to search: the model engine is reached by Shift+Tab, changed by keyboard, and named in the request", async ({ page }) => {
   // ADR-135 decision 5 (rule 13). Ask to search sends no handling code, so the Conduit runs it
   // locally whatever is named; the panel says the engine the answer names, not the one chosen.
-  await page.route("**/*/v1/models/engines", (route) =>
+  // ADR-136: the case's own engines route.
+  await page.route("**/*/v1/investigations/*/models/engines", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",

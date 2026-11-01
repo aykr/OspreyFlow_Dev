@@ -453,7 +453,7 @@ function mountEngines(engines: unknown, ask: { ok: boolean; status: number; body
   const fetchMock = vi.fn((url: string, init?: { body?: string }) => {
     void init;
     const target = String(url);
-    if (target.endsWith("/v1/models/engines")) {
+    if (target.endsWith("/v1/investigations/inv-1/models/engines")) {
       return Promise.resolve({ ok: true, status: 200, json: async () => engines });
     }
     if (target.endsWith("/patterns/ask")) {
@@ -482,7 +482,7 @@ describe("QueryBuilderPanel ask to search's engine choice (ADR-135)", () => {
       { ok: true, status: 200, body: PROPOSAL },
     );
     await vi.waitFor(() =>
-      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/v1/models/engines"))).toBe(true),
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/v1/investigations/inv-1/models/engines"))).toBe(true),
     );
     expect(screen.queryByRole("combobox", { name: "Model engine" })).toBeNull();
     fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "q" } });

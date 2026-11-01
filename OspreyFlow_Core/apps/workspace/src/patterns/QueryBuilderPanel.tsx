@@ -97,7 +97,7 @@ export function QueryBuilderPanel({
   const [proposal, setProposal] = useState<PatternProposal | null>(null);
   // ADR-135 decision 5: the engine to ask, among those offered for extraction. The Conduit runs
   // ask to search locally whatever is named (it sends no handling code); the proposal says so.
-  const engineChoice = useEngineChoice(apiBaseUrl, bearerToken, "extraction");
+  const engineChoice = useEngineChoice(apiBaseUrl, bearerToken, "extraction", investigationId);
   // A proposal replaces the pattern drawn, so what it replaced is kept until it is restored or
   // another proposal replaces it: one press of "Restore the previous pattern" is the undo.
   const [previous, setPrevious] = useState<{ pattern: PatternBuilderState; id: string | null; name: string } | null>(null);
